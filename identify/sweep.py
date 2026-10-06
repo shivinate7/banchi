@@ -195,24 +195,55 @@ def switched_on(conn: sqlite3.Connection) -> bool:
     return bool(row) and row[0] == "on"
 
 
-def tried() -> Dict[str, str]:
+def _live_record():
+    """The tried record and the keys marked while a Prepare ran (and so held back), or None when the record is stale: another
+    model, or an index stamp that a finished Prepare has moved. `tried` and `why` share these rules."""
     record = _read_json(tried_path())
     if not isinstance(record, dict) or record.get("model") != MODEL_SHA256:
-        return {}
+        return None
     from identify import match  # lazy: match pulls the heavy readers
 
     running = match.prepare_pid() is not None
     if not running and record.get("stamp") != match.index_stamp():
-        return {}  # a set was read since: cards tried before it are tried again
-    keys = record.get("keys")
+        return None  # a set was read since: cards tried before it are tried again
+    # A mark made while a Prepare ran was made against a half-built index: it holds only until the Prepare ends.
+    return record, (set(record.get("building") or ()) if not running else set())
+
+
+def tried() -> Dict[str, str]:
+    live = _live_record()
+    keys = live[0].get("keys") if live else None
     if not isinstance(keys, dict):
         return {}
-    # A mark made while a Prepare ran was made against a half-built index: it holds only until the Prepare ends.
-    building = set(record.get("building") or ()) if not running else set()
-    return {str(k): str(v) for k, v in keys.items() if k not in building}
+    return {str(k): str(v) for k, v in keys.items() if k not in live[1]}
 
 
-def remember_tried(additions: Dict[str, str]) -> None:
+def why() -> Dict[str, dict]:
+    """`{key: {code, margin, floor, candidates}}`: why the free reader did not accept a tried card. Same record, same
+    validity rules as `tried`, so a stale mark drops its reason with it. A mark made before reasons were kept has none."""
+    live = _live_record()
+    kept = live[0].get("why") if live else None
+    if not isinstance(kept, dict):
+        return {}
+    return {str(k): v for k, v in kept.items() if isinstance(v, dict) and k not in live[1]}
+
+
+def _reason(result) -> dict:
+    """The part of an unaccepted `Result` the band's sheet shows: the code, the two numbers, and two candidates."""
+    return {
+        "code": result.code,
+        "margin": result.margin,
+        "floor": result.floor,
+        "candidates": [
+            {"name": str(c.get("name") or ""), "set": str(c.get("set") or ""), "number": str(c.get("number") or "")}
+            for c in (result.candidates or [])[:2]
+        ],
+    }
+
+
+def remember_tried(additions: Dict[str, str], results: Sequence = ()) -> None:
+    """Mark cards tried at a capture id. `results` are the unaccepted `Result`s: each one's reason is kept beside its mark
+    in the same atomic write (about 250 bytes a card)."""
     if not additions:
         return
     from identify import match
@@ -220,25 +251,43 @@ def remember_tried(additions: Dict[str, str]) -> None:
     record = _read_json(tried_path())
     valid = isinstance(record, dict) and record.get("model") == MODEL_SHA256
     keys = tried()
+    kept = why()
     keys.update(additions)
+    for key in additions:
+        kept.pop(key, None)  # a new mark replaces the old reason
+    kept.update({r.key: _reason(r) for r in results if r.key in additions and not r.accepted})
     if match.prepare_pid() is not None:
         building = set(record.get("building") or ()) if valid else set()
         building |= set(additions)
         stamp = record.get("stamp") if valid else match.index_stamp()  # older marks keep the stamp they had
     else:
         building, stamp = set(), match.index_stamp()
-    _write_json(tried_path(), {"model": MODEL_SHA256, "stamp": stamp, "building": sorted(building), "keys": keys})
+    _write_json(tried_path(), {"model": MODEL_SHA256, "stamp": stamp, "building": sorted(building), "keys": keys, "why": kept})
 
 
 def forget_tried(keys: Sequence[str]) -> None:
-    """Drop the tried marks of the named positions, so the free reader reads them again. Same atomic write as
+    """Drop the tried marks of the named positions, and their reasons, so the free reader reads them again. Same atomic write as
     `remember_tried`, over the record as it is now, with the stamp and building list kept. A set-aside card stays set aside."""
     record = _read_json(tried_path())
     if not isinstance(record, dict) or not isinstance(record.get("keys"), dict):
         return
-    left = {k: v for k, v in record["keys"].items() if k not in set(keys)}
-    if len(left) != len(record["keys"]):
-        _write_json(tried_path(), {**record, "keys": left})
+    gone = set(keys)
+    left = {k: v for k, v in record["keys"].items() if k not in gone}
+    kept = record.get("why")
+    left_why = {k: v for k, v in kept.items() if k not in gone} if isinstance(kept, dict) else kept
+    if len(left) != len(record["keys"]) or left_why != kept:
+        _write_json(tried_path(), {**record, "keys": left, **({"why": left_why} if isinstance(kept, dict) else {})})
+
+
+def clear_unexplained() -> None:
+    """ONCE: drop every tried mark that has no reason, so the free reader reads those cards again (it spends nothing) and they gain
+    one. It then writes the `why` field, even empty: a record that carries it is never cleared again. A set-aside mark is the
+    crash record's, and stays. Runs as the watcher's worker starts, under the watcher's lock."""
+    record = _read_json(tried_path())
+    if not isinstance(record, dict) or record.get("model") != MODEL_SHA256 or "why" in record:
+        return
+    keys = record.get("keys") if isinstance(record.get("keys"), dict) else {}
+    _write_json(tried_path(), {**record, "keys": {}, "why": {}} if keys else {**record, "why": {}})
 
 
 _QUEUE_WHERE = (

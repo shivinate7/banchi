@@ -811,7 +811,196 @@ def check_claims_correction_requeues(checks: Checks) -> None:
         checks.ok(f not in _queue() and f in sweep.tried(), "7. and leaves its neighbour in the box tried")
 
 
+# ------------------------------------------------------------- the band's sheets (identify-engine-pick.md, 10.5)
+# WIRE SHAPE ASSUMED HERE, NAMED FOR THE BUILDER (the spec fixes the fields, not their spellings): `detail=` answers
+# `cards`, one row per card of that one count, each `{key, box_name, index, cid, code, candidates}`; a `candidates`
+# entry is `{name, set, number}`. `sweep.remember_tried(additions, results)` takes the unaccepted `Result`s second.
+# `sweep.why()` is `{key: {code, margin, floor, candidates}}`. `sweep.clear_unexplained()` takes no argument.
+
+
+def _unaccepted(key: str, code: str = match.UNREAD_MARGIN, n: int = 3) -> "match.Result":
+    cands = [{"product_id": 100 + i, "set": "sv9", "number": str(i + 1), "name": f"Cand {i}", "cosine": 0.9 - i / 10} for i in range(n)]
+    return match.Result(key, False, None, code, "x", margin=0.01, floor=0.9, candidates=cands)
+
+
+def _remember(checks: Checks, additions: dict, results: list, label: str) -> bool:
+    """`remember_tried` with its new second argument. A TypeError is the red verdict, never an error."""
+    try:
+        sweep.remember_tried(additions, results)
+        return True
+    except TypeError as exc:
+        sweep.remember_tried(additions)  # the mark itself, so later steps run on the old shape
+        return checks.ok(False, label, f"remember_tried takes no reasons yet: {exc}")
+
+
+def _why():
+    fn = getattr(sweep, "why", None)
+    return fn() if callable(fn) else None
+
+
+def _record() -> dict:
+    return sweep._read_json(sweep.tried_path()) or {}
+
+
+@contextlib.contextmanager
+def _serving():
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    thread = _spawn_server(httpd)
+    try:
+        yield httpd.server_address[1]
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+
+def _sweep_get(port: int, keys, detail=None) -> dict:
+    path = "/pipeline/match/sweep?keys=" + ",".join(keys) + (f"&detail={detail}" if detail else "")
+    status, body, _ = request(port, "GET", path)
+    return json.loads(body) if status == 200 else {"_status": status}
+
+
+def _keys_of(answer: dict) -> set:
+    return {r.get("key") for r in (answer.get("cards") or [])}
+
+
+def check_why_kept_with_the_mark(checks: Checks) -> None:
+    checks.note("")
+    checks.note("BAND SHEETS 1-3 — the sweep keeps a why beside each tried mark, stamp-bound, dropped with the mark")
+    with isolated_home():
+        key = _capture(game="pokemon", set_hint="sv9")
+        cid = Store().read().inventory.cards[key].capture_id
+        _remember(checks, {key: cid}, [_unaccepted(key)], "1. remember_tried accepts the unaccepted Results")
+        checks.equal(
+            (_why() or {}).get(key),
+            {"code": match.UNREAD_MARGIN, "margin": 0.01, "floor": 0.9,
+             "candidates": [{"name": "Cand 0", "set": "sv9", "number": "1"}, {"name": "Cand 1", "set": "sv9", "number": "2"}]},
+            "1. why[key] holds the code, margin, floor and at most two candidates as {name, set, number}",
+        )
+        checks.equal(sweep.tried().get(key), cid, "1. tried keeps its shape")
+        raw = _record()
+        with mock.patch.object(match, "index_stamp", lambda: "another-index"):
+            checks.ok(_why() == {} and bool(raw.get("why")), "2. why is {} against another index stamp, as tried is")
+        sweep._write_json(sweep.tried_path(), {**raw, "model": "another-model"})
+        checks.ok(_why() == {} and bool(raw.get("why")), "2. why is {} against another model")
+        sweep._write_json(sweep.tried_path(), raw)
+        sweep.forget_tried([key])
+        checks.ok(bool(raw.get("why")) and key not in (_record().get("why") or {}), "3. forget_tried removes the reason from the record with the mark")
+        checks.ok(_why() is not None and key not in _why(), "3. and sweep.why no longer answers it")
+
+
+def check_sweep_detail_reads(checks: Checks) -> None:
+    checks.note("")
+    checks.note("BAND SHEETS 4-6, 15, 20, 21 — `detail=paid|unread|matched|unhinted` answers `cards` for exactly one count")
+    with isolated_home():
+        paid_a = _capture(box=3, game="pokemon", set_hint="sv9")
+        paid_b = _capture(box=3, game="pokemon", set_hint="sv9")
+        legacy = _capture(box=3, game="pokemon", set_hint="sv9")
+        unserved = _capture(box=3, game="pokemon_code")
+        unread = _capture(box=3, game="pokemon", set_hint="sv9")
+        matched = _capture(box=3, game="pokemon", set_hint="sv9")
+        unhinted = _capture(box=3, game="pokemon")
+        _put(matched, MATCHER)
+        cards = Store().read().inventory.cards
+        cid = lambda k: cards[k].capture_id or ""  # noqa: E731
+        _remember(checks, {paid_a: cid(paid_a), paid_b: cid(paid_b)}, [_unaccepted(paid_a), _unaccepted(paid_b, match.UNREAD_FLOOR)], "4. (precondition) reasons can be stored")
+        sweep.remember_tried({legacy: cid(legacy)})  # a mark from before the change: no reason
+        named = [paid_a, paid_b, legacy, unserved, unread, matched, unhinted]
+        with _serving() as port:
+            plain = _sweep_get(port, named)
+            checks.ok("cards" not in plain and "_status" not in plain, "4. with no detail the answer has no `cards`")
+            checks.equal(sorted(plain.get("paid_keys") or []), sorted([paid_a, paid_b, legacy, unserved]), "4. (precondition) paid_keys is the four paid cards")
+            paid = _sweep_get(port, named, "paid")
+            checks.equal(_keys_of(paid) if "cards" in paid else None, set(plain.get("paid_keys") or []), "4. detail=paid names exactly paid_keys")
+            by = {r.get("key"): r for r in (paid.get("cards") or [])}
+            row = by.get(paid_a) or {}
+            box_name = Store().read().inventory.boxes[3].name
+            checks.ok(
+                row.get("box_name") == box_name and row.get("index") == int(paid_a.split("/")[1]) and row.get("cid") == cards[paid_a].cid
+                and row.get("code") == match.UNREAD_MARGIN and len(row.get("candidates") or []) == 2,
+                "4. a paid row has the box name, the slot, cid, the code and two candidates",
+                f"row: {row!r}",
+            )
+            checks.equal((by.get(unserved) or {}).get("code"), match.UNREAD_GAME, "5. a card of a game the reader does not serve answers game_not_served")
+            checks.ok(unserved in by and not by[unserved].get("candidates"), "5. and carries no stored reason")
+            checks.ok(legacy in by and by[legacy].get("code") is None, "5. a card with a mark from before the change answers no code")
+            lists = {name: _sweep_get(port, named, name) for name in ("unread", "matched", "unhinted")}
+            checks.equal(_keys_of(lists["unread"]) if "cards" in lists["unread"] else None, {unread}, "6. unread lists the card the reader has not looked at")
+            checks.equal(_keys_of(lists["matched"]) if "cards" in lists["matched"] else None, {matched}, "6. matched lists the card with a free row")
+            checks.equal(_keys_of(lists["unhinted"]) if "cards" in lists["unhinted"] else None, {unhinted}, "6. and an unhinted card is only in the unhinted list")
+            every = [k for a in (paid, *lists.values()) for k in _keys_of(a)]
+            checks.ok(len(every) == len(set(every)) == len(named), "6. every card in scope is in exactly one list")
+            checks.equal(
+                tuple(len(_keys_of(a)) for a in (paid, lists["unread"], lists["matched"])),
+                (plain.get("paid"), plain.get("unread"), plain.get("matched_here")),
+                "6. the three list sizes equal the band's three figures",
+            )
+            hint = lists["unhinted"].get("cards") or []
+            checks.equal(plain.get("unhinted"), len(hint), "20. detail=unhinted returns exactly the cards the band counts as unhinted")
+            checks.ok(
+                bool(hint) and all(r.get("box_name") == box_name and r.get("index") and r.get("cid") and not r.get("code") for r in hint),
+                "20. an unhinted row has the box name, the slot and cid, and no reason",
+            )
+            # 15: a claims write moves a paid card to "not yet looked at". It is the existing requeue, proved over the new read.
+            capture_server.do_put_card(3, int(paid_a.split("/")[1]), {"set_hint": "sv8"})
+            checks.ok("cards" in _sweep_get(port, named, "paid") and paid_a not in _keys_of(_sweep_get(port, named, "paid")), "15. a claims write takes the card out of the paid sheet")
+            checks.ok(paid_a in _keys_of(_sweep_get(port, named, "unread")), "15. and puts it in the not-yet-looked-at sheet")
+            # 21: a set hint written takes the card out of the set-named sheet.
+            capture_server.do_put_card(3, int(unhinted.split("/")[1]), {"set_hint": "sv9"})
+            now = _sweep_get(port, named, "unhinted")
+            checks.ok("cards" in now and unhinted not in _keys_of(now), "21. a written set hint takes the card out of the set-named sheet")
+            checks.equal(now.get("unhinted"), 0, "21. and the health count drops on the next read")
+
+
+def check_clear_unexplained_once(checks: Checks) -> None:
+    from cli import cmd_match
+
+    checks.note("")
+    checks.note("BAND SHEETS 22 — the sweep drops every mark with no why once, free, and never again")
+    with isolated_home():
+        old, kept, aside = (_capture(game="pokemon", set_hint="sv9") for _ in range(3))
+        cards = Store().read().inventory.cards
+        cid = lambda k: cards[k].capture_id or ""  # noqa: E731
+        sweep.remember_tried({old: cid(old), kept: cid(kept)})
+        # the record as it was before the change: marks, and no `why` field at all
+        sweep._write_json(sweep.tried_path(), {k: v for k, v in _record().items() if k != "why"})
+        sweep._write_json(sweep.crash_path(), {"model": matchconst.MODEL_SHA256, "aside": {aside: cid(aside)}})
+        _switch(False)  # no chunk runs: the clearing alone is under test
+        reads = []
+        with mock.patch.object(match, "status", lambda: {"ready": True}), mock.patch.object(match, "Index", _FakeIndex), mock.patch.object(
+            match, "read", lambda *a, **k: reads.append(a) or []
+        ), mock.patch.object(os, "nice", lambda _n: 0), mock.patch("signal.signal", lambda *_a: None), quiet():
+            cmd_match.sweep_worker(lambda _line: None)
+        checks.ok("why" in _record(), "22. the first run writes the why field, even when empty")
+        checks.ok(old not in (_record().get("keys") or {}) and kept not in (_record().get("keys") or {}), "22. the first run drops every tried mark that has no why entry")
+        checks.equal(sweep.aside().get(aside), cid(aside), "22. a set-aside mark stays")
+        checks.equal(reads, [], "22. the first run reads nothing and so spends nothing")
+        # a record that already carries `why` is never cleared: a mark with a why entry stays, and a second run drops nothing
+        _remember(checks, {kept: cid(kept)}, [_unaccepted(kept)], "22. (precondition) a mark with a why entry")
+        before = dict(_record().get("keys") or {})
+        clear = getattr(sweep, "clear_unexplained", None)
+        checks.ok(callable(clear), "22. sweep.clear_unexplained exists")
+        if callable(clear):
+            clear()
+        checks.ok(kept in before and _record().get("keys") == before, "22. a second run drops nothing, and a mark with a why entry stays")
+
+
+def check_unread_codes_have_groups(checks: Checks) -> None:
+    checks.note("")
+    checks.note("BAND SHEETS 8 — every UNREAD_* code the free reader can emit has a group in app/src/reasons.ts")
+    text = (REPO_ROOT / "app" / "src" / "reasons.ts").read_text("utf-8")
+    # `pokemon_needs_a_set` is the unhinted card's code: such a card is never read, so it is in no paid group (10.1, sheet 4).
+    codes = {v for k, v in vars(match).items() if k.startswith("UNREAD_") and isinstance(v, str)} - {match.UNREAD_NO_HINT}
+    checks.ok(len(codes) >= 10, "8. (precondition) the free reader names its codes")
+    for code in sorted(codes):
+        checks.ok(f"'{code}'" in text or f'"{code}"' in text, f"8. {code} has a group in reasons.ts")
+
+
 CHECKS = (
+    check_why_kept_with_the_mark,
+    check_sweep_detail_reads,
+    check_clear_unexplained_once,
+    check_unread_codes_have_groups,
     check_claims_correction_requeues,
     check_sweep_queue,
     check_sweep_watcher,

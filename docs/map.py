@@ -753,7 +753,7 @@ COMPONENTS = [
                                            "D56", "D58", "D59", "D65", "D87", "D89", "D115", "D137",
                                            "D145", "D147", "D150", "D156", "D166", "D180",
                                            "D183", "D188", "D253", "D259", "D262"], "tested_by": ["T7"]},
-            "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D86", "D54"], "tested_by": ["T7"]},
+            "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D86", "D54", "D65"], "tested_by": ["T7"]},
         },
     },
     {
@@ -1847,6 +1847,11 @@ COMPONENTS = [
                 "behavior, so it carries no tested_by: an unenforced claim is the defect "
                 "docs/debts/ names, not a rounding error.",
         "modules": {
+            "clock.py": {
+                "does": "the one UTC-second stamp every receipt writes, and the one way to read "
+                        "it back.",
+                "governed_by": ["D88"],
+            },
             "numbers.py": {"does": "a card's number, composed (`join_key`), screen-drawn "
                                    "(`display_number`) and stripped of a glued set code "
                                    "(`strip_set_code`) — a LEAF module with no imports beyond the "
@@ -5791,6 +5796,18 @@ COMPONENTS = [
                         "already aims the export. PKMNSCAN_TCG_SELLER_KEY must be in .env or "
                         "a live fetch answers 403.",
             },
+            "portal_http.py": {
+                "does": "the transport both TCGplayer hosts share: the session cookie read, "
+                        "the User-Agent, the no-redirect opener, the socket handling and the "
+                        "one status ladder. Each host passes in its own refusal class, codes "
+                        "and words.",
+                "governed_by": ["D65", "D69"],
+            },
+            "refusal.py": {
+                "does": "`BadRequest`, the refusal every route module can raise, and "
+                        "`require_box`, the one parser for a box number in a request body.",
+                "governed_by": ["D20"],
+            },
             "match.py": {
                 "does": "the one forgiving matcher (FLT-06/04, UX-173), ported from "
                         "`app/src/kit/match.ts` — NFKC/NFKD accent folding, canonical "
@@ -5972,6 +5989,13 @@ COMPONENTS = [
                                             "against the other tree's code. "
                                             "`PKMNSCAN_CHECKOUT_IDENTITY=off` skips it",
                                     "governed_by": ["D43", "D261"]},
+            "demoSplit.ts": {"does": "the demo build's split of the recorded responses (DEBT84): a "
+                                     "Vite plugin loaded only when `VITE_DEMO=1`, writing "
+                                     "`demo-data/` beside the app, one file per small route "
+                                     "family or per large response, and an index of key to file. "
+                                     "`demoServer.ts` fetches a file when a screen first asks. "
+                                     "The recorder's chunks are read as written.",
+                             "governed_by": ["D172"]},
             "vite.config.ts": {"does": "the dev server, strictPort — a busy port fails "
                                        "loudly rather than serving on 5174, where CLAUDE.md, the "
                                        "Makefile and scripts/views.txt would all three be wrong. "
@@ -6654,6 +6678,12 @@ COMPONENTS = [
                                           "bundle.",
                                   "governed_by": ["D10", "D20", "D26", "D28", "D37", "D43", "D86",
                                                   "D57", "D58", "D103", "D172"]},
+            "src/demoShared.ts": {"does": "what the demo's runtime and its build step agree on: "
+                                          "the canonical key spelling, the two derived Home reads "
+                                          "(`recentCards`, `historyCards`) and the folder the split "
+                                          "recording lives in. Imports nothing, so the Vite config "
+                                          "can load it.",
+                                  "governed_by": ["D172"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript. "
@@ -7137,6 +7167,20 @@ COMPONENTS = [
                         "sends. It polls the keys-scoped sweep read with `usePoll` and holds its "
                         "loaded size from the first paint (D313).",
                 "governed_by": ["D291", "D313"],
+            },
+            "src/ReviewBandSheet.tsx": {
+                "does": "THE REVIEW BAND'S FOUR SHEETS (`docs/specs/identify-engine-pick.md`, section "
+                        "10): waiting for a paid look (grouped by why the free reader stopped), not "
+                        "yet looked at (by box), matched free (by set) and the cards that need a "
+                        "set named (by box). A snapshot taken at open, a held line when the count "
+                        "moves, a group's first 50 rows. A row press goes to the card on Inventory. "
+                        "Its styles are `ReviewBandSheet.css`.",
+                "governed_by": ["D181", "D196", "D313"],
+            },
+            "src/ReviewBandSheet.css": {
+                "does": "The band sheets' styles: group heads, pointer lines, rows with a 40 by 56 "
+                        "photo held from first paint, the held \"count has moved\" slot. Tokens only.",
+                "governed_by": ["D313"],
             },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "

@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Optional
 
 import geometry
+from geometry.crop import MAX_REGION_EDGE
 
 try:  # reported as a message at call time, not as a traceback at import
     import numpy as np
@@ -40,7 +41,9 @@ except ImportError:  # pragma: no cover - environment problem, not logic
     np = None
     Image = None
 
-MAX_EDGE = 1568
+# The API's own cap on a longest edge. Declared once, in `geometry.crop` (the lower package), where a
+# region band is held under it too.
+MAX_EDGE = MAX_REGION_EDGE
 
 # HOW MUCH OF THE DETECTED CARD'S OWN SIZE TO KEEP AROUND IT, per side. The owner chose this
 # looking at the rendered boxes over five real frames — the detected edge alone read as too

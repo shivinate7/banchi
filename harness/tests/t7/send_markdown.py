@@ -32,7 +32,7 @@ from harness.tests import Checks
 from cli import cmd_reprice, resolve, runs
 from pipeline import corpus, reprice, sendguard, tcgcsv
 from server import capture_server, pipeline_routes, send_routes, tcg_export, tcg_import
-from store import db, files, master, sendclaims
+from store import clock, db, files, master, sendclaims
 from store.session import Store
 from harness.tests.t7.common import (
     ARTICUNO_SKU,
@@ -50,6 +50,7 @@ from harness.tests.t7.common import (
     quiet,
     request,
     seam_run,
+    write_export,
 )
 
 
@@ -2040,7 +2041,7 @@ def check_send_hazards(checks: Checks) -> None:
 
     # ---------------------------------------------------- S3: the same bytes, windowed
     with _case(checks, "S3: the same bytes, windowed"), isolated_home():
-        now = send_routes._now()
+        now = clock.now()
         # ROUND-1 STAMPS, WITHOUT THE RANDOM TAIL: the old shape still reads, and it is the
         # shape the round-1 build could see, so this case goes red on that build for the
         # right reason (it refused the 20-minute-old bytes) rather than by not seeing them.
@@ -2049,7 +2050,7 @@ def check_send_hazards(checks: Checks) -> None:
                 send_routes.sends_dir() / stamp,
                 {
                     "kind": "send", "digest": f"d{age}", "taken_back_at": None,
-                    "pushed": {"upload_id": "u", "pushed_at": send_routes._iso(now - timedelta(seconds=age))},
+                    "pushed": {"upload_id": "u", "pushed_at": clock.iso(now - timedelta(seconds=age))},
                 },
             )
         checks.equal(
@@ -2102,7 +2103,7 @@ def check_send_hazards(checks: Checks) -> None:
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
-        gap = send_routes._parse(sent["check_after"]) - send_routes._parse(sent["published_at"])
+        gap = clock.parse(sent["check_after"]) - clock.parse(sent["published_at"])
         checks.ok(
             gap.total_seconds() > cmd_reprice.PUBLISH_LAG_S,
             f"THE FIRST CHECK IS DUE PAST THE LAG, not at it: {gap.total_seconds()}s after the publish",
@@ -3612,6 +3613,254 @@ def check_send_review_r7(checks: Checks) -> None:
             "R6-1: THE WORKLIST CARRIES TCGPLAYER'S PRICE FROM THE NEWEST LIVE EXPORT (22.03), not "
             "only the join's (25.99)",
         )
+
+
+def _store_backed_run(checks: Checks, home: Path, cards, only=None, stamp=True) -> "runs.Run":
+    """A run made the way the sweep makes one: cards identified IN THE STORE, then
+    `pkmnscan join --keys` (the store-backed join `cli/cmd_match.py` calls through
+    `resolve.load_from_store`). Its directory holds `manifest.json` with `selection.keys` and
+    `pricing.json`, and NEVER `identifications.json` (D65, a sweep card reads as a press card)."""
+    from cli import __main__ as entry
+
+    keys = []
+    for box, index, name, number, finish in cards:
+        while Store().read().inventory.next_index(box) <= index:
+            capture_server.do_capture(capture_payload(box))
+        keys.append(master.position_key(box, index))
+        with Store().write() as snapshot:
+            snapshot.inventory.record_identification(
+                keys[-1], name=name, number=number, printed_total="159", confidence="high",
+                run="t7-sweep", detected_finish=finish,
+            )
+    files.runs_dir().mkdir(parents=True, exist_ok=True)
+    before = {d.name for d in files.runs_dir().iterdir()}
+    export = write_export(home / "sweep-export.csv")
+    with quiet():
+        keys = [k for k in keys if only is None or k in only]
+        code = entry.main(["join", "--keys", ",".join(keys), "--export", str(export)])
+    checks.equal(code, 0, "fixture: the store-backed join writes the sweep-shaped run")
+    made = [d for d in files.runs_dir().iterdir() if d.name not in before]
+    checks.equal(len(made), 1, "fixture: exactly one run directory")
+    run = runs.open_run(made[0])
+    with Store().write() as snapshot:  # the sweep stamps each card it adopts with its run's name
+        for key in keys if stamp else ():
+            snapshot.inventory.cards[key].run = run.name
+    checks.ok(
+        not run.path(runs.IDENTIFICATIONS).exists() and (run.manifest.get("selection") or {}).get("keys") == keys,
+        "fixture: the run holds selection.keys and no identifications.json",
+    )
+    return run
+
+
+def check_send_store_backed_runs(checks: Checks) -> None:
+    """A run with no `identifications.json` reads the store's CURRENT cards for its
+    `selection.keys`, never a frozen copy (owner's ruling; D65). Each case red on main with
+    `RunError: ... does not exist — run pkmnscan identify first`."""
+    from cli import __main__ as entry
+    from cli import cmd_identify
+
+    checks.note("")
+    checks.note("STORE-BACKED RUNS — emit, send and the run readers over a sweep-shaped run")
+    one = [(3, 1, "Articuno", "161", None), (3, 2, "Dunsparce", "120", "normal")]
+
+    def written(run_dir):
+        rows = tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED)).rows
+        return {r[tcgcsv.SKU_COLUMN]: r[tcgcsv.QUANTITY_COLUMN] for r in rows}
+
+    # 1. EMIT
+    with isolated_home() as home:
+        run = _store_backed_run(checks, home, one)
+        raised = ""
+        with quiet() as said:
+            try:
+                code = entry.main(["emit", str(run.directory)])
+            except runs.RunError as caught:
+                code, raised = None, str(caught)
+        checks.equal(code, 0, "EMIT: `emit` over a sweep run exits 0, no RunError: " + (raised or said.getvalue()[-300:]))
+        got = written(run) if run.path(runs.IMPORT_MERGED).exists() else {}
+        checks.equal(got, {ARTICUNO_SKU: "1", DUNSPARCE_SKU: "1"}, "EMIT: import.csv holds both cards' SKUs")
+
+        # 4. THE OTHER READERS, on the same run
+        def reads(fn):
+            try:
+                return fn()
+            except Exception as caught:  # noqa: BLE001
+                return f"raised {type(caught).__name__}: {caught}"
+
+        keys = run.manifest["selection"]["keys"]
+        checks.equal(
+            reads(lambda: pipeline_routes._run_keys(run.name)), keys,
+            "READERS: the route's `_run_keys` names the sweep run's selection keys, never []",
+        )
+        checks.equal(
+            reads(lambda: cmd_identify._run_keys_of(run.name, lambda _line: None)), sorted(keys),
+            "READERS: `identify --run <sweep run>` selects the run's selection keys, never []",
+        )
+        run.set(joined=False)
+        counts = reads(lambda: {
+            row["run"]: row["cards"]
+            for row in pipeline_routes._unreachable(Store().read().inventory, 0, files.runs_dir())["unjoined"]
+        })
+        checks.equal(
+            counts.get(run.name) if isinstance(counts, dict) else counts, 2,
+            "READERS: the unjoined count over a sweep run is the store's 2, not 0",
+        )
+
+    # 2. SEND over the wire, 3. MIXED SEND with a classic run
+    for mixed in (False, True):
+        label = "MIXED SEND" if mixed else "SEND"
+        with send_portal() as portal, isolated_home() as home:
+            names = []
+            if mixed:
+                classic, _ = seam_run(checks, one)
+                names.append(classic.name)
+            run = _store_backed_run(
+                checks, home,
+                [(4, 1, "Articuno", "161", None), (4, 2, "Dunsparce", "120", "normal")] if mixed else one,
+            )
+            names.append(run.name)
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+            httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+            port = httpd.server_address[1]
+            thread = _spawn_server(httpd)
+            try:
+                status, body, _ = request(
+                    port, "POST", "/pipeline/send", payload={"runs": names, "confirm": True}
+                )
+            finally:
+                httpd.shutdown()
+                thread.join(timeout=5)
+            error = (json.loads(body or b"{}").get("error") or {}).get("code")
+            checks.equal((status, error), (200, None), f"{label}: POST /pipeline/send answers 200, not 409 write_refused")
+            want = "2" if mixed else "1"
+            checks.equal(
+                {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]},
+                {ARTICUNO_SKU: want, DUNSPARCE_SKU: want},
+                f"{label}: TCGplayer receives both SKUs, one row each, aggregated by SKU",
+            )
+
+
+def check_send_store_backed_follows_cards(checks: Checks) -> None:
+    """A store-backed run follows each CARD, not its slot (owner's ruling on PR #751).
+    `do_remove_card` slides higher cards down one index, so a stored position can come to name
+    a card the run never held. A moved card is found where it is now; a gone card is refused
+    by name; a card the run never held is never sent."""
+    from cli import __main__ as entry
+
+    checks.note("")
+    checks.note("STORE-BACKED RUNS FOLLOW CARDS — a removal below the run slides its slots")
+    art, dun, rev = (5, 0, "Articuno", "161", None), (5, 0, "Dunsparce", "120", "normal"), (
+        5, 0, "Dunsparce", "120", "reverse_holo")
+
+    def cards_at(*specs):
+        return [(5, i + 1, *spec[2:]) for i, spec in enumerate(specs)]
+
+    def remove(index):
+        card = Store().read().inventory.cards[master.position_key(5, index)]
+        capture_server.do_remove_card(5, index, {"capture_id": card.capture_id})
+
+    def emitted(run):
+        raised = ""
+        with quiet() as said:
+            try:
+                code = entry.main(["emit", str(run.directory)])
+            except Exception as caught:  # noqa: BLE001
+                code, raised = None, str(caught)
+        rows = {}
+        if run.path(runs.IMPORT_MERGED).exists():
+            rows = {
+                r[tcgcsv.SKU_COLUMN]: r[tcgcsv.QUANTITY_COLUMN]
+                for r in tcgcsv.read_export(run.path(runs.IMPORT_MERGED)).rows
+            }
+        return code, rows, said.getvalue() + raised
+
+    def old_manifest(run):  # what the owner's runs hold: positions only, no per-card identity
+        keep = ("basis", "counts", "created_at", "exports", "joined", "review_below_confidence",
+                "rule", "selection", "updated_at")
+        run.manifest = {k: v for k, v in run.manifest.items() if k in keep}
+        run.manifest["selection"] = {"keys": list(run.manifest["selection"]["keys"])}
+        run.save()
+
+    wanted = {ARTICUNO_SKU: "1", DUNSPARCE_SKU: "1"}
+    # (a) a junk card at 5/1 is removed; the run holds 5/2 and 5/3; a never-held reverse is at 5/4
+    for label, old in (("(a)", False), ("(c) older manifest", True)):
+        with isolated_home() as home:
+            run = _store_backed_run(
+                checks, home, cards_at(dun, art, dun, rev),
+                only=[master.position_key(5, 2), master.position_key(5, 3)],
+            )
+            if old:
+                old_manifest(run)
+            remove(1)
+            code, rows, text = emitted(run)
+            checks.equal(
+                (code, rows), (0, wanted),
+                f"{label}: after a removal below it the run sends exactly its own two cards, "
+                f"found at their new keys; the never-held reverse card is not sent. {text[-200:]}",
+            )
+
+    with isolated_home() as home:  # (c) nothing moved: an older manifest sends as it always did
+        run = _store_backed_run(
+            checks, home, cards_at(art, dun), only=[master.position_key(5, 1), master.position_key(5, 2)]
+        )
+        old_manifest(run)
+        code, rows, _ = emitted(run)
+        checks.equal((code, rows), (0, wanted), "(c) an older manifest, nothing moved, sends its two cards")
+
+    # (b) a card the run held is removed: refused by name, nothing else sent in its place
+    with isolated_home() as home:
+        run = _store_backed_run(
+            checks, home, cards_at(art, dun, rev),
+            only=[master.position_key(5, 1), master.position_key(5, 2)],
+        )
+        remove(1)
+        code, rows, text = emitted(run)
+        checks.ok(code not in (0, None) and not rows, f"(b) a run card since removed refuses the emit and sends nothing: exit {code}, rows {rows}")
+        checks.ok("Articuno" in text, f"(b) and the refusal names the card: {text[-300:]!r}")
+        checks.ok("Dunsparce" not in text, f"(d) and names only that card, no other of the run: {text[-300:]!r}")
+
+    # (a) a later sweep re-reads and re-stamps one card of sweep-01: both runs still follow cards
+    with isolated_home() as home:
+        spec = cards_at(art, dun)
+        first = _store_backed_run(checks, home, spec)
+        _store_backed_run(checks, home, spec, only=[master.position_key(5, 2)])  # re-stamps 5/2
+        code, rows, text = emitted(first)
+        checks.equal((code, rows), (0, wanted), "(a) sweep-01 still sends its cards after a later sweep re-stamped one: " + text[-200:])
+        second = runs.open_run(sorted(d for d in files.runs_dir().iterdir())[-1])
+        code, rows, text = emitted(second)
+        checks.ok(DUNSPARCE_SKU not in rows, f"(a) and the re-read card goes out once across both runs: {rows}")
+
+    # (b) a `join --keys` run stamps no card, and sends its cards
+    with isolated_home() as home:
+        run = _store_backed_run(checks, home, cards_at(art, dun), stamp=False)
+        code, rows, text = emitted(run)
+        checks.equal((code, rows), (0, wanted), "(b) a join --keys run, stamped on no card, sends its cards: " + text[-200:])
+
+    # (e) an old keys-only manifest backfills at first read; a second read uses the recorded map
+    with isolated_home() as home:
+        run = _store_backed_run(checks, home, cards_at(art, dun))
+        old_manifest(run)
+        def names():
+            try:
+                cards = runs.open_run(run.directory).read_identifications()["cards"]
+            except runs.RunError as caught:
+                return f"refused: {caught}"
+            return sorted((c.get("identification") or {}).get("name") for c in cards.values())
+
+        checks.equal(names(), ["Articuno", "Dunsparce"], "(e) an old manifest, every card stamped, backfills at first read")
+        with Store().write() as snapshot:
+            for key in run.manifest["selection"]["keys"]:
+                snapshot.inventory.cards[key].run = "a-later-sweep"
+        checks.equal(names(), ["Articuno", "Dunsparce"], "(e) a second read uses the recorded map, not the stamp")
+        code, rows, text = emitted(runs.open_run(run.directory))
+        checks.equal((code, rows), (0, wanted), "(e) and the backfilled run sends: " + text[-200:])
+    with isolated_home() as home:  # backfill only when EVERY key's card is stamped with that run
+        run = _store_backed_run(checks, home, cards_at(art, dun))
+        old_manifest(run)
+        with Store().write() as snapshot:
+            snapshot.inventory.cards[master.position_key(5, 2)].run = "a-later-sweep"
+        code, rows, text = emitted(runs.open_run(run.directory))
+        checks.ok(code not in (0, None) and not rows, f"(e) an old manifest with one card stamped elsewhere refuses, sends nothing: exit {code}, rows {rows}")
 
 
 def check_schema_eleven_then_twelve(checks: Checks) -> None:
@@ -5267,6 +5516,8 @@ def check_withholding(checks: Checks) -> None:
 
 CHECKS = (
     check_markdown,
+    check_send_store_backed_runs,
+    check_send_store_backed_follows_cards,
     check_markdown_floor,
     check_markdown_lens,
     check_markdown_push,

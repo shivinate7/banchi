@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { CAPTURE_PORT, CAPTURE_URL, DEV_PORT } from './devPort'
 import { checkoutIdentityPlugin } from './checkoutIdentity'
+import { demoSplit } from './demoSplit'
 
 // Port 5173 is not Vite's default acting by accident — CLAUDE.md and the Makefile's `dev`
 // target both promise :5173, and scripts/views.txt points the screenshot runner there.
@@ -39,7 +40,7 @@ export default defineConfig({
   base: process.env.DEMO_BASE ?? '/',
   // `checkoutIdentityPlugin` answers `GET /__checkout` with this checkout's path, so a test
   // run that reuses a server can prove it is this tree's (checkoutIdentity.ts).
-  plugins: [react(), checkoutIdentityPlugin()],
+  plugins: [react(), checkoutIdentityPlugin(), ...(process.env.VITE_DEMO === '1' ? [demoSplit()] : [])],
   server: {
     port: DEV_PORT,
     strictPort: true,

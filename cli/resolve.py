@@ -560,7 +560,7 @@ def box_views(
                         continue
                 except games.UnknownGame:
                     pass
-                rows.append((index, state not in master.TERMINAL_STATES))
+                rows.append((index, master.state_is_on_hand(state)))
             if broken or not found_any:
                 continue
             grouped[n] = rows
@@ -582,7 +582,7 @@ def box_views(
             except games.UnknownGame:
                 pass  # unregistered reads as located, exactly as `join.is_located` answers
             grouped.setdefault(at[0], []).append(
-                (at[1], state not in master.TERMINAL_STATES)
+                (at[1], master.state_is_on_hand(state))
             )
 
     views: Dict[int, join.BoxView] = {}
@@ -994,7 +994,7 @@ def _committed_keys(
     by_sku = _cards_by_sku(inventory) if by_sku is None else by_sku
     keys = set()
     for sku, out in copies_out.items():
-        on_hand = [row for row in by_sku.get(sku, ()) if row.state not in master.TERMINAL_STATES]
+        on_hand = [row for row in by_sku.get(sku, ()) if master.is_on_hand(row)]
         for row in _oldest_first(on_hand)[:out]:
             keys.add(row.key)
     return keys
@@ -1108,7 +1108,8 @@ def _games_needed(run: runs.Run) -> "OrderedDict[str, List[str]]":
     # box whose number was deleted and reused since this run is somebody else's drawer, and
     # the `held.game` fallback below would read a foreign card's game as this card's — which
     # is how the first refusal to fire named 53 riftbound cards in a Pokemon run.
-    refuse_reallocated(payload, inventory, run)
+    if not run.store_backed:  # a store-read payload is at today's slots by construction
+        refuse_reallocated(payload, inventory, run)
     return _needed_games(payload.get("cards") or {}, inventory)
 
 
@@ -2022,7 +2023,7 @@ def paperwork_for(run: runs.Run) -> List[orders.PaperworkEntry]:
         # every consumer re-checks the card it lands on anyway.
         moved, gone = {}, set()
     else:
-        _, moved, departed, _ = realign(payload)
+        _, moved, departed, _ = realign(payload) if not run.store_backed else (0, {}, [], 0)
         gone = set(departed)
 
     found: List[orders.PaperworkEntry] = []
@@ -2086,13 +2087,17 @@ def load(
     # D36 — BEFORE anything reads a position out of this payload. A run directory is immutable
     # and the store is not, so the slot a card was identified at may not be the slot it is in
     # now. Matched by photograph, refused when uncertain, untouched when nothing has moved.
-    payload, realigned, departed, unverified = realign(payload)
+    if run.store_backed:  # read from the store just now: nothing frozen to realign or disown
+        realigned, departed, unverified = {}, [], []
+    else:
+        payload, realigned, departed, unverified = realign(payload)
 
     snapshot = Store().read()
     # D36 (amended) — the same refusal `_games_needed` raises on the `exports_for` path, as
     # the backstop for a caller handing a mapping straight in. Before `held_cards` is read:
     # every read below at this run's keys assumes the box is this run's drawer.
-    refuse_reallocated(payload, snapshot.inventory, run)
+    if not run.store_backed:
+        refuse_reallocated(payload, snapshot.inventory, run)
     return _resolve(
         run,
         payload,
@@ -2219,6 +2224,64 @@ def store_payload(keys: Sequence[str], inventory: master.Inventory) -> Dict[str,
             "a typo, or a card this store has never captured, has none."
         )
     return {"cards": cards}
+
+
+def record_cards(run: runs.Run, keys: Sequence[str], inventory: master.Inventory) -> None:
+    """Record the manifest's `cards`, `{key: {"cid", "name"}}`, for each key not yet recorded.
+
+    The card's `cid` is its identity wherever it later slides to; `name` is its last-known name,
+    which a refusal prints if the card is gone. Writes into the manifest in memory only: the
+    caller's next `run.set` / `save` flushes it.
+    """
+    cards = dict(run.manifest.get("cards") or {})
+    for key in keys:
+        card = inventory.cards.get(key)
+        if key not in cards and card is not None and card.cid:
+            cards[key] = {"cid": card.cid, "name": card_reading(card).name or card.name or key}
+    run.manifest["cards"] = cards
+
+
+def store_backed_payload(run: runs.Run, inventory: master.Inventory) -> Dict[str, Any]:
+    """A store-backed run's cards, read FROM THE STORE and FOLLOWING EACH CARD by its `cid`.
+
+    The manifest's `cards` records `{key: {cid, name}}` when the run is made (`record_cards`).
+    Each cid is followed to where its card is NOW; the `run` stamp is never read once the map
+    exists, because a later sweep re-stamps a card. A recorded cid that is gone refuses, naming
+    only that card by its last-known name. A card not recorded is never sent. An older
+    keys-only manifest backfills the map once, at first read, from the cards stamped with this
+    run, and only when they number exactly the keys (else it cannot tell which cards it held).
+    """
+    if "cards" not in run.manifest:
+        keys = list((run.manifest.get("selection") or {}).get("keys") or [])
+        stamped = inventory.cards.where(run=run.name)
+        if len(stamped) != len(keys):
+            raise runs.RunError(
+                f"Run {run.name} records no card identities, and the store holds "
+                f"{len(stamped)} cards stamped with it against {len(keys)} it selected, so it "
+                "cannot tell which cards it held. Nothing was sent."
+            )
+        run.manifest["cards"] = {
+            master.position_key(c.box, c.index): {
+                "cid": c.cid, "name": card_reading(c).name or c.name or "a card",
+            }
+            for c in stamped
+            if c.cid
+        }
+        run.save()
+    held, gone = [], []
+    for entry in run.manifest["cards"].values():
+        found = inventory.cards.where(cid=entry["cid"])
+        if found:
+            held.append(found[0])
+        else:
+            gone.append(str(entry.get("name") or entry["cid"]))
+    if gone:
+        raise runs.RunError(
+            f"Run {run.name} held a card that is no longer in the store: {', '.join(gone)}. "
+            "Nothing was sent."
+        )
+    held.sort(key=lambda c: (c.box, c.index))
+    return store_payload([master.position_key(c.box, c.index) for c in held], inventory)
 
 
 def load_from_store(

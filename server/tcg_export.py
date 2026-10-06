@@ -88,7 +88,7 @@ the two were conflated once while this was being scoped, and reached the wrong c
 THAT LAST CLAUSE WAS MEASURED FALSE ON 2026-08-30 AND IS CORRECTED HERE RATHER THAN
 DELETED (D69). `order-management-api.tcgplayer.com` answers NO `www-authenticate` header on
 any path probed; it is a COOKIE SESSION authenticated by the same `TCGAuthTicket_Production`
-cookie `_cookie()` below reads, because that cookie is scoped to `.tcgplayer.com` and both
+cookie `_session()` below reads, because that cookie is scoped to `.tcgplayer.com` and both
 hosts sit under it. The portal's own XHR sets no `Authorization` header either. The
 sentence stands because the CONFLATION it warns about was real and the two hosts genuinely
 are different — what was wrong was the scheme it attributed to the second one.
@@ -117,6 +117,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 import envfile  # noqa: E402
 from pipeline import setnames  # noqa: E402
+from server import portal_http  # noqa: E402
 
 # The seller portal's own download. A constant rather than something a request can name: a
 # route that fetched any URL a client sent, carrying the operator's session cookie, would be
@@ -149,13 +150,13 @@ FILTERS_URL = "https://store.tcgplayer.com/admin/pricing/getjsonfilters"
 # cookie the operator had already fixed. A bare name rather than a
 # `PKMNSCAN_` one, which is this repo's existing split: knobs are prefixed, secrets are not
 # (`ANTHROPIC_API_KEY`, `POKEMONTCG_API_KEY`).
-COOKIE_ENV = "TCGPLAYER_STORE_COOKIE"
+COOKIE_ENV = portal_http.COOKIE_ENV
 
 # Two knobs, and each exists because a named refusal points at it. The URL is how T7 aims
 # this at a local socket instead of at TCGplayer; the agent is the first thing to try when
 # the WAF refuses.
 URL_ENV = "PKMNSCAN_TCG_EXPORT_URL"
-AGENT_ENV = "PKMNSCAN_TCG_USER_AGENT"
+AGENT_ENV = portal_http.AGENT_ENV
 
 # AN HONEST AGENT RATHER THAN A DISGUISED ONE, and the measurement is why it can be. AWS WAF
 # sits on `store.tcgplayer.com` and blocks by request signature, so a block was a plausible
@@ -164,7 +165,7 @@ AGENT_ENV = "PKMNSCAN_TCG_USER_AGENT"
 # unauthenticated. So there is no evidence that a disguise is needed, and this is the
 # operator's own tooling against the operator's own account. If an AUTHENTICATED request is
 # scored differently, `tcg_blocked` names `AGENT_ENV` as the remedy.
-DEFAULT_AGENT = "pkmnscan/1 (+local; python-urllib)"
+DEFAULT_AGENT = portal_http.DEFAULT_AGENT
 
 # Generous, because the portal builds the CSV before it sends it and a large catalog is not a
 # failure — bounded, because a request that never answers is worse than one that refuses.
@@ -175,11 +176,6 @@ TIMEOUT_S = 120
 # megabytes is far past anything real and is a backstop against a body that never ends, not a
 # judgement about how large an export may be.
 MAX_BYTES = 32 * 1024 * 1024
-
-# What an expired session looks like. The portal answers a 302 to its own logon page rather
-# than a 401, so the redirect is what has to be read — which is why redirects are NOT followed
-# blindly below. An HTML login page parsed as a CSV is the failure this prevents.
-_LOGON_MARKER = "account/logon"
 
 
 # ------------------------------------------------- THE FIELDS THAT ARE NOT A PER-REQUEST CHOICE
@@ -371,47 +367,20 @@ def _filters_endpoint() -> str:
     return override.rstrip("/").rsplit("/", 1)[0] + "/getjsonfilters"
 
 
-def _cookie() -> str:
-    """The `Cookie:` header value, or the refusal that says where to put one.
-
-    THE WHOLE HEADER VALUE, NOT ONE TICKET. `TCGAuthTicket_Production` is the cookie the
-    session hangs on, and it is not established that it is the only one the portal requires —
-    hard-coding one name would be a guess that fails as an expired session and sends the
-    operator looking in the wrong place. Copying the whole `Cookie:` header out of the
-    browser's network tab is one action and cannot be wrong about which cookies matter.
-    """
-    value = envfile.get_live(COOKIE_ENV)
-    if not value:
-        print(f"export: set {COOKIE_ENV} in the settings file", file=sys.stderr, flush=True)
+def _session() -> str:
+    """The `Cookie:` header value, or the refusal that says where to put one."""
+    value, problem = portal_http.read_cookie("export")
+    if problem == "missing":
         raise FetchRefusal(
             "tcg_cookie_missing",
             "TCGplayer is not signed in on this Mac. Sign in at store.tcgplayer.com in your browser, open the pricing page, and copy the Cookie header of any request in the browser's network tab. Paste it into the Mac's settings file (the .env file in the app's folder), keeping it private, then try again.",
         )
-    if "=" not in value:
-        print(f"export: {COOKIE_ENV} holds no name=value pair", file=sys.stderr, flush=True)
+    if problem == "malformed":
         raise FetchRefusal(
             "tcg_cookie_malformed",
             "The saved TCGplayer session in the Mac's settings file (the .env file in the app's folder) is not a valid cookie. Copy the whole Cookie header value from your browser, not just part of it.",
         )
     return value
-
-
-def _agent() -> str:
-    return (envfile.get_live(AGENT_ENV) or "").strip() or DEFAULT_AGENT
-
-
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Hand a 3xx back to the caller instead of following it.
-
-    FOLLOWING BLINDLY IS THE BUG THIS PREVENTS. An expired session answers 302 to the logon
-    page, and the default handler would fetch that page and return it as a 200 full of HTML —
-    which `_check_body` would then have to recognise as "not a CSV" without being able to say
-    that the SESSION is what expired. One hop is followed deliberately below, by
-    `fetch`, and only where the destination is not the logon page.
-    """
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D102
-        return None
 
 
 def _open(
@@ -421,55 +390,48 @@ def _open(
     request = urllib.request.Request(url, data=data, method="POST" if data else "GET")
     if content_type:
         request.add_header("Content-Type", content_type)
-    request.add_header("User-Agent", _agent())
+    request.add_header("User-Agent", portal_http.agent())
     request.add_header("Accept", "text/csv, application/octet-stream, */*")
     if cookie:
         request.add_header("Cookie", cookie)
-    opener = urllib.request.build_opener(_NoRedirect)
     host = urlparse(url).netloc
-    try:
-        response = opener.open(request, timeout=TIMEOUT_S)
-        return response.status, dict(response.headers), response.read(MAX_BYTES + 1)
-    except urllib.error.HTTPError as caught:
-        # A 3xx reaches here BECAUSE of `_NoRedirect`, which is the point: an HTTPError is
-        # how a non-followed redirect is delivered, and its headers carry the Location.
-        try:
-            body = caught.read(MAX_BYTES + 1)
-        except (OSError, http.client.HTTPException):
-            body = b""
-        return caught.code, dict(caught.headers), body
-    except urllib.error.URLError as caught:
-        raise FetchRefusal(
+    return portal_http.send(
+        request,
+        timeout=TIMEOUT_S,
+        max_bytes=MAX_BYTES,
+        unreachable=lambda caught: FetchRefusal(
             "tcg_unreachable",
             f"Could not reach {host}: {caught.reason}.",
-        ) from None
-    except (OSError, http.client.HTTPException):
+        ),
         # EVERY OTHER WAY THE SOCKET CAN FAIL, AND THE TIMEOUT IS THE ONE THAT MATTERS. On this
         # repo's Python 3.9 `socket.timeout` is an `OSError` and NOT a `TimeoutError` (the two
         # were merged in 3.10), and urllib raises it raw from `getresponse()` and from
-        # `read()` — outside the `URLError` it wraps a connect failure in. `except TimeoutError`
-        # alone caught none of them, so a slow answer escaped every caller as a traceback. A
-        # dropped connection (`RemoteDisconnected`, `IncompleteRead`) is the same event from
-        # the caller's side: no answer it can read.
+        # `read()` — outside the `URLError` it wraps a connect failure in. A dropped connection
+        # (`RemoteDisconnected`, `IncompleteRead`) is the same event from the caller's side: no
+        # answer it can read.
         #
         # THE MESSAGE SAYS WHAT IS KNOWN AND NO MORE. On a read, nothing was fetched. On a
         # write, the other end may have done the work before it went quiet — so this sentence
         # does not say "nothing was written", and `server/tcg_import.py`'s callers decide what
         # an unanswered write means.
-        raise FetchRefusal(
+        dropped=lambda: FetchRefusal(
             "tcg_unreachable",
             f"{host} did not answer within {TIMEOUT_S}s, or dropped the connection.",
-        ) from None
+        ),
+        dropped_on=(OSError, http.client.HTTPException),
+        error_body_guard=(OSError, http.client.HTTPException),
+    )
 
 
-def _check_status(status: int, headers: dict, url: str) -> Optional[str]:
+def _check_response(status: int, headers: dict, url: str) -> Optional[str]:
     """Turn a status into a refusal, or into the one URL worth following. None means keep it.
 
     Returns a URL to follow once, or None if the response is the body itself.
     """
-    if status in (301, 302, 303, 307, 308):
+    kind = portal_http.classify(status, headers)
+    if kind in ("logon", "redirect"):
         location = str(headers.get("Location") or "")
-        if _LOGON_MARKER in location.lower():
+        if kind == "logon":
             print(f"export: {COOKIE_ENV} has expired", file=sys.stderr, flush=True)
             raise FetchRefusal(
                 "tcg_session_expired",
@@ -481,25 +443,25 @@ def _check_status(status: int, headers: dict, url: str) -> Optional[str]:
                 f"TCGplayer answered {status} with no Location header. Nothing was written.",
             )
         return urljoin(url, location)
-    if status == 401:
+    if kind == "unauthorized":
         print(f"export: {COOKIE_ENV} was refused", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "tcg_session_expired",
             "TCGplayer refused the saved session as not authorised. Sign in again and replace the saved session in the Mac's settings file (the .env file in the app's folder). Nothing was written.",
         )
-    if status == 403:
+    if kind == "forbidden":
         print(f"export: HTTP 403; set {AGENT_ENV} in the settings file", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "tcg_blocked",
             "TCGplayer refused the request as forbidden. Either the session lost its permissions, or TCGplayer is declining this app's browser signature. Set the browser signature in the Mac's settings file (the .env file in the app's folder) to match your browser and try again. If it keeps refusing, download the export by hand. Nothing was written.",
         )
-    if status >= 500:
+    if kind == "unavailable":
         raise FetchRefusal(
             "tcg_unavailable",
             f"TCGplayer answered {status}. That is their end, not this one — try again "
             f"later. Nothing was written.",
         )
-    if status != 200:
+    if kind != "ok":
         raise FetchRefusal(
             "tcg_unexpected_response",
             f"TCGplayer answered {status} rather than sending a file. Nothing was written.",
@@ -571,8 +533,8 @@ def filters(category_id: int) -> Dict[str, Any]:
     constant read once.
     """
     url = f"{_filters_endpoint()}?categoryId={int(category_id)}"
-    status, headers, body = _open(url, cookie=_cookie())
-    if _check_status(status, headers, url) is not None:
+    status, headers, body = _open(url, cookie=_session())
+    if _check_response(status, headers, url) is not None:
         raise FetchRefusal(
             "tcg_unexpected_response",
             "TCGplayer redirected the filter list. Nothing was read.",
@@ -662,8 +624,8 @@ def fetch_live() -> bytes:
     url = live_endpoint()
     if "?" not in url:
         url = f"{url}?{urlencode(LIVE_QUERY)}"
-    status, headers, body = _open(url, cookie=_cookie())
-    following = _check_status(status, headers, url)
+    status, headers, body = _open(url, cookie=_session())
+    following = _check_response(status, headers, url)
     if following is not None:
         same_host = urlparse(following).netloc == urlparse(url).netloc
         if urlparse(following).scheme not in ("https", "http"):
@@ -672,8 +634,8 @@ def fetch_live() -> bytes:
                 "TCGplayer redirected the download somewhere this will not follow. "
                 "Nothing was written.",
             )
-        status, headers, body = _open(following, cookie=_cookie() if same_host else None)
-        if _check_status(status, headers, following) is not None:
+        status, headers, body = _open(following, cookie=_session() if same_host else None)
+        if _check_response(status, headers, following) is not None:
             raise FetchRefusal(
                 "tcg_unexpected_response",
                 "TCGplayer redirected the download twice. One hop is followed; a chain is "
@@ -723,7 +685,7 @@ def _post_export(model: dict) -> bytes:
     this repo that carries the operator's session.
     """
     url = endpoint()
-    cookie = _cookie()
+    cookie = _session()
     payload = urlencode({"model": json.dumps(model)}).encode("utf-8")
     status, headers, body = _open(
         url,
@@ -731,7 +693,7 @@ def _post_export(model: dict) -> bytes:
         data=payload,
         content_type="application/x-www-form-urlencoded",
     )
-    following = _check_status(status, headers, url)
+    following = _check_response(status, headers, url)
     if following is not None:
         same_host = urlparse(following).netloc == urlparse(url).netloc
         if urlparse(following).scheme not in ("https", "http"):
@@ -741,7 +703,7 @@ def _post_export(model: dict) -> bytes:
                 "Nothing was written.",
             )
         status, headers, body = _open(following, cookie=cookie if same_host else None)
-        if _check_status(status, headers, following) is not None:
+        if _check_response(status, headers, following) is not None:
             raise FetchRefusal(
                 "tcg_unexpected_response",
                 "TCGplayer redirected the download twice. One hop is followed; a chain is "

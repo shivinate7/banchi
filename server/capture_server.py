@@ -330,6 +330,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from codes import products  # noqa: E402
 from pipeline import games, join, setnames, stockimages, tcgcsv  # noqa: E402
+from pipeline.identity_binding import _read_number_key  # noqa: E402
 from pipeline import orders as order_engine  # noqa: E402
 from pipeline import routing  # noqa: E402
 from pipeline import skus as sku_fill  # noqa: E402
@@ -337,6 +338,7 @@ from pipeline import walkplan  # noqa: E402
 from cli import runs as cli_runs  # noqa: E402
 from server import match  # noqa: E402
 from store import Store, db, files, master, numbers, photos, queues  # noqa: E402
+from store.photos import SIDECAR_SUFFIX  # noqa: E402
 from store import cache as cache_mod  # noqa: E402
 from store import orders as order_store  # noqa: E402
 
@@ -363,6 +365,7 @@ from store import orders as order_store  # noqa: E402
 # module as `harness/tests/t7_store_and_seams.py` imports it. Only the package form works
 # under both, and the sys.path line above is what makes it work under the first.
 from server import codes_routes  # noqa: E402
+from server.refusal import BadRequest, require_box  # noqa: E402
 from server import pipeline_routes  # noqa: E402
 # The one press that sends to TCGplayer and makes copies live, and the live check after it
 # (`D273`). Its own module for `tcg_import.py`'s reason: it can
@@ -444,7 +447,6 @@ APP_NO_STORE = "no-store"
 CAPTURES_DIRNAME = "captures"
 CARDS_DIRNAME = "cards"
 PHOTO_SUFFIX = ".jpg"
-SIDECAR_SUFFIX = ".json"
 INDEX_PAD = 4
 
 # A 24 MB ceiling on one decoded image. A phone JPEG is 2-5 MB; this refuses a body that
@@ -1465,15 +1467,6 @@ SERVER_EVENTS = (
 )
 
 
-class BadRequest(ValueError):
-    """A request this server refuses, carrying the status and code to answer with."""
-
-    def __init__(self, status: HTTPStatus, code: str, message: str):
-        super().__init__(message)
-        self.status = status
-        self.code = code
-
-
 # --------------------------------------------------------------------------------- paths
 
 
@@ -1589,23 +1582,6 @@ def sidecar_payload(box: int, index: int, **claims) -> dict:
 
 
 # ---------------------------------------------------------------------- request decoding
-
-
-def _require_box(payload: dict) -> int:
-    raw = payload.get("box")
-    if raw is None:
-        raise BadRequest(HTTPStatus.BAD_REQUEST, "box_required", "Send a box number.")
-    try:
-        box = int(raw)
-    except (TypeError, ValueError):
-        raise BadRequest(
-            HTTPStatus.BAD_REQUEST, "box_invalid", f"box was {raw!r}; send a whole number."
-        ) from None
-    if box < 1:
-        raise BadRequest(
-            HTTPStatus.BAD_REQUEST, "box_invalid", f"box was {box}; boxes start at 1."
-        )
-    return box
 
 
 def _require_image(payload: dict) -> bytes:
@@ -2957,7 +2933,7 @@ def do_capture(payload: dict) -> Tuple[HTTPStatus, dict]:
     raises, the exception leaves the block and the session commits nothing, so there is no
     record pointing at a file that was never written.
     """
-    box = _require_box(payload)
+    box = require_box(payload)
     capture_id = _optional_text(payload, "capture_id")
     # THE SECTION TO FILE INTO, by its divider key (`docs/specs/subbox-capture.md` 1.2). The
     # store picks the position, so this body still carries no index (capture-app.md 5.6).
@@ -5437,7 +5413,7 @@ def do_move_card(box: int, index: int, payload: dict) -> dict:
             "replayed request from moving the card that now sits at this position.",
         )
     aimed_at = _optional_text(payload, "capture_id")
-    to_box = _require_to_box(payload)
+    to_box = require_box(payload, "to_box", "Send a destination box number.")
     aim = _require_section(payload)
 
     key = master.position_key(box, index)
@@ -5462,23 +5438,6 @@ def do_move_card(box: int, index: int, payload: dict) -> dict:
         )
 
     return result
-
-
-def _require_to_box(payload: dict) -> int:
-    raw = payload.get("to_box")
-    if raw is None:
-        raise BadRequest(HTTPStatus.BAD_REQUEST, "to_box_required", "Send a destination box number.")
-    try:
-        to_box = int(raw)
-    except (TypeError, ValueError):
-        raise BadRequest(
-            HTTPStatus.BAD_REQUEST, "to_box_invalid", f"to_box was {raw!r}; send a whole number."
-        ) from None
-    if to_box < 1:
-        raise BadRequest(
-            HTTPStatus.BAD_REQUEST, "to_box_invalid", f"to_box was {to_box}; boxes start at 1."
-        )
-    return to_box
 
 
 def do_move_cards(box: int, payload: dict) -> dict:
@@ -5508,7 +5467,7 @@ def do_move_cards(box: int, payload: dict) -> dict:
     exactly the case that refusal exists for.
     """
     _reject_unknown(payload, MOVE_CARDS_FIELDS)
-    to_box = _require_to_box(payload)
+    to_box = require_box(payload, "to_box", "Send a destination box number.")
     aim = _require_section(payload)
     raw_indices = payload.get("indices")
     if raw_indices is not None:
@@ -5532,7 +5491,7 @@ def do_move_cards(box: int, payload: dict) -> dict:
             wanted = sorted(
                 at
                 for at, _, card in inventory.records_in(box)
-                if card.state not in master.TERMINAL_STATES
+                if master.is_on_hand(card)
             )
             if not wanted:
                 raise BadRequest(
@@ -5913,7 +5872,7 @@ def _destination(inventory: master.Inventory, payload: dict, box: int) -> Tuple[
         to_box = inventory.next_box_number()
         inventory.ensure_box(to_box)
         return to_box, to_box
-    to_box = _require_to_box(payload)
+    to_box = require_box(payload, "to_box", "Send a destination box number.")
     dst = inventory.box(to_box)
     # A BOX THE REGISTRY DOES NOT HOLD IS REFUSED, NEVER MADE (the R3 review): a move must not
     # create a box silently, and a receipt must never name a box the store does not have
@@ -6787,7 +6746,7 @@ def do_box_photos(box: int) -> dict:
     reclaimable, reclaimed = _reclaimable(inventory, box)
     on_hand = sum(
         1 for at, _, card in inventory.records_in(box)
-        if card.state not in master.TERMINAL_STATES
+        if master.is_on_hand(card)
         and photo_for(inventory, card) is not None
     )
     return {
@@ -6951,7 +6910,7 @@ def do_delete_box(box: int) -> dict:
         _, _view = join.box_view(inventory, box)
         for at, card_key, card in inventory.records_in(box):
             holds.append((at, card_key, card))
-            if card.state not in master.TERMINAL_STATES:
+            if master.is_on_hand(card):
                 # D134: a departed record (sold, retired, moved) no longer blocks — it is
                 # buried below. Only an ON-HAND card can still hold a listing.
                 held = _listing_hold(inventory, card)
@@ -8263,32 +8222,6 @@ def _name_differs(name, against: Optional[str]) -> bool:
     return join.name_disputes(name, [{tcgcsv.NAME_COLUMN: against}])
 
 
-def _number_compare_key(strategy: str, number, printed_total) -> Optional[str]:
-    """identity-follows-sku.md §6's per-game number rule, folded once, so EITHER side of a
-    comparison — a read pair, a bound identity pair, or a catalog cell already split the
-    way `bind_sku` splits one (`store/numbers.catalog_number_fields`) — lands on the same
-    key. `None` means "no evidence", `name_disputes`'s own rule for a blank name carried
-    over to the number: a half-read Pokemon pair or a blank cell never manufactures a
-    dispute.
-
-    Pokemon (`numbers.NUMBER_AND_PRINTED_TOTAL`): `numbers.join_key` composes the pair,
-    then `join.number_index_key` is the fold that decides whether two spellings are one
-    number (leading zeros, case). Every other game: `numbers.strip_set_code` first (D55/D67
-    — a model that glued a set code onto the front), then the same fold. Applying
-    `strip_set_code` to every side uniformly, not only a "read" side, is what keeps this
-    symmetric: a SHOWN number that happens to still carry a glued code (a held card, where
-    it equals the read verbatim) strips the same way the READ side does, so the two never
-    manufacture a dispute against each other.
-    """
-    if strategy == numbers.NUMBER_AND_PRINTED_TOTAL:
-        if not number or not printed_total:
-            return None
-        return join.number_index_key(numbers.join_key(number, printed_total))
-    if not number:
-        return None
-    return join.number_index_key(numbers.strip_set_code(number))
-
-
 def _listing_decoration(card, skus: "Skus") -> Dict[str, object]:  # noqa: F821 - store.skus.Skus, duck-typed
     """identity-follows-sku.md §5.4/§8.1, the owner's ruling on Details' two identity lines
     (2026-09-24, verbatim: "show listing name and/or hide when identical i dont think it's
@@ -8340,13 +8273,13 @@ def _listing_decoration(card, skus: "Skus") -> Dict[str, object]:  # noqa: F821 
         "name": listing_name, "number": listing_number, "printed_total": listing_printed_total,
     }
 
-    shown_key = _number_compare_key(strategy, card.number, card.printed_total)
-    listing_key = _number_compare_key(strategy, listing_number, listing_printed_total)
+    shown_key = _read_number_key(strategy, card.number, card.printed_total)
+    listing_key = _read_number_key(strategy, listing_number, listing_printed_total)
     listing_differs = _name_differs(card.name, listing_name) or (
         shown_key is not None and listing_key is not None and shown_key != listing_key
     )
 
-    read_key = _number_compare_key(strategy, card.read_number, card.read_printed_total)
+    read_key = _read_number_key(strategy, card.read_number, card.read_printed_total)
     reading_differs = _name_differs(card.read_name, card.name) or (
         read_key is not None and shown_key is not None and read_key != shown_key
     )
@@ -11482,7 +11415,7 @@ def _zero_padded_variant(term: str) -> Optional[str]:
     if not found:
         return None
     digits, rest = found.group(1), found.group(2) or ""
-    return digits.zfill(3) + rest
+    return numbers.pad_number(digits) + rest
 
 
 def _fts_query_variants(term: str) -> List[str]:
@@ -11934,7 +11867,7 @@ def _fts_supplemental_candidates(conn: sqlite3.Connection, text: str) -> List[Tu
         found = _LEADING_SLASH_DIGITS.match(term)
         if found:
             digits = found.group(1)
-            slash_suffixes[term] = {digits, digits.zfill(3)}
+            slash_suffixes[term] = {digits, numbers.pad_number(digits)}
         # F1, round-9: mirrors `match._number_match` exactly — splits a composed term
         # on `/`, strips a leading `#`, folds a hyphen standing for the slash. No
         # length floor here: `match._number_match` itself has none, and a term this
@@ -12517,7 +12450,7 @@ def do_search(query: str) -> dict:
         # none. The rule it applies is the one D7 states as amended by D26 — a copy is on hand
         # because it exists and has not left, by either door — and it is one comparison against
         # the same tuple that method uses.
-        loose_on_hand = sum(1 for card in loose if card.state not in master.TERMINAL_STATES)
+        loose_on_hand = sum(1 for card in loose if master.is_on_hand(card))
         groups.append(
             {
                 "sku": None,
@@ -13198,7 +13131,7 @@ def do_create_box(payload: dict) -> Tuple[HTTPStatus, dict]:
         # the cards, and a number chosen outside the write would be a number another request
         # could take between the read and the write — the same race `allocate_capture` holds
         # this lock to prevent one scale down.
-        box = _require_box(payload) if payload.get("box") is not None else inventory.next_box_number()
+        box = require_box(payload) if payload.get("box") is not None else inventory.next_box_number()
         if inventory.box(box) is not None:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
@@ -16715,9 +16648,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if path == "/pipeline/match/sweep":
                 # THE BACKGROUND READER'S SWITCH AND ITS COUNT, for the Capture screen's Setup.
                 # Free: a meta row, a pid check and one count.
-                keys = parse_qs(parsed.query, keep_blank_values=True).get("keys")
+                query = parse_qs(parsed.query, keep_blank_values=True)
+                keys, detail = query.get("keys"), query.get("detail")
                 return self._json(
-                    HTTPStatus.OK, pipeline_routes.do_pipeline_match_sweep(None if keys is None else keys[0])
+                    HTTPStatus.OK,
+                    pipeline_routes.do_pipeline_match_sweep(None if keys is None else keys[0], None if detail is None else detail[0]),
                 )
             if path == "/pipeline/runs":
                 return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_runs())

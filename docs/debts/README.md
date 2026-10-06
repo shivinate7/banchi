@@ -77,7 +77,7 @@ DEBT76 the walk's card sheet on a phone has no Mark sold
 DEBT77 every phone-width spec is off
 DEBT82 The Fulfiller's boxes slide once when the Pick list lands
 DEBT83 Off-screen rail tiles still cost a little per capture
-DEBT84 The public demo's first screen waits on a 75 MB chunk
+DEBT84 The public demo's first screen is heavier than its budget
 DEBT85 The read-budget check proves some routes on their miss path only
 DEBT86 Capabilities written twice that have not drifted yet
 ```

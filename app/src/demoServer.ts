@@ -50,87 +50,70 @@
 import { didYouMean, filterByQuery } from './kit/match'
 import { ServerError } from './server'
 import type { GraveyardPayload } from './types'
+import { DEMO_DATA_DIR, DEPARTED, canonical, historyCards, postKey, recentCards } from './demoShared'
+
+export { canonical, postKey }
 
 type Recorded = { status: number; body: unknown }
 type Dict = Record<string, unknown>
 
-// ------------------------------------------------------------------------- canonical keys
-
-/**
- * One spelling of a recorded key, whichever side composed it.
+/* THE RECORDING, FETCHED PER SCREEN. `app/demoSplit.ts` splits the recorded `responses` at BUILD
+ * time into small JSON files beside the app (`demo-data/`) and an index of canonical key to file.
+ * A read fetches the file that holds its key the first time it asks and keeps it here, so Home
+ * never waits on the whole recording (DEBT84). A checkout with no recording has an empty index
+ * and every read is "Not in this demo." — the same answer a key the recording lacks gets.
  *
- * A GET is its path plus its query pairs SORTED, re-encoded by `URLSearchParams`. The
- * recorder builds `/boxes?game=riftbound&set=Origins` with Python's `urlencode`; the screen
- * builds the same filter with `URLSearchParams` in whatever order its object keys happen to
- * be — and the two encoders even disagree on which characters to escape. Sorting and
- * re-encoding BOTH sides is what makes the lookup exact.
- *
- * A POST read is `POST <path> <body>`, the body re-serialized with its keys sorted — the
- * string `demo-record.py:post_key` writes, re-derived here rather than trusted byte for byte.
- */
-export function canonical(key: string): string {
-  if (key.startsWith('POST ')) {
-    const rest = key.slice(5)
-    const space = rest.indexOf(' ')
-    if (space < 0) return key
-    try {
-      return postKey(rest.slice(0, space), JSON.parse(rest.slice(space + 1)) as unknown)
-    } catch {
-      return key
-    }
-  }
-  const mark = key.indexOf('?')
-  if (mark < 0) return key
-  const pairs = [...new URLSearchParams(key.slice(mark + 1)).entries()].sort((a, b) =>
-    a[0] === b[0] ? (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0) : a[0] < b[0] ? -1 : 1,
-  )
-  const query = new URLSearchParams(pairs).toString()
-  return query === '' ? key.slice(0, mark) : `${key.slice(0, mark)}?${query}`
-}
-
-function sortedJson(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sortedJson)
-  if (value !== null && typeof value === 'object') {
-    const out: Dict = {}
-    for (const name of Object.keys(value as Dict).sort()) out[name] = sortedJson((value as Dict)[name])
-    return out
-  }
-  return value
-}
-
-/** The recorded key of a POST read: the verb, the path and the body with its keys sorted. */
-export function postKey(path: string, body: unknown): string {
-  return `POST ${path} ${JSON.stringify(sortedJson(body))}`
-}
-
-/* THE RECORDING, IN CHUNKS. `scripts/demo-mirror.py:chunk_bundle` splits the recording into
- * files GitHub's 100 MB blob limit accepts, never a fixed count — the recording had already
- * grown past that limit as one file (2026-09-27). `import.meta.glob` needs no manifest and no
- * fixed count: it matches whatever chunk files are on disk at BUILD time, so it stays correct
- * however many `chunk_bundle` writes. A checkout with no recording (`make demo` not run,
- * `git clone` alone) matches zero files and this becomes `{}` — no stub file needed, unlike
- * the old single-file `#demo-bundle` alias this replaces, because a glob with no matches is
- * not a resolve error. */
-const chunks = import.meta.glob<{ responses?: Record<string, Recorded>; wire?: string }>(
-  '../demo/bundle/*.json',
-  { eager: true, import: 'default' },
-)
-
-/* The recording, as a MUTABLE map under canonical keys. Never cloned (a clone of the 75 MB
- * recording cost the first screen a third of its wait): the module evaluates once per page load,
- * so a write patches this session's objects and a reload starts the demo over — which is the behaviour somebody
- * clicking through a shared link wants, and the reason no attempt is made to persist it. */
+ * `responses` is the MUTABLE map under canonical keys, never cloned: the module evaluates once
+ * per page load, so a write patches this session's objects and a reload starts the demo over —
+ * which is the behaviour somebody clicking through a shared link wants. */
 const responses: Record<string, Recorded> = {}
-let wire = ''
-for (const chunk of Object.values(chunks)) {
-  for (const [key, entry] of Object.entries(chunk.responses ?? {})) {
-    responses[canonical(key)] = entry
-  }
-  if (chunk.wire) wire = chunk.wire
+const dataBase = `${import.meta.env.BASE_URL}${DEMO_DATA_DIR}/`
+let indexed: Promise<Record<string, string>> | null = null
+const loading = new Map<string, Promise<void>>()
+
+async function fetchData<T>(name: string): Promise<T> {
+  const reply = await fetch(dataBase + name)
+  if (!reply.ok) refuse('demo_data_missing', NOT_IN_DEMO, 404)
+  return (await reply.json()) as T
 }
 
-/** The wire contract this recording was made against. Surfaced for the staleness check. */
-export const WIRE = wire
+function loadFile(file: string): Promise<void> {
+  let pending = loading.get(file)
+  if (pending === undefined) {
+    pending = fetchData<Record<string, Recorded>>(file).then((entries) => {
+      for (const move of journal) applyMove(move, Object.entries(entries))
+      Object.assign(responses, entries)
+    })
+    pending.catch(() => loading.delete(file))
+    loading.set(file, pending)
+  }
+  return pending
+}
+
+function index(): Promise<Record<string, string>> {
+  if (indexed === null) {
+    indexed = fetchData<Record<string, string>>('index.json')
+    indexed.catch(() => {
+      indexed = null // a failed read is asked again next time, never remembered
+    })
+  }
+  return indexed
+}
+
+/** Fetch the files that hold these canonical keys. A key the index lacks stays absent. */
+async function ensure(keys: Iterable<string>): Promise<void> {
+  const known = await index()
+  const files = new Set<string>()
+  for (const key of keys) {
+    const file = known[canonical(key)]
+    if (file !== undefined) files.add(file)
+  }
+  await Promise.all([...files].map(loadFile))
+}
+
+async function ensureWhere(wanted: (key: string) => boolean): Promise<void> {
+  await ensure(Object.keys(await index()).filter(wanted))
+}
 
 // ---------------------------------------------------------------------------- documents
 
@@ -254,9 +237,6 @@ const CANNOT: ReadonlyArray<readonly [string, string, string]> = [
 
 // ------------------------------------------------------------------- one card, everywhere
 
-/** States that are not on hand. `_box_row` counts `on_hand` as every card not in one. */
-const DEPARTED: ReadonlySet<string> = new Set(['sold', 'retired', 'moved'])
-
 /** Box-row counters a state lives in; `identified` and `captured` live in none but `on_hand`. */
 const COUNTER: Readonly<Record<string, string>> = { sold: 'sold', retired: 'retired', moved: 'moved' }
 
@@ -278,13 +258,25 @@ const COUNTER: Readonly<Record<string, string>> = { sold: 'sold', retired: 'reti
  * the place labels are composed by the server; this does not recompose them. That matches the
  * owner's "nothing jumps" ruling for a press (a sold row keeps its place until the next load),
  * and the next load of a published demo is a reload, which starts it over.
+ *
+ * A DOCUMENT FETCHED AFTER THE PRESS IS PATCHED TOO. Documents arrive when a screen first asks
+ * (`ensure`), so each press is kept in `journal` and replayed over every file as it lands.
  */
+type Move = { position: string; patch: Dict; before: string; after: string; box: string; section: unknown }
+const journal: Move[] = []
+
 function moveCard(position: string, patch: Dict): void {
   const before = String(cards()[position]?.state ?? '')
-  const after = String(patch.state ?? before)
-  const box = position.split('/')[0] ?? ''
-  const section = cards()[position]?.section
+  const move: Move = {
+    position, patch, before, after: String(patch.state ?? before),
+    box: position.split('/')[0] ?? '', section: cards()[position]?.section,
+  }
+  journal.push(move)
+  applyMove(move, Object.entries(responses))
+  restat()
+}
 
+function applyMove({ position, patch, before, after, box, section }: Move, entries: Array<[string, Recorded]>): void {
   const seen = new Set<unknown>()
   const walk = (node: unknown): void => {
     if (node === null || typeof node !== 'object' || seen.has(node)) return
@@ -305,12 +297,12 @@ function moveCard(position: string, patch: Dict): void {
     }
     for (const value of Object.values(object)) walk(value)
   }
-  for (const entry of Object.values(responses)) walk(entry.body)
+  for (const [, entry] of entries) walk(entry.body)
 
   if (before === after) return
   const wasOnHand = !DEPARTED.has(before)
   const isOnHand = !DEPARTED.has(after)
-  for (const [key, entry] of Object.entries(responses)) {
+  for (const [key, entry] of entries) {
     if (key === '/boxes' || key.startsWith('/boxes?')) {
       for (const row of ((entry.body as Dict).boxes as Dict[]) ?? []) {
         if (String(row.box) !== box) continue
@@ -333,7 +325,6 @@ function moveCard(position: string, patch: Dict): void {
       }
     }
   }
-  restat()
 }
 
 function bump(row: Dict, field: string, by: number): void {
@@ -599,12 +590,15 @@ function trendsFor(run: string, wanted: string[]): unknown {
  * band whole, once per box, and this cuts the page. The cursor is this module's own
  * (`demo:<offset>`) — the screen hands `next` back unread, which is all a cursor promises.
  */
-function valuePage(params: URLSearchParams): unknown {
-  const band = params.get('band') ?? 'top'
+function valueKey(params: URLSearchParams): string {
   const box = params.get('box')
-  const whole = new URLSearchParams({ band, limit: '5000' })
+  const whole = new URLSearchParams({ band: params.get('band') ?? 'top', limit: '5000' })
   if (box !== null && box !== '') whole.set('box', box)
-  const recorded = doc(`/pipeline/value?${whole.toString()}`)
+  return `/pipeline/value?${whole.toString()}`
+}
+
+function valuePage(params: URLSearchParams): unknown {
+  const recorded = doc(valueKey(params))
   if (recorded === null) notRecorded()
   const rows = (recorded.rows as unknown[]) ?? []
   const after = params.get('after')
@@ -616,10 +610,12 @@ function valuePage(params: URLSearchParams): unknown {
 }
 
 /** `GET /pipeline/price-now?sku=…` for any set of SKUs, merged out of per-SKU recordings. */
+const priceKey = (sku: string): string => `/pipeline/price-now?sku=${encodeURIComponent(sku)}`
+
 function priceNow(skus: string[]): unknown {
   const prices: Dict = {}
   for (const sku of skus) {
-    const one = doc(`/pipeline/price-now?sku=${encodeURIComponent(sku)}`)
+    const one = doc(priceKey(sku))
     if (one === null) notRecorded()
     Object.assign(prices, (one.prices as Dict) ?? {})
   }
@@ -628,11 +624,13 @@ function priceNow(skus: string[]): unknown {
 
 /** `GET /skus/photos?sku=…` for any set of SKUs, merged out of per-SKU recordings. A SKU with
  *  no recording is left out of both fields, the route's own "no photograph" answer. */
+const photoKey = (sku: string): string => `/skus/photos?sku=${encodeURIComponent(sku)}`
+
 function skuPhotos(skus: string[]): unknown {
   const photos: Dict = {}
   const stock: Dict = {}
   for (const sku of skus) {
-    const one = doc(`/skus/photos?sku=${encodeURIComponent(sku)}`)
+    const one = doc(photoKey(sku))
     if (one === null) continue
     Object.assign(photos, (one.photos as Dict) ?? {})
     Object.assign(stock, (one.stock_photos as Dict) ?? {})
@@ -684,12 +682,14 @@ function search(query: string): unknown {
 }
 
 /** `POST /inventory/copies` — every on-hand copy of the named SKUs, merged per SKU. */
+const copiesKey = (sku: unknown): string => postKey('/inventory/copies', { skus: [String(sku)] })
+
 function copies(body: Dict): unknown {
   const skus = (body.skus as unknown[]) ?? []
   if (skus.length === 0) refuse('skus_required', NOT_IN_DEMO, 400)
   const out = { cards: {} as Dict, listings: {} as Dict }
   for (const sku of skus) {
-    const one = doc(postKey('/inventory/copies', { skus: [String(sku)] }))
+    const one = doc(copiesKey(sku))
     if (one === null) notRecorded()
     Object.assign(out.cards, (one.cards as Dict) ?? {})
     Object.assign(out.listings, (one.listings as Dict) ?? {})
@@ -699,12 +699,14 @@ function copies(body: Dict): unknown {
 
 /** `POST /orders/picks` — the named orders' picks, merged per order. A key the ledger does
  *  not hold is SKIPPED, the route's own rule; the recorder asked for every key it holds. */
+const picksKey = (key: unknown): string => postKey('/orders/picks', { keys: [String(key)] })
+
 function picks(body: Dict): unknown {
   const keys = (body.keys as unknown[]) ?? []
   if (keys.length === 0) refuse('keys_required', NOT_IN_DEMO, 400)
   const orders: unknown[] = []
   for (const key of keys) {
-    const one = doc(postKey('/orders/picks', { keys: [String(key)] }))
+    const one = doc(picksKey(key))
     if (one !== null) orders.push(...((one.orders as unknown[]) ?? []))
   }
   return { orders }
@@ -716,12 +718,17 @@ function ledgerKeys(): Set<string> {
   return new Set(orders.map((order) => String(order.key)))
 }
 
+/** The ticked order keys the ledger holds, sorted: the set a walk plan was recorded under. */
+function walkKeys(body: Dict): string[] {
+  const known = ledgerKeys()
+  return [...new Set(((body.keys as unknown[]) ?? []).map(String))].filter((key) => known.has(key)).sort()
+}
+
 /** `POST /orders/walk-plan` — the recorded plan for exactly this ticked set. Keys the ledger
  *  does not hold are dropped first, as the solver's own `demand` skips them. */
 function walkPlan(body: Dict): unknown {
   if (body.cost !== undefined) notRecorded()
-  const known = ledgerKeys()
-  const keys = [...new Set(((body.keys as unknown[]) ?? []).map(String))].filter((key) => known.has(key)).sort()
+  const keys = walkKeys(body)
   if (keys.length === 0) refuse('keys_required', NOT_IN_DEMO, 400)
   const plan = doc(postKey('/orders/walk-plan', { keys }))
   if (plan === null) notRecorded()
@@ -753,27 +760,20 @@ function parseBody(init?: RequestInit): Dict {
   }
 }
 
-/** `GET /inventory/recent` — Home's hero deck, DERIVED from the whole-store read, never replayed.
- *  Home asks for no photograph until this answers (D172). The recording of it is the real
- *  store's answer on the day of the mirror, and that store's newest captures had all sold, so
- *  it recorded `{}` and Home drew no photograph at all. The server's own rule, on the
- *  recorded cards: named, photographed, on hand, newest capture first. A sale here also
- *  leaves the deck without a patch. */
+/** Home's deck and ribbon. Derived from the whole-store read once a press has loaded it (so a sale
+ *  leaves the deck), else from the slim copies `app/demoSplit.ts` derives at build time with the
+ *  same two functions, so Home never fetches the 7 MB read. */
 function recent(limit: number): Dict {
-  const picked = Object.entries(cards())
-    .filter(([, c]) => c.photo !== null && c.name && !DEPARTED.has(String(c.state)))
-    .sort((a, b) => String(b[1].captured_at).localeCompare(String(a[1].captured_at)))
-    .slice(0, limit)
-  return { cards: Object.fromEntries(picked) }
+  if (responses['/inventory'] === undefined) {
+    const pool = responses['/inventory/recent']?.body as { cards: Record<string, Dict> } | undefined
+    return recentCards(pool?.cards ?? {}, limit)
+  }
+  return recentCards(cards(), limit)
 }
 
-/** `GET /inventory/history` — three fields a card, DERIVED from the whole-store read like `recent`. */
 function history(): Dict {
-  return {
-    cards: Object.fromEntries(
-      Object.entries(cards()).map(([key, c]) => [key, { captured_at: c.captured_at, box: c.box, state: c.state }]),
-    ),
-  }
+  if (responses['/inventory'] === undefined) return (responses['/inventory/history']?.body as Dict | undefined) ?? { cards: {} }
+  return historyCards(cards())
 }
 
 /** Every GET: the recording under its canonical key, or one of the re-sliced reads. */
@@ -818,7 +818,7 @@ function read(path: string): unknown {
   /* The background reader is off in the demo: the answer the real server gives when it is not swept. */
   if (route === '/pipeline/match/sweep') {
     return params.has('keys')
-      ? { on: false, running: false, worker: false, blocked: null, aside: 0, matched_here: 0, matched_keys: [], paid: 0, paid_keys: [], unread: 0, unhinted: 0 }
+      ? { on: false, running: false, worker: false, blocked: null, aside: 0, matched_here: 0, matched_keys: [], paid: 0, paid_keys: [], unread: 0, unhinted: 0, ...(params.has('detail') ? { cards: [] } : {}) }
       : { on: false, running: false, matched: 0 }
   }
   /* No capture sitting is open on a published page: the answer the real server gives when nothing was captured lately. */
@@ -829,6 +829,41 @@ function read(path: string): unknown {
     return { departed: (graveyard.body as GraveyardPayload).departed.filter((row) => row.buried) }
   }
   notRecorded()
+}
+
+/** Fetch what a read will look at, and nothing else, before the sync code reads it. */
+async function warm(path: string): Promise<void> {
+  const mark = path.indexOf('?')
+  const route = mark < 0 ? path : path.slice(0, mark)
+  const params = new URLSearchParams(mark < 0 ? '' : path.slice(mark + 1))
+  const skus = params.getAll('sku').filter((sku) => sku !== '')
+  await ensure([canonical(path)])
+  if (path === '/inventory/history' || path.startsWith('/inventory/recent?')) {
+    if (responses['/inventory'] === undefined) await ensure([route])
+  } else if (/^\/pipeline\/runs\/[^/]+\/trends$/.test(route)) await ensureWhere((key) => key.includes('/trends?'))
+  else if (route === '/pipeline/value') await ensure([valueKey(params)])
+  else if (route === '/pipeline/price-now') await ensure(skus.map(priceKey))
+  else if (route === '/skus/photos') await ensure(skus.map(photoKey))
+  else if (route === '/search') await ensureWhere((key) => key.startsWith('/search?'))
+  else if (route === '/graveyard') await ensure(['/graveyard'])
+}
+
+/** The same for a POST read. */
+async function warmPost(path: string, body: Dict): Promise<void> {
+  if (path === '/inventory/copies') await ensure(((body.skus as unknown[]) ?? []).map(copiesKey))
+  else if (path === '/orders/picks') await ensure(((body.keys as unknown[]) ?? []).map(picksKey))
+  else if (path === '/orders/walk-plan') {
+    await ensure(['/orders'])
+    await ensure([postKey('/orders/walk-plan', { keys: walkKeys(body) })])
+  } else if (path === '/shipping/batches') await ensure(['POST /shipping/batches'])
+}
+
+/** The documents a press reads or patches, fetched before it runs. */
+async function warmWrite(path: string): Promise<void> {
+  if (path === '/pricing') await ensure(['/pricing'])
+  else if (BOX.test(path)) await ensureWhere((key) => key === '/inventory' || key === '/boxes' || key.startsWith('/boxes?'))
+  else if (BOX_SECTIONS.test(path)) await ensure(['/inventory'])
+  else if ([SOLD, RETIRE, REVIEW_ANSWER, REVIEW_STAND_DOWN].some((rule) => rule.test(path))) await ensure(['/inventory', '/status', '/queues'])
 }
 
 /**
@@ -845,7 +880,10 @@ export async function demoRequest(path: string, init?: RequestInit): Promise<unk
   const method = (init?.method ?? 'GET').toUpperCase()
   const body = parseBody(init)
 
-  if (method === 'GET') return read(path)
+  if (method === 'GET') {
+    await warm(path)
+    return read(path)
+  }
 
   for (const [prefix, code] of CANNOT) {
     if (path === prefix || path.startsWith(`${prefix}/`)) refuse(code, NOT_IN_DEMO)
@@ -854,12 +892,15 @@ export async function demoRequest(path: string, init?: RequestInit): Promise<unk
   /* THE WRITE-SHAPED READS. A POST because the list is too long for a query string, and each
    * route opens the store read-only — so the answer is a recording, never a patch. */
   if (method === 'POST') {
+    await warmPost(path, body)
     if (path === '/inventory/copies') return copies(body)
     if (path === '/orders/picks') return picks(body)
     if (path === '/orders/walk-plan') return walkPlan(body)
     /* The free count of cards a paid read would buy: none, since the frozen store has no unidentified card and no claim. */
     if (path === '/pipeline/waiting') return { keys: [], claimed: 0 }
   }
+
+  await warmWrite(path)
 
   let match: RegExpExecArray | null
   if ((match = SOLD.exec(path)) !== null) {

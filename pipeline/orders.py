@@ -508,7 +508,7 @@ class _Draw:
         return tuple(
             copy
             for copy in self.copies(sku)
-            if copy.card.state not in master.TERMINAL_STATES and _located(copy.card)
+            if master.is_on_hand(copy.card) and _located(copy.card)
         )
 
     def line(self, order: Order, line: OrderLine) -> LineResolution:
@@ -558,7 +558,7 @@ class _Draw:
                 [
                     c
                     for c in every
-                    if c.card.state not in master.TERMINAL_STATES and not _located(c.card)
+                    if master.is_on_hand(c.card) and not _located(c.card)
                 ]
             ),
         }

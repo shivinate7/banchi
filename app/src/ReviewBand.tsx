@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { getCaptureSitting, getMatchSweep, getMatchState, getQueues, getRuns } from './server'
-import type { MatchSweep } from './types'
+import type { MatchSweep, MatchSweepDetail } from './types'
 import { usePoll } from './usePoll'
-import { Button, Money } from './kit'
+import { Button, Money, Stat } from './kit'
+import { BandSheet, sheetTitle, type BandSheetData } from './ReviewBandSheet'
 import { roundsToNothing } from './money'
 
 /* THE REVIEW SUMMARY BAND (`docs/specs/identify-engine-pick.md`, section 8). It sits where the Identify strip sat.
  *
  * THE SCOPE: a selection handed to Review (`carried`) wins; else this sitting, the Capture head's own keys, so "matched
  * free" here and "matched" there agree; else the cards the pipeline says wait (`waiting`, the parent's one list). One poll,
- * `usePoll`, about 3 s while a worker reads and 20 s otherwise, over the keys-scoped sweep read.
+ * `usePoll`, about 3 s while a worker reads or the reader has cards to look at, and 20 s otherwise, over the keys-scoped sweep read.
  *
  * EVERY CARD IN SCOPE LANDS IN EXACTLY ONE COUNT. The server splits the unanswered ones (matched, paid, unread, unhinted);
  * a card that also has an open review row counts only in "waiting for you".
@@ -23,6 +24,10 @@ const COUNTS = [
   ['unread', 'not yet looked at'],
   ['you', 'waiting for you'],
 ] as const
+
+/* THREE COUNTS AND THE SET-NAMED LINE OPEN A SHEET (`ReviewBandSheet.tsx`); "waiting for you" opens nothing, so it stays plain
+   (Review's rail is its list). A sheet is a snapshot taken at open: `sigOf` is the signature of what the band counts now, so
+   the sheet can tell when the count has moved. */
 
 export function ReviewBand({
   waiting,
@@ -87,7 +92,8 @@ export function ReviewBand({
     idleMs: 20_000,
     isLive: (answer) => {
       const left = (answer.paid ?? 0) + (answer.unread ?? 0)
-      if (answer.running || (pressed.current && runLive.current)) {
+      /* A reader that is switched on, set up, able to run and has cards it has not looked at is about to move the counts: keep the live pace. */
+      if (answer.running || (answer.on && answer.blocked == null && !needsSetup && (answer.unread ?? 0) > 0) || (pressed.current && runLive.current)) {
         last.current = { left, alike: 0 }
         return true
       }
@@ -152,10 +158,45 @@ export function ReviewBand({
     if (sweep.blocked != null || needsSetup) parts.push('Needs setup')
     else if (sweep.running) parts.push('Matching now')
     if (sweep.aside > 0) parts.push(`${sweep.aside} set aside`)
-    const unhinted = sweep.unhinted ?? 0
-    if (unhinted > 0) parts.push(unhinted === 1 ? '1 needs a set named' : `${unhinted} need a set named`)
   }
+  const unhinted = loaded ? (sweep.unhinted ?? 0) : 0
   const health = parts.length === 0 ? null : parts.join(', ')
+
+  /* THE SHEETS. One read when a count is pressed, one more on "Show it again", and none when the poll ticks (D313). Matched rows
+     leave out a card that also waits on a review row, as the figure does. */
+  const [sheet, setSheet] = useState<(BandSheetData & { sig: string; on: boolean }) | null>(null)
+  const [shown, setShown] = useState(false)
+  const [again, setAgain] = useState(false)
+  const inReview = useMemo(() => new Set(reviewing ?? []), [reviewing])
+  const sigOf = (kind: MatchSweepDetail, answer: MatchSweep | null): string => {
+    if (answer === null) return ''
+    if (kind === 'paid') return (answer.paid_keys ?? []).join(',')
+    if (kind === 'matched') return (answer.matched_keys ?? []).filter((key) => !inReview.has(key)).join(',')
+    return String(kind === 'unread' ? (answer.unread ?? 0) : (answer.unhinted ?? 0))
+  }
+  const openSheet = async (kind: MatchSweepDetail) => {
+    setShown(true)
+    setAgain(true)
+    if (sheet === null || sheet.kind !== kind) setSheet({ kind, cards: null, failed: false, sig: '', on: false })
+    try {
+      const answer = await getMatchSweep([...(keys ?? [])], kind)
+      /* The box number is the key's own first part: the wire need not repeat it. */
+      const cards = (answer.cards ?? [])
+        .filter((card) => kind !== 'matched' || !inReview.has(card.key))
+        .map((card) => ({ ...card, box: Number(card.key.split('/')[0]) }))
+      setSheet({ kind, cards, failed: false, sig: sigOf(kind, answer), on: answer.on })
+    } catch {
+      setSheet((now) => (now !== null && now.kind === kind && now.cards !== null ? now : { kind, cards: null, failed: true, sig: '', on: false }))
+    } finally {
+      setAgain(false)
+    }
+  }
+  const moved = sheet !== null && sheet.cards !== null && sheet.sig !== sigOf(sheet.kind, sweep)
+  const press = (kind: MatchSweepDetail) => ({
+    onPress: () => void openSheet(kind),
+    expanded: shown && sheet?.kind === kind,
+    disabled: !loaded,
+  })
 
   const read = async () => {
     pressed.current = true
@@ -169,17 +210,33 @@ export function ReviewBand({
     <section className="review-band" aria-label="Where this sitting stands">
       <div className="review-band-counts">
         {COUNTS.map(([id, label]) => (
-          <div key={id} className="bn-stat review-band-count">
-            <span className="bn-stat-value" style={loaded ? undefined : { visibility: 'hidden' }}>
-              {figures[id]}
-            </span>{' '}
-            <span className="bn-stat-label">{label}</span>
-          </div>
+          <Stat
+            key={id}
+            className="review-band-count"
+            value={figures[id]}
+            label={label}
+            pending={!loaded}
+            press={id === 'you' ? undefined : press(id)}
+          />
         ))}
       </div>
       <div className="review-band-foot">
         <span className="review-band-health" aria-live="polite">
           {health}
+          {unhinted === 0 ? null : (
+            <>
+              {health === null ? null : ', '}
+              <button
+                type="button"
+                className="review-band-named"
+                aria-haspopup="dialog"
+                aria-expanded={shown && sheet?.kind === 'unhinted'}
+                onClick={() => void openSheet('unhinted')}
+              >
+                {sheetTitle('unhinted', unhinted)}
+              </button>
+            </>
+          )}
         </span>
         <span className="review-band-presses">
           <span className="review-band-slot">
@@ -201,6 +258,16 @@ export function ReviewBand({
           </Button>
         </span>
       </div>
+      <BandSheet
+        open={shown}
+        onClose={() => setShown(false)}
+        data={sheet}
+        figure={sheet === null ? 0 : sheet.kind === 'unhinted' ? unhinted : figures[sheet.kind]}
+        moved={moved}
+        busy={again}
+        readerOn={sheet?.on === true}
+        onAgain={() => sheet !== null && void openSheet(sheet.kind)}
+      />
     </section>
   )
 }

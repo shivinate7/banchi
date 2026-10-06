@@ -165,9 +165,9 @@ def _skus_in(path: Path) -> List[str]:
     try:
         with path.open(newline="", encoding="utf-8-sig") as handle:
             return [
-                (row.get(tcgcsv.SKU_COLUMN) or "").strip()
+                tcgcsv.sku_cell(row)
                 for row in csv.DictReader(handle)
-                if (row.get(tcgcsv.SKU_COLUMN) or "").strip()
+                if tcgcsv.sku_cell(row)
             ]
     except (OSError, csv.Error, UnicodeDecodeError):
         return []

@@ -62,7 +62,7 @@ def _card_counts(inventory):
         state = getattr(card, "state", None)
         if state == master.SOLD:
             sold[sku] = sold.get(sku, 0) + 1
-        elif state not in master.TERMINAL_STATES:
+        elif master.state_is_on_hand(state):
             hand[sku] = hand.get(sku, 0) + 1
     return sold, hand, seen
 

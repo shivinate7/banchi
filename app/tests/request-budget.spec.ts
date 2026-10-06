@@ -36,6 +36,10 @@ const EXCUSED = JSON.parse(readFileSync(resolve(HERE, 'request-budget-allow.json
 const STILL_FRAMES = 20
 const MINUTE_HOLD_MS = 0
 const LEAVE_HOLD_MS = 1500
+/* A read the screen has open when it is left must still be open then, however slow the runner: a
+   wall-clock hold of 1.5s lost that race and the read finished on its own, read as "kept". The
+   hold on the screen being left is long; it drops to nothing the moment before it is left. */
+const OPEN_UNTIL_LEFT_MS = 60_000
 const MIN_POLL_MS = 3000
 const MINUTE_MS = 60_000
 const STEP_MS = 250
@@ -65,7 +69,7 @@ interface Watch {
   reset: () => void
   openCount: () => number
   openPaths: () => string[]
-  hold: { ms: number }
+  hold: { ms: number; except?: (r: Request) => boolean }
   close: () => void
   release: () => void
 }
@@ -104,7 +108,7 @@ async function instrument(page: Page): Promise<Watch> {
       return (open as (...a: unknown[]) => void).call(this, method, url, ...rest)
     } as typeof open
   })
-  const hold = { ms: MINUTE_HOLD_MS }
+  const hold: { ms: number; except?: (r: Request) => boolean } = { ms: MINUTE_HOLD_MS }
   let gate: Promise<void> = Promise.resolve()
   let open_: () => void = () => {}
   await page.route(
@@ -113,7 +117,7 @@ async function instrument(page: Page): Promise<Watch> {
       const type = route.request().resourceType()
       if (type === 'fetch' || type === 'xhr') {
         await gate // a closed gate holds every answer until the burst has been counted
-        await new Promise((r) => setTimeout(r, hold.ms)) // keep: stubbed answer held on purpose, a latency fixture
+        if (!hold.except?.(route.request())) await new Promise((r) => setTimeout(r, hold.ms)) // keep: stubbed answer held on purpose, a latency fixture
       }
       await route.fallback()
     },
@@ -422,6 +426,8 @@ test('a screen that is left stops asking, and what it had open is aborted', asyn
   const first = mounts.get(routes[0]!)!
   const shell = new Set([...SHELL, ...[...first].filter((one) => routes.every((r) => mounts.get(r)!.has(one)))])
 
+  /* The shell's reads outlive a screen on purpose, so the long hold never touches them. */
+  watch.hold.except = (r) => r.method() !== 'GET' || shell.has(`${r.method()} ${shape(r.url())}`)
   const bad: string[] = []
   const used = new Set<string>()
   for (let at = 0; at + 1 < routes.length; at++) {
@@ -430,6 +436,7 @@ test('a screen that is left stops asking, and what it had open is aborted', asyn
     await page.goto('about:blank')
     watch.reset()
     const before = watch.seen.length
+    watch.hold.ms = OPEN_UNTIL_LEFT_MS
     await page.goto(`/${from}`)
     const own = (s: Seen) => !s.done && s.failed === null && !shell.has(named(s)) && s.method === 'GET'
     /* a screen may ask nothing on arrival (`#/shipping`): the wait is for an open read OR for the
@@ -441,6 +448,7 @@ test('a screen that is left stops asking, and what it had open is aborted', asyn
     }, { message: `${from}: neither an open read nor a quiet page` }).toBe(true)
     const mark = watch.seen.length
     const open = watch.seen.slice(before).filter(own)
+    watch.hold.ms = 0
     await page.evaluate((next) => { window.location.hash = next }, to.slice(1))
     await expect.poll(() => open.every((s) => s.done || s.failed !== null), { message: `${from}: reads neither finished nor failed`, timeout: 15_000 }).toBe(true)
     await quiet(page, watch)

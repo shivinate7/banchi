@@ -859,7 +859,7 @@ def check_shipping_routes(checks: Checks) -> None:
         urllib.request.build_opener = lambda *args, **kwargs: _Stub()
         unreachable = None
         try:
-            order_transport._open(
+            order_transport._call(
                 f"{order_transport.base_url()}/orders/search?api-version=2.0",
                 cookie=cookie,
                 data=json.dumps(body).encode("utf-8"),

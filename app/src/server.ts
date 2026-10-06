@@ -78,6 +78,7 @@ import type {
   RunSelection,
   MatchState,
   MatchSweep,
+  MatchSweepDetail,
   RunSend,
   RunPreflight,
   RunStarted,
@@ -2547,8 +2548,9 @@ export async function getMatchState(): Promise<MatchState> {
 }
 
 /** The background reader's switch and its count. FREE: a store row, a pid check and one count. */
-export async function getMatchSweep(keys?: string[]): Promise<MatchSweep> {
-  const query = keys === undefined ? '' : `?keys=${encodeURIComponent(keys.join(','))}`
+export async function getMatchSweep(keys?: string[], detail?: MatchSweepDetail): Promise<MatchSweep> {
+  /* `detail` adds the rows of one band count to the keys-scoped answer: the sheet asks once, when it opens. */
+  const query = keys === undefined ? '' : `?keys=${encodeURIComponent(keys.join(','))}${detail === undefined ? '' : `&detail=${detail}`}`
   return (await request(`/pipeline/match/sweep${query}`, NO_CACHE)) as MatchSweep
 }
 
