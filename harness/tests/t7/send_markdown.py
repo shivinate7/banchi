@@ -3623,14 +3623,14 @@ def _store_backed_run(checks: Checks, home: Path, cards) -> "runs.Run":
     from cli import __main__ as entry
 
     keys = []
-    for box, index, name, number, _finish in cards:
+    for box, index, name, number, finish in cards:
         while Store().read().inventory.next_index(box) <= index:
             capture_server.do_capture(capture_payload(box))
         keys.append(master.position_key(box, index))
         with Store().write() as snapshot:
             snapshot.inventory.record_identification(
                 keys[-1], name=name, number=number, printed_total="159", confidence="high",
-                run="t7-sweep",
+                run="t7-sweep", detected_finish=finish,
             )
     files.runs_dir().mkdir(parents=True, exist_ok=True)
     before = {d.name for d in files.runs_dir().iterdir()}
@@ -3712,7 +3712,7 @@ def check_send_store_backed_runs(checks: Checks) -> None:
                 names.append(classic.name)
             run = _store_backed_run(
                 checks, home,
-                [(3, 3, "Articuno", "161", None), (3, 4, "Dunsparce", "120", "normal")] if mixed else one,
+                [(4, 1, "Articuno", "161", None), (4, 2, "Dunsparce", "120", "normal")] if mixed else one,
             )
             names.append(run.name)
             portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
