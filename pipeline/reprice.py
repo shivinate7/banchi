@@ -513,7 +513,7 @@ def plan(
     qualified: List[Candidate] = []
     for raw in export_rows:
         row = dict(raw)
-        sku = str(row.get(tcgcsv.SKU_COLUMN, "")).strip()
+        sku = tcgcsv.sku_cell(row)
         if not sku:
             # A blank SKU cannot be matched by an import and cannot be looked up here.
             # `pipeline/livecheck.py` skips it for the same reason.
@@ -801,7 +801,7 @@ def read_back(
     barred = dict(unpriceable or {})
 
     for raw in worklist_rows:
-        sku = str(raw.get(tcgcsv.SKU_COLUMN, "")).strip()
+        sku = tcgcsv.sku_cell(raw)
         if not sku:
             continue
         edit = Edit(
@@ -913,7 +913,7 @@ def check_quantities_zero(rows: Sequence[Mapping[str, str]]) -> List[str]:
     is nine SKUs on the owner's store sitting at twice what was pushed.
     """
     return [
-        str(row.get(tcgcsv.SKU_COLUMN, "")).strip()
+        tcgcsv.sku_cell(row)
         for row in rows
         if tcgcsv.parse_quantity(row.get(tcgcsv.QUANTITY_COLUMN, "")) != 0
     ]

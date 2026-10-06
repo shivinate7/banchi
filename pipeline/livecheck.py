@@ -158,7 +158,7 @@ def compare(
 
     by_sku: Dict[str, Mapping[str, str]] = {}
     for raw in export_rows:
-        sku = str(raw.get(tcgcsv.SKU_COLUMN, "")).strip()
+        sku = tcgcsv.sku_cell(raw)
         if sku:
             by_sku[sku] = raw
 
