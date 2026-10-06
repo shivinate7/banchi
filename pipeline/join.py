@@ -2765,18 +2765,31 @@ class JoinReport:
 Router = Callable[[IdentifiedCard, Candidates, variant.Resolution], routing.Destination]
 
 
-def _picks_same_printing(card: "IdentifiedCard", pick: "MatcherPick", row) -> bool:
-    """Did the free reader's pick name the resolved row's printing? Set by `setnames.sides`
-    (the fold), number by `identity_binding.number_agrees`. A blank set or number on the pick is
-    no evidence and never agrees: a name alone never counts."""
-    from pipeline import identity_binding  # it imports this module
+def _pick_number_is(pick: "MatcherPick", card: "IdentifiedCard", row, *, need_total: bool) -> bool:
+    """Does the free pick's number name this row's number? The number part must be present and
+    equal. The printed total, from the pick's own "/total" or else the paid read's, must equal
+    the row's when `need_total`; a missing total is then no agreement (a bare number is not a
+    printing). Never `number_agrees`: its blank key means "agrees"."""
+    if not pick.number:
+        return False
+    number, _, total = pick.number.partition("/")
+    row_number, _, row_total = str(row[tcgcsv.NUMBER_COLUMN]).partition("/")
+    if not number.strip() or number_index_key(number) != number_index_key(row_number):
+        return False
+    total = total or card.printed_total or ""
+    if row_total and (total or need_total):
+        return bool(total) and number_index_key(total) == number_index_key(row_total)
+    return True
 
+
+def _picks_same_printing(card: "IdentifiedCard", pick: "MatcherPick", row) -> bool:
+    """Did the free reader's pick name the resolved row's printing? The WHOLE set label folds
+    equal (`setnames.fold`: `Origins` is not `Origins: Proving Grounds`) and the number agrees
+    with its total. A blank set or number on the pick is no evidence: a name alone never counts."""
     if row is None or not pick.set or not pick.number:
         return False
-    if not set(setnames.sides(pick.set)) & set(setnames.sides(row[tcgcsv.SET_COLUMN])):
-        return False
-    return identity_binding.number_agrees(
-        games.get(card.game or games.DEFAULT_GAME)["join_key"], pick.number, card.printed_total, row[tcgcsv.NUMBER_COLUMN]
+    return setnames.fold(pick.set) == setnames.fold(row[tcgcsv.SET_COLUMN]) and _pick_number_is(
+        pick, card, row, need_total=True
     )
 
 
@@ -2790,17 +2803,14 @@ def _pick_rows(catalog: "Catalog", card: "IdentifiedCard", have) -> Tuple[tcgcsv
     rows = catalog.candidates(
         replace(card, name=pick.name or card.name, number=pick.number, set_hint=pick.set or card.set_hint)
     ).rows
-    from pipeline import identity_binding  # it imports this module
-
-    strategy = games.get(card.game or games.DEFAULT_GAME)["join_key"]
     seen = {row[tcgcsv.SKU_COLUMN] for row in have}
-    wanted = set(setnames.sides(pick.set)) if pick.set else None
+    wanted = setnames.fold(pick.set) if pick.set else None
     return tuple(
         row for row in rows
         if row[tcgcsv.SKU_COLUMN] not in seen
         # a row the name fallback found for an unmatched number is not the pick's printing
-        and identity_binding.number_agrees(strategy, pick.number, card.printed_total, row[tcgcsv.NUMBER_COLUMN])
-        and (wanted is None or wanted & set(setnames.sides(row[tcgcsv.SET_COLUMN])))
+        and _pick_number_is(pick, card, row, need_total=False)
+        and (wanted is None or wanted == setnames.fold(row[tcgcsv.SET_COLUMN]))
     )
 
 

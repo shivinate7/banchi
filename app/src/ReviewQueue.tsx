@@ -170,9 +170,14 @@ function duplicatedCondition(candidates: CandidateRow[]): string | null {
  * says `low_confidence` over a high read plus the free reader's pick, which is the readers
  * disagreeing. Said so rather than "Low confidence read" over a High chip. */
 function shownReason(entry: QueueEntryWire): string {
-  return entry.reason === 'low_confidence' && text(entry.confidence) === 'high' && entry.read.matcher_pick
-    ? 'readers_disagree'
-    : entry.reason
+  const pick = entry.read.matcher_pick
+  if (entry.reason !== 'low_confidence' || text(entry.confidence) !== 'high' || !pick) return entry.reason
+  /* An old entry whose pick names the very card the paid read named is unsure, not a disagreement
+   * (a refresh frees it). */
+  const key = (n: string | null | undefined) => (n ?? '').split('/')[0]!.trim().replace(/^0+(?=\d)/, '').toLowerCase()
+  const same = key(pick.number) !== '' && key(pick.number) === key(entry.read.number) &&
+    (text(pick.name) ?? '').toLowerCase() === (text(entry.read.name) ?? '').toLowerCase()
+  return same ? 'second_look_unsure' : 'readers_disagree'
 }
 
 /* One sentence per reason. A claim is drawn as a word; its pipeline spelling is kept on the
