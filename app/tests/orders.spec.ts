@@ -4238,6 +4238,50 @@ test('the walk re-reads its plan once when the window regains focus, and the Liv
   await expect.poll(() => calls.calls()).toBe(2)
 })
 
+test('a focus re-read with a changed plan keeps Hide picked and the folded section; a new buyer selection may reset them', async ({ page }) => {
+  await open(page, {
+    orders: secondBuyerPayload().payload,
+    pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] },
+  })
+  await stubWalkPlan(page, bothPlan())
+  await startWalk(page)
+  await page.locator('.orders-index-item', { hasText: 'Nora Second' }).locator('.orders-index-tick input').check()
+  await expect(page.locator('.orders-walk-list')).toContainText('Sunrise')
+
+  const hide = page.locator('.orders-walk-tools').getByRole('button', { name: /^Picked/ })
+  /* Hide picked folds at the PRESS: sell Volcanion with it off, then press it on, so that line is folded away. */
+  if ((await hide.getAttribute('aria-pressed')) === 'true') await hide.click()
+  await expect(hide).toHaveAttribute('aria-pressed', 'false')
+  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.locator(CURRENT_PICK).getByRole('button', { name: /^Undo/ })).toBeVisible()
+  await hide.click()
+  await expect(hide).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.orders-walk-line')).toHaveCount(1)
+  await expect(page.locator('.orders-walk-list')).not.toContainText('Volcanion')
+  await page.locator('.orders-walk-sect').first().click()
+  await expect(page.locator('.orders-walk-rows')).toHaveCount(0)
+
+  /* Same buyers, a Live figure changed elsewhere. */
+  const at = new Date(Date.now() - 60_000).toISOString()
+  const changed = bothPlan()
+  const take = changed.stops[0]!.takes[0]!
+  const calls = await stubWalkPlan(page, {
+    ...changed,
+    stops: [{ ...changed.stops[0]!, takes: [{ ...take, listed: { pushed: 0, staged: 0, live: 4 }, live_as_of: at }] }, ...changed.stops.slice(1)],
+  })
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await expect.poll(() => calls.calls(), 'the walk did not re-read on return').toBe(1)
+  await expect(hide).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.orders-walk-rows')).toHaveCount(0)
+  await page.locator('.orders-walk-sect').first().click()
+  await expect(page.locator('.orders-walk-line')).toHaveCount(1)
+  await expect(page.locator('.orders-walk-list'), 'the picked line came back after the re-read').not.toContainText('Volcanion')
+
+  /* Guard: a new buyer selection may reset them, so it is only asserted that the walk follows the selection. */
+  await page.locator('.orders-index-row', { hasText: 'Nora Second' }).click()
+  await expect(page.locator('.orders-walk-list')).toContainText('Sunrise')
+})
+
 test('the ORDER id stays on one line and in the mono face, however long it is', async ({ page }) => {
   /* S8, D221 — `.orders-panel-order` was built for "Box 3" and wrapped a real order id
    *  mid-identifier; the id now gets its own nowrap/ellipsis span in the mono face. */
