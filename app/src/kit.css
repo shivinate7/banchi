@@ -1333,9 +1333,11 @@ span.bn-slot { display: inline-block; }
   box-shadow: var(--bn-shadow-3);
   animation: bn-dialog-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
+/* ENTRY IS OPACITY ONLY. A control that moves between pointer-down and pointer-up gets no click
+   (the up lands on its parent), so a press during entry was lost: Boxes slid 16px in 200ms. */
 @keyframes bn-dialog-in {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.96) translateY(8px); }
-  to { opacity: 1; transform: translate(-50%, -50%); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @keyframes bn-dialog-out {
   from { opacity: 1; transform: translate(-50%, -50%); }
@@ -1354,8 +1356,8 @@ span.bn-slot { display: inline-block; }
   animation: bn-sheet-in var(--bn-t-slow) var(--bn-ease) backwards;
 }
 .bn-sheet-left { right: auto; left: 0; animation-name: bn-sheet-in-left; }
-@keyframes bn-sheet-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes bn-sheet-in-left { from { transform: translateX(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes bn-sheet-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bn-sheet-in-left { from { opacity: 0; } to { opacity: 1; } }
 @keyframes bn-sheet-out { from { transform: none; opacity: 1; } to { transform: translateX(24px); opacity: 0; } }
 @keyframes bn-sheet-out-left { from { transform: none; opacity: 1; } to { transform: translateX(-24px); opacity: 0; } }
 .bn-sheet-bottom {
@@ -1367,7 +1369,7 @@ span.bn-slot { display: inline-block; }
   border-radius: var(--bn-r-2xl) var(--bn-r-2xl) 0 0;
   animation-name: bn-sheet-up;
 }
-@keyframes bn-sheet-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes bn-sheet-up { from { opacity: 0; } to { opacity: 1; } }
 @keyframes bn-sheet-down { from { transform: none; opacity: 1; } to { transform: translateY(24px); opacity: 0; } }
 
 /* On a phone every sheet and dialog rises from the bottom — once, here, rather than a copy
