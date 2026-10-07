@@ -660,6 +660,7 @@ export function useOrderWalk({
 
   return {
     loading,
+    keysSig,
     pending: keysSig !== settledSig,
     /** The old plan stands, dimmed, while the new one is out: no key may act on it (D313). */
     held: keysSig !== settledSig && plan !== null,
@@ -850,10 +851,10 @@ export function WalkList({
    * (it recomputed from the very data it was meant to hold still against). */
   const [foldedKeys, setFoldedKeys] = useState<ReadonlySet<string>>(new Set())
   const wasHiding = useRef(hideSold)
-  const planRef = useRef(walk.plan)
+  const selectionRef = useRef(walk.keysSig)
   useEffect(() => {
-    if (walk.plan !== planRef.current) {
-      planRef.current = walk.plan
+    if (walk.keysSig !== selectionRef.current) {
+      selectionRef.current = walk.keysSig
       setFoldedKeys(new Set())
     } else if (hideSold && !wasHiding.current) {
       const picked = new Set<string>()
@@ -863,7 +864,7 @@ export function WalkList({
       setFoldedKeys(picked)
     }
     wasHiding.current = hideSold
-  }, [hideSold, walk.plan, walk.sections, walk.soldKeys])
+  }, [hideSold, walk.keysSig, walk.sections, walk.soldKeys])
 
   if (walk.loading && walk.plan === null) {
     return (
