@@ -95,7 +95,7 @@
 @container orders (min-width: 560px) {
   .orders-layout {
     grid-template-columns: 268px minmax(0, 1fr);
-    grid-template-areas: 'buyers card' 'walk card';
+    grid-template-areas: 'walk card' 'buyers card';
     grid-template-rows: auto 1fr;
   }
   /* THE RAIL, Q2: sticky, fit to the window, its own scroll — `RailFrame`'s own rule
@@ -127,7 +127,7 @@
 @container orders (min-width: 1000px) {
   .orders-layout {
     grid-template-columns: 300px minmax(0, 1fr);
-    grid-template-areas: 'buyers card' 'walk card';
+    grid-template-areas: 'walk card' 'buyers card';
     grid-template-rows: auto 1fr;
     gap: var(--bn-4) var(--bn-5);
   }
@@ -351,18 +351,28 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   border-bottom: 1px solid var(--bn-line);
   padding-bottom: var(--bn-2);
 }
-.orders-walk-count { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 
 /* ---- the walk: one row per card per section, "Pick 1 of 2" (UX-198) ------------------ */
 .orders-walk-list { list-style: none; display: flex; flex-direction: column; gap: var(--bn-4); }
 .orders-walk-group { animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards; }
 .orders-walk-sect {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--bn-2);
-  padding: 0 var(--bn-2) var(--bn-1);
+  width: 100%;
+  min-height: var(--bn-control-h-lg);
+  padding: 0 var(--bn-2);
+  border-radius: var(--bn-r-sm);
   color: var(--bn-ink-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
+.orders-walk-sect:hover { background: var(--bn-hover); }
+.orders-walk-chev { flex: none; color: var(--bn-ink-3); transition: transform var(--bn-t-fast) var(--bn-ease); }
+.orders-walk-sect[aria-expanded='false'] .orders-walk-chev { transform: rotate(-90deg); }
 .orders-walk-sectcount { margin-left: auto; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
 .orders-walk-rows { list-style: none; display: flex; flex-direction: column; gap: var(--bn-3); }
 /* One line a card, as Inventory's card list. The copies are in the pane beside it. */
@@ -1212,7 +1222,8 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   }
   .orders-walk-name { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
   .orders-walk-slot { font-size: var(--bn-fs-sm); }
-  .orders-walk-pick { flex-wrap: nowrap; white-space: nowrap; min-width: 14ch; justify-content: flex-end; }
+  /* CENTERED, NOT BASELINE: a Picked line's check icon would otherwise move the pick's baseline and grow the row (D313). */
+  .orders-walk-pick { align-self: center; flex-wrap: nowrap; white-space: nowrap; min-width: 14ch; justify-content: flex-end; }
   .orders-walk-rows { gap: var(--bn-0-5); }
   .orders-walk-tools { flex-wrap: wrap; }
 }

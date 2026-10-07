@@ -332,6 +332,38 @@ export function useOrderWalk({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keysSig])
 
+  /* THE RETURN READ: once when the window regains focus or the tab becomes visible, never a poll. A real return
+     fires both events, so a 300ms debounce makes them one read. It is silent (no `loading`, no dim) and keeps
+     the held plan when the answer is identical, so a re-read never moves the list (D313). */
+  const planJson = useRef('')
+  planJson.current = plan === null ? '' : JSON.stringify(plan)
+  useEffect(() => {
+    if (walkedKeys.size === 0) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const reread = () => {
+      if (document.visibilityState === 'hidden') return
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        const asked = keysSig
+        walkPlan([...walkedKeys])
+          .then((got) => {
+            if (live.current && currentSig.current === asked && JSON.stringify(got) !== planJson.current) setPlan(got)
+          })
+          .catch(() => {
+            /* A failed return read leaves the plan held: the walk is stale, not dark. */
+          })
+      }, 300)
+    }
+    window.addEventListener('focus', reread)
+    document.addEventListener('visibilitychange', reread)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('focus', reread)
+      document.removeEventListener('visibilitychange', reread)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `walkedKeys` is `keysSig`'s set.
+  }, [keysSig])
+
   const rows = useMemo(() => rowsOf(plan), [plan])
   const sections = useMemo(() => sectionsOf(plan, rows), [plan, rows])
 
@@ -628,6 +660,7 @@ export function useOrderWalk({
 
   return {
     loading,
+    keysSig,
     pending: keysSig !== settledSig,
     /** The old plan stands, dimmed, while the new one is out: no key may act on it (D313). */
     held: keysSig !== settledSig && plan !== null,
@@ -791,8 +824,13 @@ export function WalkList({
   owedBySku,
   showBuyers,
   onPick,
+  folded,
+  onToggleSection,
 }: {
   readonly walk: OrderWalk
+  /** Section keys folded to their header (the owner's fold press, held by `Orders.tsx`). */
+  readonly folded: ReadonlySet<string>
+  readonly onToggleSection: (key: string) => void
   readonly hideSold: boolean
   /** What the walked orders still want of each SKU, across every stop. The "of N". */
   readonly owedBySku: ReadonlyMap<string, number>
@@ -813,10 +851,10 @@ export function WalkList({
    * (it recomputed from the very data it was meant to hold still against). */
   const [foldedKeys, setFoldedKeys] = useState<ReadonlySet<string>>(new Set())
   const wasHiding = useRef(hideSold)
-  const planRef = useRef(walk.plan)
+  const selectionRef = useRef(walk.keysSig)
   useEffect(() => {
-    if (walk.plan !== planRef.current) {
-      planRef.current = walk.plan
+    if (walk.keysSig !== selectionRef.current) {
+      selectionRef.current = walk.keysSig
       setFoldedKeys(new Set())
     } else if (hideSold && !wasHiding.current) {
       const picked = new Set<string>()
@@ -826,7 +864,7 @@ export function WalkList({
       setFoldedKeys(picked)
     }
     wasHiding.current = hideSold
-  }, [hideSold, walk.plan, walk.sections, walk.soldKeys])
+  }, [hideSold, walk.keysSig, walk.sections, walk.soldKeys])
 
   if (walk.loading && walk.plan === null) {
     return (
@@ -849,13 +887,15 @@ export function WalkList({
         const lines = takeLinesOf(section.rows)
         const shown = hideSold ? lines.filter((line) => !foldedKeys.has(line.takeKey)) : lines
         if (shown.length === 0) return null
+        const isFolded = folded.has(section.key)
         return (
           <li className="orders-walk-group" key={section.key}>
-            <div className="orders-walk-sect">
+            <button type="button" className="orders-walk-sect" aria-expanded={!isFolded} onClick={() => onToggleSection(section.key)}>
+              <Icon name="chevronDown" size={14} className="orders-walk-chev" />
               <SectionTitle parts={section.parts} />
               <span className="orders-walk-sectcount">{shown.length}</span>
-            </div>
-            <ul className="orders-walk-rows">
+            </button>
+            {isFolded ? null : <ul className="orders-walk-rows">
               {shown.map((line) => {
                 const picked = line.take.copies.filter((copy) => walk.soldKeys.has(copy.key)).length
                 const done = picked >= line.take.wanted
@@ -908,7 +948,7 @@ export function WalkList({
                   </li>
                 )
               })}
-            </ul>
+            </ul>}
           </li>
         )
       })}

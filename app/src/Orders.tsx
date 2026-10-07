@@ -3363,11 +3363,17 @@ function PullStage({
     rememberHideSold(next)
   }
 
-  /** "N sections", made a control (S5) — `#/inventory`'s own `toggleAllSections`, over every
-   *  section at once rather than per section: this walk draws no per-section fold state to
-   *  toggle independently (`WalkList`'s own chevron stays decorative), so one boolean answers
-   *  for the whole list. Not persisted — a fresh mount always opens expanded, matching what
-   *  this list has always drawn. */
+  /** SECTIONS FOLDED TO THEIR HEADER, by section key: the fold-all press and a header's own press both write
+   *  it. Not persisted: a fresh mount opens every section. */
+  const [foldedSections, setFoldedSections] = useState<ReadonlySet<string>>(new Set())
+  const toggleSection = (key: string) =>
+    setFoldedSections((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+
   const toggleWalkTick = (key: string) =>
     setWalkTicked((prev) => {
       const next = new Set(prev)
@@ -3821,6 +3827,7 @@ function PullStage({
 
   const buyerDone = walkedGroups.length === 1 && shownGroup !== null && shownGroup.open.length === 0
 
+  const anyFolded = foldedSections.size > 0 && walk.sections.some((section) => foldedSections.has(section.key))
   const walkColumn = (
     <section className="bn-panel orders-walk" aria-label="The walk" ref={walkRef} tabIndex={-1} aria-busy={walkHeld ? 'true' : undefined} inert={walkHeld}>
       <header className="orders-walk-head">{walkHead}</header>
@@ -3843,9 +3850,13 @@ function PullStage({
       ) : (
         <>
           <div className="orders-walk-tools">
-            <span className="orders-walk-count">
-              {countOf(walk.sections.length, 'section')}
-            </span>
+            <Button
+              size="sm"
+              icon={anyFolded ? 'chevronRight' : 'chevronDown'}
+              onClick={() => setFoldedSections(anyFolded ? new Set() : new Set(walk.sections.map((section) => section.key)))}
+            >
+              {anyFolded ? 'Open' : 'Fold'} {countOf(walk.sections.length, 'section')}
+            </Button>
             <span className="bn-spacer" />
             <HideToggle checked={hideSold} onChange={setHideSold} count={walk.soldKeys.size}>
               Picked
@@ -3857,6 +3868,8 @@ function PullStage({
             owedBySku={owedBySku}
             showBuyers={walkedGroups.length > 1}
             onPick={openCardSheet}
+            folded={foldedSections}
+            onToggleSection={toggleSection}
           />
         </>
       )}
@@ -3901,9 +3914,6 @@ function PullStage({
           {/* LAYOUT R (D304, Q1/Q2): Inventory's
               own `RailFrame`, sticky and fit to the window, its own scroll — never the page's.
               `#/inventory`'s box list is the only other caller. */}
-          <RailFrame className="orders-buyers" role="navigation" aria-label="Buyers">
-            <div className="bn-panel orders-buyers-panel">{buyerList}</div>
-          </RailFrame>
           <button type="button" className="orders-buyerchip" aria-haspopup="dialog" onClick={() => setBuyersOpen(true)}>
             <Icon name="list" size={16} />
             <span className="orders-buyerchip-text bn-facts">
@@ -3913,8 +3923,11 @@ function PullStage({
             </span>
             <Icon name="chevronDown" size={14} />
           </button>
-          {/* DOM order is the desk's visual order (buyers, walk, card), so Tab reads as the eye does. */}
+          {/* DOM order is the desk's visual order (walk, buyers, card), so Tab reads as the eye does. */}
           {walkColumn}
+          <RailFrame className="orders-buyers" role="navigation" aria-label="Buyers">
+            <div className="bn-panel orders-buyers-panel">{buyerList}</div>
+          </RailFrame>
           {/* Q4: ON A PHONE THE CARD IS A SHEET, opened by a tap on a walk row (`WalkList`'s
               `onPick` above). The column below 560px hides this pane in CSS (a container query);
               the press asks the width once, in `openCardSheet`. At 560px of column and up the pane
