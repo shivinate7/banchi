@@ -1926,9 +1926,44 @@ def check_send_take_outstanding(checks: Checks) -> None:
         )
         checks.ok(says_outstanding(text), f"and the press says why. Got: {text[-300:]!r}")
 
+    # ------------------------------------------------ a failed store write leaves the take outstanding
+    with send_portal() as portal, isolated_home():
+        run_dir = settled(portal, count=5, live=3)
+        start, _ = counts()
+        hold(ARTICUNO_SKU)
+        sent, _ = press([run_dir])
+        long_ago(stamp_of(sent))
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        real = send_routes._lower_takes
+
+        def broken(gone, live_now):
+            raise OSError("the store would not write")
+
+        send_routes._lower_takes = broken
+        try:
+            send_routes.do_live_check({})
+        except OSError:
+            pass
+        finally:
+            send_routes._lower_takes = real
+        checks.ok(
+            not any(
+                ARTICUNO_SKU in (record.get("take_settled") or [])
+                for _, record in send_routes._receipts()
+            ),
+            "A STORE WRITE THAT FAILED LEAVES THE TAKE OUTSTANDING: no receipt says it settled, "
+            "so the next check settles it",
+        )
+        send_routes.do_live_check({})
+        checks.equal(
+            counts()[0],
+            start - 3,
+            "and the next check lowers `pushed` once, by three",
+        )
+
     # ------------------------------------------------ G: a held SKU in none of the selected runs
     with send_portal() as portal, isolated_home():
-        sent_run = settled(portal)
+        settled(portal)
         other, _ = seam_run(checks, [(4, 1, "Dunsparce", "120", "normal")])
         hold(ARTICUNO_SKU)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})

@@ -4789,6 +4789,44 @@ def check_hold_take_reads(checks: Checks) -> None:
                     f"Got: {said[-300:]!r}",
                 )
 
+    # ------------------------------------- a held SKU in no selected run (the store-wide worklist)
+    def two_runs():
+        sent_run, _ = seam_run(checks, cards)
+        command(checks, "emit", str(sent_run.directory))
+        other, _ = seam_run(checks, [(4, 1, "Dunsparce", "120", "normal")])
+        hold(ARTICUNO_SKU)
+        return other
+
+    with isolated_home():
+        other = two_runs()
+        guard = live_file(other, {ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})
+        with quiet():
+            entry.main(["emit", str(other.directory), "--split-games", "--live-guard", str(guard)])
+        homes = [
+            path.name
+            for path in other.directory.glob("import*.csv")
+            if any(
+                r[tcgcsv.SKU_COLUMN] == ARTICUNO_SKU and r[tcgcsv.QUANTITY_COLUMN] == "-3"
+                for r in tcgcsv.read_export(path).rows
+            )
+        ]
+        checks.ok(
+            len(homes) == 1 and "pokemon" in homes[0].lower(),
+            f"A HELD SKU IN NO SELECTED RUN IS FILED UNDER ITS OWN GAME in a `--split-games` "
+            f"send: one file, named for the game. Got: {homes}",
+        )
+
+    with isolated_home():
+        sent_run, _ = seam_run(checks, cards)  # never emitted: `pushed` 0
+        other, _ = seam_run(checks, [(4, 1, "Dunsparce", "120", "normal")])
+        hold(ARTICUNO_SKU)
+        code, said, rows = emit(other)
+        checks.ok(
+            ARTICUNO_SKU in said and "live read" in said,
+            "A HELD SKU IN NO SELECTED RUN, NO FRESH READ AND `pushed` 0, IS NAMED in the "
+            f"output. Got: {said[-300:]!r}",
+        )
+
 
 CHECKS = (
     check_pipeline_routes,
