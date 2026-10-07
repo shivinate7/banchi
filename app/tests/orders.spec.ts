@@ -2540,18 +2540,15 @@ test('the buyer list is not a scroll box of its own, and no hint sits on its row
 })
 
 /* THE LIST AND THE WALK ARE ON THE PAGE AT 1440, 820 AND 720 (UX-169, UX-194) — LAYOUT R
- * (D304, Q1), then Inventory's own skeleton at every width (section 18, design pass C). 1440 is a
- * two-column desk (buyers over walk | card). 820 and 720 sit inside Orders' own 560-999 mid range (the app shell's
- * own rail collapses to 64px there, D289 rule 3's "720 is a desk" is about a DIFFERENT
- * breakpoint, `#/inventory`'s own 640, and never widens Orders' 1000px one) — Inventory's own
- * two-column skeleton: the buyer rail sits above the walk, in the same column, and the card
- * pane sits beside that column, sticky. */
+ * (D304, Q1), then Inventory's own skeleton at every width (section 18, design pass C), then the owner's
+ * ruling that the WALK sits above the buyer list: a two-column desk at 1440 and the same skeleton at 820
+ * and 720, with the walk over the buyers in the rail column and the card pane beside that column. */
 for (const [width, height] of [
   [1440, 900],
   [820, 1180],
   [720, 900],
 ] as const) {
-  test(`at ${width}, the buyer list sits above the walk, beside the card`, async ({ page }) => {
+  test(`at ${width}, the walk sits above the buyer list, beside the card`, async ({ page }) => {
     await setViewport(page, { width, height })
     await open(page, { orders: threeBuyerPayload() })
     const buyers = await page.locator('.orders-buyers').boundingBox()
@@ -2559,7 +2556,7 @@ for (const [width, height] of [
     const card = await page.locator('.orders-cardcol').boundingBox()
     if (buyers === null || walk === null || card === null) throw new Error('the buyer list, the walk or the card did not lay out')
     expect(walk.x, 'the walk stays in the buyer rail column, not beside it').toBeLessThan(buyers.x + buyers.width)
-    expect(walk.y, 'the walk sits under the buyer rail').toBeGreaterThan(buyers.y + buyers.height - 1)
+    expect(buyers.y, 'the buyer list sits under the walk').toBeGreaterThan(walk.y + walk.height - 1)
     expect(card.x, 'the card sits beside the rail column').toBeGreaterThan(buyers.x + buyers.width - 1)
     await expect(page.locator('.orders-buyerchip')).toBeHidden()
   })
@@ -4174,10 +4171,13 @@ test('the selected buyer row draws a spine, not a ring', async ({ page }) => {
   expect(ownStyle).toBe('none')
 })
 
-test('the walk counts its sections with no fold, and Picked carries a count', async ({ page }) => {
-  /* "N sections" is a plain count: the strip shows the whole order, so no fold control is left. The Hide
-   *  sold chip carries how many rows it would hide, matching `#/inventory`'s own `departedHere`. */
-  const wire = await open(page, {
+test('the walk folds every section at once, and Picked carries a count', async ({ page }) => {
+  /* Owner ruling (walk above buyers): the fold-all press is back, as it was before the strip. Folded, every
+   *  section header is in view at once; one header opens its cards; the press again opens them all.
+   *  Contract for the builder: a button in `.orders-walk-tools` named /sections$/, "Fold 2 sections" then
+   *  "Open 2 sections", and a press on a `.orders-walk-sect` header toggles that one section. */
+  await setViewport(page, { width: 1440, height: 700 })
+  await open(page, {
     orders: secondBuyerPayload().payload,
     pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] },
   })
@@ -4186,18 +4186,56 @@ test('the walk counts its sections with no fold, and Picked carries a count', as
   await page.locator('.orders-index-item', { hasText: 'Nora Second' }).locator('.orders-index-tick input').check()
   await expect(page.locator('.orders-walk-list')).toContainText('Sunrise')
 
-  await expect(page.locator('.orders-walk-tools .orders-walk-count')).toHaveText('2 sections')
-  await expect(page.locator('.orders-walk-tools').getByRole('button', { name: /sections$/ })).toHaveCount(0)
+  const tools = page.locator('.orders-walk-tools')
+  const fold = tools.getByRole('button', { name: /sections$/ })
+  await expect(fold).toHaveText('Fold 2 sections')
+  await expect(page.locator('.orders-walk-rows')).toHaveCount(2)
+  await fold.click()
+  await expect(page.locator('.orders-walk-rows')).toHaveCount(0)
+  await expect(page.locator('.orders-walk-press')).toHaveCount(0)
+  await expect(fold).toHaveText('Open 2 sections')
+  await expect(page.locator('.orders-walk-sect')).toHaveCount(2)
+  for (const head of await page.locator('.orders-walk-sect').all()) await expect(head).toBeInViewport()
+  await expect(tools.getByRole('button', { name: /^Picked/ })).toContainText('0')
+
+  await page.locator('.orders-walk-sect').first().click()
+  await expect(page.locator('.orders-walk-rows')).toHaveCount(1)
+  await expect(page.locator('.orders-walk-press')).toHaveCount(1)
+  await expect(page.locator('.orders-walk-list')).toContainText('Volcanion')
+  await expect(page.locator('.orders-walk-list')).not.toContainText('Sunrise')
+
+  await fold.click()
   await expect(page.locator('.orders-walk-rows')).toHaveCount(2)
 
-  const hide = page.locator('.orders-walk-tools').getByRole('button', { name: /^Picked/ })
+  const hide = tools.getByRole('button', { name: /^Picked/ })
   await expect(hide).toContainText('0')
   await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
-  /* UN-6 REBUILD: the sale lands in place — the row's own control reads Undo — rather than
-     the pane advancing on its own, so the sync point is the control, not the card name. */
   await expect(page.locator(CURRENT_PICK).getByRole('button', { name: /^Undo/ })).toBeVisible()
   await expect(hide).toContainText('1')
-  void wire
+})
+
+test('the walk re-reads its plan once when the window regains focus, and the Live figure updates', async ({ page }) => {
+  const at = new Date(Date.now() - 60_000).toISOString()
+  await open(page, { orders: oneOpenOrder(), walkPlan: volcanionPlan() })
+  const live = page.locator('.browse-card .browse-hero-fig-live')
+  await expect(live).toContainText('not read')
+
+  const read = walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ listed: { pushed: 0, staged: 0, live: 3 }, live_as_of: at })] })])
+  const calls = await stubWalkPlan(page, read)
+  await expect.poll(() => calls.calls()).toBe(0)
+
+  /* One return: the window gains focus and the tab becomes visible, as a real return fires both. */
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('focus'))
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await expect.poll(() => calls.calls(), 'the walk did not re-read on return').toBe(1)
+  await expect(live.locator('.browse-hero-fig-value')).toHaveText('3')
+  await expect(live).not.toContainText('not read')
+
+  /* A read per return, never a poll: a second return reads once more, and the count is exact. */
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await expect.poll(() => calls.calls()).toBe(2)
 })
 
 test('the ORDER id stays on one line and in the mono face, however long it is', async ({ page }) => {
