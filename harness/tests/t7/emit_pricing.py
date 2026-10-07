@@ -3870,7 +3870,9 @@ def _m_cases() -> Dict[str, dict]:
             says=[f"{_M_D} — under the cut-off (Dunsparce)", _M_A],
             never=[f"{_M_A} — {_M_LIVE}", f'"sku": "{_M_A}", "would"', _M_ASKED0], home=send2)
         add("own/held+live", market=_M_MIX, pre=(_M_D,), live={_M_D: 1, _M_R: 0, _M_A: 0}, named=_M_NONE_NAMED,
-            exit=0, files={last: [r_mix]}, says=[_M_A],
+            # THE OWNER'S RULING, "held items have 0 qty live on TCGplayer": the held card the
+            # fresh read shows live gets a take-off row of that size, here minus one.
+            exit=0, files={last: [(_M_D, -1, "2.06"), r_mix]}, says=[_M_A],
             never=[f"{_M_D} — {_M_LIVE}", f'"sku": "{_M_D}", "would"', _M_ASKED0],
             home={"line": "send 1 copy to TCGplayer", "behind": "1 card needs a price", "tile": "run to price, 1 ready",
                   "failed": "send 2 copies to TCGplayer"})
@@ -4433,6 +4435,399 @@ def check_live_listing_per_sku(checks: Checks) -> None:
     checks.equal(moved["listed"], 2, "`do_pipeline_movers` still counts the live SKUs a bad row does not touch")
 
 
+def check_hold_takes_live_off(checks: Checks) -> None:
+    """A SKU held on `#/pricing` with copies live comes off TCGplayer on the next send.
+
+    THE OWNER'S RULING (D100's open question, "a negative `Add to Quantity` lowers a live
+    quantity"), AS THE REVIEW OF PR #768 REDESIGNED IT. The size comes ONLY from a fresh live
+    read taken for this send (`--live-guard`, no older than `reprice.READ_FRESH_S`): that
+    read's live quantity for the held SKU, less copies sold since it. Never from the store's
+    `pushed` or `live`. A held SKU the read does not name takes off 0, no row. The store
+    changes NOTHING at write time, so a take-off that never lands heals: the next send
+    re-reads live and takes off what is still there, and never twice for the same copies.
+
+    THE WORDING THESE ASSERT: the report says "N copies ... off TCGplayer", and a refusal says
+    "live read" and names the card. `tcg_import._check`'s `take_off` is a SKU -> size mapping.
+    """
+    checks.note("")
+    checks.note("HOLD TAKES LIVE COPIES OFF — a negative row sized by a fresh live read")
+
+    from cli import __main__ as entry
+    from server import tcg_import
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+    HOUR = 3600
+
+    def live_file(run_dir, quantities, age_s=0, name="live-read.csv"):
+        path = run_dir.path(name)
+        path.write_bytes(_live_export_bytes(quantities))
+        stamp = time.time() - age_s
+        os.utime(path, (stamp, stamp))
+        return path
+
+    def emit(run_dirs, *flags, guard=None):
+        """Run `emit`; `(code, said, rows)` where rows are the SKU -> quantity THIS press wrote,
+        read from every import file it made or changed (a press that writes nothing leaves the
+        earlier press's file on disk)."""
+        run_dirs = run_dirs if isinstance(run_dirs, (list, tuple)) else [run_dirs]
+
+        def snapshot():
+            return {
+                path: path.read_bytes()
+                for run_dir in run_dirs
+                for path in run_dir.directory.glob("import*.csv")
+            }
+
+        before = snapshot()
+        argv = ["emit", *[str(run_dir.directory) for run_dir in run_dirs], *flags]
+        if guard is not None:
+            argv += ["--live-guard", str(guard)]
+        with quiet() as said:
+            code = entry.main(argv)
+        rows = {}
+        for path, data in snapshot().items():
+            if before.get(path) != data:
+                for row in tcgcsv.read_export(path).rows:
+                    rows[row[tcgcsv.SKU_COLUMN]] = row[tcgcsv.QUANTITY_COLUMN]
+        return code, said.getvalue(), rows
+
+    def hold(sku, reason="keeping"):
+        book = corpus.Corpus.read()
+        if reason is None:
+            book.answers.pop(sku, None)
+        else:
+            book.answers[sku] = corpus.Answer(value={"withheld": reason})
+        book.write()
+
+    def store_counts(sku):
+        listing = Store().read().inventory.listings.get(sku)
+        return (0, 0) if listing is None else (listing.pushed, listing.live)
+
+    def sent_run():
+        """A run whose Articuno copies went out (pushed) and whose Dunsparce did not."""
+        run_dir, _ = seam_run(checks, cards)
+        command(checks, "emit", str(run_dir.directory), "--quantity", f"{DUNSPARCE_SKU}=0")
+        return run_dir
+
+    # ------------------------------------- held, a fresh read of three: -3, store unchanged
+    for reason in ("bullish", "keeping", "next_batch"):
+        with isolated_home():
+            run_dir = sent_run()
+            before = store_counts(ARTICUNO_SKU)
+            hold(ARTICUNO_SKU, reason)
+            guard = live_file(run_dir, {ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})
+            code, said, rows = emit(run_dir, guard=guard)
+            checks.equal(
+                rows.get(ARTICUNO_SKU),
+                "-3",
+                f"A HELD SKU ({reason}) THE FRESH READ SHOWS THREE OF takes three off: one row, -3",
+            )
+            checks.ok(
+                code == 0 and re.search(r"3 copies.*off TCGplayer", said) is not None,
+                f"the report says in a sentence how many come off. Got: {said[-300:]!r}",
+            )
+            checks.equal(
+                store_counts(ARTICUNO_SKU),
+                before,
+                "THE STORE CHANGED NOTHING at write time: `pushed` and `live` drop only when "
+                "the live check confirms the copies are gone",
+            )
+            if reason != "keeping":
+                continue
+            # HEALS: the take-off never landed, live still shows three, so it is taken again,
+            # and once live shows none it is not taken twice.
+            code, said, rows = emit(
+                run_dir, guard=live_file(run_dir, {ARTICUNO_SKU: 3}, name="again.csv")
+            )
+            checks.equal(
+                rows.get(ARTICUNO_SKU),
+                "-3",
+                "A TAKE-OFF THAT NEVER LANDED HEALS: the next send re-reads live and takes "
+                "off what is still there",
+            )
+            code, said, rows = emit(
+                run_dir, guard=live_file(run_dir, {ARTICUNO_SKU: 0}, name="gone.csv")
+            )
+            checks.ok(
+                ARTICUNO_SKU not in rows,
+                "and once TCGplayer shows none there is no row: never twice for the same copies",
+            )
+
+    # ------------------------------------- the size is the read's, never the store's
+    with isolated_home():
+        run_dir = sent_run()
+        hold(ARTICUNO_SKU)
+        code, said, rows = emit(run_dir, guard=live_file(run_dir, {ARTICUNO_SKU: 2}))
+        checks.equal(
+            rows.get(ARTICUNO_SKU),
+            "-2",
+            "THREE WERE SENT AND THE READ SHOWS TWO (one sold): minus two, from the read",
+        )
+        code, said, rows = emit(
+            run_dir, guard=live_file(run_dir, {ARTICUNO_SKU: 5}, name="five.csv")
+        )
+        checks.equal(
+            rows.get(ARTICUNO_SKU),
+            "-5",
+            "THE SIZE IS THE READ'S LIVE QUANTITY, never capped by the store's `pushed` (three)",
+        )
+
+    # ------------------------------------- copies sold since the read come off the size
+    with isolated_home():
+        run_dir = sent_run()
+        hold(ARTICUNO_SKU)
+        guard = live_file(run_dir, {ARTICUNO_SKU: 3}, age_s=50 * 60)
+        capture_server.do_mark_sold(3, 3, {})
+        code, said, rows = emit(run_dir, guard=guard)
+        checks.equal(
+            rows.get(ARTICUNO_SKU),
+            "-2",
+            "ONE COPY SOLD AFTER THE READ: three live less one sold since is minus two",
+        )
+
+    # ------------------------------------- a held SKU the fresh read does not name: no row
+    with isolated_home():
+        run_dir = sent_run()
+        hold(ARTICUNO_SKU)
+        code, said, rows = emit(run_dir, guard=live_file(run_dir, {DUNSPARCE_SKU: 0}))
+        checks.ok(
+            ARTICUNO_SKU not in rows,
+            "A HELD SKU ABSENT FROM THE FRESH READ TAKES OFF 0: no row, whatever the store holds",
+        )
+
+    # ------------------------------------- no fresh read: refused, nothing written
+    for label, age in (("a read older than the freshness rule", 25 * HOUR), ("no read at all", None)):
+        with isolated_home():
+            run_dir = sent_run()
+            files_before = {p: p.read_bytes() for p in run_dir.directory.glob("import*.csv")}
+            before = store_counts(ARTICUNO_SKU)
+            hold(ARTICUNO_SKU)
+            guard = None if age is None else live_file(run_dir, {ARTICUNO_SKU: 3}, age_s=age)
+            code, said, rows = emit(run_dir, guard=guard)
+            checks.ok(
+                code != 0 and ARTICUNO_SKU in said and "live read" in said and not rows,
+                f"{label.upper()}: refused with a sentence naming the card and the live "
+                f"read, and no row written. Got: {said[-300:]!r}",
+            )
+            checks.ok(
+                {p: p.read_bytes() for p in run_dir.directory.glob("import*.csv")} == files_before
+                and store_counts(ARTICUNO_SKU) == before,
+                f"{label}: no file written and the store untouched",
+            )
+
+    # ------------------------------------- held, never sent, nothing live: no row
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        hold(DUNSPARCE_SKU, "bullish")
+        code, said, rows = emit(
+            run_dir, guard=live_file(run_dir, {ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        )
+        checks.equal(
+            rows,
+            {ARTICUNO_SKU: "3"},
+            "A HELD SKU THAT WAS NEVER SENT WRITES NO ROW, negative or otherwise",
+        )
+
+    # ------------------------------------- merged: one SKU in two runs is one row
+    with isolated_home():
+        first, _ = seam_run(checks, [(3, i, "Articuno", "161", None) for i in (1, 2)])
+        second, _ = seam_run(checks, [(4, 1, "Articuno", "161", None)])
+        book = corpus.Corpus.read()
+        book.sub_threshold = "floor"
+        book.write()
+        command(checks, "emit", str(first.directory), str(second.directory))
+        hold(ARTICUNO_SKU)
+        code, said, rows = emit([first, second], guard=live_file(first, {ARTICUNO_SKU: 3}))
+        checks.equal(
+            rows,
+            {ARTICUNO_SKU: "-3"},
+            "TWO RUNS HOLDING THE SAME SKU WRITE ONE ROW, -3: not one per run and not -6",
+        )
+
+    # ------------------------------------- the send flags beside a take
+    for flags in (
+        ("--listed-only",),
+        ("--split-games",),
+        ("--cap", "1"),
+        ("--quantity", f"{DUNSPARCE_SKU}=1"),
+        ("--listed-only", "--cap", "1"),
+    ):
+        with isolated_home():
+            run_dir = sent_run()
+            hold(ARTICUNO_SKU)
+            guard = live_file(run_dir, {ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})
+            code, said, rows = emit(run_dir, *flags, guard=guard)
+            checks.equal(
+                rows.get(ARTICUNO_SKU),
+                "-3",
+                f"`{' '.join(flags)}` DOES NOT DROP OR RESIZE A TAKE-OFF: the held card still "
+                "comes off by the whole read",
+            )
+
+    # ------------------------------------- `_check` compares the magnitude
+    def row(quantity):
+        return {"ProductConditionId": ARTICUNO_SKU, "MyPrice": "5.00", "AddToQuantity": quantity}
+
+    def check_code(quantity, **kwargs):
+        try:
+            tcg_import._check([row(quantity)], **kwargs)
+        except Exception as refusal:  # noqa: BLE001
+            return getattr(refusal, "code", type(refusal).__name__)
+        return None
+
+    checks.equal(
+        check_code("-3", listing=True, take_off={ARTICUNO_SKU: 3}),
+        None,
+        "A NEGATIVE THE SIZE EMIT COMPUTED PASSES the listing door",
+    )
+    checks.equal(
+        check_code("-2", listing=True, take_off={ARTICUNO_SKU: 3}),
+        "tcg_import_moves_quantity",
+        "A NEGATIVE OF THE WRONG MAGNITUDE IS REFUSED, though its SKU is named",
+    )
+    checks.equal(
+        check_code("-4", listing=True, take_off={ARTICUNO_SKU: 3}),
+        "tcg_import_moves_quantity",
+        "and so is a larger one",
+    )
+    checks.equal(
+        check_code("-3", listing=True),
+        "tcg_import_moves_quantity",
+        "A NEGATIVE WITH NO TAKE-OFF NAMED IS STILL REFUSED on the listing door",
+    )
+    checks.equal(
+        check_code("-1"),
+        "tcg_import_moves_quantity",
+        "and a price file refuses any negative",
+    )
+
+    # ------------------------------------- a SKU not held never gets a negative
+    with isolated_home():
+        run_dir = sent_run()
+        code, said, rows = emit(run_dir, guard=live_file(run_dir, {ARTICUNO_SKU: 3}))
+        checks.ok(
+            not any(int(q) < 0 for q in rows.values()),
+            "A SKU NOT HELD NEVER GETS A NEGATIVE, however many copies the read shows",
+        )
+
+
+def check_hold_take_reads(checks: Checks) -> None:
+    """What the CLI does with a held SKU's read (the re-review of PR #768).
+
+    D: a held SKU Banchi never sent, listed by hand and live in a fresh read, is taken off by
+    the read's size. E: a held SKU with no fresh read and `pushed` 0 is never skipped in
+    silence: the output names it and says there is no live read. F: a size comes from a read
+    seconds old, so `--live-guard` older than an hour refuses the take-off (the 24-hour rule
+    is for a mark-down's prices, too long for a size).
+    """
+    checks.note("")
+    checks.note("HOLD TAKE-OFF READS — hand-listed, unread, and too old")
+
+    from cli import __main__ as entry
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+
+    def live_file(run_dir, quantities, age_s=0):
+        path = run_dir.path("live-read.csv")
+        path.write_bytes(_live_export_bytes(quantities))
+        stamp = time.time() - age_s
+        os.utime(path, (stamp, stamp))
+        return path
+
+    def emit(run_dir, guard=None):
+        path = run_dir.path(runs.IMPORT_MERGED)
+        before = path.read_bytes() if path.exists() else None
+        argv = ["emit", str(run_dir.directory)]
+        if guard is not None:
+            argv += ["--live-guard", str(guard)]
+        with quiet() as said:
+            code = entry.main(argv)
+        rows = {}
+        after = path.read_bytes() if path.exists() else None
+        if after is not None and after != before:
+            rows = {r[tcgcsv.SKU_COLUMN]: r[tcgcsv.QUANTITY_COLUMN] for r in tcgcsv.read_export(path).rows}
+        return code, said.getvalue(), rows
+
+    def hold(sku):
+        book = corpus.Corpus.read()
+        book.answers[sku] = corpus.Answer(value={"withheld": "keeping"})
+        book.write()
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        hold(ARTICUNO_SKU)
+        code, said, rows = emit(run_dir, live_file(run_dir, {ARTICUNO_SKU: 2}))
+        checks.equal(
+            rows.get(ARTICUNO_SKU),
+            "-2",
+            "D: A HELD SKU BANCHI NEVER SENT, LIVE 2 IN A FRESH READ, is taken off by two",
+        )
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        hold(ARTICUNO_SKU)
+        code, said, rows = emit(run_dir)
+        checks.ok(
+            "Articuno" in said and "live read" in said,
+            "E: A HELD SKU WITH NO FRESH READ AND `pushed` 0 IS NOT SKIPPED IN SILENCE: the "
+            f"output names it and says there is no live read. Got: {said[-300:]!r}",
+        )
+
+    for label, age, wanted in (("thirty minutes", 1800, "-3"), ("two hours", 7200, None)):
+        with isolated_home():
+            run_dir, _ = seam_run(checks, cards)
+            command(checks, "emit", str(run_dir.directory))
+            hold(ARTICUNO_SKU)
+            code, said, rows = emit(run_dir, live_file(run_dir, {ARTICUNO_SKU: 3}, age_s=age))
+            if wanted:
+                checks.equal(rows.get(ARTICUNO_SKU), wanted, f"F: a read {label} old still sizes a take-off")
+            else:
+                checks.ok(
+                    code != 0 and not rows and "live read" in said,
+                    f"F: A READ {label.upper()} OLD IS REFUSED for a size, nothing written. "
+                    f"Got: {said[-300:]!r}",
+                )
+
+    # ------------------------------------- a held SKU in no selected run (the store-wide worklist)
+    def two_runs():
+        sent_run, _ = seam_run(checks, cards)
+        command(checks, "emit", str(sent_run.directory))
+        other, _ = seam_run(checks, [(4, 1, "Dunsparce", "120", "normal")])
+        hold(ARTICUNO_SKU)
+        return other
+
+    with isolated_home():
+        other = two_runs()
+        guard = live_file(other, {ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})
+        with quiet():
+            entry.main(["emit", str(other.directory), "--split-games", "--live-guard", str(guard)])
+        homes = [
+            path.name
+            for path in other.directory.glob("import*.csv")
+            if any(
+                r[tcgcsv.SKU_COLUMN] == ARTICUNO_SKU and r[tcgcsv.QUANTITY_COLUMN] == "-3"
+                for r in tcgcsv.read_export(path).rows
+            )
+        ]
+        checks.ok(
+            len(homes) == 1 and "pokemon" in homes[0].lower(),
+            f"A HELD SKU IN NO SELECTED RUN IS FILED UNDER ITS OWN GAME in a `--split-games` "
+            f"send: one file, named for the game. Got: {homes}",
+        )
+
+    with isolated_home():
+        sent_run, _ = seam_run(checks, cards)  # never emitted: `pushed` 0
+        other, _ = seam_run(checks, [(4, 1, "Dunsparce", "120", "normal")])
+        hold(ARTICUNO_SKU)
+        code, said, rows = emit(other)
+        checks.ok(
+            ARTICUNO_SKU in said and "live read" in said,
+            "A HELD SKU IN NO SELECTED RUN, NO FRESH READ AND `pushed` 0, IS NAMED in the "
+            f"output. Got: {said[-300:]!r}",
+        )
+
+
 CHECKS = (
     check_pipeline_routes,
     check_emit_claim_decides,
@@ -4451,6 +4846,8 @@ CHECKS = (
     check_worklist_on_hand_unstamped,
     check_cap_flag_refusals,
     check_emit_send_quantity,
+    check_hold_takes_live_off,
+    check_hold_take_reads,
     check_merged_cap_is_the_tightest,
     check_threshold_and_file_shape,
     check_live_reconcile,

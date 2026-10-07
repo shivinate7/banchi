@@ -1621,6 +1621,362 @@ def check_send_press(checks: Checks) -> None:
     )
 
 
+def check_send_hold_takes_off(checks: Checks) -> None:
+    """The press takes a held SKU's live copies off: one negative row, sized by the press's own
+    fresh live read, and the store changes only when the live check confirms.
+
+    THE OWNER'S RULING (D100's open question), AS THE REVIEW OF PR #768 REDESIGNED IT. The size
+    is the fresh read's live quantity for the held SKU, never the store's. Nothing in the store
+    moves at write time, so a take-off that fails, is only downloaded, or is never confirmed
+    heals on the next press. `_summary` carries the count as `taken_off` for `SendCard`.
+    `_already_pushed` still refuses a real double send, including a take-off pressed twice.
+    """
+    checks.note("")
+    checks.note("SEND PRESS — a held SKU's live copies come off, and the store waits for the check")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+
+    def hold(sku, reason):
+        book = corpus.Corpus.read()
+        if reason is None:
+            book.answers.pop(sku, None)
+        else:
+            book.answers[sku] = corpus.Answer(value={"withheld": reason})
+        book.write()
+
+    def counts():
+        listing = Store().read().inventory.listings.get(ARTICUNO_SKU)
+        return (0, 0) if listing is None else (listing.pushed, listing.live)
+
+    def rows(portal):
+        return {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]}
+
+    def press(run_dir, **extra):
+        """The press's answer, or None with the refusal's code on a failure line."""
+        try:
+            return send_routes.do_send({"runs": [run_dir.name], "confirm": True, **extra})
+        except pipeline_routes.PipelineRefusal as caught:
+            return {"refused": caught.code}
+
+    def settled(portal):
+        """A run whose three copies are sent AND confirmed live: the starting point."""
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        _age_receipt(sent["stamp"])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({})
+        return run_dir
+
+    # ------------------------------------------------ the take, and the store waiting
+    with send_portal() as portal, isolated_home():
+        run_dir = settled(portal)
+        start = counts()
+        hold(ARTICUNO_SKU, "bullish")
+        portal["rows"].clear()
+        answer = press(run_dir)
+        checks.equal(
+            rows(portal),
+            {ARTICUNO_SKU: "-3"},
+            f"THE PORTAL RECEIVED ONE NEGATIVE ROW, the fresh read's three. Press: {answer.get('refused', 'sent')}",
+        )
+        checks.equal(
+            (answer.get("send") or {}).get("taken_off"),
+            3,
+            "and the receipt names how many copies come off (`taken_off`, read by SendCard)",
+        )
+        checks.equal(
+            counts(),
+            start,
+            "THE STORE CHANGED NOTHING AT WRITE TIME: `pushed` and `live` wait for the check",
+        )
+        sent = (answer.get("send") or {}).get("stamp")
+        if sent:
+            _age_receipt(sent)
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+            send_routes.do_live_check({})
+            checks.equal(
+                counts(),
+                (0, 0),
+                "THE LIVE CHECK THAT FINDS THEM GONE is what lowers `pushed` and `live`",
+            )
+
+    # ------------------------------------------------ a failed take-off leaves the store alone
+    with send_portal() as portal, isolated_home():
+        run_dir = settled(portal)
+        start = counts()
+        hold(ARTICUNO_SKU, "keeping")
+        portal["refuse"] = {"uploadexportcsv"}
+        failed = press(run_dir)
+        checks.ok("refused" in failed, "TCGplayer turns the take-off away, and the press fails")
+        checks.equal(
+            counts(),
+            start,
+            "`_fail` LEAVES THE STORE UNCHANGED: a take-off that never landed took nothing, and "
+            "must not put copies back on top of what is still counted",
+        )
+        portal["refuse"] = set()
+        portal["rows"].clear()
+        press(run_dir)
+        checks.equal(
+            rows(portal),
+            {ARTICUNO_SKU: "-3"},
+            "THE NEXT PRESS HEALS IT: it re-reads live and takes off what is still there",
+        )
+
+    # ------------------------------------------------ a download's take-off is outstanding
+    with send_portal() as portal, isolated_home():
+        run_dir = settled(portal)
+        start = counts()
+        hold(ARTICUNO_SKU, "next_batch")
+        press(run_dir, download=True)
+        checks.equal(counts(), start, "a downloaded take-off changes nothing in the store")
+        portal["rows"].clear()
+        press(run_dir)
+        checks.ok(
+            ARTICUNO_SKU not in rows(portal),
+            "A DOWNLOADED FILE IS A TAKE-OFF OUTSTANDING: the next press writes no second row "
+            "for the SKU until a newer live read settles or lapses the first",
+        )
+
+    # ------------------------------------------------ an unknown answer leaves the store alone
+    with send_portal() as portal, isolated_home():
+        run_dir = settled(portal)
+        start = counts()
+        hold(ARTICUNO_SKU, "keeping")
+        portal["published_then_5xx"] = True
+        press(run_dir)
+        checks.equal(
+            counts(),
+            start,
+            "A TAKE-OFF TCGPLAYER ANSWERED 500 TO is unknown, and the store stays as it was",
+        )
+
+    # ------------------------------------------------ a take-off pressed twice is refused
+    with send_portal() as portal, isolated_home():
+        run_dir = settled(portal)
+        hold(ARTICUNO_SKU, "keeping")
+        press(run_dir)
+        portal["rows"].clear()
+        again = press(run_dir)
+        checks.ok(
+            "refused" in again and not portal["rows"],
+            "THE SAME TAKE-OFF TWICE INSIDE THE UPLOAD WINDOW IS A DOUBLE SEND: refused, "
+            f"nothing reaches TCGplayer. Got: {again.get('refused', 'sent')}",
+        )
+
+    # ------------------------------------------------ `_already_pushed` on take-off receipts
+    def receipt(stamp, age_s, **fields):
+        now = clock.now()
+        at = clock.iso(now - timedelta(seconds=age_s))
+        send_routes._write(
+            send_routes.sends_dir() / stamp,
+            {
+                "kind": "send", "taken_back_at": None, "at": at,
+                "pushed": {"upload_id": "u", "pushed_at": at},
+                **fields,
+            },
+        )
+
+    with isolated_home():
+        receipt("20260924-110000", 120, digest="d-take", copies={}, taken_off={ARTICUNO_SKU: 3})
+        receipt("20260924-110100", 60, digest="d-take-2", copies={}, taken_off={ARTICUNO_SKU: 3})
+        checks.equal(
+            send_routes._already_pushed("d-take"),
+            "20260924-110000",
+            "A TAKE-OFF RECEIPT WITH NO COPIES IS STILL A PUSH: a later take-off of the same "
+            "SKU does not excuse the same bytes pressed again inside the window",
+        )
+    with isolated_home():
+        receipt("20260924-110000", 120, digest="d-sent", copies={ARTICUNO_SKU: 2})
+        receipt("20260924-110100", 60, digest="d-part", copies={}, taken_off={ARTICUNO_SKU: 1})
+        checks.equal(
+            send_routes._already_pushed("d-sent"),
+            "20260924-110000",
+            "A PARTIAL TAKE (1 of 2) DOES NOT CLEAR THE SEND: one copy is still pending at "
+            "TCGplayer, so the same two bytes again would double it",
+        )
+
+
+def check_send_take_outstanding(checks: Checks) -> None:
+    """At most ONE outstanding take-off per SKU (the re-review of PR #768).
+
+    A take-off is outstanding from the moment its file is written (a press or a download) until
+    a live read newer than it settles it: the copies are gone (settled once, from that take), or
+    they are still live after the check window (never landed, and only then may a new take be
+    sized). While one is outstanding a press writes no take-off row for that SKU and says so in
+    a sentence that names the card and says "outstanding". The press also works on the
+    store-wide worklist, so a held SKU in none of the selected runs is still taken off.
+    """
+    checks.note("")
+    checks.note("SEND PRESS — one outstanding take-off per SKU")
+
+    def hold(sku, reason="keeping"):
+        book = corpus.Corpus.read()
+        if reason is None:
+            book.answers.pop(sku, None)
+        else:
+            book.answers[sku] = corpus.Answer(value={"withheld": reason})
+        book.write()
+
+    def counts():
+        listing = Store().read().inventory.listings.get(ARTICUNO_SKU)
+        return (0, 0) if listing is None else (listing.pushed, listing.live)
+
+    def rows(portal):
+        return {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]}
+
+    def press(runs_, **extra):
+        """`(answer, text)`: the press's answer and every sentence it said, or its refusal."""
+        names = [run.name for run in runs_]
+        try:
+            answer = send_routes.do_send({"runs": names, "confirm": True, **extra})
+            return answer, str(answer.get("console") or "")
+        except pipeline_routes.PipelineRefusal as caught:
+            return {"refused": caught.code}, f"{caught.code} {caught}"
+
+    def long_ago(stamp):
+        """Age a receipt past the check wait AND the upload window, so the digest guard that
+        stops the same bytes twice in a row is not what these cases measure."""
+        if not stamp:
+            return
+        _age_receipt(stamp)
+        directory = send_routes.sends_dir() / stamp
+        record = send_routes._read(directory)
+        old = "2000-01-01T00:00:00+00:00"
+        record["at"] = old
+        if record.get("pushed"):
+            record["pushed"]["pushed_at"] = old
+        send_routes._write(directory, record)
+
+    def stamp_of(answer):
+        return (answer.get("send") or {}).get("stamp")
+
+    def says_outstanding(text):
+        return "outstanding" in text and "Articuno" in text
+
+    def settled(portal, count=3, live=3):
+        run_dir, _ = seam_run(checks, [(3, i, "Articuno", "161", None) for i in range(1, count + 1)])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        _age_receipt(sent["stamp"])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: live})
+        send_routes.do_live_check({})
+        return run_dir
+
+    # ------------------------------------------------ A: never landed, then landed: settle once
+    with send_portal() as portal, isolated_home():
+        run_dir = settled(portal, count=5, live=3)
+        start, _ = counts()
+        hold(ARTICUNO_SKU)
+        first, _ = press([run_dir])
+        long_ago(stamp_of(first))
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({})  # still live past the window: it never landed
+        portal["rows"].clear()
+        second, _ = press([run_dir])
+        checks.equal(
+            rows(portal),
+            {ARTICUNO_SKU: "-3"},
+            "A TAKE THAT NEVER LANDED (still live past the window) MAY BE SIZED AGAIN",
+        )
+        long_ago(stamp_of(second))
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        send_routes.do_live_check({})
+        send_routes.do_live_check({})
+        checks.equal(
+            counts()[0],
+            start - 3,
+            "THE COPIES THAT WENT ARE SETTLED EXACTLY ONCE: `pushed` falls by three, not six",
+        )
+        settled_by = [
+            stamp
+            for stamp, record in send_routes._receipts()
+            if ARTICUNO_SKU in (record.get("take_settled") or [])
+        ]
+        checks.equal(len(settled_by), 1, "and exactly one receipt carries the settlement")
+
+    # ------------------------------------------------ B: a download not uploaded blocks a second
+    with send_portal() as portal, isolated_home():
+        run_dir = settled(portal)
+        hold(ARTICUNO_SKU)
+        send_routes.do_send({"runs": [run_dir.name], "download": True})
+        portal["rows"].clear()
+        answer, text = press([run_dir])
+        checks.ok(
+            ARTICUNO_SKU not in rows(portal),
+            "A DOWNLOADED TAKE-OFF IS OUTSTANDING until a newer read settles it: the next "
+            "press writes no second take-off file for that SKU",
+        )
+        checks.ok(says_outstanding(text), f"and says so, naming the card. Got: {text[-300:]!r}")
+
+    # ------------------------------------------------ C: a sale between two presses
+    with send_portal() as portal, isolated_home():
+        run_dir = settled(portal)
+        hold(ARTICUNO_SKU)
+        press([run_dir])
+        capture_server.do_mark_sold(3, 3, {})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
+        portal["rows"].clear()
+        answer, text = press([run_dir])
+        checks.ok(
+            ARTICUNO_SKU not in rows(portal),
+            "A COPY SOLD BETWEEN TWO PRESSES INSIDE THE WINDOW does not size a second take-off "
+            "while the first is outstanding",
+        )
+        checks.ok(says_outstanding(text), f"and the press says why. Got: {text[-300:]!r}")
+
+    # ------------------------------------------------ a failed store write leaves the take outstanding
+    with send_portal() as portal, isolated_home():
+        run_dir = settled(portal, count=5, live=3)
+        start, _ = counts()
+        hold(ARTICUNO_SKU)
+        sent, _ = press([run_dir])
+        long_ago(stamp_of(sent))
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        real = send_routes._lower_takes
+
+        def broken(gone, live_now):
+            raise OSError("the store would not write")
+
+        send_routes._lower_takes = broken
+        try:
+            send_routes.do_live_check({})
+        except OSError:
+            pass
+        finally:
+            send_routes._lower_takes = real
+        checks.ok(
+            not any(
+                ARTICUNO_SKU in (record.get("take_settled") or [])
+                for _, record in send_routes._receipts()
+            ),
+            "A STORE WRITE THAT FAILED LEAVES THE TAKE OUTSTANDING: no receipt says it settled, "
+            "so the next check settles it",
+        )
+        send_routes.do_live_check({})
+        checks.equal(
+            counts()[0],
+            start - 3,
+            "and the next check lowers `pushed` once, by three",
+        )
+
+    # ------------------------------------------------ G: a held SKU in none of the selected runs
+    with send_portal() as portal, isolated_home():
+        settled(portal)
+        other, _ = seam_run(checks, [(4, 1, "Dunsparce", "120", "normal")])
+        hold(ARTICUNO_SKU)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})
+        portal["rows"].clear()
+        press([other])
+        checks.equal(
+            rows(portal).get(ARTICUNO_SKU),
+            "-3",
+            "THE PRESS WORKS ON THE STORE-WIDE WORKLIST: a held SKU in none of the selected "
+            "runs is still taken off",
+        )
+
+
 def _press_thread(fn, answers, index):
     """Run one press on its own thread and keep what it answered, or the code it refused."""
 
@@ -5632,6 +5988,8 @@ CHECKS = (
     check_markdown_push,
     check_send_guard,
     check_send_press,
+    check_send_hold_takes_off,
+    check_send_take_outstanding,
     check_send_sold_since,
     check_send_hazards,
     check_send_review_r3,

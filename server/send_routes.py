@@ -522,6 +522,8 @@ def _summary(stamp: str, record: dict, now: datetime, held: frozenset = frozense
         "prices_left": record.get("prices_left") or [],
         "moves": record.get("moves") or [],
         "held": stamp in held,
+        # THE COPIES THIS PRESS TOOK OFF TCGPLAYER for held cards (D100, the owner's ruling).
+        "taken_off": sum((record.get("taken_off") or {}).values()),
         "takeable": sum(offer.values()),
         "take_back_after": store_clock.iso(take_after) if waiting_to_take and take_after is not None else None,
         "files": record.get("files") or [],
@@ -727,11 +729,26 @@ def _already_pushed(digest: str, now: Optional[datetime] = None) -> Optional[str
     (the round-1 rule refused them forever — the 2026-09-24 review, S3).
     """
     moment = now or store_clock.now()
-    for stamp, record in _receipts():
+    receipts = _receipts()
+    for stamp, record in receipts:
         if record.get("digest") != digest or record.get("kind") != KIND_SEND:
             continue
         pushed = record.get("pushed")
         if not pushed or record.get("taken_back_at"):
+            continue
+        # A SEND WHOSE COPIES A LATER SEND TOOK OFF IS NO PENDING DOUBLE: the owner held the
+        # cards and let them go again, and the same rows are a legitimate send (D100).
+        sent = record.get("copies") or {}
+        if sent and any(
+            later > stamp
+            and later_record.get("pushed")
+            and not later_record.get("taken_back_at")
+            and all(
+                int((later_record.get("taken_off") or {}).get(sku, 0)) >= int(n)
+                for sku, n in sent.items()
+            )
+            for later, later_record in receipts
+        ):
             continue
         when = store_clock.parse(pushed.get("pushed_at")) or store_clock.parse(record.get("at"))
         if when is None or (moment - when).total_seconds() <= UPLOAD_WINDOW_S:
@@ -898,6 +915,12 @@ def _gone_names(console: str) -> List[str]:
 def _empty_send_refusal(console: str, trimmed: list, step: str, code: int = 1) -> "PipelineRefusal":
     """`_empty_refusal`, with the cards a store-backed run could not send named beside it."""
     refusal = _empty_refusal(console, trimmed, step, code)
+    waiting = (_json_line(console, "send_outstanding") or {}).values()
+    if waiting:
+        refusal.args = (
+            f"{refusal.args[0]} {', '.join(sorted(map(str, waiting)))}: a take-off is already "
+            "outstanding, so no second one was written.",
+        )
     gone = _gone_names(console)
     if gone:
         refusal.args = (f"{refusal.args[0]} {resolve.gone_sentence(gone)}",)
@@ -1199,6 +1222,10 @@ def _write_and_send(
         encoding="utf-8",
     )
     argv += ["--reprice-live", str(named)]
+    # A TAKE-OFF STILL OUTSTANDING IS NOT SIZED AGAIN (D100): `emit` writes no second row for these.
+    outstanding = _outstanding_takes()
+    if outstanding:
+        argv += ["--take-outstanding", ",".join(sorted(outstanding))]
     if download and payload.get("split_threshold"):
         argv.append("--split-threshold")
     argv += pipeline_routes._quantity_flags(payload)
@@ -1207,6 +1234,7 @@ def _write_and_send(
     claim = Store().read().send_claims.get(stamp)
     written = sorted(directory.glob("import*.csv"))
     said_prices = _json_line(console, "send_prices") or {}
+    said_off = _json_line(console, "send_takeoff") or {}
     changes = list(said_prices.get("rows") or [])
 
     if claim is None:
@@ -1227,6 +1255,7 @@ def _write_and_send(
     kept = [path.name for path in written]
     was = {str(row.get("sku")): row.get("was") for row in changes}
     copies: Dict[str, int] = {}
+    taken_off: Dict[str, int] = {}
     names: Dict[str, str] = {}
     for path in written:
         for sku, count in _copies(path).items():
@@ -1234,12 +1263,18 @@ def _write_and_send(
             # Take back and every count of what went live never see it.
             if count > 0:
                 copies[sku] = copies.get(sku, 0) + count
+            # A NEGATIVE ROW COUNTS ONLY AT THE SIZE `emit` SAID; any other negative stays out
+            # and the push door refuses it. THE STORE IS NOT TOUCHED HERE: the live check
+            # lowers `pushed` and `live` once the copies are gone (`_settle_takes`).
+            elif count < 0 and said_off.get(sku) == -count:
+                taken_off[sku] = -count
         names.update(_names(path))
     record.update(
         {
             "files": kept,
             "copies": copies,
             "copies_total": sum(copies.values()),
+            "taken_off": taken_off,
             # THE PRICE-ONLY ROWS, SKU -> the price the file carries and the live price it
             # replaces. The check past the wait compares TCGplayer's price with `price`, the
             # mark-down's own test (`_resolve_markdown`), and never offers one back.
@@ -1355,7 +1390,12 @@ def _push_and_publish(directory: Path, record: dict, console: str) -> dict:
         )
     rows = tcg_import.rows_from_csv(pushed_file.read_text(encoding="utf-8"))
     try:
-        upload = tcg_import.push_to_staged(rows, filename=record["files"][0], listing=True)
+        upload = tcg_import.push_to_staged(
+            rows,
+            filename=record["files"][0],
+            listing=True,
+            take_off=record.get("taken_off") or {},
+        )
     except tcg_import.PushFailed as failed:
         if failed.upload_id is None:
             _fail(directory, record, failed.code,
@@ -1962,6 +2002,55 @@ def _price_check(record: dict, live_prices: Dict[str, str], live_now: Dict[str, 
     }
 
 
+def _outstanding_takes() -> set:
+    """The SKUs with a take-off outstanding: written (a press or a download) and neither settled
+    by a live read nor lapsed as never landed. A failed press wrote nothing that can land."""
+    out: set = set()
+    for _stamp, record in _receipts():
+        if record.get("failure") or record.get("taken_back_at"):
+            continue
+        for sku in record.get("taken_off") or {}:
+            if sku not in (record.get("take_settled") or []) and sku not in (record.get("take_lapsed") or []):
+                out.add(sku)
+    return out
+
+
+def _settle_takes(record: dict, live_now: Dict[str, int]) -> Dict[str, int]:
+    """A check past the wait that finds a take-off's copies gone lowers `pushed` and sets `live`.
+
+    GONE MEANS TCGPLAYER NOW SHOWS NO MORE THAN IT SHOWED AT THE PRESS LESS THE TAKE (`live_seen`
+    is the press's own baseline). Each SKU settles once (`take_settled`); a take that never
+    landed stays unsettled and the next send re-reads live and takes it again, so the same
+    copies are never counted off twice."""
+    done = list(record.get("take_settled") or [])
+    lapsed = list(record.get("take_lapsed") or [])
+    gone = {}
+    for sku, n in (record.get("taken_off") or {}).items():
+        if sku in done or sku in lapsed:
+            continue
+        if live_now.get(sku, 0) <= max(0, int((record.get("live_seen") or {}).get(sku, 0)) - int(n)):
+            gone[sku] = int(n)
+        else:
+            # STILL LIVE PAST THE WINDOW: it never landed, and only now may a new one be sized.
+            lapsed.append(sku)
+    record["take_settled"] = sorted(done + list(gone))
+    record["take_lapsed"] = sorted(lapsed)
+    return gone
+
+
+def _lower_takes(gone: Dict[str, int], live_now: Dict[str, int]) -> None:
+    """One store write for every take-off a check settled: `pushed` falls, `live` is the read."""
+    if not gone:
+        return
+    with Store().write() as writable:
+        for sku, n in gone.items():
+            listing = writable.inventory.listings.get(sku)
+            if listing is None:
+                continue
+            listing.bump(master.PUSHED, -n)
+            listing.set(master.LIVE, live_now.get(sku, 0))
+
+
 def _live_check(force: bool) -> dict:
     now = store_clock.now()
     receipts = _receipts()
@@ -1990,6 +2079,8 @@ def _live_check(force: bool) -> dict:
     credits = _credits(receipts, due_stamps, sent_by, live_now, sold_now, now)
 
     checked = []
+    lowered: Dict[str, int] = {}
+    finish: List[Tuple[str, dict]] = []
     for stamp, record in due:
         copies = sent_by.get(stamp, {})
         missing = []
@@ -2023,13 +2114,21 @@ def _live_check(force: bool) -> dict:
             # THE FIRST CHECK PAST THE WAIT, KEPT: a downloaded file's copies come back only
             # after a second one, one wait later (`_second_check`).
             record["first_checked_at"] = store_clock.iso(now)
+        if _checked_past_wait(record):
+            for sku, n in _settle_takes(record, live_now).items():
+                lowered.setdefault(sku, n)
+        finish.append((stamp, record))
+
+    # THE STORE FIRST, THEN THE RECEIPTS: a settle persisted before the store write that lowers
+    # `pushed` would, on a failed write, never be retried.
+    _lower_takes(lowered, live_now)
+    for stamp, record in finish:
         _write(sends_dir() / stamp, record)
         # A CHECK PAST THE WAIT RESOLVES A HOLD: what is live is now known, and what is not can
         # be taken back. The claim goes whether the copies were found or not.
         if _checked_past_wait(record):
             _release(stamp, "checked")
         checked.append(_summary(stamp, record, now, _held_stamps()))
-
     for stamp in markdowns:
         _resolve_markdown(stamp, path, now)
 

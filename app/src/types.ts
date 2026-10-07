@@ -4711,6 +4711,8 @@ export type SendSummary = {
   /** Cards the run held that the store no longer has, by last-known name: skipped, not sent. */
   gone: string[]
   trimmed_copies: number
+  /** Copies this press took off TCGplayer for cards the owner holds (a negative row). 0 when none. */
+  taken_off: number
   accepted: number | null
   /** Rows TCGplayer's own count turned away. The screen never says more went live than it took. */
   turned_away: number
