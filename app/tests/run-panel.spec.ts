@@ -658,11 +658,16 @@ test('Boxes takes a press held 200ms while the dialog is still entering', async 
   await page.keyboard.press('Escape')
   await expect(page.locator('.runs-composer')).toBeHidden()
   await page.locator('.runs-actions').getByRole('button', { name: /^Identify/ }).click()
+  /* THE FIRST FRAME THE BUTTON EXISTS IN, polled on rAF: any slower and the entry is over before
+     the press starts, and the case passes on code it should fail. */
+  const at = await (await page.waitForFunction(() => {
+    const b = [...document.querySelectorAll('.runs-starts button')].find((e) => e.textContent?.trim() === 'Boxes')
+    if (!b || b.getAttribute('aria-pressed') !== 'false') return null
+    const r = b.getBoundingClientRect()
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+  }, undefined, { polling: 'raf' })).jsonValue()
   const boxes = page.locator('.runs-starts').getByRole('button', { name: 'Boxes' })
-  await boxes.waitFor({ state: 'attached' })
-  const at = await boxes.boundingBox()
-  expect(at).not.toBeNull()
-  await page.mouse.move(at!.x + at!.width / 2, at!.y + at!.height / 2)
+  await page.mouse.move(at!.x, at!.y)
   await page.mouse.down()
   await page.waitForTimeout(200) // keep: the held press under test
   await page.mouse.up()
