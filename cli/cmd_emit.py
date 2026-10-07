@@ -73,7 +73,7 @@ from datetime import datetime
 from typing import Dict, List, Tuple
 
 from cli import resolve, runs
-from pipeline import corpus, decisions, games, join, merge, pricing, reprice, routing, sendguard, tcgcsv
+from pipeline import corpus, decisions, games, join, merge, pricing, routing, sendguard, tcgcsv
 from pipeline import skus as skus_walk
 from pathlib import Path
 
@@ -764,10 +764,10 @@ def _takeoffs(resolved_list, withheld, inventory, args):
         live_price = sendguard.live_prices(export.rows)
     outstanding = {sku for sku in (getattr(args, "take_outstanding", None) or "").split(",") if sku}
     found = {}
-    first_game = None
+    sent_games = set()
     for resolved in resolved_list:
         for game_join in resolved.joins.values():
-            first_game = first_game or game_join.game
+            sent_games.add(game_join.game)
             for sku, match in game_join.report.matches.items():
                 found.setdefault(sku, (game_join.game, match))
     takes: Dict[str, _Take] = {}
@@ -777,7 +777,7 @@ def _takeoffs(resolved_list, withheld, inventory, args):
         hold = withheld[sku]
         if hold.reason not in decisions.WITHHOLD_REASONS:
             continue
-        game, match = found.get(sku, (first_game, None))
+        game, match = found.get(sku, (None, None))
         name = match.name if match is not None else sku
         if sku in outstanding:
             notes.append(("outstanding", sku, name))
@@ -786,14 +786,20 @@ def _takeoffs(resolved_list, withheld, inventory, args):
             listing = inventory.listings.get(sku)
             if listing is not None and int(listing.pushed) > 0:
                 blocked.append((sku, name))
-            elif match is not None:
+            else:
                 notes.append(("unread", sku, name))
             continue
         count = max(0, int(read.get(sku, 0))) - _sold_since(inventory, sku, as_of)
         if count <= 0:
             continue
         row = match.row if match is not None else rows_by_sku.get(sku)
-        if row is None or game is None:
+        if row is None:
+            continue
+        if game is None:
+            # A SKU IN NO SELECTED RUN FILES UNDER ITS OWN GAME, read off its row's Product Line.
+            game = games.game_for_product_line(row.get("Product Line"))
+        if game not in sent_games:
+            notes.append(("ungamed", sku, name))
             continue
         # THE PRICE IS THE ONE TCGPLAYER ALREADY SHOWS, so the row moves nothing but the
         # quantity: the live export's, else the catalogue row's own, else the join's.
@@ -811,9 +817,13 @@ def _say_take_notes(notes, say) -> None:
         return
     import json
 
+    if len(notes) > 8:
+        say(f"...and {len(notes) - 8} more held cards with no take-off")
     for kind, sku, name in notes[:8]:
         if kind == "outstanding":
             say(f"{name} ({sku}) already has a take-off outstanding, so no second one is written.")
+        elif kind == "ungamed":
+            say(f"{name} ({sku}) is held and live, and no game in this send files it, so nothing is taken off it.")
         else:
             say(f"{name} ({sku}) is held and there is no fresh live read, so nothing is taken off it.")
     say(json.dumps({"send_outstanding": {s: n for k, s, n in notes if k == "outstanding"}}, sort_keys=True))

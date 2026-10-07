@@ -2080,6 +2080,7 @@ def _live_check(force: bool) -> dict:
 
     checked = []
     lowered: Dict[str, int] = {}
+    finish: List[Tuple[str, dict]] = []
     for stamp, record in due:
         copies = sent_by.get(stamp, {})
         missing = []
@@ -2116,14 +2117,18 @@ def _live_check(force: bool) -> dict:
         if _checked_past_wait(record):
             for sku, n in _settle_takes(record, live_now).items():
                 lowered.setdefault(sku, n)
+        finish.append((stamp, record))
+
+    # THE STORE FIRST, THEN THE RECEIPTS: a settle persisted before the store write that lowers
+    # `pushed` would, on a failed write, never be retried.
+    _lower_takes(lowered, live_now)
+    for stamp, record in finish:
         _write(sends_dir() / stamp, record)
         # A CHECK PAST THE WAIT RESOLVES A HOLD: what is live is now known, and what is not can
         # be taken back. The claim goes whether the copies were found or not.
         if _checked_past_wait(record):
             _release(stamp, "checked")
         checked.append(_summary(stamp, record, now, _held_stamps()))
-
-    _lower_takes(lowered, live_now)
     for stamp in markdowns:
         _resolve_markdown(stamp, path, now)
 
