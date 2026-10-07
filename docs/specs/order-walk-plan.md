@@ -640,9 +640,15 @@ the strip answers the one question Inventory never has to: what does this buyer 
 
 ### What C is, as built
 
-- **The rail** holds the buyers, the open buyer's panel and the walk, one line a card. The line
-  carries no copies. The section count is a plain count: no fold control, because the strip
-  already shows the whole order.
+- **The rail** holds the walk, then the buyers. The walk is the open buyer's panel and one line a
+  card, and it sits above the buyer list at 1440 and 820. The line carries no copies.
+- **The fold is back.** The strip shows one buyer's cards, not the sections to hunt across checked
+  buyers. A button in `.orders-walk-tools` reads "Fold N sections", or "Open N sections" while any
+  section is folded, and sets every section at once. A press on a section header toggles that one.
+  Folded, every header shows at once.
+- **The walk re-reads once on return.** When the window regains focus or the tab becomes visible,
+  `useOrderWalk` asks `walkPlan` again, debounced so both events make one read. It is silent, keeps
+  the held plan when the answer is the same, and never polls.
 - **The pane** is `CardPane`. `CardLocations` is its `detail`, so the photograph sits beside the
   copies. Mark sold stays the small per-copy icon press, with the tick on a picked card. No
   large primary press is added.
