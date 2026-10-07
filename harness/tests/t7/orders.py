@@ -4096,6 +4096,51 @@ def check_order_walk_plan_route(checks: Checks) -> None:
             )
 
 
+def check_order_walk_plan_take_live_reading(checks: Checks) -> None:
+    """A walk take for a SKU whose listing holds a live reading carries `listed.live` and
+    `live_as_of` exactly as `/search` does (`_listing_reading`, one home). The owner saw the
+    walk's card view draw "not read" for a SKU whose listing held live 2 with `live_as_of` set."""
+    checks.note("")
+    checks.note("WALK PLAN TAKE CARRIES THE LISTING'S LIVE READING")
+    sku = "9139842"
+    with isolated_home():
+        capture_server.do_capture(capture_payload(3, capture_id="r1", set_hint="sv9"))
+        with Store().write() as snapshot:
+            snapshot.inventory.record_identification(
+                "3/1", name="Calm Rune", number="002/219", printed_total="219", confidence="high",
+            )
+            snapshot.inventory.cards["3/1"].sku = sku
+            snapshot.inventory.listing(sku).observe_live(2, master.now())
+        answers(
+            checks,
+            lambda: capture_server.do_order_ingest(
+                {"orders": [{
+                    "source": "TCGplayer", "number": "R-1",
+                    "placed_at": "2026-09-18T10:00:00.000+00:00",
+                    "lines": [{"sku": sku, "quantity": 1, "name": "Calm Rune"}],
+                }]}
+            ),
+            "an order for the listed SKU ingests",
+        )
+        search = answers(checks, lambda: capture_server.do_search(sku), "GET /search over the SKU")
+        plan = answers(
+            checks,
+            lambda: capture_server.do_order_walk_plan({"keys": ["tcgplayer:r-1"]}),
+            "POST /orders/walk-plan answers a plan over that order",
+        )
+        if search is None or plan is None:
+            return
+        group = next(g for g in search["groups"] if g["sku"] == sku)
+        take = next(t for stop in plan["stops"] for t in stop["takes"] if t["sku"] == sku)
+        checks.equal(group["listed"]["live"], 2, "fixture: /search sees live 2")
+        checks.ok(group["live_as_of"] is not None, "fixture: /search sees `live_as_of` set")
+        checks.equal(
+            (take.get("listed"), take.get("sold_here"), take.get("live_as_of")),
+            (group["listed"], group["sold_here"], group["live_as_of"]),
+            "THE WALK TAKE'S `listed`/`sold_here`/`live_as_of` EQUAL /search'S FOR THE SAME SKU",
+        )
+
+
 def check_order_places_scoped(checks: Checks) -> None:
     """Store-scaling item 6: `do_orders` scopes its `_Places` build to the boxes its picks
     actually touch, never to the whole store.
@@ -5122,6 +5167,7 @@ CHECKS = (
     check_order_line_sealed_from_title,
     check_order_screen,
     check_order_walk_plan_route,
+    check_order_walk_plan_take_live_reading,
     check_order_places_scoped,
     check_order_picks_tier,
     check_inventory_copies_route,

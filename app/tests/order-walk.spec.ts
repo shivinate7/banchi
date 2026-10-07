@@ -461,6 +461,35 @@ test('the walk\'s card pane carries no listing-correction control — Inventory 
   await expect(page.locator('.card-correction')).toHaveCount(0)
 })
 
+/* ------------------------------------------------------------------- the Live figure */
+
+/** `twoCopyPlan` with the take's listing fields set (or left off, as a plan built before a SKU had a record). */
+function planWithListing(listing: { listed: { pushed: number; staged: number; live: number }; sold_here: number; live_as_of: string | null } | null): WalkPlan {
+  const plan = twoCopyPlan()
+  if (listing !== null) Object.assign(plan.stops[0]!.takes[0]!, listing)
+  return plan
+}
+
+test('the walk card view draws the Live count and its age when the listing has a reading', async ({ page }) => {
+  const hourAgo = new Date(Date.now() - 3_600_000).toISOString()
+  await open(page, { plan: planWithListing({ listed: { pushed: 0, staged: 0, live: 2 }, sold_here: 0, live_as_of: hourAgo }) })
+
+  const live = page.locator('.browse-hero-fig-live')
+  await expect(live).toBeVisible()
+  await expect(live).toHaveAttribute('data-read', 'true')
+  await expect(live.locator('.browse-hero-fig-value')).toHaveText('2')
+  await expect(live.locator('.browse-hero-age')).toHaveText('1h ago')
+})
+
+test('the walk card view still says not read when the listing has no reading', async ({ page }) => {
+  await open(page, { plan: planWithListing({ listed: { pushed: 0, staged: 0, live: 0 }, sold_here: 0, live_as_of: null }) })
+
+  const live = page.locator('.browse-hero-fig-live')
+  await expect(live).toBeVisible()
+  await expect(live).toHaveAttribute('data-read', 'false')
+  await expect(live.locator('.browse-hero-age')).toHaveText('not read')
+})
+
 /* -------------------------------------------------------------------------------------- 6 */
 
 test('a walk row fills the pane with the hero head, the photo, and every on-hand copy — the chosen one first, no Details fold', async ({
