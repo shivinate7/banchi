@@ -354,3 +354,28 @@ test('every glyph in an xl button: one box size, one glyph size, centre between 
   const off = rows.filter((r) => r.ex > GLYPH_TOL_PX || r.ey > GLYPH_TOL_PX)
   expect(off.map((r) => `${r.n}: ${r.ex.toFixed(2)}px x, ${r.ey.toFixed(2)}px y outside`), 'glyphs sitting off their button centre').toEqual([])
 })
+
+/* A PANEL'S ENTRY MAY FADE AND MAY NOT MOVE (the kit's `bn-dialog-in`, `bn-sheet-in`).
+ *
+ * A control that moves between pointer-down and pointer-up gets no `click` (the up lands on its
+ * parent), so a press held ~200ms during a moving entry was lost. This samples a control's box as
+ * soon as the panel is drawn, then once the motion is done; a keyframe that translates or scales
+ * the panel moves the control between the two and goes red. */
+for (const [kind, opener, panel, control] of [
+  ['dialog', 'modal', '.bn-dialog', 'Done'],
+  ['sheet', 'sheet', '.bn-sheet', 'Save'],
+] as const) {
+  test(`a ${kind}'s controls hold still while it enters`, async ({ page }) => {
+    await page.locator(`[data-kit-open="${opener}"]`).click()
+    const btn = page.locator(panel).getByRole('button', { name: control, exact: true })
+    await btn.waitFor({ state: 'attached' })
+    const during = await btn.boundingBox()
+    await settleMotion(page)
+    const after = await btn.boundingBox()
+    expect(during, `${kind} control drawn`).not.toBeNull()
+    expect(after, `${kind} control settled`).not.toBeNull()
+    expect(Math.abs(during!.x - after!.x), `${kind} control x`).toBeLessThanOrEqual(0.5)
+    expect(Math.abs(during!.y - after!.y), `${kind} control y`).toBeLessThanOrEqual(0.5)
+    expect(Math.abs(during!.width - after!.width), `${kind} control width`).toBeLessThanOrEqual(0.5)
+  })
+}

@@ -650,6 +650,25 @@ async function pickBox(page: Page, box = 9) {
   await page.locator('.runs-boxes').getByRole('button', { name: new RegExp(`^${escaped}\\b`) }).click()
 }
 
+/** A press held through the dialog's entry still takes. The entry once moved and scaled the panel,
+ *  so the pointer-up landed on its parent and no `click` fired: `Boxes` stayed unpressed. */
+test('Boxes takes a press held 200ms while the dialog is still entering', async ({ page }) => {
+  await open(page, { runs: [runRow({})] })
+  await openComposer(page)
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.runs-composer')).toBeHidden()
+  await page.locator('.runs-actions').getByRole('button', { name: /^Identify/ }).click()
+  const boxes = page.locator('.runs-starts').getByRole('button', { name: 'Boxes' })
+  await boxes.waitFor({ state: 'attached' })
+  const at = await boxes.boundingBox()
+  expect(at).not.toBeNull()
+  await page.mouse.move(at!.x + at!.width / 2, at!.y + at!.height / 2)
+  await page.mouse.down()
+  await page.waitForTimeout(200) // keep: the held press under test
+  await page.mouse.up()
+  await expect(boxes).toHaveAttribute('aria-pressed', 'true')
+})
+
 /** Forward from the boxes stage to the reading stage. */
 async function toReading(page: Page, reader: 'paid' | 'free' = 'paid') {
   await page.getByRole('button', { name: /^Next: photos$/ }).click()
