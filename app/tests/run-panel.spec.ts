@@ -6,6 +6,7 @@ import { NO_FREE_FIELDS, matchState, runRow, stubMatchState } from './routeFixtu
 import { HAIKU_NAME_TOOLTIP, MATCHER_NAME_TOOLTIP } from '../src/engines'
 import type { MatchState } from '../src/types'
 import { expectOneStagger } from './staggerCheck'
+import { settleMotion } from './motionSettled'
 import { boxTitle } from '../src/kit/dataRules'
 
 /* THE PIPELINE IS REACHABLE FROM A SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
@@ -643,8 +644,19 @@ async function pickBox(page: Page, box = 9) {
      more: a selection can begin from a STATE, from the cards handed over, or from a previous
      run. Choosing the start first is idempotent — `Segmented` re-presses without toggling —
      so every existing caller of this helper keeps meaning what it meant. */
+  /* THE PRESS WAITS FOR THE SHEET TO FINISH ARRIVING. A case that pressed `Identify` and went
+     straight to this helper (the two Prepare cases, which have no quote to wait for) pressed
+     `Boxes` while `bn-dialog-in` was still running. Playwright's stability check read the rect
+     before the starved page painted its first frame, so the mouse went down on the button and came
+     up with the dialog still moving: CI's trace has focus on `Boxes` and `aria-pressed` false
+     through to the 15s timeout. The cases that open through `openComposer` never met it, because
+     they wait out the first quote. */
+  await expect(page.locator('.runs-composer')).toBeVisible()
+  await settleMotion(page)
   const drawers = page.locator('.runs-starts').getByRole('button', { name: 'Boxes' })
   await drawers.click()
+  /* THE PRESS IS THE ASSERTION: a lost press fails here, by name, and not 15s later on a box chip. */
+  await expect(drawers).toHaveAttribute('aria-pressed', 'true')
   const label = boxTitle(BOX_NAMES[box] ?? null, box)
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   await page.locator('.runs-boxes').getByRole('button', { name: new RegExp(`^${escaped}\\b`) }).click()
