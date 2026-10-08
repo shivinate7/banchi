@@ -105,7 +105,9 @@
 name: check
 
 on:
+  # A draft runs nothing heavy: `ready_for_review` starts the full run when the person marks it ready.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   # Main too, and not only pull requests. A merge can break what neither side broke alone —
   # the semantic conflict git merges cleanly — and the whole point here is that somebody finds
   # out without having to remember to look.
@@ -150,8 +152,9 @@ jobs:
   # others are still worth their verdict.
   ci-check:
     name: ci-check (${{ matrix.target }})
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 8
     strategy:
       fail-fast: false
       matrix:
@@ -247,7 +250,11 @@ jobs:
           BROWSER: ${{ needs.design-check.result }}
           SCOPE_RUN: ${{ needs.browser-scope.outputs.run }}
           ALREADY_PASSED: ${{ needs.already-passed.outputs.skip }}
+          DRAFT: ${{ github.event.pull_request.draft }}
         run: |
+          # A draft skips the heavy jobs, so this check FAILS on one: a skipped required check counts as
+          # passing, and a dropped `ready_for_review` event would leave a ready PR mergeable on it.
+          if [ "${DRAFT}" = "true" ]; then echo "::error::draft: mark ready to run the checks"; exit 1; fi
           echo "shards: ${SHARDS}; browser matrix: ${BROWSER} (scope run=${SCOPE_RUN}, already-passed skip=${ALREADY_PASSED})"
           [ "${SHARDS}" = "success" ] || { echo "a shard did not succeed"; exit 1; }
           [ "${BROWSER}" = "success" ] && exit 0
@@ -372,6 +379,7 @@ jobs:
   # because the answer is a diff from the merge-base against the PR's base, and the classifier
   # answers RUN, out loud, whenever it cannot compute one. Nothing here writes.
   browser-scope:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -423,7 +431,7 @@ jobs:
     # implicit `success()`, so a gate job that FAILED releases the matrix instead of skipping
     # it — a broken lookup or a broken classifier is not a reason to test less (the browser-scope entry in docs/decisions/). Until
     # this line, a failed `already-passed` skipped the matrix; now it runs it.
-    if: ${{ !cancelled() && needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' }}
+    if: ${{ !cancelled() && !github.event.pull_request.draft && needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' }}
     runs-on: ubuntu-latest
     # the long sitting (monthly, or a dispatch that asks) puts a 16-minute case on one shard
     timeout-minutes: ${{ (github.event.schedule == '47 4 1 * *' || inputs.long_sitting) && 40 || 20 }}

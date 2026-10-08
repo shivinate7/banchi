@@ -62,3 +62,7 @@ The scope this entry settled — `SCOPE`, the classifier, the wiring — is unch
 ---
 
 **AMENDED on the owner's word: one gated spec.** `scripts/browser-scope.py`'s `GATED_SPECS` names `app/tests/capture-freeze.spec.ts`. On a pull request it is left out of the spec list unless a changed path is inside its own derived closure (`spec_reach`: the Capture screen, the dealer, what they import, and the spec itself). Any doubt runs it: a path with whitespace, an unmapped `app/` file, a top-level `SCOPE` path, an empty diff, and `PKMNSCAN_BROWSER_SCOPE=all` (which every non-pull-request event sets). A shared surface the closure does not reach leaves it out. The `spec map` row of `make docs-audit` checks that each gated name is a real spec whose closure reaches `app/src/`.
+
+---
+
+**AMENDED on the owner's word: a draft skips the classifier too.** `browser-scope` and `design-check` carry `!github.event.pull_request.draft`, so a draft pays for neither the classifier nor a shard. The fail-open reading is unchanged for every ready pull request: the draft clause is an added condition on `design-check`'s `if:`, and the `!= 'false'` and `!cancelled()` clauses stand. D136's amendment says how `check` answers on a draft: it fails.
