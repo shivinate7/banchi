@@ -366,7 +366,7 @@ export type InventoryCard = {
   box: number
   index: number
 
-  /** The stock image (D301) from `POST /inventory/copies`, `null` on a join miss or a bare call. */
+  /** The stock image (D301). Only `POST /inventory/copies` sends it: `null` on a join miss or a bare call, absent on every other route. */
   image_url?: string | null
 
   /* ---- decorated by the server, not stored ----
