@@ -64,16 +64,24 @@ def run(ok) -> None:
     _workflow = read(CHECK_WORKFLOW) if exists(CHECK_WORKFLOW) else ""
     _gate = browser_gate_findings(_workflow)
     ok(not _gate, "the workflow as it stands reads the scope fail-open", "\n".join(m for _, m in _gate))
-    _closed = _workflow.replace("outputs.run != 'false'", "outputs.run == 'true'")
+    # A mutant equal to the original is a no-op, and a no-op reads as a gate miss. Name it instead.
+    def _mutant(text: str, label: str) -> str:
+        ok(text != _workflow, f"the {label} mutation changes the workflow it mutates")
+        return text
+
+    _closed = _mutant(_workflow.replace("outputs.run != 'false'", "outputs.run == 'true'"), "fail-closed")
     ok(any("fail-open" in m for _, m in browser_gate_findings(_closed)),
        "the fail-closed spelling `== 'true'` is refused by name")
-    _gated_on = _workflow.replace("on:\n  pull_request:", "on:\n  pull_request:\n    paths: ['app/**']", 1)
+    # Anchored on the `  pull_request:` key of the `on:` block, so a comment between them does not matter.
+    _gated_on = _mutant(
+        re.sub(r"^(on:\n(?:[ \t]+#.*\n)*  pull_request:\n)", r"\1    paths: ['app/**']\n", _workflow, count=1, flags=re.M),
+        "`paths` filter")
     ok(any("`on:` block" in m for _, m in browser_gate_findings(_gated_on)),
        "a `paths` filter in the `on:` block, which would gate every job, is refused")
-    _unwired = _SCOPE_STEP_RE.sub("python3 scripts/other.py classify", _workflow)
+    _unwired = _mutant(_SCOPE_STEP_RE.sub("python3 scripts/other.py classify", _workflow), "unwired classifier")
     ok(any("consulted by nothing" in m for _, m in browser_gate_findings(_unwired)),
        "a workflow that never runs the classifier is reported as gating nothing")
-    _recording = _workflow.replace("if: github.event_name != 'push'", "if: always()")
+    _recording = _mutant(_workflow.replace("if: github.event_name != 'push'", "if: always()"), "recording guard")
     ok(any("skipped matrix" in m for _, m in browser_gate_findings(_recording)),
        "a pass record written for a skipped matrix is refused")
     _module = _sibling("browser-scope.py")
