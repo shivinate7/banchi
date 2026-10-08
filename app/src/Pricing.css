@@ -231,7 +231,7 @@
 .pricing-live[data-none='true'] { color: var(--bn-ink-3); }
 .pricing-why { font-style: italic; color: var(--bn-ink-2); max-width: 24ch; overflow: hidden; text-overflow: ellipsis; }
 
-.pricing-ref { position: relative; text-align: right; font-size: var(--bn-fs-md); color: var(--bn-ink); white-space: nowrap; }
+.pricing-ref { position: relative; text-align: center; font-size: var(--bn-fs-md); color: var(--bn-ink); white-space: nowrap; }
 .pricing-ref[data-empty='true'] { color: var(--bn-ink-3); }
 .pricing-ref-label { display: none; }
 /* THE AGE OF A FIGURE, UNDER IT, IN THE WARN TONE. Its line is always there, drawn or not (D313). */
