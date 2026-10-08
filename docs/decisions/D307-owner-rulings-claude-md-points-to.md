@@ -56,7 +56,7 @@ README's route table stays. The `route rosters` row of `make docs-audit` reconci
 
 ### Store
 
-**`banchi.runs.spend-notice` is a notice and never a cap.** The owner's words:
+**A press has no spend cap and no threshold notice.** The confirm names the cards and the spend. The owner's words:
 "if I want to run everything, then I get to run everything." D180 (press names the cards) holds the selection.
 
 **No standing cap on copies.** A cap is something a send asks for.

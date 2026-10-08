@@ -37,7 +37,6 @@ import { money } from './money'
 import { usePoll } from './usePoll'
 import { DEFAULT_ENGINE, HAIKU_NAME_TOOLTIP, MATCHER_NAME_TOOLTIP, type Engine } from './engines'
 import { storeKeyText } from './storeKey'
-import { rememberSpendNotice, storedSpendNotice } from './deviceMemory'
 import { carriedByBox, type CarriedScope } from './runHandoff'
 import './Runs.css'
 
@@ -441,13 +440,6 @@ function MatchPrepare({
   )
 }
 
-/** The next whole dollar at or above a figure, floored at the notice's own default. What the
- *  one-press raise sets, so "stop asking" means this send AND the ones like it rather than this
- *  send to the cent. */
-function coverFor(estimate: number): number {
-  return Math.max(1, Math.ceil(estimate))
-}
-
 type Props = {
   readonly open: boolean
   readonly onClose: () => void
@@ -509,13 +501,6 @@ export function RunsComposer({
   const [quote, setQuote] = useState<RunPreflight | null>(null)
   const [ticket, setTicket] = useState('')
   const [showPreflight, setShowPreflight] = useState(false)
-
-  /* THE SPEND NOTICE (the owner's ruling, 2026-09-12). Device-local, raisable here, and never a
-     block — see `deviceMemory.ts` for the derivation of the default and for why a ceiling is the
-     wrong shape. `raised` keeps the block on screen after the press that raised it, so pressing
-     it cannot move the confirm underneath the finger (D118). */
-  const [notice, setNotice] = useState<number>(() => storedSpendNotice())
-  const [raised, setRaised] = useState<number | null>(null)
 
   const [busy, setBusy] = useState<'quote' | 'start' | null>(null)
   const [trouble, setTrouble] = useState<Failure | null>(null)
@@ -821,7 +806,6 @@ export function RunsComposer({
         setQuote(answer)
         setTicket(sendKey)
         setShowPreflight(false)
-        setRaised(null)
         setStage('quote')
       }),
     [guard, send, sendKey, free, matchReady],
@@ -903,15 +887,6 @@ export function RunsComposer({
       }
     })
 
-  const raiseNotice = useCallback(
-    (to: number) => {
-      setNotice(to)
-      setRaised(to)
-      rememberSpendNotice(to)
-    },
-    [],
-  )
-
   /* ---------------------------------------------------------------------------- render */
   const rows = useMemo(() => (boxes === null ? [] : [...boxes].sort((a, b) => a.box - b.box)), [boxes])
 
@@ -958,8 +933,6 @@ export function RunsComposer({
   /* THE SECOND STAGE ASKS WHO READS FIRST, and for the free read there are no photos to send. */
   const stageTitle = stage === 'read' && free ? 'Who reads the cards' : stage === 'quote' && free ? 'What it will read' : TITLES[stage]
 
-  const estimate = quote?.total.estimate_usd ?? null
-  const overNotice = estimate !== null && estimate > notice
 
   /* THE KIT'S OWN DIALOG (D275), which portals to <body> itself: `.bn-page`'s enter animation
      leaves `main` with a filled transform, so a dialog drawn inside it would centre on the page
@@ -1616,41 +1589,6 @@ export function RunsComposer({
                 </Notice>
               ) : (
                 <>
-                  {overNotice || raised !== null ? (
-                    /* THE SPEND NOTICE, AND IT IS A SENTENCE RATHER THAN A GATE (the owner's
-                       ruling, 2026-09-12: *"Give me settings if I can have them, but if I want to
-                       run everything, then I get to run everything."*). The confirm below is
-                       untouched — not disabled, not hidden, not moved — and the only thing this
-                       block does is say so out loud and offer a way to stop being asked.
-
-                       IT STAYS ON SCREEN AFTER THE RAISE, carrying the result instead of the
-                       question (D118): a block that vanished on its own press would pull the
-                       spend button up under the finger that just pressed it. */
-                    <Notice
-                      tone={raised === null ? 'warn' : 'ok'}
-                      title={
-                        raised === null
-                          ? `More than the ${money(notice)} this device asks about`
-                          : `Noted — nothing under ${money(raised)} will ask again`
-                      }
-                    >
-                      {raised === null ? (
-                        <div className="runs-spend-row">
-                          <span>This send is {money(estimate)}.</span>
-                          <Button
-                            size="sm"
-                            variant="quiet"
-                            onClick={() => raiseNotice(coverFor(estimate ?? notice))}
-                          >
-                            Stop asking under {money(coverFor(estimate ?? notice))}
-                          </Button>
-                        </div>
-                      ) : (
-                        <span>Remembered on this browser. Change the figure below to be asked sooner.</span>
-                      )}
-                    </Notice>
-                  ) : null}
-
                   <div className="runs-quote-confirm">
                     <Button
                       variant="primary"
@@ -1670,28 +1608,6 @@ export function RunsComposer({
                         ? 'One run. The free read costs nothing. The second look is paid, and its answers wait in your review queue. It keeps going if you close this tab.'
                         : 'One run. Identification takes minutes to hours and keeps going if you close this tab.'}
                     </span>
-                    {/* THE SETTING ITSELF, ALWAYS ON SCREEN AND NEVER ONLY INSIDE THE WARNING —
-                        otherwise the figure could be raised and never lowered again. */}
-                    {(
-                    <label className="runs-field-inline runs-spend-set">
-                      <span>Ask me above</span>
-                      <span className="bn-muted">$</span>
-                      <input
-                        className="bn-input bn-input-mono runs-spend-input"
-                        type="number"
-                        min={0.01}
-                        step={0.5}
-                        value={notice}
-                        onChange={(event) => {
-                          const next = Number(event.target.value)
-                          if (!Number.isFinite(next) || next <= 0) return
-                          setNotice(next)
-                          setRaised(null)
-                          rememberSpendNotice(next)
-                        }}
-                      />
-                    </label>
-                    )}
                   </div>
                 </>
               )}
