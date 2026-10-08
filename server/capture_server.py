@@ -12167,7 +12167,22 @@ def do_skus_photos(
     return {"photos": out, "stock_photos": stock, "pending": pending}
 
 
-def do_search(query: str) -> dict:
+def _group_image(images, copies) -> Optional[str]:
+    """`image_url` for one SKU group (D301): only a group holding a reclaimed copy resolves, so an
+    ordinary search never wakes the catalog refresh. Keyed on `set_name`, never the operator's
+    `set_hint`, which narrows a search and does not identify a card."""
+    if not any(card.photo_reclaimed_at for card in copies):
+        return None
+    return pipeline_routes.stock_image_url(
+        images,
+        _agreed(card.game for card in copies),
+        _agreed(card.set_name for card in copies),
+        _agreed(card.number for card in copies),
+        _agreed(_number_display(card) for card in copies),
+    )
+
+
+def do_search(query: str, images: Optional["stockimages.StockImages"] = None) -> dict:
     """Find a card by name, number, SKU or set hint. Grouped by SKU, D7's map made visible.
 
     THE ANSWER IS A SKU AND ITS POSITIONS, WHICH IS THE SHAPE D7 ALREADY DESCRIBES: one
@@ -12437,6 +12452,8 @@ def do_search(query: str) -> dict:
                 # `bestLiveTier`. The value means nothing on its own; it exists only to be
                 # compared for equality against another group's.
                 "rank": rank,
+                # D301: the hotlinked stock photo, for a card whose own photograph was reclaimed.
+                "image_url": _group_image(images, copies),
             }
         )
 
@@ -12479,6 +12496,7 @@ def do_search(query: str) -> dict:
                 # APPENDED AFTER THE SORT ABOVE, SO ITS OWN RANK NEVER FED IT — worse than
                 # every real rank, matching where it has always landed.
                 "rank": _RANK_SUBSTRING + 1,
+                "image_url": None,
             }
         )
 
@@ -16461,7 +16479,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # `query_required` rather than looking like a request with no `q` at all —
                 # the two are one refusal, and the code says which to send next.
                 query = parse_qs(parsed.query, keep_blank_values=True).get("q") or [""]
-                return self._json(HTTPStatus.OK, do_search(query[0]))
+                return self._json(HTTPStatus.OK, do_search(query[0], images=pipeline_routes.STOCK_IMAGES))
             if path == "/skus/photos":
                 # `#/revenue`'s thumbnail lookup — see `do_skus_photos`'s own header.
                 # `pipeline_routes.STOCK_IMAGES`, the one resolver instance, same as

@@ -768,6 +768,8 @@ export type PhotoPanelProps = {
   absent: boolean
   onAbsent: () => void
   nonce: string | null
+  /** The catalogue's stock photo (D301), drawn only where the card's own photograph was reclaimed. */
+  stockImage?: string | null
   onZoom: () => void
   reshoot: ReactNode
   /** The box registry, so a moved card can say which box it went to by name. */
@@ -777,11 +779,41 @@ export type PhotoPanelProps = {
   gone?: string
 }
 
+/** A sold card's photograph, reclaimed on purpose (D89). With a stock image (D301) it draws that
+ *  in the same `.bn-photo` box, labeled so it is never taken for the owner's copy; with none, or
+ *  when the image fails to load, today's reclaimed box. */
+function ReclaimedPhoto({ row, stockImage }: { row: Row; stockImage: string | null }) {
+  const [failed, setFailed] = useState(false)
+  if (stockImage !== null && !failed) {
+    return (
+      <div className="bn-photo browse-stock">
+        <img src={stockImage} alt="" loading="lazy" onError={() => setFailed(true)} />
+        <span className="browse-stock-label">Stock photo, not your copy</span>
+      </div>
+    )
+  }
+  return (
+    <div className="bn-photo browse-absent">
+      <Icon name="check" size={28} />
+      <p>Photograph reclaimed after the sale — deleted on purpose, record kept.</p>
+      <span className="browse-machine bn-facts">
+        <span>reclaimed {row.card.photo_reclaimed_at}</span>
+        {row.card.photo_sha256 ? (
+          <>
+            {' '}
+            <span>sha256 {row.card.photo_sha256.slice(0, 16)}…</span>
+          </>
+        ) : null}
+      </span>
+    </div>
+  )
+}
+
 /** Three ways a photo can be missing — never stored, reclaimed on purpose after the sale
  *  (D89), or claimed and not on disk — each a card-shaped placeholder. `reshoot` is optional
  *  by the caller's own choice: `#/orders` passes `null`, since re-shooting a card mid-walk is
  *  an Inventory-only correction. */
-export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoot, boxes = [], gone }: PhotoPanelProps) {
+export function PhotoPanel({ row, label, absent, onAbsent, nonce, stockImage = null, onZoom, reshoot, boxes = [], gone }: PhotoPanelProps) {
   /* D218: `label` is the server's `Position.label`, and this panel only ever speaks it —
      the paragraph below and the photo's own `alt` are plain text and an accessible name,
      where there is no CSS to draw the ` · ' with, so `sayPlace` reads it as a sentence
@@ -806,21 +838,7 @@ export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoo
   }
 
   if (row.card.photo_reclaimed_at !== null) {
-    return (
-      <div className="bn-photo browse-absent">
-        <Icon name="check" size={28} />
-        <p>Photograph reclaimed after the sale — deleted on purpose, record kept.</p>
-        <span className="browse-machine bn-facts">
-          <span>reclaimed {row.card.photo_reclaimed_at}</span>
-          {row.card.photo_sha256 ? (
-            <>
-              {' '}
-              <span>sha256 {row.card.photo_sha256.slice(0, 16)}…</span>
-            </>
-          ) : null}
-        </span>
-      </div>
-    )
+    return <ReclaimedPhoto key={stockImage ?? ''} row={row} stockImage={stockImage} />
   }
 
   const src = photoSrc(row, nonce)

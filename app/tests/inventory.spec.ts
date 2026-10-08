@@ -4326,6 +4326,103 @@ test('a reclaimed photograph is drawn as reclaimed, not as a photo the store los
   await expect(page.locator('.browse-absent')).not.toContainText('did not load')
 })
 
+/* THE RECLAIMED BOX SHOWS THE STOCK IMAGE, MARKED AS ONE (owner ruling; D89). `GET /search`
+   groups carry `image_url` off the one resolver. A sold card whose own photograph was reclaimed
+   draws that image in the photo box with a stock-photo label, so it is never taken for the
+   owner's copy. A card whose own photograph exists never shows it; a join miss, or an image
+   that fails to load, keeps the reclaimed box. */
+const RECLAIMED_STOCK_URL = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
+
+/** The Eiscue fixture, sold, with its photograph reclaimed (`reclaimed: true`) or still on disk,
+ *  and every `/search` group carrying `image_url`. `searched` counts the answers served. */
+function stockImageStore(imageUrl: string | null, reclaimed: boolean) {
+  const cards: Cards = {
+    ...CARDS,
+    '2/4': card({
+      index: 4, state: reclaimed ? 'sold' : 'identified', name: 'Eiscue', sku: '8937371', section: 1,
+      sectionStart: 1, sectionEnd: 3, reclaimed: reclaimed ? '2026-09-01T21:00:00.000+00:00' : undefined,
+    }),
+  }
+  const counter = { searched: 0 }
+  const store: Store = {
+    cards,
+    search: (query) => {
+      counter.searched += 1
+      const answer = searchAnswer(query, cards) as { groups: object[] }
+      return { ...answer, groups: answer.groups.map((group) => ({ ...group, image_url: imageUrl })) }
+    },
+  }
+  return { store, counter }
+}
+
+/** Open the Eiscue card and wait for the search that decides its panel to have ANSWERED, so a
+ *  negative assertion below cannot pass on the moment before the answer lands. */
+async function openEiscue(page: Page, store: Store, counter: { searched: number }) {
+  await open(page, BOXES, store)
+  await expandAll(page)
+  const before = counter.searched
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
+  await expect.poll(() => counter.searched, 'the card never asked /search').toBeGreaterThan(before)
+  await expect(page.locator('.inventory-copies [aria-busy="true"]')).toHaveCount(0)
+  await expect(page.locator('.browse-hero-side[data-pending]')).toHaveCount(0)
+}
+
+const STOCK_PIXEL = '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88"><rect width="63" height="88" fill="#ccc"/></svg>'
+
+test('a reclaimed photograph with a stock image draws the stock image, labelled as a stock photo', async ({ page }) => {
+  await page.route(RECLAIMED_STOCK_URL, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/svg+xml', body: STOCK_PIXEL }),
+  )
+  const { store, counter } = stockImageStore(RECLAIMED_STOCK_URL, true)
+  await openEiscue(page, store, counter)
+
+  const box = page.locator('.bn-photo')
+  await expect(box.locator('img')).toHaveAttribute('src', RECLAIMED_STOCK_URL)
+  await expect(box.locator('img')).toBeVisible()
+  /* THE LABEL IS ON SCREEN WITH THE IMAGE: a stock photo that wore no mark would read as the
+     owner's own copy, which is the one thing the ruling forbids. */
+  await expect(box).toContainText(/stock photo/i)
+  await expect(box).not.toContainText('Photograph reclaimed after the sale')
+})
+
+test('a reclaimed photograph with no stock image keeps the reclaimed box', async ({ page }) => {
+  const { store, counter } = stockImageStore(null, true)
+  await openEiscue(page, store, counter)
+
+  await expect(page.locator('.browse-absent')).toContainText('Photograph reclaimed after the sale')
+  await expect(page.locator('.bn-photo img')).toHaveCount(0)
+  await expect(page.locator('.bn-photo')).not.toContainText(/stock photo/i)
+})
+
+test('a card with its own photograph never shows the stock image', async ({ page }) => {
+  const asked: string[] = []
+  await page.route(RECLAIMED_STOCK_URL, (route) => {
+    asked.push(route.request().url())
+    return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: STOCK_PIXEL })
+  })
+  const { store, counter } = stockImageStore(RECLAIMED_STOCK_URL, false)
+  await openEiscue(page, store, counter)
+
+  await expect(page.locator('.browse-photo')).toHaveAttribute('src', /\/photo\/2\/4/)
+  await expect(page.locator(`img[src="${RECLAIMED_STOCK_URL}"]`)).toHaveCount(0)
+  await expect(page.locator('.bn-photo')).not.toContainText(/stock photo/i)
+  expect(asked, 'the stock image was requested although the own photograph exists').toEqual([])
+})
+
+test('a stock image that fails to load falls back to the reclaimed box', async ({ page }) => {
+  await page.route(RECLAIMED_STOCK_URL, (route) => route.fulfill({ status: 404, body: '' }))
+  const { store, counter } = stockImageStore(RECLAIMED_STOCK_URL, true)
+  /* THE IMAGE MUST HAVE BEEN TRIED: without this, "no img in the box" also holds for a screen
+     that never drew the stock image at all, and the fallback would be asserted on nothing. */
+  const tried = page.waitForRequest(RECLAIMED_STOCK_URL, { timeout: 10_000 })
+  await openEiscue(page, store, counter)
+  await tried
+
+  await expect(page.locator('.browse-absent')).toContainText('Photograph reclaimed after the sale')
+  await expect(page.locator('.bn-photo img')).toHaveCount(0)
+  await expect(page.locator('.bn-photo')).not.toContainText(/stock photo/i)
+})
+
 test('a card that never had a photograph asks for none and says so, not that a file is lost', async ({
   page,
 }) => {
