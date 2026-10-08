@@ -23,20 +23,24 @@ from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
 
-# Claude Haiku 4.5, halved for the Batch API's 50% discount (confirmed 2026-08-03):
+# Claude Haiku 5.5 Batch API price, from Anthropic's pricing page, for prompts up to 100,000
+# tokens (over 100K it is $0.25 / $1.25; every paid read here is far under 100K):
 #
-#     base input  $1 / MTok  ->  $0.50
-#     output      $5 / MTok  ->  $2.50
+#     input   $0.05 / MTok
+#     output  $0.25 / MTok
 #
-# The arithmetic is written out because the halving is the part that looks like a typo. Two
+# Haiku 5.5 uses the newer tokenizer, about 30% more tokens for the same text, so token
+# estimates may run low until a run is re-measured on it.
+#
+# Two
 # columns of the price sheet are deliberately unused: prompt caching is not wired here, so
 # no request pays a cache-write rate and none gets a cache-hit rate. The system prompt IS
 # identical across every request in a batch and could in principle be cached — but images
 # dominate the input (a 1568px card is several times the system prompt), so the saving is
 # small and the complexity is not free. Recorded so a later session sees a decision rather
 # than an oversight.
-INPUT_PER_MTOK = Decimal("0.50")
-OUTPUT_PER_MTOK = Decimal("2.50")
+INPUT_PER_MTOK = Decimal("0.05")
+OUTPUT_PER_MTOK = Decimal("0.25")
 
 MILLION = Decimal(1_000_000)
 

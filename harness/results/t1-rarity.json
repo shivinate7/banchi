@@ -30,6 +30,7 @@
     }
   },
   "model": "claude-haiku-4-5-20251001",
+  "model_waiver": "Scored on claude-haiku-4-5-20251001. The paid read now runs claude-haiku-5-5, adopted on the owner's word with no re-measurement: this score is Haiku 4.5's, not Haiku 5.5's. prompt_fingerprint moved only because the model id is hashed.",
   "name_correct": 144,
   "overall_accuracy": 0.9533,
   "passed": true,
@@ -95,7 +96,7 @@
       "total": 15
     }
   },
-  "prompt_fingerprint": "1ef974bf511d",
+  "prompt_fingerprint": "edb6d274962f",
   "rarity_claim_mode": "true_rarity",
   "rarity_claimed": 150,
   "rarity_fingerprint": "be63bf40c8c8",

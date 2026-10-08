@@ -238,7 +238,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **A run's slot numbers are not the truth. The photograph is** (D36, the store says which slot).
   `cli/resolve.py:realign` re-binds records. It refuses on ambiguity and on a reallocated box.
 - Only two columns are ever written: `Add to Quantity`, `TCG Marketplace Price`. `TCGplayer Id` is never modified.
-- **Batch API, not sequential calls.** Model: `claude-haiku-4-5-20251001`.
+- **Batch API, not sequential calls.** Model: `claude-haiku-5-5`.
 - **Every checkout has its own store and ports** (D43, the port follows the store). An empty inventory in a
   worktree is correct. A linked checkout claims a port slot once in `~/.pkmnscan/port-slots.json`
   (`scripts/port-slots.py`). A test run refuses a reused dev server that does not name this checkout
