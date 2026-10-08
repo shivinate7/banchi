@@ -70,8 +70,9 @@ export type FilterBarHide = {
   readonly onChange: (next: boolean) => void
   readonly label: string
   readonly count?: number
-  /** The screen's resting state. Hide sold is ON at rest (D132), so its badge and its Clear
-   *  treat `true` as nothing changed. Default `false`. */
+  /** The screen's resting state. Hide sold is ON at rest (D132), so its badge, its Clear and
+   *  the count line's "filtered by" words all skip it while it stays `true`: only a change from
+   *  this value is marked. Default `false`. */
   readonly defaultChecked?: boolean
 }
 
@@ -199,7 +200,8 @@ export function FilterBar<K extends string = string>({
 
   const typed = search?.query.trim() ?? ''
   /* THE COUNT LINE NAMES EVERYTHING THAT NARROWS THE LIST: each picked option, the search's
-   *  own words, and the hide toggle while it hides at least one row. */
+   *  own words, and a hide toggle while it hides at least one row, unless it sits at its
+   *  `defaultChecked` (a resting state is not a narrowing the reader chose). */
   const words = [
     ...facetWords(facets, value),
     ...(typed === '' ? [] : [`“${typed}”`]),

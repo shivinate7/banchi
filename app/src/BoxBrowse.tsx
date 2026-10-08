@@ -2125,7 +2125,7 @@ export function BoxBrowse({
   const rail = (
     <RailFrame ref={mapRef}>
       {/* THE KIT'S FILTER BAR (FLT-09): the search, the three facets in any order and the one
-          count line. Hide sold stays on the walk's own bar, beside the rows it folds. The rail is narrow, so the facets sit behind one Filters
+          count line. In stock only sits in the Filters menu, its resting state on. The rail is narrow, so the facets sit behind one Filters
           press: a popover beside it on a desk, a sheet on a phone. */}
       <FilterBar
         className="browse-filterbar"
