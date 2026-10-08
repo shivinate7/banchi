@@ -1740,7 +1740,8 @@ async function watchStorage(page: Page, seed?: Record<string, string>) {
       touched.push(`set:${k}`)
       return set.call(this, k, v)
     }
-    for (const [k, v] of Object.entries(seeded ?? {})) set.call(localStorage, k, v)
+    // eslint-disable-next-line no-restricted-syntax -- seeds a retired device key to prove nothing reads it
+    for (const [k, v] of Object.entries(seeded ?? {})) set.call(window.localStorage, k, v)
   }, seed)
 }
 
@@ -1778,7 +1779,8 @@ test('a paid confirm on a fresh device leaves no spend-notice key behind', async
   await checkCost(page)
   await page.locator('.run-button-money').click()
   await expect(page.locator('.runs-composer')).not.toContainText('Ask me above')
-  expect(await page.evaluate((k) => localStorage.getItem(k), SPEND_KEY)).toBeNull()
+  // eslint-disable-next-line no-restricted-syntax -- proves the retired device key is absent
+  expect(await page.evaluate((k) => window.localStorage.getItem(k), SPEND_KEY)).toBeNull()
 })
 
 // ------------------------------------------------------ the state the old address never had
