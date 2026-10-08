@@ -322,14 +322,15 @@ for (const width of [1440, 820]) {
 
 /* THE CARD PANEL HOLDS ITS LOADED SIZE WHILE ITS OWN SEARCH IS OUT (D313). Opening a card draws the
    panel at once; `/search` answers later. Until then the figures column (`.browse-hero-side[data-pending]`,
-   ghost bars) and the copies list (`.inventory-copies .bn-loading`) stand in skeleton. The real figures
-   are shorter than the ghosts, so the card, its head and its text column shrank when the answer landed
+   ghost bars) stands in skeleton, and the copies list draws the card's own known copy as a real row
+   (inert, `aria-busy`), with no skeleton. The real figures are shorter than the ghosts, so the card, its head and its text column shrank when the answer landed
    (MEASURED 28px locally, 50px in CI). THE ANSWER HERE IS A SEARCH WITH NO GROUP, the shape that
    draws no figures column and no lead at all. One row per skeleton: the boxes the skeleton sits in are
-   sampled while it shows, `/search` is released, and the same boxes are sampled again. */
+   sampled while it shows, `/search` is released, and the same boxes are sampled again. The group answer
+   here holds ONE copy, so it must move nothing; a longer list may grow, and is not asserted. */
 const SKELETON_ROWS = [
   { name: 'figures', pending: '.browse-hero-side[data-pending]', parts: ['.browse-card', '.browse-hero-head', '.browse-hero-text', '.browse-hero-side', '.browse-hero-lead', '.browse-hero-fig'] },
-  { name: 'copies', pending: '.inventory-copies .bn-loading', parts: ['.browse-card', '.inventory-copies'] },
+  { name: 'copies', pending: '.inventory-copies [aria-busy="true"] .card-locations-row', parts: ['.browse-card', '.inventory-copies'] },
 ] as const
 /* The second answer is the shape real cards get: a group with its copies, from `l1Inventory`'s own stub. */
 for (const width of [1440, 820]) for (const one of SKELETON_ROWS) for (const answer of ['no group', 'a group with copies'] as const) {
