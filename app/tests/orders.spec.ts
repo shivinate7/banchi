@@ -2667,12 +2667,19 @@ test('each control narrows; they compose', async ({ page }) => {
   await expect(page.locator('.orders-index-row')).toContainText('Bob')
 
   /* BACK TO ALL, THEN HIDE UNKNOWN CARDS: Carol's line names a card the store never saw. */
+  const badge = page.locator(`${VIEW} .bn-filterbar-trigger .bn-icon-count`)
   const body = await openFilters(page)
   await body.getByRole('button', { name: 'Clear Status' }).click()
+  await closeFilters(page)
+  const badgeBefore = (await badge.count()) === 0 ? 0 : Number(await badge.textContent())
+  await openFilters(page)
   await body.getByRole('button', { name: /^Hide unknown/ }).click()
   await closeFilters(page)
   await expect(page.locator('.orders-index-row')).toHaveCount(2)
   await expect(page.locator('.orders-buyers')).not.toContainText('Carol')
+  /* A HIDE OFF REST, SWITCHED ON, IS NAMED AND BADGED: Hide unknown rests OFF, so on is a change. */
+  await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('Hide unknown')
+  await expect(badge).toHaveText(String(badgeBefore + 1))
 
   /* COMPOSED: Ready to Ship AND hide-unknown leaves only Alice. */
   await pickFacet(page, 'Status', /^Ready to Ship/)
