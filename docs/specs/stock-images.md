@@ -81,6 +81,12 @@ pre-cropped art. A join miss (`image_url: null`) or a load failure (`onError`) f
   before this feature.
 - **Inventory's Sets view** falls back to nothing, because that screen has no per-row `idx` to build
   a photograph URL from. Nothing is the honest state, and no fallback is manufactured.
+- **Inventory's card panel** (`app/src/CardHero.tsx:PhotoPanel`) draws the stock image only in
+  place of a reclaimed photograph (D89). It sits in the same `.bn-photo` box and carries a stock
+  photo label. The owner never mistakes it for their own copy. The URL is `image_url` on the
+  `/search` group (`server/capture_server.py:do_search`, through `pipeline_routes.stock_image_url`).
+  A card with its own photograph never requests it. A join miss or a load failure keeps the
+  reclaimed box.
 
 ## Never a guess
 

@@ -2816,6 +2816,7 @@ export function BoxBrowse({
                       absent: photoAbsent === panelRow.key,
                       onAbsent: () => setPhotoAbsent(panelRow.key),
                       nonce: reshot[panelRow.key] ?? null,
+                      stockImage: panelFigures?.group.image_url ?? null,
                       onZoom: () => setZoomed(true),
                       reshoot: (
                         <ReshootControl
