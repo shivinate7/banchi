@@ -1324,13 +1324,13 @@ export function RunsComposer({
               <aside className="run-preview" aria-label="What this reading sends">
                 <div className="run-preview-head">
                   <span className="bn-label">What this reading sends</span>
-                  {preview === null ? null : (
+                  {(
                     /* The walk lives up here, above the frame, so it is on screen at every
                        viewport height — the arrow keys are only discoverable from it. */
-                    <span className="run-preview-walk" role="group" aria-label="Walk the selection">
+                    <span className="run-preview-walk" role="group" aria-label="Walk the selection" data-pending={preview === null ? "" : undefined}>
                       <IconButton size="sm" icon="chevronLeft" label="The card before this one" onClick={() => setPreviewOffset((was) => was - 1)} />
                       <span className="run-preview-count">
-                        card {preview.offset + 1} of {count(preview.total)}
+                        card {(preview?.offset ?? 0) + 1} of {count(preview?.total ?? 0)}
                       </span>
                       <IconButton size="sm" icon="chevronRight" label="The card after this one" onClick={() => setPreviewOffset((was) => was + 1)} />
                     </span>
@@ -1338,12 +1338,7 @@ export function RunsComposer({
                 </div>
                 {previewTrouble !== null ? (
                   <Notice tone="warn">{previewTrouble}</Notice>
-                ) : preview === null ? (
-                  /* The frame's own box while the preview draws, so nothing moves when it lands (D118). */
-                  <div className="run-preview-frame" aria-busy="true">
-                    <Loading rows={0} label="Drawing the preview" />
-                  </div>
-                ) : preview.sample.unreadable !== undefined || preview.sample.frame === undefined ? (
+                ) : preview !== null && (preview.sample.unreadable !== undefined || preview.sample.frame === undefined) ? (
                   <p className="run-preview-fact">
                     {/* THE STORE KEY AND NOT A CARD NUMBER, on all four of this panel's figures.
                         `/pipeline/crop-preview` sends `{box, index}` and no slot, because what
@@ -1356,8 +1351,11 @@ export function RunsComposer({
                     <span>Can't decode — nothing sent.</span>
                   </p>
                 ) : (
-                  <div className="run-preview-card" aria-busy={previewBusy}>
-                    <div className="run-preview-frame" onPointerMove={aimAt} onPointerLeave={() => setAim(null)}>
+                  /* ONE LAYOUT FOR PENDING AND LOADED (D313): the same slots in the same order, the
+                     content swapped inside them, so the sheet never changes size when the preview lands. */
+                  <div className={preview === null ? 'run-preview-pending' : 'run-preview-card'} aria-busy={preview === null || previewBusy}>
+                    <div className="run-preview-frame" onPointerMove={aimAt} onPointerLeave={() => setAim(null)} aria-busy={preview === null ? 'true' : undefined}>
+                      {preview === null ? <Loading rows={0} label="Drawing the preview" /> : (<>
                       <img
                         className="run-preview-ghost"
                         /* THE SLOT ROUTE, BECAUSE THE PREVIEW HAS NO NAME TO OFFER (D172).
@@ -1399,8 +1397,17 @@ export function RunsComposer({
                           }}
                         />
                       )}
+                      </>)}
                     </div>
 
+                    {preview === null ? (
+                      <>
+                        <div className="run-preview-detail" />
+                        <p className="run-preview-fact run-preview-fact-stack"><span>&nbsp;</span><span>&nbsp;</span></p>
+                        <p className="run-preview-fact"><span>&nbsp;</span></p>
+                      </>
+                    ) : (
+                      <>
                     <div
                       ref={detailRef}
                       className="run-preview-detail"
@@ -1412,7 +1419,7 @@ export function RunsComposer({
                       role="img"
                       aria-label={`${storeKeyText(preview.sample.box, preview.sample.index)} at full size, as this reading sends it`}
                     />
-                    <p className="run-preview-fact">
+                    <p className="run-preview-fact run-preview-fact-stack">
                       <span>{aim === null ? 'Resting on the collector number' : 'Where you are pointing'} (1:1)</span>
                       {preview.sample.band_px != null && (
                         <span>
@@ -1442,6 +1449,9 @@ export function RunsComposer({
                     </p>
                     {preview.sample.crop_refused != null && (
                       <p className="run-step-fine">{preview.sample.crop_refused}</p>
+                    )}
+
+                      </>
                     )}
 
                     <p className="run-preview-hint">

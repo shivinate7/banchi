@@ -489,16 +489,16 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
    the frame and is on screen at every height. */
 .run-preview-head {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--bn-2);
-  min-height: 28px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--bn-1);
 }
+.run-preview-walk[data-pending] { visibility: hidden; }
 .run-preview-walk {
   display: inline-flex;
   align-items: center;
   gap: var(--bn-0-5);
-  margin-left: auto;
+  align-self: flex-end;
   flex: none;
 }
 .run-preview-count {
@@ -509,7 +509,8 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.run-preview-card {
+.run-preview-card,
+.run-preview-pending {
   display: flex;
   flex-direction: column;
   gap: var(--bn-2);
@@ -564,6 +565,7 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
   line-height: 1.5;
   color: var(--bn-ink-3);
 }
+.run-preview-fact-stack { flex-direction: column; }
 .run-preview-slot { font-weight: 600; color: var(--bn-ink); font-variant-numeric: tabular-nums; }
 .run-preview-hint {
   display: flex;
@@ -738,7 +740,6 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
   /* the tick's own hit area reaches past its drawn box, the way BoxBrowse's does */
   .runs-box-check { position: relative; }
   .runs-box-check::after { content: ''; position: absolute; inset: -11px; }
-  .run-preview-head { min-height: var(--bn-control-h-sm); }
 }
 
 /* ------------------------------------------------------- the selection builder (stage 1)
