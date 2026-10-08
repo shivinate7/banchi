@@ -1055,9 +1055,93 @@ def check_mix_listed_card_with_no_rarity_reads_unread(checks: Checks) -> None:
     checks.equal([c.get("set") for c in cards], ["No set yet"], "a listed card with no SKU set reads No set yet, not its hint")
 
 
+def check_inventory_copies_stock_image(checks: Checks) -> None:
+    """`POST /inventory/copies` carries `image_url` on each card (D301), for the Orders walk's
+    strip of thumbnails (`OrdersWalkPane.tsx:WalkStrip`): a hit is the resolver's hotlinked
+    URL, a join miss is `None`, and a call with no resolver is `None` with no socket opened.
+
+    THE RESOLVER IS THE ONE `StockImages`, handed in as `images=` exactly as
+    `do_pipeline_sets` and `do_skus_photos` take it (`server/pipeline_routes.py:STOCK_IMAGES`
+    at the HTTP dispatch). Its tcgcsv fetcher is stubbed and the cache is warmed and joined,
+    so the answer is deterministic. A fetcher that raises on any other URL is the proof that
+    no socket is reached: the bare call never constructs one, and a miss reads the cache only.
+    """
+    checks.note("")
+    checks.note("INVENTORY COPIES — image_url on each card, hit, miss and bare (D301)")
+
+    URL = "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg"
+
+    def fetcher(url: str):
+        if url.endswith("/categories"):
+            return {"results": [
+                {"name": "Riftbound League of Legends Trading Card Game", "categoryId": 89},
+            ]}
+        if url.endswith("/89/groups"):
+            return {"results": [{"name": "Vendetta", "groupId": 24698}]}
+        if url.endswith("/89/24698/products"):
+            return {"results": [{
+                "imageUrl": URL,
+                "extendedData": [{"name": "Number", "value": "SP3/006"}],
+            }]}
+        raise AssertionError(f"unexpected fetch: {url}")
+
+    images = stockimages.StockImages(market=pricehistory.Market(cache_dir=None, fetcher=fetcher))
+    for thread in images.warm([("riftbound", "Vendetta")]):
+        thread.join(timeout=5)
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            inventory.ensure_box(1, name="walk thumbs box")
+            for tag, sku, name, number in (
+                ("hit", "8925700", "Ahri, Inquisitive", "SP3/006"),
+                ("miss", "8925701", "Not In The Catalog", "SP3/999"),
+            ):
+                card, _ = inventory.allocate_capture(1, cid=fake_cid(f"copies-stock-{tag}"))
+                card.sku = sku
+                card.name = name
+                card.number = number
+                card.printed_total = "166"
+                card.set_name = "Vendetta"
+                card.game = "riftbound"
+                card.state = master.IDENTIFIED
+
+        wanted = {"skus": ["8925700", "8925701"]}
+        threaded = answers(
+            checks,
+            lambda: capture_server.do_inventory_copies(wanted, images=images),
+            "a resolver handed in, the route answers",
+        )
+        bare = answers(
+            checks,
+            lambda: capture_server.do_inventory_copies(wanted),
+            "no resolver handed in, the route still answers",
+        )
+
+    if threaded is not None:
+        by_sku = {card["sku"]: card for card in threaded["cards"].values()}
+        checks.equal(
+            by_sku["8925700"].get("image_url", "<absent>"),
+            URL,
+            "a card the resolver knows carries its hotlinked URL on `image_url`",
+        )
+        checks.equal(
+            by_sku["8925701"].get("image_url", "<absent>"),
+            None,
+            "a JOIN MISS is None, never a guess and never an absent key",
+        )
+    if bare is not None:
+        checks.equal(
+            sorted(card.get("image_url", "<absent>") for card in bare["cards"].values() if card["sku"] == "8925700"),
+            [None],
+            "no resolver handed in, `image_url` is None on every card and no socket is opened",
+        )
+
+
 CHECKS = (
     check_pipeline_sets,
     check_stock_images,
+    check_inventory_copies_stock_image,
     check_sales_stock_photo_fallback,
     check_stock_images_pokemon_warm_refusal,
     check_skus_photos_pending,
