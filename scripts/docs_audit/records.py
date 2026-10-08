@@ -908,6 +908,34 @@ def check_decision_structure(report: Report) -> None:
                scanned=len(entries))
 
 
+# A decision file's slug is the part after `D<n>-` and before `.md`. The owner's ruling caps
+# it at 32 characters, the same cap a branch's unclaimed slug carries.
+MAX_DECISION_SLUG = 32
+_DECISION_FILE_RE = re.compile(r"^D\d+-(.+)\.md$")
+
+
+def long_decision_slugs(names: Iterable[str]) -> List[Tuple[str, int]]:
+    """(file name, slug length) for each decision file name whose slug is over the cap."""
+    out: List[Tuple[str, int]] = []
+    for name in names:
+        match = _DECISION_FILE_RE.match(name)
+        if match and len(match.group(1)) > MAX_DECISION_SLUG:
+            out.append((name, len(match.group(1))))
+    return out
+
+
+def check_decision_slug_length(report: Report) -> None:
+    if corpus_is_empty(report, "decision slug length", MECHANICAL):
+        return
+    files = decision_files()
+    findings = [Finding(rel(p), f"slug is {n} characters; the cap is {MAX_DECISION_SLUG}. "
+                                "Rename the file with a shorter slug and keep its D<n>- prefix.")
+                for p in files for (_, n) in long_decision_slugs([p.name])]
+    report.add("decision slug length", MECHANICAL, findings,
+               f"{len(files)} decision files, every slug at most {MAX_DECISION_SLUG} characters",
+               scanned=len(files))
+
+
 # THE DEBT TWIN OF THE (RETIRED) DECISION-SIDE EXEMPTION, ONE LETTER OVER. `docs/debts/`
 # joined D140's claim path (the owner's word), so a debt's own unclaimed slug
 # (`DEBT-<slug>`) is exempt from "must appear in the index" for the identical reason a
