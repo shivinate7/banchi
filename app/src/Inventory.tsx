@@ -387,6 +387,7 @@ function InventoryWalk({
   const [heroGroup, setHeroGroup] = useState<SearchGroup | null>(null)
   /* The copies search is still asking for the selected card: the band holds its figures column. */
   const [heroPending, setHeroPending] = useState(false)
+  const [heroNote, setHeroNote] = useState<ReactNode>(null)
 
   /* The toast standing for each receipt, by copy key, so an undo from the row can take it down. */
   const toasts = useRef<Map<string, number>>(new Map())
@@ -779,6 +780,7 @@ function InventoryWalk({
           onCurrent={setCurrentCopy}
           onGroup={setHeroGroup}
           onPending={setHeroPending}
+          onNote={setHeroNote}
           renderAction={actionFor}
           hideSold={hideSold}
           frozen={frozen}
@@ -823,6 +825,7 @@ function InventoryWalk({
         figures={figures}
         figuresPending={figures === null && heroPending}
         figuresEmpty={figures === null && !heroPending}
+        figuresNote={figures === null && !heroPending ? heroNote : null}
         onSelect={setSelected}
         onBoxes={setBoxRecords}
         onListings={setListings}
@@ -889,6 +892,7 @@ function CopiesPanel({
   onCurrent,
   onGroup,
   onPending,
+  onNote,
   renderAction,
   hideSold,
   frozen,
@@ -905,6 +909,8 @@ function CopiesPanel({
   onCurrent: (copy: SearchCopy | null) => void
   onGroup: (group: SearchGroup | null) => void
   onPending: (pending: boolean) => void
+  /** The search's own warning, for the figures slot to draw. Null when there is none. */
+  onNote: (note: ReactNode) => void
   renderAction: (copy: SearchCopy, primary: boolean) => ReactNode
   hideSold: boolean
   frozen: FrozenRank
@@ -996,6 +1002,19 @@ function CopiesPanel({
     onPending(bandPending)
   }, [bandPending, onPending])
 
+  /* THE UNANSWERED SEARCH'S WARNING GOES TO THE FIGURES SLOT, which is reserved for it (D313). The copies
+     slot keeps the card's own copy, which is still true. */
+  const unanswered = group === null && gaveUp
+  useLayoutEffect(() => {
+    onNote(
+      unanswered ? (
+        <Notice tone="warn" title="The search did not return this card's own row." code={`key ${row.key}, query ${query}`}>
+          That should not happen; a reload usually settles it.
+        </Notice>
+      ) : null,
+    )
+  }, [unanswered, row.key, query, onNote])
+
   if (handle === null) {
     return (
       <section className="inventory-copies">
@@ -1054,11 +1073,11 @@ function CopiesPanel({
       {/* WHILE THE SEARCH IS OUT, THE CARD'S OWN COPY STANDS IN THE LIST (D313): the one place the record
           already knows, drawn as the real row. The answer replaces it, and other copies add rows then.
           Inert, because a sale needs the group the answer brings. No place on the record: the kit's row. */}
-      {group === null && !gaveUp && heldCopies === null ? (
-        pending === null ? (
+      {group === null && (gaveUp || heldCopies === null) ? (
+        pending === null ? (gaveUp ? null : (
           <Loading rows={1} className="inventory-looking" label="Reading this card's copies" />
-        ) : (
-          <div aria-busy="true" inert>
+        )) : (
+          <div aria-busy={gaveUp ? undefined : 'true'} inert>
             <CardLocations
               group={pending}
               persona="owner"
@@ -1077,12 +1096,6 @@ function CopiesPanel({
             />
           </div>
         )
-      ) : null}
-
-      {group === null && gaveUp ? (
-        <Notice tone="warn" title="The search did not return this card's own row." code={`key ${row.key}, query ${query}`}>
-          That should not happen; a reload usually settles it.
-        </Notice>
       ) : null}
 
       {group === null && !gaveUp && heldCopies !== null ? (

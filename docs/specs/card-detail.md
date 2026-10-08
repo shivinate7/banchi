@@ -45,6 +45,8 @@ The panel has two parts.
 
 The copies list has no heading (owner's ruling). The re-sort chip shows only while the order is stale. It is an icon button in the band's title row, beside Actions, at the same size. The row keeps its height, so no copy row moves when it appears (D118). The staleness sentence is its tooltip and accessible name.
 
+The card panel draws its known copy as a real row while the card's search loads, and the answer then replaces it. If the search returns no row for the card, that row stays and the warning sits in the figures slot.
+
 The row keeps every fact that the built row has:
 
 - the address: box, section, and "Card N of M";
