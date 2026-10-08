@@ -65,4 +65,4 @@ The scope this entry settled — `SCOPE`, the classifier, the wiring — is unch
 
 ---
 
-**AMENDED on the owner's word: a draft skips the classifier too.** `browser-scope` and `design-check` carry `!github.event.pull_request.draft`, so a draft pays for neither the classifier nor a shard. The fail-open reading is unchanged for every ready pull request: the draft clause is an added condition on `design-check`'s `if:`, and the `!= 'false'` and `!cancelled()` clauses stand. D136's amendment says how `check` answers on a draft.
+**AMENDED on the owner's word: a draft skips the classifier too.** `browser-scope` and `design-check` carry `!github.event.pull_request.draft`, so a draft pays for neither the classifier nor a shard. The fail-open reading is unchanged for every ready pull request: the draft clause is an added condition on `design-check`'s `if:`, and the `!= 'false'` and `!cancelled()` clauses stand. D136's amendment says how `check` answers on a draft: it fails.

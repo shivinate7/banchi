@@ -2,7 +2,7 @@
 # Two re-run attempts waited 1,309s and 4,141s for a start that GitHub never sent. Required checks
 # that never start block the merge in silence; this makes the silence a comment.
 #
-# Every ten minutes it lists open, non-draft pull requests whose head commit has no `check` run
+# Every ten minutes it lists open, non-draft pull requests whose head commit has no real `check` run
 # and whose last update is over five minutes old, and comments once per head commit (a hidden
 # marker in the comment is the memory). Nothing is cancelled, re-run or pushed: the remedy is a
 # person's (push an empty commit, or close and reopen). It reads the API only; no checkout, no
@@ -39,8 +39,16 @@ jobs:
           while IFS=$'\t' read -r number sha updated; do
             age=$(( now - $(date -u -d "${updated}" +%s) ))
             [ "${age}" -gt 300 ] || continue
-            runs=$(gh api "repos/${REPO}/commits/${sha}/check-runs?check_name=check" --jq '.total_count')
-            [ "${runs}" = "0" ] || continue
+            # A real run is one that did not skip and is not the draft refusal (a draft's `check` fails
+            # with an annotation saying so). Only a real run clears the head.
+            real=0
+            for id in $(gh api "repos/${REPO}/commits/${sha}/check-runs?check_name=check" \
+                --jq '.check_runs[] | select(.conclusion != "skipped") | .id'); do
+              if ! gh api "repos/${REPO}/check-runs/${id}/annotations" --jq '.[].message' | grep -qF 'draft: mark ready'; then
+                real=$((real + 1))
+              fi
+            done
+            [ "${real}" = "0" ] || continue
             marker="<!-- dropped-start-alarm:${sha} -->"
             if gh api "repos/${REPO}/issues/${number}/comments" --paginate --jq '.[].body' | grep -qF "${marker}"; then
               continue

@@ -240,7 +240,7 @@ jobs:
   # it can move to claude-settings' `actions/all-jobs-passed` once that is merged.
   check:
     needs: [ci-check, design-check, already-passed, browser-scope]
-    if: ${{ always() && !github.event.pull_request.draft }}
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -250,7 +250,11 @@ jobs:
           BROWSER: ${{ needs.design-check.result }}
           SCOPE_RUN: ${{ needs.browser-scope.outputs.run }}
           ALREADY_PASSED: ${{ needs.already-passed.outputs.skip }}
+          DRAFT: ${{ github.event.pull_request.draft }}
         run: |
+          # A draft skips the heavy jobs, so this check FAILS on one: a skipped required check counts as
+          # passing, and a dropped `ready_for_review` event would leave a ready PR mergeable on it.
+          if [ "${DRAFT}" = "true" ]; then echo "::error::draft: mark ready to run the checks"; exit 1; fi
           echo "shards: ${SHARDS}; browser matrix: ${BROWSER} (scope run=${SCOPE_RUN}, already-passed skip=${ALREADY_PASSED})"
           [ "${SHARDS}" = "success" ] || { echo "a shard did not succeed"; exit 1; }
           [ "${BROWSER}" = "success" ] && exit 0
