@@ -1088,7 +1088,7 @@ for (const theme of ['light', 'dark'] as const) {
   for (const width of [1440, 820]) {
     test(`7b-30: every header label but Item is centered over its column on the Live tab at ${width} in ${theme}`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: theme })
-      await page.setViewportSize({ width, height: 900 })
+      await setViewport(page, { width, height: 900 })
       await open(page)
       await page.goto('/#/pricing?live')
       await expect(page.locator('.pricing-row').first()).toBeVisible()
