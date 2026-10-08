@@ -141,15 +141,6 @@
   place-items: center;
   color: var(--bn-ink-3);
 }
-.browse-hidesold { flex: none; }
-/* ONE TOOLBAR LINE (UX-269): in the walk's status line the toggle takes the line's own small
-   height and type, so `tick shown` no longer wraps alone onto a second row. */
-.browse-status .bn-hidetoggle {
-  height: var(--bn-control-h-sm);
-  padding: 0 var(--bn-2);
-  font-size: var(--bn-fs-xs);
-  font-weight: 600;
-}
 .browse-boxcell-mini { font-size: var(--bn-fs-xs); letter-spacing: 0; padding: 0 var(--bn-0-5); overflow: hidden; }
 .browse-boxcell-text { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
 .browse-boxcell-name {

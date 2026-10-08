@@ -7270,6 +7270,23 @@ test('a hash naming no box falls back, and does not hold the walk open', async (
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 commons/)
 })
 
+/** "In stock only" lives in the rail's Filters popover (the FilterBar `hide` entry), not on the rail's own
+ *  row. Open the popover, hand `fn` the toggle, close it again so the next press reaches the page. */
+async function withHide<T>(page: Page, fn: (toggle: Locator) => Promise<T>): Promise<T> {
+  const popover = page.locator('.bn-filterbar-popover')
+  const trigger = page.locator('.browse-filterbar .bn-filterbar-trigger:visible')
+  await expect(popover.or(trigger).first()).toBeVisible()
+  if (!(await popover.isVisible())) await trigger.click()
+  await expect(popover).toBeVisible()
+  const out = await fn(popover.locator('.bn-hidetoggle'))
+  await page.keyboard.press('Escape')
+  await expect(popover).toBeHidden()
+  return out
+}
+
+/** The trigger's badge counts what differs from rest, and In stock only ON is rest. */
+const hideBadge = (page: Page) => page.locator('.browse-filterbar .bn-filterbar-trigger .bn-icon-count')
+
 /* ================================================================== D132: sold folded away,
  * the name leads, the rail is ordered by the hand, and a section can be named. Each case here
  * was run once against the shipped tree with its own arm reverted — the chip absent, the sort
@@ -7280,9 +7297,12 @@ test('D132 — the product hides sold by default, and the chip says how many it 
   await open(page, BOXES, STORE, () => PRICING, SALE, { hideSold: null })
   await expandAll(page)
 
-  const chip = page.locator('.browse-hidesold')
-  await expect(chip).toHaveAttribute('aria-pressed', 'true')
-  await expect(chip.locator('.bn-hidetoggle-count')).toHaveText('2')
+  /* The toggle is in the Filters popover and ON is its resting state: the trigger shows no badge. */
+  await expect(hideBadge(page)).toHaveCount(0)
+  await withHide(page, async (chip) => {
+    await expect(chip).toHaveAttribute('aria-pressed', 'true')
+    await expect(chip.locator('.bn-hidetoggle-count')).toHaveText('2')
+  })
 
   /* Seven records, one sold and one retired; five rows drawn, none of them departed. */
   const slots = page.locator('.browse-row .browse-row-position')
@@ -7301,8 +7321,12 @@ test('D132 — the product hides sold by default, and the chip says how many it 
 test('UX-189 — unticked, a departed row stays where it sat, so the list and the arrow keys follow one order, and the choice is remembered', async ({ page }) => {
   await open(page, BOXES, STORE, () => PRICING, SALE, { hideSold: null })
   await expandAll(page)
-  await page.locator('.browse-hidesold').click()
-  await expect(page.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'false')
+  await withHide(page, async (chip) => {
+    await chip.click()
+    await expect(chip).toHaveAttribute('aria-pressed', 'false')
+  })
+  /* Showing sold is off rest, so the trigger now carries a badge. */
+  await expect(hideBadge(page)).toHaveText('1')
 
   /* The store below puts the sold card FIRST in its section, which is the shape a real box
      takes after its first card sells. D132 sank it to the section's foot while the arrow keys
@@ -7329,7 +7353,7 @@ test('UX-189 — unticked, a departed row stays where it sat, so the list and th
   await open(again, BOXES, store, () => PRICING, SALE, { hideSold: null })
   await expandAll(again)
   /* REMEMBERED: the press above wrote `show`, and this open wrote nothing over it. */
-  await expect(again.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'false')
+  await withHide(again, (chip) => expect(chip).toHaveAttribute('aria-pressed', 'false'))
   await expect(again.locator('.browse-row .browse-row-name')).toHaveText(['Eiscue', 'Thievul', 'Thievul', 'Inteleon'])
   /* THE KEYS WALK THE SAME ORDER: from the sold Eiscue, → lands on the Thievul drawn under it. */
   await again.locator('.browse-row').nth(0).click()
@@ -7401,15 +7425,19 @@ test('UX-254 — the fold toggle is "In stock only", on by default, counting wha
   await open(page, BOXES, STORE, () => PRICING, SALE, { hideSold: null })
   await expandAll(page)
 
-  const toggle = page.getByRole('button', { name: /^In stock only/ })
-  await expect(toggle).toBeVisible()
-  await expect(page.getByRole('button', { name: /^Hide sold/ })).toHaveCount(0)
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  /* No chip on the rail's row any more: the words are in the Filters popover. */
+  await expect(page.getByRole('button', { name: /^In stock only/ })).toHaveCount(0)
+  await withHide(page, async () => {
+    const toggle = page.locator('.bn-filterbar-popover').getByRole('button', { name: /^In stock only/ })
+    await expect(toggle).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Hide sold/ })).toHaveCount(0)
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true')
   // Eiscue (sold) and Mantine (retired) are the fixture's own two departed cards (D89's own
   // reason there are two): the count is what the fold hides, not every departed row that ever
   // sat on this shelf — `D132 — the Hide sold chip counts...` proves that distinction; this
   // just reads the same figure under the new name.
-  await expect(toggle.locator('.bn-hidetoggle-count')).toHaveText('2')
+    await expect(toggle.locator('.bn-hidetoggle-count')).toHaveText('2')
+  })
 })
 
 test('D132 — the Hide sold chip counts what the fold actually hides, not every departed row on the shelf', async ({ page }) => {
@@ -7434,12 +7462,12 @@ test('D132 — the Hide sold chip counts what the fold actually hides, not every
   await open(page, BOXES, store, () => PRICING, sale, { hideSold: true })
   await expandAll(page)
 
-  const chip = page.locator('.browse-hidesold')
+  const hiddenCount = (n: string) => withHide(page, (chip) => expect(chip.locator('.bn-hidetoggle-count')).toHaveText(n))
   /* One departed row (Eiscue) already on the shelf, nothing selected yet: the fold hides it and
      the chip says so — one, not zero, and not the two it would read if it counted every live row
      that could someday leave. */
   await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2'])
-  await expect(chip.locator('.bn-hidetoggle-count')).toHaveText('1')
+  await hiddenCount('1')
 
   await page.locator('.browse-row').nth(1).click()
   await page.locator('.card-locations-row.is-current').getByRole('button', { name: 'Mark sold' }).click()
@@ -7450,17 +7478,17 @@ test('D132 — the Hide sold chip counts what the fold actually hides, not every
      (`departedHere`) would read 2 here; this is the 6-claimed-5-hidden defect at its smallest
      reproduction. */
   await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#3'])
-  await expect(chip.locator('.bn-hidetoggle-count')).toHaveText('1')
+  await hiddenCount('1')
 
   /* Step off the sold row and it stays drawn (UX-181, nothing jumps), so the fold still hides
      one. On the next box load it goes, and both departed rows are hidden and counted. */
   await page.locator('.browse-row').nth(0).click()
   await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#3'])
-  await expect(chip.locator('.bn-hidetoggle-count')).toHaveText('1')
+  await hiddenCount('1')
   await page.reload()
   await expandAll(page)
   await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1'])
-  await expect(chip.locator('.bn-hidetoggle-count')).toHaveText('2')
+  await hiddenCount('2')
 })
 
 test('B3 — a sale does not reorder the rail, on a device that has never opened either box', async ({ page }) => {
@@ -8140,9 +8168,9 @@ test('F8 — the top match being sold says so, with a press that reveals it', as
   await page.getByRole('searchbox').fill('hand hammer')
 
   await expect(page.locator('.browse-topsold')).toContainText('Hand Hammer: 1 copy, all sold')
-  await expect(page.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'true')
+  await withHide(page, (chip) => expect(chip).toHaveAttribute('aria-pressed', 'true'))
   await page.getByRole('button', { name: 'Show sold cards' }).click()
-  await expect(page.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'false')
+  await withHide(page, (chip) => expect(chip).toHaveAttribute('aria-pressed', 'false'))
 })
 
 /* ------------------------------------------------------- the order stops moving under a sale
