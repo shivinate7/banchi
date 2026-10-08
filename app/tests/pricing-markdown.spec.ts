@@ -1,6 +1,6 @@
 // Protects: The Pricing Live tab reprices live TCGplayer listings and leaves the run-based Pricing flow untouched.
 // Governs: D28, D278, D103, D107, D118, D218, D273, D277
-import { HEAD_CENTER_PX, headOffsets } from './shell'
+import { HEAD_CENTER_PX, headOffsets, valueMeasures, VALUE_CENTER_PX, KEPT_LEFT_PX, KEPT_RIGHT_ZERO } from './shell'
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleMotion } from './motionSettled'
@@ -1094,6 +1094,29 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(page.locator('.pricing-row').first()).toBeVisible()
       for (const { column, off } of await headOffsets(page)) {
         expect.soft(Math.abs(off), `${column}: label is ${off.toFixed(1)}px off`).toBeLessThanOrEqual(HEAD_CENTER_PX)
+      }
+    })
+  }
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [1440, 820]) {
+    test(`7b-31: Live tab Market, Lowest and Range 7d values are centered in their cell, the others have not moved, at ${width} in ${theme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: theme })
+      await setViewport(page, { width, height: 900 })
+      await open(page)
+      await page.goto('/#/pricing?live')
+      await expect(page.locator('.pricing-row').first()).toBeVisible()
+      const seen = await valueMeasures(page)
+      expect(seen.some((m) => m.column.startsWith('market'))).toBe(true)
+      for (const m of seen) {
+        const column = m.column.split('#')[0]!
+        if (['market', 'low', 'range'].includes(column)) {
+          expect.soft(Math.abs(m.off), `${m.column}: value is ${m.off.toFixed(1)}px off its cell's center`).toBeLessThanOrEqual(VALUE_CENTER_PX)
+        } else {
+          expect.soft(Math.abs(m.left - KEPT_LEFT_PX[column]!), `${m.column}: value moved, ${m.left.toFixed(1)}px from the cell's left`).toBeLessThanOrEqual(VALUE_CENTER_PX)
+          if (KEPT_RIGHT_ZERO.includes(column)) expect.soft(Math.abs(m.right), `${m.column}: value moved, ${m.right.toFixed(1)}px from the cell's right`).toBeLessThanOrEqual(VALUE_CENTER_PX)
+        }
       }
     })
   }

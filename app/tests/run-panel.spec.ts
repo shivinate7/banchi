@@ -1721,6 +1721,68 @@ test('a box the send could not start is named, not swallowed', async ({ page }) 
   await expect(note).toContainText('spawn_failed')
 })
 
+// ------------------------------------------------------ no spend notice, no threshold setting
+
+const SPEND_KEY = 'banchi.runs.spend-notice'
+
+/** Records every localStorage key read or written, so "never touched" is asserted, not inferred. */
+async function watchStorage(page: Page, seed?: Record<string, string>) {
+  await page.addInitScript((seeded) => {
+    const touched: string[] = []
+    ;(window as unknown as { __touched: string[] }).__touched = touched
+    const get = Storage.prototype.getItem
+    const set = Storage.prototype.setItem
+    Storage.prototype.getItem = function (k: string) {
+      touched.push(`get:${k}`)
+      return get.call(this, k)
+    }
+    Storage.prototype.setItem = function (k: string, v: string) {
+      touched.push(`set:${k}`)
+      return set.call(this, k, v)
+    }
+    // eslint-disable-next-line no-restricted-syntax -- seeds a retired device key to prove nothing reads it
+    for (const [k, v] of Object.entries(seeded ?? {})) set.call(window.localStorage, k, v)
+  }, seed)
+}
+
+test('a large paid quote draws no spend notice, no raise button and no threshold field', async ({ page }) => {
+  // The old stored figure is seeded low on purpose: a build that still read it would warn on $0.42.
+  await watchStorage(page, { [SPEND_KEY]: '0.01' })
+  await open(page, { toSend: 5000, estimate: 250 })
+  await atReading(page)
+  await checkCost(page)
+
+  await expect(page.locator('.run-button-money')).toBeVisible()
+  await expect(page.locator('.runs-composer')).not.toContainText('this device asks about')
+  await expect(page.locator('.runs-composer')).not.toContainText('Stop asking')
+  await expect(page.locator('.runs-composer')).not.toContainText('Ask me above')
+  await expect(page.locator('.runs-spend-set, .runs-spend-row, .runs-spend-input')).toHaveCount(0)
+})
+
+test('the spend-notice device key is neither read nor written, before or after a paid confirm', async ({ page }) => {
+  await watchStorage(page, { [SPEND_KEY]: '0.01' })
+  await open(page, { toSend: 5000, estimate: 250 })
+  await atReading(page)
+  await checkCost(page)
+  await page.locator('.run-button-money').click()
+  await expect(page.locator('.runs-composer')).not.toContainText('Ask me above')
+
+  const touched = await page.evaluate(() => (window as unknown as { __touched: string[] }).__touched)
+  expect(touched.filter((t) => t.endsWith(SPEND_KEY))).toEqual([])
+  // The key was only seeded; a build that still owned it would have rewritten or kept using it.
+  // A fresh store (no seed) must also end with no such key after a paid confirm.
+})
+
+test('a paid confirm on a fresh device leaves no spend-notice key behind', async ({ page }) => {
+  await open(page, { toSend: 5000, estimate: 250 })
+  await atReading(page)
+  await checkCost(page)
+  await page.locator('.run-button-money').click()
+  await expect(page.locator('.runs-composer')).not.toContainText('Ask me above')
+  // eslint-disable-next-line no-restricted-syntax -- proves the retired device key is absent
+  expect(await page.evaluate((k) => window.localStorage.getItem(k), SPEND_KEY)).toBeNull()
+})
+
 // ------------------------------------------------------ the state the old address never had
 
 test('no DRAWER is picked for the operator, and the default start is a state rather than a shelf', async ({

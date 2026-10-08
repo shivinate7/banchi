@@ -124,17 +124,15 @@ D174 wrote: *"`_busy_run` is left in place by this entry. Both checks now run in
 
 `_claim_conflicts` is NOT deleted with it. It survives as `_claim_conflict` — the courtesy check at the press, over sidecars rather than digests (35 ms over 678), still the only thing that answers a double-click AT the press. `claim_or_refuse` is still the binding one.
 
-### THE SPEND SETTING, ON THE OWNER'S RULING
+### NO SPEND SETTING, ON THE OWNER'S RULING
 
-Asked whether a store-wide press wants a standing spend ceiling, 2026-09-12:
+Asked whether a store-wide press wants a standing spend ceiling, the owner ruled:
 
 > *"Give me settings if I can have them, but if I want to run everything, then I get to run everything."*
 
 **So there is no cap on this route and there is not going to be one.** A ceiling that refuses "everything" is the wrong shape: it would be the server deciding how much of their own store the operator may read.
 
-**What there is instead is a NOTICE, device-local, with a default, raisable at the confirm, and never a block.** `banchi.runs.spend-notice` in `app/src/deviceMemory.ts`. **Default $1.00**, derived: input is $0.50/MTok batch-discounted (`identify/cost.py`), a card at `max_edge` 1200 measures **2,641 input tokens**, so $1.00 is about **757 cards** — larger than every drawer on this store but box 3 (887), and roughly a quarter of a full store re-read (2,535 cards ≈ $3.35). An ordinary drawer press never trips it; a store-wide one always does.
-
-**Device-local is argued rather than convenient.** D13 puts one truth on one Mac so two devices cannot disagree about where a card IS; a notice threshold is how loud a button is on THIS browser, which is the same side of that line as D91's order-status filter — a preference the owner ruled belongs there. Two devices disagreeing about it costs nothing.
+**There is no threshold notice either.** The paid read (Haiku 5.5) costs about a tenth of what it did, so a warning above a dollar protected nothing. The confirm that names the cards and the spend is the whole of it. The device key `banchi.runs.spend-notice` is deleted.
 
 **AND THE THING THE OWNER SHOULD KNOW, which is not a cap.** The per-drawer press was doing unstated work as a **sampling gate**: today you can identify one drawer, look at `#/review`, discover the model is misreading a set's number format, and stop. A store-wide default spends that lesson in one act. **The mitigation is the preflight's honesty rather than a ceiling** — it names the figure and the count in cards before anything is bought — and the honest note is that this trade is real and was made deliberately.
 

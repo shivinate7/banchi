@@ -666,7 +666,7 @@ lowest first, then the default order.
   search live in the URL).
 - **One control.** The header is the kit's `SortHeader` in `app/src/kit/filters.tsx`, extended.
   Pricing has no second header.
-- **Header labels.** Item stays left. Every other header label (Market, Lowest, Range 7d, Trend, Qty, Price) is centered over its column; row values keep their alignment (7b-30). The hover box hugs the label and the chevron sits outside it (7b-28).
+- **Header labels.** Item stays left. Every other header label (Market, Lowest, Range 7d, Trend, Qty, Price) is centered over its column; row values keep their alignment, except Market, Lowest and Range 7d, whose values are centered in their cell (7b-30, 7b-31; decimal alignment given up on purpose). The hover box hugs the label and the chevron sits outside it (7b-28).
 - **Centering.** Row values center on the row's own center. Tokens set it, never pixel literals.
 - **Proof.** `app/tests/pricing.spec.ts`, cases `7b-21` to `7b-27`: "a row with a hold note
   centers Market, Lowest, Range 7d and Qty on the row's own center", "header cycles highest first,
