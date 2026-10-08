@@ -32,7 +32,9 @@
 /* The list takes what the band leaves it, and it is the only thing in this column that does
    — D118 fixed the band's height and made the list the part that gives. The location card was
    `flex: none` beside it until D119 deleted the card. */
-.inventory-copies > .card-locations { flex: 1 1 auto; min-height: 0; }
+.inventory-copies > .card-locations, .inventory-copies > .inventory-list > .card-locations, .inventory-copies > .inventory-held > .card-locations { flex: 1 1 auto; min-height: 0; }
+/* The one list's wrapper is the list's own flex slot, so the answer, the held list and the known copy share one box (D313). */
+.inventory-list, .inventory-held { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; min-width: 0; }
 /* The lone card's notice sits under the list and is its own size, not the list's. */
 .inventory-copies > .inventory-lone { flex: none; }
 

@@ -520,6 +520,14 @@
 .browse-hero-fig-live .bn-meter-cells > span { min-width: 0; width: auto; }
 /* A STAND-IN FOR TEXT NOT YET KNOWN: real text in the real face, covered by the kit's `Skeleton` (bar and shimmer), so the box is the
    one the answer will occupy. Never read aloud: its parent is `aria-hidden`. */
+/* THE EMPTY ANSWER KEEPS THE FIGURES' BOX (D313): the same elements, hidden, set the size; one sentence sits in it. */
+.browse-hero-side[data-empty] { visibility: hidden; }
+/* The note shares the hidden figures' cell (they set its size), so a disclosure the person opens grows the slot and spills over nothing. */
+.browse-hero-lead[data-empty] > .browse-hero-fig { visibility: hidden; grid-row: 1; }
+.browse-hero-lead[data-empty] > .browse-hero-fig:nth-child(2) { grid-column: 1; }
+.browse-hero-lead[data-empty] > .browse-hero-fig:nth-child(3) { grid-column: 2; }
+.browse-hero-lead[data-empty] > .browse-hero-fig:nth-child(4) { grid-column: 3; }
+.browse-hero-empty { grid-area: 1 / 1 / auto / span 3; inline-size: 0; min-inline-size: 100%; z-index: 1; }
 .bn-ghost, .bn-ghost * { color: transparent; user-select: none; }
 .bn-ghost { position: relative; }
 .bn-ghost > .bn-ghost-bar { position: absolute; inset: 0; min-height: 0; }

@@ -387,6 +387,7 @@ function InventoryWalk({
   const [heroGroup, setHeroGroup] = useState<SearchGroup | null>(null)
   /* The copies search is still asking for the selected card: the band holds its figures column. */
   const [heroPending, setHeroPending] = useState(false)
+  const [heroNote, setHeroNote] = useState<ReactNode>(null)
 
   /* The toast standing for each receipt, by copy key, so an undo from the row can take it down. */
   const toasts = useRef<Map<string, number>>(new Map())
@@ -779,6 +780,7 @@ function InventoryWalk({
           onCurrent={setCurrentCopy}
           onGroup={setHeroGroup}
           onPending={setHeroPending}
+          onNote={setHeroNote}
           renderAction={actionFor}
           hideSold={hideSold}
           frozen={frozen}
@@ -822,6 +824,8 @@ function InventoryWalk({
         detail={detail}
         figures={figures}
         figuresPending={figures === null && heroPending}
+        figuresEmpty={figures === null && !heroPending}
+        figuresNote={figures === null && !heroPending ? heroNote : null}
         onSelect={setSelected}
         onBoxes={setBoxRecords}
         onListings={setListings}
@@ -888,6 +892,7 @@ function CopiesPanel({
   onCurrent,
   onGroup,
   onPending,
+  onNote,
   renderAction,
   hideSold,
   frozen,
@@ -904,6 +909,8 @@ function CopiesPanel({
   onCurrent: (copy: SearchCopy | null) => void
   onGroup: (group: SearchGroup | null) => void
   onPending: (pending: boolean) => void
+  /** The search's own warning, for the figures slot to draw. Null when there is none. */
+  onNote: (note: ReactNode) => void
   renderAction: (copy: SearchCopy, primary: boolean) => ReactNode
   hideSold: boolean
   frozen: FrozenRank
@@ -976,6 +983,15 @@ function CopiesPanel({
      carries no place at all, which is the one shape that has no copy to put in a group. */
   const solo = useMemo(() => (lone === null ? null : loneGroup(row, lone)), [row, lone])
 
+  /* The card's own copy as a group, for the list while the search is out. Null when the record has no place. */
+  const pending = useMemo(() => {
+    const copy = loneCopy(row)
+    return copy === null ? null : { ...loneGroup(row, copy), sku: row.card.sku }
+  }, [row])
+
+  /* WHAT THE LIST DRAWS: the answer, else the last list while this card's read is out, else the card's own copy. */
+  const shown = group !== null ? { group, key: row.key } : (!gaveUp && heldCopies !== null ? heldCopies : pending === null ? null : { group: pending, key: row.key })
+
   const bandGroup = handle === null ? solo : group
   useEffect(() => {
     onGroup(bandGroup)
@@ -988,6 +1004,17 @@ function CopiesPanel({
   useLayoutEffect(() => {
     onPending(bandPending)
   }, [bandPending, onPending])
+
+  /* THE UNANSWERED SEARCH'S WARNING GOES TO THE FIGURES SLOT, which is reserved for it (D313). The copies
+     slot keeps the card's own copy, which is still true. */
+  const unanswered = group === null && gaveUp
+  useLayoutEffect(() => {
+    onNote(
+      unanswered ? (
+        <Notice tone="warn" title="The search did not return this card's own row." code={`key ${row.key}, query ${query}`} detail="That should not happen; a reload usually settles it." />
+      ) : null,
+    )
+  }, [unanswered, row.key, query, onNote])
 
   if (handle === null) {
     return (
@@ -1044,59 +1071,49 @@ function CopiesPanel({
           band lost 160px and the details under it moved twice. The previous card's list stays,
           dimmed and inert, until the answer is whole. Only the very first read has nothing to stand
           on, and draws the skeleton. */}
-      {group === null && !gaveUp && heldCopies === null ? (
+      {/* ONE LIST, ONE WRAPPER, FOR EVERY STATE (D313). While this card's search is out, the card's own copy stands
+          here as a real row; a step to another card stands on the last list, dimmed; the answer then updates the
+          same list in place, so the rows are never remounted and other copies add rows then. Inert until the
+          answer, because a sale needs the group the answer brings. No place on the record: the kit's row. */}
+      {/* THE READ IS ANNOUNCED OUTSIDE THE INERT LIST, which a screen reader would skip. */}
+      {group === null && !gaveUp && pending !== null ? (
+        <span className="bn-sr" role="status">
+          Reading this card's copies
+        </span>
+      ) : null}
+
+      {group === null && !gaveUp && heldCopies === null && pending === null ? (
         <Loading rows={1} className="inventory-looking" label="Reading this card's copies" />
       ) : null}
 
-      {group === null && !gaveUp && heldCopies !== null ? (
-        <div className="inventory-held" aria-busy="true" inert>
+      {shown === null ? null : (
+        <div
+          className={group === null ? 'inventory-held' : 'inventory-list'}
+          aria-busy={group === null && !gaveUp ? 'true' : undefined}
+          inert={group === null}
+        >
           <CardLocations
-            group={heldCopies.group}
+            group={shown.group}
             persona="owner"
             sections={layouts}
-            currentKey={heldCopies.key}
+            currentKey={shown.key}
             mark={markFor(row.card.game, row.card.rarity)}
             glint={glint}
-            listedAt={heldCopies.group.sku === null ? null : (listings[heldCopies.group.sku]?.live_as_of ?? null)}
+            listedAt={group === null || shown.group.sku === null ? null : (listings[shown.group.sku]?.live_as_of ?? null)}
             claims={wanted}
+            onGoTo={group === null ? undefined : onGoTo}
             onSell={onSell}
             busyKey={busyKey}
             soldKeys={soldKeys}
+            /* EVERY row draws its own controls, the copy the walk is standing on included —
+               and since D119 there is no second place they could be drawn. `false` is the row
+               form: a quiet `Mark sold` and an icon-only `Retire`. The `true` form survives at
+               one call site, the phone's sticky action bar, and is phone-only from here. */
             renderAction={(copy) => renderAction(copy, false)}
             hideSold={hideSold}
             frozen={frozen}
           />
         </div>
-      ) : null}
-
-      {group === null && gaveUp ? (
-        <Notice tone="warn" title="The search did not return this card's own row." code={`key ${row.key}, query ${query}`}>
-          That should not happen; a reload usually settles it.
-        </Notice>
-      ) : null}
-
-      {group === null ? null : (
-        <CardLocations
-          group={group}
-          persona="owner"
-          sections={layouts}
-          currentKey={row.key}
-          mark={markFor(row.card.game, row.card.rarity)}
-          glint={glint}
-          listedAt={group.sku === null ? null : (listings[group.sku]?.live_as_of ?? null)}
-          claims={wanted}
-          onGoTo={onGoTo}
-          onSell={onSell}
-          busyKey={busyKey}
-          soldKeys={soldKeys}
-          /* EVERY row draws its own controls, the copy the walk is standing on included —
-             and since D119 there is no second place they could be drawn. `false` is the row
-             form: a quiet `Mark sold` and an icon-only `Retire`. The `true` form survives at
-             one call site, the phone's sticky action bar, and is phone-only from here. */
-          renderAction={(copy) => renderAction(copy, false)}
-          hideSold={hideSold}
-          frozen={frozen}
-        />
       )}
     </section>
   )
