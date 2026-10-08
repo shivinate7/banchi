@@ -917,3 +917,35 @@ export async function settleAnimations(page: Page): Promise<void> {
     }
   })
 }
+
+/** The owner's ruling for the Pricing header: Item's label stays on the column's left edge; every other
+ *  label is centered over its column cell. Values are not asserted here. A column the screen drops
+ *  (Range 7d at 820, Qty with no copies) is skipped. */
+export const HEAD_CENTER_PX = 1
+const CENTERED = ['market', 'low', 'range', 'trend', 'qty', 'price'] as const
+
+export async function headOffsets(page: Page): Promise<{ column: string; off: number }[]> {
+  return page.locator('.pricing-caption').evaluate((caption, columns) => {
+    const row = document.querySelector('.pricing-row')!
+    const labelBox = (head: Element) => {
+      const label = head.querySelector('.bn-sortth-label') ?? head
+      const range = document.createRange()
+      range.selectNodeContents(label)
+      return range.getBoundingClientRect()
+    }
+    const out: { column: string; off: number }[] = []
+    for (const column of columns) {
+      const cls = `.pricing-col-${column}`
+      const head = caption.querySelector(cls)
+      const cell = row.querySelector(cls)
+      if (head === null || cell === null || head.getBoundingClientRect().width === 0) continue
+      const label = labelBox(head)
+      const box = cell.getBoundingClientRect()
+      out.push({ column, off: (label.left + label.right) / 2 - (box.left + box.right) / 2 })
+    }
+    const item = caption.querySelector('[role=columnheader]:not([class])')!
+    const id = row.querySelector('.pricing-id')!
+    out.push({ column: 'item (left edge)', off: labelBox(item).left - id.getBoundingClientRect().left })
+    return out
+  }, [...CENTERED])
+}

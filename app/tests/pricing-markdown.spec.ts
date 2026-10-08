@@ -1,5 +1,6 @@
 // Protects: The Pricing Live tab reprices live TCGplayer listings and leaves the run-based Pricing flow untouched.
 // Governs: D28, D278, D103, D107, D118, D218, D273, D277
+import { HEAD_CENTER_PX, headOffsets } from './shell'
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleMotion } from './motionSettled'
@@ -1082,3 +1083,18 @@ test('7b-29: Live tab: the default order, back from a sort and after a reload, k
   await expect(page.locator('.pricing-row')).toHaveCount(LEFT_BOX_LIVE.length)
   expect(await liveGroups(page)).toEqual(liveLeftBoxExpected())
 })
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [1440, 820]) {
+    test(`7b-30: every header label but Item is centered over its column on the Live tab at ${width} in ${theme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: theme })
+      await setViewport(page, { width, height: 900 })
+      await open(page)
+      await page.goto('/#/pricing?live')
+      await expect(page.locator('.pricing-row').first()).toBeVisible()
+      for (const { column, off } of await headOffsets(page)) {
+        expect.soft(Math.abs(off), `${column}: label is ${off.toFixed(1)}px off`).toBeLessThanOrEqual(HEAD_CENTER_PX)
+      }
+    })
+  }
+}
