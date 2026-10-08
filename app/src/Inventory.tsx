@@ -1011,7 +1011,7 @@ function CopiesPanel({
   useLayoutEffect(() => {
     onNote(
       unanswered ? (
-        <Notice tone="warn" title="The search did not return this card's own row." code={`key ${row.key}, query ${query}`} />
+        <Notice tone="warn" title="The search did not return this card's own row." code={`key ${row.key}, query ${query}`} detail="That should not happen; a reload usually settles it." />
       ) : null,
     )
   }, [unanswered, row.key, query, onNote])
@@ -1075,6 +1075,13 @@ function CopiesPanel({
           here as a real row; a step to another card stands on the last list, dimmed; the answer then updates the
           same list in place, so the rows are never remounted and other copies add rows then. Inert until the
           answer, because a sale needs the group the answer brings. No place on the record: the kit's row. */}
+      {/* THE READ IS ANNOUNCED OUTSIDE THE INERT LIST, which a screen reader would skip. */}
+      {group === null && !gaveUp && pending !== null ? (
+        <span className="bn-sr" role="status">
+          Reading this card's copies
+        </span>
+      ) : null}
+
       {group === null && !gaveUp && heldCopies === null && pending === null ? (
         <Loading rows={1} className="inventory-looking" label="Reading this card's copies" />
       ) : null}
