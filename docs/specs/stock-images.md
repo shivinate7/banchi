@@ -84,6 +84,12 @@ pre-cropped art. A join miss (`image_url: null`) or a load failure (`onError`) f
 - **The Orders walk's thumbnail row** (`OrdersWalkPane.tsx:WalkStrip`) draws the stock image from
   `POST /inventory/copies`' `image_url`, falling back to the owner's photograph on a miss or a load
   failure. The count badge and the big `img.browse-photo` (the owner's photograph) are unchanged.
+- **Inventory's card panel** (`app/src/CardHero.tsx:PhotoPanel`) draws the stock image only in
+  place of a reclaimed photograph (D89). It sits in the same `.bn-photo` box and carries a stock
+  photo label. The owner never mistakes it for their own copy. The URL is `image_url` on the
+  `/search` group (`server/capture_server.py:do_search`, through `pipeline_routes.stock_image_url`).
+  A card with its own photograph never requests it. A join miss or a load failure keeps the
+  reclaimed box.
 
 ## Never a guess
 

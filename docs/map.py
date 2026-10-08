@@ -7558,7 +7558,7 @@ COMPONENTS = [
                                  "governed_by": ["D6", "D26", "D28", "D31", "D34", "D67", "D77",
                                                  "D83", "D89", "D97", "D118", "D119", "D134",
                                                  "D172", "D183", "D195", "D218", "D252", "D259",
-                                                 "D313"]},
+                                                 "D301", "D313"]},
             "src/CardHero.css": {"does": "the listing-correction control's own spacing. Everything "
                                          "else it draws with is reused rather than restyled: "
                                          "`kit.css`'s `.bn-panel*` for the panel chrome, "

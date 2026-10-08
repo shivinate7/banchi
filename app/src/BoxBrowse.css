@@ -141,15 +141,6 @@
   place-items: center;
   color: var(--bn-ink-3);
 }
-.browse-hidesold { flex: none; }
-/* ONE TOOLBAR LINE (UX-269): in the walk's status line the toggle takes the line's own small
-   height and type, so `tick shown` no longer wraps alone onto a second row. */
-.browse-status .bn-hidetoggle {
-  height: var(--bn-control-h-sm);
-  padding: 0 var(--bn-2);
-  font-size: var(--bn-fs-xs);
-  font-weight: 600;
-}
 .browse-boxcell-mini { font-size: var(--bn-fs-xs); letter-spacing: 0; padding: 0 var(--bn-0-5); overflow: hidden; }
 .browse-boxcell-text { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
 .browse-boxcell-name {
@@ -733,6 +724,25 @@
   background: repeating-linear-gradient(135deg, var(--bn-surface-2) 0 10px, var(--bn-surface) 10px 20px);
   color: var(--bn-ink-3);
 }
+.browse-stock {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 63 / 88;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--bn-line-strong);
+  background: var(--bn-surface-2);
+}
+.browse-stock img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.browse-stock-label {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: var(--bn-1) var(--bn-2);
+  text-align: center;
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-2);
+  background: var(--bn-surface);
+  box-shadow: inset 0 1px 0 var(--bn-line-strong);
+}
 .browse-absent .bn-icon { color: var(--bn-ink-4); }
 .browse-absent p { font-size: var(--bn-fs-md); color: var(--bn-ink-2); max-width: 26ch; }
 .browse-absent .browse-machine { max-width: 100%; }
@@ -751,6 +761,7 @@
 @media (max-width: 639px) {
   .browse-shot { max-width: none; align-items: center; }
   .browse-photo-frame,
+  .browse-stock,
   .browse-absent { width: auto; height: min(44vh, 420px); max-width: 100%; }
   .browse-band { padding: 0 var(--bn-4) var(--bn-4); gap: var(--bn-4); }
   .browse-hero-head { padding: var(--bn-4) var(--bn-4) var(--bn-3); }

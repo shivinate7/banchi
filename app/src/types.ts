@@ -1709,6 +1709,9 @@ export type SearchGroup = {
 
   condition: string | null
 
+  /** The catalogue's hotlinked stock photo for this card (D301), or null on a join miss. Absent in an older recording. */
+  image_url?: string | null
+
   /** How many copies have reached each of the three listing states. Three counts and not one,
    *  because `staged` and `live` are two facts about two different things — D7's refill maths
    *  reads the LIVE number, and an import that was staged and never moved live has no live

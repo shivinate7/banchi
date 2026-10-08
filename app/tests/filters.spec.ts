@@ -258,7 +258,8 @@ test.describe('FilterBar', () => {
     /* Twelve Pokémon cards, three of them sold and hidden by default. */
     await expect(count).toContainText('9 of 24 cards')
     await expect(count).toContainText('Pokémon')
-    await expect(count).toContainText('Hide sold')
+    /* Hide sold is ON at its default, and the count line names a hide toggle only when it differs from rest. */
+    await expect(count).not.toContainText('Hide sold')
 
     /* THE SEARCH IS NAMED TOO, in the words typed. The search field stays outside the popover. */
     await page.locator(`${BAR} .search-field-input`).fill('ex')

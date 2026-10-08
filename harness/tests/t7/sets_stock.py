@@ -1055,6 +1055,177 @@ def check_mix_listed_card_with_no_rarity_reads_unread(checks: Checks) -> None:
     checks.equal([c.get("set") for c in cards], ["No set yet"], "a listed card with no SKU set reads No set yet, not its hint")
 
 
+def check_search_group_stock_image(checks: Checks) -> None:
+    """`GET /search` groups carry `image_url` off the one resolver, so `#/inventory` can draw a
+    stock photo where a sold card's own photograph was reclaimed (D89, D301). Same posture as
+    `#/pricing`'s worklist rows: the resolver is handed in, a join miss is `None`, and nothing
+    here opens a socket.
+
+    BUILDER CONTRACT, read here: `do_search(query, images=None)`, the keyword `do_skus_photos`
+    and `do_pipeline_sets` already take; the HTTP dispatch passes `pipeline_routes.STOCK_IMAGES`.
+    """
+    checks.note("")
+    checks.note("SEARCH STOCK IMAGE — every /search group carries image_url, None on a miss")
+
+    calls: list = []
+
+    def fetcher(url: str):
+        calls.append(url)
+        if url.endswith("/categories"):
+            return {"results": [
+                {"name": "Riftbound League of Legends Trading Card Game", "categoryId": 89},
+            ]}
+        if url.endswith("/89/groups"):
+            return {"results": [{"name": "Vendetta", "groupId": 24698}]}
+        if url.endswith("/89/24698/products"):
+            return {"results": [{
+                "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
+                "extendedData": [{"name": "Number", "value": "SP3/006"}],
+            }]}
+        raise AssertionError(f"unexpected fetch: {url}")
+
+    images = stockimages.StockImages(market=pricehistory.Market(cache_dir=None, fetcher=fetcher))
+    for thread in images.warm([("riftbound", "Vendetta")]):
+        thread.join(timeout=5)
+    warmed_calls = len(calls)
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            inventory.ensure_box(1, name="search-image box")
+            # Both the card's own fields and the SKU table agree, so the answer does not
+            # depend on which of the two the builder joins through.
+            for sku, number, seed in (("9100001", "SP3/006", "hit"), ("9100002", "ZZ9/999", "miss")):
+                card, _ = inventory.allocate_capture(1, cid=fake_cid(f"search-image-{seed}"))
+                card.sku = sku
+                card.name = f"Ahri {seed}"
+                card.number = number
+                card.printed_total = "166"
+                card.set_name = "Vendetta"
+                card.game = "riftbound"
+                card.state = master.IDENTIFIED
+                # Only a reclaimed copy draws the stock photo (D89), so only it asks the resolver.
+                card.photo_reclaimed_at = "2026-09-01T21:00:00+00:00"
+                snapshot.skus.entries[sku] = SkuRow(
+                    product_line="Riftbound League of Legends Trading Card Game",
+                    set_name="Vendetta", product_name=f"Ahri {seed}", number=number,
+                    rarity="Rare", condition="Near Mint", grade=None, printing=None,
+                    first_seen=1_700_000_000, last_seen=1_700_000_000, source="t7-fixture", raw={},
+                )
+
+        bare = answers(checks, lambda: capture_server.do_search("ahri"), "no resolver, search answers")
+        threaded = answers(
+            checks,
+            lambda: capture_server.do_search("ahri", images=images),
+            "a resolver handed in, search answers",
+        )
+
+    absent = "<no image_url key>"
+    if bare is not None:
+        checks.equal(
+            {g["sku"]: g.get("image_url", absent) for g in bare["groups"]},
+            {"9100001": None, "9100002": None},
+            "no resolver handed in: every group carries image_url None, no socket",
+        )
+    if threaded is not None:
+        checks.equal(
+            {g["sku"]: g.get("image_url", absent) for g in threaded["groups"]},
+            {
+                "9100001": "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
+                "9100002": None,
+            },
+            "a resolver handed in: the hit group carries the URL, the join miss carries None",
+        )
+        checks.equal(
+            len(calls), warmed_calls,
+            "and the search opened no socket of its own: the fetcher saw no new request",
+        )
+
+
+def check_search_group_stock_image_guards(checks: Checks) -> None:
+    """The three ways a `/search` group's `image_url` must NOT resolve, or must not raise.
+
+    (a) A `set_hint` is a claim on a stack, not a catalogue set: a card with a hint naming a real
+        set and no `set_name` gets `None`, never that hinted set's card (D301, never a guess).
+    (b) Only a group holding a reclaimed copy shows the stock photo (D89), so any other group
+        answers `None` and asks the resolver nothing.
+    (c) A card number stored as an int resolves, or misses, without raising.
+    """
+    checks.note("")
+    checks.note("SEARCH STOCK IMAGE GUARDS — hint is not a set, no reclaimed copy asks nothing, int number")
+
+    def fetcher(url: str):
+        if url.endswith("/categories"):
+            return {"results": [
+                {"name": "Riftbound League of Legends Trading Card Game", "categoryId": 89},
+            ]}
+        if url.endswith("/89/groups"):
+            return {"results": [{"name": "Vendetta", "groupId": 24698}]}
+        if url.endswith("/89/24698/products"):
+            return {"results": [{
+                "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
+                "extendedData": [{"name": "Number", "value": "SP3/006"}],
+            }]}
+        raise AssertionError(f"unexpected fetch: {url}")
+
+    asked: list = []
+
+    class Spy(stockimages.StockImages):
+        def url_for(self, game, set_name, number):
+            asked.append((game, set_name, number))
+            return super().url_for(game, set_name, number)
+
+    images = Spy(market=pricehistory.Market(cache_dir=None, fetcher=fetcher))
+    for thread in images.warm([("riftbound", "Vendetta")]):
+        thread.join(timeout=5)
+    absent = "<no image_url key>"
+
+    def put(inventory, sku, name, number, seed, *, set_name, set_hint=None, reclaimed):
+        card, _ = inventory.allocate_capture(1, cid=fake_cid(f"guard-{seed}"))
+        card.sku, card.name, card.number, card.printed_total = sku, name, number, "166"
+        card.set_name, card.game, card.state = set_name, "riftbound", master.IDENTIFIED
+        if set_hint is not None:
+            card.set_hint = set_hint
+        if reclaimed:
+            card.photo_reclaimed_at = "2026-09-01T21:00:00+00:00"
+        return card
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(1, name="guard box")
+            # (a) reclaimed, number in the warmed set, hint names that set, set_name blank.
+            put(snapshot.inventory, "9200001", "Guard hint", "SP3/006", "hint", set_name=None, set_hint="Vendetta", reclaimed=True)
+            # (b) the same card WITH a real set_name, but its photograph is still on disk.
+            put(snapshot.inventory, "9200002", "Guard kept", "SP3/006", "kept", set_name="Vendetta", reclaimed=False)
+        answer = answers(checks, lambda: capture_server.do_search("guard", images=images), "search answers")
+
+    if answer is not None:
+        by_sku = {g["sku"]: g.get("image_url", absent) for g in answer["groups"]}
+        checks.equal(
+            by_sku.get("9200001", absent), None,
+            "(a) a set_hint naming a real set, with no set_name, answers None, never the hinted set's card",
+        )
+        checks.equal(
+            by_sku.get("9200002", absent), None,
+            "(b) a group with no reclaimed copy answers None, though its set and number resolve",
+        )
+        checks.equal(
+            [call for call in asked if call[2] == "SP3/006" and call[1] == "Vendetta"], [],
+            "(b) and the resolver was asked nothing about a card with no reclaimed copy "
+            f"(asked: {asked!r})",
+        )
+
+    # (c) a legacy int `number`: no raise, and the answer is a URL string or None.
+    with isolated_home():
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(1, name="int box")
+            put(snapshot.inventory, "9200003", "Guard int", 6, "int", set_name="Vendetta", reclaimed=True)
+        got = answers(checks, lambda: capture_server.do_search("guard", images=images), "(c) an int card number: search answers")
+    if got is not None:
+        value = {g["sku"]: g.get("image_url", absent) for g in got["groups"]}.get("9200003", absent)
+        checks.ok(value is None or isinstance(value, str), f"(c) and its image_url is a string or None (got {value!r})")
+
+
 def check_inventory_copies_stock_image(checks: Checks) -> None:
     """`POST /inventory/copies` carries `image_url` on each card (D301), for the Orders walk's
     strip of thumbnails (`OrdersWalkPane.tsx:WalkStrip`): a hit is the resolver's hotlinked
@@ -1145,6 +1316,8 @@ CHECKS = (
     check_sales_stock_photo_fallback,
     check_stock_images_pokemon_warm_refusal,
     check_skus_photos_pending,
+    check_search_group_stock_image,
+    check_search_group_stock_image_guards,
     check_mix_leaves_out_retired_and_moved,
     check_mix_wire_has_no_revenue_and_price_is_the_reading,
     check_mix_unlisted_card_reads_its_claim,

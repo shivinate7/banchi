@@ -579,7 +579,10 @@ async function boxes(page: Page, selectors: readonly string[]): Promise<Record<s
 test('L3 S8: the In stock only count holds one box at 9, 99 and 1,234', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   await page.goto(screen('inventory'))
-  const count = '.browse-hidesold .bn-hidetoggle-count'
+  /* The toggle is in the rail's Filters popover; the figure is read with it open. */
+  await page.locator('.browse-filterbar .bn-filterbar-trigger:visible').click()
+  await settleMotion(page)
+  const count = '.bn-filterbar-popover .bn-hidetoggle-count'
   await expect(page.locator(count)).toBeVisible()
   await settleFonts(page)
   const seen = await boxPerVariant(page, count, ['9', '99', '1,234'], count)
