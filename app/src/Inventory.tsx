@@ -1011,9 +1011,7 @@ function CopiesPanel({
   useLayoutEffect(() => {
     onNote(
       unanswered ? (
-        <Notice tone="warn" title="The search did not return this card's own row." code={`key ${row.key}, query ${query}`}>
-          That should not happen; a reload usually settles it.
-        </Notice>
+        <Notice tone="warn" title="The search did not return this card's own row." code={`key ${row.key}, query ${query}`} />
       ) : null,
     )
   }, [unanswered, row.key, query, onNote])
