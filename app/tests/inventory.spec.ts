@@ -1901,6 +1901,12 @@ test('the press that sells a copy moves nothing outside the panel it lands in', 
   const press = row.getByRole('button', { name: 'Mark sold' })
   await press.scrollIntoViewIfNeeded()
 
+  /* THE "BEFORE" SAMPLE WAITS OUT THE CARD'S OWN SEARCH. `open()` returns once the card is drawn, but
+     `.browse-hero-side[data-pending]` and `.inventory-copies .bn-loading` stand in skeleton until
+     `/search` answers, and landing changes the page's height with no press involved. */
+  await expect(page.locator('.browse-hero-side[data-pending]')).toHaveCount(0)
+  await expect(page.locator('.inventory-copies .bn-loading')).toHaveCount(0)
+
   const before = await settled(page)
   const height = await page.evaluate(() => document.documentElement.scrollHeight)
   const at = await page.evaluate(() => window.scrollY)

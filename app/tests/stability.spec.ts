@@ -320,6 +320,47 @@ for (const width of [1440, 820]) {
   })
 }
 
+/* THE CARD PANEL HOLDS ITS LOADED SIZE WHILE ITS OWN SEARCH IS OUT (D313). Opening a card draws the
+   panel at once; `/search` answers later. Until then the figures column (`.browse-hero-side[data-pending]`,
+   ghost bars) and the copies list (`.inventory-copies .bn-loading`) stand in skeleton. The real figures
+   are shorter than the ghosts, so the card, its head and its text column shrank when the answer landed
+   (MEASURED 28px locally, 50px in CI). THE ANSWER HERE IS A SEARCH WITH NO GROUP, the shape that
+   draws no figures column and no lead at all. One row per skeleton: the boxes the skeleton sits in are
+   sampled while it shows, `/search` is released, and the same boxes are sampled again. */
+const SKELETON_ROWS = [
+  { name: 'figures', pending: '.browse-hero-side[data-pending]', parts: ['.browse-card', '.browse-hero-head', '.browse-hero-text', '.browse-hero-side', '.browse-hero-lead', '.browse-hero-fig'] },
+  { name: 'copies', pending: '.inventory-copies .bn-loading', parts: ['.browse-card', '.inventory-copies'] },
+] as const
+for (const width of [1440, 820]) for (const one of SKELETON_ROWS) {
+  test(`held frame: the card panel's ${one.name} skeleton holds the size the answer fills, at ${width}`, async ({ page }) => {
+    await l1Inventory(page)
+    let release!: () => void
+    const held = new Promise<void>((r) => { release = r })
+    await page.route(/\/search\?/, async (route) => { await held
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ query: '', groups: [] }) })
+    })
+    await setViewport(page, { width, height: 1000 })
+    await page.goto(screen('inventory'))
+    await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
+    await expect(page.locator('.browse-hero-name').first()).toBeVisible()
+    await expect(page.locator(one.pending).first(), 'the skeleton is not showing, so there is nothing to hold').toBeVisible()
+    await settleFonts(page)
+    await settleMotion(page)
+    await afterPaint(page)
+    const read = () => page.evaluate((sels) => ({
+      height: document.documentElement.scrollHeight,
+      boxes: sels.map((s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return r ? `${s} ${Math.round(r.width)}x${Math.round(r.height)}` : `${s} absent` }),
+    }), [...one.parts])
+    const before = await read()
+    release()
+    await expect(page.locator(one.pending), 'the answer never replaced the skeleton').toHaveCount(0)
+    await settleMotion(page)
+    await afterPaint(page)
+    const after = await read()
+    expect(after, 'the card panel changed size when its search answered').toEqual(before)
+  })
+}
+
 /* THE DELETED BOXES SHELF: entering it is one swap with no read behind it, and leaving it for a box
    holds the frame like any other box press. The shelf's records are the same shape as a box's, so
    any move is the frame. */
