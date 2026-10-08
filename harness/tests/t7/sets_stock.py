@@ -1055,12 +1055,98 @@ def check_mix_listed_card_with_no_rarity_reads_unread(checks: Checks) -> None:
     checks.equal([c.get("set") for c in cards], ["No set yet"], "a listed card with no SKU set reads No set yet, not its hint")
 
 
+def check_search_group_stock_image(checks: Checks) -> None:
+    """`GET /search` groups carry `image_url` off the one resolver, so `#/inventory` can draw a
+    stock photo where a sold card's own photograph was reclaimed (D89, D301). Same posture as
+    `#/pricing`'s worklist rows: the resolver is handed in, a join miss is `None`, and nothing
+    here opens a socket.
+
+    BUILDER CONTRACT, read here: `do_search(query, images=None)`, the keyword `do_skus_photos`
+    and `do_pipeline_sets` already take; the HTTP dispatch passes `pipeline_routes.STOCK_IMAGES`.
+    """
+    checks.note("")
+    checks.note("SEARCH STOCK IMAGE — every /search group carries image_url, None on a miss")
+
+    calls: list = []
+
+    def fetcher(url: str):
+        calls.append(url)
+        if url.endswith("/categories"):
+            return {"results": [
+                {"name": "Riftbound League of Legends Trading Card Game", "categoryId": 89},
+            ]}
+        if url.endswith("/89/groups"):
+            return {"results": [{"name": "Vendetta", "groupId": 24698}]}
+        if url.endswith("/89/24698/products"):
+            return {"results": [{
+                "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
+                "extendedData": [{"name": "Number", "value": "SP3/006"}],
+            }]}
+        raise AssertionError(f"unexpected fetch: {url}")
+
+    images = stockimages.StockImages(market=pricehistory.Market(cache_dir=None, fetcher=fetcher))
+    for thread in images.warm([("riftbound", "Vendetta")]):
+        thread.join(timeout=5)
+    warmed_calls = len(calls)
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            inventory.ensure_box(1, name="search-image box")
+            # Both the card's own fields and the SKU table agree, so the answer does not
+            # depend on which of the two the builder joins through.
+            for sku, number, seed in (("9100001", "SP3/006", "hit"), ("9100002", "ZZ9/999", "miss")):
+                card, _ = inventory.allocate_capture(1, cid=fake_cid(f"search-image-{seed}"))
+                card.sku = sku
+                card.name = f"Ahri {seed}"
+                card.number = number
+                card.printed_total = "166"
+                card.set_name = "Vendetta"
+                card.game = "riftbound"
+                card.state = master.IDENTIFIED
+                snapshot.skus.entries[sku] = SkuRow(
+                    product_line="Riftbound League of Legends Trading Card Game",
+                    set_name="Vendetta", product_name=f"Ahri {seed}", number=number,
+                    rarity="Rare", condition="Near Mint", grade=None, printing=None,
+                    first_seen=1_700_000_000, last_seen=1_700_000_000, source="t7-fixture", raw={},
+                )
+
+        bare = answers(checks, lambda: capture_server.do_search("ahri"), "no resolver, search answers")
+        threaded = answers(
+            checks,
+            lambda: capture_server.do_search("ahri", images=images),
+            "a resolver handed in, search answers",
+        )
+
+    absent = "<no image_url key>"
+    if bare is not None:
+        checks.equal(
+            {g["sku"]: g.get("image_url", absent) for g in bare["groups"]},
+            {"9100001": None, "9100002": None},
+            "no resolver handed in: every group carries image_url None, no socket",
+        )
+    if threaded is not None:
+        checks.equal(
+            {g["sku"]: g.get("image_url", absent) for g in threaded["groups"]},
+            {
+                "9100001": "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
+                "9100002": None,
+            },
+            "a resolver handed in: the hit group carries the URL, the join miss carries None",
+        )
+        checks.equal(
+            len(calls), warmed_calls,
+            "and the search opened no socket of its own: the fetcher saw no new request",
+        )
+
+
 CHECKS = (
     check_pipeline_sets,
     check_stock_images,
     check_sales_stock_photo_fallback,
     check_stock_images_pokemon_warm_refusal,
     check_skus_photos_pending,
+    check_search_group_stock_image,
     check_mix_leaves_out_retired_and_moved,
     check_mix_wire_has_no_revenue_and_price_is_the_reading,
     check_mix_unlisted_card_reads_its_claim,
