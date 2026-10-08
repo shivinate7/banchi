@@ -893,25 +893,6 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
   overflow-wrap: anywhere;
 }
 
-/* ---- the spend notice, which is a notice and never a gate ---- */
-.runs-spend-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--bn-3);
-  flex-wrap: wrap;
-}
-/* THE SETTING IS ALWAYS ON SCREEN, under the button rather than inside the warning — a figure
-   that could only be raised from inside the block it silences could never be lowered again. */
-.runs-spend-set {
-  color: var(--bn-ink-3);
-  font-size: var(--bn-fs-sm);
-}
-.runs-spend-input {
-  width: 6.5ch;
-  text-align: right;
-}
-
 @media (max-width: 767px) {
   /* The narrowing controls go full width rather than sharing a line: three of them side by side
      at 390 leaves each too narrow to read the value in, and a select whose value is cut is a
