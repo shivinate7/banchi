@@ -1531,8 +1531,8 @@ test('a search that never returns this card gives a sentence, not an endless loa
   const panel = page.locator('.inventory-copies')
   await expect(panel).toBeVisible()
 
-  // The answer lands (the warning), then the busy marks must be gone.
-  await expect(panel.locator('.bn-notice-warn')).toContainText("did not return this card's own row")
+  // The answer lands (the warning, in the figures' cell on the card), then the busy marks must be gone.
+  await expect(page.locator('.browse-card .bn-notice-warn', { hasText: 'did not return' })).toContainText("did not return this card's own row")
   await expect(
     panel.locator('[aria-busy="true"]'),
     'the panel is still marked busy once the search has answered',
@@ -1705,6 +1705,12 @@ function copyRow(page: Page, place: string) {
 test('Undo stands in Mark sold\'s own frame, and the sale never moves the row', async ({ page }) => {
   const { store, sell } = sellableStore()
   await open(page, BOXES, store)
+
+  /* THE SEARCH HAS ANSWERED, NOT JUST THE ROW IS DRAWN: while `/search` is out the card's own copy stands in
+     the list as a real row (inert, `aria-busy`) and the figures column is a ghost, so a row that exists no
+     longer means the answer landed. */
+  await expect(page.locator('.inventory-copies [aria-busy="true"]')).toHaveCount(0)
+  await expect(page.locator('.browse-hero-side[data-pending]')).toHaveCount(0)
 
   const row = copyRow(page, CARD_1)
   const box = (sel: string) => row.locator(sel).evaluate((el) => {
@@ -9391,6 +9397,11 @@ test('selling the claimed copy moves the held-for-order mark to its replacement 
   const claims = page.locator('.card-locations-owner .card-locations-claim')
   await expect(copyRow(page, CARD_1).locator('.card-locations-claim'), 'the fixture does not hold copy 1').toHaveCount(1)
   await expect(claims).toHaveCount(1)
+  /* THE SEARCH HAS ANSWERED, NOT JUST THE ROW IS DRAWN: while `/search` is out the card's own copy stands in
+     the list as a real row (inert, `aria-busy`) and the figures column is a ghost, so a row that exists no
+     longer means the answer landed. */
+  await expect(page.locator('.inventory-copies [aria-busy="true"]')).toHaveCount(0)
+  await expect(page.locator('.browse-hero-side[data-pending]')).toHaveCount(0)
 
   sold = true
   sell('2/1')
