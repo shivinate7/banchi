@@ -331,12 +331,14 @@ const SKELETON_ROWS = [
   { name: 'figures', pending: '.browse-hero-side[data-pending]', parts: ['.browse-card', '.browse-hero-head', '.browse-hero-text', '.browse-hero-side', '.browse-hero-lead', '.browse-hero-fig'] },
   { name: 'copies', pending: '.inventory-copies .bn-loading', parts: ['.browse-card', '.inventory-copies'] },
 ] as const
-for (const width of [1440, 820]) for (const one of SKELETON_ROWS) {
-  test(`held frame: the card panel's ${one.name} skeleton holds the size the answer fills, at ${width}`, async ({ page }) => {
+/* The second answer is the shape real cards get: a group with its copies, from `l1Inventory`'s own stub. */
+for (const width of [1440, 820]) for (const one of SKELETON_ROWS) for (const answer of ['no group', 'a group with copies'] as const) {
+  test(`held frame: the card panel's ${one.name} skeleton holds the size the answer fills, answered with ${answer}, at ${width}`, async ({ page }) => {
     await l1Inventory(page)
     let release!: () => void
     const held = new Promise<void>((r) => { release = r })
     await page.route(/\/search\?/, async (route) => { await held
+      if (answer === 'a group with copies') return route.fallback()
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ query: '', groups: [] }) })
     })
     await setViewport(page, { width, height: 1000 })
