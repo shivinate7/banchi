@@ -28,11 +28,11 @@ The eval scripts and raw results live in a scratchpad. They are not in the repo.
 - Pokemon is the easy case. The photos cover one set and 109 distinct printings.
   Photos of one printing can sit on both sides of a split. Treat the 100% as optimistic (measured).
 - One Piece is unmeasured. The store holds no One Piece card.
-- Haiku's own figure is T1: 97.1% on 150 official flat images, scored on name and join key.
+- Haiku's own figure is T1 on 150 official flat images, scored on name and join key. Read it from `make status`, not from this page.
   The two figures do not compare. The images differ, and the tasks differ.
   Nobody has run Haiku on these 500 photographs. DEBT63 (T1 never compared with Scan & Identify) is the same gap.
-- Haiku costs about $0.0011 a card (measured from T1 usage: 295,485 input and 5,697 output tokens for 150 images).
-  The owner's 3,503 identified cards would have cost about $3.80 in all.
+- Haiku 5.5 batch price is $0.05 input and $0.25 output per MTok (`identify.cost`). Per-card cost is unmeasured on Haiku 5.5; `identify.cost` quotes it.
+  The whole-store total is unmeasured on Haiku 5.5.
   Cost is not the reason for the matcher. The reasons are speed with no batch wait, no network for the read, and a second opinion.
 
 ## 2. What the Haiku read gives that the matcher does not
@@ -362,7 +362,7 @@ The Haiku pick uses `HAIKU_NAME_TOOLTIP`. The matcher pick uses `MATCHER_NAME_TO
   That line shows its own cost. It is off until the owner turns it on, and it asks again at every press.
   This replaces the earlier idea of a cross-check default. Nothing cross-checks the free read by default.
 - The press button names the cards, as D180 requires. It reads "Match 412 cards, then spend $0.17 on the second look" for the matcher.
-  It reads "Read 412 cards, about $0.45" for Haiku.
+  It reads "Read 412 cards, about" plus the `identify.cost` quote for Haiku. The dollar figure is not stated here (unmeasured on Haiku 5.5).
 - When the matcher is picked, the crop and size choice is hidden. The matcher always uses the same crop.
 - The free read is the default pick each time the composer opens. The pick is not stored on the device.
 

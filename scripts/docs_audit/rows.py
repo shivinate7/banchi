@@ -109,7 +109,7 @@ from .spelling import check_shell_substitution
 from .sleeps import check_fixed_sleeps
 from .capability_homes import check_capability_homes
 from .stability import check_font_stability, check_layout_transitions, check_scrollbar_gutter, check_state_layout
-from .status_reach import check_closed_vocabularies, check_status_sources, check_tested_by_reach
+from .status_reach import check_closed_vocabularies, check_paid_read_model, check_status_sources, check_tested_by_reach
 from .strings import check_no_mechanism_on_screen, check_typed_interpunct, check_views_opsec
 
 # ------------------------------------------------------------------------------ main
@@ -223,6 +223,7 @@ ROWS: Tuple[AuditRow, ...] = (
     AuditRow("hint reasons", 1, check_hint_reasons, ()),
     AuditRow("tested_by reach", 2, check_tested_by_reach, ()),
     AuditRow("status sources", 2, check_status_sources, ()),
+    AuditRow("paid-read model", 1, check_paid_read_model, ()),
     AuditRow("design tokens", 1, check_design_tokens, ()),
     AuditRow("raw color", 1, check_raw_color, ()),
     AuditRow("raw motion", 1, check_raw_motion, ()),
