@@ -3805,7 +3805,9 @@ def do_inventory_history() -> dict:
     }
 
 
-def do_inventory_copies(payload: dict) -> dict:
+def do_inventory_copies(
+    payload: dict, images: Optional["stockimages.StockImages"] = None
+) -> dict:
     """`POST /inventory/copies` — every on-hand copy of the requested SKUs, store-wide, in
     `do_inventory`'s own per-card shape (DEBT27, site 1 — `Orders.tsx:indexStore`).
 
@@ -3892,7 +3894,12 @@ def do_inventory_copies(payload: dict) -> dict:
         card = inventory.cards.get(key)
         if card is None:
             continue
-        cards[key] = _decorate_card(asdict(card), places)  # no listing facts: read budget
+        row = _decorate_card(asdict(card), places)  # no listing facts: read budget
+        # THE STOCK IMAGE (D301), for EVERY card (the walk's thumbnails), never only a reclaimed one.
+        row["image_url"] = pipeline_routes.stock_image_url(
+            images, card.game, card.set_name, card.number, display_number=row.get("number_display")
+        )
+        cards[key] = row
 
     # `listings` RIDES ALONG THE SAME WAY `do_inventory_box`'s DOES: narrowed to the SKUs the
     # scan above actually matched, never to `wanted` (the request), so a SKU asked about but
@@ -16992,7 +16999,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # regex here could ever have matched it anyway, but this keeps the same reading
             # order as the exact-string routes above.
             if path == "/inventory/copies":
-                return self._json(HTTPStatus.OK, do_inventory_copies(self._body()))
+                return self._json(HTTPStatus.OK, do_inventory_copies(self._body(), images=pipeline_routes.STOCK_IMAGES))
             # D83's third door: one card, to another box. Matched before the batched form
             # one register down, though the two patterns cannot collide — `_MOVE_RE` needs
             # two digit groups before `/move` and `_MOVE_CARDS_RE` needs exactly one.

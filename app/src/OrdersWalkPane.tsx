@@ -1022,7 +1022,13 @@ export function WalkStrip({ walk, notInBoxes }: { readonly walk: OrderWalk; read
                 title={name}
                 onClick={() => first !== undefined && walk.select(first.rowKey)}
               >
-                <CardThumb src={card === null ? null : photoUrl(card.box, card.index, card)} alt={name} size="md" />
+                {/* THE STOCK IMAGE (D301), falling back to the owner's photograph on a join miss or a load failure. */}
+                <CardThumb
+                  src={card === null ? null : (card.image_url ?? photoUrl(card.box, card.index, card))}
+                  fallbackSrc={card === null ? null : photoUrl(card.box, card.index, card)}
+                  alt={name}
+                  size="md"
+                />
                 <span className="orders-strip-count">{done ? <Icon name="check" size={12} /> : null}{line.take.wanted}</span>
               </button>
             </li>

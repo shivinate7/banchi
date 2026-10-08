@@ -384,9 +384,12 @@ export function CardThumb({
   focus,
   className,
   pending = false,
+  fallbackSrc = null,
 }: {
   /** The photograph's URL, or null when there is none. */
   readonly src: string | null
+  /** Drawn in place of `src` once `src` has failed to load, before the no-photo state. */
+  readonly fallbackSrc?: string | null
   /** What the photograph shows, usually the card's name. */
   readonly alt: string
   readonly size?: CardThumbSize
@@ -398,8 +401,9 @@ export function CardThumb({
    *  no-photo state. Ignored once `src` is set. */
   readonly pending?: boolean
 }) {
-  const [failed, setFailed] = useState<string | null>(null)
-  if (pending && src === null) {
+  const [failedSrcs, setFailedSrcs] = useState<readonly string[]>([])
+  const shown = src !== null && failedSrcs.includes(src) && fallbackSrc !== null ? fallbackSrc : src
+  if (pending && shown === null) {
     return (
       <span
         className={['bn-thumb', `bn-thumb-${size}`, className ?? ''].filter(Boolean).join(' ')}
@@ -408,7 +412,7 @@ export function CardThumb({
       />
     )
   }
-  const missing = src === null || failed === src
+  const missing = shown === null || failedSrcs.includes(shown)
   const style = missing ? undefined : cropStyle(crop, focus)
   return (
     <span
@@ -430,12 +434,12 @@ export function CardThumb({
         <img
           className={style === undefined ? 'bn-thumb-img' : 'bn-thumb-img bn-crop'}
           data-cropped={style === undefined ? undefined : 'true'}
-          src={src}
+          src={shown}
           alt={alt}
           loading="lazy"
           decoding="async"
           style={style}
-          onError={() => setFailed(src)}
+          onError={() => setFailedSrcs((all) => [...all, shown])}
         />
       )}
     </span>

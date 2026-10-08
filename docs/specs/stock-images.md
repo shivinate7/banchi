@@ -81,6 +81,9 @@ pre-cropped art. A join miss (`image_url: null`) or a load failure (`onError`) f
   before this feature.
 - **Inventory's Sets view** falls back to nothing, because that screen has no per-row `idx` to build
   a photograph URL from. Nothing is the honest state, and no fallback is manufactured.
+- **The Orders walk's thumbnail row** (`OrdersWalkPane.tsx:WalkStrip`) draws the stock image from
+  `POST /inventory/copies`' `image_url`, falling back to the owner's photograph on a miss or a load
+  failure. The count badge and the big `img.browse-photo` (the owner's photograph) are unchanged.
 - **Inventory's card panel** (`app/src/CardHero.tsx:PhotoPanel`) draws the stock image only in
   place of a reclaimed photograph (D89). It sits in the same `.bn-photo` box and carries a stock
   photo label. The owner never mistakes it for their own copy. The URL is `image_url` on the
