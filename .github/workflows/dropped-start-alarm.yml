@@ -1,0 +1,52 @@
+# A DROPPED `pull_request` EVENT LEAVES A PULL REQUEST WITH NO `check` RUN AT ALL, AND NOTHING SAYS SO.
+# Two re-run attempts waited 1,309s and 4,141s for a start that GitHub never sent. Required checks
+# that never start block the merge in silence; this makes the silence a comment.
+#
+# Every ten minutes it lists open, non-draft pull requests whose head commit has no `check` run
+# and whose last update is over five minutes old, and comments once per head commit (a hidden
+# marker in the comment is the memory). Nothing is cancelled, re-run or pushed: the remedy is a
+# person's (push an empty commit, or close and reopen). It reads the API only; no checkout, no
+# third-party action.
+name: dropped-start-alarm
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: dropped-start-alarm
+  cancel-in-progress: false
+
+jobs:
+  alarm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+      checks: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Flag pull requests whose head has no check run
+        run: |
+          now=$(date -u +%s)
+          gh api "repos/${REPO}/pulls?state=open&per_page=100" \
+            --jq '.[] | select(.draft | not) | [.number, .head.sha, .updated_at] | @tsv' |
+          while IFS=$'\t' read -r number sha updated; do
+            age=$(( now - $(date -u -d "${updated}" +%s) ))
+            [ "${age}" -gt 300 ] || continue
+            runs=$(gh api "repos/${REPO}/commits/${sha}/check-runs?check_name=check" --jq '.total_count')
+            [ "${runs}" = "0" ] || continue
+            marker="<!-- dropped-start-alarm:${sha} -->"
+            if gh api "repos/${REPO}/issues/${number}/comments" --paginate --jq '.[].body' | grep -qF "${marker}"; then
+              continue
+            fi
+            body="${marker}
+          No \`check\` run has started for \`${sha:0:7}\`, five minutes after the last update. GitHub may have dropped the pull request event. Push an empty commit, or close and reopen the pull request."
+            gh api --method POST "repos/${REPO}/issues/${number}/comments" -f body="${body}" > /dev/null
+            echo "flagged #${number} at ${sha}"
+          done
