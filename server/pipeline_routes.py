@@ -194,10 +194,11 @@ PID_FILE = "running.pid"
 STOCK_IMAGES: "stockimages.StockImages"
 
 
-def stock_image_url(images: "Optional[stockimages.StockImages]", game, set_name, number) -> Optional[str]:
+def stock_image_url(images: "Optional[stockimages.StockImages]", game, set_name, number, display_number=None) -> Optional[str]:
     """The one per-row stock-image resolve (D301): `None` with no resolver, on a blank key,
     or on a miss. Cache-only for the tcgcsv games (`Never blocks a request`), so any route
     may call it per row. `/search` groups call it; the Orders walk payload should too."""
+    number = number or display_number
     if images is None or not (game and set_name and number):
         return None
     return images.url_for(str(game), str(set_name), str(number))

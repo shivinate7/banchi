@@ -12168,12 +12168,17 @@ def do_skus_photos(
 
 
 def _group_image(images, copies) -> Optional[str]:
-    """`image_url` for one SKU group: the agreed game, set and number through the one resolver."""
+    """`image_url` for one SKU group (D301): only a group holding a reclaimed copy resolves, so an
+    ordinary search never wakes the catalog refresh. Keyed on `set_name`, never the operator's
+    `set_hint`, which narrows a search and does not identify a card."""
+    if not any(card.photo_reclaimed_at for card in copies):
+        return None
     return pipeline_routes.stock_image_url(
         images,
         _agreed(card.game for card in copies),
-        _agreed(card.set_name for card in copies) or _agreed(card.set_hint for card in copies),
-        _agreed(card.number for card in copies) or _agreed(_number_display(card) for card in copies),
+        _agreed(card.set_name for card in copies),
+        _agreed(card.number for card in copies),
+        _agreed(_number_display(card) for card in copies),
     )
 
 
