@@ -366,6 +366,9 @@ export type InventoryCard = {
   box: number
   index: number
 
+  /** The stock image (D301) from `POST /inventory/copies`, `null` on a join miss or a bare call. */
+  image_url?: string | null
+
   /* ---- decorated by the server, not stored ----
    *
    * `server/capture_server.py:do_inventory` adds these three to each row after `to_payload`
