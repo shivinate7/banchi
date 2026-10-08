@@ -451,13 +451,16 @@ function HeroLead({ figures, market }: { readonly figures: HeroFigures; readonly
   )
 }
 
+/** THE FIGURES SLOT'S ONE SENTENCE when the search answered with no group for this card. */
+const FIGURES_EMPTY = 'No copy figures for this card yet.'
+
 /** STAND-IN TEXT: the text sets the box (the browser's own font, so the size is right on any
  *  platform) and is hidden, and the kit's `Skeleton` is laid over it for the bar and its shimmer. */
-function Ghost({ children, className }: { readonly children: ReactNode; readonly className?: string }) {
+function Ghost({ children, className, quiet = false }: { readonly children: ReactNode; readonly className?: string; readonly quiet?: boolean }) {
   return (
     <span className={['bn-ghost', className].filter(Boolean).join(' ')}>
       {children}
-      <Skeleton className="bn-ghost-bar" />
+      {quiet ? null : <Skeleton className="bn-ghost-bar" />}
     </span>
   )
 }
@@ -470,39 +473,40 @@ function Ghost({ children, className }: { readonly children: ReactNode; readonly
  *  own font, so the two states agree on any platform rather than by a tuned number. Stored, Live
  *  and Market for a card with a SKU, Stored alone for one without (D119, no SKU, no listing
  *  figures). */
-function HeroLeadPending({ listing }: { readonly listing: boolean }) {
+function HeroLeadPending({ listing, empty = false }: { readonly listing: boolean; readonly empty?: boolean }) {
   const label = (text: string) => (
     <span className="browse-hero-fig-label">
       <span className="bn-label">{text}</span>
     </span>
   )
   return (
-    <div className="browse-hero-lead" aria-hidden="true" data-pending="true">
-      <div className="browse-hero-fig">
+    <div className="browse-hero-lead" aria-hidden={empty ? undefined : true} data-pending={empty ? undefined : 'true'} data-empty={empty ? 'true' : undefined}>
+      {empty ? <p className="browse-hero-empty">{FIGURES_EMPTY}</p> : null}
+      <div className="browse-hero-fig" aria-hidden="true">
         {label('Stored')}
         <span className="browse-hero-fig-value">
-          <Ghost>00</Ghost>
+          <Ghost quiet={empty}>00</Ghost>
         </span>
       </div>
       {listing ? (
         <>
-          <div className="browse-hero-fig browse-hero-fig-live">
+          <div className="browse-hero-fig browse-hero-fig-live" aria-hidden="true">
             {label('Live')}
             <span className="browse-hero-fig-value">
-              <Ghost>00</Ghost>
+              <Ghost quiet={empty}>00</Ghost>
             </span>
             <span className="bn-meter">
               <span className="bn-meter-cells">
                 <span />
               </span>
-              <Ghost className="bn-meter-end">Cap 0</Ghost>
+              <Ghost quiet={empty} className="bn-meter-end">Cap 0</Ghost>
             </span>
           </div>
-          <div className="browse-hero-fig">
+          <div className="browse-hero-fig" aria-hidden="true">
             {label('Market')}
             <span className="browse-hero-fig-value">
               <span className="bn-datalink">
-                <Ghost>$0.00</Ghost>
+                <Ghost quiet={empty}>$0.00</Ghost>
               </span>
             </span>
           </div>
@@ -525,6 +529,7 @@ export function CardHeroHead({
   actions,
   figures,
   figuresPending = false,
+  figuresEmpty = false,
   market = null,
 }: {
   readonly card: InventoryCard
@@ -537,6 +542,8 @@ export function CardHeroHead({
   readonly figures?: HeroFigures | null
   /** The copies search has not answered: hold the figures column at its final width. */
   readonly figuresPending?: boolean
+  /** The copies search answered with no group for this card: the figures column keeps its place and says so. */
+  readonly figuresEmpty?: boolean
   /** The Market figure's price (`useMarketPrice`). */
   readonly market?: number | null
 }) {
@@ -592,16 +599,16 @@ export function CardHeroHead({
         {/* THE SIDE FACTS: history, quieter than the lead figures and equal to each other. Hidden
             is drawn at 0 too, so a sale that folds a copy away adds no line (D118). */}
         {figures == null ? (
-          figuresPending ? (
-            <div className="browse-hero-side" aria-hidden="true" data-pending="true">
-              <Ghost>
+          figuresPending || figuresEmpty ? (
+            <div className="browse-hero-side" aria-hidden="true" data-pending={figuresPending ? 'true' : undefined}>
+              <Ghost quiet={figuresEmpty}>
                 Captured<b>0</b>
               </Ghost>
-              <Ghost>
+              <Ghost quiet={figuresEmpty}>
                 Hidden<b>0</b>
               </Ghost>
               {card.sku === null ? null : (
-                <Ghost>
+                <Ghost quiet={figuresEmpty}>
                   Sent<b>0</b>
                 </Ghost>
               )}
@@ -625,8 +632,8 @@ export function CardHeroHead({
       </div>
       {figures != null ? (
         <HeroLead figures={figures} market={market} />
-      ) : figuresPending ? (
-        <HeroLeadPending listing={card.sku !== null} />
+      ) : figuresPending || figuresEmpty ? (
+        <HeroLeadPending listing={card.sku !== null} empty={figuresEmpty && !figuresPending} />
       ) : null}
     </div>
   )
@@ -651,13 +658,14 @@ export type CardPaneProps = {
   /** The band's figures. Omitted, the band draws the identity alone. */
   readonly figures?: HeroFigures | null
   readonly figuresPending?: boolean
+  readonly figuresEmpty?: boolean
   readonly photo: Omit<PhotoPanelProps, 'row'>
   /** The copies list beside the photo — `Inventory.tsx`'s `CopiesPanel`, handed down because
    *  the caller already knows which card is selected. */
   readonly detail?: ReactNode
 }
 
-export function CardPane({ row, game, dimmed = false, preChips, postChips, queued, actions, figures, figuresPending, photo, detail }: CardPaneProps) {
+export function CardPane({ row, game, dimmed = false, preChips, postChips, queued, actions, figures, figuresPending, figuresEmpty, photo, detail }: CardPaneProps) {
   const market = useMarketPrice(row.card)
   return (
     <section
@@ -666,7 +674,7 @@ export function CardPane({ row, game, dimmed = false, preChips, postChips, queue
       data-dimmed={dimmed ? 'true' : undefined}
       inert={dimmed}
     >
-      <CardHeroHead card={row.card} game={game} preChips={preChips} postChips={postChips} actions={actions} figures={figures} figuresPending={figuresPending} market={market} />
+      <CardHeroHead card={row.card} game={game} preChips={preChips} postChips={postChips} actions={actions} figures={figures} figuresPending={figuresPending} figuresEmpty={figuresEmpty} market={market} />
       {queued}
       {/* NO `detail`, NO COPIES COLUMN: `#/orders`' walk draws where each copy is in its own column, so
           its card pane is the head, the band and the photograph alone (same components, switched off

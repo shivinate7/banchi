@@ -492,6 +492,8 @@ type BoxBrowseProps = {
    *  that holds the card's search group. Null draws the identity alone. */
   figures?: HeroFigures | null
   figuresPending?: boolean
+  /** The search answered with no group: the figures slot holds its place and says so. */
+  figuresEmpty?: boolean
 
   /** Which card the walk is pointing at, reported on every change and `null` when the filter
    *  leaves nothing to point at. */
@@ -773,6 +775,7 @@ export function BoxBrowse({
   detail,
   figures,
   figuresPending,
+  figuresEmpty,
   actionBar,
   onSelect,
   onBoxes,
@@ -1851,6 +1854,7 @@ export function BoxBrowse({
    * last figures for exactly the `dimPanel` window (D313, class B). */
   const panelFigures = useHeld(figures, dimPanel)
   const panelFiguresPending = useHeld(figuresPending, dimPanel)
+  const panelFiguresEmpty = useHeld(figuresEmpty, dimPanel)
 
   /* What Manage box may narrow a Move or a Claims write to: this box's cards, by section
    * and in box order, off every row of the shelf and not the filtered list. */
@@ -2826,6 +2830,7 @@ export function BoxBrowse({
                     detail={panelDetail}
                     figures={panelFigures}
                     figuresPending={panelFiguresPending}
+                    figuresEmpty={panelFiguresEmpty}
                   />
 
                   <CardDetailsSection

@@ -822,6 +822,7 @@ function InventoryWalk({
         detail={detail}
         figures={figures}
         figuresPending={figures === null && heroPending}
+        figuresEmpty={figures === null && !heroPending}
         onSelect={setSelected}
         onBoxes={setBoxRecords}
         onListings={setListings}
@@ -976,6 +977,16 @@ function CopiesPanel({
      carries no place at all, which is the one shape that has no copy to put in a group. */
   const solo = useMemo(() => (lone === null ? null : loneGroup(row, lone)), [row, lone])
 
+  /* The one-copy list the skeleton takes its size from: this card's own place, under the SKU it asks with.
+     Its label keeps the card's shape and loses every digit, so the ruler has the answer's size and is never
+     mistaken for the answer's row (it is hidden and inert, and nothing should find it by place). */
+  const standIn = useMemo(() => {
+    const copy = loneCopy(row)
+    if (copy === null) return null
+    const place = { ...copy.place, label: copy.place.label?.replace(/\d/g, '0') ?? null }
+    return { ...loneGroup(row, { ...copy, place }), sku: row.card.sku }
+  }, [row])
+
   const bandGroup = handle === null ? solo : group
   useEffect(() => {
     onGroup(bandGroup)
@@ -1044,8 +1055,38 @@ function CopiesPanel({
           band lost 160px and the details under it moved twice. The previous card's list stays,
           dimmed and inert, until the answer is whole. Only the very first read has nothing to stand
           on, and draws the skeleton. */}
-      {group === null && !gaveUp && heldCopies === null ? (
-        <Loading rows={1} className="inventory-looking" label="Reading this card's copies" />
+      {/* THE SKELETON SHARES THE ANSWER'S FRAME (D313). The list is drawn here from the card's own place,
+          hidden, and sets the box the answer fills; the kit's skeleton is laid over it. No pixel is tuned. */}
+      {group === null && (gaveUp || heldCopies === null) ? (
+        <div className="inventory-looking-frame">
+          {standIn === null ? null : (
+            <div className="inventory-sizer" aria-hidden="true" inert>
+              <CardLocations
+                group={standIn}
+                persona="owner"
+                sections={layouts}
+                currentKey={row.key}
+                mark={markFor(row.card.game, row.card.rarity)}
+                glint={glint}
+                listedAt={null}
+                claims={wanted}
+                onSell={onSell}
+                busyKey={busyKey}
+                soldKeys={soldKeys}
+                renderAction={(copy) => renderAction(copy, false)}
+                hideSold={hideSold}
+                frozen={frozen}
+              />
+            </div>
+          )}
+          {gaveUp ? (
+            <Notice tone="warn" title="The search did not return this card's own row." code={`key ${row.key}, query ${query}`}>
+              That should not happen; a reload usually settles it.
+            </Notice>
+          ) : (
+            <Loading rows={1} className="inventory-looking" label="Reading this card's copies" />
+          )}
+        </div>
       ) : null}
 
       {group === null && !gaveUp && heldCopies !== null ? (
@@ -1067,12 +1108,6 @@ function CopiesPanel({
             frozen={frozen}
           />
         </div>
-      ) : null}
-
-      {group === null && gaveUp ? (
-        <Notice tone="warn" title="The search did not return this card's own row." code={`key ${row.key}, query ${query}`}>
-          That should not happen; a reload usually settles it.
-        </Notice>
       ) : null}
 
       {group === null ? null : (

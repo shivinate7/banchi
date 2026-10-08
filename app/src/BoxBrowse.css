@@ -520,6 +520,10 @@
 .browse-hero-fig-live .bn-meter-cells > span { min-width: 0; width: auto; }
 /* A STAND-IN FOR TEXT NOT YET KNOWN: real text in the real face, covered by the kit's `Skeleton` (bar and shimmer), so the box is the
    one the answer will occupy. Never read aloud: its parent is `aria-hidden`. */
+/* THE EMPTY ANSWER KEEPS THE FIGURES' BOX (D313): the same elements, hidden, set the size; one sentence sits in it. */
+.browse-hero-lead[data-empty] { position: relative; }
+.browse-hero-lead[data-empty] > .browse-hero-fig { visibility: hidden; }
+.browse-hero-empty { position: absolute; inset: 0; margin: 0; display: flex; align-items: center; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 .bn-ghost, .bn-ghost * { color: transparent; user-select: none; }
 .bn-ghost { position: relative; }
 .bn-ghost > .bn-ghost-bar { position: absolute; inset: 0; min-height: 0; }

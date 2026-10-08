@@ -54,6 +54,10 @@
 
 /* the lone copy: a card with no name and no SKU */
 .inventory-lone { min-width: 0; }
+/* The frame of the copies slot, loading or unanswered: a hidden list sets the size, the content is stacked over it (D313). */
+.inventory-looking-frame { display: grid; }
+.inventory-looking-frame > * { grid-area: 1 / 1; align-self: start; min-width: 0; }
+.inventory-sizer { visibility: hidden; pointer-events: none; }
 .inventory-looking { display: flex; flex-direction: column; gap: var(--bn-2); }
 /* The last copies list, held while the next card's own read is out (D313, class B): dimmed, never live. */
 .inventory-held { opacity: var(--bn-disabled); pointer-events: none; transition: opacity var(--bn-t-fast) var(--bn-ease); }
