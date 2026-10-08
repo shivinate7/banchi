@@ -41,7 +41,7 @@ per set and overall.
   was separated, the labels were filed with the pixels, which is why T1 failed in a fresh
   checkout, in a worktree before `make worktree-setup`, and could not run in CI at all — not
   because scoring needed the images, but because the labels were stored among them.
-- Rerun after any prompt change. Commit the score to `harness/results/` so regressions are
+- Rerun after any prompt or model change, unless the owner waives a model swap. A waiver is recorded as `model_waiver` in the result file, and the score stays the measured model's. Commit the score to `harness/results/` so regressions are
   visible in the diff. One file per configuration — a hinted run and an unhinted run are
   different measurements and must never share a filename. **No date in the name**: git
   holds the history, and a dated filename turned every new UTC date into a fresh file

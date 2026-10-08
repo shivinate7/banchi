@@ -94,7 +94,7 @@ EVAL_IMAGE_TARGET = 150
 # as the re-measured `harness/results/t1.json`. What it stops is the OTHER thing: a wording
 # tidy nobody meant as a change, silently invalidating every cached run and re-submitting
 # 150 images at the end of a turn.
-PROMPT_FINGERPRINT = "1ef974bf511d"
+PROMPT_FINGERPRINT = "edb6d274962f"
 
 RESULTS_DIR = Path(__file__).resolve().parents[1] / "results"
 
