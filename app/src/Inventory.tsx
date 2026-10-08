@@ -1081,7 +1081,7 @@ function CopiesPanel({
 
       {shown === null ? null : (
         <div
-          className={group === null && !gaveUp && heldCopies !== null ? 'inventory-held' : 'inventory-list'}
+          className={group === null ? 'inventory-held' : 'inventory-list'}
           aria-busy={group === null && !gaveUp ? 'true' : undefined}
           inert={group === null}
         >
