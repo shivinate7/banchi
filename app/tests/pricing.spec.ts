@@ -15,7 +15,7 @@ import type {
   TrendsPayload,
 } from '../src/types'
 import { setViewport } from './phoneSwitch'
-import { HEAD_CENTER_PX, headOffsets } from './shell'
+import { HEAD_CENTER_PX, headOffsets, valueMeasures, VALUE_CENTER_PX, KEPT_LEFT_PX, KEPT_RIGHT_ZERO } from './shell'
 
 /* THE PRICING SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
  *
@@ -5832,6 +5832,31 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(sortHead(page, 'Market')).toBeVisible()
       for (const { column, off } of await headOffsets(page)) {
         expect.soft(Math.abs(off), `${column}: label is ${off.toFixed(1)}px off`).toBeLessThanOrEqual(HEAD_CENTER_PX)
+      }
+    })
+  }
+}
+
+/* ROW VALUES OF MARKET, LOWEST AND RANGE 7D ARE CENTERED IN THEIR CELL (owner ruling; decimal points no longer line
+ * up). Trend, Qty and Price values keep today's place. Short values ("—", "$1.05") and the range are in the rows. */
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [1440, 820]) {
+    test(`7b-31: Market, Lowest and Range 7d values are centered in their cell, the others have not moved, at ${width} in ${theme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: theme })
+      await setViewport(page, { width, height: 900 })
+      const skus = [...sortRows(), sku({ sku: '907', name: 'Golf', snap: { market: '1.05', direct_low: null, low: '1.05', low_with_shipping: null, now: null } })]
+      await open(page, { skus, decisions: SORT_DECISIONS, saved: sortSaved(AGO(3600)) })
+      await expect(sortHead(page, 'Market')).toBeVisible()
+      const seen = await valueMeasures(page)
+      expect(seen.some((m) => m.column.startsWith('market')) && seen.some((m) => m.column.startsWith('range') || width < 1440)).toBe(true)
+      for (const m of seen) {
+        const column = m.column.split('#')[0]!
+        if (['market', 'low', 'range'].includes(column)) {
+          expect.soft(Math.abs(m.off), `${m.column}: value is ${m.off.toFixed(1)}px off its cell's center`).toBeLessThanOrEqual(VALUE_CENTER_PX)
+        } else {
+          expect.soft(Math.abs(m.left - KEPT_LEFT_PX[column]!), `${m.column}: value moved, ${m.left.toFixed(1)}px from the cell's left`).toBeLessThanOrEqual(VALUE_CENTER_PX)
+          if (KEPT_RIGHT_ZERO.includes(column)) expect.soft(Math.abs(m.right), `${m.column}: value moved, ${m.right.toFixed(1)}px from the cell's right`).toBeLessThanOrEqual(VALUE_CENTER_PX)
+        }
       }
     })
   }

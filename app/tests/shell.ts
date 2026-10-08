@@ -949,3 +949,55 @@ export async function headOffsets(page: Page): Promise<{ column: string; off: nu
     return out
   }, [...CENTERED])
 }
+
+/** The owner's ruling for Pricing row values: Market, Lowest and Range 7d values are centered in their cell;
+ *  Trend, Qty and Price values keep the place they had (`gaps` reports it as the space left and right of the
+ *  shown content inside the cell, so a guard can pin it). The shown content leaves out the age line and hidden
+ *  parts. Item is not measured. One entry per row and column; a column the screen drops is skipped. */
+export const VALUE_CENTER_PX = 1
+export async function valueMeasures(page: Page): Promise<{ column: string; off: number; left: number; right: number }[]> {
+  return page.locator('.pricing-row').evaluateAll((rows) => {
+    const out: { column: string; off: number; left: number; right: number }[] = []
+    rows.forEach((row, at) => {
+      for (const column of ['market', 'low', 'range', 'trend', 'qty', 'price']) {
+        const cell = row.querySelector(`.pricing-col-${column}`)
+        if (cell === null || cell.getBoundingClientRect().width === 0) continue
+        const box = cell.getBoundingClientRect()
+        const edges: number[] = []
+        const walk = (node: Node) => {
+          if (node instanceof Element && (node.classList.contains('pricing-ref-age') || getComputedStyle(node).display === 'none')) return
+          if (node instanceof HTMLInputElement) {
+            const r = node.getBoundingClientRect()
+            if (r.width > 0) edges.push(r.left, r.right)
+            return
+          }
+          if (node.nodeType === Node.TEXT_NODE) {
+            if ((node.textContent ?? '').trim() === '') return
+            const range = document.createRange()
+            range.selectNodeContents(node)
+            const r = range.getBoundingClientRect()
+            if (r.width > 0) edges.push(r.left, r.right)
+            return
+          }
+          if (node instanceof SVGElement && node.getBoundingClientRect().width > 0) {
+            const r = node.getBoundingClientRect()
+            edges.push(r.left, r.right)
+            return
+          }
+          node.childNodes.forEach(walk)
+        }
+        walk(cell)
+        if (edges.length === 0) continue
+        const left = Math.min(...edges) - box.left
+        const right = box.right - Math.max(...edges)
+        out.push({ column: `${column}#${at}`, off: (left - right) / 2, left, right })
+      }
+    })
+    return out
+  })
+}
+
+/** Where Trend, Qty and Price values sit today, as the space left of the shown content in the cell. Right gaps
+ *  are pinned for Trend and Qty, whose content ends flush with the cell. */
+export const KEPT_LEFT_PX: Record<string, number> = { trend: 8, qty: 4, price: 13 }
+export const KEPT_RIGHT_ZERO = ['trend', 'qty']
