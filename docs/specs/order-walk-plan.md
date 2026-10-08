@@ -598,6 +598,8 @@ dropped. The prototypes sat on scratch branches `scratch/orders-pass-a`, `-b` an
 
 ### What the good screens do that Orders does not
 
+This list describes the screen before C.
+
 Measured against `#/inventory`, `#/` and `#/revenue` at 1440 and 820, in both themes, on the
 demo mirror:
 

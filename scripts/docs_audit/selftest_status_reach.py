@@ -14,6 +14,7 @@ from .status_reach import (
     check_tested_by_reach,
     follow_target,
     imported_names,
+    model_disagreement,
     reach_findings,
     string_literals,
     test_reach,
@@ -244,4 +245,13 @@ def run(ok) -> None:
         token_value(TYPEFACE, "'Cabinet Grotesk', sans-serif") == token_value(TYPEFACE, "Cabinet Grotesk"),
         "the generic fallback in a font stack is not part of the token",
         token_value(TYPEFACE, "'Cabinet Grotesk', sans-serif"),
+    )
+
+    print("\nthe paid-read model named in CLAUDE.md is the one the code emits")
+    rule = "- **Batch API, not sequential calls.** Model: `m-1`."
+    ok(model_disagreement(rule, 'MODEL = "m-1"\n') is None, "equal ids agree")
+    ok(model_disagreement(rule, 'MODEL = "m-2"\n') is not None, "a swapped model id is caught")
+    ok(
+        model_disagreement(read(ROOT / "CLAUDE.md"), read(ROOT / "identify" / "prompt.py")) is None,
+        "this repo's CLAUDE.md and prompt.py agree",
     )
