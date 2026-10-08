@@ -2164,8 +2164,8 @@ export function BoxBrowse({
         }}
         /* UX-254 (owner's ruling): the words, never the meaning. "In stock only" lives in the
            filter menu now; checked still folds a departed copy away, on by default
-           (`storedHideSold`), and the count is still what it hides. No `defaultChecked`, so the
-           trigger's badge marks it while it narrows the list. */
+           (`storedHideSold`), and the count is still what it hides. It is the resting state
+           (`defaultChecked`), so the badge and the count line mark only showing sold cards. */
         hide={
           onShelf.length === 0 || onHideSold === undefined
             ? undefined
@@ -2176,6 +2176,7 @@ export function BoxBrowse({
                 },
                 label: 'In stock only',
                 count: hiddenBySold,
+                defaultChecked: true,
               }
         }
         beside={

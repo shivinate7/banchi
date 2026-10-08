@@ -203,7 +203,7 @@ export function FilterBar<K extends string = string>({
   const words = [
     ...facetWords(facets, value),
     ...(typed === '' ? [] : [`“${typed}”`]),
-    ...hides.filter((one) => one.checked && (one.count ?? 1) > 0).map((one) => one.label),
+    ...hides.filter((one) => one.checked && !(one.defaultChecked ?? false) && (one.count ?? 1) > 0).map((one) => one.label),
   ]
   const clearable = active > 0 || typed !== '' || hideMoved
   const clearAll = () => {
