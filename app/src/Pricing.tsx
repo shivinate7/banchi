@@ -2939,14 +2939,14 @@ export function Pricing() {
               {/* "ITEM", NOT "CARD" (the owner's add-on, 2026-09-26): the rows include sealed
                   product too, which is not a card. */}
               <span role="columnheader">Item</span>
-              <SortHeader grid className="pricing-col-market" sortKey="price" value={sort} onChange={setSort} rest={SORT_AT_REST} align="end">Market</SortHeader>
-              <SortHeader grid className="pricing-col-low" sortKey="low" value={sort} onChange={setSort} rest={SORT_AT_REST} align="end">Lowest</SortHeader>
+              <SortHeader grid className="pricing-col-market" sortKey="price" value={sort} onChange={setSort} rest={SORT_AT_REST}>Market</SortHeader>
+              <SortHeader grid className="pricing-col-low" sortKey="low" value={sort} onChange={setSort} rest={SORT_AT_REST}>Lowest</SortHeader>
               {rangeOn ? (
-                <SortHeader grid className="pricing-col-range" sortKey="range" value={sort} onChange={setSort} rest={SORT_AT_REST} align="end">Range 7d</SortHeader>
+                <SortHeader grid className="pricing-col-range" sortKey="range" value={sort} onChange={setSort} rest={SORT_AT_REST}>Range 7d</SortHeader>
               ) : null}
               <span className="pricing-col-trend" role="columnheader">Trend</span>
               {source.copies ? <span className="pricing-col-qty" role="columnheader">Qty</span> : null}
-              <SortHeader grid className="pricing-col-price" sortKey="asking" value={sort} onChange={setSort} rest={SORT_AT_REST} align="start">{liveTab ? 'New price' : 'Price'}</SortHeader>
+              <SortHeader grid className="pricing-col-price" sortKey="asking" value={sort} onChange={setSort} rest={SORT_AT_REST}>{liveTab ? 'New price' : 'Price'}</SortHeader>
               <span />
             </div>
             {drawn.map((group) => (

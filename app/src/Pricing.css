@@ -127,10 +127,8 @@
   border-bottom: 1px solid var(--bn-line);
   background: var(--bn-surface-2);
 }
-.pricing-caption .pricing-col-market,
-.pricing-caption .pricing-col-low,
-.pricing-caption .pricing-col-range,
-.pricing-caption .pricing-col-qty { text-align: right; }
+.pricing-caption .pricing-col-trend,
+.pricing-caption .pricing-col-qty { text-align: center; }
 
 .pricing-group { display: flex; flex-direction: column; }
 .pricing-group-head {

@@ -116,7 +116,7 @@
   min-height: var(--bn-control-h-lg);
   padding: 0;
   margin: 0;
-  justify-content: flex-start;
+  justify-content: center; /* the label centers over its column; the ::before below balances the chevron's slot */
   font-weight: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
@@ -142,6 +142,7 @@
 .bn-sortth-grid:hover { background: none; }
 .bn-sortth-grid:hover .bn-sortth-box { background: var(--bn-hover); }
 .bn-sortth-grid[data-active='true'] { color: var(--bn-ink); }
+.bn-sortth-grid::before { content: ''; flex: none; width: var(--bn-3); }
 .bn-sortth-mark { display: inline-flex; flex: none; width: var(--bn-3); color: var(--bn-accent); }
 /* THE ACTIVE COLUMN IS MARKED IN TWO CHANNELS, not only the chevron a squint could miss
    (FLT-19's own complaint about a chevron on every header): the label goes to full ink weight
