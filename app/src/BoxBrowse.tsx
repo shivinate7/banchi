@@ -59,7 +59,7 @@ import { buriedKeys, DeletedPane, DeletedWalk, useBuried } from './DeletedBoxes'
 import { stateLabel } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
-import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, Popover, boxesMostRecentFirst, countFacets, filterRows, useHeld, type PickGroup, type SortValue } from './kit'
+import { Button, Chip, EmptyState, FilterBar, Icon, IconButton, Loading, Money, Notice, Popover, boxesMostRecentFirst, countFacets, filterRows, useHeld, type PickGroup, type SortValue } from './kit'
 import { boxTitle, UNNAMED_BOX } from './kit/data'
 import type { FilterFacet, FilterValue } from './kit/data'
 import { useFacetParams } from './kit/viewState'
@@ -2162,6 +2162,22 @@ export function BoxBrowse({
           onChange: setSort,
           defaultValue: { key: 'recent', dir: 'desc' },
         }}
+        /* UX-254 (owner's ruling): the words, never the meaning. "In stock only" lives in the
+           filter menu now; checked still folds a departed copy away, on by default
+           (`storedHideSold`), and the count is still what it hides. No `defaultChecked`, so the
+           trigger's badge marks it while it narrows the list. */
+        hide={
+          onShelf.length === 0 || onHideSold === undefined
+            ? undefined
+            : {
+                checked: hideSold,
+                onChange: (next) => {
+                  if (next !== hideSold) onHideSold()
+                },
+                label: 'In stock only',
+                count: hiddenBySold,
+              }
+        }
         beside={
           phone ? undefined : (
             <IconButton
@@ -2335,7 +2351,7 @@ export function BoxBrowse({
               )
             ) : (
               <button className="browse-quiet" type="button" onClick={toggleAllSections}>
-                <Icon name={anyExpanded ? 'chevronUp' : 'chevronDown'} size={12} />
+                <Icon name={anyExpanded ? 'fold' : 'unfold'} size={12} />
                 {/* THE HEADERS BELOW ALREADY COUNT THE SECTIONS (cut list #11, UX-269). */}
                 {anyExpanded ? 'Collapse' : 'Expand'}
               </button>
@@ -2354,14 +2370,6 @@ export function BoxBrowse({
               </span>
             ) : null}
 
-            {onShelf.length === 0 || onHideSold === undefined ? null : (
-              /* UX-254 (owner's ruling, 2026-09-24: "maybe in stock only should be the toggle
-                 name?"): the words, never the meaning — checked still folds a departed copy
-                 away, on by default (`storedHideSold`), and the count is still what it hides. */
-              <HideToggle checked={hideSold} count={hiddenBySold} className="browse-hidesold" onChange={() => onHideSold()}>
-                In stock only
-              </HideToggle>
-            )}
 
           </div>
 

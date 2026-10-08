@@ -3852,7 +3852,7 @@ function PullStage({
           <div className="orders-walk-tools">
             <Button
               size="sm"
-              icon={anyFolded ? 'chevronRight' : 'chevronDown'}
+              icon={anyFolded ? 'unfold' : 'fold'}
               onClick={() => setFoldedSections(anyFolded ? new Set() : new Set(walk.sections.map((section) => section.key)))}
             >
               {anyFolded ? 'Open' : 'Fold'} {countOf(walk.sections.length, 'section')}
