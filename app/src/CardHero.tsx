@@ -600,7 +600,7 @@ export function CardHeroHead({
             is drawn at 0 too, so a sale that folds a copy away adds no line (D118). */}
         {figures == null ? (
           figuresPending || figuresEmpty ? (
-            <div className="browse-hero-side" aria-hidden="true" data-pending={figuresPending ? 'true' : undefined}>
+            <div className="browse-hero-side" aria-hidden="true" data-pending={figuresPending ? 'true' : undefined} data-empty={figuresPending ? undefined : 'true'}>
               <Ghost quiet={figuresEmpty}>
                 Captured<b>0</b>
               </Ghost>
