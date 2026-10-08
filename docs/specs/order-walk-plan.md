@@ -583,6 +583,8 @@ D132 (Inventory) and D304 (the walk) each point here.
 **With no search**, Inventory ranks by this device's box recency, then `bid`, then the box
 number (D132). The walk has no no-search order.
 
+**Inventory's rail filter.** "In stock only" lives in the rail's filter menu, on by default, and is marked only when it is off. With the rail folded, no mark shows, and the owner accepted that.
+
 **The order is frozen once taken** (D181, D118, `app/src/frozenRank.ts`). A copy that left since
 the order was taken still counts for its section. So a sale never re-ranks a list under the hand
 that made it. The walk's ranking is held the same way (section 8).
