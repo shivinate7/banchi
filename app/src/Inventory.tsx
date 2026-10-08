@@ -989,6 +989,9 @@ function CopiesPanel({
     return copy === null ? null : { ...loneGroup(row, copy), sku: row.card.sku }
   }, [row])
 
+  /* WHAT THE LIST DRAWS: the answer, else the last list while this card's read is out, else the card's own copy. */
+  const shown = group !== null ? { group, key: row.key } : (!gaveUp && heldCopies !== null ? heldCopies : pending === null ? null : { group: pending, key: row.key })
+
   const bandGroup = handle === null ? solo : group
   useEffect(() => {
     onGroup(bandGroup)
@@ -1070,77 +1073,42 @@ function CopiesPanel({
           band lost 160px and the details under it moved twice. The previous card's list stays,
           dimmed and inert, until the answer is whole. Only the very first read has nothing to stand
           on, and draws the skeleton. */}
-      {/* WHILE THE SEARCH IS OUT, THE CARD'S OWN COPY STANDS IN THE LIST (D313): the one place the record
-          already knows, drawn as the real row. The answer replaces it, and other copies add rows then.
-          Inert, because a sale needs the group the answer brings. No place on the record: the kit's row. */}
-      {group === null && (gaveUp || heldCopies === null) ? (
-        pending === null ? (gaveUp ? null : (
-          <Loading rows={1} className="inventory-looking" label="Reading this card's copies" />
-        )) : (
-          <div aria-busy={gaveUp ? undefined : 'true'} inert>
-            <CardLocations
-              group={pending}
-              persona="owner"
-              sections={layouts}
-              currentKey={row.key}
-              mark={markFor(row.card.game, row.card.rarity)}
-              glint={glint}
-              listedAt={null}
-              claims={wanted}
-              onSell={onSell}
-              busyKey={busyKey}
-              soldKeys={soldKeys}
-              renderAction={(copy) => renderAction(copy, false)}
-              hideSold={hideSold}
-              frozen={frozen}
-            />
-          </div>
-        )
+      {/* ONE LIST, ONE WRAPPER, FOR EVERY STATE (D313). While this card's search is out, the card's own copy stands
+          here as a real row; a step to another card stands on the last list, dimmed; the answer then updates the
+          same list in place, so the rows are never remounted and other copies add rows then. Inert until the
+          answer, because a sale needs the group the answer brings. No place on the record: the kit's row. */}
+      {group === null && !gaveUp && heldCopies === null && pending === null ? (
+        <Loading rows={1} className="inventory-looking" label="Reading this card's copies" />
       ) : null}
 
-      {group === null && !gaveUp && heldCopies !== null ? (
-        <div className="inventory-held" aria-busy="true" inert>
+      {shown === null ? null : (
+        <div
+          className={group === null && !gaveUp && heldCopies !== null ? 'inventory-held' : 'inventory-list'}
+          aria-busy={group === null && !gaveUp ? 'true' : undefined}
+          inert={group === null}
+        >
           <CardLocations
-            group={heldCopies.group}
+            group={shown.group}
             persona="owner"
             sections={layouts}
-            currentKey={heldCopies.key}
+            currentKey={shown.key}
             mark={markFor(row.card.game, row.card.rarity)}
             glint={glint}
-            listedAt={heldCopies.group.sku === null ? null : (listings[heldCopies.group.sku]?.live_as_of ?? null)}
+            listedAt={group === null || shown.group.sku === null ? null : (listings[shown.group.sku]?.live_as_of ?? null)}
             claims={wanted}
+            onGoTo={group === null ? undefined : onGoTo}
             onSell={onSell}
             busyKey={busyKey}
             soldKeys={soldKeys}
+            /* EVERY row draws its own controls, the copy the walk is standing on included —
+               and since D119 there is no second place they could be drawn. `false` is the row
+               form: a quiet `Mark sold` and an icon-only `Retire`. The `true` form survives at
+               one call site, the phone's sticky action bar, and is phone-only from here. */
             renderAction={(copy) => renderAction(copy, false)}
             hideSold={hideSold}
             frozen={frozen}
           />
         </div>
-      ) : null}
-
-      {group === null ? null : (
-        <CardLocations
-          group={group}
-          persona="owner"
-          sections={layouts}
-          currentKey={row.key}
-          mark={markFor(row.card.game, row.card.rarity)}
-          glint={glint}
-          listedAt={group.sku === null ? null : (listings[group.sku]?.live_as_of ?? null)}
-          claims={wanted}
-          onGoTo={onGoTo}
-          onSell={onSell}
-          busyKey={busyKey}
-          soldKeys={soldKeys}
-          /* EVERY row draws its own controls, the copy the walk is standing on included —
-             and since D119 there is no second place they could be drawn. `false` is the row
-             form: a quiet `Mark sold` and an icon-only `Retire`. The `true` form survives at
-             one call site, the phone's sticky action bar, and is phone-only from here. */
-          renderAction={(copy) => renderAction(copy, false)}
-          hideSold={hideSold}
-          frozen={frozen}
-        />
       )}
     </section>
   )
