@@ -21,6 +21,7 @@ from .records import (
     decision_heading_lines,
     is_main,
     is_slug,
+    long_decision_slugs,
     without_noqa,
 )
 from .screens import _pooled_absence_titles
@@ -28,6 +29,12 @@ from .selftest_data import NON_PATHS, REAL_PATHS
 
 
 def run(ok) -> None:
+    print("\ndecision slug length")
+    over = "D" + "999-" + "a" * 33 + ".md"
+    short = "D" + "999-" + "a" * 32 + ".md"
+    ok(long_decision_slugs([over]) == [(over, 33)], "a 33-character slug is flagged")
+    ok(long_decision_slugs([short, "README.md"]) == [], "a 32-character slug and a non-record pass")
+
     print("\nextractor rejects prose that only looks like a path")
     tops = top_level_names()
     for line in NON_PATHS:

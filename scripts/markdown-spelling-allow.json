@@ -48,7 +48,7 @@
         "catalogue"
       ]
     },
-    "docs/decisions/*-sweep-preview-is-free-press-commits.md": {
+    "docs/decisions/*-sweep-preview-free-press-pays.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "judgement"
@@ -67,7 +67,7 @@
         "relabelled"
       ]
     },
-    "docs/decisions/*-card-numbers-count-within-a-section.md": {
+    "docs/decisions/*-numbers-count-within-section.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "centre",
@@ -79,13 +79,13 @@
         "neighbours"
       ]
     },
-    "docs/decisions/*-a-citation-names-a-symbol-not-a-line.md": {
+    "docs/decisions/*-citation-names-symbol-not-line.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "honour"
       ]
     },
-    "docs/decisions/*-a-departed-card-s-label-names-its-record.md": {
+    "docs/decisions/*-departed-label-names-record.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "ellipsises",
@@ -99,7 +99,7 @@
         "judgement"
       ]
     },
-    "docs/decisions/*-generators-may-write-writers-never-gate.md": {
+    "docs/decisions/*-generators-write-never-gate.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "generalises",
@@ -114,7 +114,7 @@
         "catalogue"
       ]
     },
-    "docs/decisions/*-join-trusts-resolved-numbers-gap-open.md": {
+    "docs/decisions/*-join-trusts-resolved-numbers.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "catalogue"
@@ -143,7 +143,7 @@
         "labelled"
       ]
     },
-    "docs/decisions/*-a-press-never-moves-other-content.md": {
+    "docs/decisions/*-press-never-moves-content.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "behaviour",
@@ -161,7 +161,7 @@
         "licence"
       ]
     },
-    "docs/decisions/*-a-rule-without-a-reader-is-advice.md": {
+    "docs/decisions/*-rule-without-reader-is-advice.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "judgement",
@@ -170,7 +170,7 @@
         "mechanised"
       ]
     },
-    "docs/decisions/*-archive-subjects-include-sold-and-sealed.md": {
+    "docs/decisions/*-archive-includes-sold-sealed.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "catalogues"
@@ -182,13 +182,13 @@
         "summarised"
       ]
     },
-    "docs/decisions/*-a-session-stops-only-what-it-started.md": {
+    "docs/decisions/*-session-stops-only-its-own.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "neighbouring"
       ]
     },
-    "docs/decisions/*-interactive-feedback-belongs-to-the-product.md": {
+    "docs/decisions/*-feedback-belongs-to-product.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "colour",
@@ -226,20 +226,20 @@
         "honours"
       ]
     },
-    "docs/decisions/*-the-public-demo-is-the-scrubbed-real-store.md": {
+    "docs/decisions/*-public-demo-is-scrubbed-store.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "catalogue"
       ]
     },
-    "docs/decisions/*-duplicate-copies-aggregate-by-sku.md": {
+    "docs/decisions/*-duplicates-aggregate-by-sku.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "labelled",
         "unrecognised"
       ]
     },
-    "docs/decisions/*-every-unsent-copy-is-one-worklist.md": {
+    "docs/decisions/*-unsent-copies-one-worklist.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "labelled"
@@ -280,7 +280,7 @@
         "colour"
       ]
     },
-    "docs/decisions/*-listing-needs-name-and-number-agreeing.md": {
+    "docs/decisions/*-listing-needs-name-and-number.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "behaviour",
@@ -316,13 +316,13 @@
         "neighbours"
       ]
     },
-    "docs/decisions/*-every-screen-inherits-the-page-scaffold.md": {
+    "docs/decisions/*-screens-inherit-page-scaffold.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "judgement"
       ]
     },
-    "docs/decisions/*-palette-is-go-to-lists-every-screen.md": {
+    "docs/decisions/*-palette-go-to-lists-screens.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "labelled",
@@ -354,7 +354,7 @@
         "colours"
       ]
     },
-    "docs/decisions/*-shell-mistakes-are-refused-by-resolving-them.md": {
+    "docs/decisions/*-shell-mistakes-refused.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "behaviour",
@@ -364,7 +364,7 @@
         "judgement"
       ]
     },
-    "docs/decisions/*-name-agreement-settles-sku-number-conflicts.md": {
+    "docs/decisions/*-name-agreement-settles-sku.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "catalogue",
@@ -387,7 +387,7 @@
         "synthesising"
       ]
     },
-    "docs/decisions/*-three-checks-replace-the-word-ceiling.md": {
+    "docs/decisions/*-three-checks-replace-ceiling.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "judgement"
@@ -414,13 +414,13 @@
         "colour"
       ]
     },
-    "docs/decisions/*-docs-cite-identifiers-use-american-spelling.md": {
+    "docs/decisions/*-docs-cite-ids-american.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "judgement"
       ]
     },
-    "docs/decisions/*-order-is-taken-once-a-sale-keeps-it.md": {
+    "docs/decisions/*-order-taken-once.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "behaviour",
@@ -435,7 +435,7 @@
         "memoised"
       ]
     },
-    "docs/decisions/*-the-primary-checkout-syncs-itself.md": {
+    "docs/decisions/*-primary-checkout-syncs.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "generalise",
@@ -443,7 +443,7 @@
         "neighbour"
       ]
     },
-    "docs/decisions/*-reconcile-is-store-wide-and-writes-live.md": {
+    "docs/decisions/*-reconcile-store-wide-live.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "cancelled"
@@ -465,7 +465,7 @@
         "relabelled"
       ]
     },
-    "docs/decisions/*-review-answers-undo-list-holds-still.md": {
+    "docs/decisions/*-review-undo-list-holds-still.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "acknowledgement",
@@ -507,13 +507,13 @@
         "recognise"
       ]
     },
-    "docs/decisions/*-the-shell-is-rail-palette-reference-sheet.md": {
+    "docs/decisions/*-shell-rail-palette-sheet.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "labelled"
       ]
     },
-    "docs/decisions/*-shipping-routes-three-lanes-one-unsure.md": {
+    "docs/decisions/*-shipping-three-lanes-unsure.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "judgement"
@@ -525,7 +525,7 @@
         "serialised"
       ]
     },
-    "docs/decisions/*-the-suite-is-sharded-never-widened.md": {
+    "docs/decisions/*-suite-sharded-never-widened.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "cancelled",
@@ -560,7 +560,7 @@
         "unlabelled"
       ]
     },
-    "docs/decisions/*-token-literals-are-caught-by-family.md": {
+    "docs/decisions/*-token-literals-caught-family.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "colour",
