@@ -4990,7 +4990,8 @@ test('a fresh landing shows only pullable buyers, and one click widens it', asyn
   await expect(page.locator(`${VIEW} .bn-verdict .bn-stat-value`)).toHaveText(['2', '2', '1', '1'])
   await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
   await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('1 of 2 buyers')
-  await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('Hide unpullable')
+  /* Hide unpullable is ON at rest, and the count line names a hide toggle only when it differs from rest. */
+  await expect(page.locator(`${VIEW} .bn-filtercount`)).not.toContainText('Hide unpullable')
   /* The rest state is not a change: no badge on the Filters press. */
   await expect(page).not.toHaveURL(/pullable=/)
 
