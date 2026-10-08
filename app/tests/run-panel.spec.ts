@@ -6,7 +6,7 @@ import { NO_FREE_FIELDS, matchState, runRow, stubMatchState } from './routeFixtu
 import { HAIKU_NAME_TOOLTIP, MATCHER_NAME_TOOLTIP } from '../src/engines'
 import type { MatchState } from '../src/types'
 import { expectOneStagger } from './staggerCheck'
-import { settleMotion } from './motionSettled'
+import { afterPaint, settleMotion } from './motionSettled'
 import { boxTitle } from '../src/kit/dataRules'
 
 /* THE PIPELINE IS REACHABLE FROM A SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
@@ -3325,6 +3325,60 @@ test('a fresh opening is the free read again, whatever was picked last time', as
   /* THE SHEET REOPENS ON THE SECOND STAGE WITH THE BOX KEPT, and the pick is not what it keeps. */
   await expect(page.locator('.run-engine')).toBeVisible()
   await expect(picked(page, 'Match to stock photos')).toHaveAttribute('aria-pressed', 'true')
+})
+
+/** THE PREVIEW LANDING MOVES THE SHEET, AND THAT LOST A CLOSE PRESS ON CI (run 37854850654, shard 6,
+ *  the case above: `.runs-composer` count Expected 0, Received 1, then green on re-run). The paid pick
+ *  fetches `/pipeline/crop-preview` after a 140ms debounce. The loading frame is shorter than the card
+ *  that replaces it, so the dialog grows and re-centres and `Close` moves up. A press whose down and up
+ *  straddle that frame ends on the panel, `click` fires on the common ancestor, and the sheet stays.
+ *  Measured on the rig: panel height 452 to 672, `Close` y 155.6 to 45.6, 171ms after the pick.
+ *  THE ROUTE IS HELD, NOT THROTTLED: the preview lands exactly when the case releases it (a late
+ *  read moves nothing; D118, the frame holds the box). */
+async function holdPreview(page: Page) {
+  let release!: () => void
+  const held = new Promise<void>((done) => {
+    release = done
+  })
+  await page.route(/\/pipeline\/crop-preview$/, async (route) => {
+    await held
+    await route.fallback()
+  })
+  return release
+}
+
+test('the preview landing moves nothing: the sheet keeps its box and Close stays put', async ({ page }) => {
+  await open(page)
+  const release = await holdPreview(page)
+  await atReading(page, 9, 'paid')
+  await expect(page.locator('.run-preview-frame[aria-busy="true"]')).toBeVisible()
+  await settleMotion(page)
+  const close = page.locator('.runs-composer').getByRole('button', { name: 'Close' })
+  const panel = page.locator('.runs-composer')
+  const before = { close: await close.boundingBox(), panel: await panel.boundingBox() }
+
+  release()
+  await expect(page.locator('.run-preview-card')).toBeVisible()
+  await afterPaint(page)
+  expect({ close: await close.boundingBox(), panel: await panel.boundingBox() }).toEqual(before)
+})
+
+test('a Close press that straddles the preview landing still closes the sheet', async ({ page }) => {
+  await open(page)
+  const release = await holdPreview(page)
+  await atReading(page, 9, 'paid')
+  await expect(page.locator('.run-preview-frame[aria-busy="true"]')).toBeVisible()
+  await settleMotion(page)
+  const at = (await page.locator('.runs-composer').getByRole('button', { name: 'Close' }).boundingBox())!
+
+  /* DOWN ON CLOSE, THE PREVIEW LANDS, UP: the press the CI run made by luck, made on purpose. */
+  await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2)
+  await page.mouse.down()
+  release()
+  await expect(page.locator('.run-preview-card')).toBeVisible()
+  await afterPaint(page)
+  await page.mouse.up()
+  await expect(page.locator('.runs-composer')).toHaveCount(0)
 })
 
 test('both picks carry a hover tooltip that names their model, and nothing else on the sheet does', async ({
