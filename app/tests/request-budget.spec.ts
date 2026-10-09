@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { test, expect, type Page, type Request } from '@playwright/test'
+import { test, expect, type Page, type Request, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { routesFromNav } from './routes'
 import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
@@ -72,6 +72,8 @@ interface Watch {
   hold: { ms: number; except?: (r: Request) => boolean }
   close: () => void
   release: () => void
+  /** Holds again, ahead of any stub a test installs later: a stub that answers first would end a hold. */
+  holdFirst: () => Promise<void>
 }
 interface Measure { value: number; detail: string }
 
@@ -111,17 +113,20 @@ async function instrument(page: Page): Promise<Watch> {
   const hold: { ms: number; except?: (r: Request) => boolean } = { ms: MINUTE_HOLD_MS }
   let gate: Promise<void> = Promise.resolve()
   let open_: () => void = () => {}
-  await page.route(
-    () => true,
-    async (route) => {
-      const type = route.request().resourceType()
-      if (type === 'fetch' || type === 'xhr') {
-        await gate // a closed gate holds every answer until the burst has been counted
-        if (!hold.except?.(route.request())) await new Promise((r) => setTimeout(r, hold.ms)) // keep: stubbed answer held on purpose, a latency fixture
-      }
-      await route.fallback()
-    },
-  )
+  /* A READ IS HELD FOR THE TIME IN FORCE WHEN IT STARTED, NOT WHEN THIS HANDLER RUNS. The handler runs after the
+     `request` event, by as long as the runner takes. A test that saw a read start and then zeroed `hold.ms` to
+     leave could find that read answered at once by a handler that read the zero: "open" by the event, finished by
+     the handler, and kept by the leave rule though the screen never left. */
+  const heldFor = new WeakMap<Request, number>()
+  const holdRead = async (route: Route): Promise<void> => {
+    const type = route.request().resourceType()
+    if (type === 'fetch' || type === 'xhr') {
+      await gate // a closed gate holds every answer until the burst has been counted
+      if (!hold.except?.(route.request())) await new Promise((r) => setTimeout(r, heldFor.get(route.request()) ?? hold.ms)) // keep: stubbed answer held on purpose, a latency fixture
+    }
+    await route.fallback()
+  }
+  await page.route(() => true, holdRead)
   /* THE MOUNT IS MEASURED AS A BUILD MOUNTS IT. `main.tsx` wraps the app in `StrictMode`, which in
      the dev server runs every mount effect twice, so every first read would count double and a
      rule about "once on mount" could never hold. The entry module is served with the wrapper
@@ -139,6 +144,7 @@ async function instrument(page: Page): Promise<Watch> {
   const isRead = (r: Request) => r.resourceType() === 'fetch' || r.resourceType() === 'xhr'
   page.on('request', (r) => {
     if (!isRead(r)) return
+    heldFor.set(r, hold.ms)
     const one: Seen = { method: r.method(), url: r.url(), path: shape(r.url()), failed: null, done: false, order: seen.length }
     seen.push(one)
     open.set(r, one)
@@ -150,6 +156,7 @@ async function instrument(page: Page): Promise<Watch> {
     hold,
     close: () => { gate = new Promise<void>((r) => { open_ = r }) },
     release: () => open_(),
+    holdFirst: () => page.route(() => true, holdRead),
     /* a new page starts from nothing: what the last page left open is not this page's */
     reset: () => { open.clear() },
     openCount: () => open.size,
@@ -428,6 +435,7 @@ test('a screen that is left stops asking, and what it had open is aborted', asyn
 
   /* The shell's reads outlive a screen on purpose, so the long hold never touches them. */
   watch.hold.except = (r) => r.method() !== 'GET' || shell.has(`${r.method()} ${shape(r.url())}`)
+  await watch.holdFirst() // the seeds answer at once, so a seeded read would be done before it could be left
   const bad: string[] = []
   const used = new Set<string>()
   for (let at = 0; at + 1 < routes.length; at++) {
