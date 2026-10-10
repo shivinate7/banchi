@@ -138,6 +138,7 @@ UNKNOWN_GAME = "unknown_game"
 STAGE_PENDING = "pending"  # undecided; once the preflight is over, this IS the send list
 STAGE_CACHED = "cached"  # the store already owns this answer — never prepared, never sent
 STAGE_UNREADABLE = "unreadable"  # the bytes would not hash, or would not decode
+STAGE_HELD = "held"  # a cleared answer that will not parse: in review, not sent, not adopted
 STAGE_REFUSED = "refused"  # no prompt to read it with — named, not sent, not dropped
 
 
@@ -821,6 +822,33 @@ def cached_refusal(item: Item, entry) -> Optional[str]:
     return None
 
 
+def _queue_held(store, held, say) -> None:
+    """Upsert one review entry per card whose human-cleared answer will not parse, through
+    `store/queues.py`'s `Queue.upsert` as `cmd_match` and `cmd_emit` do. The cleared cache
+    entry is not touched. A second press writes the same entry again."""
+    from pipeline import routing
+    from store import queues
+
+    with store.write() as writable:
+        for item, entry in held:
+            said = entry.identification if isinstance(entry.identification, dict) else {}
+            writable.review.upsert(
+                queues.QueueEntry(
+                    position=item.key,
+                    box=item.capture.box,
+                    index=item.capture.index,
+                    label=join.place_text(
+                        item.game or games.DEFAULT_GAME,
+                        join.Position(box=item.capture.box, index=item.capture.index),
+                    ),
+                    photo=str(item.capture.photo),
+                    read={k: said[k] for k in ("name", "number", "printed_total") if said.get(k)},
+                    reason=routing.CLEARED_ANSWER_UNREADABLE,
+                )
+            )
+    say(f"held            {len(held)} card(s) with a saved answer that cannot be used: sent to Review, not paid for")
+
+
 def record_adopted(writable, item: Item, run_name: Optional[str] = None) -> bool:
     """Record one item's answer on its card. THE ONE HOME of the write a paid press, a press over
     cached answers and the background reader's adoption all make. Parses a cached item (its
@@ -1066,6 +1094,7 @@ def run(args, say) -> int:
 
     matcher_read = 0
     refused_cached: List[str] = []
+    held_cleared: list = []
     for item in items:
         # THE DIGEST, NOT THE PREPARED BYTES. This read `item.prepared.sha256` and skipped on
         # `prepared is None`; under hash-first that test would have skipped every card whose
@@ -1088,6 +1117,12 @@ def run(args, say) -> int:
             item.retry_reasons.append("reidentify-stale")
             continue
         why = cached_refusal(item, entry)
+        if why is not None and entry.cleared_by_human and item.capture.has_position:
+            # A PERSON SETTLED THIS CARD AND THE ANSWER CANNOT BE USED: never paid for, never
+            # overwritten. It waits in review with its photograph (`_queue_held`).
+            item.stage = STAGE_HELD
+            held_cleared.append((item, entry))
+            continue
         if why is not None:
             refused_cached.append(
                 f"{item.key}: {why}; "
@@ -1375,6 +1410,9 @@ def run(args, say) -> int:
     if args.dry_run:
         say("--dry-run: nothing submitted, nothing written.")
         return 0
+
+    if held_cleared:
+        _queue_held(store, held_cleared, say)
 
     if free and to_send and not ready:
         say("refused: the free reader is not prepared. Press Prepare on the runs sheet first: it "
