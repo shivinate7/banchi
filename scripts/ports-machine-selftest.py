@@ -246,6 +246,18 @@ class MachineHomeCase(unittest.TestCase):
         ports.remove_old_agent("com.banchi.serve.42")
         self.assertFalse(plist.exists(), "plist must go when the service is not loaded")
 
+    def test_remove_old_agent_treats_exit_3_as_not_loaded(self):
+        # Measured on the owner's Mac: bootout of a label that does not exist exits 3
+        # ("No such process"), and the switchover printed a false failure for it.
+        plist = self._plist("com.pkmnscan.demo-mirror-daily")
+        self.fake_run.return_value = mock.Mock(
+            returncode=3, stderr=b"Boot-out failed: 3: No such process")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            ports.remove_old_agent("com.banchi.demo-mirror-daily")
+        self.assertFalse(plist.exists(), "plist must go when the service does not exist")
+        self.assertEqual(err.getvalue(), "", "no failure line for a service that does not exist")
+
 
 def tearDownModule():
     # A leak into the real home fails the run, even if every case passed.
