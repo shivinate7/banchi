@@ -35,7 +35,8 @@ from store.session import Store
 
 
 def _adopt(args, say) -> int:
-    found, sources = readings_walk.collect()
+    bad: list = []
+    found, sources = readings_walk.collect(bad)
 
     try:
         before: Dict[str, Reading] = dict(Store().read().readings.entries)
@@ -68,6 +69,14 @@ def _adopt(args, say) -> int:
             say(f"  {sku}")
         if len(dropped) > 20:
             say(f"  ... and {len(dropped) - 20} more")
+
+    if args.write and (bad or not found):
+        say("")
+        for path in bad:
+            say(f"refused: {path} could not be read; adopting would drop its SKUs")
+        if not found:
+            say("refused: no reading found; adopting would blank the table")
+        return 1
 
     if not args.write:
         say("")

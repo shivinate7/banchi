@@ -122,7 +122,7 @@ def reading_from_table(parsed: dict, *, at: int, source: str) -> Tuple[Dict[str,
     return found, source_row
 
 
-def _run_readings(root: Path) -> Tuple[Dict[str, Reading], List[Source]]:
+def _run_readings(root: Path, bad: Optional[List[str]] = None) -> Tuple[Dict[str, Reading], List[Source]]:
     """Every run's `pricing.json` under `root`, oldest to newest by directory name."""
     found: Dict[str, Reading] = {}
     sources: List[Source] = []
@@ -136,6 +136,8 @@ def _run_readings(root: Path) -> Tuple[Dict[str, Reading], List[Source]]:
             parsed = json.loads(table.read_text("utf-8"))
             at = int(table.stat().st_mtime)
         except (OSError, ValueError):
+            if bad is not None:
+                bad.append(str(table))
             continue
         run_found, run_source = reading_from_table(parsed, at=at, source=entry.name)
         for sku, candidate in run_found.items():
@@ -207,7 +209,7 @@ def _newest_live_reading(directory: Path) -> Tuple[Dict[str, Reading], List[Sour
     return found, sources
 
 
-def collect() -> Tuple[Dict[str, Reading], List[Source]]:
+def collect(bad: Optional[List[str]] = None) -> Tuple[Dict[str, Reading], List[Source]]:
     """`sku -> the NEWEST market price this machine can read for it`, and where each source's
     reading came from. The whole two-source walk; see the module docstring for the rule.
 
@@ -216,6 +218,9 @@ def collect() -> Tuple[Dict[str, Reading], List[Source]]:
     that ties the live export's `at` keeps the same "later source wins ties" rule the
     original single-pass version had (`>=`, not `>`), so a live export fetched in the same
     second as a run table's mtime still displaces it.
+
+    `bad`, when given, collects the path of each `pricing.json` that could not be read, so a
+    caller that WRITES (`readings adopt`) can refuse instead of dropping those SKUs.
     """
     found: Dict[str, Reading] = {}
 
@@ -226,7 +231,7 @@ def collect() -> Tuple[Dict[str, Reading], List[Source]]:
 
     sources: List[Source] = []
 
-    run_found, run_sources = _run_readings(files.runs_dir())
+    run_found, run_sources = _run_readings(files.runs_dir(), bad)
     for sku, reading in run_found.items():
         offer(sku, reading)
     sources.extend(run_sources)
