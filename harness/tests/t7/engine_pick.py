@@ -996,8 +996,8 @@ def check_refused_hit_is_claimed(checks: Checks) -> None:
             for position in positions:
                 # Colours far apart: flat images one step apart can encode to identical bytes, and
                 # identical bytes are one photograph, which the store refuses as a second card.
-                colour = [(30, 120, 200), (200, 40, 40)][position - 1]
-                identify_images.Image.new("RGB", (64, 89), colour).save(caps / f"4-00{position}.jpg", "JPEG")
+                color = [(30, 120, 200), (200, 40, 40)][position - 1]
+                identify_images.Image.new("RGB", (64, 89), color).save(caps / f"4-00{position}.jpg", "JPEG")
                 (caps / f"4-00{position}.json").write_text(
                     json.dumps({"box": 4, "position": position, "game": "pokemon"}), "utf-8"
                 )
