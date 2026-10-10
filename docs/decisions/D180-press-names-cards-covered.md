@@ -70,7 +70,6 @@ That is the whole design rule, and nothing here invents a grouping:
 
 - **How all is asked for.** The CLI spells it `--all`, and `banchi identify` refuses a selection that names nothing without it. The route has no term for all. There, a selection that names nothing is the whole store, with the preflight and the confirm in front of it (`Selection.named`).
 - **Where each refusal lives.** A null term: `pipeline/selection.parse`. An unknown top-level key: `server/pipeline_routes._resolve_send`. An empty flag: `cli/cmd_identify._selection_from`.
-- **Not built.** `pipeline/selection.parse` reads a null term as absent. `server/pipeline_routes._resolve_send` ignores an unknown key. `cli/cmd_identify._selection_from` reads an empty flag as absent. Each one widens a press today.
 
 ### `--box` is a FILTER, and the old `--box` is `--assume-box`
 

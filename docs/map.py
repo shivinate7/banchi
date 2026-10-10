@@ -1987,7 +1987,7 @@ COMPONENTS = [
                                           "D29", "D36", "D138", "D63", "D69", "D88", "D113",
                                           "D193"],
                           "tested_by": ["T7"]},
-            "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88"]},
+            "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88", "D-cache-cleared-answers"]},
             # THE ONLY BINDING IN THIS PIPELINE THAT PROTECTS A DOLLAR, and it replaces a BOX
             # number with the cards actually being bought. The box form is wrong in both
             # directions — it refuses two disjoint selections in one drawer (D180's accepted

@@ -22,13 +22,12 @@ That second table earns its place rather than being convenience. A run table tha
 
 `Readings.replace()` clears every row in both tables and writes exactly the fresh set `collect()` just computed. This is deliberate and is the one place this entry is emphatic: **a SKU whose only source has since been retired — a run directory deleted, a live export superseded and removed by hand — must disappear from the table exactly as it would have dropped out of the old live walk on its very next request.** An incremental merge that only ever added rows would let `readings` accumulate stale answers the live version never could, which is the one way this change could make the store WORSE than the thing it replaces rather than merely different. `store/rows.py:Rows`'s diff is baseline-based, so a full clear-then-reinsert writes only the SKUs that actually changed — a SKU whose reading is unchanged between two adopts costs nothing in the transaction, and only new, changed or genuinely-dropped rows touch disk.
 
-### A newest export that is not a price export is skipped
+### A bad input is skipped or refused, never replaced
 
-**A newest live export that is not a price export is skipped.** It has no SKU or Market Price column, or it cannot be read. A skipped file gives no readings, and no older export stands in for it. This keeps an older export from posing as the newest market reading.
+**A malformed run `pricing.json` makes `readings adopt --write` refuse and keep the table.** A newest live export that is not a price export is skipped. It has no SKU or Market Price column, or it cannot be read. A skipped file gives no readings, and no older export stands in for it. This keeps an older export from posing as the newest market reading.
 
-- **`readings adopt` names the file and the SKUs lost.** The preview gives the skipped file's name and how many SKUs the table loses because of the skip. This lets the operator tell a bad file from a store with few valuable cards.
-- **A valid export with no priced rows is not skipped.** It has the columns, and the market priced nothing. That is a reading. This keeps the table from holding prices a newer export dropped.
-- **Not built.** `pipeline/readings._newest_live_reading` returns no rows for a file that is not a price export and says nothing. `pipeline/readings.reading_from_export` lists no source for an export with no priced rows, so the two cases look the same. `cli/cmd_readings._adopt` reports dropped SKUs but not which skipped file cost them.
+- **`readings adopt` names the skipped file and the SKUs lost.** This lets the operator tell a bad file from a store with few valuable cards.
+- **A valid export with no priced rows is not skipped.** It has the columns, and the market priced nothing. That is a reading.
 
 ### What was proved, and how
 
