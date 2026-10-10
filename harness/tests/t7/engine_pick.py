@@ -787,6 +787,98 @@ def check_cache_engines(checks: Checks) -> None:
     )
 
 
+def _known_defect(checks: Checks, passed: bool, label: str, why: str) -> None:
+    """A case the code fails today. It is shown as KNOWN DEFECT and is not counted as a
+    failure, so the suite still reports the rest. It turns into a plain check once fixed."""
+    if passed:
+        checks.ok(True, label)
+    else:
+        checks.note(f"KNOWN DEFECT: {label}. {why}")
+
+
+def _outcome(fn):
+    """The return value of `fn`, or the exception it raised, so a crash is a value to assert on."""
+    try:
+        return fn()
+    except Exception as caught:  # noqa: BLE001 - the case is what the exception is
+        return caught
+
+
+def check_cache_position_key(checks: Checks) -> None:
+    """`Cache.reusable` keys on POSITION (`master.position_key`, "box/index") and checks the
+    photo sha256 on top (`store/cache.py` header, D36: the photograph is the truth, not the slot).
+    A reuse that the photo does not support lists the wrong card."""
+    checks.note("")
+    checks.note("CACHE KEY — position is the key, the photo is the check (D36)")
+    haiku = cache_mod.ENGINE_HAIKU
+    said = lambda name: {"name": name, "number": "1", "printed_total": "9", "confidence": "high"}  # noqa: E731
+
+    # (a) an answer stored for a position is returned for that position and the same photo.
+    cache = cache_mod.Cache.parse({})
+    cache.put("3/1", said("Alpha"), "sha-A", "fp", engine=haiku)
+    hit = cache.reusable("3/1", "sha-A")
+    checks.ok(
+        hit is not None and hit.identification["name"] == "Alpha",
+        "(a) the answer stored at 3/1 is returned for 3/1 with the same photo",
+    )
+
+    # (b) the photo at that position changes: the cache misses, and the old answer is not returned.
+    checks.equal(cache.reusable("3/1", "sha-B"), None, "(b) the same position with a new photo misses")
+    cache.put("3/1", said("Beta"), "sha-B", "fp", engine=haiku)
+    checks.equal(cache.reusable("3/1", "sha-A"), None, "(b) after the re-read, the old photo finds nothing at 3/1")
+    checks.equal(
+        cache.reusable("3/1", "sha-B").identification["name"], "Beta",
+        "(b) and the new photo finds the new answer",
+    )
+
+    # (c) a reallocated slot or box does not return the old card's answer.
+    cache = cache_mod.Cache.parse({})
+    cache.put("3/1", said("Alpha"), "sha-A", "fp", engine=haiku)
+    checks.equal(cache.reusable("3/1", "sha-Z"), None, "(c) a different card in a reallocated slot (same key, new photo) misses")
+    checks.equal(cache.reusable("3/2", "sha-A"), None, "(c) the same photo at another slot misses: the answer does not follow the photo")
+    checks.equal(cache.reusable("4/1", "sha-A"), None, "(c) a reallocated box with the same index misses")
+
+    # (c, human-cleared) a cleared answer is returned whatever the photo says (store/cache.py
+    # `reusable`, and `put`'s permanence rule). Read against D36 it returns Alpha's answer for a
+    # different card in a reallocated slot. The code's docstring calls that permanence. Owner's call.
+    cleared = cache_mod.Cache.parse({})
+    cleared.put("3/1", said("Human"), "sha-A", "fp", engine=haiku)
+    cleared.entries["3/1"].cleared_by_human = True
+    _known_defect(
+        checks,
+        cleared.reusable("3/1", "sha-Z") is None,
+        "(c) a human-cleared answer does not return for a different card in a reallocated slot",
+        "reusable returns a cleared entry whatever the photo says (permanence, D36 as briefed). Owner's call.",
+    )
+
+    # (d) a corrupt entry is a miss, never a crash and never an answer.
+    checks.equal(
+        cache_mod.Cache.parse({"3/1": {"identification": said("X")}}).reusable("3/1", "sha-A"),
+        None,
+        "(d) a record missing required fields is a miss",
+    )
+    checks.equal(len(cache_mod.Cache.parse({"_meta": {"x": 1}})), 0, "(d) a `_`-prefixed key is metadata, never an entry")
+    for label, record in (("null", None), ("a string", "junk"), ("a list", ["x"])):
+        outcome = _outcome(lambda: cache_mod.Cache.parse({"3/1": record}).reusable("3/1", "sha-A"))
+        _known_defect(
+            checks,
+            outcome is None,
+            f"(d) a corrupt entry ({label}) is a miss, not a crash",
+            f"`_parse_entry` calls record.items() before any shape check, so it raises {type(outcome).__name__}. "
+            "The store read fails for the whole store, not one card.",
+        )
+    not_a_mapping = _outcome(
+        lambda: cache_mod.Cache.parse({"3/1": {"identification": "junk", "photo_sha256": "sha-A", "prompt_fingerprint": "f", "at": "t"}})
+        .reusable("3/1", "sha-A")
+    )
+    _known_defect(
+        checks,
+        not_a_mapping is None,
+        "(d) an identification that is not a mapping is a miss, not an answer",
+        "`_parse_entry` does not check the shape of `identification`, so the string is returned as an answer.",
+    )
+
+
 # ------------------------------------------------------------------------ the model verdict, the promo census, Prepare
 
 
@@ -996,6 +1088,7 @@ CHECKS = (
     check_disagree_candidates_hold_both,
     check_agreement_is_the_same_printing,
     check_cache_engines,
+    check_cache_position_key,
     check_model_ready_hashes_once,
     check_promo_census,
     check_prepare_clears_stale_part,
