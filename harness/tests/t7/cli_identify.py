@@ -5720,10 +5720,15 @@ def check_selection_grammar(checks: Checks) -> None:
     (d) The route and the CLI parse one expression to one `Selection`, and resolve it to one
         set of cards on the store.
     """
+    import socket
+    import subprocess
+    import urllib.request
+    from http import HTTPStatus
     from types import SimpleNamespace
 
     from cli import __main__ as cli_entry
     from cli import cmd_identify
+    from identify import batch as identify_batch
     from pipeline import selection as selection_mod
     from server import pipeline_routes
 
@@ -5851,6 +5856,32 @@ def check_selection_grammar(checks: Checks) -> None:
             continue
         checks.ok(False, f"(b) the route refuses {why}", f"it answered: {got!r}")
 
+    # A NULL TERM IS A VALUE AND A VALUE IS REFUSED, never read as "absent" (owner ruling on
+    # PR #813: a press never pays for cards it did not name). A caller that means "any" leaves
+    # the key out. Each selector is tried alone, then all of them together.
+    null_terms = ("paths", "state", "box", "bid", "section", "game", "since", "keys", "run")
+    for term in null_terms:
+        try:
+            got = sel.parse({term: None})
+        except sel.SelectionError as refusal:
+            checks.ok(
+                refusal.code == "selection_invalid" and str(refusal).strip() != "",
+                f"(b) the route refuses `{term}: null` as selection_invalid, with a reason",
+                f"code={refusal.code!r} message={str(refusal)!r}",
+            )
+            continue
+        checks.ok(False, f"(b) the route refuses `{term}: null`", f"it answered: {got!r}")
+    try:
+        got = sel.parse({term: None for term in null_terms})
+    except sel.SelectionError as refusal:
+        checks.ok(
+            refusal.code == "selection_invalid" and str(refusal).strip() != "",
+            "(b) a payload of only null terms is refused as selection_invalid, not read as every photograph",
+            f"code={refusal.code!r} message={str(refusal)!r}",
+        )
+    else:
+        checks.ok(False, "(b) a payload of only null terms is refused", f"it answered: {got!r}")
+
     parser = cli_entry.build_parser()
     for argv, why in (
         (["identify", "--box", "0"], "--box 0"),
@@ -5956,6 +5987,80 @@ def check_selection_grammar(checks: Checks) -> None:
                 sorted(c.key for c in cli_found),
                 f"(d) {payload} resolves to the same cards on the route and the CLI",
             )
+
+    # ------------------------------ the identify route refuses a null term before any spend
+    # The route is the one that spends. Blocked here: sockets, `urlopen`, the child it would
+    # spawn, the hash and the paid read. A route that read `box: null` as absent would resolve
+    # every photograph in the store and spawn a paid child, so the refusal is pinned at the
+    # door, with the money path closed.
+    spawned: list = []
+    hashed: list = []
+    paid: list = []
+    network: list = []
+
+    def no_network(*args, **kwargs):
+        network.append(args[:1])
+        raise OSError("network blocked for this check")
+
+    def no_spawn(*args, **kwargs):
+        spawned.append(args[:1])
+        raise OSError("no child for this check")
+
+    def counted(log: list, real_fn):
+        def wrapper(*args, **kwargs):
+            log.append(args[:1])
+            return real_fn(*args, **kwargs)
+
+        return wrapper
+
+    def fake_run_batch(requests, log=None, on_submit=None):
+        paid.append(len(requests))
+        return identify_batch.BatchRun(outcomes={})
+
+    saved = {
+        "popen": subprocess.Popen,
+        "sha": cmd_identify.images.sha256_of,
+        "run_batch": cmd_identify.batch.run_batch,
+        "create_connection": socket.create_connection,
+        "connect": socket.socket.connect,
+        "urlopen": urllib.request.urlopen,
+    }
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(3))
+        subprocess.Popen = no_spawn
+        cmd_identify.images.sha256_of = counted(hashed, saved["sha"])
+        cmd_identify.batch.run_batch = fake_run_batch
+        socket.create_connection = no_network
+        socket.socket.connect = no_network
+        urllib.request.urlopen = no_network
+        try:
+            for payload in (
+                {"box": None},
+                {"keys": None, "game": None},
+                {"box": None, "state": None, "section": None},
+            ):
+                label = str(payload)
+                try:
+                    routed = pipeline_routes.do_pipeline_identify({"confirm": True, **payload})
+                    checks.ok(False, f"the identify route refuses {label}", f"it answered: {routed!r}")
+                except pipeline_routes.PipelineRefusal as refusal:
+                    checks.equal(
+                        (refusal.status, refusal.code),
+                        (HTTPStatus.BAD_REQUEST, "selection_invalid"),
+                        f"the identify route refuses {label} as 400 selection_invalid",
+                    )
+                checks.equal(spawned, [], f"and spawns NO child for {label}")
+                checks.equal(hashed, [], f"and hashes NO photograph for {label}")
+                checks.equal(paid, [], f"and makes NO paid read for {label}")
+                checks.equal(network, [], f"and makes NO network call for {label}")
+        finally:
+            subprocess.Popen = saved["popen"]
+            cmd_identify.images.sha256_of = saved["sha"]
+            cmd_identify.batch.run_batch = saved["run_batch"]
+            socket.create_connection = saved["create_connection"]
+            socket.socket.connect = saved["connect"]
+            urllib.request.urlopen = saved["urlopen"]
 
 
 def check_identify_empty_refuses_before_work(checks: Checks) -> None:
