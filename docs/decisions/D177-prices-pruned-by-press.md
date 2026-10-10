@@ -16,11 +16,11 @@ so the store remembers listings it never photographed. **So "no card matches" is
 
 **Measured: 430 answers, 419 would survive, 11 would be deleted, and 0 of the 11 are safe.**
 
-- **7 are prices on listings that are live on TCGplayer right now**, worth $192.52. **Five of the seven are not cards at all** — a One Piece booster pack at $27.50 and another at
-  $20.49, an illustration box at $84.99, a Riftbound playmat at $39.79, a sleeve bundle at
+- **7 are prices on listings that are live on TCGplayer right now**, worth $192.52. **Five of the seven are not cards at all**. Examples: a One Piece booster pack at $27.50 and another at
+  $20.49, an illustration box at $84.99. Also a Riftbound playmat at $39.79, and a sleeve bundle at
   $16.47. They have no card number, no rarity and no photograph, and there is no path through
-  `identify` for any of them. **No store-wide join, however complete, can ever match these rows.** They are not leftovers a better join would resolve; they are permanently unmatched by
-  construction, and a card-matching rule deletes them on its first run and on every run after.
+  `identify` for any of them. **No store-wide join, however complete, can ever match these rows.** They are not leftovers a better join would resolve. They are permanently unmatched by
+  construction. A card-matching rule deletes them on its first run and on every run after.
 - **3 sold out of a box that was then deleted**, worth $8.75. This took two events, not one: a
   sold card's record keeps standing and keeps matching, and `pipeline/join.py`'s
   `IdentifiedCard.committed` says so in as many words. **294 sold card records, 113 distinct SKUs, 0 of them among the eleven.** The box delete is what orphaned these three, and box
@@ -31,7 +31,7 @@ so the store remembers listings it never photographed. **So "no card matches" is
   2026-09-10 and 2026-09-12.
 
 **The eleven carry 2.70% of the corpus's typed rows and 28.78% of its typed money** — mean
-$20.75 against the corpus's $1.95, a factor of 10.6. That skew is not chance. **The expensive answers in this file are disproportionately the ones with no card behind them, because the expensive things in this store are sealed product and accessories.**
+$20.75 against the corpus's $1.95, a factor of 10.6. That skew is not chance. **The expensive answers in this file are disproportionately the ones with no card behind them**. The reason is that the expensive things in this store are sealed product and accessories.
 
 **And the exposure grows rather than converging.** The live book went from 759 rows to 853 in
 six days. **350 of those 853 SKUs have no card record here** — 229 Pokemon, 76 Riftbound, 41
@@ -39,7 +39,7 @@ One Piece, 2 YuGiOh, 1 Playmat, 1 Card Sleeves. Ten are answered today because t
 is new; every row the operator prices on it joins the group. **The prune list is not eleven rows heading for zero, it is eleven heading for three hundred and fifty.**
 
 **The holds survived on luck, not on the rule.** All 23 `bullish` holds are matched today, and
-two of them have no copy left on hand — matched only because their records still stand. **Had either been in box 1 on 2026-09-11, a prune would have deleted a judgment the operator wrote in words**, and the card would go out at the rule's price on the next `emit` with nothing said.
+two of them have no copy left on hand — matched only because their records still stand. **Had either been in box 1 on 2026-09-11, a prune would have deleted a judgment the operator wrote in words**. The card would go out at the rule's price on the next `emit` with nothing said.
 
 ### What this decides
 
@@ -47,9 +47,7 @@ two of them have no copy left on hand — matched only because their records sti
 not behind a flag that defaults on.
 
 **The shape that is permitted already exists**: `pipeline/corpus.py:clearable`, which the
-owner's own *"Just give me a mass-clear button"* produced. It previews, the operator points
-it, one press spends it, holds and `unknown`-channel answers are excluded by kind, and an
-undated answer is named rather than guessed at. **A prune takes that shape or it does not land.** Three things such a preview must show, each earned by a row above:
+owner's own *"Just give me a mass-clear button"* produced. It previews, and the operator points it. One press spends it. Holds and `unknown`-channel answers are excluded by kind. An undated answer is named rather than guessed at. **A prune takes that shape or it does not land.** Three things such a preview must show, each earned by a row above:
 
 1. **Whether the SKU is live on TCGplayer right now.** This is the difference between a
    leftover and the asking price on stock that is for sale this minute.
@@ -65,18 +63,14 @@ was live for four days and has no listing record. **D109's remembering started a
 ### What this does not decide
 
 **The store-wide join is not touched.** It remains worth building for every reason it was
-proposed; what it does not buy is a license to delete. **Nor does this reopen D86** — one file
-for the whole store, keyed by SKU, is exactly why the file can hold an answer for a listing no
-box ever contained, and that property is the feature rather than the leak.
+proposed; what it does not buy is a license to delete. **Nor does this reopen D86**. One file for the whole store is keyed by SKU. That is exactly why it can hold an answer for a listing no box ever contained. That property is the feature rather than the leak.
 
-**The measurement is analytic and says so.** There is no store-wide join to compare against,
-so it differs from a real store-wide join in seven ways — six of which make the real prune list longer, never shorter, and the seventh being the sealed
-product that no join can reach. **The eleven is a floor.** The model: a SKU survives if some card record carries it as its settled identity and the current catalog export still has that row, or if the ladder could reach it from a card with no settled identity yet.
+**The measurement is analytic and says so.** There is no store-wide join to compare against. So it differs from a real store-wide join in seven ways. Six of those ways make the real prune list longer, never shorter. The seventh is the sealed product that no join can reach. **The eleven is a floor.** The model: a SKU survives if some card record carries it as its settled identity and the current catalog export still has that row. A SKU also survives if the ladder could reach it from a card with no settled identity yet.
 
 1. **No store-wide join exists to compare against.** `cli/resolve.py:load` reads one run directory, never the store. Walking card records uses settled identities. Walking every run's identifications and realigning re-derives them. The two give different answers, so the join's SKU set is a design choice still to make.
 2. **A run-assembled join can refuse a run.** D36's `refuse_reallocated` refuses a run whose box number was deleted and reused. "This run may not be read" is a different answer from "no card matches", and a prune rule must not collapse them.
 3. **`bid` cannot rescue a buried record.** D20's box index was migrated in after the box was deleted, so the buried payloads carry no `bid`. The `buried` history line is the only evidence they belonged to another box.
-4. **The ladder probe over-approximates on purpose.** For cards with no settled SKU it took the union of every catalog row their number key or name key could reach, where the real ladder narrows by set hint, rarity and finish. Over-approximating is the safe direction for a question about deletion.
-5. **The catalog scope is the most favorable one.** Both exports were full-category. D76 means a real run fetches a narrower scope, which makes the prune list longer.
+4. **The ladder probe over-approximates on purpose.** For cards with no settled SKU it took the union of every catalog row their number key or name key could reach. The real ladder narrows by set hint, rarity and finish. Over-approximating is the safe direction for a question about deletion.
+5. **The catalog scope is the most favorable one.** Both exports were full-category. D76 means that a real run fetches a narrower scope, which makes the prune list longer.
 6. **A stored SKU the export has dropped falls to the ladder**, never a guess. None was missing in the snapshot. One would be the moment a set rotates out of a fetched scope.
 7. **Sealed product and accessories never enter a join.** This runs the unsafe way, and it is a permanent property of the inputs, not an artifact of the measurement.

@@ -4,4 +4,4 @@
 
 **Outcome at risk.** A dead path citation ships unnoticed.
 
-**Closes when.** The remaining path citations in code become id citations (cite by id, never by path), and the `paths` row, or a sibling row, opens the file types that can carry one.
+**Closes when.** The remaining path citations in code become id citations (cite by id, never by path). The `paths` row, or a sibling row, opens the file types that can carry one.
