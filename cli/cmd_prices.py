@@ -21,7 +21,6 @@ over a corpus that already holds answers keeps the corpus's and retires the file
 from __future__ import annotations
 
 import json
-import re
 
 from cli import runs
 from pipeline import corpus, decisions, pricing
@@ -79,7 +78,7 @@ def _adopt(args, say) -> int:
     retire = corpus.retirable(found, folded)
     say(f"{len(found)} run file(s) -> {len(folded.answers)} answer(s), "
         + ("the run files winning" if replace else "the corpus keeping what it already answers"))
-    say(f"policy           rule={folded.rule} basis={folded.basis} sub_threshold={folded.sub_threshold}")
+    say(f"policy           rule={folded.rule} basis={folded.basis} sub_threshold={_rule(folded.sub_threshold)}")
     holds = sum(1 for answer in folded.answers.values() if answer.is_hold)
     say(f"holds            {holds} card(s) held back, and they outlive their run")
 
@@ -90,16 +89,16 @@ def _adopt(args, say) -> int:
             f"sitting, and --force is how a run file overrides it. "
             f"{len(differing)} differ from the file:")
         for row in differing:
-            say(f"  {row.sku}  kept {_printed(row.in_corpus)} (corpus) — file said {_printed(row.in_file)} ({row.run})")
+            say(f"  {row.sku}  kept {row.in_corpus_shown} (corpus) — file said {row.in_file_shown} ({row.run})")
 
     if changes:
         say("")
         say(f"{len(changes)} card(s) were answered more than one way. Newest wins:")
         for change in changes:
             mark = "  <-- A HOLD WAS REPLACED BY A PRICE" if change.hold_lost else ""
-            say(f"  {change.sku}  kept {_printed(change.kept)}{mark}")
-            for name, token in change.dropped:
-                say(f"      dropped {_printed(token)} ({name})")
+            say(f"  {change.sku}  kept {change.kept_shown}{mark}")
+            for name, token in change.dropped_shown:
+                say(f"      dropped {token} ({name})")
         lost = [change for change in changes if change.hold_lost]
         if lost:
             say("")
@@ -143,9 +142,11 @@ def _adopt(args, say) -> int:
     return 0
 
 
-def _printed(token: str) -> str:
-    """A `corpus._token` compare key as the owner reads it: every `$` figure gets cents."""
-    return re.sub(r"\$(-?[0-9][0-9.]*)", lambda m: pricing.money(m.group(1)), token)
+def _rule(rule) -> str:
+    """A sub-threshold rule as a sentence: `flat $0.50`, not a dict."""
+    if isinstance(rule, dict) and set(rule) == {decisions.FLAT_KEY}:
+        return f"flat {pricing.money(rule[decisions.FLAT_KEY])}"
+    return str(rule)
 
 
 def _show(args, say) -> int:
@@ -161,7 +162,7 @@ def _show(args, say) -> int:
     say(f"{files.prices_path()}")
     say(
         f"policy           rule={book.rule} basis={book.basis} "
-        f"threshold={pricing.money(book.threshold)} sub_threshold={book.sub_threshold}"
+        f"threshold={pricing.money(book.threshold)} sub_threshold={_rule(book.sub_threshold)}"
     )
     for name, over in sorted(book.overrides.items()):
         say(f"  override       {name}: {over}")

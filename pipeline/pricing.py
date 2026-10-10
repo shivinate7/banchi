@@ -200,7 +200,9 @@ def money(value) -> str:
     A value that is not a number prints as typed."""
     try:
         number = Decimal(str(value).strip())
-        if number.as_tuple().exponent < -2:
+        if not number.is_finite():
+            return f"${value}"
+        if number.normalize().as_tuple().exponent < -2:
             return f"${number.normalize():f}"
         return "$" + tcgcsv.format_price(number)
     except (ArithmeticError, InvalidOperation, ValueError):
