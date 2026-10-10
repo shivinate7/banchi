@@ -814,8 +814,10 @@ def cached_refusal(item: Item, entry) -> Optional[str]:
     """Why this run's own parser refuses a cached answer, or None when it accepts it. The store
     cannot know a card's game; only the run holds its strategy, so only the run can judge a hit.
     A refused answer is a miss: the caller leaves the card pending and names the refusal."""
+    if item.strategy is None:  # an unknown game never borrows Pokemon's profile
+        return f"game {item.game!r} has no prompt strategy"
     try:
-        prompt.parse(entry.identification, item.strategy or prompt.DEFAULT_PROFILE)
+        prompt.parse(entry.identification, item.strategy)
     except (prompt.MalformedIdentification, LookupError) as exc:
         return str(exc)
     return None
@@ -1392,6 +1394,7 @@ def run(args, say) -> int:
     # reach here believing they are first, so the intersection is computed against claims read
     # under the lock and the row is written before it is released. See `store/submissions.py`.
     claim = None
+    by_key = {item.key: item for item in items}
     if to_send:
         with store.write() as claiming:
             claim, conflicts = claiming.submissions.claim_or_refuse(
@@ -1401,6 +1404,8 @@ def run(args, say) -> int:
                 # the recompute would drop every `--reidentify-stale` target from the claim and
                 # the run would submit cards nothing was holding.
                 force=stale_targets,
+                # THE RUN'S VERDICT ON A HIT: one the parser refuses is a miss, so it is claimed.
+                accepts=lambda key, entry: cached_refusal(by_key[key], entry) is None,
                 # A RESUME IS THIS RUN CONTINUING. `--run-dir` re-enters a run that already
                 # claimed these cards, so its own stale claim is the first thing this would
                 # collide with; naming it releases that run's claims and nobody else's.

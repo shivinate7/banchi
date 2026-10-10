@@ -70,7 +70,7 @@ import secrets
 import subprocess
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from store.files import UnreadableClaim
 from store.rows import Rows, TableSpec
@@ -337,6 +337,7 @@ class Submissions:
         capture_dir: Optional[str] = None,
         receipt: Optional[str] = None,
         reread_matcher: bool = False,
+        accepts: Optional[Callable[[str, object], bool]] = None,
     ) -> Tuple[Optional["Submission"], List[Tuple["Submission", List[str]]]]:
         """RECOMPUTE the send list, check it against every live claim, and claim it. One act.
 
@@ -363,6 +364,10 @@ class Submissions:
         there — the bytes would not hash — and is refused the same way here rather than
         claimed on an unknown.
 
+        `accepts(key, entry)` IS THE RUN'S VERDICT ON A HIT. The store cannot know a card's game,
+        so the caller passes the judge (`cmd_identify.cached_refusal`). A hit it rejects is a
+        miss here and is claimed, because the run will pay for it and a second press must not.
+
         `force` IS THE DELIBERATE RE-READ, AND WITHOUT IT THIS WOULD HAVE SILENTLY BROKEN ONE.
         `--reidentify-stale` exists to pay again for an answer the cache already holds, so
         every one of its targets is a cache HIT by construction: recomputing from the cache
@@ -381,13 +386,14 @@ class Submissions:
         if resuming:
             self.release_run(str(resuming), BY_RUN)
         forced = {str(key) for key in force}
+        def is_hit(key: str, digest: str) -> bool:
+            entry = cache.reusable(key, digest, reread_matcher=reread_matcher)
+            return entry is not None and (accepts is None or accepts(key, entry))
+
         wanted = sorted(
             key
             for key, digest in candidates.items()
-            if digest and (
-                str(key) in forced
-                or cache.reusable(str(key), str(digest), reread_matcher=reread_matcher) is None
-            )
+            if digest and (str(key) in forced or not is_hit(str(key), str(digest)))
         )
         conflicts = self.overlap(wanted)
         if conflicts:
