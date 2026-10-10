@@ -860,23 +860,14 @@ def check_cache_position_key(checks: Checks) -> None:
     checks.equal(len(cache_mod.Cache.parse({"_meta": {"x": 1}})), 0, "(d) a `_`-prefixed key is metadata, never an entry")
     for label, record in (("null", None), ("a string", "junk"), ("a list", ["x"])):
         outcome = _outcome(lambda: cache_mod.Cache.parse({"3/1": record}).reusable("3/1", "sha-A"))
-        _known_defect(
-            checks,
-            outcome is None,
-            f"(d) a corrupt entry ({label}) is a miss, not a crash",
-            f"`_parse_entry` calls record.items() before any shape check, so it raises {type(outcome).__name__}. "
-            "The store read fails for the whole store, not one card.",
-        )
+        checks.ok(outcome is None, f"(d) a corrupt entry ({label}) is a miss, not a crash")
+    kept = cache_mod.Cache.parse({"3/0": None, "3/1": {"identification": said("Ok"), "photo_sha256": "sha-A", "prompt_fingerprint": "f", "at": "t"}})
+    checks.equal(list(kept.entries), ["3/1"], "(d) a corrupt row is skipped and the rest of the store still reads")
     not_a_mapping = _outcome(
         lambda: cache_mod.Cache.parse({"3/1": {"identification": "junk", "photo_sha256": "sha-A", "prompt_fingerprint": "f", "at": "t"}})
         .reusable("3/1", "sha-A")
     )
-    _known_defect(
-        checks,
-        not_a_mapping is None,
-        "(d) an identification that is not a mapping is a miss, not an answer",
-        "`_parse_entry` does not check the shape of `identification`, so the string is returned as an answer.",
-    )
+    checks.ok(not_a_mapping is None, "(d) an identification that is not a mapping is a miss, not an answer")
 
 
 # ------------------------------------------------------------------------ the model verdict, the promo census, Prepare

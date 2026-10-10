@@ -107,7 +107,9 @@ def _parse_entry(key: str, record: dict) -> Optional[CacheEntry]:
     """One paid answer from its stored record, or None for a shape that will not
     construct — re-reading such a card is cheap, and the rule is the same for a JSON
     record and a database row."""
-    if str(key).startswith("_"):
+    if str(key).startswith("_") or not isinstance(record, dict):
+        return None
+    if not isinstance(record.get("identification"), dict):
         return None
     known = {k: v for k, v in record.items() if k in CacheEntry.__annotations__}
     try:

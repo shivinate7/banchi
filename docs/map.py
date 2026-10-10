@@ -1851,10 +1851,9 @@ COMPONENTS = [
                 "T7 reaches this package as of 2026-08-13 — the allocator, the lock and "
                 "the atomic replace — and as of 2026-08-22 asserts queues.apply_run "
                 "outright: check_queue_supersede calls it directly rather than watching it "
-                "through a route, which is what earned queues.py its tested_by. cache.py is "
-                "still only read through a session there, with nothing asserting its own "
-                "behavior, so it carries no tested_by: an unenforced claim is the defect "
-                "docs/debts/ names, not a rounding error.",
+                "through a route, which is what earned queues.py its tested_by. cache.py earned "
+                "its own the same way: check_cache_position_key asserts its key and its "
+                "corrupt-record rule directly.",
         "modules": {
             "clock.py": {
                 "does": "the one UTC-second stamp every receipt writes, and the one way to read "
@@ -1987,7 +1986,8 @@ COMPONENTS = [
                                           "D29", "D36", "D138", "D63", "D69", "D88", "D113",
                                           "D193"],
                           "tested_by": ["T7"]},
-            "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88"]},
+            "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88"],
+                         "tested_by": ["T7"]},
             # THE ONLY BINDING IN THIS PIPELINE THAT PROTECTS A DOLLAR, and it replaces a BOX
             # number with the cards actually being bought. The box form is wrong in both
             # directions — it refuses two disjoint selections in one drawer (D180's accepted
