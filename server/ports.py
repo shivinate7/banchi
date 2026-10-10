@@ -165,8 +165,9 @@ def remove_old_agent(label: str) -> None:
     """Unload and delete the `com.pkmnscan.*` agent that `label` (a `com.banchi.*`) replaced.
 
     Each agent's `--remove` calls it, so one press leaves nothing under the old name. The plist
-    goes only when bootout answered 0, 3 or 113 (3 and 113 both mean no such service; this
-    Mac answers 3); any other code keeps it.
+    goes only when bootout answered 0, 3 or 113; any other code keeps it. 3 and 113 mean the
+    label is not loaded in this user's gui domain (this Mac answers 3). Every installer here
+    bootstraps into gui/<uid> only, so a job loaded by hand into user/ or system/ is out of scope.
     """
     old = label.replace("com.banchi.", "com.pkmnscan.", 1)
     if old == label:
