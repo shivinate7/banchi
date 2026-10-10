@@ -638,13 +638,14 @@ def _identity(args, say) -> int:
 # ----------------------------------------------------------------------- cards photos
 
 
-def _move_sidecar(key, cid, box, idx, record, home, refusals) -> bool:
+def _move_sidecar(key, cid, box, idx, record, home, refusals, census) -> bool:
     """Bring a card's legacy sidecar to its name. True when a sidecar was moved or rewritten.
 
     A SIDECAR THAT CANNOT MOVE IS REWRITTEN FROM THE STORE'S RECORD (`photos.claims_payload`),
     because the sidecar is the backup the store is rebuilt from and a card without one has
-    none. Only when that write fails too is the card refused, which blocks the stamp. A
-    legacy sidecar that stays behind is still found: `photos.find_sidecar` falls back to it.
+    none. Only when that write fails too is the card counted refused, so the run exits
+    non-zero and does not stamp. When `adopt_sidecar` failed after the target already
+    existed (copied, source not unlinked), the target is kept and not rewritten.
     """
     sidecar = photos.legacy_path(box, idx, home).with_suffix(photos.SIDECAR_SUFFIX)
     if not sidecar.is_file():
@@ -653,12 +654,14 @@ def _move_sidecar(key, cid, box, idx, record, home, refusals) -> bool:
         photos.adopt_sidecar(sidecar, cid, home)
         return True
     except OSError:
-        pass
+        if photos.sidecar_path(cid, home).is_file():
+            return True
     claims = {name: record.get(name) for name in photos.CLAIM_WIRE_NAMES}
     try:
         photos.write_sidecar(cid, photos.claims_payload(box, idx, claims), home)
         return True
     except OSError as exc:
+        census["refused"] += 1
         refusals.append((key, f"sidecar: {exc}"))
         return False
 
@@ -738,7 +741,7 @@ def _photos(args, say) -> int:
             # A KILL BETWEEN THE PHOTO MOVE AND THE SIDECAR MOVE LEAVES THE SIDECAR AT ITS
             # LEGACY ADDRESS. Move it now, or rewrite it from the record.
             if write and box is not None and idx is not None:
-                if _move_sidecar(key, cid, box, idx, record, home, refusals):
+                if _move_sidecar(key, cid, box, idx, record, home, refusals, census):
                     census["sidecars"] += 1
             continue
         if record.get("photo_reclaimed_at"):
@@ -762,7 +765,7 @@ def _photos(args, say) -> int:
         census[verdict] += 1
         if verdict == "moved":
             bytes_moved += size
-        if _move_sidecar(key, cid, box, idx, record, home, refusals):
+        if _move_sidecar(key, cid, box, idx, record, home, refusals, census):
             census["sidecars"] += 1
 
     say("  " + "  ".join(f"{name}={value}" for name, value in census.items()))

@@ -178,8 +178,7 @@ def find(
         candidate = path(cid, home)
         if candidate.is_file():
             return candidate
-    # The legacy address is read even once relocated: a sidecar that could not move stays there.
-    if box is not None and index is not None:
+    if not relocated and box is not None and index is not None:
         legacy = legacy_path(box, index, home)
         if legacy.is_file():
             return legacy
@@ -194,13 +193,12 @@ def find_sidecar(
     relocated: bool = False,
     home: Optional[Path] = None,
 ) -> Optional[Path]:
-    """`find` for the claims file: its own name first, then the legacy address, relocated or not."""
+    """`find` for the claims file. Same gate, same order."""
     if is_photo_cid(cid):
         candidate = sidecar_path(cid, home)
         if candidate.is_file():
             return candidate
-    # The legacy address is read even once relocated: a sidecar that could not move stays there.
-    if box is not None and index is not None:
+    if not relocated and box is not None and index is not None:
         legacy = legacy_path(box, index, home).with_suffix(SIDECAR_SUFFIX)
         if legacy.is_file():
             return legacy
