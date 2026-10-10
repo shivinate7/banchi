@@ -3949,7 +3949,7 @@ COMPONENTS = [
             "docs_audit/strings.py": {
                 "does": "The rows over screen strings: mechanism words, the typed interpunct, the offender-list "
                         "ratchet and views opsec.",
-                "governed_by": ["D24", "D41", "D134", "D177", "D196", "D210", "D218", "D280", "D284"]},
+                "governed_by": ["D24", "D41", "D94", "D134", "D177", "D196", "D210", "D218", "D280", "D284"]},
             "catalog-refresh.py": {
                 "does": "build-order step 9, piece 1 (D15): shallow-clone "
                         "PokemonTCG/pokemon-tcg-data, diff it against the committed "

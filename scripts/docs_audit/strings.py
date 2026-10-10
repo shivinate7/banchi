@@ -112,10 +112,10 @@ _DECISION_CITE_RE = re.compile(r"\bD\d{1,4}\b|\bC\d{1,4}\b|\(D-[A-Za-z0-9][A-Za-
 # key for `Pricing.tsx`'s "Run `banchi rescue` to rebind it." — a backticked command
 # is not a decision citation, not one of `_REPO_TOP_DIRS` followed by a slash, and not a
 # `.json`/`.sqlite`/`.jsonl` filename, so it passed this row clean while naming this
-# product's own CLI on screen. `banchi` is the checkout's own name (CLAUDE.md's naming
-# rule) and never a word an operator would use to describe what a press does; a subcommand
+# product's own CLI on screen. lowercase `banchi` is the CLI's name. The product's name, `Banchi`, is a word an operator
+# reads on screen and is not matched (D94). The CLI is never a word for what a press does; a subcommand
 # beside it (`rescue`, `join`, `emit`, …) is exactly the mechanism this row exists to catch.
-_CLI_INVOCATION_RE = re.compile(r"`?\bbanchi\b(?:\s+[\w.-]+)*`?", re.I)
+_CLI_INVOCATION_RE = re.compile(r"`?\bbanchi\b(?!\.)(?:\s+[\w.-]+)*`?")
 
 
 UNKNOWN_NO_TOOLCHAIN = "unknown: app/node_modules missing, run make worktree-setup"
