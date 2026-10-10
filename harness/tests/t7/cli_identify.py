@@ -6,6 +6,7 @@ the order `CHECK_ORDER` runs them.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import hashlib
 import shutil
@@ -5859,11 +5860,16 @@ def check_selection_grammar(checks: Checks) -> None:
     # A NULL TERM IS A VALUE AND A VALUE IS REFUSED, never read as "absent" (owner ruling on
     # PR #813: a press never pays for cards it did not name). A caller that means "any" leaves
     # the key out. Each selector is tried alone, then all of them together.
-    null_terms = ("paths", "state", "box", "bid", "section", "game", "since", "keys", "run")
+    # The list is read from `Selection`'s fields, never typed here: a term added later that
+    # `parse` forgets to refuse as null would widen a press to the whole store, and a typed
+    # copy of the list would not notice (review of PR #813).
+    null_terms = tuple(field.name for field in dataclasses.fields(sel.Selection))
+    null_refused = 0
     for term in null_terms:
         try:
             got = sel.parse({term: None})
         except sel.SelectionError as refusal:
+            null_refused += refusal.code == "selection_invalid"
             checks.ok(
                 refusal.code == "selection_invalid" and str(refusal).strip() != "",
                 f"(b) the route refuses `{term}: null` as selection_invalid, with a reason",
@@ -5871,6 +5877,11 @@ def check_selection_grammar(checks: Checks) -> None:
             )
             continue
         checks.ok(False, f"(b) the route refuses `{term}: null`", f"it answered: {got!r}")
+    checks.ok(
+        null_refused == len(dataclasses.fields(sel.Selection)),
+        "(b) `parse` refuses as null every term `Selection` has, not fewer",
+        f"refused {null_refused} of {len(dataclasses.fields(sel.Selection))} terms",
+    )
     try:
         got = sel.parse({term: None for term in null_terms})
     except sel.SelectionError as refusal:
