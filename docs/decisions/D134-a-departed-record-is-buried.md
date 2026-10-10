@@ -27,7 +27,7 @@ This amends D10's owner ruling 3 (2026-08-23). It reads: "a box may not go while
 
 **D36's realign by digest, for a run still un-joined over a deleted box.** A moved card's digest and its photograph both travel with the transplant, so realign still works for those. A sold or retired card's digest is kept in the burial line, but the photograph it would be checked against is gone. That is the same boundary D89's reclaim already draws. It applies to a sold card whose photograph was reclaimed while its box still stood.
 
-**`next_index` for a deleted box number restarts at 1.** That was already true before this decision, and it is unchanged. This decision only widens which boxes may reach that state. D10's permanent-gap promise holds inside every box that still exists.
+**`next_index` for a deleted box number restarts at 1.** That was already true before this decision, and it is unchanged. The rule is "a deleted box is a box the store has never heard of" (D10). This decision only widens which boxes may reach that state. D10's permanent-gap promise holds inside every box that still exists.
 
 ### What is recorded rather than mitigated
 
