@@ -1034,6 +1034,20 @@ CHECKS = (
         "governed_by": ("D18",),
     },
     {
+        "target": "session-teardown-selftest",
+        "shard": "guards-1",
+        "runs": "bash scripts/session-teardown-selftest.sh",
+        "asserts": "scripts/session-teardown.sh's branch-delete step in a throwaway repo: a "
+                   "worktree-* branch already in the local origin/main is deleted, and an "
+                   "unmerged one is kept.",
+        "needs": ("python3", "bash", "git"),
+        "writes": "a bare origin, a clone and linked worktrees, all under `mktemp -d`.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp repo and removes worktrees.",
+        "gates": True,
+        "governed_by": ("D18", "D138"),
+    },
+    {
         "target": "reap-selftest",
         "shard": "guards-1",
         "runs": "bash scripts/reap-selftest.sh",

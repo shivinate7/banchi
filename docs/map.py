@@ -3466,6 +3466,12 @@ COMPONENTS = [
                         "hook without --no-track.",
                 "governed_by": ["D18"],
             },
+            "session-teardown-selftest.sh": {
+                "does": "`make session-teardown-selftest`: session-teardown.sh's branch step in "
+                        "a throwaway repo. A worktree-* branch already in the local origin/main "
+                        "is deleted, an unmerged one is kept.",
+                "governed_by": ["D18", "D138"],
+            },
             "ignore-check.sh": {"does": "the other half of D47: `git check-ignore` over every path "
                                         "a worktree provisions, asserting each is ignored WHATEVER "
                                         "kind of thing is at it. That entry's own reopening "

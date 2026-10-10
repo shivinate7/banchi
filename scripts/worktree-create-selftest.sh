@@ -19,8 +19,11 @@
 # THE HOOK UNDER TEST. $WORKTREE_CREATE_SCRIPT names the copy to run, so the red proof can point
 # it at the old script. Default: scripts/worktree-create.sh beside this file.
 #
-# Knobs: ROUNDS (default 5) and PARALLEL (default 4). Trees made: ROUNDS*PARALLEL, plus the main
-# checkout. Raise them only if a red run is needed; the defaults are the stated contract.
+# TWO ARMS. A deterministic arm holds .git/config.lock by hand and makes ONE tree, so the old
+# hook fails every time, with no race needed. The parallel arm then races ROUNDS*PARALLEL
+# creations, which is the realistic shape. Trees made: that count plus one, plus the main
+# checkout. Knobs: ROUNDS (default 5) and PARALLEL (default 4). Raise them only if a red run is
+# needed; the defaults are the stated contract.
 #
 # Output is kept, never silenced: each creation writes its stdout and stderr to a file, and a
 # FAIL line prints the stderr so the reason shows.
@@ -76,18 +79,27 @@ RUN_OUT="$tmp/out"
 mkdir -p "$RUN_OUT"
 export RUN_MAIN="$MAIN" RUN_SCRIPT="$SCRIPT" RUN_OUT
 
-names=()
+# DETERMINISTIC ARM. The config lock is held by hand, so the upstream write that the old hook
+# makes fails every time. The new hook writes no upstream, so it passes with the lock held.
+# One creation, no race needed. The lock is removed straight after.
+: > "$MAIN/.git/config.lock"
+bash "$tmp/run_one.sh" lk
+rm -f "$MAIN/.git/config.lock"
+
+pnames=()
 total=$((ROUNDS * PARALLEL))
-for k in $(seq 1 "$total"); do names+=("w$k"); done
+for k in $(seq 1 "$total"); do pnames+=("w$k"); done
 
 # Rounds run one after another. Within a round, PARALLEL creations run at once.
 for r in $(seq 1 "$ROUNDS"); do
   start=$(( (r - 1) * PARALLEL ))
-  round_names=("${names[@]:start:PARALLEL}")
+  round_names=("${pnames[@]:start:PARALLEL}")
   printf '%s\n' "${round_names[@]}" | xargs -P"$PARALLEL" -n1 bash "$tmp/run_one.sh"
 done
 
 # Per-name assertions: exit 0, the path as the last stdout line, the tree on disk, the branch.
+names=("lk" "${pnames[@]}")
+made=${#names[@]}
 for name in "${names[@]}"; do
   path="$MAIN/.claude/worktrees/$name"
   rc="$(cat "$RUN_OUT/$name.rc" 2>/dev/null)"
@@ -104,8 +116,8 @@ done
 # Totals: one main checkout plus one tree per creation, one branch per creation, no lock left.
 trees="$(git -C "$MAIN" worktree list --porcelain | grep -c '^worktree ')"
 branches="$(git -C "$MAIN" for-each-ref --format='%(refname)' 'refs/heads/worktree-*' | wc -l | tr -d ' ')"
-if [ "$trees" = "$((total + 1))" ]; then ok "$((total + 1)) trees in total"; else bad "trees: want $((total + 1)), got $trees"; fi
-if [ "$branches" = "$total" ]; then ok "$total worktree branches in total"; else bad "branches: want $total, got $branches"; fi
+if [ "$trees" = "$((made + 1))" ]; then ok "$((made + 1)) trees in total"; else bad "trees: want $((made + 1)), got $trees"; fi
+if [ "$branches" = "$made" ]; then ok "$made worktree branches in total"; else bad "branches: want $made, got $branches"; fi
 if [ -e "$MAIN/.git/config.lock" ]; then bad "a .git/config.lock was left behind"; else ok "no .git/config.lock left behind"; fi
 
 # The race named in the hook's header: a config-lock message in any creation's stderr.
