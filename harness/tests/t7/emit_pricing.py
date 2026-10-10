@@ -872,6 +872,68 @@ def check_prices_adopt(checks: Checks) -> None:
             "corpus — the answer was already there; emit only reads it",
         )
 
+    # ------------------------------------- (7) every money figure the CLI prints has cents
+    # THE CENT RULE, read the way the owner reads it. `corpus._token` compares an answer with
+    # `Decimal.normalize`, and it also RENDERS with it, which strips trailing zeros: the adopt
+    # report named a $18.50 answer as "$18.5" and a $1200.00 answer as "$1200". Every `$`
+    # figure on a CLI line is money, so every one carries exactly two decimals.
+    money_token = re.compile(r"\$-?[0-9][0-9,]*(?:\.[0-9]+)?")
+    two_decimals = re.compile(r"\$-?[0-9][0-9,]*\.[0-9]{2}")
+
+    def bare_money(text):
+        return [tok for tok in money_token.findall(text) if not two_decimals.fullmatch(tok)]
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: "18.50", DUNSPARCE_SKU: "1200.00"}})
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.49", DUNSPARCE_SKU: "1199.99"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.equal(
+            bare_money(said),
+            [],
+            "the first adoption's kept and dropped rows print every price with two decimals — "
+            "a $18.50 answer is `$18.50`, a $1200.00 answer is `$1200.00`, never `$18.5`/`$1200`",
+        )
+        checks.ok(
+            "dropped $18.50 (" in said and "kept $1199.99 (" in said,
+            "and the two figures the owner typed are the two figures the report names",
+            said,
+        )
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.49"}})
+        command(checks, "prices", "adopt", "--write")
+        legacy_run({"overrides": {ARTICUNO_SKU: "18.50"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.equal(
+            bare_money(said),
+            [],
+            "a re-adopt's kept row prints the corpus's figure and the file's with two decimals",
+        )
+        checks.ok(
+            "kept $0.49 (corpus) — file said $18.50" in said,
+            "and the row reads `kept $0.49 (corpus) — file said $18.50`",
+            said,
+        )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.threshold = "0.4"
+        book.answers[ARTICUNO_SKU] = corpus.Answer(
+            value={"withheld": "bullish", "watch_above": "18.5"}
+        )
+        book.write()
+        shown = command(checks, "prices", "show", "--held")
+        checks.equal(
+            bare_money(shown),
+            [],
+            "`prices show` prints the threshold and the watch price with two decimals",
+        )
+        checks.ok(
+            "threshold=$0.40 " in shown and "above $18.50" in shown,
+            "a threshold typed as 0.4 shows as $0.40 and a watch typed as 18.5 as $18.50",
+            shown,
+        )
+
 
 def check_readings_adopt_cli(checks: Checks) -> None:
     """`banchi readings adopt` and `readings show`, through the real argparse dispatch
