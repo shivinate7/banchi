@@ -2409,7 +2409,8 @@ COMPONENTS = [
                 "does": "provisions a worktree that `git worktree add` just made, by calling "
                         "scripts/worktree-guard.sh. It runs only when the previous HEAD is all "
                         "zeros, so a branch switch runs nothing. Covers the worktree a session "
-                        "makes mid-session, which SessionStart never sees. Fails open.",
+                        "makes mid-session, which SessionStart never sees. A worktree added "
+                        "with --no-checkout gets no run. Fails open.",
                 # It writes, and D18 allows that here: post-checkout cannot stop a commit.
                 "governed_by": ["D18"],
                 "note": "Extensionless, unscanned, listed by hand — see the siblings above.",

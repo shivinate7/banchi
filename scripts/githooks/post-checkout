@@ -3,8 +3,10 @@
 #
 # The SessionStart hook (scripts/worktree-guard.sh) covers a session that STARTS in a
 # worktree. It misses a worktree made mid-session, by hand or by a tool, because no
-# session starts there. Git runs this hook after every `git worktree add`, with an
-# all-zero previous HEAD, so this calls the same script for that case and no other.
+# session starts there. Git runs this hook after `git worktree add` (not with
+# --no-checkout), with an all-zero previous HEAD, so this calls the same script for
+# that case and no other. It also claims this tree's port slot, as SessionStart does.
+# `make venv` runs in the foreground, so the add waits for pip once per worktree.
 # A branch switch or a file checkout passes a real previous HEAD and runs nothing.
 #
 # Not a gate: post-checkout cannot stop a commit, so D18 (writers never gate) holds.
