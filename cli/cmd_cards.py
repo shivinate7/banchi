@@ -710,6 +710,18 @@ def _photos(args, say) -> int:
                 except files.StoreError as exc:
                     census["refused"] += 1
                     refusals.append((key, str(exc)))
+            # A KILL BETWEEN THE PHOTO MOVE AND THE SIDECAR MOVE LEAVES THE SIDECAR AT ITS
+            # LEGACY ADDRESS. Adopt it here, or the stamp would orphan it for good. A sidecar
+            # that cannot move counts as refused, so the stamp waits.
+            if write and box is not None and idx is not None:
+                sidecar = photos.legacy_path(box, idx, home).with_suffix(photos.SIDECAR_SUFFIX)
+                if sidecar.is_file():
+                    try:
+                        photos.adopt_sidecar(sidecar, cid, home)
+                        census["sidecars"] += 1
+                    except OSError as exc:
+                        census["refused"] += 1
+                        refusals.append((key, f"sidecar: {exc}"))
             continue
         if record.get("photo_reclaimed_at"):
             census["reclaimed"] += 1
