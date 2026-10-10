@@ -282,7 +282,7 @@ def seed_legacy_store(home: Path, box: int, count: int) -> Dict[str, str]:
             card, _ = snapshot.inventory.allocate_capture(
                 box, capture_id=f"seed-{box}-{index}", cid=digest, game="pokemon"
             )
-            snapshot.cache.put(card.key, {"name": f"Card {index}"}, digest, "fp")
+            snapshot.cache.put(card.key, pokemon_answer(f"Card {index}"), digest, "fp")
     _unname(home)
     return digests
 

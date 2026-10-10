@@ -15,7 +15,6 @@ import math
 import threading
 import urllib.request
 from pathlib import Path
-from types import SimpleNamespace
 
 from harness.tests import Checks
 from harness.tests.t7.common import REPO_ROOT, isolated_home, quiet
@@ -877,29 +876,85 @@ def check_cache_position_key(checks: Checks) -> None:
     )
     checks.ok(not_a_mapping is None, "(d) an identification that is not a mapping is a miss, not an answer")
 
-    # (d) a mapping that lacks the Pokemon schema's required keys is a miss, and a cached run
-    # does not count it. The consult gate in `cli/cmd_identify.py` `run` is `reusable`, then
-    # `_adopt_cached` (which sets `cached`). Only a hit reaches `_adopt_cached`.
-    from cli import cmd_identify
+    # (d) CONSUMER LEVEL. A cached answer that the run's own parser refuses (`prompt.parse`
+    # for the card's strategy) is a miss at `cli/cmd_identify.py` `run`: not counted cached,
+    # re-identified, and the refusal is not swallowed. The paid read is stubbed, so no network.
+    from cli import __main__ as cli_entry, cmd_identify
+    from store.session import Store
 
-    for label, answer in (("an empty mapping", {}), ("a name only", {"name": "A"}), ("an unrelated key", {"foo": 1})):
-        checks.raises(
-            prompt.MalformedIdentification,
-            lambda answer=answer: prompt.parse(answer, "pokemon_card_v1"),
-            f"(d) {label} is refused by prompt.parse, the same rule a run applies",
-        )
-        stored = cache_mod.Cache.parse(
-            {"3/1": {"identification": answer, "photo_sha256": "sha-A", "prompt_fingerprint": "f", "at": "t"}}
-        )
-        item = SimpleNamespace(
-            strategy="pokemon_card_v1", cached=False, stage=None, engine=None, held_second_look=None,
-            identification=None, status="pending", stale_prompt=False,
-        )
-        entry = stored.reusable("3/1", "sha-A")
-        if entry is not None:
-            cmd_identify._adopt_cached(item, entry, {})
-        checks.equal(entry, None, f"(d) {label} is a cache miss, not returned as an answer")
-        checks.equal(item.cached, False, f"(d) {label}: a cached run does not count it as cached")
+    shapes = (
+        ("an empty mapping", {}),
+        ("a name only", {"name": "A"}),
+        ("an unrelated key", {"foo": 1}),
+        # One Piece's shape: every key but `printed_total`, which Pokemon's schema requires.
+        ("a one_piece-shaped answer", {"name": "Luffy", "number": "1", "finish": "normal", "confidence": "high"}),
+    )
+    with isolated_home() as home:
+        caps = Path(home) / "cache-key-caps"
+        caps.mkdir()
+        identify_images.Image.new("RGB", (64, 89), (30, 120, 200)).save(caps / "4-001.jpg", "JPEG")
+        (caps / "4-001.json").write_text(json.dumps({"box": 4, "position": 1, "game": "pokemon"}), "utf-8")
+        digest = identify_images.sha256_of(caps / "4-001.jpg")
+        sent: list = []
+
+        def fake_run_batch(requests, log=None, on_submit=None):
+            outcomes = {}
+            for request in requests:
+                sent.append(request.custom_id)
+                outcomes[request.custom_id] = batch.Outcome(
+                    request.custom_id,
+                    batch.SUCCEEDED,
+                    identification=prompt.parse(said("Pikachu"), request.strategy),
+                )
+            return batch.BatchRun(outcomes=outcomes)
+
+        def press():
+            lines: list = []
+            with quiet():
+                code = cmd_identify.run(
+                    cli_entry.build_parser().parse_args(["identify", str(caps), "--engine", "haiku"]),
+                    lines.append,
+                )
+            return code, lines
+
+        def spoken(lines, prefix):
+            return next((line for line in lines if line.startswith(prefix)), "")
+
+        real_run_batch = cmd_identify.batch.run_batch
+        cmd_identify.batch.run_batch = fake_run_batch
+        try:
+            code, _ = press()
+            checks.equal(code, 0, "(d) the seed press over one readable Pokemon card exits 0")
+            for label, answer in shapes:
+                with Store().write() as snapshot:
+                    snapshot.cache.put("4/1", answer, digest, "fp", engine=haiku)
+                before = len(sent)
+                code, lines = press()
+                checks.equal(
+                    len(sent) - before, 1,
+                    f"(d) {label} in the cache: the card is re-identified (one paid read), not adopted",
+                )
+                checks.equal(
+                    spoken(lines, "cache hits"), "cache hits      0",
+                    f"(d) {label} in the cache: a cached run does not count it as a cache hit",
+                )
+        finally:
+            cmd_identify.batch.run_batch = real_run_batch
+
+    # (d, store level, non-dict only) a record or identification that is not a mapping is a
+    # miss: asserted above. Dict shapes are judged by the consumer, which is the one holding the
+    # run's strategy (D63: the store cannot know a game's profile).
+
+    # (e) the permanence rule (`store/cache.py` header): a malformed human-cleared entry is never
+    # overwritten by a paid put, and the put reports the disagreement.
+    cleared = cache_mod.Cache.parse(
+        {"3/1": {"identification": {"name": "Human"}, "photo_sha256": "sha-A", "prompt_fingerprint": "f",
+                 "at": "t", "cleared_by_human": True}}
+    )
+    reported = cleared.put("3/1", said("Paid"), "sha-new", "fp2", engine=haiku)
+    checks.equal(cleared.get("3/1").identification, {"name": "Human"}, "(e) a malformed human-cleared entry is not overwritten by a paid put")
+    checks.equal(cleared.get("3/1").photo_sha256, "sha-A", "(e) and keeps its photo digest")
+    checks.ok(reported is not None, "(e) and the put reports the disagreement instead of writing")
 
 
 # ------------------------------------------------------------------------ the model verdict, the promo census, Prepare
