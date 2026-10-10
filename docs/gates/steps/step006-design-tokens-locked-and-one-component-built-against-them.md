@@ -1,6 +1,6 @@
 6. ~~Design tokens locked and one component built against them~~ — done 2026-08-12.
-   Tokens locked by interview against rendered alternatives rather than by inference; the
-   pull-confirm built against them at `app/src/PullConfirm.tsx`, in all three states, on a
+   Tokens locked by interview against rendered alternatives rather than by inference. The
+   pull-confirm was built against them at `app/src/PullConfirm.tsx`, in all three states, on a
    gallery route `make screenshot` renders and `make design-check` asserts.
    **Building it earned its place**: it caught two points where
    the static palette sheet contradicted `docs/DESIGN.md`. One was an 18px button label under
