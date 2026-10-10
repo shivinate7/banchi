@@ -618,13 +618,89 @@ def case_kill_between_photo_and_sidecar_leaves_sidecar_reachable() -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(blob)
     legacy.unlink()
-    run_cards("photos", write=True, limit=None)
-    stamped = stamped_at(home)
+    code, _lines = run_cards("photos", write=True, limit=None)
     found = photos.find_sidecar(cid, box, index, relocated=True, home=home)
-    ok(found is not None or not stamped,
-       "the sidecar is reachable once relocated, or the run refused to stamp",
-       f"stamped={stamped}, find_sidecar(relocated=True)={found}, "
-       f"legacy sidecar still there={sidecar.is_file()}")
+    ok(code == 0 and stamped_at(home), "the run finishes and stamps",
+       f"exit {code}, stamped={stamped_at(home)}")
+    ok(found is not None, "and the sidecar is reachable once relocated",
+       f"find_sidecar(relocated=True)={found}, legacy sidecar still there={sidecar.is_file()}")
+
+
+def mark_record(cid: str, marker: str) -> None:
+    """Put a note on the store's record for `cid`, so a sidecar written from the record can
+    be told from one copied from a file."""
+    from store import db
+
+    home = Path(os.environ["BANCHI_HOME"])
+    conn = sqlite3.connect(str(db.path(home / "inventory")))
+    try:
+        conn.execute("UPDATE cards SET payload = json_set(payload, '$.note', ?) WHERE cid = ?",
+                     (marker, cid))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def check_fresh_sidecar(home: Path, cid: str, marker: str, code: int) -> None:
+    from store import photos
+
+    ok(code == 0, "the run exits 0 although the sidecar cannot move", f"exit {code}")
+    ok(stamped_at(home), "and it stamps photos_relocated")
+    fresh = photos.sidecar_path(cid, home)
+    text = fresh.read_text() if fresh.is_file() else ""
+    ok(marker in text, "and a sidecar at the new address holds the card's record from the store",
+       f"{fresh.name} exists={fresh.is_file()}")
+
+
+def case_sidecar_that_cannot_move_is_rewritten_from_the_store() -> None:
+    print("cards photos --write — a sidecar that cannot move is rewritten at the new address")
+    from unittest import mock
+    from store import photos
+
+    home = fresh_home()
+    placed = seed_legacy_photographs(2)
+    cid, box, index, _blob = placed[0]
+    photos.legacy_path(box, index, home).with_suffix(photos.SIDECAR_SUFFIX).write_text("{}")
+    mark_record(cid, "from-the-store")
+    with mock.patch.object(photos, "adopt_sidecar", side_effect=OSError("disk said no")):
+        code, _lines = run_cards("photos", write=True, limit=None)
+    check_fresh_sidecar(home, cid, "from-the-store", code)
+
+
+def case_rerun_with_sidecar_that_cannot_move_is_rewritten_from_the_store() -> None:
+    print("cards photos --write — a rerun, photo moved and sidecar stuck, rewrites the sidecar")
+    from unittest import mock
+    from store import photos
+
+    home = fresh_home()
+    placed = seed_legacy_photographs(2)
+    cid, box, index, blob = placed[0]
+    legacy = photos.legacy_path(box, index, home)
+    legacy.with_suffix(photos.SIDECAR_SUFFIX).write_text("{}")
+    mark_record(cid, "from-the-store")
+    target = photos.path(cid, home)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(blob)
+    legacy.unlink()
+    with mock.patch.object(photos, "adopt_sidecar", side_effect=OSError("disk said no")):
+        code, _lines = run_cards("photos", write=True, limit=None)
+    check_fresh_sidecar(home, cid, "from-the-store", code)
+
+
+def case_legacy_sidecar_left_after_the_stamp_is_found() -> None:
+    print("find_sidecar(relocated=True) — a legacy sidecar left behind is still found")
+    from store import photos
+
+    home = fresh_home()
+    placed = seed_legacy_photographs(1)
+    cid, box, index, _blob = placed[0]
+    code, _lines = run_cards("photos", write=True, limit=None)
+    ok(code == 0 and stamped_at(home), "the pass stamps, so the case is the relocated one")
+    legacy = photos.legacy_path(box, index, home).with_suffix(photos.SIDECAR_SUFFIX)
+    legacy.write_text("{}")
+    found = photos.find_sidecar(cid, box, index, relocated=True, home=home)
+    ok(found == legacy, "the legacy sidecar is returned when the new address has none",
+       f"find_sidecar(relocated=True)={found}")
 
 
 TESTS = [
@@ -645,6 +721,9 @@ TESTS = [
     case_write_limit_zero_moves_nothing_and_stamps_nothing,
     case_limited_then_full_pass_reaches_every_photo,
     case_kill_between_photo_and_sidecar_leaves_sidecar_reachable,
+    case_sidecar_that_cannot_move_is_rewritten_from_the_store,
+    case_rerun_with_sidecar_that_cannot_move_is_rewritten_from_the_store,
+    case_legacy_sidecar_left_after_the_stamp_is_found,
 ]
 
 
