@@ -83,7 +83,7 @@ class MachineHomeCase(unittest.TestCase):
         self._dir(self.old, "old")
         got = ports.machine_dir()
         self.assertEqual(got, self.new)
-        self.assertFalse(self.old.exists())
+        self.assertTrue(self.old.is_symlink())
         self.assertEqual((self.new / "marker").read_text(encoding="utf-8"), "old")
 
     def test_machine_dir_does_nothing_when_only_new_exists(self):
@@ -98,20 +98,21 @@ class MachineHomeCase(unittest.TestCase):
         self._dir(self.new, "new")
         got = ports.machine_dir()
         self.assertEqual(got, self.new)
-        # Old is not merged and not removed. Its files are no longer read by any reader.
-        self.assertTrue(self.old.is_dir())
-        self.assertEqual((self.old / "marker").read_text(encoding="utf-8"), "old")
+        # The new copy wins. The old real directory is kept aside, and the old path links to new.
+        self.assertTrue(self.old.is_symlink())
         self.assertEqual((self.new / "marker").read_text(encoding="utf-8"), "new")
+        kept = list(self.home.glob(".pkmnscan.old-*"))
+        self.assertEqual(len(kept), 1)
+        self.assertEqual((kept[0] / "marker").read_text(encoding="utf-8"), "old")
 
     def test_machine_dir_both_exist_drops_old_slot_claims(self):
-        # DATA-LOSS FINDING, pinned as current behaviour. A claim in the old registry is
-        # invisible once the new directory exists, so `slot_for` falls back to the hash.
+        # A claim only the old registry held is moved into the new directory, so it still reads.
         self._dir(self.new, "new")
         self.old.mkdir()
         (self.old / ports.SLOT_REGISTRY_NAME).write_text(
             '{"slots": {"/some/checkout": 42}}', encoding="utf-8")
         self.assertEqual(ports.machine_dir(), self.new)
-        self.assertEqual(ports.read_claims(), {})
+        self.assertEqual(ports.read_claims(), {"/some/checkout": 42})
 
     def test_machine_dir_neither_exists_returns_new_and_creates_nothing(self):
         got = ports.machine_dir()

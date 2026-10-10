@@ -894,7 +894,7 @@ def check_storage_keys(report: Report) -> None:
        can judge whether an explanation is any good, but it can hold that the key was
        written down once, on purpose, where a reader looking for it would find it. D27
        promised its keys were "named here" and named them only as English (*box number, set
-       hint, finish claim…*) while the app spelled them with the old prefix. Measured
+       hint, finish claim…*) while the app spelled them `pkmnscan.session.*`. Measured
        2026-09-06: seven of the eight keys under that carve-out appeared in no markdown file
        in this repo, and two of them — `game` and `product` — had never been described in
        any form, having arrived after the entry was written.

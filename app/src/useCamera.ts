@@ -82,8 +82,8 @@ const JPEG_QUALITY = 0.95
  * declared rather than counted in one list. Nothing here is a card, a position or a price —
  * that is D27's whole test — so the worst case is a preference the operator sets again.
  *
- * THIS RIG PAID TWO CLICKS FOR IT. the old `capture.deviceId` key held the 4K capture card the
- * feeder runs through and the old `capture.rotation` key held the quarter turn D13's sideways
+ * THIS RIG PAID TWO CLICKS FOR IT. `pkmnscan.capture.deviceId` (now `banchi.capture.deviceId`) held the 4K capture card the
+ * feeder runs through and `pkmnscan.capture.rotation` (now `banchi.capture.rotation`) held the quarter turn D13's sideways
  * mount needs; the first load after this landed opened the device picker with nothing
  * remembered and drew the preview unrotated. Both are one press on the capture screen. */
 const REMEMBERED_DEVICE_KEY = 'banchi.capture.deviceId'

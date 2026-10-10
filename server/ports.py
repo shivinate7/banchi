@@ -50,7 +50,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -73,8 +75,8 @@ SLOTS = 300
 # slots is not "every checkout has its own ports". Two live worktrees on this Mac hashed into
 # one slot on 2026-09-24, and a design-check in one of them tested the other's code, green.
 # So a checkout may CLAIM a slot, once, in one machine-wide file keyed by its resolved path.
-# The derivation READS the file and never writes it. `scripts/port-slots.py claim` is the one
-# writer. A missing, unreadable or malformed file, or no entry for this path, reads as "not
+# The derivation READS the file and writes no claim. (Finding the file may move `~/.pkmnscan`
+# once, see `machine_dir`.) `scripts/port-slots.py claim` is the one claim writer. A missing, unreadable or malformed file, or no entry for this path, reads as "not
 # claimed", and the hash answers as before. `app/devPort.ts` reads the same file the same way.
 SLOT_REGISTRY_ENV = "BANCHI_SLOT_REGISTRY"
 SLOT_REGISTRY_NAME = "port-slots.json"
@@ -129,28 +131,48 @@ def machine_dir() -> Path:
     """The one home of `~/.banchi`: per-user machine state (slot registry, suite lock, daily logs).
 
     Every reader asks here, never `Path.home() / ".banchi"`. The first ask also moves a
-    `~/.pkmnscan` left by the old name, once, and only when the new directory is missing. A
-    failed move leaves the old directory alone and the caller creates the new one.
+    `~/.pkmnscan` left by the old name and leaves `~/.pkmnscan` as a symlink to `~/.banchi`,
+    so old code on another branch writes into the same directory:
+    - only the old directory exists: rename it, link it.
+    - both exist and the old one is a real directory: move each file only the old one holds into
+      the new one, rename the old one to `~/.pkmnscan.old-<timestamp>` (a file in both keeps its
+      old copy there), link it, and print one line.
+    - the old path is already a symlink: do nothing.
+    A failed step leaves what it had and the caller still gets `~/.banchi`.
     """
     home = Path.home()
     new, old = home / ".banchi", home / ".pkmnscan"
-    if not new.exists() and old.is_dir():
-        try:
+    if old.is_symlink() or not old.is_dir():
+        return new
+    try:
+        if not new.exists():
             old.rename(new)
-        except OSError:
-            pass
+        else:
+            for item in old.iterdir():
+                if not (new / item.name).exists():
+                    shutil.move(str(item), str(new / item.name))
+            kept = home / (".pkmnscan.old-" + time.strftime("%Y%m%dT%H%M%S"))
+            old.rename(kept)
+            print("moved %s into %s; the rest is kept in %s" % (old, new, kept))
+        os.symlink(new, old)
+    except OSError:
+        pass
     return new
 
 
 def remove_old_agent(label: str) -> None:
     """Unload and delete the `com.pkmnscan.*` agent that `label` (a `com.banchi.*`) replaced.
 
-    Each agent's `--remove` calls it, so one press leaves nothing under the old name.
+    Each agent's `--remove` calls it, so one press leaves nothing under the old name. The plist
+    goes only when bootout answered 0 or 113 (service not found); any other code keeps it.
     """
     old = label.replace("com.banchi.", "com.pkmnscan.", 1)
     if old == label:
         return
-    subprocess.run(["launchctl", "bootout", "gui/%d/%s" % (os.getuid(), old)], capture_output=True)
+    done = subprocess.run(["launchctl", "bootout", "gui/%d/%s" % (os.getuid(), old)], capture_output=True)
+    if done.returncode not in (0, 113):
+        print("%s: launchctl bootout failed (%s); its plist is kept." % (old, done.returncode))
+        return
     (Path.home() / "Library" / "LaunchAgents" / (old + ".plist")).unlink(missing_ok=True)
 
 
