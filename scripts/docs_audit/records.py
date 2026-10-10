@@ -1287,3 +1287,69 @@ def _debts_section(number: int) -> Optional[str]:
     rest = text[start.end() :]
     nxt = re.search(r"^## \d+ — ", rest, re.M)
     return rest[: nxt.start()] if nxt else rest
+
+
+# ------------------------------------------------------------- no owner quotes (the no-owner-quotes record)
+
+NO_OWNER_QUOTES_ALLOW = ROOT / "scripts" / "no-owner-quotes-allow.json"
+NO_OWNER_QUOTES_RULE = "marker"
+NO_OWNER_QUOTES_HOME = "no-owner-quotes.md"  # the record that names the markers; not an offender, before or after its number is claimed
+_OWNER_QUOTE_RE = re.compile(r"The owner(?:'|’)s words|verbatim:")
+
+
+def _no_owner_quotes_found(root: Path) -> Dict[str, Dict[str, List[str]]]:
+    """file -> {marker: [one marker per occurrence]} over every `.md` under docs/."""
+    found: Dict[str, Dict[str, List[str]]] = {}
+    for path in sorted((root / "docs").rglob("*.md")):
+        name = path.relative_to(root).as_posix()
+        if name.startswith("docs/decisions/") and name.endswith(NO_OWNER_QUOTES_HOME):
+            continue
+        text = path.read_text(encoding="utf-8")
+        hits = [m.group(0).replace("’", "'") for m in _OWNER_QUOTE_RE.finditer(text)]
+        if hits:
+            found[name] = {NO_OWNER_QUOTES_RULE: hits}
+    return found
+
+
+def check_no_owner_quotes(report: Report) -> None:
+    """A record keeps no owner quote: no `The owner's words` and no `verbatim:` under docs/.
+
+    A RULE, AND A SHRINKING LIST, NEVER A COUNT (D280). Every marker is a finding unless
+    `scripts/no-owner-quotes-allow.json` names it, once per occurrence, in that file. A listed
+    entry that matches nothing is a finding (stale: delete it). Growth over the merge-base is
+    refused. A quoted owner message with no marker is not seen: a machine cannot tell it from
+    another quote."""
+    from .strings import (
+        _offender_diff, _offender_growth, _offender_list_at_merge_base,
+        _offender_list_shape, _read_offender_list,
+    )
+
+    name = "no owner quotes"
+    allow_rel = rel(NO_OWNER_QUOTES_ALLOW)
+    found = _no_owner_quotes_found(ROOT)
+    document, why = _read_offender_list(NO_OWNER_QUOTES_ALLOW)
+    if document is None:
+        report.add(name, MECHANICAL, [Finding(allow_rel, f"{why}. Restore the list from git.")],
+                   "no offender list", scanned=len(found))
+        return
+    rules = {NO_OWNER_QUOTES_RULE}
+    listed, _lanes, shape_errors = _offender_list_shape(document, rules)
+    findings = [Finding(allow_rel, e) for e in shape_errors]
+    unlisted, stale = _offender_diff(found, listed)
+    for file, _rule, text in unlisted:
+        findings.append(Finding(
+            file, f"keeps an owner quote ({text!r}) and {allow_rel} does not list it.\n"
+                  "  State the ruling in plain words. Never add an entry to excuse a new quote."))
+    for file, _rule, text in stale:
+        findings.append(Finding(
+            f"{allow_rel}: {file}",
+            f"lists {text!r} and {file} no longer holds it. Delete the entry: the list only shrinks."))
+    base_doc, where = _offender_list_at_merge_base(allow_rel)
+    if base_doc is not None:
+        base_listed, _, _ = _offender_list_shape(base_doc, rules)
+        refused, _ = _offender_growth(base_listed, listed, rules, rules)
+        findings += [Finding(allow_rel, f"gained {line} over the merge-base {where}.") for line in refused]
+    count = sum(len(v) for per in found.values() for v in per.values())
+    report.add(name, MECHANICAL, findings,
+               f"{count} markers in {len(found)} files; {len(unlisted)} unlisted, {len(stale)} stale",
+               scanned=len(found))

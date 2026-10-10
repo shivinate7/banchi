@@ -3906,7 +3906,7 @@ COMPONENTS = [
             "docs_audit/records.py": {
                 "does": "The rows over the decision, gate and debt records: decision ids, id claims, numbering "
                         "growth, heading structure and the debts index.",
-                "governed_by": ["D2", "D50", "D60", "D92", "D140", "D149", "D160", "D182"]},
+                "governed_by": ["D2", "D50", "D60", "D92", "D140", "D149", "D160", "D182", "D280"]},
             "docs_audit/registry_scopes.py": {
                 "does": "The rows over the check registry, the commit path, the suite lock, the browser, spec, "
                         "serve and guard scopes, and how callers invoke the audit.",
