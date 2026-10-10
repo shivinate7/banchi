@@ -66,8 +66,8 @@ read. It works the same way choosing a different search result does.
 
 **The batched Trends strip: a press for refresh, an overnight read by the owner's word.** The
 Trends press on `#/pricing` stays, to refresh. The daily job (`scripts/price-refresh-daily.py`)
-also reads the strip overnight for every row the press would read, through the press's own route
-(`do_pipeline_trends`) at its own courtesy pace, and saves each strip with the second it was read
+also reads the strip overnight for every row the press would read. It uses the press's own route
+(`do_pipeline_trends`) at its own courtesy pace. It saves each strip with the second it was read
 (`inventory/price-trends.json`). `#/pricing` draws the saved strips at first paint from that local
 file, with the relative date of the read. It never reads the market host on render, so a visit
 still fires no request there. A failed or partial overnight read is said on the screen as "N of M

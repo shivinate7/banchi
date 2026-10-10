@@ -100,4 +100,4 @@ width_days)` points ascending. `PriceArchive.upsert` merges into it in the same
 `price_history`. `PriceArchive.summary_for_sku` is the indexed read `pipeline/holdings.py` uses.
 Measured, 162k rows and 2,500 on-hand SKUs: 2288 ms to 242 ms, response byte-identical. The
 never-delete rule is unchanged: the merge only adds or replaces a start.
-The one-time build holds the store lock for about 1.4 s and the first open takes about 3.35 s on a 162k-row archive, so captures queue behind it and do not fail (30 s lock timeout); the build stays inside the lock by design.
+The one-time build holds the store lock for about 1.4 s. The first open takes about 3.35 s on a 162k-row archive. So captures queue behind it and do not fail (30 s lock timeout), and the build stays inside the lock by design.
