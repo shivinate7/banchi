@@ -1294,7 +1294,7 @@ def _debts_section(number: int) -> Optional[str]:
 NO_OWNER_QUOTES_ALLOW = ROOT / "scripts" / "no-owner-quotes-allow.json"
 NO_OWNER_QUOTES_RULE = "marker"
 NO_OWNER_QUOTES_HOME = "no-owner-quotes.md"  # the record that names the markers; not an offender, before or after its number is claimed
-_OWNER_QUOTE_RE = re.compile(r"The owner(?:'|’)s words|verbatim:")
+_OWNER_QUOTE_RE = re.compile(r"The owner(?:'|’)s words|verbatim:", re.IGNORECASE)
 
 
 def _no_owner_quotes_found(root: Path) -> Dict[str, Dict[str, List[str]]]:
@@ -1305,7 +1305,7 @@ def _no_owner_quotes_found(root: Path) -> Dict[str, Dict[str, List[str]]]:
         if name.startswith("docs/decisions/") and name.endswith(NO_OWNER_QUOTES_HOME):
             continue
         text = path.read_text(encoding="utf-8")
-        hits = [m.group(0).replace("’", "'") for m in _OWNER_QUOTE_RE.finditer(text)]
+        hits = [("The owner's words" if m.group(0)[0] in "Tt" else "verbatim:") for m in _OWNER_QUOTE_RE.finditer(text)]
         if hits:
             found[name] = {NO_OWNER_QUOTES_RULE: hits}
     return found

@@ -57,6 +57,12 @@
     "verbatim:"
    ]
   },
+  "docs/decisions/D162-name-overrides-a-disputed-number.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  },
   "docs/decisions/D164-undo-covers-the-whole-sitting.md": {
    "lane": "cut pass",
    "marker": [
@@ -134,6 +140,8 @@
    "lane": "cut pass",
    "marker": [
     "The owner's words",
+    "The owner's words",
+    "The owner's words",
     "verbatim:"
    ]
   },
@@ -172,6 +180,7 @@
   "docs/decisions/D307-owner-rulings-claude-md.md": {
    "lane": "cut pass",
    "marker": [
+    "The owner's words",
     "The owner's words"
    ]
   },
