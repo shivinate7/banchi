@@ -69,7 +69,7 @@ SHARDLESS = ("revert-guard",)
 
 # The parallel shards `.github/workflows/check.yml` runs in place of one `make ci-check`.
 # A registry entry's `shard` names one of these (without the `ci-check-` prefix), or is None.
-CI_SHARD_RULES = ("ci-check-product", "ci-check-static", "ci-check-guards-1", "ci-check-guards-2")
+CI_SHARD_RULES = ("ci-check-product", "ci-check-product-2", "ci-check-product-3", "ci-check-static", "ci-check-guards-1", "ci-check-guards-2")
 CHECK_WORKFLOW = ROOT / ".github" / "workflows" / "check.yml"
 
 
@@ -155,6 +155,23 @@ def _check_registry() -> Row:
             findings.append(Finding(rel(CHECKS_REGISTRY), (
                 "no entry runs in shard `{0}`, so `ci-check-{0}` fails on an empty list."
             ).format(shard)))
+    # Each shard is a Makefile rule, or the matrix job fails on the runner and nowhere else.
+    for rule in CI_SHARD_RULES:
+        if rule not in rules:
+            findings.append(Finding("Makefile", (
+                "has no `{0}` rule, and `check.yml` runs it as a shard."
+            ).format(rule)))
+    # The harness slices: harness/run.py's PARTS and the `harness-K` entries must agree, or a
+    # slice of T7 runs in no shard (or twice).
+    run_py = read(ROOT / "harness" / "run.py") if exists(ROOT / "harness" / "run.py") else ""
+    parts = re.search(r"^PARTS = (\d+)$", run_py, flags=re.M)
+    want = {"harness-{0}".format(k) for k in range(1, int(parts.group(1)) + 1)} if parts else None
+    have = {str(e.get("target")) for e in entries if re.fullmatch(r"harness-\d+", str(e.get("target")))}
+    if want is None or have != want:
+        findings.append(Finding(rel(CHECKS_REGISTRY), (
+            "the `harness-K` entries are {0} and harness/run.py's PARTS wants {1}.\n"
+            "  A missing slice drops its T7 checks from every shard."
+        ).format(sorted(have), sorted(want) if want else "a `PARTS = N` line")))
     workflow = read(CHECK_WORKFLOW) if exists(CHECK_WORKFLOW) else ""
     matrix = re.search(r"target:\s*\[([^\]]*)\]", workflow)
     listed = {t.strip() for t in matrix.group(1).split(",")} if matrix else set()

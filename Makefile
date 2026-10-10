@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint typecheck unit venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
+.PHONY: help status map explain harness harness-1 harness-2 harness-3 harness-part check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint typecheck unit venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -317,6 +317,25 @@ harness:
 		echo "harness: SKIPPED — nothing in this branch reaches what harness/ reads. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
+# The harness in PARTS slices (harness/run.py), one rule per slice, for the CI shards. `make check`
+# runs all of them, so it runs the whole harness. `make harness` stays the one-command whole.
+# `harness-part` is their shared recipe; PART comes from the slice rule.
+harness-part:
+	$(VENV_GUARD)
+	@python3 scripts/guard-scope.py classify --target harness --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
+		BANCHI_HARNESS=1 $(PYTHON) harness/run.py --part $(PART); \
+	else \
+		echo "harness-$(PART): SKIPPED — nothing in this branch reaches what harness/ reads. BANCHI_GUARD_SCOPE=all runs it anyway."; \
+	fi
+
+harness-1:
+	@$(MAKE) --no-print-directory harness-part PART=1
+harness-2:
+	@$(MAKE) --no-print-directory harness-part PART=2
+harness-3:
+	@$(MAKE) --no-print-directory harness-part PART=3
+
 # Exit 1 is a provably wrong reference and fails. Exit 2 is the coupling question — it
 # prints and passes, here for the same reason the pre-commit hook lets it through: a
 # question that can fail your build is a question you learn to route around. See D16.
@@ -444,12 +463,18 @@ RUN_CHECKS = t="$$(python3 scripts/checks.py --targets $(1))" && $(MAKE) --no-pr
 ci-check:
 	@$(call RUN_CHECKS)
 
-# CI RUNS `ci-check` AS FOUR PARALLEL SHARDS (D161, amended): the serial job took 600s on run
+# CI RUNS `ci-check` AS PARALLEL SHARDS (D161, amended): the serial job took 600s on run
 # 36509895299. Each entry's `shard` field in scripts/checks.py names its shard, product first,
 # the guards' self-tests last, balanced by the times that run measured. `revert-guard` has no
 # shard: the standalone required `revert-guard` job runs it, and `ci-check` runs it locally.
 ci-check-product:
 	@$(call RUN_CHECKS,product)
+
+ci-check-product-2:
+	@$(call RUN_CHECKS,product-2)
+
+ci-check-product-3:
+	@$(call RUN_CHECKS,product-3)
 
 ci-check-static:
 	@$(call RUN_CHECKS,static)
@@ -1297,7 +1322,7 @@ janitor-install:
 # answers from the tree alone, and a row that resolves DNS and expects a server to be up would
 # go red on a train and in every worktree. A check that fails for reasons unrelated to the
 # commit is one people learn to ignore.
-.PHONY: janitor janitor-selftest janitor-install serve-selftest sync-selftest ci-check ci-check-product ci-check-static ci-check-guards-1 ci-check-guards-2
+.PHONY: janitor janitor-selftest janitor-install serve-selftest sync-selftest ci-check ci-check-product ci-check-product-2 ci-check-product-3 ci-check-static ci-check-guards-1 ci-check-guards-2
 
 .PHONY: lan-check
 # Is the LAN URL still good? DNS, both servers, and a real write. Reaches the
