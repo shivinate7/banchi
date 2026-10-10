@@ -3696,7 +3696,7 @@ COMPONENTS = [
                         "stale entry, and on growth over the merge-base with origin/main. Shrunk "
                         "by a cut pass or by `make offenders-prune`, which only deletes. Never "
                         "grown by a tool. Its keys are the files that hold a marker, so it cites their ids.",
-                "governed_by": ["D280", "D-no-owner-quotes", "D100", "D103", "D134", "D145", "D155", "D162", "D164", "D176", "D179", "D213", "D220", "D241", "D242", "D254", "D259", "D260", "D264", "D271", "D272", "D273", "D291", "D293", "D296", "D299", "D300", "D301", "D307"]},
+                "governed_by": ["D280", "D-no-owner-quotes", "D100", "D136", "D141", "D287", "D103", "D134", "D145", "D155", "D162", "D164", "D176", "D179", "D213", "D220", "D241", "D242", "D254", "D259", "D260", "D264", "D271", "D272", "D273", "D291", "D293", "D296", "D299", "D300", "D301", "D307"]},
             "ste/ste_lint.py": {
                 "does": "the STE prose check's linter, VENDORED verbatim from $HOME/.claude/"
                         "lint/ste_lint.py (MIT, LICENSE-ste_lint beside it) on 2026-09-19 — a "
@@ -4663,9 +4663,9 @@ COMPONENTS = [
                         "overtaken in ordinary prose reads as current.",
             },
             "offenders-prune.py": {
-                "does": "`make offenders-prune` — delete the STALE entries from the two "
+                "does": "`make offenders-prune` — delete the STALE entries from the three "
                         "shrinking offender lists (`typed-interpunct-allow.json`, "
-                        "`markdown-spelling-allow.json`), and "
+                        "`markdown-spelling-allow.json`, `no-owner-quotes-allow.json`), and "
                         "re-key a listed file that git's "
                         "rename detection (`git diff -M` from the merge-base with origin/main) "
                         "says moved. Two lists were CUT: `ste-offenders.json` on 2026-09-27 "

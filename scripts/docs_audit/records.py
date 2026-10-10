@@ -1298,7 +1298,7 @@ NO_OWNER_QUOTES_HOME = re.compile(r"^docs/decisions/D\d*-no-owner-quotes\.md$") 
 # `The owner's request, verbatim`, and `verbatim:`. `\s+` crosses a line wrap. "on the owner's
 # word." is a permission phrase and stays quiet.
 _OWNER_QUOTE_RE = re.compile(
-    r"The\s+owner(?:'|\u2019)s\s+(?:words|word\s*:\s*[*_`]*[\"'\u201c\u2018]|request,?\s+verbatim)|verbatim:",
+    r"The\s+owner(?:'|\u2019)s\s+(?:words|word(?:\s+was)?\s*[:,(.]?\s*[*_`]*\s*[\"'\u201c\u2018]|request,?\s+verbatim)|verbatim\)?:",
     re.IGNORECASE,
 )
 

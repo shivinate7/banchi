@@ -52,6 +52,18 @@
     "verbatim:"
    ]
   },
+  "docs/decisions/D136-suite-sharded-never-widened.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  },
+  "docs/decisions/D141-browser-matrix-when-reachable.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  },
   "docs/decisions/D145-box-bid-is-a-hidden-identity.md": {
    "lane": "cut pass",
    "marker": [
@@ -158,6 +170,14 @@
     "The owner's words",
     "The owner's words",
     "The owner's words",
+    "The owner's words",
+    "The owner's words",
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D287-home-keeps-shape-five-stages.md": {
+   "lane": "cut pass",
+   "marker": [
     "verbatim:"
    ]
   },
@@ -178,6 +198,7 @@
   "docs/decisions/D296-buyer-list-sorts-five-ways.md": {
    "lane": "cut pass",
    "marker": [
+    "The owner's words",
     "The owner's words"
    ]
   },
@@ -217,6 +238,12 @@
    "lane": "cut pass",
    "marker": [
     "The owner's words",
+    "The owner's words"
+   ]
+  },
+  "docs/specs/motion-trigger.md": {
+   "lane": "cut pass",
+   "marker": [
     "The owner's words"
    ]
   },
