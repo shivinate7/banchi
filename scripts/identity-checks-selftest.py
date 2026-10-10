@@ -2,7 +2,7 @@
 """`pipeline/identity_checks.py`, proved against literal fixtures, and `cli/cmd_cards.py`'s
 `identity`, `photos` and `checks` subcommands, proved against a temp store (D239).
 
-Protects: Each stored-data identity check goes red on its own named defect and stays quiet on clean data.
+Protects: Each stored-data identity check goes red on its own named defect and stays quiet on clean data; `cards identity --write` keeps same-named cards on distinct SKUs and is a no-op on a second run; a preview writes nothing; `cards photos --limit N` moves at most N photographs and stamps nothing short of a full pass.
 Governs: D239, D247
 
 EACH CHECK IS PROVED THE WAY `CLAUDE.md` DEMANDS: shown to catch its own named defect, and
@@ -27,10 +27,6 @@ below now reach `cards checks`, `cards identity` and `cards photos` through `cmd
 
 THE CLI CASES NEED A STORE, THE FOUR CLASSES DO NOT. Each CLI case gets a fresh `BANCHI_HOME`
 and removes it afterwards. The operator's store is never opened.
-
-KNOWN DEFECTS ARE MARKED, NOT HIDDEN. A case the code does not yet meet prints `KNOWN` and
-does not fail the run, so the open defect stays visible in every run. Once the defect is
-fixed the marker reads `FAIL` until its `known_defect` line is removed.
 
 `--mutant merge-identities` IS THE RED PROOF FOR THE IDENTITY CASE. It wraps
 `master.Inventory.bind_sku` so every card binds to the first SKU seen. The distinct-identity
@@ -235,7 +231,6 @@ def test_near_duplicate_name_measured_case():
 
 # ----------------------------------------- the cards CLI (cli/cmd_cards.py), against a temp store
 
-KNOWN = 0
 MADE: List[Path] = []
 PRODUCT_LINE = "Riftbound League of Legends Trading Card Game"
 
@@ -248,19 +243,6 @@ def _mutant_name() -> Optional[str]:
 
 
 MUTANT = _mutant_name()
-
-
-def known_defect(condition: bool, label: str, defect: str, detail: str = "") -> None:
-    """A case the code does not yet meet. Prints `KNOWN` and never fails the run, so the open
-    defect shows in every run. A FIXED defect reads FAIL here, so its marker is removed with
-    the fix instead of lingering."""
-    global KNOWN, FAIL
-    if condition:
-        FAIL += 1
-        print(f"  FAIL   {label}  {defect} is fixed: remove this known_defect marker")
-    else:
-        KNOWN += 1
-        print(f"  KNOWN  {label}  open defect: {defect}  {detail}")
 
 
 def fresh_home() -> Path:
@@ -494,11 +476,12 @@ def case_photos_limit_touches_at_most_n() -> None:
         conn.close()
     reachable = [photos.find(cid, box, index, relocated=stamped, home=home) is not None
                  for cid, box, index in unmoved]
-    known_defect(
+    ok(not stamped, "a pass that stops at the limit does not stamp photos_relocated",
+       f"stamped={stamped}")
+    ok(
         all(reachable),
         "the three photographs not yet moved are still found after a partial write",
-        "a --limit pass stamps photos_relocated, so the legacy address is never read again",
-        f"stamped={stamped}, found {sum(reachable)} of {len(unmoved)}",
+        f"found {sum(reachable)} of {len(unmoved)}",
     )
 
 
@@ -507,10 +490,9 @@ def case_photos_limit_zero_moves_nothing() -> None:
     fresh_home()
     seed_legacy_photographs(3)
     _code, lines = run_cards("photos", write=False, limit=0)
-    known_defect(
+    ok(
         any("moved=0" in line for line in lines),
         "`--limit 0` names zero photographs",
-        "`if limit and` reads 0 as no limit, so it names all three",
         "; ".join(line for line in lines if "moved" in line),
     )
 
@@ -564,7 +546,7 @@ def main() -> int:
         for where in MADE:
             shutil.rmtree(where, ignore_errors=True)
     print()
-    print(f"{PASS} passed, {FAIL} failed, {KNOWN} known defect(s) open")
+    print(f"{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0
 
 
