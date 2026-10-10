@@ -1150,6 +1150,130 @@ def check_cleared_unparsed_goes_to_review(checks: Checks) -> None:
     case("a cleared answer that parses (guard)", said("Pikachu"), parses=True)
 
 
+def _cleared_press(home, cards, cache, review=()):
+    """One `identify --engine haiku` press over `cards` with a fake paid batch. `cards` is a list
+    of (file stem, sidecar or None); `cache` maps a key to a cleared answer; `review` is a list of
+    queue entries stored first. Returns (custom ids sent, console lines). The paid batch answers
+    Articuno for whatever it is sent."""
+    from cli import __main__ as cli_entry, cmd_identify
+    from store.session import Store
+
+    caps = Path(home) / "cleared-caps"
+    caps.mkdir()
+    colors = [(30, 120, 200), (200, 40, 40), (40, 200, 40)]
+    digests = {}
+    for n, (stem, sidecar) in enumerate(cards):
+        identify_images.Image.new("RGB", (64, 89), colors[n]).save(caps / f"{stem}.jpg", "JPEG")
+        if sidecar is not None:
+            (caps / f"{stem}.json").write_text(json.dumps(sidecar), "utf-8")
+    with Store().write() as snapshot:
+        for key, identification in cache.items():
+            snapshot.cache.entries[key] = cache_mod.CacheEntry(
+                identification=identification, photo_sha256="sha-old", prompt_fingerprint="fp",
+                at="t", cleared_by_human=True,
+            )
+        for entry in review:
+            snapshot.review.upsert(entry)
+    answer = {key: "x" for key in prompt.profile("pokemon_card_v1").schema["required"]}
+    answer.update(name="Articuno", number="161", printed_total="159", finish="normal", confidence="high")
+    sent: list = []
+
+    def fake_run_batch(requests, log=None, on_submit=None):
+        sent.extend(request.custom_id for request in requests)
+        return batch.BatchRun(outcomes={
+            r.custom_id: batch.Outcome(r.custom_id, batch.SUCCEEDED, identification=prompt.parse(dict(answer), r.strategy))
+            for r in requests
+        })
+
+    lines: list = []
+    real_run_batch = cmd_identify.batch.run_batch
+    cmd_identify.batch.run_batch = fake_run_batch
+    try:
+        with quiet():
+            cmd_identify.run(
+                cli_entry.build_parser().parse_args(["identify", str(caps), "--engine", "haiku"]), lines.append
+            )
+    finally:
+        cmd_identify.batch.run_batch = real_run_batch
+    return sent, lines
+
+
+def check_cleared_unparsed_no_position_not_bought(checks: Checks) -> None:
+    """A cleared answer that does not parse is never paid for, positioned or not. A photograph
+    with no sidecar is keyed `file:<name>`; its saved answer is just as settled."""
+    from store.session import Store
+
+    checks.note("")
+    checks.note("CLEARED ANSWER THAT DOES NOT PARSE, NO POSITION — never bought")
+    with isolated_home() as home:
+        sent, _ = _cleared_press(home, [("scan", None)], {"file:scan.jpg": {"name": "Human"}})
+        checks.equal(sent, [], "a cleared unreadable answer on a card with no position sends no paid read")
+        kept = Store().read().cache.get("file:scan.jpg")
+        checks.ok(kept is not None and kept.cleared_by_human and kept.identification == {"name": "Human"},
+                  "and the cleared entry is unchanged")
+
+
+def check_cleared_unparsed_held_report_and_join(checks: Checks) -> None:
+    """A held card is neither failed nor identified: not in the report's failed line, not in
+    `identified N/M`, not in the run's `cards`. A later join leaves its review reason alone."""
+    from cli import runs
+    from harness.tests.t7.common import capture_payload, command, write_export
+    from server import capture_server
+    from store.session import Store
+
+    checks.note("")
+    checks.note("HELD CARD IS NOT A FAILURE — report, payload, and the join that follows")
+    with isolated_home() as home:
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(4))
+        sent, lines = _cleared_press(
+            home,
+            [("4-001", {"box": 4, "position": 1, "game": "pokemon"}),
+             ("4-002", {"box": 4, "position": 2, "game": "pokemon"})],
+            {"4/1": {"name": "Human"}},
+        )
+        text = "\n".join(lines)
+        checks.equal(len(sent), 1, "fixture: the other card is paid for once")
+        checks.ok("identification_failed" not in text and not any(l.lstrip().startswith("failed") for l in lines),
+                  "the held card is not reported as failed", text)
+        checks.ok(any(l.split() == ["identified", "1/1"] for l in lines),
+                  "and `identified N/M` counts only the card that was read", text)
+        run = runs.latest()
+        checks.ok(run is not None and "4/1" not in run.read_identifications().get("cards", {}),
+                  "and the held card is not in the run's `cards`")
+        if run is not None:
+            command(checks, "join", str(run.directory), "--export", str(write_export(run.path("export.csv"))))
+        held = Store().read().review.entries.get("4/1")
+        checks.equal(held.reason if held else None, "cleared_answer_unreadable",
+                     "after a join its review reason is still `cleared_answer_unreadable`")
+
+
+def check_cleared_unparsed_answered_in_review(checks: Checks) -> None:
+    """The owner already answered this card in Review. `Queue.upsert` refuses to re-queue it, so
+    the console must not claim it was sent there (D28: an answer outlives the question)."""
+    from dataclasses import asdict
+    from store import queues
+    from store.session import Store
+
+    checks.note("")
+    checks.note("HELD CARD ALREADY ANSWERED IN REVIEW — the console says so, the answer stands")
+    answered = queues.QueueEntry(
+        position="4/1", box=4, index=1, label="Box 4, card 1", photo="p.jpg", reason="no_catalog_row",
+        first_seen="2026-01-01", cleared_by_human=True,
+    )
+    with isolated_home() as home:
+        sent, lines = _cleared_press(
+            home, [("4-001", {"box": 4, "position": 1, "game": "pokemon"})],
+            {"4/1": {"name": "Human"}}, review=[answered],
+        )
+        text = "\n".join(lines)
+        checks.equal(sent, [], "a card answered in Review is not paid for")
+        checks.ok("sent to Review" not in text, "the console does not say it was sent to Review", text)
+        checks.ok("already answered" in text, "it says the card was already answered in Review", text)
+        checks.equal(asdict(Store().read().review.entries["4/1"]), asdict(answered),
+                     "and the owner's entry is left as the owner left it")
+
+
 # ------------------------------------------------------------------------ the model verdict, the promo census, Prepare
 
 
@@ -1362,6 +1486,9 @@ CHECKS = (
     check_cache_position_key,
     check_refused_hit_is_claimed,
     check_cleared_unparsed_goes_to_review,
+    check_cleared_unparsed_no_position_not_bought,
+    check_cleared_unparsed_held_report_and_join,
+    check_cleared_unparsed_answered_in_review,
     check_model_ready_hashes_once,
     check_promo_census,
     check_prepare_clears_stale_part,
