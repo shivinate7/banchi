@@ -12,7 +12,7 @@ front door never did, and nothing compared them.
 So the composition is data. The `check registry` row in `scripts/docs-audit.py` reads the
 entries' shape, and the `commit path` row reads them against the pre-commit hook.
 
-**THIS FILE DRIVES `make check`, `make ci-check` AND THE FOUR CI SHARDS.** Each `shard` field
+**THIS FILE DRIVES `make check`, `make ci-check` AND THE CI SHARDS.** Each `shard` field
 names the CI shard that runs the entry (`None`: a standalone CI job runs it, `revert-guard`).
 `scripts/checks.py --targets [shard]` prints the targets in registry order; the Makefile runs
 them as one `make` call each, so the suite runs in a known order and stops at the first
@@ -68,10 +68,10 @@ NEEDS = {
 # pairing, because an entry claiming both would be describing nothing.
 CHECKS = (
     {
-        "target": "harness",
+        "target": "harness-1",
         "shard": "product",
-        "runs": "$(PYTHON) harness/run.py",
-        "asserts": "Every verification test in harness/run.py's TESTS list. RECOUNT FROM THERE "
+        "runs": "$(PYTHON) harness/run.py --part 1",
+        "asserts": "Slice 1 of harness/run.py's PARTS of the TESTS list (only part 1 writes the T1 result file; each part runs the T7 checks whose name hashes to it). RECOUNT FROM THERE "
                    "— this entry deliberately carries no number, because a count published "
                    "beside a list is the drift this whole file exists about.",
         "needs": ("venv",),
@@ -81,6 +81,34 @@ CHECKS = (
         "why_off_commit_path": "It writes, and it needs the venv. D18 keeps a writing thing off "
                                "the path that decides whether a commit proceeds; the Stop hook "
                                "runs it at turn end instead.",
+        "gates": True,
+        "governed_by": ("D18",),
+    },
+    {
+        "target": "harness-2",
+        "shard": "product-2",
+        "runs": "$(PYTHON) harness/run.py --part 2",
+        "asserts": "Slice 2 of harness/run.py's PARTS of the TESTS list (only part 1 writes the T1 result file; each part runs the T7 checks whose name hashes to it). RECOUNT FROM THERE "
+                   "— this entry deliberately carries no number, because a count published "
+                   "beside a list is the drift this whole file exists about.",
+        "needs": ("venv",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "It needs the venv, and the commit hook runs a bare python3.",
+        "gates": True,
+        "governed_by": ("D18",),
+    },
+    {
+        "target": "harness-3",
+        "shard": "product-3",
+        "runs": "$(PYTHON) harness/run.py --part 3",
+        "asserts": "Slice 3 of harness/run.py's PARTS of the TESTS list (only part 1 writes the T1 result file; each part runs the T7 checks whose name hashes to it). RECOUNT FROM THERE "
+                   "— this entry deliberately carries no number, because a count published "
+                   "beside a list is the drift this whole file exists about.",
+        "needs": ("venv",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "It needs the venv, and the commit hook runs a bare python3.",
         "gates": True,
         "governed_by": ("D18",),
     },
@@ -1015,6 +1043,35 @@ CHECKS = (
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes, and it signals processes. It drives a "
                                "tool that can delete a worktree.",
+        "gates": True,
+        "governed_by": ("D18", "D138"),
+    },
+    {
+        "target": "worktree-create-selftest",
+        "shard": "guards-1",
+        "runs": "bash scripts/worktree-create-selftest.sh",
+        "asserts": "scripts/worktree-create.sh run for four names at once, five rounds, in a "
+                   "throwaway repo with an origin: every creation exits 0 and prints its path, "
+                   "21 trees and 20 branches exist, and no .git/config.lock is left. Red on the "
+                   "hook without --no-track, where parallel creations hit the config lock.",
+        "needs": ("python3", "bash", "git"),
+        "writes": "a bare origin, a clone and twenty linked worktrees, all under `mktemp -d`.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp repo and twenty worktrees.",
+        "gates": True,
+        "governed_by": ("D18",),
+    },
+    {
+        "target": "session-teardown-selftest",
+        "shard": "guards-1",
+        "runs": "bash scripts/session-teardown-selftest.sh",
+        "asserts": "scripts/session-teardown.sh's branch-delete step in a throwaway repo: a "
+                   "worktree-* branch already in the local origin/main is deleted, and an "
+                   "unmerged one is kept.",
+        "needs": ("python3", "bash", "git"),
+        "writes": "a bare origin, a clone and linked worktrees, all under `mktemp -d`.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp repo and removes worktrees.",
         "gates": True,
         "governed_by": ("D18", "D138"),
     },

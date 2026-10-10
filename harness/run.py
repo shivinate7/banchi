@@ -36,6 +36,7 @@ is for.
 
 import sys
 import traceback
+import zlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -71,9 +72,19 @@ TESTS = [
 ]
 
 
-def run_one(module):
+# `--part K` runs one of PARTS slices, so CI can shard the harness (T7 is 342 checks and most of
+# its time). Part 1 also runs every test but T7; each part runs the T7 checks whose name hashes to it (crc32 spreads the
+# slow `check_send_*` run, which a stride put in one part), so the parts together run each check once. `make docs-audit`'s `check registry`
+# row reads PARTS and wants one `harness-K` registry entry for every K.
+PARTS = 3
+
+
+def run_one(module, part=None):
     try:
-        result = module.run()
+        if part and module is t7_store_and_seams:
+            result = module.run(order=lambda todo: [c for c in todo if zlib.crc32(c.__name__.encode()) % PARTS == part - 1])
+        else:
+            result = module.run()
     except NotImplementedYet as exc:
         return Result(False, str(exc) or "not implemented")
     except Exception:
@@ -84,13 +95,15 @@ def run_one(module):
     return result
 
 
-def main():
-    print("BANCHI harness — docs/GATES.md")
+def main(part=None):
+    print("BANCHI harness — docs/GATES.md" + (f" (part {part} of {PARTS})" if part else ""))
     print("=" * 72)
 
     results = []
     for module in TESTS:
-        result = run_one(module)
+        if part and part > 1 and module is not t7_store_and_seams:
+            continue
+        result = run_one(module, part)
         results.append((module, result))
 
         status = "PASS" if result.passed else "FAIL"
@@ -113,4 +126,7 @@ def main():
 if __name__ == "__main__":
     # Every test runs against a throwaway store and no settings file, for the whole process.
     with isolated_home():
-        sys.exit(main())
+        args = sys.argv[1:]
+        if args and (len(args) != 2 or args[0] != "--part" or args[1] not in map(str, range(1, PARTS + 1))):
+            sys.exit(f"usage: harness/run.py [--part 1..{PARTS}]")
+        sys.exit(main(int(args[1]) if args else None))

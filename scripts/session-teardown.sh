@@ -60,14 +60,21 @@ torn=$?    # 3 (janitor.IN_USE): another session stands in the tree; any non-zer
 # scripts/worktree-create.sh makes every Claude Code worktree, so removing it is this hook's
 # job too. No --force: git refuses a tree with uncommitted work, and that tree stays on disk.
 # WorktreeRemove reads exit 0 as "removed", so a tree left on disk exits 1. The branch goes
-# with `-d`, which keeps a branch holding commits that no other ref has.
+# with `-d`, which keeps a branch holding commits that no other ref has. worktree-create.sh
+# cuts with --no-track, so the branch has no upstream and `-d` compares with HEAD only. A
+# branch already in the local origin/main is merged for sure, so it goes with `-D` (no network).
 case "$wtp" in
   */.claude/worktrees/*)
     [ "$torn" = 0 ] || exit 1
     branch="$(git -C "$tree" symbolic-ref --quiet --short HEAD 2>/dev/null)"
     main="$(dirname "$(git -C "$tree" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")"
     git -C "$main" worktree remove "$tree" >/dev/null 2>&1 || exit 1
-    case "$branch" in worktree-*) git -C "$main" branch -d "$branch" >/dev/null 2>&1 ;; esac
+    case "$branch" in
+      worktree-*)
+        flag=-d
+        git -C "$main" merge-base --is-ancestor "$branch" refs/remotes/origin/main >/dev/null 2>&1 && flag=-D
+        git -C "$main" branch "$flag" "$branch" >/dev/null 2>&1 ;;
+    esac
     ;;
 esac
 

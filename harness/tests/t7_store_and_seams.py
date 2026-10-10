@@ -275,8 +275,9 @@ CHECK_ORDER = (
 def run(order=None) -> Result:
     """Run every check, in `CHECK_ORDER` then the box map's, each inside `hermetic`.
 
-    `order` is for the order proof only: a function from the list of checks to the list to
-    run. `harness/run.py` never passes it, so the normal run is the hand-ordered one.
+    `order` is a function from the list of checks to the list to run. The order proof passes
+    one that reorders; `harness/run.py --part K` passes one that keeps this part's slice. A
+    whole `make harness` passes none, so that run is the hand-ordered one.
     """
     from harness.tests import t7_box_map  # its fixtures come from this file (D264)
 

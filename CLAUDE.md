@@ -6,7 +6,7 @@ every card physically is.
 Code cards are a feature of this product, not a second track (D248, turn end never runs the harness, and code cards
 share one rules file). The feature is DORMANT. See "Code cards (dormant feature)" below.
 D14 (two tracks, one rig) still stands in structure. `codes/` is its own package. `docs/map.py`
-carries a `TRACKS` tuple. `scripts/decision-context.py` prints a track banner. Repeal needs the
+carries a `TRACKS` list. `scripts/decision-context.py` prints a track banner. Repeal needs the
 owner's word.
 
 Codex reads this file, not a copy (D135, Codex reads the same rules). `AGENTS.md`,
@@ -80,13 +80,13 @@ make price-refresh-agent  # owner's Mac, main tree only: a daily launchd job tha
 make demo-static    # demo-mirror-install, then a static build to dist-demo/.
 make demo-preview   # serve dist-demo/ as a static host would.
 make check          # the whole suite, product first, guard self-tests last. `make explain` lists it.
-make ci-check       # the same list as `check`, from `scripts/checks.py`. CI runs it as four shards, `revert-guard` apart.
+make ci-check       # the same list as `check`, from `scripts/checks.py`. CI runs it as six shards, `revert-guard` apart.
 make css-var-check  # a `var(--x)` with no fallback and no definition. BANCHI_CSS_VARS=off skips it.
 make token-literal-check  # a CSS literal equal to a design token, ratcheted per file. BANCHI_TOKEN_LITERALS=off skips it.
 make catalog-refresh  # re-clone pokemon-tcg-data into vendor/. Writes. ARGS=--dry-run.
 make catalog-index  # build catalog.sqlite. Gitignored generator.
 make catalog-index-selftest  # that builder on a fixture. Not in `make check`.
-make catalog-mirror # dry run only. ARGS=--dry-run samples over HTTP HEAD.
+make catalog-mirror # fills the image mirror (about 16.7 GB). ARGS=--dry-run samples over HTTP HEAD.
 ./banchi scan     <capture-dir>   # code cards only: read QRs into the ledger. Free.
 ./banchi identify <capture-dir>   # free read first, then the paid second look for the rest. Costs money. --dry-run first.
                                    #   --engine haiku is the paid read alone.
@@ -195,7 +195,7 @@ Fulfiller's. The shell has these parts:
 
 - A sidebar that folds to a rail (⌘.), a top bar and bottom tab bar on phones.
 - A command palette (⌘K, the only way to `#/gallery`), `,` then a letter to jump, ⌘←/⌘→ to step the workflow ring.
-- A keyboard sheet on `?`. A new key binding is not done until it is in `SHORTCUTS` (`app/src/keys.ts`).
+- A keyboard sheet on `?`. A new key binding is not done until it is in `SHORTCUTS` (`app/src/App.tsx`).
 - An error boundary per route. The Fulfiller's `plain` variant offers one button and no error text.
 - A toast stack, an offline banner and the document title.
 
