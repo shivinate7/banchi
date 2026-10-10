@@ -832,12 +832,13 @@ COMPONENTS = [
                                     "note": "PROVED BY `make identity-checks-selftest`, "
                                             "PATH GATED and IN `make check` as of D247's "
                                             "nineteenth entry (owner's word, 2026-09-23): "
-                                            "13 arms, including a mutation arm over the "
-                                            "denominator check's dominant-vs-first-seen "
-                                            "choice. Its one caller is the "
-                                            "`cli/cmd_cards.py:checks` CLI subcommand — "
-                                            "`grep -rl identity_checks harness/` names "
-                                            "nothing, so no harness id tests it either."},
+                                            "arms over the four checks, a mutation arm over "
+                                            "the denominator check's dominant-vs-first-seen "
+                                            "choice, and CLI cases through `cmd_cards.run` "
+                                            "(`checks`, `identity`, `photos --limit`). Its "
+                                            "one caller is the `cli/cmd_cards.py:checks` "
+                                            "subcommand — `grep -rl identity_checks "
+                                            "harness/` names nothing."},
             # THE SKU SELF-CONTRADICTION CHECK, KEPT SEPARATE FROM identity_checks.py (a
             # separate, sibling PR) ON THE OWNER'S OWN RULING.
             "sku_number_contradictions.py": {
@@ -3077,7 +3078,8 @@ COMPONENTS = [
             },
             "identity-checks-selftest.py": {
                 "does": "proves pipeline/identity_checks.py against literal CardRecord "
-                        "fixtures, no store, no network (D239). One "
+                        "fixtures (D239), and the `identity`, `photos` and `checks` "
+                        "subcommands of cli/cmd_cards.py against a temp store. One "
                         "positive and one negative arm per check, built from the exact "
                         "subjects the cited analysis measured. A case proving the "
                         "denominator and digit-count checks flag a genuine rare print "
@@ -3086,7 +3088,7 @@ COMPONENTS = [
                         "arm: a denominator check comparing against the first-seen value "
                         "instead of the dominant one is shown to blame the wrong card "
                         "before the real function is shown to survive the same fixture. "
-                        "13 assertions. PATH GATED, IN `make check` and `make ci-check` "
+                        "PATH GATED, IN `make check` and `make ci-check` "
                         "as of D247's nineteenth entry (owner's word, 2026-09-23) — the "
                         "sentence that used to sit here (\"already covered by T7's "
                         "harness sweep\") was itself wrong: T7 drives `cli/cmd_cards.py` "

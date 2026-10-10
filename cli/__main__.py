@@ -49,6 +49,13 @@ def _say(message: str = "") -> None:
     print(message)
 
 
+def _non_negative_int(text: str) -> int:
+    value = int(text)
+    if value < 0:
+        raise argparse.ArgumentTypeError("must be 0 or more")
+    return value
+
+
 def _pricing_arguments(parser: argparse.ArgumentParser) -> None:
     """Shared by join and emit. emit prefers what the manifest recorded; these are seeds."""
     parser.add_argument(
@@ -421,8 +428,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cards_photos.add_argument(
         "--limit",
-        type=int,
-        help="stop after this many cards. For a first pass over a large corpus.",
+        type=_non_negative_int,
+        help="stop after this many photographs are moved (0 moves none). For a first pass "
+        "over a large corpus.",
     )
     cards_variants = cards_sub.add_parser(
         "variants",
