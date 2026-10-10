@@ -183,7 +183,7 @@ def reading_from_export(export, *, at: int, source: str) -> Tuple[Dict[str, Read
     return found, source_row
 
 
-def _newest_live_reading(directory: Path) -> Tuple[Dict[str, Reading], List[Source]]:
+def _newest_live_reading(directory: Path, skipped: Optional[List[str]] = None) -> Tuple[Dict[str, Reading], List[Source]]:
     """The newest file under `directory`, and only the newest — never the whole directory.
 
     `do_live_export` never sweeps that directory — the file is the evidence for the reading
@@ -198,20 +198,24 @@ def _newest_live_reading(directory: Path) -> Tuple[Dict[str, Reading], List[Sour
         return found, sources
     newest = fetched[-1]
     at = live_export_at(newest.name)
-    if at is None:
-        return found, sources
     try:
+        if at is None:
+            raise ValueError("unreadable stamp")
         export = tcgcsv.read_export(newest)
-    except (tcgcsv.MalformedCsv, OSError):
+    except (tcgcsv.MalformedCsv, OSError, ValueError):
+        if skipped is not None:
+            skipped.append(newest.name)
         return found, sources
     live_found, live_source = reading_from_export(export, at=at, source=newest.name)
     found.update(live_found)
     if live_source is not None:
         sources.append(live_source)
+    elif skipped is not None:  # parsed, but no priced row: as unusable as one that will not parse
+        skipped.append(newest.name)
     return found, sources
 
 
-def collect(bad: Optional[List[str]] = None) -> Tuple[Dict[str, Reading], List[Source]]:
+def collect(bad: Optional[List[str]] = None, skipped: Optional[List[str]] = None) -> Tuple[Dict[str, Reading], List[Source]]:
     """`sku -> the NEWEST market price this machine can read for it`, and where each source's
     reading came from. The whole two-source walk; see the module docstring for the rule.
 
@@ -223,6 +227,7 @@ def collect(bad: Optional[List[str]] = None) -> Tuple[Dict[str, Reading], List[S
 
     `bad`, when given, collects the path of each `pricing.json` that could not be read, so a
     caller that WRITES (`readings adopt`) can refuse instead of dropping those SKUs.
+    `skipped` collects the name of a newest live export that was skipped as unreadable.
     """
     found: Dict[str, Reading] = {}
 
@@ -238,7 +243,7 @@ def collect(bad: Optional[List[str]] = None) -> Tuple[Dict[str, Reading], List[S
         offer(sku, reading)
     sources.extend(run_sources)
 
-    live_found, live_sources = _newest_live_reading(files.inventory_dir() / files.LIVE_DIRNAME)
+    live_found, live_sources = _newest_live_reading(files.inventory_dir() / files.LIVE_DIRNAME, skipped)
     for sku, reading in live_found.items():
         offer(sku, reading)
     sources.extend(live_sources)

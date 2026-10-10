@@ -30,13 +30,14 @@ from typing import Dict
 
 from pipeline import readings as readings_walk
 from store import files
-from store.readings import Reading
+from store.readings import KIND_LIVE, Reading
 from store.session import Store
 
 
 def _adopt(args, say) -> int:
     bad: list = []
-    found, sources = readings_walk.collect(bad)
+    skipped: list = []
+    found, sources = readings_walk.collect(bad, skipped)
 
     try:
         before: Dict[str, Reading] = dict(Store().read().readings.entries)
@@ -69,6 +70,13 @@ def _adopt(args, say) -> int:
             say(f"  {sku}")
         if len(dropped) > 20:
             say(f"  ... and {len(dropped) - 20} more")
+
+    if skipped:
+        # lost = rows the table holds from a live export that nothing offers now
+        lost = sum(1 for sku in dropped if before[sku].kind == KIND_LIVE)
+        for name in skipped:
+            say(f"skipped live export {name}: it could not be read; {lost} sku(s) from an "
+                f"earlier live export are lost")
 
     if args.write and (bad or not found):
         say("")
