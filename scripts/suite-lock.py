@@ -82,7 +82,7 @@ from pathlib import Path
 from typing import List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import machinedir  # noqa: E402
+from server import ports  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -120,7 +120,7 @@ def lock_dir() -> Path:
     # the whole defect: two trees would take two locks and agree with each other about nothing.
     # `~` because the contention is between the processes of one user on one machine.
     override = os.environ.get(LOCK_DIR_ENV, "").strip()
-    return Path(override) if override else machinedir.machine_dir() / "locks"
+    return Path(override) if override else ports.machine_dir() / "locks"
 
 
 def lock_path(name: str) -> Path:

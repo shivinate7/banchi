@@ -22,7 +22,7 @@ the env vars `BANCHI_*`, `~/.banchi` and the launchd labels `com.banchi.*`. The 
 name. Fixtures are never modified.
 
 - GitHub Pages follows the repository name. `.github/workflows/demo.yml` derives `DEMO_BASE` from it.
-- `~/.pkmnscan` moves to `~/.banchi` once, in `machinedir.machine_dir`. Each launchd `--remove` also (`machinedir.remove_old_agent`)
+- `~/.pkmnscan` moves to `~/.banchi` once, in `server/ports.machine_dir`. Each launchd `--remove` also (`server/ports.remove_old_agent`)
   removes the old `com.pkmnscan.*` plist.
 - No gate is current. Gate A, B and C passed, and their run records are deleted. History lives in
   version control.

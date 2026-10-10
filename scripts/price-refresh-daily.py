@@ -28,9 +28,9 @@ HERE = Path(__file__).resolve()
 ROOT = HERE.parent.parent
 LABEL = "com.banchi.price-refresh-daily"
 sys.path.insert(0, str(ROOT))
-import machinedir  # noqa: E402
+from server import ports  # noqa: E402
 
-LOG = machinedir.machine_dir() / "price-refresh-daily.log"
+LOG = ports.machine_dir() / "price-refresh-daily.log"
 
 
 def log(verdict):

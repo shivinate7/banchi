@@ -51,7 +51,6 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import envfile  # noqa: E402
-import machinedir  # noqa: E402
 import primary_sync  # noqa: E402
 import reap_mark  # noqa: E402 — `do_up` marks its detached child directly, see that file's header
 from server import ports  # noqa: E402
@@ -222,7 +221,6 @@ SELF_FILES = (
     "scripts/serve.py",
     "scripts/primary_sync.py",
     "envfile.py",
-    "machinedir.py",
     "server/ports.py",
     "store/files.py",
 )
@@ -1908,7 +1906,7 @@ def do_launch_agent(args: argparse.Namespace) -> int:
     label = ports.agent_label(root)
 
     if args.remove:
-        machinedir.remove_old_agent(label)
+        ports.remove_old_agent(label)
         if not plist.exists():
             print(f"no launch agent installed for this checkout ({label}).")
             return 0

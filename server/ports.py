@@ -50,12 +50,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import sys
+import subprocess
 from pathlib import Path
 from typing import Optional
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import machinedir  # noqa: E402
 
 PORT_ENV = "BANCHI_PORT"
 
@@ -128,6 +125,35 @@ def is_primary_checkout(root: Path) -> bool:
         return False
 
 
+def machine_dir() -> Path:
+    """The one home of `~/.banchi`: per-user machine state (slot registry, suite lock, daily logs).
+
+    Every reader asks here, never `Path.home() / ".banchi"`. The first ask also moves a
+    `~/.pkmnscan` left by the old name, once, and only when the new directory is missing. A
+    failed move leaves the old directory alone and the caller creates the new one.
+    """
+    home = Path.home()
+    new, old = home / ".banchi", home / ".pkmnscan"
+    if not new.exists() and old.is_dir():
+        try:
+            old.rename(new)
+        except OSError:
+            pass
+    return new
+
+
+def remove_old_agent(label: str) -> None:
+    """Unload and delete the `com.pkmnscan.*` agent that `label` (a `com.banchi.*`) replaced.
+
+    Each agent's `--remove` calls it, so one press leaves nothing under the old name.
+    """
+    old = label.replace("com.banchi.", "com.pkmnscan.", 1)
+    if old == label:
+        return
+    subprocess.run(["launchctl", "bootout", "gui/%d/%s" % (os.getuid(), old)], capture_output=True)
+    (Path.home() / "Library" / "LaunchAgents" / (old + ".plist")).unlink(missing_ok=True)
+
+
 def slot_registry() -> Optional[Path]:
     """Where the claimed slots are recorded. `BANCHI_SLOT_REGISTRY` overrides.
 
@@ -139,7 +165,7 @@ def slot_registry() -> Optional[Path]:
     if override:
         return Path(override)
     try:
-        return machinedir.machine_dir() / SLOT_REGISTRY_NAME
+        return machine_dir() / SLOT_REGISTRY_NAME
     except (RuntimeError, KeyError, OSError):
         return None
 
