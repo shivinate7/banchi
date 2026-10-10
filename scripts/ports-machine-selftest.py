@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+"""Selftest for `server/ports.py`'s `machine_dir` and `remove_old_agent`, and their env overrides.
+
+Every case runs with HOME pointed at a fresh temp dir. `Path.home()` reads `$HOME` on POSIX,
+and `setUp` asserts it before each case. `subprocess.run` is replaced, so no case reaches the
+real `launchctl`. `BANCHI_LOCK_DIR` lives in `scripts/suite-lock.py`, so that case loads it.
+
+Run: `python3 scripts/ports-machine-selftest.py`. Stdlib only, no fixtures outside `mkdtemp`.
+"""
+from __future__ import annotations
+
+import importlib.util
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from server import ports  # noqa: E402
+
+LOCK_DIR_ENV = "BANCHI_LOCK_DIR"
+
+# The real home, read before any case touches HOME. The module teardown proves nothing leaked.
+REAL_HOME = Path(os.path.expanduser("~"))
+REAL_PKMNSCAN_AT_START = (REAL_HOME / ".pkmnscan").exists()
+REAL_BANCHI_AT_START = (REAL_HOME / ".banchi").exists()
+
+
+def _load_suite_lock():
+    spec = importlib.util.spec_from_file_location("suite_lock_under_test", ROOT / "scripts" / "suite-lock.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class MachineHomeCase(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="banchi-machine-selftest-")
+        self.addCleanup(self._tmp.cleanup)
+        self.home = Path(self._tmp.name).resolve()
+        self.new = self.home / ".banchi"
+        self.old = self.home / ".pkmnscan"
+        self.launch_agents = self.home / "Library" / "LaunchAgents"
+
+        saved_env = dict(os.environ)
+        self.addCleanup(self._restore_env, saved_env)
+        os.environ["HOME"] = str(self.home)
+        os.environ.pop(ports.SLOT_REGISTRY_ENV, None)
+        os.environ.pop(LOCK_DIR_ENV, None)
+
+        # Fence: the override must take effect before any case runs.
+        self.assertEqual(Path.home(), self.home)
+
+        run = mock.patch.object(ports.subprocess, "run", return_value=mock.Mock(returncode=0))
+        self.fake_run = run.start()
+        self.addCleanup(run.stop)
+
+    @staticmethod
+    def _restore_env(saved):
+        os.environ.clear()
+        os.environ.update(saved)
+
+    def _dir(self, path: Path, marker: str) -> None:
+        path.mkdir(parents=True)
+        (path / "marker").write_text(marker, encoding="utf-8")
+
+    def _plist(self, label: str) -> Path:
+        self.launch_agents.mkdir(parents=True, exist_ok=True)
+        plist = self.launch_agents / (label + ".plist")
+        plist.write_text("<plist/>", encoding="utf-8")
+        return plist
+
+    # ------------------------------------------------------------------ machine_dir
+
+    def test_machine_dir_moves_old_dir_when_only_old_exists(self):
+        self._dir(self.old, "old")
+        got = ports.machine_dir()
+        self.assertEqual(got, self.new)
+        self.assertFalse(self.old.exists())
+        self.assertEqual((self.new / "marker").read_text(encoding="utf-8"), "old")
+
+    def test_machine_dir_does_nothing_when_only_new_exists(self):
+        self._dir(self.new, "new")
+        got = ports.machine_dir()
+        self.assertEqual(got, self.new)
+        self.assertFalse(self.old.exists())
+        self.assertEqual((self.new / "marker").read_text(encoding="utf-8"), "new")
+
+    def test_machine_dir_both_exist_new_wins_old_left_alone(self):
+        self._dir(self.old, "old")
+        self._dir(self.new, "new")
+        got = ports.machine_dir()
+        self.assertEqual(got, self.new)
+        # Old is not merged and not removed. Its files are no longer read by any reader.
+        self.assertTrue(self.old.is_dir())
+        self.assertEqual((self.old / "marker").read_text(encoding="utf-8"), "old")
+        self.assertEqual((self.new / "marker").read_text(encoding="utf-8"), "new")
+
+    def test_machine_dir_both_exist_drops_old_slot_claims(self):
+        # DATA-LOSS FINDING, pinned as current behaviour. A claim in the old registry is
+        # invisible once the new directory exists, so `slot_for` falls back to the hash.
+        self._dir(self.new, "new")
+        self.old.mkdir()
+        (self.old / ports.SLOT_REGISTRY_NAME).write_text(
+            '{"slots": {"/some/checkout": 42}}', encoding="utf-8")
+        self.assertEqual(ports.machine_dir(), self.new)
+        self.assertEqual(ports.read_claims(), {})
+
+    def test_machine_dir_neither_exists_returns_new_and_creates_nothing(self):
+        got = ports.machine_dir()
+        self.assertEqual(got, self.new)
+        self.assertFalse(self.new.exists())
+        self.assertFalse(self.old.exists())
+
+    # ------------------------------------------------------------------ env overrides
+
+    def test_slot_registry_env_override_is_used_and_no_move_happens(self):
+        self._dir(self.old, "old")
+        override = self.home / "elsewhere" / "slots.json"
+        os.environ[ports.SLOT_REGISTRY_ENV] = str(override)
+        self.assertEqual(ports.slot_registry(), override)
+        self.assertTrue(self.old.is_dir())
+        self.assertFalse(self.new.exists())
+
+    def test_lock_dir_env_override_is_used_and_no_move_happens(self):
+        self._dir(self.old, "old")
+        override = self.home / "elsewhere" / "locks"
+        os.environ[LOCK_DIR_ENV] = str(override)
+        suite_lock = _load_suite_lock()
+        self.assertEqual(suite_lock.lock_dir(), override)
+        self.assertTrue(self.old.is_dir())
+        self.assertFalse(self.new.exists())
+
+    def test_lock_dir_default_sits_under_banchi(self):
+        suite_lock = _load_suite_lock()
+        self.assertEqual(suite_lock.lock_dir(), self.new / "locks")
+
+    # ------------------------------------------------------------------ remove_old_agent
+
+    def test_remove_old_agent_deletes_present_pkmnscan_plist(self):
+        plist = self._plist("com.pkmnscan.serve.42")
+        ports.remove_old_agent("com.banchi.serve.42")
+        self.assertFalse(plist.exists())
+        self.fake_run.assert_called_once_with(
+            ["launchctl", "bootout", "gui/%d/com.pkmnscan.serve.42" % os.getuid()],
+            capture_output=True)
+
+    def test_remove_old_agent_absent_plist_is_quiet(self):
+        self.launch_agents.mkdir(parents=True)
+        ports.remove_old_agent("com.banchi.serve.42")  # must not raise
+        self.assertEqual(list(self.launch_agents.iterdir()), [])
+        self.fake_run.assert_called_once()
+
+    def test_remove_old_agent_never_touches_banchi_plist(self):
+        # The argument is the NEW label. The function derives the OLD one and acts on that only.
+        new_plist = self._plist("com.banchi.serve.42")
+        ports.remove_old_agent("com.banchi.serve.42")
+        self.assertTrue(new_plist.exists())
+        self.assertEqual(self.fake_run.call_count, 1)
+        for call in self.fake_run.call_args_list:
+            self.assertNotIn("com.banchi", " ".join(call.args[0]))
+
+    def test_remove_old_agent_pkmnscan_label_is_a_no_op(self):
+        # A label with no com.banchi prefix maps to itself, so the function returns early.
+        plist = self._plist("com.banchi.serve.42")
+        ports.remove_old_agent("com.pkmnscan.serve.42")
+        self.assertTrue(plist.exists())
+        self.fake_run.assert_not_called()
+
+
+def tearDownModule():
+    # A leak into the real home fails the run, even if every case passed.
+    assert (REAL_HOME / ".pkmnscan").exists() == REAL_PKMNSCAN_AT_START, "real ~/.pkmnscan changed"
+    assert (REAL_HOME / ".banchi").exists() == REAL_BANCHI_AT_START, "real ~/.banchi changed"
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

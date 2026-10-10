@@ -593,7 +593,7 @@ port-slots-selftest:
 	$(NPM_GUARD)
 	@python3 scripts/guard-scope.py classify --target port-slots-selftest --base origin/main; rc=$$?; \
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
-		python3 scripts/port-slots.py selftest; \
+		python3 scripts/port-slots.py selftest && python3 scripts/ports-machine-selftest.py; \
 	else \
 		echo "port-slots-selftest: SKIPPED — this branch does not touch the port-slot claim or its callers. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi

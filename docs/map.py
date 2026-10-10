@@ -3533,6 +3533,13 @@ COMPONENTS = [
                         "`.claude/launch.json` names the claimed port.",
                 "governed_by": ["D18", "D43", "D122", "D261"],
             },
+            "ports-machine-selftest.py": {
+                "does": "proves `server/ports.py`'s `machine_dir` (the one-time move of the old "
+                        "machine dir to `~/.banchi`) and `remove_old_agent` (deletes an old "
+                        "launchd plist, never a current one) against a temp HOME. Asserts the "
+                        "real home is untouched. Run by `make port-slots-selftest`.",
+                "governed_by": ["D43", "D94"],
+            },
             "set-hint-agreement.py": {
                 "does": "port-agreement.py's shape, one decision over: proves "
                         "`server/tcg_export.py:match_sets` and `app/src/setHint.ts` resolve a "
