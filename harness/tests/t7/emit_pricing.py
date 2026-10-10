@@ -1020,6 +1020,107 @@ def check_prices_adopt(checks: Checks) -> None:
             failure or outcome.get("text", ""),
         )
 
+    # ------------------- (9) a printed price reads right at a glance; a typed value never crashes
+    # `pricing.money` stripped trailing zeros from a figure finer than a cent, so a value typed
+    # `18.500` printed `$18.5`; a non-finite `watch_above` ('NaN', 'Infinity', 'sNaN') raised a
+    # TypeError out of `prices show --held`; and `cmd_prices._printed` rewrote every `$<digits>`
+    # in a compare key, including one inside a hold's reason text or a `$1,500` figure.
+    for typed, printed in (("18.500", "$18.50"), ("0.400", "$0.40"), ("5.000", "$5.00"), ("0.505", "$0.505")):
+        got = {}
+        failure = raises(lambda: got.update(text=pricing.money(typed)))
+        checks.equal(
+            got.get("text") or failure,
+            printed,
+            f"`pricing.money({typed!r})` prints {printed}: trailing zeros pad to cents, a real "
+            "sub-cent digit is kept",
+        )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.threshold = "0.400"
+        book.answers[ARTICUNO_SKU] = corpus.Answer(value={"withheld": "bullish", "watch_above": "18.500"})
+        book.write()
+        shown = command(checks, "prices", "show", "--held")
+        checks.ok(
+            "threshold=$0.40 " in shown and "above $18.50" in shown,
+            "`prices show` prints a threshold typed 0.400 as $0.40 and a watch typed 18.500 as "
+            "$18.50, two decimals each",
+            shown,
+        )
+
+    for typed in ("NaN", "Infinity", "sNaN"):
+        with isolated_home():
+            book = corpus.Corpus()
+            book.answers[ARTICUNO_SKU] = corpus.Answer(value={"withheld": "bullish", "watch_above": typed})
+            book.write()
+            outcome = {}
+            failure = raises(lambda: outcome.update(text=command(checks, "prices", "show", "--held")))
+            checks.ok(
+                not failure and f"{ARTICUNO_SKU}  bullish" in outcome.get("text", ""),
+                f"`prices show --held` over a hold with watch_above {typed!r} does not raise and "
+                "still prints the hold's line",
+                failure or outcome.get("text", ""),
+            )
+            legacy_run({"overrides": {ARTICUNO_SKU: "3.45"}})
+            failure = raises(lambda: command(checks, "prices", "adopt"))
+            checks.equal(
+                failure,
+                "",
+                f"`prices adopt` over a corpus hold with watch_above {typed!r} does not raise",
+            )
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: {"withheld": "market $3 looks off."}}})
+        legacy_run({"overrides": {ARTICUNO_SKU: "3.45"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.ok(
+            "dropped held: market $3 looks off. (" in said,
+            "a hold reason that says `$3` prints unchanged in the adopt report, never `$3.00`",
+            said,
+        )
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: {"withheld": "worth $1,500 maybe"}}})
+        legacy_run({"overrides": {ARTICUNO_SKU: "3.45"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.ok(
+            "dropped held: worth $1,500 maybe (" in said,
+            "a hold reason that says `$1,500` prints unchanged, never cut at the comma",
+            said,
+        )
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: {"withheld": "bullish", "watch_above": "1,500"}}})
+        legacy_run({"overrides": {ARTICUNO_SKU: "3.45"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.ok(
+            re.search(r"above \$1,500(\.00)?(?![0-9,])", said) is not None and "$1.00,500" not in said,
+            "a watch price of 1,500 prints as $1,500 or $1,500.00, never as a wrong figure",
+            said,
+        )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.sub_threshold = {"flat": "0.5"}
+        book.write()
+        shown = command(checks, "prices", "show")
+        policy_line = next(line for line in shown.splitlines() if line.startswith("policy"))
+        checks.ok(
+            "{" not in policy_line and "'flat'" not in policy_line and "$0.50" in policy_line,
+            "`prices show` prints a flat sub-threshold rule as a sentence with $0.50, not a raw dict",
+            policy_line,
+        )
+
+    with isolated_home():
+        legacy_run({"sub_threshold": {"flat": ".5"}, "overrides": {ARTICUNO_SKU: "3.45"}})
+        said = command(checks, "prices", "adopt")
+        policy_line = next(line for line in said.splitlines() if line.startswith("policy"))
+        checks.ok(
+            "{" not in policy_line and "'flat'" not in policy_line and "$0.50" in policy_line,
+            "`prices adopt` prints a flat sub-threshold rule as a sentence with $0.50, not a raw dict",
+            policy_line,
+        )
+
 
 def check_readings_adopt_cli(checks: Checks) -> None:
     """`banchi readings adopt` and `readings show`, through the real argparse dispatch
