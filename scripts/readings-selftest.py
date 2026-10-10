@@ -410,6 +410,37 @@ def check_cli_adopt() -> None:
            "and its output names that export file and the 2 SKUs it lost",
            "\n".join(said) or "(no output)")
 
+        # -------------------------------------------------- a VALID newest live export that
+        # offers nothing: no readings are lost, so the "skipped" line would be a false alarm
+        # (the owner learns to ignore it). Only an export that cannot be read is skipped.
+        for label, rows in (
+            ("zero rows", []),
+            ("every row with a blank Market Price", [live_row("444", "", "Card D"),
+                                                      live_row("445", "  ", "Card E")]),
+        ):
+            print(f"\n  -- a valid newest live export with {label}: no skipped line --")
+            seed_good_sources(home)
+            write_live(live_dir, "20260301-000000", rows)
+            code, said = run_adopt(write=True)
+            ok(code == 0 and sorted(stored()[0]) == ["111", "222", "333"],
+               f"adopt --write exits 0 and writes the run rows ({label})",
+               f"code {code}, rows {sorted(stored()[0])}")
+            ok(not any("skipped" in line for line in said),
+               f"and prints no 'skipped' line ({label})", "\n".join(said) or "(no output)")
+
+        # -------------------------------------------------- a run row whose snap is a string
+        print("\n  -- a run row whose snap is a string: refuse, name the source, write nothing --")
+        seed_table_from_sources(home)
+        before = stored()
+        table = runs / "2026-01-01-box2-01" / "pricing.json"
+        table.write_text(json.dumps({"skus": [{"sku": "333", "snap": "2.00"}]}), "utf-8")
+        code, said = run_adopt(write=True)
+        ok(code not in (0, None) and stored() == before,
+           "refuses (no traceback): adopt --write over a string snap leaves the table as it was",
+           f"code {code}, said {said[-2:]}")
+        ok(any(str(table) in line for line in said) and not any("raised" in line for line in said),
+           "and the refusal names that run table", "\n".join(said[-4:]))
+
 
 # ---------------------------------------------------------------------------------- main
 
