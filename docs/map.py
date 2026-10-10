@@ -3458,6 +3458,13 @@ COMPONENTS = [
                         "path on stdout; exits non-zero only when git cannot make the tree.",
                 "governed_by": ["D18"],
             },
+            "worktree-create-selftest.sh": {
+                "does": "`make worktree-create-selftest`: runs worktree-create.sh for four "
+                        "names at once, five rounds, in a throwaway repo with an origin. Every "
+                        "tree and branch must exist and no config.lock may remain. Red on the "
+                        "hook without --no-track.",
+                "governed_by": ["D18"],
+            },
             "ignore-check.sh": {"does": "the other half of D47: `git check-ignore` over every path "
                                         "a worktree provisions, asserting each is ignored WHATEVER "
                                         "kind of thing is at it. That entry's own reopening "
