@@ -9,7 +9,9 @@ Run: `python3 scripts/ports-machine-selftest.py`. Stdlib only, no fixtures outsi
 """
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import os
 import sys
 import tempfile
@@ -171,6 +173,68 @@ class MachineHomeCase(unittest.TestCase):
         ports.remove_old_agent("com.pkmnscan.serve.42")
         self.assertTrue(plist.exists())
         self.fake_run.assert_not_called()
+
+
+    # ------------------------------------------------------------------ next round: symlink
+    # RED on the current code: the old path is gone after the move, so nothing is linked.
+
+    def test_machine_dir_leaves_symlink_at_old_path_after_move(self):
+        self._dir(self.old, "old")
+        ports.machine_dir()
+        self.assertTrue(self.old.is_symlink(), "old path must be a symlink after the move")
+        self.assertEqual(self.old.resolve(), self.new.resolve())
+        (self.old / "written_via_old.txt").write_text("x", encoding="utf-8")
+        self.assertTrue((self.new / "written_via_old.txt").is_file())
+
+    def test_machine_dir_both_exist_real_old_moves_missing_files_and_links(self):
+        # RED on the current code: the real old dir is left alone and nothing is moved.
+        self._dir(self.new, "new")
+        (self.new / "common.txt").write_text("new wins", encoding="utf-8")
+        self.old.mkdir()
+        (self.old / "only_old.txt").write_text("from old", encoding="utf-8")
+        (self.old / "common.txt").write_text("old copy", encoding="utf-8")
+        got = ports.machine_dir()
+        self.assertEqual(got, self.new)
+        self.assertEqual((self.new / "only_old.txt").read_text(encoding="utf-8"), "from old")
+        # For a file present in both, the new one wins. The old copy is not kept aside.
+        self.assertEqual((self.new / "common.txt").read_text(encoding="utf-8"), "new wins")
+        self.assertTrue(self.old.is_symlink(), "old path must be replaced by a symlink")
+        self.assertEqual(self.old.resolve(), self.new.resolve())
+
+    def test_machine_dir_old_symlink_already_linked_changes_nothing(self):
+        # GREEN on the current code by design: this is a guard for the builder's change.
+        self._dir(self.new, "new")
+        os.symlink(self.new, self.old)
+        before = sorted(p.name for p in self.new.iterdir())
+        got = ports.machine_dir()
+        self.assertEqual(got, self.new)
+        self.assertTrue(self.old.is_symlink())
+        self.assertEqual(self.old.resolve(), self.new.resolve())
+        self.assertEqual(sorted(p.name for p in self.new.iterdir()), before)
+        self.assertEqual((self.new / "marker").read_text(encoding="utf-8"), "new")
+
+    # ------------------------------------------------------------------ next round: bootout
+
+    def test_remove_old_agent_keeps_plist_when_bootout_fails(self):
+        # RED on the current code: the plist is deleted whatever bootout returns.
+        # Exit 5 is "Input/output error" (`launchctl error 5`), not "not loaded".
+        plist = self._plist("com.pkmnscan.serve.42")
+        self.fake_run.return_value = mock.Mock(
+            returncode=5, stderr=b"Boot-out failed: 5: Input/output error")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            ports.remove_old_agent("com.banchi.serve.42")
+        self.assertTrue(plist.exists(), "plist must stay when bootout fails")
+        self.assertIn("com.pkmnscan.serve.42", out.getvalue(), "a line must be printed")
+
+    def test_remove_old_agent_deletes_plist_when_not_loaded(self):
+        # GREEN on the current code by design: exit 113 is "Could not find specified service"
+        # (`launchctl error 113`), the "not loaded" code this round uses.
+        plist = self._plist("com.pkmnscan.serve.42")
+        self.fake_run.return_value = mock.Mock(
+            returncode=113, stderr=b"Boot-out failed: 113: Could not find specified service")
+        ports.remove_old_agent("com.banchi.serve.42")
+        self.assertFalse(plist.exists(), "plist must go when the service is not loaded")
 
 
 def tearDownModule():
