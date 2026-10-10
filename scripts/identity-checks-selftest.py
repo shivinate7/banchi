@@ -687,20 +687,87 @@ def case_rerun_with_sidecar_that_cannot_move_is_rewritten_from_the_store() -> No
     check_fresh_sidecar(home, cid, "from-the-store", code)
 
 
-def case_legacy_sidecar_left_after_the_stamp_is_found() -> None:
-    print("find_sidecar(relocated=True) — a legacy sidecar left behind is still found")
+def case_after_the_stamp_the_sidecar_is_at_its_name_and_legacy_is_not_read() -> None:
+    print("find_sidecar(relocated=True) — the sidecar is at its name; a stray legacy file is not read")
     from store import photos
 
     home = fresh_home()
-    placed = seed_legacy_photographs(1)
-    cid, box, index, _blob = placed[0]
+    placed = seed_legacy_photographs(2)
+    (cid_a, box_a, index_a, _a), (cid_b, box_b, index_b, _b) = placed
+    photos.legacy_path(box_a, index_a, home).with_suffix(photos.SIDECAR_SUFFIX).write_text("{}")
     code, _lines = run_cards("photos", write=True, limit=None)
     ok(code == 0 and stamped_at(home), "the pass stamps, so the case is the relocated one")
+    found = photos.find_sidecar(cid_a, box_a, index_a, relocated=True, home=home)
+    ok(found == photos.sidecar_path(cid_a, home), "the moved sidecar is found at its name",
+       f"find_sidecar(relocated=True)={found}")
+    stray = photos.legacy_path(box_b, index_b, home).with_suffix(photos.SIDECAR_SUFFIX)
+    stray.write_text('{"note": "someone else"}')
+    found = photos.find_sidecar(cid_b, box_b, index_b, relocated=True, home=home)
+    ok(found is None, "a stray file at the legacy address is not returned for a card with none",
+       f"find_sidecar(relocated=True)={found}")
+
+
+def case_stray_legacy_photo_is_not_returned_once_relocated() -> None:
+    print("photos.find(relocated=True) — a stray legacy photo is not returned for a nameless card")
+    from store import photos
+
+    home = fresh_home()
+    stray = photos.legacy_path(3, 17, home)
+    stray.parent.mkdir(parents=True, exist_ok=True)
+    stray.write_bytes(b"\xff\xd8 someone else's card")
+    found = photos.find("nophoto:3/17@x", 3, 17, relocated=True, home=home)
+    ok(found is None, "the legacy address is not consulted after the stamp", f"find={found}")
+    control = photos.find("nophoto:3/17@x", 3, 17, relocated=False, home=home)
+    ok(control == stray, "control: before the stamp the same call does read it", f"find={control}")
+
+
+def case_sidecar_and_rewrite_both_fail_refuses_the_card() -> None:
+    print("cards photos --write — a sidecar that can neither move nor be rewritten refuses the card")
+    from unittest import mock
+    from store import photos
+
+    home = fresh_home()
+    placed = seed_legacy_photographs(2)
+    cid, box, index, _blob = placed[0]
     legacy = photos.legacy_path(box, index, home).with_suffix(photos.SIDECAR_SUFFIX)
     legacy.write_text("{}")
-    found = photos.find_sidecar(cid, box, index, relocated=True, home=home)
-    ok(found == legacy, "the legacy sidecar is returned when the new address has none",
-       f"find_sidecar(relocated=True)={found}")
+    with mock.patch.object(photos, "adopt_sidecar", side_effect=OSError("move said no")), \
+            mock.patch.object(photos, "write_sidecar", side_effect=OSError("write said no")):
+        code, lines = run_cards("photos", write=True, limit=None)
+    ok(code != 0, "the run exits non-zero", f"exit {code}")
+    ok(any("refused=1" in line for line in lines), "and the census counts the card as refused",
+       "; ".join(line for line in lines if "refused" in line))
+    ok(not stamped_at(home), "and nothing is stamped")
+    ok(legacy.is_file(), "and the legacy sidecar is left where it was")
+
+
+def case_copied_sidecar_whose_source_cannot_go_is_not_rewritten() -> None:
+    print("cards photos --write — a sidecar copied, then its source stuck, keeps the copied file")
+    from unittest import mock
+    from store import photos
+
+    home = fresh_home()
+    placed = seed_legacy_photographs(2)
+    cid, box, index, _blob = placed[0]
+    legacy = photos.legacy_path(box, index, home).with_suffix(photos.SIDECAR_SUFFIX)
+    legacy.write_text('{"box": %d, "index": %d, "note": "the-sidecar-itself"}' % (box, index))
+    mark_record(cid, "from-the-store")
+    real_unlink = photos.unlink
+
+    def stuck_sidecar(target):
+        if target is not None and target.suffix == photos.SIDECAR_SUFFIX:
+            raise OSError("unlink said no")
+        return real_unlink(target)
+
+    with mock.patch.object(photos, "unlink", side_effect=stuck_sidecar):
+        code, _lines = run_cards("photos", write=True, limit=None)
+    copied = photos.sidecar_path(cid, home)
+    text = copied.read_text() if copied.is_file() else ""
+    ok("the-sidecar-itself" in text and "from-the-store" not in text,
+       "the copy at the new address is not rewritten from the record",
+       f"exists={copied.is_file()}, text={text!r}")
+    ok(code == 0 and stamped_at(home), "and the run finishes and stamps",
+       f"exit {code}, stamped={stamped_at(home)}")
 
 
 TESTS = [
@@ -723,7 +790,10 @@ TESTS = [
     case_kill_between_photo_and_sidecar_leaves_sidecar_reachable,
     case_sidecar_that_cannot_move_is_rewritten_from_the_store,
     case_rerun_with_sidecar_that_cannot_move_is_rewritten_from_the_store,
-    case_legacy_sidecar_left_after_the_stamp_is_found,
+    case_after_the_stamp_the_sidecar_is_at_its_name_and_legacy_is_not_read,
+    case_stray_legacy_photo_is_not_returned_once_relocated,
+    case_sidecar_and_rewrite_both_fail_refuses_the_card,
+    case_copied_sidecar_whose_source_cannot_go_is_not_rewritten,
 ]
 
 
