@@ -402,9 +402,16 @@ def run(ok) -> None:
     _no_owner_quotes(ok)
 
 
-def _no_owner_quotes_row(docs: dict, listed: dict, base: dict | None = None) -> list[str]:
+def _no_owner_quotes_row(docs: dict, listed: dict, base: dict | None = None, renames: list | None = None) -> list[str]:
+    """The messages of `_no_owner_quotes_check`."""
+    row = _no_owner_quotes_check(docs, listed, base, renames)
+    return [f"{f.where} {f.message}" for f in row.findings]
+
+
+def _no_owner_quotes_check(docs: dict, listed: dict, base: dict | None = None, renames: list | None = None):
     """The `no owner quotes` row over a throwaway repo: `docs` is path -> text, `listed` and
-    `base` are the allow list's `files` block now and at the merge-base. Returns the messages."""
+    `base` are the allow list's `files` block now and at the merge-base (`base` None is an
+    unreadable base), `renames` is the rename pairs (old, new) the row reads. Returns the row."""
     allow_doc = lambda files: {"files": {f: {"lane": "cut pass", "marker": m} for f, m in files.items()}}  # noqa: E731
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -415,12 +422,50 @@ def _no_owner_quotes_row(docs: dict, listed: dict, base: dict | None = None) -> 
         allow.write_text(json.dumps(allow_doc(listed)), encoding="utf-8")
         base_doc = allow_doc(base) if base is not None else None
         report = Report()
+        pairs = lambda: list(renames or [])  # noqa: E731
         with mock.patch.object(records, "ROOT", root), \
                 mock.patch.object(records, "NO_OWNER_QUOTES_ALLOW", allow), \
-                mock.patch.object(strings, "_offender_list_at_merge_base", lambda _rel: (base_doc, "base")):
+                mock.patch.object(strings, "_offender_list_at_merge_base", lambda _rel: (base_doc, "base")), \
+                mock.patch.object(strings, "_git_renames", pairs, create=True), \
+                mock.patch.object(records, "_git_renames", pairs, create=True):
             records.check_no_owner_quotes(report)
-    row = [c for c in report.checks if c.check == "no owner quotes"][0]
-    return [f"{f.where} {f.message}" for f in row.findings]
+    return [c for c in report.checks if c.check == "no owner quotes"][0]
+
+
+def _prune_no_owner_quotes() -> tuple[str, dict]:
+    """`offenders-prune.py --write` over a throwaway tree whose `no owner quotes` list holds one
+    stale entry. Returns (its output, the list after)."""
+    import contextlib
+    import io
+    import sys
+
+    prune = _sibling("offenders-prune.py")
+    audit = prune._audit()
+    quote = "The owner's words"
+    a = "docs/decisions/D001-a.md"
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / a).parent.mkdir(parents=True)
+        (root / a).write_text("plain text\n", encoding="utf-8")
+        allow = root / "allow.json"
+        allow.write_text(json.dumps({"files": {a: {"lane": "cut pass", "marker": [quote]}}}), encoding="utf-8")
+        spelling = root / "spelling.json"
+        spelling.write_text(json.dumps({"files": {}}), encoding="utf-8")
+        out = io.StringIO()
+        with mock.patch.object(records, "ROOT", root), \
+                mock.patch.object(records, "NO_OWNER_QUOTES_ALLOW", allow), \
+                mock.patch.object(audit, "ROOT", root, create=True), \
+                mock.patch.object(audit, "NO_OWNER_QUOTES_ALLOW", allow, create=True), \
+                mock.patch.object(prune, "ROOT", root), \
+                mock.patch.object(prune, "_audit", lambda: audit), \
+                mock.patch.object(prune, "git_renames", lambda *_a, **_k: []), \
+                mock.patch.object(prune, "interpunct_inputs", lambda _a: None), \
+                mock.patch.object(prune, "markdown_spelling_inputs",
+                                  lambda _a: (spelling, {}, lambda _k: True, lambda p: p, lambda e: e, {"STE006"})), \
+                mock.patch.object(sys, "argv", ["offenders-prune.py", "--write"]), \
+                contextlib.redirect_stdout(out):
+            prune.main()
+        return out.getvalue(), json.loads(allow.read_text(encoding="utf-8"))
 
 
 def _no_owner_quotes(ok) -> None:
@@ -446,3 +491,28 @@ def _no_owner_quotes(ok) -> None:
         {"docs/decisions/" + "D" + "-no-owner-quotes.md": f"{quote}\nverbatim:\n",
          "docs/decisions/" + "D" + "999-no-owner-quotes.md": f"{quote}\n"}, {}, {})
     ok(got == [], "5. the record file itself is skipped, before and after its number is claimed", str(got))
+
+    print("\nno owner quotes: the marker forms, the record's own name, the base, renames and the pruner")
+    got = _no_owner_quotes_row({a: "The owner's\nwords: x\n"}, {}, {})
+    ok(len(got) == 1 and "does not list it" in got[0], "6. a marker wrapped over a line break is found", str(got))
+    for text in ('The owner\'s word: *"keep it"*', "The owner's request, verbatim, was to stop.",
+                 "The owner’s request, verbatim, was to stop."):
+        got = _no_owner_quotes_row({a: f"{text}\n"}, {}, {})
+        ok(len(got) == 1 and "does not list it" in got[0], f"7. the singular and verbatim forms are found: {text!r}", str(got))
+    for text in ("Merge only on the owner's word.", "It waits for the owner's word, then merges."):
+        got = _no_owner_quotes_row({a: f"{text}\n"}, {}, {})
+        ok(got == [], f"8. a permission phrase stays quiet: {text!r}", str(got))
+    for name in ("docs/decisions/" + "D" + "321-ban-no-owner-quotes.md", "docs/decisions/zz-no-owner-quotes.md"):
+        got = _no_owner_quotes_row({name: f"{quote}\n"}, {}, {})
+        ok(len(got) == 1 and "does not list it" in got[0], f"9. only the record itself is skipped, not {name}", str(got))
+    row = _no_owner_quotes_check({a: f"{quote}\n"}, {a: [quote]}, None)
+    ok("Only-shrinks not compared" in row.summary and row.findings == [],
+       "10. an unreadable merge-base prints a note that only-shrinks was not compared", row.summary)
+    moved = {b: f"{quote}\n"}
+    got = _no_owner_quotes_row(moved, {b: [quote]}, {a: [quote]}, renames=[(a, b)])
+    ok(got == [], "11. a renamed listed file is re-keyed, not growth", str(got))
+    got = _no_owner_quotes_row(moved, {b: [quote]}, {a: [quote]}, renames=[])
+    ok(len(got) == 1 and "gained" in got[0], "11b. growth is counted per file: with no rename pair the same move is growth", str(got))
+    printed, after = _prune_no_owner_quotes()
+    ok("no owner quotes" in printed and after.get("files") == {},
+       "12. offenders-prune deletes a stale entry from the no-owner-quotes list", f"{printed!r} {after}")
