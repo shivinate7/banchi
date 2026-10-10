@@ -137,16 +137,16 @@ def _run_readings(root: Path, bad: Optional[List[str]] = None) -> Tuple[Dict[str
             at = int(table.stat().st_mtime)
             if not isinstance(parsed, dict) or not isinstance(parsed.get("skus"), list):
                 raise ValueError("not a pricing table")
+            if bad is not None and any(
+                isinstance(row, dict) and not isinstance(row.get("snap") or {}, dict)
+                for row in parsed["skus"]
+            ):  # only a caller that collects `bad` can refuse; the rest still see the defect
+                raise ValueError("a row's snap is not an object")
         except (OSError, ValueError):
             if bad is not None:
                 bad.append(str(table))
             continue
-        try:
-            run_found, run_source = reading_from_table(parsed, at=at, source=entry.name)
-        except (AttributeError, TypeError):  # a row shaped wrong, e.g. a string `snap`
-            if bad is not None:
-                bad.append(str(table))
-            continue
+        run_found, run_source = reading_from_table(parsed, at=at, source=entry.name)
         for sku, candidate in run_found.items():
             here = found.get(sku)
             if here is None or candidate.at >= here.at:
@@ -215,8 +215,8 @@ def _newest_live_reading(directory: Path, skipped: Optional[List[str]] = None) -
     found.update(live_found)
     if live_source is not None:
         sources.append(live_source)
-    elif skipped is not None and tcgcsv.SKU_COLUMN not in export.header:
-        skipped.append(newest.name)  # not a price export: parsed, but no SKU column
+    elif skipped is not None and not {tcgcsv.SKU_COLUMN, tcgcsv.MARKET_PRICE_COLUMN} <= set(export.header):
+        skipped.append(newest.name)  # not a price export: no SKU or Market Price column
     return found, sources
 
 
