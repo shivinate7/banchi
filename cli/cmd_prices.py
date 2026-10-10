@@ -21,6 +21,7 @@ over a corpus that already holds answers keeps the corpus's and retires the file
 from __future__ import annotations
 
 import json
+import re
 
 from cli import runs
 from pipeline import corpus, decisions, pricing
@@ -89,16 +90,16 @@ def _adopt(args, say) -> int:
             f"sitting, and --force is how a run file overrides it. "
             f"{len(differing)} differ from the file:")
         for row in differing:
-            say(f"  {row.sku}  kept {row.in_corpus} (corpus) — file said {row.in_file} ({row.run})")
+            say(f"  {row.sku}  kept {_printed(row.in_corpus)} (corpus) — file said {_printed(row.in_file)} ({row.run})")
 
     if changes:
         say("")
         say(f"{len(changes)} card(s) were answered more than one way. Newest wins:")
         for change in changes:
             mark = "  <-- A HOLD WAS REPLACED BY A PRICE" if change.hold_lost else ""
-            say(f"  {change.sku}  kept {change.kept}{mark}")
+            say(f"  {change.sku}  kept {_printed(change.kept)}{mark}")
             for name, token in change.dropped:
-                say(f"      dropped {token} ({name})")
+                say(f"      dropped {_printed(token)} ({name})")
         lost = [change for change in changes if change.hold_lost]
         if lost:
             say("")
@@ -140,6 +141,11 @@ def _adopt(args, say) -> int:
     say("                 a retired file is history: nothing reads it, and join and emit no")
     say("                 longer refuse the run for carrying it.")
     return 0
+
+
+def _printed(token: str) -> str:
+    """A `corpus._token` compare key as the owner reads it: every `$` figure gets cents."""
+    return re.sub(r"\$(-?[0-9][0-9.]*)", lambda m: pricing.money(m.group(1)), token)
 
 
 def _show(args, say) -> int:
