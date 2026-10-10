@@ -1561,9 +1561,223 @@ def check_product_sheet_unsent_sku(checks: Checks) -> None:
         checks.ok(code == "sku_unknown", "a SKU in no table still refuses sku_unknown")
 
 
+# ------------------------------------------------------------------ archive command (D219, D222)
+#
+# `./banchi archive` (`cli/cmd_pricearchive.py`) through `command()`, the same seam every CLI
+# case in this file uses. Three promises the operator is given, each a check below: a preview
+# is free and writes nothing, a `--write` pass never deletes an archived row, and `show --sku`
+# names exactly one SKU's rows. `Market` is the one class a sweep builds, so the write case
+# swaps it for a scripted stand-in and the preview case leaves the real one in place and
+# watches the doors it would knock on.
+
+
+def _tree_digest(root) -> dict:
+    """Every file under `root` as `{relative path: sha256}`. The whole home, not one named
+    file: a write to a cache, a WAL or a sidecar shows up as a difference too."""
+    import hashlib
+
+    return {
+        str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(Path(root).rglob("*"))
+        if path.is_file()
+    }
+
+
+@contextlib.contextmanager
+def _network_recorder():
+    """Every attempt to reach the network, recorded and refused.
+
+    Three doors a `urllib` fetch can go through, each patched to raise `OSError` after it
+    records the attempt. A caller that catches the error still shows up in `attempts`, which
+    is the point: the preview's own `except` would otherwise hide a call the brief forbids.
+    """
+    import socket
+    from unittest import mock
+
+    attempts = []
+
+    def refuse(*args, **_kwargs):
+        attempts.append(repr(args[-1:]))
+        raise OSError("harness: network blocked")
+
+    with mock.patch.object(socket, "create_connection", refuse), \
+            mock.patch.object(socket.socket, "connect", refuse), \
+            mock.patch.object(urllib.request, "urlopen", refuse):
+        yield attempts
+
+
+def _scripted_market(script):
+    """A class standing in for `pipeline/pricehistory.py:Market` inside one sweep.
+
+    `script` maps SKU to `{range: Series}`. A SKU with no entry is a refusal, the way the real
+    `Market` reports a SKU it cannot answer for. Nothing here opens a socket.
+    """
+
+    class ScriptedMarket:
+        def __init__(self, **_kwargs):
+            self.requests = 0
+
+        def readings_for_rows(self, rows, ranges=(), *, product_ids=None):
+            readings, refusals = {}, {}
+            for row in rows:
+                sku = row.get("TCGplayer Id", "")
+                by_range = script.get(sku)
+                if by_range is None:
+                    refusals[sku] = "not in the script"
+                    continue
+                wanted = {r: s for r, s in by_range.items() if r in ranges}
+                readings[sku] = pricehistory.Reading(sku=sku, product_id=4242, series=wanted)
+            return readings, refusals
+
+    return ScriptedMarket
+
+
+def _one_month_series(sku: str, start, price: str):
+    """A `month` series holding one bucket that starts on `start` at `price`."""
+    from decimal import Decimal
+
+    bucket = pricehistory.Bucket(
+        start=start, market=Decimal(price), quantity=2, transactions=2,
+        low=Decimal(price), high=Decimal(price),
+    )
+    return pricehistory.Series(
+        sku=sku, product_id=4242, range="month", variant="Normal", condition="Near Mint",
+        language="English", total_quantity_sold=2, total_transaction_count=2,
+        buckets=(bucket,),
+    )
+
+
+def _seed_one_sku_card(sku: str) -> None:
+    """One identified riftbound card whose stored SKU is `sku` — the only subject a sweep has."""
+    with Store().write() as snapshot:
+        snapshot.inventory.set_state("7/1", master.IDENTIFIED)
+        card = snapshot.inventory.cards["7/1"]
+        card.game = "riftbound"
+        card.sku = sku
+
+
+def check_archive_preview_is_free(checks: Checks) -> None:
+    """`archive sweep` with no `--write` leaves the home byte-identical and opens no socket.
+
+    The preview is the press an operator runs to see what a real pass would cost, so it has
+    to be safe to run at any time. The module docstring promises it reads only the archive and
+    the store. The sweep's own `Market` is built in `_sweep` before the preview branch, so this
+    case also proves that building it costs nothing on the wire for a store with no sealed sale.
+    """
+    from store.pricearchive import Bucket
+
+    checks.note("")
+    checks.note("ARCHIVE PREVIEW — `sweep` without --write: home unchanged, no network")
+    with isolated_home() as home:
+        capture_server.do_capture(capture_payload(7, game="riftbound"))
+        _seed_one_sku_card("7700001")
+        with Store().write() as snapshot:
+            snapshot.archive.upsert({
+                "7700001:month:2026-01-05": Bucket(
+                    "7700001", 4242, "month", 1, "2026-01-05", "0.40", 3, 1, None, None, 1),
+            })
+        before = _tree_digest(home)
+        checks.ok("inventory/store.sqlite" in before, "the digest covers the store file itself")
+        with _network_recorder() as attempts:
+            text = command(checks, "archive", "sweep")
+        checks.ok("DRY RUN" in text and "1 sku(s) subject to this pass" in text,
+                  "the preview ran over the one card's SKU, not an early 'nothing to sweep'",
+                  text)
+        checks.equal(attempts, [], "a preview opens no socket and fetches no URL")
+        after = _tree_digest(home)
+        # SQLite's `-shm` file is the WAL index. Any reader rewrites it, so it is runtime state
+        # and not store content. Every other file, the store included, must match byte for byte.
+        changed = sorted(
+            name for name in set(before) | set(after)
+            if not name.endswith("-shm") and before.get(name) != after.get(name)
+        )
+        checks.equal(changed, [], "a preview leaves the store and every other file byte-identical")
+
+
+def check_archive_write_never_deletes(checks: Checks) -> None:
+    """`archive sweep --write` adds the buckets it read and deletes none of the rows it held.
+
+    D219: the source window slides, so an archived row may be the only copy of a reading the
+    source can no longer produce. Three rows are seeded. One is a bucket for the swept SKU the
+    market will not return (a different start). One is an `annual` bucket for the same SKU. One
+    belongs to a SKU the store does not carry at all. The pass must add its new bucket and
+    leave all three exactly as they were.
+    """
+    from datetime import date
+    from unittest import mock
+
+    from store.pricearchive import Bucket
+
+    checks.note("")
+    checks.note("ARCHIVE WRITE — `sweep --write` never deletes or rewrites a row it did not read")
+    with isolated_home():
+        capture_server.do_capture(capture_payload(7, game="riftbound"))
+        _seed_one_sku_card("7700001")
+        held = {
+            "7700001:month:2026-01-05": Bucket(
+                "7700001", 4242, "month", 1, "2026-01-05", "0.40", 3, 1, None, None, 1),
+            "7700001:annual:2025-01-06": Bucket(
+                "7700001", 4242, "annual", 7, "2025-01-06", "0.35", 9, 4, None, None, 1),
+            "8800002:month:2026-02-01": Bucket(
+                "8800002", 4243, "month", 1, "2026-02-01", "1.10", 1, 1, None, None, 1),
+        }
+        with Store().write() as snapshot:
+            snapshot.archive.upsert(held)
+        script = {"7700001": {"month": _one_month_series("7700001", date(2026, 9, 10), "0.50")}}
+        with mock.patch.object(pricehistory, "Market", _scripted_market(script)):
+            text = command(checks, "archive", "sweep", "--write")
+        after = dict(Store().read().archive.entries)
+        checks.ok("7700001:month:2026-09-10" in after,
+                  "the write landed the new bucket, so the case is not vacuous", text)
+        checks.equal([key for key in held if key not in after], [],
+                     "no archived row is deleted by a --write pass")
+        checks.equal([key for key in held if after.get(key) != held[key]], [],
+                     "no archived row the pass did not read is rewritten")
+
+
+def check_archive_show_sku(checks: Checks) -> None:
+    """`archive show --sku ID` prints that SKU's own buckets and nothing for any other SKU.
+
+    `show` is the read an operator uses to see what the archive holds for one card. Two of the
+    three seeded rows belong to one SKU, and one belongs to another. The known SKU must print
+    both of its own starts and never the other SKU's. An unknown SKU must print the refusal
+    line and nothing else.
+    """
+    from store.pricearchive import Bucket
+
+    checks.note("")
+    checks.note("ARCHIVE SHOW --sku — one SKU's rows, nothing for an unknown SKU")
+    with isolated_home():
+        capture_server.do_capture(capture_payload(7, game="riftbound"))
+        with Store().write() as snapshot:
+            snapshot.archive.upsert({
+                "7700001:month:2026-01-05": Bucket(
+                    "7700001", 4242, "month", 1, "2026-01-05", "0.40", 3, 1, None, None, 1),
+                "7700001:annual:2025-01-06": Bucket(
+                    "7700001", 4242, "annual", 7, "2025-01-06", "0.35", 9, 4, None, None, 1),
+                "8800002:month:2026-02-01": Bucket(
+                    "8800002", 4243, "month", 1, "2026-02-01", "1.10", 1, 1, None, None, 1),
+            })
+        text = command(checks, "archive", "show", "--sku", "7700001")
+        checks.ok("7700001: 2 bucket(s)" in text,
+                  "show --sku states the count of that SKU's own buckets", text)
+        checks.ok("2026-01-05" in text and "2025-01-06" in text,
+                  "show --sku prints each of that SKU's bucket starts", text)
+        checks.ok("8800002" not in text and "2026-02-01" not in text,
+                  "show --sku prints no row that belongs to another SKU", text)
+        unknown = command(checks, "archive", "show", "--sku", "9999999")
+        checks.ok("9999999: no bucket archived" in unknown,
+                  "show --sku for an unknown SKU says so", unknown)
+        checks.ok("7700001" not in unknown and "8800002" not in unknown,
+                  "show --sku for an unknown SKU prints no other SKU's row", unknown)
+
+
 CHECKS = (
     check_price_history,
     check_history_route,
     check_history_blocked_route,
     check_product_sheet_unsent_sku,
+    check_archive_preview_is_free,
+    check_archive_write_never_deletes,
+    check_archive_show_sku,
 )
