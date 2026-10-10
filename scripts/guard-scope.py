@@ -107,8 +107,6 @@ ROSTER = (
     {"target": "match-selftest", "test": "scripts/match-selftest.py"},
     {"target": "browser-scope-selftest", "test": "scripts/browser-scope.py"},
     {"target": "port-slots-selftest", "test": "scripts/port-slots.py"},
-    {"target": "port-slots-selftest", "test": "scripts/ports-machine-selftest.py"},
-    {"target": "port-slots-selftest", "test": "scripts/suite-lock.py"},
     # THE PRODUCT HARNESS, on the owner's word (D247, amended). Not a self-test, so its subjects
     # are not read from one file: `harness_subjects()` reads every module under `harness/`.
     {"target": "harness", "test": "harness/run.py", "derive": "harness"},
@@ -447,6 +445,10 @@ EXTRA_SUBJECTS = {
         ("app/src/Inventory.tsx", "the selftest asserts the specs it reaches."),
         ("app/src/Home.tsx", "the selftest asserts the specs it reaches."),
         ("app/tests/**", "the specs and their helpers are read for route hashes and sweeps."),
+    ),
+    "port-slots-selftest": (
+        ("scripts/ports-machine-selftest.py", "the recipe runs this second test beside it."),
+        ("scripts/suite-lock.py", "that second test loads it to check the lock's default dir."),
     ),
 }
 
