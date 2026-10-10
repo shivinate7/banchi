@@ -18,13 +18,13 @@
 
 ### The sidebar is the same complaint with the scarce axis inverted
 
-`cards 543 · sold 0 · fill 543 · next index 544` is 46 cells = **354.2px**. The track D38 narrowed to 299px at 1440 and 285px at 1280. It is **not** a digit-count problem. Box 1's line is four characters shorter and wraps identically. It is four label words and three interpuncts. That is **277.2px of chrome against 77.0px of digits**. Here horizontal is fixed. Vertical is **~290px of unused height** under the column in D31's resting state. So the block flows DOWN instead of across. Three census figures sit at 16px in a row, and `next index` sits on its own line at the muted register.
+`cards 543 · sold 0 · fill 543 · next index 544` is 46 cells = **354.2px**. The track D38 narrowed to 299px at 1440 and 285px at 1280. It is **not** a digit-count problem. Box 1's line is four characters shorter and wraps identically. It is four label words and three interpuncts. That is **277.2px of chrome against 77.0px of digits**. Here horizontal is fixed and **vertical is ~290px of unused height** under the column in D31's resting state. So the block flows DOWN instead of across. Three census figures sit at 16px in a row, and `next index` sits on its own line at the muted register.
 
 **`next index` leaves the row because it is not a fourth statistic.** `cards`, `sold` and `fill` describe what is in the box. `next index` is D10's high-water mark, what the allocator will hand out next. Four peers joined by dots was a false claim about them. The structure is now the distinction, rather than a sentence explaining it.
 
 **D20's two words are on screen once, on the identity line.** That entry is explicit about one failure. A denominator whose meaning switches silently between an open box and a sealed one is that failure. D20 exists to prevent it. `fill` is a fill-**so far** while the box is open. Once **sealed**, it is a frozen capacity.
 
-**The qualifier was put on `.boxops-meta`'s fill and taken off again one commit later.** The correction is worth recording. The first version made a duplication EXACT that had until then been approximate. `BoxIdentity` sixteen pixels above already renders `133 so far`. Adding the same two words put the identical string on screen twice, nine words apart. **The field stays and only the qualifier goes**, which is the half that matters. `BoxOps.tsx` promises these key names grep to `inventory.json`. So dropping `fill` outright would have broken one promise to keep another. D20 is discharged either way. Its rule is that the number is unambiguous ON SCREEN, not that it is annotated at every site.
+**The qualifier was put on `.boxops-meta`'s fill and taken off again one commit later**, and the correction is worth recording. The first version made a duplication EXACT that had until then been approximate. `BoxIdentity` sixteen pixels above already renders `133 so far`. Adding the same two words put the identical string on screen twice, nine words apart. **The field stays and only the qualifier goes**, which is the half that matters. `BoxOps.tsx` promises these key names grep to `inventory.json`. So dropping `fill` outright would have broken one promise to keep another. D20 is discharged either way. Its rule is that the number is unambiguous ON SCREEN, not that it is annotated at every site.
 
 **Field names stay verbatim in the DOM.** The keys are written lowercase and uppercased by `text-transform` at paint only, so a copy out of the DOM still matches the store. `app/tests/inventory.spec.ts` asserts the lowercase text. A `toUpperCase()` in the component takes it red, though the output is identical on screen. That mutation was run.
 
@@ -32,7 +32,7 @@
 
 ### Full treatment for all, the same day
 
-The owner reopened it in those words. The paragraph this replaces named `.review-position` and `.card-locations-label`. It said taking the treatment to them was a decision about all three sites. **The count was wrong**: the capture screen draws the address in **five** more places. Three of them sit inside running sentences. Six owner sites, not three.
+The owner reopened it in those words. The paragraph this replaces named `.review-position` and `.card-locations-label`. It said taking the treatment to them was a decision about all three sites, **and the count was wrong**. The capture screen draws the address in **five** more places, three of them inside running sentences. Six owner sites, not three.
 
 **The structure is universal and the size is per site**, which is what the old paragraph's warning buys. It predicted that a 44px figure repeated seven times in a list would be a different and worse defect. That is now measured. At 44px the copies row goes 114.17 to **126.48px**, +86px on a seven-copy list. Copies visible on landing drop 4 to 3. This is on the screen whose recorded complaint (D38 twice, D38 again) is that the copies scroll away. So what is shared is the RANK: muted stacked path, no separator, and the slot as the only thing drawn at size. Each site sets its own figure.
 
@@ -40,7 +40,7 @@ The owner reopened it in those words. The paragraph this replaces named `.review
 
 **Proportional scaling was tried and refused, with the arithmetic.** The shipped ratio is path 11px against 44px, 0.25em. At the review head's 32px, that is 8px. At the copies row's 28px, it is 7px. Both are below anything this product draws. Probed independently, **all four new sites landed on the same 11px path against four different figures**. The path tracks each screen's metadata register (`.review-machine` 11px, `.card-locations-boxname` 10px). The figure tracks its payload. Two scales, not one. A single multiplier would have claimed these screens are scaled copies of each other.
 
-**The figure is free up to 32.3px, and that is one measurement not five.** The two-line path is 33.9px. So at `line-height: 1.05`, every figure to 32.3px draws the same 33.9–34.0px block. 20, 24, 28 and 32 cost nothing. 36 costs 4px, and 44 costs 12. **It is a property of a THREE-part label.** A two-part label has a one-line path, and the plateau collapses. D36 and D24 both contemplate that.
+**The figure is free up to 32.3px, and that is one measurement not five.** The two-line path is 33.9px. So at `line-height: 1.05`, every figure to 32.3px draws the same 33.9–34.0px block. 20, 24, 28 and 32 cost nothing. 36 costs 4px, and 44 costs 12. **It is a property of a THREE-part label**. A two-part label has a one-line path and the plateau collapses, which D36 and D24 both contemplate.
 
 **Three sites needed a rule the band did not.**
 

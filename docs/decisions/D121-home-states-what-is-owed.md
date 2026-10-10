@@ -21,7 +21,7 @@
 
 **The scale is the fastest shown sitting.** It draws at full height, and the dashed line at the top marks that height. Every other block is its rate's share of it.
 
-**Fixed in the same change, because it ships into this hero either way**: `Home.css` set `pointer-events: none` on `.home-hero-art` with nothing restoring it. So the deck's own `<a>`, its hover lift and its focus ring were reachable by keyboard alone. That was true for as long as the deck has been a link. Under fifteen lines of comment said it opens the card it is showing. The wrapper keeps the rule, so the empty-state deck stays inert. `a.home-deck` restores it for itself.
+**Fixed in the same change, because it ships into this hero either way**: `Home.css` set `pointer-events: none` on `.home-hero-art` with nothing restoring it. So the deck's own `<a>`, its hover lift and its focus ring were reachable by keyboard alone. That was true for as long as the deck has been a link. Fewer than fifteen lines of comment said it opens the card it is showing. The wrapper keeps the rule, so the empty-state deck stays inert. `a.home-deck` restores it for itself.
 
 **What retires this:** a second reader of the standing line's rank. It is a policy with one consumer today. The moment a second screen wants "what is owed", the ranking should move to the server rather than being derived twice.
 
