@@ -141,7 +141,12 @@ def _run_readings(root: Path, bad: Optional[List[str]] = None) -> Tuple[Dict[str
             if bad is not None:
                 bad.append(str(table))
             continue
-        run_found, run_source = reading_from_table(parsed, at=at, source=entry.name)
+        try:
+            run_found, run_source = reading_from_table(parsed, at=at, source=entry.name)
+        except (AttributeError, TypeError):  # a row shaped wrong, e.g. a string `snap`
+            if bad is not None:
+                bad.append(str(table))
+            continue
         for sku, candidate in run_found.items():
             here = found.get(sku)
             if here is None or candidate.at >= here.at:
@@ -210,8 +215,8 @@ def _newest_live_reading(directory: Path, skipped: Optional[List[str]] = None) -
     found.update(live_found)
     if live_source is not None:
         sources.append(live_source)
-    elif skipped is not None:  # parsed, but no priced row: as unusable as one that will not parse
-        skipped.append(newest.name)
+    elif skipped is not None and tcgcsv.SKU_COLUMN not in export.header:
+        skipped.append(newest.name)  # not a price export: parsed, but no SKU column
     return found, sources
 
 
