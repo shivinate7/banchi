@@ -369,7 +369,7 @@ def do_codes_lot(payload: dict) -> Tuple[HTTPStatus, dict]:
 
     with Store().write():
         # RE-READ AND RE-PLAN INSIDE THE LOCK. The pool above was read without one, and a
-        # capture server or a `pkmnscan scan` writing between the two reads is exactly the
+        # capture server or a `banchi scan` writing between the two reads is exactly the
         # race the store's single lock exists to settle.
         entries = ledger.read()
         if any(e.order_id == lot_id for e in entries):

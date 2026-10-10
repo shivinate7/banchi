@@ -8,7 +8,7 @@ D15's own `IMAGE_SIZE = "large"` choice, matched to `harness/eval/fixtures.py`'s
 834 KB/image measurement D15 cites and the ~16.7 GB extrapolation both name the hires size —
 mirroring the small size too would be a second, unmeasured number.
 
-Destination is `PKMNSCAN_IMAGE_MIRROR` (read through `envfile`, exactly as
+Destination is `BANCHI_IMAGE_MIRROR` (read through `envfile`, exactly as
 `harness/eval/fixtures.py` reads it — same knob, same reason: a mirror path is a fact about
 one machine's disk, D15 argues for a knob because of the mirror's size, and a real environment
 variable still wins over a stored default). Unset, it defaults to `harness/images/` — D15's
@@ -54,7 +54,7 @@ import envfile  # noqa: E402
 
 VENDOR_DIR = ROOT / "vendor" / "pokemon-tcg-data"
 MANIFEST_PATH = VENDOR_DIR / "image-manifest.json"
-USER_AGENT = "pkmnscan-catalog-image-mirror/1.0 (+build-order step 9, piece 3)"
+USER_AGENT = "banchi-catalog-image-mirror/1.0 (+build-order step 9, piece 3)"
 HTTP_TIMEOUT = 20
 MIN_INTERVAL_S = 0.25  # rate limit: ~4 req/s, gentle on a CDN that is the one piece of this catalog not vendored
 DRY_RUN_SAMPLE_CAP = 200
@@ -62,8 +62,8 @@ DRY_RUN_SAMPLE_CAP = 200
 
 def mirror_dir() -> Path:
     """Where the mirror lives — the same knob and the same default `harness/eval/fixtures.py`
-    reads (D15): `PKMNSCAN_IMAGE_MIRROR` if set, else `harness/images/`."""
-    raw = envfile.get("PKMNSCAN_IMAGE_MIRROR")
+    reads (D15): `BANCHI_IMAGE_MIRROR` if set, else `harness/images/`."""
+    raw = envfile.get("BANCHI_IMAGE_MIRROR")
     if raw:
         return Path(os.path.expandvars(os.path.expanduser(raw)))
     return ROOT / "harness" / "images"

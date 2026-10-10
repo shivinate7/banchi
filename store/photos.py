@@ -107,7 +107,7 @@ def digest_of(cid: Optional[str]) -> Optional[str]:
 
 
 def root(home: Optional[Path] = None) -> Path:
-    """`<home>/photos`. Moves with `PKMNSCAN_HOME`, as the rest of the store does (D43)."""
+    """`<home>/photos`. Moves with `BANCHI_HOME`, as the rest of the store does (D43)."""
     return (Path(home) if home is not None else files.home()) / DIRNAME
 
 

@@ -81,7 +81,7 @@ names the current index is read as the sidecar's own claim. No precedence change
 ### 0.5 The relocation: resumable, and verified per card
 
 The relocation moves each legacy photograph to its name exactly once. It is not part of
-`_upgrade`. It is its own step (`./pkmnscan cards photos [--write]`), and it previews by
+`_upgrade`. It is its own step (`./banchi cards photos [--write]`), and it previews by
 default. It opens the store read-only and takes no write lock. Per card, in ascending order:
 
 ```
@@ -187,7 +187,7 @@ symlink at that name. `make ignore-check` covers it.
 - The forward-version guard, the four-roster reconciliation and the partial-index self-heal.
 - `store/photos.py`, and the relocation with its preview.
 - The `GET /photo/by-card/<cid>` route, and the client that uses it.
-- `./pkmnscan cards name`, `audit` and `photos`.
+- `./banchi cards name`, `audit` and `photos`.
 - `make cid-selftest` and `make cid-audit`.
 
 **Two rules in `store/db.py` keep the cid unique.**
@@ -230,7 +230,7 @@ re-taken.**
 
 The id is not invented or allocated. It is read. On the store measured, every stored digest
 equalled its file, with no missing file and no duplicate. That measurement is the proof that
-each move has an oracle. Re-run `./pkmnscan cards audit` to measure it again.
+each move has an oracle. Re-run `./banchi cards audit` to measure it again.
 
 ### The rejected options
 
@@ -390,7 +390,7 @@ healed at the next open.
 
 ### 3.5 Previewable
 
-`./pkmnscan cards name` previews and writes nothing. It opens the store `sqlite3` read-only and
+`./banchi cards name` previews and writes nothing. It opens the store `sqlite3` read-only and
 never calls `db.connect`. That function always runs `_ensure_schema`, so a preview through it
 would perform the migration it previews. `scripts/cid-selftest.py` asserts this by behavior and
 by source inspection. The preview prints the count per source. It lists every card that would land in shape 4 and
@@ -414,7 +414,7 @@ store.
 
 For every card, `sha256(<photograph>)` equals `cid` with any `-<n>` suffix stripped, unless the
 card carries a `photo_reclaimed_at`, or a `reshot` history line whose recorded digest equals
-the file. `./pkmnscan cards audit` (or `make cid-audit`) proves this on any copy with no
+the file. `./banchi cards audit` (or `make cid-audit`) proves this on any copy with no
 external state. Run right after the seeding it is close to a tautology. Its value is temporal:
 it proves the link still holds after renumbers, moves, deletions and reclaims. The source
 census in the receipt shows how many cards were named by something weaker than their own
@@ -435,7 +435,7 @@ re-reads the stamp inside the lock and returns early. The OS releases a dead hol
 
 **Never open the owner's live `inventory/store.sqlite` for writing to test this.** Use a
 `.backup()` copy through a `mode=ro&immutable=1` connection. `make cid-selftest` builds its own
-throwaway store under `PKMNSCAN_HOME`.
+throwaway store under `BANCHI_HOME`.
 
 ## 4. What is deleted, and what merely moves
 
@@ -506,7 +506,7 @@ A migration half applied inside the transaction cannot exist (3.8). Three states
 
 ### 6.2 `make cid-selftest`
 
-It builds a throwaway store under `PKMNSCAN_HOME` and proves each point below.
+It builds a throwaway store under `BANCHI_HOME` and proves each point below.
 
 - The seeding names every card from its own bytes, and a re-run names nothing and changes no
   name.
@@ -523,7 +523,7 @@ It builds a throwaway store under `PKMNSCAN_HOME` and proves each point below.
 - The forward-version guard refuses a newer store.
 - A renumber moves no file.
 
-### 6.3 `./pkmnscan cards audit`
+### 6.3 `./banchi cards audit`
 
 It is read-only. It has three verdicts, never two: `pass`, `fail` (a named mismatch, listed),
 and `not known`. It prints `not known` when the `cid` column is absent, when any cid is NULL, or

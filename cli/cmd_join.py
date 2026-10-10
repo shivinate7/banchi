@@ -1,4 +1,4 @@
-"""`pkmnscan join <run-dir>` — resolve identifications against the export. Free.
+"""`banchi join <run-dir>` — resolve identifications against the export. Free.
 
 Free and re-runnable, which is what makes the rest of the design affordable: clear a review,
 refresh the export, change the rule, run it again. Nothing here spends money and nothing here
@@ -225,9 +225,9 @@ def _preview(args, run_dir, plan, resolved, say, *, keys=None) -> int:
     _counts_block(say, mine)
     say("")
     if keys is not None:
-        say(f"next: pkmnscan join --keys {','.join(keys)} --export <file>  (to write it)")
+        say(f"next: banchi join --keys {','.join(keys)} --export <file>  (to write it)")
     else:
-        say(f"next: pkmnscan join {run_dir.directory} --export <file>  (to write it)")
+        say(f"next: banchi join {run_dir.directory} --export <file>  (to write it)")
     return 0
 
 
@@ -443,7 +443,7 @@ def run(args, say) -> int:
     if run_dir is not None:
         legacy = run_dir.path(runs.DECISIONS)
         if legacy.is_file():
-            say(f"{legacy} is a legacy pricing file; run `pkmnscan prices adopt --write` to "
+            say(f"{legacy} is a legacy pricing file; run `banchi prices adopt --write` to "
                 f"fold and retire it. Nothing was joined.")
             return 1
     # The file->game mapping, read off each file's own Product Line cells, and every
@@ -751,7 +751,7 @@ def run(args, say) -> int:
     # a later price. See `pipeline/corpus.py` and D86.
     #
     # A RUN FILE THAT STILL EXISTS IS LEGACY AND IS NOT READ — this command refused on one at
-    # its top, before the store was opened. `pkmnscan prices adopt --write` folds it in, once,
+    # its top, before the store was opened. `banchi prices adopt --write` folds it in, once,
     # with a report of every answer it had to choose between, and retires it.
     #
     # `book` WAS ALSO READ AT THE TOP OF THIS COMMAND, because the threshold it carries had to
@@ -862,6 +862,6 @@ def run(args, say) -> int:
     path = run_dir.write_text(runs.REPORT, full_report + "\n")
     say("")
     say(f"report           {path}")
-    say(f"next: price on #/pricing (or edit {files.prices_path()}), then pkmnscan emit "
+    say(f"next: price on #/pricing (or edit {files.prices_path()}), then banchi emit "
         f"{run_dir.directory}")
     return 0

@@ -29,7 +29,7 @@ drift would be invisible: both would answer, and nobody would know which was rig
 
 IT FAILS OPEN, IN EVERY DIRECTION. No merge-base, a diff it cannot compute, an EMPTY diff
 (more likely a wrong base than an empty change), a `CARRY` it cannot read, and a recipe it
-cannot extract all answer RUN, out loud. Only an explicit skip skips, and `PKMNSCAN_SERVE_SCOPE=all`
+cannot extract all answer RUN, out loud. Only an explicit skip skips, and `BANCHI_SERVE_SCOPE=all`
 runs it anyway. That adds a check, so it is not a hatch.
 
     scripts/serve-scope.py classify [--base REV] [--head REV]
@@ -54,7 +54,7 @@ from typing import List, Sequence
 SKIP_EXIT = 3  # any other non-zero exit is a crash, and a crash must RUN the test
 
 ROOT = Path(__file__).resolve().parent.parent
-HATCH = "PKMNSCAN_SERVE_SCOPE"
+HATCH = "BANCHI_SERVE_SCOPE"
 
 # EVERY PATH `make serve-selftest` READS, AND WHY. Pure literals: `scripts/docs-audit.py`
 # reads this tuple with `ast.literal_eval` rather than importing the module. Entries whose

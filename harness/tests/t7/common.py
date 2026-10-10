@@ -157,7 +157,7 @@ def _seed_sku_table(snapshot, candidates, *, product_line: str = "Pokemon") -> N
     round, the fixture-setup half of "no partial upsert into skus": a review answer now
     REFUSES a SKU the table does not already hold (`sku_unknown`), so any section below
     that answers a hand-built candidate seeds it here first, exactly as a real fetch or
-    `pkmnscan skus adopt` would have — never a shortcut that skips the fold.
+    `banchi skus adopt` would have — never a shortcut that skips the fold.
 
     `candidates` IS THE SAME NORMALIZED SHAPE `entry()`'s own `candidates` FIELD CARRIES
     (`sku`, `name`, `set`, `number`, `condition`, optional `rarity`) — the literal already
@@ -506,7 +506,7 @@ SEAM_SKUS = (DUNSPARCE_SKU, DUNSPARCE_REVERSE_SKU, ARTICUNO_SKU)
 def write_export(path, *, live=None, market=None):
     """A Filtered Export holding the three seam rows. `live` overrides `Total Quantity`.
 
-    That column is the one D8 and D11 make authoritative and the one `./pkmnscan join` reads
+    That column is the one D8 and D11 make authoritative and the one `./banchi join` reads
     a SKU's `live` count from, so every case below that moves `live` moves it by rewriting
     this file rather than by writing the number it expects to read back.
 
@@ -588,7 +588,7 @@ def seam_run(checks: Checks, cards, *, live=None, market=None, join=True, sectio
 
 
 def command(checks: Checks, *argv, exits: int = 0):
-    """Run one `./pkmnscan` subcommand and return what it printed. Exit 0 or a failure.
+    """Run one `./banchi` subcommand and return what it printed. Exit 0 or a failure.
 
     Through `cli/__main__.py:main` rather than by importing the command module, because the
     dispatch and the argument defaults are part of the seam: a flag whose default moved would
@@ -600,7 +600,7 @@ def command(checks: Checks, *argv, exits: int = 0):
     with quiet() as said:
         code = entry.main(list(argv))
     text = said.getvalue()
-    checks.ok(code == exits, f"`pkmnscan {argv[0]}` exits {exits}", f"exit {code}\n{text}")
+    checks.ok(code == exits, f"`banchi {argv[0]}` exits {exits}", f"exit {code}\n{text}")
     return text
 
 

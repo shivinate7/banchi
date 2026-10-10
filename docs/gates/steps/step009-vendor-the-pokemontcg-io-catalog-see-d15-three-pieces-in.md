@@ -22,7 +22,7 @@
     - **RECORDED, NOT FILLED.** The image mirror from `images.pokemontcg.io`:
       `scripts/catalog-image-mirror.py` builds the manifest from the vendored snapshot (no
       network) and implements a rate-limited, resumable, per-file-skip downloader.
-      Destination is overridable by `PKMNSCAN_IMAGE_MIRROR` (D15); unset, it defaults to
+      Destination is overridable by `BANCHI_IMAGE_MIRROR` (D15); unset, it defaults to
       `harness/images/`. **Only `--dry-run` has ever run on this checkout**: 20,444 files,
       ~14.18 GB extrapolated from a 200-image HEAD sample (2026-09-13) — the same order of
       magnitude as D15's own ~16.7 GB estimate from a 197-image sample. `harness/images/` is

@@ -4,7 +4,7 @@
   "ci-check-guards-2": "a CI shard of `ci-check` (D161); the workflow calls it, and a session runs `make ci-check` instead",
   "ci-check-static": "a CI shard of `ci-check` (D161); the workflow calls it, and a session runs `make ci-check` instead",
   "ci-check-product": "a CI shard of `ci-check` (D161); the workflow calls it, and a session runs `make ci-check` instead",
-  "cid-audit": "reads the whole corpus, so it is deliberately not in `make check`; cited by name in CLAUDE.md's ./pkmnscan cards audit entry",
+  "cid-audit": "reads the whole corpus, so it is deliberately not in `make check`; cited by name in CLAUDE.md's ./banchi cards audit entry",
   "demo-histories": "owner's Mac only, never CI; a one-off recording step for the demo, not a command a session reaches for",
   "demo-mirror-rebuild": "re-runs `demo-mirror` from its own gitignored snapshot; a variant of a target already documented",
   "demo-photos": "owner's Mac only; curates the tracked photograph set, not a build or verification step",

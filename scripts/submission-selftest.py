@@ -15,7 +15,7 @@ separate processes racing a real flock.
 WHAT IS ACTUALLY RACED, SAID PLAINLY SO NOBODY READS MORE INTO IT THAN IS THERE. Two OS
 processes, each opening the throwaway store and calling `Submissions.claim_or_refuse` inside
 `Store.write()` — the same call, in the same transaction, that `cli/cmd_identify.py` makes
-before it submits a byte. It is NOT `pkmnscan identify` end to end: that needs photographs,
+before it submits a byte. It is NOT `banchi identify` end to end: that needs photographs,
 sidecars and the Batch API, and a test that mocked the API would be racing the mock. The claim
 is the mechanism, and the claim is what is raced.
 
@@ -36,7 +36,7 @@ reproduction probabilistic, and a probabilistic reproduction of a money bug is a
 WHY IT IS NOT IN THE GIT HOOK. D18: it writes a temp tree and it signals processes. It IS in
 `make check`, which is `reap-selftest`'s and `janitor-selftest`'s standing.
 
-IT NEVER TOUCHES THE OPERATOR'S STORE. `PKMNSCAN_HOME` is set to a fresh temp directory for
+IT NEVER TOUCHES THE OPERATOR'S STORE. `BANCHI_HOME` is set to a fresh temp directory for
 every case and the real one is never opened, for reading or for writing. The one case needing a
 killed holder kills a process this script started, in its own session.
 
@@ -93,15 +93,15 @@ def check(condition: bool, what: str) -> bool:
 
 
 def fresh_store() -> Path:
-    """A throwaway store directory, with `PKMNSCAN_HOME` pointed at it.
+    """A throwaway store directory, with `BANCHI_HOME` pointed at it.
 
     A DIRECTORY PER CASE, never one reused with its rows deleted. A claim table's whole meaning
     is what is live in it, so a leftover row from the previous case is exactly the thing that
     would make the next one unreadable — and the failure would read as the guard misbehaving.
     """
-    where = Path(tempfile.mkdtemp(prefix="pkmnscan-claim."))
+    where = Path(tempfile.mkdtemp(prefix="banchi-claim."))
     MADE.append(where)
-    os.environ["PKMNSCAN_HOME"] = str(where)
+    os.environ["BANCHI_HOME"] = str(where)
     return where
 
 
@@ -500,7 +500,7 @@ def case_an_unspent_press_gives_the_claim_back() -> None:
 
         def __init__(self, ids):
             self.batch_ids = list(ids)
-            self.directory = "/tmp/pkmnscan-selftest-run"
+            self.directory = "/tmp/banchi-selftest-run"
 
     said: List[str] = []
 
@@ -607,7 +607,7 @@ CHILD = '''
 import json, os, sys, time
 sys.path.insert(0, {repo!r})
 mode, home, go, out, key, mark, peers = sys.argv[1:8]
-os.environ["PKMNSCAN_HOME"] = home
+os.environ["BANCHI_HOME"] = home
 
 from store.session import Store
 from store import submissions as subs
@@ -663,7 +663,7 @@ with open(out, "w") as fh:
 
 def race(mode: str, key: str, home: Path, rounds: int = 1):
     """Two processes, one card, started together. Returns each child's verdict."""
-    work = Path(tempfile.mkdtemp(prefix="pkmnscan-race."))
+    work = Path(tempfile.mkdtemp(prefix="banchi-race."))
     MADE.append(work)
     script = work / "press.py"
     script.write_text(CHILD.format(repo=str(REPO)))

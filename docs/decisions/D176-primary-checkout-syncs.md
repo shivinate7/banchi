@@ -1,7 +1,7 @@
 ## D176 — The primary checkout syncs itself
 
 **Settled 2026-09-12, on the owner's answer to a refuse-only proposal.** Asked whether the
-primary checkout — `/Users/shivinate/Developer/pkmnscan`, the one directory D138 keeps a capture
+primary checkout — `/Users/shivinate/Developer/banchi`, the one directory D138 keeps a capture
 server alive out of at login over their real store — is mechanically kept on `main` at
 `origin/main`, and offered a guard that would only refuse, they said:
 
@@ -55,7 +55,7 @@ A fast-forward to `origin/main` satisfies that predicate by construction.
 Which is the same sentence D42's own amendment uses about `make merge`: *"It arms nothing."*
 
 **Checked rather than cited.** `scripts/sync-selftest.py` installs that exact hook file in a
-throwaway clone via `core.hooksPath`, `PKMNSCAN_MAIN` deliberately unset, and asserts both
+throwaway clone via `core.hooksPath`, `BANCHI_MAIN` deliberately unset, and asserts both
 directions: the sync's fast-forward goes through, **and** a `git branch -f main <a local commit>`
 there is still refused. An arm proving only the first would pass against a hook permitting
 everything.
@@ -76,7 +76,7 @@ caution is about does not exist on this machine.
 that had not been through a pull request. Every guard that does that is untouched: `pre-push`
 refuses a push to main, GitHub has required a PR since 2026-09-06 with `enforce_admins` true, and
 `reference-transaction` still refuses a local move to a commit origin lacks — including one this
-module would make, because **it deliberately does not pass `PKMNSCAN_MAIN=off` to git.** If the
+module would make, because **it deliberately does not pass `BANCHI_MAIN=off` to git.** If the
 hook ever refuses this file's move, that is a finding and not a thing to route around.
 
 **This is CLAUDE.md's own rule applied to a settled decision's scope rather than its conclusion:**
@@ -88,7 +88,7 @@ the words D158 used to reopen D158's.
 **Rule 3 asks whether the DESTINATION is on `origin/main`, and here the destination IS it.**
 So rule 3 is trivially satisfied, and would permit a move that discarded local commits.
 A primary checkout whose main is *ahead* of origin — a commit made there directly, which
-`PKMNSCAN_MAIN=off` makes possible — would be silently rewound by anything that merely trusted
+`BANCHI_MAIN=off` makes possible — would be silently rewound by anything that merely trusted
 the hook.
 
 So there is a second predicate, and it is why this module can be trusted with a ref D42 protects:
@@ -173,9 +173,9 @@ defect is not the operator's business, and its inability to read their tree very
 
 ### The hatch stops the mechanism rather than letting something past
 
-`PKMNSCAN_SYNC=off`, printed on every sync **and** every refusal, spelled the way
-`PKMNSCAN_MAIN=off`, `PKMNSCAN_KILL=off`, `PKMNSCAN_REVERT=off`, `PKMNSCAN_SUITE_LOCK=off` and
-`PKMNSCAN_SERVE_MAIN=off` are.
+`BANCHI_SYNC=off`, printed on every sync **and** every refusal, spelled the way
+`BANCHI_MAIN=off`, `BANCHI_KILL=off`, `BANCHI_REVERT=off`, `BANCHI_SUITE_LOCK=off` and
+`BANCHI_SERVE_MAIN=off` are.
 
 **It is the first hatch here that turns an act off rather than permitting one.** Every other stands
 between a person and something they meant to do; this one acts on their behalf. So what a reader
@@ -235,7 +235,7 @@ and failed an assertion about the refspec form that had nothing wrong with it.
 **Four arms red for one state change three sections earlier** — the hardest kind of fixture
 failure to read, and it
 was invisible in the exit code: `make check > log; echo $?` reports the redirect's status, so the
-suite looked green. The arms that assert the LOCAL half now pin `PKMNSCAN_SYNC=off` and keep
+suite looked green. The arms that assert the LOCAL half now pin `BANCHI_SYNC=off` and keep
 meaning what they meant; the rig half has a section of its own, including that a dirty rig is
 refused by name **while main still advances** — the merge is not failed by it.
 

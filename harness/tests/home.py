@@ -1,4 +1,4 @@
-"""The one throwaway store for every harness test: a temp `PKMNSCAN_HOME`, and an `ENV_FILE`
+"""The one throwaway store for every harness test: a temp `BANCHI_HOME`, and an `ENV_FILE`
 that does not exist, so no test reads the owner's settings file and none needs one to pass.
 
 `harness/run.py` wraps the whole process in `isolated_home()`; a check that needs its own

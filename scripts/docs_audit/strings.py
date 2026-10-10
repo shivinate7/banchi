@@ -109,13 +109,13 @@ _REPO_EXT_RE = re.compile(r"\b[\w-]+\.(?:sqlite|jsonl|json)\b")
 _DECISION_CITE_RE = re.compile(r"\bD\d{1,4}\b|\bC\d{1,4}\b|\(D-[A-Za-z0-9][A-Za-z0-9-]*\)")
 
 # A CLI INVOCATION, BACKTICKED OR BARE (D210's own finding). This row had no
-# key for `Pricing.tsx`'s "Run `pkmnscan rescue` to rebind it." — a backticked command
+# key for `Pricing.tsx`'s "Run `banchi rescue` to rebind it." — a backticked command
 # is not a decision citation, not one of `_REPO_TOP_DIRS` followed by a slash, and not a
 # `.json`/`.sqlite`/`.jsonl` filename, so it passed this row clean while naming this
-# product's own CLI on screen. `pkmnscan` is the checkout's own name (CLAUDE.md's naming
+# product's own CLI on screen. `banchi` is the checkout's own name (CLAUDE.md's naming
 # rule) and never a word an operator would use to describe what a press does; a subcommand
 # beside it (`rescue`, `join`, `emit`, …) is exactly the mechanism this row exists to catch.
-_CLI_INVOCATION_RE = re.compile(r"`?\bpkmnscan\b(?:\s+[\w.-]+)*`?", re.I)
+_CLI_INVOCATION_RE = re.compile(r"`?\bbanchi\b(?:\s+[\w.-]+)*`?", re.I)
 
 
 UNKNOWN_NO_TOOLCHAIN = "unknown: app/node_modules missing, run make worktree-setup"

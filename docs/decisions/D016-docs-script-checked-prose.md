@@ -63,7 +63,7 @@ An agent that can edit the docs to satisfy its own gate will do exactly that, an
 
 This paragraph used to make that point by naming the number the docs test would have taken, which stopped working the moment a real test needed a number. T7 is now the store, server and command-seam test (`docs/GATES.md`), and it is unrelated to this entry. The rule here was never about a number.
 
-**The allowlist is self-cleaning.** `scripts/docs-audit-allow.txt` records things the docs name before they exist — `PKMNSCAN_IMAGE_MIRROR` was documented by build-order step 9. The audit **fails when an entry comes true**, which forces the line out at that moment. A list that only grows becomes a list nobody has read since.
+**The allowlist is self-cleaning.** `scripts/docs-audit-allow.txt` records things the docs name before they exist — `BANCHI_IMAGE_MIRROR` was documented by build-order step 9. The audit **fails when an entry comes true**, which forces the line out at that moment. A list that only grows becomes a list nobody has read since.
 
 **A threshold is published, not restated.** Each test's `PASS_CRITERIA` must appear word for word as the `- **Pass**:` line of its `### Tn` section, and layer 1 blocks a commit where they disagree. **Reconciliation runs from the test to the gate.** The test is where a threshold is argued about and changed; `docs/GATES.md` is where it is announced. Rewriting a test so a doc-checker goes quiet inverts that and makes the test worse to please a tool.
 

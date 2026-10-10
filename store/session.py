@@ -79,12 +79,12 @@ class Snapshot:
     # snapshot for `submissions`' reason: `cli/cmd_emit.py` checks and writes it in the SAME
     # transaction that counts the copies as sent, so two presses cannot both decide first.
     send_claims: SendClaims
-    # THE MARKET READING `pkmnscan readings adopt --write` LAST CACHED, PER SKU
+    # THE MARKET READING `banchi readings adopt --write` LAST CACHED, PER SKU
     # (D189). Bound like every other table so a `Store.write()` from `readings
     # adopt` commits it atomically with everything else D88 already protects; every other
     # writer in this package leaves it untouched.
     readings: Readings
-    # THE PRICE-HISTORY ARCHIVE (D219): every bucket `pkmnscan archive
+    # THE PRICE-HISTORY ARCHIVE (D219): every bucket `banchi archive
     # sweep --write` has ever read, kept past the source's own 357-day ceiling. In the
     # snapshot for the same reason `readings` is: a `Store.write()` from `archive sweep`
     # commits it atomically with everything else D88 already protects.
@@ -160,7 +160,7 @@ class Store:
                 # session would hand its id out a second time.
                 box_ids_issued=db.box_ids_issued(conn),
                 # READ IN THE SAME TRANSACTION, for `box_ids_issued`' reason one line up,
-                # and NEVER WRITTEN BACK: `pkmnscan cards photos` is the only writer, so a
+                # and NEVER WRITTEN BACK: `banchi cards photos` is the only writer, so a
                 # session that carried a stale None could not un-stamp the store.
                 photos_relocated=db.photos_relocated(conn),
             ),

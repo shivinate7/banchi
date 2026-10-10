@@ -201,7 +201,7 @@ class Withheld:
     the run's own file and die with it, so a second run over the same box started with none —
     the limit D86 recorded and the one that put three deliberate holds under a later price.
     It is one answer for the store now: every run over the card is held until the hold is
-    lifted on `#/pricing`, and `pkmnscan prices show --held` is the cross-run view of what is
+    lifted on `#/pricing`, and `banchi prices show --held` is the cross-run view of what is
     being held.
     """
 

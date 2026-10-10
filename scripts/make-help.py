@@ -69,7 +69,7 @@ def targets_and_summaries(text: str) -> List[Tuple[str, str]]:
 
 
 def render(text: str) -> str:
-    lines = ["PKMNSCAN — run `make status` for where the build actually stands.", ""]
+    lines = ["BANCHI — run `make status` for where the build actually stands.", ""]
     for name, summary in targets_and_summaries(text):
         if name == "help":
             continue

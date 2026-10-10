@@ -81,22 +81,19 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import machinedir  # noqa: E402
 
-#: The lock's home, and the one thing about this file that may not be per-checkout. `.serve/`
-#: would put it inside the tree, which is the whole defect — two trees would take two locks
-#: and agree with each other about nothing. `~` because the contention is between the
-#: processes of one user on one machine, which is what a home directory already scopes.
-DEFAULT_LOCK_DIR = Path.home() / ".pkmnscan" / "locks"
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 #: Overridden only by the self-test, which must not touch the real lock while a real suite may
 #: be holding it. Same shape as `scripts/janitor.py --sessions DIR`, for the same reason.
-LOCK_DIR_ENV = "PKMNSCAN_LOCK_DIR"
+LOCK_DIR_ENV = "BANCHI_LOCK_DIR"
 
-#: The escape hatch, in the shape `PKMNSCAN_MAIN=off` and `PKMNSCAN_FOREGROUND=off` already
+#: The escape hatch, in the shape `BANCHI_MAIN=off` and `BANCHI_FOREGROUND=off` already
 #: use, and printed in every refusal. A guard with no visible way past it gets disarmed
 #: somewhere worse — by deleting the line from the Makefile, which nothing would catch.
-ESCAPE_ENV = "PKMNSCAN_SUITE_LOCK"
+ESCAPE_ENV = "BANCHI_SUITE_LOCK"
 
 #: What the refusal exits with. See the module docstring: `1` is what a failing suite exits
 #: with, and this must never be mistaken for one.
@@ -119,8 +116,11 @@ _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 
 def lock_dir() -> Path:
+    # The lock's home may not be per-checkout. `.serve/` would put it inside the tree, which is
+    # the whole defect: two trees would take two locks and agree with each other about nothing.
+    # `~` because the contention is between the processes of one user on one machine.
     override = os.environ.get(LOCK_DIR_ENV, "").strip()
-    return Path(override) if override else DEFAULT_LOCK_DIR
+    return Path(override) if override else machinedir.machine_dir() / "locks"
 
 
 def lock_path(name: str) -> Path:

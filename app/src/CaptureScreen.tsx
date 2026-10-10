@@ -397,7 +397,7 @@ function handOrder(
  *  more — the field still works — and the code is kept on the end of anything unnamed
  *  because `docs/DESIGN.md` shows reason codes beside names, so what you saw stays greppable.
  *  **THAT RULE IS OLDER THAN THIS COMMENT AND IT SURVIVED A SESSION WRITING OVER IT**: the
- *  build that widened this map first wrote `set PKMNSCAN_TCG_USER_AGENT in .env` into two of
+ *  build that widened this map first wrote `set BANCHI_TCG_USER_AGENT in .env` into two of
  *  these clauses, which is the remedy for the person at the keyboard and noise to the person
  *  holding a card over a stand. It says what is wrong; where the knob is lives one layer down.
  *
@@ -541,9 +541,9 @@ function hintNoteText(verdict: HintVerdict, game: string, needsHint = false): st
  * is what holds the window to "this page load", which is the window the banner's own sentence
  * is true in.
  *
- * THE `pkmnscan.` PREFIX WAS RENAMED TO `banchi.` ON 2026-09-06, ON THE OWNER'S WORD, AND
+ * THE `banchi.` PREFIX WAS RENAMED TO `banchi.` ON 2026-09-06, ON THE OWNER'S WORD, AND
  * NOTHING MIGRATES. `useCamera.ts` carries the argument in full beside its own two keys; the
- * short of it is that the split between `banchi.*` and `pkmnscan.*` was chronological rather
+ * short of it is that the split between `banchi.*` and `banchi.*` was chronological rather
  * than principled, and the owner declined a read-time fallback because a fallback can never
  * safely be deleted afterwards. */
 const SESSION_KEYS = {

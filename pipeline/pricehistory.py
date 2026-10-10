@@ -195,7 +195,7 @@ HISTORY_HOST = "https://infinite-api.tcgplayer.com"
 # — kept as the DEFAULT so a checkout with no override behaves exactly as it always has and
 # fails the same honest way, rather than reaching for a disguise nobody asked this module to
 # wear.
-USER_AGENT = "pkmnscan/1.0 (+private single-operator inventory tool)"
+USER_AGENT = "banchi/1.0 (+private single-operator inventory tool)"
 
 # THE ESCAPE HATCH'S NAME, NOT ITS VALUE — a string only, and never read from `.env` here.
 # `pipeline/` imports nothing outside itself and the stdlib (see `Market`'s header below), so
@@ -206,7 +206,7 @@ USER_AGENT = "pkmnscan/1.0 (+private single-operator inventory tool)"
 # `server/tcg_export.py:AGENT_ENV`, ON PURPOSE: reused rather than a second knob, because it
 # already means "the User-Agent to present to TCGplayer" and tcgcsv answers either value
 # (measured 2026-09-19) — see D216 for the argument.
-AGENT_ENV = "PKMNSCAN_TCG_USER_AGENT"
+AGENT_ENV = "BANCHI_TCG_USER_AGENT"
 
 # The four the endpoint accepts. A closed tuple rather than a passed-through string: every
 # other spelling answers HTTP 400, and a range that silently returned nothing would read as

@@ -486,7 +486,7 @@ def check_history_route(checks: Checks) -> None:
 
 
 def check_history_blocked_route(checks: Checks) -> None:
-    """A 403 refuses as `history_blocked`, and `PKMNSCAN_TCG_USER_AGENT` reaches the wire
+    """A 403 refuses as `history_blocked`, and `BANCHI_TCG_USER_AGENT` reaches the wire
     (D216).
 
     ITS OWN RUN, ITS OWN ENVIRONMENT ISOLATION — `check_export_fetch`'s reason applies again:
@@ -511,9 +511,9 @@ def check_history_blocked_route(checks: Checks) -> None:
         "wire (D216)"
     )
 
-    keys = ("PKMNSCAN_TCG_USER_AGENT", envfile.FROM_FILE_ENV)
+    keys = ("BANCHI_TCG_USER_AGENT", envfile.FROM_FILE_ENV)
     previous = {name: os.environ.get(name) for name in keys}
-    os.environ.pop("PKMNSCAN_TCG_USER_AGENT", None)
+    os.environ.pop("BANCHI_TCG_USER_AGENT", None)
 
     env_before = (envfile.ENV_FILE, set(envfile._from_file), envfile._loaded)
     envfile.ENV_FILE = Path(tempfile.gettempdir()) / "t7-history-blocked-no-such.env"
@@ -605,7 +605,7 @@ def check_history_blocked_route(checks: Checks) -> None:
             # THE OVERRIDE, SET LIVE — `get_live` is what `_history_user_agent` reads, so a
             # value that appears in `.env` after the process started still takes effect,
             # the same guarantee D65 built `_agent()` on.
-            os.environ["PKMNSCAN_TCG_USER_AGENT"] = "pkmnscan-t7-browser-stand-in/1"
+            os.environ["BANCHI_TCG_USER_AGENT"] = "banchi-t7-browser-stand-in/1"
             try:
                 pipeline_routes.do_pipeline_history(name, "9189317")
                 checks.ok(False, "still 403, still refuses", "it answered instead")
@@ -618,8 +618,8 @@ def check_history_blocked_route(checks: Checks) -> None:
                 )
             checks.equal(
                 seen_agents[-1],
-                "pkmnscan-t7-browser-stand-in/1",
-                "AND WITH THE OVERRIDE SET, THE HEADER CHANGES — `PKMNSCAN_TCG_USER_AGENT` "
+                "banchi-t7-browser-stand-in/1",
+                "AND WITH THE OVERRIDE SET, THE HEADER CHANGES — `BANCHI_TCG_USER_AGENT` "
                 "reaches the request through `server/pipeline_routes.py:_history_user_agent`, "
                 "not only through `pipeline/pricehistory.py`'s own default",
             )
@@ -1473,10 +1473,10 @@ def check_price_history(checks: Checks) -> None:
         "a claim about it — a WAF's answer is measured off the header, not off this docstring",
     )
 
-    pricehistory.fetch_json(agent_url, user_agent="pkmnscan-t7-probe/1")
+    pricehistory.fetch_json(agent_url, user_agent="banchi-t7-probe/1")
     checks.equal(
         agent_seen["value"],
-        "pkmnscan-t7-probe/1",
+        "banchi-t7-probe/1",
         "AN EXPLICIT user_agent REPLACES THE DEFAULT — the same shape `Market`'s own "
         "`cache_dir` argument already takes, per that class's header: passed in, never "
         "discovered, because this module may not read `.env` for itself",
@@ -1484,12 +1484,12 @@ def check_price_history(checks: Checks) -> None:
 
     stub["mode"] = "blocked"
     try:
-        pricehistory.fetch_json(agent_url, user_agent="pkmnscan-t7-secret-agent/1")
+        pricehistory.fetch_json(agent_url, user_agent="banchi-t7-secret-agent/1")
         checks.ok(False, "a 403 refuses rather than answering", "it answered")
     except pricehistory.Blocked as exc:
         checks.equal(
             agent_seen["value"],
-            "pkmnscan-t7-secret-agent/1",
+            "banchi-t7-secret-agent/1",
             "the override still reached the wire — the host refused it, not this module",
         )
         checks.ok(
@@ -1499,7 +1499,7 @@ def check_price_history(checks: Checks) -> None:
             str(exc),
         )
         checks.ok(
-            "pkmnscan-t7-secret-agent" not in str(exc),
+            "banchi-t7-secret-agent" not in str(exc),
             "...and NEVER ECHOES THE VALUE presented — the message names the KNOB, never "
             "what was turned",
             str(exc),

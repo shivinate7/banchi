@@ -24,10 +24,10 @@ import { DEV_URL, checkoutRoot } from './devPort'
 // two trees off one port in the first place. This file is what makes a shared port harmless
 // when that fails.
 //
-// `PKMNSCAN_CHECKOUT_IDENTITY=off` skips the check, and the refusal prints it.
+// `BANCHI_CHECKOUT_IDENTITY=off` skips the check, and the refusal prints it.
 
 export const IDENTITY_PATH = '/__checkout'
-export const IDENTITY_ESCAPE_ENV = 'PKMNSCAN_CHECKOUT_IDENTITY'
+export const IDENTITY_ESCAPE_ENV = 'BANCHI_CHECKOUT_IDENTITY'
 
 export function checkoutIdentityPlugin(): Plugin {
   const checkout = checkoutRoot()

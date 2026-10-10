@@ -17,7 +17,7 @@ blocks the commit. These constructs block:
 - A path whose first segment is an existing top-level directory, and which does not exist.
   Backticks and fences do not exempt it.
 - `make <target>` in backticks with no such Makefile target.
-- `pkmnscan <verb>` in backticks with an unregistered verb.
+- `banchi <verb>` in backticks with an unregistered verb.
 - An environment variable that no code, script or settings file names.
 - The phrase "check" followed by a number. Name a row by its printed label instead.
 - A decision id with no entry.
@@ -189,20 +189,20 @@ LAN. There is no auth and no TLS on this LAN tool (D13, D5). Do not add a login 
 - The mutating verbs are gated by an origin allowlist. `_dispatch` runs the gate ahead of
   every handler. Without it, any page open in the owner's browser could preflight and send
   `DELETE /inventory/3/17`, which hard-deletes the record, the sidecar and the photo.
-- An absent `Origin` may write. A browser page cannot omit the header. `curl`, `./pkmnscan`
+- An absent `Origin` may write. A browser page cannot omit the header. `curl`, `./banchi`
   and the harness all omit it, so requiring it would break every command-line path.
 - An unknown origin is told `GET, HEAD, OPTIONS` only. Its preflight for a write fails in the
   browser, and the request never leaves. `fetch` then rejects with a bare `TypeError`.
   `app/src/server.ts` probes `GET /status` on that path and raises `origin_blocked`, which
   names the address as the thing refused. It never reports `unreachable` for a running server.
 - The defaults are this checkout's own dev origin, `http://localhost:<dev port>` and
-  `http://127.0.0.1:<dev port>` (D43). `PKMNSCAN_ALLOWED_ORIGINS` extends them and never
+  `http://127.0.0.1:<dev port>` (D43). `BANCHI_ALLOWED_ORIGINS` extends them and never
   replaces them. Entries are comma- or whitespace-separated, lowercased, without a trailing
   slash. A port is never defaulted in. Comparison is by exact string, so `*` refuses
   everything and does not open the gate. T7 asserts this.
-- `PKMNSCAN_LAN_NAME` (D138) names the owner's DNS name for this Mac. `scripts/serve.py` reads
+- `BANCHI_LAN_NAME` (D138) names the owner's DNS name for this Mac. `scripts/serve.py` reads
   it through `envfile`, so it belongs in `.env` and not in a shell profile. It composes
-  `PKMNSCAN_ALLOWED_ORIGINS` from that name and this Mac's Bonjour name. A phone can then
+  `BANCHI_ALLOWED_ORIGINS` from that name and this Mac's Bonjour name. A phone can then
   write and not only read.
 
 ### 6.4b — Is the LAN URL still good? (`make lan-check`)
@@ -213,16 +213,16 @@ app rendering every screen while capture, undo, mark-sold and every other write 
 `origin_not_allowed`. So "I opened it and it looked fine" is not evidence. The check presses a
 write to find out.
 
-Parts that hold `http://pkmnscan.lan:8000` up:
+Parts that hold `http://banchi.lan:8000` up:
 
 | Where | What | If it is wrong |
 |---|---|---|
 | the owner's router | a DHCP reservation pinning this Mac | the name resolves to an address this Mac no longer holds |
-| the owner's router | a local DNS record for `pkmnscan.lan` | the name does not resolve |
+| the owner's router | a local DNS record for `banchi.lan` | the name does not resolve |
 | here | `app/vite.config.ts`'s `allowedHosts` | "Blocked request. This host is not allowed." |
 | here | `app/src/server.ts` composing the capture base from `location.hostname` | the phone calls itself |
-| here | `PKMNSCAN_LAN_NAME` in `.env` | writes answer 403 and reads do not |
-| here | `PKMNSCAN_ALLOWED_ORIGINS`, composed by `scripts/serve.py` | the same |
+| here | `BANCHI_LAN_NAME` in `.env` | writes answer 403 and reads do not |
+| here | `BANCHI_ALLOWED_ORIGINS`, composed by `scripts/serve.py` | the same |
 
 The check writes nothing. The origin gate runs ahead of the body read. `POST /capture` with no
 body therefore answers `origin_not_allowed` for an unknown origin and `body_required` for a
@@ -245,7 +245,7 @@ between file writes of photos and sidecars can still leave a file the store does
 
 On SIGTERM or Ctrl-C the server stops accepting first, then waits for in-flight requests, then
 exits. `DRAIN_SECONDS` bounds the wait. It is `files.LOCK_TIMEOUT_SECONDS + 5`, derived and not
-chosen. A capture can wait on `./pkmnscan identify` for the full lock timeout before it answers
+chosen. A capture can wait on `./banchi identify` for the full lock timeout before it answers
 `store_busy`. A shorter drain would cut a request that behaved correctly.
 Past the bound the server exits and says so loudly.
 

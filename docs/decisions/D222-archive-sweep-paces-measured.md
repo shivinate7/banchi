@@ -15,7 +15,7 @@ finishing.
 ### A 403 after success this pass is named for what it is
 
 `pipeline/pricehistory.py:Blocked`'s message tells the operator to set
-`PKMNSCAN_TCG_USER_AGENT`. That is the right remedy for a 403 with no earlier success this
+`BANCHI_TCG_USER_AGENT`. That is the right remedy for a 403 with no earlier success this
 pass. It is the wrong remedy once this pass already read other SKUs with the same agent.
 Every one of the 689 refused lines carried that message on 2026-09-19. Each one sent the
 operator to fix something the run had already disproved.
@@ -101,7 +101,7 @@ stopped a pass it could not rescue. The rescue is the next press.
 classifies a string it already produces. It never edits the file that raises it.
 
 No retry loop sleeps and re-tries the same request inside one attempt. This repo's own
-shell guard already refuses that shape elsewhere, under `PKMNSCAN_WAIT`. A wait that cannot
+shell guard already refuses that shape elsewhere, under `BANCHI_WAIT`. A wait that cannot
 see its own outcome is not a mechanism. Stopping the pass is the mechanism instead. Letting
 the operator re-run `archive sweep --write` is the other half.
 D224 is what makes that re-run cheap.

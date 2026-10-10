@@ -1,4 +1,4 @@
-"""The sweep `pkmnscan archive sweep` runs: read `pipeline/pricehistory.py`'s live endpoint
+"""The sweep `banchi archive sweep` runs: read `pipeline/pricehistory.py`'s live endpoint
 for every name the owner has sold or holds, and hand what came back to `store/pricearchive.py`
 (D219).
 
@@ -212,7 +212,7 @@ def merged_export_rows_by_sku(snapshot=None) -> Dict[str, tcgcsv.Row]:
 
     A READER OF THE TABLE, NOT A SECOND MAP (identity-follows-sku.md §3.2 and §5.3, lane 4).
     Before lane 0 this function walked `inventory/.exports/` itself, first-file-wins on a SKU
-    seen twice. The table is that same map, written down once by `pkmnscan skus adopt` and
+    seen twice. The table is that same map, written down once by `banchi skus adopt` and
     every export fetch since (`pipeline/skus.py`), and NEWEST FACTS WIN there
     (`store/skus.py:Skus.fold`'s own rule — the newest file's stamp, never the first file
     found) rather than first-file-wins — a deliberate change, because a table kept current by
@@ -857,7 +857,7 @@ def classify_refusals(
     A 403 THAT ARRIVES AFTER THIS PASS HAS ALREADY READ AT LEAST ONE SKU SUCCESSFULLY IS A
     THROTTLE, NEVER AN AUTHORIZATION PROBLEM — measured 2026-09-19: product 652771 answered
     HTTP 200 minutes into a run and HTTP 403 later in the SAME session, with the same
-    working `PKMNSCAN_TCG_USER_AGENT` and nothing about the request changed but the volume
+    working `BANCHI_TCG_USER_AGENT` and nothing about the request changed but the volume
     already sent. Telling that operator to set the User-Agent again sends them to fix
     something the run itself already proved was not broken — `CLAUDE.md`'s rule that a
     refusal must name its remedy cuts both ways: naming the WRONG remedy is worse than

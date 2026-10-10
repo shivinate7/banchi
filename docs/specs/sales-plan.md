@@ -128,7 +128,7 @@ nobody could recover.
 
 The pattern is the readings table and its adopt command. `store/pricearchive.py` is the table,
 `pipeline/pricearchive.py` is the walk, and `cli/cmd_pricearchive.py` is the press
-(`pkmnscan archive sweep [--write]` and `pkmnscan archive show [--sku ID]`).
+(`banchi archive sweep [--write]` and `banchi archive show [--sku ID]`).
 
 - **Buckets are keyed by `(sku, range, start)` and never by width.** The ranges overlap, and
   `semiannual` and `annual` are both seven days wide, so a width-only key would collide two

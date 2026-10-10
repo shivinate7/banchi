@@ -37,7 +37,7 @@ narrowing are `scripts/browser-scope.py`'s `classify_paths`, imported rather tha
 
 IT FAILS OPEN, IN EVERY DIRECTION. No merge-base, a diff it cannot compute, an EMPTY diff,
 an unscoped target name, and any exception raised while deriving a subject all answer RUN,
-out loud. Only an explicit skip skips, and `PKMNSCAN_GUARD_SCOPE=all` runs every target
+out loud. Only an explicit skip skips, and `BANCHI_GUARD_SCOPE=all` runs every target
 anyway. That adds checks, so it is not a hatch.
 
     scripts/guard-scope.py classify --target <name> [--base REV] [--head REV]
@@ -63,7 +63,7 @@ from pathlib import Path
 from typing import List, Optional, Sequence, Set, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
-HATCH = "PKMNSCAN_GUARD_SCOPE"
+HATCH = "BANCHI_GUARD_SCOPE"
 
 # CLAUDE.md's own list: "the Python packages (server/ store/ pipeline/ identify/ geometry/
 # codes/ cli/)". A local-package import is resolved against this list, never a guess.
@@ -468,7 +468,7 @@ def harness_subjects() -> Tuple[str, ...]:
     """What `harness/run.py` reads, derived from every module under `harness/`.
 
     From each module: a local package or top-level module it imports; a top-level name a
-    `ROOT / "x"` chain or a bare string constant names (`"pkmnscan"`, `"./pkmnscan"`: a
+    `ROOT / "x"` chain or a bare string constant names (`"banchi"`, `"./banchi"`: a
     subprocess target or an opened data path); and the TS import closure of every `app/src/*.ts`
     a chain names (`standing.ts`, `storeHistory.ts`). A `scripts/*.py` file so named is scanned
     the same way, to a fixed point, because it reads on the harness's behalf (`demo-seed.py`

@@ -710,14 +710,14 @@ def _pooled_exclusion_evidence(route_path: str) -> Optional[str]:
 INDEX_HTML = ROOT / "app" / "index.html"
 
 # A key literal, in either store. The two prefixes are the whole namespace: `banchi.` for
-# anything written since the rebrand and `pkmnscan.` for everything older, frozen at its
+# anything written since the rebrand and `banchi.` for everything older, frozen at its
 # spelling because renaming a live key silently discards what sits under the old one (D94).
-_STORAGE_KEY_RE = re.compile(r"""['"]((?:banchi|pkmnscan)\.[A-Za-z0-9._-]+)['"]""")
+_STORAGE_KEY_RE = re.compile(r"""['"]((?:banchi|banchi)\.[A-Za-z0-9._-]+)['"]""")
 
 # The same key as a DOCUMENT writes it — bare, inside a fenced block, with no quotes to
 # anchor on. D27's session roster is written that way, and reading it with the code regex
 # above found nothing at all, which is a broken reader that reads like a broken entry.
-_FENCED_STORAGE_KEY_RE = re.compile(r"\b((?:banchi|pkmnscan)\.[A-Za-z0-9._-]+)")
+_FENCED_STORAGE_KEY_RE = re.compile(r"\b((?:banchi|banchi)\.[A-Za-z0-9._-]+)")
 
 # Which store a file touches. Member access only — `window.localStorage`, a bare
 # `localStorage`, and the `window["localStorage"]` spelling the lint rule also has to cover.
@@ -813,7 +813,7 @@ def _session_fence_findings(session: Dict[str, List[str]]) -> List[Finding]:
     other store, where the sentence said FOUR and listed five for three days.
 
     **THE FENCE ONLY, NEVER THE SURROUNDING ARGUMENT.** D27 legitimately discusses the
-    retired `pkmnscan.*` spellings, the six keys that left, and what each one cost, all in
+    retired `banchi.*` spellings, the six keys that left, and what each one cost, all in
     prose. Reading the whole entry backwards would fail the commit over every abandoned key
     the entry exists to explain.
     """
@@ -894,13 +894,13 @@ def check_storage_keys(report: Report) -> None:
        can judge whether an explanation is any good, but it can hold that the key was
        written down once, on purpose, where a reader looking for it would find it. D27
        promised its keys were "named here" and named them only as English (*box number, set
-       hint, finish claim…*) while the app spelled them `pkmnscan.session.*`. Measured
+       hint, finish claim…*) while the app spelled them with the old prefix. Measured
        2026-09-06: seven of the eight keys under that carve-out appeared in no markdown file
        in this repo, and two of them — `game` and `product` — had never been described in
        any form, having arrived after the entry was written.
 
     THE PREFIX IS HELD TOO, AS OF 2026-09-06, AND THIS ROW ARGUED THE OTHER WAY FIRST. The
-    audit that built it proposed freezing `pkmnscan.*` on the ten keys that carried it —
+    audit that built it proposed freezing `banchi.*` on the ten keys that carried it —
     D94 keeps every name beneath the product, a key's spelling is fixed on the day it is
     written, and renaming a live one discards whatever a browser holds under the old
     spelling. The owner overruled that after being shown the cost, declined a read-time
@@ -912,7 +912,7 @@ def check_storage_keys(report: Report) -> None:
 
     D94 IS NOT REOPENED BY THAT and this row is not evidence that it is. That entry governs
     the checkout, the CLI, the packages, the store on disk, every route on the wire and
-    `PKMNSCAN_HOME`; a storage key is a name this product writes and no other program reads,
+    `BANCHI_HOME`; a storage key is a name this product writes and no other program reads,
     which is what separates it from every item on that list. Nothing here should be read as
     licence to rename anything else.
     """
@@ -930,7 +930,7 @@ def check_storage_keys(report: Report) -> None:
                     where,
                     f"`{key}` does not carry the `banchi.` prefix every browser-storage key "
                     "has carried since 2026-09-06 (D27, second amendment).\n"
-                    "  Ten keys were renamed off `pkmnscan.` that day, with no migration and "
+                    "  Ten keys were renamed off `banchi.` that day, with no migration and "
                     "the cost accepted in writing. A new key spelled the old way is not "
                     "continuity with them — they are gone — it is a second convention.",
                 )

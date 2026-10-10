@@ -10,7 +10,7 @@ Part of `harness/tests/t7_store_and_seams.py` (one verdict). Names the builder f
   `match.unread_targets(stock, store_pairs) -> [(game, set)]`  `targets_for` minus the sets the index holds.
   `match.index_stamp() -> str`  changes when the index gains a set. `sweep.tried()` is empty for a record
         stamped by an older one, so cards tried before their set was read are tried again.
-  The switch (`SWITCH` below, env "AUTO_SETUP" under the PKMNSCAN prefix)  "on" forces auto-start. Unset,
+  The switch (`SWITCH` below, env "AUTO_SETUP" under the BANCHI prefix)  "on" forces auto-start. Unset,
         it is refused when `CI` or the harness variable (`HARNESS` below) is set,
         and no case here sets `=off`. Every case that expects a spawn sets "on". No suite ever downloads.
 
@@ -37,8 +37,8 @@ from store.session import Store
 
 # Built by concatenation: the docs audit demands a markdown home for a name it reads in code, and that
 # home is the builder's to write beside the product code that reads the switch.
-SWITCH = "PKMNSCAN_" + "AUTO_SETUP"
-HARNESS = "PKMNSCAN_" + "HARNESS"
+SWITCH = "BANCHI_" + "AUTO_SETUP"
+HARNESS = "BANCHI_" + "HARNESS"
 
 
 class _Stock:

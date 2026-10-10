@@ -27,7 +27,10 @@ import launchagent  # scripts/launchagent.py, the shared installer
 HERE = Path(__file__).resolve()
 ROOT = HERE.parent.parent
 LABEL = "com.banchi.price-refresh-daily"
-LOG = Path.home() / ".pkmnscan" / "price-refresh-daily.log"
+sys.path.insert(0, str(ROOT))
+import machinedir  # noqa: E402
+
+LOG = machinedir.machine_dir() / "price-refresh-daily.log"
 
 
 def log(verdict):

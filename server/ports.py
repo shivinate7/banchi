@@ -50,10 +50,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Optional
 
-PORT_ENV = "PKMNSCAN_PORT"
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import machinedir  # noqa: E402
+
+PORT_ENV = "BANCHI_PORT"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -75,7 +79,7 @@ SLOTS = 300
 # The derivation READS the file and never writes it. `scripts/port-slots.py claim` is the one
 # writer. A missing, unreadable or malformed file, or no entry for this path, reads as "not
 # claimed", and the hash answers as before. `app/devPort.ts` reads the same file the same way.
-SLOT_REGISTRY_ENV = "PKMNSCAN_SLOT_REGISTRY"
+SLOT_REGISTRY_ENV = "BANCHI_SLOT_REGISTRY"
 SLOT_REGISTRY_NAME = "port-slots.json"
 
 
@@ -125,9 +129,9 @@ def is_primary_checkout(root: Path) -> bool:
 
 
 def slot_registry() -> Optional[Path]:
-    """Where the claimed slots are recorded. `PKMNSCAN_SLOT_REGISTRY` overrides.
+    """Where the claimed slots are recorded. `BANCHI_SLOT_REGISTRY` overrides.
 
-    The default sits beside the machine-wide suite lock, under `~/.pkmnscan/`, because a
+    The default sits beside the machine-wide suite lock, under `~/.banchi/`, because a
     slot is a fact about this machine and not about any one checkout. None when there is no
     home directory to find, and then nothing is claimed.
     """
@@ -135,7 +139,7 @@ def slot_registry() -> Optional[Path]:
     if override:
         return Path(override)
     try:
-        return Path.home() / ".pkmnscan" / SLOT_REGISTRY_NAME
+        return machinedir.machine_dir() / SLOT_REGISTRY_NAME
     except (RuntimeError, KeyError, OSError):
         return None
 
@@ -209,7 +213,7 @@ def _port(root: Path, base: int, low: int) -> int:
 def capture_port(root: Path = REPO_ROOT) -> int:
     """The port `make server` binds and the app addresses.
 
-    `PKMNSCAN_PORT` overrides, the same knob and the same shape as `PKMNSCAN_HOME` — where
+    `BANCHI_PORT` overrides, the same knob and the same shape as `BANCHI_HOME` — where
     this server listens is the operator's call, and the Fulfiller's device reaching this Mac
     by address is the case `docs/specs/capture-app.md` §11 leaves open. An unparseable or
     out-of-range value is IGNORED rather than obeyed: a typo in an env var must not put the
@@ -252,4 +256,4 @@ def agent_label(root: Path = REPO_ROOT) -> str:
     launchd, so this is deliberately Python-only and the agreement test stays a comparison of
     the three things both sides really do compute.
     """
-    return f"com.pkmnscan.serve.{slot_for(root)}"
+    return f"com.banchi.serve.{slot_for(root)}"

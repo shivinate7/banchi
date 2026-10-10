@@ -9,7 +9,7 @@ the same report.
 **What this builds.** A SKU is one product in one condition. Two copies of it have no
 legitimate reason to read a different card number. `pipeline/sku_number_contradictions.py`
 finds every SKU whose stored numbers disagree, after normalizing through
-`store.numbers.strip_set_code` and `pipeline.join.number_index_key`. `pkmnscan cards
+`store.numbers.strip_set_code` and `pipeline.join.number_index_key`. `banchi cards
 contradictions` is the reachable place a human runs it, kept apart from `cards checks`.
 
 **Kept separate from the four approved stored-data checks, built as a sibling PR, on the owner's own ruling.**

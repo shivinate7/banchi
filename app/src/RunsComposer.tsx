@@ -197,7 +197,7 @@ export function sinceOnTheWire(local: string): string | null {
  * anywhere in the app"* — so `bid` is a CLI and wire term only, and a screen that offered it
  * would be drawing the join key beside the number a person counts to. `paths` is a file dialog a
  * browser cannot honestly draw over the server's disk; naming a capture directory is a terminal
- * affordance. Both terms stay reachable from `pkmnscan identify`, which is where they belong.
+ * affordance. Both terms stay reachable from `banchi identify`, which is where they belong.
  *
  * A SECTION NEEDS EXACTLY ONE DRAWER AND IS STRUCTURALLY OMITTED OTHERWISE.
  * `pipeline/selection.py:check` refuses the combination BY NAME — *"Section 2 is a different set

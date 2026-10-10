@@ -7,7 +7,7 @@ Governs: D18, D189
 WHAT THIS PROVES AND WHY IT IS SEPARATE FROM A GOLDEN REIMPLEMENTATION. `_readings()` in
 `server/pipeline_routes.py` used to walk every run's `pricing.json` and the newest live
 export on every request; that walk moved to `pipeline/readings.py:collect()`, run once by
-`pkmnscan readings adopt --write` and cached in the `readings`/`readings_sources` tables.
+`banchi readings adopt --write` and cached in the `readings`/`readings_sources` tables.
 `golden()` below is an INDEPENDENT reimplementation of the walk the old function ran — not
 imported from `collect()`, not sharing its helper functions — kept here specifically so a bug
 introduced into `collect()` is caught by comparison rather than reproduced in both. Every arm

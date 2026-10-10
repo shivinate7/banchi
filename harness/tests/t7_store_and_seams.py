@@ -29,7 +29,7 @@ every gate in the repo on the day they shipped, and both are recorded in docs/de
                                            collided later. Coercing only the box raises
                                            inside the lock; coercing both is the fix.
 
-Isolation is `PKMNSCAN_HOME` pointed at a temporary directory. `store.files.home()` reads
+Isolation is `BANCHI_HOME` pointed at a temporary directory. `store.files.home()` reads
 the environment on every call rather than at import, so no module reload is needed — and
 that property is itself asserted in `harness/tests/t7/`, because the whole test is built on it.
 
@@ -70,7 +70,7 @@ to have open in another tab could spend his inventory; the fix is an origin allo
 `_dispatch`, ahead of every handler. It is unreachable from a `do_*` call — the gate reads a
 request HEADER, and an in-process call has none — so it went untested until 2026-08-23. The
 three properties easiest to break later each carry their reason at the assertion: a refusal
-changes nothing, an ABSENT `Origin` still writes (`curl`, `./pkmnscan` and this test send
+changes nothing, an ABSENT `Origin` still writes (`curl`, `./banchi` and this test send
 none, and requiring the header kills every command-line path at once), and `GET` stays open
 because `GET /photo` is loaded by an `<img>`, which sends no `Origin` either.
 

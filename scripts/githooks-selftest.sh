@@ -25,12 +25,12 @@ set -uo pipefail
 # can be run against the INSTALLED copy in the git common dir — `make hooks` copies rather
 # than points now (D42, amended), and a copy that lands wrong is a guard that reads as armed
 # and does nothing. Proving the files behave is not the same claim as proving the install did.
-HOOKS_DIR="${PKMNSCAN_HOOKS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/githooks" && pwd)}"
+HOOKS_DIR="${BANCHI_HOOKS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/githooks" && pwd)}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 pass=0
 fail=0
 
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/pkmnscan-githooks.XXXXXX")" || { echo "cannot make a temp dir"; exit 1; }
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/banchi-githooks.XXXXXX")" || { echo "cannot make a temp dir"; exit 1; }
 cleanup() { rm -rf "$tmp"; }
 trap cleanup EXIT
 
@@ -81,8 +81,8 @@ git remote add origin "$tmp/origin.git"
 # Seeded with the guard OFF, so the fixture itself is not the thing under test.
 echo one > file.txt
 git add file.txt
-PKMNSCAN_MAIN=off git commit -qm "seed"
-PKMNSCAN_MAIN=off git push -q -u origin main 2>/dev/null
+BANCHI_MAIN=off git commit -qm "seed"
+BANCHI_MAIN=off git push -q -u origin main 2>/dev/null
 
 git config core.hooksPath "$HOOKS_DIR"
 
@@ -129,9 +129,9 @@ expect refuse "push HEAD:main"     git push origin HEAD:main
 git switch -q main
 
 # Now main genuinely IS ahead — moved through the hatch — so the plain form has work to do.
-PKMNSCAN_MAIN=off git merge -q --ff-only feature
+BANCHI_MAIN=off git merge -q --ff-only feature
 expect refuse "push main"          git push origin main
-PKMNSCAN_MAIN=off git reset -q --hard origin/main
+BANCHI_MAIN=off git reset -q --hard origin/main
 
 echo "  -- the legitimate path is open --"
 # A merged pull request: origin's main advances without us, then we pull. The bare repo has
@@ -143,8 +143,8 @@ expect allow "pull a commit origin already has" git merge --ff-only origin/main
 echo "  -- the escape hatch --"
 echo four > file.txt
 git add file.txt
-expect allow "PKMNSCAN_MAIN=off commit on main" env PKMNSCAN_MAIN=off git commit -qm "deliberate"
-expect allow "PKMNSCAN_MAIN=off push to main"   env PKMNSCAN_MAIN=off git push -q origin main
+expect allow "BANCHI_MAIN=off commit on main" env BANCHI_MAIN=off git commit -qm "deliberate"
+expect allow "BANCHI_MAIN=off push to main"   env BANCHI_MAIN=off git push -q origin main
 
 echo "  -- a branch push runs the revert guard, and its failure stops the push --"
 # `guard_branch ... || exit 1` is the only thing that carries the revert guard's verdict out of
@@ -182,7 +182,7 @@ cd "$tmp/pack" || exit 1
 git config user.email selftest@example.com
 git config user.name  selftest
 git config commit.gpgsign false
-PKMNSCAN_MAIN=off git commit -q --allow-empty -m base
+BANCHI_MAIN=off git commit -q --allow-empty -m base
 base="$(git rev-parse main)"
 git switch -q -c side 2>/dev/null
 git commit -q --allow-empty -m ahead        # `side` is on no remote, so it is not a legal target
@@ -190,9 +190,9 @@ git config core.hooksPath "$HOOKS_DIR"
 # main both loose AND packed at $base. (A bare update-ref to the packed value writes no loose
 # file, so delete, recreate, then pack without pruning.) The hatch is setup only.
 reloose() {
-  PKMNSCAN_MAIN=off git update-ref -d refs/heads/main
-  PKMNSCAN_MAIN=off git update-ref refs/heads/main "$base"
-  PKMNSCAN_MAIN=off git pack-refs --all --no-prune
+  BANCHI_MAIN=off git update-ref -d refs/heads/main
+  BANCHI_MAIN=off git update-ref refs/heads/main "$base"
+  BANCHI_MAIN=off git pack-refs --all --no-prune
 }
 reloose
 expect allow "git pack-refs --all"            git pack-refs --all
@@ -213,10 +213,10 @@ expect refuse "fast-forward packed main"      git merge --ff-only side
 git switch -q side 2>/dev/null
 # Packed-refs holds an OLDER main than the loose file: deleting the loose one would move main.
 reloose
-PKMNSCAN_MAIN=off git update-ref refs/heads/main side
+BANCHI_MAIN=off git update-ref refs/heads/main side
 expect refuse "delete loose main, packed is older" git update-ref -d refs/heads/main "$(git rev-parse side)"
 # Loose only, nothing packed: a delete stating its value must still stop.
-PKMNSCAN_MAIN=off git update-ref refs/heads/main side
+BANCHI_MAIN=off git update-ref refs/heads/main side
 expect refuse "delete loose-only main stating its value" git update-ref -d refs/heads/main "$(git rev-parse side)"
 git switch -q side 2>/dev/null
 cd "$tmp/work" || exit 1
@@ -346,16 +346,16 @@ git -C "$rlrepo" config user.name selftest
 git -C "$rlrepo" config commit.gpgsign false
 echo one > "$rlrepo/a.txt"
 git -C "$rlrepo" add a.txt
-PKMNSCAN_MAIN=off git -C "$rlrepo" commit -qm seed
+BANCHI_MAIN=off git -C "$rlrepo" commit -qm seed
 git -C "$rlrepo" config core.hooksPath "$HOOKS_DIR"
 echo two > "$rlrepo/a.txt"
 git -C "$rlrepo" add a.txt
 # The refusal prints the short hash of the refused commit, so both commits share one fixed date: same hash, same output.
 export GIT_AUTHOR_DATE="2026-01-01T00:00:00Z" GIT_COMMITTER_DATE="2026-01-01T00:00:00Z"
-rl_out="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$rl" git commit -qm "straight onto main" 2>&1)"; rl_status=$?
+rl_out="$(cd "$rlrepo" && BANCHI_REFUSAL_LOG="$rl" git commit -qm "straight onto main" 2>&1)"; rl_status=$?
 [ $rl_status -ne 0 ] && ok "a refused commit on main still refuses" || bad "the logged refusal let the commit through"
 why="$(refusal_line_ok "$rl" "reference-transaction:main-move")" && ok "…and writes one well-formed line" || bad "the refusal log line: $why"
-rl_bad="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" git commit -qm "straight onto main" 2>&1)"; rl_bad_status=$?
+rl_bad="$(cd "$rlrepo" && BANCHI_REFUSAL_LOG="$tmp/no/such/dir/log" git commit -qm "straight onto main" 2>&1)"; rl_bad_status=$?
 if [ $rl_bad_status -ne 0 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
 else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
 unset GIT_AUTHOR_DATE GIT_COMMITTER_DATE
@@ -365,20 +365,20 @@ git -C "$rlrepo" switch -q -c rlb
 echo k > "$rlrepo/.env"
 git -C "$rlrepo" add -f .env
 rl="$tmp/precommit.log"
-rl_out="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$rl" git commit -qm "secrets" 2>&1)"; rl_status=$?
+rl_out="$(cd "$rlrepo" && BANCHI_REFUSAL_LOG="$rl" git commit -qm "secrets" 2>&1)"; rl_status=$?
 [ $rl_status -ne 0 ] && ok "pre-commit still refuses a staged secrets file" || bad "pre-commit let a secrets file through"
 why="$(refusal_line_ok "$rl" "pre-commit:secrets")" && ok "…and writes one well-formed line" || bad "the pre-commit log line: $why"
-rl_bad="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" git commit -qm "secrets" 2>&1)"; rl_bad_status=$?
+rl_bad="$(cd "$rlrepo" && BANCHI_REFUSAL_LOG="$tmp/no/such/dir/log" git commit -qm "secrets" 2>&1)"; rl_bad_status=$?
 if [ $rl_bad_status -ne 0 ] && [ "$rl_bad" = "$rl_out" ]; then ok "pre-commit: an unwritable log path changes neither verdict nor output"
 else bad "pre-commit: an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
 git -C "$rlrepo" reset -q -- .env
 git init -q --bare "$tmp/rlorigin.git"
 git -C "$rlrepo" remote add origin "$tmp/rlorigin.git"
 rl="$tmp/prepush.log"
-rl_out="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$rl" git push origin rlb:main 2>&1)"; rl_status=$?
+rl_out="$(cd "$rlrepo" && BANCHI_REFUSAL_LOG="$rl" git push origin rlb:main 2>&1)"; rl_status=$?
 [ $rl_status -ne 0 ] && ok "pre-push still refuses a push to main" || bad "pre-push let a push to main through"
 why="$(refusal_line_ok "$rl" "pre-push:main-push")" && ok "…and writes one well-formed line" || bad "the pre-push log line: $why"
-rl_bad="$(cd "$rlrepo" && PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" git push origin rlb:main 2>&1)"; rl_bad_status=$?
+rl_bad="$(cd "$rlrepo" && BANCHI_REFUSAL_LOG="$tmp/no/such/dir/log" git push origin rlb:main 2>&1)"; rl_bad_status=$?
 if [ $rl_bad_status -ne 0 ] && [ "$rl_bad" = "$rl_out" ]; then ok "pre-push: an unwritable log path changes neither verdict nor output"
 else bad "pre-push: an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
 
@@ -388,7 +388,7 @@ python3 -c "
 import os, sys
 sys.path.insert(0, '$REPO_ROOT/scripts')
 import refusal_log as r
-os.environ['PKMNSCAN_REFUSAL_LOG'] = '$rl'
+os.environ['BANCHI_REFUSAL_LOG'] = '$rl'
 for _ in range(4000):
     r.log('t', 'rule', 'x' * 40)
 sys.exit(0 if os.path.getsize('$rl') <= r.MAX_BYTES and os.path.exists('$rl.1') and r.recent() else 1)
@@ -398,10 +398,10 @@ sys.exit(0 if os.path.getsize('$rl') <= r.MAX_BYTES and os.path.exists('$rl.1') 
 OPSEC="$REPO_ROOT/scripts/guard-opsec.sh"
 rl="$tmp/opsec.log"
 rl_payload='{"session_id":"sess-1","tool_input":{"file_path":"/x/fixtures/a.csv","content":"x"}}'
-rl_out="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$rl" bash "$OPSEC" 2>&1)"; rl_status=$?
+rl_out="$(printf '%s' "$rl_payload" | BANCHI_REFUSAL_LOG="$rl" bash "$OPSEC" 2>&1)"; rl_status=$?
 [ $rl_status -eq 2 ] && ok "guard-opsec still refuses a fixtures write" || bad "guard-opsec exited $rl_status"
 why="$(refusal_line_ok "$rl" "guard-opsec:fixtures" "sess-1")" && ok "…and writes one well-formed line" || bad "the guard-opsec log line: $why"
-rl_bad="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" bash "$OPSEC" 2>&1)"; rl_bad_status=$?
+rl_bad="$(printf '%s' "$rl_payload" | BANCHI_REFUSAL_LOG="$tmp/no/such/dir/log" bash "$OPSEC" 2>&1)"; rl_bad_status=$?
 if [ $rl_bad_status -eq 2 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
 else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
 

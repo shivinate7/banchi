@@ -10,6 +10,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import machinedir  # noqa: E402
+
 
 def agent(label, script, root, hour, minute, log, remove):
     plist = Path.home() / "Library" / "LaunchAgents" / (label + ".plist")
@@ -17,6 +20,7 @@ def agent(label, script, root, hour, minute, log, remove):
     if remove:
         subprocess.run(["launchctl", "bootout", "%s/%s" % (uid, label)], capture_output=True)
         plist.unlink(missing_ok=True)
+        machinedir.remove_old_agent(label)
         print("removed", label)
         return 0
     if (Path(root) / ".git").is_file():

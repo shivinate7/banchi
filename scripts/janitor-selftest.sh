@@ -26,7 +26,7 @@ fail=0
 
 [ -f "$JANITOR" ] || { echo "no janitor.py beside this script"; exit 1; }
 
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/pkmnscan-janitor.XXXXXX")" || { echo "cannot make a temp dir"; exit 1; }
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/banchi-janitor.XXXXXX")" || { echo "cannot make a temp dir"; exit 1; }
 kids=""
 cleanup() {
   for k in $kids; do kill "$k" 2>/dev/null; done

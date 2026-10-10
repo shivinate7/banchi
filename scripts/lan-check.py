@@ -10,15 +10,15 @@ ignore, and a check people ignore is worse than an absent one.
 
 So it is a target you RUN, on the machine the URL points at, when you want to know.
 
-WHAT IT IS FOR. The owner reaches this product from a phone at `http://pkmnscan.lan:8000`,
+WHAT IT IS FOR. The owner reaches this product from a phone at `http://banchi.lan:8000`,
 and that address is held up by six things in two places. Two are the owner's, on their UniFi,
 and this repo does not touch them (D43): a DHCP reservation pinning this Mac to an address,
 and a local DNS record mapping the name to it. Four are here: Vite's `allowedHosts`, the
-client composing the capture base from `location.hostname`, `PKMNSCAN_LAN_NAME` in `.env`, and
-the `PKMNSCAN_ALLOWED_ORIGINS` the supervisor composes from it.
+client composing the capture base from `location.hostname`, `BANCHI_LAN_NAME` in `.env`, and
+the `BANCHI_ALLOWED_ORIGINS` the supervisor composes from it.
 
 THE FAILURE THIS EXISTS FOR IS SILENT, WHICH IS WHY LOOKING IS NOT ENOUGH. Reads are ungated
-and writes are origin-checked (D43). If `PKMNSCAN_LAN_NAME` goes missing from `.env` — a fresh
+and writes are origin-checked (D43). If `BANCHI_LAN_NAME` goes missing from `.env` — a fresh
 clone, a rewritten `.env`, a `.env` copied from `.env.example` before this variable was listed
 there — every screen still renders and the whole inventory still draws, and capture, undo,
 mark-sold, retire, the mid-box delete and the claim editor all answer 403 `origin_not_allowed`.
@@ -44,7 +44,7 @@ from typing import List, Optional, Tuple
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # The supervisor is imported rather than restated, for the reason it states about the capture
-# server: a second hand-written spelling of `PKMNSCAN_LAN_NAME` would agree until the day one
+# server: a second hand-written spelling of `BANCHI_LAN_NAME` would agree until the day one
 # moved, and the symptom of the disagreement is exactly the silent 403 above. `serve.py` is
 # import-safe — it defines and computes, and starts nothing until called.
 sys.path.insert(0, str(REPO_ROOT))
@@ -166,17 +166,17 @@ def check() -> List[Result]:
     if not lan_names:
         results.append(
             Result(
-                "PKMNSCAN_LAN_NAME in .env",
+                "BANCHI_LAN_NAME in .env",
                 False,
                 "not set — no LAN name is in the origin allowlist",
-                "Add `PKMNSCAN_LAN_NAME=pkmnscan.lan` to .env (see .env.example), then "
+                "Add `BANCHI_LAN_NAME=banchi.lan` to .env (see .env.example), then "
                 "`make up ARGS=--restart` when the rig is idle. Reads will work without it and "
                 "every write from the LAN will answer 403 origin_not_allowed.",
             )
         )
         return results
     results.append(
-        Result("PKMNSCAN_LAN_NAME in .env", True, ", ".join(lan_names))
+        Result("BANCHI_LAN_NAME in .env", True, ", ".join(lan_names))
     )
 
     mine = local_addresses()
@@ -297,7 +297,7 @@ def check() -> List[Result]:
                     "This is the phone's symptom and it does not look like this one. The "
                     "page gets a bare network error, so the app reports the capture server "
                     "as DOWN when it is up and answering. Restarting it fixes nothing: the "
-                    "cause is the origin, so check PKMNSCAN_LAN_NAME in .env.",
+                    "cause is the origin, so check BANCHI_LAN_NAME in .env.",
                 )
             )
 
@@ -313,7 +313,7 @@ def check() -> List[Result]:
                     f"WRITES from {origin}",
                     False,
                     "403 origin_not_allowed — reads work, every write is refused",
-                    "The running server does not have this origin. Either PKMNSCAN_LAN_NAME "
+                    "The running server does not have this origin. Either BANCHI_LAN_NAME "
                     "was added to .env after the server started (restart it when the rig is "
                     "idle), or it is absent. This is the silent failure: the app looks "
                     "entirely healthy until you try to change something.",

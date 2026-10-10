@@ -1,6 +1,6 @@
 ## 9 — The sigil check matches text, so a renamed local walks past it
 
-`make sigil-check` (D92) refuses a bare `#` composed from an expression naming `index`, and the word form `Card {…index}`. It reads source text. `const n = side.index` on one line and `#{n}` or `Card {n}` on the next is a violation it cannot see, and so is any indirection through a helper, a destructure or a prop rename. One such violation shipped: `slotNumber` returned `String(target.index)` three functions away from the `#`. The bypass is `PKMNSCAN_SIGIL=off`, or the per-line `sigil-ok: <why>`.
+`make sigil-check` (D92) refuses a bare `#` composed from an expression naming `index`, and the word form `Card {…index}`. It reads source text. `const n = side.index` on one line and `#{n}` or `Card {n}` on the next is a violation it cannot see, and so is any indirection through a helper, a destructure or a prop rename. One such violation shipped: `slotNumber` returned `String(target.index)` three functions away from the `#`. The bypass is `BANCHI_SIGIL=off`, or the per-line `sigil-ok: <why>`.
 
 **Outcome at risk.** A slot number and a card count drawn with the same `#` on one screen, so a person reads a slot as a count of cards (D58).
 

@@ -57,7 +57,7 @@ only and carries no sealed row at all.
 
 Stock images cache in the archive's market-cache directory; no second cache.
 
-`PKMNSCAN_STOCK_IMAGES_SYNC` is set only by `scripts/demo-record.py`. It makes `warm_stock_images()` join its threads before the server accepts requests, so the recorder's first read is warm. The live server stays fire-and-forget.
+`BANCHI_STOCK_IMAGES_SYNC` is set only by `scripts/demo-record.py`. It makes `warm_stock_images()` join its threads before the server accepts requests, so the recorder's first read is warm. The live server stays fire-and-forget.
 
 **Amended, on the owner's word: one exception, a fingerprint read.** The stock-photo matcher
 (`docs/specs/identify-engine-pick.md`, D2) needs one fingerprint for each stock image.

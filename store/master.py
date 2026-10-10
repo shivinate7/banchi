@@ -655,7 +655,7 @@ class Card:
     # reused rather than invented.
     #
     # NULL ON EVERY CARD IDENTIFIED BEFORE THIS FIELD EXISTED, filled by `bind_sku` from the
-    # `skus` table (`./pkmnscan cards identity --write`, which retired `cards variants`) and
+    # `skus` table (`./banchi cards identity --write`, which retired `cards variants`) and
     # never guessed: a SKU the table does not hold keeps a null set rather than a fallback
     # value invented for the column.
     set_name: Optional[str] = None
@@ -1720,7 +1720,7 @@ class Inventory:
     # stops a migration-window fallback becoming a permanent second lookup.
     #
     # A STAMP RATHER THAN A BOOLEAN, because "when" is the question a person asks about a
-    # move, and because `pkmnscan cards photos` is the only writer: no session sets this,
+    # move, and because `banchi cards photos` is the only writer: no session sets this,
     # so unlike `box_ids_issued` it travels one way only and `store/session.py` does not
     # write it back.
     photos_relocated: Optional[str] = None

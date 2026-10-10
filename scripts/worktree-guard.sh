@@ -158,7 +158,7 @@ if [ -d .git ] && git rev-parse --verify --quiet main >/dev/null 2>&1; then
     echo "                serving this branch's code over the owner's REAL store (D138)."
     # REACHING EITHER ARM MEANS THE SYNC DID NOT PUT THIS TREE ON MAIN — it runs above, and the
     # branch is read after it. So neither arm asserts what the sync SAID: it may have declined
-    # and printed a reason, or it may be switched off entirely with PKMNSCAN_SYNC=off, and a
+    # and printed a reason, or it may be switched off entirely with BANCHI_SYNC=off, and a
     # sentence pointing at an explanation that is not there is worse than no sentence. Same
     # correction `scripts/serve.py:stand_down_lines` carries, for the same reason.
     if [ "$ahead" = "0" ] && [ "$dirty" = "0" ]; then
@@ -169,7 +169,7 @@ if [ -d .git ] && git rev-parse --verify --quiet main >/dev/null 2>&1; then
       echo "                switch blind — see \`make status\`."
     fi
     echo "                The self-sync runs ahead of this report and prints its own reason"
-    echo "                when it declines; PKMNSCAN_SYNC=off stops it running at all."
+    echo "                when it declines; BANCHI_SYNC=off stops it running at all."
   fi
 fi
 

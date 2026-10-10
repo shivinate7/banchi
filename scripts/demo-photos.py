@@ -34,7 +34,7 @@ Evolution, the fixture is SV09. So the boxes that carry a RUN are drawn from the
 and the boxes that do not are free to use the second: inventory, sales and orders need no
 export, and only join, emit and pricing do.
 
-    ./scripts/demo-photos.py --source ~/Developer/pkmnscan --count 122
+    ./scripts/demo-photos.py --source ~/Developer/banchi --count 122
 
 Writes `demo-assets/`, which IS tracked — see the pre-commit hook's narrow exception and
 the reason beside it. Re-run it only to change the set; the demo seed reads what it wrote.
@@ -191,7 +191,7 @@ def candidates(source: Path, rows: Dict[str, dict]):
     real name that no vendored export prices, which is everything the inventory, order and
     sale screens need and nothing the pipeline does.
     """
-    os.environ["PKMNSCAN_HOME"] = str(source)
+    os.environ["BANCHI_HOME"] = str(source)
     from store import Store
 
     snapshot = Store().read()

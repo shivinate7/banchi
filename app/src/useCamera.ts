@@ -69,11 +69,11 @@ const JPEG_QUALITY = 0.95
  * about a card is stored here, and docs/specs/capture-app.md section 9's "no second store
  * in the browser" is about captures, which still go straight to the Mac.
  *
- * THE `pkmnscan.` PREFIX WAS RENAMED TO `banchi.` ON 2026-09-06, ON THE OWNER'S WORD, AND
+ * THE `banchi.` PREFIX WAS RENAMED TO `banchi.` ON 2026-09-06, ON THE OWNER'S WORD, AND
  * NOTHING MIGRATES. D94 freezes every name beneath the product and a storage key is about as
  * far beneath it as a thing gets, so the case for renaming was never technical — the split
  * was simply chronological, `banchi.*` on the three keys written after the rebrand and
- * `pkmnscan.*` on the ten written before, which is a residue rather than a rule. The owner
+ * `banchi.*` on the ten written before, which is a residue rather than a rule. The owner
  * was shown the alternative (read the new key, fall back to the old, write the new) and
  * declined the shim, on the grounds that a fallback read can never safely be deleted:
  * removing it later strands any browser that has not opened the app since.
@@ -82,8 +82,8 @@ const JPEG_QUALITY = 0.95
  * declared rather than counted in one list. Nothing here is a card, a position or a price —
  * that is D27's whole test — so the worst case is a preference the operator sets again.
  *
- * THIS RIG PAID TWO CLICKS FOR IT. `pkmnscan.capture.deviceId` held the 4K capture card the
- * feeder runs through and `pkmnscan.capture.rotation` held the quarter turn D13's sideways
+ * THIS RIG PAID TWO CLICKS FOR IT. the old `capture.deviceId` key held the 4K capture card the
+ * feeder runs through and the old `capture.rotation` key held the quarter turn D13's sideways
  * mount needs; the first load after this landed opened the device picker with nothing
  * remembered and drew the preview unrotated. Both are one press on the capture screen. */
 const REMEMBERED_DEVICE_KEY = 'banchi.capture.deviceId'

@@ -83,7 +83,7 @@ subject set only stops most of those keys from being discarded before they reach
 ### The measured reach of this fix
 
 This was measured read-only against the owner's real store, 2026-09-20. Nothing was
-written. No `pkmnscan archive` command was run — a live sweep was in progress against the
+written. No `banchi archive` command was run — a live sweep was in progress against the
 same store, and only `ledger_subject_rows` was called, never `sweep`. 287 SKUs in the
 ledger carry no `cards` row today (the ranking design's count of 270 was taken a day earlier, over a
 store that has since sold more). 281 of the 287 resolve to a row. The remaining 6 all

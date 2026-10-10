@@ -1,4 +1,4 @@
-"""`pkmnscan emit <run-dir>` — write the import CSV. Free, re-runnable.
+"""`banchi emit <run-dir>` — write the import CSV. Free, re-runnable.
 
 ONE FILE, `import.csv`, AND THAT IS THE DEFAULT FOR EVERY SEND — one run or several. The
 owner's instruction, verbatim: *"emit by default only should now emit only one spreadsheet by
@@ -63,7 +63,7 @@ and each copy's identity write is appended to `history.jsonl`. `pushed` is a qua
 SKU and not a state a card wears (D7 amended) — which copies back it is deliberately
 unrecorded, because every unsold copy is equally sellable and an address here would be a
 fiction the pull then has to honour. `pushed` still means one thing only: a CSV was written.
-Everything past it is confirmed by something outside this pipeline — see `pkmnscan reconcile`.
+Everything past it is confirmed by something outside this pipeline — see `banchi reconcile`.
 """
 
 from __future__ import annotations
@@ -1275,7 +1275,7 @@ def run(args, say) -> int:
     # same seam and `pipeline/corpus.py`'s header for why the per-SKU half of the old run file
     # left the run: a price is a fact about a SKU, and one stored per drawer was one answer per
     # drawer. A legacy run file is not read as a fallback — `_legacy_refusal` refused on it
-    # above, before anything was read — it is folded in once by `pkmnscan prices adopt`.
+    # above, before anything was read — it is folded in once by `banchi prices adopt`.
     try:
         book = corpus.Corpus.read()
     except (
@@ -1386,7 +1386,7 @@ def run(args, say) -> int:
     )
     if missing:
         say("REFUSING to write: cards were routed to a queue but are not in one on disk.")
-        say("Run `pkmnscan join` first — nothing may be written before they are recorded.")
+        say("Run `banchi join` first — nothing may be written before they are recorded.")
         for position in missing[:10]:
             say(f"    {position}")
         _warn_stale(run_dir, say)
@@ -1897,11 +1897,11 @@ def _after_single(
             say(f"      {listed_names} is unchanged, from the emit at {sent.get('at', 'an earlier run')}.")
             say("      A price changed after an emit cannot travel this road; the copies "
                 "are already sent.")
-            say(f"next: pkmnscan reconcile {run_dir.directory} <staged-export.csv>")
+            say(f"next: banchi reconcile {run_dir.directory} <staged-export.csv>")
         return 1
     say(f"next: import {listed_names} to Staged in TCGplayer, "
         f"then Export From Staged and run")
-    say(f"      pkmnscan reconcile {run_dir.directory} <staged-export.csv>")
+    say(f"      banchi reconcile {run_dir.directory} <staged-export.csv>")
     return 0
 
 
@@ -1918,7 +1918,7 @@ def _legacy_refusal(run_dir, say) -> bool:
     legacy = run_dir.path(runs.DECISIONS)
     if not legacy.is_file():
         return False
-    say(f"{legacy} is a legacy pricing file; run `pkmnscan prices adopt --write` to fold "
+    say(f"{legacy} is a legacy pricing file; run `banchi prices adopt --write` to fold "
         f"and retire it.")
     return True
 
@@ -2018,7 +2018,7 @@ def run_merged(args, say) -> int:
 
 
 def _run_merged(args, say) -> int:
-    """`pkmnscan emit <run> <run> ...` — one import file over several runs (D86).
+    """`banchi emit <run> <run> ...` — one import file over several runs (D86).
 
     THE DEDUPE IS WHY THIS IS NOT A CONCATENATION OF THE FILES `emit` ALREADY WROTE, and the
     cap was the other half until the standing one went (D7, amended 2026-09-08). A card in
@@ -2452,5 +2452,5 @@ def _after_merged(
     say(f"standing queues  {queue_line}")
     say("")
     say("next: import the file above to Staged in TCGplayer, then Export From Staged and run")
-    say(f"      pkmnscan reconcile {dirs[-1].path('')} <staged-export.csv>")
+    say(f"      banchi reconcile {dirs[-1].path('')} <staged-export.csv>")
     return 0

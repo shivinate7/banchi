@@ -11,7 +11,7 @@ of those and the key changes and the batch re-runs. Change nothing and T1 re-sco
 stored answers offline, which is also what makes the committed score in
 `harness/results/` reproducible rather than a snapshot of one afternoon's API mood.
 
-`PKMNSCAN_RERUN_T1=1` forces a fresh submission regardless.
+`BANCHI_RERUN_T1=1` forces a fresh submission regardless.
 
 Gitignored, like the images: it is derived data, reproducible from the API, and the
 artefact worth committing is the score in `harness/results/`, not the raw responses.
@@ -52,7 +52,7 @@ def _path(key: str) -> Path:
 
 
 def forced() -> bool:
-    return os.environ.get("PKMNSCAN_RERUN_T1") == "1"
+    return os.environ.get("BANCHI_RERUN_T1") == "1"
 
 
 def load(key: str) -> Optional[Dict[str, object]]:

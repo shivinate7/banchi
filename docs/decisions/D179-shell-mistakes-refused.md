@@ -102,8 +102,8 @@ wearing a guard's clothes.
 
 ### Five hatches, not one, and none is printed to an agent
 
-`PKMNSCAN_CHECKOUT`, `PKMNSCAN_TREE`, `PKMNSCAN_WAIT` and the later clauses' hatches — each
-`=off`, each honoured in the environment, and each the owner's to set. The owner's word: a refusal never prints a blocked switch's name to an agent. It prints "owner-only: ask the owner to run this command". `clause_owner_only` refuses an agent's tool call that sets any real `PKMNSCAN_*=off`, read by `_hatches_set`, so a mention passes. Four recovery levers stay open to an agent because each frees a stuck session: `PKMNSCAN_KILL`, `PKMNSCAN_SUITE_LOCK`, `PKMNSCAN_SERVE_MAIN` and `PKMNSCAN_SYNC`, and they keep their printed names. The owner's terminal and CI are not tool calls, so the clause never sees them. The clause lives in `hook`, not in `read_command`. The self-test's older cases call `hook(payload, owner_only=False)`, and only its owner-only cases go through `--hook`. There is no switch for it. **Known residual:** a Write of a script, then `bash script.sh`, sets a switch that no stage of any Bash command shows. The clause cannot see it. **One switch for the whole hook would mean disarming the clause that guards uncommitted work in order to make a symlink**, and a hatch reached for by reflex is a guard
+`BANCHI_CHECKOUT`, `BANCHI_TREE`, `BANCHI_WAIT` and the later clauses' hatches — each
+`=off`, each honoured in the environment, and each the owner's to set. The owner's word: a refusal never prints a blocked switch's name to an agent. It prints "owner-only: ask the owner to run this command". `clause_owner_only` refuses an agent's tool call that sets any real `BANCHI_*=off`, read by `_hatches_set`, so a mention passes. Four recovery levers stay open to an agent because each frees a stuck session: `BANCHI_KILL`, `BANCHI_SUITE_LOCK`, `BANCHI_SERVE_MAIN` and `BANCHI_SYNC`, and they keep their printed names. The owner's terminal and CI are not tool calls, so the clause never sees them. The clause lives in `hook`, not in `read_command`. The self-test's older cases call `hook(payload, owner_only=False)`, and only its owner-only cases go through `--hook`. There is no switch for it. **Known residual:** a Write of a script, then `bash script.sh`, sets a switch that no stage of any Bash command shows. The clause cannot see it. **One switch for the whole hook would mean disarming the clause that guards uncommitted work in order to make a symlink**, and a hatch reached for by reflex is a guard
 already gone. The recovery the 2026-09-06 incident actually needed — `git checkout --` in the
 main tree, to unwind writes that had landed there — is one hatch away, and the owner holds it.
 
@@ -216,7 +216,7 @@ branch name differs, is refused. Everything else passes exactly as before: no co
 upstream at all (the ordinary first push of a new branch), a name that already matches its own
 upstream, an explicit `HEAD:<branch>` naming the real destination, a push to a remote this
 branch does not track (a fork workflow), and `--all`/`--mirror`/`--tags`/`--delete`, which push
-something other than "this branch under its own name". `PKMNSCAN_PUSH=off` is its hatch,
+something other than "this branch under its own name". `BANCHI_PUSH=off` is its hatch,
 honoured in both forms like the other five.
 
 **Reproduced rather than argued, its own standard.** `scripts/guard-shell-selftest.sh`
@@ -360,16 +360,16 @@ above, so the next edit cannot trade one for the other.
 
 ### Every hatch use is logged, and the push remedy names the branch's own name
 
-**The owner's ruling: log and surface every `PKMNSCAN_*=off` use.** A hatch lifts its guard and
+**The owner's ruling: log and surface every `BANCHI_*=off` use.** A hatch lifts its guard and
 prints nothing while it does. A run of hatch uses was therefore invisible. `guard-shell.py --hook`
 already sees every Bash command, so it is the one home.
 
-A command can set any `PKMNSCAN_<NAME>=off`: an env prefix, `export`, or `env`. The hook reads
+A command can set any `BANCHI_<NAME>=off`: an env prefix, `export`, or `env`. The hook reads
 that from the parsed stages, so a mention in an argument, a comment or a heredoc is not a use.
 `_off` reads the same parsed set, so a hatch counts only as a real assignment. Every hatch a
 command sets is logged, and a mention never lifts. The three scope switches take `=all`, not `=off`: they only add checks, so they are not hatches and the log never counts them. A hatch set in the environment is not logged
 here; `make status` names it under `hatches`. The hook appends one
-line per name to `pkmnscan-hatches.log` in `git rev-parse --git-common-dir`. Every worktree of the
+line per name to `banchi-hatches.log` in `git rev-parse --git-common-dir`. Every worktree of the
 clone shares that file. A line holds the time, the hatch, the checkout, the branch and the first
 120 characters of the command.
 
@@ -387,13 +387,13 @@ a different non-default branch.
 
 **The owner's ruling: log every deny or ask.** `scripts/refusal_log.py` is the one helper. Each
 guard imports it, and the shell hooks call its CLI. It appends one line per refusal to
-`pkmnscan-refusals.log`, beside the hatch log. A line holds the time, `guard:rule` (one stable id
+`banchi-refusals.log`, beside the hatch log. A line holds the time, `guard:rule` (one stable id
 per clause), a snippet of at most 80 characters (a heading, a path or a masked verdict, never a
 whole command), the session id and the checkout. The guards that write it are `guard-shell.py`,
 `reap.py --hook`, `silent-write-guard.py`, `guard-opsec.sh` and the three hooks in
 `scripts/githooks/` that refuse. One `O_APPEND` write per line keeps concurrent agents apart.
 The log is LOG ONLY and fails open: a log that cannot be written never changes a verdict or an
-output. `PKMNSCAN_REFUSAL_LOG` names a file instead of the common-dir default, which is how each
+output. `BANCHI_REFUSAL_LOG` names a file instead of the common-dir default, which is how each
 self-test points the log at a fixture and at an unwritable path. `make status` prints the last 24
 hours per rule on one line, beside the hatch lines.
 

@@ -1,12 +1,12 @@
 ## D178 — A + prefix names what does not exist yet
 
-**A `+` in front of a path, a `make` target or a `PKMNSCAN_` name means the thing does not exist yet.** Three mechanical docs-audit rows verify that a named thing is real — the `paths` row, the make-targets row and the `env vars` row — and a design document's whole job is to name what it would create. Without a marker those two things cannot both be served.
+**A `+` in front of a path, a `make` target or a `BANCHI_` name means the thing does not exist yet.** Three mechanical docs-audit rows verify that a named thing is real — the `paths` row, the make-targets row and the `env vars` row — and a design document's whole job is to name what it would create. Without a marker those two things cannot both be served.
 
 **The owner asked for this, and asked for it as a design question rather than a workaround.** Their words, on being shown the established practice: *"i mean just cuz convention is established doesnt mean that's the best way right? i told you that if there's something in the docs that doesn't sound too ideal, to push back — isn't there a more optimal way of having dynamic labeling of naming things before theyre built to avoid conflicts?"*
 
 ### The two things it replaces, and why each was worse
 
-**Spelling the name bare, without a code span.** This is what the repo had been doing and it is what a session reached for first. It works by making the checker unable to SEE the reference, which is evasion rather than declaration — and it costs the reader the one thing a code span is for, since a bare scripts/guard-shell.py in a sentence is no longer distinguishable from prose. **It also does not work at all for `env vars`**, which reads markdown for `PKMNSCAN_` tokens whether they are backticked or not. A fix that covers two of three rows and lies to the reader about the third is not a convention worth keeping.
+**Spelling the name bare, without a code span.** This is what the repo had been doing and it is what a session reached for first. It works by making the checker unable to SEE the reference, which is evasion rather than declaration — and it costs the reader the one thing a code span is for, since a bare scripts/guard-shell.py in a sentence is no longer distinguishable from prose. **It also does not work at all for `env vars`**, which reads markdown for `BANCHI_` tokens whether they are backticked or not. A fix that covers two of three rows and lies to the reader about the third is not a convention worth keeping.
 
 **An allowlist line per reference.** `scripts/docs-audit-allow.txt` already accepts *"named before it is built"* as a reason and is self-cleaning — its own row fails when a listed path exists — so this would have worked correctly. It was declined on two counts. It puts a name's status two directories from the sentence that uses it, so a reader learns nothing from the reference itself. And it is an **exact-match roster that every branch edits**: one shelf document naming twenty-one unbuilt mechanisms would have added twenty-one lines to a live conflict surface, on a day when five PRs were already colliding in two shared files.
 
@@ -22,7 +22,7 @@ A `+` is read **only where a row was about to make a claim about existence**, an
 
 ### It caught its own author twice, which is the evidence it works
 
-**A concrete example name inside the checker made that name real.** Documenting the sigil in `scripts/docs-audit.py` with a full `PKMNSCAN_`-prefixed example put that name in the `env vars` haystack — so every marked reference to it in a design document then failed as *"the code reads it now."* **A mechanism whose documentation lives inside its own subject has to be written for that**, and the examples in that docstring name the prefix and stop.
+**A concrete example name inside the checker made that name real.** Documenting the sigil in `scripts/docs-audit.py` with a full `BANCHI_`-prefixed example put that name in the `env vars` haystack — so every marked reference to it in a design document then failed as *"the code reads it now."* **A mechanism whose documentation lives inside its own subject has to be written for that**, and the examples in that docstring name the prefix and stop.
 
 **And a generated document broke a path across a line.** `textwrap` split `scripts/githooks/pre-commit` on its hyphen, leaving the prefix alone on one line as a reference to nothing — which the `paths` row correctly refused, and which no sigil should have silenced. Eleven tokens were broken that way in one file. The repair is the generator's, not the checker's.
 

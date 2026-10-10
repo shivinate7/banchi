@@ -6,12 +6,12 @@ the spike's 500 photographs. This runs it, unchanged, over photographs the spike
 each answer against the owner's own confirmed identification, and says what happened. It reads
 the store read-only and writes nothing to it. No image is copied or kept.
 
-    PKMNSCAN_HOME=<store> python3 scripts/match-heldout.py --from-store [--exclude FILE] [--limit N]
+    BANCHI_HOME=<store> python3 scripts/match-heldout.py --from-store [--exclude FILE] [--limit N]
     python3 scripts/match-heldout.py --manifest FILE
 
 `--from-store` takes every card the store holds with a confirmed SKU, a number and a photograph on
 disk, minus the photographs in `--exclude` (a JSON list of photo paths or sha256 digests: the spike's
-sample), in a fixed order so a rerun reads the same cards. `PKMNSCAN_HOME` names the store, and it is
+sample), in a fixed order so a rerun reads the same cards. `BANCHI_HOME` names the store, and it is
 also where the hint vocabulary comes from (the exports under `inventory/.exports/`).
 `--manifest` is a JSON list of `{photo, game, set, number, name, set_hint?}` for photographs that are
 not in the store.

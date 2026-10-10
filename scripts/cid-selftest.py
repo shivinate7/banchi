@@ -9,7 +9,7 @@ WHY THIS EXISTS. D172 gives a card a name and
 worth exactly what their refusals and their WORK-SAVINGS are worth, and neither can be
 exercised against the real thing: the store is the owner's 2,535 real cards and the corpus is
 4.45 GB of photographs that cannot be re-taken. So every case here builds its own store under
-a temp `PKMNSCAN_HOME`, and the destructive ones run against photographs this script drew.
+a temp `BANCHI_HOME`, and the destructive ones run against photographs this script drew.
 
 AN OUTCOME ASSERTION CANNOT SEE A WORK-SAVING, WHICH IS THE TRAP THIS SUITE IS SHAPED
 AROUND. PR A's arm 9 recorded it: deleting a hash-first gate left every outcome assertion
@@ -36,7 +36,7 @@ among 132 demo pool files), the `moved:` tombstone (0 `state='moved'` rows), and
 WHY IT IS NOT IN THE GIT HOOK. D18: it writes temp trees and it forks and kills a process. It
 IS in `make check`, which is `submission-selftest`'s and `reap-selftest`'s standing.
 
-IT NEVER TOUCHES THE OPERATOR'S STORE. `PKMNSCAN_HOME` is a fresh temp directory for every
+IT NEVER TOUCHES THE OPERATOR'S STORE. `BANCHI_HOME` is a fresh temp directory for every
 case; the real store is never opened, for reading or for writing, and the real `captures/` is
 never named. The one case that kills a process kills one this script forked.
 """
@@ -91,16 +91,16 @@ def equal(got, want, what: str) -> bool:
 
 
 def fresh_home() -> Path:
-    """A throwaway `PKMNSCAN_HOME`, and every module that caches a path re-read after it.
+    """A throwaway `BANCHI_HOME`, and every module that caches a path re-read after it.
 
     A DIRECTORY PER CASE rather than one reused with its rows deleted. Half of what is
     asserted here is about a store's STAMP and about files on disk, so a leftover from the
     previous case is exactly the thing that would make the next one unreadable — and the
     failure would read as the code misbehaving.
     """
-    where = Path(tempfile.mkdtemp(prefix="pkmnscan-cid."))
+    where = Path(tempfile.mkdtemp(prefix="banchi-cid."))
     MADE.append(where)
-    os.environ["PKMNSCAN_HOME"] = str(where)
+    os.environ["BANCHI_HOME"] = str(where)
     (where / "inventory").mkdir(parents=True, exist_ok=True)
     return where
 
@@ -1190,7 +1190,7 @@ def case_only_a_store_with_photographs_left_behind_reports_a_residue() -> None:
     # because an explicit `iterdir` on a symlinked directory DOES follow it.
     store_with("linked")
     card = sorted(Store().read().inventory.cards.values(), key=lambda c: c.index)[0]
-    linked_home = Path(os.environ["PKMNSCAN_HOME"])
+    linked_home = Path(os.environ["BANCHI_HOME"])
     real_box = linked_home / "elsewhere" / "box1"
     real_box.mkdir(parents=True, exist_ok=True)
     (real_box / "0001.jpg").write_bytes(photo_bytes("linked-0"))
@@ -1206,7 +1206,7 @@ def case_only_a_store_with_photographs_left_behind_reports_a_residue() -> None:
 
     store_with("done")
     conn = sqlite3.connect(
-        str(Path(os.environ["PKMNSCAN_HOME"]) / "inventory" / "store.sqlite"),
+        str(Path(os.environ["BANCHI_HOME"]) / "inventory" / "store.sqlite"),
         isolation_level=None,
     )
     conn.execute(

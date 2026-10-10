@@ -244,7 +244,7 @@ def run(ok) -> None:
     shared = hook("Write|Edit", "scripts/guard-opsec.sh")
     reap = hook("Bash", "scripts/reap.py --hook")
     silent = hook("Bash", "scripts/silent-write-guard.py --hook")
-    narrow = "PKMNSCAN_SILENT_WRITE_ONLY=file,bash-c "
+    narrow = "BANCHI_SILENT_WRITE_ONLY=file,bash-c "
     silent_c = hook("Bash", narrow + "scripts/silent-write-guard.py --hook")
     extra = hook("Bash", "scripts/janitor.py --hook")
 
@@ -274,11 +274,11 @@ def run(ok) -> None:
     ok(len(found) == 1 and "does not run" in str(found[0]),
        "red: an unlisted Codex-only hook appears", str(found))
 
-    # PKMNSCAN_SILENT_WRITE_ONLY pin: Claude's entry carries `file,bash-c`, Codex's carries none.
+    # BANCHI_SILENT_WRITE_ONLY pin: Claude's entry carries `file,bash-c`, Codex's carries none.
     found = codex_hooks_findings([shared, silent_c], [shared, silent, reap])
     ok(not found, "green: Claude has the file,bash-c prefix and Codex has none", str(found))
     for label, claude_entry in (
-        ("only `file`", hook("Bash", "PKMNSCAN_SILENT_WRITE_ONLY=file scripts/silent-write-guard.py --hook")),
+        ("only `file`", hook("Bash", "BANCHI_SILENT_WRITE_ONLY=file scripts/silent-write-guard.py --hook")),
         ("no prefix", silent),
     ):
         found = codex_hooks_findings([shared, claude_entry], [shared, silent, reap])
@@ -394,7 +394,7 @@ def run(ok) -> None:
         return [f.message for row in fixture_report.checks for f in row.findings]
 
     # Built at runtime: a literal here would be a variable this file names, and the row would flag it.
-    undoc = "PKMNSCAN_" + "FIXTURE_UNDOC"
+    undoc = "BANCHI_" + "FIXTURE_UNDOC"
     named = '{"env": {"%s": "1"}}\n' % undoc
     found = vocab_findings({}, {".claude/settings.local.json": named})
     ok(not any(undoc in m for m in found),

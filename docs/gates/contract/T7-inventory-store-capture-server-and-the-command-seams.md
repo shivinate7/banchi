@@ -1,6 +1,6 @@
 ### T7 — Inventory store, capture server, and the command seams
 
-The first test to reach `store/`, `server/` and `cli/`. Isolation is `PKMNSCAN_HOME` pointed
+The first test to reach `store/`, `server/` and `cli/`. Isolation is `BANCHI_HOME` pointed
 at a temporary directory, so nothing here touches the real inventory.
 
 - **Pass**: positions never collide and a replay burns none; the sidecar round-trips through the reader identify uses; every refusal answers in its own code; command seams read the columns they name, and commands refuse rather than prompt
@@ -251,7 +251,7 @@ at a temporary directory, so nothing here touches the real inventory.
   session cookie from `.env` instead of the operator downloading and uploading it.
   `check_export_fetch` has its own `isolated_home` AND its own environment — the first
   section here that reads `.env`, so one that leaked `TCGPLAYER_STORE_COOKIE` or
-  `PKMNSCAN_TCG_EXPORT_URL` would point every later fetch in the process somewhere
+  `BANCHI_TCG_EXPORT_URL` would point every later fetch in the process somewhere
   unexpected.
 
   **What it proves**: that a session redirected to a login page never becomes a parsed CSV

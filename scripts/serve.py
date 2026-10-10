@@ -51,14 +51,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import envfile  # noqa: E402
+import machinedir  # noqa: E402
 import primary_sync  # noqa: E402
 import reap_mark  # noqa: E402 — `do_up` marks its detached child directly, see that file's header
 from server import ports  # noqa: E402
 from store import files as store_files  # noqa: E402
 
-# The name the owner's own DNS answers with — `pkmnscan.lan` on their UniFi. Documented in
+# The name the owner's own DNS answers with — `banchi.lan` on their UniFi. Documented in
 # docs/specs/capture-server.md beside the allowlist variable it feeds.
-LAN_NAME_ENV = "PKMNSCAN_LAN_NAME"
+LAN_NAME_ENV = "BANCHI_LAN_NAME"
 
 # ---------------------------------------------------------------------------- state on disk
 
@@ -93,7 +94,7 @@ POLL_SECONDS = 1.0
 QUIET_SECONDS = 0.75
 
 # DERIVED, NEVER CHOSEN. `store/files.py:LOCK_TIMEOUT_SECONDS` is 30, and a capture posted
-# while `./pkmnscan identify` holds the store lock legitimately takes that long before it
+# while `./banchi identify` holds the store lock legitimately takes that long before it
 # answers `store_busy`. A shorter grace would convert a true refusal into a killed request —
 # the same argument `app/src/server.ts` makes one process over for having no client timeout
 # below 30s.
@@ -189,7 +190,7 @@ BUILD_STAMP = ".built"
 # lockfile look newer than any receipt and fire an `npm ci` every time. A spurious BUILD costs
 # 1.2 seconds and is measured; a spurious INSTALL costs about thirty and would land on every
 # branch switch, which is often enough to teach the operator to distrust the supervisor.
-NPM_RECEIPT = "app/node_modules/.pkmnscan-lock"
+NPM_RECEIPT = "app/node_modules/.banchi-lock"
 
 # Every line the build child writes is prefixed, because it shares the supervisor's log with
 # the restart lines and a bare `vite` banner in there reads as the supervisor talking.
@@ -221,6 +222,7 @@ SELF_FILES = (
     "scripts/serve.py",
     "scripts/primary_sync.py",
     "envfile.py",
+    "machinedir.py",
     "server/ports.py",
     "store/files.py",
 )
@@ -465,7 +467,7 @@ def _origins_env_name(root: Path = REPO_ROOT) -> str:
     try:
         tree = ast.parse((root / "server" / "capture_server.py").read_text(encoding="utf-8"))
     except (OSError, SyntaxError):
-        return "PKMNSCAN_ALLOWED_ORIGINS"
+        return "BANCHI_ALLOWED_ORIGINS"
     for node in tree.body:
         if isinstance(node, ast.Assign):
             for target in node.targets:
@@ -476,7 +478,7 @@ def _origins_env_name(root: Path = REPO_ROOT) -> str:
                     and isinstance(node.value.value, str)
                 ):
                     return node.value.value
-    return "PKMNSCAN_ALLOWED_ORIGINS"
+    return "BANCHI_ALLOWED_ORIGINS"
 
 
 ORIGINS_ENV = _origins_env_name()
@@ -516,7 +518,7 @@ def _child_env(root: Path = REPO_ROOT) -> dict:
     """The capture server's environment, with the LAN origins added.
 
     THE ALLOWLIST IS SET HERE RATHER THAN EDITED IN THE SERVER, and that is the whole of the
-    LAN change on this side. `PKMNSCAN_ALLOWED_ORIGINS` already exists, is already documented,
+    LAN change on this side. `BANCHI_ALLOWED_ORIGINS` already exists, is already documented,
     is read fresh on every request, and EXTENDS the two defaults rather than replacing them —
     so a name added here can never turn the gate off. `*` is not a wildcard in that reader; it
     is compared as an exact string and therefore refuses everything, which T7 asserts.
@@ -528,7 +530,7 @@ def _child_env(root: Path = REPO_ROOT) -> dict:
     if not names:
         return env
     # BOTH PORTS PER NAME, SINCE D138. The app is served from the CAPTURE port now, so the
-    # phone at `http://pkmnscan.lan:8000` is same-origin with the server it writes to and its
+    # phone at `http://banchi.lan:8000` is same-origin with the server it writes to and its
     # Origin is that, not the dev port. Naming only the dev port here is what made the owner's
     # first real write 403 on localhost; the LAN path had the identical hole one step further
     # out, where `make lan-check` presses a write precisely because looking at a screen cannot
@@ -946,7 +948,7 @@ def wait_for_port(port: int, timeout: float,
 
     THE CHILD ARGUMENT IS THE WHOLE POINT, AND ITS ABSENCE WAS A REAL DEFECT. This probed the
     socket alone, so a port held by somebody else satisfied it: a stray `make server` on :8000
-    answered, `make up` reported "pkmnscan is up", and the capture child it had just spawned
+    answered, `make up` reported "banchi is up", and the capture child it had just spawned
     was in a retry loop that would never succeed. Observed on the owner's machine — the app
     served fine off the squatter and silently stopped reloading on edit, which is the exact
     failure the supervisor exists to prevent.
@@ -1030,7 +1032,7 @@ def print_where(root: Path = REPO_ROOT) -> None:
     now, which is also what makes the bundle's own composition trivially right: it bakes the
     capture port and resolves the host from the address bar (D138)."""
     _, capture_url = urls(root)
-    print("pkmnscan is up.")
+    print("banchi is up.")
     print(f"  banchi    {capture_url}     <- bookmark this")
     for name in lan_hostnames():
         print(f"            http://{name}:{ports.capture_port(root)}")
@@ -1052,7 +1054,7 @@ def print_where(root: Path = REPO_ROOT) -> None:
 # ---------------------------------------- the primary checkout serves main
 # D158
 
-SERVE_MAIN_ENV = "PKMNSCAN_SERVE_MAIN"
+SERVE_MAIN_ENV = "BANCHI_SERVE_MAIN"
 
 
 def off_main(root: Path = REPO_ROOT) -> Optional[str]:
@@ -1153,7 +1155,7 @@ def stand_down_lines(branch: str, running: bool) -> list[str]:
         #
         # WORDED AS THE MECHANISM AND NOT AS A CLAIM ABOUT THIS INSTANCE, deliberately: the
         # first draft said "a sync was attempted; its reason is printed above", which is FALSE
-        # under `PKMNSCAN_SYNC=off` — the sync returns silently and prints nothing, so the
+        # under `BANCHI_SYNC=off` — the sync returns silently and prints nothing, so the
         # refusal would have pointed at an explanation that was not there. A stand-down is read
         # by somebody already confused about why their rig is down; a sentence in it that can be
         # wrong is worse than no sentence.
@@ -1906,6 +1908,7 @@ def do_launch_agent(args: argparse.Namespace) -> int:
     label = ports.agent_label(root)
 
     if args.remove:
+        machinedir.remove_old_agent(label)
         if not plist.exists():
             print(f"no launch agent installed for this checkout ({label}).")
             return 0
@@ -1972,7 +1975,7 @@ def do_launch_agent(args: argparse.Namespace) -> int:
     return 0
 
 
-FOREGROUND_ENV = "PKMNSCAN_FOREGROUND"
+FOREGROUND_ENV = "BANCHI_FOREGROUND"
 
 
 def do_guard_foreground(_args: argparse.Namespace) -> int:
@@ -1994,7 +1997,7 @@ def do_guard_foreground(_args: argparse.Namespace) -> int:
     quietly moved would serve a DIFFERENT store); what this removes is the ability to create it
     by accident.
 
-    `PKMNSCAN_FOREGROUND=off` bypasses, in the shape `PKMNSCAN_MAIN=off` already uses — a guard
+    `BANCHI_FOREGROUND=off` bypasses, in the shape `BANCHI_MAIN=off` already uses — a guard
     with no visible way past it gets disarmed somewhere worse.
     """
     if os.environ.get(FOREGROUND_ENV, "").strip().lower() == "off":
@@ -2027,7 +2030,7 @@ def do_report(args: argparse.Namespace) -> int:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Run the pkmnscan servers.")
+    parser = argparse.ArgumentParser(description="Run the banchi servers.")
     sub = parser.add_subparsers(dest="verb")
 
     run = sub.add_parser("run", help="foreground; what the LaunchAgent execs")

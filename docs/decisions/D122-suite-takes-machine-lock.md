@@ -34,7 +34,7 @@ two suites never touch one server. The contention is CPU and memory and nothing 
 also why the lock must live outside every checkout, and why `.serve/` was the wrong home for it.
 
 **IT IS AN ADVISORY `flock`, WHICH IS WHY THIS FEATURE HAS NO STALE-LOCK PATH.**
-The file is `~/.pkmnscan/locks/browsers.lock`. `scripts/serve.py` proves a pid is still the process it
+The file is `~/.banchi/locks/browsers.lock`. `scripts/serve.py` proves a pid is still the process it
 recorded by comparing `ps -o command=` against the argv it stored, and it has to: a port is the
 resource there and it outlives the process that held it. Here the OS owns the whole question — an
 advisory lock is released when the holder exits, however it exits, including `kill -9`, a crashed
@@ -85,10 +85,10 @@ here has measured a failure from.
 **That is reasoning and not a measurement, and DEBT16 records it as such**,
 along with what would reopen it.
 
-**THE ESCAPE HATCH IS `PKMNSCAN_SUITE_LOCK=off` AND IT IS PRINTED IN EVERY REFUSAL**, in the shape
-`PKMNSCAN_MAIN=off` and `PKMNSCAN_FOREGROUND=off` already use. A guard with no visible way past it
+**THE ESCAPE HATCH IS `BANCHI_SUITE_LOCK=off` AND IT IS PRINTED IN EVERY REFUSAL**, in the shape
+`BANCHI_MAIN=off` and `BANCHI_FOREGROUND=off` already use. A guard with no visible way past it
 is one somebody disarms by deleting the line from the Makefile, where nothing would catch it.
-`PKMNSCAN_LOCK_DIR` moves the lock directory and exists for the self-test alone — same shape as
+`BANCHI_LOCK_DIR` moves the lock directory and exists for the self-test alone — same shape as
 `scripts/janitor.py --sessions DIR`, and for the same reason: a self-test that took the real lock
 would refuse a suite running in another checkout.
 

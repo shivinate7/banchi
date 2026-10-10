@@ -20,7 +20,7 @@ module answers two things and keeps them apart, per this feature's own rules:
      table with.
 
 WHAT THIS MODULE DELIBERATELY DOES NOT DO. It does not fetch. It does not write. It does not
-run `pkmnscan archive sweep`'s walk — that is `pipeline/pricearchive.py`'s job and stays a
+run `banchi archive sweep`'s walk — that is `pipeline/pricearchive.py`'s job and stays a
 press (D219's own statement, D278's before it: this reader cannot fire on its own). It takes
 an already-loaded `Snapshot`'s `inventory`, `archive` and `ledger` and answers a pure
 computation over them, so a test never needs a store on disk, only the three dataclasses this

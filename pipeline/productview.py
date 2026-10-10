@@ -21,7 +21,7 @@ never a sweep and never a write to the archive table.
 
 NEVER WRITES. Not to `price_history`, not to `price_history_sources`, not to the corpus. A
 live fallback read is answered straight to the caller and never folded back into the archive
-— `pkmnscan archive sweep` is the one press that does that, and it stays a press (D278's own
+— `banchi archive sweep` is the one press that does that, and it stays a press (D278's own
 statement: this reader cannot fire on its own).
 
 THE SPREAD IS CARRIED PER BUCKET, NEVER COLLAPSED TO ONE NUMBER. Each archived bucket already

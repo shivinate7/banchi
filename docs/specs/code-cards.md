@@ -24,7 +24,7 @@ sources are named. Nothing is carried forward from an earlier draft unmeasured.
     operator loads a stack                the cards came out of ONE sealed product
       -> capture screen, game = pokemon_code, product picker, set hint
       -> POST /capture per card           photo + sidecar + record, exactly as singles
-    ./pkmnscan scan <capture-dir>         FREE. QR decode. NO model call. NO network.
+    ./banchi scan <capture-dir>         FREE. QR decode. NO model call. NO network.
       -> codes/qr.py                      100% of physically-readable frames, 0 mis-reads
       -> codes/ledger.py                  inventory/codes.jsonl, keyed by the CODE
       -> whatever QR refused              queued for the paid vision read, then a human

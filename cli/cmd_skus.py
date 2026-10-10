@@ -1,7 +1,7 @@
-"""`pkmnscan skus adopt` — the one-time backfill press over every export already on disk
+"""`banchi skus adopt` — the one-time backfill press over every export already on disk
 (docs/specs/identity-follows-sku.md §3.2, lane 0).
 
-Modelled on `pkmnscan readings adopt` (`cli/cmd_readings.py`): a re-runnable press that walks
+Modelled on `banchi readings adopt` (`cli/cmd_readings.py`): a re-runnable press that walks
 files already fetched and folds them into a store table, previewing by default. THE FOLD IS
 NOT A FULL REPLACE, unlike `readings adopt` — `store/skus.py`'s whole argument is that this
 table never deletes, so `adopt` is a fold onto whatever the table already holds, never a
@@ -78,5 +78,5 @@ def _adopt(args, say) -> int:
 def run(args, say) -> int:
     if args.skus_command == "adopt":
         return _adopt(args, say)
-    say("usage: pkmnscan skus adopt [--write]")
+    say("usage: banchi skus adopt [--write]")
     return 1

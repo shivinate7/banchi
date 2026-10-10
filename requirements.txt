@@ -10,7 +10,7 @@ ruff==0.16.5
 #            talks to Anthropic — see identify/batch.py.
 anthropic>=0.69
 
-# Pillow  image handling for `pkmnscan identify`: the 1568px downscale (anything
+# Pillow  image handling for `banchi identify`: the 1568px downscale (anything
 #         larger is billed and then discarded by the API) and the crop-retry bands.
 #         Not optional — there is no stdlib path to either.
 # numpy   the array maths behind geometry/: thresholding, projection profiles, the

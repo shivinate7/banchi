@@ -11,10 +11,10 @@ per set and overall.
   the holdout is the measurement. `overall_accuracy` is still reported and is still useful,
   but it includes the half the prompt was fitted against, which is exactly the number the
   paragraph below says means nothing about the next card. Current split: 82 tune, 68
-  holdout, 150 together. **`PKMNSCAN_T1_SPLIT=tune`** restricts a run to that half, which is
+  holdout, 150 together. **`BANCHI_T1_SPLIT=tune`** restricts a run to that half, which is
   what prompt iteration should use — it halves the upload and keeps the holdout from being
   consulted on every attempt, itself a slow way of fitting to it. The holdout's card-level
-  failures are deliberately not printed for the same reason; **`PKMNSCAN_T1_REVEAL_HOLDOUT`**
+  failures are deliberately not printed for the same reason; **`BANCHI_T1_REVEAL_HOLDOUT`**
   opts into seeing them, and the moment a tuner reads them the holdout has become tuning data
   and the score stops measuring generalisation.
 - **A cache miss refuses; IT NEVER SUBMITS.** T1 replays banked responses, so an ordinary
@@ -25,7 +25,7 @@ per set and overall.
   of every turn**. Found on 2026-08-29 in a git worktree, where `harness/.cache/` is
   gitignored and therefore does not travel; nothing was billed only because that worktree
   had no key either, which is luck rather than a design. Submitting is now an act —
-  `PKMNSCAN_RERUN_T1=1` — and `make worktree-setup` is how a worktree answers the refusal
+  `BANCHI_RERUN_T1=1` — and `make worktree-setup` is how a worktree answers the refusal
   without paying for an answer this machine already holds.
 - **AN ORDINARY RUN REPLAYS NOTHING, AS OF 2026-09-06 (D112).** Between two turns the only
   things about T1 that can change are its prompt, its eval set and its arithmetic; the model is
@@ -52,7 +52,7 @@ per set and overall.
   a real re-measurement stops being visible among the noise — which is the one thing the
   committed score exists to show. `batch_ids` and `usage` are part of the comparison, so a
   fresh submission always writes even if the accuracy lands on the same number.
-- **The rarity-clause A/B was run on 2026-08-23 and the clause lost.** `PKMNSCAN_T1_RARITY=1`
+- **The rarity-clause A/B was run on 2026-08-23 and the clause lost.** `BANCHI_T1_RARITY=1`
   scores the eval with each card's TRUE rarity as a one-element stack claim — the best case
   the feature could ever see — into its own results file, `harness/results/t1-rarity.json`
   (one file per configuration, as above). Measured against baseline: holdout 0.9706 → 0.9559,
@@ -78,5 +78,5 @@ per set and overall.
 specific images that failed and re-measuring on the same set reports a number that means
 nothing about the next card, and that number is the whole basis for trusting identification
 once there is no answer key. So: hold out a slice the tuner never sees the failures from,
-tune against the rest, and report only the held-out score. `PKMNSCAN_REFRESH_IMAGES=1` with
+tune against the rest, and report only the held-out score. `BANCHI_REFRESH_IMAGES=1` with
 a different `EVAL_SETS` draws a fresh sample.

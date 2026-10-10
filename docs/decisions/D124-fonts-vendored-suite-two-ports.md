@@ -82,7 +82,7 @@ real TCGplayer Staged import through. What the suite is entitled to talk to is k
 What it might one day be pointed at is not.
 
 **The port is the test, not the hostname**, for the reason `CAPTURE_ORIGIN` already gives:
-`server.ts` composes its base from `location.hostname`, so the same page opened at `pkmnscan.lan`
+`server.ts` composes its base from `location.hostname`, so the same page opened at `banchi.lan`
 asks a different host on the same two ports, and both are still this Mac.
 
 **Proved by mutation, because a new sweep that goes green proves nothing.** Re-adding a

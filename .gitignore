@@ -117,7 +117,7 @@ test-results
 
 # Vale packages sync into styles/ ; only the repo-local style is tracked.
 styles/*
-!styles/PKMNSCAN/
+!styles/BANCHI/
 !styles/config/
 
 # `pipeline/pricehistory.py`'s fetches, cached on disk by `server/pipeline_routes.py`.

@@ -15,7 +15,7 @@ import { DEALING_RAIL_TILES, SAVE_WAIT_MS } from '../src/dealer'
  *     after Stop the rail catches up to all of them. That one catch-up render may be long and is
  *     not barred. A cost that grows with the sitting can hide at 50. By the owner's word the
  *     per-PR run trades that for speed.
- *  2. DEALING, 300 captures, monthly and on demand (PKMNSCAN_LONG_SITTING=1): the same claims.
+ *  2. DEALING, 300 captures, monthly and on demand (BANCHI_LONG_SITTING=1): the same claims.
  *     This run is what catches growth. The owner's longest sitting is 555 cards.
  *  3. HAND FEED, 60 captures with the shutter: the old bar, so hand feeding cannot regress.
  * Photos are distinct 1920x1080 JPEGs, so image decode is in the measurement. The dealer is the
@@ -294,9 +294,9 @@ test('50 captures while the dispenser deals: the rail paused, the last capture l
   await dealing(page, 50)
 })
 
-// Runs monthly and on demand: PKMNSCAN_LONG_SITTING=1. About 16 minutes.
+// Runs monthly and on demand: BANCHI_LONG_SITTING=1. About 16 minutes.
 test('300 captures while the dispenser deals: no growth in cost, the rail paused, the last capture live', async ({ page }) => {
-  test.skip(process.env.PKMNSCAN_LONG_SITTING !== '1', 'runs monthly or on demand: set PKMNSCAN_LONG_SITTING=1')
+  test.skip(process.env.BANCHI_LONG_SITTING !== '1', 'runs monthly or on demand: set BANCHI_LONG_SITTING=1')
   test.setTimeout(1_500_000)
   await dealing(page, 300)
 })

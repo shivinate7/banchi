@@ -8,7 +8,7 @@ Cached under `harness/images/`, which is gitignored: these are reproducible from
 public API, they are large, and committing them would put ~50 binaries in every clone to
 save one HTTP call. The manifest next to them records the selection and the labels, and
 a rerun that finds a matching manifest with every file present makes NO network calls at
-all. `PKMNSCAN_REFRESH_IMAGES=1` forces a re-fetch.
+all. `BANCHI_REFRESH_IMAGES=1` forces a re-fetch.
 
 Selection is deterministic — cards sorted by collector number, then sampled at an even
 stride. That spreads the sample across the print run rather than clustering on the low
@@ -44,7 +44,7 @@ import envfile
 
 API_ROOT = "https://api.pokemontcg.io/v2"
 IMAGE_SIZE = "large"  # ~600x825 — well inside the vision cap, and the small one is mush
-USER_AGENT = "pkmnscan-harness/1.0 (+T1 ground-truth eval)"
+USER_AGENT = "banchi-harness/1.0 (+T1 ground-truth eval)"
 HTTP_TIMEOUT = 30
 # The endpoint returns 500 in bursts lasting tens of seconds — observed answering 500
 # five times running, then 200. Five quick attempts covered ~15s and lost a whole
@@ -56,7 +56,7 @@ HTTP_BACKOFF_CAP = 20.0
 # the environment or `.env`. Sent to the API host only, never to the image CDN.
 API_KEY_ENV = "POKEMONTCG_API_KEY"
 
-# WHERE THE MIRROR LIVES, AND IT IS A KNOB BECAUSE OF ITS SIZE (D15). `PKMNSCAN_IMAGE_MIRROR`
+# WHERE THE MIRROR LIVES, AND IT IS A KNOB BECAUSE OF ITS SIZE (D15). `BANCHI_IMAGE_MIRROR`
 # has been documented since build-order step 9 was written and read by nothing until 2026-08-30,
 # when D47 made setting it the remedy rather than a preference: the repository was inside iCloud
 # Drive, and 133 MB of derived binaries syncing there is what produced the conflict copies.
@@ -80,7 +80,7 @@ API_KEY_ENV = "POKEMONTCG_API_KEY"
 # that matters here: a mirror path is a fact about one machine's disk and a worktree that
 # inherited one from a tree it does not share would be worse than having none. A real
 # environment variable still wins, which is what `envfile.get` already guarantees.
-_MIRROR = envfile.get("PKMNSCAN_IMAGE_MIRROR")
+_MIRROR = envfile.get("BANCHI_IMAGE_MIRROR")
 IMAGES_DIR = (
     Path(os.path.expandvars(os.path.expanduser(_MIRROR)))
     if _MIRROR
@@ -145,7 +145,7 @@ def split_of(card_id: str) -> str:
     shuffle seed to lose, and the same answer on any machine at any time."""
     if card_id in SEEN_BEFORE_SPLIT:
         return TUNE
-    digest = hashlib.sha256(("pkmnscan-t1-split/" + card_id).encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(("banchi-t1-split/" + card_id).encode("utf-8")).hexdigest()
     return TUNE if int(digest[:8], 16) % 2 == 0 else HOLDOUT
 
 
@@ -395,7 +395,7 @@ def load(
     """Labelled eval images, downloading only when the cache does not already answer."""
     say = log or (lambda _message: None)
     if refresh is None:
-        refresh = os.environ.get("PKMNSCAN_REFRESH_IMAGES") == "1"
+        refresh = os.environ.get("BANCHI_REFRESH_IMAGES") == "1"
 
     if not refresh:
         cached = _cached(sets)

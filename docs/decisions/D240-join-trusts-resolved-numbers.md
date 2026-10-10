@@ -14,7 +14,7 @@ with a different real card.
 
 **Measured against the owner's real store and two real cached exports** (`inventory/
 .exports/riftbound/…csv`, `inventory/.exports/pokemon/…csv`), read-only, no
-`pkmnscan` command run:
+`banchi` command run:
 
 - 3,297 real, numbered, named cards in catalogued games (riftbound, pokemon).
 - 2,636 of them resolve to a catalogue row through the number key alone, with D55's

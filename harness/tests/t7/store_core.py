@@ -283,7 +283,7 @@ def check_store(checks: Checks) -> None:
         checks.equal(
             files.home(),
             home.resolve(),
-            "files.home() reads PKMNSCAN_HOME per call — the whole test rests on this",
+            "files.home() reads BANCHI_HOME per call — the whole test rests on this",
         )
 
         with Store().write() as snapshot:
@@ -330,10 +330,10 @@ def check_set_and_rarity(checks: Checks) -> None:
     `store/db.py`'s own docstring for `_add_search_index` argues an upgrade must be additive
     against.
 
-    THE BACKFILL HALF: `./pkmnscan cards variants --write` refuses, names `cards identity`,
+    THE BACKFILL HALF: `./banchi cards variants --write` refuses, names `cards identity`,
     and writes nothing. That is the arm a restored direct `card.set_name = ...` turns red.
     Then the replacement, over its own code path: `skus adopt`'s fill, then
-    `./pkmnscan cards identity --write`. A SKU the table holds gets a real set and rarity
+    `./banchi cards identity --write`. A SKU the table holds gets a real set and rarity
     through `bind_sku`. A SKU the table lacks keeps a null set and its own record — never
     guessed, never dropped.
     """
@@ -2031,7 +2031,7 @@ def check_drain(checks: Checks) -> None:
     checks.equal(capture_server.inflight(), 0, "nothing is in flight at rest")
     checks.ok(capture_server.drain(0.2), "and a drain over an idle server returns at once")
 
-    # DERIVED, NOT A LITERAL. A capture posted while `./pkmnscan identify` holds the store lock
+    # DERIVED, NOT A LITERAL. A capture posted while `./banchi identify` holds the store lock
     # legitimately waits `LOCK_TIMEOUT_SECONDS` before answering `store_busy`, so a drain
     # shorter than that would cut a request that was behaving correctly. Asserting the
     # arithmetic rather than the number means it moves the day the lock timeout does.

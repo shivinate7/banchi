@@ -874,7 +874,7 @@ def check_claim_vocabulary(report: Report) -> None:
 
 # ------------------------------------------------------------------------- env vars
 
-_ENV_RE = re.compile(r"\b(PKMNSCAN_[A-Z0-9_]+|POKEMONTCG_API_KEY|ANTHROPIC_API_KEY)\b")
+_ENV_RE = re.compile(r"\b(BANCHI_[A-Z0-9_]+|POKEMONTCG_API_KEY|ANTHROPIC_API_KEY)\b")
 
 
 def _prose_guard():
