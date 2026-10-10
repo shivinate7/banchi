@@ -14,6 +14,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from server import ports  # noqa: E402
 
 
+machine_dir = ports.machine_dir  # the job's log lives beside the other machine state
+
+
 def agent(label, script, root, hour, minute, log, remove):
     plist = Path.home() / "Library" / "LaunchAgents" / (label + ".plist")
     uid = "gui/%d" % os.getuid()

@@ -27,10 +27,7 @@ import launchagent  # scripts/launchagent.py, the shared installer
 HERE = Path(__file__).resolve()
 ROOT = HERE.parent.parent
 LABEL = "com.banchi.price-refresh-daily"
-sys.path.insert(0, str(ROOT))
-from server import ports  # noqa: E402
-
-LOG = ports.machine_dir() / "price-refresh-daily.log"
+LOG = launchagent.machine_dir() / "price-refresh-daily.log"
 
 
 def log(verdict):
