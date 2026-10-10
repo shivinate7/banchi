@@ -10,6 +10,12 @@
 # `worktree-<name>`, cut from a freshly fetched origin/main. A name whose branch is still
 # there reuses that branch as it stands. session-teardown.sh deletes the branch with `-d`.
 #
+# `--no-track`: a branch cut from origin/main gets upstream tracking by default, and that
+# writes the shared .git/config. Parallel Agents raced on its lock ("could not lock config
+# file", "unable to write upstream branch configuration") and two of three failed. Nothing
+# in the repo reads a worktree branch's upstream (guard-shell's `_tracked_branch` treats no
+# upstream as the ordinary first push), so the write is dropped rather than retried.
+#
 # settings.json runs the copy at $CLAUDE_PROJECT_DIR, the tree the session launched in, never
 # the cwd copy. That tree's settings armed this hook, so it holds this file too, even when the
 # session has since moved into a tree cut before this file existed.
@@ -46,7 +52,7 @@ git -C "$main" rev-parse --verify --quiet "$base" >/dev/null 3>&- || { base=HEAD
 if git -C "$main" rev-parse --verify --quiet "refs/heads/$branch" >/dev/null 3>&-; then
   git -C "$main" worktree add "$path" "$branch" 3>&- || exit 1
 else
-  git -C "$main" worktree add -b "$branch" "$path" "$base" 3>&- || exit 1
+  git -C "$main" worktree add --no-track -b "$branch" "$path" "$base" 3>&- || exit 1
 fi
 
 echo "$path" >&3

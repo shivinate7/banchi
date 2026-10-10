@@ -3452,7 +3452,8 @@ COMPONENTS = [
             "worktree-create.sh": {
                 "does": "the WorktreeCreate hook. Makes every Claude Code worktree with a plain "
                         "`git worktree add` at `.claude/worktrees/<name>` on `worktree-<name>`, "
-                        "cut from a fresh origin/main, so githooks/post-checkout provisions it. "
+                        "cut from a fresh origin/main with --no-track (no shared .git/config write, so parallel "
+                        "Agents do not race on its lock), so githooks/post-checkout provisions it. "
                         "Claude Code's own creation never fires post-checkout. Prints only the "
                         "path on stdout; exits non-zero only when git cannot make the tree.",
                 "governed_by": ["D18"],
