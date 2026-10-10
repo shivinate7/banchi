@@ -441,6 +441,55 @@ def check_cli_adopt() -> None:
         ok(any(str(table) in line for line in said) and not any("raised" in line for line in said),
            "and the refusal names that run table", "\n".join(said[-4:]))
 
+        # -------------------------------------------------- a code defect is not a bad file
+        # No data gives a TypeError, so one from the row rule is a bug in the code. It must
+        # raise, never be reported as a bad pricing.json (that tells the owner to move or
+        # delete a good file).
+        print("\n  -- a TypeError inside the row rule (a code bug): raises, blames no file --")
+        seed_table_from_sources(home)
+        before = stored()
+        real_reading = readings_walk.Reading
+
+        def broken_reading(*args, **kwargs):
+            raise TypeError("injected code defect")
+
+        readings_walk.Reading = broken_reading
+        try:
+            code, said = run_adopt(write=True)
+        finally:
+            readings_walk.Reading = real_reading
+        ok(code is None and any("raised TypeError" in line for line in said)
+           and stored() == before,
+           "adopt --write raises on a code TypeError and leaves the table as it was",
+           f"code {code}, said {said[-2:]}")
+        ok(not any("could not be read" in line for line in said),
+           "and does not call a good pricing.json unreadable", "\n".join(said[-4:]))
+
+        # The harness callers pass no `bad`; a wrongly shaped row must still raise for them.
+        seed_good_sources(home)
+        (runs / "2026-01-01-box2-01" / "pricing.json").write_text(
+            json.dumps({"skus": [{"sku": "333", "snap": "2.00"}]}), "utf-8")
+        try:
+            readings_walk.collect()
+            raised = None
+        except Exception as exc:
+            raised = exc
+        ok(raised is not None,
+           "collect() with the default bad=None raises on a string snap (callers that pass "
+           "no list must not get a silent skip)", "returned normally")
+
+        # -------------------------------------------------- an export with no price column
+        print("\n  -- a live export with a SKU column but no Market Price column: skipped --")
+        seed_good_sources(home)
+        (home / "inventory" / files.LIVE_DIRNAME).mkdir(parents=True, exist_ok=True)
+        no_price = (home / "inventory" / files.LIVE_DIRNAME
+                    / f"{files.LIVE_PREFIX}20260401-000000.csv")
+        no_price.write_text(f"{tcgcsv.SKU_COLUMN},{tcgcsv.NAME_COLUMN}\n111,Card A\n", "utf-8")
+        code, said = run_adopt(write=True)
+        ok(code == 0 and any("skipped" in line and no_price.name in line for line in said),
+           "adopt --write prints a 'skipped' line naming an export with no Market Price column",
+           f"code {code}, said {said}")
+
 
 # ---------------------------------------------------------------------------------- main
 
