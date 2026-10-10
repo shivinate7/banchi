@@ -235,7 +235,7 @@ each move has an oracle. Re-run `./banchi cards audit` to measure it again.
 ### The rejected options
 
 - **`capture_id`.** It names a photograph, not a card. `do_reshoot` overwrites it. `move_card`
-  clears it on the tombstone. The column is not UNIQUE. A `fulfilment` reference to it
+  clears it on the tombstone. The column has no UNIQUE constraint. A `fulfilment` reference to it
   can dangle after a burial. It stays as the photograph's id and `allocate_capture`'s
   replay guard.
 - **A never-reused integer from a `meta` high-water mark.** Two probes on copies killed it.
@@ -270,7 +270,7 @@ is never one of the four. A NULL cannot tell "no photograph was found" from "thi
 not look", which is this repo's signature defect. Shapes 2, 3 and 4 exist for populations that
 were empty when measured. Whether they have fired on the owner's store: unmeasured.
 
-**Naming.** `cid` sits two fields from `capture_id` and is not an abbreviation of it. The
+**Naming.** `cid` sits two fields from `capture_id` and does not abbreviate it. The
 symmetry is `bid` : box :: `cid` : card. `card_id` is taken by the T1 fixtures.
 
 ## 2. What stays
@@ -321,9 +321,9 @@ older ones, and this section says so.
 `_card_columns`, `Inventory.CARDS.column_names` and `db.TABLES["cards"]`. `cid` is TEXT, which is
 `_ddl`'s default. If `_card_columns` misses it, every write stores the cid in the payload and
 leaves the column NULL. If `db.TABLES["cards"]` misses it, a fresh store gets no column. The T7
-arm compares the rosters. `scripts/cid-selftest.py` also runs the query that catches a
-column that disagrees with its payload: `SELECT count(*) FROM cards WHERE cid IS NOT
-json_extract(payload,'$.cid')` must be 0, after the migration AND after an ordinary write.
+arm compares the rosters. `scripts/cid-selftest.py` also runs a query that catches a column
+that disagrees with its payload. The query is `SELECT count(*) FROM cards WHERE cid IS NOT json_extract(payload,'$.cid')`.
+It must be 0 after the migration AND after an ordinary write.
 
 ### 3.2 The seeding
 
@@ -392,7 +392,7 @@ healed at the next open.
 
 `./banchi cards name` previews and writes nothing. It opens the store `sqlite3` read-only and
 never calls `db.connect`. That function always runs `_ensure_schema`, so a preview through it
-would perform the migration it previews. `scripts/cid-selftest.py` asserts this by behavior and
+would migrate the store it is meant to preview. `scripts/cid-selftest.py` asserts this by behavior and
 by source inspection. The preview prints the count per source. It lists every card that would land in shape 4 and
 every duplicate that would get a suffix. It prints the receipt with its `reverse` sentence.
 `cards name --write` runs the same step now.
@@ -412,8 +412,8 @@ store.
 
 ### 3.7 What proves no record-to-photograph link was lost
 
-For every card, `sha256(<photograph>)` equals `cid` with any `-<n>` suffix stripped, unless the
-card carries a `photo_reclaimed_at`, or a `reshot` history line whose recorded digest equals
+For every card, `sha256(<photograph>)` equals `cid` with any `-<n>` suffix stripped. This holds
+unless the card carries a `photo_reclaimed_at`, or a `reshot` history line whose recorded digest equals
 the file. `./banchi cards audit` (or `make cid-audit`) proves this on any copy with no
 external state. Run right after the seeding it is close to a tautology. Its value is temporal:
 it proves the link still holds after renumbers, moves, deletions and reclaims. The source
@@ -448,7 +448,7 @@ change the wire.
 
 ### One route added, none removed
 
-`GET /photo/by-card/<cid>` (`do_photo_by_card`) needs no store read: the path is a function of
+`GET /photo/by-card/<cid>` (`do_photo_by_card`) needs no store read: the path is derived from
 the name. Its ETag is the cid plus a hash of `?v=<capture id>`, which moves exactly when the
 bytes do. A D26 re-shoot writes new bytes under the same cid, so the address alone cannot be
 `immutable`. With `?v=` the response is `immutable`. Without it, the route reads and hashes the
