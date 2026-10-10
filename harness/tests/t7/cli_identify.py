@@ -5958,6 +5958,103 @@ def check_selection_grammar(checks: Checks) -> None:
             )
 
 
+def check_identify_empty_refuses_before_work(checks: Checks) -> None:
+    """`./banchi identify` over a selection that names no card refuses BEFORE any hash, any
+    prepare, any paid read, and any network call; it exits 1 and says why.
+
+    THE REFUSAL IS THE MONEY GATE for the empty case. A selection that matches nothing must
+    not fall through to the hash, prepare and send passes with an empty list and report a
+    success, and it must not reach the network to find out. Four sites are counted: the hash
+    (`images.sha256_of`), the decode (`images.prepare` and `prepare_located`) and the paid
+    read (`batch.run_batch`). Sockets and `urlopen` are blocked for the press, so a call that
+    reaches the network is a recorded failure rather than a silent one. Two empty selections:
+    a drawer that was never photographed, and a key the store does not hold.
+    """
+    import socket
+    import urllib.request
+
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+    from identify import batch as identify_batch
+
+    checks.note("")
+    checks.note("IDENTIFY, EMPTY SELECTION: refuses before any hash, decode, paid read or network")
+
+    hashed: list = []
+    decoded: list = []
+    paid: list = []
+    network: list = []
+
+    def counted(log: list, real_fn):
+        def wrapper(*args, **kwargs):
+            log.append(args[:1])
+            return real_fn(*args, **kwargs)
+
+        return wrapper
+
+    def no_network(*args, **kwargs):
+        network.append(args[:1])
+        raise OSError("network blocked for this check")
+
+    def fake_run_batch(requests, log=None, on_submit=None):
+        paid.append(len(requests))
+        return identify_batch.BatchRun(outcomes={})
+
+    real = {
+        "sha": cmd_identify.images.sha256_of,
+        "prepare": cmd_identify.images.prepare,
+        "located": cmd_identify.images.prepare_located,
+        "run_batch": cmd_identify.batch.run_batch,
+        "create_connection": socket.create_connection,
+        "connect": socket.socket.connect,
+        "urlopen": urllib.request.urlopen,
+    }
+
+    from harness.tests.t7.common import capture_payload, isolated_home
+    from harness.tests.t7.common import quiet as quiet_out
+
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(3))
+
+        cmd_identify.images.sha256_of = counted(hashed, real["sha"])
+        cmd_identify.images.prepare = counted(decoded, real["prepare"])
+        cmd_identify.images.prepare_located = counted(decoded, real["located"])
+        cmd_identify.batch.run_batch = fake_run_batch
+        socket.create_connection = no_network
+        socket.socket.connect = no_network
+        urllib.request.urlopen = no_network
+        try:
+            for argv, why in (
+                (["identify", "--box", "9", "--engine", "haiku"], "a drawer nothing was photographed into"),
+                (["identify", "--keys", "9/9", "--engine", "haiku"], "a key the store does not hold"),
+            ):
+                try:
+                    with quiet_out() as said:
+                        code = cli_entry.main(argv)
+                    text = said.getvalue()
+                except Exception as failure:  # noqa: BLE001 — a crash is a finding, not a pass
+                    code, text = None, f"raised {failure!r}"
+                checks.equal(code, 1, f"`identify` over {why} exits 1")
+                checks.ok(
+                    "Nothing to identify" in text or "refused" in text,
+                    f"and says why, over {why}",
+                    f"said: {text.strip()!r}",
+                )
+                checks.equal(hashed, [], f"and hashes NO photograph over {why}")
+                checks.equal(decoded, [], f"and decodes NO photograph over {why}")
+                checks.equal(paid, [], f"and makes NO paid read over {why}")
+                checks.equal(network, [], f"and makes NO network call over {why}")
+        finally:
+            cmd_identify.images.sha256_of = real["sha"]
+            cmd_identify.images.prepare = real["prepare"]
+            cmd_identify.images.prepare_located = real["located"]
+            cmd_identify.batch.run_batch = real["run_batch"]
+            socket.create_connection = real["create_connection"]
+            socket.socket.connect = real["connect"]
+            urllib.request.urlopen = real["urlopen"]
+
+
 CHECKS = (
     check_cli_seams,
     check_code_ledger,
@@ -5985,4 +6082,5 @@ CHECKS = (
     check_printed_code_profiles,
     check_cli_refusals,
     check_selection_grammar,
+    check_identify_empty_refuses_before_work,
 )
