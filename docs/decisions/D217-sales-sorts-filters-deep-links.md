@@ -16,9 +16,9 @@ entry is about what a person can DO with the same rows, once they are on screen.
 
 Name, Copies, Gross and Last sold each get a `<button>` inside their `<th>`. `aria-sort` is
 set on the active column, `ascending` or `descending`, and left off the rest. That is the
-ARIA APG shape, not a hand-rolled one. The first click on a column picks the direction a
+ARIA APG shape, not a hand-rolled one. Clicking a column for the first time picks the direction a
 reader wants first. Name goes ascending. Everything else goes descending: biggest gross,
-most copies, most recent sale. A second click on the same column flips it. Gross-descending
+most copies, most recent sale. Clicking the same column a second time flips it. Gross-descending
 stays the screen's own default, unchanged from D214.
 
 ### The URL is the one copy of the screen's own state, and it replaces rather than pushes
@@ -95,7 +95,7 @@ asked to see. This entry's own copy-budget section states the final, smaller cos
 The bucket that contains `now`, when the selection reaches today, carries `inProgress:
 true`. It draws a small `Pill` reading "ongoing" beside its label. A half-finished month
 would otherwise read as a decline on the chart. This names that fact instead of leaving it
-to be misread. The verdict's own comparison no longer assumes the prior window is complete.
+to be misread. The verdict's own comparison no longer assumes that the prior window is complete.
 `elapsedMs` is how much of the current window has actually elapsed, clamped to `now`. The
 prior window is cut to that same length, starting from its own beginning. This reduces to
 the old, full-prior-window comparison in one case. The current window has already fully

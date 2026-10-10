@@ -102,10 +102,10 @@ Measured on the owner's store: 103 rows over 103 distinct SKUs, so the gate is c
 builds need one new read route over `store/postings.py`, one client function in
 `app/src/server.ts` and one wire type in `app/src/types.ts`. Neither writes.
 
-Rules both keep: a posted price is a third kind of observation, never joined to the market line
+Rules both keep: a posted price is a third kind of observation. It is never joined to the market line
 or the fills (D278). A price stays until the next press, so it is a held step. Money uses
 `.bn-money` (D221). Kit pieces and `--bn-*` tokens only. A chart or table holds its size from
-first paint (D313, nothing moves unless the person moved it).
+first paint (D313: if the person did not move it, nothing moves).
 
 **B, the first build: a Sales section.** A section on `#/revenue`, below the sold products,
 titled "What you asked". One row per re-priced name: posts, first asked, latest asked, change,
@@ -115,7 +115,7 @@ gross-revenue screen (D214), so it never claims profit. The period control needs
 posts outside the period.
 
 **A, the second build: an asked-price series on `#/product`.** Each range chart gets a dashed ink
-step line with one hollow square per posting, one legend entry, and a price axis that includes
+step line. It has one hollow square per posting and one legend entry. Its price axis includes
 postings. B's row links are how a person reaches it. It shows the shape of one SKU's asked price
 against the market line and the sale diamonds (D212's grain). It adds a fourth mark to four
 stacked charts.

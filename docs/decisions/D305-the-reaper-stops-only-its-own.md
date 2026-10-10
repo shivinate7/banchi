@@ -174,8 +174,8 @@ orchestrator allowance has no equivalent here. There is nothing here for it to a
 
 ### No install
 
-`reap.py` reads `.serve/owners/` inside whatever checkout it is asked about, so it sees a
-project's own marks from the repo's own copy. Nothing is installed: the user's Claude bin directory is
+`reap.py` reads `.serve/owners/` inside whatever checkout it is asked about. So it sees a
+project's own marks from the repo's own copy. Nothing is installed. The user's Claude bin directory is
 claude-settings' install.sh's, and `make janitor-install` copies nothing.
 
 Reap's "under this checkout" is the verdict's own test; a nested worktree is another checkout.
