@@ -50,7 +50,7 @@ from .paths_commands import load_game_coverage_allowlist
 #   join key shape    MECHANICAL. A `join_key` that the export's own `Number` cells prove
 #                     can never match a row. One direction only — see the check.
 #
-# BLOCKING ROWS READ ONLY THE EXPORTS THE REPO CARRIES. `PKMNSCAN_EXPORTS` widens the
+# BLOCKING ROWS READ ONLY THE EXPORTS THE REPO CARRIES. `BANCHI_EXPORTS` widens the
 # advisory row and nothing else, and a path in it that does not resolve is skipped in
 # silence rather than reported. A gate that can be failed by a file on one person's disk is
 # a gate that gets switched off, and a gate that *requires* such a file has already switched
@@ -215,7 +215,7 @@ FIXTURES_DIR = ROOT / "fixtures"
 # Opt-in extra exports, colon-separated, absolute or repo-relative. For the operator who
 # has a full-catalog export or a Riftbound one on disk and wants the coverage questions
 # asked against it. Never blocking — see the note above.
-EXPORTS_ENV = "PKMNSCAN_EXPORTS"
+EXPORTS_ENV = "BANCHI_EXPORTS"
 
 PRODUCT_LINE_CELL = "Product Line"
 RARITY_CELL = "Rarity"
@@ -326,7 +326,7 @@ _EXPORTS: Optional[List[ExportFacts]] = None
 def export_facts() -> List[ExportFacts]:
     """Every export in view: the committed fixtures always, then the opt-in ones.
 
-    Built once. A `PKMNSCAN_EXPORTS` entry that does not resolve, does not read, or is not
+    Built once. A `BANCHI_EXPORTS` entry that does not resolve, does not read, or is not
     an export is dropped without a word — see the section note for why that silence is the
     point rather than a gap.
     """
@@ -853,7 +853,7 @@ def check_game_coverage(report: Report) -> None:
     behind an unselectable chip. So the excess is a question by construction, and the row
     that blocks is `matrix superset`, which asks the same question the other way round.
 
-    Opt-in `PKMNSCAN_EXPORTS` files feed this row and only this row. An operator with a
+    Opt-in `BANCHI_EXPORTS` files feed this row and only this row. An operator with a
     full-catalog export gets every question asked against it without any of them being able
     to stop a commit on a machine that does not have the file.
     """

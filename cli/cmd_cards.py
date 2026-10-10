@@ -1,4 +1,4 @@
-"""`pkmnscan cards` — the card's stable name and, since lane 2 of `docs/specs/
+"""`banchi cards` — the card's stable name and, since lane 2 of `docs/specs/
 identity-follows-sku.md`, its identity: preview it, audit it, move the photographs.
 
 EIGHT SUBCOMMANDS AND SIX OF THEM WRITE NOTHING EVER.
@@ -400,7 +400,7 @@ def _checks(args, say) -> int:
     if not select_set_name:
         say("VERDICT: not known — this store has no `set_name` column, so class 2, 3 and 4 "
             "cannot be checked. Any write press adds it on open, such as "
-            "`pkmnscan cards identity --write`.")
+            "`banchi cards identity --write`.")
         return 2
     if not rows:
         say("VERDICT: not known — there are no cards in this store")
@@ -794,7 +794,7 @@ def _variants(args, say) -> int:
     """RETIRED into `cards identity --write` (`docs/specs/identity-follows-sku.md` §4.2, §9
     item 7). This press wrote `set_name` and `rarity` onto a card directly, off an export
     file. `Inventory.bind_sku` is now the one writer of those two fields. It copies them from
-    the `skus` table, which `pkmnscan skus adopt --write` fills from every export this press
+    the `skus` table, which `banchi skus adopt --write` fills from every export this press
     read, plus the live exports. So `cards identity --write` fills every card this press
     filled, and it also moves the rest of the identity with them.
 
@@ -806,7 +806,7 @@ def _variants(args, say) -> int:
     REFUSES WITH EXIT 2, NOT 0 like `cards contradictions`. That command wrote nothing, so
     an exit of 0 told the operator no lie. This one was a write press, and an exit of 0 on
     `--write` would say that a write happened."""
-    say("`cards variants` is retired. Run `./pkmnscan cards identity` to preview, then "
+    say("`cards variants` is retired. Run `./banchi cards identity` to preview, then "
         "`--write`. It fills `set` and `rarity` from the SKU table for every card it binds. "
         "Nothing was written.")
     return 2
@@ -831,6 +831,6 @@ def run(args, say) -> int:
     action = getattr(args, "cards_action", None)
     handler = _SUBCOMMANDS.get(action)
     if handler is None:
-        say("pkmnscan cards <name|audit|checks|identity|contradictions|sku-names|photos|variants>")
+        say("banchi cards <name|audit|checks|identity|contradictions|sku-names|photos|variants>")
         return 2
     return handler(args, say)

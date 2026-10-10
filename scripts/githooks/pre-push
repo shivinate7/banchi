@@ -20,7 +20,7 @@
 
 set -uo pipefail
 
-[ "${PKMNSCAN_MAIN:-}" = "off" ] && exit 0
+[ "${BANCHI_MAIN:-}" = "off" ] && exit 0
 
 remote="${1:-origin}"
 
@@ -41,7 +41,7 @@ rlog() {
 # main already carries — PR #221's shape, which no check on the commit path could see. The
 # script is resolved through the checkout the push is made from, so a worktree runs its own
 # copy; absent (a fixture clone, a throwaway) it is skipped, which is the same fail-open rule
-# the refusal below states. `PKMNSCAN_REVERT=off` is the script's own hatch and it prints it.
+# the refusal below states. `BANCHI_REVERT=off` is the script's own hatch and it prints it.
 guard_branch() {
   local top
   top="$(git rev-parse --show-toplevel 2>/dev/null)" || return 0

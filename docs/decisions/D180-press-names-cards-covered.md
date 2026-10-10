@@ -1,6 +1,6 @@
 ## D180 — A press names the cards it covers
 
-**The box stops being the unit of work. `POST /pipeline/identify` and `pkmnscan identify` take ONE SELECTION — a set of terms, each of which narrows a set of cards — and the drawer is a term in it rather than the thing a run is made of.** Built 2026-09-12. **This OVERTAKES the cart design**, on the owner's word, and the rot in that entry is documented below rather than deleted.
+**The box stops being the unit of work. `POST /pipeline/identify` and `banchi identify` take ONE SELECTION — a set of terms, each of which narrows a set of cards — and the drawer is a term in it rather than the thing a run is made of.** Built 2026-09-12. **This OVERTAKES the cart design**, on the owner's word, and the rot in that entry is documented below rather than deleted.
 
 ### What stood, and the sentence it rested on
 
@@ -8,7 +8,7 @@
 
 > *"Send a positive integer `box`. A run is always scoped to one box."*
 
-That is the thesis stated as a 400. `pkmnscan identify` took exactly one directory, `_scope_dir` symlinked a ticked selection into `.scopes/box3-<n>-<stamp>` so that a subset could be expressed as the one thing the command accepted — a path — and the cart design made a SEND a cart of those, one detached child per drawer.
+That is the thesis stated as a 400. `banchi identify` took exactly one directory, `_scope_dir` symlinked a ticked selection into `.scopes/box3-<n>-<stamp>` so that a subset could be expressed as the one thing the command accepted — a path — and the cart design made a SEND a cart of those, one detached child per drawer.
 
 **So "identify everything that still needs it" was not a sentence this product could be asked**, and a pile spanning two drawers was two presses however few cards it held.
 
@@ -84,7 +84,7 @@ One name for both is how a press aimed at box 3 quietly relabels an unpositioned
 
 **What that costs is the drawer label on a pre-D145 terminal run that has never been re-joined: two on this store, and it was answering WRONGLY for both.** What it buys is that a run filed under the wrong drawer stops being undetectable, because a wrong box number RESOLVES and a null does not.
 
-**It does not make those two runs right.** Their own `scope.box` says 1 and 6 as well — both voices agree and both are wrong. This stops the second voice agreeing with the first for a different bad reason; repairing the records is `pkmnscan rescue`'s job (D36), not this entry's.
+**It does not make those two runs right.** Their own `scope.box` says 1 and 6 as well — both voices agree and both are wrong. This stops the second voice agreeing with the first for a different bad reason; repairing the records is `banchi rescue`'s job (D36), not this entry's.
 
 **And `--box` is a filter over what each capture RECORDED precisely because of those two runs.** A photograph sitting in `box7/` whose sidecar says box 3 is found by `--box 3` and not by `--box 7`, which no narrower scan root can do.
 

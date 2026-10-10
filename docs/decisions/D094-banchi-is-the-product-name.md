@@ -4,7 +4,7 @@
 
 **The rename covers these names.** `./pkmnscan` becomes `./banchi`. `PKMNSCAN_*` becomes `BANCHI_*`. `~/.pkmnscan` becomes `~/.banchi`. The `com.pkmnscan.*` launchd labels become `com.banchi.*`. `~/Developer/pkmnscan` becomes `~/Developer/banchi`. The store stays `inventory/store.sqlite` (D88), because that name holds no product name. Fixtures are never modified, so a fixture that holds the old name keeps it.
 
-**Done is `git grep -i pkmnscan` printing nothing outside `fixtures/`.** Until the rename lane merges, each old name in the code is pending work, not a boundary. After it merges, a new `pkmnscan` is a defect.
+**Done is `git grep -i pkmnscan` printing nothing outside `fixtures/`.** The rename merged, so a new `pkmnscan` is a defect. The remaining hits are this entry, CLAUDE.md's "Banchi names everything" section, and the code that moves or removes machine state left under the old name (`~/.pkmnscan` and `com.pkmnscan.*` plists).
 
 **One derived name is already guarded.** GitHub Pages serves a project site at `/<repo>/`. `.github/workflows/demo.yml` derives `DEMO_BASE` from the repository name, so a rename cannot leave it pointing at the old one. GitHub redirects the old repository name, so old clone URLs and merged PR links still resolve.
 

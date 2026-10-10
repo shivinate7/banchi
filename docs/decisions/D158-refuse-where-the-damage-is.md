@@ -1,6 +1,6 @@
 ## D158 — Refuse where the damage is
 
-**The primary checkout is where the damage lands, so the refusal is on serving there and not on the git command.** An earlier design, written after `/Users/shivinate/Developer/pkmnscan` — the primary checkout, the one D138 keeps
+**The primary checkout is where the damage lands, so the refusal is on serving there and not on the git command.** An earlier design, written after `/Users/shivinate/Developer/banchi` — the primary checkout, the one D138 keeps
 a supervisor alive out of over the owner's real store — was found standing on
 `claude/env-key-rotation` with three live sessions in it. It shipped warnings at three moments
 and ruled that **a warning is the ceiling**.
@@ -90,8 +90,8 @@ speakers there.
 
 ### It has an escape hatch, and that is a departure from the entry it is modelled on
 
-`PKMNSCAN_SERVE_MAIN=off`, printed in every refusal, as `PKMNSCAN_MAIN=off`, `PKMNSCAN_KILL=off`,
-`PKMNSCAN_REVERT=off` and `PKMNSCAN_SUITE_LOCK=off` all are.
+`BANCHI_SERVE_MAIN=off`, printed in every refusal, as `BANCHI_MAIN=off`, `BANCHI_KILL=off`,
+`BANCHI_REVERT=off` and `BANCHI_SUITE_LOCK=off` all are.
 D140 — the merge's own stale-half guard, landed the same night — deliberately has none, on
 the ground that what it refuses
 costs `git merge origin/main` — seconds, and the right thing to have done anyway.

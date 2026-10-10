@@ -17,14 +17,14 @@ merged. `required_status_checks` is null because nothing runs on a PR yet, and
 This entry already argued that a remote gate would have caught one of the two incidents and
 been silent through the other; that argument is unchanged, and it is now the reason the two
 guards are complementary rather than one superseding the other. Nothing about `make merge`,
-the two local hooks or `PKMNSCAN_MAIN=off` changes.
+the two local hooks or `BANCHI_MAIN=off` changes.
 
 What follows is the measurement as it stood when this entry was written.
 
 Measured rather than assumed — both surfaces answered 403:
 
-    GET repos/shivinate7/pkmnscan/rulesets                   403
-    GET repos/shivinate7/pkmnscan/branches/main/protection   403
+    GET repos/shivinate7/banchi/rulesets                   403
+    GET repos/shivinate7/banchi/branches/main/protection   403
     "Upgrade to GitHub Pro or make this repository public to enable this feature."
 
 Free plan, private repo. Going public is not an option: `CLAUDE.md`'s opsec rule makes a live unredeemed code card a bearer instrument, and this tree carries the enforcement for it. So the server-side gate costs a subscription, and the owner chose the local guard. **They later bought it** — see the amendment above; the repo stayed private, which is what Pro buys and what going public would have cost.
@@ -58,7 +58,7 @@ Git reports zeros whenever the caller did not state an expected value, even wher
 
 **Claim one, falsified within the hour of merging.** A working tree's contents are a function of its branch. The moment this entry landed on main, the main checkout was on another session's WIP branch that predated it, so the directory git read held **one hook out of three**. The guard was armed at zero and nothing said so — the silent-failure class this repo refuses everywhere else, reproduced by the fix for it.
 
-**Claim two, falsified by running the test rather than reading the config.** `extensions.worktreeConfig` is **on** in this clone, and whatever creates `.claude/worktrees/` writes a per-worktree `core.hooksPath` into `.git/worktrees/<name>/config.worktree`, beside a `core.longpaths`, so it is that tooling and not this repo. **A per-worktree value beats the common one.** After an install that printed success, `git config --get core.hooksPath` inside a worktree still answered the old path and all four worktrees were unguarded. It was found by running the nineteen cases against the INSTALLED directory — `PKMNSCAN_HOOKS_DIR` exists for exactly this — and would not have been found by reading the config, because the config that lies is not the one you look at.
+**Claim two, falsified by running the test rather than reading the config.** `extensions.worktreeConfig` is **on** in this clone, and whatever creates `.claude/worktrees/` writes a per-worktree `core.hooksPath` into `.git/worktrees/<name>/config.worktree`, beside a `core.longpaths`, so it is that tooling and not this repo. **A per-worktree value beats the common one.** After an install that printed success, `git config --get core.hooksPath` inside a worktree still answered the old path and all four worktrees were unguarded. It was found by running the nineteen cases against the INSTALLED directory — `BANCHI_HOOKS_DIR` exists for exactly this — and would not have been found by reading the config, because the config that lies is not the one you look at.
 
 So `make hooks` copies the tracked hooks into `<git-common-dir>/hooks-armed`, points the common config there, and UNSETS the per-worktree override everywhere. `.git` is per-clone and no branch can empty it. Verified after: all seven worktrees resolve to the install, the installed copy passes all nineteen cases, and a live `git push --dry-run --force origin <branch>:main` is refused by name.
 
@@ -72,7 +72,7 @@ The owner's amendment, 2026-08-30. The sentence that changes is *the owner merge
 
 **The permission covers both halves of the merge**, which is the owner's second amendment of the same day. An earlier reading granted only `gh pr merge` and left the clone permanently one commit short: a session that merged had to stop and *describe* the `git pull`, which is a handoff in the middle of one operation and leaves every later session cutting branches from a stale main.
 
-**It cannot widen what is mechanically possible, and that is the safety argument.** Allow rule 3 of `scripts/githooks/reference-transaction` is `git merge-base --is-ancestor "$new" refs/remotes/origin/main` — move main to a commit origin already has — and the commit a merged PR produces IS that commit. So this reaches the prose and nothing else: it arms nothing, disarms nothing, edits no file under `scripts/githooks/`, and needs no escape hatch. **`PKMNSCAN_MAIN=off` is not what a session reaches for here** and must not become it; a session typing that variable has left this amendment behind.
+**It cannot widen what is mechanically possible, and that is the safety argument.** Allow rule 3 of `scripts/githooks/reference-transaction` is `git merge-base --is-ancestor "$new" refs/remotes/origin/main` — move main to a commit origin already has — and the commit a merged PR produces IS that commit. So this reaches the prose and nothing else: it arms nothing, disarms nothing, edits no file under `scripts/githooks/`, and needs no escape hatch. **`BANCHI_MAIN=off` is not what a session reaches for here** and must not become it; a session typing that variable has left this amendment behind.
 
 ### The local half is two states, and one question tells them apart
 
@@ -96,9 +96,9 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 **A path printed — main is checked out there.** Added 2026-08-30 after PR #38, because `git fetch origin main:main` is exactly what git will not do to a branch somebody is standing on:
 
-    fatal: refusing to fetch into branch 'refs/heads/main' checked out at '/Users/shivinate/Developer/pkmnscan'
+    fatal: refusing to fetch into branch 'refs/heads/main' checked out at '/Users/shivinate/Developer/banchi'
 
-**That refusal is git's and not the hook's**, and telling them apart is most of why this is written down. Everything else here is about a hook that refuses, so a session reading the word `refusing` reaches for `PKMNSCAN_MAIN=off`, which changes nothing because no hook has spoken. `git switch main && git pull` is unaffected and always was: `pull` is a fetch and then a merge, two transactions, in that order. The hook's refusals name themselves and print the variable; this one names a path. Pull in that tree instead:
+**That refusal is git's and not the hook's**, and telling them apart is most of why this is written down. Everything else here is about a hook that refuses, so a session reading the word `refusing` reaches for `BANCHI_MAIN=off`, which changes nothing because no hook has spoken. `git switch main && git pull` is unaffected and always was: `pull` is a fetch and then a merge, two transactions, in that order. The hook's refusals name themselves and print the variable; this one names a path. Pull in that tree instead:
 
     git -C <that path> pull --ff-only
 
@@ -116,7 +116,7 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 **What is automated is the state lookup, which is not a choice anybody makes.** Which of the two forms above applies is a question with one right answer that git already knows, and *the unconditional shortcut is a footgun* two paragraphs up is the account of what it costs to get wrong: no error, no hook, a branch somebody else is working on quietly advanced. A session was being asked to remember a lookup; it asks git instead, and re-asks with `git rev-parse --abbrev-ref HEAD` before it pulls.
 
-**It widens nothing mechanically, for the same reason the amendment above widens nothing.** It fetches origin first and then asserts `merge-base --is-ancestor <commit> refs/remotes/origin/main` — allow rule 3, evaluated before anything moves rather than discovered when the hook refuses. It never sets `PKMNSCAN_MAIN` and no refusal it prints suggests it. A commit origin does not carry is refused by name.
+**It widens nothing mechanically, for the same reason the amendment above widens nothing.** It fetches origin first and then asserts `merge-base --is-ancestor <commit> refs/remotes/origin/main` — allow rule 3, evaluated before anything moves rather than discovered when the hook refuses. It never sets `BANCHI_MAIN` and no refusal it prints suggests it. A commit origin does not carry is refused by name.
 
 **`make help` lists it, and the plumbing worry is answered by shape rather than by obscurity.** Hiding the target would be security by not-being-listed, which this repo rejects everywhere else, and `CLAUDE.md`'s own rule is that a capability nobody can find is not done. The two raw commands stay in `CLAUDE.md` beside it: the wrapper must not become the only way anyone knows the answer.
 
@@ -160,7 +160,7 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 ### The escape hatch and the evidence
 
-**`PKMNSCAN_MAIN=off`**, spelled the way `PKMNSCAN_DOCS=off` already is. One variable, the owner's to set from the owner's terminal. By the owner's word, no refusal prints a blocked switch's name to an agent: each prints "owner-only: ask the owner to run this command", and `guard-shell.py` refuses an agent's tool call that sets it (D179). A guard with no way past it gets disarmed at the config instead, and a disarmed `core.hooksPath` takes the three opsec rules with it, the trade D16 already refused for the docs audit. So the way past exists and the owner holds it. CLAUDE.md names the switch for the owner.
+**`BANCHI_MAIN=off`**, spelled the way `BANCHI_DOCS=off` already is. One variable, the owner's to set from the owner's terminal. By the owner's word, no refusal prints a blocked switch's name to an agent: each prints "owner-only: ask the owner to run this command", and `guard-shell.py` refuses an agent's tool call that sets it (D179). A guard with no way past it gets disarmed at the config instead, and a disarmed `core.hooksPath` takes the three opsec rules with it, the trade D16 already refused for the docs audit. So the way past exists and the owner holds it. CLAUDE.md names the switch for the owner.
 
 **`make githooks-selftest` is the evidence, and it runs in `make check` and never in the git hook.** D18's rule: it writes — a bare repo, a clone, commits, pushes. It has a second reason of its own that the docs audit's self-test does not: it exercises the guard by **violating** it, so a version on the commit path would be refusing its own commits. Nineteen cases, two of which were green for the wrong reason until the harness checked whose refusal it was — git declines to delete the branch you are standing on and declines to push what is already up to date, both without consulting a hook. A refusal now has to carry the hook's own marker to count.
 

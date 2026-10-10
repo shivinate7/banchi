@@ -29,7 +29,7 @@ prompts. Each section keeps its argument.
 best-case claims. Holdout fell and high-confidence misses rose. It is switched off:
 `cli/cmd_identify.py` passes `rarity_claim=None`, and the comment there gives the numbers. The
 rarity claim still does its other two jobs (9.1). Re-enable the clause only with a rig-photo
-measurement that says otherwise. `PKMNSCAN_T1_RARITY=1` is the instrument
+measurement that says otherwise. `BANCHI_T1_RARITY=1` is the instrument
 (`harness/tests/t1_id_eval.py`).
 
 **What has met a real card.** Nothing here. The identification measurements ran on Pokemon
@@ -333,7 +333,7 @@ The rows are named, not numbered (D16). Each is deterministic. Each reads the co
 - **`join key shape`** blocks. It checks the composed-key games against the export's actual
   `Number` cells. It would have caught D25's real defect had it existed earlier.
 
-`PKMNSCAN_EXPORTS` widens the advisory row and nothing else. It holds colon-separated paths to
+`BANCHI_EXPORTS` widens the advisory row and nothing else. It holds colon-separated paths to
 extra exports that the repo cannot carry. A path that does not resolve is skipped in silence,
 and nothing read through it can fail a commit. A gate that a file on one person's disk can break
 gets switched off. A gate that needs such a file has already switched itself off for everybody

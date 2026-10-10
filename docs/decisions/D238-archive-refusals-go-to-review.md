@@ -1,6 +1,6 @@
 ## D238 — Archive refusals go to review
 
-**What this builds.** `pkmnscan archive sweep`'s own refusals now route to the standing
+**What this builds.** `banchi archive sweep`'s own refusals now route to the standing
 review queue. `cli/archive_review.py` is the new module. `store/queues.py:Queue.upsert`
 (D167) is the only write primitive it calls. No new queue exists. No new file format
 exists. `CLAUDE.md`'s own rule is the reason: an ambiguity goes to the review queue with

@@ -48,7 +48,7 @@ fail=0
 [ -f "$GUARD" ]  || { echo "no guard-shell.py beside this script"; exit 1; }
 [ -f "$PARSER" ] || { echo "no shell_parse.py beside this script — the guard shares it"; exit 1; }
 
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/pkmnscan-guardshell.XXXXXX")" || { echo "cannot make a temp dir"; exit 1; }
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/banchi-guardshell.XXXXXX")" || { echo "cannot make a temp dir"; exit 1; }
 cleanup() { rm -rf "$tmp"; return 0; }
 trap cleanup EXIT
 
@@ -221,14 +221,14 @@ refuses "buried mid-script behind a \`&&\`"           "$tmp/main" "echo tidy && 
 # arm each.
 refuses "on its own line in a two-line script"       "$tmp/main" "echo tidy
 git checkout work.py"
-refuses "an env prefix does not launder it"          "$tmp/main" "PKMNSCAN_MAIN=off git checkout work.py"
+refuses "an env prefix does not launder it"          "$tmp/main" "BANCHI_MAIN=off git checkout work.py"
 
 # THE REFUSAL'S CONTENT IS SCORED, NOT ONLY ITS EXIT CODE. A refusal that does not name the
 # escape hatch is what CLAUDE.md forbids repo-wide, and one that does not name the `.bak`
 # shape sends a session looking for a different command to type.
 judge "$tmp/main" "git checkout work.py"
 case "$out" in
-  *"PKMNSCAN_CHECKOUT=off"*) bad "the refusal names the CHECKOUT switch to an agent" ;;
+  *"BANCHI_CHECKOUT=off"*) bad "the refusal names the CHECKOUT switch to an agent" ;;
   *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
   *) bad "the refusal carries no owner-only line" ;; esac
 case "$out" in *".bak"*) ok "the refusal names the \`.bak\` copy as the way to do it safely" ;;
@@ -342,7 +342,7 @@ case "$out" in *"$tmp/main/work.py"*) ok "the refusal names the resolved target"
 case "$out" in *"$wt_root"*) ok "the refusal names the resolved root" ;;
   *) bad "the refusal does not name this checkout" ;; esac
 case "$out" in
-  *"PKMNSCAN_TREE=off"*) bad "the refusal names the TREE switch to an agent" ;;
+  *"BANCHI_TREE=off"*) bad "the refusal names the TREE switch to an agent" ;;
   *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
   *) bad "the refusal carries no owner-only line" ;; esac
 
@@ -421,7 +421,7 @@ judge "$WT" "cd $tmp/main && npm run build"
 case "$out" in *"stand in another checkout"*) ok "the \`cd\` refusal says what the act is" ;;
   *) bad "the cd refusal does not name the act" ;; esac
 case "$out" in
-  *"PKMNSCAN_TREE=off"*) bad "the refusal names the TREE switch to an agent" ;;
+  *"BANCHI_TREE=off"*) bad "the refusal names the TREE switch to an agent" ;;
   *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
   *) bad "the refusal carries no owner-only line" ;; esac
 allows  "\`cd\` into a temp directory that is no checkout"          "$WT" "cd $tmp/scratch && echo x > out.log"
@@ -515,7 +515,7 @@ case "$out" in *"command line NAMES it"*) ok "the refusal explains that the patt
 case "$out" in *"platform-dependent"*) ok "and names the platform dependency rather than asserting past it" ;;
   *) bad "the refusal asserts a self-match this platform does not produce" ;; esac
 case "$out" in
-  *"PKMNSCAN_WAIT=off"*) bad "the refusal names the WAIT switch to an agent" ;;
+  *"BANCHI_WAIT=off"*) bad "the refusal names the WAIT switch to an agent" ;;
   *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
   *) bad "the refusal carries no owner-only line" ;; esac
 case "$out" in *"sanctioned form"*) ok "the refusal names what to do instead" ;;
@@ -625,7 +625,7 @@ refuses "\`-u\` does not launder it — it would re-point the tracking AFTER the
 refuses "\`--force\` does not launder it either" \
   "$tmp/main" "git push --force origin HEAD"
 refuses "an env prefix does not launder it" \
-  "$tmp/main" "PKMNSCAN_MAIN=off git push origin HEAD"
+  "$tmp/main" "BANCHI_MAIN=off git push origin HEAD"
 
 judge "$tmp/main" "git push origin HEAD"
 case "$out" in *"pr-h-readings-table-local"*) ok "the refusal names the current branch" ;;
@@ -633,7 +633,7 @@ case "$out" in *"pr-h-readings-table-local"*) ok "the refusal names the current 
 case "$out" in *"claude/pr-h-readings-table"*) ok "the refusal names the tracked upstream" ;;
   *) bad "the refusal does not name the tracked upstream" ;; esac
 case "$out" in
-  *"PKMNSCAN_PUSH=off"*) bad "the refusal names the PUSH switch to an agent" ;;
+  *"BANCHI_PUSH=off"*) bad "the refusal names the PUSH switch to an agent" ;;
   *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
   *) bad "the refusal carries no owner-only line" ;; esac
 # (a) the trap is still refused: `git push origin HEAD` above, on a branch whose upstream is
@@ -834,13 +834,13 @@ refuses "\`git stash drop\` with no entry named — defaults to \`stash@{0}\`" \
 refuses "\`git stash clear\` — takes no target, always destroys the whole stack" \
   "$tmp/main" "git stash clear"
 refuses "an env prefix does not launder it" \
-  "$tmp/main" "PKMNSCAN_MAIN=off git stash pop"
+  "$tmp/main" "BANCHI_MAIN=off git stash pop"
 refuses "buried mid-script behind a \`&&\`" \
   "$tmp/main" "echo tidy && git stash drop"
 
 judge "$tmp/main" "git stash pop"
 case "$out" in
-  *"PKMNSCAN_STASH=off"*) bad "the refusal names the STASH switch to an agent" ;;
+  *"BANCHI_STASH=off"*) bad "the refusal names the STASH switch to an agent" ;;
   *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
   *) bad "the refusal carries no owner-only line" ;; esac
 case "$out" in *"per-CLONE"*) ok "the refusal explains the shared-stack hazard" ;;
@@ -895,12 +895,12 @@ refuses "the bare form" "$tmp/main" "git reset --hard"
 refuses "against an explicit commit" "$tmp/main" "git reset --hard HEAD"
 refuses "\`--merge\`, the same discard" "$tmp/main" "git reset --merge"
 refuses "\`--keep\`, the same discard" "$tmp/main" "git reset --keep"
-refuses "an env prefix does not launder it" "$tmp/main" "PKMNSCAN_MAIN=off git reset --hard"
+refuses "an env prefix does not launder it" "$tmp/main" "BANCHI_MAIN=off git reset --hard"
 refuses "buried mid-script behind a \`&&\`" "$tmp/main" "echo tidy && git reset --hard"
 
 judge "$tmp/main" "git reset --hard"
 case "$out" in
-  *"PKMNSCAN_RESET=off"*) bad "the refusal names the RESET switch to an agent" ;;
+  *"BANCHI_RESET=off"*) bad "the refusal names the RESET switch to an agent" ;;
   *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
   *) bad "the refusal carries no owner-only line" ;; esac
 case "$out" in *".bak"*) ok "the refusal names the \`.bak\` copy as the way to do it safely" ;;
@@ -979,11 +979,11 @@ refuses "into a file nothing in the command reads back" "$tmp/main" "make merge 
 refuses "\`tail\` with no count" "$tmp/main" "make merge ARGS=\"437 --confirm\" 2>&1 | tail"
 refuses "the script run directly, which is the same act" "$tmp/main" "~/.claude/bin/merge 437 --confirm | tail -5"
 refuses "buried mid-script behind a \`&&\`" "$tmp/main" "git fetch origin && make merge ARGS=\"437 --confirm\" | tail -30"
-refuses "an env prefix does not launder it" "$tmp/main" "PKMNSCAN_MAIN=off make merge ARGS=\"437 --confirm\" | tail -5"
+refuses "an env prefix does not launder it" "$tmp/main" "BANCHI_MAIN=off make merge ARGS=\"437 --confirm\" | tail -5"
 
 judge "$tmp/main" "make merge ARGS=\"437 --confirm\" 2>&1 | tail -18"
 case "$out" in
-  *"PKMNSCAN_NARRATE=off"*) bad "the refusal names the NARRATE switch to an agent" ;;
+  *"BANCHI_NARRATE=off"*) bad "the refusal names the NARRATE switch to an agent" ;;
   *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
   *) bad "the refusal carries no owner-only line" ;; esac
 case "$out" in *"four to"*) ok "the refusal says the wait is CORRECT and how long it takes, so nobody 'fixes' the waiting" ;;
@@ -1080,19 +1080,19 @@ judge_agent() {   # judge_agent <cwd> <command> -> exit code, output in $out
         | python3 "$GUARD" --hook 2>&1)"
   return $?
 }
-judge_agent "$tmp/main" "PKMNSCAN_TREE=off echo hi"
-if [ $? -eq 2 ]; then ok "an agent command with PKMNSCAN_TREE=off is refused"; else bad "PKMNSCAN_TREE=off was allowed"; fi
+judge_agent "$tmp/main" "BANCHI_TREE=off echo hi"
+if [ $? -eq 2 ]; then ok "an agent command with BANCHI_TREE=off is refused"; else bad "BANCHI_TREE=off was allowed"; fi
 case "$out" in
-  *PKMNSCAN_TREE*) bad "the owner-only refusal names the switch" ;;
+  *BANCHI_TREE*) bad "the owner-only refusal names the switch" ;;
   *"owner-only: ask the owner to run this command"*) ok "and says owner-only without naming it" ;;
   *) bad "the owner-only refusal is missing" ;; esac
-judge_agent "$tmp/main" "export PKMNSCAN_MAIN=off; echo hi"
-if [ $? -eq 2 ]; then ok "export form is refused"; else bad "export PKMNSCAN_MAIN=off was allowed"; fi
-judge_agent "$tmp/main" "env PKMNSCAN_DOCS=off echo hi"
-if [ $? -eq 2 ]; then ok "env form is refused"; else bad "env PKMNSCAN_DOCS=off was allowed"; fi
+judge_agent "$tmp/main" "export BANCHI_MAIN=off; echo hi"
+if [ $? -eq 2 ]; then ok "export form is refused"; else bad "export BANCHI_MAIN=off was allowed"; fi
+judge_agent "$tmp/main" "env BANCHI_DOCS=off echo hi"
+if [ $? -eq 2 ]; then ok "env form is refused"; else bad "env BANCHI_DOCS=off was allowed"; fi
 for lever in KILL SUITE_LOCK SERVE_MAIN SYNC; do
-  judge_agent "$tmp/main" "PKMNSCAN_$lever=off echo hi"
-  if [ $? -eq 0 ]; then ok "recovery lever PKMNSCAN_$lever=off is allowed"; else bad "PKMNSCAN_$lever=off was refused"; fi
+  judge_agent "$tmp/main" "BANCHI_$lever=off echo hi"
+  if [ $? -eq 0 ]; then ok "recovery lever BANCHI_$lever=off is allowed"; else bad "BANCHI_$lever=off was refused"; fi
 done
 agent_refuses() {   # agent_refuses <label> <command>
   judge_agent "$tmp/main" "$2"
@@ -1104,60 +1104,60 @@ agent_allows() {    # agent_allows <label> <command>
 }
 # EVERY FORM BELOW REACHES A GUARD'S PROCESS ENVIRONMENT, which is what pre-push and
 # reference-transaction read, so each one is a real setting and not a mention.
-agent_refuses "eval string"                 "eval 'PKMNSCAN_MAIN=off git status'"
-agent_refuses "eval export"                 "eval export PKMNSCAN_MAIN=off"
-agent_refuses "declare -x"                  "declare -x PKMNSCAN_MAIN=off"
-agent_refuses "sudo prefix"                 "sudo PKMNSCAN_MAIN=off ls"
-agent_refuses "sudo -u value"               "sudo -u root PKMNSCAN_MAIN=off ls"
-agent_refuses "command env"                 "command env PKMNSCAN_MAIN=off ls"
-agent_refuses "nohup prefix"                "nohup PKMNSCAN_MAIN=off ls"
-agent_refuses "time prefix"                 "time PKMNSCAN_MAIN=off ls"
-agent_refuses "brace group"                 "{ PKMNSCAN_MAIN=off ls; }"
-agent_refuses "if then"                     "if true; then PKMNSCAN_MAIN=off ls; fi"
-agent_refuses "while loop"                  "while PKMNSCAN_MAIN=off false; do ls; done"
-agent_refuses "backticks"                   'echo `PKMNSCAN_MAIN=off ls`'
-agent_refuses "command substitution"        'echo $(PKMNSCAN_MAIN=off ls)'
-agent_refuses "export of a variable name"   'V=PKMNSCAN_MAIN; export $V=off'
-agent_refuses "ANSI-C quoted name"          "export \$'PKMNSCAN_MAIN'=off"
-agent_refuses "ANSI-C quoted value"         "PKMNSCAN_MAIN=\$'off' ls"
-agent_refuses "env -u before the setting"   "env -u HOME PKMNSCAN_MAIN=off ls"
-agent_refuses "env -S string"               "env -S 'PKMNSCAN_MAIN=off ls'"
-agent_refuses "xargs env"                   "echo x | xargs env PKMNSCAN_MAIN=off ls"
+agent_refuses "eval string"                 "eval 'BANCHI_MAIN=off git status'"
+agent_refuses "eval export"                 "eval export BANCHI_MAIN=off"
+agent_refuses "declare -x"                  "declare -x BANCHI_MAIN=off"
+agent_refuses "sudo prefix"                 "sudo BANCHI_MAIN=off ls"
+agent_refuses "sudo -u value"               "sudo -u root BANCHI_MAIN=off ls"
+agent_refuses "command env"                 "command env BANCHI_MAIN=off ls"
+agent_refuses "nohup prefix"                "nohup BANCHI_MAIN=off ls"
+agent_refuses "time prefix"                 "time BANCHI_MAIN=off ls"
+agent_refuses "brace group"                 "{ BANCHI_MAIN=off ls; }"
+agent_refuses "if then"                     "if true; then BANCHI_MAIN=off ls; fi"
+agent_refuses "while loop"                  "while BANCHI_MAIN=off false; do ls; done"
+agent_refuses "backticks"                   'echo `BANCHI_MAIN=off ls`'
+agent_refuses "command substitution"        'echo $(BANCHI_MAIN=off ls)'
+agent_refuses "export of a variable name"   'V=BANCHI_MAIN; export $V=off'
+agent_refuses "ANSI-C quoted name"          "export \$'BANCHI_MAIN'=off"
+agent_refuses "ANSI-C quoted value"         "BANCHI_MAIN=\$'off' ls"
+agent_refuses "env -u before the setting"   "env -u HOME BANCHI_MAIN=off ls"
+agent_refuses "env -S string"               "env -S 'BANCHI_MAIN=off ls'"
+agent_refuses "xargs env"                   "echo x | xargs env BANCHI_MAIN=off ls"
 agent_refuses "heredoc piped to sh"         "cat <<E | sh
-PKMNSCAN_MAIN=off ls
+BANCHI_MAIN=off ls
 E"
-agent_refuses "make command-line variable"  "make status PKMNSCAN_MAIN=off"
+agent_refuses "make command-line variable"  "make status BANCHI_MAIN=off"
 agent_allows  "a heredoc piped to a non-shell" "cat <<E | wc -l
-PKMNSCAN_MAIN=off
+BANCHI_MAIN=off
 E"
-agent_allows  "a quoted mention in git commit" "git status -m 'PKMNSCAN_TREE=off'"
-agent_allows  "an eval of a mention"        "eval 'echo PKMNSCAN_TREE=off'"
+agent_allows  "a quoted mention in git commit" "git status -m 'BANCHI_TREE=off'"
+agent_allows  "an eval of a mention"        "eval 'echo BANCHI_TREE=off'"
 agent_allows  "make without a switch"       "make status ARGS=x"
-judge_agent "$tmp/main" "echo PKMNSCAN_TREE=off"
+judge_agent "$tmp/main" "echo BANCHI_TREE=off"
 if [ $? -eq 0 ]; then ok "a mere mention is allowed"; else bad "a mention was refused"; fi
-judge_agent "$tmp/main" "PKMNSCAN_GUARD_SCOPE=all echo hi"
-if [ $? -eq 0 ]; then ok "a run-everything scope switch is allowed"; else bad "PKMNSCAN_GUARD_SCOPE=all was refused"; fi
+judge_agent "$tmp/main" "BANCHI_GUARD_SCOPE=all echo hi"
+if [ $? -eq 0 ]; then ok "a run-everything scope switch is allowed"; else bad "BANCHI_GUARD_SCOPE=all was refused"; fi
 
 echo ""
-echo "  the escape hatches, in both of PKMNSCAN_KILL's two forms"
+echo "  the escape hatches, in both of BANCHI_KILL's two forms"
 
-allows "checkout, inline" "$tmp/main" "PKMNSCAN_CHECKOUT=off git checkout work.py"
-allows "wait, inline"     "$tmp/main" "PKMNSCAN_WAIT=off until ! pgrep -f x; do sleep 5; done"
-allows "tree, inline"     "$WT" "PKMNSCAN_TREE=off cat > $tmp/main/work.py"
+allows "checkout, inline" "$tmp/main" "BANCHI_CHECKOUT=off git checkout work.py"
+allows "wait, inline"     "$tmp/main" "BANCHI_WAIT=off until ! pgrep -f x; do sleep 5; done"
+allows "tree, inline"     "$WT" "BANCHI_TREE=off cat > $tmp/main/work.py"
 
 # THE PUSH HATCH IS TESTED AGAINST THE MISMATCHED BRANCH, not against `main` — `main` never
 # had a tracked upstream configured in this fixture, so the command would pass with or
 # without the hatch and the test would prove nothing about the hatch itself.
 (cd "$tmp/main" && git checkout -q pr-h-readings-table-local 2>/dev/null)
-allows "push, inline"    "$tmp/main" "PKMNSCAN_PUSH=off git push origin HEAD"
+allows "push, inline"    "$tmp/main" "BANCHI_PUSH=off git push origin HEAD"
 # A HATCH IS HONOURED ONLY AS A REAL ASSIGNMENT: a mention never lifts, so every lift is logged.
 refuses "a hatch in a trailing comment does not lift" \
-  "$tmp/main" "git push origin HEAD # PKMNSCAN_PUSH=off"
+  "$tmp/main" "git push origin HEAD # BANCHI_PUSH=off"
 refuses "a hatch echoed before the command does not lift" \
-  "$tmp/main" "echo PKMNSCAN_PUSH=off; git push origin HEAD"
-b="$(cat "$tmp/main/.git/pkmnscan-hatches.log" | wc -l | tr -d ' ')"
-judge "$tmp/main" "PKMNSCAN_PUSH=off git push origin HEAD"
-a="$(cat "$tmp/main/.git/pkmnscan-hatches.log" | wc -l | tr -d ' ')"
+  "$tmp/main" "echo BANCHI_PUSH=off; git push origin HEAD"
+b="$(cat "$tmp/main/.git/banchi-hatches.log" | wc -l | tr -d ' ')"
+judge "$tmp/main" "BANCHI_PUSH=off git push origin HEAD"
+a="$(cat "$tmp/main/.git/banchi-hatches.log" | wc -l | tr -d ' ')"
 if [ "$a" = "$((b + 1))" ]; then ok "a real push hatch lifts AND logs exactly one line"
 else bad "the push hatch wrote $((a - b)) log line(s)"; fi
 # A `-c` SCRIPT IS READ LIKE A BARE COMMAND: the shared reading unwraps it once.
@@ -1168,35 +1168,35 @@ refuses "sh -c with -u reads the push inside" \
 allows "bash -c with the branch's own name is fine" \
   "$tmp/main" "bash -c 'git push origin HEAD:pr-h-readings-table-local'"
 refuses "a hatch merely echoed inside -c does not lift" \
-  "$tmp/main" "bash -c 'echo PKMNSCAN_PUSH=off; git push origin HEAD'"
-b="$(cat "$tmp/main/.git/pkmnscan-hatches.log" | wc -l | tr -d ' ')"
-judge "$tmp/main" "bash -c 'PKMNSCAN_PUSH=off git push origin HEAD'"
-a="$(cat "$tmp/main/.git/pkmnscan-hatches.log" | wc -l | tr -d ' ')"
+  "$tmp/main" "bash -c 'echo BANCHI_PUSH=off; git push origin HEAD'"
+b="$(cat "$tmp/main/.git/banchi-hatches.log" | wc -l | tr -d ' ')"
+judge "$tmp/main" "bash -c 'BANCHI_PUSH=off git push origin HEAD'"
+a="$(cat "$tmp/main/.git/banchi-hatches.log" | wc -l | tr -d ' ')"
 if [ "$a" = "$((b + 1))" ] && [ -z "$out" ]; then ok "a hatch inside -c lifts AND logs exactly one line"
 else bad "the -c hatch wrote $((a - b)) log line(s), out=[$out]"; fi
 (cd "$tmp/main" && git checkout -q main 2>/dev/null)
 
-allows "stash, inline"   "$tmp/main" "PKMNSCAN_STASH=off git stash pop"
-hatchlog="$tmp/main/.git/pkmnscan-hatches.log"
+allows "stash, inline"   "$tmp/main" "BANCHI_STASH=off git stash pop"
+hatchlog="$tmp/main/.git/banchi-hatches.log"
 before="$(cat "$hatchlog" 2>/dev/null | wc -l | tr -d ' ')"
 judge "$tmp/main" "git status --porcelain"
-judge "$tmp/main" "echo PKMNSCAN_STASH=offish PKMNSCAN_x=on"
+judge "$tmp/main" "echo BANCHI_STASH=offish BANCHI_x=on"
 for mention in \
-  "grep -n 'PKMNSCAN_TREE=off' README.md" \
-  "echo PKMNSCAN_TREE=off" \
-  "git commit -m 'doc: PKMNSCAN_PUSH=off is the hatch'" \
+  "grep -n 'BANCHI_TREE=off' README.md" \
+  "echo BANCHI_TREE=off" \
+  "git commit -m 'doc: BANCHI_PUSH=off is the hatch'" \
   "cat <<EOF
-PKMNSCAN_STASH=off
+BANCHI_STASH=off
 EOF" \
-  "# PKMNSCAN_TREE=off" \
-  "printf 'PKMNSCAN_WAIT=off'" \
+  "# BANCHI_TREE=off" \
+  "printf 'BANCHI_WAIT=off'" \
 ; do
   judge "$tmp/main" "$mention"
 done
 after_plain="$(cat "$hatchlog" 2>/dev/null | wc -l | tr -d ' ')"
 if [ "$before" = "$after_plain" ]; then ok "a plain command and six MENTIONS of a hatch write no hatch-log line"
 else bad "a plain command or a mention wrote $((after_plain - before)) hatch-log line(s)"; fi
-for real in "PKMNSCAN_PUSH=off git status" "env PKMNSCAN_STASH=off ls" "PKMNSCAN_WAIT=off echo hi"; do
+for real in "BANCHI_PUSH=off git status" "env BANCHI_STASH=off ls" "BANCHI_WAIT=off echo hi"; do
   b="$(cat "$hatchlog" | wc -l | tr -d ' ')"
   judge "$tmp/main" "$real"
   a="$(cat "$hatchlog" | wc -l | tr -d ' ')"
@@ -1204,15 +1204,15 @@ for real in "PKMNSCAN_PUSH=off git status" "env PKMNSCAN_STASH=off ls" "PKMNSCAN
   else bad "a real setting wrote $((a - b)) line(s): $real"; fi
 done
 after_plain="$(cat "$hatchlog" | wc -l | tr -d ' ')"
-judge "$tmp/main" "export PKMNSCAN_RESET=off; git status --porcelain"
+judge "$tmp/main" "export BANCHI_RESET=off; git status --porcelain"
 after_hatch="$(cat "$hatchlog" 2>/dev/null | wc -l | tr -d ' ')"
 if [ "$after_hatch" = "$((after_plain + 1))" ]; then ok "a hatch command writes exactly one hatch-log line"
 else bad "a hatch command wrote $((after_hatch - after_plain)) hatch-log lines"; fi
 case "$(tail -1 "$hatchlog" 2>/dev/null)" in
-  *"	PKMNSCAN_RESET	"*"	"*"export PKMNSCAN_RESET=off"*) ok "the line names the hatch, checkout, branch and command" ;;
+  *"	BANCHI_RESET	"*"	"*"export BANCHI_RESET=off"*) ok "the line names the hatch, checkout, branch and command" ;;
   *) bad "the hatch-log line is malformed: $(tail -1 "$hatchlog" 2>/dev/null)" ;; esac
-allows "reset, inline"   "$tmp/main" "PKMNSCAN_RESET=off git reset --hard"
-allows "narrate, inline" "$tmp/main" "PKMNSCAN_NARRATE=off make merge ARGS=\"437 --confirm\" | tail -5"
+allows "reset, inline"   "$tmp/main" "BANCHI_RESET=off git reset --hard"
+allows "narrate, inline" "$tmp/main" "BANCHI_NARRATE=off make merge ARGS=\"437 --confirm\" | tail -5"
 
 hatch_env() {   # hatch_env <name> <cwd> <command>
   out="$(printf '%s' "$3" \
@@ -1220,24 +1220,24 @@ hatch_env() {   # hatch_env <name> <cwd> <command>
         | env "$1=off" python3 "$GUARD" --hook 2>&1)"
   if [ $? -eq 0 ]; then ok "$1=off in the environment"; else bad "$1=off in the environment did not disarm it"; fi
 }
-hatch_env PKMNSCAN_CHECKOUT "$tmp/main" "git checkout work.py"
-hatch_env PKMNSCAN_WAIT     "$tmp/main" "until ! pgrep -f x; do sleep 5; done"
-hatch_env PKMNSCAN_PUSH     "$tmp/main" "git push origin HEAD"
-hatch_env PKMNSCAN_STASH    "$tmp/main" "git stash pop"
-hatch_env PKMNSCAN_RESET    "$tmp/main" "git reset --hard"
-hatch_env PKMNSCAN_NARRATE  "$tmp/main" "make merge ARGS=\"437 --confirm\" | tail -5"
+hatch_env BANCHI_CHECKOUT "$tmp/main" "git checkout work.py"
+hatch_env BANCHI_WAIT     "$tmp/main" "until ! pgrep -f x; do sleep 5; done"
+hatch_env BANCHI_PUSH     "$tmp/main" "git push origin HEAD"
+hatch_env BANCHI_STASH    "$tmp/main" "git stash pop"
+hatch_env BANCHI_RESET    "$tmp/main" "git reset --hard"
+hatch_env BANCHI_NARRATE  "$tmp/main" "make merge ARGS=\"437 --confirm\" | tail -5"
 (cd "$tmp/main" && git checkout -q main 2>/dev/null)
 
 out="$(CWD="$WT" TARGET="$tmp/main/work.py" python3 -c 'import json,os; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"file_path":os.environ["TARGET"]}}))' \
-      | env PKMNSCAN_TREE=off python3 "$GUARD" --hook 2>&1)"
-if [ $? -eq 0 ]; then ok "PKMNSCAN_TREE=off in the environment"; else bad "PKMNSCAN_TREE=off in the environment did not disarm it"; fi
+      | env BANCHI_TREE=off python3 "$GUARD" --hook 2>&1)"
+if [ $? -eq 0 ]; then ok "BANCHI_TREE=off in the environment"; else bad "BANCHI_TREE=off in the environment did not disarm it"; fi
 
 # EVERY CLAUSE HAS A HATCH AND EVERY HATCH IS PRINTED. The table is read rather than retyped,
 # so a clause added without one fails here instead of shipping unescapable.
 count="$(python3 "$GUARD" --clauses | wc -l | tr -d ' ')"
 if [ "$count" = "7" ]; then ok "seven clauses, seven hatches, read from the guard's own table"
 else bad "the clause table has $count rows; this file scores seven"; fi
-if python3 "$GUARD" --clauses | grep -qv "PKMNSCAN_.*=off"; then
+if python3 "$GUARD" --clauses | grep -qv "BANCHI_.*=off"; then
   bad "a clause in the table names no escape hatch"
 else
   ok "no clause in the table is missing its hatch"
@@ -1360,10 +1360,10 @@ echo "  the refusal log"
 . "$LIBDIR/refusal-log-assert.sh"
 rl="$tmp/refusals.log"
 rl_payload='{"session_id":"sess-1","cwd":"'"$tmp"'","tool_input":{"command":"until ! pgrep -f x; do sleep 5; done"}}'
-rl_out="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$rl" python3 "$GUARD" --hook 2>&1)"; rl_status=$?
+rl_out="$(printf '%s' "$rl_payload" | BANCHI_REFUSAL_LOG="$rl" python3 "$GUARD" --hook 2>&1)"; rl_status=$?
 [ $rl_status -eq 2 ] && ok "a refused command still exits 2" || bad "the logged refusal exited $rl_status"
 why="$(refusal_line_ok "$rl" "guard-shell:wait" "sess-1")" && ok "…and writes one well-formed line" || bad "the refusal log line: $why"
-rl_bad="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" python3 "$GUARD" --hook 2>&1)"; rl_bad_status=$?
+rl_bad="$(printf '%s' "$rl_payload" | BANCHI_REFUSAL_LOG="$tmp/no/such/dir/log" python3 "$GUARD" --hook 2>&1)"; rl_bad_status=$?
 if [ $rl_bad_status -eq 2 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
 else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
 

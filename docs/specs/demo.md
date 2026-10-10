@@ -68,7 +68,7 @@ There are three checks, each on a different artifact:
   a throwaway store with a synthetic symbol.
 - `scripts/githooks/pre-commit` runs `scripts/qr-clear-check.py` on every staged image (D303). It
   reads the staged blob and not the working-tree file. It refuses on the first decode and names the
-  file. `PKMNSCAN_QR=off` bypasses it once.
+  file. `BANCHI_QR=off` bypasses it once.
 
 ## 4. The seed is deterministic, and refuses a real store
 
@@ -76,13 +76,13 @@ There are three checks, each on a different artifact:
 offset from one fixed clock (`NOW`). An unchanged tree rebuilds the store byte-identically.
 
 It refuses to touch a store that already holds cards unless `--force` says so. `make demo-seed`
-passes `--force` with `PKMNSCAN_HOME=$(DEMO_HOME)` (`DEMO_HOME ?= demo`). An unset `PKMNSCAN_HOME`
+passes `--force` with `BANCHI_HOME=$(DEMO_HOME)` (`DEMO_HOME ?= demo`). An unset `BANCHI_HOME`
 means the checkout's own store, which is somebody's real one (D43).
 
 Identification is the one step of the real pipeline that costs money, so it is the only step the
-seed fakes. It writes `identifications.json` in the shape a real `pkmnscan identify` run leaves.
+seed fakes. It writes `identifications.json` in the shape a real `banchi identify` run leaves.
 `cli/resolve.py` documents that shape as a supported input. Everything after runs for real.
-`make demo-seed` runs `./pkmnscan join` against `fixtures/riftbound_export_untouched.csv`, so the
+`make demo-seed` runs `./banchi join` against `fixtures/riftbound_export_untouched.csv`, so the
 catalog lookup, the variant ladder and the cap arithmetic are the pipeline's own output.
 
 ## 5. The bundle, and why it never touches the owner's server
@@ -227,7 +227,7 @@ the honest User-Agent (D216). The owner allows the browser signature from the ow
 only. So CI never fetches a history. `make demo-histories` records them on the owner's Mac, when the
 owner chooses:
 
-    PKMNSCAN_TCG_USER_AGENT="<the browser's User-Agent>" make demo-histories
+    BANCHI_TCG_USER_AGENT="<the browser's User-Agent>" make demo-histories
 
 - It reads every demo card that a committed export can place, over all four ranges
   (`pipeline/pricehistory.py`). It writes a new directory, `fixtures/demo-price-history/<date>/`,
@@ -237,7 +237,7 @@ owner chooses:
 - Before it writes, every key of every answer is checked against an allow list of public market
   figures (`scripts/demo-histories.py`'s `ALLOWED_RESULT` and `ALLOWED_BUCKET`). A key outside the
   list refuses the whole run. The User-Agent is never written.
-- Without `PKMNSCAN_TCG_USER_AGENT` it refuses and names the variable.
+- Without `BANCHI_TCG_USER_AGENT` it refuses and names the variable.
 
 The 40 Pokemon cards in `demo-assets/` have no row in a committed export, so none of them has a
 history.
@@ -318,7 +318,7 @@ the artifact: `gh run download <id> -R shivinate7/banchi -n github-pages -D <dir
 
 ## 12. A second, small, real box — opt-in, additive, and off by default
 
-`make demo-seed` on its own is unchanged by this section. `PKMNSCAN_DEMO_EXTRA_REAL=1` is a
+`make demo-seed` on its own is unchanged by this section. `BANCHI_DEMO_EXTRA_REAL=1` is a
 target-specific Make variable that `demo-record` sets. It makes `scripts/demo-seed.py`'s
 `add_extra_real_boxes()` run. That function runs in its own `store.write()`, after the deterministic
 base store is committed. It only adds: one box, its cards, and a listing row per SKU. No order is
@@ -374,7 +374,7 @@ repeat it.
 **The mirror refreshes daily and merges itself.** `make demo-mirror-agent` installs a launchd job
 on the owner's Mac (main tree only). `scripts/demo-mirror-daily.py` cuts a throwaway worktree from
 fresh origin/main, runs `demo-mirror`, and stops quietly when `demo-assets/mirror/` is unchanged.
-A scrub failure or any error publishes nothing and logs why to `~/.pkmnscan/demo-mirror-daily.log`.
+A scrub failure or any error publishes nothing and logs why to `~/.banchi/demo-mirror-daily.log`.
 Otherwise it opens a PR from `demo/mirror-refresh` and merges it on green CI, with no word asked.
 **A PR auto-merges on green CI only under three conditions** (D295, D42). Its head is
 `demo/mirror-refresh`. This script opened it after the scrub assert and the fence. Its whole diff

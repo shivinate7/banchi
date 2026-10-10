@@ -22,12 +22,12 @@ that have not sold here inside a window and have been listed longer than the win
 reports what each would be re-priced to. With `--write` it produces a **worklist**: the same
 rows, in export shape, with a price already proposed on every one.
 
-The operator edits the worklist or does not. `pkmnscan reprice apply` reads it back and writes
+The operator edits the worklist or does not. `banchi reprice apply` reads it back and writes
 **`import.csv`**, the file for TCGplayer's My Pricing.
 
 ```
-./pkmnscan reprice list  <my-pricing.csv> [--days N] [--percent P] [--write]
-./pkmnscan reprice apply <worklist.csv> [--corpus-revision <digest>] [--write]
+./banchi reprice list  <my-pricing.csv> [--days N] [--percent P] [--write]
+./banchi reprice apply <worklist.csv> [--corpus-revision <digest>] [--write]
 ```
 
 Both halves preview by default. `--write` also leaves a `survey.json` that holds every live
@@ -139,7 +139,7 @@ sales-velocity figure in this product, and this feature does not invent one.**
 
 The windows select by age and by sales. A window longer than the store's age selects nothing.
 That is a fact about the store and not about the feature. The counts of live, held and sold
-SKUs move with every export, so none is recorded here. Run `pkmnscan reprice list` on a
+SKUs move with every export, so none is recorded here. Run `banchi reprice list` on a
 current export to measure them.
 
 ## 5. The four files, and why the worklist is not the upload

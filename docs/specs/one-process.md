@@ -148,10 +148,10 @@ and the logs under `.serve/`.
 
 **`make dev` runs beside the supervisor.** `do_guard_foreground` refuses `make server` while this
 checkout's supervisor is up, because `:8000` is the supervisor's. It no longer refuses `make dev`.
-The supervisor does not hold the dev port. `PKMNSCAN_FOREGROUND=off` bypasses the guard.
+The supervisor does not hold the dev port. `BANCHI_FOREGROUND=off` bypasses the guard.
 
 **`make up` prints one link**, `http://localhost:<capture port>`, and the LAN name beside it when
-`PKMNSCAN_LAN_NAME` is set. **`make status`** reports the app's build: built, building, stale with a
+`BANCHI_LAN_NAME` is set. **`make status`** reports the app's build: built, building, stale with a
 failed build, or not built.
 
 **Proof, in `make serve-selftest`.** It runs against a throwaway checkout with a stub `app/`. The
@@ -185,7 +185,7 @@ Two things are keyed by origin in Chrome and both reset once:
 `sessionStorage` is per tab. Reinstall between shifts and not mid-capture, for the `captureId`
 reason D27 names.
 
-The LAN URL is `pkmnscan.lan:<capture port>`. The owner's DNS record names the host and not the
+The LAN URL is `banchi.lan:<capture port>`. The owner's DNS record names the host and not the
 port. `scripts/lan-check.py` presses the app on the capture port. A phone's home-screen bookmark
 moves to that port. No dock app has ever been installed (D108). Installing one from the capture
 port is optional, and D108's manifest is already relative.
@@ -200,12 +200,12 @@ port is optional, and D108's manifest is already relative.
 - `make screenshot` renders `make dev`'s port.
 - `make demo-record` spawns its own capture server. `make demo-static` builds under `DEMO_BASE` to
   `dist-demo/`, which this never reads.
-- The wire, the store, the packages, `PKMNSCAN_HOME` and the ports' derivation.
+- The wire, the store, the packages, `BANCHI_HOME` and the ports' derivation.
 
 ## 7. The frozen form, deferred
 
 D138 defers a promoted snapshot until a second person needs the app. It would be a release target
-that writes `app/dist/` plus the Python packages into a directory with its own `PKMNSCAN_HOME`. The
+that writes `app/dist/` plus the Python packages into a directory with its own `BANCHI_HOME`. The
 launch agent would point at that directory and not at the checkout. §3 and §4 are prerequisites for
 it. `server/capture_server.py`'s `APP_DIST` is a call-time read, and not an environment variable,
 because only this form would want one. No such person exists, so nothing plans it further.

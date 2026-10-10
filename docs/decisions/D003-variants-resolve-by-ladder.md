@@ -35,7 +35,7 @@ The two review reasons stay distinct so the queue can be triaged: a run full of 
 
 ### Rung 3 can be switched off for a run, and box 2 is why
 
-The owner's ruling, 2026-08-24; `pkmnscan join --bypass`. The paragraph above kept rung 3 on the argument that a 30% false-positive rate is still cheaper than one wrong listing. At 544 cards with the owner supplying ground truth, the rate was **42% — 230 cards contradicting a claim that was right every single time** — and the same photograph read differently at two downscales on 19 of 40 cards. the gates corpus's `GateB-note1` record ("Box 2") holds the numbers. A cross-check that is wrong more often than the thing it checks has stopped being a cross-check, and 230 review taps against a claim the operator already knows is correct is not a cost the ladder is entitled to impose.
+The owner's ruling, 2026-08-24; `banchi join --bypass`. The paragraph above kept rung 3 on the argument that a 30% false-positive rate is still cheaper than one wrong listing. At 544 cards with the owner supplying ground truth, the rate was **42% — 230 cards contradicting a claim that was right every single time** — and the same photograph read differently at two downscales on 19 of 40 cards. the gates corpus's `GateB-note1` record ("Box 2") holds the numbers. A cross-check that is wrong more often than the thing it checks has stopped being a cross-check, and 230 review taps against a claim the operator already knows is correct is not a cost the ladder is entitled to impose.
 
 **The flag is one rule: where a finish claim exists, detection may not contradict it — but it may still choose inside it.** Both halves matter. Suppressing rung 3 wholesale would throw away its real work, which is picking between the members of a multi-finish claim; suppressing only its power to contradict is the narrowest change that answers the measurement.
 
@@ -47,7 +47,7 @@ The owner's ruling, 2026-08-24; `pkmnscan join --bypass`. The paragraph above ke
 
 ### The flag is per-run, so every later command has to read it back
 
-**And `emit` did not, from the day the flag shipped** — found by the owner 2026-08-30, pressing *Write the import files* on a box they had joined. `cli/cmd_emit.py` does not read what `join` decided; it re-derives it, calling `resolve.load` a second time. That call passed no `trust_claim`, so it walked the ladder with rung 3 LIVE over a run joined with the flag — inventing a queued position for every bypassed card, finding none of them in either queue file because join deliberately never wrote them, and refusing with *run `pkmnscan join` first* at an operator who had. Re-running join could not clear it, because join was right.
+**And `emit` did not, from the day the flag shipped** — found by the owner 2026-08-30, pressing *Write the import files* on a box they had joined. `cli/cmd_emit.py` does not read what `join` decided; it re-derives it, calling `resolve.load` a second time. That call passed no `trust_claim`, so it walked the ladder with rung 3 LIVE over a run joined with the flag — inventing a queued position for every bypassed card, finding none of them in either queue file because join deliberately never wrote them, and refusing with *run `banchi join` first* at an operator who had. Re-running join could not clear it, because join was right.
 
 **Measured on box 1: `bypassed: 39` in the manifest, 39 positions invented, 39 absent from disk.** The refusal's first ten positions matched what the screen printed character for character.
 

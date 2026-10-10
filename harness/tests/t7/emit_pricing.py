@@ -66,7 +66,7 @@ def check_emit_claim_decides(checks: Checks) -> None:
     That case guarded a seam: `emit` re-derives the run rather than reading it, and for six
     days it re-derived with rung 3 live over a run joined with the flag — inventing a queued
     position for every bypassed card, finding none of them on disk, and refusing with *"Run
-    `pkmnscan join` first"* at an operator who had (measured on the owner's box 1: 39 of 39).
+    `banchi join` first"* at an operator who had (measured on the owner's box 1: 39 of 39).
     The fix read the flag off the manifest. The amendment deletes the flag, so there is nothing
     left for `emit` to forget; what remains to assert is that the two commands still agree,
     and agree on the CLAIM's row rather than the photograph's.
@@ -597,7 +597,7 @@ def check_threshold_and_file_shape(checks: Checks) -> None:
 
 
 def check_prices_adopt(checks: Checks) -> None:
-    """`pkmnscan prices adopt` folds, RETIRES, and the two commands refuse until it has (D86, amended).
+    """`banchi prices adopt` folds, RETIRES, and the two commands refuse until it has (D86, amended).
 
     THE REFUSAL WAS GATED ON AN EMPTY CORPUS, AND ON THE OWNER'S STORE EIGHT FILES SAT BEHIND
     IT. `join` and `emit` refused a run carrying `decisions.json` only while `inventory/
@@ -874,7 +874,7 @@ def check_prices_adopt(checks: Checks) -> None:
 
 
 def check_readings_adopt_cli(checks: Checks) -> None:
-    """`pkmnscan readings adopt` and `readings show`, through the real argparse dispatch
+    """`banchi readings adopt` and `readings show`, through the real argparse dispatch
     (D189).
 
     THE WALK ITSELF IS PROVED BY `make readings-selftest` — an independent reimplementation
@@ -1018,9 +1018,9 @@ def check_readings_writer_after_live_export(checks: Checks) -> None:
     checks.note("READINGS WRITER — a live fetch refreshes the cache with no adopt press")
 
     keys = (
-        "PKMNSCAN_TCG_EXPORT_URL",
+        "BANCHI_TCG_EXPORT_URL",
         "TCGPLAYER_STORE_COOKIE",
-        "PKMNSCAN_TCG_USER_AGENT",
+        "BANCHI_TCG_USER_AGENT",
         envfile.FROM_FILE_ENV,
     )
     previous = {name: os.environ.get(name) for name in keys}
@@ -1043,13 +1043,13 @@ def check_readings_writer_after_live_export(checks: Checks) -> None:
     portal = http.server.HTTPServer(("127.0.0.1", 0), Portal)
     portal_thread = _spawn_server(portal)
 
-    os.environ["PKMNSCAN_TCG_EXPORT_URL"] = (
+    os.environ["BANCHI_TCG_EXPORT_URL"] = (
         f"http://127.0.0.1:{portal.server_address[1]}/admin/pricing/downloadexportcsv"
     )
     os.environ["TCGPLAYER_STORE_COOKIE"] = (
         "TCGAuthTicket_Production=t7-readings-not-a-real-session"
     )
-    os.environ.pop("PKMNSCAN_TCG_USER_AGENT", None)
+    os.environ.pop("BANCHI_TCG_USER_AGENT", None)
 
     # THE SAME HERMETIC DANCE `check_export_fetch` DOES, for the same reason: an unpolluted
     # `envfile._from_file` is what makes `get_live` honour the variables set above rather than
@@ -1267,7 +1267,7 @@ def check_live_reconcile(checks: Checks) -> None:
         checks.ok(
             "DRY RUN" in said,
             "IT PREVIEWS BY DEFAULT. It moves quantities the cap arithmetic reads, over every "
-            "SKU at once — `pkmnscan prices adopt`'s reason, and a settlement nobody watched "
+            "SKU at once — `banchi prices adopt`'s reason, and a settlement nobody watched "
             "is how a wrong number becomes the new floor",
         )
         unchanged = Store().read().inventory.listings
@@ -1281,7 +1281,7 @@ def check_live_reconcile(checks: Checks) -> None:
             "the stranger row is reported by SKU. `seen` is every SKU a CARD carries and is "
             "deliberately wider than the listing ledger: a withheld or sub-threshold card has "
             "a SKU and no listing, and judging against the ledger alone would accuse the "
-            "operator of listing it outside pkmnscan the moment it went live",
+            "operator of listing it outside banchi the moment it went live",
         )
 
         said = command(checks, "reconcile", "--live", str(live_path), "--write")
@@ -2494,7 +2494,7 @@ def check_pipeline_routes(checks: Checks) -> None:
             # `Popen` IS MONKEYPATCHED AND THE REAL ROUTE IS DRIVEN, which is the shape the
             # `_spawn` case below already argues for: a fixture that hands the answer to the
             # assertion cannot see the code stop doing the work. Nothing is submitted and no
-            # money is spent — the patched child never executes `pkmnscan`.
+            # money is spent — the patched child never executes `banchi`.
             spawned: List[list] = []
 
             class _Fake:
@@ -2997,7 +2997,7 @@ def check_pipeline_routes(checks: Checks) -> None:
             # ------------------------------------------------- a real run directory, read
             made = runs.create("box3")
             made.set(capture_dir=str(box_dir), scope={"box": 3, "whole_box": True})
-            (made.directory / "console.log").write_text("$ pkmnscan identify\nphotographs 2\n")
+            (made.directory / "console.log").write_text("$ banchi identify\nphotographs 2\n")
             (made.directory / "import-listed.csv").write_text("TCGplayer Id,Add to Quantity\n1,2\n")
 
             status, body, _ = request(port, "GET", f"/pipeline/runs/{made.directory.name}")

@@ -1,4 +1,4 @@
-"""The two-source market-reading walk `pkmnscan readings adopt` runs (D189).
+"""The two-source market-reading walk `banchi readings adopt` runs (D189).
 
 THIS IS THE ARBITRATION `server/pipeline_routes.py:_readings()` USED TO RUN ON EVERY
 `GET /pipeline/value`, MOVED HERE UNCHANGED. Two sources, compared on a clock rather than on
@@ -29,7 +29,7 @@ reading is legible as a thin reading rather than as a store with no valuable car
 
 WHY THIS IS A PIPELINE MODULE AND NOT A SERVER ONE. `server/` sits above `cli/`, `pipeline/`
 and `store/` in this repo's layering — it imports them, never the reverse — and
-`pkmnscan readings adopt` (`cli/cmd_readings.py`) has to run this walk with no server in
+`banchi readings adopt` (`cli/cmd_readings.py`) has to run this walk with no server in
 sight. So it lives here, one layer down from where it used to run, and
 `server/pipeline_routes.py` no longer needs any of this: `_readings()` there is a plain
 `SELECT` against the table this walk fills.

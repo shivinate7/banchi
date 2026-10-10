@@ -145,7 +145,7 @@ rebuilt the fixture with
 real Pokemon-shaped names, suffixes (`ex`, `V`, `VMAX`, `VSTAR`), numbers, set names and a
 SKU prefix digit. It added a FOURTH column: the owner's own live store, copied read-only
 (`sqlite3 store.sqlite ".backup"`, WAL-safe, the original never opened for writing) into a
-throwaway `PKMNSCAN_HOME`. Four measurement methods, each labeled. An in-process call
+throwaway `BANCHI_HOME`. Four measurement methods, each labeled. An in-process call
 timed directly, and three real HTTP loopback columns (20 requests per shape, JSON encoding
 included, matching UX-263's own method) against a running `CaptureServer`:
 

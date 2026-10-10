@@ -83,8 +83,8 @@ BUILT in the locating lane, server half:
 - The backfill is a press that previews first:
 
   ```
-  ./pkmnscan boxes names            # preview: which box gets which name
-  ./pkmnscan boxes names --write    # one transaction; a second run changes nothing
+  ./banchi boxes names            # preview: which box gets which name
+  ./banchi boxes names --write    # one transaction; a second run changes nothing
   ```
 
 - A cleared name stores the default name `Box <count+1>`, the next free one. It is never

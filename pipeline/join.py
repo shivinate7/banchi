@@ -2402,7 +2402,7 @@ class SkuMatch:
         # no copy is silently maxed or summed across two readings any more (D7). `pending`
         # is `nothing_to_add`'s own name for the same gap `_cap_pending` tests.
         #
-        # THE REMEDY IS WORDED AS THE SCREEN'S OWN ACTION (D196, on review). `pkmnscan
+        # THE REMEDY IS WORDED AS THE SCREEN'S OWN ACTION (D196, on review). `banchi
         # reconcile --live` is the CLI door to it; `#/pricing`'s Live tab has its own door,
         # the "Read what is live" press (`app/src/Pricing.tsx:readAgain`, over
         # `reconcileLive`). Naming the CLI flag on a wire field a screen renders would put a

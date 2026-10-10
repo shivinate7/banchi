@@ -1,4 +1,4 @@
-"""`pkmnscan reprice` — the live listings that are not selling, marked down and pushed back.
+"""`banchi reprice` — the live listings that are not selling, marked down and pushed back.
 
 TWO PRESSES, BECAUSE THE OPERATOR ASKED FOR TWO. *"Export my live inventory back out (for
 cards I have listed and aren't selling) and be able to mass re-edit the prices down (and then
@@ -12,7 +12,7 @@ listing in place and `Add to Quantity` is a DELTA against the quantity TCGplayer
 holds. So a markdown is a price-only push, `Add to Quantity` is 0 on every row of every file
 this command writes, and the quantity is not a variable anywhere in this path.
 
-BOTH HALVES PREVIEW BY DEFAULT, for `pkmnscan prices adopt`'s reason and one more. The reason
+BOTH HALVES PREVIEW BY DEFAULT, for `banchi prices adopt`'s reason and one more. The reason
 it shares: this moves numbers the operator cannot see the effect of until they are live. The
 reason it does not: `apply --write` is the last press before bytes leave for a marketplace,
 and the file it writes cannot be un-uploaded.
@@ -307,7 +307,7 @@ def _say_plan(plan, say, source, export, live_rows) -> None:
                 f"of any card")
             say("                 carrying the SKU. A floor on the listing's age, never the age "
                 "itself;")
-            say("                 `pkmnscan reconcile --live --write` gives those rows a real "
+            say("                 `banchi reconcile --live --write` gives those rows a real "
                 "one.")
         if undatable:
             say(f"                 {undatable} row(s) can be dated by neither and are reported "
@@ -605,7 +605,7 @@ def _list(args, say) -> int:
         say("")
         say(f"DRY RUN — nothing written. Re-run with --write to put the worklist in "
             f"{_markdowns_dir()}/,")
-        say("then edit its `TCG Marketplace Price` column and hand it to `pkmnscan reprice apply`.")
+        say("then edit its `TCG Marketplace Price` column and hand it to `banchi reprice apply`.")
         return 0
 
     try:
@@ -617,7 +617,7 @@ def _list(args, say) -> int:
     say(f"                 {directory / REPORT}")
     say("")
     say("Edit the worklist's `TCG Marketplace Price` column — or do not, the prices above are")
-    say(f"already in it — then: pkmnscan reprice apply {directory / WORKLIST}")
+    say(f"already in it — then: banchi reprice apply {directory / WORKLIST}")
     return 0
 
 

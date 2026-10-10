@@ -27,7 +27,7 @@ from typing import List, Tuple
 def replacements(repo_root: Path, home: Path) -> List[Tuple[str, str]]:
     """The prefixes to rewrite, longest first.
 
-    `home` before `repo_root`: `PKMNSCAN_HOME=demo` puts the demo store INSIDE the checkout,
+    `home` before `repo_root`: `BANCHI_HOME=demo` puts the demo store INSIDE the checkout,
     so the two share a prefix and the more specific one has to win or every demo path is
     rewritten as a checkout path.
     """

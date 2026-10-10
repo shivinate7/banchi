@@ -43,7 +43,7 @@ wish it were.
 NO SQLITE ANYWHERE HERE. `bind_sku`/`unbind_sku`/`record_identification` are pure methods
 over `Inventory`'s in-memory mapping and a `Skus` table built the same way — `store/skus.py`'s
 own `Skus(entries=Rows(Skus.ENTRIES, objects={...}))`, no `Store`, no `mktemp`, no
-`PKMNSCAN_HOME`. This lane changes no data on disk (§11's own line: "no (code only; lane 2's
+`BANCHI_HOME`. This lane changes no data on disk (§11's own line: "no (code only; lane 2's
 press writes the data)"), so nothing here should either.
 
 `number_strategy` is `games.get(game)["join_key"]`, resolved HERE and handed to `bind_sku`/

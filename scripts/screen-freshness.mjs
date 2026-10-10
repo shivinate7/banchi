@@ -2009,7 +2009,7 @@ function selfTest() {
       }`],
   ]
 
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pkmnscan-freshness.'))
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'banchi-freshness.'))
   try {
     console.log('\na stale write is flagged, and each idiom is recognised as ITSELF')
     cases.forEach(([label, expected, body], index) => {

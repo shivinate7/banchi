@@ -1,6 +1,6 @@
 # Batch script v2
 
-`./pkmnscan identify | join | emit | reconcile` is live code. Gate B put 53 real cards through
+`./banchi identify | join | emit | reconcile` is live code. Gate B put 53 real cards through
 all four commands and reconciled back with zero unmatched in either direction. `docs/GATES.md`'s
 build-order step 4 carries the run record.
 
@@ -37,11 +37,11 @@ There are four commands. A batch takes minutes to hours, and the pricing decisio
 human. One blocking command would put a person in the middle of a poll loop.
 
 ```
-pkmnscan identify   <capture-dir>   submit, wait, collect, cache. Costs money.
-pkmnscan join       <run-dir>       resolve against the export. Free, re-runnable.
-pkmnscan emit       <run-dir> ...   write the import CSV. Free, re-runnable.
-pkmnscan reconcile  <run-dir> <staged-export.csv>   confirm what TCGplayer staged.
-pkmnscan reconcile  --live <my-pricing.csv>         the whole store, both directions (D87).
+banchi identify   <capture-dir>   submit, wait, collect, cache. Costs money.
+banchi join       <run-dir>       resolve against the export. Free, re-runnable.
+banchi emit       <run-dir> ...   write the import CSV. Free, re-runnable.
+banchi reconcile  <run-dir> <staged-export.csv>   confirm what TCGplayer staged.
+banchi reconcile  --live <my-pricing.csv>         the whole store, both directions (D87).
                       Previews. --write settles `live`. Reachable on #/runs.
 ```
 

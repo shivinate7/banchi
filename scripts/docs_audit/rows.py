@@ -72,7 +72,7 @@ from .paths_commands import (
     check_line_anchors,
     check_make_targets,
     check_paths,
-    check_pkmnscan_commands,
+    check_banchi_commands,
     code_files,
     load_allowlist,
 )
@@ -179,7 +179,7 @@ ROWS: Tuple[AuditRow, ...] = (
     AuditRow("line anchors", 1, check_line_anchors, ("docs", "staged_code")),
     AuditRow("make targets", 1, check_make_targets, ("docs",)),
     AuditRow("commands roster", 1, check_commands_roster, ()),
-    AuditRow("pkmnscan commands", 1, check_pkmnscan_commands, ("docs", "all_docs")),
+    AuditRow("banchi commands", 1, check_banchi_commands, ("docs", "all_docs")),
     AuditRow("harness tests", 1, check_harness_tests, ("docs", "allowed")),
     AuditRow("pass criteria", 2, check_pass_criteria, ()),
     AuditRow("criteria evidence", 2, check_criteria_evidence, ()),

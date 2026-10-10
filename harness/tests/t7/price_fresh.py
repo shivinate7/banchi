@@ -97,7 +97,7 @@ def world(checks: Checks, *, extra_runs: int = 0, disjoint: bool = False):
     the same game follow, each in its own box. The portal's catalog answer has Dunsparce at `NOW`.
     The capture server listens on its own port; the portal on another. Both are torn down.
     """
-    keys = ("PKMNSCAN_TCG_EXPORT_URL", "TCGPLAYER_STORE_COOKIE", "PKMNSCAN_TCG_USER_AGENT", envfile.FROM_FILE_ENV)
+    keys = ("BANCHI_TCG_EXPORT_URL", "TCGPLAYER_STORE_COOKIE", "BANCHI_TCG_USER_AGENT", envfile.FROM_FILE_ENV)
     previous = {name: os.environ.get(name) for name in keys}
     stub = {
         "mode": "csv", "body": b"", "live_body": b"", "requests": [], "asked_sets": [], "asked_categories": [],
@@ -170,9 +170,9 @@ def world(checks: Checks, *, extra_runs: int = 0, disjoint: bool = False):
         with isolated_home() as home, hermetic():
             os.environ.pop(envfile.FROM_FILE_ENV, None)
             envfile._from_file.clear()
-            os.environ["PKMNSCAN_TCG_EXPORT_URL"] = f"http://127.0.0.1:{portal.server_address[1]}/admin/pricing/downloadexportcsv"
+            os.environ["BANCHI_TCG_EXPORT_URL"] = f"http://127.0.0.1:{portal.server_address[1]}/admin/pricing/downloadexportcsv"
             os.environ["TCGPLAYER_STORE_COOKIE"] = "TCGAuthTicket_Production=t7-not-a-real-session"
-            os.environ.pop("PKMNSCAN_TCG_USER_AGENT", None)
+            os.environ.pop("BANCHI_TCG_USER_AGENT", None)
 
             made = []
             cards = [(3, 1, "Dunsparce", "120/159", "normal"), (3, 2, "Articuno", "161", None)]

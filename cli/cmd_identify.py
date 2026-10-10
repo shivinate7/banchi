@@ -1,4 +1,4 @@
-"""`pkmnscan identify <capture-dir>` — the only command that costs money.
+"""`banchi identify <capture-dir>` — the only command that costs money.
 
 Because it costs money, everything that can be checked for free is checked first and
 printed before a single byte is submitted: card count, payload size, batch chunks, estimated
@@ -495,7 +495,7 @@ def _requests(items: List[Item], with_crops: bool, say) -> List[batch.ImageReque
                 # against the carve-out sentence telling it not to — which is rung 3's one
                 # signal being made more decisive exactly when it is wrong. Re-enable by
                 # passing `rarity_claim=item.capture.rarity_claim` here, and only with a
-                # rig-photo measurement that says otherwise; PKMNSCAN_T1_RARITY=1 is the
+                # rig-photo measurement that says otherwise; BANCHI_T1_RARITY=1 is the
                 # instrument.
                 rarity_claim=None,
                 regions=regions,
@@ -943,7 +943,7 @@ def run(args, say) -> int:
         return 1
     if not selection.named and not getattr(args, "all", False):
         # THE TERMINAL DEFAULT IS REFUSE-AND-NAME-THE-FLAG, and the route's is not, which is
-        # argued in `Selection.named`. `./pkmnscan identify "$DIR"` with `$DIR` unset used to be
+        # argued in `Selection.named`. `./banchi identify "$DIR"` with `$DIR` unset used to be
         # an argparse error; under a list positional it is an empty selection, and the one thing
         # this change must not do quietly is turn that typo into a paid store-wide submission.
         say("refused: this names no cards. Give a path, a selection flag, or `--all`.")
@@ -1892,5 +1892,5 @@ def run(args, say) -> int:
         # it gave them back, and `make submission-selftest` asserts both figures.
         say(f"claim           {released_keys} card(s) released ({claim.receipt})")
     say("")
-    say(f"next: pkmnscan join {run_dir.directory} --export <filtered-export.csv>")
+    say(f"next: banchi join {run_dir.directory} --export <filtered-export.csv>")
     return 0

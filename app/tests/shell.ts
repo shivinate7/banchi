@@ -119,7 +119,7 @@ const escaped = new WeakMap<Page, string[]>()
  *  semantics have moved once already (`*` stopped crossing `/` in 1.53).
  *
  *  THE HOST IS A WILDCARD BECAUSE `server.ts` FOLLOWS THE ADDRESS BAR — it composes its base
- *  from `location.hostname`, so the same page opened at `pkmnscan.lan` asks a different host on
+ *  from `location.hostname`, so the same page opened at `banchi.lan` asks a different host on
  *  the same port. The PORT is what identifies the capture server, and `devPort.ts` derives it
  *  from this checkout alone (D43). */
 const CAPTURE_ORIGIN = new RegExp(`^[a-z+.-]+://[^/]+:${CAPTURE_PORT}(/|$)`)
@@ -221,7 +221,7 @@ const CARDS = {
  *  guard built as a block-list of guessed endpoint names let a real TCGplayer import through.
  *
  *  THE PORT IS THE WHOLE TEST, for the reason `CAPTURE_ORIGIN` above gives: `server.ts`
- *  composes its base from `location.hostname`, so the same page opened at `pkmnscan.lan` asks
+ *  composes its base from `location.hostname`, so the same page opened at `banchi.lan` asks
  *  a different host on the same two ports, and both are still this Mac. A hostname allow-list
  *  would have to guess at that set; the ports are derived from this checkout (D43).
  *

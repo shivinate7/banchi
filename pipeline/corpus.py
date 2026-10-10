@@ -514,7 +514,7 @@ def revision(path: Optional[Path] = None) -> str:
 
     ONE IMPLEMENTATION, FOR BOTH WRITERS, AND THAT IS THE WHOLE REASON IT IS HERE. This was
     `server/pipeline_routes.py:_corpus_revision` and served the route alone, so `PUT /pricing`
-    was guarded against a stale write while `pkmnscan reprice apply` and `prices adopt` — which
+    was guarded against a stale write while `banchi reprice apply` and `prices adopt` — which
     read-modify-write the same file from a subprocess — were not. `cli/` may not import
     `server/`, so the guard could not be shared until it moved down here.
 

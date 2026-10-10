@@ -11,7 +11,7 @@ open database file" on a store whose WAL has been checkpointed away and its side
 removed, which is a normal, cold, fully-committed store, not a damaged one. `open_read_only`
 gives the same read-only, non-migrating guarantee without that failure. It reads
 `inventory/markdowns/*/receipt.txt` and `.../import.csv` as plain files, never through
-`cli/cmd_reprice.py`, and it runs no `pkmnscan` command of any kind.
+`cli/cmd_reprice.py`, and it runs no `banchi` command of any kind.
 
 WHAT THIS ANSWERS. Two questions the `events` ledger and the markdown folders can be asked
 today, before `price_postings` existed to answer them going forward:
@@ -22,7 +22,7 @@ today, before `price_postings` existed to answer them going forward:
   2. How many SKUs' prices can be read back off a markdown folder's own receipt?
 
 Usage: `python3 scripts/price-postings-recovery.py [path-to-inventory-dir]`
-Defaults to `~/Developer/pkmnscan/inventory`, the owner's real store.
+Defaults to `~/Developer/banchi/inventory`, the owner's real store.
 """
 
 from __future__ import annotations
@@ -110,7 +110,7 @@ def distinct_priced_skus(conn: sqlite3.Connection) -> int:
 
 def main() -> int:
     inventory_dir = Path(
-        sys.argv[1] if len(sys.argv) > 1 else Path.home() / "Developer" / "pkmnscan" / "inventory"
+        sys.argv[1] if len(sys.argv) > 1 else Path.home() / "Developer" / "banchi" / "inventory"
     )
     db_path = inventory_dir / "store.sqlite"
     if not db_path.is_file():

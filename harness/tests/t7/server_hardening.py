@@ -129,7 +129,7 @@ def check_concurrency(checks: Checks) -> None:
 
 @contextmanager
 def allowed_origins_env(value):
-    """Set (or clear) `PKMNSCAN_ALLOWED_ORIGINS`, restoring it on the way out.
+    """Set (or clear) `BANCHI_ALLOWED_ORIGINS`, restoring it on the way out.
 
     Restored rather than deleted for the reason `isolated_home` gives: six other tests share
     this process, and an origin list leaking out of here would be invisible until one of them
@@ -196,7 +196,7 @@ def check_origin_gate(checks: Checks) -> None:
       a refusal must change    the existing undo cases assert this about `undo_too_late` and
       NOTHING                  it matters more here, because the request that is refused is
                                the one a hostile page sent on purpose.
-      an ABSENT `Origin`       `curl`, `./pkmnscan` and this test send none, and a browser
+      an ABSENT `Origin`       `curl`, `./banchi` and this test send none, and a browser
       must still write         page cannot omit one. Tightening this to require the header
                                kills every command-line path in the project at once, and it
                                is exactly the change that looks like hardening.
@@ -215,8 +215,8 @@ def check_origin_gate(checks: Checks) -> None:
 
     checks.equal(
         capture_server.ORIGINS_ENV,
-        "PKMNSCAN_ALLOWED_ORIGINS",
-        "the env var is spelled PKMNSCAN_ALLOWED_ORIGINS — pinned here because the docs "
+        "BANCHI_ALLOWED_ORIGINS",
+        "the env var is spelled BANCHI_ALLOWED_ORIGINS — pinned here because the docs "
         "audit reconciles documented environment variables against real ones, and a rename "
         "would otherwise fail that check somewhere far from the code that caused it",
     )
@@ -258,7 +258,7 @@ def check_origin_gate(checks: Checks) -> None:
             "write D43 exists to prevent, arriving through the one control meant to stop "
             "it. Pointing one tree's app at another's is already deliberate "
             "(VITE_CAPTURE_SERVER) and takes the deliberate answer: name the origin in "
-            "PKMNSCAN_ALLOWED_ORIGINS",
+            "BANCHI_ALLOWED_ORIGINS",
         )
     else:
         checks.note(
@@ -357,7 +357,7 @@ def check_origin_gate(checks: Checks) -> None:
             checks.equal(
                 status,
                 201,
-                "A REQUEST WITH NO `Origin` STILL WRITES. `curl`, `./pkmnscan` and this "
+                "A REQUEST WITH NO `Origin` STILL WRITES. `curl`, `./banchi` and this "
                 "test send none, and a browser page cannot omit one — so requiring the "
                 "header would kill every command-line path in this project at once while "
                 "stopping nothing a page could do. Anything holding a shell here can open "
@@ -445,7 +445,7 @@ def check_origin_gate(checks: Checks) -> None:
                 checks.equal(
                     sorted(capture_server.allowed_origins()),
                     sorted(capture_server.DEFAULT_ALLOWED_ORIGINS + (lan,)),
-                    "PKMNSCAN_ALLOWED_ORIGINS EXTENDS the defaults rather than replacing "
+                    "BANCHI_ALLOWED_ORIGINS EXTENDS the defaults rather than replacing "
                     "them — rebuilding the whole list from an env var would let a typo "
                     "switch the protection off while looking like configuration. Case and "
                     "a trailing slash are folded, because that is what a human types",

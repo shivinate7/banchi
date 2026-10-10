@@ -55,7 +55,7 @@ for Claude Code, so `.claude/settings.json` no longer runs `scripts/reap.py --ho
 `scripts/guard-shell.py` with `GUARD_SHELL_SKIP=checkout,stash,reset`. Every other guard-shell entry sets `GUARD_SHELL_SKIP=` empty, so an inherited value never narrows Codex. Codex runs no shared guard and keeps
 all of them in full. `CODEX_ONLY` in `check_codex_hooks` names the one hook only Codex runs, and
 the row fails when Claude Code runs it again or Codex loses it. The row compares commands exactly, so the `GUARD_SHELL_SKIP` value on each entry is pinned.
-Claude Code runs `PKMNSCAN_SILENT_WRITE_ONLY=file,bash-c scripts/silent-write-guard.py --hook`.
+Claude Code runs `BANCHI_SILENT_WRITE_ONLY=file,bash-c scripts/silent-write-guard.py --hook`.
 That runs only the unread-file clause and the `bash -c` clause. The shared silent-write rule
 (claude-settings PR 257 and PR 264) covers the rest. Codex keeps the full hook. The row pins the
 prefix on the Claude entry and its absence on the Codex entry. It is a variable, not a flag.
@@ -87,7 +87,7 @@ covered by `--self-test`; the stale allowlist line removed; the `.gitignore` lin
 **RECORDED**: this entry, and the CLAUDE.md paragraph naming it.
 
 **NEITHER, left for the owner**: the three untracked copies in the main checkout
-(`~/Developer/pkmnscan/AGENTS.md`, its `.agents/skills/` mirror, and `.codex/`) are deleted
+(`~/Developer/banchi/AGENTS.md`, its `.agents/skills/` mirror, and `.codex/`) are deleted
 only after this change is merged and pulled there — deleting them from a worktree
 would not remove the main checkout's own untracked files, and doing it before the merge would
 leave that Mac's Codex session with nothing to read in between. `.codex/config.toml` is kept

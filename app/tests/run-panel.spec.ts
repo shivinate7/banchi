@@ -14,7 +14,7 @@ import { boxTitle } from '../src/kit/dataRules'
  * `CLAUDE.md`'s hard rule — "A ROUTE IS NOT A FEATURE. Nothing is built until it is reachable
  * from a screen" — was written after three tested routes turned out to have no control
  * anywhere. The pipeline was the larger instance of the same thing and nobody had counted it:
- * `./pkmnscan identify | join | emit | reconcile` has existed since step 4, has been through a
+ * `./banchi identify | join | emit | reconcile` has existed since step 4, has been through a
  * real 53-card run and a real 544-card run, and until now could only be reached by somebody
  * typing at a terminal. `docs/GATES.md` records what that cost — "the owner had no visibility
  * into emitted import files; their names exist only in CLI output the owner never sees when
@@ -1701,7 +1701,7 @@ test('a drawer is untickable, and the last one out leaves nothing to price', asy
 
 test('a box the send could not start is named, not swallowed', async ({ page }) => {
   await open(page, {
-    failed: [{ code: 'spawn_failed', message: 'Could not start `pkmnscan identify`' }],
+    failed: [{ code: 'spawn_failed', message: 'Could not start `banchi identify`' }],
   })
   await openComposer(page)
   await pickBox(page, 9)
@@ -3059,7 +3059,7 @@ test('rebind: the sheet previews on open, and Apply is absent until it answers',
   /* NOTHING ON SCREEN NAMES A COMMAND, A PATH OR A DECISION NUMBER (D196/no mechanism on
      screen) — the owner's 2026-09-13 ruling widened to this sheet specifically. */
   const text = (await sheet.innerText()).toLowerCase()
-  expect(text).not.toContain('pkmnscan')
+  expect(text).not.toContain('banchi')
   expect(text).not.toContain('d165')
   expect(text).not.toContain('/logs/')
 

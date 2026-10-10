@@ -25,7 +25,7 @@ toast never moves content the person did not touch.
 ## 2. How the audit measured
 
 - **Server.** This checkout's own `make up` on port 8271, over `make demo-seed`'s store
-  (`PKMNSCAN_HOME=demo`). A sale re-reads the real store, so the hero text changes as it does
+  (`BANCHI_HOME=demo`). A sale re-reads the real store, so the hero text changes as it does
   for the owner. The static demo (`make demo-static`) was used for a first pass only. Its
   recorded reads do not change the place label after a sale.
 - **Browser.** Headless Chromium, 1440×1000 and 820×1000, light and dark. Every number is a

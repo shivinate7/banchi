@@ -1,4 +1,4 @@
-"""`pkmnscan queue refresh` — re-resolve every open queue entry, store-wide.
+"""`banchi queue refresh` — re-resolve every open queue entry, store-wide.
 
 FREE, RE-RUNNABLE, AND IT PREVIEWS BY DEFAULT — `join`, `reconcile` and `reprice list`'s
 posture, for `reconcile --live`'s reason: it rewrites every open entry in the store at once,
@@ -89,7 +89,7 @@ def _recorded_exports(root: Optional[Path] = None) -> "List[Tuple[str, Path]]":
 
 def run(args, say) -> int:
     if getattr(args, "queue_command", None) != "refresh":
-        say("give a subcommand: `pkmnscan queue refresh [--export <file.csv>] [--write]`")
+        say("give a subcommand: `banchi queue refresh [--export <file.csv>] [--write]`")
         return 2
     return refresh(args, say)
 

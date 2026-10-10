@@ -1,6 +1,6 @@
-"""`pkmnscan match` — set up the free reader. `status` is free. `prepare` downloads and reads.
+"""`banchi match` — set up the free reader. `status` is free. `prepare` downloads and reads.
 
-The reading itself is `pkmnscan identify --engine marqo-b`. This command is only the one-time
+The reading itself is `banchi identify --engine marqo-b`. This command is only the one-time
 preparation that reader needs, and it is the ONLY place a model file is downloaded or a stock
 photograph is read (D301's one exception: each image is read once, in memory, and only its
 fingerprint is kept). Nothing starts it on its own: the owner presses Prepare on the runs sheet,
@@ -576,5 +576,5 @@ def run(args, say) -> int:
         )
     if action == "audit":
         return audit(say, write=bool(getattr(args, "write", False)))
-    say("usage: pkmnscan match status | prepare [--model-only | --fingerprints-only] | audit [--write] | --sweep")
+    say("usage: banchi match status | prepare [--model-only | --fingerprints-only] | audit [--write] | --sweep")
     return 64

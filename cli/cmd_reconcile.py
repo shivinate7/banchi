@@ -1,4 +1,4 @@
-"""`pkmnscan reconcile <run-dir> <staged-export.csv>` — what TCGplayer actually staged.
+"""`banchi reconcile <run-dir> <staged-export.csv>` — what TCGplayer actually staged.
 
 Writing a CSV proves only that a CSV was written. This is the machine-checkable round trip
 against the real system that GATES.md calls the highest-value finding from Gate A: download
@@ -50,7 +50,7 @@ def _card_counts(inventory):
 
     `seen` IS WIDER THAN THE LISTING LEDGER AND HAS TO BE. A card can carry a SKU that was
     never pushed — withheld (D86), sub-threshold and not yet emitted, or simply queued. Judging
-    "listed outside pkmnscan" against the ledger alone would accuse the operator of every one
+    "listed outside banchi" against the ledger alone would accuse the operator of every one
     of them the moment it showed up live.
     """
     sold, hand, seen = {}, {}, set()
@@ -115,9 +115,9 @@ def _settlement(rows, listings, as_of: str):
 
 
 def run_live(args, say) -> int:
-    """`pkmnscan reconcile --live <export.csv>` — the whole store against one live export.
+    """`banchi reconcile --live <export.csv>` — the whole store against one live export.
 
-    PREVIEWS BY DEFAULT, for `pkmnscan prices adopt`'s reason: it moves quantities the cap
+    PREVIEWS BY DEFAULT, for `banchi prices adopt`'s reason: it moves quantities the cap
     arithmetic reads, over every SKU at once, and a migration nobody watched is how a wrong
     number becomes the new floor.
     """
@@ -160,7 +160,7 @@ def run_live(args, say) -> int:
     _say_rows(
         say, report.unknown,
         f"never seen here  {len(report.unknown)} SKU(s) live at TCGplayer",
-        "sealed product, or singles listed outside pkmnscan. Nothing to reconcile.",
+        "sealed product, or singles listed outside banchi. Nothing to reconcile.",
     )
     _say_rows(
         say, report.absent,
@@ -254,7 +254,7 @@ def run_live(args, say) -> int:
     # lock is not the place to do that.
     with store.write() as writable:
         # THE SKU TABLE FILL (docs/specs/identity-follows-sku.md §3.2, item 3: "An export a
-        # person hands the CLI ... ./pkmnscan reconcile --live <file>"). EVERY ROW of
+        # person hands the CLI ... ./banchi reconcile --live <file>"). EVERY ROW of
         # `export.rows` — the whole file, already read unfiltered at the top of this
         # function, unlike `pipeline/join.py:Catalog`'s per-game narrowing.
         at, source_name = _skus_stamp(source)
@@ -467,7 +467,7 @@ def run(args, say) -> int:
     # writing rows it wrote itself.
     sent = run_dir.emitted_skus
     if not sent:
-        say("this run has emitted nothing — run `pkmnscan emit` first")
+        say("this run has emitted nothing — run `banchi emit` first")
         return 1
 
     staged = tcgcsv.read_export(staged_path)

@@ -18,7 +18,7 @@ Gate C was two 85-card feeder runs. Nothing is blocked behind a gate.
 Its numbers are evidence and are never rewritten to match a later tree.
 
 **The name is the app's, and nothing beneath it.** D94 (the product's name) holds the argument. It does not hold two facts.
-The local directory `~/Developer/pkmnscan` is not renamed. The GitHub repository is `shivinate7/banchi`.
+The local directory is `~/Developer/banchi`. The GitHub repository is `shivinate7/banchi`.
 GitHub Pages followed the rename. `.github/workflows/demo.yml` derives `DEMO_BASE` from the repository name.
 The Makefile's own default is a stale fallback for a hand-run build, by design.
 

@@ -133,7 +133,7 @@ warn_other_tree() {
 # the same question `app/checkoutIdentity.ts` asks for a Playwright run, and a server that
 # names another checkout, or names none, is refused. Nothing listening is left to the render,
 # which already says "nothing is serving". Any other origin is not this check's business.
-# `PKMNSCAN_CHECKOUT_IDENTITY=off` skips it, and the refusal prints that.
+# `BANCHI_CHECKOUT_IDENTITY=off` skips it, and the refusal prints that.
 identity_checked=""
 require_own_server() {
   case "$1" in
@@ -141,7 +141,7 @@ require_own_server() {
     http://127.0.0.1:"$DEV_PORT"|http://127.0.0.1:"$DEV_PORT"/*) ;;
     *) return 0 ;;
   esac
-  [ "${PKMNSCAN_CHECKOUT_IDENTITY:-}" = "off" ] && return 0
+  [ "${BANCHI_CHECKOUT_IDENTITY:-}" = "off" ] && return 0
   [ -n "$identity_checked" ] && return 0
   local served here
   served="$(python3 - "$DEV_PORT" <<'IDENTITY' 2>/dev/null

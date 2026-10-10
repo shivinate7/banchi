@@ -40,7 +40,7 @@ is the one still only read. `docs/specs/stale-listings.md` §6 carries what thos
 
 WHAT THAT RUN ALSO MEASURED, and it is not about this module: `Export From Live` is NOT
 read-your-writes. Forty seconds after a confirmed publish it still served the pre-publish price
-while the grid served the new one — so `pkmnscan reconcile --live`, which writes `live` off that
+while the grid served the new one — so `banchi reconcile --live`, which writes `live` off that
 export (D87), records the old price if it runs straight after a publish. Nothing guards it.
 
 JQUERY'S DEEP FORM ENCODING IS THE WIRE FORMAT, AND IT IS NOT JSON. `$.post` with a nested
@@ -171,7 +171,7 @@ class StagedUpload:
 def _url(path: str) -> str:
     """The absolute URL, with the export module's override honoured.
 
-    THE OVERRIDE IS SHARED ON PURPOSE. `PKMNSCAN_TCG_EXPORT_URL` exists so a test can point
+    THE OVERRIDE IS SHARED ON PURPOSE. `BANCHI_TCG_EXPORT_URL` exists so a test can point
     the cookie at a loopback server, and a knob that redirected reads but not writes would
     send a real price change to the real portal during exactly the test that was trying to
     avoid it.

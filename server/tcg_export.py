@@ -148,14 +148,14 @@ FILTERS_URL = "https://store.tcgplayer.com/admin/pricing/getjsonfilters"
 # of the file — so under D138's supervisor, which runs for days and does not watch `.env`, that
 # printed remedy would not have worked and the refusal would have repeated forever over a
 # cookie the operator had already fixed. A bare name rather than a
-# `PKMNSCAN_` one, which is this repo's existing split: knobs are prefixed, secrets are not
+# `BANCHI_` one, which is this repo's existing split: knobs are prefixed, secrets are not
 # (`ANTHROPIC_API_KEY`, `POKEMONTCG_API_KEY`).
 COOKIE_ENV = portal_http.COOKIE_ENV
 
 # Two knobs, and each exists because a named refusal points at it. The URL is how T7 aims
 # this at a local socket instead of at TCGplayer; the agent is the first thing to try when
 # the WAF refuses.
-URL_ENV = "PKMNSCAN_TCG_EXPORT_URL"
+URL_ENV = "BANCHI_TCG_EXPORT_URL"
 AGENT_ENV = portal_http.AGENT_ENV
 
 # AN HONEST AGENT RATHER THAN A DISGUISED ONE, and the measurement is why it can be. AWS WAF

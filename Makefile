@@ -1,4 +1,4 @@
-# PKMNSCAN
+# BANCHI
 #
 # Empty targets exit 1. A target that exits 0 with nothing to run is a lie the rest of
 # the project would be built on top of — `make check` green means every check ran.
@@ -31,7 +31,7 @@ NPM_GUARD = @[ -d app/node_modules ] || { \
 
 # A LINKED CHECKOUT CLAIMS ITS OWN PORT SLOT BEFORE IT SERVES OR TESTS
 # (D-a-claimed-slot-and-a-server-that-names-its-checkout). A hash into 300 slots put two live
-# worktrees on one port. The claim records one slot per checkout in ~/.pkmnscan/port-slots.json,
+# worktrees on one port. The claim records one slot per checkout in ~/.banchi/port-slots.json,
 # and server/ports.py and app/devPort.ts read it. The primary checkout claims nothing. It fails
 # open and says so: the ports then fall back to the hash, and app/checkoutIdentity.ts still
 # refuses a test run against another checkout's server.
@@ -126,7 +126,7 @@ launch-config:
 # the refusal easy to answer instead of merely correct.
 #
 # THE CACHE IS COPIED AND THE IMAGES ARE SYMLINKED, and the split is not arbitrary. A
-# shared cache would let a `PKMNSCAN_RERUN_T1=1` in either tree rewrite what the other
+# shared cache would let a `BANCHI_RERUN_T1=1` in either tree rewrite what the other
 # scores against, and the two trees are meant to be able to disagree — that is why one is
 # a worktree. It is 90 KB, so copying costs nothing. The eval images are 133 MB and are
 # immutable: `fixtures.load` only ever adds a missing file keyed by card id, so sharing
@@ -307,14 +307,14 @@ explain:
 # end (D248) — a session runs this itself before saying something works.
 # PATH GATED (owner's word, D247 amended): `scripts/guard-scope.py` derives what the harness reads
 # from `harness/` itself and skips this when the branch touches none of it. A main push and the
-# nightly run set PKMNSCAN_GUARD_SCOPE=all in check.yml, so they never skip.
+# nightly run set BANCHI_GUARD_SCOPE=all in check.yml, so they never skip.
 harness:
 	$(VENV_GUARD)
 	@python3 scripts/guard-scope.py classify --target harness --base origin/main; rc=$$?; \
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
-		PKMNSCAN_HARNESS=1 $(PYTHON) harness/run.py; \
+		BANCHI_HARNESS=1 $(PYTHON) harness/run.py; \
 	else \
-		echo "harness: SKIPPED — nothing in this branch reaches what harness/ reads. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "harness: SKIPPED — nothing in this branch reaches what harness/ reads. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # Exit 1 is a provably wrong reference and fails. Exit 2 is the coupling question — it
@@ -485,7 +485,7 @@ verdict-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/verdict-selftest.py; \
 	else \
-		echo "verdict-selftest: SKIPPED — nothing in this branch reaches app/design-check-reporter.ts. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "verdict-selftest: SKIPPED — nothing in this branch reaches app/design-check-reporter.ts. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # python3, not $(PYTHON): the script is stdlib-only so it must not need `make venv`.
@@ -494,7 +494,7 @@ audit-self-test:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/docs-audit.py --self-test; \
 	else \
-		echo "audit-self-test: SKIPPED — this branch does not touch scripts/docs-audit.py or scripts/docs_audit/. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "audit-self-test: SKIPPED — this branch does not touch scripts/docs-audit.py or scripts/docs_audit/. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # D92 — a bare `#` on an owner-side screen is D58's COUNT, and three renderers spelled the
@@ -593,9 +593,9 @@ port-slots-selftest:
 	$(NPM_GUARD)
 	@python3 scripts/guard-scope.py classify --target port-slots-selftest --base origin/main; rc=$$?; \
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
-		python3 scripts/port-slots.py selftest; \
+		python3 scripts/port-slots.py selftest && python3 scripts/ports-machine-selftest.py; \
 	else \
-		echo "port-slots-selftest: SKIPPED — this branch does not touch the port-slot claim or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "port-slots-selftest: SKIPPED — this branch does not touch the port-slot claim or its callers. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # FLT-06/04, UX-173: the one forgiving matcher, server side. `server/match.py` against every
@@ -604,7 +604,7 @@ port-slots-selftest:
 # `capture_server._match_rank` and `capture_server.do_search` end to end against a throwaway
 # store — a real SQLite FTS5 index is what shows the candidate-step defect (a bare `54/132`
 # or a hyphenated `heimerdinger-inventor` never reaching the rank step at all), which
-# `_match_rank` alone cannot. `PKMNSCAN_HOME` is repointed to a temp directory per case, so
+# `_match_rank` alone cannot. `BANCHI_HOME` is repointed to a temp directory per case, so
 # the operator's own store is never opened. Stdlib only, no subprocess, no network — same
 # standing as `decisions-selftest` right above its own cluster, not `cid-selftest`'s (D18
 # still applies to the temp store it writes, which is why it gates rather than runs in the
@@ -614,7 +614,7 @@ match-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/match-selftest.py; \
 	else \
-		echo "match-selftest: SKIPPED — this branch does not touch search, matching or their callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "match-selftest: SKIPPED — this branch does not touch search, matching or their callers. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # HERE AND NOT IN THE GIT HOOK, for the reason stated above `check` and for a second one of
@@ -627,7 +627,7 @@ githooks-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/githooks-selftest.sh; \
 	else \
-		echo "githooks-selftest: SKIPPED — nothing in this branch reaches scripts/githooks/. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "githooks-selftest: SKIPPED — nothing in this branch reaches scripts/githooks/. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # THE SHARED MERGE TOOL (D140, merge claims the record number). `~/.claude/bin/merge` lives in
@@ -651,7 +651,7 @@ merge:
 # script on the branch being pushed), and once more as its own job in .github/workflows/check.yml
 # so it shows as a check on the PR. It writes nothing and needs only python3 and git. Absent
 # `origin/main` — a fixture clone, a throwaway — it allows and says so, which is the same
-# fail-open rule the two D42 hooks state. `PKMNSCAN_REVERT=off` runs nothing, printed in every
+# fail-open rule the two D42 hooks state. `BANCHI_REVERT=off` runs nothing, printed in every
 # refusal. `scripts/revert-audit.py history` is the same engine walked over main's whole
 # first-parent line, which is how the 2026-09-11 audit was taken.
 revert-guard:
@@ -667,7 +667,7 @@ revert-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/revert-audit.py selftest; \
 	else \
-		echo "revert-selftest: SKIPPED — this branch does not touch scripts/revert-audit.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "revert-selftest: SKIPPED — this branch does not touch scripts/revert-audit.py. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # THE CORPUS IS COMPLETE AND STILL ROUND-TRIPS. `docs/decisions/` is one file per entry and
@@ -723,7 +723,7 @@ catalog-index-selftest:
 # nothing here has ever filled the mirror for real on this checkout — see the decision entry
 # this step wrote. `ARGS=--dry-run` HEAD-samples up to 200 images and prints the manifest's
 # file count and the byte total extrapolated from the sample, writing nothing under the
-# mirror destination (`PKMNSCAN_IMAGE_MIRROR`, default `harness/images/`, D15). Bare
+# mirror destination (`BANCHI_IMAGE_MIRROR`, default `harness/images/`, D15). Bare
 # `make catalog-mirror` fills it for real, for whenever that becomes the owner's call.
 catalog-mirror:
 	@python3 scripts/catalog-image-mirror.py $(ARGS)
@@ -796,7 +796,7 @@ screen-freshness-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		node scripts/screen-freshness.mjs --self-test; \
 	else \
-		echo "screen-freshness-selftest: SKIPPED — this branch does not touch scripts/screen-freshness.mjs. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "screen-freshness-selftest: SKIPPED — this branch does not touch scripts/screen-freshness.mjs. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # NOT IN `check`, AND NOT IN THE GIT HOOK. This is a target that can delete a file, and D18 forbids a writer on the path that decides
@@ -830,7 +830,7 @@ janitor-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/janitor-selftest.sh; \
 	else \
-		echo "janitor-selftest: SKIPPED — nothing in this branch reaches scripts/janitor.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "janitor-selftest: SKIPPED — nothing in this branch reaches scripts/janitor.py. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # THE SUPERVISOR'S BUILD JOB (D138), against a throwaway tree with a stub `vite build`. Same
@@ -848,7 +848,7 @@ janitor-selftest:
 # target would cost more to maintain than it saves. A SECOND gated target needs the owner's
 # word again — do not read this recipe as a pattern to copy.
 #
-# PKMNSCAN_SERVE_SCOPE=all runs it regardless, and every skip prints that.
+# BANCHI_SERVE_SCOPE=all runs it regardless, and every skip prints that.
 serve-selftest:
 	@python3 scripts/serve-scope.py classify --base origin/main; rc=$$?; \
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
@@ -863,7 +863,7 @@ serve-selftest:
 # no merge-base, an unreadable diff and an EMPTY diff all run the test.
 # `make serve-selftest` was the only path-gated target from 2026-09-17 to 2026-09-20 —
 # 70.1s of `make check`'s own total, copying the checkout with a STUB app/ so no screen
-# change can reach it. `PKMNSCAN_SERVE_SCOPE=all` runs it regardless, printed in every
+# change can reach it. `BANCHI_SERVE_SCOPE=all` runs it regardless, printed in every
 # skip.
 serve-scope:
 	@python3 scripts/serve-scope.py $(ARGS)
@@ -886,7 +886,7 @@ serve-scope-selftest:
 # and, 2026-09-27, `match-selftest`, `browser-scope-selftest` and
 # `port-slots-selftest`). Fails open exactly like `serve-scope`: no merge-base, an
 # unreadable diff, an EMPTY diff, an unscoped target, and any exception all run the
-# test. `PKMNSCAN_GUARD_SCOPE=all` runs every gated self-test regardless, printed in
+# test. `BANCHI_GUARD_SCOPE=all` runs every gated self-test regardless, printed in
 # every skip. Reconciled BOTH WAYS by `make docs-audit`'s `guard scope` row: every
 # roster target is wired into the Makefile and every wired recipe names a roster
 # target. A THIRD GATE MECHANISM needs the owner's word again — a new roster entry
@@ -907,7 +907,7 @@ sync-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/sync-selftest.py; \
 	else \
-		echo "sync-selftest: SKIPPED — nothing in this branch reaches scripts/primary_sync.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "sync-selftest: SKIPPED — nothing in this branch reaches scripts/primary_sync.py. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # WHAT THIS SESSION STARTED, AND NOTHING ELSE. `pkill -f` and `lsof -ti tcp:PORT` are both
@@ -942,7 +942,7 @@ reap-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/reap-selftest.sh; \
 	else \
-		echo "reap-selftest: SKIPPED — nothing in this branch reaches scripts/reap.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "reap-selftest: SKIPPED — nothing in this branch reaches scripts/reap.py. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 .PHONY: reap reap-selftest
@@ -967,13 +967,13 @@ submission-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/submission-selftest.py; \
 	else \
-		echo "submission-selftest: SKIPPED — this branch does not touch the claim table it proves. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "submission-selftest: SKIPPED — this branch does not touch the claim table it proves. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # D172'S TWO TARGETS, AND ONLY ONE OF THEM IS IN `check`.
 #
 # `cid-selftest` answers from the tree alone: it builds its own store under a temp
-# `PKMNSCAN_HOME` and draws its own photographs, so it is `submission-selftest`'s
+# `BANCHI_HOME` and draws its own photographs, so it is `submission-selftest`'s
 # standing exactly — in `check`, never in the git hook, because it writes a temp tree
 # and kills a process (D18).
 #
@@ -985,7 +985,7 @@ cid-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/cid-selftest.py; \
 	else \
-		echo "cid-selftest: SKIPPED — this branch does not touch the card's stable name or the photograph store. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "cid-selftest: SKIPPED — this branch does not touch the card's stable name or the photograph store. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # THE SIXTEENTH GATED TARGET (D247, owner's word 2026-09-23 on the SKU-first price-history
@@ -998,7 +998,7 @@ pricearchive-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/pricearchive-selftest.py; \
 	else \
-		echo "pricearchive-selftest: SKIPPED — this branch does not touch price-history resolution or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "pricearchive-selftest: SKIPPED — this branch does not touch price-history resolution or its callers. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # SIX MORE GATED TARGETS, SEVENTEENTH THROUGH TWENTY-SECOND (D247, owner's word
@@ -1012,7 +1012,7 @@ archive-review-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/archive-review-selftest.py; \
 	else \
-		echo "archive-review-selftest: SKIPPED — this branch does not touch the archive review queue or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "archive-review-selftest: SKIPPED — this branch does not touch the archive review queue or its callers. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # pipeline/holdings.py, proved against in-memory fixtures, no store, no network:
@@ -1022,7 +1022,7 @@ holdings-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/holdings-selftest.py; \
 	else \
-		echo "holdings-selftest: SKIPPED — this branch does not touch unsold-stock holdings or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "holdings-selftest: SKIPPED — this branch does not touch unsold-stock holdings or its callers. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # pipeline/identity_checks.py's four stored-data checks, proved against literal
@@ -1032,7 +1032,7 @@ identity-checks-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/identity-checks-selftest.py; \
 	else \
-		echo "identity-checks-selftest: SKIPPED — this branch does not touch the stored-data identification checks or their callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "identity-checks-selftest: SKIPPED — this branch does not touch the stored-data identification checks or their callers. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # TWO INVOCATIONS: the real run, then `--mutate-to-upsert`, which MUST itself go red inside
@@ -1044,7 +1044,7 @@ price-postings-selftest:
 		$(PYTHON) scripts/price-postings-selftest.py && \
 		$(PYTHON) scripts/price-postings-selftest.py --mutate-to-upsert; \
 	else \
-		echo "price-postings-selftest: SKIPPED — this branch does not touch the price-postings ledger or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "price-postings-selftest: SKIPPED — this branch does not touch the price-postings ledger or its callers. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # pipeline/productview.py and server/pipeline_routes.py:do_product_history, proved
@@ -1054,7 +1054,7 @@ product-history-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/product-history-selftest.py; \
 	else \
-		echo "product-history-selftest: SKIPPED — this branch does not touch the per-product history route or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "product-history-selftest: SKIPPED — this branch does not touch the per-product history route or its callers. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # pipeline/sku_number_contradictions.py, proved against literal fixtures and
@@ -1064,7 +1064,7 @@ sku-number-contradictions-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		$(PYTHON) scripts/sku-number-contradictions-selftest.py; \
 	else \
-		echo "sku-number-contradictions-selftest: SKIPPED — this branch does not touch the SKU self-contradiction check or its callers. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "sku-number-contradictions-selftest: SKIPPED — this branch does not touch the SKU self-contradiction check or its callers. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # Wired into `check` and `ci-check` after a test-health audit found each in neither. Not
@@ -1117,7 +1117,7 @@ pipeline-trends-archive-ids-selftest:
 # Does every card's name still resolve to its photograph? Reads the whole corpus,
 # so it is NOT in `make check`. Three verdicts, and the third is `not known`.
 cid-audit:
-	@./pkmnscan cards audit
+	@./banchi cards audit
 
 # THE MARKET-READING TABLE, PROVED AGAINST AN INDEPENDENT REIMPLEMENTATION OF ITS OWN WALK
 # (D-readings-table). `pipeline/readings.py:collect()` is compared to `golden()` — a second,
@@ -1163,7 +1163,7 @@ identity-store-selftest:
 # FIXTURES (identity-follows-sku.md §5.5, §7, lane 2). Every class T1-T6 and `sku_unknown`,
 # in §7.2's own order; the human-bound exclusion §5.5 requires (`answer`/`group_answer`/
 # `correction`/`confirm` never re-flagged); both report halves (§4.3's three audit failures,
-# and §5.5's name half/number half). `./pkmnscan cards identity` and `scripts/
+# and §5.5's name half/number half). `./banchi cards identity` and `scripts/
 # identity-replay.py` both import this module rather than re-deriving the classifier, so
 # this is the one place its logic is proved.
 #
@@ -1201,12 +1201,12 @@ identity-readers-selftest:
 		$(PYTHON) scripts/identity-readers-selftest.py --mutate-no-refusal
 
 # THE CLI WRITERS, AGAINST A REAL THROWAWAY STORE AND THE REAL CLI DISPATCH
-# (identity-follows-sku.md §4.2, lane 3b). `pkmnscan emit` upserts the matched export row
+# (identity-follows-sku.md §4.2, lane 3b). `banchi emit` upserts the matched export row
 # into `skus` and THEN binds through `Inventory.bind_sku` — proved by binding on a store
 # whose `skus` table starts empty, so a successful bind is proof the upsert ran first. A
 # re-identification of an already-bound card (`cli/cmd_identify.py:_read_disputes_for`)
-# writes only `read_*`; the bound identity does not move. `pkmnscan join --export` and
-# `pkmnscan reconcile --live` each fill the table from EVERY row of the file they read, not
+# writes only `read_*`; the bound identity does not move. `banchi join --export` and
+# `banchi reconcile --live` each fill the table from EVERY row of the file they read, not
 # only the rows a card matched.
 #
 # IN `check`, NEVER IN THE GIT HOOK: it writes a temp store under `mktemp -d` (D18). Answers
@@ -1237,7 +1237,7 @@ silent-write-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/silent-write-selftest.sh; \
 	else \
-		echo "silent-write-selftest: SKIPPED — nothing in this branch reaches scripts/silent-write-guard.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "silent-write-selftest: SKIPPED — nothing in this branch reaches scripts/silent-write-guard.py. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 .PHONY: silent-write-selftest
@@ -1269,7 +1269,7 @@ guard-shell-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		bash scripts/guard-shell-selftest.sh; \
 	else \
-		echo "guard-shell-selftest: SKIPPED — nothing in this branch reaches scripts/guard-shell.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "guard-shell-selftest: SKIPPED — nothing in this branch reaches scripts/guard-shell.py. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 .PHONY: guard-shell-selftest
@@ -1282,11 +1282,11 @@ janitor-install:
 	@echo "Banchi's hooks run scripts/session-teardown.sh and scripts/reap.py from the repo."
 
 # IS THE LAN URL STILL GOOD? The owner reaches this product from a phone at
-# `http://pkmnscan.lan:8000`, and nothing in this repo knows that name — the DHCP reservation
+# `http://banchi.lan:8000`, and nothing in this repo knows that name — the DHCP reservation
 # and the DNS record are theirs, on their UniFi (D43). What this checks is the four things on
 # THIS side that have to agree with it, ending with a real write, because the failure worth
 # catching is silent: reads are ungated and writes are origin-checked, so a missing
-# `PKMNSCAN_LAN_NAME` leaves every screen rendering and every write answering 403.
+# `BANCHI_LAN_NAME` leaves every screen rendering and every write answering 403.
 #
 # A SEPARATE `.PHONY` LINE, and that is deliberate rather than sloppy: the single line at the
 # top of this file is one line that every branch adding a target edits, which makes it the
@@ -1332,7 +1332,7 @@ lan-check:
 #
 # `up` takes them too, for `--no-watch` and for `--restart`, which is the bounce now.
 #
-# WILL NOT SERVE A PRIMARY CHECKOUT OFF MAIN (D158, D138). `PKMNSCAN_SERVE_MAIN=off` overrides,
+# WILL NOT SERVE A PRIMARY CHECKOUT OFF MAIN (D158, D138). `BANCHI_SERVE_MAIN=off` overrides,
 # printed in every refusal.
 up:
 	$(PORT_CLAIM)
@@ -1406,7 +1406,7 @@ screenshot:
 #
 # IT REFUSES RATHER THAN QUEUES, and exits 75 so the refusal cannot read as a failing suite.
 # `ARGS=--wait` queues instead, out loud. The `--` is what separates the guard's flags from
-# the command it guards, so `ARGS` can never reach npm. `PKMNSCAN_SUITE_LOCK=off` overrides
+# the command it guards, so `ARGS` can never reach npm. `BANCHI_SUITE_LOCK=off` overrides
 # the lock outright, printed in every refusal (D122).
 #
 # AND IT LEAVES A VERDICT BEHIND, WHICH IS HOW A SESSION WAITS FOR IT. The suite is ~90-175s
@@ -1442,13 +1442,13 @@ design-check:
 	@python3 scripts/reap_mark.py design-check; python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
 
 # THE 300-CAPTURE CASE, about 16 minutes (owner's word). `app/tests/capture-freeze.spec.ts` skips it
-# unless PKMNSCAN_LONG_SITTING=1; CI sets that monthly and on a dispatch that asks. Same lock and
+# unless BANCHI_LONG_SITTING=1; CI sets that monthly and on a dispatch that asks. Same lock and
 # verdict file as `design-check`, one spec.
 long-sitting:
 	$(NPM_GUARD)
 	$(PORT_CLAIM)
 	@rm -f .serve/design-check.json
-	@python3 scripts/reap_mark.py design-check; PKMNSCAN_LONG_SITTING=1 python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- tests/capture-freeze.spec.ts
+	@python3 scripts/reap_mark.py design-check; BANCHI_LONG_SITTING=1 python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- tests/capture-freeze.spec.ts
 
 # The lock itself, exercised by violating it — a holder, a refusal, a wait, and a holder
 # killed with -9 to prove the OS releases what it took. In `check`, never in the git hook: it
@@ -1459,7 +1459,7 @@ suite-lock-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/suite-lock.py selftest; \
 	else \
-		echo "suite-lock-selftest: SKIPPED — this branch does not touch scripts/suite-lock.py. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "suite-lock-selftest: SKIPPED — this branch does not touch scripts/suite-lock.py. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # The classifier's own matcher, recipe narrowing and spec map, proved on fixtures and on the
@@ -1470,7 +1470,7 @@ browser-scope-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		python3 scripts/browser-scope.py selftest; \
 	else \
-		echo "browser-scope-selftest: SKIPPED — this branch does not touch the browser-matrix classifier or its spec map. PKMNSCAN_GUARD_SCOPE=all runs it anyway."; \
+		echo "browser-scope-selftest: SKIPPED — this branch does not touch the browser-matrix classifier or its spec map. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # A JS media query's viewport width against what a stylesheet under app/src declares
@@ -1602,7 +1602,7 @@ DEMO_PHOTO_JOINABLE ?= 92
 demo-photos:
 	@[ -n "$(SOURCE)" ] || { \
 		echo "SOURCE=<checkout> is required — the store whose photographs to curate."; \
-		echo "  e.g. make demo-photos SOURCE=~/Developer/pkmnscan"; \
+		echo "  e.g. make demo-photos SOURCE=~/Developer/banchi"; \
 		exit 1; }
 	@$(PYTHON) scripts/demo-photos.py --source "$(SOURCE)" \
 	  --count $(DEMO_PHOTO_COUNT) --joinable $(DEMO_PHOTO_JOINABLE)
@@ -1619,7 +1619,7 @@ demo-photos:
 demo-mirror:
 	@[ -n "$(SOURCE)" ] || { \
 		echo "SOURCE=<checkout> is required — the real store to snapshot and scrub."; \
-		echo "  e.g. make demo-mirror SOURCE=~/Developer/pkmnscan"; \
+		echo "  e.g. make demo-mirror SOURCE=~/Developer/banchi"; \
 		exit 1; }
 	@$(PYTHON) scripts/demo-mirror.py --source "$(SOURCE)" --home $(DEMO_HOME)
 
@@ -1652,7 +1652,7 @@ demo-mirror-install:
 #
 # The history host refuses the honest User-Agent (D216), and the owner allows the browser
 # signature from the owner's own machine, never from CI. So this runs by hand, when the owner
-# chooses, with PKMNSCAN_TCG_USER_AGENT set, and writes a new dated directory under
+# chooses, with BANCHI_TCG_USER_AGENT set, and writes a new dated directory under
 # fixtures/demo-price-history/. It refuses to overwrite one. The seed and the recorder read the
 # newest. NO WORKFLOW CALLS THIS TARGET.
 demo-histories:
@@ -1660,7 +1660,7 @@ demo-histories:
 
 # The store alone, built on the curated photographs.
 demo-seed:
-	@PKMNSCAN_HOME=$(DEMO_HOME) $(PYTHON) scripts/demo-seed.py --force
+	@BANCHI_HOME=$(DEMO_HOME) $(PYTHON) scripts/demo-seed.py --force
 # THE JOIN IS THE REAL ONE, and that is the point of doing it here rather than writing a
 # pricing table by hand. `identify` is the one step that costs money, so the seed fakes ONLY
 # that — it writes `identifications.json` in the shape a real run leaves behind, which
@@ -1668,17 +1668,17 @@ demo-seed:
 # Everything downstream then runs for real against the real fixture exports: the catalogue
 # lookup, the variant ladder, the cap arithmetic and `pricing.json` are the pipeline's own
 # output, not a fixture pretending to be one. Both are free and re-runnable.
-	@PKMNSCAN_HOME=$(DEMO_HOME) ./pkmnscan join $(DEMO_HOME)/runs/demo-box1 	  --export fixtures/riftbound_export_untouched.csv > /dev/null
-	@PKMNSCAN_HOME=$(DEMO_HOME) ./pkmnscan join $(DEMO_HOME)/runs/demo-box3 	  --export fixtures/riftbound_export_untouched.csv > /dev/null
+	@BANCHI_HOME=$(DEMO_HOME) ./banchi join $(DEMO_HOME)/runs/demo-box1 	  --export fixtures/riftbound_export_untouched.csv > /dev/null
+	@BANCHI_HOME=$(DEMO_HOME) ./banchi join $(DEMO_HOME)/runs/demo-box3 	  --export fixtures/riftbound_export_untouched.csv > /dev/null
 	@echo "  joined 2 runs against the real fixture exports"
 
 # A SECOND, small, real box, opt-in only — never on `demo-seed` alone (D18: the flag reaches
 # a generator, never a gate). Set as a TARGET-SPECIFIC variable, which GNU Make propagates
 # into every prerequisite this target pulls in, direct and indirect — so `demo-static`'s own
 # chain through `demo` to `demo-seed` carries it, and a bare `make demo-seed` never does.
-demo-record: export PKMNSCAN_DEMO_EXTRA_REAL := 1
+demo-record: export BANCHI_DEMO_EXTRA_REAL := 1
 demo-record:
-	@PKMNSCAN_HOME=$(DEMO_HOME) $(PYTHON) scripts/demo-record.py $(DEMO_RECORD_ARGS)
+	@BANCHI_HOME=$(DEMO_HOME) $(PYTHON) scripts/demo-record.py $(DEMO_RECORD_ARGS)
 
 # The bundle without the build — what to run after changing a wire shape, so `git status`
 # shows the recording moving with the contract it was recorded against.

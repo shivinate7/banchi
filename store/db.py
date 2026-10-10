@@ -113,14 +113,14 @@ MATCH_SWEEP = "match_sweep"
 # `set_name` and `rarity` to `cards` and sweeps the 99 `UNL` rows from 2026-08-29 to
 # `Unleashed` — the DDL and the sweep, which cost nothing to run on every open. Filling the
 # two new columns for cards the store already holds is a SEPARATE, re-runnable step
-# (`./pkmnscan cards identity --write` since identity-follows-sku.md, which retired
+# (`./banchi cards identity --write` since identity-follows-sku.md, which retired
 # `cards variants`), never bound to a schema version: its answer depends on what the `skus`
 # table holds, which grows from one run to the next, and a migration that ran once at open
 # time could never re-answer a card whose export arrived later.
 #
 # NINE, FOR D219 (`docs/specs/sales-plan.md` §4). `_add_price_history`
 # adds `price_history` and `price_history_sources` — the same purely-additive shape
-# `_add_readings` used at 5, two tables nothing older has. `pkmnscan archive sweep --write`
+# `_add_readings` used at 5, two tables nothing older has. `banchi archive sweep --write`
 # is the only writer, and an upgraded store's archive is correctly empty until the first
 # press: the source's own 357-day window means there was nothing this build could have
 # captured before this table existed either.
@@ -143,7 +143,7 @@ MATCH_SWEEP = "match_sweep"
 # and `cards.identity_source`, an inert `TEXT` column `_add_set_columns`'s own precedent: it
 # defaults to NULL and this step does not fill it, because filling it is `Inventory.bind_sku`
 # (a later lane), never a migration bound to `SCHEMA_VERSION`. An upgraded store's `skus`
-# table is correctly empty until the first `pkmnscan skus adopt --write`, which — unlike
+# table is correctly empty until the first `banchi skus adopt --write`, which — unlike
 # `price_history` — can answer for every export this machine has ever cached, because none of
 # them ages out the way the live price-history endpoint's own window does.
 # TWELVE, FOR `D273` (round 2). It was ELEVEN on its own branch,
@@ -224,7 +224,7 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     # its outcome is known (`store/sendclaims.py`). `skus` is the claim itself and, like
     # `submissions.keys`, is not a column.
     "send_claims": ("pid", "state", "started_at", "kind"),
-    # D189: the market reading `pkmnscan readings adopt --write` last read for
+    # D189: the market reading `banchi readings adopt --write` last read for
     # each SKU, one row per SKU. `store/readings.py` is the module; `pipeline/readings.py`
     # is the two-source walk that fills it.
     "readings": ("market", "at", "source", "kind"),
@@ -1042,7 +1042,7 @@ def _add_readings(conn: sqlite3.Connection) -> None:
 
     AN EMPTY READING TABLE IS THE CORRECT STATE FOR AN UPGRADED STORE. The table is a CACHE
     of a filesystem walk (`pipeline/readings.py:collect`), never an independent ledger, and a
-    store that has never run `pkmnscan readings adopt --write` answered every price question
+    store that has never run `banchi readings adopt --write` answered every price question
     with an empty reading before this table existed too — `_readings()`'s old live walk over
     a store with no runs and no live exports returned `({}, [])` exactly as this table does
     fresh. The first `readings adopt --write` after an upgrade fills it from the same files
@@ -1303,7 +1303,7 @@ def _add_set_columns(conn: sqlite3.Connection) -> None:
     ADDITIVE LIKE `_add_search_index`'s TWO COLUMNS: the `ALTER`s are guarded by
     `PRAGMA table_info` so a re-run after a crash is a no-op, and nothing existing is READ to
     decide what to write — both columns default to NULL and stay NULL until
-    `./pkmnscan cards identity --write` or the next `bind_sku` fills them.
+    `./banchi cards identity --write` or the next `bind_sku` fills them.
     `_add_search_index`'s own case for why the CID is here rather than derived per read
     applies unchanged: `_copies_out` and `do_search` are both O(cards) already, and a facet
     computed by joining an export on every request would be the same defect this schema
@@ -1314,7 +1314,7 @@ def _add_set_columns(conn: sqlite3.Connection) -> None:
     `inventory/.exports/<game>/` happens to hold, and an export is exactly the kind of thing
     that ages in (D166) or is fetched for the first time between two opens of this store; a
     migration bound to `SCHEMA_VERSION` runs once, ever, and could never re-answer a card
-    whose export arrived a week later. `./pkmnscan cards identity --write` is the
+    whose export arrived a week later. `./banchi cards identity --write` is the
     re-runnable counterpart now (it retired `cards variants`, identity-follows-sku.md §4.2)
     — the same shape `photos`/`prices adopt` already use for a fact this store can only
     partially answer the day it is asked.
@@ -1345,7 +1345,7 @@ def _add_price_history(conn: sqlite3.Connection) -> None:
     AN EMPTY ARCHIVE IS THE CORRECT STATE FOR AN UPGRADED STORE, and unlike `_add_readings`
     this is not merely convenient — it is the honest answer. The source endpoint's own
     window is 357 days; nothing this build could have captured before this table existed is
-    recoverable now, upgrade or not. The first `pkmnscan archive sweep --write` after an
+    recoverable now, upgrade or not. The first `banchi archive sweep --write` after an
     upgrade starts the archive from whatever the live endpoint can still answer, which is
     all any build, old or new, could ever have gotten.
     """
@@ -1447,7 +1447,7 @@ def _add_skus(conn: sqlite3.Connection) -> None:
 
     THE TABLE HALF IS ADDITIVE LIKE `_add_readings`/`_add_price_history`: nothing older has a
     `skus` table, so there is nothing to backfill and nothing to read wrong. An upgraded
-    store's table is correctly empty until the first `pkmnscan skus adopt --write`, which
+    store's table is correctly empty until the first `banchi skus adopt --write`, which
     reads every export already cached under `inventory/.exports/` and `inventory/.live/` —
     unlike `price_history`'s 357-day source window, nothing here ages out, so that first press
     can answer for the store's WHOLE history of fetched exports, not merely what is left of it.

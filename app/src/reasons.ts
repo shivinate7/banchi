@@ -17,7 +17,7 @@
  * `pipeline/variant.py` (the D3 ladder's review reasons, including D23's
  * `rarity_claim_mismatch`) and NINE from `pipeline/routing.py` (v2 §5.4's routing reasons,
  * including D35's `number_unread_name_matched`, since 2026-09-11 `name_disputed`, and since
- * identity-follows-sku.md §7.3 (lane 2) `listing_disputed` — opened directly by `./pkmnscan
+ * identity-follows-sku.md §7.3 (lane 2) `listing_disputed` — opened directly by `./banchi
  * cards identity --write`, never by `routing.route()`, the same shape `no_market_data`
  * already carries in this tuple). It
  * read "fourteen, six and eight" until that lane landed, "thirteen, six and seven" before
@@ -85,13 +85,13 @@ export const REASON_LABELS: Readonly<Record<string, string>> = {
    * own destination, priced by hand on #/pricing. Kept because docs/DESIGN.md names
    * thirteen, and a map that quietly held twelve would be the drift this comment is about. */
   no_market_data: 'No market price',
-  /* identity-follows-sku.md §7.3, lane 2. Opened directly by `./pkmnscan cards identity
+  /* identity-follows-sku.md §7.3, lane 2. Opened directly by `./banchi cards identity
    * --write` for a held, identified card — the read disputes the listing it is under, on
    * name or on number, and nobody has looked. `#/review`'s own headline for it is longer
    * ("Is the listing the right card?", `ReviewQueue.tsx`'s `QUESTIONS` map); this is the
    * short sub-label the shared `reasonLabel()` draws beside the machine string. */
   listing_disputed: 'The listing may be the wrong card',
-  /* `pipeline/routing.py:FREE_READER_DISAGREES`, opened by `./pkmnscan match audit --write`. */
+  /* `pipeline/routing.py:FREE_READER_DISAGREES`, opened by `./banchi match audit --write`. */
   free_reader_disagrees: 'The free reader sees another card',
   /* `pipeline/routing.py:READERS_DISAGREE` and `SECOND_LOOK_UNSURE`: a card the free reader
    * refused, held after the paid second look. */

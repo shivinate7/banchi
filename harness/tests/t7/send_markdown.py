@@ -1032,7 +1032,7 @@ def check_markdown_push(checks: Checks) -> None:
 def send_portal():
     """A loopback TCGplayer: the live export GET and the five pricing POSTs, and a record of
     every call. NOTHING HERE CAN REACH THE REAL PORTAL: `tcg_import._url` and
-    `tcg_export.live_endpoint` both follow `PKMNSCAN_TCG_EXPORT_URL`, which is set to this
+    `tcg_export.live_endpoint` both follow `BANCHI_TCG_EXPORT_URL`, which is set to this
     socket, and `envfile` is made hermetic so a real `.env` cannot supply a real cookie.
 
     THE MODES, EACH A WAY THE REAL PORTAL CAN ANSWER THAT A SEND MUST SURVIVE:
@@ -1177,20 +1177,20 @@ def send_portal():
             self._answer(200, json.dumps(answer).encode("utf-8"))
 
     keys = (
-        "PKMNSCAN_TCG_EXPORT_URL",
+        "BANCHI_TCG_EXPORT_URL",
         "TCGPLAYER_STORE_COOKIE",
-        "PKMNSCAN_TCG_USER_AGENT",
+        "BANCHI_TCG_USER_AGENT",
         envfile.FROM_FILE_ENV,
     )
     previous = {name: os.environ.get(name) for name in keys}
     portal = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Portal)
     portal.daemon_threads = True
     thread = _spawn_server(portal)
-    os.environ["PKMNSCAN_TCG_EXPORT_URL"] = (
+    os.environ["BANCHI_TCG_EXPORT_URL"] = (
         f"http://127.0.0.1:{portal.server_address[1]}/admin/pricing/downloadexportcsv"
     )
     os.environ["TCGPLAYER_STORE_COOKIE"] = "TCGAuthTicket_Production=t7-send-not-a-real-session"
-    os.environ.pop("PKMNSCAN_TCG_USER_AGENT", None)
+    os.environ.pop("BANCHI_TCG_USER_AGENT", None)
     env_before = (envfile.ENV_FILE, set(envfile._from_file), envfile._loaded)
     envfile.ENV_FILE = Path(tempfile.gettempdir()) / "t7-send-no-such.env"
     envfile._from_file.clear()
@@ -3973,7 +3973,7 @@ def check_send_review_r7(checks: Checks) -> None:
 
 def _store_backed_run(checks: Checks, home: Path, cards, only=None, stamp=True) -> "runs.Run":
     """A run made the way the sweep makes one: cards identified IN THE STORE, then
-    `pkmnscan join --keys` (the store-backed join `cli/cmd_match.py` calls through
+    `banchi join --keys` (the store-backed join `cli/cmd_match.py` calls through
     `resolve.load_from_store`). Its directory holds `manifest.json` with `selection.keys` and
     `pricing.json`, and NEVER `identifications.json` (D65, a sweep card reads as a press card)."""
     from cli import __main__ as entry
@@ -4011,7 +4011,7 @@ def _store_backed_run(checks: Checks, home: Path, cards, only=None, stamp=True) 
 def check_send_store_backed_runs(checks: Checks) -> None:
     """A run with no `identifications.json` reads the store's CURRENT cards for its
     `selection.keys`, never a frozen copy (owner's ruling; D65). Each case red on main with
-    `RunError: ... does not exist — run pkmnscan identify first`."""
+    `RunError: ... does not exist — run banchi identify first`."""
     from cli import __main__ as entry
     from cli import cmd_identify
 
@@ -5177,7 +5177,7 @@ def check_corpus_revision(checks: Checks) -> None:
 
     WHY THE GUARD EXISTS. That route replaces `inventory/prices.json` WHOLESALE, which is D86's
     design and is right: the screen round-trips every key it does not understand. It had no
-    concurrency guard because the operator was the only writer, and `pkmnscan reprice` is a
+    concurrency guard because the operator was the only writer, and `banchi reprice` is a
     second one — it re-prices every stale SKU at once, so a `#/pricing` tab holding a snapshot
     from mount would revert an entire sweep on the next keystroke, with no error anywhere, on
     the one file in this product that holds money.
@@ -5194,7 +5194,7 @@ def check_corpus_revision(checks: Checks) -> None:
     `do_pricing_corpus_write` — the same route the guard lives in. But the writer the guard
     exists for never touches that route: D86's amendment names it as a NON-ROUTE writer moving
     `inventory/prices.json` under an open `#/pricing` tab, and that writer is
-    `pkmnscan prices adopt --write` (`cli/cmd_prices.py`'s `folded.write()` ->
+    `banchi prices adopt --write` (`cli/cmd_prices.py`'s `folded.write()` ->
     `pipeline/corpus.py:Corpus.write()` -> `store/files.py:write_json()`). A reprice sweep is
     the same call. Neither imports `server/pipeline_routes.py`.
 
