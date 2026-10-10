@@ -74,6 +74,9 @@ def _adopt(args, say) -> int:
         say("")
         for path in bad:
             say(f"refused: {path} could not be read; adopting would drop its SKUs")
+        if bad:
+            say("to proceed, move or delete that run's pricing.json under the runs folder "
+                "(inside BANCHI_HOME), then run adopt again")
         if not found:
             say("refused: no reading found; adopting would blank the table")
         return 1

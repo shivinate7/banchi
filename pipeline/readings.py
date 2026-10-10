@@ -135,6 +135,8 @@ def _run_readings(root: Path, bad: Optional[List[str]] = None) -> Tuple[Dict[str
         try:
             parsed = json.loads(table.read_text("utf-8"))
             at = int(table.stat().st_mtime)
+            if not isinstance(parsed, dict) or not isinstance(parsed.get("skus"), list):
+                raise ValueError("not a pricing table")
         except (OSError, ValueError):
             if bad is not None:
                 bad.append(str(table))
