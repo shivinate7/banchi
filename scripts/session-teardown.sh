@@ -55,7 +55,7 @@ janitor="$mine/janitor.py"
 [ -f "$janitor" ] || exit 0
 
 python3 "$janitor" --teardown "$tree" 2>/dev/null
-in_use=$?    # 3: another session still stands in the tree (janitor.IN_USE)
+torn=$?    # 3 (janitor.IN_USE): another session stands in the tree; any non-zero keeps it
 
 # scripts/worktree-create.sh makes every Claude Code worktree, so removing it is this hook's
 # job too. No --force: git refuses a tree with uncommitted work, and that tree stays on disk.
@@ -63,7 +63,7 @@ in_use=$?    # 3: another session still stands in the tree (janitor.IN_USE)
 # with `-d`, which keeps a branch holding commits that no other ref has.
 case "$wtp" in
   */.claude/worktrees/*)
-    [ "$in_use" = 3 ] && exit 1
+    [ "$torn" = 0 ] || exit 1
     branch="$(git -C "$tree" symbolic-ref --quiet --short HEAD 2>/dev/null)"
     main="$(dirname "$(git -C "$tree" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")"
     git -C "$main" worktree remove "$tree" >/dev/null 2>&1 || exit 1

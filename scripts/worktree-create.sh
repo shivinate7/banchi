@@ -10,8 +10,9 @@
 # `worktree-<name>`, cut from a freshly fetched origin/main. A name whose branch is still
 # there reuses that branch as it stands. session-teardown.sh deletes the branch with `-d`.
 #
-# settings.json runs the MAIN checkout's copy of this file, never the session's cwd copy, so
-# a session standing in a tree cut before this file existed still gets a worktree.
+# settings.json runs the copy at $CLAUDE_PROJECT_DIR, the tree the session launched in, never
+# the cwd copy. That tree's settings armed this hook, so it holds this file too, even when the
+# session has since moved into a tree cut before this file existed.
 #
 # Contract: stdin is JSON with `name`. The LAST line of stdout is the absolute path, so
 # everything else goes to stderr. A non-zero exit fails the creation, so it exits non-zero
@@ -33,7 +34,8 @@ branch="worktree-$name"
 # fd 3 is Claude Code's stdout. Every child gets it closed (3>&-), or a backgrounded
 # `npm ci` from the post-checkout hook would hold it open and creation would wait for npm.
 if git -C "$main" worktree list --porcelain 3>&- | grep -qx "worktree $path"; then
-  echo "$path" >&3; exit 0      # re-entry: the tree is already there
+  [ -d "$path" ] && { echo "$path" >&3; exit 0; }   # re-entry: the tree is already there
+  git -C "$main" worktree prune 3>&-               # deleted by hand: drop the record, remake it
 fi
 
 GIT_TERMINAL_PROMPT=0 git -C "$main" -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 \

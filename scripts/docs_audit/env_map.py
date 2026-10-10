@@ -36,9 +36,6 @@ from .core import (
     rel,
 )
 from .paths_commands import PROPOSED_SIGIL, ignored_paths, marked_proposed
-
-# How a hook command names the project root. `:-.` keeps Codex, which does not set it, at cwd.
-PROJECT_DIR_PREFIX = "${CLAUDE_PROJECT_DIR:-.}/"
 from .registry_scopes import _tracked_paths
 from .records import (
     _DECISION_RE,
@@ -47,6 +44,9 @@ from .records import (
     decision_heading_lines_across,
     without_noqa,
 )
+
+# How a hook command names the project root. `:-.` keeps Codex, which does not set it, at cwd.
+PROJECT_DIR_PREFIX = "${CLAUDE_PROJECT_DIR:-.}/"
 
 # `duplicated measurements` is CUT (test-audit plan Q2, 2026-09-28). It reconciled
 # copies of three hand-taken measurements (cid lookup latency, the store card total,
