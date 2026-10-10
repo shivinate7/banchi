@@ -143,10 +143,12 @@ def _adopt(args, say) -> int:
 
 
 def _rule(rule) -> str:
-    """A sub-threshold rule as a sentence: `flat $0.50`, not a dict."""
-    if isinstance(rule, dict) and set(rule) == {decisions.FLAT_KEY}:
-        return f"flat {pricing.money(rule[decisions.FLAT_KEY])}"
-    return str(rule)
+    """The sub-threshold rule in `Disposition.describe`'s words; as typed when it will not parse."""
+    try:
+        parsed = decisions.parse_sub_threshold(rule)
+    except (decisions.MalformedDecisions, ValueError):
+        parsed = None
+    return parsed.describe if parsed else str(rule)
 
 
 def _show(args, say) -> int:
