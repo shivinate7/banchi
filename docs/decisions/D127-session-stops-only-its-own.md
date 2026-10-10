@@ -3,51 +3,24 @@
 **Built 2026-09-10, after two incidents in a single session**, both while cleaning up dev
 servers the session had itself launched.
 
-1. `pkill -f "capture_server.py"`, meant for a scratch capture server started in a worktree. It
-   is machine-wide, so it also matched
-   `/Users/shivinate/Developer/banchi/server/capture_server.py` — the owner's live capture
-   server on :8000 over their real 1,625-card store, the process **D138** exists to keep alive at
-   login. The supervisor restored it 25 seconds later and **D88** meant the store itself survived,
-   every write being one SQLite transaction; any request in flight was severed.
+1. `pkill -f "capture_server.py"`, meant for a scratch capture server started in a worktree. It is machine-wide. So it also matched `/Users/shivinate/Developer/banchi/server/capture_server.py`, the owner's live capture server on :8000 over their real 1,625-card store. That process is the one **D138** exists to keep alive at login. The supervisor restored it 25 seconds later. **D88** meant that the store itself survived, every write being one SQLite transaction. Any request in flight was severed.
 2. `for p in $(lsof -ti tcp:5439); do kill $p; done`, meant for the session's own Vite server.
    `lsof -ti tcp:PORT` returns every process holding a socket on that port, **which includes CLIENTS**. The second pid was the Claude desktop app's network-service helper. Electron
-   started it again; the app's network went down in between.
+   started it again. The app's network went down meanwhile.
 
-**NEITHER WAS A LAPSE OF CARE, AND THAT IS THE ENTIRE ARGUMENT FOR MECHANISM.** Both commands are
-the obvious spelling of a correct intent. What is wrong with them is invisible in the text: the
-first has a blast radius that depends on what else happens to be running, and the second has a
-blast radius that depends on who happens to be connected. A more careful session types the same
-two commands.
+**NEITHER WAS A LAPSE OF CARE, AND THAT IS THE ENTIRE ARGUMENT FOR MECHANISM.** Both commands are the obvious spelling of a correct intent. What is wrong with them is invisible in the text. The first has a blast radius that depends on what else happens to be running. The second has a blast radius that depends on who happens to be connected. A more careful session types the same two commands.
 
-**THREE SESSION NOTES ALREADY WARNED ABOUT THIS CLASS AND IT HAPPENED TWICE ANYWAY.** This
-project's memory carries `pkill-f-is-machine-wide.md` (a worktree cleanup that killed the main
-tree's servers), `dont-bounce-the-owners-servers.md` (the `restart` target killing the live capture
-server mid-request) and `a-pgrep-waiter-matches-itself.md`. **A note that has to be remembered is not a guard**, which is the preference this repo already acts on everywhere else — D16 checks the
-docs mechanically rather than asking, D42 refuses a move of `main` in a hook rather than in a
-sentence, claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep" sweeps rather than reminding.
+**THREE SESSION NOTES ALREADY WARNED ABOUT THIS CLASS AND IT HAPPENED TWICE ANYWAY.** This project's memory carries `pkill-f-is-machine-wide.md` (a worktree cleanup that killed the main tree's servers), `dont-bounce-the-owners-servers.md` (the `restart` target killing the live capture server mid-request) and `a-pgrep-waiter-matches-itself.md`. **A note that has to be remembered is not a guard**. That is the preference this repo already acts on everywhere else. D16 checks the docs mechanically rather than asking. D42 refuses a move of `main` in a hook rather than in a sentence. claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep" sweeps rather than reminding.
 
 ### The rule
 
-**Every process an agent session legitimately needs to kill was started BY that session**, and
-it lives under the checkout that session is working in. Everything it must never kill lives somewhere else: the
-main checkout's capture server, another worktree's servers under a different
-`.claude/worktrees/<name>/`, the desktop app, Chrome, and every other thing on the machine.
+**Every process an agent session legitimately needs to kill was started BY that session**, and it lives under the checkout that session is working in. Everything it must never kill lives somewhere else. That includes the main checkout's capture server. It includes another worktree's servers under a different `.claude/worktrees/<name>/`. It includes the desktop app, Chrome, and every other thing on the machine.
 
-That is not a heuristic. It is a property of how this repo is worked in, and **D43 is what makes it true** — that entry gave every checkout its own store and its own ports, so a session's own
-processes are already segregated by path. This entry spends that segregation a second time.
+That is not a heuristic. It is a property of how this repo is worked in. **D43 is what makes it true**. That entry gave every checkout its own store and its own ports. So a session's own processes are already segregated by path. This entry spends that segregation a second time.
 
-**So the guard does not read intent; it RESOLVES the command's real targets.** `scripts/reap.py
---hook` runs `pgrep` and `lsof` itself, read-only, and judges each pid it gets back:
-does any absolute path in that process's argv, or its working directory, live under this
-checkout? **`pkill -f capture_server.py` is therefore ALLOWED when the only match is yours**, and refused
-when it is not — the same command being right on Monday and wrong on Tuesday, which is
-exactly the fact no reading of the string could ever have carried.
+**So the guard does not read intent; it RESOLVES the command's real targets.** `scripts/reap.py --hook` runs `pgrep` and `lsof` itself, read-only. It judges each pid it gets back. Does any absolute path in that process's argv, or its working directory, live under this checkout? **`pkill -f capture_server.py` is therefore ALLOWED when the only match is yours**. It is refused when it is not. The same command is right on Monday and wrong on Tuesday. That is exactly the fact no reading of the string could ever have carried.
 
-**A loop variable is answered by the clause beside it.** `kill $p` cannot be resolved, but
-`for p in $(lsof -ti tcp:5439); do kill $p; done` has the port sitting in plain sight, so the
-question the guard asks is *what pids could this command be about* rather than *what is this
-kill's argument*. The producers — `pgrep`, `lsof -ti`, a `pkill` pattern, a `killall` name — are
-resolved wherever they sit in the command.
+**A loop variable is answered by the clause beside it.** `kill $p` cannot be resolved. But `for p in $(lsof -ti tcp:5439); do kill $p; done` has the port sitting in plain sight. So the question the guard asks is *what pids could this command be about* rather than *what is this kill's argument*. The producers — `pgrep`, `lsof -ti`, a `pkill` pattern, a `killall` name — are resolved wherever they sit in the command.
 
 ### What it lets past, because a guard that breaks cleanup is one that gets switched off
 
@@ -59,98 +32,45 @@ were cases in the self-test before the refusals were:
   ordinary way a session waits for a process to exit;
 - `%1` and `$!`, which name a job of the one-shot shell running the command and are therefore
   provably the session's own;
-- **the body of a heredoc**, because writing a script that mentions `pkill` is an ordinary thing
-  to do and a guard that reads a document as a command fires on the one class of command that can
-  kill nothing at all.
+- **the body of a heredoc**, because writing a script that mentions `pkill` is an ordinary thing to do. A guard that reads a document as a command fires on the one class of command that can kill nothing at all.
 
 ### Two refusals it makes that its own rule does not
 
-**A target it cannot place is refused** — no absolute path in the argv and no readable working
-directory. Missing evidence is never read as absence of a problem; `janitor.py:_same_process`
-takes the same direction, and for the same asymmetry: a false refusal costs a session one extra
-sentence, a false permission costs the owner a process they were using.
+**A target it cannot place is refused** — no absolute path in the argv and no readable working directory. Missing evidence is never read as absence of a problem. `janitor.py:_same_process` takes the same direction, and for the same asymmetry. A false refusal costs a session one extra sentence. A false permission costs the owner a process they were using.
 
-**The main checkout's supervisor and its children are refused even from inside it** — where the rule above would clear them. This is D138 written as a set of integers:
-`scripts/serve.py` records each child's pid under `.serve/*.pid`, and the guard reads each
-`.pid` marker and walks down the process tree from them — down, because the supervisor re-execs and
-replaces its children, so a child can be running before the pidfile naming it is rewritten. The
-refusal names `make down ARGS=--confirm`, which **drains**, rather than a harder kill.
+**The main checkout's supervisor and its children are refused even from inside it** — where the rule above would clear them. This is D138 written as a set of integers. `scripts/serve.py` records each child's pid under `.serve/*.pid`. The guard reads each `.pid` marker and walks down the process tree from them. It walks down, because the supervisor re-execs and replaces its children. So a child can be running before the pidfile naming it is rewritten. The refusal names `make down ARGS=--confirm`, which **drains**, rather than a harder kill.
 
-**IT COSTS 35 ms ON A BASH CALL IT HAS NO OPINION ABOUT**, measured over five runs on this
-machine, and that is almost entirely Python's own start-up: the first thing it does is a
-substring test for the three command words, and most commands do not contain one. A command it
-does have to judge costs 103 ms, which is `pgrep` and `lsof` and a `ps` — paid only on the
-commands that could kill something. A hook on EVERY Bash call has to justify its floor, so the
-floor is the number worth writing down.
+**IT COSTS 35 ms ON A BASH CALL IT HAS NO OPINION ABOUT**. Measured over five runs on this machine, that is almost entirely Python's own start-up. The first thing it does is a substring test for the three command words, and most commands do not contain one. A command it does have to judge costs 103 ms. That cost is `pgrep` and `lsof` and a `ps`, paid only on the commands that could kill something. A hook on EVERY Bash call has to justify its floor, so the floor is the number worth writing down.
 
 ### The asymmetry that keeps it enabled
 
-**A broken GUARD fails open; an unreadable TARGET fails closed.** The first is `guard-opsec.sh`'s
-hard-won rule, taken here unchanged and for its reason — that guard was disabled inside a day
-when it blocked on its own bugs, and a disabled guard protects nothing. The second is not the
-same thing wearing a different hat: it is the guard being *right that it does not know*, which is
-a determination about the world and not a defect in the code.
+**A broken GUARD fails open; an unreadable TARGET fails closed.** The first is `guard-opsec.sh`'s hard-won rule, taken here unchanged and for its reason. That guard was disabled inside a day when it blocked on its own bugs. A disabled guard protects nothing. The second is not the same thing wearing a different hat. It is the guard being *right that it does not know*. That is a determination about the world and not a defect in the code.
 
-**The escape hatch is `BANCHI_KILL=off` and every refusal prints it**, per the house convention
-`BANCHI_MAIN=off` set. It is sized to be reached for rarely rather than made hard: everything
-provably yours is already allowed, so a session that wants the hatch is doing something unusual
-and should notice that it is.
+**The escape hatch is `BANCHI_KILL=off` and every refusal prints it**, per the house convention `BANCHI_MAIN=off` set. It is sized to be reached for rarely rather than made hard. Everything provably yours is already allowed. So a session that wants the hatch is doing something unusual, and should notice that it is.
 
 ### One file, two faces, one predicate
 
-`scripts/reap.py` is both the hook and the tool the hook recommends. **That is the point rather than a convenience**: a guard that refuses on one notion of "safe to kill" while the tool it names
-uses another is a guard people learn to route around. `make reap` previews everything running
-under this checkout, `--confirm` stops it, and `port:N` / `match:X` / `pid:N` narrow it —
-**and it prints what it refused and why**, which is the half a `pkill` that quietly does the right
-thing on a good day can never do.
+`scripts/reap.py` is both the hook and the tool the hook recommends. **That is the point rather than a convenience**. A guard that refuses on one notion of "safe to kill" while the tool it names uses another. Such a guard is one people learn to route around. `make reap` previews everything running under this checkout, and `--confirm` stops it. `port:N` / `match:X` / `pid:N` narrow it, **and it prints what it refused and why**. That is the half a `pkill` that quietly does the right thing on a good day can never do.
 
-**IT DOES NOT DUPLICATE `janitor.py`, AND IT WAS BUILT NOT TO.** The claude-settings sweep (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep") owns the
-neighbouring question — what a FINISHED session left behind, on its own schedule, across trees
-and branches and orphans. This owns one signal at the moment it is sent. What they share is the
-reasoning, and where the shapes matched the code was copied WITH its argument rather than
-re-derived: `_real` and its symlink trap, the process table, the leader-only `killpg`. Neither
-grew a second, disagreeing notion of what is safe to stop.
+**IT DOES NOT DUPLICATE `janitor.py`, AND IT WAS BUILT NOT TO.** The claude-settings sweep (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep") owns the neighbouring question — what a FINISHED session left behind, on its own schedule, across trees and branches and orphans. This owns one signal at the moment it is sent. What they share is the reasoning. Where the shapes matched, the code was copied WITH its argument rather than re-derived: `_real` and its symlink trap, the process table, the leader-only `killpg`. Neither grew a second, disagreeing notion of what is safe to stop.
 
-**It imports nothing from this tree**, for `janitor.py`'s reason: both stay repo-agnostic so a hook can
-point them at any checkout. **The repo's own `.codex/hooks.json` carries the hook**, so the guard is armed in this tree and in
-every worktree cut from it with no per-machine step at all — the repo's copy is the only one, run from `scripts/`.
-`.claude/settings.json` does not, on the owner's word: the shared layer's machine-wide-kill rule
-owns the Claude side.
+**It imports nothing from this tree**, for `janitor.py`'s reason: both stay repo-agnostic so a hook can point them at any checkout. **The repo's own `.codex/hooks.json` carries the hook**. So the guard is armed in this tree and in every worktree cut from it, with no per-machine step at all. The repo's copy is the only one, run from `scripts/`. `.claude/settings.json` does not, on the owner's word: the shared layer's machine-wide-kill rule owns the Claude side.
 
 ### Amended 2026-09-10, the same day: a root may not be a directory that contains everything
 
-**The user-level install exposed a hole the repo-level one structurally could not.** Inside a
-clone `git rev-parse --show-toplevel` always answers, so `checkout_root`'s fallback — the current
-directory, when there is no git top level — never ran. The moment a user-level
-hook ran this guard it began firing in directories that are not
-repositories at all, and there the fallback **adopted the home directory as "this checkout"**.
+**The user-level install exposed a hole the repo-level one structurally could not.** Inside a clone `git rev-parse --show-toplevel` always answers, so `checkout_root`'s fallback never ran. That fallback is the current directory, used when there is no git top level. The moment a user-level hook ran this guard, it began firing in directories that are not repositories at all. There the fallback **adopted the home directory as "this checkout"**.
 
 **Measured from `/Users/shivinate` on the owner's Mac, minutes after the install:** `pgrep -f
 capture_server.py` — the literal command of incident 1 — resolved their live `:8000` server to
 **OURS**, because `~/Developer/banchi/server/capture_server.py` is under `~`. The guard would
 have cleared the exact kill it was built to refuse.
 
-**A root has to be a place work is DONE, not a place work is KEPT.** `_too_broad` rejects the home
-directory, every ancestor of it, `/`, and the system directories; with no honest root the answer is
-not a wider guess but that this file has nothing to reason with, and `_under` already reads an
-empty root as "nothing is under it" — so every target is refused and the hatch is printed, which is
-the direction every other unknown here resolves in. An ordinary non-repo directory is still a
-workspace, because a session outside a clone must still be able to clean up after itself.
+**A root has to be a place work is DONE, not a place work is KEPT.** `_too_broad` rejects the home directory, every ancestor of it, `/`, and the system directories. With no honest root, the answer is not a wider guess. The answer is that this file has nothing to reason with. `_under` already reads an empty root as "nothing is under it". So every target is refused, and the hatch is printed. That is the direction every other unknown here resolves in. An ordinary non-repo directory is still a workspace. The reason: a session outside a clone must still be able to clean up after itself.
 
-**THE FIRST TWO ATTEMPTS AT THE TEST FOR THIS PASSED WITHOUT SEEING ANYTHING**, and that is worth
-recording beside the fix. Both judged `$stranger`, which lives under the fixture's `mktemp -d` —
-on a Mac that is `$TMPDIR` in `/var/folders`, under neither `$HOME` nor `/tmp` — so a broad root
-would not have claimed it either and the cases were vacuous. Three mutation arms survived, which
-is the only reason anyone found out.
-**Every case now puts a process inside the directory it is testing**, and `$HOME` is faked into
-the fixture rather than used — the only way to have a subject under a home directory without
-starting one under the owner's real home.
+**THE FIRST TWO ATTEMPTS AT THE TEST FOR THIS PASSED WITHOUT SEEING ANYTHING**, and that is worth recording beside the fix. Both judged `$stranger`, which lives under the fixture's `mktemp -d`. On a Mac that is `$TMPDIR` in `/var/folders`, under neither `$HOME` nor `/tmp`. So a broad root would not have claimed it either, and the cases were vacuous. Three mutation arms survived, which is the only reason anyone found out.
+**Every case now puts a process inside the directory it is testing**. `$HOME` is faked into the fixture rather than used. This is the only way to have a subject under a home directory without starting one under the owner's real home.
 
-**A redundancy no test can distinguish is not defense in depth.** The first `_too_broad` had two
-arms — a fixed list, and a separate home-and-ancestors check — and on a standard Mac layout every
-case either could pose was caught by both, so removing one changed no verdict. They are one set
-now, and the cases separate the list (`/private/tmp`) from the walk (a home directory placed
-somewhere the list does not reach).
+**A redundancy no test can distinguish is not defense in depth.** The first `_too_broad` had two arms: a fixed list, and a separate home-and-ancestors check. On a standard Mac layout, every case either could pose was caught by both. So removing one changed no verdict. They are one set now. The cases separate the list (`/private/tmp`) from the walk (a home directory placed somewhere the list does not reach).
 
 ### What it does not cover, said out loud
 
@@ -163,10 +83,7 @@ somewhere the list does not reach).
 - **`os.kill` in a `python3 -c`**, which is not in the trigger set. Adding it would trade a real
   false-positive rate against a case nobody has hit.
 
-`make reap-selftest` proves the rest against a throwaway checkout, a throwaway sibling standing in
-for everywhere-else, a real socket with a real client on it, and a `.serve/` pidfile — both
-incidents reproduced rather than asserted about. **Mutation-tested: thirteen guards removed one at a time, all thirteen caught.** D18 keeps it out of the git hook and in `make check`, beside
-`janitor-selftest`, for the reason that entry gives — it writes, and it signals.
+`make reap-selftest` proves the rest against a throwaway checkout and a throwaway sibling. The sibling stands in for everywhere-else. The test also uses a real socket with a real client on it, and a `.serve/` pidfile. Both incidents are reproduced rather than asserted about. **Mutation-tested: thirteen guards removed one at a time, all thirteen caught.** D18 keeps it out of the git hook and in `make check`, beside `janitor-selftest`, as that entry explains. It writes, and it signals.
 
 ### Amended 2026-09-27: "under this checkout" is no longer "one session's"
 
