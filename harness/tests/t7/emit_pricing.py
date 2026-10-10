@@ -1121,6 +1121,44 @@ def check_prices_adopt(checks: Checks) -> None:
             policy_line,
         )
 
+    # --- the same figure on the lines `join` and `emit` print: `Disposition.describe` -----------
+    checks.equal(
+        pricing.flat_price("0.5").describe,
+        "flat at $0.50",
+        "`Disposition.describe` for a flat 0.5 reads `flat at $0.50`, never `$0.5`",
+    )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.sub_threshold = {"flat": "0.5"}
+        book.write()
+        run_dir, joined = seam_run(
+            checks, [(3, 1, "Dunsparce", "120", "normal")], market={DUNSPARCE_SKU: "0.12"}
+        )
+        checks.ok(
+            "sub-threshold    flat at $0.50" in joined,
+            "the `sub-threshold` line `join` prints reads `flat at $0.50`",
+            joined,
+        )
+        sent = command(checks, "emit", str(run_dir.directory))
+        pricing_line = next((line for line in sent.splitlines() if line.startswith("pricing")), "")
+        checks.ok(
+            "sub_threshold=flat at $0.50 " in pricing_line,
+            "the `pricing` line `emit` prints names the flat sub-threshold as `flat at $0.50`",
+            pricing_line or sent,
+        )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.sub_threshold = {"flat": "0.5"}
+        book.write()
+        shown = command(checks, "prices", "show")
+        checks.ok(
+            "sub_threshold=flat $0.50" in shown,
+            "GUARD: `prices show` still prints the sub-threshold as `flat $0.50`",
+            shown,
+        )
+
 
 def check_readings_adopt_cli(checks: Checks) -> None:
     """`banchi readings adopt` and `readings show`, through the real argparse dispatch
