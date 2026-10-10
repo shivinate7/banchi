@@ -193,6 +193,22 @@ def check_basis(basis: str) -> str:
     return basis
 
 
+def money(value) -> str:
+    """THE way the CLI prints a price: `$18.50`, never `$18.5`. Rendering only; comparing is `corpus._token`.
+
+    A figure finer than a cent prints in full, so a screen never shows a boundary that is not the real one.
+    A value that is not a number prints as typed."""
+    try:
+        number = Decimal(str(value).strip())
+        if not number.is_finite():
+            return f"${value}"
+        if number.normalize().as_tuple().exponent < -2:
+            return f"${number.normalize():f}"
+        return "$" + tcgcsv.format_price(number)
+    except (ArithmeticError, InvalidOperation, ValueError):
+        return f"${value}"
+
+
 def basis_price(row: tcgcsv.Row, basis: str = BASIS_MARKET) -> Optional[Decimal]:
     """The price this run's rule is applied to. None when the cell is blank."""
     return tcgcsv.parse_price(row[BASIS_COLUMN[check_basis(basis)]])

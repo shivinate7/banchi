@@ -803,6 +803,9 @@ class Change:
     kept: str
     dropped: List[Tuple[str, str]]
     hold_lost: bool
+    #: `kept` and `dropped` as the owner reads them (`shown`); the fields above are compare keys.
+    kept_shown: str = ""
+    dropped_shown: List[Tuple[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -820,6 +823,8 @@ class Kept:
     run: str
     in_file: str
     in_corpus: str
+    in_file_shown: str = ""
+    in_corpus_shown: str = ""
 
 
 def adopt(
@@ -885,6 +890,8 @@ def adopt(
                             run=name,
                             in_file=_token(value),
                             in_corpus=_token(out.answers[str(sku)].value),
+                            in_file_shown=shown(value),
+                            in_corpus_shown=shown(out.answers[str(sku)].value),
                         )
                     )
                     continue
@@ -919,6 +926,12 @@ def adopt(
                     any(_is_hold(value) for _, value in history[:-1])
                     and not _is_hold(kept_value)
                 ),
+                kept_shown=f"{shown(kept_value)} ({kept_run})",
+                dropped_shown=[
+                    (name, shown(value))
+                    for name, value in history[:-1]
+                    if _token(value) != _token(kept_value)
+                ],
             )
         )
     return out, changes, kept
@@ -951,6 +964,19 @@ def _is_hold(value: object) -> bool:
     if isinstance(value, dict):
         return decisions_mod.WITHHELD_KEY in value
     return str(value).strip().lower() == decisions_mod.pricing.UNLISTED
+
+
+def shown(value: object) -> str:
+    """An answer as the owner reads it: a price with cents, a hold's reason text untouched.
+    Display only; `_token` is the compare key."""
+    if isinstance(value, dict):
+        reason = value.get(decisions_mod.WITHHELD_KEY, "")
+        watch = value.get(decisions_mod.WATCH_KEY)
+        return f"held: {reason}" + (f" above {pricing.money(watch)}" if watch else "")
+    text = str(value).strip()
+    if text.lower() == decisions_mod.pricing.UNLISTED:
+        return "unlisted"
+    return pricing.money(text)
 
 
 def _token(value: object) -> str:

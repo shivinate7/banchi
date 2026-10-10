@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 
 from cli import runs
-from pipeline import corpus, decisions
+from pipeline import corpus, decisions, pricing
 from store import files
 
 
@@ -78,7 +78,7 @@ def _adopt(args, say) -> int:
     retire = corpus.retirable(found, folded)
     say(f"{len(found)} run file(s) -> {len(folded.answers)} answer(s), "
         + ("the run files winning" if replace else "the corpus keeping what it already answers"))
-    say(f"policy           rule={folded.rule} basis={folded.basis} sub_threshold={folded.sub_threshold}")
+    say(f"policy           rule={folded.rule} basis={folded.basis} sub_threshold={_rule(folded.sub_threshold)}")
     holds = sum(1 for answer in folded.answers.values() if answer.is_hold)
     say(f"holds            {holds} card(s) held back, and they outlive their run")
 
@@ -89,15 +89,15 @@ def _adopt(args, say) -> int:
             f"sitting, and --force is how a run file overrides it. "
             f"{len(differing)} differ from the file:")
         for row in differing:
-            say(f"  {row.sku}  kept {row.in_corpus} (corpus) — file said {row.in_file} ({row.run})")
+            say(f"  {row.sku}  kept {row.in_corpus_shown} (corpus) — file said {row.in_file_shown} ({row.run})")
 
     if changes:
         say("")
         say(f"{len(changes)} card(s) were answered more than one way. Newest wins:")
         for change in changes:
             mark = "  <-- A HOLD WAS REPLACED BY A PRICE" if change.hold_lost else ""
-            say(f"  {change.sku}  kept {change.kept}{mark}")
-            for name, token in change.dropped:
+            say(f"  {change.sku}  kept {change.kept_shown}{mark}")
+            for name, token in change.dropped_shown:
                 say(f"      dropped {token} ({name})")
         lost = [change for change in changes if change.hold_lost]
         if lost:
@@ -142,6 +142,13 @@ def _adopt(args, say) -> int:
     return 0
 
 
+def _rule(rule) -> str:
+    """A sub-threshold rule as a sentence: `flat $0.50`, not a dict."""
+    if isinstance(rule, dict) and set(rule) == {decisions.FLAT_KEY}:
+        return f"flat {pricing.money(rule[decisions.FLAT_KEY])}"
+    return str(rule)
+
+
 def _show(args, say) -> int:
     try:
         book = corpus.Corpus.read()
@@ -155,7 +162,7 @@ def _show(args, say) -> int:
     say(f"{files.prices_path()}")
     say(
         f"policy           rule={book.rule} basis={book.basis} "
-        f"threshold=${book.threshold} sub_threshold={book.sub_threshold}"
+        f"threshold={pricing.money(book.threshold)} sub_threshold={_rule(book.sub_threshold)}"
     )
     for name, over in sorted(book.overrides.items()):
         say(f"  override       {name}: {over}")
@@ -172,7 +179,7 @@ def _show(args, say) -> int:
             note = value.get("note") if isinstance(value, dict) else None
             line = f"  {sku}  {reason}"
             if watch:
-                line += f" above ${watch}"
+                line += f" above {pricing.money(watch)}"
             if note:
                 line += f" — {note}"
             say(line)

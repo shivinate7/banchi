@@ -872,6 +872,293 @@ def check_prices_adopt(checks: Checks) -> None:
             "corpus — the answer was already there; emit only reads it",
         )
 
+    # ------------------------------------- (7) every money figure the CLI prints has cents
+    # THE CENT RULE, read the way the owner reads it. `corpus._token` compares an answer with
+    # `Decimal.normalize`, and it also RENDERS with it, which strips trailing zeros: the adopt
+    # report named a $18.50 answer as "$18.5" and a $1200.00 answer as "$1200". Every `$`
+    # figure on a CLI line is money, so every one carries exactly two decimals.
+    money_token = re.compile(r"\$-?[0-9][0-9,]*(?:\.[0-9]+)?")
+    two_decimals = re.compile(r"\$-?[0-9][0-9,]*\.[0-9]{2}")
+
+    def bare_money(text):
+        return [tok for tok in money_token.findall(text) if not two_decimals.fullmatch(tok)]
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: "18.50", DUNSPARCE_SKU: "1200.00"}})
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.49", DUNSPARCE_SKU: "1199.99"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.equal(
+            bare_money(said),
+            [],
+            "the first adoption's kept and dropped rows print every price with two decimals — "
+            "a $18.50 answer is `$18.50`, a $1200.00 answer is `$1200.00`, never `$18.5`/`$1200`",
+        )
+        checks.ok(
+            "dropped $18.50 (" in said and "kept $1199.99 (" in said,
+            "and the two figures the owner typed are the two figures the report names",
+            said,
+        )
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.49"}})
+        command(checks, "prices", "adopt", "--write")
+        legacy_run({"overrides": {ARTICUNO_SKU: "18.50"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.equal(
+            bare_money(said),
+            [],
+            "a re-adopt's kept row prints the corpus's figure and the file's with two decimals",
+        )
+        checks.ok(
+            "kept $0.49 (corpus) — file said $18.50" in said,
+            "and the row reads `kept $0.49 (corpus) — file said $18.50`",
+            said,
+        )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.threshold = "0.4"
+        book.answers[ARTICUNO_SKU] = corpus.Answer(
+            value={"withheld": "bullish", "watch_above": "18.5"}
+        )
+        book.write()
+        shown = command(checks, "prices", "show", "--held")
+        checks.equal(
+            bare_money(shown),
+            [],
+            "`prices show` prints the threshold and the watch price with two decimals",
+        )
+        checks.ok(
+            "threshold=$0.40 " in shown and "above $18.50" in shown,
+            "a threshold typed as 0.4 shows as $0.40 and a watch typed as 18.5 as $18.50",
+            shown,
+        )
+
+    # ------------------------- (8) a COMPARE KEY keeps full precision; only PRINTING rounds
+    # `corpus._token` is the key that decides "same answer", and section 7 made it round to two
+    # decimals. Two prices a tenth of a cent apart then count as ONE answer: an adopt hides a
+    # price change, and an override edited from 0.505 to 0.51 keeps its stale `at`. Rounding
+    # belongs at the print site (`pricing.money`) and nowhere else.
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.505"}})
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.51"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.ok(
+            "1 card(s) were answered more than one way" in said,
+            "run files 0.505 then 0.51 are ONE reported change, never folded into one answer",
+            said,
+        )
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.51"}})
+        command(checks, "prices", "adopt", "--write")
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.505"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.ok(
+            "1 differ from the file" in said and f"{ARTICUNO_SKU}  kept $0.51 (corpus)" in said,
+            "a re-adopt without --force, corpus 0.51 against a file's 0.505, counts the row as "
+            "differing and prints the kept line",
+            said,
+        )
+
+    stamped_at = "2026-10-01T00:00:00+00:00"
+    first_at = "2026-01-01T00:00:00+00:00"
+    held_before = corpus.Corpus()
+    held_before.answers[ARTICUNO_SKU] = corpus.Answer(value="0.505", at=first_at)
+    held_after = corpus.Corpus()
+    held_after.answers[ARTICUNO_SKU] = corpus.Answer(value="0.51")
+    stamped = corpus.stamp_answers(held_before, held_after, stamped_at)
+    checks.equal(
+        (stamped, held_after.answers[ARTICUNO_SKU].at),
+        ([ARTICUNO_SKU], stamped_at),
+        "an override edited from 0.505 to 0.51 is a new answer and gets a new `at`",
+    )
+    same_before = corpus.Corpus()
+    same_before.answers[ARTICUNO_SKU] = corpus.Answer(value="0.50", at=first_at)
+    same_after = corpus.Corpus()
+    same_after.answers[ARTICUNO_SKU] = corpus.Answer(value="0.5")
+    checks.equal(
+        (corpus.stamp_answers(same_before, same_after, stamped_at), same_after.answers[ARTICUNO_SKU].at),
+        ([], first_at),
+        "and 0.50 round-tripped as 0.5 is still the same answer and keeps its `at`",
+    )
+
+    # A hold whose `watch_above` is not a number is a value `Decisions.parse` refuses later.
+    # Comparing or printing it must report it as typed, never raise out of a read-only command.
+    bad_hold = {"withheld": "bullish", "watch_above": "abc"}
+
+    def raises(fn):
+        try:
+            fn()
+        except Exception as error:  # noqa: BLE001 — the case is that nothing escapes
+            return f"{type(error).__name__}: {error}"
+        return ""
+
+    for replace in (True, False):
+        base = corpus.Corpus()
+        base.answers[ARTICUNO_SKU] = corpus.Answer(value=bad_hold)
+        checks.equal(
+            raises(lambda: corpus.adopt([("run-a", {"overrides": {ARTICUNO_SKU: "3.45"}})], base, replace=replace)),
+            "",
+            f"`corpus.adopt(replace={replace})` over a hold with watch_above 'abc' does not raise",
+        )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.answers[ARTICUNO_SKU] = corpus.Answer(value=bad_hold)
+        book.write()
+        outcome = {}
+
+        def show_held():
+            outcome["text"] = command(checks, "prices", "show", "--held")
+
+        failure = raises(show_held)
+        checks.ok(
+            not failure and f"{ARTICUNO_SKU}  bullish" in outcome.get("text", ""),
+            "`prices show --held` over a hold with watch_above 'abc' does not raise and still "
+            "prints the hold's line",
+            failure or outcome.get("text", ""),
+        )
+
+    # ------------------- (9) a printed price reads right at a glance; a typed value never crashes
+    # `pricing.money` stripped trailing zeros from a figure finer than a cent, so a value typed
+    # `18.500` printed `$18.5`; a non-finite `watch_above` ('NaN', 'Infinity', 'sNaN') raised a
+    # TypeError out of `prices show --held`; and `cmd_prices._printed` rewrote every `$<digits>`
+    # in a compare key, including one inside a hold's reason text or a `$1,500` figure.
+    for typed, printed in (("18.500", "$18.50"), ("0.400", "$0.40"), ("5.000", "$5.00"), ("0.505", "$0.505")):
+        got = {}
+        failure = raises(lambda: got.update(text=pricing.money(typed)))
+        checks.equal(
+            got.get("text") or failure,
+            printed,
+            f"`pricing.money({typed!r})` prints {printed}: trailing zeros pad to cents, a real "
+            "sub-cent digit is kept",
+        )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.threshold = "0.400"
+        book.answers[ARTICUNO_SKU] = corpus.Answer(value={"withheld": "bullish", "watch_above": "18.500"})
+        book.write()
+        shown = command(checks, "prices", "show", "--held")
+        checks.ok(
+            "threshold=$0.40 " in shown and "above $18.50" in shown,
+            "`prices show` prints a threshold typed 0.400 as $0.40 and a watch typed 18.500 as "
+            "$18.50, two decimals each",
+            shown,
+        )
+
+    for typed in ("NaN", "Infinity", "sNaN"):
+        with isolated_home():
+            book = corpus.Corpus()
+            book.answers[ARTICUNO_SKU] = corpus.Answer(value={"withheld": "bullish", "watch_above": typed})
+            book.write()
+            outcome = {}
+            failure = raises(lambda: outcome.update(text=command(checks, "prices", "show", "--held")))
+            checks.ok(
+                not failure and f"{ARTICUNO_SKU}  bullish" in outcome.get("text", ""),
+                f"`prices show --held` over a hold with watch_above {typed!r} does not raise and "
+                "still prints the hold's line",
+                failure or outcome.get("text", ""),
+            )
+            legacy_run({"overrides": {ARTICUNO_SKU: "3.45"}})
+            failure = raises(lambda: command(checks, "prices", "adopt"))
+            checks.equal(
+                failure,
+                "",
+                f"`prices adopt` over a corpus hold with watch_above {typed!r} does not raise",
+            )
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: {"withheld": "market $3 looks off."}}})
+        legacy_run({"overrides": {ARTICUNO_SKU: "3.45"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.ok(
+            "dropped held: market $3 looks off. (" in said,
+            "a hold reason that says `$3` prints unchanged in the adopt report, never `$3.00`",
+            said,
+        )
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: {"withheld": "worth $1,500 maybe"}}})
+        legacy_run({"overrides": {ARTICUNO_SKU: "3.45"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.ok(
+            "dropped held: worth $1,500 maybe (" in said,
+            "a hold reason that says `$1,500` prints unchanged, never cut at the comma",
+            said,
+        )
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: {"withheld": "bullish", "watch_above": "1,500"}}})
+        legacy_run({"overrides": {ARTICUNO_SKU: "3.45"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.ok(
+            re.search(r"above \$1,500(\.00)?(?![0-9,])", said) is not None and "$1.00,500" not in said,
+            "a watch price of 1,500 prints as $1,500 or $1,500.00, never as a wrong figure",
+            said,
+        )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.sub_threshold = {"flat": "0.5"}
+        book.write()
+        shown = command(checks, "prices", "show")
+        policy_line = next(line for line in shown.splitlines() if line.startswith("policy"))
+        checks.ok(
+            "{" not in policy_line and "'flat'" not in policy_line and "$0.50" in policy_line,
+            "`prices show` prints a flat sub-threshold rule as a sentence with $0.50, not a raw dict",
+            policy_line,
+        )
+
+    with isolated_home():
+        legacy_run({"sub_threshold": {"flat": ".5"}, "overrides": {ARTICUNO_SKU: "3.45"}})
+        said = command(checks, "prices", "adopt")
+        policy_line = next(line for line in said.splitlines() if line.startswith("policy"))
+        checks.ok(
+            "{" not in policy_line and "'flat'" not in policy_line and "$0.50" in policy_line,
+            "`prices adopt` prints a flat sub-threshold rule as a sentence with $0.50, not a raw dict",
+            policy_line,
+        )
+
+    # --- the same figure on the lines `join` and `emit` print: `Disposition.describe` -----------
+    checks.equal(
+        pricing.flat_price("0.5").describe,
+        "flat at $0.50",
+        "`Disposition.describe` for a flat 0.5 reads `flat at $0.50`, never `$0.5`",
+    )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.sub_threshold = {"flat": "0.5"}
+        book.write()
+        run_dir, joined = seam_run(
+            checks, [(3, 1, "Dunsparce", "120", "normal")], market={DUNSPARCE_SKU: "0.12"}
+        )
+        checks.ok(
+            "sub-threshold    flat at $0.50" in joined,
+            "the `sub-threshold` line `join` prints reads `flat at $0.50`",
+            joined,
+        )
+        sent = command(checks, "emit", str(run_dir.directory))
+        pricing_line = next((line for line in sent.splitlines() if line.startswith("pricing")), "")
+        checks.ok(
+            "sub_threshold=flat at $0.50 " in pricing_line,
+            "the `pricing` line `emit` prints names the flat sub-threshold as `flat at $0.50`",
+            pricing_line or sent,
+        )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.sub_threshold = {"flat": "0.5"}
+        book.write()
+        shown = command(checks, "prices", "show")
+        checks.ok(
+            "sub_threshold=flat $0.50" in shown,
+            "GUARD: `prices show` still prints the sub-threshold as `flat $0.50`",
+            shown,
+        )
+
 
 def check_readings_adopt_cli(checks: Checks) -> None:
     """`banchi readings adopt` and `readings show`, through the real argparse dispatch
