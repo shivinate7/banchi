@@ -2,8 +2,10 @@
 # Provisions a NEW worktree the moment `git worktree add` makes it.
 #
 # The SessionStart hook (scripts/worktree-guard.sh) covers a session that STARTS in a
-# worktree. It misses a worktree made mid-session, by hand or by a tool, because no
-# session starts there. Git runs this hook after `git worktree add` (not with
+# worktree. It misses a worktree made mid-session with `git worktree add`, because no
+# session starts there. Claude Code's own worktrees (EnterWorktree by name, an Agent with
+# isolation: worktree) do NOT run this hook: measured, it never fired for them. A shared
+# setup in claude-settings is to cover those. Git runs this hook after `git worktree add` (not with
 # --no-checkout), with an all-zero previous HEAD, so this calls the same script for
 # that case and no other. It also claims this tree's port slot, as SessionStart does.
 # `make venv` runs in the foreground, so the add waits for pip once per worktree.
