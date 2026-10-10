@@ -129,5 +129,28 @@ else
   ok "c: branch worktree-c deleted with -d (merged into primary HEAD)"
 fi
 
+# ------------------------------------------------------------------ case d: a local ref named origin/main
+
+# A local branch named origin/main at an UNMERGED tip shadows refs/remotes/origin/main in a bare
+# `origin/main` revision. The ancestor test then passes, and -D deletes unmerged work. The branch
+# must be KEPT. The ref is created by hand, not by a teardown path, so this case stands alone.
+make_tree d
+commit_file "$MAIN/.claude/worktrees/d" d
+git -C "$MAIN" branch origin/main worktree-d
+# Setup check: the bare name now resolves to the local branch, not the remote-tracking ref.
+if [ "$(git -C "$MAIN" rev-parse origin/main)" = "$(git -C "$MAIN" rev-parse worktree-d)" ] \
+   && [ "$(git -C "$MAIN" rev-parse refs/remotes/origin/main)" != "$(git -C "$MAIN" rev-parse worktree-d)" ]; then
+  ok "d: setup holds (bare origin/main names a local branch at the unmerged tip)"
+else
+  bad "d: setup did not hold; the case proves nothing"
+fi
+run_teardown d
+if [ "$(cat "$tmp/d.rc")" = "0" ]; then ok "d: teardown exits 0"; else bad "d: teardown exit $(cat "$tmp/d.rc")"; fi
+if git -C "$MAIN" rev-parse --verify --quiet refs/heads/worktree-d >/dev/null; then
+  ok "d: unmerged branch worktree-d kept despite a local origin/main ref"
+else
+  bad "d: unmerged branch worktree-d was DELETED through a shadowed origin/main ref"
+fi
+
 echo "session-teardown-selftest: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
