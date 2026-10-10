@@ -3439,7 +3439,8 @@ COMPONENTS = [
                         "is still standing in is left alone, and the branch is never touched. "
                         "On WorktreeRemove it also runs `git worktree remove` without --force, "
                         "because worktree-create.sh made the tree, then `git branch -d` on its "
-                        "`worktree-*` branch. A tree with uncommitted work, or one another "
+                        "`worktree-*` branch, or `-D` when the branch is already in the local "
+                        "origin/main (no upstream to compare with). A tree with uncommitted work, or one another "
                         "session stands in (janitor's `IN_USE` exit), stays on disk and the "
                         "hook exits 1. A supervisor whose tree has just been "
                         "removed is findable only from the process table; that dead-rooted "
@@ -3453,7 +3454,7 @@ COMPONENTS = [
                 "does": "the WorktreeCreate hook. Makes every Claude Code worktree with a plain "
                         "`git worktree add` at `.claude/worktrees/<name>` on `worktree-<name>`, "
                         "cut from a fresh origin/main with --no-track (no shared .git/config write, so parallel "
-                        "Agents do not race on its lock), so githooks/post-checkout provisions it. "
+                        "Agents do not race on its lock; the branch has no upstream), so githooks/post-checkout provisions it. "
                         "Claude Code's own creation never fires post-checkout. Prints only the "
                         "path on stdout; exits non-zero only when git cannot make the tree.",
                 "governed_by": ["D18"],

@@ -12,9 +12,10 @@
 #
 # `--no-track`: a branch cut from origin/main gets upstream tracking by default, and that
 # writes the shared .git/config. Parallel Agents raced on its lock ("could not lock config
-# file", "unable to write upstream branch configuration") and two of three failed. Nothing
-# in the repo reads a worktree branch's upstream (guard-shell's `_tracked_branch` treats no
-# upstream as the ordinary first push), so the write is dropped rather than retried.
+# file", "unable to write upstream branch configuration") and two of three failed. The
+# branch has no upstream now. guard-shell's `_tracked_branch` reads no upstream as an ordinary
+# first push. session-teardown.sh, which used `-d` (merged into upstream, else HEAD), now also
+# tests the branch against the local origin/main and deletes a merged one with `-D`.
 #
 # settings.json runs the copy at $CLAUDE_PROJECT_DIR, the tree the session launched in, never
 # the cwd copy. That tree's settings armed this hook, so it holds this file too, even when the

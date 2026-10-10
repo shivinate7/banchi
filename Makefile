@@ -1297,6 +1297,15 @@ janitor-install:
 # answers from the tree alone, and a row that resolves DNS and expects a server to be up would
 # go red on a train and in every worktree. A check that fails for reasons unrelated to the
 # commit is one people learn to ignore.
+.PHONY: janitor janitor-selftest janitor-install serve-selftest sync-selftest ci-check ci-check-product ci-check-static ci-check-guards-1 ci-check-guards-2
+
+.PHONY: lan-check
+# Is the LAN URL still good? DNS, both servers, and a real write. Reaches the
+# network, so it never gates a commit.
+lan-check:
+	@python3 scripts/lan-check.py
+
+# Four worktree-create.sh creations at once must all make a tree (the shared config lock).
 .PHONY: worktree-create-selftest
 worktree-create-selftest:
 	@python3 scripts/guard-scope.py classify --target worktree-create-selftest --base origin/main; rc=$$?; \
@@ -1305,14 +1314,6 @@ worktree-create-selftest:
 	else \
 		echo "worktree-create-selftest: SKIPPED — nothing in this branch reaches scripts/worktree-create.sh. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
-
-.PHONY: janitor janitor-selftest janitor-install serve-selftest sync-selftest ci-check ci-check-product ci-check-static ci-check-guards-1 ci-check-guards-2
-
-.PHONY: lan-check
-# Is the LAN URL still good? DNS, both servers, and a real write. Reaches the
-# network, so it never gates a commit.
-lan-check:
-	@python3 scripts/lan-check.py
 
 # THE SERVER, DETACHED. ONE PROCESS: the API and the built app on one port (D138), restarting
 # itself when you edit Python and rebuilding the app when you edit a screen.
