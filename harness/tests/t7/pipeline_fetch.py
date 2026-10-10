@@ -358,7 +358,7 @@ def check_export_fetch(checks: Checks) -> None:
 
     ITS OWN `isolated_home`, this file's own repeated lesson — and its own ENVIRONMENT too,
     which is new. This is the first section that reads `.env`, and one that left
-    `TCGPLAYER_STORE_COOKIE` or `PKMNSCAN_TCG_EXPORT_URL` set behind it would point every
+    `TCGPLAYER_STORE_COOKIE` or `BANCHI_TCG_EXPORT_URL` set behind it would point every
     later fetch in this process somewhere unexpected.
 
     THE FETCH IS AIMED AT A LOCAL SOCKET AND NEVER AT TCGPLAYER. `server/tcg_export.py` takes
@@ -377,9 +377,9 @@ def check_export_fetch(checks: Checks) -> None:
     owner, and D65 names it as owed rather than implying it has happened.
     """
     keys = (
-        "PKMNSCAN_TCG_EXPORT_URL",
+        "BANCHI_TCG_EXPORT_URL",
         "TCGPLAYER_STORE_COOKIE",
-        "PKMNSCAN_TCG_USER_AGENT",
+        "BANCHI_TCG_USER_AGENT",
         # THE CLAIM HAS A SECOND HOME SINCE 2026-09-11 and clearing the set no longer clears
         # it: `envfile.FROM_FILE_ENV` carries the lifted names across a spawn, so it lives in
         # `os.environ` and outlives a `_from_file.clear()`. Saved here and popped below with
@@ -487,11 +487,11 @@ def check_export_fetch(checks: Checks) -> None:
     portal_thread = _spawn_server(portal)
 
     cookie = "TCGAuthTicket_Production=t7-not-a-real-session"
-    os.environ["PKMNSCAN_TCG_EXPORT_URL"] = (
+    os.environ["BANCHI_TCG_EXPORT_URL"] = (
         f"http://127.0.0.1:{portal.server_address[1]}/admin/pricing/downloadexportcsv"
     )
     os.environ["TCGPLAYER_STORE_COOKIE"] = cookie
-    os.environ.pop("PKMNSCAN_TCG_USER_AGENT", None)
+    os.environ.pop("BANCHI_TCG_USER_AGENT", None)
 
     # HERMETIC AGAINST THE DEVELOPER'S OWN `.env`, WHICH THIS BLOCK WAS NOT — and the way it
     # was not is a secret leaving the place it belongs, not merely a test going red.
@@ -956,7 +956,7 @@ def check_export_fetch(checks: Checks) -> None:
                     (status, error_code(raw)),
                     (409, "export_refused"),
                     "a run with no identifications refuses by name and carries the "
-                    "command's own sentence — `run pkmnscan identify first` — rather than "
+                    "command's own sentence — `run banchi identify first` — rather than "
                     "letting a RunError out as a 500 with a traceback in it",
                 )
                 checks.equal(
@@ -2027,7 +2027,7 @@ def check_key_rotation(checks: Checks) -> None:
     """`identify/batch.py:_client` and `envfile` — the API key survives a rotation (2026-09-11).
 
     THE DEFECT, ON THE OWNER'S OWN RIG: the key expired, they pasted a new one into `.env`, and
-    `./pkmnscan identify` and the `#/runs` press both kept failing with the dead one. `make
+    `./banchi identify` and the `#/runs` press both kept failing with the dead one. `make
     down` / `make up` picked it up, and nothing short of that did — which is the restart
     discipline D138 exists to make unnecessary.
 
@@ -2039,7 +2039,7 @@ def check_key_rotation(checks: Checks) -> None:
       - and `get_live` could not see the rotation either, one process down. `_from_file` — the
         half of the precedence rule that says "this came out of a file" — is a process global,
         and every child here is spawned with `dict(os.environ)`. D138's supervisor reads ONE
-        `.env` line (`PKMNSCAN_LAN_NAME`) and `load` lifts them all, so the capture server
+        `.env` line (`BANCHI_LAN_NAME`) and `load` lifts them all, so the capture server
         inherits the key as a REAL environment variable and `get_live`, correctly by its own
         rule, declines to read the file again. `envfile.FROM_FILE_ENV` carries the set across
         the spawn.
@@ -2115,7 +2115,7 @@ def check_key_rotation(checks: Checks) -> None:
             #
             # READ OFF THE REAL SPAWN SITES rather than a copy of their composition. Both
             # build `dict(os.environ)`, which is correct — a child that did not inherit
-            # `PKMNSCAN_HOME` would run against another store (D43) — and is also how the
+            # `BANCHI_HOME` would run against another store (D43) — and is also how the
             # process-global half of the precedence rule was lost at the first boundary.
             checks.ok(
                 envfile.FROM_FILE_ENV in serve._child_env(_SERVE_ROOT),

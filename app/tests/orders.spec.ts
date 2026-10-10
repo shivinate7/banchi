@@ -595,8 +595,8 @@ async function open(
            server sends both; sending only the value reproduces a server that never announced its
            restart. */
         headers: {
-          'X-Pkmnscan-Boot': options.boot!(),
-          'Access-Control-Expose-Headers': 'X-Pkmnscan-Boot',
+          'X-Banchi-Boot': options.boot!(),
+          'Access-Control-Expose-Headers': 'X-Banchi-Boot',
         },
         body,
       })
@@ -653,7 +653,7 @@ async function open(
       headers:
         boot === undefined
           ? undefined
-          : { 'X-Pkmnscan-Boot': boot, 'Access-Control-Expose-Headers': 'X-Pkmnscan-Boot' },
+          : { 'X-Banchi-Boot': boot, 'Access-Control-Expose-Headers': 'X-Banchi-Boot' },
       body: JSON.stringify(chosen ?? oneOpenOrder()),
     })
   })

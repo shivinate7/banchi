@@ -39,12 +39,12 @@ NOTHING HERE EVER SUBMITS ON ITS OWN, and this paragraph used to say the opposit
 "editing the prompt changes the fingerprint and re-submits automatically", which was
 already false when it was written, because the fingerprint check in `run()` refuses
 instead. A cache miss of ANY cause now refuses the same way: a moved prompt, a fresh git
-worktree that `harness/.cache/` did not travel to, a cleared cache. `PKMNSCAN_RERUN_T1=1`
+worktree that `harness/.cache/` did not travel to, a cleared cache. `BANCHI_RERUN_T1=1`
 is the one way a submission happens, because this test runs under the Stop hook at the end
 of every turn and a turn end must not be able to spend money.
 
-Two A/B knobs, both off by default so the gate scores the floor: `PKMNSCAN_T1_SET_HINT=1`
-(D2 — what is the set hint worth) and `PKMNSCAN_T1_RARITY=1` (D23 job (c) — what is the
+Two A/B knobs, both off by default so the gate scores the floor: `BANCHI_T1_SET_HINT=1`
+(D2 — what is the set hint worth) and `BANCHI_T1_RARITY=1` (D23 job (c) — what is the
 rarity-claim clause worth, with the fixture's own rarity as a perfectly-sorted one-element
 claim). Each writes its own results file; see RARITY_ENV below for the both-directions
 warning a claimed run must be read under.
@@ -100,11 +100,11 @@ RESULTS_DIR = Path(__file__).resolve().parents[1] / "results"
 
 # D2 — the set hint is an optional accelerator recorded at capture, and identification
 # has to work without it. T1 scores the unhinted path so the number is the floor, not the
-# best case. Flip with PKMNSCAN_T1_SET_HINT=1 to measure what the hint is worth.
-SET_HINT_ENV = "PKMNSCAN_T1_SET_HINT"
+# best case. Flip with BANCHI_T1_SET_HINT=1 to measure what the hint is worth.
+SET_HINT_ENV = "BANCHI_T1_SET_HINT"
 
 # D23 job (c) — the rarity-claim clause, A/B-gated the same shape as the set hint. Flip
-# with PKMNSCAN_T1_RARITY=1: every card is claimed as its OWN true rarity from the fixture
+# with BANCHI_T1_RARITY=1: every card is claimed as its OWN true rarity from the fixture
 # record, a one-element list — a perfectly sorted stack, the best case the feature can
 # ever see. The default run stays claimless, so the gate keeps scoring the floor.
 #
@@ -112,19 +112,19 @@ SET_HINT_ENV = "PKMNSCAN_T1_SET_HINT"
 # raises confidence on wrong answers is a bad trade, because it converts review-queue
 # taps into silently mislisted cards. That is why a claimed run's results file records
 # `miss_confidence` beside its accuracy — the second number is the price of the first.
-RARITY_ENV = "PKMNSCAN_T1_RARITY"
+RARITY_ENV = "BANCHI_T1_RARITY"
 
 # Restrict a run to one split. Prompt iteration uses `tune` — it halves the upload and,
 # more importantly, keeps the holdout from being consulted on every attempt, which is
 # itself a slow way of fitting to it.
-SPLIT_ENV = "PKMNSCAN_T1_SPLIT"
+SPLIT_ENV = "BANCHI_T1_SPLIT"
 
 # The holdout's card-level failures are deliberately NOT printed. The gate is the holdout
 # score; the moment the tuner can read which holdout cards failed, the holdout has become
 # tuning data and the number stops measuring generalisation. Details still go to the
 # results JSON so a human can inspect them — that is the human's call to make, not the
 # tuner's. Set this to opt in explicitly.
-REVEAL_ENV = "PKMNSCAN_T1_REVEAL_HOLDOUT"
+REVEAL_ENV = "BANCHI_T1_REVEAL_HOLDOUT"
 
 
 class Score:
@@ -410,7 +410,7 @@ def run() -> Result:
             say("harness/results/t1.json, generated {0}".format(banked.get("generated_at")))
             say("{0} images · {1} · holdout {2}".format(
                 banked.get("image_count"), banked.get("model"), holdout))
-            say("re-measure deliberately: PKMNSCAN_RERUN_T1=1 make harness (docs/GATES.md)")
+            say("re-measure deliberately: BANCHI_RERUN_T1=1 make harness (docs/GATES.md)")
             return checks.result()
 
     try:
@@ -457,7 +457,7 @@ def run() -> Result:
         # also lacked the key, which is luck rather than a design.
         #
         # So the rule is the cause-independent one the comment above was already reaching
-        # for: replaying is automatic, SUBMITTING IS AN ACT. `PKMNSCAN_RERUN_T1=1` is that
+        # for: replaying is automatic, SUBMITTING IS AN ACT. `BANCHI_RERUN_T1=1` is that
         # act and already existed — this branch does not invent a flag, it stops the flag
         # from being bypassable by an empty directory. Every legitimate path is unchanged:
         # forced still submits, a warm cache still replays, and the only behaviour that
@@ -470,7 +470,7 @@ def run() -> Result:
             "      If this is a git worktree, it is missing harness/.cache/ — copy it from\n"
             "      the main working tree (`make worktree-setup`) rather than paying twice\n"
             "      for an answer this machine already has.\n"
-            "      To genuinely re-measure, PKMNSCAN_RERUN_T1=1 make harness — deliberately,\n"
+            "      To genuinely re-measure, BANCHI_RERUN_T1=1 make harness — deliberately,\n"
             "      and per docs/GATES.md commit the new harness/results/t1.json with it.",
         )
     else:

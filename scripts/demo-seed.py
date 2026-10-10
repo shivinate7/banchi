@@ -29,10 +29,10 @@ DETERMINISTIC. One RNG, seeded from a constant, so re-running writes the same st
 recorder downstream turns this into a fixture bundle, and a bundle that changed every time
 it was built would make every rebuild a diff nobody can read.
 
-    PKMNSCAN_HOME=demo ./scripts/demo-seed.py
+    BANCHI_HOME=demo ./scripts/demo-seed.py
 
 Refuses to touch a store that already holds cards unless `--force` says so, because
-`PKMNSCAN_HOME` unset means the checkout's own store and that is somebody's real one.
+`BANCHI_HOME` unset means the checkout's own store and that is somebody's real one.
 """
 
 from __future__ import annotations
@@ -203,7 +203,7 @@ def relative_photo(digest: str) -> str:
     THIS ONE MAY NOT. `Card.photo` reaches the wire — `types.ts:CardSummary.photo`, a
     filesystem path and not a URL, which the app never fetches because every photograph is
     addressed through `photoUrl` — so an absolute path would bake this machine's
-    `PKMNSCAN_HOME` into the recorded bundle and make every rebuild a diff. The store already
+    `BANCHI_HOME` into the recorded bundle and make every rebuild a diff. The store already
     holds both shapes on the owner's own machine (1,993 absolute, 542 relative, 0 tail-drift),
     so nothing downstream cares which; determinism does.
     """
@@ -385,7 +385,7 @@ DISPUTE_OFFSET = 0
 def seed_skus(inventory, skus) -> None:
     """Fold the demo's own real fixture exports into the store's `skus` table
     (identity-follows-sku.md §3.2, lane 0), through `pipeline/skus.apply_rows` — the SAME
-    fold `pkmnscan skus adopt` runs on a real store. Run before any card is bound: `bind_sku`
+    fold `banchi skus adopt` runs on a real store. Run before any card is bound: `bind_sku`
     reads this table and refuses `sku_unknown` for anything not folded here first (§3.2:
     "every writer upserts the row it is about to bind... before calling bind_sku").
 
@@ -552,7 +552,7 @@ def build_store(force: bool) -> dict:
         if len(inventory.cards) and not force:
             raise SystemExit(
                 "refusing: %s already holds %d cards. This is a real store unless "
-                "PKMNSCAN_HOME says otherwise — pass --force if you meant it."
+                "BANCHI_HOME says otherwise — pass --force if you meant it."
                 % (home, len(inventory.cards))
             )
 
@@ -957,7 +957,7 @@ class FixtureMarket:
     """`pipeline/pricearchive.py:_MarketLike`, answered from the recorded histories only.
 
     THE REAL SWEEP DOES THE WORK. `write_archive` hands this to `pricearchive.sweep`, so the
-    buckets the archive holds are built by the same code `pkmnscan archive sweep --write`
+    buckets the archive holds are built by the same code `banchi archive sweep --write`
     runs. This class replaces only the network. A SKU the recording does not carry is a
     refusal, named, never an invented series.
     """
@@ -1034,7 +1034,7 @@ def write_archive() -> int:
 def add_extra_real_boxes() -> dict:
     """A SECOND, small, real box — additive, opt-in, and never the default build.
 
-    OFF UNLESS `PKMNSCAN_DEMO_EXTRA_REAL=1`. `make demo-seed` on its own never calls this
+    OFF UNLESS `BANCHI_DEMO_EXTRA_REAL=1`. `make demo-seed` on its own never calls this
     branch at all, so the default store stays byte-identical to the build before this
     function existed — `make demo-determinism-selftest` proves the digest matcher without
     ever setting the variable, and nothing above this function changes.
@@ -1051,12 +1051,12 @@ def add_extra_real_boxes() -> dict:
     NO ORDER IS WRITTEN, on the owner's own ruling: buyers and orders stay invented, and nothing
     here adds either.
     """
-    if not os.environ.get("PKMNSCAN_DEMO_EXTRA_REAL"):
+    if not os.environ.get("BANCHI_DEMO_EXTRA_REAL"):
         return {}
 
     manifest_path = REPO_ROOT / "demo-assets" / "extra" / "cards.json"
     if not manifest_path.is_file():
-        print("PKMNSCAN_DEMO_EXTRA_REAL is set but %s is missing — run "
+        print("BANCHI_DEMO_EXTRA_REAL is set but %s is missing — run "
               "scripts/demo-extra-real.py first. Skipping." % manifest_path.relative_to(REPO_ROOT))
         return {}
     entries = json.loads(manifest_path.read_text())
@@ -1153,8 +1153,8 @@ def main() -> int:
     home = store_files.home()
     if home == REPO_ROOT and not os.environ.get(store_files.HOME_ENV):
         raise SystemExit(
-            "refusing: PKMNSCAN_HOME is unset, so this would seed the checkout's OWN "
-            "store at %s. Run it as `PKMNSCAN_HOME=demo %s`."
+            "refusing: BANCHI_HOME is unset, so this would seed the checkout's OWN "
+            "store at %s. Run it as `BANCHI_HOME=demo %s`."
             % (home / "inventory", Path(__file__).name)
         )
 
@@ -1178,7 +1178,7 @@ def main() -> int:
                 "runs", "orders", "sold", "retired", "moved", "captured"):
         print("  %-9s %d" % (key, counts.get(key, 0)))
     if extra:
-        print("  extra real box (PKMNSCAN_DEMO_EXTRA_REAL):")
+        print("  extra real box (BANCHI_DEMO_EXTRA_REAL):")
         for key, value in extra.items():
             print("    %-9s %d" % (key, value))
     return 0
@@ -1191,7 +1191,7 @@ def main() -> int:
 def write_run(
     placed: List[Tuple[Card, "Row"]], box: int, home: Path, whole_box: bool = True
 ) -> Optional[Path]:
-    """A run directory over one box, in the shape `pkmnscan identify` leaves behind.
+    """A run directory over one box, in the shape `banchi identify` leaves behind.
 
     HAND-BUILT AND THEN JOINED FOR REAL, which is the whole point. Identification is the one
     step in this pipeline that costs money — a Batch API call per card — so a demo cannot run

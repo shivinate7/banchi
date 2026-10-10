@@ -3448,7 +3448,7 @@ test('a store still holding two figures says so, and one press makes them agree'
 /* ---------------------------------------------------------------- the stale-write guard
  *
  * `PUT /pricing` REPLACES THE DOCUMENT WHOLESALE, and this screen autosaves from a snapshot it
- * took at mount. A second writer — another tab, an edit on disk, `pkmnscan prices adopt --write`
+ * took at mount. A second writer — another tab, an edit on disk, `banchi prices adopt --write`
  * — was therefore silently reverted on the operator's next keystroke, with no error anywhere, on
  * the one file in this product that holds money. Found on `claude/great-nightingale-37cf84`,
  * whose markdown sweep made it acute: a stale PUT would undo a re-price of every stale SKU.

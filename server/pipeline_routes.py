@@ -97,7 +97,7 @@ file already did to `capture_server.py`'s money promise one paragraph up.
 
 STDLIB ONLY, like the rest of the server. `make server` runs `python3` and not the venv
 (the Makefile says so and gives the reason), so this module may not import anything that
-needs `make venv`. It shells out to `./pkmnscan`, which picks the venv itself with the same
+needs `make venv`. It shells out to `./banchi`, which picks the venv itself with the same
 rule the Makefile uses — one rule about which Python runs, stated in places that agree.
 `cli.runs` is imported for its names, and is stdlib-only itself.
 """
@@ -179,7 +179,7 @@ from store import readings as store_readings  # noqa: E402
 from store import submissions as claims  # noqa: E402
 from store.session import Snapshot  # noqa: E402
 
-PKMNSCAN = REPO_ROOT / "pkmnscan"
+BANCHI = REPO_ROOT / "banchi"
 CONSOLE = "console.log"
 PID_FILE = "running.pid"
 
@@ -217,7 +217,7 @@ def warm_stock_images() -> None:
     this is a courtesy that widens the very first request's coverage and nothing depends on
     it having run.
 
-    `PKMNSCAN_STOCK_IMAGES_SYNC` JOINS THE THREADS THIS STARTS, BEFORE RETURNING —
+    `BANCHI_STOCK_IMAGES_SYNC` JOINS THE THREADS THIS STARTS, BEFORE RETURNING —
     `scripts/demo-record.py` sets it (D301). Nowhere else does: a LIVE
     server must never make the first request after a restart wait on a disk read, however
     fast, which is the whole reason `warm()` is fire-and-forget. The demo recorder is a
@@ -237,13 +237,13 @@ def warm_stock_images() -> None:
     except (files.StoreError, OSError, ValueError, TypeError):
         return
     threads = STOCK_IMAGES.warm(pair for pair in pairs if pair[0] and pair[1])
-    if os.environ.get("PKMNSCAN_STOCK_IMAGES_SYNC", "").strip():
+    if os.environ.get("BANCHI_STOCK_IMAGES_SYNC", "").strip():
         for thread in threads:
             thread.join(timeout=60)
 
 
 # The free commands, and the flags each will accept from a request. An allowlist rather than
-# a passthrough: a request that could append arbitrary argv to `./pkmnscan` would be a shell
+# a passthrough: a request that could append arbitrary argv to `./banchi` would be a shell
 # for anything on this machine that the origin check is not strong enough to guard.
 FREE_STEPS = ("join", "emit", "reconcile")
 
@@ -321,7 +321,7 @@ def _child_key(run_dir: Path) -> str:
     """THE RESOLVED PATH, NEVER THE RUN NAME.
 
     `store/files.py:home()` reads the environment on every call, so two stores can hold runs
-    with the same `<date>-<slug>-<nn>` name — and T7 moves `PKMNSCAN_HOME` between sections
+    with the same `<date>-<slug>-<nn>` name — and T7 moves `BANCHI_HOME` between sections
     inside one process, which is exactly that case in the one place it would be found late.
     """
     try:
@@ -683,7 +683,7 @@ def _default_label(selection: selection_mod.Selection) -> str:
 
 
 def _env() -> dict:
-    """The child's environment. `PKMNSCAN_HOME` is inherited so a test server pointed at a
+    """The child's environment. `BANCHI_HOME` is inherited so a test server pointed at a
     temporary store cannot start a run against the real one."""
     child = dict(os.environ)
     child.setdefault("PYTHONUNBUFFERED", "1")
@@ -715,10 +715,10 @@ def _run_sync(argv: Sequence[str], timeout: int) -> Tuple[int, str]:
             "That step did not finish in time. Nothing is written half way, so run it again.",
         ) from None
     except FileNotFoundError:
-        files.log_note(f"pkmnscan_missing: {PKMNSCAN} is not executable from {REPO_ROOT}")
+        files.log_note(f"banchi_missing: {BANCHI} is not executable from {REPO_ROOT}")
         raise PipelineRefusal(
             HTTPStatus.INTERNAL_SERVER_ERROR,
-            "pkmnscan_missing",
+            "banchi_missing",
             "Banchi's command tool could not be found on the Mac, so this step could not run. Set the app up again on the Mac.",
         ) from None
     return finished.returncode, finished.stdout.decode("utf-8", "replace")
@@ -1347,7 +1347,7 @@ def _spawn_sweep_watcher() -> Optional[int]:
         return None
     try:
         child = subprocess.Popen(  # noqa: S603
-            [str(PKMNSCAN), "match", "--sweep"],
+            [str(BANCHI), "match", "--sweep"],
             cwd=str(REPO_ROOT),
             env=_env(),
             stdin=subprocess.DEVNULL,
@@ -1412,10 +1412,10 @@ _SETUP_BACKOFF = 1800.0  # a look that would start the same setup again waits th
 
 
 def _spawn_prepare():
-    """The one door to a detached `pkmnscan match prepare`: the press and the automatic setup both use it.
+    """The one door to a detached `banchi match prepare`: the press and the automatic setup both use it.
     One at a time: under a lock it writes a running record BEFORE the spawn, so a second caller in the
     window before the child's first write is refused."""
-    argv = [str(PKMNSCAN), "match", "prepare"]
+    argv = [str(BANCHI), "match", "prepare"]
     log_path = matcher.progress_path().with_suffix(".log")
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with _spawn_lock:
@@ -1447,13 +1447,13 @@ def _spawn_prepare():
 
 
 def _auto_setup_allowed() -> bool:
-    """`PKMNSCAN_AUTO_SETUP=on` forces it. Unset, a CI or harness run never downloads, and
-    only the primary checkout does, and only over its own store (a `PKMNSCAN_HOME` elsewhere is a
+    """`BANCHI_AUTO_SETUP=on` forces it. Unset, a CI or harness run never downloads, and
+    only the primary checkout does, and only over its own store (a `BANCHI_HOME` elsewhere is a
     throwaway or a demo, never a place to download 372 MB into)."""
-    switch = os.environ.get("PKMNSCAN_AUTO_SETUP")
+    switch = os.environ.get("BANCHI_AUTO_SETUP")
     if switch is not None:
         return switch == "on"
-    return not (os.environ.get("CI") or os.environ.get("PKMNSCAN_HARNESS")) and files.home() == ports.REPO_ROOT.resolve() and ports.is_primary_checkout(ports.REPO_ROOT)
+    return not (os.environ.get("CI") or os.environ.get("BANCHI_HARNESS")) and files.home() == ports.REPO_ROOT.resolve() and ports.is_primary_checkout(ports.REPO_ROOT)
 
 
 def _ensure(stock, skip=None):
@@ -1526,7 +1526,7 @@ def do_pipeline_match_prepare(payload: dict) -> Tuple[HTTPStatus, dict]:
     (372 MB, once) and READS each stock photo once. It spends no money. The same work starts by
     itself (`ensure_stock_setup`); the press needs `confirm` because it can download.
 
-    Spawns a detached `pkmnscan match prepare` and answers at once. The screen polls
+    Spawns a detached `banchi match prepare` and answers at once. The screen polls
     `GET /pipeline/match`. A second press while one runs is refused, never doubled."""
     if payload.get("confirm") is not True:
         raise PipelineRefusal(
@@ -1753,7 +1753,7 @@ def _preflight(send: Send) -> dict:
             selection_mod.refuse_empty(send.selection, scanned, files.home())
         except selection_mod.SelectionError as exc:
             raise PipelineRefusal(HTTPStatus.NOT_FOUND, exc.code, str(exc)) from None
-    argv = [str(PKMNSCAN), "identify", *send.selection.flags(), "--dry-run"] + send.flags
+    argv = [str(BANCHI), "identify", *send.selection.flags(), "--dry-run"] + send.flags
     code, text = _run_sync(argv, PREFLIGHT_TIMEOUT_S)
     return {
         "ok": code == 0,
@@ -2166,7 +2166,7 @@ def _spawn(send: Send, captures) -> dict:
     )
 
     argv = (
-        [str(PKMNSCAN), "identify", *send.selection.flags(), "--run-dir", str(run.directory)]
+        [str(BANCHI), "identify", *send.selection.flags(), "--run-dir", str(run.directory)]
         + send.flags
     )
     console = run.directory / CONSOLE
@@ -2704,7 +2704,7 @@ def do_pipeline_pricing(name: str, reads: Optional[_PricingReads] = None) -> dic
     — D58 on D56's rule, the same treatment `capture_server._queue_row` gives the review
     queue, argued at `_relabel_positions`. So this handler now reads the store as well as the
     run directory, and it reads it LOCK-FREE like `do_queues`: a screen must not serialise
-    behind a running `./pkmnscan join`. A store it cannot read costs the captions and not the
+    behind a running `./banchi join`. A store it cannot read costs the captions and not the
     table.
 
     IT ALSO ANSWERS WHEN THE TABLE WAS WRITTEN, which is what lets a screen say how stale a
@@ -3300,7 +3300,7 @@ def _unreachable(inventory: master.Inventory, review_count: int, root: Path) -> 
     no join can reach and which is left out of the union above for exactly that reason —
     counted here, it would offer the NEW drawer's cards under the OLD run's identities.
 
-    A REALLOCATED RUN'S COUNT IS DISCHARGED BY ITS OWN RESCUE. `pkmnscan rescue` (D36's own
+    A REALLOCATED RUN'S COUNT IS DISCHARGED BY ITS OWN RESCUE. `banchi rescue` (D36's own
     repair) re-addresses a stranded run's cards to a new, joinable run over the drawer they
     are actually in — the fix this row's tooltip sends the operator to — but it never edits
     the stranded run's manifest or the store's `cards.run` column, so a naive on-hand count
@@ -3427,7 +3427,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
         book = corpus.Corpus()
 
     # THE STORE, ONCE, FOR EVERYTHING BELOW THAT COUNTS A COPY. Lock-free like every other
-    # read on this route: a screen must not serialise behind a running `./pkmnscan join`.
+    # read on this route: a screen must not serialise behind a running `./banchi join`.
     try:
         snapshot: Optional[Snapshot] = Store().read()
     except (files.StoreError, OSError, ValueError, TypeError):
@@ -3441,7 +3441,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
     # discovering every run that exists in the store through a filter-less scan.
     manifests_by_entry: Dict[Path, dict] = {}
     joined_names: List[str] = []
-    # A STRANDED RUN'S CARDS, RE-ADDRESSED — keyed by the run `pkmnscan rescue` was RUN
+    # A STRANDED RUN'S CARDS, RE-ADDRESSED — keyed by the run `banchi rescue` was RUN
     # AGAINST, never by the rescue's own name. `rescue` never edits the stranded run's
     # manifest or the store's `cards.run` column (it derives a SECOND run, D36's own repair),
     # so nothing else here can see a rescue happened; this is the one place that collects it.
@@ -3519,7 +3519,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
             # the store would not open — unknown is not zero, and a warning that silently
             # became "nothing to see" on an unreadable store would be the worst of the two.
             #
-            # A RESCUE DISCHARGES THIS COUNT (`pkmnscan rescue`, D36's own repair): it never
+            # A RESCUE DISCHARGES THIS COUNT (`banchi rescue`, D36's own repair): it never
             # edits THIS run's manifest or the store's `cards.run` column, so `on_hand` still
             # counts every card this run ever named — the rescue's own JOINED run is where
             # they now count instead. Subtract what every joined rescue already carried away.
@@ -3920,7 +3920,7 @@ def _readings() -> Tuple[Dict[str, _Reading], List[dict]]:
     walk every run's `pricing.json` and the newest live export on every call, comparing two
     sources on a clock and reporting which files answered — the two-source arbitration
     `pipeline/readings.py:collect` still does, word for word, but only when
-    `pkmnscan readings adopt --write` runs it. What lives here now is the read half of that
+    `banchi readings adopt --write` runs it. What lives here now is the read half of that
     split: `store.readings.Readings` is a snapshot field like every other table (D88), and
     this function's whole job is turning it back into the `(sku -> reading, sources)` shape
     every caller below already expects.
@@ -3974,7 +3974,7 @@ def do_pipeline_price_now(skus: Sequence[str]) -> dict:
     what this feature was built to cover.
 
     THE ARCHIVE IS TRIED FIRST AND `readings` IS THE FALLBACK, never the reverse and never
-    merged into one average. `pkmnscan archive sweep` (D219) walks every
+    merged into one average. `banchi archive sweep` (D219) walks every
     SKU this store has ever recorded, sold or held, across four ranges — sealed product
     included, because unlike `readings` it is not filtered through on-hand inventory or
     `#/pricing`'s own live-export walk. `month` is the finest range the archive keeps, so its
@@ -4878,7 +4878,7 @@ def do_reconcile_live(payload: dict) -> dict:
     """`POST /pipeline/reconcile-live` — the whole store against one live export (D87).
 
     FREE, AND IT WRITES ONLY WITH `write`. The preview is the default for the same reason
-    `pkmnscan prices adopt` previews: it moves the quantities `pipeline/join.py`'s cap
+    `banchi prices adopt` previews: it moves the quantities `pipeline/join.py`'s cap
     arithmetic reads, over every SKU at once, and a settlement nobody watched is how a wrong
     number becomes the new floor.
 
@@ -4895,7 +4895,7 @@ def do_reconcile_live(payload: dict) -> dict:
     # server already holds, so an operator who marks down and then reconciles is acting on ONE
     # reading rather than two downloads taken minutes apart.
     path = _live_export_from(payload)
-    argv = [str(PKMNSCAN), "reconcile", "--live", str(path)]
+    argv = [str(BANCHI), "reconcile", "--live", str(path)]
     if payload.get("write"):
         argv.append("--write")
     code, console = _run_sync(argv, STEP_TIMEOUT_S)
@@ -4935,7 +4935,7 @@ def do_queue_refresh(payload: dict) -> dict:
     names what it would change, what it refuses and why, and a structured summary here would
     be a second description of it to keep in step.
     """
-    argv = [str(PKMNSCAN), "queue", "refresh"]
+    argv = [str(BANCHI), "queue", "refresh"]
     if payload.get("write"):
         argv.append("--write")
     code, console = _run_sync(argv, STEP_TIMEOUT_S)
@@ -5003,7 +5003,7 @@ def do_run_rescue(name: str, payload: dict) -> dict:
     """
     directory = _open_run(name)
     write = bool(payload.get("write"))
-    argv = [str(PKMNSCAN), "rescue", str(directory), "--json"]
+    argv = [str(BANCHI), "rescue", str(directory), "--json"]
     if write:
         argv.append("--write")
     code, console = _run_sync(argv, STEP_TIMEOUT_S)
@@ -5137,7 +5137,7 @@ def do_markdown_list(payload: dict) -> dict:
     """
     path = _live_export_from(payload)
 
-    argv = [str(PKMNSCAN), "reprice", "list", str(path)]
+    argv = [str(BANCHI), "reprice", "list", str(path)]
     argv += _markdown_flags(payload)
     write = bool(payload.get("write"))
     if write:
@@ -5159,7 +5159,7 @@ def _markdown_flags(payload: dict) -> List[str]:
     """The allowlisted flags, one at a time, each validated here.
 
     AN ALLOWLIST AND NEVER A PASSTHROUGH, which is this module's standing rule: a request
-    that could append arbitrary argv to `./pkmnscan` would be a shell. Every value is either
+    that could append arbitrary argv to `./banchi` would be a shell. Every value is either
     coerced to a number here or matched against a set the CLI also knows.
     """
     argv: List[str] = []
@@ -5505,7 +5505,7 @@ def do_markdown_apply(stamp: str, payload: dict) -> dict:
             "no_worklist",
             f"Markdown {stamp} has no edited price sheet to apply. Edit the sheet first.",
         )
-    argv = [str(PKMNSCAN), "reprice", "apply", str(worklist)]
+    argv = [str(BANCHI), "reprice", "apply", str(worklist)]
     # THE STALE-WRITE GUARD, TRAVELLING TO THE SUBPROCESS. Absent means "did not read one",
     # which the command allows for the terminal user; present-and-behind refuses the whole
     # file before a byte is built. See `cli/cmd_reprice.py:_apply`.
@@ -6218,7 +6218,7 @@ def _clear_revision_guard(payload: dict) -> None:
     THE SAME GUARD `PUT /pricing` TAKES, AND TAKING IT IS THE WHOLE REASON A SECOND WRITER IS
     ALLOWED HERE. D86's amendment of 2026-09-04 is blunt: *"ONE FILE MEANS TWO WRITERS, AND THE
     SECOND ONE WAS SILENTLY REVERTING THE FIRST"*, and D105 states the rule as *"one file may
-    not have two unguarded writers"*. UNGUARDED is the operative word — `pkmnscan reprice apply`
+    not have two unguarded writers"*. UNGUARDED is the operative word — `banchi reprice apply`
     is already a second writer and is admitted by carrying `--corpus-revision`. These two routes
     are the third and fourth and they carry the identical digest.
 
@@ -6725,7 +6725,7 @@ def do_pipeline_merged_emit(payload: dict) -> dict:
     # the same guard every other run route uses, applied before anything is read.
     directories = [str(_open_run(str(name))) for name in wanted]
     newest = sorted(str(name) for name in wanted)[-1]
-    argv = [str(PKMNSCAN), "emit", *directories]
+    argv = [str(BANCHI), "emit", *directories]
     if payload.get("listed_only"):
         argv.append("--listed-only")
     if payload.get("split_games"):
@@ -6786,7 +6786,7 @@ def market_cache_dir() -> Path:
 # own slug is the same `"tcgcsv/<category>/<group>/products"` these other Markets already
 # write, so a fetch any of them made answers all the others with no network call.
 #
-# `PKMNSCAN_STOCK_IMAGES_SYNC` ALSO RAISES THE TTL TO `CATALOG_TTL_SECONDS`, a second
+# `BANCHI_STOCK_IMAGES_SYNC` ALSO RAISES THE TTL TO `CATALOG_TTL_SECONDS`, a second
 # finding this same decision entry records (D301). `StockImages`'s default
 # `TCGCSV_TTL_SECONDS` is one hour — right for a live server, where a stale answer costs one
 # more tcgcsv request. `_fetch_tcgcsv`'s
@@ -6801,7 +6801,7 @@ STOCK_IMAGES = stockimages.StockImages(
     market=pricehistory.Market(cache_dir=market_cache_dir()),
     ttl=(
         pricehistory.CATALOG_TTL_SECONDS
-        if os.environ.get("PKMNSCAN_STOCK_IMAGES_SYNC", "").strip()
+        if os.environ.get("BANCHI_STOCK_IMAGES_SYNC", "").strip()
         else stockimages.TCGCSV_TTL_SECONDS
     ),
 )
@@ -6993,7 +6993,7 @@ def do_product_history(sku: str) -> dict:
     `pipeline/pricehistory.py:Market` exactly the way `_history_for_entry` already does for
     `#/pricing`'s panel — same cache, same refusal vocabulary — and answers a `Series`-shaped
     payload with the vwap/bound/momentum that live reading actually carries. NEITHER PATH
-    EVER WRITES: not to the archive, not to the corpus. `pkmnscan archive sweep` is the one
+    EVER WRITES: not to the archive, not to the corpus. `banchi archive sweep` is the one
     press that folds a live read back into the table, and it stays a press.
 
     `not_catalogued` is refused before either path runs — the same D22 permanent state
@@ -7073,13 +7073,13 @@ def do_product_realized(sku: str) -> dict:
     """`GET /pipeline/products/<sku>/realized` — what this seller got for this SKU's product,
     against the archived market on each sale date (DEBT70). READ-ONLY, no receipt.
 
-    The sales export is read IN PLACE from `PKMNSCAN_SALES_EXPORT`, a path the owner names.
+    The sales export is read IN PLACE from `BANCHI_SALES_EXPORT`, a path the owner names.
     With none set the answer is `configured: false` and nothing is read. Rows are matched on
     the archive's own `product_id`; only dates and money leave this function, never a buyer
     (`pipeline/realized.py:read_sales` drops them while parsing).
     """
     wanted = _wanted_sku(sku)
-    path = os.environ.get("PKMNSCAN_SALES_EXPORT", "").strip()
+    path = os.environ.get("BANCHI_SALES_EXPORT", "").strip()
     if not path:
         return {"sku": wanted, "configured": False}
     if not os.path.isfile(path):
@@ -7384,7 +7384,7 @@ def _trends_for_entries(
     # fetch, so `category_id()`/`group_id()` re-fetch and re-sleep on every row) — a real
     # demo-mirror recording timed out here at the client's 30s GET timeout
     # (`scripts/demo-record.py`), 2026-09-27. Most rows in a store that has ever run
-    # `pkmnscan archive sweep` (D219) already carry a verified id and need no network call
+    # `banchi archive sweep` (D219) already carry a verified id and need no network call
     # at all.
     product_ids: Dict[str, int] = {}
     try:
@@ -9051,7 +9051,7 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
         # NOT THE PRICING TAB. Since D65 `_scope_for_run` names `CategoryId` from the run's
         # own game, so the portal's saved filter is not consulted and cannot be what is
         # wrong. What is left is a wrong `tcgplayer_category_id` in `pipeline/games.py`,
-        # `PKMNSCAN_TCG_EXPORT_URL` pointing at the old unscoped endpoint, or TCGplayer
+        # `BANCHI_TCG_EXPORT_URL` pointing at the old unscoped endpoint, or TCGplayer
         # renumbering a category — and the sentence names all three, with the product lines
         # the file actually carries, because `claimed` is empty whenever none is registered.
         lines = ", ".join(tcgcsv.product_lines(fetched_export)) or "no product line at all"
@@ -9264,7 +9264,7 @@ def do_pipeline_step(name: str, step: str, payload: dict) -> dict:
             f"{step!r} is not a step that can run for free. Identify spends money, so it has its own button.",
         )
 
-    argv = [str(PKMNSCAN), step, str(directory)]
+    argv = [str(BANCHI), step, str(directory)]
     if step == "join":
         argv += _exports_for_join(directory, payload)
         argv += _pricing_flags(payload)

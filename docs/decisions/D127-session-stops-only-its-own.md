@@ -5,7 +5,7 @@ servers the session had itself launched.
 
 1. `pkill -f "capture_server.py"`, meant for a scratch capture server started in a worktree. It
    is machine-wide, so it also matched
-   `/Users/shivinate/Developer/pkmnscan/server/capture_server.py` — the owner's live capture
+   `/Users/shivinate/Developer/banchi/server/capture_server.py` — the owner's live capture
    server on :8000 over their real 1,625-card store, the process **D138** exists to keep alive at
    login. The supervisor restored it 25 seconds later and **D88** meant the store itself survived,
    every write being one SQLite transaction; any request in flight was severed.
@@ -91,8 +91,8 @@ when it blocked on its own bugs, and a disabled guard protects nothing. The seco
 same thing wearing a different hat: it is the guard being *right that it does not know*, which is
 a determination about the world and not a defect in the code.
 
-**The escape hatch is `PKMNSCAN_KILL=off` and every refusal prints it**, per the house convention
-`PKMNSCAN_MAIN=off` set. It is sized to be reached for rarely rather than made hard: everything
+**The escape hatch is `BANCHI_KILL=off` and every refusal prints it**, per the house convention
+`BANCHI_MAIN=off` set. It is sized to be reached for rarely rather than made hard: everything
 provably yours is already allowed, so a session that wants the hatch is doing something unusual
 and should notice that it is.
 
@@ -127,7 +127,7 @@ repositories at all, and there the fallback **adopted the home directory as "thi
 
 **Measured from `/Users/shivinate` on the owner's Mac, minutes after the install:** `pgrep -f
 capture_server.py` — the literal command of incident 1 — resolved their live `:8000` server to
-**OURS**, because `~/Developer/pkmnscan/server/capture_server.py` is under `~`. The guard would
+**OURS**, because `~/Developer/banchi/server/capture_server.py` is under `~`. The guard would
 have cleared the exact kill it was built to refuse.
 
 **A root has to be a place work is DONE, not a place work is KEPT.** `_too_broad` rejects the home

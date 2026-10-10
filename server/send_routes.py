@@ -587,7 +587,7 @@ def _fetch_live(step: str) -> Tuple[str, Path]:
 def _reconcile(path: Path, step: str) -> str:
     """`reconcile --live --write`: the store's `live` becomes what TCGplayer just said (D87)."""
     code, console = pipeline_routes._run_sync(
-        [str(pipeline_routes.PKMNSCAN), "reconcile", "--live", str(path), "--write"],
+        [str(pipeline_routes.BANCHI), "reconcile", "--live", str(path), "--write"],
         pipeline_routes.STEP_TIMEOUT_S,
     )
     if code != 0:
@@ -1206,7 +1206,7 @@ def _write_and_send(
     step = "written" if download else "sent"
     stamp = record["stamp"]
     directory = sends_dir() / stamp
-    argv = [str(pipeline_routes.PKMNSCAN), "emit", *[str(d) for d in directories]]
+    argv = [str(pipeline_routes.BANCHI), "emit", *[str(d) for d in directories]]
     argv += ["--live-guard", str(live_path), "--send-dir", str(directory)]
     argv += ["--send-claim", stamp, "--claim-holder", str(os.getpid())]
     # THE MIXED SEND (the owner's ruling, 2026-09-24: "Allow mixed"). ONLY A PRICE THE SCREEN

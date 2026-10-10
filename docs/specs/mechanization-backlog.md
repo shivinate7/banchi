@@ -15,8 +15,8 @@ section for what the audit did not reach.
 
 ## How this file spells things that do not exist yet
 
-A `+` in front of a path, a `make` target or a `PKMNSCAN_` name means the thing does not exist yet:
-`+make opsec-selftest`, `+PKMNSCAN_PWARGS`. Three mechanical `make docs-audit` rows that verify a
+A `+` in front of a path, a `make` target or a `BANCHI_` name means the thing does not exist yet:
+`+make opsec-selftest`, `+BANCHI_PWARGS`. Three mechanical `make docs-audit` rows that verify a
 named thing is real read the sigil. So this file can name what it would create without failing a
 commit on every line.
 
@@ -31,7 +31,7 @@ The ranks are stable ids. They are not renumbered, so a citation of a rank keeps
 | Rank | Rule | Status |
 |---|---|---|
 | 18 | A filtered suite run must have exercised the tests it named. | Shelved |
-| 19 | Never write a waiter loop over a pattern. | Built: `scripts/guard-shell.py`'s `wait` clause (`PKMNSCAN_WAIT`) |
+| 19 | Never write a waiter loop over a pattern. | Built: `scripts/guard-shell.py`'s `wait` clause (`BANCHI_WAIT`) |
 | 21 | A row that examined an empty subject must not print the same word as one that examined everything. | Partly built |
 | 22 | `make check` reports the state of every target. | Shelved |
 | 23 | A claim a debt entry makes about a file's shape is true of that file. | Shelved |
@@ -91,7 +91,7 @@ exercised none of the target cases.
 and the count must reconcile. Half (b) prints both numbers every run, so an unreadable verdict file
 is a printed disagreement and not silence.
 
-**Escape hatch.** `+PKMNSCAN_PWARGS=off`, printed in the refusal.
+**Escape hatch.** `+BANCHI_PWARGS=off`, printed in the refusal.
 
 ### Rank 21 — A row that examined an empty subject must not print the same word as one that examined everything.
 
@@ -112,7 +112,7 @@ tracked files only.
 **Mutation arm.** Point `raw color`'s walk at a non-existent directory. The row must print `none` and
 the floor arm must fail.
 
-**Escape hatch.** `PKMNSCAN_DOCS=off`.
+**Escape hatch.** `BANCHI_DOCS=off`.
 
 ### Rank 22 — `make check` reports the state of every target, not only of the first one to fail.
 
@@ -160,7 +160,7 @@ false accept, which is the dangerous direction.
 that disagrees with the count: red. The pin compares a list length to the published count, so an
 empty list with a non-zero count fails.
 
-**Escape hatch.** `PKMNSCAN_DOCS=off`.
+**Escape hatch.** `BANCHI_DOCS=off`.
 
 ### Rank 24 — A guard must be able to fail, and be proved to fail by a planted defect — starting with the one that guards a bearer instrument.
 
@@ -213,7 +213,7 @@ because the row was advisory.
 **Mutation arm.** Introduce a new breakpoint above 1024: red (unpinned). Pin it with a reason: green.
 Fix it and leave the pin: red (stale).
 
-**Escape hatch.** `PKMNSCAN_DOCS=off`.
+**Escape hatch.** `BANCHI_DOCS=off`.
 
 ### Rank 26 — A read of the API key is screened whichever tool performs it.
 
@@ -249,7 +249,7 @@ refuses. A pipeline the parser cannot read passes, and the hook says it could no
 Recognize a direct `playwright test` invocation with the `_FLEET_RUNNER_RE` that the `suite lock` row
 already uses (one pattern, two callers). Ask the existing lock file who holds it. Refuse only when
 another checkout holds it, naming that tree and printing `make design-check PW_ARGS=…` and
-`PKMNSCAN_SUITE_LOCK=off`. Fail open on its own parse errors and on an unreadable lock directory.
+`BANCHI_SUITE_LOCK=off`. Fail open on its own parse errors and on an unreadable lock directory.
 
 **Where.** `scripts/suite-lock.py --hook`, registered as a PreToolUse Bash matcher in
 `.claude/settings.json` and `.codex/hooks.json` (D135), with an arm in `make suite-lock-selftest`.
@@ -259,9 +259,9 @@ which no Makefile recipe mediates. The row reads recipe lines and `app/package.j
 cannot see a shell.
 
 **Keeps passing.** `npx playwright install`, `--list`, `show-report`, `codegen`, and a single-spec
-run while nobody holds the lock. `PKMNSCAN_LOCK_DIR` sends the self-test at a throwaway directory.
+run while nobody holds the lock. `BANCHI_LOCK_DIR` sends the self-test at a throwaway directory.
 
-**Mutation arm.** Hold the lock from a second `PKMNSCAN_LOCK_DIR` and issue `npx playwright test`: it
+**Mutation arm.** Hold the lock from a second `BANCHI_LOCK_DIR` and issue `npx playwright test`: it
 must refuse and name the holder. With the lock free: pass. `--list`: pass.
 
 ### Rank 30 — `ADD_TO_QUANTITY` stays a bare module constant on the reprice path — never a parameter, never a default, never reachable from a flag.
@@ -288,7 +288,7 @@ way has no measured instance. Build it second, in the same row.
 **Mutation arm.** Change `_write_worklist` to `add_to_quantity=0` (a literal): red. Add a parameter
 named `add_to_quantity`: red.
 
-**Escape hatch.** `PKMNSCAN_DOCS=off`.
+**Escape hatch.** `BANCHI_DOCS=off`.
 
 ### Rank 31 — Two identify batches may not run over one box, whichever door started the first one.
 
@@ -333,7 +333,7 @@ anything reads a position" is a call-site convention with no reader.
 goes red. Add a module that reads position keys without importing `realign` and without a roster
 entry: the row names it.
 
-**Escape hatch.** `PKMNSCAN_DOCS=off` for the roster half.
+**Escape hatch.** `BANCHI_DOCS=off` for the roster half.
 
 ### Rank 33 — A copy is never offered to TCGplayer twice.
 
@@ -345,7 +345,7 @@ the existing `sku` stamp. It records that this physical copy reached an import f
 case.
 
 **Catches.** A doubling in the store: SKUs at `2 x pushed - sold`, from one file uploaded twice.
-`staged` is written only by `pkmnscan reconcile --live`, so the store cannot tell a sold-out listing
+`staged` is written only by `banchi reconcile --live`, so the store cannot tell a sold-out listing
 from an import sitting in Staged. D59 named this field as its own reopening condition.
 
 **Mutation arm.** Push a SKU, mark one copy sold, re-emit: the marked copies must not be offered
@@ -372,7 +372,7 @@ presses to undo (DEBT9).
 **Mutation arm.** A same-file helper that returns the raw index behind a `#{}`: red. The same helper
 returning `slot`: green.
 
-**Escape hatch.** `PKMNSCAN_SIGIL=off`.
+**Escape hatch.** `BANCHI_SIGIL=off`.
 
 ### Rank 36 — Never lower a Fulfillment floor, and keep every floor constant equal to the figure `docs/DESIGN.md`'s constraints table publishes.
 
@@ -392,7 +392,7 @@ and report an unparseable table row as unreadable and not as a mismatch.
 
 **Mutation arm.** Lower `PHOTO_FLOOR` to 240: the row goes red and names both sides.
 
-**Escape hatch.** `PKMNSCAN_DOCS=off`.
+**Escape hatch.** `BANCHI_DOCS=off`.
 
 ### Rank 37 — Never narrow `pipeline/games.py`'s rarity-to-finish matrix to what one export proves.
 
@@ -416,7 +416,7 @@ unclaimable. Absence from one export proves nothing.
 **Mutation arm.** Swap one pair for another so the pair count is unchanged: it must go red. A ratchet
 cannot kill that arm.
 
-**Escape hatch.** `PKMNSCAN_DOCS=off`.
+**Escape hatch.** `BANCHI_DOCS=off`.
 
 ### Rank 38 — Never add a generation seam without amending D18's named list.
 
@@ -440,7 +440,7 @@ while `scripts/build-mark.mjs` generates three tracked files (`app/src/kit/markG
 **Mutation arm.** Add a generator that writes a tracked path through a computed expression: it must be
 reported and not skipped. Point the walk at an empty directory: it goes red.
 
-**Escape hatch.** `PKMNSCAN_DOCS=off`.
+**Escape hatch.** `BANCHI_DOCS=off`.
 
 ### Rank 39 — Every route the server dispatches is reachable from `app/src/server.ts`, and every exported write has a call site.
 

@@ -50,10 +50,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import Optional
 
-PORT_ENV = "PKMNSCAN_PORT"
+PORT_ENV = "BANCHI_PORT"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -72,10 +76,10 @@ SLOTS = 300
 # slots is not "every checkout has its own ports". Two live worktrees on this Mac hashed into
 # one slot on 2026-09-24, and a design-check in one of them tested the other's code, green.
 # So a checkout may CLAIM a slot, once, in one machine-wide file keyed by its resolved path.
-# The derivation READS the file and never writes it. `scripts/port-slots.py claim` is the one
-# writer. A missing, unreadable or malformed file, or no entry for this path, reads as "not
+# The derivation READS the file and writes no claim. (Finding the file may move `~/.pkmnscan`
+# once, see `machine_dir`.) `scripts/port-slots.py claim` is the one claim writer. A missing, unreadable or malformed file, or no entry for this path, reads as "not
 # claimed", and the hash answers as before. `app/devPort.ts` reads the same file the same way.
-SLOT_REGISTRY_ENV = "PKMNSCAN_SLOT_REGISTRY"
+SLOT_REGISTRY_ENV = "BANCHI_SLOT_REGISTRY"
 SLOT_REGISTRY_NAME = "port-slots.json"
 
 
@@ -124,10 +128,59 @@ def is_primary_checkout(root: Path) -> bool:
         return False
 
 
-def slot_registry() -> Optional[Path]:
-    """Where the claimed slots are recorded. `PKMNSCAN_SLOT_REGISTRY` overrides.
+def machine_dir() -> Path:
+    """The one home of `~/.banchi`: per-user machine state (slot registry, suite lock, daily logs).
 
-    The default sits beside the machine-wide suite lock, under `~/.pkmnscan/`, because a
+    Every reader asks here, never `Path.home() / ".banchi"`. The first ask also moves a
+    `~/.pkmnscan` left by the old name and leaves `~/.pkmnscan` as a symlink to `~/.banchi`,
+    so old code on another branch writes into the same directory:
+    - only the old directory exists: rename it, link it.
+    - both exist and the old one is a real directory: move each file only the old one holds into
+      the new one, rename the old one to `~/.pkmnscan.old-<timestamp>` (a file in both keeps its
+      old copy there), link it, and print one line.
+    - the old path is already a symlink: do nothing.
+    A failed step leaves what it had and the caller still gets `~/.banchi`.
+    """
+    home = Path.home()
+    new, old = home / ".banchi", home / ".pkmnscan"
+    if old.is_symlink() or not old.is_dir() or new.resolve() == old.resolve():
+        return new
+    try:
+        if not new.exists():
+            old.rename(new)
+        else:
+            for item in old.iterdir():
+                if not (new / item.name).exists():
+                    shutil.move(str(item), str(new / item.name))
+            kept = home / (".pkmnscan.old-" + time.strftime("%Y%m%dT%H%M%S"))
+            old.rename(kept)
+            print("moved %s into %s; the rest is kept in %s" % (old, new, kept), file=sys.stderr)
+        os.symlink(new, old)
+    except OSError as err:
+        print("could not move %s into %s: %s" % (old, new, err), file=sys.stderr)
+    return new
+
+
+def remove_old_agent(label: str) -> None:
+    """Unload and delete the `com.pkmnscan.*` agent that `label` (a `com.banchi.*`) replaced.
+
+    Each agent's `--remove` calls it, so one press leaves nothing under the old name. The plist
+    goes only when bootout answered 0 or 113 (service not found); any other code keeps it.
+    """
+    old = label.replace("com.banchi.", "com.pkmnscan.", 1)
+    if old == label:
+        return
+    done = subprocess.run(["launchctl", "bootout", "gui/%d/%s" % (os.getuid(), old)], capture_output=True)
+    if done.returncode not in (0, 113):
+        print("%s: launchctl bootout failed (%s); its plist is kept." % (old, done.returncode), file=sys.stderr)
+        return
+    (Path.home() / "Library" / "LaunchAgents" / (old + ".plist")).unlink(missing_ok=True)
+
+
+def slot_registry() -> Optional[Path]:
+    """Where the claimed slots are recorded. `BANCHI_SLOT_REGISTRY` overrides.
+
+    The default sits beside the machine-wide suite lock, under `~/.banchi/`, because a
     slot is a fact about this machine and not about any one checkout. None when there is no
     home directory to find, and then nothing is claimed.
     """
@@ -135,7 +188,7 @@ def slot_registry() -> Optional[Path]:
     if override:
         return Path(override)
     try:
-        return Path.home() / ".pkmnscan" / SLOT_REGISTRY_NAME
+        return machine_dir() / SLOT_REGISTRY_NAME
     except (RuntimeError, KeyError, OSError):
         return None
 
@@ -209,7 +262,7 @@ def _port(root: Path, base: int, low: int) -> int:
 def capture_port(root: Path = REPO_ROOT) -> int:
     """The port `make server` binds and the app addresses.
 
-    `PKMNSCAN_PORT` overrides, the same knob and the same shape as `PKMNSCAN_HOME` — where
+    `BANCHI_PORT` overrides, the same knob and the same shape as `BANCHI_HOME` — where
     this server listens is the operator's call, and the Fulfiller's device reaching this Mac
     by address is the case `docs/specs/capture-app.md` §11 leaves open. An unparseable or
     out-of-range value is IGNORED rather than obeyed: a typo in an env var must not put the
@@ -252,4 +305,4 @@ def agent_label(root: Path = REPO_ROOT) -> str:
     launchd, so this is deliberately Python-only and the agreement test stays a comparison of
     the three things both sides really do compute.
     """
-    return f"com.pkmnscan.serve.{slot_for(root)}"
+    return f"com.banchi.serve.{slot_for(root)}"

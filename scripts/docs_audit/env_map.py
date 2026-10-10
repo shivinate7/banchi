@@ -105,10 +105,10 @@ def _env_vars(docs: List[Path], allowed: Dict[str, str]) -> Row:
 
 # Every file that is not markdown and can name an environment variable, WITH the extensionless
 # git hooks that `code_haystack` cannot see. That omission is not incidental here: the hook
-# roster is the one place this repo keeps growing extensionless files, and `PKMNSCAN_SIGIL` —
+# roster is the one place this repo keeps growing extensionless files, and `BANCHI_SIGIL` —
 # printed in every refusal the sigil check makes — lives in exactly such a file.
 def _env_sites() -> Dict[str, List[str]]:
-    """`PKMNSCAN_*` and friends named outside markdown, mapped to where they are named.
+    """`BANCHI_*` and friends named outside markdown, mapped to where they are named.
 
     Only tracked files are read: an ignored file (`.claude/settings.local.json`) is one
     machine's override, so a variable named only there is not the repo's vocabulary.
@@ -145,9 +145,9 @@ def _env_names() -> Row:
     undocumented switch to this repo was simply to add it.
 
     Measured 2026-09-05, four had gone in that way, and the list is not a set of oddities:
-    `PKMNSCAN_SIGIL` is the bypass the sigil check PRINTS IN EVERY REFUSAL, so the one
-    sentence a blocked commit reads names a variable no document explains. `PKMNSCAN_T1_SPLIT`
-    chooses which half of the eval corpus T1 scores; `PKMNSCAN_TCG_ORDERS_URL` points the
+    `BANCHI_SIGIL` is the bypass the sigil check PRINTS IN EVERY REFUSAL, so the one
+    sentence a blocked commit reads names a variable no document explains. `BANCHI_T1_SPLIT`
+    chooses which half of the eval corpus T1 scores; `BANCHI_TCG_ORDERS_URL` points the
     order fetch at an endpoint.
 
     **Naming it anywhere in markdown is the whole bar**, deliberately low. This cannot judge
@@ -166,7 +166,7 @@ def _env_names() -> Row:
         if name in documented:
             continue
         # THE AUDITOR SORTS LAST when choosing which site to cite. It is a legitimate source —
-        # it reads `PKMNSCAN_EXPORTS` — so excluding it would leave a hole exactly where a
+        # it reads `BANCHI_EXPORTS` — so excluding it would leave a hole exactly where a
         # checker is least watched. But it also NAMES variables in prose, including this
         # docstring, and citing a sentence that describes the problem instead of the code
         # that has it sends the reader to the wrong file.
@@ -376,7 +376,7 @@ _HATCH_OFF = "off"
 
 
 def check_env_vocabulary(report: Report, docs: List[Path], allowed: Dict[str, str]) -> None:
-    """`PKMNSCAN_*` names, both directions: documented => real, and real => documented.
+    """`BANCHI_*` names, both directions: documented => real, and real => documented.
 
     Merged from `env vars` and `env names` by M3 (test-audit-2026-09-27, L8, Q8 yes). Each
     sub-check below is unchanged; only the last line of each moved from `report.add` to
@@ -393,12 +393,12 @@ def check_env_vocabulary(report: Report, docs: List[Path], allowed: Dict[str, st
 def check_hatch_state(report: Report) -> None:
     """A guard that has been switched off says so where a session already looks.
 
-    **THE PUREST FORM OF THE DEFECT THIS FILE IS ABOUT.** `PKMNSCAN_DOCS=off` exported in a
+    **THE PUREST FORM OF THE DEFECT THIS FILE IS ABOUT.** `BANCHI_DOCS=off` exported in a
     shell profile, a launchd plist, a wrapper or a CI environment kills one of the only two
     checks on the commit path in every session, forever — and every refusal message it
     would have printed is never printed, because no refusal ever happens. Every row in this
     file is void in that state, and nothing in the tree could report it. Same for
-    `PKMNSCAN_SIGIL`, whose guard runs in the same hook, and for `PKMNSCAN_MAIN`, which is
+    `BANCHI_SIGIL`, whose guard runs in the same hook, and for `BANCHI_MAIN`, which is
     the local half of D42.
 
     **IT REPORTS AND REFUSES NOTHING.** A one-shot hatch typed on the command line for a
@@ -438,7 +438,7 @@ def check_hatch_state(report: Report) -> None:
             "  If you typed it for this one command, this line is the receipt and there is "
             "nothing to do. If you did NOT, it is standing — a shell profile, a launchd "
             "plist, a wrapper, a CI env — and the guard it lifts has been refusing nothing "
-            "and printing nothing in every session since. Check `env | grep PKMNSCAN`.",
+            "and printing nothing in every session since. Check `env | grep BANCHI`.",
         ))
 
     settings = ROOT / ".claude" / "settings.json"
@@ -675,7 +675,7 @@ def check_subagent_override(report: Report) -> None:
     stop reading it the day it means something. The whole task here was drawing the line
     between "set on purpose, right now" and "forgotten" — three candidates, one taken:
 
-    REJECTED: an escape hatch, `PKMNSCAN_<NAME>=off` in the shape every other clause in this
+    REJECTED: an escape hatch, `BANCHI_<NAME>=off` in the shape every other clause in this
     repo's shell guard carries. That pattern is deliberately not spelled out as a real name
     here — inventing one would make `env names` demand it be documented as if it existed.
     Every clause in this repo's shell guard carries one, but a hatch answers "should this row
@@ -1084,7 +1084,7 @@ CLAUDE_BASH_SKIP = "checkout,stash,reset"
 
 #: The one hook Claude Code runs narrowed by an environment prefix, and Codex runs bare. The
 #: row expects the prefix on the Claude entry and its absence on the Codex entry.
-NARROWED_ENV = "PKMNSCAN_SILENT_WRITE_ONLY=file,bash-c "
+NARROWED_ENV = "BANCHI_SILENT_WRITE_ONLY=file,bash-c "
 NARROWED_HOOK = ("PreToolUse", "Bash", "scripts/silent-write-guard.py --hook")
 
 
@@ -1470,7 +1470,7 @@ def check_build_order_mirror(report: Report) -> None:
 
 
 # A NOTE ON DOCUMENTING THE SIGIL, because writing it down broke it once. `env vars` reads the
-# scripts for a `PKMNSCAN_` token, so spelling a concrete example name in this file put that
+# scripts for a `BANCHI_` token, so spelling a concrete example name in this file put that
 # name in its own haystack — and every `+`-marked reference to it in a design document then
 # failed as "the code reads it now". The examples above therefore name the PREFIX and stop.
 # A mechanism whose documentation is inside its own subject has to be written for that.

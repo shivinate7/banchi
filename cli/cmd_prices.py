@@ -1,4 +1,4 @@
-"""`pkmnscan prices` — the pricing corpus: fold the run files in, and look at what is in it.
+"""`banchi prices` — the pricing corpus: fold the run files in, and look at what is in it.
 
 WHY THERE IS A COMMAND AT ALL. `pipeline/corpus.py` moved the listing answer out of the run
 directory and into one file for the store (D86, amended). Eight run directories on this

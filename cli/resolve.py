@@ -1967,7 +1967,7 @@ def refuse_reallocated(payload: dict, inventory: master.Inventory, run: runs.Run
         raise DisownedRun(
             f"REFUSING: {sentence}. This run describes a drawer that no longer exists and "
             f"cannot be joined.\n"
-            f"Re-identify the box as it is now (`pkmnscan identify`, or Identify on #/runs) "
+            f"Re-identify the box as it is now (`banchi identify`, or Identify on #/runs) "
             f"if that is what you want joined; this run's directory is a record of the old "
             f"drawer and is left as it is.\n"
             f"Nothing was joined, nothing was written, and no queue was touched.",
@@ -2199,7 +2199,7 @@ def store_payload(keys: Sequence[str], inventory: master.Inventory) -> Dict[str,
                 else "succeeded"
             ),
             "error": (
-                "this card has not been identified yet — run `pkmnscan identify` first"
+                "this card has not been identified yet — run `banchi identify` first"
                 if not identified
                 else "this card is bound to a SKU but carries no recorded reading to "
                      "compare it against — re-identify it to refresh the evidence"

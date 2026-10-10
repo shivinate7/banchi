@@ -1159,7 +1159,7 @@ card the ladder resolved. `low_confidence` and `no_market_data` do too. The diff
 that they reach `routing.route` still resolved and are re-routed there. This one arrives
 already un-resolved.
 
-identity-follows-sku.md §7.3 (lane 2) opens `listing_disputed`. `./pkmnscan cards identity
+identity-follows-sku.md §7.3 (lane 2) opens `listing_disputed`. `./banchi cards identity
 --write` opens it for a held, identified card. `routing.route` never opens it.
 
 Showing only a friendly label

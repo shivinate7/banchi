@@ -59,7 +59,7 @@ def run(ok) -> None:
     bad_path = "Marqo ecommerce-B, see docs/specs/identify-engine-pick.md"
     found_path, _used = _no_mechanism_findings([row(0, bad_path)], {}, (bad_path,))
     ok(len(found_path) == 1, "a tooltip carrying a repository path fails the same way")
-    bad_cli = "Haiku via ./pkmnscan identify"
+    bad_cli = "Haiku via ./banchi identify"
     found_cli, _used = _no_mechanism_findings([row(0, bad_cli)], {}, (bad_cli,))
     ok(len(found_cli) == 1, "a tooltip carrying a command line fails the same way")
     with tempfile.TemporaryDirectory() as exc_dir:

@@ -1,4 +1,4 @@
-"""`pkmnscan readings` — the cached market-reading table: fold the two sources in, or look at it.
+"""`banchi readings` — the cached market-reading table: fold the two sources in, or look at it.
 
 WHY THERE IS A COMMAND AT ALL. `server/pipeline_routes.py:_readings()` used to walk every
 run's `pricing.json` and the newest live export on EVERY `GET /pipeline/value`, comparing the
@@ -9,7 +9,7 @@ that walk now fills once; `_readings()` is a plain `SELECT` against it.
 
 `adopt` DOES THE WALK AND WRITES THE TABLE. IT PREVIEWS BY DEFAULT.
 
-Modelled on `pkmnscan prices adopt` (`cli/cmd_prices.py`), and DELIBERATELY SIMPLER than it in
+Modelled on `banchi prices adopt` (`cli/cmd_prices.py`), and DELIBERATELY SIMPLER than it in
 one respect: `prices adopt` previews because folding a run's `decisions.json` into the shared
 corpus is a REAL DECISION — newest-wins can silently replace a deliberate price hold with a
 figure nobody meant to compare it to (D86). Nothing here is a decision. `readings` holds no

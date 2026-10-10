@@ -152,7 +152,7 @@ def _client(api_key: Optional[str] = None):
     This called `envfile.load()` and then constructed with no key at all, leaving the SDK to
     read `os.environ` itself — which made the value this process was started with the only
     value it could ever use. The key EXPIRES, and the operator replaces it in `.env`: on
-    2026-09-11 the owner did exactly that and both `./pkmnscan identify` and the `#/runs` press
+    2026-09-11 the owner did exactly that and both `./banchi identify` and the `#/runs` press
     kept failing with the dead one until `make down` / `make up`. `get_live` re-reads the file
     on every construction, which is what makes the paste enough.
 

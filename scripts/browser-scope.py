@@ -61,7 +61,7 @@ regardless — D136's pass record is the only thing that skips the matrix on mai
         config or package file, or anything already in the top-level `SCOPE` outside
         `app/**`) selects every spec. So does an unmapped `app/**` path, an empty or
         unreadable diff, no merge-base, a path carrying whitespace (`PW_ARGS` is word-split
-        by `make`), or `PKMNSCAN_BROWSER_SCOPE=all` — printed by name on every such skip.
+        by `make`), or `BANCHI_BROWSER_SCOPE=all` — printed by name on every such skip.
         A non-spec `app/tests/*` file selects the specs whose import closure holds it; one no spec imports selects every spec.
         `partial=true` only when the run is genuinely narrowed, so `design-check-passed`
         never records a tree as fully tested on a partial run.
@@ -538,7 +538,7 @@ def history(count: int) -> int:
 def selftest() -> int:
     # HERMETIC: a hatch inherited from the environment (CI sets it on every push to main)
     # would make this self-test's own SKIP cases run. Its cases set the hatch themselves.
-    os.environ.pop("PKMNSCAN_BROWSER_SCOPE", None)
+    os.environ.pop("BANCHI_BROWSER_SCOPE", None)
     failures: List[str] = []
 
     def ok(condition: bool, label: str) -> None:
@@ -692,17 +692,17 @@ def selftest() -> int:
     ok(gated in classify_specs([]).specs, "an empty diff runs the gated spec")
     ok(gated in classify_specs(["Makefile"]).specs, "a top-level scope path runs the gated spec")
 
-    old = os.environ.get("PKMNSCAN_BROWSER_SCOPE")
-    os.environ["PKMNSCAN_BROWSER_SCOPE"] = "all"
+    old = os.environ.get("BANCHI_BROWSER_SCOPE")
+    os.environ["BANCHI_BROWSER_SCOPE"] = "all"
     try:
         off_verdict = classify_specs(["app/src/Inventory.tsx"])
     finally:
         if old is None:
-            os.environ.pop("PKMNSCAN_BROWSER_SCOPE", None)
+            os.environ.pop("BANCHI_BROWSER_SCOPE", None)
         else:
-            os.environ["PKMNSCAN_BROWSER_SCOPE"] = old
+            os.environ["BANCHI_BROWSER_SCOPE"] = old
     ok(off_verdict.specs == set(all_specs()) and not off_verdict.partial,
-       "PKMNSCAN_BROWSER_SCOPE=all selects every spec")
+       "BANCHI_BROWSER_SCOPE=all selects every spec")
 
     # A TEST HELPER SELECTS ONLY THE SPECS THAT IMPORT IT (D215, amended); one nothing imports
     # selects all. `moneyFace.ts` is the control: reached by the text-checks spec, not by all.
@@ -1065,9 +1065,9 @@ def classify_specs(paths: Sequence[str],
     when the substitution happens above the real `def` in this file.
     """
     everyone = set(all_specs())
-    if os.environ.get("PKMNSCAN_BROWSER_SCOPE") == "all":
+    if os.environ.get("BANCHI_BROWSER_SCOPE") == "all":
         return SpecVerdict(everyone, False,
-                           ["PKMNSCAN_BROWSER_SCOPE=all — every spec runs."])
+                           ["BANCHI_BROWSER_SCOPE=all — every spec runs."])
     if not paths:
         return SpecVerdict(everyone, False, [
             "no changed files were found. That is more likely a wrong base than an empty "

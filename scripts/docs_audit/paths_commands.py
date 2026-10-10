@@ -87,9 +87,9 @@ PROPOSED_SIGIL = "+"
 def marked_proposed(line: str, start: int) -> bool:
     """Is the token at `start` marked as named-before-it-exists?
 
-    **A `+` immediately in front of a path, a `make` target or a `PKMNSCAN_` name says the
+    **A `+` immediately in front of a path, a `make` target or a `BANCHI_` name says the
     thing does not exist YET** — `+scripts/guard-shell.py`, `+make opsec-selftest`,
-    and `+PKMNSCAN_` followed by a name. Three rows here verify that a named thing is real, and a design
+    and `+BANCHI_` followed by a name. Three rows here verify that a named thing is real, and a design
     document's whole job is to name what it would create, so without a marker those rows and
     that job cannot both be served.
 
@@ -817,7 +817,7 @@ def iter_code_lines(text: str):
         # JOINED BY A NEWLINE, BECAUSE TWO ADJACENT SPANS ARE TWO REFERENCES AND NOT ONE.
         # A space let every caller's regex match straight across a span boundary, so
         # `make` beside `docs/GATES.md` read as a target called `docs` and
-        # `~/Developer/pkmnscan` beside `make icloud-sweep` read as a subcommand called
+        # `~/Developer/banchi` beside `make icloud-sweep` read as a subcommand called
         # `make`. Both are phantoms — nobody wrote either reference — and both blocked a
         # commit. Latent until D60 unwrapped the prose: the docs used to wrap at 96
         # columns, which kept most spans on separate lines and hid it. Every caller here
@@ -1094,9 +1094,9 @@ def check_commands_roster(report: Report) -> None:
                scanned=len(targets))
 
 
-# ----------------------------------------------------------- ./pkmnscan subcommands
+# ----------------------------------------------------------- ./banchi subcommands
 
-_PKMNSCAN_REF_RE = re.compile(r"`?\.?/?pkmnscan ([a-z][a-z-]*)")
+_BANCHI_REF_RE = re.compile(r"(?:\./|`)banchi ([a-z][a-z-]*)")
 
 
 def dict_keys_from_assign(source: str, name: str) -> Optional[List[str]]:
@@ -1119,15 +1119,15 @@ def dict_keys_from_assign(source: str, name: str) -> Optional[List[str]]:
     return None
 
 
-def check_pkmnscan_commands(report: Report, docs: List[Path], all_docs: List[Path]) -> None:
+def check_banchi_commands(report: Report, docs: List[Path], all_docs: List[Path]) -> None:
     main = ROOT / "cli" / "__main__.py"
     if not exists(main):
-        report.add("pkmnscan commands", MECHANICAL, [Finding("cli/__main__.py", "does not exist")])
+        report.add("banchi commands", MECHANICAL, [Finding("cli/__main__.py", "does not exist")])
         return
     registered = dict_keys_from_assign(read(main), "COMMANDS")
     if registered is None:
         report.add(
-            "pkmnscan commands",
+            "banchi commands",
             MECHANICAL,
             [Finding("cli/__main__.py", "no module-level COMMANDS dict literal to read")],
         )
@@ -1136,12 +1136,12 @@ def check_pkmnscan_commands(report: Report, docs: List[Path], all_docs: List[Pat
     findings: List[Finding] = []
     for doc in docs:
         for number, line in iter_code_lines(read(doc)):
-            for name in _PKMNSCAN_REF_RE.findall(line):
+            for name in _BANCHI_REF_RE.findall(line):
                 if name not in registered:
                     findings.append(
                         Finding(
                             f"{rel(doc)}:{number}",
-                            f"`./pkmnscan {name}` is documented but not registered in "
+                            f"`./banchi {name}` is documented but not registered in "
                             f"cli/__main__.py:COMMANDS ({', '.join(registered)}).",
                         )
                     )
@@ -1155,18 +1155,18 @@ def check_pkmnscan_commands(report: Report, docs: List[Path], all_docs: List[Pat
     documented: Set[str] = set()
     for doc in all_docs:
         for _, line in iter_code_lines(read(doc)):
-            documented.update(_PKMNSCAN_REF_RE.findall(line))
+            documented.update(_BANCHI_REF_RE.findall(line))
     for name in registered:
         if name not in documented:
             findings.append(
                 Finding(
                     "cli/__main__.py",
-                    f"`./pkmnscan {name}` is registered but documented nowhere. "
+                    f"`./banchi {name}` is registered but documented nowhere. "
                     f"CLAUDE.md and README.md both list the commands.",
                 )
             )
     report.add(
-        "pkmnscan commands",
+        "banchi commands",
         MECHANICAL,
         findings,
         f"{len(registered)} registered, all documented",

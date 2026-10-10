@@ -91,8 +91,8 @@ fail() {
 # Fails OPEN on anything it cannot determine — no main ref, no armed dir, a missing file.
 # A freshness check that cannot answer is not evidence the commit is bad.
 #
-# Bypass:  PKMNSCAN_HOOKS=off git commit ...
-if [ "${PKMNSCAN_HOOKS:-}" != "off" ]; then
+# Bypass:  BANCHI_HOOKS=off git commit ...
+if [ "${BANCHI_HOOKS:-}" != "off" ]; then
   armed_dir="$(git config core.hooksPath 2>/dev/null || true)"
   if [ -n "$armed_dir" ] && [ -d "$armed_dir" ] \
      && ! [ "$(cd "$armed_dir" && pwd -P 2>/dev/null)" = "$(cd scripts/githooks && pwd -P 2>/dev/null)" ] \
@@ -187,8 +187,8 @@ fi
 # A relative link that stays inside the tree is allowed and is the only kind that survives a
 # clone on another machine — which is the property this rule is really enforcing.
 #
-# Bypass:  PKMNSCAN_LINKS=off git commit ...
-if [ "${PKMNSCAN_LINKS:-}" != "off" ]; then
+# Bypass:  BANCHI_LINKS=off git commit ...
+if [ "${BANCHI_LINKS:-}" != "off" ]; then
   root="$(git rev-parse --show-toplevel)"
   while IFS= read -r link; do
     [ -z "$link" ] && continue
@@ -250,8 +250,8 @@ done <<< "$staged"
 # or a broken zxing-cpp install let an unscanned image straight onto a tracked path with the
 # commit reporting nothing wrong. Unavailable is not the same as clear.
 #
-# Bypass:  PKMNSCAN_QR=off git commit ...
-if [ "${#image_paths[@]}" -gt 0 ] && [ "${PKMNSCAN_QR:-}" != "off" ]; then
+# Bypass:  BANCHI_QR=off git commit ...
+if [ "${#image_paths[@]}" -gt 0 ] && [ "${BANCHI_QR:-}" != "off" ]; then
   if command -v python3 >/dev/null 2>&1; then
     qr_out="$(python3 scripts/qr-clear-check.py "${image_paths[@]}" </dev/null 2>&1)"
     qr_status=$?
@@ -306,7 +306,7 @@ fi
 # Anything else means the auditor itself is broken, which is not evidence the docs are
 # wrong. Say so loudly and let the commit through.
 #
-# Bypass:  PKMNSCAN_DOCS=off git commit ...
+# Bypass:  BANCHI_DOCS=off git commit ...
 #
 # `--commit` (L12, test-audit-2026-09-27/TIERS.md, owner's ruling on Q1): only TIER 1 rows
 # run here. A Tier 2 row (two artifacts agreeing with each other) or Tier 3 row (a style
@@ -317,7 +317,7 @@ fi
 # stdin is closed deliberately. Nothing in this block may prompt: `git commit` run from an
 # agent session has no tty, and a hook that waits for input there hangs the session
 # instead of failing it. See cli/__main__.py for the same rule stated for the pipeline.
-if [ "${PKMNSCAN_DOCS:-}" != "off" ] && [ -f scripts/docs-audit.py ] && command -v python3 >/dev/null 2>&1; then
+if [ "${BANCHI_DOCS:-}" != "off" ] && [ -f scripts/docs-audit.py ] && command -v python3 >/dev/null 2>&1; then
   audit_out="$(python3 scripts/docs-audit.py --staged --commit </dev/null 2>&1)"
   audit_status=$?
   case "$audit_status" in
@@ -374,8 +374,8 @@ fi
 # audit applies to its own exit 64: a broken checker is not evidence that a screen is
 # wrong, and blocking on one would make the bypass habitual.
 #
-# Bypass:  PKMNSCAN_SIGIL=off git commit ...
-if [ "${PKMNSCAN_SIGIL:-}" != "off" ] && [ -f scripts/sigil-check.py ] && command -v python3 >/dev/null 2>&1; then
+# Bypass:  BANCHI_SIGIL=off git commit ...
+if [ "${BANCHI_SIGIL:-}" != "off" ] && [ -f scripts/sigil-check.py ] && command -v python3 >/dev/null 2>&1; then
   if ! selftest_out="$(python3 scripts/sigil-check.py --self-test </dev/null 2>&1)"; then
     echo "$selftest_out" >&2
     echo "WARNING: scripts/sigil-check.py --self-test FAILED, so its extractors no longer" >&2

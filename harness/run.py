@@ -85,7 +85,7 @@ def run_one(module):
 
 
 def main():
-    print("PKMNSCAN harness — docs/GATES.md")
+    print("BANCHI harness — docs/GATES.md")
     print("=" * 72)
 
     results = []

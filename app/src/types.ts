@@ -627,7 +627,7 @@ export type InventoryCard = {
  * wants "how many of this are listed" reads it here and cannot count it off the copies.
  *
  * `live` IS THE EXPORT'S READING AND NOTHING ELSE, WITH ITS TIME (D115). D8 and D11 put the
- * authority in the TCGplayer export's `Total Quantity`, which `./pkmnscan join` and
+ * authority in the TCGplayer export's `Total Quantity`, which `./banchi join` and
  * `reconcile --live` read, and an export corrects it only where the export was read LATER than
  * `live_as_of` (D87 amended, `store/master.py:Listing.observe_live`).
  *
@@ -1698,7 +1698,7 @@ export type SearchGroup = {
    *  (D213). `set_hint` above is the
    *  operator's own claim, typed at the shutter; this is read off the export row the SKU
    *  resolved to at identification time. `null` on every card identified before this field
-   *  existed, until `./pkmnscan cards identity --write` or the next identification fills
+   *  existed, until `./banchi cards identity --write` or the next identification fills
    *  it — a screen prefers this and falls back to `set_hint`. */
   set: string | null
 
@@ -2679,7 +2679,7 @@ export type Unreachable = {
    *  cards were the same sentence until this field existed. `null` means the server could
    *  not open the store, which is not the same claim as zero.
    *
-   *  A RESCUE ALREADY DISCHARGES PART OF THIS COUNT (`pkmnscan rescue`, D36's own repair):
+   *  A RESCUE ALREADY DISCHARGES PART OF THIS COUNT (`banchi rescue`, D36's own repair):
    *  `cards` is the on-hand figure minus every JOINED rescue's own `rescued_cards`, summed —
    *  an unjoined rescue has not put its cards on any worklist yet and does not subtract.
    *  `rescued` is that sum and `rescued_by` names the rescue run(s); both are absent from a
@@ -3296,7 +3296,7 @@ export type RunStepResult = {
  *  DELIBERATELY NOT `RunStepResult`'S SHAPE, AND THAT IS THE WHOLE POINT: there is no
  *  `console` field. The owner ruled, 2026-09-13, that raw machine text — stdout, JSON, a CLI
  *  string, a path — is never visible on the front end, not even behind a disclosure, and
- *  `cmd_rescue`'s own report carries backticked `pkmnscan …` invocations and decision numbers.
+ *  `cmd_rescue`'s own report carries backticked `banchi …` invocations and decision numbers.
  *  The server parses that report into the fields below and writes the raw text to a log file
  *  under the run's own directory instead; `log` names it for a person at the machine, and no
  *  screen ever reads it. */
@@ -4417,7 +4417,7 @@ export type MarkdownSku = {
   owned_since: string | null
   /** `Listing.first_seen_live` — the earliest export observed holding this SKU live, which is
    *  the LISTING's own age and the term the proxy above was standing in for. Null until
-   *  `pkmnscan reconcile --live --write` has seen the SKU. */
+   *  `banchi reconcile --live --write` has seen the SKU. */
   listed_since: string | null
   /** Whether any card in this store has ever carried this SKU. Evidence, not a gate: it
    *  explains a row with no thumbnail and no copies, and it stopped being a refusal on

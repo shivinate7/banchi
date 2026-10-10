@@ -31,7 +31,7 @@ output — the recorded bundle and the QR-cleared photographs — is committed, 
   `sqlite3` backup, never a plain file copy of a live WAL database. It writes into
   gitignored `demo-mirror/`. The owner's real data never leaves this directory. It is
   never committed — `.gitignore` marks it beside `demo`, `app/demo` and `dist-demo`.
-- `build()` copies that snapshot into a working `PKMNSCAN_HOME`. Then, inside one
+- `build()` copies that snapshot into a working `BANCHI_HOME`. Then, inside one
   `Store().write()`:
   - **Buyers.** `jane_does()` numbers every distinct buyer "Jane Doe N". Oldest first
     order wins the lowest N. The numbering stays stable across rebuilds. Every order's

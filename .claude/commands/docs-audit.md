@@ -86,7 +86,7 @@ and it is not yours to skip on their behalf.
 
 If the pre-commit hook blocked a commit, show the findings and the proposed markdown change
 and **wait**. Never edit a doc for the sole purpose of getting a commit through, and never
-reach for `PKMNSCAN_DOCS=off` or `--no-verify` on the owner's behalf — both are theirs to
+reach for `BANCHI_DOCS=off` or `--no-verify` on the owner's behalf — both are theirs to
 choose, and `--no-verify` also switches off the three opsec rules guarding code-card
 bearer instruments.
 

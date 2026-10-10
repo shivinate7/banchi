@@ -397,7 +397,7 @@ function handOrder(
  *  more — the field still works — and the code is kept on the end of anything unnamed
  *  because `docs/DESIGN.md` shows reason codes beside names, so what you saw stays greppable.
  *  **THAT RULE IS OLDER THAN THIS COMMENT AND IT SURVIVED A SESSION WRITING OVER IT**: the
- *  build that widened this map first wrote `set PKMNSCAN_TCG_USER_AGENT in .env` into two of
+ *  build that widened this map first wrote `set BANCHI_TCG_USER_AGENT in .env` into two of
  *  these clauses, which is the remedy for the person at the keyboard and noise to the person
  *  holding a card over a stand. It says what is wrong; where the knob is lives one layer down.
  *

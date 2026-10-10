@@ -124,7 +124,7 @@ on:
   workflow_dispatch:
     inputs:
       long_sitting:
-        description: Also run the 300-capture case (about 16 minutes, PKMNSCAN_LONG_SITTING=1)
+        description: Also run the 300-capture case (about 16 minutes, BANCHI_LONG_SITTING=1)
         type: boolean
         default: false
       report_failure:
@@ -225,8 +225,8 @@ jobs:
       # their own hatches, which is what those hatches are for. A PR keeps its scope.
       - name: make ${{ matrix.target }}
         env:
-          PKMNSCAN_GUARD_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
-          PKMNSCAN_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
+          BANCHI_GUARD_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
+          BANCHI_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
         run: make ${{ matrix.target }}
 
   # THE REQUIRED CHECK. The ruleset names `check`, so this job keeps that name and passes only
@@ -406,7 +406,7 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           # Off a pull request, every spec: a nightly never narrows.
-          PKMNSCAN_BROWSER_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
+          BANCHI_BROWSER_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
         run: python3 scripts/browser-scope.py specs --base "origin/$BASE_REF"
 
   # The browser half. Same tree, different question: what a person actually sees.
@@ -508,7 +508,7 @@ jobs:
           SHARD: ${{ matrix.shard }}
           SHARDS: ${{ strategy.job-total }}
           # the monthly schedule and a dispatch that asks; nothing else sets it
-          PKMNSCAN_LONG_SITTING: ${{ (github.event.schedule == '47 4 1 * *' || inputs.long_sitting) && '1' || '' }}
+          BANCHI_LONG_SITTING: ${{ (github.event.schedule == '47 4 1 * *' || inputs.long_sitting) && '1' || '' }}
         run: |
           files="$(python3 scripts/browser-scope.py shard "$SHARD" "$SHARDS" $SPECS)"
           if [ -z "$files" ]; then

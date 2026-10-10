@@ -38,7 +38,7 @@ the only piece softening that into a warning for the missing-interpreter case. I
 does. Unavailable is not the same as clear.
 
 **What did not change.** The printed-code layout check (four hyphen-separated groups) stays
-untouched. `PKMNSCAN_QR=off` still bypasses the whole block, loudly, exactly as before.
+untouched. `BANCHI_QR=off` still bypasses the whole block, loudly, exactly as before.
 `captures/` stays exempt, for the reason stated above.
 
 Proved by `make githooks-selftest`, extended rather than rewritten. A decodable QR in a

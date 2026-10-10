@@ -454,7 +454,7 @@ def check_code_ledger(checks: Checks) -> None:
                     cli_entry.build_parser().parse_args(["identify", str(caps), "--engine", "haiku"]),
                     lambda *a: None,
                 )
-            checks.equal(exit_code, 0, "`pkmnscan identify` exits 0 over the stub transport")
+            checks.equal(exit_code, 0, "`banchi identify` exits 0 over the stub transport")
             checks.equal(
                 len(transported), 2, "which was asked for exactly the two photographs"
             )
@@ -1169,7 +1169,7 @@ def check_correct_answer(checks: Checks) -> None:
         # -------------------------------------------------------- item 2 of the brief itself
         #
         # PROVEN AGAINST THE REAL MODULE, NOT REINVENTED. `pipeline/livecheck.py:compare` is
-        # what `pkmnscan reconcile --live` calls — D109's own `beyond` bucket: "TCGplayer's
+        # what `banchi reconcile --live` calls — D109's own `beyond` bucket: "TCGplayer's
         # own quantity for a SKU this pipeline never sent — more than it sent". A live export
         # that still shows the old sku's copy (nobody has told TCGplayer yet) now reads as
         # exactly that, with no second mechanism built to say so.
@@ -1609,7 +1609,7 @@ def check_identity_binding(checks: Checks) -> None:
             "and that refusal wrote nothing onto the card",
         )
 
-        # THE TABLE IS SEEDED THE WAY A REAL FETCH OR `pkmnscan skus adopt` WOULD FILL IT —
+        # THE TABLE IS SEEDED THE WAY A REAL FETCH OR `banchi skus adopt` WOULD FILL IT —
         # never by this route. `_seed_sku_table` folds through the real
         # `pipeline/skus.py:apply_rows`, the SAME fold `do_pipeline_export`/`do_live_export`
         # use (proved by `check_export_fetch`'s own two new assertions).
@@ -3327,7 +3327,7 @@ def check_reused_box_refusal(checks: Checks) -> None:
 
         with quiet() as said:
             code = entry.main(["join", str(run.directory), "--export", str(export)])
-        checks.equal(code, 1, "`pkmnscan join` over that run exits 1")
+        checks.equal(code, 1, "`banchi join` over that run exits 1")
         says(said.getvalue(), "and prints the refusal", "REFUSING", "reused", other)
         tables = store_tables()
         checks.equal(
@@ -3815,7 +3815,7 @@ def check_rescue_stranded_run(checks: Checks) -> None:
         before = run_count()
         with quiet() as said:
             code = cmd_rescue.run(Args(run.directory), print)
-        checks.equal(code, 0, "`pkmnscan rescue` previews and exits 0")
+        checks.equal(code, 0, "`banchi rescue` previews and exits 0")
         checks.equal(
             run_count(), before,
             "and writes no run directory — the preview is the default and it presses nothing",
@@ -4049,14 +4049,14 @@ def check_rescue_stranded_run(checks: Checks) -> None:
 
         with quiet() as said:
             code = entry.main(["rescue", str(run.directory)])
-        checks.equal(code, 1, "`pkmnscan rescue` is a real subcommand and exits 1 on a refusal")
+        checks.equal(code, 1, "`banchi rescue` is a real subcommand and exits 1 on a refusal")
         checks.ok("REFUSING" in said.getvalue(), "printing the refusal", said.getvalue())
 
 
 def check_rescue_discharges_stranded_count(checks: Checks) -> None:
     """A rescued run stops counting as stranded on `#/pricing`.
 
-    `pkmnscan rescue` (D36's own repair, asserted above) re-addresses a stranded run's cards
+    `banchi rescue` (D36's own repair, asserted above) re-addresses a stranded run's cards
     to a new, joinable run over the drawer they are actually in — the fix `#/pricing`'s own
     tooltip sends the operator to. It never edits the STRANDED run's manifest or the store's
     `cards.run` column (`cli/cmd_rescue.py`: a rescue derives a second run rather than
@@ -4186,7 +4186,7 @@ def check_rescue_route(checks: Checks) -> None:
     step. `do_queue_refresh` and `do_pipeline_step` return `console` verbatim (D33) because
     stdout is the one description of what a free command did — but the owner ruled, 2026-09-13,
     that raw machine text may never reach a screen, not even behind a disclosure, and
-    `cmd_rescue`'s own sentences carry backticked `pkmnscan …` invocations and decision numbers
+    `cmd_rescue`'s own sentences carry backticked `banchi …` invocations and decision numbers
     that are exactly the class `no mechanism on screen` refuses. So this route is the deliberate
     exception: it parses `cmd_rescue`'s stdout into a small structured shape, writes the raw
     text to a log file under the run's own directory, and returns no `console` field at all.
@@ -4474,7 +4474,7 @@ def check_rescue_json_reasons(checks: Checks) -> None:
     # ------------------------------------------------------------ no_identifications
     with isolated_home() as home:
         # THE REACHABLE CONDITION: a store-backed join's own output directory (D188) —
-        # `pkmnscan join --keys` writes a run with a report and a pricing table but never
+        # `banchi join --keys` writes a run with a report and a pricing table but never
         # `identifications.json`, because there was no frozen snapshot to write one from.
         box, index = 5, 1
         while Store().read().inventory.next_index(box) <= index:
@@ -4757,7 +4757,7 @@ def check_store_backed_join(checks: Checks) -> None:
                 type("Args", (), {"run_dir": str(new_run.directory), "write": False})(),
                 lambda *_: None,
             ),
-            "`pkmnscan rescue` refuses a store-backed join's own output directory rather "
+            "`banchi rescue` refuses a store-backed join's own output directory rather "
             "than crashing on a missing `identifications.json` or treating it as an "
             "ordinary un-stranded run",
         )
@@ -5407,7 +5407,7 @@ def check_cli_refusals(checks: Checks) -> None:
     # ---------------------------------- `identify` WITH NO PATH IS NO LONGER A USAGE ERROR
     #
     # AND THAT IS THE ONE THING THIS CHANGE COULD HAVE DONE QUIETLY. `capture_dir` was a
-    # required positional, so `./pkmnscan identify "$DIR"` with `$DIR` unset exited 2 from
+    # required positional, so `./banchi identify "$DIR"` with `$DIR` unset exited 2 from
     # argparse; under `nargs="*"` it is an empty list, which is a selection naming nothing,
     # which is EVERY PHOTOGRAPH IN THE STORE — a paid store-wide submission from a typo.
     #

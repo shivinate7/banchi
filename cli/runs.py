@@ -27,7 +27,7 @@ from store import files
 MANIFEST = "manifest.json"
 IDENTIFICATIONS = "identifications.json"
 DECISIONS = "decisions.json"
-# A LEGACY ANSWER FILE, RETIRED (D86, amended 2026-09-02). `pkmnscan prices adopt --write`
+# A LEGACY ANSWER FILE, RETIRED (D86, amended 2026-09-02). `banchi prices adopt --write`
 # folds a run's `decisions.json` into `inventory/prices.json` and then renames it to this, so
 # the run keeps the bytes it was priced with and `join`/`emit` stop refusing on it. The
 # suffix is what drops it out of `server/pipeline_routes.py:_DOWNLOADABLE`, whose pattern
@@ -339,7 +339,7 @@ class Run:
             return resolve.store_backed_payload(self, Store().read().inventory)
         if payload is None:
             raise RunError(
-                f"{self.path(IDENTIFICATIONS)} does not exist — run `pkmnscan identify` first"
+                f"{self.path(IDENTIFICATIONS)} does not exist — run `banchi identify` first"
             )
         return payload
 

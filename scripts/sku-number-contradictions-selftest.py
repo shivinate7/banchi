@@ -32,7 +32,7 @@ PATH GATED, THE TWENTY-SECOND (D247, owner's word 2026-09-23, on the same ground
 into `make check` and `make ci-check` through `scripts/guard-scope.py`. `docs/map.py` used to
 state this file's exemption as "`pricearchive-selftest.py`'s own precedent, one entry above" —
 that precedent is gone, and this module's real caller (`cli/cmd_sku_contradictions.py:run`,
-`./pkmnscan cards contradictions`, D242) was tested nowhere else. Once it's done, it only
+`./banchi cards contradictions`, D242) was tested nowhere else. Once it's done, it only
 needs to be tested when touched.
 """
 

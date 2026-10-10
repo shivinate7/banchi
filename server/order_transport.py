@@ -27,7 +27,7 @@ STATUS, PLAINLY: THE SESSION IS PROVEN AND THE DETAIL CALL IS NOT
 operator ran it — an agent may not read `.env` here, which is `.claude/settings.json`'s rule
 and was left standing rather than worked around. What that one call settles is more than the
 session: the `TCGPLAYER_STORE_COOKIE` value stored in `.env` DOES authenticate this host, so
-one credential really does serve the admin portal and the order API; `PKMNSCAN_TCG_SELLER_KEY`
+one credential really does serve the admin portal and the order API; `BANCHI_TCG_SELLER_KEY`
 was accepted, so the 403 shape is understood correctly; the plain-JSON body was accepted, so
 D65's form encoding really is the wrong shape here and not merely a different one; and the
 response parsed and projected without raising.
@@ -140,7 +140,7 @@ WHAT IS DELIBERATELY NOT BUILT
     POST /orders/<orderNumber>/tracking?api-version=2.0    {carrier, trackingNumber}
 
 Both exist and both were seen. Both are WRITES back to TCGplayer, and
-`docs/specs/order-pipeline.md` §3 T5 already rules on them: pkmnscan never writes order status
+`docs/specs/order-pipeline.md` §3 T5 already rules on them: banchi never writes order status
 back to TCGplayer, because tcgtracking owns mark-shipped and two authors on one shipment is
 D34's problem twice. Recorded here so the next reader knows the endpoints exist and that not
 using them is a decision rather than an oversight — and so that adding them is visibly a
@@ -186,14 +186,14 @@ AGENT_ENV = portal_http.AGENT_ENV
 # THE SELLER KEY IS NOT A SECRET AND IS STILL NOT A CONSTANT. It is the lowercased prefix of
 # every order number this account has, so it identifies the account and would be wrong in
 # anyone else's checkout — which makes it configuration, and configuration in this repo is a
-# `PKMNSCAN_`-prefixed name in `.env`. The split is the existing one: knobs are prefixed,
+# `BANCHI_`-prefixed name in `.env`. The split is the existing one: knobs are prefixed,
 # secrets are not (`ANTHROPIC_API_KEY`, `TCGPLAYER_STORE_COOKIE`).
-SELLER_KEY_ENV = "PKMNSCAN_TCG_SELLER_KEY"
+SELLER_KEY_ENV = "BANCHI_TCG_SELLER_KEY"
 
 # How T7 aims this at a socket it controls. Guarded by `endpoint()`, which will not carry the
 # cookie anywhere but https or loopback — a knob that redirects a session cookie is an
 # exfiltration channel wearing a test seam.
-BASE_ENV = "PKMNSCAN_TCG_ORDERS_URL"
+BASE_ENV = "BANCHI_TCG_ORDERS_URL"
 
 # THE PORTAL'S OWN XHR SENDS THESE AND SO DOES THE BRIDGE. Neither was proven to be REQUIRED —
 # an unauthenticated probe cannot tell an origin check from an auth check — so they are sent

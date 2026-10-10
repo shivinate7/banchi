@@ -171,7 +171,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--write", action="store_true", help="apply the repair. Default: preview only.")
     parser.add_argument(
         "--home", type=Path, default=None,
-        help="a store directory to repair, instead of this checkout's own (PKMNSCAN_HOME-"
+        help="a store directory to repair, instead of this checkout's own (BANCHI_HOME-"
              "aware default). For testing — the owner runs this with no flag against theirs.",
     )
     args = parser.parse_args(argv)

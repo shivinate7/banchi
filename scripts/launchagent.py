@@ -10,6 +10,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from server import ports  # noqa: E402
+
+
+machine_dir = ports.machine_dir  # the job's log lives beside the other machine state
+
 
 def agent(label, script, root, hour, minute, log, remove):
     plist = Path.home() / "Library" / "LaunchAgents" / (label + ".plist")
@@ -17,6 +23,7 @@ def agent(label, script, root, hour, minute, log, remove):
     if remove:
         subprocess.run(["launchctl", "bootout", "%s/%s" % (uid, label)], capture_output=True)
         plist.unlink(missing_ok=True)
+        ports.remove_old_agent(label)
         print("removed", label)
         return 0
     if (Path(root) / ".git").is_file():

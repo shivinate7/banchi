@@ -1,6 +1,6 @@
 4. ~~Batch script v2: Batch API, variant ladder, catalog join, real CSV library~~ — code
    done 2026-08-03, spec at `docs/specs/batch-script.md`, harness green at T1–T6.
-   `./pkmnscan identify | join | emit | reconcile`. **This line read "not yet run against a
+   `./banchi identify | join | emit | reconcile`. **This line read "not yet run against a
    real card" until 2026-08-22**, when Gate B put 53 through all four commands and reconciled
    back in two clean round trips with zero unmatched in either direction. The run found
    defects in this step's own code that no fixture could: the Batch API refusing the store's

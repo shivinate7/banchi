@@ -45,12 +45,12 @@ FAIL = "\033[31mFAIL\033[0m" if sys.stdout.isatty() else "FAIL"
 
 failures: List[str] = []
 
-# `PKMNSCAN_MAIN=off` FOR THE FIXTURE'S OWN SEED COMMITS AND NOWHERE ELSE. This repo's ref hook
+# `BANCHI_MAIN=off` FOR THE FIXTURE'S OWN SEED COMMITS AND NOWHERE ELSE. This repo's ref hook
 # may be armed through the ambient config and would refuse the fixture's `git init` history for
 # reasons that have nothing to do with what is under test. It is deliberately NOT passed to the
 # module under test — see `sync_in()` — because whether the hook permits this file's move is one
 # of the things being measured.
-FIXTURE_ENV = dict(os.environ, PKMNSCAN_MAIN="off", GIT_CONFIG_NOSYSTEM="1")
+FIXTURE_ENV = dict(os.environ, BANCHI_MAIN="off", GIT_CONFIG_NOSYSTEM="1")
 
 
 def check(condition: bool, message: str) -> None:
@@ -163,9 +163,9 @@ def load_module(tree: Path):
 
 
 def sync_in(module, tree: Path, confirm: bool = True, **kwargs):
-    """Run the module against `tree`, with the ambient hatch and `PKMNSCAN_MAIN` LEFT ALONE.
+    """Run the module against `tree`, with the ambient hatch and `BANCHI_MAIN` LEFT ALONE.
 
-    The fixture sets `PKMNSCAN_MAIN=off` for its own seed commits; passing it here would make
+    The fixture sets `BANCHI_MAIN=off` for its own seed commits; passing it here would make
     every arm silently exempt from the ref hook, and one arm's whole subject is that the hook
     permits this move on its own terms.
     """
@@ -405,7 +405,7 @@ def main() -> int:  # noqa: C901 — one arm per state, flat on purpose
         where = Path(tmp)
         clone = build_clone(where, ahead=2)
         module = load_module(clone)
-        # A local commit on main. `PKMNSCAN_MAIN=off` because committing ON main is exactly
+        # A local commit on main. `BANCHI_MAIN=off` because committing ON main is exactly
         # what D42's hook refuses, and the state is the fixture rather than the subject.
         local_tip = commit(clone, "local-only")
         git(clone, "switch", "-q", "-c", "claude/elsewhere")
@@ -429,7 +429,7 @@ def main() -> int:  # noqa: C901 — one arm per state, flat on purpose
         # state: origin has commits the clone does not AND the clone has one origin does not.
         git(clone, "switch", "-q", "main")
         git(clone, "reset", "-q", "--hard", "refs/remotes/origin/main",
-            env=dict(FIXTURE_ENV, PKMNSCAN_MAIN="off"))
+            env=dict(FIXTURE_ENV, BANCHI_MAIN="off"))
         commit(clone, "diverging")
         origin_work = where / "seedwork"
         commit(origin_work, "origin-later")
@@ -551,7 +551,7 @@ def main() -> int:  # noqa: C901 — one arm per state, flat on purpose
 
         # The hatch is NOT set for these two — the hook's own judgement is the measurement.
         armed = dict(os.environ)
-        armed.pop("PKMNSCAN_MAIN", None)
+        armed.pop("BANCHI_MAIN", None)
         armed["GIT_CONFIG_NOSYSTEM"] = "1"
 
         refused = git(clone, "branch", "-f", "main", "refs/remotes/origin/main~1", env=armed)
@@ -566,7 +566,7 @@ def main() -> int:  # noqa: C901 — one arm per state, flat on purpose
         )
 
         git(clone, "switch", "-q", "claude/local")
-        os.environ.pop("PKMNSCAN_MAIN", None)
+        os.environ.pop("BANCHI_MAIN", None)
         verdict = module.sync(clone, confirm=True)
         check(
             verdict.action == "synced",

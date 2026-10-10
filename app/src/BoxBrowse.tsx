@@ -99,7 +99,7 @@ const EMPTY_GROUPS: SearchGroup[] = []
 /** Strips a trailing parenthetical off a card name — `"Calm Rune (R02a)"` -> `"Calm Rune"` —
  *  so a base printing and its promo/alt-art siblings fold to the same key. This is the ONE
  *  naming convention this store's own data was measured to use for "another printing of the
- *  same card": `pkmnscan cards name`'s corpus and the real Riftbound export both carry the
+ *  same card": `banchi cards name`'s corpus and the real Riftbound export both carry the
  *  parenthetical suffix on exactly the rows that are a variant of the un-suffixed name, never
  *  on an unrelated card that happens to share a word. */
 function baseCardName(name: string): string {

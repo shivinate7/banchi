@@ -43,7 +43,7 @@ design-check` is deliberately off the commit path.
 **The store is not a fixture, and every measurement taken against it is perishable.** A number
 about the owner's store is evidence of one moment. A session that finds one stale has found the
 store moving, and not the file lying. So this file records no counts of the live store. Measure
-it (`make status`, `pkmnscan` reports) when a number matters.
+it (`make status`, `banchi` reports) when a number matters.
 
 Four facts about the store outlive any count.
 
@@ -234,7 +234,7 @@ logged-in browser and not by a request from this tree. `POST /orders/fetch` answ
 body that `POST /orders/ingest` accepts. So the fetch needs no adapter, and it enters through
 the same one door that the paste does. What is NOT established is in section 6.
 
-**`PKMNSCAN_TCG_ORDERS_URL` re-points the base URL, and it is a test seam with a guard on
+**`BANCHI_TCG_ORDERS_URL` re-points the base URL, and it is a test seam with a guard on
 it.** T7 aims it at a loopback socket so the refusal codes can run without the live portal.
 The module refuses to send the session cookie anywhere but https or loopback. A knob that
 redirects a session cookie is an exfiltration channel that looks like a test seam. The variable
@@ -293,7 +293,7 @@ Tracking read back and emitted as TCGplayer's Import Shipping Info CSV. T2's byt
 govern the file. The order id that T2 carries into Pirate Ship is what makes the match
 possible.
 
-**pkmnscan never writes order status back to TCGplayer.** tcgtracking owns mark-shipped, and two
+**banchi never writes order status back to TCGplayer.** tcgtracking owns mark-shipped, and two
 authors on one shipment is D34's problem twice. The two endpoints that would do it were seen on
 the wire. They are recorded once, in `server/order_transport.py`'s WHAT IS DELIBERATELY NOT
 BUILT block. Read them there. That module cites this section by number for the ruling.

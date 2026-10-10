@@ -86,7 +86,7 @@ NAME_DISPUTED = "name_disputed"
 
 # `docs/specs/identity-follows-sku.md` §7.3, lane 2: the migration's own review reason, for
 # a HELD card (`identity_source = read`, a SKU the read disputes on name or on number, §3.1)
-# that is IDENTIFIED rather than sold. `./pkmnscan cards identity --write` opens the entry
+# that is IDENTIFIED rather than sold. `./banchi cards identity --write` opens the entry
 # directly, through `store/queues.py:Queue.upsert` — never through `route()` above, which is
 # the join's own reasoning and has nothing to say about a card the migration is looking at
 # long after the join ran. Label on screen, `app/src/ReviewQueue.tsx`'s own `QUESTIONS` map
@@ -101,7 +101,7 @@ NAME_DISPUTED = "name_disputed"
 # identity_binding.py:held_review_entry`, which loads this name to build the entry.
 LISTING_DISPUTED = "listing_disputed"
 
-# `./pkmnscan match audit --write` opens it directly (`cli/cmd_match.py:audit`), never `route()`,
+# `./banchi match audit --write` opens it directly (`cli/cmd_match.py:audit`), never `route()`,
 # for an in-stock card whose confident free pick disagrees with the card it is filed as. Same
 # shape as `LISTING_DISPUTED`: in `ROUTING_REASONS` as a destination this module owns.
 FREE_READER_DISAGREES = "free_reader_disagrees"

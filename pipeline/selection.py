@@ -2,7 +2,7 @@
 
 THE BOX STOPPED BEING THE UNIT OF WORK HERE. `server/pipeline_routes.py:_resolve_scope`
 refused any request that did not name a positive integer `box` — *"A run is always scoped to
-one box"* — and `pkmnscan identify` took exactly one directory. So "identify everything that
+one box"* — and `banchi identify` took exactly one directory. So "identify everything that
 still needs it" was not a thing an operator could ask for, and a pile spanning two drawers was
 two presses whatever the cards were.
 
@@ -239,7 +239,7 @@ class Selection:
     def flags(self) -> List[str]:
         """This selection as the argv a child gets. The CLI's spelling of the same object.
 
-        THE ROUTE SPAWNS `pkmnscan identify` AND NO LONGER BUILDS IT A DIRECTORY, which is the
+        THE ROUTE SPAWNS `banchi identify` AND NO LONGER BUILDS IT A DIRECTORY, which is the
         deletion this module exists for. `_scope_dir` symlinked the chosen photographs into
         `.scopes/box3-<n>-<stamp>` so that a subset could be expressed as the one thing
         `identify` accepted — a path. Measured on the owner's checkout: 264 such directories,

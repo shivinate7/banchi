@@ -144,7 +144,7 @@ import type {
  *
  * NO CLIENT-SIDE TIMEOUT, and this one is worth being explicit about because adding one
  * looks like an obvious improvement. `Store.write()` waits up to 30 seconds for the file
- * lock, so a capture posted while `./pkmnscan identify` holds it can legitimately take that
+ * lock, so a capture posted while `./banchi identify` holds it can legitimately take that
  * long and then answer `store_busy` — a true statement naming the process to wait for. Any
  * AbortController shorter than the server's own lock timeout converts that into
  * `unreachable`, which is a lie about the server being down, and it does so at the moment
@@ -182,7 +182,7 @@ import type {
  * every property the injected URL had — the port still comes from the same slot as the Vite
  * port, so a worktree's UI still cannot be answered by another tree's server — and adds the
  * one it lacked: it follows the address bar. Opened at `localhost` it resolves to
- * `localhost`; opened at `pkmnscan.lan` it resolves to `pkmnscan.lan`. Any hostname works,
+ * `localhost`; opened at `banchi.lan` it resolves to `banchi.lan`. Any hostname works,
  * with no rebuild and nothing to configure.
  *
  * This HONOURS the note above about VITE_CAPTURE_SERVER rather than overriding it. That knob
@@ -366,7 +366,7 @@ const FAULT_CODES: ReadonlySet<string> = new Set([
   'store_unavailable',
   // Named 500s a run start reports inside a 200, where no status reaches the screen.
   'spawn_failed',
-  'pkmnscan_missing',
+  'banchi_missing',
 ])
 
 export function failureTone(failure: { readonly code?: string | null; readonly status?: number }): 'warn' | 'danger' {
@@ -699,7 +699,7 @@ export function onServerBoot(listener: BootListener): () => void {
 }
 
 function noteBoot(response: Response): void {
-  const seen = response.headers.get('X-Pkmnscan-Boot')
+  const seen = response.headers.get('X-Banchi-Boot')
   /* A server that does not send it says nothing. Absent means either a server predating the header
    * or — far more likely in a test — a stubbed route, and inventing a reload from a missing
    * header would make every spec that stubs the wire report one. */
@@ -3253,7 +3253,7 @@ export async function putPricingCorpus(
      route replaces `inventory/prices.json` wholesale, so a screen holding a snapshot from mount
      silently reverts anything written underneath it on the next keystroke — no error anywhere,
      on the one file in this product that holds money. Two tabs on `#/pricing` reach that today,
-     and so does `pkmnscan prices adopt --write` while one is open.
+     and so does `banchi prices adopt --write` while one is open.
 
      Sending it INSIDE the corpus would put it in the object `Pricing.tsx` dirty-checks by
      identity, and every landed write would then rebuild that object and re-dirty the screen —
@@ -3431,7 +3431,7 @@ export async function getPriceHistory(
  *
  * ARCHIVE FIRST, LIVE ONLY WHEN THE ARCHIVE HAS NEVER SWEPT THIS SKU. Unlike
  * `getPriceHistory` above, this call does NOT always leave the machine — read the answer's
- * own `source` field. A SKU `pkmnscan archive sweep` has already visited answers straight off
+ * own `source` field. A SKU `banchi archive sweep` has already visited answers straight off
  * `store/pricearchive.py`, no socket opened. Only a SKU the archive has zero rows for at all
  * reaches the same live reader `getPriceHistory` always does.
  *
@@ -4106,7 +4106,7 @@ export async function ingestOrders(orders: readonly OrderIngestOrder[]): Promise
  * `range` is one of the transport's `KNOWN_RANGES`; omit it for its default. Refusals worth
  * branching on are the transport's own codes — `order_cookie_missing`,
  * `order_seller_key_rejected` (a 403, which reads exactly like an expired session and is
- * not one: `PKMNSCAN_TCG_SELLER_KEY` is missing), `order_session_expired` — each carrying a
+ * not one: `BANCHI_TCG_SELLER_KEY` is missing), `order_session_expired` — each carrying a
  * sentence naming what to fix.
  */
 export async function fetchOrders(

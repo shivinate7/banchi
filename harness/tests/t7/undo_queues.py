@@ -971,7 +971,7 @@ def check_queue_refresh_agreement(checks: Checks) -> None:
     frozen entries the day it lands, with nothing here to keep in step. If it does not, the
     command quietly rewrites 565 entries into answers no join would give.
 
-    THE JOIN'S SIDE COMES FROM THE REAL `pkmnscan join`, NOT FROM A SECOND CALL TO
+    THE JOIN'S SIDE COMES FROM THE REAL `banchi join`, NOT FROM A SECOND CALL TO
     `join_batch` HERE. `seam_run` runs the command through `cli/__main__.py`, so `load`,
     `entries_for` and `queues.apply_run` all run for real and the store's two queues ARE the
     join's verdict — which is the first of the two shapes available and the stronger one: a
@@ -2544,7 +2544,7 @@ def check_review_answer(checks: Checks) -> None:
             "priced 3/4 ahead of the unpriced pair, which fall back to box-walk order",
         )
 
-        # The reason clearing beats deleting: a later `./pkmnscan join` re-queues every card
+        # The reason clearing beats deleting: a later `./banchi join` re-queues every card
         # it could not resolve, and this card is still unresolved as far as the pipeline is
         # concerned. Popping the entry would let it ask the same question again.
         with Store().write() as snapshot:

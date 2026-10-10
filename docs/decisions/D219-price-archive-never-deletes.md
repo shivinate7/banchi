@@ -6,7 +6,7 @@ goes wider. `week`, `year`, `all` and `latest` all answer HTTP 400. A bucket tha
 of that window cannot be asked for again. Not from any range. Not at any later date.
 `store/pricearchive.py`'s `price_history` table is the local, permanent copy this repo did
 not have before this entry. `pipeline/pricearchive.py` walks the endpoint for every SKU this
-store has sold or holds. `pkmnscan archive sweep --write` is the press that runs it. Both are
+store has sold or holds. `banchi archive sweep --write` is the press that runs it. Both are
 new. `pipeline/pricehistory.py`'s own fetching and parsing are untouched.
 
 ### Why the key carries `range` and not `width_days`
@@ -72,7 +72,7 @@ a real export row. This module invents no second resolution path against the cat
 
 ### What was proved, and how
 
-`scripts/pricearchive-selftest.py` runs against a throwaway store. `PKMNSCAN_HOME` points at
+`scripts/pricearchive-selftest.py` runs against a throwaway store. `BANCHI_HOME` points at
 a temp directory, destroyed after. A stand-in for `Market` carries no network underneath, per
 `CLAUDE.md`'s "no network call in a test" rule. It asserts the one test this entry exists for.
 The test proves the defect this entry guards against: archiving the same calendar day from

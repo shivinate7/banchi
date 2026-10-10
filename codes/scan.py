@@ -3,7 +3,7 @@
 THE CORE, SHARED BY THE CLI AND THE ROUTE, and it is factored out rather than duplicated
 because CLAUDE.md's hard rule makes both mandatory: a capability that exists only in
 `server/` is not done, and one that exists only in `cli/` cannot be reached from a screen.
-Two callers, one implementation, so the Codes screen and `pkmnscan scan` can never come to
+Two callers, one implementation, so the Codes screen and `banchi scan` can never come to
 disagree about what a scan did.
 
 NOTHING HERE WRITES. `read_directory` is pure with respect to the store — it opens

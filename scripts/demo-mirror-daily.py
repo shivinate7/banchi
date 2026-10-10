@@ -29,9 +29,12 @@ from pathlib import Path
 ALLOWED = "demo-assets/mirror/"
 BRANCH = "demo/mirror-refresh"
 LABEL = "com.banchi.demo-mirror-daily"
-LOG = Path.home() / ".pkmnscan" / "demo-mirror-daily.log"
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from server import ports  # noqa: E402
+
+LOG = ports.machine_dir() / "demo-mirror-daily.log"
 MERGE = Path.home() / ".claude" / "bin" / "merge"
-SOURCE = Path.home() / "Developer" / "pkmnscan"
+SOURCE = Path.home() / "Developer" / "banchi"
 HERE = Path(__file__).resolve()
 
 
@@ -165,6 +168,7 @@ def agent(remove):
     if remove:
         subprocess.run(["launchctl", "bootout", "%s/%s" % (uid, LABEL)], capture_output=True)
         plist.unlink(missing_ok=True)
+        ports.remove_old_agent(LABEL)
         print("removed", LABEL)
         return 0
     if (HERE.parent.parent / ".git").is_file():

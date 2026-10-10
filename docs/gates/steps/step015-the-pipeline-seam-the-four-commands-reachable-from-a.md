@@ -2,7 +2,7 @@
     2026-08-24. spec-less by choice; the decision entry carries the whole argument.
 
     **THE LARGEST INSTANCE OF `CLAUDE.md`'s route-is-not-a-feature RULE THIS REPO HAS HAD,
-    and nobody had counted it.** `./pkmnscan identify | join | emit | reconcile` has existed
+    and nobody had counted it.** `./banchi identify | join | emit | reconcile` has existed
     since step 4, went through Gate B's 53 cards and box 2's 544, and could be reached only
     by somebody typing at a terminal. This section already named the cost in the Gate B
     write-up — *"the owner had no visibility into emitted import files; their names exist

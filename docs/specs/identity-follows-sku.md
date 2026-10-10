@@ -131,7 +131,7 @@ the store.
 2. A fetched live export: `server/pipeline_routes.do_live_export`.
 3. An export a person hands the CLI: `cli/cmd_join.py` (`--export`), `cli/cmd_reconcile.py`
    (`reconcile --live`) and `cli/cmd_emit.py`.
-4. The backfill: `./pkmnscan skus adopt [--write]`. It previews by default. It reads
+4. The backfill: `./banchi skus adopt [--write]`. It previews by default. It reads
    `inventory/.exports/*/*.csv` and `inventory/.live/*.csv`.
 
 **Freshness, and why it never deletes.** `Skus.fold` gives one of four results.
@@ -228,7 +228,7 @@ three.
    `move_card`. The row reads the constant, never a copy. Its own exception list,
    `IDENTITY_WRITERS_ALLOWED`, is empty and ratcheted. It sees only a `card.<field>`
    assignment.
-2. **The store's own audit.** `./pkmnscan cards identity` reads the store and the SKU table,
+2. **The store's own audit.** `./banchi cards identity` reads the store and the SKU table,
    never an export file. It gives three verdicts (D172's shape): pass, fail, not known. It
    fails on any of these:
    - a card bound `sku` whose identity differs from its row.
@@ -291,7 +291,7 @@ passes D196 (no decision, path or pipeline noun on screen).
 
 ### 5.5 One report
 
-`./pkmnscan cards identity` (4.3) is the one report. It has a name half and a number half. Both
+`./banchi cards identity` (4.3) is the one report. It has a name half and a number half. Both
 compare `read_*` against the SKU table's row. They use the join's own tests
 (`pipeline/join.name_disputes`, and the number fold in section 6).
 
@@ -393,8 +393,8 @@ counts on the owner's store: unmeasured here.
    adds an indexed `identity_source` column on `cards`, so the residue count is one probe. The
    other new card fields live in the payload. FTS is unchanged. The DDL runs inside `_upgrade`'s
    one transaction. `check_schema_eleven_then_twelve` in T7 builds each older shape.
-2. **Fill the table:** `./pkmnscan skus adopt --write` (3.2).
-3. **The press:** `./pkmnscan cards identity --write`. It previews by default. It never runs at
+2. **Fill the table:** `./banchi skus adopt --write` (3.2).
+3. **The press:** `./banchi cards identity --write`. It previews by default. It never runs at
    open time, because its answer depends on what the table holds, and that grows.
    - Every card: backfill `read_*` from the `identifications` entry for its `cid`. If none
      matches, use the card's current fields.

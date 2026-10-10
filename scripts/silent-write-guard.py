@@ -47,8 +47,8 @@ runs constantly; `git merge --abort 2>/dev/null` discards an unwind that has not
 report. Every one of those passes, and `scripts/silent-write-selftest.sh` pins them as
 passing rather than trusting this paragraph.
 
-THE ESCAPE HATCH IS `PKMNSCAN_SILENT=off` AND IT IS PRINTED IN EVERY REFUSAL, per the house
-rule `PKMNSCAN_MAIN=off` set, and honoured in both of `PKMNSCAN_KILL`'s two forms — the
+THE ESCAPE HATCH IS `BANCHI_SILENT=off` AND IT IS PRINTED IN EVERY REFUSAL, per the house
+rule `BANCHI_MAIN=off` set, and honoured in both of `BANCHI_KILL`'s two forms — the
 environment, and inline in the command itself.
 
 WHAT IT COSTS, MEASURED, because it runs on EVERY Bash call in the session: 35 ms, and flat —
@@ -282,7 +282,7 @@ def read_command(command: str, clauses: Optional[frozenset] = None) -> Verdict:
             continue
         out = resolve(stage.fd1, op in PIPE_OPS, tail)
         err = resolve(stage.fd2, op == "|&", tail)
-        # A narrowed run (`PKMNSCAN_SILENT_WRITE_ONLY`) keeps a lost stream only when a named
+        # A narrowed run (`BANCHI_SILENT_WRITE_ONLY`) keeps a lost stream only when a named
         # clause owns it: `file` owns a stream sent to an unread file, `bash-c` owns any lost
         # stream of a stage inside a `bash -c` script. The shared guard owns the rest.
         def owned(where: Redirect, inner: bool = inner) -> str:
@@ -377,7 +377,7 @@ CLAUSES = ("file", "bash-c")
 
 
 def _clauses() -> Optional[frozenset]:
-    """`PKMNSCAN_SILENT_WRITE_ONLY=file,bash-c` narrows the hook to the named clauses.
+    """`BANCHI_SILENT_WRITE_ONLY=file,bash-c` narrows the hook to the named clauses.
 
     An environment variable, never a flag: an old copy of this script on an older branch
     ignores a variable and runs the full check, while an unknown flag exits 2 and blocks
@@ -385,13 +385,13 @@ def _clauses() -> Optional[frozenset]:
     warns on every call, since each Bash call is a new process. It never exits non-zero over
     configuration.
     """
-    value = os.environ.get("PKMNSCAN_SILENT_WRITE_ONLY", "")
+    value = os.environ.get("BANCHI_SILENT_WRITE_ONLY", "")
     names = [name for name in value.split(",") if name]
     if not names:
         return None
     unknown = [name for name in names if name not in CLAUSES]
     if unknown:
-        print("silent-write: PKMNSCAN_SILENT_WRITE_ONLY names {0!r}, which is not one of {1}; "
+        print("silent-write: BANCHI_SILENT_WRITE_ONLY names {0!r}, which is not one of {1}; "
               "running the full check".format(",".join(unknown), ", ".join(CLAUSES)),
               file=sys.stderr)
         return None
@@ -416,7 +416,7 @@ def hook(payload: dict, clauses: Optional[frozenset] = None) -> int:
     command = str(tool_input.get("command") or "")
     if not command:
         return 0
-    if os.environ.get("PKMNSCAN_SILENT") == "off" or _hatch_set_by("PKMNSCAN_SILENT", command):
+    if os.environ.get("BANCHI_SILENT") == "off" or _hatch_set_by("BANCHI_SILENT", command):
         return 0
     verdict = read_command(command, clauses)
     if not verdict.silenced:

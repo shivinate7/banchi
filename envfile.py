@@ -29,14 +29,14 @@ _from_file: set = set()
 # THE SAME SET, CARRIED ACROSS A SPAWN, BECAUSE HALF THE PRECEDENCE RULE WAS A PROCESS GLOBAL
 # AND EVERY CHILD HERE IS HANDED `dict(os.environ)` (2026-09-11). `scripts/serve.py:_child_env`
 # and `server/pipeline_routes.py:_env` copy the environment wholesale, which is right — a child
-# must inherit `PKMNSCAN_HOME` or it would run against another store — and it is also how the
+# must inherit `BANCHI_HOME` or it would run against another store — and it is also how the
 # distinction above is lost at the first process boundary: the child sees a value this module
 # lifted out of `.env` and cannot tell it from one the operator exported, so `get_live` returns
 # it and never reads the file. The rotation the whole of `get_live` exists for stops working one
 # process down.
 #
 # MEASURED ON THE OWNER'S OWN MACHINE, 2026-09-11. The capture server under the main checkout
-# carried `ANTHROPIC_API_KEY`, `TCGPLAYER_STORE_COOKIE` and `PKMNSCAN_LAN_NAME` in its initial
+# carried `ANTHROPIC_API_KEY`, `TCGPLAYER_STORE_COOKIE` and `BANCHI_LAN_NAME` in its initial
 # environment — all three lifted out of `.env` by D138's supervisor, which reads exactly one of
 # them. The sibling checkout, which has no `.env`, carried none of the three. So this was not a
 # hazard waiting to happen: it was the state of the process the owner was using.
@@ -44,7 +44,7 @@ _from_file: set = set()
 # NAMES ONLY, NEVER VALUES. The values are already in the environment beside it and a secret
 # copied to a second place is a second place to leak it. `ps eww` shows a process's initial
 # environment, which is how the measurement above was taken without reading `.env` at all.
-FROM_FILE_ENV = "PKMNSCAN_ENV_FROM_FILE"
+FROM_FILE_ENV = "BANCHI_ENV_FROM_FILE"
 
 
 def _parse(path: Path) -> dict:
@@ -152,9 +152,9 @@ def get_live(name: str) -> str:
     PROCESS", AND THAT WAS WRONG. An API key is placed before anything starts and it also
     EXPIRES, and the operator does the same thing about it that they do about the cookie: paste
     a new one into `.env`. Measured 2026-09-11, on the owner's: the key expired, they replaced
-    it, and `./pkmnscan identify` and the `#/runs` press both kept failing with the dead one —
+    it, and `./banchi identify` and the `#/runs` press both kept failing with the dead one —
     `make down` / `make up` was the only thing that picked up the new key, which is the restart
-    discipline D138 exists to make unnecessary. `PKMNSCAN_IMAGE_MIRROR` keeps the judgement and
+    discipline D138 exists to make unnecessary. `BANCHI_IMAGE_MIRROR` keeps the judgement and
     keeps `get`: a path to a disk is not a credential and does not expire.
 
     THE PRECEDENCE IS UNCHANGED, which is the whole reason `_from_file` exists. A real

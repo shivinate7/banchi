@@ -2,7 +2,7 @@
 TCGplayer export, oldest stamp first, folded into `store/skus.py:Skus`.
 
 WHY A PIPELINE MODULE AND NOT A SERVER ONE. `server/` sits above `cli/`, `pipeline/` and
-`store/` in this repo's layering — it imports them, never the reverse — and `pkmnscan skus
+`store/` in this repo's layering — it imports them, never the reverse — and `banchi skus
 adopt` (`cli/cmd_skus.py`) has to run this walk with no server in sight, exactly
 `pipeline/readings.py`'s own reason for living here (see that module's docstring). A later
 lane wires the fetch routes in `server/pipeline_routes.py` and the CLI writers in
@@ -216,7 +216,7 @@ def changed_rows(rows, *, at: int, source: str, skus: Skus) -> list:
 
 
 def fill(skus: Skus, events: List[dict]) -> Report:
-    """The whole-disk walk `pkmnscan skus adopt` runs: every cached export this machine has,
+    """The whole-disk walk `banchi skus adopt` runs: every cached export this machine has,
     oldest stamp first, folded into `skus` — see the module docstring for why the order
     matters and why an unstamped file is skipped rather than guessed at.
 

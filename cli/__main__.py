@@ -81,7 +81,7 @@ def _pricing_arguments(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="pkmnscan",
+        prog="banchi",
         description="Bulk-list Pokemon TCG singles on TCGplayer. Batch script v2.",
         epilog=f"store: ${store_files.HOME_ENV} or the repo root",
     )
@@ -118,7 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
     # is new is that there may be none of them, in which case the selection flags below say
     # which cards — and `--all` says every one in the store.
     #
-    # `nargs="*"` IS WHY `--all` HAS TO EXIST. `./pkmnscan identify "$DIR"` with `$DIR` unset was
+    # `nargs="*"` IS WHY `--all` HAS TO EXIST. `./banchi identify "$DIR"` with `$DIR` unset was
     # an argparse error and is now an empty list, so the one thing this change could quietly do
     # is turn a typo into a paid store-wide submission. It refuses instead and names the flag.
     identify.add_argument(
