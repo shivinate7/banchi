@@ -14,18 +14,14 @@ Codex reads this file, not a copy (D135, Codex reads the same rules). `AGENTS.md
 `.agents/skills` links to `.claude/skills`. `.codex/hooks.json` mirrors `.claude/settings.json`.
 The `agent links` and `codex hooks` rows of `make docs-audit` check both.
 
-## The name is the app's, and nothing beneath it (D94, Banchi is the product's name)
+## Banchi names everything (D94, Banchi names everything)
 
-**Banchi** names the web app under `app/`. Everything beneath it keeps its old name. That
-covers the checkout (`~/Developer/pkmnscan`), the CLI `./pkmnscan`, the Python packages
-(`server/ store/ pipeline/ identify/ geometry/ codes/ cli/`) and `inventory/store.sqlite`.
-It also covers `PKMNSCAN_HOME`, every wire route, `PKMNSCAN_MAIN=off`, the harness, the
-fixtures, `docs/` and `make`. Renaming any of these is a defect.
+**Banchi** names the app, the GitHub repository `shivinate7/banchi`, the checkout, the CLI, the
+env vars, `~/.banchi` and the launchd labels. A rename lane is moving each old `pkmnscan` name.
+Until it merges, an old name in the code is pending work. After it merges, a new `pkmnscan`
+outside `fixtures/` is a defect. `inventory/store.sqlite` keeps its name. Fixtures are never modified.
 
-- The GitHub repository is `shivinate7/banchi`. The local directory stays `pkmnscan`. The two disagree on purpose.
 - GitHub Pages follows the repository name. `.github/workflows/demo.yml` derives `DEMO_BASE` from it.
-- The front-end rename reaches `app/index.html`, the brand block in `app/src/App.tsx`, the document
-  title, `banchi.*` keys and on-screen copy. It reaches nothing on the wire.
 - No gate is current. Gate A, B and C passed, and their run records are deleted. History lives in
   version control.
 
