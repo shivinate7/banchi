@@ -193,6 +193,11 @@ def check_basis(basis: str) -> str:
     return basis
 
 
+def money(value) -> str:
+    """THE way the CLI prints a price: `$18.50`, never `$18.5`. Rendering only; comparing is `corpus._token`."""
+    return "$" + tcgcsv.format_price(value)
+
+
 def basis_price(row: tcgcsv.Row, basis: str = BASIS_MARKET) -> Optional[Decimal]:
     """The price this run's rule is applied to. None when the cell is blank."""
     return tcgcsv.parse_price(row[BASIS_COLUMN[check_basis(basis)]])

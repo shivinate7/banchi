@@ -958,32 +958,13 @@ def _token(value: object) -> str:
     if isinstance(value, dict):
         reason = value.get(decisions_mod.WITHHELD_KEY, "")
         watch = value.get(decisions_mod.WATCH_KEY)
-        return f"held: {reason}" + (f" above ${watch}" if watch else "")
+        return f"held: {reason}" + (f" above {pricing.money(watch)}" if watch else "")
     text = str(value).strip()
     if text.lower() == decisions_mod.pricing.UNLISTED:
         return "unlisted"
     try:
-        # `normalize()` IS THE COMPARISON AND `_plain` IS THE RENDERING, and they were one
-        # call until 2026-09-06. Normalising folds `0.50` and `0.5` into one answer, which is
-        # the whole point — and it also folds `7000.00` into `7E+3`, because that is what
-        # `Decimal.normalize` does to a round number of at least 100. Every string here is
-        # printed to the operator by `cli/cmd_prices.py`, so the two highest-value figures
-        # this repo has ever handled — a $7,000 listing and a $750 test publish — both
-        # rendered as exponents in the report that names what a price was changed to.
-        return f"${_plain(Decimal(text).normalize())}"
+        # Two decimals, so `0.50` and `0.5` are ONE answer and a $7,000 listing is never `7E+3`.
+        return pricing.money(text)
     except (ArithmeticError, InvalidOperation, ValueError):
         # A value `Decisions.parse` will refuse later. Reported as typed rather than guessed.
         return text
-
-
-def _plain(number: Decimal) -> str:
-    """A normalised `Decimal` as digits, never scientific notation.
-
-    `Decimal("7000.00").normalize()` is `Decimal("7E+3")` and `str()` of it says so. The fix
-    is `quantize` back to a whole exponent, which is exact for a value that only LOST
-    trailing zeros — the case `normalize` produces — and cannot lose a significant digit.
-    Small values are unaffected: `0.49` normalizes to itself.
-    """
-    if number == number.to_integral_value() and number.as_tuple().exponent > 0:
-        return str(number.quantize(Decimal(1)))
-    return str(number)

@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 
 from cli import runs
-from pipeline import corpus, decisions
+from pipeline import corpus, decisions, pricing
 from store import files
 
 
@@ -155,7 +155,7 @@ def _show(args, say) -> int:
     say(f"{files.prices_path()}")
     say(
         f"policy           rule={book.rule} basis={book.basis} "
-        f"threshold=${book.threshold} sub_threshold={book.sub_threshold}"
+        f"threshold={pricing.money(book.threshold)} sub_threshold={book.sub_threshold}"
     )
     for name, over in sorted(book.overrides.items()):
         say(f"  override       {name}: {over}")
@@ -172,7 +172,7 @@ def _show(args, say) -> int:
             note = value.get("note") if isinstance(value, dict) else None
             line = f"  {sku}  {reason}"
             if watch:
-                line += f" above ${watch}"
+                line += f" above {pricing.money(watch)}"
             if note:
                 line += f" — {note}"
             say(line)
