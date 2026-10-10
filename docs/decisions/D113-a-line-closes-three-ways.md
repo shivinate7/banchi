@@ -83,7 +83,7 @@ end                                   wanted 3  picks 0  no_copies_on_hand  fulf
 ```
 
 **Open forever, with the third copy already in the envelope.** `#/inventory`'s sale does not
-touch the ledger. D63 keeps them apart, rightly, because a sale is a fact about a card. A fulfilment is a fact about an order. So nothing ever counted it. `no_copies_on_hand`'s remedy
+touch the ledger. D63 keeps them apart, rightly, because a sale is a fact about a card. A fulfilment is a fact about an order, so nothing ever counted it. `no_copies_on_hand`'s remedy
 *"Sold, retired or pooled — the counts beside this line say which"* is a dead end, and the first
 build of this entry gated its presses to `sku_unseen` and `not_a_single`, so none was offered.
 

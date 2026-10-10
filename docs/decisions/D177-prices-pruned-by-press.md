@@ -16,8 +16,8 @@ so the store remembers listings it never photographed. **So "no card matches" is
 
 **Measured: 430 answers, 419 would survive, 11 would be deleted, and 0 of the 11 are safe.**
 
-- **7 are prices on listings that are live on TCGplayer right now**, worth $192.52. **Five of the seven are not cards at all**. Examples: a One Piece booster pack at $27.50 and another at
-  $20.49, an illustration box at $84.99. Also a Riftbound playmat at $39.79, and a sleeve bundle at
+- **7 are prices on listings that are live on TCGplayer right now**, worth $192.52. **Five of the seven are not cards at all**. They are a One Piece booster pack at $27.50 and another at
+  $20.49. Also an illustration box at $84.99, a Riftbound playmat at $39.79, and a sleeve bundle at
   $16.47. They have no card number, no rarity and no photograph, and there is no path through
   `identify` for any of them. **No store-wide join, however complete, can ever match these rows.** They are not leftovers a better join would resolve. They are permanently unmatched by
   construction. A card-matching rule deletes them on its first run and on every run after.
@@ -31,7 +31,7 @@ so the store remembers listings it never photographed. **So "no card matches" is
   2026-09-10 and 2026-09-12.
 
 **The eleven carry 2.70% of the corpus's typed rows and 28.78% of its typed money** — mean
-$20.75 against the corpus's $1.95, a factor of 10.6. That skew is not chance. **The expensive answers in this file are disproportionately the ones with no card behind them**. The reason is that the expensive things in this store are sealed product and accessories.
+$20.75 against the corpus's $1.95, a factor of 10.6. That skew is not chance. **The expensive answers in this file are disproportionately the ones with no card behind them. The reason is that the expensive things in this store are sealed product and accessories.**
 
 **And the exposure grows rather than converging.** The live book went from 759 rows to 853 in
 six days. **350 of those 853 SKUs have no card record here** — 229 Pokemon, 76 Riftbound, 41

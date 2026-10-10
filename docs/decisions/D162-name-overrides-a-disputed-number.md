@@ -60,7 +60,7 @@ on 212 answers none of which disagreed with the machine.
 
 ### What the ladder does now
 
-**Two conditions, and both must hold before anything is released:** the name answers exactly one CARD. `(Set Name, folded Number)` is that test, so finishes beneath one card are not a question. The ladder settles the finish from that card's own claim. Either one failing means that a human looks.
+**Two conditions, and both must hold before anything is released:** the name answers exactly one CARD, identified by `(Set Name, folded Number)`. So finishes beneath one card are not a question. The ladder settles the finish from that card's own claim. Either one failing means that a human looks.
 
 - **`name_disputed`** — where both hold, the name's row IS the answer. The card is listed.
   Where they do not, the entry carries **both readings**. The name's rows come first, each stamped
