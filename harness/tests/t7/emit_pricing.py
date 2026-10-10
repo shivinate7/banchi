@@ -1154,8 +1154,9 @@ def check_prices_adopt(checks: Checks) -> None:
         book.write()
         shown = command(checks, "prices", "show")
         checks.ok(
-            "sub_threshold=flat $0.50" in shown,
-            "GUARD: `prices show` still prints the sub-threshold as `flat $0.50`",
+            "sub_threshold=flat at $0.50" in shown,
+            "`prices show` prints the sub-threshold as `flat at $0.50`, the one wording join and "
+            "emit use too",
             shown,
         )
 
