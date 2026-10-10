@@ -257,11 +257,15 @@ def check_sources_payload_ties_break_on_name() -> None:
 # So a refusal, or its absence, in `_adopt` is what each arm sees.
 
 
-def run_adopt(write: bool) -> Tuple[int, List[str]]:
+def run_adopt(write: bool) -> Tuple[Optional[int], List[str]]:
     said: List[str] = []
-    code = cmd_readings.run(
-        argparse.Namespace(readings_command="adopt", write=write), said.append
-    )
+    try:
+        code = cmd_readings.run(
+            argparse.Namespace(readings_command="adopt", write=write), said.append
+        )
+    except Exception as exc:  # a crash refuses by accident, and names no file
+        said.append(f"raised {type(exc).__name__}: {exc}")
+        return None, said
     return code, said
 
 
@@ -286,6 +290,21 @@ def seed_table_from_sources(home: Path) -> None:
     seed_good_sources(home)
     with Store().write() as snapshot:
         snapshot.readings.replace(*readings_walk.collect())
+
+
+def check_bad_run_table(home: Path, label: str, content: str) -> None:
+    """box2's run table is replaced by `content`, among good ones: adopt --write must refuse,
+    keep the table (box2's 333 included), and name the bad file in its output."""
+    seed_table_from_sources(home)
+    before = stored()
+    table = home / "runs" / "2026-01-01-box2-01" / "pricing.json"
+    table.write_text(content, "utf-8")
+    code, said = run_adopt(write=True)
+    ok(code not in (0, None) and stored() == before,
+       f"refuses: adopt --write over a run table that is {label} leaves the table as it was",
+       f"code {code}, rows left {sorted(stored()[0])}")
+    ok(any(str(table) in line for line in said),
+       f"and the refusal names that file ({label})", "\n".join(said[-4:]))
 
 
 def check_cli_adopt() -> None:
@@ -332,37 +351,36 @@ def check_cli_adopt() -> None:
            "and the preview says it wrote nothing")
 
         # -------------------------------------------------- (a) refusals, table kept
-        # FOUND DEFECT (test-author): `_adopt` has no refusal. An empty or malformed walk
-        # reaches `Readings.replace()` with `{}`, which clears every row. Red until the
-        # builder adds the refusal to `cli/cmd_readings.py:_adopt`.
         print("\n  -- adopt --write over no usable source refuses, and keeps the table --")
         seed_table_from_sources(home)
         before = stored()
         shutil.rmtree(runs)
         code, _ = run_adopt(write=True)
-        ok(code != 0 and stored() == before,
+        ok(code not in (0, None) and stored() == before,
            "refuses: adopt --write over no source at all leaves the table as it was",
            f"code {code}, rows left {sorted(stored()[0])}")
 
         seed_table_from_sources(home)
         before = stored()
         shutil.rmtree(runs)
-        (runs / "2026-01-01-box1-01").mkdir(parents=True)
-        (runs / "2026-01-01-box1-01" / "pricing.json").write_text("{not json", "utf-8")
-        code, _ = run_adopt(write=True)
-        ok(code != 0 and stored() == before,
+        only = runs / "2026-01-01-box1-01" / "pricing.json"
+        only.parent.mkdir(parents=True)
+        only.write_text("{not json", "utf-8")
+        code, said = run_adopt(write=True)
+        ok(code not in (0, None) and stored() == before,
            "refuses: adopt --write whose only source is a malformed pricing.json leaves the "
            "table as it was",
            f"code {code}, rows left {sorted(stored()[0])}")
+        ok(any(str(only) in line for line in said),
+           "and the refusal names that file", "\n".join(said[-4:]))
 
-        seed_table_from_sources(home)
-        before = stored()
-        (runs / "2026-01-01-box2-01" / "pricing.json").write_text("{not json", "utf-8")
-        code, _ = run_adopt(write=True)
-        ok(code != 0 and stored() == before,
-           "refuses: one malformed run table among good ones does not silently drop its SKUs "
-           "(333) from the table",
-           f"code {code}, rows left {sorted(stored()[0])}")
+        # One run table of the good set is replaced by a bad one. Each must refuse, keep the
+        # table (box2's 333 included), and name the file. `{}` is valid JSON, so it is the
+        # silent case; `[]` and `null` crash the walk and name nothing.
+        check_bad_run_table(home, "not JSON", "{not json")
+        check_bad_run_table(home, "an empty object, with no skus key", "{}")
+        check_bad_run_table(home, "a JSON array", "[]")
+        check_bad_run_table(home, "JSON null", "null")
 
 
 # ---------------------------------------------------------------------------------- main
