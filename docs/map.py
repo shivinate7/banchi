@@ -3436,14 +3436,24 @@ COMPONENTS = [
                 "does": "the SessionEnd / WorktreeRemove hook. Stops what a leaving session "
                         "started in a linked worktree and nothing else — the main checkout's "
                         "server is D138's product and is never touched, a tree another session "
-                        "is still standing in is left alone, and the branch and the tree are "
-                        "never touched at all. A supervisor whose tree has just been "
+                        "is still standing in is left alone, and the branch is never touched. "
+                        "On WorktreeRemove it also runs `git worktree remove` without --force, "
+                        "because worktree-create.sh made the tree; a tree with uncommitted "
+                        "work stays on disk. A supervisor whose tree has just been "
                         "removed is findable only from the process table; that dead-rooted "
                         "read is claude-settings' sweep, which its own SessionEnd hook and "
                         "daily agent run. Fails open on every path.",
                 # D138 is the behaviour it is careful not to break; D18 keeps it off the commit
                 # path, exactly as the SessionStart guard beside it is kept off.
                 "governed_by": ["D18", "D138"],
+            },
+            "worktree-create.sh": {
+                "does": "the WorktreeCreate hook. Makes every Claude Code worktree with a plain "
+                        "`git worktree add` at `.claude/worktrees/<name>` on `worktree-<name>`, "
+                        "cut from a fresh origin/main, so githooks/post-checkout provisions it. "
+                        "Claude Code's own creation never fires post-checkout. Prints only the "
+                        "path on stdout; exits non-zero only when git cannot make the tree.",
+                "governed_by": ["D18"],
             },
             "ignore-check.sh": {"does": "the other half of D47: `git check-ignore` over every path "
                                         "a worktree provisions, asserting each is ignored WHATEVER "

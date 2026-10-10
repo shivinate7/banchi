@@ -96,6 +96,17 @@
         ]
       }
     ],
+    "WorktreeCreate": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/worktree-create.sh",
+            "timeout": 600
+          }
+        ]
+      }
+    ],
     "WorktreeRemove": [
       {
         "hooks": [

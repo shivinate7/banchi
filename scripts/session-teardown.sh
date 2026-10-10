@@ -25,20 +25,21 @@ set -uo pipefail
 
 payload="$(cat 2>/dev/null || true)"
 
-# `cwd` follows Claude, so it is the worktree root rather than the project root, which is
-# exactly the value wanted here. `reason` is absent for WorktreeRemove and present for
+# WorktreeRemove names the tree in `worktree_path`. SessionEnd has only `cwd`, which follows
+# Claude to its worktree root. `reason` is absent for WorktreeRemove and present for
 # SessionEnd; an absent one is not a `clear`, so it proceeds.
-read -r tree reason <<EOF
+read -r tree reason wtp <<EOF
 $(python3 -c "
 import json, sys
 try:
     d = json.loads(sys.stdin.read() or '{}')
 except Exception:
     d = {}
-cwd = str(d.get('cwd') or '').strip()
+wtp = str(d.get('worktree_path') or '').strip()
+cwd = wtp or str(d.get('cwd') or '').strip()
 why = str(d.get('reason') or '').strip()
-print((cwd or '-'), (why or '-'))
-" <<<"$payload" 2>/dev/null || echo "- -")
+print((cwd or '-'), (why or '-'), (wtp or '-'))
+" <<<"$payload" 2>/dev/null || echo "- - -")
 EOF
 
 [ "${tree:--}" = "-" ] && exit 0
@@ -53,5 +54,11 @@ janitor="$mine/janitor.py"
 [ -f "$janitor" ] || exit 0
 
 python3 "$janitor" --teardown "$tree" 2>/dev/null || true
+
+# scripts/worktree-create.sh makes every Claude Code worktree, so removing it is this hook's
+# job too. No --force: git refuses a tree with uncommitted work, and that tree stays on disk.
+case "$wtp" in
+  */.claude/worktrees/*) git -C "$tree" worktree remove "$tree" >/dev/null 2>&1 || true ;;
+esac
 
 exit 0
