@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import List, NamedTuple, Optional, Sequence, Set, Tuple
 
 SESSIONS_DIR = Path.home() / ".claude" / "sessions"
+IN_USE = 3  # --teardown's exit when another session still stands in the tree
 
 
 # Every absolute path in a command line. `ps -o command=` prints the argv space-joined, so a
@@ -413,7 +414,7 @@ def teardown(tree: str, sessions_dir: Path) -> int:
     if others:
         say("session-teardown: {0} session(s) still here — leaving the server up.".format(
             len(others)))
-        return 0
+        return IN_USE  # session-teardown.sh then leaves the tree on disk too
 
     serve = Path(tree) / "scripts" / "serve.py"
     if serve.is_file():

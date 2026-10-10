@@ -45,6 +45,9 @@ from .records import (
     without_noqa,
 )
 
+# How a hook command names the project root. `:-.` keeps Codex, which does not set it, at cwd.
+PROJECT_DIR_PREFIX = "${CLAUDE_PROJECT_DIR:-.}/"
+
 # `duplicated measurements` is CUT (test-audit plan Q2, 2026-09-28). It reconciled
 # copies of three hand-taken measurements (cid lookup latency, the store card total,
 # the largest drawer size) scattered across store/, cli/, server/, pipeline/, app/src/,
@@ -1289,7 +1292,10 @@ def check_codex_hooks(report: Report) -> None:
         )
 
     for event, _matcher, command in sorted(codex_triples | claude_triples):
-        script = command.split()[0] if command else ""
+        script = command.split()[0].strip('"') if command else ""
+        # A hook that must not resolve against the session's cwd names its project root
+        # (worktree-create.sh: a tree cut before the script existed had no copy).
+        script = script.removeprefix(PROJECT_DIR_PREFIX)
         if script and not exists(ROOT / script):
             findings.append(
                 Finding(
