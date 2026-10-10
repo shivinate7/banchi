@@ -530,7 +530,7 @@ def _resolve_selection(payload: dict) -> selection_mod.Selection:
     # A KEY NO READER KNOWS IS NOT "NO TERMS": `{"boxes": [3]}` would otherwise price and run the
     # whole store. `indices` is left to `parse`, which refuses it by name.
     known = _ROUTE_KEYS | {f.name for f in dataclass_fields(selection_mod.Selection)}
-    stray = sorted(str(k) for k in payload if k not in known and k != "indices")
+    stray = sorted(str(k) for k in payload if k not in known and k not in ("indices", "scopes"))
     if stray:
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
