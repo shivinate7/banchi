@@ -71,7 +71,7 @@ CHECKS = (
         "target": "harness-1",
         "shard": "product",
         "runs": "$(PYTHON) harness/run.py --part 1",
-        "asserts": "Slice 1 of harness/run.py's PARTS of the TESTS list (part 1 also runs every test but T7; each part runs the T7 checks whose name hashes to it). RECOUNT FROM THERE "
+        "asserts": "Slice 1 of harness/run.py's PARTS of the TESTS list (only part 1 writes the T1 result file; each part runs the T7 checks whose name hashes to it). RECOUNT FROM THERE "
                    "— this entry deliberately carries no number, because a count published "
                    "beside a list is the drift this whole file exists about.",
         "needs": ("venv",),
@@ -88,12 +88,11 @@ CHECKS = (
         "target": "harness-2",
         "shard": "product-2",
         "runs": "$(PYTHON) harness/run.py --part 2",
-        "asserts": "Slice 2 of harness/run.py's PARTS of the TESTS list (part 1 also runs every test but T7; each part runs the T7 checks whose name hashes to it). RECOUNT FROM THERE "
+        "asserts": "Slice 2 of harness/run.py's PARTS of the TESTS list (only part 1 writes the T1 result file; each part runs the T7 checks whose name hashes to it). RECOUNT FROM THERE "
                    "— this entry deliberately carries no number, because a count published "
                    "beside a list is the drift this whole file exists about.",
         "needs": ("venv",),
-        "writes": "harness/results/t1*.json, but only when the measurement itself changed — a "
-                  "timestamp bump alone is not a change and is not written.",
+        "writes": "",
         "commit_path": False,
         "why_off_commit_path": "It writes, and it needs the venv. D18 keeps a writing thing off "
                                "the path that decides whether a commit proceeds; the Stop hook "
@@ -105,12 +104,11 @@ CHECKS = (
         "target": "harness-3",
         "shard": "product-3",
         "runs": "$(PYTHON) harness/run.py --part 3",
-        "asserts": "Slice 3 of harness/run.py's PARTS of the TESTS list (part 1 also runs every test but T7; each part runs the T7 checks whose name hashes to it). RECOUNT FROM THERE "
+        "asserts": "Slice 3 of harness/run.py's PARTS of the TESTS list (only part 1 writes the T1 result file; each part runs the T7 checks whose name hashes to it). RECOUNT FROM THERE "
                    "— this entry deliberately carries no number, because a count published "
                    "beside a list is the drift this whole file exists about.",
         "needs": ("venv",),
-        "writes": "harness/results/t1*.json, but only when the measurement itself changed — a "
-                  "timestamp bump alone is not a change and is not written.",
+        "writes": "",
         "commit_path": False,
         "why_off_commit_path": "It writes, and it needs the venv. D18 keeps a writing thing off "
                                "the path that decides whether a commit proceeds; the Stop hook "
