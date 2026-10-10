@@ -32,10 +32,10 @@ spanning a flexible (`1fr`) track is skipped when the browser sizes a `max-conte
 spanning columns 2–3 (to run the full row width when its blocker has no fix) does not inflate column 2.
 Only the buttons that sit in column 2 alone do, and column 2 is sized by them.
 
-Both shapes were mutation-tested against the live block on 2026-09-13. In one run, a `.bak`-protected copy
-of `kit.css` had `.bn-actions-stack`'s `justify-self: stretch` deleted. In the other, `CaptureScreen.css`
-had `.capture-block-fix`'s `justify-self` reverted to `start`. Each turned the capture block's own two fix
-buttons unequal: "Open the camera" 147.3px against "Pick a box" 107.0px. `make design-check PW_ARGS=tests/button-stack.spec.ts`
+Both shapes were mutation-tested against the live block on 2026-09-13. Each shape was a `.bak`-protected copy.
+One copy of `kit.css` had `.bn-actions-stack`'s `justify-self: stretch` deleted. One copy of `CaptureScreen.css`
+had `.capture-block-fix`'s `justify-self` reverted to `start`. Together, these turned the capture block's own two
+fix buttons unequal: "Open the camera" 147.3px against "Pick a box" 107.0px. `make design-check PW_ARGS=tests/button-stack.spec.ts`
 went red on exactly that sector. Restoring both files from the `.bak` copies turned it green again.
 
 ### The guard is `app/tests/button-stack.spec.ts`, and it discovers its subjects

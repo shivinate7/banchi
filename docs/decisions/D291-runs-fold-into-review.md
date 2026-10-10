@@ -48,4 +48,7 @@ Both stay together in the Runs sheet. Neither moves to `#/pricing`, and neither 
 - **Emit is free.** A pricing screen may hold its button, and a stale run list or a race with the pricing autosave are the costs of doing so. It has no argument for moving.
 - **Reconcile does not belong on pricing under any reading.** Its input is a file that exists only after the operator has left the app, imported to TCGplayer and downloaded Export From Staged. It reads no pricing answer. Its only tie to emit is one manifest key. What it needs is to be findable on re-entry. So a run's phase says what the run owes in its own unit ("price 12", "answer 4"). It does not name three different states as `emit`.
 - **Three items are built:** the preset moves `rule` and `basis`; `#/pricing` draws the sub-threshold answer; `app/src/readiness.ts` computes what a run owes. Three are abandoned by the owner: collapsing a finished step's body, a `#/runs?run=<name>` link back from pricing, and the same ink weight for the `reconcile` phase as for `identifying`.
-- **What would reopen it:** any one of these. Emit still complained about after the sheet. A median box needs two or more refused emit presses. The emit-to-reconcile gap is measured in days on a real listing box. One measurement exists: 6m44s, 13 SKUs.
+- **What would reopen it:** any one of these.
+  - Emit still complained about after the sheet.
+  - A median box needing two or more refused emit presses.
+  - The emit-to-reconcile gap measured in days on a real listing box (one measurement exists, 6m44s, 13 SKUs).

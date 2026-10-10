@@ -9,7 +9,7 @@
 
 The second is unrecoverable and silent. Nothing on either screen says which process replied.
 
-**Half of this was already fixed and the half that was left is the one that writes.** `app/devPort.ts`, earlier the same day, gave every checkout its own **Vite** port. Before that, `make design-check` in a worktree attached to the main tree's dev server. It asserted `docs/DESIGN.md`'s floors against code the worktree had never seen, and it passed. That entry's own reasoning is the argument here: the shared PORT is the whole fault. It stopped at Vite and Playwright. The capture server, which is the process that writes photographs and inventory to disk, kept the shared constant.
+**Half of this was already fixed and the half that was left is the one that writes.** `app/devPort.ts`, earlier the same day, gave every checkout its own **Vite** port. Before that, `make design-check` ran in a worktree attached to the main tree's dev server. It asserted `docs/DESIGN.md`'s floors against code the worktree had never seen, and it passed. That entry's own reasoning is the argument here: the shared PORT is the whole fault. It stopped at Vite and Playwright. The capture server, which is the process that writes photographs and inventory to disk, kept the shared constant.
 
 **`app/tests/inventory.spec.ts` had already written the bug report.** Its stubs are justified in a comment. The comment says an unstubbed read is a request to whatever is listening on port 8000. In this repo, that is the owner's actual capture server over their actual 767-card inventory. That is this defect, observed, worked around locally, and never filed.
 
