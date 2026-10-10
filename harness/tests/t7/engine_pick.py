@@ -15,6 +15,7 @@ import math
 import threading
 import urllib.request
 from pathlib import Path
+from types import SimpleNamespace
 
 from harness.tests import Checks
 from harness.tests.t7.common import REPO_ROOT, isolated_home, quiet
@@ -811,7 +812,14 @@ def check_cache_position_key(checks: Checks) -> None:
     checks.note("")
     checks.note("CACHE KEY — position is the key, the photo is the check (D36)")
     haiku = cache_mod.ENGINE_HAIKU
-    said = lambda name: {"name": name, "number": "1", "printed_total": "9", "confidence": "high"}  # noqa: E731
+    # A good answer carries every key the Pokemon schema requires, read from the schema itself
+    # (`identify/prompt.py` `parse` checks `chosen.schema["required"]`), never a copied list.
+    pokemon_required = prompt.profile("pokemon_card_v1").schema["required"]
+
+    def said(name):
+        answer = {key: "x" for key in pokemon_required}
+        answer.update(name=name, number="1", printed_total="9", finish="normal", confidence="high")
+        return answer
 
     # (a) an answer stored for a position is returned for that position and the same photo.
     cache = cache_mod.Cache.parse({})
@@ -868,6 +876,30 @@ def check_cache_position_key(checks: Checks) -> None:
         .reusable("3/1", "sha-A")
     )
     checks.ok(not_a_mapping is None, "(d) an identification that is not a mapping is a miss, not an answer")
+
+    # (d) a mapping that lacks the Pokemon schema's required keys is a miss, and a cached run
+    # does not count it. The consult gate in `cli/cmd_identify.py` `run` is `reusable`, then
+    # `_adopt_cached` (which sets `cached`). Only a hit reaches `_adopt_cached`.
+    from cli import cmd_identify
+
+    for label, answer in (("an empty mapping", {}), ("a name only", {"name": "A"}), ("an unrelated key", {"foo": 1})):
+        checks.raises(
+            prompt.MalformedIdentification,
+            lambda: prompt.parse(answer, "pokemon_card_v1"),
+            f"(d) {label} is refused by prompt.parse, the same rule a run applies",
+        )
+        stored = cache_mod.Cache.parse(
+            {"3/1": {"identification": answer, "photo_sha256": "sha-A", "prompt_fingerprint": "f", "at": "t"}}
+        )
+        item = SimpleNamespace(
+            strategy="pokemon_card_v1", cached=False, stage=None, engine=None, held_second_look=None,
+            identification=None, status="pending", stale_prompt=False,
+        )
+        entry = stored.reusable("3/1", "sha-A")
+        if entry is not None:
+            cmd_identify._adopt_cached(item, entry, {})
+        checks.equal(entry, None, f"(d) {label} is a cache miss, not returned as an answer")
+        checks.equal(item.cached, False, f"(d) {label}: a cached run does not count it as cached")
 
 
 # ------------------------------------------------------------------------ the model verdict, the promo census, Prepare
