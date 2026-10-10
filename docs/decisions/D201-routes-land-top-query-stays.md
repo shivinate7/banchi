@@ -36,7 +36,8 @@ fix, rather than assuming a "shell main" div is always the scroller.
 
 `app/tests/phone.spec.ts` — `leaving a scrolled screen lands the next one at the top`. It scrolls
 `#/capture` to 300px. The test finds `#/capture` off the drawer's own roster, never a typed hash.
-The `docs-audit` `route rosters` row refuses a third pinned literal in this file. It confirms the
+`docs-audit`'s `route
+rosters` row refuses a third pinned literal in this file. It confirms the
 scroll actually moved. It leads to Inventory with `,I`. It asserts the document is taller than the
 viewport plus the old scroll offset. A short destination can never pass this by accident of the
 browser's own clamp. It asserts `window.scrollY === 0`. Red on the unfixed tree at `scrollY: 247`;
