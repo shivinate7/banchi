@@ -43,9 +43,9 @@ Four of them — `TCG Market Price`, `TCG Direct Low`, `TCG Low Price With Shipp
 timestamp, a sale record or a sample size.** The file is what the marketplace looks like at
 the moment the button was pressed, and nothing in it is a window onto anything.
 
-`TCG Market Price` is the only column with sales behind it, and it is TCGplayer's own
-aggregate over recent sales rather than a sale — one number, no window. **There are no
-last-sold rows in this export, and TCGplayer publishes none anywhere**, so this is not a
+`TCG Market Price` is the only column with sales behind it. It is TCGplayer's own
+aggregate over recent sales rather than a sale. It is one number. It has no window. **There are no
+last-sold rows in this export, and TCGplayer publishes none anywhere.** So this is not a
 gap to be filled from another one of their files. `docs/decisions/`'s Someday list
 carries what is available instead.
 
