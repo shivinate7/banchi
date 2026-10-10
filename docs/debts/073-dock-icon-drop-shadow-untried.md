@@ -6,4 +6,4 @@
 
 **Why unfixed.** The value must come from a sweep, and not from typing a number into the generator. The sweep has not run.
 
-**What would close it.** A sheet that shows candidate shadows at 128, 64 and 32px beside the same three system icons, judged by the method in section 7 of the spec. Then a decision on whether `build-mark.mjs` draws the shadow into the manifest icons.
+**What would close it.** A sheet shows candidate shadows at 128, 64 and 32px beside the same three system icons. The method in section 7 of the spec judges them. Then a decision on whether `build-mark.mjs` draws the shadow into the manifest icons.
