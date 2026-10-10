@@ -346,7 +346,7 @@ class Disposition:
         # the floor is not while a `prices.json` exists.
         if self.kind == FLAT_FLOOR:
             return "flat at the store's floor"
-        return f"flat at ${self.price}"
+        return f"flat at {money(self.price)}"
 
 
 def flat_floor() -> Disposition:
