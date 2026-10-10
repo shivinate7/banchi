@@ -36,7 +36,7 @@ reader, and a `keys` selection reads only its own sidecars.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
@@ -476,6 +476,16 @@ def parse(payload: Dict[str, Any]) -> Selection:
             "`scopes` is not a selection term. A send is one selection over cards, not a cart "
             "of boxes — name the drawers' cards with `keys`, or the whole lot with `state`.",
         )
+
+    # A null term is refused, never read as absent: an all-null payload would otherwise select
+    # every photograph, and a press must not pay for cards it did not name. "Any" is the key left out.
+    for term in (f.name for f in fields(Selection)):
+        if term in payload and payload[term] is None:
+            raise SelectionError(
+                "selection_invalid",
+                f"The {term} term is null. A null term does not mean any. Leave the key out "
+                "to leave that term unconstrained.",
+            )
 
     raw_paths = payload.get("paths")
     paths: Tuple[str, ...] = ()
