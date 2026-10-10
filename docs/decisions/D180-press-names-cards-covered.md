@@ -64,6 +64,14 @@ That is the whole design rule, and nothing here invents a grouping:
 
 **`sitting` was asked for and is `since` instead.** A sitting is a CLUSTER computed from `captured_at`, and that clustering lives in `app/src` for Home's library drawing (`storeHistory.ts`'s own `GAP_MINUTES`). A second clustering in Python would be a second answer to "which sitting is this". The screen spends a sitting as a `since` bound, which for "the pile I just shot" is exactly the same set of cards.
 
+### A selection never widens a press
+
+**A selection refuses a null term, an unknown top-level key on a selection route, and an empty CLI selection flag. A run never widens to the whole store unless the operator asked for all.** A null term, a misspelled key and an empty flag each read as "no term". A selection with no term is every card in the store. The refusals keep a paid press on the cards the operator named.
+
+- **How all is asked for.** The CLI spells it `--all`, and `banchi identify` refuses a selection that names nothing without it. The route has no term for all. There, a selection that names nothing is the whole store, with the preflight and the confirm in front of it (`Selection.named`).
+- **Where each refusal lives.** A null term: `pipeline/selection.parse`. An unknown top-level key: `server/pipeline_routes._resolve_send`. An empty flag: `cli/cmd_identify._selection_from`.
+- **Not built.** `pipeline/selection.parse` reads a null term as absent. `server/pipeline_routes._resolve_send` ignores an unknown key. `cli/cmd_identify._selection_from` reads an empty flag as absent. Each one widens a press today.
+
 ### `--box` is a FILTER, and the old `--box` is `--assume-box`
 
 Two opposite jobs were wearing one name.
