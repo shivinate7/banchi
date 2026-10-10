@@ -72,7 +72,7 @@ case "$wtp" in
     case "$branch" in
       worktree-*)
         flag=-d
-        git -C "$main" merge-base --is-ancestor "$branch" origin/main >/dev/null 2>&1 && flag=-D
+        git -C "$main" merge-base --is-ancestor "$branch" refs/remotes/origin/main >/dev/null 2>&1 && flag=-D
         git -C "$main" branch "$flag" "$branch" >/dev/null 2>&1 ;;
     esac
     ;;

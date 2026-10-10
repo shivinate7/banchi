@@ -1281,6 +1281,8 @@ janitor-install:
 	@echo "claude-settings' install.sh owns ~/.claude/bin. This target copies nothing."
 	@echo "Banchi's hooks run scripts/session-teardown.sh and scripts/reap.py from the repo."
 
+.PHONY: janitor janitor-selftest janitor-install serve-selftest sync-selftest ci-check ci-check-product ci-check-static ci-check-guards-1 ci-check-guards-2
+
 # IS THE LAN URL STILL GOOD? The owner reaches this product from a phone at
 # `http://banchi.lan:8000`, and nothing in this repo knows that name — the DHCP reservation
 # and the DNS record are theirs, on their UniFi (D43). What this checks is the four things on
@@ -1297,8 +1299,6 @@ janitor-install:
 # answers from the tree alone, and a row that resolves DNS and expects a server to be up would
 # go red on a train and in every worktree. A check that fails for reasons unrelated to the
 # commit is one people learn to ignore.
-.PHONY: janitor janitor-selftest janitor-install serve-selftest sync-selftest ci-check ci-check-product ci-check-static ci-check-guards-1 ci-check-guards-2
-
 .PHONY: lan-check
 # Is the LAN URL still good? DNS, both servers, and a real write. Reaches the
 # network, so it never gates a commit.
