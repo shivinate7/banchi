@@ -6,7 +6,7 @@ this gap and width of screens is variable"* is wrong — the left edge of every 
 be the same, at every width and in both rail states.
 
 **The cause is `app/src/kit.css`'s `.bn-page`.** It read
-`max-width: var(--bn-page-max, var(--bn-page-w)); margin: 0 auto;`. `margin: 0 auto` CENTERS the page inside the shell's own column. A screen with a lower cap sits in the middle of the space the shell handed it. Pricing and `ValueBands` are at 1120px, and Codes, Home and Orders are at `--bn-page-w-rows` (1344px). The page does not sit against its edge. The gutter that produces grows with the window and differs between routes. A screen with no cap (the 1600px default) happened to fill enough of the column that
+`max-width: var(--bn-page-max, var(--bn-page-w)); margin: 0 auto;`. `margin: 0 auto` CENTERS the page inside the shell's own column. So a screen with a lower cap sits in the MIDDLE of the space the shell handed it, rather than against its edge. Pricing and `ValueBands` are at 1120px, and Codes/Home/Orders are at `--bn-page-w-rows` (1344px). The gutter that produces grows with the window and differs between routes. A screen with no cap (the 1600px default) happened to fill enough of the column that
 the gap was invisible on the owner's own rig. That is exactly how this went unnoticed through
 every 1440px walk this build was verified at.
 

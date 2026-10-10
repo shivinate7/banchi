@@ -322,7 +322,8 @@ older ones, and this section says so.
 `_ddl`'s default. If `_card_columns` misses it, every write stores the cid in the payload and
 leaves the column NULL. If `db.TABLES["cards"]` misses it, a fresh store gets no column. The T7
 arm compares the rosters. `scripts/cid-selftest.py` also runs a query that catches a column
-that disagrees with its payload. The query is `SELECT count(*) FROM cards WHERE cid IS NOT json_extract(payload,'$.cid')`.
+that disagrees with its payload. The query is `SELECT count(*) FROM cards WHERE cid IS NOT
+json_extract(payload,'$.cid')`.
 It must be 0 after the migration AND after an ordinary write.
 
 ### 3.2 The seeding
@@ -392,7 +393,7 @@ healed at the next open.
 
 `./banchi cards name` previews and writes nothing. It opens the store `sqlite3` read-only and
 never calls `db.connect`. That function always runs `_ensure_schema`, so a preview through it
-would migrate the store it is meant to preview. `scripts/cid-selftest.py` asserts this by behavior and
+would run the migration it previews. `scripts/cid-selftest.py` asserts this by behavior and
 by source inspection. The preview prints the count per source. It lists every card that would land in shape 4 and
 every duplicate that would get a suffix. It prints the receipt with its `reverse` sentence.
 `cards name --write` runs the same step now.
