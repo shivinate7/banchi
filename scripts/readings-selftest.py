@@ -23,9 +23,11 @@ never in the git hook: it writes, into a directory it creates and destroys (D18)
 from __future__ import annotations
 
 import csv
+import argparse
 import io
 import json
 import os
+import re
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -35,6 +37,7 @@ from typing import Dict, List, Optional, Tuple
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from cli import cmd_readings  # noqa: E402
 from pipeline import readings as readings_walk  # noqa: E402
 from pipeline import tcgcsv  # noqa: E402
 from harness.tests.home import isolated_home  # noqa: E402
@@ -249,6 +252,245 @@ def check_sources_payload_ties_break_on_name() -> None:
        "got %r" % distinct_names)
 
 
+# ------------------------------------------------- `banchi readings adopt` (the CLI)
+#
+# These drive `cli/cmd_readings.py:run`, the path an operator types, not `replace()` directly.
+# So a refusal, or its absence, in `_adopt` is what each arm sees.
+
+
+def run_adopt(write: bool) -> Tuple[Optional[int], List[str]]:
+    said: List[str] = []
+    try:
+        code = cmd_readings.run(
+            argparse.Namespace(readings_command="adopt", write=write), said.append
+        )
+    except Exception as exc:  # a crash refuses by accident, and names no file
+        said.append(f"raised {type(exc).__name__}: {exc}")
+        return None, said
+    return code, said
+
+
+def stored() -> Tuple[Dict[str, Reading], list]:
+    current = Store().read().readings
+    return dict(current.entries), current.sources_payload()
+
+
+def seed_good_sources(home: Path) -> None:
+    """Disk holds two good run tables: box1 (111, 222) and box2 (333), box2 the newer."""
+    shutil.rmtree(home / "runs", ignore_errors=True)
+    shutil.rmtree(home / "inventory" / files.LIVE_DIRNAME, ignore_errors=True)
+    write_run(home / "runs", "2026-01-01-box1-01",
+              [run_row("111", "1.23", "Card A"), run_row("222", "4.56", "Card B")],
+              mtime=1_700_000_000)
+    write_run(home / "runs", "2026-01-01-box2-01",
+              [run_row("333", "2.00", "Card C")], mtime=1_700_000_100)
+
+
+def seed_table_from_sources(home: Path) -> None:
+    """The table holds exactly what a walk over the good sources gives, set up directly."""
+    seed_good_sources(home)
+    with Store().write() as snapshot:
+        snapshot.readings.replace(*readings_walk.collect())
+
+
+def check_bad_run_table(home: Path, label: str, content: str) -> None:
+    """box2's run table is replaced by `content`, among good ones: adopt --write must refuse,
+    keep the table (box2's 333 included), and name the bad file in its output."""
+    seed_table_from_sources(home)
+    before = stored()
+    table = home / "runs" / "2026-01-01-box2-01" / "pricing.json"
+    table.write_text(content, "utf-8")
+    code, said = run_adopt(write=True)
+    ok(code not in (0, None) and stored() == before,
+       f"refuses: adopt --write over a run table that is {label} leaves the table as it was",
+       f"code {code}, rows left {sorted(stored()[0])}")
+    ok(any(str(table) in line for line in said),
+       f"and the refusal names that file ({label})", "\n".join(said[-4:]))
+
+
+def check_cli_adopt() -> None:
+    print("\n  -- `banchi readings adopt` (cli/cmd_readings.py) over a throwaway store --")
+    with isolated_home() as home:
+        (home / "inventory").mkdir(parents=True, exist_ok=True)
+        runs = home / "runs"
+
+        # -------------------------------------------------- (b) a good source, exact rows
+        print("\n  -- adopt --write from a good source gives exactly the source's rows --")
+        seed_good_sources(home)
+        with Store().write() as snapshot:  # a stale row the source no longer offers
+            snapshot.readings.replace(
+                {"999": Reading(market="8.88", at=1, source="gone", kind=KIND_RUN,
+                                name=None, set_name=None, condition=None)},
+                [],
+            )
+        code, _ = run_adopt(write=True)
+        entries, sources = stored()
+        ok(code == 0 and {sku: r.market for sku, r in entries.items()}
+           == {"111": "1.23", "222": "4.56", "333": "2.00"},
+           "adopt --write leaves exactly the good source's SKUs and prices; the stale row "
+           "is gone", f"code {code}, rows {sorted(entries)}")
+        ok([(s["name"], s["skus"]) for s in sources]
+           == [("2026-01-01-box2-01", 1), ("2026-01-01-box1-01", 2)],
+           "and the sources list is the two run tables, newest first, with their counts",
+           str(sources))
+
+        # -------------------------------------------------- (c) without --write
+        print("\n  -- without --write nothing is written --")
+        seed_table_from_sources(home)
+        before = stored()
+        write_run(runs, "2026-01-01-box1-01", [run_row("111", "9.99", "Card A")],
+                  mtime=1_700_000_000)
+        shutil.rmtree(runs / "2026-01-01-box2-01")
+        ok(readings_walk.collect()[0] != before[0],
+           "the disk now differs from the table, so a --write would have changed it "
+           "(the arm has something to refuse)")
+        code, said = run_adopt(write=False)
+        ok(code == 0 and stored() == before,
+           "a preview without --write leaves the table exactly as it was",
+           f"code {code}, before {before[0]}, after {stored()[0]}")
+        ok(any("DRY RUN" in line for line in said),
+           "and the preview says it wrote nothing")
+
+        # -------------------------------------------------- (a) refusals, table kept
+        print("\n  -- adopt --write over no usable source refuses, and keeps the table --")
+        seed_table_from_sources(home)
+        before = stored()
+        shutil.rmtree(runs)
+        code, _ = run_adopt(write=True)
+        ok(code not in (0, None) and stored() == before,
+           "refuses: adopt --write over no source at all leaves the table as it was",
+           f"code {code}, rows left {sorted(stored()[0])}")
+
+        seed_table_from_sources(home)
+        before = stored()
+        shutil.rmtree(runs)
+        only = runs / "2026-01-01-box1-01" / "pricing.json"
+        only.parent.mkdir(parents=True)
+        only.write_text("{not json", "utf-8")
+        code, said = run_adopt(write=True)
+        ok(code not in (0, None) and stored() == before,
+           "refuses: adopt --write whose only source is a malformed pricing.json leaves the "
+           "table as it was",
+           f"code {code}, rows left {sorted(stored()[0])}")
+        ok(any(str(only) in line for line in said),
+           "and the refusal names that file", "\n".join(said[-4:]))
+
+        # One run table of the good set is replaced by a bad one. Each must refuse, keep the
+        # table (box2's 333 included), and name the file. `{}` is valid JSON, so it is the
+        # silent case; `[]` and `null` crash the walk and name nothing.
+        check_bad_run_table(home, "not JSON", "{not json")
+        check_bad_run_table(home, "an empty object, with no skus key", "{}")
+        check_bad_run_table(home, "a JSON array", "[]")
+        check_bad_run_table(home, "JSON null", "null")
+
+        # -------------------------------------------------- a malformed NEWEST live export
+        # Owner ruling: adopt goes on, but the report names the skipped export and the count
+        # of SKUs it lost. The older, readable export carried 444 and 445 into the table; the
+        # newest export is bad CSV, so only the runs are read, and 444 and 445 would drop.
+        print("\n  -- a malformed newest live export: adopt goes on, and says what it lost --")
+        seed_good_sources(home)
+        live_dir = home / "inventory" / files.LIVE_DIRNAME
+        write_live(live_dir, "20260101-000000",
+                   [live_row("444", "5.00", "Card D"), live_row("445", "6.00", "Card E")])
+        with Store().write() as snapshot:
+            snapshot.readings.replace(*readings_walk.collect())
+        ok(sorted(stored()[0]) == ["111", "222", "333", "444", "445"],
+           "setup: the table holds the older live export's two SKUs alongside the runs",
+           f"rows {sorted(stored()[0])}")
+
+        newest = live_dir / f"{files.LIVE_PREFIX}20260201-000000.csv"
+        newest.write_text("this is not a price export\n", "utf-8")
+        code, said = run_adopt(write=True)
+        entries, _ = stored()
+        ok(code == 0 and sorted(entries) == ["111", "222", "333"],
+           "a malformed newest export: adopt --write exits 0 and writes the good run rows",
+           f"code {code}, rows {sorted(entries)}")
+        named = [line for line in said if newest.name in line]
+        ok(bool(named) and any(re.search(r"\b2\b", line) for line in named),
+           "and its output names that export file and the 2 SKUs it lost",
+           "\n".join(said) or "(no output)")
+
+        # -------------------------------------------------- a VALID newest live export that
+        # offers nothing: no readings are lost, so the "skipped" line would be a false alarm
+        # (the owner learns to ignore it). Only an export that cannot be read is skipped.
+        for label, rows in (
+            ("zero rows", []),
+            ("every row with a blank Market Price", [live_row("444", "", "Card D"),
+                                                      live_row("445", "  ", "Card E")]),
+        ):
+            print(f"\n  -- a valid newest live export with {label}: no skipped line --")
+            seed_good_sources(home)
+            write_live(live_dir, "20260301-000000", rows)
+            code, said = run_adopt(write=True)
+            ok(code == 0 and sorted(stored()[0]) == ["111", "222", "333"],
+               f"adopt --write exits 0 and writes the run rows ({label})",
+               f"code {code}, rows {sorted(stored()[0])}")
+            ok(not any("skipped" in line for line in said),
+               f"and prints no 'skipped' line ({label})", "\n".join(said) or "(no output)")
+
+        # -------------------------------------------------- a run row whose snap is a string
+        print("\n  -- a run row whose snap is a string: refuse, name the source, write nothing --")
+        seed_table_from_sources(home)
+        before = stored()
+        table = runs / "2026-01-01-box2-01" / "pricing.json"
+        table.write_text(json.dumps({"skus": [{"sku": "333", "snap": "2.00"}]}), "utf-8")
+        code, said = run_adopt(write=True)
+        ok(code not in (0, None) and stored() == before,
+           "refuses (no traceback): adopt --write over a string snap leaves the table as it was",
+           f"code {code}, said {said[-2:]}")
+        ok(any(str(table) in line for line in said) and not any("raised" in line for line in said),
+           "and the refusal names that run table", "\n".join(said[-4:]))
+
+        # -------------------------------------------------- a code defect is not a bad file
+        # No data gives a TypeError, so one from the row rule is a bug in the code. It must
+        # raise, never be reported as a bad pricing.json (that tells the owner to move or
+        # delete a good file).
+        print("\n  -- a TypeError inside the row rule (a code bug): raises, blames no file --")
+        seed_table_from_sources(home)
+        before = stored()
+        real_reading = readings_walk.Reading
+
+        def broken_reading(*args, **kwargs):
+            raise TypeError("injected code defect")
+
+        readings_walk.Reading = broken_reading
+        try:
+            code, said = run_adopt(write=True)
+        finally:
+            readings_walk.Reading = real_reading
+        ok(code is None and any("raised TypeError" in line for line in said)
+           and stored() == before,
+           "adopt --write raises on a code TypeError and leaves the table as it was",
+           f"code {code}, said {said[-2:]}")
+        ok(not any("could not be read" in line for line in said),
+           "and does not call a good pricing.json unreadable", "\n".join(said[-4:]))
+
+        # The harness callers pass no `bad`; a wrongly shaped row must still raise for them.
+        seed_good_sources(home)
+        (runs / "2026-01-01-box2-01" / "pricing.json").write_text(
+            json.dumps({"skus": [{"sku": "333", "snap": "2.00"}]}), "utf-8")
+        try:
+            readings_walk.collect()
+            raised = None
+        except Exception as exc:
+            raised = exc
+        ok(raised is not None,
+           "collect() with the default bad=None raises on a string snap (callers that pass "
+           "no list must not get a silent skip)", "returned normally")
+
+        # -------------------------------------------------- an export with no price column
+        print("\n  -- a live export with a SKU column but no Market Price column: skipped --")
+        seed_good_sources(home)
+        (home / "inventory" / files.LIVE_DIRNAME).mkdir(parents=True, exist_ok=True)
+        no_price = (home / "inventory" / files.LIVE_DIRNAME
+                    / f"{files.LIVE_PREFIX}20260401-000000.csv")
+        no_price.write_text(f"{tcgcsv.SKU_COLUMN},{tcgcsv.NAME_COLUMN}\n111,Card A\n", "utf-8")
+        code, said = run_adopt(write=True)
+        ok(code == 0 and any("skipped" in line and no_price.name in line for line in said),
+           "adopt --write prints a 'skipped' line naming an export with no Market Price column",
+           f"code {code}, said {said}")
+
+
 # ---------------------------------------------------------------------------------- main
 
 
@@ -419,6 +661,8 @@ def main() -> int:
         ok("666" not in shrunk,
            "the SKU whose only source was deleted drops out of the table — a cache "
            "refresh, never an accumulating ledger", str(sorted(shrunk)))
+
+    check_cli_adopt()
 
     print("\nreadings self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))

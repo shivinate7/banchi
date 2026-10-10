@@ -840,7 +840,9 @@ CHECKS = (
                    "unchanged files (idempotent, no duplicate rows), a new run landing "
                    "between two adopts, and a run directory deleted between two adopts (its "
                    "SKU drops out of the table — a cache refresh, never an accumulating "
-                   "ledger).",
+                   "ledger), and `readings adopt --write` refusing (exit non-zero, table kept) "
+                   "over no source, over a malformed pricing.json alone, and over one "
+                   "malformed run among good ones.",
         "needs": ("python3",),
         "writes": "one sqlite store per case, under `mktemp -d`. `BANCHI_HOME` is "
                   "repointed for the whole run, so the operator's own store is never opened.",
