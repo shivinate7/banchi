@@ -14,7 +14,8 @@
 # that reason is skipped by name.
 #
 # IT FAILS OPEN, ALWAYS. Every path here exits 0: no stdin, unparseable stdin, no such tree, a
-# missing janitor, a Python that will not start. A hook that can refuse a session's end is worse
+# missing janitor, a Python that will not start. The one exception is a WorktreeRemove whose
+# tree stays on disk, which exits 1, because Claude Code reads 0 as "removed". A hook that can refuse a session's end is worse
 # than a leak, and whatever this misses is reaped by `make janitor` later — which is the point of
 # having a sweep that does not depend on an event.
 #
@@ -53,12 +54,21 @@ janitor="$mine/janitor.py"
 [ -f "$janitor" ] || janitor="$(dirname "$mine")/scripts/janitor.py"
 [ -f "$janitor" ] || exit 0
 
-python3 "$janitor" --teardown "$tree" 2>/dev/null || true
+python3 "$janitor" --teardown "$tree" 2>/dev/null
+in_use=$?    # 3: another session still stands in the tree (janitor.IN_USE)
 
 # scripts/worktree-create.sh makes every Claude Code worktree, so removing it is this hook's
 # job too. No --force: git refuses a tree with uncommitted work, and that tree stays on disk.
+# WorktreeRemove reads exit 0 as "removed", so a tree left on disk exits 1. The branch goes
+# with `-d`, which keeps a branch holding commits that no other ref has.
 case "$wtp" in
-  */.claude/worktrees/*) git -C "$tree" worktree remove "$tree" >/dev/null 2>&1 || true ;;
+  */.claude/worktrees/*)
+    [ "$in_use" = 3 ] && exit 1
+    branch="$(git -C "$tree" symbolic-ref --quiet --short HEAD 2>/dev/null)"
+    main="$(dirname "$(git -C "$tree" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")"
+    git -C "$main" worktree remove "$tree" >/dev/null 2>&1 || exit 1
+    case "$branch" in worktree-*) git -C "$main" branch -d "$branch" >/dev/null 2>&1 ;; esac
+    ;;
 esac
 
 exit 0

@@ -3438,8 +3438,10 @@ COMPONENTS = [
                         "server is D138's product and is never touched, a tree another session "
                         "is still standing in is left alone, and the branch is never touched. "
                         "On WorktreeRemove it also runs `git worktree remove` without --force, "
-                        "because worktree-create.sh made the tree; a tree with uncommitted "
-                        "work stays on disk. A supervisor whose tree has just been "
+                        "because worktree-create.sh made the tree, then `git branch -d` on its "
+                        "`worktree-*` branch. A tree with uncommitted work, or one another "
+                        "session stands in (janitor's `IN_USE` exit), stays on disk and the "
+                        "hook exits 1. A supervisor whose tree has just been "
                         "removed is findable only from the process table; that dead-rooted "
                         "read is claude-settings' sweep, which its own SessionEnd hook and "
                         "daily agent run. Fails open on every path.",

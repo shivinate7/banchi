@@ -36,6 +36,9 @@ from .core import (
     rel,
 )
 from .paths_commands import PROPOSED_SIGIL, ignored_paths, marked_proposed
+
+# How a hook command names the project root. `:-.` keeps Codex, which does not set it, at cwd.
+PROJECT_DIR_PREFIX = "${CLAUDE_PROJECT_DIR:-.}/"
 from .registry_scopes import _tracked_paths
 from .records import (
     _DECISION_RE,
@@ -1289,7 +1292,10 @@ def check_codex_hooks(report: Report) -> None:
         )
 
     for event, _matcher, command in sorted(codex_triples | claude_triples):
-        script = command.split()[0] if command else ""
+        script = command.split()[0].strip('"') if command else ""
+        # A hook that must not resolve against the session's cwd names its project root
+        # (worktree-create.sh: a tree cut before the script existed had no copy).
+        script = script.removeprefix(PROJECT_DIR_PREFIX)
         if script and not exists(ROOT / script):
             findings.append(
                 Finding(

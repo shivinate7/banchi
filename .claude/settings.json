@@ -119,7 +119,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "scripts/worktree-create.sh",
+            "command": "\"${CLAUDE_PROJECT_DIR:-.}/scripts/worktree-create.sh\"",
             "timeout": 600
           }
         ]

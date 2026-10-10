@@ -7,7 +7,11 @@
 # scripts/githooks/post-checkout, which provisions the tree like every other worktree.
 #
 # Same layout as Claude Code's default: `<main>/.claude/worktrees/<name>` on branch
-# `worktree-<name>`, cut from a freshly fetched origin/main.
+# `worktree-<name>`, cut from a freshly fetched origin/main. A name whose branch is still
+# there reuses that branch as it stands. session-teardown.sh deletes the branch with `-d`.
+#
+# settings.json runs the MAIN checkout's copy of this file, never the session's cwd copy, so
+# a session standing in a tree cut before this file existed still gets a worktree.
 #
 # Contract: stdin is JSON with `name`. The LAST line of stdout is the absolute path, so
 # everything else goes to stderr. A non-zero exit fails the creation, so it exits non-zero
@@ -26,14 +30,21 @@ main="$(dirname "$common")"
 path="$main/.claude/worktrees/$name"
 branch="worktree-$name"
 
-git -C "$main" fetch --quiet origin main || echo "worktree-create: fetch failed, using the last fetched origin/main"
-base=origin/main
-git -C "$main" rev-parse --verify --quiet "$base" >/dev/null || base=HEAD
+# fd 3 is Claude Code's stdout. Every child gets it closed (3>&-), or a backgrounded
+# `npm ci` from the post-checkout hook would hold it open and creation would wait for npm.
+if git -C "$main" worktree list --porcelain 3>&- | grep -qx "worktree $path"; then
+  echo "$path" >&3; exit 0      # re-entry: the tree is already there
+fi
 
-if git -C "$main" rev-parse --verify --quiet "refs/heads/$branch" >/dev/null; then
-  git -C "$main" worktree add "$path" "$branch" || exit 1
+GIT_TERMINAL_PROMPT=0 git -C "$main" -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 \
+  fetch --quiet origin main 3>&- || echo "worktree-create: fetch failed, using the last fetched origin/main"
+base=origin/main
+git -C "$main" rev-parse --verify --quiet "$base" >/dev/null 3>&- || { base=HEAD; echo "worktree-create: no origin/main, cutting from HEAD"; }
+
+if git -C "$main" rev-parse --verify --quiet "refs/heads/$branch" >/dev/null 3>&-; then
+  git -C "$main" worktree add "$path" "$branch" 3>&- || exit 1
 else
-  git -C "$main" worktree add -b "$branch" "$path" "$base" || exit 1
+  git -C "$main" worktree add -b "$branch" "$path" "$base" 3>&- || exit 1
 fi
 
 echo "$path" >&3
