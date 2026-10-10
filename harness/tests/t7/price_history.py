@@ -34,6 +34,7 @@ from harness.tests.t7.common import (
     command,
     isolated_home,
     run_photo,
+    tree_digest,
 )
 
 # ------------------------------------------------------------------ price history (D8, D86)
@@ -1571,18 +1572,6 @@ def check_product_sheet_unsent_sku(checks: Checks) -> None:
 # watches the doors it would knock on.
 
 
-def _tree_digest(root) -> dict:
-    """Every file under `root` as `{relative path: sha256}`. The whole home, not one named
-    file: a write to a cache, a WAL or a sidecar shows up as a difference too."""
-    import hashlib
-
-    return {
-        str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
-        for path in sorted(Path(root).rglob("*"))
-        if path.is_file()
-    }
-
-
 @contextlib.contextmanager
 def _network_recorder():
     """Every attempt to reach the network, recorded and refused.
@@ -1676,7 +1665,7 @@ def check_archive_preview_is_free(checks: Checks) -> None:
                 "7700001:month:2026-01-05": Bucket(
                     "7700001", 4242, "month", 1, "2026-01-05", "0.40", 3, 1, None, None, 1),
             })
-        before = _tree_digest(home)
+        before = tree_digest(home)
         checks.ok("inventory/store.sqlite" in before, "the digest covers the store file itself")
         with _network_recorder() as attempts:
             text = command(checks, "archive", "sweep")
@@ -1684,14 +1673,11 @@ def check_archive_preview_is_free(checks: Checks) -> None:
                   "the preview ran over the one card's SKU, not an early 'nothing to sweep'",
                   text)
         checks.equal(attempts, [], "a preview opens no socket and fetches no URL")
-        after = _tree_digest(home)
-        # SQLite's `-shm` file is the WAL index. Any reader rewrites it, so it is runtime state
-        # and not store content. Every other file, the store included, must match byte for byte.
+        after = tree_digest(home)
         changed = sorted(
-            name for name in set(before) | set(after)
-            if not name.endswith("-shm") and before.get(name) != after.get(name)
+            name for name in set(before) | set(after) if before.get(name) != after.get(name)
         )
-        checks.equal(changed, [], "a preview leaves the store and every other file byte-identical")
+        checks.equal(changed, [], "a preview leaves the store's rows and every other file unchanged")
 
 
 def check_archive_write_never_deletes(checks: Checks) -> None:
