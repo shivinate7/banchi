@@ -4841,6 +4841,186 @@ def check_store_indexes_reach_existing_store(checks: Checks) -> None:
             conn.close()
 
 
+def _tree_digest(root: Path) -> dict:
+    """Every file under `root`, by relative path, as a sha256. Byte identity, not logical."""
+    return {
+        str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def check_queue_refresh_command(checks: Checks) -> None:
+    """`cli/cmd_queue.py` — the command an operator runs, over the pass the cases above cover.
+
+    The cases above call `requeue.plan` and `RefreshPlan.apply` directly. Nothing reaches
+    `refresh` itself, which owns the promises an operator relies on: the preview writes
+    nothing, `--write` removes an entry that now resolves and the receipt says so, and no
+    other open entry is dropped on the way.
+
+    Six open entries, four kinds: three refresh in place, one the catalogue settles (it
+    leaves on `--write`), one sold card (skipped by name, kept) and one with no reading
+    recorded (skipped, kept). Six open before, five after, and the one that goes is named.
+    """
+    from types import SimpleNamespace
+
+    from cli import cmd_queue
+
+    checks.note("")
+    checks.note("QUEUE REFRESH COMMAND — cli/cmd_queue.py, preview, write gate and receipt")
+
+    READINGS = {
+        1: ("Dunsparce", "120"),  # refreshes in place
+        2: ("Dunsparce", "120"),  # refreshes in place
+        3: ("Dunsparce", "120"),  # refreshes in place
+        4: ("Articuno", "161"),  # resolves: leaves the queue on --write
+        5: ("Dunsparce", "120"),  # sold: skipped by name, kept
+        6: None,  # no reading recorded: skipped, kept
+    }
+    OPEN_BEFORE = {"1/1", "1/2", "1/3", "1/4", "1/5", "1/6"}
+    stale_off_condition = {
+        "sku": "8608861",
+        "name": "Articuno",
+        "set": "SV09",
+        "number": "161/159",
+        "condition": "Lightly Played Holofoil",
+        "market": "9.10",
+    }
+
+    with isolated_home() as home:
+        for _ in READINGS:
+            capture_server.do_capture(capture_payload(1))
+        export = write_export(home / "command-export.csv")
+
+        with Store().write() as snapshot:
+            for index, reading in READINGS.items():
+                if reading is None:
+                    continue
+                name, number = reading
+                snapshot.inventory.record_identification(
+                    master.position_key(1, index),
+                    name=name,
+                    number=number,
+                    printed_total="159",
+                    confidence="high",
+                )
+            snapshot.inventory.set_state("1/5", master.SOLD)
+            _bind(snapshot, "1/5", DUNSPARCE_SKU, condition="Near Mint")
+            for index in READINGS:
+                snapshot.review.upsert(
+                    entry(
+                        1,
+                        index,
+                        candidates=[
+                            *(dict(row) for row in CANDIDATES),
+                            dict(stale_off_condition),
+                        ],
+                    )
+                )
+                # AFTER the upsert, for the reason `check_queue_refresh` gives: `upsert`
+                # stamps today's date when it finds no existing entry.
+                snapshot.review.entries[master.position_key(1, index)].first_seen = FROZEN_SEEN
+
+        def open_positions() -> set:
+            snap = Store().read()
+            return {e.position for q in (snap.review, snap.parked) for e in q.open_entries}
+
+        def run_command(write: bool):
+            lines: list = []
+            code = cmd_queue.run(
+                SimpleNamespace(queue_command="refresh", export=[str(export)], write=write),
+                lines.append,
+            )
+            return code, lines
+
+        checks.equal(
+            open_positions(),
+            OPEN_BEFORE,
+            "the fixture holds six open entries before the command runs",
+        )
+
+        # ------------------------------------------------------------- the preview
+        bytes_before = _tree_digest(home)
+        stored_before = stored_payloads("queues", {"queue": queues.MAIN})
+        code, lines = run_command(write=False)
+        checks.equal(code, 0, "the preview exits 0")
+        checks.ok(
+            any(
+                line.startswith("DRY RUN — nothing written. 4 entry(ies) would change.")
+                for line in lines
+            ),
+            "THE PREVIEW SAYS IT WROTE NOTHING and counts the four it would change: three "
+            "refreshed in place and one resolved",
+        )
+        checks.ok(
+            not any(line.startswith("written") for line in lines),
+            "and it prints no `written` receipt, because nothing was written",
+        )
+        checks.ok(
+            any(
+                line.strip().startswith("resolves now")
+                and "1 entry(ies) leave the queue" in line
+                for line in lines
+            ),
+            "the preview names the entry that WOULD leave, so the operator can read it first",
+        )
+        checks.equal(
+            _tree_digest(home),
+            bytes_before,
+            "WITHOUT --write THE STORE IS BYTE-IDENTICAL: every file under the store's home "
+            "hashes the same after the preview as before it",
+        )
+        checks.equal(
+            open_positions(),
+            OPEN_BEFORE,
+            "and every open entry is still queued, the one that would resolve included",
+        )
+        checks.equal(
+            stored_payloads("queues", {"queue": queues.MAIN}),
+            stored_before,
+            "its stored payloads are unchanged as well, not only the file bytes",
+        )
+
+        # --------------------------------------------------------------- the write
+        code, lines = run_command(write=True)
+        checks.equal(code, 0, "the write exits 0")
+        checks.ok(
+            any(line.startswith("written") and "-1 resolved" in line for line in lines),
+            "THE RECEIPT SAYS THE ENTRY LEFT THE QUEUE: `written ... -1 resolved`",
+        )
+        checks.ok(
+            any(line.startswith("refreshed") and "3 entry(ies)" in line for line in lines),
+            "and it says the three refreshed entries were rewritten in place",
+        )
+        after = open_positions()
+        checks.equal(
+            after,
+            OPEN_BEFORE - {"1/4"},
+            "N - 1 OPEN ENTRIES SURVIVE BY NAME: the one the catalogue settles is the only "
+            "one gone. The sold card and the unread card are kept, and so are the three "
+            "that refreshed. None is dropped without being named",
+        )
+        stored_after = stored_payloads("queues", {"queue": queues.MAIN})
+        checks.equal(
+            {key: json.dumps(stored_after.get(key), sort_keys=True) for key in ("1/5", "1/6")},
+            {key: json.dumps(stored_before.get(key), sort_keys=True) for key in ("1/5", "1/6")},
+            "THE SKIPPED ENTRIES ARE KEPT BYTE FOR BYTE: a departed card's question and an "
+            "unread card's question are left exactly as they stood",
+        )
+
+        # ------------------------------------------------------------ idempotence
+        code, lines = run_command(write=True)
+        checks.ok(
+            code == 0 and any("nothing to write" in line for line in lines),
+            "a second --write finds nothing to do and says so, rather than writing again",
+        )
+        checks.equal(
+            open_positions(),
+            after,
+            "and the open entries after it are the same five",
+        )
+
+
 CHECKS = (
     check_undo,
     check_remove_and_box_delete,
@@ -4854,6 +5034,7 @@ CHECKS = (
     check_queue_refresh,
     check_queue_refresh_agreement,
     check_queue_refresh_reading,
+    check_queue_refresh_command,
     check_review_answer,
     check_group_answer,
     check_mark_sold,
