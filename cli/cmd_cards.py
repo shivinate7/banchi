@@ -652,6 +652,9 @@ def _photos(args, say) -> int:
     """
     write = bool(getattr(args, "write", False))
     limit = getattr(args, "limit", None)
+    if limit is not None and int(limit) < 0:
+        say("--limit must be 0 or more.")
+        return 2
     directory = files.inventory_dir()
     conn = _read_only(directory)
     home = directory.parent
@@ -764,11 +767,6 @@ def _photos(args, say) -> int:
     # THE STAMP IS THE LAST THING AND ONLY ON A CLEAN PASS. Until it is set, `photos.find`
     # still reads the legacy address, which is what keeps every screen drawing during a
     # partial move; once set, the legacy address is never consulted again.
-    if stopped_at_limit:
-        say("")
-        say("  Stopped at --limit, so `photos_relocated` is NOT stamped and the legacy "
-            "address is still read. Run again to move the rest.")
-        return 0
     outstanding = census["refused"] + census["no_file"]
     if outstanding:
         say("")
@@ -776,6 +774,11 @@ def _photos(args, say) -> int:
             "stamped and the legacy address is still read. Fix or accept those and run "
             "again.")
         return 1
+    if stopped_at_limit:
+        say("")
+        say("  Stopped at --limit, so `photos_relocated` is NOT stamped and the legacy "
+            "address is still read. Run again to move the rest.")
+        return 0
     with files.exclusive(directory):
         conn = db.connect(directory, locked=True)
         conn.execute("BEGIN IMMEDIATE")
