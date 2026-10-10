@@ -934,6 +934,92 @@ def check_prices_adopt(checks: Checks) -> None:
             shown,
         )
 
+    # ------------------------- (8) a COMPARE KEY keeps full precision; only PRINTING rounds
+    # `corpus._token` is the key that decides "same answer", and section 7 made it round to two
+    # decimals. Two prices a tenth of a cent apart then count as ONE answer: an adopt hides a
+    # price change, and an override edited from 0.505 to 0.51 keeps its stale `at`. Rounding
+    # belongs at the print site (`pricing.money`) and nowhere else.
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.505"}})
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.51"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.ok(
+            "1 card(s) were answered more than one way" in said,
+            "run files 0.505 then 0.51 are ONE reported change, never folded into one answer",
+            said,
+        )
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.51"}})
+        command(checks, "prices", "adopt", "--write")
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.505"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.ok(
+            "1 differ from the file" in said and f"{ARTICUNO_SKU}  kept $0.51 (corpus)" in said,
+            "a re-adopt without --force, corpus 0.51 against a file's 0.505, counts the row as "
+            "differing and prints the kept line",
+            said,
+        )
+
+    stamped_at = "2026-10-01T00:00:00+00:00"
+    first_at = "2026-01-01T00:00:00+00:00"
+    held_before = corpus.Corpus()
+    held_before.answers[ARTICUNO_SKU] = corpus.Answer(value="0.505", at=first_at)
+    held_after = corpus.Corpus()
+    held_after.answers[ARTICUNO_SKU] = corpus.Answer(value="0.51")
+    stamped = corpus.stamp_answers(held_before, held_after, stamped_at)
+    checks.equal(
+        (stamped, held_after.answers[ARTICUNO_SKU].at),
+        ([ARTICUNO_SKU], stamped_at),
+        "an override edited from 0.505 to 0.51 is a new answer and gets a new `at`",
+    )
+    same_before = corpus.Corpus()
+    same_before.answers[ARTICUNO_SKU] = corpus.Answer(value="0.50", at=first_at)
+    same_after = corpus.Corpus()
+    same_after.answers[ARTICUNO_SKU] = corpus.Answer(value="0.5")
+    checks.equal(
+        (corpus.stamp_answers(same_before, same_after, stamped_at), same_after.answers[ARTICUNO_SKU].at),
+        ([], first_at),
+        "and 0.50 round-tripped as 0.5 is still the same answer and keeps its `at`",
+    )
+
+    # A hold whose `watch_above` is not a number is a value `Decisions.parse` refuses later.
+    # Comparing or printing it must report it as typed, never raise out of a read-only command.
+    bad_hold = {"withheld": "bullish", "watch_above": "abc"}
+
+    def raises(fn):
+        try:
+            fn()
+        except Exception as error:  # noqa: BLE001 — the case is that nothing escapes
+            return f"{type(error).__name__}: {error}"
+        return ""
+
+    for replace in (True, False):
+        base = corpus.Corpus()
+        base.answers[ARTICUNO_SKU] = corpus.Answer(value=bad_hold)
+        checks.equal(
+            raises(lambda: corpus.adopt([("run-a", {"overrides": {ARTICUNO_SKU: "3.45"}})], base, replace=replace)),
+            "",
+            f"`corpus.adopt(replace={replace})` over a hold with watch_above 'abc' does not raise",
+        )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.answers[ARTICUNO_SKU] = corpus.Answer(value=bad_hold)
+        book.write()
+        outcome = {}
+
+        def show_held():
+            outcome["text"] = command(checks, "prices", "show", "--held")
+
+        failure = raises(show_held)
+        checks.ok(
+            not failure and f"{ARTICUNO_SKU}  bullish" in outcome.get("text", ""),
+            "`prices show --held` over a hold with watch_above 'abc' does not raise and still "
+            "prints the hold's line",
+            failure or outcome.get("text", ""),
+        )
+
 
 def check_readings_adopt_cli(checks: Checks) -> None:
     """`banchi readings adopt` and `readings show`, through the real argparse dispatch
