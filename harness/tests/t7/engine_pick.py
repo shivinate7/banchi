@@ -720,7 +720,7 @@ def check_cache_engines(checks: Checks) -> None:
     checks.note("")
     checks.note("CACHE ENGINES — matcher never replaces, Haiku replaces a matcher entry")
     haiku, matcher = cache_mod.ENGINE_HAIKU, cache_mod.ENGINE_MATCHER
-    said = lambda name: {"name": name, "number": "1", "printed_total": "9", "confidence": "high"}  # noqa: E731
+    said = lambda name: {"name": name, "number": "1", "printed_total": "9", "finish": "normal", "confidence": "high"}  # noqa: E731
 
     def held(engine, name, cleared=False):
         cache = cache_mod.Cache.parse({})
@@ -785,6 +785,369 @@ def check_cache_engines(checks: Checks) -> None:
         (["3/1"], []),
         "and is judged against the prompt, where a matcher entry never is",
     )
+
+
+def _outcome(fn):
+    """The return value of `fn`, or the exception it raised, so a crash is a value to assert on."""
+    try:
+        return fn()
+    except Exception as caught:  # noqa: BLE001 - the case is what the exception is
+        return caught
+
+
+def check_cache_position_key(checks: Checks) -> None:
+    """`Cache.reusable` keys on POSITION (`master.position_key`, "box/index") and checks the
+    photo sha256 on top (`store/cache.py` header, D36: the photograph is the truth, not the slot).
+    A reuse that the photo does not support lists the wrong card."""
+    checks.note("")
+    checks.note("CACHE KEY — position is the key, the photo is the check (D36)")
+    haiku = cache_mod.ENGINE_HAIKU
+    # A good answer carries every key the Pokemon schema requires, read from the schema itself
+    # (`identify/prompt.py` `parse` checks `chosen.schema["required"]`), never a copied list.
+    pokemon_required = prompt.profile("pokemon_card_v1").schema["required"]
+
+    def said(name):
+        answer = {key: "x" for key in pokemon_required}
+        answer.update(name=name, number="1", printed_total="9", finish="normal", confidence="high")
+        return answer
+
+    # (a) an answer stored for a position is returned for that position and the same photo.
+    cache = cache_mod.Cache.parse({})
+    cache.put("3/1", said("Alpha"), "sha-A", "fp", engine=haiku)
+    hit = cache.reusable("3/1", "sha-A")
+    checks.ok(
+        hit is not None and hit.identification["name"] == "Alpha",
+        "(a) the answer stored at 3/1 is returned for 3/1 with the same photo",
+    )
+
+    # (b) the photo at that position changes: the cache misses, and the old answer is not returned.
+    checks.equal(cache.reusable("3/1", "sha-B"), None, "(b) the same position with a new photo misses")
+    cache.put("3/1", said("Beta"), "sha-B", "fp", engine=haiku)
+    checks.equal(cache.reusable("3/1", "sha-A"), None, "(b) after the re-read, the old photo finds nothing at 3/1")
+    checks.equal(
+        cache.reusable("3/1", "sha-B").identification["name"], "Beta",
+        "(b) and the new photo finds the new answer",
+    )
+
+    # (c) a reallocated slot or box does not return the old card's answer.
+    cache = cache_mod.Cache.parse({})
+    cache.put("3/1", said("Alpha"), "sha-A", "fp", engine=haiku)
+    checks.equal(cache.reusable("3/1", "sha-Z"), None, "(c) a different card in a reallocated slot (same key, new photo) misses")
+    checks.equal(cache.reusable("3/2", "sha-A"), None, "(c) the same photo at another slot misses: the answer does not follow the photo")
+    checks.equal(cache.reusable("4/1", "sha-A"), None, "(c) a reallocated box with the same index misses")
+
+    # (c, permanence) a cleared answer IS returned for a new photo at the same position. The key
+    # is the position, and a box id or stored index is never reused (D145), so a different photo
+    # there is a re-shot of the same card. Permanence is correct here, and this pins it.
+    cleared = cache_mod.Cache.parse({})
+    cleared.put("3/1", said("Human"), "sha-A", "fp", engine=haiku)
+    cleared.entries["3/1"].cleared_by_human = True
+    held = cleared.reusable("3/1", "sha-Z")
+    checks.ok(
+        held is not None and held.identification["name"] == "Human",
+        "(c, permanence) a cleared answer is returned for a new photo at the same position (a re-shot of the same card)",
+    )
+
+    # (d) a corrupt entry is a miss, never a crash and never an answer.
+    checks.equal(
+        cache_mod.Cache.parse({"3/1": {"identification": said("X")}}).reusable("3/1", "sha-A"),
+        None,
+        "(d) a record missing required fields is a miss",
+    )
+    checks.equal(len(cache_mod.Cache.parse({"_meta": {"x": 1}})), 0, "(d) a `_`-prefixed key is metadata, never an entry")
+    for label, record in (("null", None), ("a string", "junk"), ("a list", ["x"])):
+        outcome = _outcome(lambda record=record: cache_mod.Cache.parse({"3/1": record}).reusable("3/1", "sha-A"))
+        checks.ok(outcome is None, f"(d) a corrupt entry ({label}) is a miss, not a crash")
+    kept = cache_mod.Cache.parse({"3/0": None, "3/1": {"identification": said("Ok"), "photo_sha256": "sha-A", "prompt_fingerprint": "f", "at": "t"}})
+    checks.equal(list(kept.entries), ["3/1"], "(d) a corrupt row is skipped and the rest of the store still reads")
+    not_a_mapping = _outcome(
+        lambda: cache_mod.Cache.parse({"3/1": {"identification": "junk", "photo_sha256": "sha-A", "prompt_fingerprint": "f", "at": "t"}})
+        .reusable("3/1", "sha-A")
+    )
+    checks.ok(not_a_mapping is None, "(d) an identification that is not a mapping is a miss, not an answer")
+
+    # (d) CONSUMER LEVEL. A cached answer that the run's own parser refuses (`prompt.parse`
+    # for the card's strategy) is a miss at `cli/cmd_identify.py` `run`: not counted cached,
+    # re-identified, and the refusal is not swallowed. The paid read is stubbed, so no network.
+    from cli import __main__ as cli_entry, cmd_identify
+    from store.session import Store
+
+    shapes = (
+        ("an empty mapping", {}),
+        ("a name only", {"name": "A"}),
+        ("an unrelated key", {"foo": 1}),
+        # One Piece's shape: every key but `printed_total`, which Pokemon's schema requires.
+        ("a one_piece-shaped answer", {"name": "Luffy", "number": "1", "finish": "normal", "confidence": "high"}),
+    )
+    with isolated_home() as home:
+        caps = Path(home) / "cache-key-caps"
+        caps.mkdir()
+        identify_images.Image.new("RGB", (64, 89), (30, 120, 200)).save(caps / "4-001.jpg", "JPEG")
+        (caps / "4-001.json").write_text(json.dumps({"box": 4, "position": 1, "game": "pokemon"}), "utf-8")
+        digest = identify_images.sha256_of(caps / "4-001.jpg")
+        sent: list = []
+
+        def fake_run_batch(requests, log=None, on_submit=None):
+            outcomes = {}
+            for request in requests:
+                sent.append(request.custom_id)
+                outcomes[request.custom_id] = batch.Outcome(
+                    request.custom_id,
+                    batch.SUCCEEDED,
+                    identification=prompt.parse(said("Pikachu"), request.strategy),
+                )
+            return batch.BatchRun(outcomes=outcomes)
+
+        def press():
+            lines: list = []
+            with quiet():
+                code = cmd_identify.run(
+                    cli_entry.build_parser().parse_args(["identify", str(caps), "--engine", "haiku"]),
+                    lines.append,
+                )
+            return code, lines
+
+        def spoken(lines, prefix):
+            return next((line for line in lines if line.startswith(prefix)), "")
+
+        real_run_batch = cmd_identify.batch.run_batch
+        cmd_identify.batch.run_batch = fake_run_batch
+        try:
+            code, _ = press()
+            checks.equal(code, 0, "(d) the seed press over one readable Pokemon card exits 0")
+            for label, answer in shapes:
+                with Store().write() as snapshot:
+                    snapshot.cache.put("4/1", answer, digest, "fp", engine=haiku)
+                before = len(sent)
+                code, lines = press()
+                checks.equal(
+                    len(sent) - before, 1,
+                    f"(d) {label} in the cache: the card is re-identified (one paid read), not adopted",
+                )
+                checks.equal(
+                    spoken(lines, "cache hits"), "cache hits      0",
+                    f"(d) {label} in the cache: a cached run does not count it as a cache hit",
+                )
+        finally:
+            cmd_identify.batch.run_batch = real_run_batch
+
+    # (d, store level, non-dict only) a record or identification that is not a mapping is a
+    # miss: asserted above. Dict shapes are judged by the consumer, which is the one holding the
+    # run's strategy (D63: the store cannot know a game's profile).
+
+    # (e) the permanence rule (`store/cache.py` header): a malformed human-cleared entry is never
+    # overwritten by a paid put, and the put reports the disagreement.
+    cleared = cache_mod.Cache.parse(
+        {"3/1": {"identification": {"name": "Human"}, "photo_sha256": "sha-A", "prompt_fingerprint": "f",
+                 "at": "t", "cleared_by_human": True}}
+    )
+    reported = cleared.put("3/1", said("Paid"), "sha-new", "fp2", engine=haiku)
+    checks.equal(cleared.get("3/1").identification, {"name": "Human"}, "(e) a malformed human-cleared entry is not overwritten by a paid put")
+    checks.equal(cleared.get("3/1").photo_sha256, "sha-A", "(e) and keeps its photo digest")
+    checks.ok(reported is not None, "(e) and the put reports the disagreement instead of writing")
+
+    # (c, undo) the one path that reuses an index is undo of the newest capture (D10, `do_delete_card`).
+    # The position's cache entry goes with the card, so a new capture at the released index must not
+    # inherit a cleared answer that belonged to the deleted card.
+    from server import capture_server
+    from harness.tests.t7.common import capture_payload
+
+    with isolated_home():
+        capture_server.do_capture(capture_payload(5))
+        with Store().write() as snapshot:
+            snapshot.cache.entries["5/1"] = cache_mod.CacheEntry(
+                identification=said("Human"), photo_sha256="sha-A", prompt_fingerprint="fp",
+                at="t", cleared_by_human=True,
+            )
+        capture_server.do_delete_card(5, 1)
+        checks.equal(Store().read().cache.get("5/1"), None, "(c, undo) undoing the newest capture drops its cache entry with it")
+        capture_server.do_capture(capture_payload(5))
+        checks.ok("5/1" in Store().read().inventory.cards, "(c, undo) the released index is reused by the next capture")
+        checks.equal(
+            Store().read().cache.reusable("5/1", "sha-new"), None,
+            "(c, undo) a new capture at the released index does not inherit the deleted card's cleared answer",
+        )
+
+
+def check_refused_hit_is_claimed(checks: Checks) -> None:
+    """A cached answer the run's parser refuses is a miss, and a miss is CLAIMED
+    (`store/submissions.py` `claim_or_refuse`). Outcome protected: the owner never pays twice for
+    one card. The second press runs INSIDE the first press's paid read, while the first press's
+    claim is live, so the overlap it meets is the one a concurrent press would meet."""
+    from cli import __main__ as cli_entry, cmd_identify
+    from store.session import Store
+
+    haiku = cache_mod.ENGINE_HAIKU
+    pokemon_required = prompt.profile("pokemon_card_v1").schema["required"]
+
+    def said(name):
+        answer = {key: "x" for key in pokemon_required}
+        answer.update(name=name, number="1", printed_total="9", finish="normal", confidence="high")
+        return answer
+
+    checks.note("")
+    checks.note("REFUSED HIT IS CLAIMED — a refused cached answer is held like a miss (one paid read per card)")
+
+    def claim_case(label, positions, refused):
+        with isolated_home() as home:
+            caps = Path(home) / "claim-caps"
+            caps.mkdir()
+            digests = {}
+            for position in positions:
+                # Colours far apart: flat images one step apart can encode to identical bytes, and
+                # identical bytes are one photograph, which the store refuses as a second card.
+                color = [(30, 120, 200), (200, 40, 40)][position - 1]
+                identify_images.Image.new("RGB", (64, 89), color).save(caps / f"4-00{position}.jpg", "JPEG")
+                (caps / f"4-00{position}.json").write_text(
+                    json.dumps({"box": 4, "position": position, "game": "pokemon"}), "utf-8"
+                )
+                digests[position] = identify_images.sha256_of(caps / f"4-00{position}.jpg")
+            with Store().write() as snapshot:
+                for position in refused:
+                    # `{}` is a mapping the store accepts and the Pokemon parser refuses.
+                    snapshot.cache.put(f"4/{position}", {}, digests[position], "fp", engine=haiku)
+
+            def press():
+                lines: list = []
+                with quiet():
+                    code = cmd_identify.run(
+                        cli_entry.build_parser().parse_args(["identify", str(caps), "--engine", "haiku"]),
+                        lines.append,
+                    )
+                return code, lines
+
+            sent: list = []
+            seen: dict = {"nested": False, "claimed": None}
+            nested: dict = {}
+
+            def fake_run_batch(requests, log=None, on_submit=None):
+                sent.extend(request.custom_id for request in requests)
+                if not seen["nested"]:
+                    seen["nested"] = True
+                    seen["claimed"] = sorted(key for sub in Store().read().submissions.live() for key in sub.keys)
+                    nested["code"], nested["lines"] = press()
+                return batch.BatchRun(outcomes={
+                    request.custom_id: batch.Outcome(
+                        request.custom_id, batch.SUCCEEDED,
+                        identification=prompt.parse(said("Pikachu"), request.strategy),
+                    )
+                    for request in requests
+                })
+
+            real_run_batch = cmd_identify.batch.run_batch
+            cmd_identify.batch.run_batch = fake_run_batch
+            try:
+                first_code, _ = press()
+            finally:
+                cmd_identify.batch.run_batch = real_run_batch
+
+            every = [f"4/{p}" for p in positions]
+            checks.equal(
+                seen["claimed"], sorted(every),
+                f"{label}: while press 1 pays, its claim holds every card it pays for, refused hit included",
+            )
+            checks.equal(
+                nested.get("code"), 1,
+                f"{label}: a second press over the same cards is refused by the claim",
+            )
+            checks.ok(
+                "already claimed" in "\n".join(nested.get("lines", [])),
+                f"{label}: and says so, naming the claim",
+            )
+            checks.equal(
+                sorted(sent), sorted(cmd_identify._custom_id(key) for key in every),
+                f"{label}: exactly one paid read per card across both presses",
+            )
+
+    claim_case("a refused hit alone", [1], [1])
+    claim_case("a refused hit beside a miss", [1, 2], [1])
+
+
+def check_cleared_unparsed_goes_to_review(checks: Checks) -> None:
+    """A human-cleared cache answer the card's own parser cannot read is never paid for and never
+    used: the card waits in review with its photo and a reason, once, and the cleared entry stays
+    as it is. Outcome protected: the owner never pays again for a card a person already settled.
+    A cleared answer that parses is still used, with no paid read."""
+    from dataclasses import asdict
+
+    from cli import __main__ as cli_entry, cmd_identify
+    from store.session import Store
+
+    pokemon_required = prompt.profile("pokemon_card_v1").schema["required"]
+
+    def said(name):
+        answer = {key: "x" for key in pokemon_required}
+        answer.update(name=name, number="1", printed_total="9", finish="normal", confidence="high")
+        return answer
+
+    checks.note("")
+    checks.note("CLEARED ANSWER THAT DOES NOT PARSE — goes to review, is never paid for, is never changed")
+
+    def case(label, identification, parses):
+        with isolated_home() as home:
+            caps = Path(home) / "cleared-caps"
+            caps.mkdir()
+            identify_images.Image.new("RGB", (64, 89), (30, 120, 200)).save(caps / "4-001.jpg", "JPEG")
+            (caps / "4-001.json").write_text(json.dumps({"box": 4, "position": 1, "game": "pokemon"}), "utf-8")
+            digest = identify_images.sha256_of(caps / "4-001.jpg")
+            cleared = cache_mod.CacheEntry(
+                identification=identification, photo_sha256=digest, prompt_fingerprint="fp",
+                at="t", cleared_by_human=True,
+            )
+            with Store().write() as snapshot:
+                snapshot.cache.entries["4/1"] = cleared
+            before = asdict(Store().read().cache.get("4/1"))
+
+            sent: list = []
+
+            def fake_run_batch(requests, log=None, on_submit=None):
+                sent.extend(request.custom_id for request in requests)
+                return batch.BatchRun(outcomes={
+                    request.custom_id: batch.Outcome(
+                        request.custom_id, batch.SUCCEEDED,
+                        identification=prompt.parse(said("Pikachu"), request.strategy),
+                    )
+                    for request in requests
+                })
+
+            def press():
+                with quiet():
+                    return cmd_identify.run(
+                        cli_entry.build_parser().parse_args(["identify", str(caps), "--engine", "haiku"]),
+                        lambda _line: None,
+                    )
+
+            real_run_batch = cmd_identify.batch.run_batch
+            cmd_identify.batch.run_batch = fake_run_batch
+            try:
+                press()
+                queued = Store().read().review.entries.get("4/1")
+                queued_once = asdict(queued) if queued is not None else None
+                press()
+            finally:
+                cmd_identify.batch.run_batch = real_run_batch
+
+            after = Store().read()
+            checks.equal(sent, [], f"{label}: two presses send no paid read for the cleared card")
+            checks.equal(asdict(after.cache.get("4/1")), before, f"{label}: the cleared entry is unchanged after two presses")
+            if parses:
+                checks.ok(queued is None, f"{label}: a cleared answer that parses is used, not queued")
+                return
+            checks.ok(queued is not None, f"{label}: the card is in the review queue after the first press")
+            if queued is not None:
+                checks.ok(bool(queued.photo), f"{label}: with its photo")
+                checks.ok(bool(queued.reason), f"{label}: and a reason")
+            checks.equal(
+                sorted(after.review.entries), ["4/1"], f"{label}: one entry for the card after two presses"
+            )
+            if queued is not None:
+                checks.equal(
+                    asdict(after.review.entries["4/1"]), queued_once,
+                    f"{label}: the second press leaves that entry as the first wrote it",
+                )
+
+    case("a cleared answer that parses as nothing", {"name": "Human"}, parses=False)
+    case("a cleared answer that parses (guard)", said("Pikachu"), parses=True)
 
 
 # ------------------------------------------------------------------------ the model verdict, the promo census, Prepare
@@ -996,6 +1359,9 @@ CHECKS = (
     check_disagree_candidates_hold_both,
     check_agreement_is_the_same_printing,
     check_cache_engines,
+    check_cache_position_key,
+    check_refused_hit_is_claimed,
+    check_cleared_unparsed_goes_to_review,
     check_model_ready_hashes_once,
     check_promo_census,
     check_prepare_clears_stale_part,

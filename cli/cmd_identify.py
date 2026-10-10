@@ -754,9 +754,7 @@ def _code_ledger_lines(items: List[Item], run_name: str, captured_at_of):
         parsed = item.parsed
         if parsed is None:
             try:
-                parsed = prompt.parse(
-                    item.identification, item.strategy or prompt.DEFAULT_PROFILE
-                )
+                parsed = prompt.parse(item.identification, item.strategy)
             except (prompt.MalformedIdentification, LookupError) as exc:
                 skipped.append(f"{item.key}: cached answer does not parse — {exc}")
                 continue
@@ -810,6 +808,19 @@ def _adopt_cached(item: Item, entry, fingerprints: Dict[str, str]) -> None:
     )
 
 
+def cached_refusal(item: Item, entry) -> Optional[str]:
+    """Why this run's own parser refuses a cached answer, or None when it accepts it. The store
+    cannot know a card's game; only the run holds its strategy, so only the run can judge a hit.
+    A refused answer is a miss: the caller leaves the card pending and names the refusal."""
+    if item.strategy is None:  # an unknown game never borrows Pokemon's profile
+        return f"game {item.game!r} has no prompt strategy"
+    try:
+        prompt.parse(entry.identification, item.strategy)
+    except (prompt.MalformedIdentification, LookupError) as exc:
+        return str(exc)
+    return None
+
+
 def record_adopted(writable, item: Item, run_name: Optional[str] = None) -> bool:
     """Record one item's answer on its card. THE ONE HOME of the write a paid press, a press over
     cached answers and the background reader's adoption all make. Parses a cached item (its
@@ -819,7 +830,7 @@ def record_adopted(writable, item: Item, run_name: Optional[str] = None) -> bool
         return False
     if item.parsed is None:
         try:
-            item.parsed = prompt.parse(item.identification, item.strategy or prompt.DEFAULT_PROFILE)
+            item.parsed = prompt.parse(item.identification, item.strategy)
         except (prompt.MalformedIdentification, LookupError):
             return False
     # THE PARSED FIELDS, NOT THE RAW PAYLOAD'S KEYS. The raw payload is
@@ -1054,6 +1065,7 @@ def run(args, say) -> int:
     )
 
     matcher_read = 0
+    refused_cached: List[str] = []
     for item in items:
         # THE DIGEST, NOT THE PREPARED BYTES. This read `item.prepared.sha256` and skipped on
         # `prepared is None`; under hash-first that test would have skipped every card whose
@@ -1075,6 +1087,13 @@ def run(args, say) -> int:
         if item.key in stale_targets:
             item.retry_reasons.append("reidentify-stale")
             continue
+        why = cached_refusal(item, entry)
+        if why is not None:
+            refused_cached.append(
+                f"{item.key}: {why}; "
+                + ("not read, refused below as an unknown game" if item.strategy is None else "read again")
+            )
+            continue
         _adopt_cached(item, entry, fingerprints)
 
     # A CARD NOBODY HAS A PROMPT FOR IS REFUSED HERE, BEFORE IT COSTS ANYTHING — the same
@@ -1083,8 +1102,10 @@ def run(args, say) -> int:
     # `to send` and the cost estimate count only what will actually be submitted. A
     # refused card keeps the NOTHING IS EVER SKIPPED property: it leaves this command as a
     # named failure bound for the main queue, never dropped — and never read with another
-    # game's prompt (D21). A cached answer is left standing: already paid for, and refusing
-    # it would answer a question about submission on a card that is not being submitted.
+    # game's prompt (D21). A cached answer is left standing only when it has a strategy and
+    # the strategy's parser accepts it (`cached_refusal`). A cached answer for a card with no
+    # strategy is refused at the consult pass above and is refused here as UNKNOWN_GAME: named,
+    # not adopted, not sent.
     for item in items:
         # STILL UNDECIDED ONLY — one clause where there were two. `cached or prepared is
         # None` meant "not a cache hit, and readable"; a card refused here is now refused
@@ -1192,6 +1213,8 @@ def run(args, say) -> int:
     # directory was reported to the operator as a CACHE HIT, on the one line they read to
     # decide whether the run is worth paying for. There is now a value that means cache hit.
     say(f"cache hits      {len([i for i in items if i.stage == STAGE_CACHED])}")
+    for line in refused_cached:
+        say(f"cache refused   {line}")
     if matcher_read:
         # THE PAID PRESS'S ASK. These cards were answered by the free reader. A paid press skips
         # them unless `--reread-matcher` asks to buy them again; either way the figure is here, so
@@ -1374,6 +1397,7 @@ def run(args, say) -> int:
     # reach here believing they are first, so the intersection is computed against claims read
     # under the lock and the row is written before it is released. See `store/submissions.py`.
     claim = None
+    by_key = {item.key: item for item in items}
     if to_send:
         with store.write() as claiming:
             claim, conflicts = claiming.submissions.claim_or_refuse(
@@ -1383,6 +1407,8 @@ def run(args, say) -> int:
                 # the recompute would drop every `--reidentify-stale` target from the claim and
                 # the run would submit cards nothing was holding.
                 force=stale_targets,
+                # THE RUN'S VERDICT ON A HIT: one the parser refuses is a miss, so it is claimed.
+                accepts=lambda key, entry: cached_refusal(by_key[key], entry) is None,
                 # A RESUME IS THIS RUN CONTINUING. `--run-dir` re-enters a run that already
                 # claimed these cards, so its own stale claim is the first thing this would
                 # collide with; naming it releases that run's claims and nobody else's.
@@ -1415,13 +1441,21 @@ def run(args, say) -> int:
                 f"answered in the store — another run banked them while this one was preparing. "
                 f"Nothing is being submitted."
             )
+            unclaimed: set = set()
             for item in to_send:
                 entry = store.read().cache.reusable(
                     item.key, item.photo_sha256 or "", reread_matcher=reread_matcher
                 )
-                if entry is not None:
-                    _adopt_cached(item, entry, fingerprints)
-            to_send = [i for i in items if i.stage == STAGE_PENDING]
+                if entry is None:
+                    unclaimed.add(item.key)
+                    continue
+                why = cached_refusal(item, entry)
+                if why is not None:
+                    say(f"cache refused   {item.key}: {why}; no claim holds it, so read on the next press")
+                    unclaimed.add(item.key)
+                    continue
+                _adopt_cached(item, entry, fingerprints)
+            to_send = [i for i in items if i.stage == STAGE_PENDING and i.key not in unclaimed]
         elif len(claim.keys) != len(to_send):
             # NARROWED, NOT REFUSED. Same cause as above and a partial version of it: the cards
             # the recompute dropped take the answer the store now owns, and the send list
@@ -1429,6 +1463,7 @@ def run(args, say) -> int:
             # meaning rests on, asserted here rather than assumed.
             held = set(claim.keys)
             adopted = 0
+            unclaimed: set = set()
             for item in list(to_send):
                 if item.key in held:
                     continue
@@ -1437,9 +1472,14 @@ def run(args, say) -> int:
                 )
                 if entry is None:
                     continue
+                why = cached_refusal(item, entry)
+                if why is not None:
+                    say(f"cache refused   {item.key}: {why}; not in this claim, so read on the next press")
+                    unclaimed.add(item.key)
+                    continue
                 _adopt_cached(item, entry, fingerprints)
                 adopted += 1
-            to_send = [i for i in items if i.stage == STAGE_PENDING]
+            to_send = [i for i in items if i.stage == STAGE_PENDING and i.key not in unclaimed]
             say("")
             say(
                 f"claim           {len(claim.keys)} card(s) held under {claim.receipt}; "

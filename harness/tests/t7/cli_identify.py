@@ -3053,7 +3053,7 @@ def check_run_realignment(checks: Checks) -> None:
                     "index": i,
                     "photo": f"captures/cards/box2/{i:04d}.jpg",
                     "photo_sha256": hashlib.sha256(body).hexdigest(),
-                    "identification": {"name": names[i], "confidence": "high"},
+                    "identification": {"name": names[i], "number": "1", "printed_total": "9", "finish": "normal", "confidence": "high"},
                 }
                 for i, body in bodies.items()
             }

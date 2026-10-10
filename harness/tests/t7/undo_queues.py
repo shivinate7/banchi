@@ -422,7 +422,7 @@ def check_undo(checks: Checks) -> None:
                     cleared_by_human=True,
                 )
             )
-            snapshot.cache.put(queued_key, {"name": "Rhyhorn"}, "sha-of-photo", "prompt-1")
+            snapshot.cache.put(queued_key, {"name": "Rhyhorn", "number": "1", "printed_total": "9", "finish": "normal", "confidence": "high"}, "sha-of-photo", "prompt-1")
 
         removed = capture_server.do_delete_card(queued["box"], queued["index"])
         after = Store().read()
@@ -1298,7 +1298,7 @@ def check_remove_and_box_delete(checks: Checks) -> None:
                     f"3/{i}", name=f"N{i}", number=f"{i:03d}", printed_total="102",
                     confidence="high",
                 )
-            snapshot.cache.put("3/5", {"name": "N5"}, "sha-5", "p1")
+            snapshot.cache.put("3/5", {"name": "N5", "number": "1", "printed_total": "9", "finish": "normal", "confidence": "high"}, "sha-5", "p1")
             snapshot.review.upsert(
                 queues.QueueEntry(
                     position="3/5", box=3, index=5, label=stored_label(3, 5),
