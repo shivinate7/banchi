@@ -48,6 +48,7 @@ from harness.tests.t7.common import (
     stored_captures,
     stored_label,
     stored_payloads,
+    tree_digest,
     write_export,
 )
 
@@ -4841,15 +4842,6 @@ def check_store_indexes_reach_existing_store(checks: Checks) -> None:
             conn.close()
 
 
-def _tree_digest(root: Path) -> dict:
-    """Every file under `root`, by relative path, as a sha256. Byte identity, not logical."""
-    return {
-        str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
-        for path in sorted(root.rglob("*"))
-        if path.is_file()
-    }
-
-
 def check_queue_refresh_command(checks: Checks) -> None:
     """`cli/cmd_queue.py` — the command an operator runs, over the pass the cases above cover.
 
@@ -4940,7 +4932,7 @@ def check_queue_refresh_command(checks: Checks) -> None:
         )
 
         # ------------------------------------------------------------- the preview
-        bytes_before = _tree_digest(home)
+        bytes_before = tree_digest(home)
         stored_before = stored_payloads("queues", {"queue": queues.MAIN})
         code, lines = run_command(write=False)
         checks.equal(code, 0, "the preview exits 0")
@@ -4965,7 +4957,7 @@ def check_queue_refresh_command(checks: Checks) -> None:
             "the preview names the entry that WOULD leave, so the operator can read it first",
         )
         checks.equal(
-            _tree_digest(home),
+            tree_digest(home),
             bytes_before,
             "WITHOUT --write THE STORE IS BYTE-IDENTICAL: every file under the store's home "
             "hashes the same after the preview as before it",
