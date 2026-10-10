@@ -517,6 +517,92 @@ def case_cards_checks_reaches_the_cli() -> None:
     ok(any("VERDICT: 1 flag(s)" in line for line in lines), "and the verdict counts one flag")
 
 
+def stamped_at(home: Path) -> bool:
+    """Whether `meta.photos_relocated` is set, read with plain sqlite3 so the check itself
+    never migrates or stamps."""
+    from store import db
+
+    conn = sqlite3.connect(str(db.path(home / "inventory")))
+    try:
+        return conn.execute(
+            "SELECT count(*) FROM meta WHERE key = ?", (db.PHOTOS_RELOCATED,)
+        ).fetchone()[0] == 1
+    finally:
+        conn.close()
+
+
+def legacy_still_there(placed) -> bool:
+    from store import photos
+
+    home = Path(os.environ["BANCHI_HOME"])
+    return all(photos.legacy_path(box, index, home).is_file() for _c, box, index, _b in placed)
+
+
+def case_limited_pass_reports_a_corrupt_photo() -> None:
+    print("cards photos --write --limit 2 — a corrupt photo is refused and the pass exits non-zero")
+    home = fresh_home()
+    from store import photos
+
+    placed = seed_legacy_photographs(4)
+    _cid, box, index, _blob = placed[0]
+    photos.legacy_path(box, index, home).write_bytes(b"not the photograph")
+    code, lines = run_cards("photos", write=True, limit=2)
+    ok(
+        any("refused=1" in line for line in lines),
+        "the census counts the corrupt photo as refused",
+        "; ".join(line for line in lines if "refused" in line or "moved" in line),
+    )
+    ok(code != 0, "the limited pass exits non-zero, as the unlimited pass does", f"exit {code}")
+
+    control = fresh_home()
+    placed = seed_legacy_photographs(4)
+    _cid, box, index, _blob = placed[0]
+    photos.legacy_path(box, index, control).write_bytes(b"not the photograph")
+    code, _lines = run_cards("photos", write=True, limit=None)
+    ok(code != 0, "control: the unlimited pass over the same corrupt photo exits non-zero",
+       f"exit {code}")
+
+
+def case_negative_limit_is_refused() -> None:
+    print("cards photos --write --limit -1 — refused with exit 2, and moves nothing")
+    fresh_home()
+    placed = seed_legacy_photographs(3)
+    code, _lines = run_cards("photos", write=True, limit=-1)
+    ok(code == 2, "a negative limit is refused with exit 2", f"exit {code}")
+    ok(legacy_still_there(placed), "and no photograph is moved")
+    ok(not stamped_at(Path(os.environ["BANCHI_HOME"])), "and nothing is stamped")
+
+
+def case_write_limit_zero_moves_nothing_and_stamps_nothing() -> None:
+    print("cards photos --write --limit 0 — moves none and stamps nothing")
+    home = fresh_home()
+    placed = seed_legacy_photographs(3)
+    _code, lines = run_cards("photos", write=True, limit=0)
+    ok(any("moved=0" in line for line in lines), "the census names zero moved",
+       "; ".join(line for line in lines if "moved" in line))
+    ok(legacy_still_there(placed), "and every photograph is still at its legacy address")
+    ok(not stamped_at(home), "and photos_relocated is not stamped")
+
+
+def case_limited_then_full_pass_reaches_every_photo() -> None:
+    print("cards photos --limit 2, then a full pass — stamped, and every photo reachable")
+    home = fresh_home()
+    from store import photos
+
+    placed = seed_legacy_photographs(5)
+    code, _lines = run_cards("photos", write=True, limit=2)
+    ok(code == 0 and not stamped_at(home), "the limited pass stamps nothing")
+    code, _lines = run_cards("photos", write=True, limit=None)
+    ok(code == 0, "the full pass exits 0", f"exit {code}")
+    ok(stamped_at(home), "and stamps photos_relocated")
+    reachable = [
+        photos.find(cid, box, index, relocated=True, home=home) is not None
+        for cid, box, index, _b in placed
+    ]
+    ok(all(reachable), "and every photograph is reachable at its name",
+       f"{sum(reachable)} of {len(placed)}")
+
+
 TESTS = [
     test_long_name,
     test_denominator_outlier,
@@ -530,6 +616,10 @@ TESTS = [
     case_photos_limit_touches_at_most_n,
     case_photos_limit_zero_moves_nothing,
     case_cards_checks_reaches_the_cli,
+    case_limited_pass_reports_a_corrupt_photo,
+    case_negative_limit_is_refused,
+    case_write_limit_zero_moves_nothing_and_stamps_nothing,
+    case_limited_then_full_pass_reaches_every_photo,
 ]
 
 
