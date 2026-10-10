@@ -65,7 +65,7 @@ AREAS: Tuple[Tuple[str, str], ...] = (
     ("Public demo", r"demo-"),
     ("Code cards", r"t8_"),
     ("Store, identity and prices", r"cid-|holdings|identity-|sku|readings|price|archive|submission|repair-born|catalog-index|stockimages|pipeline-trends|pricehistory"),
-    ("Repository guards and tooling", r"claim-|githooks|guard-shell|hand-search|janitor|merge-|reap-|serve-|silent-write|subagent|sync-|verdict|worktree-provision"),
+    ("Repository guards and tooling", r"claim-|githooks|guard-shell|hand-search|janitor|merge-|reap-|serve-|silent-write|subagent|sync-|verdict|worktree-provision|ports-machine"),
 )
 UNFILED = "Unfiled (add a rule to AREAS in scripts/tests_page.py)"
 

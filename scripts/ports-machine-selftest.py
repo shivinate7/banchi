@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Selftest for `server/ports.py`'s `machine_dir` and `remove_old_agent`, and their env overrides.
 
+Protects: The move to the new machine dir loses no port claim or file, and an old launchd job file is deleted only after its job is stopped.
+
 Every case runs with HOME pointed at a fresh temp dir. `Path.home()` reads `$HOME` on POSIX,
 and `setUp` asserts it before each case. `subprocess.run` is replaced, so no case reaches the
 real `launchctl`. `BANCHI_LOCK_DIR` lives in `scripts/suite-lock.py`, so that case loads it.
