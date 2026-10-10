@@ -6,7 +6,7 @@ every card physically is.
 Code cards are a feature of this product, not a second track (D248, turn end never runs the harness, and code cards
 share one rules file). The feature is DORMANT. See "Code cards (dormant feature)" below.
 D14 (two tracks, one rig) still stands in structure. `codes/` is its own package. `docs/map.py`
-carries a `TRACKS` tuple. `scripts/decision-context.py` prints a track banner. Repeal needs the
+carries a `TRACKS` list. `scripts/decision-context.py` prints a track banner. Repeal needs the
 owner's word.
 
 Codex reads this file, not a copy (D135, Codex reads the same rules). `AGENTS.md`,
@@ -195,7 +195,7 @@ Fulfiller's. The shell has these parts:
 
 - A sidebar that folds to a rail (⌘.), a top bar and bottom tab bar on phones.
 - A command palette (⌘K, the only way to `#/gallery`), `,` then a letter to jump, ⌘←/⌘→ to step the workflow ring.
-- A keyboard sheet on `?`. A new key binding is not done until it is in `SHORTCUTS` (`app/src/keys.ts`).
+- A keyboard sheet on `?`. A new key binding is not done until it is in `SHORTCUTS` (`app/src/App.tsx`).
 - An error boundary per route. The Fulfiller's `plain` variant offers one button and no error text.
 - A toast stack, an offline banner and the document title.
 

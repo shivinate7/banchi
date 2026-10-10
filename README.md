@@ -31,7 +31,7 @@ make up                     # serve the app; open the link it prints
 ## Usage
 
 `make up` serves the app. There is no login: it is for your own desk and network. `?` in the app lists the keyboard shortcuts (`SHORTCUTS` in
-[`app/src/keys.ts`](app/src/keys.ts)).
+[`app/src/App.tsx`](app/src/App.tsx)).
 
 <!-- gen:routes -->
 | Screen | Route | Note |
@@ -53,7 +53,7 @@ make up                     # serve the app; open the link it prints
 
 Each screen's spec is in [`docs/specs/`](docs/specs/). Every step also runs from the terminal.
 `./banchi --help` lists the commands, and `<command> --help` lists its flags.
-A command that writes shows a preview first; add `--write` to apply it. The command list in
+The command list in
 [`CLAUDE.md`](CLAUDE.md) says which commands write.
 
 ```sh
@@ -86,8 +86,7 @@ make check            # the whole suite; `make explain` lists it
 Main moves by pull request only (D42, main moves by pull request). `make docs-audit` checks
 this file against the code: paths, make targets, commands, route table and decision ids.
 
-The name Banchi belongs to the app. The checkout, CLI, packages, store and routes keep
-`banchi` (D94, Banchi is the product's name).
+Naming follows D94 (Banchi names everything).
 
 ## More
 
