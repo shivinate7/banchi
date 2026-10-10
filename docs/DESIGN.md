@@ -1051,7 +1051,7 @@ disabled    owner-side only; this view has no disabled state at all
 border is drawn from it and follows it through both themes.
 
 **Both findings from building it before any screen still hold, and both are now enforced
-rather than remembered.** The label had to be 20px or more because the constraints table puts that floor on every text node in his view. A button label is a text node. It is 22px, and the spec asserts the floor. And the key chip does not belong on this control. "Every choice shows its key" is an owner-side rule. `keyHint` renders nothing when omitted, and the spec asserts its absence by default.
+rather than remembered.** The label had to be 20px or more because the constraints table puts that floor on every text node in his view. A button label is a text node. It is 22px, and the spec asserts the floor. And the key chip does not belong on this control. "every choice shows its key" is an owner-side rule. `keyHint` renders nothing when omitted, and the spec asserts its absence by default.
 
 ## The screenshot loop is mandatory
 
