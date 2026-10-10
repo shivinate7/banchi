@@ -638,6 +638,31 @@ def _identity(args, say) -> int:
 # ----------------------------------------------------------------------- cards photos
 
 
+def _move_sidecar(key, cid, box, idx, record, home, refusals) -> bool:
+    """Bring a card's legacy sidecar to its name. True when a sidecar was moved or rewritten.
+
+    A SIDECAR THAT CANNOT MOVE IS REWRITTEN FROM THE STORE'S RECORD (`photos.claims_payload`),
+    because the sidecar is the backup the store is rebuilt from and a card without one has
+    none. Only when that write fails too is the card refused, which blocks the stamp. A
+    legacy sidecar that stays behind is still found: `photos.find_sidecar` falls back to it.
+    """
+    sidecar = photos.legacy_path(box, idx, home).with_suffix(photos.SIDECAR_SUFFIX)
+    if not sidecar.is_file():
+        return False
+    try:
+        photos.adopt_sidecar(sidecar, cid, home)
+        return True
+    except OSError:
+        pass
+    claims = {name: record.get(name) for name in photos.CLAIM_WIRE_NAMES}
+    try:
+        photos.write_sidecar(cid, photos.claims_payload(box, idx, claims), home)
+        return True
+    except OSError as exc:
+        refusals.append((key, f"sidecar: {exc}"))
+        return False
+
+
 def _photos(args, say) -> int:
     """Move the corpus onto the card's own name. Previews unless `--write`.
 
@@ -711,17 +736,10 @@ def _photos(args, say) -> int:
                     census["refused"] += 1
                     refusals.append((key, str(exc)))
             # A KILL BETWEEN THE PHOTO MOVE AND THE SIDECAR MOVE LEAVES THE SIDECAR AT ITS
-            # LEGACY ADDRESS. Adopt it here, or the stamp would orphan it for good. A sidecar
-            # that cannot move counts as refused, so the stamp waits.
+            # LEGACY ADDRESS. Move it now, or rewrite it from the record.
             if write and box is not None and idx is not None:
-                sidecar = photos.legacy_path(box, idx, home).with_suffix(photos.SIDECAR_SUFFIX)
-                if sidecar.is_file():
-                    try:
-                        photos.adopt_sidecar(sidecar, cid, home)
-                        census["sidecars"] += 1
-                    except OSError as exc:
-                        census["refused"] += 1
-                        refusals.append((key, f"sidecar: {exc}"))
+                if _move_sidecar(key, cid, box, idx, record, home, refusals):
+                    census["sidecars"] += 1
             continue
         if record.get("photo_reclaimed_at"):
             census["reclaimed"] += 1
@@ -744,16 +762,8 @@ def _photos(args, say) -> int:
         census[verdict] += 1
         if verdict == "moved":
             bytes_moved += size
-        sidecar = photos.legacy_path(box, idx, home).with_suffix(photos.SIDECAR_SUFFIX)
-        if sidecar.is_file():
-            try:
-                photos.adopt_sidecar(sidecar, cid, home)
-                census["sidecars"] += 1
-            except OSError as exc:
-                # NEVER FATAL. `identify.sidecar.scan` keys on the PHOTOGRAPH, so a sidecar
-                # that did not travel costs the recovery path in that module's docstring and
-                # never a card.
-                refusals.append((key, f"sidecar: {exc}"))
+        if _move_sidecar(key, cid, box, idx, record, home, refusals):
+            census["sidecars"] += 1
 
     say("  " + "  ".join(f"{name}={value}" for name, value in census.items()))
     say(f"  {bytes_moved:,} bytes {'moved' if write else 'would move'}")

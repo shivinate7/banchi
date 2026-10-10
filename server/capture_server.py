@@ -786,30 +786,8 @@ _SHIPPING_ITEM_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})$")
 # directly. Only `variant` differs from its record field: `metadata_finish` is what the
 # store calls it, `variant` is what the sidecar and the request body have always called it,
 # and renaming either would break a file `identify.sidecar` already reads.
-CLAIM_WIRE_NAMES = {
-    "set_hint": "set_hint",
-    # D3 rung 1's finish claim, and SINCE 2026-08-23 A JSON LIST of the game's finishes —
-    # the second set-valued claim in this map, not the only one. The key does not move: the
-    # sidecar and the request body have called it `variant` since before it had a shape, and
-    # `identify/sidecar.py` reads that spelling off files already on disk.
-    #
-    # A BARE STRING IS STILL READ, and it is what all 682 records written before the
-    # amendment carry: one member, and D3 says nothing writes one any more. There is no
-    # migration, so both shapes travel this wire permanently.
-    "metadata_finish": "variant",
-    "game": "game",
-    # D23's multi-select stack claim: a JSON list of the game's exact `Rarity` cells.
-    # `sidecar_payload`'s truthiness filter means an empty list is never written — absent
-    # is no claim, exactly as `variant` and `set_hint` behave, and now for the same reason
-    # rather than by coincidence: both claims are sets and an empty set is no claim (D3, D23).
-    "rarity_claim": "rarity_claim",
-    # C10's product claim. Same spelling on the wire, in the sidecar and on the record —
-    # unlike `metadata_finish`/`variant` above, which differ only because that key was named
-    # before it had a shape and files on disk already use it. A field on its first day gets
-    # one name everywhere.
-    "product": "product",
-    "note": "note",
-}
+# The map lives in `store/photos.py` (one home, shared with `cli`); re-exported here.
+CLAIM_WIRE_NAMES = photos.CLAIM_WIRE_NAMES
 
 # The claims no client sends, so they are legitimately absent from the map above rather than
 # forgotten. `photo` is derived — the path is not knowable until the index is allocated.
@@ -1574,11 +1552,7 @@ def sidecar_payload(box: int, index: int, **claims) -> dict:
             f"sidecar_payload was handed {', '.join(unknown)}, which has no wire name. "
             f"Sidecar claims: {', '.join(CLAIM_WIRE_NAMES)}.",
         )
-    payload = {"box": int(box), "index": int(index)}
-    for field, value in claims.items():
-        if value:
-            payload[CLAIM_WIRE_NAMES[field]] = value
-    return payload
+    return photos.claims_payload(box, index, claims)
 
 
 # ---------------------------------------------------------------------- request decoding

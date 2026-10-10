@@ -2187,8 +2187,7 @@ COMPONENTS = [
                                   "OUTSIDE `captures/` for `_scopes_root`'s reason: `sidecar.scan` "
                                   "walks recursively and every photograph it finds is a PAID Batch "
                                   "request",
-                          "governed_by": ["D172", "D183", "D26",
-                                          "D43", "D83", "D89"],
+                          "governed_by": ["D3", "D23", "D26", "D43", "D83", "D89", "D172", "D183"],
                           "tested_by": ["T7"]},
         },
     },
