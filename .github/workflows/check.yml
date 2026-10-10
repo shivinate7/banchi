@@ -144,7 +144,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # SIX SHARDS IN PARALLEL, THE SLOWEST (guards-1) ABOUT 240s AND `timeout-minutes` 9 (OVER 2x THAT), AND ONE JOB NAMED `check` THAT ANSWERS FOR THEM (owner's word,
+  # SIX SHARDS IN PARALLEL, NONE MUCH OVER 150s (`timeout-minutes` IS OVER 2x THE SLOWEST SHARD), AND ONE JOB NAMED `check` THAT ANSWERS FOR THEM (owner's word,
   # 2026-09-28; D161, amended). The serial `make ci-check` took 600s on run 36509895299. The
   # shards' recipes together are exactly `ci-check`'s, and `make docs-audit`'s `check registry`
   # row fails when they are not. Each shard installs the same way and keeps D161's order, product
@@ -236,10 +236,11 @@ jobs:
   # matrix, so one failed, cancelled or skipped shard changes its result) must be `success`, or
   # `skipped` with an explicit reason: `browser-scope` answered `false` (no browser can reach
   # the change) or `already-passed` answered `true` (this tree went green on a pull request).
-  # Any other `skipped`, `failure` or `cancelled` fails. ponytail: the smallest in-repo gate;
+  # Any other `skipped`, `failure` or `cancelled` fails. `records` must be `success`, never skipped.
+  # ponytail: the smallest in-repo gate;
   # it can move to claude-settings' `actions/all-jobs-passed` once that is merged.
   check:
-    needs: [ci-check, design-check, already-passed, browser-scope]
+    needs: [ci-check, design-check, already-passed, browser-scope, records]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -250,6 +251,7 @@ jobs:
           BROWSER: ${{ needs.design-check.result }}
           SCOPE_RUN: ${{ needs.browser-scope.outputs.run }}
           ALREADY_PASSED: ${{ needs.already-passed.outputs.skip }}
+          RECORDS: ${{ needs.records.result }}
           DRAFT: ${{ github.event.pull_request.draft }}
         run: |
           # A draft skips the heavy jobs, so this check FAILS on one: a skipped required check counts as
@@ -257,6 +259,7 @@ jobs:
           if [ "${DRAFT}" = "true" ]; then echo "::error::draft: mark ready to run the checks"; exit 1; fi
           echo "shards: ${SHARDS}; browser matrix: ${BROWSER} (scope run=${SCOPE_RUN}, already-passed skip=${ALREADY_PASSED})"
           [ "${SHARDS}" = "success" ] || { echo "a shard did not succeed"; exit 1; }
+          [ "${RECORDS}" = "success" ] || { echo "the record-number check did not succeed: ${RECORDS}"; exit 1; }
           [ "${BROWSER}" = "success" ] && exit 0
           if [ "${BROWSER}" = "skipped" ] && { [ "${SCOPE_RUN}" = "false" ] || [ "${ALREADY_PASSED}" = "true" ]; }; then
             echo "browser matrix skipped on purpose"; exit 0
@@ -288,8 +291,9 @@ jobs:
   # THE RECORD NUMBERS, CHECKED, NEVER WRITTEN. The shared merge tool (`merge`, claude-settings)
   # claims a record's number on the pull request branch before the merge, so main never holds a
   # pending one. Mode `check` refuses a number a branch wrote by hand and, on main, any pending
-  # record. `contents: read` only. NOT a required check: the ruleset names `check` and
-  # `revert-guard`, and `.github/stamp.json`'s `merge.requiredChecks` reads that list.
+  # record. `contents: read` only. It BLOCKS a merge through `check`, which lists it in `needs`
+  # and fails unless it succeeded, on the owner's ruling. The ruleset still names `check` and
+  # `revert-guard`; `zizmor` stays non-blocking.
   records:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -585,7 +589,7 @@ jobs:
   # a week of red nights is one issue and not seven. `issues: write` is the whole grant: the
   # job checks nothing out and reads its verdict from `needs`. A skipped job is not a failure.
   nightly-alarm:
-    needs: [ci-check, revert-guard, zizmor, design-check]
+    needs: [ci-check, revert-guard, zizmor, design-check, records]
     if: ${{ always() && (github.event_name == 'schedule' || inputs.report_failure) && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
