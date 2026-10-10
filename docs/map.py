@@ -3689,6 +3689,14 @@ COMPONENTS = [
                         "(D280). Shrunk by hand or by "
                         "`make offenders-prune`, which only deletes. Never grown by a tool.",
                 "governed_by": ["D41", "D218", "D280"]},
+            "no-owner-quotes-allow.json": {
+                "does": "the shrinking offender list for `make docs-audit`'s `no owner quotes` row: "
+                        "file -> lane and `marker` -> one marker per occurrence of an owner-quote "
+                        "marker in `docs/`. The row fails on a marker the list does not name, on a "
+                        "stale entry, and on growth over the merge-base with origin/main. Shrunk "
+                        "by a cut pass or by `make offenders-prune`, which only deletes. Never "
+                        "grown by a tool. Its keys are the files that hold a marker, so it cites their ids.",
+                "governed_by": ["D280", "D-no-owner-quotes", "D100", "D103", "D134", "D145", "D155", "D162", "D164", "D176", "D179", "D213", "D220", "D241", "D242", "D254", "D259", "D260", "D264", "D271", "D272", "D273", "D291", "D293", "D296", "D299", "D300", "D301", "D307"]},
             "ste/ste_lint.py": {
                 "does": "the STE prose check's linter, VENDORED verbatim from $HOME/.claude/"
                         "lint/ste_lint.py (MIT, LICENSE-ste_lint beside it) on 2026-09-19 — a "

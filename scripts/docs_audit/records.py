@@ -1293,22 +1293,46 @@ def _debts_section(number: int) -> Optional[str]:
 
 NO_OWNER_QUOTES_ALLOW = ROOT / "scripts" / "no-owner-quotes-allow.json"
 NO_OWNER_QUOTES_RULE = "marker"
-NO_OWNER_QUOTES_HOME = "no-owner-quotes.md"  # the record that names the markers; not an offender, before or after its number is claimed
-_OWNER_QUOTE_RE = re.compile(r"The owner(?:'|’)s words|verbatim:", re.IGNORECASE)
+NO_OWNER_QUOTES_HOME = re.compile(r"^docs/decisions/D\d*-no-owner-quotes\.md$")  # the record that names the markers
+# Three forms: `The owner's words`, a one-word quote lead (`The owner's word:` then a quote mark),
+# `The owner's request, verbatim`, and `verbatim:`. `\s+` crosses a line wrap. "on the owner's
+# word." is a permission phrase and stays quiet.
+_OWNER_QUOTE_RE = re.compile(
+    r"The\s+owner(?:'|\u2019)s\s+(?:words|word\s*:\s*[*_`]*[\"'\u201c\u2018]|request,?\s+verbatim)|verbatim:",
+    re.IGNORECASE,
+)
 
 
 def _no_owner_quotes_found(root: Path) -> Dict[str, Dict[str, List[str]]]:
-    """file -> {marker: [one marker per occurrence]} over every `.md` under docs/."""
+    """file -> {marker: [one marker per occurrence]} over every `.md` under docs/. A hit in any
+    case or wrap is listed in one form, so a list entry never goes stale over case."""
     found: Dict[str, Dict[str, List[str]]] = {}
     for path in sorted((root / "docs").rglob("*.md")):
         name = path.relative_to(root).as_posix()
-        if name.startswith("docs/decisions/") and name.endswith(NO_OWNER_QUOTES_HOME):
+        if NO_OWNER_QUOTES_HOME.match(name):
             continue
         text = path.read_text(encoding="utf-8")
         hits = [("The owner's words" if m.group(0)[0] in "Tt" else "verbatim:") for m in _OWNER_QUOTE_RE.finditer(text)]
         if hits:
             found[name] = {NO_OWNER_QUOTES_RULE: hits}
     return found
+
+
+def _no_owner_quotes_growth(base, head, rules, renames):
+    """`_offender_growth` counted PER FILE, a renamed file mapped to its merge-base path."""
+    from .strings import _offender_growth
+
+    to_base = {new: old for old, new in renames}
+
+    def folded(files, mapped):
+        out: Dict[str, Dict[str, List[str]]] = {}
+        for file, per in files.items():
+            where = to_base.get(file, file) if mapped else file
+            for rule, entries in per.items():
+                out.setdefault(where, {}).setdefault(rule, []).extend(f"{where} :: {e}" for e in entries)
+        return out
+
+    return _offender_growth(folded(base, False), folded(head, True), rules, rules)
 
 
 def check_no_owner_quotes(report: Report) -> None:
@@ -1320,7 +1344,7 @@ def check_no_owner_quotes(report: Report) -> None:
     refused. A quoted owner message with no marker is not seen: a machine cannot tell it from
     another quote."""
     from .strings import (
-        _offender_diff, _offender_growth, _offender_list_at_merge_base,
+        _git_renames, _offender_diff, _offender_list_at_merge_base,
         _offender_list_shape, _read_offender_list,
     )
 
@@ -1338,18 +1362,21 @@ def check_no_owner_quotes(report: Report) -> None:
     unlisted, stale = _offender_diff(found, listed)
     for file, _rule, text in unlisted:
         findings.append(Finding(
-            file, f"keeps an owner quote ({text!r}) and {allow_rel} does not list it.\n"
+            file, f"keeps an owner-quote marker ({text!r}) and {allow_rel} does not list it.\n"
                   "  State the ruling in plain words. Never add an entry to excuse a new quote."))
     for file, _rule, text in stale:
         findings.append(Finding(
             f"{allow_rel}: {file}",
             f"lists {text!r} and {file} no longer holds it. Delete the entry: the list only shrinks."))
     base_doc, where = _offender_list_at_merge_base(allow_rel)
-    if base_doc is not None:
+    if base_doc is None:
+        note = f" Only-shrinks not compared: {where}. Failing open."
+    else:
         base_listed, _, _ = _offender_list_shape(base_doc, rules)
-        refused, _ = _offender_growth(base_listed, listed, rules, rules)
+        refused, _ = _no_owner_quotes_growth(base_listed, listed, rules, _git_renames())
         findings += [Finding(allow_rel, f"gained {line} over the merge-base {where}.") for line in refused]
+        note = f" Only-shrinks compared against the merge-base {where}."
     count = sum(len(v) for per in found.values() for v in per.values())
     report.add(name, MECHANICAL, findings,
-               f"{count} markers in {len(found)} files; {len(unlisted)} unlisted, {len(stale)} stale",
+               f"{count} markers in {len(found)} files; {len(unlisted)} unlisted, {len(stale)} stale.{note}",
                scanned=len(found))

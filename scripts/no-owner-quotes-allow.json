@@ -1,6 +1,13 @@
 {
  "_about": "THE SHRINKING OFFENDER LIST for `make docs-audit`'s `no owner quotes` row (D-no-owner-quotes; D280, offender lists replace pinned counts). files: file -> lane (who owes the fix) and `marker` -> one marker per occurrence. A cut pass that rewrites a file deletes its entry. An entry that matches nothing is stale and red. Growth over the merge-base with origin/main is refused.",
  "files": {
+  "docs/decisions/D002-identify-is-haiku-vision.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words",
+    "The owner's words"
+   ]
+  },
   "docs/decisions/D007-duplicates-aggregate-by-sku.md": {
    "lane": "cut pass",
    "marker": [
@@ -41,6 +48,7 @@
   "docs/decisions/D134-a-departed-record-is-buried.md": {
    "lane": "cut pass",
    "marker": [
+    "The owner's words",
     "verbatim:"
    ]
   },
@@ -94,6 +102,12 @@
     "verbatim:"
    ]
   },
+  "docs/decisions/D241-early-catalogue-check-is-unbuilt.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  },
   "docs/decisions/D242-name-agreement-settles-sku.md": {
    "lane": "cut pass",
    "marker": [
@@ -121,13 +135,15 @@
   "docs/decisions/D264-a-section-moves-as-one-object.md": {
    "lane": "cut pass",
    "marker": [
+    "The owner's words",
     "verbatim:"
    ]
   },
   "docs/decisions/D271-every-search-uses-one-matcher.md": {
    "lane": "cut pass",
    "marker": [
-    "verbatim:"
+    "verbatim:",
+    "The owner's words"
    ]
   },
   "docs/decisions/D272-one-page-width-one-scaffold.md": {
@@ -155,7 +171,14 @@
   "docs/decisions/D293-inventory-has-a-by-set-view.md": {
    "lane": "cut pass",
    "marker": [
+    "The owner's words",
     "verbatim:"
+   ]
+  },
+  "docs/decisions/D296-buyer-list-sorts-five-ways.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
    ]
   },
   "docs/decisions/D299-boxes-have-no-lid-or-capacity.md": {
@@ -178,6 +201,19 @@
    ]
   },
   "docs/decisions/D307-owner-rulings-claude-md.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words",
+    "The owner's words"
+   ]
+  },
+  "docs/specs/graveyard.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  },
+  "docs/specs/identify-engine-pick.md": {
    "lane": "cut pass",
    "marker": [
     "The owner's words",

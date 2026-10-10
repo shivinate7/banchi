@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""DELETE THE STALE ENTRIES FROM THE TWO SHRINKING OFFENDER LISTS, AND RE-KEY A RENAMED FILE.
+"""DELETE THE STALE ENTRIES FROM THE THREE SHRINKING OFFENDER LISTS, AND RE-KEY A RENAMED FILE.
 
     scripts/offenders-prune.py            what it would delete and re-key. Writes nothing.
     scripts/offenders-prune.py --write    apply it.
     scripts/offenders-prune.py --selftest its own cases, in memory and in a throwaway repo.
 
-THE TWO LISTS (D280): `scripts/typed-interpunct-allow.json`, which its `typed interpunct`
-row reads, and `scripts/markdown-spelling-allow.json`, which the `identifier spelling` row's
-markdown half reads (owner's ruling, test-audit plan, 2026-09-27). Two lists were cut.
+THE THREE LISTS (D280): `scripts/typed-interpunct-allow.json`, which its `typed interpunct`
+row reads, `scripts/markdown-spelling-allow.json`, which the `identifier spelling` row's
+markdown half reads (owner's ruling, test-audit plan, 2026-09-27), and
+`scripts/no-owner-quotes-allow.json`, which the `no owner quotes` row reads. Two lists were cut.
 `scripts/ste-offenders.json` went 2026-09-27 (test-audit plan, D60/D280 amended): the
 write-time STE hook already lints new prose, so the `ste offenders` row was retired along
 with the list. `scripts/line-anchor-offenders.json` went 2026-09-28 (line-anchor lane): the
@@ -248,6 +249,13 @@ def markdown_spelling_inputs(audit):
             lambda entry: entry, {audit.MARKDOWN_SPELLING_RULE})
 
 
+def no_owner_quotes_inputs(audit):
+    """The same six for the no-owner-quotes list."""
+    found = audit._no_owner_quotes_found(ROOT)
+    return (audit.NO_OWNER_QUOTES_ALLOW, found, lambda k: (ROOT / k).is_file(),
+            lambda path: path, lambda entry: entry, {audit.NO_OWNER_QUOTES_RULE})
+
+
 # ------------------------------------------------------------------------------------ main
 
 
@@ -297,7 +305,8 @@ def main() -> int:
 
     audit = _audit()
     renames = git_renames(ROOT)
-    inputs = [("markdown spelling", markdown_spelling_inputs(audit))]
+    inputs = [("markdown spelling", markdown_spelling_inputs(audit)),
+              ("no owner quotes", no_owner_quotes_inputs(audit))]
     dots = interpunct_inputs(audit)
     if dots is None:
         print("typed interpunct: not read. `node` or app/node_modules/typescript is missing, "
