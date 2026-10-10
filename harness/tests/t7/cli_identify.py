@@ -5708,6 +5708,256 @@ def check_run_and_preview_share_locate_card(checks: Checks) -> None:
     )
 
 
+def check_selection_grammar(checks: Checks) -> None:
+    """`pipeline/selection.py` is ONE grammar for which cards a press covers. Four claims.
+
+    (a) A selection that matches nothing returns NOTHING, never every card, and the empty
+        answer is refused as `selection_is_empty` (`empty=True`), never returned as a result.
+    (b) A malformed term refuses as `selection_invalid` with a reason on BOTH surfaces, the
+        route's `parse` and the CLI's argparse adapter. A term that is refused and then
+        answered anyway would be a press over every card reported as a press over some.
+    (c) Each selector narrows the set, and two or more selectors intersect.
+    (d) The route and the CLI parse one expression to one `Selection`, and resolve it to one
+        set of cards on the store.
+    """
+    from types import SimpleNamespace
+
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+    from pipeline import selection as selection_mod
+    from server import pipeline_routes
+
+    sel = selection_mod
+    checks.note("")
+    checks.note("SELECTION GRAMMAR — pipeline/selection.py, one reader for the route and the CLI")
+
+    # ------------------------------------------------ a stand-in store for `narrow`
+    # `narrow` reads only these attributes, so a stand-in is the whole of what it can see.
+    # Box 3 is pokemon, with dividers at index 1 and 4 (sections 1 and 2). Box 5 is riftbound.
+    rows = {}
+    captures = []
+
+    def add(box, index, game, captured_at, state):
+        key = f"{box}/{index}"
+        captures.append(
+            SimpleNamespace(
+                box=box, index=index, key=key, has_position=True, game_or_default=game
+            )
+        )
+        rows[key] = (box, index, captured_at, state)
+
+    for index, state in ((1, "identified"), (2, "identified"), (3, "captured")):
+        add(3, index, "pokemon", "2026-09-01T10:00:00", state)
+    for index in (4, 5, 6):
+        add(3, index, "pokemon", "2026-09-12T10:00:00", "captured")
+    for index in (1, 2, 3):
+        add(5, index, "riftbound", "2026-09-12T10:00:00", "captured")
+
+    class _Cards:
+        def select(self, fields, **where):
+            state = where.get("state")
+            return [
+                (key, (box, idx, at))
+                for key, (box, idx, at, st) in rows.items()
+                if state is None or st == state
+            ]
+
+    class _Order:
+        def of(self, index):
+            return index
+
+    class _Inventory:
+        cards = _Cards()
+
+        def box_by_id(self, bid):
+            return SimpleNamespace(box=3) if bid == 70 else None
+
+        def sections_for(self, number):
+            return (1, 4) if number == 3 else ()
+
+        def box_title(self, number):
+            return f"box {number}"
+
+        def box_order(self, box):
+            return _Order()
+
+    inventory = _Inventory()
+
+    def narrowed(selection):
+        found = sel.narrow(selection, captures, inventory=inventory, run_keys=None)
+        return sorted(c.key for c in found)
+
+    everything = sorted(c.key for c in captures)
+
+    # ----------------------------------------------------------------- (a) empty is empty
+    for label, selection in (
+        ("a box nothing has been photographed into", sel.Selection(box=(9,))),
+        ("a key naming a card the store does not hold", sel.Selection(keys=("9/9",))),
+        ("a game no card in that drawer claims", sel.Selection(game="pokemon", box=(5,))),
+        ("a state no card holds", sel.Selection(state="sold")),
+        ("a capture time after every card", sel.Selection(since="2030-01-01")),
+        ("a state and a game that never meet", sel.Selection(state="identified", game="riftbound")),
+    ):
+        got = narrowed(selection)
+        checks.equal(got, [], f"(a) {label} selects ZERO cards, never every card")
+
+    try:
+        sel.refuse_empty(sel.Selection(box=(9,)), scanned=len(captures))
+        checks.ok(False, "(a) an empty answer is refused as selection_is_empty", "it returned")
+    except sel.SelectionError as refusal:
+        checks.equal(
+            (refusal.code, refusal.empty),
+            ("selection_is_empty", True),
+            "(a) an empty answer is refused as `selection_is_empty` with empty=True",
+        )
+
+    # ------------------------------------------------- (b) malformed refuses with a reason
+    malformed = (
+        ({"box": 0}, "a box that is not positive"),
+        ({"box": -1}, "a negative box"),
+        ({"box": "3"}, "a box sent as a string"),
+        ({"box": True}, "a box sent as a boolean"),
+        ({"box": []}, "an empty box list"),
+        ({"box": [3, 0]}, "a box list holding a zero"),
+        ({"keys": []}, "an empty key list, which must not read as every card"),
+        ({"keys": "3/17"}, "keys sent as a bare string"),
+        ({"keys": ["3/017"]}, "a key with padding"),
+        ({"keys": ["3/0"]}, "a key with index zero"),
+        ({"keys": ["3-17"]}, "a key with the wrong separator"),
+        ({"keys": ["3/17", 5]}, "a key list holding a number"),
+        ({"state": "nonsense"}, "a state the store does not have"),
+        ({"game": "not-a-game"}, "a game the registry does not know"),
+        ({"game": ""}, "an empty game"),
+        ({"since": "yesterday"}, "a capture time that is not an instant"),
+        ({"since": ""}, "an empty capture time"),
+        ({"section": 2}, "a section with no drawer to be inside"),
+        ({"box": [3, 5], "section": 1}, "a section over two drawers"),
+        ({"box": 3, "bid": 3}, "a drawer named twice, two ways"),
+        ({"indices": [17]}, "`indices`, the retired spelling"),
+        ({"scopes": [{"box": 3}]}, "`scopes`, the retired cart"),
+        ({"paths": []}, "an empty path list"),
+        ({"run": "../secrets"}, "a run name with a separator"),
+        ([], "a selection that is not a JSON object"),
+    )
+    for payload, why in malformed:
+        try:
+            got = sel.parse(payload)
+        except sel.SelectionError as refusal:
+            checks.ok(
+                refusal.code == "selection_invalid" and str(refusal).strip() != "",
+                f"(b) the route refuses {why} as selection_invalid, with a reason",
+                f"code={refusal.code!r} message={str(refusal)!r}",
+            )
+            continue
+        checks.ok(False, f"(b) the route refuses {why}", f"it answered: {got!r}")
+
+    parser = cli_entry.build_parser()
+    for argv, why in (
+        (["identify", "--box", "0"], "--box 0"),
+        (["identify", "--keys", "3/017"], "--keys with padding"),
+        (["identify", "--section", "2"], "--section with no drawer"),
+        (["identify", "--box", "3", "--bid", "3"], "--box and --bid naming one drawer twice"),
+        (["identify", "--state", "nonsense"], "--state the store does not have"),
+    ):
+        try:
+            got = cmd_identify._selection_from(parser.parse_args(argv))
+        except sel.SelectionError as refusal:
+            checks.ok(
+                refusal.code == "selection_invalid" and str(refusal).strip() != "",
+                f"(b) the CLI refuses {why} as selection_invalid, with a reason",
+                f"code={refusal.code!r} message={str(refusal)!r}",
+            )
+            continue
+        checks.ok(False, f"(b) the CLI refuses {why}", f"it answered: {got!r}")
+
+    # ---------------------------------------------- (c) each selector narrows, and they meet
+    single = (
+        ("box 3", sel.Selection(box=(3,)), ["3/1", "3/2", "3/3", "3/4", "3/5", "3/6"]),
+        ("boxes 3 and 5", sel.Selection(box=(3, 5)), everything),
+        ("bid 70, the drawer that is box 3", sel.Selection(bid=(70,)), ["3/1", "3/2", "3/3", "3/4", "3/5", "3/6"]),
+        ("keys", sel.Selection(keys=("3/2", "5/1")), ["3/2", "5/1"]),
+        ("game riftbound", sel.Selection(game="riftbound"), ["5/1", "5/2", "5/3"]),
+        ("state identified", sel.Selection(state="identified"), ["3/1", "3/2"]),
+        ("since 2026-09-10", sel.Selection(since="2026-09-10"), ["3/4", "3/5", "3/6", "5/1", "5/2", "5/3"]),
+        ("section 1 of box 3", sel.Selection(box=(3,), section=1), ["3/1", "3/2", "3/3"]),
+        ("section 2 of box 3", sel.Selection(box=(3,), section=2), ["3/4", "3/5", "3/6"]),
+    )
+    for label, selection, expected in single:
+        checks.equal(narrowed(selection), expected, f"(c) the {label} selector narrows to its own cards")
+
+    pairs = (
+        ("box 3 and state identified", sel.Selection(box=(3,), state="identified"), ["3/1", "3/2"]),
+        (
+            "box 3, since 09-10 and state captured",
+            sel.Selection(box=(3,), since="2026-09-10", state="captured"),
+            ["3/4", "3/5", "3/6"],
+        ),
+        ("game pokemon and keys 3/1 and 5/1", sel.Selection(game="pokemon", keys=("3/1", "5/1")), ["3/1"]),
+        ("section 2 of box 3 and keys 3/2 and 3/5", sel.Selection(box=(3,), section=2, keys=("3/2", "3/5")), ["3/5"]),
+        (
+            "boxes 3 and 5, game riftbound and since",
+            sel.Selection(box=(3, 5), game="riftbound", since="2026-09-10"),
+            ["5/1", "5/2", "5/3"],
+        ),
+    )
+    for label, selection, expected in pairs:
+        checks.equal(narrowed(selection), expected, f"(c) two or more selectors intersect: {label}")
+
+    # ------------------------------------------- the real store: (a) end to end, and (d)
+    from harness.tests.t7.common import capture_payload, isolated_home
+    from store import files
+    from store.session import Store
+
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(3))
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(6))
+        files.home().joinpath("captures", "cards").mkdir(parents=True, exist_ok=True)
+
+        def read_inventory():
+            return Store().read().inventory
+
+        held = sorted(c.key for c in pipeline_routes._selection_captures(sel.parse({})))
+        k3 = [k for k in held if k.startswith("3/")]
+        k6 = [k for k in held if k.startswith("6/")]
+        checks.ok(len(held) == 5 and len(k3) == 3, "the store holds 3 cards in box 3 and 2 in box 6", f"{held}")
+
+        for label, payload in (
+            ("a key the store does not hold", {"keys": ["9/9"]}),
+            ("a box nothing was photographed into", {"box": 9}),
+        ):
+            found, _ = sel.resolve(
+                sel.parse(payload), files.home(), read_inventory=read_inventory, run_keys=None
+            )
+            checks.equal(found, [], f"(a) end to end, {label} resolves to ZERO cards from the store")
+
+        cases = (
+            ({"box": [3, 6]}, ["--box", "3,6"]),
+            ({"box": 3}, ["--box", "3"]),
+            ({"keys": [k3[0], k6[0]]}, ["--keys", f"{k3[0]},{k6[0]}"]),
+            ({"keys": [k3[1], k6[1]]}, ["--keys", k3[1], "--keys", k6[1]]),
+            ({"box": 3, "state": "captured"}, ["--box", "3", "--state", "captured"]),
+            ({"box": 3, "section": 1}, ["--box", "3", "--section", "1"]),
+            ({"game": "pokemon", "since": "2000-01-01"}, ["--game", "pokemon", "--since", "2000-01-01"]),
+        )
+        for payload, argv in cases:
+            route_sel = pipeline_routes._resolve_selection(payload)
+            cli_sel = cmd_identify._selection_from(parser.parse_args(["identify", *argv]))
+            checks.equal(
+                route_sel,
+                cli_sel,
+                f"(d) the route and the CLI parse {payload} to the same selection",
+            )
+            route_set = sorted(c.key for c in pipeline_routes._selection_captures(route_sel))
+            cli_found, _ = sel.resolve(cli_sel, files.home(), read_inventory=read_inventory, run_keys=None)
+            checks.equal(
+                route_set,
+                sorted(c.key for c in cli_found),
+                f"(d) {payload} resolves to the same cards on the route and the CLI",
+            )
+
+
 CHECKS = (
     check_cli_seams,
     check_code_ledger,
@@ -5734,4 +5984,5 @@ CHECKS = (
     check_run_binds_to_bid,
     check_printed_code_profiles,
     check_cli_refusals,
+    check_selection_grammar,
 )
