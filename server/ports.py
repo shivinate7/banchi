@@ -142,7 +142,7 @@ def machine_dir() -> Path:
     """
     home = Path.home()
     new, old = home / ".banchi", home / ".pkmnscan"
-    if old.is_symlink() or not old.is_dir():
+    if old.is_symlink() or not old.is_dir() or new.resolve() == old.resolve():
         return new
     try:
         if not new.exists():
@@ -155,8 +155,8 @@ def machine_dir() -> Path:
             old.rename(kept)
             print("moved %s into %s; the rest is kept in %s" % (old, new, kept))
         os.symlink(new, old)
-    except OSError:
-        pass
+    except OSError as err:
+        print("could not move %s into %s: %s" % (old, new, err))
     return new
 
 

@@ -31,8 +31,8 @@ LOCK_DIR_ENV = "BANCHI_LOCK_DIR"
 
 # The real home, read before any case touches HOME. The module teardown proves nothing leaked.
 REAL_HOME = Path(os.path.expanduser("~"))
-REAL_PKMNSCAN_AT_START = (REAL_HOME / ".pkmnscan").exists()
-REAL_BANCHI_AT_START = (REAL_HOME / ".banchi").exists()
+REAL_PKMNSCAN_AT_START = os.path.lexists(REAL_HOME / ".pkmnscan")
+REAL_BANCHI_AT_START = os.path.lexists(REAL_HOME / ".banchi")
 
 
 def _load_suite_lock():
@@ -95,7 +95,7 @@ class MachineHomeCase(unittest.TestCase):
         self.assertFalse(self.old.exists())
         self.assertEqual((self.new / "marker").read_text(encoding="utf-8"), "new")
 
-    def test_machine_dir_both_exist_new_wins_old_left_alone(self):
+    def test_machine_dir_both_exist_keeps_new_links_old_and_aside_old_copy(self):
         self._dir(self.old, "old")
         self._dir(self.new, "new")
         got = ports.machine_dir()
@@ -107,7 +107,7 @@ class MachineHomeCase(unittest.TestCase):
         self.assertEqual(len(kept), 1)
         self.assertEqual((kept[0] / "marker").read_text(encoding="utf-8"), "old")
 
-    def test_machine_dir_both_exist_drops_old_slot_claims(self):
+    def test_machine_dir_both_exist_moves_old_only_slot_claims(self):
         # A claim only the old registry held is moved into the new directory, so it still reads.
         self._dir(self.new, "new")
         self.old.mkdir()
@@ -199,10 +199,17 @@ class MachineHomeCase(unittest.TestCase):
         got = ports.machine_dir()
         self.assertEqual(got, self.new)
         self.assertEqual((self.new / "only_old.txt").read_text(encoding="utf-8"), "from old")
-        # For a file present in both, the new one wins. The old copy is not kept aside.
+        # For a file present in both, the new one wins. The old copy stays in `.pkmnscan.old-*`.
         self.assertEqual((self.new / "common.txt").read_text(encoding="utf-8"), "new wins")
         self.assertTrue(self.old.is_symlink(), "old path must be replaced by a symlink")
         self.assertEqual(self.old.resolve(), self.new.resolve())
+
+    def test_machine_dir_new_linked_to_old_makes_no_loop(self):
+        self._dir(self.old, "old")
+        os.symlink(self.old, self.new)
+        self.assertEqual(ports.machine_dir(), self.new)
+        self.assertTrue(self.old.is_dir() and not self.old.is_symlink())
+        self.assertEqual((self.new / "marker").read_text(encoding="utf-8"), "old")
 
     def test_machine_dir_old_symlink_already_linked_changes_nothing(self):
         # GREEN on the current code by design: this is a guard for the builder's change.
@@ -242,8 +249,8 @@ class MachineHomeCase(unittest.TestCase):
 
 def tearDownModule():
     # A leak into the real home fails the run, even if every case passed.
-    assert (REAL_HOME / ".pkmnscan").exists() == REAL_PKMNSCAN_AT_START, "real ~/.pkmnscan changed"
-    assert (REAL_HOME / ".banchi").exists() == REAL_BANCHI_AT_START, "real ~/.banchi changed"
+    assert os.path.lexists(REAL_HOME / ".pkmnscan") == REAL_PKMNSCAN_AT_START, "real ~/.pkmnscan changed"
+    assert os.path.lexists(REAL_HOME / ".banchi") == REAL_BANCHI_AT_START, "real ~/.banchi changed"
 
 
 if __name__ == "__main__":
