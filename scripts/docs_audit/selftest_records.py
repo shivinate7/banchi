@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import ast
+import json
 import re
 import tempfile
 from pathlib import Path
+from unittest import mock
 
+from . import records, strings
 from .code_invariants import _PAYLOAD_ASSIGN_RE, _payload_keys, _ts_function_body
-from .core import ROOT, _GATES_STEP_SLUG, _sibling, top_level_names
+from .core import ROOT, _GATES_STEP_SLUG, Report, _sibling, top_level_names
 from .env_map import cited_decisions
 from .harness_criteria import gates_pass_line, strip_presentation
 from .paths_commands import path_candidates, resolve_candidate
@@ -395,3 +398,51 @@ def run(ok) -> None:
         resolve_candidate("../../../etc/passwd", ROOT / "code-card-fork" / "CLAUDE.md", tops) is None,
         "a ../ path escaping the repo is not ours to check",
     )
+
+    _no_owner_quotes(ok)
+
+
+def _no_owner_quotes_row(docs: dict, listed: dict, base: dict | None = None) -> list[str]:
+    """The `no owner quotes` row over a throwaway repo: `docs` is path -> text, `listed` and
+    `base` are the allow list's `files` block now and at the merge-base. Returns the messages."""
+    allow_doc = lambda files: {"files": {f: {"lane": "cut pass", "marker": m} for f, m in files.items()}}  # noqa: E731
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        for name, text in docs.items():
+            (root / name).parent.mkdir(parents=True, exist_ok=True)
+            (root / name).write_text(text, encoding="utf-8")
+        allow = root / "allow.json"
+        allow.write_text(json.dumps(allow_doc(listed)), encoding="utf-8")
+        base_doc = allow_doc(base) if base is not None else None
+        report = Report()
+        with mock.patch.object(records, "ROOT", root), \
+                mock.patch.object(records, "NO_OWNER_QUOTES_ALLOW", allow), \
+                mock.patch.object(strings, "_offender_list_at_merge_base", lambda _rel: (base_doc, "base")):
+            records.check_no_owner_quotes(report)
+    row = [c for c in report.checks if c.check == "no owner quotes"][0]
+    return [f"{f.where} {f.message}" for f in row.findings]
+
+
+def _no_owner_quotes(ok) -> None:
+    print("\nno owner quotes: a new quote fails, a stale entry fails, the list only shrinks")
+    quote = "The owner's words"
+    a, b = "docs/decisions/D001-a.md", "docs/decisions/D002-b.md"
+    ok(_no_owner_quotes_row({a: f"{quote}: x\n"}, {a: [quote]}, {a: [quote]}) == [],
+       "control: a listed marker, list unchanged against the merge-base, is clean")
+    got = _no_owner_quotes_row({a: f"{quote}: x\n", b: f"{quote}: y\n"}, {a: [quote]}, {a: [quote]})
+    ok(len(got) == 1 and b in got[0] and "does not list it" in got[0],
+       "1. a new marker in an unlisted file fails", str(got))
+    got = _no_owner_quotes_row({a: "plain text\n"}, {a: [quote]}, {a: [quote]})
+    ok(len(got) == 1 and "no longer holds it" in got[0],
+       "2. a listed file whose marker is gone fails as a stale entry", str(got))
+    got = _no_owner_quotes_row({a: f"{quote} {quote}\n"}, {a: [quote, quote]}, {a: [quote]})
+    ok(len(got) == 1 and "gained" in got[0],
+       "3. a list that grows against the merge-base fails", str(got))
+    for text in ("the owner's words", "THE OWNER'S WORDS", "Verbatim: x", "VERBATIM: x"):
+        got = _no_owner_quotes_row({a: f"{text}\n"}, {}, {})
+        ok(len(got) == 1 and "does not list it" in got[0],
+           f"4. a marker in other case fails: {text!r}", str(got))
+    got = _no_owner_quotes_row(
+        {"docs/decisions/" + "D" + "-no-owner-quotes.md": f"{quote}\nverbatim:\n",
+         "docs/decisions/" + "D" + "999-no-owner-quotes.md": f"{quote}\n"}, {}, {})
+    ok(got == [], "5. the record file itself is skipped, before and after its number is claimed", str(got))
