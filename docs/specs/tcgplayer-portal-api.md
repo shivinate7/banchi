@@ -3,18 +3,13 @@
 **Status: MAPPED. The whole staged-upload-and-publish chain is measured; the rest is not. Nothing here is built except what
 `server/tcg_export.py` and `server/tcg_import.py` already call.**
 
-This file exists because the map is worth more than the one feature that produced it. It was
-read on 2026-09-06 out of `https://store.tcgplayer.com/admin/scripts/pricing/main-built.<v>.js`
-— **652,827 bytes, served without authentication**, which is why this can be re-read at any
-time and why nothing here required guessing.
+This file exists because the map is worth more than the one feature that produced it. It was read on 2026-09-06 out of `https://store.tcgplayer.com/admin/scripts/pricing/main-built.<v>.js`. It was **652,827 bytes, served without authentication**, which is why this can be re-read at any time and why nothing here required guessing.
 
 **Read §4 before calling anything on this page.** Three of these endpoints destroy inventory.
 
 ## 1. What is authenticated, and how
 
-A cookie session, and nothing else. Checked specifically for anti-forgery: the bundle has **no
-`$.ajaxSetup`, no `beforeSend`, and no `__RequestVerificationToken`** attached to any of these
-calls — its single match for that name is inside a vendored library's ignore list. Measured:
+A cookie session, and nothing else. Checked specifically for anti-forgery: the bundle has **no `$.ajaxSetup`, no `beforeSend`, and no `__RequestVerificationToken`** attached to any of these calls. Its single match for that name is inside a vendored library's ignore list. Measured:
 three POSTs went through on the session cookie alone.
 
 So `server/tcg_export.py`'s `_cookie()` — the whole `Cookie:` header out of `.env` — is
@@ -25,8 +20,7 @@ this repo's `.env` and a route that wipes live inventory.
 
 Every path is under `https://store.tcgplayer.com`. All are form POSTs (`$.post`) unless noted.
 `type` is the string `"Pricing"` or `"Buylist"`. **The bundle cannot tell you this** — it only
-ever passes `window.config["pricing-settings"].type` through, and compares it via
-`type.toUpperCase()` against `"PRICING"`/`"BUYLIST"`. The literal values were read off the live
+ever passes `window.config["pricing-settings"].type` through, and compares it using `type.toUpperCase()` against `"PRICING"`/`"BUYLIST"`. The literal values were read off the live
 page's own inline settings, which is the only place they appear:
 `pricingTypes: { Buylist: 'Buylist', Pricing: 'Pricing' }`. Every call in the staged-upload
 contract carries it — initialize, upload, finalize **and rollback**.
@@ -49,10 +43,7 @@ contract carries it — initialize, upload, finalize **and rollback**.
 | `/admin/product/clearliveinventory` | `{productId}` | clears ONE product, live | read, unexercised |
 | `GET /Admin/Pricing/StagedInventoryUploads` | — | the upload history | read, unexercised |
 
-**`clearstagedinventory` carries no id and no scope** — one field, `type`, and its own dialog
-says *"This will clear all quantities and prices from your Staged inventory."* There is no
-narrowing it to one upload; `rollbackexportcsv` is the per-upload undo and this is the whole
-channel. Its call site registers a success callback and **no `.fail`**, so their own dialog
+**`clearstagedinventory` carries no id and no scope**. One field, `type`, and its own dialog says *"This will clear all quantities and prices from your Staged inventory."* There is no narrowing it to one upload. `rollbackexportcsv` is the per-upload undo, and this is the whole channel. Its call site registers a success callback and **no `.fail`**, so their own dialog
 spins forever on a non-2xx.
 
 **`clearliveinventory` is parameterised by a six-member `clearOption`** read from
@@ -64,8 +55,7 @@ sibling is a different operation, not a variant — it clears a single `productI
 
 ### The staged-price row
 
-`PricingStagedPrice` builds this from each CSV line. Eleven fields, and the byte count of a
-real request corroborates the encoding: 46,560 bytes for 100 rows, ~465 each, which is form
+`PricingStagedPrice` builds this from each CSV line. Eleven fields. The byte count of a real request corroborates the encoding: 46,560 bytes for 100 rows, ~465 each, which is form
 encoding and rules out JSON.
 
 ```
@@ -100,11 +90,7 @@ percentage, not the operation.
 **The operator raised this, 2026-09-06, and it is the reason this file is a spec and not a
 comment.** Recorded as opportunities, none of them designed:
 
-- **A better picture of live / held / sold.** Today the store learns what TCGplayer holds from
-  one CSV download (`reconcile --live`, D87), which is why `live` was 0 on 405 of 443 SKUs
-  until that landed. `productsearch` is the grid's own query and would answer per-SKU, on
-  demand, without a 759-row round trip — and `StagedInventoryUploads` is a history this repo
-  has no equivalent of.
+- **A better picture of live / held / sold.** Today the store learns what TCGplayer holds from one CSV download (`reconcile --live`, D87). That is why `live` was 0 on 405 of 443 SKUs until that landed. `productsearch` is the grid's own query. It would answer per-SKU, on demand, without a 759-row round trip. `StagedInventoryUploads` is a history this repo has no equivalent of.
 - **Wiping and restarting becomes cheap.** `clearstagedinventory`, `clearliveinventory` and
   `rollbackexportcsv` make "put the store back" a call rather than an afternoon. That is
   genuinely useful for rebuilding after a bad import — and it is also the single most
@@ -120,25 +106,19 @@ comment.** Recorded as opportunities, none of them designed:
 
 Rules for anything built on this file:
 
-1. **A destructive endpoint gets its own module-level promise set**, the way
-   `server/tcg_import.py` is separate from `server/tcg_export.py` precisely because the latter
-   promises in writing that it *"cannot cause a charge"*.
+1. **A destructive endpoint gets its own module-level promise set**. Compare `server/tcg_import.py`, which is separate from `server/tcg_export.py` precisely because the latter promises in writing that it *"cannot cause a charge"*.
 2. **No wildcard call site.** Every route this repo calls is a named constant. A helper that
    takes a path as an argument is how `clearliveinventory` gets called by a typo.
 3. **A scope that can widen is not a parameter.** `SCOPE_THIS_UPLOAD` is a constant for this
    reason.
-4. **Never a deny-list.** A guard that blocks named-dangerous calls fails open on the one
-   nobody named — which already happened on 2026-09-06, when a "dry run" interceptor built
-   from the bundle's *function* names (`uploadPrices`, `finalizeUpload`) missed the wire
-   names (`uploadexportcsv`, `finalizeexportcsv`) and a real 100-row upload went through.
+4. **Never a deny-list.** A guard that blocks named-dangerous calls fails open on the one nobody named. That already happened on 2026-09-06, when a "dry run" interceptor built from the bundle's *function* names (`uploadPrices`, `finalizeUpload`) missed the wire names (`uploadexportcsv`, `finalizeexportcsv`). A real 100-row upload went through.
    The upload was survivable only because Staged is not Live.
 
 ## 5. What is not known
 
 - ~~**`movetolive` has never been called from here.**~~ **Corrected 2026-09-06**: it was
   called that day and the table above records the measurement — $23.22 to $750.00 and back on
-  SKU 9189317, 0 errors. This line was written in the same session that then exercised it and
-  was never updated, so the table and this list contradicted each other for a day. Left
+  SKU 9189317, 0 errors. This line was written in the same session that then exercised it. It was never updated, so the table and this list contradicted each other for a day. Left
   struck rather than deleted: a session reading only §5 would have believed the whole publish
   path unexercised and rebuilt it.
 - **The bodies of `clearliveinventory`, `clearstagedinventory`, `updateinventory`,

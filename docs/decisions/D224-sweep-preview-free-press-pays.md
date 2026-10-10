@@ -56,8 +56,7 @@ bucket read within `pipeline/pricehistory.py:HISTORY_TTL_SECONDS` (one hour) of 
 
 That hour is not new. `pipeline/pricehistory.py` already argues for it: short enough that
 nobody reads a stale figure. Long enough that repeating a pass in one sitting costs no
-requests. Reusing it means a sweep resumed within the hour of an interrupt pays for nothing
-it already has. Per D222, that resumed-within-the-hour case is now the
+requests. Reusing it means that a sweep resumed within the hour of an interrupt pays for nothing it already has. Per D222, that resumed-within-the-hour case is now the
 NORMAL one, not the exception.
 
 A SKU with genuinely no sales in a period never looks fresh by this test. An empty series
