@@ -6170,6 +6170,8 @@ def check_selection_unknown_route_keys(checks: Checks) -> None:
     `Selection` fields still pass. Probed on `_resolve_send` (the seam the preflight, waiting
     and identify routes share) and on the three routes, with the money path closed.
     """
+    import inspect
+    import re
     import socket
     import subprocess
     import urllib.request
@@ -6177,6 +6179,7 @@ def check_selection_unknown_route_keys(checks: Checks) -> None:
 
     from cli import cmd_identify
     from identify import batch as identify_batch
+    from pipeline import selection as selection_mod
     from server import pipeline_routes
 
     from harness.tests.t7.common import capture_payload, isolated_home
@@ -6220,6 +6223,7 @@ def check_selection_unknown_route_keys(checks: Checks) -> None:
         ("do_pipeline_preflight", pipeline_routes.do_pipeline_preflight),
         ("do_pipeline_waiting", pipeline_routes.do_pipeline_waiting),
         ("do_pipeline_identify", pipeline_routes.do_pipeline_identify),
+        ("do_pipeline_crop_preview", pipeline_routes.do_pipeline_crop_preview),
     )
 
     saved = {
@@ -6289,6 +6293,58 @@ def check_selection_unknown_route_keys(checks: Checks) -> None:
                     checks.ok(True, f"_resolve_send still accepts the selection term {sorted(term)}")
                 except pipeline_routes.PipelineRefusal as refusal:
                     checks.ok(False, f"_resolve_send still accepts {sorted(term)}", f"refused: {refusal}")
+
+            # `indices` and `scopes` keep `parse`'s own named refusal, never the generic stray-key one.
+            for gone in ("indices", "scopes"):
+                try:
+                    selection_mod.parse({gone: [1]})
+                    named = None
+                except selection_mod.SelectionError as err:
+                    named = str(err)
+                checks.ok(named is not None, f"parse refuses {gone} by name")
+                for name, call in (("_resolve_send", pipeline_routes._resolve_send), *routes):
+                    try:
+                        call({"confirm": True, gone: [1]})
+                        checks.ok(False, f"{name} refuses {gone}", "it answered")
+                    except pipeline_routes.PipelineRefusal as refusal:
+                        checks.equal(
+                            (refusal.status, refusal.code, str(refusal)),
+                            (HTTPStatus.BAD_REQUEST, "selection_invalid", named),
+                            f"{name} gives {gone} the message parse gives",
+                        )
+                    except Exception as failure:  # noqa: BLE001
+                        checks.ok(False, f"{name} refuses {gone}", f"it tried to run: {failure!r}")
+
+            # `_ROUTE_KEYS` is exactly the keys the handlers read, read from their source.
+            def drift(route_keys):
+                read = set()
+                for fn in (
+                    pipeline_routes._resolve_send,
+                    pipeline_routes._max_edge,
+                    pipeline_routes._identify_flags,
+                    pipeline_routes.do_pipeline_preflight,
+                    pipeline_routes.do_pipeline_waiting,
+                    pipeline_routes.do_pipeline_identify,
+                    pipeline_routes.do_pipeline_crop_preview,
+                ):
+                    read |= set(re.findall(r'payload\.get\(\s*"(\w+)"', inspect.getsource(fn)))
+                return sorted(read - set(route_keys)), sorted(set(route_keys) - read)
+
+            checks.equal(
+                drift(pipeline_routes._ROUTE_KEYS),
+                ([], []),
+                "_ROUTE_KEYS holds every key a handler reads and no key none reads",
+            )
+            checks.equal(
+                drift(pipeline_routes._ROUTE_KEYS - {"offset"}),
+                (["offset"], []),
+                "and the reconcile goes red when _ROUTE_KEYS lacks a key a handler reads",
+            )
+            checks.equal(
+                drift(pipeline_routes._ROUTE_KEYS | {"ghost"}),
+                ([], ["ghost"]),
+                "and goes red when _ROUTE_KEYS holds a key no handler reads",
+            )
         finally:
             subprocess.Popen = saved["popen"]
             cmd_identify.batch.run_batch = saved["run_batch"]

@@ -843,7 +843,7 @@ def case_the_waiting_read_refuses_only_for_an_unreadable_claim() -> None:
     conn.commit()
     conn.close()
     try:
-        routes.do_pipeline_waiting({})
+        routes.do_pipeline_waiting({"keys": ["6/1"]})
         check(False, "do_pipeline_waiting refuses over an unreadable claim (it returned instead)")
     except routes.PipelineRefusal as exc:
         check(
