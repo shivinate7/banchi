@@ -165,13 +165,15 @@ def remove_old_agent(label: str) -> None:
     """Unload and delete the `com.pkmnscan.*` agent that `label` (a `com.banchi.*`) replaced.
 
     Each agent's `--remove` calls it, so one press leaves nothing under the old name. The plist
-    goes only when bootout answered 0 or 113 (service not found); any other code keeps it.
+    goes only when bootout answered 0, 3 or 113; any other code keeps it. 3 and 113 mean the
+    label is not loaded in this user's gui domain (this Mac answers 3). Every installer here
+    bootstraps into gui/<uid> only, so a job loaded by hand into user/ or system/ is out of scope.
     """
     old = label.replace("com.banchi.", "com.pkmnscan.", 1)
     if old == label:
         return
     done = subprocess.run(["launchctl", "bootout", "gui/%d/%s" % (os.getuid(), old)], capture_output=True)
-    if done.returncode not in (0, 113):
+    if done.returncode not in (0, 3, 113):
         print("%s: launchctl bootout failed (%s); its plist is kept." % (old, done.returncode), file=sys.stderr)
         return
     (Path.home() / "Library" / "LaunchAgents" / (old + ".plist")).unlink(missing_ok=True)
