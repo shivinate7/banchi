@@ -3439,7 +3439,8 @@ COMPONENTS = [
                         "is still standing in is left alone, and the branch is never touched. "
                         "On WorktreeRemove it also runs `git worktree remove` without --force, "
                         "because worktree-create.sh made the tree, then `git branch -d` on its "
-                        "`worktree-*` branch. A tree with uncommitted work, or one another "
+                        "`worktree-*` branch, or `-D` when the branch is already in the local "
+                        "origin/main (no upstream to compare with). A tree with uncommitted work, or one another "
                         "session stands in (janitor's `IN_USE` exit), stays on disk and the "
                         "hook exits 1. A supervisor whose tree has just been "
                         "removed is findable only from the process table; that dead-rooted "
@@ -3452,10 +3453,24 @@ COMPONENTS = [
             "worktree-create.sh": {
                 "does": "the WorktreeCreate hook. Makes every Claude Code worktree with a plain "
                         "`git worktree add` at `.claude/worktrees/<name>` on `worktree-<name>`, "
-                        "cut from a fresh origin/main, so githooks/post-checkout provisions it. "
+                        "cut from a fresh origin/main with --no-track (no shared .git/config write, so parallel "
+                        "Agents do not race on its lock; the branch has no upstream), so githooks/post-checkout provisions it. "
                         "Claude Code's own creation never fires post-checkout. Prints only the "
                         "path on stdout; exits non-zero only when git cannot make the tree.",
                 "governed_by": ["D18"],
+            },
+            "worktree-create-selftest.sh": {
+                "does": "`make worktree-create-selftest`: runs worktree-create.sh for four "
+                        "names at once, five rounds, in a throwaway repo with an origin. Every "
+                        "tree and branch must exist and no config.lock may remain. Red on the "
+                        "hook without --no-track.",
+                "governed_by": ["D18"],
+            },
+            "session-teardown-selftest.sh": {
+                "does": "`make session-teardown-selftest`: session-teardown.sh's branch step in "
+                        "a throwaway repo. A worktree-* branch already in the local origin/main "
+                        "is deleted, an unmerged one is kept.",
+                "governed_by": ["D18", "D138"],
             },
             "ignore-check.sh": {"does": "the other half of D47: `git check-ignore` over every path "
                                         "a worktree provisions, asserting each is ignored WHATEVER "

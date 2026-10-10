@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint typecheck unit venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint typecheck unit venv launch-config worktree-setup worktree-provision-selftest worktree-create-selftest session-teardown-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -1280,6 +1280,8 @@ janitor-install:
 	@echo "claude-settings' install.sh owns ~/.claude/bin. This target copies nothing."
 	@echo "Banchi's hooks run scripts/session-teardown.sh and scripts/reap.py from the repo."
 
+.PHONY: janitor janitor-selftest janitor-install serve-selftest sync-selftest ci-check ci-check-product ci-check-static ci-check-guards-1 ci-check-guards-2
+
 # IS THE LAN URL STILL GOOD? The owner reaches this product from a phone at
 # `http://banchi.lan:8000`, and nothing in this repo knows that name — the DHCP reservation
 # and the DNS record are theirs, on their UniFi (D43). What this checks is the four things on
@@ -1296,13 +1298,31 @@ janitor-install:
 # answers from the tree alone, and a row that resolves DNS and expects a server to be up would
 # go red on a train and in every worktree. A check that fails for reasons unrelated to the
 # commit is one people learn to ignore.
-.PHONY: janitor janitor-selftest janitor-install serve-selftest sync-selftest ci-check ci-check-product ci-check-static ci-check-guards-1 ci-check-guards-2
-
 .PHONY: lan-check
 # Is the LAN URL still good? DNS, both servers, and a real write. Reaches the
 # network, so it never gates a commit.
 lan-check:
 	@python3 scripts/lan-check.py
+
+# Four worktree-create.sh creations at once must all make a tree (the shared config lock).
+.PHONY: worktree-create-selftest
+worktree-create-selftest:
+	@python3 scripts/guard-scope.py classify --target worktree-create-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
+		bash scripts/worktree-create-selftest.sh; \
+	else \
+		echo "worktree-create-selftest: SKIPPED — nothing in this branch reaches scripts/worktree-create.sh. BANCHI_GUARD_SCOPE=all runs it anyway."; \
+	fi
+
+# session-teardown.sh deletes a merged worktree branch (no upstream to compare with) and keeps an unmerged one.
+.PHONY: session-teardown-selftest
+session-teardown-selftest:
+	@python3 scripts/guard-scope.py classify --target session-teardown-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
+		bash scripts/session-teardown-selftest.sh; \
+	else \
+		echo "session-teardown-selftest: SKIPPED — nothing in this branch reaches scripts/session-teardown.sh. BANCHI_GUARD_SCOPE=all runs it anyway."; \
+	fi
 
 # THE SERVER, DETACHED. ONE PROCESS: the API and the built app on one port (D138), restarting
 # itself when you edit Python and rebuilding the app when you edit a screen.
