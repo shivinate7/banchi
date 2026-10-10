@@ -287,6 +287,15 @@ def seed_legacy_store(home: Path, box: int, count: int) -> Dict[str, str]:
     return digests
 
 
+def pokemon_answer(name: str) -> dict:
+    """A full Pokemon answer: every key `pokemon_card_v1` requires, read from its schema."""
+    from identify import prompt
+
+    answer = {key: "x" for key in prompt.profile("pokemon_card_v1").schema["required"]}
+    answer.update(name=name, number="1", printed_total="9", finish="normal", confidence="high")
+    return answer
+
+
 def _unname(home: Path) -> None:
     """Strip every name and set the stamp back, the way an older build leaves a store.
 
