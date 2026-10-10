@@ -787,15 +787,6 @@ def check_cache_engines(checks: Checks) -> None:
     )
 
 
-def _known_defect(checks: Checks, passed: bool, label: str, why: str) -> None:
-    """A case the code fails today. It is shown as KNOWN DEFECT and is not counted as a
-    failure, so the suite still reports the rest. It turns into a plain check once fixed."""
-    if passed:
-        checks.ok(True, label)
-    else:
-        checks.note(f"KNOWN DEFECT: {label}. {why}")
-
-
 def _outcome(fn):
     """The return value of `fn`, or the exception it raised, so a crash is a value to assert on."""
     try:
@@ -845,17 +836,16 @@ def check_cache_position_key(checks: Checks) -> None:
     checks.equal(cache.reusable("3/2", "sha-A"), None, "(c) the same photo at another slot misses: the answer does not follow the photo")
     checks.equal(cache.reusable("4/1", "sha-A"), None, "(c) a reallocated box with the same index misses")
 
-    # (c, human-cleared) a cleared answer is returned whatever the photo says (store/cache.py
-    # `reusable`, and `put`'s permanence rule). Read against D36 it returns Alpha's answer for a
-    # different card in a reallocated slot. The code's docstring calls that permanence. Owner's call.
+    # (c, permanence) a cleared answer IS returned for a new photo at the same position. The key
+    # is the position, and a box id or stored index is never reused (D145), so a different photo
+    # there is a re-shot of the same card. Permanence is correct here, and this pins it.
     cleared = cache_mod.Cache.parse({})
     cleared.put("3/1", said("Human"), "sha-A", "fp", engine=haiku)
     cleared.entries["3/1"].cleared_by_human = True
-    _known_defect(
-        checks,
-        cleared.reusable("3/1", "sha-Z") is None,
-        "(c) a human-cleared answer does not return for a different card in a reallocated slot",
-        "reusable returns a cleared entry whatever the photo says (permanence, D36 as briefed). Owner's call.",
+    held = cleared.reusable("3/1", "sha-Z")
+    checks.ok(
+        held is not None and held.identification["name"] == "Human",
+        "(c, permanence) a cleared answer is returned for a new photo at the same position (a re-shot of the same card)",
     )
 
     # (d) a corrupt entry is a miss, never a crash and never an answer.
@@ -955,6 +945,122 @@ def check_cache_position_key(checks: Checks) -> None:
     checks.equal(cleared.get("3/1").identification, {"name": "Human"}, "(e) a malformed human-cleared entry is not overwritten by a paid put")
     checks.equal(cleared.get("3/1").photo_sha256, "sha-A", "(e) and keeps its photo digest")
     checks.ok(reported is not None, "(e) and the put reports the disagreement instead of writing")
+
+    # (c, undo) the one path that reuses an index is undo of the newest capture (D10, `do_delete_card`).
+    # The position's cache entry goes with the card, so a new capture at the released index must not
+    # inherit a cleared answer that belonged to the deleted card.
+    from server import capture_server
+    from harness.tests.t7.common import capture_payload
+
+    with isolated_home():
+        capture_server.do_capture(capture_payload(5))
+        with Store().write() as snapshot:
+            snapshot.cache.entries["5/1"] = cache_mod.CacheEntry(
+                identification=said("Human"), photo_sha256="sha-A", prompt_fingerprint="fp",
+                at="t", cleared_by_human=True,
+            )
+        capture_server.do_delete_card(5, 1)
+        checks.equal(Store().read().cache.get("5/1"), None, "(c, undo) undoing the newest capture drops its cache entry with it")
+        capture_server.do_capture(capture_payload(5))
+        checks.ok("5/1" in Store().read().inventory.cards, "(c, undo) the released index is reused by the next capture")
+        checks.equal(
+            Store().read().cache.reusable("5/1", "sha-new"), None,
+            "(c, undo) a new capture at the released index does not inherit the deleted card's cleared answer",
+        )
+
+
+def check_refused_hit_is_claimed(checks: Checks) -> None:
+    """A cached answer the run's parser refuses is a miss, and a miss is CLAIMED
+    (`store/submissions.py` `claim_or_refuse`). Outcome protected: the owner never pays twice for
+    one card. The second press runs INSIDE the first press's paid read, while the first press's
+    claim is live, so the overlap it meets is the one a concurrent press would meet."""
+    from cli import __main__ as cli_entry, cmd_identify
+    from store.session import Store
+
+    haiku = cache_mod.ENGINE_HAIKU
+    pokemon_required = prompt.profile("pokemon_card_v1").schema["required"]
+
+    def said(name):
+        answer = {key: "x" for key in pokemon_required}
+        answer.update(name=name, number="1", printed_total="9", finish="normal", confidence="high")
+        return answer
+
+    checks.note("")
+    checks.note("REFUSED HIT IS CLAIMED — a refused cached answer is held like a miss (one paid read per card)")
+
+    def claim_case(label, positions, refused):
+        with isolated_home() as home:
+            caps = Path(home) / "claim-caps"
+            caps.mkdir()
+            digests = {}
+            for position in positions:
+                # Colours far apart: flat images one step apart can encode to identical bytes, and
+                # identical bytes are one photograph, which the store refuses as a second card.
+                colour = [(30, 120, 200), (200, 40, 40)][position - 1]
+                identify_images.Image.new("RGB", (64, 89), colour).save(caps / f"4-00{position}.jpg", "JPEG")
+                (caps / f"4-00{position}.json").write_text(
+                    json.dumps({"box": 4, "position": position, "game": "pokemon"}), "utf-8"
+                )
+                digests[position] = identify_images.sha256_of(caps / f"4-00{position}.jpg")
+            with Store().write() as snapshot:
+                for position in refused:
+                    # `{}` is a mapping the store accepts and the Pokemon parser refuses.
+                    snapshot.cache.put(f"4/{position}", {}, digests[position], "fp", engine=haiku)
+
+            def press():
+                lines: list = []
+                with quiet():
+                    code = cmd_identify.run(
+                        cli_entry.build_parser().parse_args(["identify", str(caps), "--engine", "haiku"]),
+                        lines.append,
+                    )
+                return code, lines
+
+            sent: list = []
+            seen: dict = {"nested": False, "claimed": None}
+            nested: dict = {}
+
+            def fake_run_batch(requests, log=None, on_submit=None):
+                sent.extend(request.custom_id for request in requests)
+                if not seen["nested"]:
+                    seen["nested"] = True
+                    seen["claimed"] = sorted(key for sub in Store().read().submissions.live() for key in sub.keys)
+                    nested["code"], nested["lines"] = press()
+                return batch.BatchRun(outcomes={
+                    request.custom_id: batch.Outcome(
+                        request.custom_id, batch.SUCCEEDED,
+                        identification=prompt.parse(said("Pikachu"), request.strategy),
+                    )
+                    for request in requests
+                })
+
+            real_run_batch = cmd_identify.batch.run_batch
+            cmd_identify.batch.run_batch = fake_run_batch
+            try:
+                first_code, _ = press()
+            finally:
+                cmd_identify.batch.run_batch = real_run_batch
+
+            every = [f"4/{p}" for p in positions]
+            checks.equal(
+                seen["claimed"], sorted(every),
+                f"{label}: while press 1 pays, its claim holds every card it pays for, refused hit included",
+            )
+            checks.equal(
+                nested.get("code"), 1,
+                f"{label}: a second press over the same cards is refused by the claim",
+            )
+            checks.ok(
+                "already claimed" in "\n".join(nested.get("lines", [])),
+                f"{label}: and says so, naming the claim",
+            )
+            checks.equal(
+                sorted(sent), sorted(cmd_identify._custom_id(key) for key in every),
+                f"{label}: exactly one paid read per card across both presses",
+            )
+
+    claim_case("a refused hit alone", [1], [1])
+    claim_case("a refused hit beside a miss", [1, 2], [1])
 
 
 # ------------------------------------------------------------------------ the model verdict, the promo census, Prepare
@@ -1167,6 +1273,7 @@ CHECKS = (
     check_agreement_is_the_same_printing,
     check_cache_engines,
     check_cache_position_key,
+    check_refused_hit_is_claimed,
     check_model_ready_hashes_once,
     check_promo_census,
     check_prepare_clears_stale_part,
