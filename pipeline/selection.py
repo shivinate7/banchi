@@ -477,6 +477,16 @@ def parse(payload: Dict[str, Any]) -> Selection:
             "of boxes — name the drawers' cards with `keys`, or the whole lot with `state`.",
         )
 
+    # A null term is refused, never read as absent: an all-null payload would otherwise select
+    # every photograph, and a press must not pay for cards it did not name. "Any" is the key left out.
+    for term in ("paths", "state", "box", "bid", "section", "game", "since", "keys", "run"):
+        if term in payload and payload[term] is None:
+            raise SelectionError(
+                "selection_invalid",
+                f"The {term} term is null. A null term does not mean any. Leave the key out "
+                "to leave that term unconstrained.",
+            )
+
     raw_paths = payload.get("paths")
     paths: Tuple[str, ...] = ()
     if raw_paths is not None:
