@@ -52,6 +52,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Optional
@@ -153,10 +154,10 @@ def machine_dir() -> Path:
                     shutil.move(str(item), str(new / item.name))
             kept = home / (".pkmnscan.old-" + time.strftime("%Y%m%dT%H%M%S"))
             old.rename(kept)
-            print("moved %s into %s; the rest is kept in %s" % (old, new, kept))
+            print("moved %s into %s; the rest is kept in %s" % (old, new, kept), file=sys.stderr)
         os.symlink(new, old)
     except OSError as err:
-        print("could not move %s into %s: %s" % (old, new, err))
+        print("could not move %s into %s: %s" % (old, new, err), file=sys.stderr)
     return new
 
 
@@ -171,7 +172,7 @@ def remove_old_agent(label: str) -> None:
         return
     done = subprocess.run(["launchctl", "bootout", "gui/%d/%s" % (os.getuid(), old)], capture_output=True)
     if done.returncode not in (0, 113):
-        print("%s: launchctl bootout failed (%s); its plist is kept." % (old, done.returncode))
+        print("%s: launchctl bootout failed (%s); its plist is kept." % (old, done.returncode), file=sys.stderr)
         return
     (Path.home() / "Library" / "LaunchAgents" / (old + ".plist")).unlink(missing_ok=True)
 
