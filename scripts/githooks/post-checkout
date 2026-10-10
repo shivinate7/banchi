@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Provisions a NEW worktree the moment `git worktree add` makes it.
+#
+# The SessionStart hook (scripts/worktree-guard.sh) covers a session that STARTS in a
+# worktree. It misses a worktree made mid-session, by hand or by a tool, because no
+# session starts there. Git runs this hook after every `git worktree add`, with an
+# all-zero previous HEAD, so this calls the same script for that case and no other.
+# A branch switch or a file checkout passes a real previous HEAD and runs nothing.
+#
+# Not a gate: post-checkout cannot stop a commit, so D18 (writers never gate) holds.
+# Fails open: every exit is 0, so a setup bug never makes `git worktree add` look failed.
+
+[ "${1:-}" = "0000000000000000000000000000000000000000" ] || exit 0
+[ -f .git ] || exit 0
+[ -f scripts/worktree-guard.sh ] || exit 0
+bash scripts/worktree-guard.sh </dev/null || true
+exit 0
