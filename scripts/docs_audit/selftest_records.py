@@ -513,6 +513,15 @@ def _no_owner_quotes(ok) -> None:
     ok(got == [], "11. a renamed listed file is re-keyed, not growth", str(got))
     got = _no_owner_quotes_row(moved, {b: [quote]}, {a: [quote]}, renames=[])
     ok(len(got) == 1 and "gained" in got[0], "11b. growth is counted per file: with no rename pair the same move is growth", str(got))
+    for text in ("The owner's word, \"motion is better than none\"", "The owner's word.** \"The suite stays\"",
+                 "Per the owner's word (\"Both\")", "The owner's word was \"keep both\"",
+                 "The request (verbatim): \"New 'missing' state\""):
+        got = _no_owner_quotes_row({a: f"{text}\n"}, {}, {})
+        ok(len(got) >= 1 and all("does not list it" in g for g in got), f"13. a quote lead is found: {text!r}", str(got))
+    for text in ("Merge on the owner's word, then ship.", "The owner's word was needed first.",
+                 "Merge on the owner's word (see the list).", "The owner's word.** Then merge."):
+        got = _no_owner_quotes_row({a: f"{text}\n"}, {}, {})
+        ok(got == [], f"13b. no quote after it stays quiet: {text!r}", str(got))
     printed, after = _prune_no_owner_quotes()
     ok("no owner quotes" in printed and after.get("files") == {},
        "12. offenders-prune deletes a stale entry from the no-owner-quotes list", f"{printed!r} {after}")
