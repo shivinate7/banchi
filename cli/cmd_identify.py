@@ -183,6 +183,28 @@ def _selection_from(args) -> selection_mod.Selection:
     )
 
 
+def _empty_flag(args) -> Optional[str]:
+    """The first selection flag given with an empty value, or None.
+
+    AN EMPTY VALUE IS NOT AN ABSENT FLAG. `--since "$SITTING"` with the variable unset reaches
+    `_selection_from` as "", which its truthiness tests read as not given, so a press narrowed
+    to one bound would silently cover the whole box. Refused before any work, exit 2.
+    """
+    for name in ("state", "game", "since", "run"):
+        value = getattr(args, name, None)
+        if value is not None and not str(value).strip():
+            return name
+    for name in ("box", "bid", "keys"):
+        for chunk in getattr(args, name, None) or ():
+            if not any(part.strip() for part in str(chunk).split(",")):
+                return name
+    if getattr(args, "section", None) == 0:
+        return "section"
+    if any(not str(p).strip() for p in getattr(args, "capture_dir", None) or ()):
+        return "path"
+    return None
+
+
 def _numbers(raw, term: str):
     """`--box 3 --box 5` and `--box 3,5` are the same selection. One flag, both habits.
 
@@ -936,6 +958,10 @@ def run(args, say) -> int:
     # 114.96 ms (D163's measurements). A filter applied after the hash loop would scan the same
     # files and hash 1,857 of them for nothing; a filter applied after the prepare pass would
     # be three and a half minutes of nothing. D163 is the same lesson one step down.
+    empty = _empty_flag(args)
+    if empty is not None:
+        say(f"refused: the {empty} given is empty, so it would narrow nothing. Nothing was run.")
+        return 2
     try:
         selection = _selection_from(args)
     except selection_mod.SelectionError as exc:
