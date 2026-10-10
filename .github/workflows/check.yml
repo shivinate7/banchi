@@ -144,7 +144,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # SIX SHARDS IN PARALLEL, THE SLOWEST (guards-1) ABOUT 240s AND `timeout-minutes` 9 (OVER 2x THAT), AND ONE JOB NAMED `check` THAT ANSWERS FOR THEM (owner's word,
+  # SIX SHARDS IN PARALLEL, NONE MUCH OVER 150s (`timeout-minutes` IS OVER 2x THE SLOWEST SHARD), AND ONE JOB NAMED `check` THAT ANSWERS FOR THEM (owner's word,
   # 2026-09-28; D161, amended). The serial `make ci-check` took 600s on run 36509895299. The
   # shards' recipes together are exactly `ci-check`'s, and `make docs-audit`'s `check registry`
   # row fails when they are not. Each shard installs the same way and keeps D161's order, product
