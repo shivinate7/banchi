@@ -86,7 +86,7 @@ make token-literal-check  # a CSS literal equal to a design token, ratcheted per
 make catalog-refresh  # re-clone pokemon-tcg-data into vendor/. Writes. ARGS=--dry-run.
 make catalog-index  # build catalog.sqlite. Gitignored generator.
 make catalog-index-selftest  # that builder on a fixture. Not in `make check`.
-make catalog-mirror # dry run only. ARGS=--dry-run samples over HTTP HEAD.
+make catalog-mirror # fills the image mirror (about 16.7 GB). ARGS=--dry-run samples over HTTP HEAD.
 ./banchi scan     <capture-dir>   # code cards only: read QRs into the ledger. Free.
 ./banchi identify <capture-dir>   # free read first, then the paid second look for the rest. Costs money. --dry-run first.
                                    #   --engine haiku is the paid read alone.

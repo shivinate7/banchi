@@ -718,13 +718,12 @@ catalog-index:
 catalog-index-selftest:
 	@python3 scripts/catalog-index-selftest.py
 
-# BUILD-ORDER STEP 9, PIECE 3, DRY RUN ONLY AS SHIPPED: the manifest is derived from the
-# vendored snapshot (no network) and the downloader is resumable and rate-limited, but
-# nothing here has ever filled the mirror for real on this checkout — see the decision entry
-# this step wrote. `ARGS=--dry-run` HEAD-samples up to 200 images and prints the manifest's
+# BUILD-ORDER STEP 9, PIECE 3: the manifest is derived from the vendored snapshot (no
+# network) and the downloader is resumable and rate-limited. The fill is the owner's command,
+# run by hand; nothing runs it by itself (D15, catalog vendored not fetched). `ARGS=--dry-run` HEAD-samples up to 200 images and prints the manifest's
 # file count and the byte total extrapolated from the sample, writing nothing under the
 # mirror destination (`BANCHI_IMAGE_MIRROR`, default `harness/images/`, D15). Bare
-# `make catalog-mirror` fills it for real, for whenever that becomes the owner's call.
+# `make catalog-mirror` fills it for real (about 16.7 GB).
 catalog-mirror:
 	@python3 scripts/catalog-image-mirror.py $(ARGS)
 

@@ -30,9 +30,8 @@ or disappear", so the downloader is the one piece of this step built to survive 
         snapshot, which is not the destination.
 
     python3 scripts/catalog-image-mirror.py
-        Fills the mirror for real. NOT RUN BY THIS STEP — see the decision entry for why: the
-        dry run's own extrapolation is large enough (~16.7 GB) that filling it is the owner's
-        call, on their own disk, not a default a `make` target reaches for silently.
+        Fills the mirror for real (~16.7 GB). The fill is the owner's command, run by hand
+        (D15, catalog vendored not fetched). Nothing runs it by itself; `--dry-run` only samples.
 """
 
 from __future__ import annotations
