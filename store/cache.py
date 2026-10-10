@@ -103,27 +103,13 @@ class CacheEntry:
         return self.confidence == WEAK_CONFIDENCE
 
 
-def _fits_a_profile(ident: dict) -> bool:
-    """True when `ident` has every key some prompt profile's schema requires — the rule
-    `identify.prompt.parse` applies, read from the schema and not copied. An entry names no
-    strategy, so any game's profile may vouch for it."""
-    from identify import prompt  # late: prompt imports pipeline, which reaches the store
-
-    return any(
-        all(key in ident for key in found.schema["required"])
-        for found in prompt.PROFILES.values()
-        if found is not None
-    )
-
-
 def _parse_entry(key: str, record: dict) -> Optional[CacheEntry]:
     """One paid answer from its stored record, or None for a shape that will not
     construct — re-reading such a card is cheap, and the rule is the same for a JSON
     record and a database row."""
     if str(key).startswith("_") or not isinstance(record, dict):
         return None
-    ident = record.get("identification")
-    if not isinstance(ident, dict) or not _fits_a_profile(ident):
+    if not isinstance(record.get("identification"), dict):
         return None
     known = {k: v for k, v in record.items() if k in CacheEntry.__annotations__}
     try:

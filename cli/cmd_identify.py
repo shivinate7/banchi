@@ -810,6 +810,17 @@ def _adopt_cached(item: Item, entry, fingerprints: Dict[str, str]) -> None:
     )
 
 
+def cached_refusal(item: Item, entry) -> Optional[str]:
+    """Why this run's own parser refuses a cached answer, or None when it accepts it. The store
+    cannot know a card's game; only the run holds its strategy, so only the run can judge a hit.
+    A refused answer is a miss: the caller leaves the card pending and names the refusal."""
+    try:
+        prompt.parse(entry.identification, item.strategy or prompt.DEFAULT_PROFILE)
+    except (prompt.MalformedIdentification, LookupError) as exc:
+        return str(exc)
+    return None
+
+
 def record_adopted(writable, item: Item, run_name: Optional[str] = None) -> bool:
     """Record one item's answer on its card. THE ONE HOME of the write a paid press, a press over
     cached answers and the background reader's adoption all make. Parses a cached item (its
@@ -1054,6 +1065,7 @@ def run(args, say) -> int:
     )
 
     matcher_read = 0
+    refused_cached: List[str] = []
     for item in items:
         # THE DIGEST, NOT THE PREPARED BYTES. This read `item.prepared.sha256` and skipped on
         # `prepared is None`; under hash-first that test would have skipped every card whose
@@ -1074,6 +1086,10 @@ def run(args, say) -> int:
             continue
         if item.key in stale_targets:
             item.retry_reasons.append("reidentify-stale")
+            continue
+        why = cached_refusal(item, entry)
+        if why is not None:
+            refused_cached.append(f"{item.key}: {why}")
             continue
         _adopt_cached(item, entry, fingerprints)
 
@@ -1192,6 +1208,8 @@ def run(args, say) -> int:
     # directory was reported to the operator as a CACHE HIT, on the one line they read to
     # decide whether the run is worth paying for. There is now a value that means cache hit.
     say(f"cache hits      {len([i for i in items if i.stage == STAGE_CACHED])}")
+    for line in refused_cached:
+        say(f"cache refused   {line}; read again")
     if matcher_read:
         # THE PAID PRESS'S ASK. These cards were answered by the free reader. A paid press skips
         # them unless `--reread-matcher` asks to buy them again; either way the figure is here, so
@@ -1419,8 +1437,13 @@ def run(args, say) -> int:
                 entry = store.read().cache.reusable(
                     item.key, item.photo_sha256 or "", reread_matcher=reread_matcher
                 )
-                if entry is not None:
-                    _adopt_cached(item, entry, fingerprints)
+                if entry is None:
+                    continue
+                why = cached_refusal(item, entry)
+                if why is not None:
+                    say(f"cache refused   {item.key}: {why}; read again")
+                    continue
+                _adopt_cached(item, entry, fingerprints)
             to_send = [i for i in items if i.stage == STAGE_PENDING]
         elif len(claim.keys) != len(to_send):
             # NARROWED, NOT REFUSED. Same cause as above and a partial version of it: the cards
@@ -1429,6 +1452,7 @@ def run(args, say) -> int:
             # meaning rests on, asserted here rather than assumed.
             held = set(claim.keys)
             adopted = 0
+            unclaimed: set = set()
             for item in list(to_send):
                 if item.key in held:
                     continue
@@ -1437,9 +1461,14 @@ def run(args, say) -> int:
                 )
                 if entry is None:
                     continue
+                why = cached_refusal(item, entry)
+                if why is not None:
+                    say(f"cache refused   {item.key}: {why}; not in this claim, so read on the next press")
+                    unclaimed.add(item.key)
+                    continue
                 _adopt_cached(item, entry, fingerprints)
                 adopted += 1
-            to_send = [i for i in items if i.stage == STAGE_PENDING]
+            to_send = [i for i in items if i.stage == STAGE_PENDING and i.key not in unclaimed]
             say("")
             say(
                 f"claim           {len(claim.keys)} card(s) held under {claim.receipt}; "
