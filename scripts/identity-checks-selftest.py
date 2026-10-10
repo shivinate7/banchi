@@ -603,6 +603,30 @@ def case_limited_then_full_pass_reaches_every_photo() -> None:
        f"{sum(reachable)} of {len(placed)}")
 
 
+def case_kill_between_photo_and_sidecar_leaves_sidecar_reachable() -> None:
+    print("cards photos --write — a kill after the photo moved, before its sidecar, loses nothing")
+    home = fresh_home()
+    from store import photos
+
+    placed = seed_legacy_photographs(2)
+    cid, box, index, blob = placed[0]
+    legacy = photos.legacy_path(box, index, home)
+    sidecar = legacy.with_suffix(photos.SIDECAR_SUFFIX)
+    sidecar.write_text("{}")
+    # The interrupted run: the photograph is at its name, its sidecar is still at the old address.
+    target = photos.path(cid, home)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(blob)
+    legacy.unlink()
+    run_cards("photos", write=True, limit=None)
+    stamped = stamped_at(home)
+    found = photos.find_sidecar(cid, box, index, relocated=True, home=home)
+    ok(found is not None or not stamped,
+       "the sidecar is reachable once relocated, or the run refused to stamp",
+       f"stamped={stamped}, find_sidecar(relocated=True)={found}, "
+       f"legacy sidecar still there={sidecar.is_file()}")
+
+
 TESTS = [
     test_long_name,
     test_denominator_outlier,
@@ -620,6 +644,7 @@ TESTS = [
     case_negative_limit_is_refused,
     case_write_limit_zero_moves_nothing_and_stamps_nothing,
     case_limited_then_full_pass_reaches_every_photo,
+    case_kill_between_photo_and_sidecar_leaves_sidecar_reachable,
 ]
 
 
