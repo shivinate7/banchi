@@ -721,7 +721,7 @@ def check_cache_engines(checks: Checks) -> None:
     checks.note("")
     checks.note("CACHE ENGINES — matcher never replaces, Haiku replaces a matcher entry")
     haiku, matcher = cache_mod.ENGINE_HAIKU, cache_mod.ENGINE_MATCHER
-    said = lambda name: {"name": name, "number": "1", "printed_total": "9", "confidence": "high"}  # noqa: E731
+    said = lambda name: {"name": name, "number": "1", "printed_total": "9", "finish": "normal", "confidence": "high"}  # noqa: E731
 
     def held(engine, name, cleared=False):
         cache = cache_mod.Cache.parse({})
@@ -867,7 +867,7 @@ def check_cache_position_key(checks: Checks) -> None:
     )
     checks.equal(len(cache_mod.Cache.parse({"_meta": {"x": 1}})), 0, "(d) a `_`-prefixed key is metadata, never an entry")
     for label, record in (("null", None), ("a string", "junk"), ("a list", ["x"])):
-        outcome = _outcome(lambda: cache_mod.Cache.parse({"3/1": record}).reusable("3/1", "sha-A"))
+        outcome = _outcome(lambda record=record: cache_mod.Cache.parse({"3/1": record}).reusable("3/1", "sha-A"))
         checks.ok(outcome is None, f"(d) a corrupt entry ({label}) is a miss, not a crash")
     kept = cache_mod.Cache.parse({"3/0": None, "3/1": {"identification": said("Ok"), "photo_sha256": "sha-A", "prompt_fingerprint": "f", "at": "t"}})
     checks.equal(list(kept.entries), ["3/1"], "(d) a corrupt row is skipped and the rest of the store still reads")
@@ -885,7 +885,7 @@ def check_cache_position_key(checks: Checks) -> None:
     for label, answer in (("an empty mapping", {}), ("a name only", {"name": "A"}), ("an unrelated key", {"foo": 1})):
         checks.raises(
             prompt.MalformedIdentification,
-            lambda: prompt.parse(answer, "pokemon_card_v1"),
+            lambda answer=answer: prompt.parse(answer, "pokemon_card_v1"),
             f"(d) {label} is refused by prompt.parse, the same rule a run applies",
         )
         stored = cache_mod.Cache.parse(

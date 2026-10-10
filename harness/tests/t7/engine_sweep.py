@@ -38,7 +38,7 @@ from store import files, master, photos
 from store.session import Store
 
 HAIKU, MATCHER = cache_mod.ENGINE_HAIKU, cache_mod.ENGINE_MATCHER
-SAID = {"name": "Card", "number": "1", "printed_total": "9", "confidence": "high"}
+SAID = {"name": "Card", "number": "1", "printed_total": "9", "finish": "normal", "confidence": "high"}
 _SHOTS = iter(range(1, 10_000))
 
 
