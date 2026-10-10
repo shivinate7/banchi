@@ -4,7 +4,7 @@ allowed-tools: Bash(python3 scripts/docs-audit.py:*), Bash(make docs-audit), Bas
 ---
 
 Audit this repo's documentation against the code, and propose changes for the owner to
-approve. Scope: $ARGUMENTS (empty means the working tree against `HEAD`).
+approve. Scope: $ARGUMENTS (empty means that the working tree against `HEAD`).
 
 This is the semantic half of D16. `scripts/docs-audit.py` already checks everything a
 machine can settle; run it and read the roster — every row is named, and marked blocking
@@ -19,13 +19,9 @@ well-formed, and no longer true.**
 python3 scripts/docs-audit.py
 ```
 
-Exit 1 means a provably wrong reference; exit 2 means **any ADVISORY row has findings**; exit 0
-means neither. Report what it found — do not re-derive it by hand.
+Exit 1 means that there is a provably wrong reference. Exit 2 means that **any ADVISORY row has findings**. Exit 0 means neither. Report what it found — do not re-derive it by hand.
 
-**Exit 2 is not the coupling question**, which is what this line said until 2026-09-05. The
-coupling row only runs under `--staged`, but `entry budget`, `game coverage`, `views exposure`
-and several others emit ADVISORY on every plain run — so exit 2 is the ordinary outcome here,
-not a signal that staged code and its docs disagreed. Read the rows; the code says which.
+**Exit 2 is not the coupling question**, which is what this line said until 2026-09-05. The coupling row only runs under `--staged`. But `entry budget`, `game coverage`, `views exposure` and several others emit ADVISORY on every plain run. So exit 2 is the ordinary outcome here, not a signal that staged code and its docs disagreed. Read the rows; the code says which.
 
 **2. Read the diff, then the docs it touches.**
 
@@ -43,14 +39,10 @@ claim.
 
 **3. Judge each candidate against a real bar.**
 
-Report a finding only when a specific sentence is now **false** — a described default that
-changed, a flag that no longer exists, a sequence of steps in the wrong order, a stated
-guarantee the code stopped making. Not: wording you would have phrased differently, a
-section you would have organized another way, or prose that is merely terse.
+When a specific sentence is now **false**, report a finding, and only then. A finding is a described default that changed, a flag that no longer exists, or steps out of order. A stated guarantee the code stopped making is also a finding. Wording you would have phrased differently is not a finding. Neither is a section you would have organized another way. Prose that is merely terse is not a finding either.
 
 `docs/decisions/` needs its own care. Entries there are settled rulings, and its header
-says sessions do not re-litigate them. A decision entry is stale only when it describes the
-implementation incorrectly. **A decision you disagree with is not a finding.** If the code
+says sessions do not re-litigate them. When it describes the implementation incorrectly, a decision entry is stale. No other case makes it stale. **A decision you disagree with is not a finding.** If the code
 contradicts a decision, that is a code finding — report it as one and leave the entry alone.
 
 ## Then, before you touch anything
@@ -61,9 +53,7 @@ Print the whole set at once:
 |---|---|---|---|---|
 
 One row per finding, one line each. Then ask how to proceed, offering: **all**, **none**, or
-**specific numbers**. The owner sees the shape of the entire edit before approving any of
-it — that is the point of this step, so never begin editing during the walk-through, and
-never present findings one at a time in a way that hides the total.
+**specific numbers**. The owner sees the shape of the entire edit before approving any of it. That is the point of this step. So never begin editing during the walk-through. Never present findings one at a time in a way that hides the total.
 
 If the set is empty, say so plainly and stop. A clean audit is a result.
 
@@ -77,17 +67,17 @@ If the set is empty, say so plainly and stop. A clean audit is a result.
 - When done: `git diff --stat -- '*.md'` and then the full `git diff -- '*.md'`.
 
 **Never `git add`. Never `git commit`.** Leave the tree dirty. The owner reviews with their
-own `git diff` and stages what they want — that final read is the last check in the chain
-and it is not yours to skip on their behalf.
+own `git diff` and stages what they want. That final read is the last check in the chain.
+It is not yours to skip on their behalf.
 
 ## The rule that matters most
 
 > **A blocked commit is reported, not resolved.**
 
 If the pre-commit hook blocked a commit, show the findings and the proposed markdown change
-and **wait**. Never edit a doc for the sole purpose of getting a commit through, and never
-reach for `BANCHI_DOCS=off` or `--no-verify` on the owner's behalf — both are theirs to
-choose, and `--no-verify` also switches off the three opsec rules guarding code-card
+and **wait**. Never edit a doc for the sole purpose of getting a commit through. Never
+reach for `BANCHI_DOCS=off` or `--no-verify` on the owner's behalf. Both are theirs to
+choose. `--no-verify` also switches off the three opsec rules guarding code-card
 bearer instruments.
 
 The docs are this project's memory and its reasoning. An agent that edits them to satisfy
