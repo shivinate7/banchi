@@ -1,6 +1,6 @@
 ## D170 — A Pokemon run names its sets
 
-**A game whose whole category cannot be fetched may not have that fetch chosen for it.** Cards that said nothing may not choose it. Built 2026-09-12, on the owner's ruling.
+**A game whose whole category cannot be fetched may not have that fetch chosen for it by cards that said nothing.** Built 2026-09-12, on the owner's ruling.
 
 Three options were put to the owner about the Pokemon catalogue fetch. The fetch sat at 97.24% of `tcg_export.MAX_BYTES`. The options were: refuse early under the cap, leave it visible, or fix the cause. They chose the third, in those words — *"make unhinted Pokémon cards impossible."*
 
@@ -8,7 +8,7 @@ Three options were put to the owner about the Pokemon catalogue fetch. The fetch
 
 **One forced whole-category Pokemon fetch, 2026-09-12: 32,629,598 B over 222,849 rows.** That is 97.24% of the 33,554,432 B ceiling the download is refused past. That leaves 903 KB of headroom. By comparison, the one set the owner's Pokemon cards all name is 238,482 B. The widening is 137x, and it lands two per cent short of a refusal.
 
-**D76 wrote that a widening is always safe. For this category it is 903 KB from a refusal.** That sentence is the whole of this entry. "Safe" was never wrong in principle. It was unbounded. One category has now been measured past the point where it holds.
+**D76 wrote that a widening is always safe. For this category it is 903 KB from a refusal.** That sentence is the whole of this entry: "safe" was never wrong in principle, it was unbounded, and one category has now been measured past the point where it holds.
 
 **ONE unhinted card is all it takes, and that is D76's own rule working correctly.** A set filter is legal only where every card of the game is hinted and every hint resolves. A hint is evidence about the card that carries it. So the box stops being unanimous the moment one card says nothing. The fetch then goes from 238 KB to 32.6 MB.
 
@@ -40,11 +40,11 @@ Three options were put to the owner about the Pokemon catalogue fetch. The fetch
 
 ### `chosen_by == "cards"` is the whole predicate, and nothing is ever stranded
 
-**The refusal fires only where the CARDS under-specified the scope.** The four reasons are `no_hints`, `partial_hints`, `unresolved_hints` and `no_hints_resolved`. They are the four branches that set `chosen_by` to `cards`, and the only four.
+**The refusal fires only where the CARDS under-specified the scope** — `no_hints`, `partial_hints`, `unresolved_hints`, `no_hints_resolved`, the four branches that set `chosen_by` to `cards` and the only four.
 
 **D76's other two voices pass straight through.** An operator sending `set_ids` or `scope: category` is `operator`, and is not refused. That is both the override and the reason a refused run is never a stranded one. The refusal exists to stop the machine widening on a guess, not to stop a person. A game whose own `export_scope` is `category` is `policy` and never reaches the question.
 
-**And the cards themselves are repairable, through a path that already existed.** `PUT /inventory/<box>` takes `set_hint` over a whole box or a named selection in one transactional write. The owner asked for it by name on 2026-08-23. *"if i accidentally did not do it at the capture level, i would like to be able to do it retroactively."* It is reached from `#/inventory` → Manage box → Set claims. The card-level `PUT /inventory/<box>/<index>` sits beside it. **No second repair path was built**, and the refusal names that screen rather than describing a capability.
+**And the cards themselves are repairable, through a path that already existed.** `PUT /inventory/<box>` takes `set_hint` over a whole box or a named selection in one transactional write — the owner asked for it by name on 2026-08-23, *"if i accidentally didn't do it at the capture level, i'd like to be able to do it retroactively"* — and it is reached from `#/inventory` → Manage box → Set claims, with the card-level `PUT /inventory/<box>/<index>` beside it. **No second repair path was built**, and the refusal names that screen rather than describing a capability.
 
 ### The screen says it at the rig, where it is still free
 

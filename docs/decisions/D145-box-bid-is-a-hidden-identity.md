@@ -4,9 +4,9 @@
 
 ### The report, and the ruling
 
-**The owner, verbatim:** *"im seeing that i deleted an old box 1, started writing into a new box (now new box 1)."* *"and if i go on say my runs tab it shows that i would run a 'Box 1' run a long time ago and so on."* *"it is confusing."*
+**The owner, verbatim:** *"im seeing that i deleted an old box 1, started writing into a new box (now new box 1) and if i go on say my runs tab it shows that i'd run a 'Box 1' run a long time ago etc. it's confusing."*
 
-**And, in the same message:** *"box #s as indexes should be immutable."* *"so if i delete a box # that deleted box's index # is not deleted, like box # and index # should not be the same thing."* *"a box needs an index # not visible anywhere in the app thats a true index rather than cheaply using boxes as an index."*
+**And, in the same message:** *"box #s as indexes should be immutable so if i delete a box # that deleted box's index # is not deleted, like box # and index # should not be the same thing, a box needs an index # not visible anywhere in the app thats a true index rather than cheaply using boxes as an index."*
 
 The second half is the design. It is stated more precisely than a specification would have been. It names two jobs and one value doing both. The fix is to separate them rather than to change how either behaves.
 
@@ -34,7 +34,7 @@ The second half is the design. It is stated more precisely than a specification 
 
 **The number stays.** It is the run directory's own name. It is the directory the photographs are in. Every refusal in `server/pipeline_routes.py` names it. That is D56's argument for carrying both halves, unchanged. Removing it would cost the operator the thread back to all three.
 
-**`(deleted)` rather than `(former)`, which the first draft used.** Both are short, and neither is jargon. So the more specific one wins. "Former" says this is not the current box 1, and it leaves the reader to wonder what became of it. "Deleted" names the act the operator performed and remembers performing. `docs/DESIGN.md`'s register rule is sentences a person reads. The sentence here is *the box 1 I deleted*.
+**`(deleted)` rather than `(former)`, which the first draft used.** Both are short and neither is jargon, so the more specific one wins: "former" says this is not the current box 1 and leaves the reader to wonder what became of it, while "deleted" names the act the operator performed and remembers performing. `docs/DESIGN.md`'s register rule is sentences a person reads; the sentence here is *the box 1 I deleted*.
 
 **The departed drawer's NAME is recovered, and that does not reopen D56.** D56 forbids writing a name into a run directory. A live name is editable, and a copy goes stale the first time the drawer is renamed. A deleted drawer's last name cannot be edited, because there is nothing left to edit. So it is a fact rather than a stale copy. It is read at join time off the `box_deleted` history line, and it is not stored on the run. The id is what makes that join possible. Recording the ID on a run is likewise not a copy of an editable thing. An identity is fixed at creation.
 
@@ -52,7 +52,7 @@ The second half is the design. It is stated more precisely than a specification 
 
 **Lossless, and the harness states it that way.** No column is dropped, no payload key is overwritten, and no row is removed. So the reverse is stated in the receipt and is four statements. T7's legacy-import case now asserts "everything the file said, plus exactly these two facts". It names both facts. It was not loosened to ignore unknown keys. Loosening it would have made that test stop being about losslessness.
 
-**A store arriving from the legacy JSON files is numbered on the way in.** The staging database is created fresh at the current version. So it never passes through the upgrade step.
+**A store arriving from the legacy JSON files is numbered on the way in**, because the staging database is created fresh at the current version and so never passes through the upgrade step.
 
 ### What this does not do
 

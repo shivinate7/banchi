@@ -1,6 +1,6 @@
 ## D181 — Order is taken once; a sale keeps it
 
-**`#/inventory`'s ranking under a search is computed from the copies that are still on hand.** **So marking one copy sold re-ranks the list the operator is working down.** **The fix is to hold the order still and give the operator a press that retakes it.** **The ranking is right, and only its timing is wrong.**
+**`#/inventory`'s ranking under a search is computed from the copies that are still on hand, so marking one copy sold re-ranks the list the operator is working down — and the fix is to hold the order still and give the operator a press that retakes it, because the ranking is right and only its timing is wrong.**
 
 **This is an amendment to D118, not a new floor.** That entry's ruling is *"a press changes WHAT IS ON THE SCREEN and never where the rest of it is"*. This is the same sentence on an axis it could not see. See "Why D118's own guards were blind to this" below. The short version is that every instrument D118 built measures PIXELS. A reshuffle moves no pixels. It moves which row is drawn at which pixel, and the rows are the same shape.
 
@@ -8,13 +8,9 @@
 
 The owner, 2026-09-12:
 
-> i built sorting in inventory so that it is ordered by when.
-> i search a card and it is ranked by the most of the card in a certain section.
-> this is awesome, and i love it.
-> but i realized if i mark sold while on that sorta view it can reorganize the rankings right in front of me.
-> which feels unintuitive if I am trying to mark multiple as sold.
+> i built sorting in inventory so that it's ordered by when. i search a card it's ranked by the most of the card in a certain section, this is awesome and i love it but i realized if i mark sold while on that sorta view it can reorganize the rankings right in front of me, which feels unintuitive if im trying to mark multiple as sold.
 
-Two things in one message, and they point opposite ways. **The ranking is correct and stays.** It is D132's amendment of 2026-09-11, their own rule: *"the largest quantity of whatever I searched, BY SECTION, is the order"*. **What is wrong is that it is recomputed under the hand.** They mark several copies sold in a row. Each press changes the arithmetic. The list they were half-way down rearranges itself.
+Two things in one sentence, and they point opposite ways. **The ranking is correct and stays** — it is D132's amendment of 2026-09-11, their own rule, *"the largest quantity of whatever I searched, BY SECTION, is the order"*. **What is wrong is that it is recomputed under the hand.** They mark several copies sold in a row; each press changes the arithmetic; the list they were half-way down rearranges itself.
 
 ### D28 is the precedent, and the mechanism is deliberately the same one
 
@@ -41,9 +37,9 @@ The only difference here is what varies. There it was a photograph's height; her
 | `BoxBrowse.tsx` `holdsLive` / `landingInFullest` | the walk does not jump to another box because the one it is in has just sold out of matches |
 | **`BoxBrowse.tsx` `visible` and `CardLocations.tsx` `stays`** | **the row is still DRAWN with `Hide sold` on** |
 
-**That last row is load-bearing and it is D132's other door.** Freezing the arithmetic while letting the fold delete the row puts the jump straight back. The row vanishes, and everything under it comes up by its height. D132 offers two behaviours for a departed row: folded away, or sunk under the live ones. **Frozen mode can take neither as written.** A sink is a movement too: every row below the sinking one comes up. So a frozen departure stays exactly where it is and is struck, which is the only rendering that moves nothing.
+**That last row is load-bearing and it is D132's other door.** Freezing the arithmetic while letting the fold delete the row puts the jump straight back: the row vanishes and everything under it comes up by its height. D132 offers two behaviours for a departed row — folded away, or sunk under the live ones — and **frozen mode can take neither as written**. A sink is a movement too: every row below the sinking one comes up. So a frozen departure stays exactly where it is and is struck, which is the only rendering that moves nothing.
 
-**The departed row's own rendering is the product's existing one, and nothing here invents a second.** `pipeline/join.py:Position` already draws a copy in no slot as `Box 7 · departed · B7 #38`. D68 explains why it names the record. D58 explains why the number behind it now belongs to a different card. And `.is-gone` already dresses the row. The freeze changes where that row is, not what it says.
+**The departed row's own rendering is the product's existing one and nothing here invents a second.** `pipeline/join.py:Position` already draws a copy in no slot as `Box 7 · departed · B7 #38` (D68 for why it names the record, D58 for why the number behind it now belongs to a different card), and `.is-gone` already dresses the row. The freeze changes where that row is, not what it says.
 
 ### The control
 
@@ -88,17 +84,17 @@ The only difference here is what varies. There it was a photograph's height; her
 | the landing ignores the freeze | **deleted — see below** |
 | an undo never releases its hold | **survives — see below** |
 
-**Four of those nine were green on the first run.** **Each was green for the same reason: the case was acting on the row the walk was standing on.** `stays` keeps a row for three reasons. The first is that it is the current copy. The second is that this screen just sold it and holds a receipt. The third is that the order is frozen by it. The first two answered every assertion, so the third was never exercised. The cases now act on a MID-LIST row. The one that reaches the freeze alone is a RETIREMENT. `Inventory.tsx` hands the copies list `soldKeys`, and deliberately not `retiredKeys`. So nothing local holds a retired row. The freeze is all there is. A fifth needed a fixture where a box's LAST live match departs, which is the only state the shelf pool can notice.
+**Four of those nine were green on the first run, and each was green for the same reason: the case was acting on the row the walk was standing on.** `stays` keeps a row for three reasons — it is the current copy, this screen just sold it and holds a receipt, or the order is frozen by it — and the first two answered every assertion, so the third was never exercised. The cases now act on a MID-LIST row, and the one that reaches the freeze alone is a RETIREMENT: `Inventory.tsx` hands the copies list `soldKeys` and deliberately not `retiredKeys`, so nothing local holds a retired row and the freeze is all there is. A fifth needed a fixture where a box's LAST live match departs, which is the only state the shelf pool can notice.
 
 **The landing's freeze was deleted rather than covered, because it was unreachable.** `landingInFullest` runs only when the query is FRESH, and a fresh query is exactly what releases the freeze. So the parameter could only ever be empty. A mutation that ignored it left the whole suite green. That is the correct answer to a parameter no call can populate. It is gone. The landing ranks on current state, as a fresh answer should.
 
-**The undo's release is the one arm that survives, and it is reported rather than explained away.** Deleting `releaseRank` leaves all 108 cases green. The header was dumped under the mutation to find out why. The chip IS present on the frame after the undo, and gone again shortly after. So something on that path clears the hold without this call. Bounding the assertion to two seconds did not separate them either. **What that does NOT establish is that the call is redundant.** It establishes only that this fixture cannot see it. That is a weaker claim than the landing's, and it is why the code stays. A later session with a reproduction should do one of two things. It should find the second clearer and delete one of them. Or it should find the case this one is missing.
+**The undo's release is the one arm that survives, and it is reported rather than explained away.** Deleting `releaseRank` leaves all 108 cases green. The header was dumped under the mutation to find out why, and the chip IS present on the frame after the undo and gone again shortly after — so something on that path clears the hold without this call, and bounding the assertion to two seconds did not separate them either. **What that does NOT establish is that the call is redundant**, only that this fixture cannot see it, which is a weaker claim than the landing's and is why the code stays. A later session with a reproduction should either find the second clearer and delete one of them, or find the case this one is missing.
 
 ### What the control cost, named
 
-**The header's title row now reserves `--bn-control-h-sm` whether or not the chip is in it.** That makes the copies panel's header about eight pixels taller on every card at desktop. That is D118's own trade, taken deliberately. The chip appears on a press. This list scrolls inside `.browse-band`'s fixed height. An unreserved slot would send every copy row down by the chip's height at the exact moment of the sale. That is the movement this entry exists to stop, reintroduced by the control that stops it. Paid once at render rather than on the press, which is the same bargain `.browse-row-slotghost` makes in D118's own amendment.
+**The header's title row now reserves `--bn-control-h-sm` whether or not the chip is in it**, which makes the copies panel's header about eight pixels taller on every card at desktop. That is D118's own trade taken deliberately: the chip appears on a press, this list scrolls inside `.browse-band`'s fixed height, and an unreserved slot would send every copy row down by the chip's height at the exact moment of the sale — the movement this entry exists to stop, reintroduced by the control that stops it. Paid once at render rather than on the press, which is the same bargain `.browse-row-slotghost` makes in D118's own amendment.
 
-**The chip's HEIGHT is the kit's and not a number in `CardLocations.css`.** `.bn-chip` reads `--bn-control-h-sm`. The token file raises that to 40px under 767px and on any coarse pointer. So D117's thumb floor is met by the system. A case asserts it at 390 anyway, because a floor with no reader is not a floor.
+**The chip's HEIGHT is the kit's and not a number in `CardLocations.css`** — `.bn-chip` reads `--bn-control-h-sm`, which the token file raises to 40px under 767px and on any coarse pointer, so D117's thumb floor is met by the system. A case asserts it at 390 anyway, because a floor with no reader is not a floor.
 
 ### What is not built, and what would reopen this
 

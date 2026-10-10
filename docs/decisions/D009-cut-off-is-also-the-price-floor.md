@@ -1,6 +1,6 @@
 ## D9 — Cut-off is also the price floor
 
-**The store's cut-off (`policy.threshold`, default `pipeline/corpus.py:DEFAULT_CUTOFF`, $0.49) is one figure in three roles.** **It is the market price at or above which a card earns a listing.** **It is the price the sub-threshold half goes out at.** **It is the price no rule or markdown may go below.** It derives from the $60/hr labor bar. A marginal pull takes about 20 seconds. A sale under the bar loses money.
+**The store's cut-off (`policy.threshold`, default `pipeline/corpus.py:DEFAULT_CUTOFF`, $0.49) is one figure in three roles: the market price at or above which a card earns a listing, the price the sub-threshold half goes out at, and the price no rule or markdown may go below.** It derives from the $60/hr labor bar: a marginal pull is about 20 seconds, and a sale under the bar loses money.
 
 There is no `policy.floor`. A second figure can only be set wrong. The pair came apart the first day a cut-off went under the constant. 293 of 354 rows were refused as `below_floor`, and 49 SKUs were written to `import.csv`. `pipeline/pricing.py:FLOOR` is only the no-store default and the labor bar the warnings name. A store that sets a cut-off below it is told once and never refused.
 
