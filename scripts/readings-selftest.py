@@ -23,6 +23,7 @@ never in the git hook: it writes, into a directory it creates and destroys (D18)
 from __future__ import annotations
 
 import csv
+import argparse
 import io
 import json
 import os
@@ -35,6 +36,7 @@ from typing import Dict, List, Optional, Tuple
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from cli import cmd_readings  # noqa: E402
 from pipeline import readings as readings_walk  # noqa: E402
 from pipeline import tcgcsv  # noqa: E402
 from harness.tests.home import isolated_home  # noqa: E402
@@ -249,6 +251,120 @@ def check_sources_payload_ties_break_on_name() -> None:
        "got %r" % distinct_names)
 
 
+# ------------------------------------------------- `banchi readings adopt` (the CLI)
+#
+# These drive `cli/cmd_readings.py:run`, the path an operator types, not `replace()` directly.
+# So a refusal, or its absence, in `_adopt` is what each arm sees.
+
+
+def run_adopt(write: bool) -> Tuple[int, List[str]]:
+    said: List[str] = []
+    code = cmd_readings.run(
+        argparse.Namespace(readings_command="adopt", write=write), said.append
+    )
+    return code, said
+
+
+def stored() -> Tuple[Dict[str, Reading], list]:
+    current = Store().read().readings
+    return dict(current.entries), current.sources_payload()
+
+
+def seed_good_sources(home: Path) -> None:
+    """Disk holds two good run tables: box1 (111, 222) and box2 (333), box2 the newer."""
+    shutil.rmtree(home / "runs", ignore_errors=True)
+    shutil.rmtree(home / "inventory" / files.LIVE_DIRNAME, ignore_errors=True)
+    write_run(home / "runs", "2026-01-01-box1-01",
+              [run_row("111", "1.23", "Card A"), run_row("222", "4.56", "Card B")],
+              mtime=1_700_000_000)
+    write_run(home / "runs", "2026-01-01-box2-01",
+              [run_row("333", "2.00", "Card C")], mtime=1_700_000_100)
+
+
+def seed_table_from_sources(home: Path) -> None:
+    """The table holds exactly what a walk over the good sources gives, set up directly."""
+    seed_good_sources(home)
+    with Store().write() as snapshot:
+        snapshot.readings.replace(*readings_walk.collect())
+
+
+def check_cli_adopt() -> None:
+    print("\n  -- `banchi readings adopt` (cli/cmd_readings.py) over a throwaway store --")
+    with isolated_home() as home:
+        (home / "inventory").mkdir(parents=True, exist_ok=True)
+        runs = home / "runs"
+
+        # -------------------------------------------------- (b) a good source, exact rows
+        print("\n  -- adopt --write from a good source gives exactly the source's rows --")
+        seed_good_sources(home)
+        with Store().write() as snapshot:  # a stale row the source no longer offers
+            snapshot.readings.replace(
+                {"999": Reading(market="8.88", at=1, source="gone", kind=KIND_RUN,
+                                name=None, set_name=None, condition=None)},
+                [],
+            )
+        code, _ = run_adopt(write=True)
+        entries, sources = stored()
+        ok(code == 0 and {sku: r.market for sku, r in entries.items()}
+           == {"111": "1.23", "222": "4.56", "333": "2.00"},
+           "adopt --write leaves exactly the good source's SKUs and prices; the stale row "
+           "is gone", f"code {code}, rows {sorted(entries)}")
+        ok([(s["name"], s["skus"]) for s in sources]
+           == [("2026-01-01-box2-01", 1), ("2026-01-01-box1-01", 2)],
+           "and the sources list is the two run tables, newest first, with their counts",
+           str(sources))
+
+        # -------------------------------------------------- (c) without --write
+        print("\n  -- without --write nothing is written --")
+        seed_table_from_sources(home)
+        before = stored()
+        write_run(runs, "2026-01-01-box1-01", [run_row("111", "9.99", "Card A")],
+                  mtime=1_700_000_000)
+        shutil.rmtree(runs / "2026-01-01-box2-01")
+        ok(readings_walk.collect()[0] != before[0],
+           "the disk now differs from the table, so a --write would have changed it "
+           "(the arm has something to refuse)")
+        code, said = run_adopt(write=False)
+        ok(code == 0 and stored() == before,
+           "a preview without --write leaves the table exactly as it was",
+           f"code {code}, before {before[0]}, after {stored()[0]}")
+        ok(any("DRY RUN" in line for line in said),
+           "and the preview says it wrote nothing")
+
+        # -------------------------------------------------- (a) refusals, table kept
+        # FOUND DEFECT (test-author): `_adopt` has no refusal. An empty or malformed walk
+        # reaches `Readings.replace()` with `{}`, which clears every row. Red until the
+        # builder adds the refusal to `cli/cmd_readings.py:_adopt`.
+        print("\n  -- adopt --write over no usable source refuses, and keeps the table --")
+        seed_table_from_sources(home)
+        before = stored()
+        shutil.rmtree(runs)
+        code, _ = run_adopt(write=True)
+        ok(code != 0 and stored() == before,
+           "refuses: adopt --write over no source at all leaves the table as it was",
+           f"code {code}, rows left {sorted(stored()[0])}")
+
+        seed_table_from_sources(home)
+        before = stored()
+        shutil.rmtree(runs)
+        (runs / "2026-01-01-box1-01").mkdir(parents=True)
+        (runs / "2026-01-01-box1-01" / "pricing.json").write_text("{not json", "utf-8")
+        code, _ = run_adopt(write=True)
+        ok(code != 0 and stored() == before,
+           "refuses: adopt --write whose only source is a malformed pricing.json leaves the "
+           "table as it was",
+           f"code {code}, rows left {sorted(stored()[0])}")
+
+        seed_table_from_sources(home)
+        before = stored()
+        (runs / "2026-01-01-box2-01" / "pricing.json").write_text("{not json", "utf-8")
+        code, _ = run_adopt(write=True)
+        ok(code != 0 and stored() == before,
+           "refuses: one malformed run table among good ones does not silently drop its SKUs "
+           "(333) from the table",
+           f"code {code}, rows left {sorted(stored()[0])}")
+
+
 # ---------------------------------------------------------------------------------- main
 
 
@@ -419,6 +535,8 @@ def main() -> int:
         ok("666" not in shrunk,
            "the SKU whose only source was deleted drops out of the table — a cache "
            "refresh, never an accumulating ledger", str(sorted(shrunk)))
+
+    check_cli_adopt()
 
     print("\nreadings self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))
