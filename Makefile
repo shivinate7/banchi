@@ -1567,7 +1567,7 @@ typecheck:
 #     make demo-static DEMO_BASE=/
 #
 # DERIVED FROM THE REMOTE, NOT WRITTEN DOWN, and it earned that on 2026-09-06: this line
-# read `/banchi/` and the repository was renamed to `banchi`, so a hand-run build pointed
+# read `/pkmnscan/` and the repository was renamed to `banchi`, so a hand-run build pointed
 # at a path that now 404s. `demo.yml` took the derived route from the start — "so a rename
 # cannot leave it pointing at the old one" — and the published demo followed the rename by
 # itself while this default did not. A name spelled in two places agrees until the day one

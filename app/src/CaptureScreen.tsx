@@ -541,9 +541,9 @@ function hintNoteText(verdict: HintVerdict, game: string, needsHint = false): st
  * is what holds the window to "this page load", which is the window the banner's own sentence
  * is true in.
  *
- * THE `banchi.` PREFIX WAS RENAMED TO `banchi.` ON 2026-09-06, ON THE OWNER'S WORD, AND
+ * THE `pkmnscan.` PREFIX WAS RENAMED TO `banchi.` ON 2026-09-06, ON THE OWNER'S WORD, AND
  * NOTHING MIGRATES. `useCamera.ts` carries the argument in full beside its own two keys; the
- * short of it is that the split between `banchi.*` and `banchi.*` was chronological rather
+ * short of it is that the split between `banchi.*` and `pkmnscan.*` was chronological rather
  * than principled, and the owner declined a read-time fallback because a fallback can never
  * safely be deleted afterwards. */
 const SESSION_KEYS = {

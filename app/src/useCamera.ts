@@ -69,7 +69,7 @@ const JPEG_QUALITY = 0.95
  * about a card is stored here, and docs/specs/capture-app.md section 9's "no second store
  * in the browser" is about captures, which still go straight to the Mac.
  *
- * THE `banchi.` PREFIX WAS RENAMED TO `banchi.` ON 2026-09-06, ON THE OWNER'S WORD, AND
+ * THE `pkmnscan.` PREFIX WAS RENAMED TO `banchi.` ON 2026-09-06, ON THE OWNER'S WORD, AND
  * NOTHING MIGRATES. D94 freezes every name beneath the product and a storage key is about as
  * far beneath it as a thing gets, so the case for renaming was never technical — the split
  * was simply chronological, `banchi.*` on the three keys written after the rebrand and
