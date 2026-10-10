@@ -27,6 +27,7 @@ import argparse
 import io
 import json
 import os
+import re
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -381,6 +382,33 @@ def check_cli_adopt() -> None:
         check_bad_run_table(home, "an empty object, with no skus key", "{}")
         check_bad_run_table(home, "a JSON array", "[]")
         check_bad_run_table(home, "JSON null", "null")
+
+        # -------------------------------------------------- a malformed NEWEST live export
+        # Owner ruling: adopt goes on, but the report names the skipped export and the count
+        # of SKUs it lost. The older, readable export carried 444 and 445 into the table; the
+        # newest export is bad CSV, so only the runs are read, and 444 and 445 would drop.
+        print("\n  -- a malformed newest live export: adopt goes on, and says what it lost --")
+        seed_good_sources(home)
+        live_dir = home / "inventory" / files.LIVE_DIRNAME
+        write_live(live_dir, "20260101-000000",
+                   [live_row("444", "5.00", "Card D"), live_row("445", "6.00", "Card E")])
+        with Store().write() as snapshot:
+            snapshot.readings.replace(*readings_walk.collect())
+        ok(sorted(stored()[0]) == ["111", "222", "333", "444", "445"],
+           "setup: the table holds the older live export's two SKUs alongside the runs",
+           f"rows {sorted(stored()[0])}")
+
+        newest = live_dir / f"{files.LIVE_PREFIX}20260201-000000.csv"
+        newest.write_text("this is not a price export\n", "utf-8")
+        code, said = run_adopt(write=True)
+        entries, _ = stored()
+        ok(code == 0 and sorted(entries) == ["111", "222", "333"],
+           "a malformed newest export: adopt --write exits 0 and writes the good run rows",
+           f"code {code}, rows {sorted(entries)}")
+        named = [line for line in said if newest.name in line]
+        ok(bool(named) and any(re.search(r"\b2\b", line) for line in named),
+           "and its output names that export file and the 2 SKUs it lost",
+           "\n".join(said) or "(no output)")
 
 
 # ---------------------------------------------------------------------------------- main
