@@ -77,7 +77,7 @@ offset from one fixed clock (`NOW`). An unchanged tree rebuilds the store byte-i
 
 It refuses to touch a store that already holds cards unless `--force` says so. `make demo-seed`
 passes `--force` with `BANCHI_HOME=$(DEMO_HOME)` (`DEMO_HOME ?= demo`). An unset `BANCHI_HOME`
-means the checkout's own store, which is somebody's real one (D43).
+means that the checkout's own store, which is somebody's real one (D43).
 
 Identification is the one step of the real pipeline that costs money, so it is the only step the
 seed fakes. It writes `identifications.json` in the shape a real `banchi identify` run leaves.
@@ -92,7 +92,7 @@ on its own port. It sweeps every GET the client can build against the parameter 
 holds. It records every 200 response into `app/demo/bundle.json`, plus the photographs Vite
 bundles, and it stops that server. It never starts, restarts or binds `make up`'s port, which in
 the main checkout is the owner's live process over their real inventory (D43, D138). A 404
-recorded here means the path is not a read this demo replays.
+recorded here means that the path is not a read this demo replays.
 
 `sweep_coverage` records these reads:
 
@@ -125,16 +125,16 @@ them: `app/demoSplit.ts`, a Vite plugin loaded only when `VITE_DEMO=1`, writes
   with `demoShared.ts`'s `historyCards` and `recentCards`, the same functions the runtime uses.
   Home reads them and never fetches the 7 MB whole-store read until a press needs it.
 
-`demoServer.ts` fetches `index.json` on its first read, then the file that holds a key the first
-time a read asks for it, and keeps it in memory under `demoShared.ts`'s `canonical` key. Files
+`demoServer.ts` fetches `index.json` on its first read. It then fetches the file that holds a key the first
+time a read asks for it. It keeps it in memory under `demoShared.ts`'s `canonical` key. Files
 resolve against `import.meta.env.BASE_URL`, so `DEMO_BASE` moves them. A key the index lacks answers
 `notRecorded()`. A press (`sold`, `retire`, review, rename, divider, price) fetches the documents it
-reads first. It also journals each card move, and the journal replays over any file that lands later,
+reads first. It also journals each card move. The journal replays over any file that lands later,
 so a document fetched after a sale shows the sale.
 
-Measured, with the split: Home's first load is 8.3 MB decoded (it was 87.9 MB), of which the app shell
-is about 1.6 MB, the index 0.44 MB, and Home's own reads (`/pipeline/pricing` 4.2 MB, `/orders` 1.5 MB)
-the rest (6.3 MB of data in all). The daily mirror job and the recorder's on-disk format are unchanged.
+Measured, with the split: Home's first load is 8.3 MB decoded (it was 87.9 MB). Of that, the app shell
+is about 1.6 MB, the index 0.44 MB, and Home's own reads (`/pipeline/pricing` 4.2 MB, `/orders` 1.5 MB).
+The rest is 6.3 MB of data in all. The daily mirror job and the recorder's on-disk format are unchanged.
 
 ## 6. `VITE_DEMO` is a build-time constant, not a runtime flag
 
@@ -300,7 +300,7 @@ touches the paths `.github/workflows/demo.yml` lists. The published copy therefo
 
 ## 11. What republishes, and why nothing is ever queued
 
-`concurrency: {group: demo-pages, cancel-in-progress: true}` means a newer push cancels a build in
+`concurrency: {group: demo-pages, cancel-in-progress: true}` means that a newer push cancels a build in
 flight and does not queue behind it. A queued build of older code has nothing to offer once newer
 code is on `main`. The job reads the repo and writes to GitHub Pages. It has no permission to write
 to the repository, so it cannot move `main` and is not a second way around D42.
@@ -389,7 +389,7 @@ stands on the same footing as `demo-assets/photos/` and `demo-assets/extra/photo
 exception this repo allows only because of what curates it. `scripts/githooks/pre-commit`
 re-decodes every staged image for a QR before it lets a commit through (D70, D303).
 
-**The walk-plan sweep records singles.** A real store's open orders make a powerset that no constant can reach: 71 open orders is 2^71 sets. Only an open order can ever be ticked. Every caller of `walkPlan` sends open keys alone (`Fulfillment.tsx`, `Orders.tsx`, D97, D220). So the recorder reads the recorded `/orders` GET and keeps the open keys. It records every single open order, plus the one full "walk all" set that every screen asks for whole. It never records a merge or a subset in between. `demoServer.ts`'s `walkPlan` refuses an unrecorded set with the demo's one honest notice (D269, TXT-46) and never fabricates a plan. A partial selection (some orders, not all, not one) is the one gap this recording leaves on purpose.
+**The walk-plan sweep records singles.** A real store's open orders make a powerset that no constant can reach: 71 open orders is 2^71 sets. Only an open order can ever be ticked. Every caller of `walkPlan` sends open keys alone (`Fulfillment.tsx`, `Orders.tsx`, D97, D220). So the recorder reads the recorded `/orders` GET and keeps the open keys. It records every single open order, plus the one full "walk all" set that every screen asks for whole. It never records a merge or a subset between. `demoServer.ts`'s `walkPlan` refuses an unrecorded set with the demo's one honest notice (D269, TXT-46) and never fabricates a plan. A partial selection (some orders, not all, not one) is the one gap this recording leaves on purpose.
 
 **Open.** `ux/stock-images` is a separate lane that may put stock image URLs on route responses.
 This section does not depend on it. Proving the mirror deterministic means reading the real store

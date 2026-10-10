@@ -298,7 +298,7 @@ The Cam Link path requires these settings:
   does not blur, and a card proud of the tray keeps its corner.
 - Lock manual focus at tray distance. The tray does not move.
 - Disable auto power off. A sleeping body drops the HDMI signal while the Cam Link stays
-  enumerated. The screen halts the run when the track dies, but the stoppage is avoidable.
+  enumerated. When the track dies, the screen halts the run, but the stoppage is avoidable.
 - Glare on the number corner is unrecoverable at any resolution. The number corner under
   raking light is unmeasured.
 

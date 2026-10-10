@@ -356,7 +356,7 @@ One Piece: the rule is Riftbound's, and only the fixture proves it.
 ### 7.1 The acceptance bar
 
 **Zero cards change in a way the owner has not confirmed.** A CHANGE is the drawn identity
-moving to a different card. That means a name the read disputes, or a number the read does not
+moving to a different card. That means that a name the read disputes, or a number the read does not
 equal after the join's fold. A spelling change draws the same card. Case, accent, a catalog
 qualifier, an embedded number and a near miss inside D23's tolerance are spelling changes.
 

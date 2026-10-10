@@ -158,7 +158,7 @@ The bracket gradients:
 
 - **The three cool marks take ground B (0.39).** Ground A is not rejected. It is an unchosen
   option, and its hexes are in section 3.
-- **Orange joins the warm family and takes true black.** It is the owner's color for Riftbound's Epic gem. Its prism is the yellow-gold ramp turned toward red, and its bracket is `amber`: paler than the prism and warmer than pale gold, so the L still reads against black and the mark stays one object, not a gold mark with an orange card.
+- **Orange joins the warm family and takes true black.** It is the owner's color for Riftbound's Epic gem. Its prism is the yellow-gold ramp turned toward red, and its bracket is `amber`. It is paler than the prism and warmer than pale gold. So the L still reads against black, and the mark stays one object, not a gold mark with an orange card.
 - **The gold family takes true black.** The tonal rule gives gold an espresso brown, and true
   black is what makes a gold foil read as lit.
 - **`rose` names two palettes**: a four-stop bracket gradient and a five-stop prism. Neither is

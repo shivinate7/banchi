@@ -1,8 +1,8 @@
 ## D19 — Auto-capture fires live, not from video
 
-**The motion trigger fires per card through the same `POST /capture` a key press uses.** Never record video and extract frames. Cutting a tape into per-card frames is the motion state machine run offline. It avoids none of the tuning and gives up the position-to-photo binding `allocate_capture` makes inside the store lock, undo's safety argument (the deleted photo is of a card still in hand) and the halt at the moment of failure. The 64x36 luma trace gives re-runnable tuning at a thousandth of the bytes.
+**The motion trigger fires per card through the same `POST /capture` a key press uses.** Never record video and extract frames. Cutting a tape into per-card frames is the motion state machine run offline. It avoids none of the tuning. It gives up the position-to-photo binding `allocate_capture` makes inside the store lock. It also gives up undo's safety argument (the deleted photo is of a card still in hand) and the halt at the moment of failure. The 64x36 luma trace gives re-runnable tuning at a thousandth of the bytes.
 
-The presence gate reads a bright quantile (`CARD_QUANTILE` 0.9), never the mean. A mean describes the whole watch region and matches the card only when the card fills it. On a second rig, empty stand read mean 27-30 and bright quantile 62-69, a settled card mean 62-86 and quantile 125-236, and the floor of 90 sat above both means. A constant can be right while its statistic is wrong, and only a second rig shows it.
+The presence gate reads a bright quantile (`CARD_QUANTILE` 0.9), never the mean. A mean describes the whole watch region and matches the card only when the card fills it. On a second rig, an empty stand read mean 27-30 and bright quantile 62-69. A settled card read mean 62-86 and quantile 125-236. The floor of 90 sat above both means. A constant can be right while its statistic is wrong, and only a second rig shows it.
 
 Every parameter derives from a measurement named where the constant lives (`docs/specs/motion-trigger.md`). Built is not tuned.
 
