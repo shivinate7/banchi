@@ -1,0 +1,257 @@
+{
+ "_about": "THE SHRINKING OFFENDER LIST for `make docs-audit`'s `no owner quotes` row (D-no-owner-quotes; D280, offender lists replace pinned counts). files: file -> lane (who owes the fix) and `marker` -> one marker per occurrence. A cut pass that rewrites a file deletes its entry. An entry that matches nothing is stale and red. Growth over the merge-base with origin/main is refused.",
+ "files": {
+  "docs/decisions/D002-identify-is-haiku-vision.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words",
+    "The owner's words"
+   ]
+  },
+  "docs/decisions/D007-duplicates-aggregate-by-sku.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  },
+  "docs/decisions/D010-inventory-positions-sections.md": {
+   "lane": "cut pass",
+   "marker": [
+    "verbatim:",
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D028-review-undo-list-holds-still.md": {
+   "lane": "cut pass",
+   "marker": [
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D100-never-delete-to-lower-a-price.md": {
+   "lane": "cut pass",
+   "marker": [
+    "verbatim:",
+    "The owner's words",
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D103-staleness-filters-it-never-gates.md": {
+   "lane": "cut pass",
+   "marker": [
+    "verbatim:",
+    "The owner's words",
+    "verbatim:",
+    "The owner's words",
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D134-a-departed-record-is-buried.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words",
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D136-suite-sharded-never-widened.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  },
+  "docs/decisions/D141-browser-matrix-when-reachable.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  },
+  "docs/decisions/D145-box-bid-is-a-hidden-identity.md": {
+   "lane": "cut pass",
+   "marker": [
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D155-the-section-ruler-leads-the-box.md": {
+   "lane": "cut pass",
+   "marker": [
+    "verbatim:",
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D162-name-overrides-a-disputed-number.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  },
+  "docs/decisions/D164-undo-covers-the-whole-sitting.md": {
+   "lane": "cut pass",
+   "marker": [
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D176-primary-checkout-syncs.md": {
+   "lane": "cut pass",
+   "marker": [
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D179-shell-mistakes-refused.md": {
+   "lane": "cut pass",
+   "marker": [
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D213-the-set-is-a-stored-fact.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  },
+  "docs/decisions/D220-orders-is-inventory-s-screen.md": {
+   "lane": "cut pass",
+   "marker": [
+    "verbatim:",
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D241-early-catalogue-check-is-unbuilt.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  },
+  "docs/decisions/D242-name-agreement-settles-sku.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  },
+  "docs/decisions/D254-resolve-a-product-from-its-sku.md": {
+   "lane": "cut pass",
+   "marker": [
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D259-boxes-show-names-only.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  },
+  "docs/decisions/D260-numbers-count-within-section.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  },
+  "docs/decisions/D264-a-section-moves-as-one-object.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words",
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D271-every-search-uses-one-matcher.md": {
+   "lane": "cut pass",
+   "marker": [
+    "verbatim:",
+    "The owner's words"
+   ]
+  },
+  "docs/decisions/D272-one-page-width-one-scaffold.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  },
+  "docs/decisions/D273-one-press-sends-listings-live.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words",
+    "The owner's words",
+    "The owner's words",
+    "The owner's words",
+    "The owner's words",
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D287-home-keeps-shape-five-stages.md": {
+   "lane": "cut pass",
+   "marker": [
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D291-runs-fold-into-review.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words",
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D293-inventory-has-a-by-set-view.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words",
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D296-buyer-list-sorts-five-ways.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words",
+    "The owner's words"
+   ]
+  },
+  "docs/decisions/D299-boxes-have-no-lid-or-capacity.md": {
+   "lane": "cut pass",
+   "marker": [
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D300-capture-fills-the-picked-section.md": {
+   "lane": "cut pass",
+   "marker": [
+    "verbatim:",
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D301-stock-photos-hotlinked.md": {
+   "lane": "cut pass",
+   "marker": [
+    "verbatim:"
+   ]
+  },
+  "docs/decisions/D307-owner-rulings-claude-md.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words",
+    "The owner's words"
+   ]
+  },
+  "docs/specs/graveyard.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  },
+  "docs/specs/identify-engine-pick.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words",
+    "The owner's words"
+   ]
+  },
+  "docs/specs/motion-trigger.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  },
+  "docs/specs/order-walk-plan.md": {
+   "lane": "cut pass",
+   "marker": [
+    "The owner's words"
+   ]
+  }
+ }
+}

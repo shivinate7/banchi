@@ -10,6 +10,6 @@
 
 **Sibling rule.** D308, no dates in repo prose, has the same shape. It keeps a date out of prose. This rule keeps a quote out of records.
 
-**Mechanism.** A docs-audit row refuses the markers above in decision records. It keeps a list of existing offenders that only shrinks. D280, offender lists replace pinned counts, sets that shape. The row is not built yet.
+**Mechanism.** A docs-audit row refuses the markers above in decision records. It keeps a list of existing offenders that only shrinks. D280, offender lists replace pinned counts, sets that shape. The `no owner quotes` row of `make docs-audit` reads `docs/` and the list `scripts/no-owner-quotes-allow.json`. It fails on a new marker and on a stale entry.
 
-**NOT MECHANIZED.** A machine would have to see `The owner's words` or `verbatim:` in a decision record, on a line the offender list does not name. It would also have to see a quoted owner message. A machine cannot tell an owner's message from another quote without reading intent. Until a row exists, this rule is prose.
+**NOT MECHANIZED (the quoted-message half).** The `no owner quotes` row sees the markers `The owner's words` and `verbatim:`. A machine cannot tell an owner's message from another quote without reading intent, so a quote with no marker passes.

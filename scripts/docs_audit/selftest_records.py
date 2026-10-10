@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import ast
+import json
 import re
 import tempfile
 from pathlib import Path
+from unittest import mock
 
+from . import records, strings
 from .code_invariants import _PAYLOAD_ASSIGN_RE, _payload_keys, _ts_function_body
-from .core import ROOT, _GATES_STEP_SLUG, _sibling, top_level_names
+from .core import ROOT, _GATES_STEP_SLUG, Report, _sibling, top_level_names
 from .env_map import cited_decisions
 from .harness_criteria import gates_pass_line, strip_presentation
 from .paths_commands import path_candidates, resolve_candidate
@@ -395,3 +398,130 @@ def run(ok) -> None:
         resolve_candidate("../../../etc/passwd", ROOT / "code-card-fork" / "CLAUDE.md", tops) is None,
         "a ../ path escaping the repo is not ours to check",
     )
+
+    _no_owner_quotes(ok)
+
+
+def _no_owner_quotes_row(docs: dict, listed: dict, base: dict | None = None, renames: list | None = None) -> list[str]:
+    """The messages of `_no_owner_quotes_check`."""
+    row = _no_owner_quotes_check(docs, listed, base, renames)
+    return [f"{f.where} {f.message}" for f in row.findings]
+
+
+def _no_owner_quotes_check(docs: dict, listed: dict, base: dict | None = None, renames: list | None = None):
+    """The `no owner quotes` row over a throwaway repo: `docs` is path -> text, `listed` and
+    `base` are the allow list's `files` block now and at the merge-base (`base` None is an
+    unreadable base), `renames` is the rename pairs (old, new) the row reads. Returns the row."""
+    allow_doc = lambda files: {"files": {f: {"lane": "cut pass", "marker": m} for f, m in files.items()}}  # noqa: E731
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        for name, text in docs.items():
+            (root / name).parent.mkdir(parents=True, exist_ok=True)
+            (root / name).write_text(text, encoding="utf-8")
+        allow = root / "allow.json"
+        allow.write_text(json.dumps(allow_doc(listed)), encoding="utf-8")
+        base_doc = allow_doc(base) if base is not None else None
+        report = Report()
+        pairs = lambda: list(renames or [])  # noqa: E731
+        with mock.patch.object(records, "ROOT", root), \
+                mock.patch.object(records, "NO_OWNER_QUOTES_ALLOW", allow), \
+                mock.patch.object(strings, "_offender_list_at_merge_base", lambda _rel: (base_doc, "base")), \
+                mock.patch.object(strings, "_git_renames", pairs, create=True), \
+                mock.patch.object(records, "_git_renames", pairs, create=True):
+            records.check_no_owner_quotes(report)
+    return [c for c in report.checks if c.check == "no owner quotes"][0]
+
+
+def _prune_no_owner_quotes() -> tuple[str, dict]:
+    """`offenders-prune.py --write` over a throwaway tree whose `no owner quotes` list holds one
+    stale entry. Returns (its output, the list after)."""
+    import contextlib
+    import io
+    import sys
+
+    prune = _sibling("offenders-prune.py")
+    audit = prune._audit()
+    quote = "The owner's words"
+    a = "docs/decisions/D001-a.md"
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / a).parent.mkdir(parents=True)
+        (root / a).write_text("plain text\n", encoding="utf-8")
+        allow = root / "allow.json"
+        allow.write_text(json.dumps({"files": {a: {"lane": "cut pass", "marker": [quote]}}}), encoding="utf-8")
+        spelling = root / "spelling.json"
+        spelling.write_text(json.dumps({"files": {}}), encoding="utf-8")
+        out = io.StringIO()
+        with mock.patch.object(records, "ROOT", root), \
+                mock.patch.object(records, "NO_OWNER_QUOTES_ALLOW", allow), \
+                mock.patch.object(audit, "ROOT", root, create=True), \
+                mock.patch.object(audit, "NO_OWNER_QUOTES_ALLOW", allow, create=True), \
+                mock.patch.object(prune, "ROOT", root), \
+                mock.patch.object(prune, "_audit", lambda: audit), \
+                mock.patch.object(prune, "git_renames", lambda *_a, **_k: []), \
+                mock.patch.object(prune, "interpunct_inputs", lambda _a: None), \
+                mock.patch.object(prune, "markdown_spelling_inputs",
+                                  lambda _a: (spelling, {}, lambda _k: True, lambda p: p, lambda e: e, {"STE006"})), \
+                mock.patch.object(sys, "argv", ["offenders-prune.py", "--write"]), \
+                contextlib.redirect_stdout(out):
+            prune.main()
+        return out.getvalue(), json.loads(allow.read_text(encoding="utf-8"))
+
+
+def _no_owner_quotes(ok) -> None:
+    print("\nno owner quotes: a new quote fails, a stale entry fails, the list only shrinks")
+    quote = "The owner's words"
+    a, b = "docs/decisions/D001-a.md", "docs/decisions/D002-b.md"
+    ok(_no_owner_quotes_row({a: f"{quote}: x\n"}, {a: [quote]}, {a: [quote]}) == [],
+       "control: a listed marker, list unchanged against the merge-base, is clean")
+    got = _no_owner_quotes_row({a: f"{quote}: x\n", b: f"{quote}: y\n"}, {a: [quote]}, {a: [quote]})
+    ok(len(got) == 1 and b in got[0] and "does not list it" in got[0],
+       "1. a new marker in an unlisted file fails", str(got))
+    got = _no_owner_quotes_row({a: "plain text\n"}, {a: [quote]}, {a: [quote]})
+    ok(len(got) == 1 and "no longer holds it" in got[0],
+       "2. a listed file whose marker is gone fails as a stale entry", str(got))
+    got = _no_owner_quotes_row({a: f"{quote} {quote}\n"}, {a: [quote, quote]}, {a: [quote]})
+    ok(len(got) == 1 and "gained" in got[0],
+       "3. a list that grows against the merge-base fails", str(got))
+    for text in ("the owner's words", "THE OWNER'S WORDS", "Verbatim: x", "VERBATIM: x"):
+        got = _no_owner_quotes_row({a: f"{text}\n"}, {}, {})
+        ok(len(got) == 1 and "does not list it" in got[0],
+           f"4. a marker in other case fails: {text!r}", str(got))
+    got = _no_owner_quotes_row(
+        {"docs/decisions/" + "D" + "-no-owner-quotes.md": f"{quote}\nverbatim:\n",
+         "docs/decisions/" + "D" + "999-no-owner-quotes.md": f"{quote}\n"}, {}, {})
+    ok(got == [], "5. the record file itself is skipped, before and after its number is claimed", str(got))
+
+    print("\nno owner quotes: the marker forms, the record's own name, the base, renames and the pruner")
+    got = _no_owner_quotes_row({a: "The owner's\nwords: x\n"}, {}, {})
+    ok(len(got) == 1 and "does not list it" in got[0], "6. a marker wrapped over a line break is found", str(got))
+    for text in ('The owner\'s word: *"keep it"*', "The owner's request, verbatim, was to stop.",
+                 "The owner’s request, verbatim, was to stop."):
+        got = _no_owner_quotes_row({a: f"{text}\n"}, {}, {})
+        ok(len(got) == 1 and "does not list it" in got[0], f"7. the singular and verbatim forms are found: {text!r}", str(got))
+    for text in ("Merge only on the owner's word.", "It waits for the owner's word, then merges."):
+        got = _no_owner_quotes_row({a: f"{text}\n"}, {}, {})
+        ok(got == [], f"8. a permission phrase stays quiet: {text!r}", str(got))
+    for name in ("docs/decisions/" + "D" + "321-ban-no-owner-quotes.md", "docs/decisions/zz-no-owner-quotes.md"):
+        got = _no_owner_quotes_row({name: f"{quote}\n"}, {}, {})
+        ok(len(got) == 1 and "does not list it" in got[0], f"9. only the record itself is skipped, not {name}", str(got))
+    row = _no_owner_quotes_check({a: f"{quote}\n"}, {a: [quote]}, None)
+    ok("Only-shrinks not compared" in row.summary and row.findings == [],
+       "10. an unreadable merge-base prints a note that only-shrinks was not compared", row.summary)
+    moved = {b: f"{quote}\n"}
+    got = _no_owner_quotes_row(moved, {b: [quote]}, {a: [quote]}, renames=[(a, b)])
+    ok(got == [], "11. a renamed listed file is re-keyed, not growth", str(got))
+    got = _no_owner_quotes_row(moved, {b: [quote]}, {a: [quote]}, renames=[])
+    ok(len(got) == 1 and "gained" in got[0], "11b. growth is counted per file: with no rename pair the same move is growth", str(got))
+    for text in ("The owner's word, \"motion is better than none\"", "The owner's word.** \"The suite stays\"",
+                 "Per the owner's word (\"Both\")", "The owner's word was \"keep both\"",
+                 "The request (verbatim): \"New 'missing' state\""):
+        got = _no_owner_quotes_row({a: f"{text}\n"}, {}, {})
+        ok(len(got) >= 1 and all("does not list it" in g for g in got), f"13. a quote lead is found: {text!r}", str(got))
+    for text in ("Merge on the owner's word, then ship.", "The owner's word was needed first.",
+                 "Merge on the owner's word (see the list).", "The owner's word.** Then merge."):
+        got = _no_owner_quotes_row({a: f"{text}\n"}, {}, {})
+        ok(got == [], f"13b. no quote after it stays quiet: {text!r}", str(got))
+    printed, after = _prune_no_owner_quotes()
+    ok("no owner quotes" in printed and after.get("files") == {},
+       "12. offenders-prune deletes a stale entry from the no-owner-quotes list", f"{printed!r} {after}")
