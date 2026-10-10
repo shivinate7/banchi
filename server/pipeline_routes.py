@@ -116,7 +116,7 @@ import contextvars
 import threading
 import time
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, fields as dataclass_fields
 from decimal import Decimal
 from http import HTTPStatus
 from pathlib import Path
@@ -508,6 +508,12 @@ def _box_bid(box: int) -> Optional[int]:
     return None if entry is None else entry.bid
 
 
+# The body keys the selection routes read beside the selection's own terms.
+_ROUTE_KEYS = frozenset(
+    {"confirm", "crop", "max_edge", "engine", "reread_matcher", "retry_budget", "label", "offset"}
+)
+
+
 def _resolve_selection(payload: dict) -> selection_mod.Selection:
     """The wire's selection, refused as a `PipelineRefusal` rather than a `SelectionError`.
 
@@ -521,6 +527,18 @@ def _resolve_selection(payload: dict) -> selection_mod.Selection:
     the request's fault (400) and a well-formed selection that matched nothing is a 404, which
     is exactly the split `box_required` and `box_has_no_captures` used to make.
     """
+    # A KEY NO READER KNOWS IS NOT "NO TERMS": `{"boxes": [3]}` would otherwise price and run the
+    # whole store. `indices` is left to `parse`, which refuses it by name.
+    known = _ROUTE_KEYS | {f.name for f in dataclass_fields(selection_mod.Selection)}
+    stray = sorted(str(k) for k in payload if k not in known and k != "indices")
+    if stray:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "selection_invalid",
+            "This request names something the selection does not know ("
+            + ", ".join(stray)
+            + "). Nothing was run.",
+        )
     try:
         return selection_mod.parse(payload)
     except selection_mod.SelectionError as exc:

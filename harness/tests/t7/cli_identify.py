@@ -5708,6 +5708,688 @@ def check_run_and_preview_share_locate_card(checks: Checks) -> None:
     )
 
 
+def check_selection_grammar(checks: Checks) -> None:
+    """`pipeline/selection.py` is ONE grammar for which cards a press covers. Four claims.
+
+    (a) A selection that matches nothing returns NOTHING, never every card, and the empty
+        answer is refused as `selection_is_empty` (`empty=True`), never returned as a result.
+    (b) A malformed term refuses as `selection_invalid` with a reason on BOTH surfaces, the
+        route's `parse` and the CLI's argparse adapter. A term that is refused and then
+        answered anyway would be a press over every card reported as a press over some.
+    (c) Each selector narrows the set, and two or more selectors intersect.
+    (d) The route and the CLI parse one expression to one `Selection`, and resolve it to one
+        set of cards on the store.
+    """
+    import socket
+    import subprocess
+    import urllib.request
+    from http import HTTPStatus
+    from types import SimpleNamespace
+
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+    from identify import batch as identify_batch
+    from pipeline import selection as selection_mod
+    from server import pipeline_routes
+
+    sel = selection_mod
+    checks.note("")
+    checks.note("SELECTION GRAMMAR — pipeline/selection.py, one reader for the route and the CLI")
+
+    # ------------------------------------------------ a stand-in store for `narrow`
+    # `narrow` reads only these attributes, so a stand-in is the whole of what it can see.
+    # Box 3 is pokemon, with dividers at index 1 and 4 (sections 1 and 2). Box 5 is riftbound.
+    rows = {}
+    captures = []
+
+    def add(box, index, game, captured_at, state):
+        key = f"{box}/{index}"
+        captures.append(
+            SimpleNamespace(
+                box=box, index=index, key=key, has_position=True, game_or_default=game
+            )
+        )
+        rows[key] = (box, index, captured_at, state)
+
+    for index, state in ((1, "identified"), (2, "identified"), (3, "captured")):
+        add(3, index, "pokemon", "2026-09-01T10:00:00", state)
+    for index in (4, 5, 6):
+        add(3, index, "pokemon", "2026-09-12T10:00:00", "captured")
+    for index in (1, 2, 3):
+        add(5, index, "riftbound", "2026-09-12T10:00:00", "captured")
+
+    class _Cards:
+        def select(self, fields, **where):
+            state = where.get("state")
+            return [
+                (key, (box, idx, at))
+                for key, (box, idx, at, st) in rows.items()
+                if state is None or st == state
+            ]
+
+    class _Order:
+        def of(self, index):
+            return index
+
+    class _Inventory:
+        cards = _Cards()
+
+        def box_by_id(self, bid):
+            return SimpleNamespace(box=3) if bid == 70 else None
+
+        def sections_for(self, number):
+            return (1, 4) if number == 3 else ()
+
+        def box_title(self, number):
+            return f"box {number}"
+
+        def box_order(self, box):
+            return _Order()
+
+    inventory = _Inventory()
+
+    def narrowed(selection):
+        found = sel.narrow(selection, captures, inventory=inventory, run_keys=None)
+        return sorted(c.key for c in found)
+
+    everything = sorted(c.key for c in captures)
+
+    # ----------------------------------------------------------------- (a) empty is empty
+    for label, selection in (
+        ("a box nothing has been photographed into", sel.Selection(box=(9,))),
+        ("a key naming a card the store does not hold", sel.Selection(keys=("9/9",))),
+        ("a game no card in that drawer claims", sel.Selection(game="pokemon", box=(5,))),
+        ("a state no card holds", sel.Selection(state="sold")),
+        ("a capture time after every card", sel.Selection(since="2030-01-01")),
+        ("a state and a game that never meet", sel.Selection(state="identified", game="riftbound")),
+    ):
+        got = narrowed(selection)
+        checks.equal(got, [], f"(a) {label} selects ZERO cards, never every card")
+
+    try:
+        sel.refuse_empty(sel.Selection(box=(9,)), scanned=len(captures))
+        checks.ok(False, "(a) an empty answer is refused as selection_is_empty", "it returned")
+    except sel.SelectionError as refusal:
+        checks.equal(
+            (refusal.code, refusal.empty),
+            ("selection_is_empty", True),
+            "(a) an empty answer is refused as `selection_is_empty` with empty=True",
+        )
+
+    # ------------------------------------------------- (b) malformed refuses with a reason
+    malformed = (
+        ({"box": 0}, "a box that is not positive"),
+        ({"box": -1}, "a negative box"),
+        ({"box": "3"}, "a box sent as a string"),
+        ({"box": True}, "a box sent as a boolean"),
+        ({"box": []}, "an empty box list"),
+        ({"box": [3, 0]}, "a box list holding a zero"),
+        ({"keys": []}, "an empty key list, which must not read as every card"),
+        ({"keys": "3/17"}, "keys sent as a bare string"),
+        ({"keys": ["3/017"]}, "a key with padding"),
+        ({"keys": ["3/0"]}, "a key with index zero"),
+        ({"keys": ["3-17"]}, "a key with the wrong separator"),
+        ({"keys": ["3/17", 5]}, "a key list holding a number"),
+        ({"state": "nonsense"}, "a state the store does not have"),
+        ({"game": "not-a-game"}, "a game the registry does not know"),
+        ({"game": ""}, "an empty game"),
+        ({"since": "yesterday"}, "a capture time that is not an instant"),
+        ({"since": ""}, "an empty capture time"),
+        ({"section": 2}, "a section with no drawer to be inside"),
+        ({"box": [3, 5], "section": 1}, "a section over two drawers"),
+        ({"box": 3, "bid": 3}, "a drawer named twice, two ways"),
+        ({"indices": [17]}, "`indices`, the retired spelling"),
+        ({"scopes": [{"box": 3}]}, "`scopes`, the retired cart"),
+        ({"paths": []}, "an empty path list"),
+        ({"run": "../secrets"}, "a run name with a separator"),
+        ([], "a selection that is not a JSON object"),
+    )
+    for payload, why in malformed:
+        try:
+            got = sel.parse(payload)
+        except sel.SelectionError as refusal:
+            checks.ok(
+                refusal.code == "selection_invalid" and str(refusal).strip() != "",
+                f"(b) the route refuses {why} as selection_invalid, with a reason",
+                f"code={refusal.code!r} message={str(refusal)!r}",
+            )
+            continue
+        checks.ok(False, f"(b) the route refuses {why}", f"it answered: {got!r}")
+
+    # A NULL TERM IS A VALUE AND A VALUE IS REFUSED, never read as "absent" (owner ruling on
+    # PR #813: a press never pays for cards it did not name). A caller that means "any" leaves
+    # the key out. Each selector is tried alone, then all of them together.
+    null_terms = ("paths", "state", "box", "bid", "section", "game", "since", "keys", "run")
+    for term in null_terms:
+        try:
+            got = sel.parse({term: None})
+        except sel.SelectionError as refusal:
+            checks.ok(
+                refusal.code == "selection_invalid" and str(refusal).strip() != "",
+                f"(b) the route refuses `{term}: null` as selection_invalid, with a reason",
+                f"code={refusal.code!r} message={str(refusal)!r}",
+            )
+            continue
+        checks.ok(False, f"(b) the route refuses `{term}: null`", f"it answered: {got!r}")
+    try:
+        got = sel.parse({term: None for term in null_terms})
+    except sel.SelectionError as refusal:
+        checks.ok(
+            refusal.code == "selection_invalid" and str(refusal).strip() != "",
+            "(b) a payload of only null terms is refused as selection_invalid, not read as every photograph",
+            f"code={refusal.code!r} message={str(refusal)!r}",
+        )
+    else:
+        checks.ok(False, "(b) a payload of only null terms is refused", f"it answered: {got!r}")
+
+    parser = cli_entry.build_parser()
+    for argv, why in (
+        (["identify", "--box", "0"], "--box 0"),
+        (["identify", "--keys", "3/017"], "--keys with padding"),
+        (["identify", "--section", "2"], "--section with no drawer"),
+        (["identify", "--box", "3", "--bid", "3"], "--box and --bid naming one drawer twice"),
+        (["identify", "--state", "nonsense"], "--state the store does not have"),
+    ):
+        try:
+            got = cmd_identify._selection_from(parser.parse_args(argv))
+        except sel.SelectionError as refusal:
+            checks.ok(
+                refusal.code == "selection_invalid" and str(refusal).strip() != "",
+                f"(b) the CLI refuses {why} as selection_invalid, with a reason",
+                f"code={refusal.code!r} message={str(refusal)!r}",
+            )
+            continue
+        checks.ok(False, f"(b) the CLI refuses {why}", f"it answered: {got!r}")
+
+    # ---------------------------------------------- (c) each selector narrows, and they meet
+    single = (
+        ("box 3", sel.Selection(box=(3,)), ["3/1", "3/2", "3/3", "3/4", "3/5", "3/6"]),
+        ("boxes 3 and 5", sel.Selection(box=(3, 5)), everything),
+        ("bid 70, the drawer that is box 3", sel.Selection(bid=(70,)), ["3/1", "3/2", "3/3", "3/4", "3/5", "3/6"]),
+        ("keys", sel.Selection(keys=("3/2", "5/1")), ["3/2", "5/1"]),
+        ("game riftbound", sel.Selection(game="riftbound"), ["5/1", "5/2", "5/3"]),
+        ("state identified", sel.Selection(state="identified"), ["3/1", "3/2"]),
+        ("since 2026-09-10", sel.Selection(since="2026-09-10"), ["3/4", "3/5", "3/6", "5/1", "5/2", "5/3"]),
+        ("section 1 of box 3", sel.Selection(box=(3,), section=1), ["3/1", "3/2", "3/3"]),
+        ("section 2 of box 3", sel.Selection(box=(3,), section=2), ["3/4", "3/5", "3/6"]),
+    )
+    for label, selection, expected in single:
+        checks.equal(narrowed(selection), expected, f"(c) the {label} selector narrows to its own cards")
+
+    pairs = (
+        ("box 3 and state identified", sel.Selection(box=(3,), state="identified"), ["3/1", "3/2"]),
+        (
+            "box 3, since 09-10 and state captured",
+            sel.Selection(box=(3,), since="2026-09-10", state="captured"),
+            ["3/4", "3/5", "3/6"],
+        ),
+        ("game pokemon and keys 3/1 and 5/1", sel.Selection(game="pokemon", keys=("3/1", "5/1")), ["3/1"]),
+        ("section 2 of box 3 and keys 3/2 and 3/5", sel.Selection(box=(3,), section=2, keys=("3/2", "3/5")), ["3/5"]),
+        (
+            "boxes 3 and 5, game riftbound and since",
+            sel.Selection(box=(3, 5), game="riftbound", since="2026-09-10"),
+            ["5/1", "5/2", "5/3"],
+        ),
+    )
+    for label, selection, expected in pairs:
+        checks.equal(narrowed(selection), expected, f"(c) two or more selectors intersect: {label}")
+
+    # ------------------------------------------- the real store: (a) end to end, and (d)
+    from harness.tests.t7.common import capture_payload, isolated_home
+    from store import files
+    from store.session import Store
+
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(3))
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(6))
+        files.home().joinpath("captures", "cards").mkdir(parents=True, exist_ok=True)
+
+        def read_inventory():
+            return Store().read().inventory
+
+        held = sorted(c.key for c in pipeline_routes._selection_captures(sel.parse({})))
+        k3 = [k for k in held if k.startswith("3/")]
+        k6 = [k for k in held if k.startswith("6/")]
+        checks.ok(len(held) == 5 and len(k3) == 3, "the store holds 3 cards in box 3 and 2 in box 6", f"{held}")
+
+        for label, payload in (
+            ("a key the store does not hold", {"keys": ["9/9"]}),
+            ("a box nothing was photographed into", {"box": 9}),
+        ):
+            found, _ = sel.resolve(
+                sel.parse(payload), files.home(), read_inventory=read_inventory, run_keys=None
+            )
+            checks.equal(found, [], f"(a) end to end, {label} resolves to ZERO cards from the store")
+
+        cases = (
+            ({"box": [3, 6]}, ["--box", "3,6"]),
+            ({"box": 3}, ["--box", "3"]),
+            ({"keys": [k3[0], k6[0]]}, ["--keys", f"{k3[0]},{k6[0]}"]),
+            ({"keys": [k3[1], k6[1]]}, ["--keys", k3[1], "--keys", k6[1]]),
+            ({"box": 3, "state": "captured"}, ["--box", "3", "--state", "captured"]),
+            ({"box": 3, "section": 1}, ["--box", "3", "--section", "1"]),
+            ({"game": "pokemon", "since": "2000-01-01"}, ["--game", "pokemon", "--since", "2000-01-01"]),
+        )
+        for payload, argv in cases:
+            route_sel = pipeline_routes._resolve_selection(payload)
+            cli_sel = cmd_identify._selection_from(parser.parse_args(["identify", *argv]))
+            checks.equal(
+                route_sel,
+                cli_sel,
+                f"(d) the route and the CLI parse {payload} to the same selection",
+            )
+            route_set = sorted(c.key for c in pipeline_routes._selection_captures(route_sel))
+            cli_found, _ = sel.resolve(cli_sel, files.home(), read_inventory=read_inventory, run_keys=None)
+            checks.equal(
+                route_set,
+                sorted(c.key for c in cli_found),
+                f"(d) {payload} resolves to the same cards on the route and the CLI",
+            )
+
+    # ------------------------------ the identify route refuses a null term before any spend
+    # The route is the one that spends. Blocked here: sockets, `urlopen`, the child it would
+    # spawn, the hash and the paid read. A route that read `box: null` as absent would resolve
+    # every photograph in the store and spawn a paid child, so the refusal is pinned at the
+    # door, with the money path closed.
+    spawned: list = []
+    hashed: list = []
+    paid: list = []
+    network: list = []
+
+    def no_network(*args, **kwargs):
+        network.append(args[:1])
+        raise OSError("network blocked for this check")
+
+    def no_spawn(*args, **kwargs):
+        spawned.append(args[:1])
+        raise OSError("no child for this check")
+
+    def counted(log: list, real_fn):
+        def wrapper(*args, **kwargs):
+            log.append(args[:1])
+            return real_fn(*args, **kwargs)
+
+        return wrapper
+
+    def fake_run_batch(requests, log=None, on_submit=None):
+        paid.append(len(requests))
+        return identify_batch.BatchRun(outcomes={})
+
+    saved = {
+        "popen": subprocess.Popen,
+        "sha": cmd_identify.images.sha256_of,
+        "run_batch": cmd_identify.batch.run_batch,
+        "create_connection": socket.create_connection,
+        "connect": socket.socket.connect,
+        "urlopen": urllib.request.urlopen,
+    }
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(3))
+        subprocess.Popen = no_spawn
+        cmd_identify.images.sha256_of = counted(hashed, saved["sha"])
+        cmd_identify.batch.run_batch = fake_run_batch
+        socket.create_connection = no_network
+        socket.socket.connect = no_network
+        urllib.request.urlopen = no_network
+        try:
+            for payload in (
+                {"box": None},
+                {"keys": None, "game": None},
+                {"box": None, "state": None, "section": None},
+            ):
+                label = str(payload)
+                try:
+                    routed = pipeline_routes.do_pipeline_identify({"confirm": True, **payload})
+                    checks.ok(False, f"the identify route refuses {label}", f"it answered: {routed!r}")
+                except pipeline_routes.PipelineRefusal as refusal:
+                    checks.equal(
+                        (refusal.status, refusal.code),
+                        (HTTPStatus.BAD_REQUEST, "selection_invalid"),
+                        f"the identify route refuses {label} as 400 selection_invalid",
+                    )
+                checks.equal(spawned, [], f"and spawns NO child for {label}")
+                checks.equal(hashed, [], f"and hashes NO photograph for {label}")
+                checks.equal(paid, [], f"and makes NO paid read for {label}")
+                checks.equal(network, [], f"and makes NO network call for {label}")
+        finally:
+            subprocess.Popen = saved["popen"]
+            cmd_identify.images.sha256_of = saved["sha"]
+            cmd_identify.batch.run_batch = saved["run_batch"]
+            socket.create_connection = saved["create_connection"]
+            socket.socket.connect = saved["connect"]
+            urllib.request.urlopen = saved["urlopen"]
+
+
+def check_identify_empty_refuses_before_work(checks: Checks) -> None:
+    """`./banchi identify` over a selection that names no card refuses BEFORE any hash, any
+    prepare, any paid read, and any network call; it exits 1 and says why.
+
+    THE REFUSAL IS THE MONEY GATE for the empty case. A selection that matches nothing must
+    not fall through to the hash, prepare and send passes with an empty list and report a
+    success, and it must not reach the network to find out. Four sites are counted: the hash
+    (`images.sha256_of`), the decode (`images.prepare` and `prepare_located`) and the paid
+    read (`batch.run_batch`). Sockets and `urlopen` are blocked for the press, so a call that
+    reaches the network is a recorded failure rather than a silent one. Two empty selections:
+    a drawer that was never photographed, and a key the store does not hold.
+    """
+    import socket
+    import urllib.request
+
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+    from identify import batch as identify_batch
+
+    checks.note("")
+    checks.note("IDENTIFY, EMPTY SELECTION: refuses before any hash, decode, paid read or network")
+
+    hashed: list = []
+    decoded: list = []
+    paid: list = []
+    network: list = []
+
+    def counted(log: list, real_fn):
+        def wrapper(*args, **kwargs):
+            log.append(args[:1])
+            return real_fn(*args, **kwargs)
+
+        return wrapper
+
+    def no_network(*args, **kwargs):
+        network.append(args[:1])
+        raise OSError("network blocked for this check")
+
+    def fake_run_batch(requests, log=None, on_submit=None):
+        paid.append(len(requests))
+        return identify_batch.BatchRun(outcomes={})
+
+    real = {
+        "sha": cmd_identify.images.sha256_of,
+        "prepare": cmd_identify.images.prepare,
+        "located": cmd_identify.images.prepare_located,
+        "run_batch": cmd_identify.batch.run_batch,
+        "create_connection": socket.create_connection,
+        "connect": socket.socket.connect,
+        "urlopen": urllib.request.urlopen,
+    }
+
+    from harness.tests.t7.common import capture_payload, isolated_home
+    from harness.tests.t7.common import quiet as quiet_out
+
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(3))
+
+        cmd_identify.images.sha256_of = counted(hashed, real["sha"])
+        cmd_identify.images.prepare = counted(decoded, real["prepare"])
+        cmd_identify.images.prepare_located = counted(decoded, real["located"])
+        cmd_identify.batch.run_batch = fake_run_batch
+        socket.create_connection = no_network
+        socket.socket.connect = no_network
+        urllib.request.urlopen = no_network
+        try:
+            for argv, why in (
+                (["identify", "--box", "9", "--engine", "haiku"], "a drawer nothing was photographed into"),
+                (["identify", "--keys", "9/9", "--engine", "haiku"], "a key the store does not hold"),
+            ):
+                try:
+                    with quiet_out() as said:
+                        code = cli_entry.main(argv)
+                    text = said.getvalue()
+                except Exception as failure:  # noqa: BLE001 — a crash is a finding, not a pass
+                    code, text = None, f"raised {failure!r}"
+                checks.equal(code, 1, f"`identify` over {why} exits 1")
+                checks.ok(
+                    "Nothing to identify" in text or "refused" in text,
+                    f"and says why, over {why}",
+                    f"said: {text.strip()!r}",
+                )
+                checks.equal(hashed, [], f"and hashes NO photograph over {why}")
+                checks.equal(decoded, [], f"and decodes NO photograph over {why}")
+                checks.equal(paid, [], f"and makes NO paid read over {why}")
+                checks.equal(network, [], f"and makes NO network call over {why}")
+        finally:
+            cmd_identify.images.sha256_of = real["sha"]
+            cmd_identify.images.prepare = real["prepare"]
+            cmd_identify.images.prepare_located = real["located"]
+            cmd_identify.batch.run_batch = real["run_batch"]
+            socket.create_connection = real["create_connection"]
+            socket.socket.connect = real["connect"]
+            urllib.request.urlopen = real["urlopen"]
+
+
+def check_selection_unknown_route_keys(checks: Checks) -> None:
+    """A selection route refuses a body key it does not know, before any spend.
+
+    Owner ruling: a paid run never covers cards the owner did not name. `{"confirm": true,
+    "boxes": [3]}` has no selection term the reader knows (`boxes` is not `box`), so reading it
+    as "no terms" would price and run the whole store. The route's own keys (`confirm`, `crop`,
+    `max_edge`, `engine`, `reread_matcher`, `retry_budget`, `label`, `offset`) and the
+    `Selection` fields still pass. Probed on `_resolve_send` (the seam the preflight, waiting
+    and identify routes share) and on the three routes, with the money path closed.
+    """
+    import socket
+    import subprocess
+    import urllib.request
+    from http import HTTPStatus
+
+    from cli import cmd_identify
+    from identify import batch as identify_batch
+    from server import pipeline_routes
+
+    from harness.tests.t7.common import capture_payload, isolated_home
+
+    checks.note("")
+    checks.note("SELECTION ROUTES: an unknown body key is refused, never read as the whole store")
+
+    spawned: list = []
+    paid: list = []
+    network: list = []
+
+    def no_network(*args, **kwargs):
+        network.append(args[:1])
+        raise OSError("network blocked for this check")
+
+    def no_spawn(*args, **kwargs):
+        spawned.append(args[:1])
+        raise OSError("no child for this check")
+
+    def fake_run_batch(requests, log=None, on_submit=None):
+        paid.append(len(requests))
+        return identify_batch.BatchRun(outcomes={})
+
+    unknown = (
+        {"confirm": True, "boxes": [3]},
+        {"confirm": True, "box": 3, "sate": "captured"},
+        {"confirm": True, "Box": 3},
+    )
+    known = {
+        "confirm": True,
+        "crop": False,
+        "max_edge": 900,
+        "engine": "haiku",
+        "reread_matcher": False,
+        "retry_budget": 1,
+        "label": "a label",
+        "offset": 0,
+        "box": 3,
+    }
+    routes = (
+        ("do_pipeline_preflight", pipeline_routes.do_pipeline_preflight),
+        ("do_pipeline_waiting", pipeline_routes.do_pipeline_waiting),
+        ("do_pipeline_identify", pipeline_routes.do_pipeline_identify),
+    )
+
+    saved = {
+        "popen": subprocess.Popen,
+        "run_batch": cmd_identify.batch.run_batch,
+        "create_connection": socket.create_connection,
+        "connect": socket.socket.connect,
+        "urlopen": urllib.request.urlopen,
+    }
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(3))
+        subprocess.Popen = no_spawn
+        cmd_identify.batch.run_batch = fake_run_batch
+        socket.create_connection = no_network
+        socket.socket.connect = no_network
+        urllib.request.urlopen = no_network
+        try:
+            for payload in unknown:
+                label = str(payload)
+                spawned.clear()
+                try:
+                    pipeline_routes._resolve_send(payload)
+                    checks.ok(False, f"_resolve_send refuses {label}", "it resolved a press")
+                except pipeline_routes.PipelineRefusal as refusal:
+                    checks.equal(
+                        (refusal.status, refusal.code),
+                        (HTTPStatus.BAD_REQUEST, "selection_invalid"),
+                        f"_resolve_send refuses {label} as 400 selection_invalid",
+                    )
+                for name, route in routes:
+                    try:
+                        answered = route(dict(payload))
+                        checks.ok(False, f"{name} refuses {label}", f"it answered: {str(answered)[:80]!r}")
+                    except pipeline_routes.PipelineRefusal as refusal:
+                        checks.equal(
+                            (refusal.status, refusal.code),
+                            (HTTPStatus.BAD_REQUEST, "selection_invalid"),
+                            f"{name} refuses {label} as 400 selection_invalid",
+                        )
+                    except Exception as failure:  # noqa: BLE001 — it got as far as the work
+                        checks.ok(False, f"{name} refuses {label}", f"it tried to run: {failure!r}")
+                checks.equal(spawned, [], f"and spawns NO child for {label}")
+                checks.equal(paid, [], f"and makes NO paid read for {label}")
+                checks.equal(network, [], f"and makes NO network call for {label}")
+
+            # Known keys still pass: every route key and a selection term, no refusal.
+            try:
+                send = pipeline_routes._resolve_send(dict(known))
+                checks.equal(
+                    send.selection.box, (3,), "_resolve_send still accepts every route key with a box"
+                )
+            except pipeline_routes.PipelineRefusal as refusal:
+                checks.ok(False, "_resolve_send still accepts every route key", f"refused: {refusal}")
+            for term in (
+                {"paths": ["x"]},
+                {"state": "captured"},
+                {"bid": 1},
+                {"section": 1, "box": 3},
+                {"game": "pokemon"},
+                {"since": "2000-01-01"},
+                {"keys": ["3/1"]},
+                {"run": "a-run"},
+            ):
+                try:
+                    pipeline_routes._resolve_send({"confirm": True, **term})
+                    checks.ok(True, f"_resolve_send still accepts the selection term {sorted(term)}")
+                except pipeline_routes.PipelineRefusal as refusal:
+                    checks.ok(False, f"_resolve_send still accepts {sorted(term)}", f"refused: {refusal}")
+        finally:
+            subprocess.Popen = saved["popen"]
+            cmd_identify.batch.run_batch = saved["run_batch"]
+            socket.create_connection = saved["create_connection"]
+            socket.socket.connect = saved["connect"]
+            urllib.request.urlopen = saved["urlopen"]
+
+
+def check_identify_empty_flag_refuses(checks: Checks) -> None:
+    """`./banchi identify` with an empty value for any selection flag exits 2, not "absent".
+
+    `--box 3 --since ""` read `since` as not given, so the press covered all of box 3 where the
+    operator typed a bound that failed to expand (`--since "$SITTING"` with the variable unset).
+    Owner ruling: a paid run never covers cards the owner did not name. Every selection flag in
+    `cmd_identify._selection_from` is tried with an empty value beside a narrowing anchor, with
+    the hash, the paid read and the network closed. `--section 0` is the same falsy-read.
+    """
+    import contextlib
+    import io
+    import socket
+    import urllib.request
+
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+    from identify import batch as identify_batch
+
+    from harness.tests.t7.common import capture_payload, isolated_home
+    from harness.tests.t7.common import quiet as quiet_out
+
+    checks.note("")
+    checks.note("IDENTIFY, EMPTY FLAG VALUE: exits 2 for every selection flag, never read as absent")
+
+    hashed: list = []
+    paid: list = []
+    network: list = []
+
+    def no_network(*args, **kwargs):
+        network.append(args[:1])
+        raise OSError("network blocked for this check")
+
+    def fake_run_batch(requests, log=None, on_submit=None):
+        paid.append(len(requests))
+        return identify_batch.BatchRun(outcomes={})
+
+    real_sha = cmd_identify.images.sha256_of
+
+    def counted_sha(*args, **kwargs):
+        hashed.append(args[:1])
+        return real_sha(*args, **kwargs)
+
+    real = {
+        "run_batch": cmd_identify.batch.run_batch,
+        "create_connection": socket.create_connection,
+        "connect": socket.socket.connect,
+        "urlopen": urllib.request.urlopen,
+    }
+    box, state = ["--box", "3"], ["--state", "captured"]
+    cases = (
+        (["--since", ""], box),
+        (["--state", ""], box),
+        (["--box", ""], state),
+        (["--bid", ""], state),
+        (["--game", ""], box),
+        (["--keys", ""], box),
+        (["--keys", ","], box),
+        (["--run", ""], box),
+        (["--section", "0"], box),
+        ([""], state),
+    )
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(3))
+        cmd_identify.images.sha256_of = counted_sha
+        cmd_identify.batch.run_batch = fake_run_batch
+        socket.create_connection = no_network
+        socket.socket.connect = no_network
+        urllib.request.urlopen = no_network
+        try:
+            for empty, anchor in cases:
+                hashed.clear()
+                argv = ["identify", *anchor, *empty, "--engine", "haiku"]
+                label = " ".join(repr(a) if a in ("", ",") else a for a in empty)
+                try:
+                    with quiet_out(), contextlib.redirect_stderr(io.StringIO()):
+                        code = cli_entry.main(argv)
+                except SystemExit as stop:
+                    code = stop.code
+                except Exception as failure:  # noqa: BLE001 — a crash is a finding, not a pass
+                    code = f"raised {failure!r}"
+                checks.equal(code, 2, f"`identify {' '.join(anchor)} {label}` exits 2")
+                checks.equal(len(hashed), 0, f"and hashes NO photograph for {label}")
+                checks.equal(paid, [], f"and makes NO paid read for {label}")
+                checks.equal(network, [], f"and makes NO network call for {label}")
+        finally:
+            cmd_identify.images.sha256_of = real_sha
+            cmd_identify.batch.run_batch = real["run_batch"]
+            socket.create_connection = real["create_connection"]
+            socket.socket.connect = real["connect"]
+            urllib.request.urlopen = real["urlopen"]
+
+
 CHECKS = (
     check_cli_seams,
     check_code_ledger,
@@ -5734,4 +6416,8 @@ CHECKS = (
     check_run_binds_to_bid,
     check_printed_code_profiles,
     check_cli_refusals,
+    check_selection_grammar,
+    check_identify_empty_refuses_before_work,
+    check_selection_unknown_route_keys,
+    check_identify_empty_flag_refuses,
 )
