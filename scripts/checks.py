@@ -94,9 +94,7 @@ CHECKS = (
         "needs": ("venv",),
         "writes": "",
         "commit_path": False,
-        "why_off_commit_path": "It writes, and it needs the venv. D18 keeps a writing thing off "
-                               "the path that decides whether a commit proceeds; the Stop hook "
-                               "runs it at turn end instead.",
+        "why_off_commit_path": "It needs the venv, and the commit hook runs a bare python3.",
         "gates": True,
         "governed_by": ("D18",),
     },
@@ -110,9 +108,7 @@ CHECKS = (
         "needs": ("venv",),
         "writes": "",
         "commit_path": False,
-        "why_off_commit_path": "It writes, and it needs the venv. D18 keeps a writing thing off "
-                               "the path that decides whether a commit proceeds; the Stop hook "
-                               "runs it at turn end instead.",
+        "why_off_commit_path": "It needs the venv, and the commit hook runs a bare python3.",
         "gates": True,
         "governed_by": ("D18",),
     },

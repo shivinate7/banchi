@@ -172,6 +172,13 @@ def _check_registry() -> Row:
             "the `harness-K` entries are {0} and harness/run.py's PARTS wants {1}.\n"
             "  A missing slice drops its T7 checks from every shard."
         ).format(sorted(have), sorted(want) if want else "a `PARTS = N` line")))
+    # Each `harness-K` rule hands the shared recipe its own K, or slice K runs in no shard.
+    for name in sorted(want or ()):
+        body = _make_recipe(makefile_text, name) or []
+        if not any("PART={0}".format(name.rsplit("-", 1)[1]) in line for line in body):
+            findings.append(Finding("Makefile - {0}".format(name), (
+                "does not pass `PART={0}`, so T7 slice {0} runs in no shard."
+            ).format(name.rsplit("-", 1)[1])))
     workflow = read(CHECK_WORKFLOW) if exists(CHECK_WORKFLOW) else ""
     matrix = re.search(r"target:\s*\[([^\]]*)\]", workflow)
     listed = {t.strip() for t in matrix.group(1).split(",")} if matrix else set()
