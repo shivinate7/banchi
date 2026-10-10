@@ -1063,6 +1063,93 @@ def check_refused_hit_is_claimed(checks: Checks) -> None:
     claim_case("a refused hit beside a miss", [1, 2], [1])
 
 
+def check_cleared_unparsed_goes_to_review(checks: Checks) -> None:
+    """A human-cleared cache answer the card's own parser cannot read is never paid for and never
+    used: the card waits in review with its photo and a reason, once, and the cleared entry stays
+    as it is. Outcome protected: the owner never pays again for a card a person already settled.
+    A cleared answer that parses is still used, with no paid read."""
+    from dataclasses import asdict
+
+    from cli import __main__ as cli_entry, cmd_identify
+    from store.session import Store
+
+    pokemon_required = prompt.profile("pokemon_card_v1").schema["required"]
+
+    def said(name):
+        answer = {key: "x" for key in pokemon_required}
+        answer.update(name=name, number="1", printed_total="9", finish="normal", confidence="high")
+        return answer
+
+    checks.note("")
+    checks.note("CLEARED ANSWER THAT DOES NOT PARSE — goes to review, is never paid for, is never changed")
+
+    def case(label, identification, parses):
+        with isolated_home() as home:
+            caps = Path(home) / "cleared-caps"
+            caps.mkdir()
+            identify_images.Image.new("RGB", (64, 89), (30, 120, 200)).save(caps / "4-001.jpg", "JPEG")
+            (caps / "4-001.json").write_text(json.dumps({"box": 4, "position": 1, "game": "pokemon"}), "utf-8")
+            digest = identify_images.sha256_of(caps / "4-001.jpg")
+            cleared = cache_mod.CacheEntry(
+                identification=identification, photo_sha256=digest, prompt_fingerprint="fp",
+                at="t", cleared_by_human=True,
+            )
+            with Store().write() as snapshot:
+                snapshot.cache.entries["4/1"] = cleared
+            before = asdict(Store().read().cache.get("4/1"))
+
+            sent: list = []
+
+            def fake_run_batch(requests, log=None, on_submit=None):
+                sent.extend(request.custom_id for request in requests)
+                return batch.BatchRun(outcomes={
+                    request.custom_id: batch.Outcome(
+                        request.custom_id, batch.SUCCEEDED,
+                        identification=prompt.parse(said("Pikachu"), request.strategy),
+                    )
+                    for request in requests
+                })
+
+            def press():
+                with quiet():
+                    return cmd_identify.run(
+                        cli_entry.build_parser().parse_args(["identify", str(caps), "--engine", "haiku"]),
+                        lambda _line: None,
+                    )
+
+            real_run_batch = cmd_identify.batch.run_batch
+            cmd_identify.batch.run_batch = fake_run_batch
+            try:
+                press()
+                queued = Store().read().review.entries.get("4/1")
+                queued_once = asdict(queued) if queued is not None else None
+                press()
+            finally:
+                cmd_identify.batch.run_batch = real_run_batch
+
+            after = Store().read()
+            checks.equal(sent, [], f"{label}: two presses send no paid read for the cleared card")
+            checks.equal(asdict(after.cache.get("4/1")), before, f"{label}: the cleared entry is unchanged after two presses")
+            if parses:
+                checks.ok(queued is None, f"{label}: a cleared answer that parses is used, not queued")
+                return
+            checks.ok(queued is not None, f"{label}: the card is in the review queue after the first press")
+            if queued is not None:
+                checks.ok(bool(queued.photo), f"{label}: with its photo")
+                checks.ok(bool(queued.reason), f"{label}: and a reason")
+            checks.equal(
+                sorted(after.review.entries), ["4/1"], f"{label}: one entry for the card after two presses"
+            )
+            if queued is not None:
+                checks.equal(
+                    asdict(after.review.entries["4/1"]), queued_once,
+                    f"{label}: the second press leaves that entry as the first wrote it",
+                )
+
+    case("a cleared answer that parses as nothing", {"name": "Human"}, parses=False)
+    case("a cleared answer that parses (guard)", said("Pikachu"), parses=True)
+
+
 # ------------------------------------------------------------------------ the model verdict, the promo census, Prepare
 
 
@@ -1274,6 +1361,7 @@ CHECKS = (
     check_cache_engines,
     check_cache_position_key,
     check_refused_hit_is_claimed,
+    check_cleared_unparsed_goes_to_review,
     check_model_ready_hashes_once,
     check_promo_census,
     check_prepare_clears_stale_part,
