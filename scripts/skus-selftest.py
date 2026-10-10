@@ -19,11 +19,14 @@ directory it creates and destroys (D18).
 
 from __future__ import annotations
 
+import hashlib
 import shutil
 import sqlite3
 import sys
 import time
+from collections import Counter
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Dict, List
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -386,9 +389,123 @@ def main() -> int:
     else:
         ok(False, f"fixture missing: {REAL_FIXTURE}")
 
+    cli_adopt_arms()
+
     print("\nskus self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))
     return 1 if FAIL else 0
+
+
+# ------------------------------------------------------- the `banchi skus adopt` press
+
+
+def _adopt_run(write: bool):
+    """`cli/cmd_skus.py`'s own `run`, the call `banchi skus adopt [--write]` makes, with its
+    output captured. Returns `(exit code, lines said)`."""
+    from cli import cmd_skus
+
+    said: List[str] = []
+    code = cmd_skus.run(SimpleNamespace(skus_command="adopt", write=write), said.append)
+    return code, said
+
+
+def _sha(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _identity(row) -> tuple:
+    """A card identity: the five cells that name one listing. Two SKUs sharing these are a
+    duplicate listing of one card."""
+    return (row.product_line, row.set_name, row.product_name, row.number, row.condition)
+
+
+def _identity_extras(entries: Dict[str, object]) -> int:
+    """Rows beyond the first for each card identity. Zero means at most one row per card."""
+    counts = Counter(_identity(row) for row in entries.values())
+    return sum(n - 1 for n in counts.values() if n > 1)
+
+
+def cli_adopt_arms() -> None:
+    """`banchi skus adopt` (cli/cmd_skus.py) run end to end over real export files. The
+    fold itself is proved above; these arms prove the press a user types: a dry run writes
+    nothing, `--write` gives one row per SKU with each TCGplayer Id kept verbatim and no
+    export file rewritten, and a second `--write` (even after the exports are gone from disk)
+    changes no row."""
+    print("\n  -- banchi skus adopt (cli/cmd_skus.py): the press over real export files --")
+    with isolated_home() as home:
+        inv = home / "inventory"
+        inv.mkdir(parents=True, exist_ok=True)
+
+        # A real Filtered Export (sv09, 341 rows) under a stamped name, plus a synthetic
+        # export with a leading-zero SKU and a repeated line for the same SKU.
+        game_dir = inv / files.EXPORTS_DIRNAME / "Pokemon"
+        game_dir.mkdir(parents=True, exist_ok=True)
+        fixture_copy = game_dir / "export-tcgplayer-20260101-000000-deadbeef.csv"
+        shutil.copy(ROOT / "fixtures" / "sv09_export_untouched.csv", fixture_copy)
+        synthetic = write_export(inv, "Riftbound", "20260102-000000", [
+            export_row("00123", product_name="Leading Zero", rarity="Common"),
+            export_row("00123", product_name="Leading Zero", rarity="Common"),
+            export_row("456", product_name="Plain", rarity="Rare"),
+        ])
+        sources = {fixture_copy: _sha(fixture_copy), synthetic: _sha(synthetic)}
+        expected = {
+            tcgcsv.sku_cell(row) for row in tcgcsv.read_export(fixture_copy).rows
+        } | {"00123", "456"}
+        expected.discard("")
+
+        # ---------------------------------------------------- (d) a dry run writes nothing
+        print("\n  -- without --write: a preview, and nothing written --")
+        code, said = _adopt_run(write=False)
+        ok(code == 0 and any("DRY RUN" in line for line in said),
+           "the preview exits 0 and says DRY RUN", "\n".join(said))
+        ok(not any(line.startswith("written") for line in said),
+           "and it never reports a write", "\n".join(said))
+        ok(len(dict(Store().read().skus.entries)) == 0,
+           "the preview leaves the skus table empty")
+        ok(all(_sha(p) == h for p, h in sources.items()),
+           "and the export files on disk are untouched")
+
+        # ------------------------------ (a) one row per SKU, (b) TCGplayer Id verbatim
+        print("\n  -- --write: one row per SKU, each TCGplayer Id kept verbatim --")
+        code, said = _adopt_run(write=True)
+        ok(code == 0 and any(line.startswith("written") for line in said),
+           "the write exits 0 and reports written", "\n".join(said))
+        entries = dict(Store().read().skus.entries)
+        ok(set(entries) == expected,
+           "the table holds exactly the SKUs the exports carry — no extra, none missing",
+           f"missing {sorted(expected - set(entries))[:5]} "
+           f"extra {sorted(set(entries) - expected)[:5]}")
+        ok(_identity_extras(entries) == 0,
+           "at most one row per card identity (no duplicate listing of one card)",
+           f"{_identity_extras(entries)} extra row(s)")
+        ok(all(row.raw.get(tcgcsv.SKU_COLUMN) == key for key, row in entries.items()),
+           "each row's TCGplayer Id cell equals its key, verbatim (leading zero kept)")
+        ok("00123" in entries and "0123" not in entries,
+           "a leading-zero SKU is stored as read, never normalised")
+        ok(all(_sha(p) == h for p, h in sources.items()),
+           "the press never rewrites an export file (TCGplayer Id cells untouched on disk)")
+
+        # ---------------------------------------------------- (c) a second write is a no-op
+        print("\n  -- a second --write over the same files: a no-op --")
+        before = dict(Store().read().skus.entries)
+        code, said = _adopt_run(write=True)
+        after = dict(Store().read().skus.entries)
+        ok(after == before, "the second write reproduces the identical table",
+           f"{len(before)} before, {len(after)} after")
+        ok(any(line.startswith("0 new, 0 changed") for line in said),
+           "and reports 0 new and 0 changed", "\n".join(said))
+        ok(not [e for e in Store().history() if e.get("event") == "sku_facts_changed"],
+           "and appends no sku_facts_changed event")
+
+        # ----------------- (c) the exports vanish from disk: the next write deletes no row
+        print("\n  -- the export files are gone: a write still deletes no row --")
+        shutil.rmtree(inv / files.EXPORTS_DIRNAME)
+        before = dict(Store().read().skus.entries)
+        code, said = _adopt_run(write=True)
+        after = dict(Store().read().skus.entries)
+        ok(after == before and len(after) == len(expected),
+           "with no export on disk, a write keeps every row it wrote",
+           f"{len(before)} before, {len(after)} after, {len(expected)} expected")
 
 
 def _table_counts(path: Path) -> Dict[str, int]:
