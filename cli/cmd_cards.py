@@ -680,7 +680,12 @@ def _photos(args, say) -> int:
     bytes_moved = 0
     would: List[Tuple[str, Path, Path]] = []
 
+    stopped_at_limit = False
     for key, cid, box, idx, record in rows:
+        # `--limit 0` moves none; the test is `is not None`, never truthiness.
+        if limit is not None and census["moved"] >= int(limit):
+            stopped_at_limit = True
+            break
         if not photos.is_photo_cid(cid):
             # A `moved:` tombstone or a `nophoto:` card names no file. Neither is a problem
             # and both are counted rather than skipped silently.
@@ -713,8 +718,6 @@ def _photos(args, say) -> int:
             would.append((key, source, target))
             bytes_moved += source.stat().st_size
             census["moved"] += 1
-            if limit and census["moved"] >= int(limit):
-                break
             continue
         size = source.stat().st_size
         try:
@@ -736,8 +739,6 @@ def _photos(args, say) -> int:
                 # that did not travel costs the recovery path in that module's docstring and
                 # never a card.
                 refusals.append((key, f"sidecar: {exc}"))
-        if limit and census["moved"] >= int(limit):
-            break
 
     say("  " + "  ".join(f"{name}={value}" for name, value in census.items()))
     say(f"  {bytes_moved:,} bytes {'moved' if write else 'would move'}")
@@ -763,6 +764,11 @@ def _photos(args, say) -> int:
     # THE STAMP IS THE LAST THING AND ONLY ON A CLEAN PASS. Until it is set, `photos.find`
     # still reads the legacy address, which is what keeps every screen drawing during a
     # partial move; once set, the legacy address is never consulted again.
+    if stopped_at_limit:
+        say("")
+        say("  Stopped at --limit, so `photos_relocated` is NOT stamped and the legacy "
+            "address is still read. Run again to move the rest.")
+        return 0
     outstanding = census["refused"] + census["no_file"]
     if outstanding:
         say("")
