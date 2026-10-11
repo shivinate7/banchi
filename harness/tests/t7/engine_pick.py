@@ -1063,6 +1063,79 @@ def check_refused_hit_is_claimed(checks: Checks) -> None:
     claim_case("a refused hit beside a miss", [1, 2], [1])
 
 
+def check_cache_game_miss(checks: Checks) -> None:
+    """Each cache entry records the game it was read under (D317, the cache keeps a cleared
+    answer); a card whose game changed is a miss. Outcome protected: a saved answer for one game
+    is never used for a card of another game. Riftbound and One Piece answers have the same
+    shape, so the parser alone cannot tell them apart. An entry with no recorded game (every
+    entry on disk before this rule) still hits when its shape fits the card's game."""
+    from cli import __main__ as cli_entry, cmd_identify
+    from store.session import Store
+
+    checks.note("")
+    checks.note("CACHE ENTRY RECORDS ITS GAME — a card whose game changed is a miss")
+
+    answer = {"name": "Old", "number": "1", "finish": "normal", "confidence": "high"}
+
+    def case(label, entry_game, cleared, expect):
+        """`entry_game` None writes an entry with no `game` key. The entry goes in through
+        `Cache.parse`, the one reader of a stored record, so it is the same record a stored row is."""
+        with isolated_home() as home:
+            caps = Path(home) / "game-caps"
+            caps.mkdir()
+            identify_images.Image.new("RGB", (64, 89), (30, 120, 200)).save(caps / "4-001.jpg", "JPEG")
+            (caps / "4-001.json").write_text(json.dumps({"box": 4, "position": 1, "game": "one_piece"}), "utf-8")
+            record = {
+                "identification": dict(answer), "photo_sha256": identify_images.sha256_of(caps / "4-001.jpg"),
+                "prompt_fingerprint": "fp", "at": "t", "cleared_by_human": cleared,
+            }
+            if entry_game is not None:
+                record["game"] = entry_game
+            with Store().write() as snapshot:
+                snapshot.cache.entries["4/1"] = cache_mod.Cache.parse({"4/1": record}).entries["4/1"]
+            sent: list = []
+
+            def fake_run_batch(requests, log=None, on_submit=None):
+                sent.extend(request.custom_id for request in requests)
+                return batch.BatchRun(outcomes={
+                    r.custom_id: batch.Outcome(
+                        r.custom_id, batch.SUCCEEDED,
+                        identification=prompt.parse({**answer, "name": "Paid"}, r.strategy),
+                    )
+                    for r in requests
+                })
+
+            real_run_batch = cmd_identify.batch.run_batch
+            cmd_identify.batch.run_batch = fake_run_batch
+            try:
+                with quiet():
+                    cmd_identify.run(
+                        cli_entry.build_parser().parse_args(["identify", str(caps), "--engine", "haiku"]),
+                        lambda _line: None,
+                    )
+            finally:
+                cmd_identify.batch.run_batch = real_run_batch
+            after = Store().read()
+            held = after.cache.get("4/1")
+            queued = after.review.entries.get("4/1")
+            if expect == "miss":
+                checks.equal(sent, [cmd_identify._custom_id("4/1")], f"{label}: the card is read (paid) once")
+                checks.equal(held.identification["name"] if held else None, "Paid", f"{label}: and the old entry is not used")
+            elif expect == "hit":
+                checks.equal(sent, [], f"{label}: no paid read")
+                checks.ok(queued is None, f"{label}: and the card is not queued")
+                checks.equal(held.identification["name"] if held else None, "Old", f"{label}: the saved answer is used")
+            else:
+                checks.equal(sent, [], f"{label}: no paid read")
+                checks.equal(queued.reason if queued else None, "cleared_answer_unreadable", f"{label}: the card goes to Review as `cleared_answer_unreadable`")
+                checks.equal(held.identification["name"] if held else None, "Old", f"{label}: and the cleared entry is unchanged")
+
+    case("an entry read under Riftbound, card now One Piece", "riftbound", False, "miss")
+    case("an entry read under One Piece, card One Piece (guard)", "one_piece", False, "hit")
+    case("an entry with no recorded game, shape fits (guard)", None, False, "hit")
+    case("a cleared entry read under Riftbound, card now One Piece", "riftbound", True, "review")
+
+
 def check_cleared_unparsed_goes_to_review(checks: Checks) -> None:
     """A human-cleared cache answer the card's own parser cannot read is never paid for and never
     used: the card waits in review with its photo and a reason, once, and the cleared entry stays
@@ -1505,6 +1578,7 @@ CHECKS = (
     check_cache_engines,
     check_cache_position_key,
     check_refused_hit_is_claimed,
+    check_cache_game_miss,
     check_cleared_unparsed_goes_to_review,
     check_cleared_unparsed_no_position_not_bought,
     check_cleared_unparsed_held_report_and_join,
