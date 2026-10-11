@@ -3671,8 +3671,8 @@ function PullStage({
       action={
         walkAll === null ? null : (
           <>
-            {walkAll}
             {walkAllCaption}
+            {walkAll}
           </>
         )
       }
