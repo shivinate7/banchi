@@ -107,6 +107,8 @@ input[type='checkbox'], input[type='radio'], input[type='file'], input[type='ran
 label:has(> input[type='checkbox']),
 label:has(> input[type='radio']),
 label:has(> input[type='file']) { cursor: pointer; }
+/* Touch floor: a tap acts at once, with no double-tap-zoom wait, and flashes the accent. */
+button, a { touch-action: manipulation; -webkit-tap-highlight-color: var(--bn-accent-tint-2); }
 button:disabled, select:disabled, textarea:disabled, input:disabled,
 [aria-disabled='true'] { cursor: not-allowed; }
 

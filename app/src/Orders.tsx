@@ -95,6 +95,7 @@ import {
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
+import { useLeaveWarning } from './useLeaveWarning'
 import { pickFigureOf, RowAction, WalkStrip, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
 import type {
   BoxRecord,
@@ -1370,6 +1371,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
 
   const live = useRef(true)
   const pasteBox = useRef<HTMLTextAreaElement>(null)
+  useLeaveWarning(hub.paste.trim() !== '')
 
   useEffect(() => {
     live.current = true

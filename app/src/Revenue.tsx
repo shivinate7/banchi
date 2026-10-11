@@ -988,7 +988,7 @@ function SalesView() {
           <p className="revenue-shelf-note">00 of 00 priced</p>
           <div className="revenue-spark" />
           <p className="revenue-shelf-note">Daily, over the last 00 days</p>
-          <p className="revenue-shelf-note">00 never priced</p>
+          <p className="revenue-shelf-note">00 cards have never had a price</p>
           <p className="revenue-shelf-note">00 sealed</p>
         </div>
       ) : null}
@@ -1010,10 +1010,10 @@ function SalesView() {
           </p>
           {leftOff === 0 ? null : (
             <p className="revenue-shelf-note">
-              {`${leftOff} early ${leftOff === 1 ? 'reading' : 'readings'} left off, too few priced.`}
+              {`${leftOff} early ${leftOff === 1 ? 'reading' : 'readings'} left off because too few of your cards had prices.`}
             </p>
           )}
-          <p className="revenue-shelf-note">{`${holdings.unmarked.names} never priced`}</p>
+          <p className="revenue-shelf-note">{`${holdings.unmarked.names} ${holdings.unmarked.names === 1 ? 'card has' : 'cards have'} never had a price`}</p>
           <p className="revenue-shelf-note">{`${holdings.sealed_excluded.names} sealed`}</p>
         </>
       )}

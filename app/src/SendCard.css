@@ -16,6 +16,8 @@
   gap: var(--bn-2);
 }
 
+.send-why { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
+
 .send-press {
   flex: 0 1 auto;
 }

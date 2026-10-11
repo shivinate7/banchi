@@ -164,6 +164,7 @@
   align-items: baseline;
   gap: var(--bn-2);
 }
+.bn-title, .bn-h2, .bn-h3, h2, h3 { text-wrap: balance; }
 .bn-h2 { font-size: var(--bn-fs-h2); }
 .bn-h3 { font-size: var(--bn-fs-h3); }
 /* A sentence a person must read is 13px or more; a label is 10-11px and never a sentence. */
@@ -1462,7 +1463,7 @@ span.bn-slot { display: inline-block; }
    portal boundary for ITS screen alone, and this button is the shared kit's, drawn under any
    Fulfiller overlay, not only that screen's. */
 .bn-overlay-close-worded { font-size: 20px; }
-.bn-overlay-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--bn-5); }
+.bn-overlay-body { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: var(--bn-5); }
 .bn-overlay-foot {
   flex: none;
   display: flex;

@@ -925,7 +925,7 @@ test('the shelf states two distinct counts: priced at the last reading, and neve
   await open(page, '?period=all')
   const shelf = page.locator('.revenue-shelf')
   await expect(shelf).toContainText('8 of 10 priced')
-  await expect(shelf).toContainText('1 never priced')
+  await expect(shelf).toContainText(/\b1 card\b.*never had a price/)
   await expect(shelf).not.toContainText('not yet')
   await expect(shelf).not.toContainText(/\d+ unpriced/)
 })
@@ -938,7 +938,7 @@ test('a partial first sweep is left off the line, said in words, and never drawn
   // Two full days draw one polyline of two points; the $1 day is not a point on it.
   const points = await page.locator('.revenue-spark polyline').getAttribute('points')
   expect(points?.trim().split(/\s+/)).toHaveLength(2)
-  await expect(shelf).toContainText('1 early reading left off, too few priced.')
+  await expect(shelf).toContainText(/1 early reading left off because too few of your cards had prices\./)
   // A relative span, no calendar date.
   await expect(shelf).toContainText('Daily, over the last 2 days')
   await expect(shelf).not.toContainText(/Aug|2026/)
@@ -999,7 +999,7 @@ test('only leading low-coverage readings are trimmed, so the line ends on the he
   await open(page, '?period=all')
   const points = await page.locator('.revenue-spark polyline').getAttribute('points')
   expect(points?.trim().split(/\s+/)).toHaveLength(3)
-  await expect(page.locator('.revenue-shelf')).toContainText('1 early reading left off')
+  await expect(page.locator('.revenue-shelf')).toContainText(/1 early reading left off because too few of your cards had prices/)
   await expect(page.locator('.revenue-shelf')).toContainText('9 of 10 priced')
 })
 
@@ -1413,3 +1413,30 @@ for (const theme of ['light', 'dark'] as const) {
     })
   }
 }
+
+/* ux-wave1 B18. The rarity bars share a row with a label column and a figure. With long rarity names
+   the label column must not take the row, or every bar collapses to a sliver. The case measures each
+   bar's track against its own row at 1440 and asks for at least 40 percent. */
+test('ux-wave1: rarity bar tracks keep at least 40% of their row with long rarity names', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await stub(page, [
+    orderRow({
+      number: 'ORD-3001',
+      lines: [
+        line({ sku: '7101', name: 'Long Rarity Alpha', condition: 'Near Mint', rarity: 'Special Illustration Rare Holo Gold Secret Edition', quantity: 1, unit_price: '120.00' }),
+        line({ sku: '7102', name: 'Long Rarity Beta', condition: 'Near Mint', rarity: 'Hyper Rare Alternate Art Gold Metal Foil Limited', quantity: 1, unit_price: '30.00' }),
+      ],
+    }),
+  ])
+  await open(page, '?period=all')
+  const mix = page.locator('.revenue-mix-rarity')
+  await expect(mix, 'the rarity breakdown is drawn').toHaveCount(1)
+  await expect(mix.locator('.revenue-mix-track'), 'both rarities have a bar').toHaveCount(2)
+  const shares = await mix.evaluate((grid) => {
+    const row = grid.getBoundingClientRect().width
+    return [...grid.querySelectorAll('.revenue-mix-track')].map((track) => track.getBoundingClientRect().width / row)
+  })
+  for (const share of shares) {
+    expect.soft(share, `a rarity bar takes ${(share * 100).toFixed(0)}% of its row`).toBeGreaterThanOrEqual(0.4)
+  }
+})

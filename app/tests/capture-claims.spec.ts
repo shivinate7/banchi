@@ -1873,3 +1873,21 @@ test('the stage panel hugs the portrait frame: no dead side bands', async ({ pag
     }
   }
 })
+
+/* ux-wave1 B1. With no box picked, Capture is off, and the button alone does not say why. The reason must
+   be tied to the disabled button: the button's own aria-describedby must resolve to text that names the
+   box. A reason that sits elsewhere on the screen (the Box field's own line, for one) does not count. */
+test('ux-wave1: with no box chosen, the disabled Capture button is described by a reason that names the box', async ({ page }) => {
+  await open(page)
+  const shutter = page.locator('.capture-shutter')
+  await expect(shutter).toBeVisible()
+  await expect(shutter).toBeDisabled()
+  const described = await shutter.evaluate((btn) =>
+    (btn.getAttribute('aria-describedby') ?? '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent?.trim() ?? ''),
+  )
+  expect(described.length, 'the disabled Capture button has an aria-describedby reason').toBeGreaterThan(0)
+  expect(described.some((text) => /box/i.test(text)), `the described reason names the box (reads ${JSON.stringify(described)})`).toBe(true)
+})
