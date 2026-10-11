@@ -1137,7 +1137,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
         await afterPaint(page)
         const before = await read()
         if (!(await oneRow())) bad.push('before: the facts row is not one pill tall')
-        await page.getByRole('button', { name: /Mark sold/ }).first().click()
+        await page.getByRole('button', { name: /Mark Sold/ }).first().click()
         await expect(page.locator('.browse-hero-sub')).toContainText('Sold')
         await settleMotion(page)
         await afterPaint(page)
@@ -1211,7 +1211,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
     const before = await read()
     const was = await pickFigure.textContent()
     const bad: string[] = []
-    await page.getByRole('button', { name: /Mark sold/ }).first().click()
+    await page.getByRole('button', { name: /Mark Sold/ }).first().click()
     await expect(pickFigure).not.toHaveText(was ?? '')
     await settleMotion(page)
     if ((await read()) !== before) bad.push('sale')
@@ -1291,7 +1291,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
     await settleMotion(page)
     const before = await boxes()
     const bad: string[] = []
-    await page.getByRole('button', { name: /Mark sold/ }).first().click()
+    await page.getByRole('button', { name: /Mark Sold/ }).first().click()
     await expect(page.locator('.orders-strip-card.is-done').first()).toBeVisible()
     await settleMotion(page)
     if ((await boxes()) !== before) bad.push('sale')

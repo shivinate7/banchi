@@ -34,6 +34,16 @@ export function isSentence(text: string): boolean {
   return /[.?!]["'”’)\]]*$/.test(text.trim())
 }
 
+/** Typed data, not a label. R2: a typed value never changes, and the owner names a box, so the name the
+ *  owner typed is shown as typed. `SV commons` is the box name the store fixtures use. The exemption is the
+ *  exact text only: a label that reuses the same words in another casing still goes red (see the unit cases). */
+export const TYPED_DATA: ReadonlySet<string> = new Set(['SV commons'])
+
+/** Is this text a typed value the casing rule does not read? */
+export function isTypedData(text: string): boolean {
+  return TYPED_DATA.has(text)
+}
+
 /** Units that may follow a number unchanged: `10 ml`, `1 month`. A count noun such as `cards` is a word. */
 export const UNIT_WORDS: ReadonlySet<string> = new Set([
   'ml', 'mm', 'cm', 'kg', 'g', 'oz', 'px', 'x',

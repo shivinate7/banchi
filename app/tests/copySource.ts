@@ -54,6 +54,11 @@ function renderedPieces(expression: ts.Expression, out: string[]): void {
 /** A first-person word: "I", "my", "me" or "mine" as a whole word, in any case (R4, R4a). */
 const FIRST_PERSON = /(?<![\p{L}\p{N}_])(?:i|my|me|mine)(?![\p{L}\p{N}_])/giu
 
+/** Quoted names that carry a first-person word and are not the app's own voice. `"My Pricing"` is the name
+ *  of TCGplayer's page, a proper name the owner ruled to keep (wave 2, copy map row 10). The quotation marks
+ *  mark it as a name, so only this exact quoted phrase is exempt. An unquoted `My Pricing` still counts. */
+const NAMED_EXEMPT: readonly string[] = ['"My Pricing"']
+
 /** One rendered string that carries a first-person word. `line` is 1-based. */
 export interface VoiceFinding {
   readonly file: string
@@ -72,7 +77,9 @@ export function firstPersonInSource(source: string, file: string): VoiceFinding[
   const found: VoiceFinding[] = []
   const at = (node: ts.Node): number => sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1
   const report = (node: ts.Node, where: string, text: string): void => {
-    const words = Array.from(text.matchAll(FIRST_PERSON), (match) => match[0])
+    let scrubbed = text
+    for (const quoted of NAMED_EXEMPT) scrubbed = scrubbed.split(quoted).join(' ')
+    const words = Array.from(scrubbed.matchAll(FIRST_PERSON), (match) => match[0])
     if (words.length > 0) found.push({ file, line: at(node), where, text: text.replace(/\s+/g, ' ').trim(), words })
   }
 

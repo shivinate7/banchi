@@ -245,7 +245,7 @@ test('the toast dismiss glyph clears 4.5:1 against the toast ground, in both the
  * "external" label="Cards to pull" href="#/fulfillment" target="_blank" rel="noreferrer"`. */
 test('the anchor form renders an <a> with the given href, target and rel', async ({ page }) => {
   const section = page.locator('[data-kit-section="icon-button"]')
-  const link = section.getByRole('link', { name: 'Cards to pull' })
+  const link = section.getByRole('link', { name: 'Cards to Pull', exact: true })
   await expect(link).toBeVisible()
   expect(await link.evaluate((el) => el.tagName)).toBe('A')
   await expect(link).toHaveAttribute('href', '#/fulfillment')
@@ -255,7 +255,7 @@ test('the anchor form renders an <a> with the given href, target and rel', async
 
 test('keyboard Enter follows the anchor form, the way a native link does', async ({ page }) => {
   const section = page.locator('[data-kit-section="icon-button"]')
-  const link = section.getByRole('link', { name: 'Cards to pull' })
+  const link = section.getByRole('link', { name: 'Cards to Pull', exact: true })
   await link.focus()
   await expect(link).toBeFocused()
   const [popup] = await Promise.all([
@@ -269,7 +269,7 @@ test('keyboard Enter follows the anchor form, the way a native link does', async
 
 test('the anchor form draws the same face, hit area and tooltip as the button form', async ({ page }) => {
   const section = page.locator('[data-kit-section="icon-button"]')
-  const link = section.getByRole('link', { name: 'Cards to pull' })
+  const link = section.getByRole('link', { name: 'Cards to Pull', exact: true })
   const btn = section.getByRole('button', { name: 'Retire' })
   // Both are `size="md"` (the default): same FACE_PX box.
   const linkBox = await link.evaluate((el) => { const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) } })
@@ -282,8 +282,8 @@ test('the anchor form draws the same face, hit area and tooltip as the button fo
   await expect(tip).toHaveCSS('opacity', '0')
   await link.hover()
   await expect(tip).toHaveCSS('opacity', '1')
-  await expect(tip).toHaveText('Cards to pull')
-  await expect(link).toHaveAccessibleName('Cards to pull')
+  await expect(tip).toHaveText('Cards to Pull')
+  await expect(link).toHaveAccessibleName('Cards to Pull')
   await page.mouse.move(0, 0)
   // The `::before` hit area reaches 40px past the drawn face on the anchor too.
   const box = await link.boundingBox()

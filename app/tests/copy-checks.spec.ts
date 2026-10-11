@@ -10,7 +10,7 @@ import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 import { sweepEveryRoute } from './routeSweep'
 import { setViewport } from './phoneSwitch'
-import { casingProblems, isSentence, voiceHits } from './copyRules'
+import { casingProblems, isSentence, isTypedData, voiceHits } from './copyRules'
 
 /* ONE SWEEP, TWO CHECKS (D284, the shape `text-checks.spec.ts` set). Each screen is opened ONCE by
  * `routeSweep.ts:sweepEveryRoute`, the same owner routes and the same populated store the text checks
@@ -93,6 +93,7 @@ function scanCopy(): CopyScan {
     const tag = el.tagName.toLowerCase()
     const role = el.getAttribute('role')
     if (el.matches('a.bn-nav-link')) return 'nav link'
+    if (tag === 'a') return 'icon link'
     if (tag === 'th') return 'column header'
     if (role === 'tab') return 'tab'
     if (role === 'radio') return 'option'
@@ -113,8 +114,10 @@ function scanCopy(): CopyScan {
   }
 
   const casing: Casing[] = []
+  // THE ICON LINK. An icon control drawn as a link (`IconButton` with an `href`, such as the Fulfiller's
+  // `Cards to pull` on Orders) is an `<a>`, not a button, so the list below must name it too.
   const candidates = document.querySelectorAll(
-    'a.bn-nav-link, th, [role="tab"], [role="radio"], button, [role="button"], h1, h2, h3, [class*="title"], [class*="chip"]',
+    'a.bn-nav-link, a[aria-label], th, [role="tab"], [role="radio"], button, [role="button"], h1, h2, h3, [class*="title"], [class*="chip"]',
   )
   for (const el of Array.from(candidates)) {
     const role = roleOf(el)
@@ -131,6 +134,20 @@ function scanCopy(): CopyScan {
       mono: el.closest('.bn-mono, code, kbd') !== null,
       upper: getComputedStyle(el).textTransform === 'uppercase',
     })
+  }
+
+  // THE ICON TIP. An icon control's visible label is its `.bn-icon-tip`, a tooltip portaled into <body>. It
+  // is always mounted and hidden until a hover, so the `shown` test above never reaches it. The control's
+  // accessible name can differ from its label (`name` overrides the label), so the tip is read on its own.
+  // Its key cap (`kbd`) is not part of the label.
+  for (const tip of Array.from(document.querySelectorAll('.bn-icon-tip'))) {
+    const text = Array.from(tip.childNodes)
+      .filter((node) => !(node instanceof HTMLElement && node.tagName === 'KBD'))
+      .map((node) => node.textContent ?? '')
+      .join('')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (text !== '') casing.push({ role: 'tooltip', text, mono: false, upper: getComputedStyle(tip).textTransform === 'uppercase' })
   }
 
   const prose: string[] = []
@@ -227,9 +244,12 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
 
     for (const one of scan.casing) {
       if (one.mono || one.upper || isSentence(one.text)) continue
+      if (isTypedData(one.text)) continue
       const problems = casingProblems(one.text)
       if (problems.length === 0) continue
-      const id = `${one.role} ${JSON.stringify(one.text)}`
+      // A FINDING IS KEYED BY ITS TEXT, not its role: a control's label often shows twice (its tip and its
+      // accessible name), and one string is one offender.
+      const id = JSON.stringify(one.text)
       if (seen.has(`c|${id}`)) continue
       seen.add(`c|${id}`)
       if (casingAllow[route]?.[id] !== undefined) {

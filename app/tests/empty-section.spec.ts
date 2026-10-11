@@ -564,7 +564,7 @@ test('selling the only card of a section keeps that section on the ruler and the
   await expect(track.locator('.position-bar-segment')).toHaveCount(2)
   await expect(header.locator('.boxops-span')).toHaveCount(2)
 
-  await row.getByRole('button', { name: 'Mark sold' }).click()
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
 
   // THE RE-READ, WAITED FOR RATHER THAN ASSUMED: `toHaveCount(2)` right after the click would
   // pass on the STALE pre-sale DOM alone, before the sale's own re-fetch has landed, and prove

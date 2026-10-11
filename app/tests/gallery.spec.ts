@@ -1242,7 +1242,7 @@ test('Mark sold is the same icon-only accent button and the same width on every 
   )
   for (const one of drawn) {
     expect(one.iconOnly, 'every row draws the seal with no visible text').toBe(true)
-    expect(one.name).toContain('Mark sold')
+    expect(one.name).toContain('Mark Sold')
     expect({ ...one, name: '' }).toEqual({ ...drawn[0]!, name: '' })
   }
   expect(drawn[0]!.width).toBe(128)
