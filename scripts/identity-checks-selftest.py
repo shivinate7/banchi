@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""`pipeline/identity_checks.py`, proved against literal fixtures — no store, no network
-(D239).
+"""`pipeline/identity_checks.py`, proved against literal fixtures, and `cli/cmd_cards.py`'s
+`identity`, `photos` and `checks` subcommands, proved against a temp store (D239).
 
-Protects: Each stored-data identity check goes red on its own named defect and stays quiet on clean data.
+Protects: Each stored-data identity check goes red on its own named defect and stays quiet on clean data; `cards identity --write` keeps same-named cards on distinct SKUs and is a no-op on a second run; a preview writes nothing; `cards photos --limit N` moves at most N photographs and stamps nothing short of a full pass.
 Governs: D239, D247
 
 EACH CHECK IS PROVED THE WAY `CLAUDE.md` DEMANDS: shown to catch its own named defect, and
@@ -22,14 +22,28 @@ PATH GATED, THE NINETEENTH (D247, owner's word 2026-09-23, on the same ground as
 sit here ("already covered by T7's harness sweep over the CLI surface") had gone stale for a
 second, independent reason beyond the dead precedent it cited: `grep -rl identity_checks
 harness/` names nothing — `harness/tests/t7_store_and_seams.py` drives `cli/cmd_cards.py`
-through `cards_action = "variants"` and `"identity"` alone, never `"checks"`. This module's one caller
-(`cli/cmd_cards.py:checks`, `./banchi cards checks`) was tested nowhere until now.
+through `cards_action = "variants"` and `"identity"` alone, never `"checks"`. The CLI cases
+below now reach `cards checks`, `cards identity` and `cards photos` through `cmd_cards.run`.
+
+THE CLI CASES NEED A STORE, THE FOUR CLASSES DO NOT. Each CLI case gets a fresh `BANCHI_HOME`
+and removes it afterwards. The operator's store is never opened.
+
+`--mutant merge-identities` IS THE RED PROOF FOR THE IDENTITY CASE. It wraps
+`master.Inventory.bind_sku` so every card binds to the first SKU seen. The distinct-identity
+assertion must then go red. Run it through `verdict`, and without the flag to see green.
 """
 
 from __future__ import annotations
 
+import hashlib
+import os
+import shutil
+import sqlite3
 import sys
+import tempfile
+import types
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -215,6 +229,380 @@ def test_near_duplicate_name_measured_case():
     ok("sf/bad" in keys(flags), "the short title is flagged against its own full name")
 
 
+# ----------------------------------------- the cards CLI (cli/cmd_cards.py), against a temp store
+
+MADE: List[Path] = []
+PRODUCT_LINE = "Riftbound League of Legends Trading Card Game"
+
+
+def _mutant_name() -> Optional[str]:
+    if "--mutant" not in sys.argv:
+        return None
+    position = sys.argv.index("--mutant")
+    return sys.argv[position + 1] if position + 1 < len(sys.argv) else None
+
+
+MUTANT = _mutant_name()
+
+
+def fresh_home() -> Path:
+    """A throwaway `BANCHI_HOME` for one case, so a row left by the last case can never be
+    what a later assertion reads."""
+    where = Path(tempfile.mkdtemp(prefix="banchi-idcheck."))
+    MADE.append(where)
+    os.environ["BANCHI_HOME"] = str(where)
+    (where / "inventory").mkdir(parents=True, exist_ok=True)
+    return where
+
+
+def store_dump(home: Path) -> Tuple[Dict[str, list], Tuple[int, int]]:
+    """Every row of every table, and the sizes of the database and its WAL. A press that
+    changes ANY byte of the store shows here, not only in its census text."""
+    from store import db
+
+    path = db.path(home / "inventory")
+    wal = path.with_name(path.name + "-wal")
+    conn = sqlite3.connect(str(path))
+    try:
+        # A VIRTUAL TABLE (the FTS index) is left out: it is derived from `cards`, and reading
+        # it as a plain table fails. Rows are compared sorted, so no table's order can hide or
+        # fake a change. WITHOUT ROWID tables are read the same way.
+        tables = [row[0] for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' "
+            "AND sql NOT LIKE 'CREATE VIRTUAL%' ORDER BY name")]
+        rows = {name: sorted(repr(row) for row in conn.execute(f'SELECT * FROM "{name}"'))
+                for name in tables}
+    finally:
+        conn.close()
+    return rows, (path.stat().st_size, wal.stat().st_size if wal.exists() else 0)
+
+
+def run_cards(action: str, **options) -> Tuple[int, List[str]]:
+    from cli import cmd_cards
+
+    lines: List[str] = []
+    args = types.SimpleNamespace(cards_action=action, **options)
+    code = cmd_cards.run(args, lines.append)
+    return code, lines
+
+
+def sku_row(name: str, number: str, set_name: str):
+    from store.skus import SkuRow
+
+    return SkuRow(product_line=PRODUCT_LINE, set_name=set_name, product_name=name,
+                  number=number, rarity="Common", condition="Near Mint", grade=None,
+                  printing=None, first_seen=1, last_seen=1, source="selftest", raw={})
+
+
+def seed_store(skus: dict, cards: list, *, identified: bool = True) -> Dict[str, str]:
+    """`skus`: {sku: (name, number, set_name)}. `cards`: [(seed, sku, name, number,
+    set_name)]. Each card is named by `sha256(seed)`, a photograph-shaped name with no file
+    behind it. Returns {seed: card key}."""
+    from store import master
+    from store.session import Store
+
+    keys: Dict[str, str] = {}
+    with Store().write() as snapshot:
+        for sku, (name, number, set_name) in skus.items():
+            snapshot.skus.fold(sku, sku_row(name, number, set_name))
+        for seed, sku, name, number, set_name in cards:
+            card, _ = snapshot.inventory.allocate_capture(
+                1, game="riftbound", cid=hashlib.sha256(seed.encode()).hexdigest())
+            card.name, card.number, card.set_name, card.sku = name, number, set_name, sku
+            if identified:
+                card.state = master.IDENTIFIED
+            keys[seed] = card.key
+    return keys
+
+
+MIND_RUNE_SKUS = {
+    "CR-VEN-001": ("Mind Rune", "R03a", "Vendetta"),
+    "CR-VEN-002": ("Mind Rune", "R03b", "Vendetta"),
+}
+MIND_RUNE_CARDS = [
+    ("first", "CR-VEN-001", "Mind Rune", "R03a", "Vendetta"),
+    ("second", "CR-VEN-002", "Mind Rune", "R03b", "Vendetta"),
+]
+
+
+def install_merge_mutant():
+    """`--mutant merge-identities`: every `bind_sku` call binds the FIRST SKU this run saw.
+    The patch lives in this process only, so no product file is touched. Returns the undo."""
+    from store import master
+
+    real = master.Inventory.bind_sku
+    first: Dict[str, str] = {}
+
+    def merged(self, key, sku, **kwargs):
+        first.setdefault("sku", sku)
+        return real(self, key, first["sku"], **kwargs)
+
+    master.Inventory.bind_sku = merged
+    return lambda: setattr(master.Inventory, "bind_sku", real)
+
+
+def case_same_name_different_numbers_keep_distinct_identities() -> None:
+    print("cards identity --write — two cards named alike, numbered apart, stay two identities")
+    fresh_home()
+    keys = seed_store(MIND_RUNE_SKUS, MIND_RUNE_CARDS)
+    undo = install_merge_mutant() if MUTANT == "merge-identities" else None
+    try:
+        code, _lines = run_cards("identity", write=True)
+    finally:
+        if undo is not None:
+            undo()
+
+    from store import master
+    from store.session import Store
+
+    cards = Store().read().inventory.cards
+    first, second = cards[keys["first"]], cards[keys["second"]]
+    ok(code == 0, "the write exits 0", f"exit {code}")
+    ok(
+        (first.sku, second.sku) == ("CR-VEN-001", "CR-VEN-002"),
+        "each card keeps its own SKU",
+        f"first {first.sku}, second {second.sku}",
+    )
+    ok(
+        (first.number, second.number) == ("R03a", "R03b"),
+        "and its own number, so the same name does not merge them",
+        f"first {first.number}, second {second.number}",
+    )
+    ok(
+        first.identity_source == second.identity_source == master.IDENTITY_SKU,
+        "both are bound by SKU (identity_source), not left on the read",
+        f"{first.identity_source}, {second.identity_source}",
+    )
+
+
+def case_second_identity_write_changes_nothing() -> None:
+    print("cards identity --write, twice — the second press is a no-op")
+    home = fresh_home()
+    seed_store(MIND_RUNE_SKUS, MIND_RUNE_CARDS)
+    _code, first = run_cards("identity", write=True)
+    ok(
+        any("bound (T1/T2/T3/T4u, bound_by=migration): 2" in line for line in first),
+        "the first press binds both cards, so the second has something to repeat",
+        "; ".join(line for line in first if "bound" in line),
+    )
+    before, sizes_before = store_dump(home)
+    _code, second = run_cards("identity", write=True)
+    ok(
+        any("bound (T1/T2/T3/T4u, bound_by=migration): 0" in line for line in second),
+        "the second press binds nothing",
+    )
+    ok(
+        any("already correctly bound, skipped: 2" in line for line in second),
+        "and skips both cards as already correct",
+    )
+    after, sizes_after = store_dump(home)
+    changed = sorted(
+        name for name in set(before) | set(after) if before.get(name) != after.get(name)
+    )
+    ok(not changed, "no table changes on the second press", f"changed: {changed}")
+    ok(sizes_before == sizes_after, "and the database and its WAL keep their sizes",
+       f"{sizes_before} -> {sizes_after}")
+
+
+def case_identity_preview_writes_nothing() -> None:
+    print("cards identity, no --write — the preview writes nothing")
+    home = fresh_home()
+    seed_store(MIND_RUNE_SKUS, MIND_RUNE_CARDS)
+    before = store_dump(home)
+    code, lines = run_cards("identity", write=False)
+    ok(
+        any(" 2 derive, 0 held" in line for line in lines),
+        "the preview finds both cards derivable, so the case can fail",
+        "; ".join(line for line in lines if "derive" in line),
+    )
+    ok(code == 0 and any("Nothing was written" in line for line in lines),
+       "and says it wrote nothing")
+    ok(store_dump(home) == before, "every table and both file sizes are unchanged")
+
+
+def seed_legacy_photographs(count: int) -> List[Tuple[str, int, int, bytes]]:
+    """`count` photographs at the LEGACY `(box, index)` address, each named by its own digest,
+    the way a store looks before `cards photos` has moved it. Returns (cid, box, index, bytes)."""
+    from store import photos
+    from store.session import Store
+
+    blobs = [b"\xff\xd8" + hashlib.sha256(f"photo-{n}".encode()).digest() * 4
+             for n in range(1, count + 1)]
+    placed = []
+    with Store().write() as snapshot:
+        for blob in blobs:
+            cid = hashlib.sha256(blob).hexdigest()
+            card, _ = snapshot.inventory.allocate_capture(3, game="pokemon", cid=cid)
+            placed.append((cid, card.box, card.index, blob))
+    home = Path(os.environ["BANCHI_HOME"])
+    for _cid, box, index, blob in placed:
+        target = photos.legacy_path(box, index, home)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(blob)
+    return placed
+
+
+def case_photos_limit_touches_at_most_n() -> None:
+    print("cards photos --limit 2 — moves at most two photographs, and says so")
+    home = fresh_home()
+    from store import db, photos
+
+    placed = seed_legacy_photographs(5)
+    code, preview = run_cards("photos", write=False, limit=2)
+    ok(
+        code == 0 and any("moved=2" in line for line in preview),
+        "the preview stops at two, so the case can fail",
+        "; ".join(line for line in preview if "moved" in line),
+    )
+    ok(
+        all(photos.legacy_path(box, index, home).is_file() for _c, box, index, _b in placed),
+        "and the preview moves none of the five",
+    )
+
+    code, _lines = run_cards("photos", write=True, limit=2)
+    moved = [(cid, box, index) for cid, box, index, _b in placed
+             if photos.path(cid, home).is_file()]
+    unmoved = [(cid, box, index) for cid, box, index, _b in placed
+               if (cid, box, index) not in moved]
+    ok(len(moved) <= 2, "at most two photographs reach their own name", f"{len(moved)} did")
+    ok(len(moved) == 2, "and exactly two, the limit", f"{len(moved)} did")
+
+    conn = sqlite3.connect(str(db.path(home / "inventory")))
+    try:
+        stamped = conn.execute(
+            "SELECT count(*) FROM meta WHERE key = ?", (db.PHOTOS_RELOCATED,)
+        ).fetchone()[0] == 1
+    finally:
+        conn.close()
+    reachable = [photos.find(cid, box, index, relocated=stamped, home=home) is not None
+                 for cid, box, index in unmoved]
+    ok(not stamped, "a pass that stops at the limit does not stamp photos_relocated",
+       f"stamped={stamped}")
+    ok(
+        all(reachable),
+        "the three photographs not yet moved are still found after a partial write",
+        f"found {sum(reachable)} of {len(unmoved)}",
+    )
+
+
+def case_photos_limit_zero_moves_nothing() -> None:
+    print("cards photos --limit 0 — previews no photographs")
+    fresh_home()
+    seed_legacy_photographs(3)
+    _code, lines = run_cards("photos", write=False, limit=0)
+    ok(
+        any("moved=0" in line for line in lines),
+        "`--limit 0` names zero photographs",
+        "; ".join(line for line in lines if "moved" in line),
+    )
+
+
+def case_cards_checks_reaches_the_cli() -> None:
+    print("cards checks — a denominator outlier is flagged through the CLI, by key")
+    fresh_home()
+    keys = seed_store(
+        {},
+        [(f"origins-{n}", None, "Origins card", f"{n:03d}/298", "Origins")
+         for n in range(1, 6)]
+        + [("origins-bad", None, "Origins card", "102/166", "Origins")],
+        identified=False,
+    )
+    code, lines = run_cards("checks", verbose=True)
+    ok(code == 0, "the checks exit 0 on a store that has cards")
+    ok(
+        any(line.strip().startswith(f"{keys['origins-bad']}  ") for line in lines),
+        "the minority denominator is listed under its own key",
+        "; ".join(line for line in lines if "denominator" in line or "flag" in line),
+    )
+    ok(any("VERDICT: 1 flag(s)" in line for line in lines), "and the verdict counts one flag")
+
+
+def stamped_at(home: Path) -> bool:
+    """Whether `meta.photos_relocated` is set, read with plain sqlite3 so the check itself
+    never migrates or stamps."""
+    from store import db
+
+    conn = sqlite3.connect(str(db.path(home / "inventory")))
+    try:
+        return conn.execute(
+            "SELECT count(*) FROM meta WHERE key = ?", (db.PHOTOS_RELOCATED,)
+        ).fetchone()[0] == 1
+    finally:
+        conn.close()
+
+
+def legacy_still_there(placed) -> bool:
+    from store import photos
+
+    home = Path(os.environ["BANCHI_HOME"])
+    return all(photos.legacy_path(box, index, home).is_file() for _c, box, index, _b in placed)
+
+
+def case_limited_pass_reports_a_corrupt_photo() -> None:
+    print("cards photos --write --limit 2 — a corrupt photo is refused and the pass exits non-zero")
+    home = fresh_home()
+    from store import photos
+
+    placed = seed_legacy_photographs(4)
+    _cid, box, index, _blob = placed[0]
+    photos.legacy_path(box, index, home).write_bytes(b"not the photograph")
+    code, lines = run_cards("photos", write=True, limit=2)
+    ok(
+        any("refused=1" in line for line in lines),
+        "the census counts the corrupt photo as refused",
+        "; ".join(line for line in lines if "refused" in line or "moved" in line),
+    )
+    ok(code != 0, "the limited pass exits non-zero, as the unlimited pass does", f"exit {code}")
+
+    control = fresh_home()
+    placed = seed_legacy_photographs(4)
+    _cid, box, index, _blob = placed[0]
+    photos.legacy_path(box, index, control).write_bytes(b"not the photograph")
+    code, _lines = run_cards("photos", write=True, limit=None)
+    ok(code != 0, "control: the unlimited pass over the same corrupt photo exits non-zero",
+       f"exit {code}")
+
+
+def case_negative_limit_is_refused() -> None:
+    print("cards photos --write --limit -1 — refused with exit 2, and moves nothing")
+    fresh_home()
+    placed = seed_legacy_photographs(3)
+    code, _lines = run_cards("photos", write=True, limit=-1)
+    ok(code == 2, "a negative limit is refused with exit 2", f"exit {code}")
+    ok(legacy_still_there(placed), "and no photograph is moved")
+    ok(not stamped_at(Path(os.environ["BANCHI_HOME"])), "and nothing is stamped")
+
+
+def case_write_limit_zero_moves_nothing_and_stamps_nothing() -> None:
+    print("cards photos --write --limit 0 — moves none and stamps nothing")
+    home = fresh_home()
+    placed = seed_legacy_photographs(3)
+    _code, lines = run_cards("photos", write=True, limit=0)
+    ok(any("moved=0" in line for line in lines), "the census names zero moved",
+       "; ".join(line for line in lines if "moved" in line))
+    ok(legacy_still_there(placed), "and every photograph is still at its legacy address")
+    ok(not stamped_at(home), "and photos_relocated is not stamped")
+
+
+def case_limited_then_full_pass_reaches_every_photo() -> None:
+    print("cards photos --limit 2, then a full pass — stamped, and every photo reachable")
+    home = fresh_home()
+    from store import photos
+
+    placed = seed_legacy_photographs(5)
+    code, _lines = run_cards("photos", write=True, limit=2)
+    ok(code == 0 and not stamped_at(home), "the limited pass stamps nothing")
+    code, _lines = run_cards("photos", write=True, limit=None)
+    ok(code == 0, "the full pass exits 0", f"exit {code}")
+    ok(stamped_at(home), "and stamps photos_relocated")
+    reachable = [
+        photos.find(cid, box, index, relocated=True, home=home) is not None
+        for cid, box, index, _b in placed
+    ]
+    ok(all(reachable), "and every photograph is reachable at its name",
+       f"{sum(reachable)} of {len(placed)}")
+
+
 TESTS = [
     test_long_name,
     test_denominator_outlier,
@@ -222,12 +610,31 @@ TESTS = [
     test_digit_count_outlier,
     test_near_duplicate_name,
     test_near_duplicate_name_measured_case,
+    case_same_name_different_numbers_keep_distinct_identities,
+    case_second_identity_write_changes_nothing,
+    case_identity_preview_writes_nothing,
+    case_photos_limit_touches_at_most_n,
+    case_photos_limit_zero_moves_nothing,
+    case_cards_checks_reaches_the_cli,
+    case_limited_pass_reports_a_corrupt_photo,
+    case_negative_limit_is_refused,
+    case_write_limit_zero_moves_nothing_and_stamps_nothing,
+    case_limited_then_full_pass_reaches_every_photo,
 ]
 
 
 def main() -> int:
-    for test in TESTS:
-        test()
+    saved = os.environ.get("BANCHI_HOME")
+    try:
+        for test in TESTS:
+            test()
+    finally:
+        if saved is None:
+            os.environ.pop("BANCHI_HOME", None)
+        else:
+            os.environ["BANCHI_HOME"] = saved
+        for where in MADE:
+            shutil.rmtree(where, ignore_errors=True)
     print()
     print(f"{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0

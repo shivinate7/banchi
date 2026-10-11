@@ -729,17 +729,17 @@ CHECKS = (
         "shard": "guards-1",
         "runs": "python3 scripts/identity-checks-selftest.py",
         "asserts": "pipeline/identity_checks.py's four stored-data checks against literal "
-                   "CardRecord fixtures, no store, no network (D239). One positive and one "
+                   "CardRecord fixtures (D239), and cli/cmd_cards.py's `identity`, `photos` "
+                   "and `checks` subcommands against a temp store, no network. One positive and one "
                    "negative arm per check, built from the exact subjects the cited "
                    "decision entry measured (`102/166` in a 298-card Origins, `0934` in a "
                    "132-card ME01, `Shadbow Temple` beside `Shadow Temple`, a "
                    "152-character rules-text name). A mutation arm: a denominator check "
                    "comparing against the first-seen value instead of the dominant one is "
                    "shown to blame the wrong card before the real function is shown to "
-                   "survive the same fixture. This module's one caller "
-                   "(`cli/cmd_cards.py:checks`) is exercised nowhere else — "
-                   "harness/tests/t7_store_and_seams.py drives cli/cmd_cards.py through "
-                   "cards_action='variants' and 'identity' alone, never 'checks'.",
+                   "survive the same fixture. CLI cases: `cards photos --limit N` moves at most N, "
+                   "stamps nothing on a limited pass and `--limit 0` moves none; "
+                   "`cards checks` is reached here and nowhere else.",
         "needs": ("python3",),
         "writes": "nothing — every fixture is a literal CardRecord, never a store on disk.",
         "commit_path": False,
