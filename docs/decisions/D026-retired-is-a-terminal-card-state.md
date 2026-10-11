@@ -1,6 +1,6 @@
 ## D26 — Retired is a terminal card state
 
-**A card that leaves without a sale takes the terminal state `retired`, sibling of `sold`, with a reason (`pulled`, `damaged`, `lost`, `given_away`).** It keeps its record, leaves its gap permanent and is reversible (`POST /inventory/<box>/<index>/retire`, `restores_to`). A sale refuses a retired card (`card_retired`). It is not the tombstone D10 refused, which gave undo a third thing the store had to explain.
+**A card that leaves without a sale takes the terminal state `retired`, sibling of `sold`, with a reason (`pulled`, `damaged`, `lost`, `given_away`).** It keeps its record, leaves its gap permanent and is reversible (`POST /inventory/<box>/<index>/retire`, `restores_to`). A sale refuses a retired card (`card_retired`). It is not the tombstone D10 refused, That was undo inventing a third thing the store must explain. This is a real card that has left.
 
 The state is `retired`, not `removed`, because `removed` is already a history event name. T7 asserts no event name is a member of `master.STATES`, and `_state_before_sale` filters history against that tuple. A state called `removed` would make old undo events parse as states.
 

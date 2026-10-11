@@ -14,7 +14,7 @@ The whole set, as the app spells it:
 banchi.session.captureId  banchi.run-scope  banchi.session.homeDeck
 ```
 
-`app/src/CaptureScreen.tsx`'s `SESSION_KEYS` declares the first. `app/src/runHandoff.ts` declares the second. `app/src/Home.tsx` declares the third. `make docs-audit`'s `storage keys` row holds this fence against the keys the app writes, in both directions. The row reads the fence only. Prose around it is not checked.
+`app/src/CaptureScreen.tsx`'s `SESSION_KEYS` declares the first. `app/src/runHandoff.ts` declares the second. `app/src/Home.tsx` declares the third. `make docs-audit`'s `storage keys` row holds this fence against the keys the app writes, in both directions. `check_storage_keys` reconciles the fence against every `sessionStorage` key under `app/src`. It reads the fence only. The argument for keeping `captureId` session-scoped, in full, is in the comment above `SESSION_KEYS`. Prose around it is not checked.
 
 ### Settings that left this carve-out
 
@@ -22,7 +22,7 @@ D142 moved six capture settings (`box`, `setHint`, `finish`, `game`, `rarityClai
 
 ### Key naming
 
-Every browser-storage key this app writes is `banchi.*`. There is no frozen set to remember. The `pkmnscan.` prefix was not kept. D94 covers a storage key like every other name. Old values are abandoned in place. No migration runs, and no read-time fallback exists, because a fallback can never safely be deleted.
+Every browser-storage key this app writes is `banchi.*`. There is no frozen set to remember. The `pkmnscan.` prefix was not kept. D94 covers a storage key like every other name. Old values are abandoned in place. No migration runs, and no read-time fallback exists, because a fallback read can never safely be deleted afterwards. Removing it strands any browser that has not opened the app since.
 
 Cost of the rename, named. Two `localStorage` keys were lost on the rig: the remembered 4K capture card and the quarter turn. Seven `sessionStorage` keys were lost too, but only in a tab left open across a deploy. The exception is `captureId`. A capture in flight when the new build loads could burn a position. D10's high-water mark would then hand that position to the next card. `run-scope` is the cheapest of the ten. Reading nothing is its safe answer, since its purpose is to stop a press paying for more than the operator ticked.
 

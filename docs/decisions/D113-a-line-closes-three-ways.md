@@ -57,7 +57,7 @@ The line stayed open with the third copy already in the envelope. `#/inventory`'
 
 **`sold_separately` is the third fill reason, and it is not `off_system`.** `off_system` means that this store never photographed the card. `sold_separately` means that it did. The two need telling apart by whoever reads the row later. One is a bookkeeping gap. The other is a blind spot.
 
-**`no_copies_on_hand` gets two presses, because it carries three truths.** `_reason`'s own comment lists them. This order's copy went out by the sale. Another buyer took the last one. Or it was retired damaged. Only the operator knows which. So "I already sent it" fills, and "it is not shipping" stands down. Neither is assumed. That second press is the only place `not_shipping` is reachable. Without it, this entry's own change would leave a server capability that no screen could reach.
+**`no_copies_on_hand` gets two presses, because it carries three truths.** `_reason`'s own comment lists them. This order's copy went out by the sale. Another buyer took the last one. Or it was retired damaged. Only the operator knows which. So *"I already sent it"* fills and *"it isn't shipping"* stands down. Neither is assumed. That second press is the only place `not_shipping` is reachable. Without it, this entry's own change would leave a server capability that no screen could reach.
 
 **`short` is deliberately excluded.** While copies are on hand, the remedy is to pull them. A fill button there would invite closing a line whose cards sit in box 3.
 
