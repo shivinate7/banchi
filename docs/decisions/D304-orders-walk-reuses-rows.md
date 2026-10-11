@@ -1,8 +1,6 @@
 ## D304 — Orders walk reuses Inventory's rows
 
-The owner's answers, 2026-09-27, to the drift findings against D220 (Orders is
-inventory's screen with orders in the rail, and the walk is a mode of it) and D274 (Orders
-and Shipping are two sidebar rows with no tabs, and the walk gets the full height). This entry records only what was decided.
+The owner's answers to the drift findings against D220 and D274 follow. D220: Orders is inventory's screen with orders in the rail, and the walk is a mode of it. D274: Orders and Shipping are two sidebar rows with no tabs, and the walk gets the full height. This entry records only what was decided.
 
 **Q1, the desk layout.** Layout R: three columns at 1000px of column and up. Inventory's
 rail frame holds the buyers, sticky, fit to the window. The walk column holds the order
@@ -35,8 +33,8 @@ The buyer shows before the photograph. This keeps D274's built walk mode (`?walk
 does not revert to the card-then-walk order the first mockup drew. The walk is what a hand
 steps through at the shelf.
 
-**Q5, the walk order.** Density first, box name breaks a tie. The owner asked whether the
-walk already sorted by density. They were right to ask. D220's own owner quote says it should.
+**Q5, the walk order.** Density first, box name breaks a tie. The walk did not sort by density.
+D220 says it should.
 `pipeline/walkplan.py`'s built `plan` sorts by `walk_order`, the hidden box NUMBER, never by
 density or name. The fix keeps `walk_order` for the solver's own determinism (`_dominated`,
 `_greedy`, `solve`). It changes only `plan`'s drawn-order key, to `(pooled flag, density,
@@ -45,12 +43,7 @@ The box name, in natural order, breaks a tie only (D259, a box is shown only by 
 
 **Q6, the pane's card facts.** The hero head only, D274's own shape. No Details fold sits on
 this screen. Below the head goes every on-hand copy of the card, in Inventory's own copies
-list, with the walk's chosen copy first (D212, every copy is fungible). The owner's own
-words:
-
-```
-we don't need details on this screen
-```
+list, with the walk's chosen copy first (D212, every copy is fungible). The owner ruled that this screen shows no details.
 
 This keeps D274's amendment. The card's details table stays on `#/inventory` alone.
 
@@ -58,14 +51,7 @@ This keeps D274's amendment. The card's details table stays on `#/inventory` alo
 refuses any image outside the demo photo folders. A code-card photo is a bearer instrument,
 and the guard carves out no exception for a review mockup.
 
-**Hide picked, lane E's own ruling, folded in here because lane A builds on top of it.** The
-owner's own words:
-
-```
-The press folds picked rows
-```
-
-A press folds every row picked so far. It is a press, never a live filter. A sale that
+**Hide picked, lane E's own ruling, folded in here because lane A builds on top of it.** The owner ruled it. A press folds every row picked so far. It is a press, never a live filter. A sale that
 lands while Hide picked is on leaves that row in place. It folds only at the next press or
 the next load. This is D263's ruling 2 (a sold row folds on the next load, never at once),
 read onto the Hide picked control and not only onto Mark sold. D118 (a press changes what is
@@ -83,8 +69,7 @@ full-detail row, which needs Inventory's own width and Inventory's own rail.
 
 This entry does not repeal D220 or D274's own arguments. The walk stays a mode of
 Inventory's screen. The pane stays reused, never forked. The two-sidebar-rows shape stays.
-It resolves the open questions the drift findings raised against them, on the owner's own
-word, on 2026-09-27.
+It resolves the open questions the drift findings raised against them, on the owner's word.
 
 ### What is still open
 
@@ -92,4 +77,4 @@ The lane plan (`orders-a/PLAN.md`, lanes A1 through A6) is not built by this ent
 entry is the design record the lanes build from. `docs/specs/order-walk-plan.md` §16 points
 here for the design, and holds the sort-order argument's own detail.
 
-**Amended 2026-09-29 (owner's word, A1).** Under a search, a tie on section density now breaks by the box's natural name, the same as the Orders walk. The no-search order is unchanged. `docs/specs/order-walk-plan.md` §17 states how each screen ranks a search.
+**Amended (owner's word, A1).** Under a search, a tie on section density now breaks by the box's natural name, the same as the Orders walk. The no-search order is unchanged. `docs/specs/order-walk-plan.md` §17 states how each screen ranks a search.

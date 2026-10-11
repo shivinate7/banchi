@@ -1,8 +1,7 @@
 ## D197 — A page anchors to the shell inset
 
-**The owner's report, 2026-09-13, with three screenshots:** `#/pricing`'s content started
-roughly 330px further right than `#/review` and `#/inventory` at the same window width. *"how
-this gap and width of screens is variable"* is wrong — the left edge of every owner screen must
+**The owner reported this with three screenshots.** `#/pricing`'s content started
+roughly 330px further right than `#/review` and `#/inventory` at the same window width. A gap that varies by screen is wrong. The left edge of every owner screen must
 be the same, at every width and in both rail states.
 
 **The cause is `app/src/kit.css`'s `.bn-page`.** It read

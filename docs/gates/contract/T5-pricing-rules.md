@@ -8,9 +8,8 @@ decimals, the floor clamp applied *after* rounding, the threshold always read fr
   threshold always reads market; no_market_data never auto-priced
 - "Floor clamp applied after rounding" is also the statement that it cannot be rounded
   under — clamping first would let the rounding step drop the price back below the floor.
-- **The floor asserted here is the STORE'S, not the module constant** (D9, amended
-  2026-09-09), and the case is written on a market price BETWEEN the two figures because that
-  is the only shape that can tell them apart: at a stored cut-off of `$0.29` a `$0.32` card
-  lists at `$0.32`, and the same row at the `$0.40` default clamps to `$0.40` and is not even
-  listable. It is a regression case rather than a parameter sweep — the owner's store sat at
-  `$0.29` for a week while every clamp read `$0.40`.
+- **The floor asserted here is the STORE'S, not the module constant** (D9, amended).
+  The case uses a market price between the two figures. Only that shape tells them apart.
+  At a stored cut-off of `$0.29`, a `$0.32` card lists at `$0.32`.
+  At the `$0.40` default, the same row clamps to `$0.40` and is not listable.
+  It is a regression case, not a parameter sweep. The owner's store sat at `$0.29` for a week while every clamp read `$0.40`.

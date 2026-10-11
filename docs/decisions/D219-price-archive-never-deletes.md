@@ -89,9 +89,9 @@ a schedule and the schedule is deferred, by the owner's own word
 sweep firing on its own reverses D224's own statement. D224 says this reader cannot fire by
 itself. That reversal needs its own argument, which nobody has made yet.
 
-### Amended 2026-09-28: a stored summary for Holdings
+### Amended: a stored summary for Holdings
 
-Owner's ruling, 2026-09-28. Holdings value took 8 to 11 s on the live server, because it
+Owner's ruling. Holdings value took 8 to 11 s on the live server, because it
 loaded all 159,341 archive rows through `PriceArchive._index` (89% of the route). The fix is a
 table, not a cache, by D189's argument, and no RAM is held while Banchi idles.
 `price_history_summary` holds one row per `(sku, range)`, with that range's `(start, market,

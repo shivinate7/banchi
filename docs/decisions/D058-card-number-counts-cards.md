@@ -1,6 +1,6 @@
 ## D58 — A card's number counts cards, not slots
 
-**A card's number counts the cards in the box, so selling one makes the card behind it take that number on every screen.** Built 2026-08-30 on the owner's instruction: when cards are marked sold, the slot is not left empty — the cards before it move up one.
+**A card's number counts the cards in the box, so selling one makes the card behind it take that number on every screen.** Built on the owner's instruction: when cards are marked sold, the slot is not left empty — the cards before it move up one.
 
 **It answers the earlier open question about a gap.** The problem was stated in the sentence this one deletes: `Card 17` is the **seventeenth slot**, not the seventeenth card you can count, and once a section has holes those two stop being the same number and every label in that section becomes uncountable by hand.
 
@@ -27,7 +27,7 @@ On the owner's store the day it landed:
 | 2 · ME01 C/UC | sealed | 543 | 0 | 1 | **542** |
 | 3 · RB Epics | open | 39 | 9 | 0 | **30** |
 
-Every label above a departed card moved once, deliberately — the same event as D10's deletion of automatic sectioning on 2026-08-29, and pinned the same way, so the next such shift cannot be accidental either.
+Every label above a departed card moved once, deliberately — the same event as D10's deletion of automatic sectioning. It is pinned the same way. The next such shift cannot be accidental either.
 
 **`Position` gains the box's occupancy and stays the only label formula in the repo.** `occupied` is every on-hand index in the box, ascending, and `departed` is every terminal one. `slot` is this card's place among the first; `section`, `section_start`, `section_end` and `card` all read it. **`None` and `()` are opposite facts and the sentinel is `None`**: an empty tuple is a box every card has left, whose cards must still render as departed rather than reverting to slot numbers, and `None` is a caller with no inventory to consult — which renders in index space, byte-identically to the day before this landed. `BoxView` is that pair with a name and `BoxView().at(box, index)` is the one constructor.
 
@@ -72,7 +72,7 @@ It becomes `Card 29` only when 180 sells, which is a card in its own section and
 
 ### A live defect this forced, and the rule that fixes it
 
-**`store/queues.py:QueueEntry.label` is a stored rendering and nothing had ever recomputed it.** Written once by `cli/resolve.py` at join time, served verbatim by `GET /queues`, drawn by `ReviewQueue.tsx`. Measured on the owner's real store: **15 of 92 entries carry a label drawn against `CARDS_PER_SECTION = 25`**, the divider rule D10's amendment deleted on 2026-08-29. Box 1 declares no dividers at all and its queue holds both `Box 1 · Section 1 · Card 108` and `Box 1 · Section 5 · Card 18` — a section that does not exist.
+**`store/queues.py:QueueEntry.label` is a stored rendering and nothing had ever recomputed it.** Written once by `cli/resolve.py` at join time, served verbatim by `GET /queues`, drawn by `ReviewQueue.tsx`. Measured on the owner's real store: **15 of 92 entries carry a label drawn against `CARDS_PER_SECTION = 25`**, the divider rule D10's amendment deleted. Box 1 declares no dividers at all and its queue holds both `Box 1 · Section 1 · Card 108` and `Box 1 · Section 5 · Card 18` — a section that does not exist.
 
 **It is latent rather than live today, and saying so is the point of measuring it.** All 92 of those entries are `cleared_by_human`, so `open_entries` serves none of them and nothing has been drawing a wrong label on screen. What the measurement establishes is the SHAPE: the field is a rendering that was written down, nothing has ever recomputed it, and a rule that moved left it behind. D28's `Queue.reopen` is the path that would surface one, and the next join writes fresh entries that go stale the next time a layout changes.
 
@@ -82,7 +82,7 @@ It becomes `Card 29` only when 180 sells, which is a card in its own section and
 
 **And `cli/resolve.py` built every `Position` with no layout at all**, which is older than this entry and is fixed with it: a box-2 queue entry was written as `Section 1 · Card 300` where the app rendered `Section 4 · Card 48`. Two renderers, two answers, and nothing had ever compared them. `box_views` is that walk, and **T7 asserts the two spell one address on a real card** — the same shape `make port-agreement` uses for the other pair that has to agree.
 
-### The same defect at a second site — `pricing.json` (amendment, 2026-08-30)
+### The same defect at a second site — `pricing.json` (amendment)
 
 **The queue was not the only stored rendering, and `pricing.json` is the one that was on a screen.** `cli/cmd_join.py:_pricing_table` writes `{"box", "index", "label"}` per matched SKU, `GET /pipeline/runs/<name>/pricing` served the stored string verbatim, and `app/src/Pricing.tsx` drew it into `.pricing-photo-caption` under the copy's photograph. Found by sweeping for the shape the section above describes, not by a failure.
 
@@ -123,7 +123,7 @@ Box 1 holds 133 records with 18 sold, box 3 holds 39 with 24, and neither declar
 
 **What would reopen this: a box whose slots are fixed.** Everything above rests on the physical fact that a card pulled out of a stack lets the cards behind it slide forward — the same premise D10 ruling 1 already leans on for the mid-box delete. A binder, a sleeved page or any storage where a slot stays empty is a box this numbering describes wrongly, and the honest answer then is per-box rather than global: the flag would sit on `Box` beside `sections`, and the seal gate the owner dropped is the cheapest version of it.
 
-### Amended 2026-09-25: capacity is gone
+### Amended: capacity is gone
 
 The paragraph above that keeps `capacity` for "its D20 job" is superseded. The owner removed the
 seal (D299), and `close_box` was the only writer of `capacity`. So a box has
