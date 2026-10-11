@@ -183,7 +183,7 @@ pills.
 - **Measures**: one multi-select `FilterFacet` over the eight measures. A column split allows one
   measure at a time, so the facet becomes single-pick (`multiple: false`). A pick that would break
   this rule rewrites the facet's picks and never leaves two.
-- **Sort**: the sort field and the direction live in one menu, `SortControl` (B19, signed off, not built yet).
+- **Sort**: the sort field and the direction live in one menu, `SortControl` (B19, signed off).
   Its keys are `Row name` and the measures drawn. The menu keeps a fixed trigger width (D313). Sort menu
   only: the other toggles on the row stay. A sort key that leaves the drawn measures falls back to `Row name`.
 - The controls wrap into rows under the heading at 1440 and 820. Each is 40px or more tall
