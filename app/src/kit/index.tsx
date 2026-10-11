@@ -1362,6 +1362,12 @@ export function stampTheme(theme: Theme): void {
   else root.removeAttribute('data-palette')
 }
 
+/** Point every theme-color meta at the page background, so the browser chrome follows the in-app theme. */
+export function syncThemeColor(): void {
+  const bg = getComputedStyle(document.body).backgroundColor
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', bg))
+}
+
 /** The theme the attributes on <html> show right now. */
 export function appliedTheme(): Theme {
   const root = document.documentElement
