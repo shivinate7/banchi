@@ -1,6 +1,13 @@
 ## D132 — Sold is folded away by default
 
-**Settled on the owner's four asks about `#/inventory`.** The owner asked for four things. Stop making them scroll through sold cards in positioning. Show the box name the way they know it (`WB1 R1`). Sort boxes by most recently clicked, then by quantity of cards. Name sections (`Section 6 RARES`, not `section 6`). Each screen answers to the person walking the boxes, not to the store's own keys.
+**Settled on the owner's four asks about `#/inventory`.** The owner asked for four things:
+
+- Stop making them scroll through sold cards in positioning.
+- Show the box name the way they know it (`WB1 R1`).
+- Sort boxes by most recently clicked, then by quantity of cards.
+- Name sections (`Section 6 RARES`, not `section 6`).
+
+Each screen answers to the person walking the boxes, not to the store's own keys.
 
 ### What is built
 
@@ -9,15 +16,15 @@
 
    **The row the walk stands on is never folded away**, whatever its state. `selectedRow` is found in the visible list. A sale leaves its receipt where it was pressed (D118, D119). A walk-to from the copies list may land on a sold copy (D45). A just-sold copy stays in the copies list while its optimistic `soldKeys` overlay stands, for the same reason. The row goes once the walk steps off it.
 
-   **The walk's sections are keyed by box and section number,** not by their first row. With sold rows folded away, a section's first row can be a different record. That happens whenever its first card has left. Without this key, every fold closed on the press. A section number survives a sale (D58's wire keeps `section` on a departed record) and survives the toggle.
+   **The walk's sections are keyed by box and section number,** not by their first row. With sold rows folded away, a section's first row can be a different record, whenever its first card has left. Without this key, every fold closed on the press. A section number survives a sale (D58's wire keeps `section` on a departed record) and survives the toggle.
 
    **`CardLocations` rule 1 is amended.** It read "none is dropped for being far away, sold or spoken for". Sold is now the exception, on the owner's word. The comment says so.
 
-2. **The address leads with the box's NAME.** `PositionLabel` takes `boxName`. The first path part's VALUE becomes the name (`BOX WB1 R1`), and the index moves into the note beside it (`Box 3`). The location card's corner used to say the name. It says `Box 3` now, and only when there is a name. An unnamed box already reads `BOX 3` in the address. The copies rows do the same (`boxName` in place of `boxNote`), on the owner's answer that the two panels should agree. **The server string is still never edited.** `aria-label` carries it verbatim. Every spec asserts that property. It is why this is a rendering and not a write.
+2. **The address leads with the box's NAME.** `PositionLabel` takes `boxName`. The first path part's VALUE becomes the name (`BOX WB1 R1`), and the index moves into the note beside it (`Box 3`). The location card's corner used to say the name. It now says `Box 3`, and only when there is a name. An unnamed box already reads `BOX 3` in the address. The copies rows do the same (`boxName` in place of `boxNote`), so the two panels agree. **The server string is still never edited.** `aria-label` carries it verbatim. Every spec asserts that property. It is why this is a rendering and not a write.
 
-3. **The rail draws no box numbers and is ordered by the hand.** `.browse-boxcell-num` is gone. The name column already fell back to `Box N` for an unnamed box. Every cell's accessible name still says `Box N`, so nothing is lost to a screen reader or a locator. Boxes sort by **when this browser last opened them**, newest first. Then they sort by **cards on hand**, most first. That is `on_hand`, not `cards`, because a box full of sold records is not a box worth reaching for. "Quantity of cards" was read that way on purpose. Then they sort by number, the last thing the owner thinks in. The collapsed rail's 36px tiles draw the first word of the name, four characters at most, and the number only where there is no name.
+3. **The rail draws no box numbers and is ordered by the hand.** `.browse-boxcell-num` is gone. The name column already falls back to `Box N` for an unnamed box. Every cell's accessible name still says `Box N`, so nothing is lost to a screen reader or a locator. Boxes sort by **when this browser last opened them**, newest first. Then by **cards on hand**, most first. That is `on_hand`, not `cards`, because a box full of sold records is not a box worth reaching for. Then by number, the last thing the owner thinks in. The collapsed rail's 36px tiles draw the first word of the name, four characters at most, and the number only where there is no name.
 
-   **Recency is device-local.** It is `banchi.inventory.box-recency` in `deviceMemory.ts`, put to the owner and chosen over a server field. It is `banchi.orders.last-check`'s kind of fact: when THIS device did something. The phone in the garage and the laptop at the desk look for different boxes. A store write for every press, for a sort order, would make D13's one truth carry a habit. It is bumped from a rail press and from a walk-to. It is **never bumped from the `?box=` landing**, so a page load does not reorder the rail. Capped at fifty. `banchi.inventory.hide-sold` is the other new key, the chip's memory. CLAUDE.md's roster says eight now. `make docs-audit`'s `storage keys` row holds it.
+   **Recency is device-local.** It is `banchi.inventory.box-recency` in `deviceMemory.ts`. It is the same kind of fact as `banchi.orders.last-check`: when THIS device did something. The phone in the garage and the laptop at the desk look for different boxes. A store write for every press, for a sort order, would make D13's one truth carry a habit. It is bumped from a rail press and from a walk-to. It is **never bumped from the `?box=` landing**, so a page load does not reorder the rail. Capped at fifty. `banchi.inventory.hide-sold` is the other new key, the chip's memory. `make docs-audit`'s `storage keys` row holds the roster.
 
 4. **A section can be named.** `store/master.py:Box.section_names` existed since D83's move-cards work. It was keyed by the divider INDEX a section starts at, persisted in the box's JSON payload. Nothing read it, and only the demo seed wrote it. Now `PUT /boxes/<box>` takes `section_names` keyed by **ordinal**, the number every screen prints. `Inventory.set_section_names` joins ordinal to divider index, the way `do_put_box` already maps a count-space layout to indices. An ordinal past the layout refuses as `section_unknown`. A blank clears the name. `sections_detail[].name` and every `place.section_name` are joined at read time. This follows D56's rule: never written into a run directory, so a rename reaches every label. The walk's headers read `Section 6 · Rares · #101–#153`. The bar's sentence reads `Section 6 · Rares · card 54 of 153 so far`. `PositionLabel` draws the name as a note on the `SECTION 6` part. The editor is a **Name sections** row in the Manage box sheet, one field per section. `section_named` carries both maps, by ordinal, for `set_name`'s reason.
 
@@ -26,7 +33,7 @@
 ### What is recorded rather than re-litigated
 
 **`LocationCard` existed in `Inventory.tsx` while this was built. D119 says it was deleted.** An earlier version of this entry said it stayed, because the owner was using it. That was wrong. The owner's screenshot showed it only because commit `9439765` had put it back by accident. Nobody had asked for it back. The owner's ruling in D119 stood the whole time.
-**The deletion is re-applied, and D119 is amended with the account** (its final section). What this entry changed on the card survives on the copies row the walk stands on. That is the corner saying `Box 3` and the address leading with the name. D119 says the address is drawn there.
+The deletion is re-applied, and D119 is amended with the account (its final section). What this entry changed on the card survives on the copies row the walk stands on. That is the corner saying `Box 3`, and the address leading with the name. D119 says the address is drawn there.
 
 ### Amendment: a search lands on the fullest section, and the index is said once
 
@@ -37,7 +44,7 @@
 **The order is the largest quantity of the answer, by section.** The owner confirmed the rule: the largest quantity of whatever was searched, by section, is the order. The copies list groups by box and section. It draws the section holding the most live copies first. Within a section, the server's card order holds. Under a query, the rail ranks a box by its **fullest section**, not by its total. Three in one section outranks one-plus-two across two. So the rail, the list and the landing agree. A fresh answer moves the walk to the first live row of that section, in that box. A rail press under the same query lands in that box's fullest section. A copy sold from this screen still counts for its section while its receipt stands, so the press moves no row (D118). With nothing live anywhere, the older rules stand.
 
 **The index is said once on the location card.** `BOX WB1 R2  Box 4` beside a corner that also said `Box 4` stated the same fact twice. `PositionLabel`'s `indexNote` was off there. The copies rows have no corner and keep the note.
-**D119's re-application overtook this the same day.** The location card is deleted again. So there is no corner and no second saying of it. Every row keeps the note. `indexNote` is gone with its only caller.
+D119's re-application overtook this the same day. The location card is deleted again. So there is no corner and no second saying of it. Every row keeps the note. `indexNote` is gone with its only caller.
 
 ### What is not built
 

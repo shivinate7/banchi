@@ -1,27 +1,25 @@
 ## D138 — One process serves the product
 
-**Settled by interview. The owner asked for an easier way to package this, and wants one server, not two.** The interview started broad. Its answers are the constraints. The ruling is what they leave standing. Nothing is built under this entry.
+**Settled by interview. The owner wants an easier way to package this, and one server, not two.** Nothing is built under this entry. The answers below are the constraints. The ruling is what they leave standing.
 
 ### What the owner answered
 
-- **Audience: unknown.** Just the owner today. Maybe the Fulfiller's device. Maybe another seller one day. So: prefer what costs least to reverse.
+- **Audience: unknown.** Just the owner today. Maybe the Fulfiller's device. Maybe another seller one day. So prefer what costs least to reverse.
 - **What bothers the owner: the shape.** Two processes, a supervisor, two ports, a launch agent, and a restart for an expired key.
-- **The dev loop stays untouched.** Hot reload on every `.tsx` edit under `make dev` is not something packaging may cost. The owner alternates building and operating, in equal shares, so neither half is the minor one.
-- **Kept, if packaging meant choosing:** self-reload on Python edits, and per-checkout ports and stores (D43). Not kept by name: start at login, and the LAN name. When asked directly what happens after a reboot, the owner kept start at login.
+- **The dev loop stays untouched.** Hot reload on every `.tsx` edit under `make dev` is not something packaging may cost. The owner alternates building and operating in equal shares, so neither half is the minor one.
+- **Kept, if packaging meant choosing:** self-reload on Python edits, and per-checkout ports and stores (D43). Not kept by name: start at login, and the LAN name. Asked directly what happens after a reboot, the owner kept start at login.
 - **The window is Chrome, as today.** D108's dock app stays. The camera work is not re-litigated.
 - **The build is the server's, when `dist` is stale.** It is not a command the owner types, and it is not a nag.
-- **Scope for the session: record the decision and plan the rest.**
 
 ### The ruling
 
-**The operating form is ONE process: the capture server, serving the compiled app itself.**
-Static files come from its own port, beside the API. `app/dist/` is served for any path that is not a route. An unknown path serves `index.html`, so the hash router works. The port is the one the tree already has: `:8000` in the main checkout, the slot's own in a worktree. D43's property holds with nothing new. The bundle bakes only the capture port and resolves the host from the address bar. When the page and the API come from one origin, that composition is trivially right.
+**The operating form is ONE process: the capture server, serving the compiled app itself.** Static files come from its own port, beside the API. `app/dist/` is served for any path that is not a route. An unknown path serves `index.html`, so the hash router works. The port is the one the tree already has: `:8000` in the main checkout, the slot's own in a worktree. D43's property holds with nothing new. The bundle bakes only the capture port and resolves the host from the address bar. When the page and the API share one origin, that composition is right.
 
-**Vite compiles and never serves at run time.** Vite does two jobs. It compiles TypeScript and JSX into a bundle. In development, it serves that bundle with hot reload. Nobody ships the second job. The Rust tools replace only the first. Vite itself is moving onto one, Rolldown. Swapping compilers changes the process count by zero. Tauri is Rust for a native window. D108 already declined that, and the owner declined it again. So the compiler stays, and `make dev` keeps it on its own port with hot reload, as it is.
+**Vite compiles and never serves at run time.** Vite does two jobs. It compiles TypeScript and JSX into a bundle. In development, it serves that bundle with hot reload. Nobody ships the second job. The Rust tools replace only the first. Vite is moving onto one, Rolldown. Swapping compilers changes the process count by zero. Tauri is Rust for a native window. D108 already declined that, and the owner declined it again. So the compiler stays, and `make dev` keeps it on its own port with hot reload.
 
-**The supervisor loses its app child and gains a build.** It watches `app/src` alongside the Python packages. When a source file is newer than `dist/`, it runs `vite build` and serves the old bundle until the new one lands. An earlier design held one thing against this shape: a built bundle has to be rebuilt, which adds a step to remember. The owner's answer removes that step by giving it to the process that already watches files. That rejection is reversed on exactly that ground. Nothing else moves. The drain, parse pre-check, fast-failure cap, self-watch and launch agent all carry over, with one child instead of two.
+**The supervisor loses its app child and gains a build.** It watches `app/src` alongside the Python packages. When a source file is newer than `dist/`, it runs `vite build` and serves the old bundle until the new one lands. An earlier design held one thing against this shape: a built bundle has to be rebuilt, which adds a step to remember. The owner's answer gives that step to the process that already watches files. That rejection is reversed on that ground. Nothing else moves. The drain, parse pre-check, fast-failure cap, self-watch and launch agent all carry over, with one child instead of two.
 
-**The code it runs is the checkout, live.** A frozen copy promoted by a release target was offered and is deferred. The owner alternates building and operating, wants Python self-reload, and already operates on the checkout today. A frozen form protects against nothing that is happening. It adds a promote step that, when forgotten, leaves a rig session on last week's code with no sign of it. **A second person needing the app would reopen the frozen form.** Then a snapshot with its own store and no worktree in sight is the right shape. D108's "signed artifact" clause is the same reopening from the other side.
+**The code it runs is the checkout, live.** A frozen copy promoted by a release target was offered and is deferred. The owner alternates building and operating, wants Python self-reload, and already operates on the checkout. A frozen form protects against nothing that is happening. It adds a promote step that, when forgotten, leaves a rig session on last week's code with no sign of it. **A second person needing the app would reopen the frozen form.** Then a snapshot with its own store and no worktree is the right shape. D108's "signed artifact" clause is the same reopening from the other side.
 
 **The dock app moves to the capture port, once.** D108 stands in every argument: the page Chrome already renders, the profile's camera grant, and the app as a client, never a second supervisor. It is amended in one fact. The installed URL is `:8000`, not `:5173`. The manifest is already relative (D108) and needs no edit. The reinstall is one press in Chrome.
 
@@ -49,8 +47,8 @@ Static files come from its own port, beside the API. `app/dist/` is served for a
 
 Unaffected, and checked before writing this: `make demo-record` spawns its own capture server. `make demo-static` already builds `dist-demo/` under a base path. `make design-check` starts a Vite server per worker and never touches the supervisor. `make screenshot` renders `make dev`'s port, which does not move.
 
-### What is BUILT, RECORDED, and NEITHER
+### Status at the time of this entry
 
-**BUILT:** nothing. **RECORDED:** this entry, `docs/specs/one-process.md`, step 22 in both build-order lists, and the entry's line in `CLAUDE.md`'s index. **NEITHER:** every line of the plan above.
+Built under this entry: nothing. Recorded: this entry, `docs/specs/one-process.md`, step 22 in both build-order lists, and the entry's line in `CLAUDE.md`'s index. Not yet built: every step of the plan above.
 
 A restart discipline is a memo, not a guard: `make up` reloads on source change.

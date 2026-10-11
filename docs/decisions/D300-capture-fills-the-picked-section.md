@@ -12,13 +12,13 @@ The owner's answers to the plan's three questions:
 
 ### The premise that no longer holds
 
-D10 (the inventory model) said the next captured card goes on the end of the stack. That was the only way a card entered a box at capture. D294 (a card's place is an order key apart from its index) already let a placement put a card between two others. This entry lets a capture do the same thing, into the section the operator picks.
+D10 (the inventory model) said the next captured card goes on the end of the stack. D294 (a card's place is an order key apart from its index) already lets a placement go between two cards. This entry lets a capture do the same, into the picked section.
 
 ### The rule
 
 **The client names a section by its divider key. The store chooses the key of the card.** So no request carries an index or an order key. `store/master.py:Inventory.section_tail_key` is the one rule. A capture, an S after a section and a Move-to-box all read it.
 
-- The last section takes `next_key`, which is the rule before this entry. A capture that names no section, or the last section, is the same capture as before. A box that nothing was placed into stays the identity (every key equals its index).
+- The last section takes `next_key`, the rule before this entry. A capture that names no section, or the last section, is the same capture as before. A box that nothing was placed into stays the identity: every key equals its index.
 - An empty section takes its divider's own key. D10's empty-last-section rule does the same.
 - Otherwise the card takes `int(lo) + 1` while that is below the next divider. `lo` is the highest key of any record in the section.
 - Otherwise the card takes `lo + (hi - lo) / 1024`. When that falls below `KEY_EPSILON`, the box is re-spaced once.
@@ -29,7 +29,7 @@ D10 (the inventory model) said the next captured card goes on the end of the sta
 
 ### What this protects, and what protects it now
 
-A key that is wrong files a card where the hand did not put it, and nothing reports it (D10's named cost). Three things guard it.
+A wrong key files a card where the hand did not put it, and nothing reports it (D10's named cost). Three things guard it.
 
 1. `harness/tests/t7_box_map.py:check_capture_into_section` holds one named case for each invariant in the spec's section 4, and a fuzz. The fuzz captures, presses S and U, and moves cards into random sections against a physical model of each box. Each mutation in the spec's section 4 turns it red.
 2. Every aim carries the box's layout token, a hash of its divider keys. A re-space gives the dividers new keys, and an old key can equal another section's new key. So a token that is not the box's current one is refused with `section_gone` (409), and nothing is written. A key the box does not have is refused the same way.
@@ -37,7 +37,7 @@ A key that is wrong files a card where the hand did not put it, and nothing repo
 
 ### S after a picked section
 
-S with `after` puts one new divider directly behind the last record of that section. No card key changes. The later sections move up one number, and their card numbers stay the same. This is the one number that moves. A section that holds no record refuses with `section_empty`, as S on the last section does. U after such an S names the divider by its key (`DELETE /boxes/<box>/sections?div=`). It removes that divider only, and only while the box's newest layout change is that S. After an editor save, the divider stays.
+S with `after` puts one new divider directly behind the last record of that section. No card key changes. The later sections move up one number, and their card numbers stay the same. A section that holds no record refuses with `section_empty`, as S on the last section does. U after such an S names the divider by its key (`DELETE /boxes/<box>/sections?div=`). It removes that divider only, and only while the box's newest layout change is that S. After an editor save, the divider stays.
 
 ### Move to box
 
