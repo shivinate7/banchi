@@ -4081,7 +4081,8 @@ export function CaptureScreen() {
         icon: 'camera',
         tone: 'plain',
         text: null,
-        fix: { label: 'Camera', icon: 'camera', onPress: camera.retry },
+        // The stage keeps the Camera control (D211); Setup does not repeat it.
+        fix: null,
       })
     } else if (!camera.ready) {
       /* STARTED BUT NOT READY — asked for, and not delivering frames: a device that vanished,
@@ -4106,7 +4107,8 @@ export function CaptureScreen() {
         tone: 'plain',
         // The disabled Capture button above answers to this row, so it says why in a sentence.
         text: 'Pick a box before you capture.',
-        fix: { label: 'Box', icon: 'box', onPress: () => toggleField('box') },
+        // The Shooting group keeps the Box select (D211); Setup keeps only the sentence.
+        fix: null,
       })
     }
     if (gameEntry === null) {
