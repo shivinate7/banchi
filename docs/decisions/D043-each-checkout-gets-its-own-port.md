@@ -11,7 +11,7 @@ The second case is silent and cannot be undone. Neither screen says which proces
 
 **`app/devPort.ts` gave each checkout its own Vite port. The shared PORT was the fault that remained.** The fix stopped at Vite and Playwright. Before it, `make design-check` in a worktree attached to the main tree's dev server, asserted `docs/DESIGN.md`'s floors against code the worktree had never seen, and passed. The capture server writes photographs and inventory to disk, and it kept the shared constant.
 
-**`app/tests/inventory.spec.ts` described the bug in a comment.** An unstubbed read goes to whatever listens on port 8000: the owner's live capture server over the live 767-card inventory.
+**`app/tests/inventory.spec.ts` described the bug in a comment.** An unstubbed read goes to whatever listens on port 8000: the owner's live capture server over the live 767-card inventory. The defect was observed, worked around locally, and never filed.
 
 ### One slot, two ports
 
@@ -49,9 +49,9 @@ The slot is the `sha256` of the checkout's canonical path, first four bytes, mod
 
 **The trade was wrong about what an absent file costs. It took twenty-three days and a measurement to see.** The paragraph above reasons that absent beats wrong. It does not. **Nothing leaves the file absent.** The Browser pane's instructions tell an agent that finds no `launch.json` to create one from a template with a literal port. So absent lasts until the first `preview_start`. Then it becomes wrong, written by a session that had no way to know this repo derives the number. Absent is not the safe end of the trade. It is the entrance to the unsafe end.
 
-**Measured across the five worktrees of this clone:** four correct, one absent, and one holding a hand-written **5173**. That linked worktree's Browser pane would start its own dev server on 5470, then open a tab on the MAIN TREE's port.
+**Measured across the five worktrees of this clone:** four correct, one absent, and one holding a hand-written **5173**. That linked worktree's Browser pane would start its own dev server on 5470, then open a tab on the MAIN TREE's port. That was the tree the measurement ran in.
 
-**An absent file became a wrong one within twenty minutes.** `card-sku-stamping-fix-d11945` had no config, then one naming **5173** against a derived **5313**. A template wrote it. Nothing inside a tool that offers a template can know the port is a fact about the checkout's path. **The absent state is not a resting state. It decays in one direction.**
+**An absent file became a wrong one within twenty minutes.** `card-sku-stamping-fix-d11945` had no config, then one naming **5173** against a derived **5313**. A session in that worktree wrote it from the template. The port is a fact about the checkout's path, and nothing inside a tool that offers a template can know it. **The absent state is not a resting state. It decays in one direction.**
 
 **The fault was that the fix was a Makefile target, and a target runs only when somebody runs it.** `make launch-config` hangs off `make venv`, which `make worktree-setup` calls. So it reaches only worktrees provisioned that way. The five readers this entry moved onto one derivation are code, and code runs whether or not anyone remembers. This one was a file that somebody had to ask for.
 

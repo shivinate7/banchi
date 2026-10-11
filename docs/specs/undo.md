@@ -16,7 +16,7 @@ it. After that, the fix is an ordinary action. A toast fades on a timer. The und
 
 No server enforces a time limit. `undo_too_late` is a state test, not a clock. Every reversal decides
 "built on" from a store fact, and the server refuses with a sentence. The screen never guesses.
-`store/orders.py`'s `reopen_line` has no window or clock. No screen offers a fixed window. The receipt has no
+`store/orders.py`'s `reopen_line` has no window or clock. How long an undo stays offered is the screen's business, and no screen offers a fixed window. The receipt has no
 window. `UNDO_WINDOW_MS` is only the toast's TTL (`Inventory.tsx`, `Orders.tsx`).
 
 ## 2. Two mechanisms, and they are not the same mechanism
@@ -64,7 +64,7 @@ did not happen, and the card would go to the next buyer.
 
 ## 5. The order record keeps the fact and drops the position
 
-The operator ruled that a fulfilled order keeps no inventory positions. It keeps what was pulled and how many.
+The operator ruled that a fulfilled order need not stay connected to inventory positions. A past order should keep only the details: what was pulled, and how many.
 
 During the walk, positions are real. Mark a copy sold, and that specific indexed card is sold.
 `U` brings that one back. Afterwards, a past order says what left, not where it was. Its line reads the
@@ -290,7 +290,7 @@ sentence. It is a reason to give, not an outcome to name. Never borrow "undone" 
 
 `.review-tray`'s own row, in the body, reserves its height and moves nothing when the receipt mounts. A second,
 unreserved receipt in the page header pushed `.review-filters` and everything below it down 56px on the first
-answer. Reserving that header row would cost `#/review`'s no-scrolling floor 54px it has no slack for. So
+answer of a session. Reserving that header row would cost `#/review`'s no-scrolling floor 54px it has no slack for. So
 `ReviewQueue.tsx` draws only the in-body Tray, inside `.review-body`, on screen with the card at every width the
 product ships. That keeps D118 and the no-scrolling floor intact together.
 
