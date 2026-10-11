@@ -3304,7 +3304,7 @@ test('clicking a buyer selects it and its walk starts at once — no Start butto
      separate `Start`/`Walk N orders` control anywhere on the screen — is real and kept. */
   await open(page, { orders: oneOpenOrder(), walkPlan: volcanionPlan() })
 
-  await expect(page.getByRole('button', { name: /Walk \d+ orders?/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /walk \d+ (orders?|buyers?)$/i })).toHaveCount(0)
   await expect(page.locator('.orders-walk')).toContainText('Volcanion')
 })
 
