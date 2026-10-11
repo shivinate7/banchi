@@ -3637,7 +3637,7 @@ function PullStage({
      The count is last, so a count that changes width never moves it. */
   const allTicked = tickableKeys.size > 0 && [...tickableKeys].every((key) => walkTicked.has(key))
   const walkAll =
-    tickableKeys.size < 2 ? null : (
+    tickableKeys.size < 1 ? null : (
       <Button
         size="sm"
         className="orders-walkall"
@@ -3650,7 +3650,7 @@ function PullStage({
         {allTicked ? 'Stop' : 'Start Walk'}
       </Button>
     )
-  const walkAllCaption = walkAll === null ? null : <span className="orders-walkall-caption">{`${tickableKeys.size} buyers`}</span>
+  const walkAllCaption = walkAll === null ? null : <span className="orders-walkall-caption">{`${tickableKeys.size} ${tickableKeys.size === 1 ? 'buyer' : 'buyers'}`}</span>
 
   const filterBar = (
     <FilterBar<OrderSortKey>
