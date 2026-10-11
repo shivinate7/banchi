@@ -1759,7 +1759,12 @@ test('ux-w2: the search field does not move when orders load and the count gains
       })),
     },
   }
-  await stubServer(page, [], { orders: twelve as unknown as typeof ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
+  // The count sums the owed takes' wanted, so the plan carries the twelve as well.
+  const twelvePlan = {
+    ...ONE_OPEN_ORDER_PLAN,
+    stops: ONE_OPEN_ORDER_PLAN.stops.map((stop) => ({ ...stop, takes: stop.takes.map((take) => ({ ...take, wanted: 12 })) })),
+  }
+  await stubServer(page, [], { orders: twelve as unknown as typeof ONE_OPEN_ORDER, plan: twelvePlan })
   let release: () => void = () => undefined
   const held = new Promise<void>((done) => (release = done))
   await page.route(/\/orders$/, async (route) => {
