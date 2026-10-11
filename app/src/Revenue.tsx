@@ -88,6 +88,13 @@ const SORT_LABEL: Record<SortKey, string> = { name: 'Name', copies: 'Copies', gr
 /** The podium's own segmented labels — the mock's own wording ("A to Z", "Latest") next to
  *  the same four keys the table's own column headers already sort by. One state, two faces. */
 const SORT_SEGMENT_LABEL: Record<SortKey, string> = { name: 'Alphabetical', copies: 'Copies', gross: 'Revenue', last: 'Latest' }
+/** What each direction means per key, said in the kit's own `SortOption` words. */
+const SORT_WORDS: Record<SortKey, { asc: string; desc: string }> = {
+  gross: { asc: 'Lowest first', desc: 'Highest first' },
+  copies: { asc: 'Fewest first', desc: 'Most first' },
+  last: { asc: 'Oldest first', desc: 'Newest first' },
+  name: { asc: 'A to Z', desc: 'Z to A' },
+}
 const SORT_KEYS: readonly SortKey[] = ['gross', 'copies', 'last', 'name']
 
 type Granularity = 'week' | 'month'
@@ -793,7 +800,7 @@ function SalesView() {
     [inPeriod, activeRange],
   )
 
-  const products = useMemo(() => {
+  const viewRows = useMemo(() => {
     const by = new Map<string, Product>()
     for (const sale of scopeSales) {
       const existing = by.get(sale.sku)
@@ -831,15 +838,17 @@ function SalesView() {
       }
     }
     const rows = Array.from(by.values())
-    const byView = rows.filter((row) => (view === 'all' ? true : isSealed(row.kind, row.condition) === (view === 'sealed')))
-    const filtered = byView.filter((row) =>
+    return rows.filter((row) => (view === 'all' ? true : isSealed(row.kind, row.condition) === (view === 'sealed')))
+  }, [scopeSales, view])
+  const products = useMemo(() => {
+    const filtered = viewRows.filter((row) =>
       matchQuery(query, { text: [row.name, row.setName], skus: [row.sku] }),
     )
     return filtered.slice().sort((a, b) => {
       const base = compareProducts(a, b, sortKey)
       return sortDir === 'asc' ? base : -base
     })
-  }, [scopeSales, query, sortKey, sortDir, view])
+  }, [viewRows, query, sortKey, sortDir])
   const nearName = useMemo(
     () => (query.trim() === '' ? null : didYouMean(query, new Set(scopeSales.map((sale) => sale.name)))),
     [scopeSales, query],
@@ -1236,11 +1245,11 @@ function SalesView() {
           facets={[]}
           value={{}}
           onChange={() => {}}
-          count={{ shown: products.length, total: products.length, quietAtRest: true }}
+          count={{ shown: products.length, total: viewRows.length, noun: { one: 'product', many: 'products' } }}
           search={{ query, onChange: setQuery, placeholder: 'Search' }}
           beside={
             <SortControl
-              options={SORT_KEYS.map((k) => ({ key: k, label: SORT_SEGMENT_LABEL[k], first: DEFAULT_DIR[k] }))}
+              options={SORT_KEYS.map((k) => ({ key: k, label: SORT_SEGMENT_LABEL[k], first: DEFAULT_DIR[k], ...SORT_WORDS[k] }))}
               value={sortValue}
               onChange={(v) => { setSortKey(v.key); setSortDir(v.dir) }}
             />
