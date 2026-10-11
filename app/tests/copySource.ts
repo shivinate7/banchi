@@ -28,6 +28,77 @@ function findObjectLiteral(node: ts.Node, name: string): ts.ObjectLiteralExpress
   return ts.forEachChild(node, (child) => findObjectLiteral(child, name))
 }
 
+/** Props whose string value is drawn as text or read as a name (R4a): the JSX attributes and the
+ *  object keys a screen passes its copy through. A string under any other key is not checked. */
+const RENDERED_PROPS: ReadonlySet<string> = new Set([
+  'label', 'title', 'placeholder', 'aria-label', 'hint', 'caption', 'heading', 'alt', 'text', 'detail', 'says',
+])
+
+/** The string pieces an expression can draw as text: a literal, a template's fixed parts, and each
+ *  branch of a conditional or a logical operator. Anything else (a call, a variable) draws nothing this
+ *  reader can see, and it is left unread rather than guessed. */
+function renderedPieces(expression: ts.Expression, out: string[]): void {
+  const node = unwrap(expression)
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+    out.push(node.text)
+  } else if (ts.isTemplateExpression(node)) {
+    out.push(node.head.text, ...node.templateSpans.map((span) => span.literal.text))
+  } else if (ts.isConditionalExpression(node)) {
+    renderedPieces(node.whenTrue, out)
+    renderedPieces(node.whenFalse, out)
+  } else if (ts.isBinaryExpression(node) && [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(node.operatorToken.kind)) {
+    renderedPieces(node.right, out)
+  }
+}
+
+/** A first-person word: "I", "my", "me" or "mine" as a whole word, in any case (R4, R4a). */
+const FIRST_PERSON = /(?<![\p{L}\p{N}_])(?:i|my|me|mine)(?![\p{L}\p{N}_])/giu
+
+/** One rendered string that carries a first-person word. `line` is 1-based. */
+export interface VoiceFinding {
+  readonly file: string
+  readonly line: number
+  readonly where: string
+  readonly text: string
+  readonly words: readonly string[]
+}
+
+/** Every rendered string in one `.tsx` source that carries "I", "my", "me" or "mine" as a whole word.
+ *  Rendered means: a JSX text node, a string or template under a JSX expression child, a value of a
+ *  `RENDERED_PROPS` JSX attribute, or a value of a `RENDERED_PROPS` object key. Comments are not
+ *  strings and are never read. */
+export function firstPersonInSource(source: string, file: string): VoiceFinding[] {
+  const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const found: VoiceFinding[] = []
+  const at = (node: ts.Node): number => sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1
+  const report = (node: ts.Node, where: string, text: string): void => {
+    const words = Array.from(text.matchAll(FIRST_PERSON), (match) => match[0])
+    if (words.length > 0) found.push({ file, line: at(node), where, text: text.replace(/\s+/g, ' ').trim(), words })
+  }
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isJsxText(node)) {
+      report(node, 'JSX text', node.text)
+    } else if (ts.isJsxExpression(node) && node.expression && node.parent && (ts.isJsxElement(node.parent) || ts.isJsxFragment(node.parent))) {
+      const pieces: string[] = []
+      renderedPieces(node.expression, pieces)
+      for (const piece of pieces) report(node, 'JSX expression', piece)
+    } else if (ts.isJsxAttribute(node) && ts.isIdentifier(node.name) && RENDERED_PROPS.has(node.name.text) && node.initializer) {
+      const pieces: string[] = []
+      if (ts.isStringLiteral(node.initializer)) pieces.push(node.initializer.text)
+      else if (ts.isJsxExpression(node.initializer) && node.initializer.expression) renderedPieces(node.initializer.expression, pieces)
+      for (const piece of pieces) report(node, `attribute ${node.name.text}`, piece)
+    } else if (ts.isPropertyAssignment(node) && (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) && RENDERED_PROPS.has(node.name.text)) {
+      const pieces: string[] = []
+      renderedPieces(node.initializer, pieces)
+      for (const piece of pieces) report(node, `key ${node.name.text}`, piece)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sf)
+  return found
+}
+
 /** Every `key: 'value'` of the object literal named `name` in `source`, as a map. */
 export function recordFromSource(source: string, name: string): Record<string, string> {
   const file = ts.createSourceFile('source.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)

@@ -1,13 +1,13 @@
 // Protects: the first-person and Title Case rules that the copy sweep applies are themselves right, and every reason label and review question headline is free of "I", "my", "me" and "mine" (R4, R4a).
 // Governs: DESIGN.md "Copy rules" (R4, R4a, R5), D173
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { test, expect } from './unit'
 import { REASON_LABELS, RETIRED_REASON_LABELS } from '../../src/reasons'
 import { casingProblems, isSentence, voiceHits } from '../copyRules'
-import { recordFromSource } from '../copySource'
+import { firstPersonInSource, recordFromSource } from '../copySource'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REVIEW_QUEUE = resolve(HERE, '..', '..', 'src', 'ReviewQueue.tsx')
@@ -104,6 +104,65 @@ test('labels: every review question headline is free of "I", "my", "me" and "min
   expect(Object.keys(questions).length, 'the QUESTIONS record read as too short to be the real one').toBeGreaterThan(15)
   const problems = Object.entries(questions).flatMap(([code, headline]) =>
     voiceHits(headline).map((word) => `${code}: "${headline}" has "${word}"`),
+  )
+  expect(problems, problems.join('\n')).toEqual([])
+})
+
+/* THE SOURCE SCAN RESPECTS STRINGS AND COMMENTS. A comment opener inside a string, a multi-line template
+ * literal and a lone apostrophe in JSX text each sit where a line scan would mis-read the rest. Only the
+ * rendered positions are read: the comment and the template body below must not produce a finding. */
+test('source scan: comments, template bodies and lone apostrophes give no finding', () => {
+  const source = [
+    "// a comment: label: 'my' and I",
+    '/* block: <p>I already sent it</p> */',
+    'const note = `a template',
+    "  spanning lines with // and label: 'me' inside`",
+    "const path = '/* not a comment, but my path */'",
+    'export const View = () => (',
+    '  <p title="Don\'t stop">Don\'t stop, it\'s fine</p>',
+    "  <span label='Pick a box'>Pick it</span>",
+    ')',
+  ].join('\n')
+  expect(firstPersonInSource(source, 'View.tsx')).toEqual([])
+})
+
+test('source scan: rendered text, rendered props and rendered object keys are read, with their lines', () => {
+  const source = [
+    'const options = [',
+    "  { value: 'cut', label: 'Under my price' },",
+    '  { value: `m`, label: `Keep me on it` },',
+    ']',
+    'export const View = () => (',
+    '  <p>Kept // my note</p>',
+    '  <dt>I already sent it</dt>',
+    '  <input placeholder="Tell me when" />',
+    "  <span>{ok ? 'Mine, mine' : 'Pick a box'}</span>",
+    ')',
+  ].join('\n')
+  const found = firstPersonInSource(source, 'View.tsx').map((one) => `${one.line} ${one.where}: ${one.text}`)
+  expect(found).toEqual([
+    '2 key label: Under my price',
+    '3 key label: Keep me on it',
+    '6 JSX text: Kept // my note',
+    '7 JSX text: I already sent it',
+    '8 attribute placeholder: Tell me when',
+    '9 JSX expression: Mine, mine',
+  ])
+})
+
+/* THE RENDERED COPY OF EVERY SCREEN COMPONENT. Gallery and Codes are skipped. Every other .tsx under
+ * app/src and app/src/kit is read; each hit is a finding the sheet pass owes. */
+test('source scan: no rendered string in app/src carries "I", "my", "me" or "mine"', () => {
+  const src = resolve(HERE, '..', '..', 'src')
+  const files = [
+    ...readdirSync(src).filter((f) => f.endsWith('.tsx')).map((f) => resolve(src, f)),
+    ...readdirSync(resolve(src, 'kit')).filter((f) => f.endsWith('.tsx')).map((f) => resolve(src, 'kit', f)),
+  ].filter((file) => !/(Gallery|Codes)\.tsx$/.test(file))
+  expect(files.length, 'the source list read as too short').toBeGreaterThan(50)
+  const problems = files.flatMap((file) =>
+    firstPersonInSource(readFileSync(file, 'utf8'), file.slice(src.length - 3)).map(
+      (one) => `${one.file}:${one.line} [${one.where}] "${one.text}" has ${one.words.map((w) => `"${w}"`).join(', ')}`,
+    ),
   )
   expect(problems, problems.join('\n')).toEqual([])
 })
