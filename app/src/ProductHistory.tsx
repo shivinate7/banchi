@@ -56,7 +56,7 @@ import {
 import { SearchField } from './SearchField'
 import { useSearch, type SearchState } from './useSearch'
 import { money } from './money'
-import { absoluteDate, saleDate } from './dates'
+import { dayDate, saleDate } from './dates'
 import { sparkSegments } from './PriceHistory'
 import { PriceFactsBlock } from './PriceFacts'
 import './ProductHistory.css'
@@ -243,7 +243,7 @@ function RangeSection({ range, fills }: { range: ProductHistoryRange; fills: rea
           <span className="producthistory-machine">{range.range}</span>
         </div>
         <span className="producthistory-span">
-          {range.from ? absoluteDate(range.from) : '?'} → {range.to ? absoluteDate(range.to) : '?'}
+          {range.from ? dayDate(range.from) : '?'} → {range.to ? dayDate(range.to) : '?'}
           {width !== null ? (
             <span className="producthistory-bucket-width">{`${width}-day bucket${width === 1 ? '' : 's'}, as read today`}</span>
           ) : null}

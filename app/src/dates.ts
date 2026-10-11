@@ -46,6 +46,12 @@ export function absoluteDate(at: Date | string | number | null | undefined): str
   return when === null ? '—' : ABSOLUTE.format(when)
 }
 
+/** A `yyyy-mm-dd` day as `absoluteDate` prints it. Read at local noon, so a zone west of UTC does not
+ *  slide the day back (a bare date parses as UTC midnight). THE one home of that read. */
+export function dayDate(day: string | null | undefined): string {
+  return day ? absoluteDate(`${day}T12:00:00`) : '—'
+}
+
 /** `just now`, `5 minutes ago`, `2 hours ago`, `yesterday`, `3 days ago`; a week or more, or a
  *  moment in the future, reads as `absoluteDate`. `—` where there is no date. THE one relative
  *  format. `now` is a parameter so a spec can pin it. */

@@ -2463,6 +2463,11 @@ def _summary(directory: Path, names: Optional[Dict[int, str]] = None) -> dict:
         "collected": bool(manifest.get("collected")),
         "joined": bool(manifest.get("joined")),
         "counts": manifest.get("counts") or {},
+        # THE CARDS THIS RUN WAS SUBMITTED OVER, before any join gives `counts.cards_in`. None
+        # on a run written before `identify` recorded `submitted`: unknown, never zero.
+        "photographed": (
+            len(manifest["submitted"]) if isinstance(manifest.get("submitted"), list) else None
+        ),
         "usage": _usage(manifest),
         # WHAT STOPPED THE AUTOMATIC MATCH, while the run still waits for one (Q4). Null when
         # nothing did, and null once the run has moved on: a problem is the run's next step

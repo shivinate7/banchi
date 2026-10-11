@@ -2927,6 +2927,9 @@ export type RunSummary = {
   collected: boolean
   joined: boolean
   counts: Record<string, number>
+  /** Cards identify submitted for this run, known before any join; null on a run written before it
+   *  recorded them. */
+  photographed?: number | null
   /** What the model read, and what that cost.
    *
    *  `cost_usd` IS THE SERVER'S AND IS NEVER DERIVED HERE. `identify/cost.py` holds the only

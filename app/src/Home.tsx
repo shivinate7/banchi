@@ -467,7 +467,7 @@ function Ribbon({ plot, live }: { readonly plot: Ribbon; readonly live: boolean 
 /** The cards a run holds, as the wire says: the join's count, else the selection that ran (`scope.cards`, null for a whole box). Null where the
  *  run has neither (a whole box not yet joined), so the row says nothing rather than a guess. */
 function runCards(run: RunSummary): number | null {
-  const n = run.counts.cards_in ?? run.scope?.cards
+  const n = run.counts.cards_in ?? run.scope?.cards ?? run.photographed
   return typeof n === 'number' ? n : null
 }
 

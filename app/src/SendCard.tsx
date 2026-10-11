@@ -24,7 +24,7 @@
  * NO PIPELINE WORD REACHES THE SCREEN (D196): not emit, not staged, not reconcile. */
 
 import { count } from './kit/dataRules'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Button, Icon, IconButton, Money, Notice, Refusal, Retry } from './kit'
 import { atClockTime, clockTime } from './dates'
 import { describeFailure, dismissSendWarning, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, takeBackSend } from './server'
@@ -540,6 +540,7 @@ export function SendCard({
   readonly onSent: () => void
 }) {
   const live = useLiveCheck()
+  const whyId = useId()
   const [phase, setPhase] = useState<'idle' | 'waiting' | 'sending' | 'downloading'>('idle')
   const [intent, setIntent] = useState<'send' | 'download'>('send')
   const [failure, setFailure] = useState<Failure | null>(null)
@@ -659,6 +660,9 @@ export function SendCard({
           ? latest
           : null
   const running = open.some((send) => send.state === 'sending')
+  /* AN INCOMPLETE LAST SEND HOLDS THE PRESS (R14): Send stays off until the owner has seen what is
+     missing, and the line beside it says why. */
+  const incomplete = latest?.state === 'short'
   const busy = phase !== 'idle' || running
   /* NOTHING READY, NOTHING TO PRESS (R4 F5): with no copy and no price change the press could
      only be refused, so it is disabled until a copy is ready. */
@@ -781,11 +785,17 @@ export function SendCard({
           icon="send"
           className="pricing-emit send-press"
           busy={phase === 'sending' || phase === 'waiting' || running}
-          disabled={busy || empty}
+          disabled={busy || empty || incomplete}
+          aria-describedby={incomplete ? whyId : undefined}
           onClick={() => press('send')}
         >
           {label}
         </Button>
+        {incomplete ? (
+          <span id={whyId} className="send-why">
+            Your last send is not all there yet.
+          </span>
+        ) : null}
         <span className="bn-sr" role="status">
           {doing}
         </span>
