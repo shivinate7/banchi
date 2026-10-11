@@ -872,6 +872,142 @@ def check_prices_adopt(checks: Checks) -> None:
             "corpus — the answer was already there; emit only reads it",
         )
 
+    # -------------------------------------- (7) a multi-SKU fold keeps every legacy answer
+    # THE FOLD IS EXACT: every SKU a legacy file answers lands in the corpus with the value the
+    # file gave it, and the corpus holds no SKU the file did not name. The fixture covers each
+    # branch of `pipeline/corpus.py:adopt` — a price, a hold, a hold with a watch and a note,
+    # and a no-market-data row (channel `unknown`).
+    fold_doc = {
+        "sub_threshold": {"flat": ".5"},
+        "overrides": {
+            DUNSPARCE_SKU: "2.06",
+            DUNSPARCE_REVERSE_SKU: {"withheld": "bullish"},
+            ARTICUNO_SKU: {"withheld": "keeping", "watch_above": "25", "note": "wait for a dip"},
+        },
+        "no_market_data": {"9999301": "0.75"},
+    }
+    fold_want = {
+        DUNSPARCE_SKU: "2.06",
+        DUNSPARCE_REVERSE_SKU: {"withheld": "bullish"},
+        ARTICUNO_SKU: {"withheld": "keeping", "watch_above": "25", "note": "wait for a dip"},
+        "9999301": "0.75",
+    }
+    with isolated_home():
+        legacy_run(fold_doc)
+        command(checks, "prices", "adopt", "--write")
+        book = corpus.Corpus.read()
+        checks.equal(
+            {sku: answer.value for sku, answer in book.answers.items()},
+            fold_want,
+            "EVERY LEGACY SKU IS IN THE CORPUS WITH THE VALUE ITS FILE GAVE IT, and no SKU "
+            "appears that the file did not name — a fold that drops one row is a card that "
+            "silently loses its listing answer",
+        )
+        checks.equal(
+            (book.answers["9999301"].channel, book.answers[DUNSPARCE_SKU].channel),
+            ("unknown", "price"),
+            "and a no-market-data row keeps its own channel, `unknown`, while a price keeps `price`",
+        )
+
+    # --------- (8) one SKU in the corpus and in the file keeps ONE answer, by the stated rule
+    # THE RULE, FROM `pipeline/corpus.py:adopt`'s docstring: WITHOUT `--force` THE CORPUS WINS
+    # (`replace=False` leaves a SKU it already answers alone and reports it as a `Kept`); WITH
+    # `--force` THE FILE WINS, and the corpus's answer is reported as the one that was dropped.
+    # Price against price here: the hold cases above do not test this.
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: "20.00"}})
+        command(checks, "prices", "adopt", "--write")
+        book = corpus.Corpus.read()
+        book.answers[ARTICUNO_SKU] = corpus.Answer(value="18.50")
+        book.write()
+
+        legacy_run({"overrides": {ARTICUNO_SKU: "21.00"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.equal(
+            corpus.Corpus.read().answers[ARTICUNO_SKU].value,
+            "18.50",
+            "WITHOUT `--force`, a SKU in both the corpus and the file keeps the CORPUS'S "
+            "answer — one answer, not two, and the file's 21.00 does not overwrite it",
+        )
+        checks.ok(
+            "kept $18.5 (corpus)" in said and "file said $21 " in said,
+            "and the kept row names both figures (rendered as prices: $18.5, $21), so the dropped one is visible",
+            said,
+        )
+
+        legacy_run({"overrides": {ARTICUNO_SKU: "22.00"}})
+        said = command(checks, "prices", "adopt", "--write", "--force")
+        checks.equal(
+            corpus.Corpus.read().answers[ARTICUNO_SKU].value,
+            "22.00",
+            "WITH `--force`, the newest file wins where the two differ — still one answer",
+        )
+        checks.ok(
+            "dropped $18.5 (corpus)" in said,
+            "and the corpus answer it replaced is named as dropped",
+            said,
+        )
+
+    # ------------------------- (9) a preview over an existing corpus writes and moves nothing
+    with isolated_home():
+        legacy_run(fold_doc)
+        command(checks, "prices", "adopt", "--write")
+        answered_corpus()
+        corpus_before = files.prices_path().read_bytes()
+        pending, pending_bytes = legacy_run(
+            {"overrides": {"9999001": "7.00", "9999401": "1.10"}}
+        )
+        for extra in ((), ("--force",)):
+            preview = command(checks, "prices", "adopt", *extra)
+            checks.ok(
+                "DRY RUN" in preview,
+                f"`prices adopt {' '.join(extra)}` previews: it says DRY RUN",
+                preview,
+            )
+        checks.equal(
+            (
+                files.prices_path().read_bytes() == corpus_before,
+                (pending.directory / runs.DECISIONS).read_bytes() == pending_bytes,
+                (pending.directory / runs.DECISIONS_ADOPTED).exists(),
+                "9999401" in corpus.Corpus.read().answers,
+            ),
+            (True, True, False, False),
+            "WITHOUT --write NOTHING IS WRITTEN: the corpus is byte-identical, the run file is "
+            "still at its live name, nothing is retired, and a SKU only the file names is not "
+            "added — under the default and under --force alike",
+        )
+
+    # ------------------------------------------ (10) `show --held` lists only held SKUs
+    # `cli/cmd_prices.py:_show` — the cross-run view of holds. A priced SKU must not appear in
+    # it, a plain `show` must not list the holds, and the count line must agree.
+    with isolated_home():
+        book = corpus.Corpus.read()
+        book.answers["9999501"] = corpus.Answer(value="9.99")
+        book.answers["9999502"] = corpus.Answer(value={"withheld": "bullish"})
+        book.answers["9999503"] = corpus.Answer(
+            value={"withheld": "keeping", "watch_above": "5.00", "note": "wait"}
+        )
+        book.answers["9999504"] = corpus.Answer(value="unlisted")
+        book.write()
+        held_text = command(checks, "prices", "show", "--held")
+        plain_text = command(checks, "prices", "show")
+        checks.equal(
+            tuple(sku in held_text for sku in ("9999501", "9999502", "9999503", "9999504")),
+            (False, True, True, True),
+            "`show --held` LISTS THE THREE HELD SKUS AND NOT THE PRICED ONE — a hold list that "
+            "includes a price is a list nobody can act on",
+        )
+        checks.ok(
+            "above $5.00" in held_text and "wait" in held_text and "4 (3 held back)" in held_text,
+            "and it carries each hold's watch and note, and the count agrees: 4 answers, 3 held",
+            held_text,
+        )
+        checks.equal(
+            tuple(sku in plain_text for sku in ("9999502", "9999503", "9999504")),
+            (False, False, False),
+            "without --held, the same SKUs are NOT listed — the flag is what shows them",
+        )
+
 
 def check_readings_adopt_cli(checks: Checks) -> None:
     """`banchi readings adopt` and `readings show`, through the real argparse dispatch
