@@ -1051,14 +1051,9 @@ export function Fulfillment() {
   /* The loaded Today tile's own elements, hidden: loading and loaded share one box. Hidden from
      assistive tech too, so it never reads as an empty landmark. */
   const todayFrame = (
-    <section className="ff-today ff-today-wait" aria-hidden="true">
-      <div className="ff-today-text">
-        <p className="ff-today-figure">
-          <b className="ff-today-num">0</b>{' '}
-          <span className="ff-today-words">pick</span>
-        </p>
-      </div>
-    </section>
+    <p className="ff-count" aria-hidden="true">
+      <b className="ff-count-num">0</b> Left
+    </p>
   )
 
   let body: ReactNode
@@ -1333,8 +1328,10 @@ export function Fulfillment() {
 
     /* ---- today: what the orders still owe, and whether it can all be found ------------- */
     let today: ReactNode
+    let countFigure: ReactNode = null
     if (orders === null) {
-      today = ordersFailed ? null : todayFrame
+      today = null
+      countFigure = ordersFailed ? null : todayFrame
     } else if (openOrderKeys.length === 0) {
       /* No order is open at all — the ONE state allowed to say "nothing waits" (the owner's
          own review finding, UX-001: a green "nothing waits" while orders are open and unread
@@ -1362,22 +1359,20 @@ export function Fulfillment() {
         </p>
       )
     } else {
-      today = (
-        <section className="ff-today" aria-label="Today">
-          <div className="ff-today-text">
-            <p className="ff-today-figure">
-              <b className="ff-today-num">{totalWanted.toLocaleString()}</b>{' '}
-              <span className="ff-today-words">pick</span>
-            </p>
-            {shortfallCount === 0 ? null : (
-              <p className="fulfillment-say ff-today-warn">
-                <Icon name="alert" size={18} className="ff-today-warn-icon" />
-                {shortfallCount.toLocaleString()} unlocated
-              </p>
-            )}
-          </div>
-        </section>
+      /* B23: the count lives in the sticky bar with the search (`countFigure`); only the
+         unlocated warning stays here, in the page. */
+      countFigure = (
+        <p className="ff-count" aria-label="Cards left to pull">
+          <b className="ff-count-num">{totalWanted.toLocaleString()}</b> Left
+        </p>
       )
+      today =
+        shortfallCount === 0 ? null : (
+          <p className="fulfillment-say ff-today-warn">
+            <Icon name="alert" size={18} className="ff-today-warn-icon" />
+            {shortfallCount.toLocaleString()} unlocated
+          </p>
+        )
     }
 
     const shownOwed = allOwed ? owed : owed.slice(0, SHOWN_OWED)
@@ -1389,6 +1384,8 @@ export function Fulfillment() {
 
         {today}
 
+        <div className="ff-bar">
+        {hunting ? null : countFigure}
         <div className="ff-search" data-clear={hunting ? 'true' : 'false'}>
           {/* No autoFocus: a software keyboard would cover the first thing he reads.
               F5 verbiage cut (row 191) deleted the worked-example placeholder ("For example,
@@ -1416,6 +1413,7 @@ export function Fulfillment() {
               <Icon name="x" size={28} />
             </button>
           ) : null}
+        </div>
         </div>
 
         {hunting ? (
@@ -1471,33 +1469,15 @@ export function Fulfillment() {
             )}
 
             {orders === null && !ordersFailed ? (
-              /* The Pick list lands above the boxes when the orders read ends. The boxes show at
-                 once, so a frame in the list's own shape (its heading, one card) holds its place. */
+              /* The list lands above the boxes when the orders read ends. The boxes show at
+                 once, so a frame in the list's own shape (one card) holds its place. */
               <section className="ff-owed ff-owed-wait" aria-hidden="true">
-                <h2 className="ff-h2">
-                  <span className="ff-h2-icon">
-                    <Icon name="cart" size={18} />
-                  </span>
-                  Pick
-                </h2>
                 <div className="ff-found ff-owed-list">
                   <span className="ff-skel ff-skel-owed" />
                 </div>
               </section>
             ) : owed.length === 0 ? null : (
-              <section className="ff-owed" aria-label="Pick">
-                <h2 className="ff-h2">
-                  <span className="ff-h2-icon">
-                    <Icon name="cart" size={18} />
-                  </span>
-                  {/* F5 verbiage cut (row 192): the CSV's own word, "Queue", is a pipeline
-                      noun this screen's own banned-word list refuses (D196) — wrong for this
-                      element. "Pick" reads with the cart icon and matches the per-card
-                      heading's own vocabulary (row 193) instead. The section's own
-                      `aria-label` is kept in step with this visible heading, per the review's
-                      finding that it had drifted to the pre-cut three-word text. */}
-                  Pick
-                </h2>
+              <section className="ff-owed" aria-label="Cards to pull">
                 <div className="ff-found ff-owed-list">
                   {shownOwed.map((item, at) => {
                     const group = owedGroup(item)
@@ -1507,8 +1487,9 @@ export function Fulfillment() {
                         key={item.key}
                         style={{ '--i': at } as CSSProperties}
                       >
+                        <span className="ff-owed-badge">{at + 1}</span>
                         <p className="fulfillment-say ff-owed-pick">
-                          <b className="ff-owed-pick-num">Pick {item.wanted}</b>
+                          <b className="ff-owed-pick-num">Need {item.wanted}</b>
                           {item.refs.length < 2 ? null : (
                             <span className="ff-owed-pick-for">
                               , {count(item.refs.length, 'order', 'orders')}
