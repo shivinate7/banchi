@@ -184,8 +184,8 @@ pills.
   measure at a time, so the facet becomes single-pick (`multiple: false`). A pick that would break
   this rule rewrites the facet's picks and never leaves two.
 - **Sort**: the sort field and the direction live in one menu, `SortControl` (B19, owner sign-off).
-  Its keys are `Row name` and the measures drawn. The menu keeps a fixed trigger width (D313). The
-  other toggles on the row stay. A sort key that leaves the drawn measures falls back to `Row name`.
+  Its keys are `Row name` and the measures drawn. The menu keeps a fixed trigger width (D313). Sort menu
+  only: the other toggles on the row stay. A sort key that leaves the drawn measures falls back to `Row name`.
 - The controls wrap into rows under the heading at 1440 and 820. Each is 40px or more tall
   (`--bn-control-h`).
 - **A pivot cell is not a link.** Drill-down to Inventory (D31, D293), saved layouts and CSV

@@ -405,11 +405,7 @@ Each opens from its count above zero, or from the set-named line, in the band (B
 
 "Waiting for you" is not pressable, at any width (10.6). Review's rail is its list, and it is unchanged.
 
-**Empty states, a sentence and one action.** The sheet still opens on a zero count. A count that can be pressed and answers nothing is a broken control.
-
-- Paid look at 0: "No card is waiting for a paid look." Action: "Back to Capture".
-- Not yet looked at at 0: "The free reader has looked at every card." Action: "Back to Capture".
-- Matched free at 0: "The free reader has not matched a card yet." Action: "Back to Capture".
+**Zero counts open nothing (B14, owner sign-off).** A zero count is a plain `div`, so no sheet opens from it. The at-zero empty states are retired with it. Those were the sheet copy for paid look, not yet looked at, and matched free at 0.
 
 ### 10.2 The data, and where it comes from
 

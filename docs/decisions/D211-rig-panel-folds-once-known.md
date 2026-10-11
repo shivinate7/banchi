@@ -8,7 +8,7 @@ Picking a box for the first time in a fresh sitting folds the panel the same way
 
 **Why a derived boolean, not a seventh stored field.** `deviceMemory.ts`'s comments say "the six choices the capture screen remembers" and "ONE KEY FOR SIX VALUES, BECAUSE IT IS ONE HABIT". The document holds exactly the operator's setup and nothing else. A `rigOpen` flag records which way a disclosure was left. It is not a claim about the rig or the box. Storing it there would answer a UI-state question with the vocabulary D142 built for another one. `restored.box === null` is already read for the box field itself. The fold reuses that read.
 
-**No-box Setup panel (B2, owner sign-off).** The stage keeps its Camera control. The Shooting group keeps the Box select. The no-box Setup panel's Camera and Box copies go.
+**No-box Setup panel (B2, owner sign-off).** The stage keeps its Camera control. The Shooting group keeps the Box select. Only the repeated Camera and Box controls go, from the no-box Setup panel. Add divider stays where it is. The panel count is not a goal.
 
 **What is NOT covered.** Whether the operator's manual open or close choice should persist across sittings is open. Today it resets to the box-based default on the next load. If it matters in practice, the owner should weigh in. Nothing here writes one. `rigTouched` is scoped to the component instance, not to storage.
 
