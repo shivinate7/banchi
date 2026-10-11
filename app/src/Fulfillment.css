@@ -63,14 +63,7 @@
   pointer-events: none;
 }
 
-/* B23: every in-flow child of the screen shares one grid cell, so the column is as tall as the
-   page and the sticky count bar stays pinned for the page's whole height. */
-.fulfillment { display: grid; grid-template-columns: minmax(0, 1fr); }
-.fulfillment > :not(.ff-glow) { grid-area: 1 / 1; }
-.fulfillment > .bn-page-body { display: flex; flex-direction: column; }
 .ff-column {
-  flex: 1 0 auto;
-  width: 100%;
   position: relative;
   max-width: var(--ff-col);
   margin: 0 auto;
@@ -181,54 +174,7 @@
 }
 .ff-h2-icon-ok { background: var(--bn-ok-tint); color: var(--bn-ok); }
 
-/* ---- today: the figure, and where to start --------------------------------------------
-   The first thing on the screen after his name for it: how many cards the open orders are
-   waiting for, and one press that opens the first of them. The fill here is INK, not the
-   accent: the accent fill is reserved for the press that writes (the sale), and this one
-   only opens a card. */
-.ff-today {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--bn-5);
-  padding: var(--bn-6);
-  border-radius: 22px;
-  background: var(--bn-surface);
-  box-shadow: var(--bn-shadow-3);
-  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
-}
-.ff-today-text {
-  flex: 1 1 20ch;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--bn-2);
-}
-.ff-today-figure {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--bn-1) var(--bn-3);
-}
-.ff-today-num {
-  font-family: var(--bn-font-display);
-  font-size: var(--ff-fs-4xl);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  color: var(--bn-ink);
-}
-.ff-today-words {
-  font-family: var(--bn-font-display);
-  font-size: var(--bn-fs-3xl);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  color: var(--bn-ink);
-}
-.ff-today-say { color: var(--bn-ink-2); }
+/* ---- today: the unlocated warning (the count itself is in the sticky bar, `.ff-bar`) ---- */
 /* A copy an open order wants that the store cannot find at all (UX-001's direction: "if the
    screen cannot place a copy, it says how many"). The icon carries the warm tint; the text
    stays at the body's own ink so it clears the 7:1 floor — `--bn-warn` is a 5.0:1 token,
@@ -240,37 +186,6 @@
   margin-top: var(--bn-2);
 }
 .ff-today-warn-icon { color: var(--bn-warn); flex: none; }
-
-.ff-start {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--bn-3);
-  min-height: 68px;
-  min-width: 44px;
-  padding: 0 var(--bn-6);
-  border-radius: var(--bn-r-full);
-  background: var(--bn-ink);
-  color: var(--bn-bg);
-  font-family: var(--bn-font-ui);
-  font-size: var(--bn-fs-2xl);
-  font-weight: 700;
-  line-height: 1.2;
-  white-space: nowrap;
-  box-shadow: var(--bn-shadow-2);
-  transition: transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
-}
-.ff-start:hover { transform: translateY(-1px); box-shadow: var(--bn-shadow-3); }
-.ff-start:active { transform: scale(0.98); }
-.ff-start-arrow { transition: transform var(--bn-t) var(--bn-ease-spring); }
-.ff-start:hover .ff-start-arrow { transform: translateX(3px); }
-@media (max-width: 559px) {
-  .ff-today { padding: var(--bn-5); }
-  .ff-today-num { font-size: var(--bn-fs-5xl); }
-  .ff-today-words { font-size: var(--ff-fs-md); }
-  .ff-start { width: 100%; }
-}
 
 /* Nothing waiting: the same sentence register, with the tick that means "you are done". */
 .ff-today-none {
@@ -304,7 +219,7 @@
 .ff-bar .ff-search { flex: 1 1 0; min-width: 0; }
 .ff-count { flex: none; display: flex; align-items: baseline; gap: var(--bn-2); margin: 0;
   font-family: var(--bn-font-display); font-size: var(--bn-fs-3xl); font-weight: 800; line-height: 1.2; }
-.ff-count-num { font-size: var(--ff-fs-4xl); letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.ff-count-num { display: inline-block; min-width: 3ch; text-align: right; font-size: var(--ff-fs-4xl); letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
 .ff-search {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -478,10 +393,6 @@
 .ff-skel-row { height: 88px; }
 .ff-skel-owed { height: 530px; border-radius: 22px; }
 .ff-skel-copy { height: 420px; border-radius: 22px; }
-/* The today tile while the orders read is out: the loaded tile's own elements, hidden, so the
-   box is the loaded box. */
-.ff-today-wait { background: var(--bn-surface-2); box-shadow: none; animation: none; }
-.ff-today-wait > * { visibility: hidden; }
 
 /* ---- Pulled today ----------------------------------------------------------------------- */
 .ff-done-list { list-style: none; display: flex; flex-direction: column; gap: var(--bn-2); }

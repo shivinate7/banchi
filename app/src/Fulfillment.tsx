@@ -1362,7 +1362,7 @@ export function Fulfillment() {
       /* B23: the count lives in the sticky bar with the search (`countFigure`); only the
          unlocated warning stays here, in the page. */
       countFigure = (
-        <p className="ff-count" aria-label="Cards left to pull">
+        <p className="ff-count">
           <b className="ff-count-num">{totalWanted.toLocaleString()}</b> Left
         </p>
       )

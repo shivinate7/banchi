@@ -1121,12 +1121,21 @@ async function targets(page: Page): Promise<{ where: string; box: DOMRect; float
        covered control cannot be pressed, so two controls with a gap between them are not a mis-tap
        pair when one of them is under something opaque. The centre of the box is hit-tested. A
        centre outside the viewport is not judged here, because it is not on screen to hit. */
-    const reachable = (element: Element, box: DOMRect): boolean => {
+    /* A control is COVERED only when the thing on top of it is a fixed or sticky layer (the count bar, or a
+       sheet). Two plain controls that overlap are not covered: the gap check must still see them. */
+    const coveredByLayer = (element: Element, box: DOMRect): boolean => {
       const cx = box.x + box.width / 2
       const cy = box.y + box.height / 2
-      if (cx < 0 || cy < 0 || cx > window.innerWidth || cy > window.innerHeight) return true
+      if (cx < 0 || cy < 0 || cx > window.innerWidth || cy > window.innerHeight) return false
       const hit = document.elementFromPoint(cx, cy)
-      return hit !== null && (hit === element || element.contains(hit))
+      if (hit === null || hit === element || element.contains(hit)) return false
+      let node: Element | null = hit
+      while (node !== null) {
+        const position = window.getComputedStyle(node).position
+        if (position === 'fixed' || position === 'sticky') return true
+        node = node.parentElement
+      }
+      return false
     }
     const out: { where: string; box: DOMRect; floating: boolean; covered: boolean }[] = []
     for (const element of document.querySelectorAll('button, a[href], input, select, textarea')) {
@@ -1139,7 +1148,7 @@ async function targets(page: Page): Promise<{ where: string; box: DOMRect; float
         where: `${element.tagName.toLowerCase()}${classes === null ? '' : `.${classes}`}: ${text.slice(0, 120)}`,
         box,
         floating: onAnOverlay(element),
-        covered: !reachable(element, box),
+        covered: coveredByLayer(element, box),
       })
     }
     return out
@@ -1732,6 +1741,63 @@ const WALK = [
    Fulfillment view drawing cards nobody put in this checkout. */
 sealEveryTest()
 
+/* ux-w2 (nothing on screen moves unless the person moved it). The search field keeps its place when the orders
+   answer arrives and the count gains a digit. The orders read is held until the case releases it, so the first paint
+   is the empty count and the second is the loaded one. */
+test('ux-w2: the search field does not move when orders load and the count gains a digit', async ({ page }) => {
+  const first = ONE_OPEN_ORDER.orders[0]!
+  const twelve = {
+    ...ONE_OPEN_ORDER,
+    summary: '1 order',
+    orders: [{ ...first, wanted: 12, progress: first.progress.map((line) => ({ ...line, wanted: 12, outstanding: 12 })) }],
+    resolution: {
+      ...ONE_OPEN_ORDER.resolution,
+      orders: ONE_OPEN_ORDER.resolution.orders.map((order) => ({
+        ...order,
+        outstanding: 12,
+        lines: order.lines.map((line) => ({ ...line, wanted: 12, owed: 12, outstanding: 12, on_hand: 12 })),
+      })),
+    },
+  }
+  // The count sums the owed takes' wanted, so the plan carries the twelve as well.
+  const twelvePlan = {
+    ...ONE_OPEN_ORDER_PLAN,
+    stops: ONE_OPEN_ORDER_PLAN.stops.map((stop) => ({ ...stop, takes: stop.takes.map((take) => ({ ...take, wanted: 12 })) })),
+  }
+  await stubServer(page, [], { orders: twelve as unknown as typeof ONE_OPEN_ORDER, plan: twelvePlan })
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await page.route(/\/orders$/, async (route) => {
+    await held
+    await route.fallback()
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(searchBox(page), 'the search is drawn before the orders answer').toBeVisible()
+  const before = await searchBox(page).boundingBox()
+  release()
+  await expect(view(page).getByText(/\b12\s+left\b/i).first(), 'the count reads 12 left once loaded').toBeVisible()
+  await settleLayout(page)
+  const after = await searchBox(page).boundingBox()
+  expect(before, 'the search has a box before the load').not.toBeNull()
+  expect(after, 'the search has a box after the load').not.toBeNull()
+  expect(Math.abs(after!.x - before!.x), 'the search does not move sideways').toBeLessThanOrEqual(1)
+  expect(Math.abs(after!.y - before!.y), 'the search does not move down or up').toBeLessThanOrEqual(1)
+  expect(Math.abs(after!.width - before!.width), 'the search keeps its width').toBeLessThanOrEqual(1)
+})
+
+/* ux-w2 gap-check self-proof. Two plain buttons that overlap are NOT a covered pair: the gap floor must fail them. The
+   covered skip applies only when a fixed or sticky layer is on top of a control. */
+test('ux-w2 gap check: two overlapping plain buttons fail the gap floor', async ({ page }) => {
+  await page.setContent(
+    '<!doctype html><html><body style="margin:0">' +
+      '<button style="position:absolute;left:10px;top:10px;width:60px;height:60px">A</button>' +
+      '<button style="position:absolute;left:30px;top:10px;width:60px;height:60px">B</button>' +
+      '</body></html>',
+  )
+  await expect(fatTargets(page, 'overlap'), 'the overlapping pair is judged, not skipped').rejects.toThrow()
+})
+
 /* ux-w2 B23 (DESIGN.md Fulfillment, signed off, not built yet). The count bar is sticky: it holds the "N Left" count
    beside the search, and it stays on screen as the list scrolls. The page is made tall here by a spacer under the search's
    own parent, so the scroll is real and the case cannot pass on a page too short to scroll. */
@@ -1743,7 +1809,7 @@ test('ux-w2 B23: the count bar with N Left and the search stay on screen after s
     const spacer = document.createElement('div')
     spacer.setAttribute('data-ux-w2-spacer', '')
     spacer.style.height = '3000px'
-    document.querySelector('main.fulfillment')?.appendChild(spacer)
+    document.querySelector('.ff-column')?.appendChild(spacer)
   })
   await page.mouse.move(640, 450)
   await page.mouse.wheel(0, 2000)

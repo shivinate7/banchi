@@ -1469,6 +1469,8 @@ test('U undoes the newest pull, on the Pull stage', async ({ page }) => {
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
 
+  // Wait for the receipt: Orders ignores `U` while the pull is still in flight.
+  await expect(page.locator('.bn-toast-receipt')).toBeVisible()
   // The hand is on the page heading, not in any field.
   await page.getByRole('heading', { name: 'Orders' }).click()
   await page.keyboard.press('u')
@@ -1555,6 +1557,8 @@ test('finding #8 (the Opus review round) — a pull already reversed elsewhere r
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
 
+  // Wait for the receipt: Orders ignores `U` while the pull is still in flight.
+  await expect(page.locator('.bn-toast-receipt')).toBeVisible()
   await page.getByRole('heading', { name: 'Orders' }).click()
   await page.keyboard.press('u')
 
