@@ -90,9 +90,9 @@ const SORT_LABEL: Record<SortKey, string> = { name: 'Name', copies: 'Copies', gr
 const SORT_SEGMENT_LABEL: Record<SortKey, string> = { name: 'Alphabetical', copies: 'Copies', gross: 'Revenue', last: 'Latest' }
 /** What each direction means per key, said in the kit's own `SortOption` words. */
 const SORT_WORDS: Record<SortKey, { asc: string; desc: string }> = {
-  gross: { asc: 'Lowest first', desc: 'Highest first' },
-  copies: { asc: 'Fewest first', desc: 'Most first' },
-  last: { asc: 'Oldest first', desc: 'Newest first' },
+  gross: { asc: 'Lowest First', desc: 'Highest First' },
+  copies: { asc: 'Fewest First', desc: 'Most First' },
+  last: { asc: 'Oldest First', desc: 'Newest First' },
   name: { asc: 'A to Z', desc: 'Z to A' },
 }
 const SORT_KEYS: readonly SortKey[] = ['gross', 'copies', 'last', 'name']
