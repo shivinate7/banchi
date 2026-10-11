@@ -63,7 +63,14 @@
   pointer-events: none;
 }
 
+/* B23: every in-flow child of the screen shares one grid cell, so the column is as tall as the
+   page and the sticky count bar stays pinned for the page's whole height. */
+.fulfillment { display: grid; grid-template-columns: minmax(0, 1fr); }
+.fulfillment > :not(.ff-glow) { grid-area: 1 / 1; }
+.fulfillment > .bn-page-body { display: flex; flex-direction: column; }
 .ff-column {
+  flex: 1 0 auto;
+  width: 100%;
   position: relative;
   max-width: var(--ff-col);
   margin: 0 auto;
@@ -281,6 +288,23 @@
    logic — promoted to `.bn-icon-badge bn-icon-badge--ok` (system review, 2026-09-20). */
 
 /* ---- search: the hero ----------------------------------------------------------------- */
+/* B23: one bar holds the count and the search, pinned while the list scrolls. */
+.ff-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: var(--bn-4);
+  margin-inline: calc(var(--ff-pad) * -1);
+  /* The bottom edge is where scrolled content tucks under the bar, so it holds the 12px target gap. */
+  padding: var(--bn-3) var(--ff-pad) var(--bn-5);
+  background: var(--bn-bg);
+}
+.ff-bar .ff-search { flex: 1 1 0; min-width: 0; }
+.ff-count { flex: none; display: flex; align-items: baseline; gap: var(--bn-2); margin: 0;
+  font-family: var(--bn-font-display); font-size: var(--bn-fs-3xl); font-weight: 800; line-height: 1.2; }
+.ff-count-num { font-size: var(--ff-fs-4xl); letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
 .ff-search {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -508,18 +532,31 @@
    the owner's own ruling — see Fulfillment.tsx's file header) ---------------------------- */
 .ff-owed-list { display: flex; flex-direction: column; gap: var(--bn-5); }
 .ff-owed-card {
+  position: relative;
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
 .ff-owed-pick {
   /* A TEXT RUN, NOT A FLEX ROW: the gap sat before the comma ("Pick 1 , 6 orders"). */
   margin: 0 0 var(--bn-2);
+  color: var(--bn-ink-2);
 }
-.ff-owed-pick-num {
-  font-family: var(--bn-font-display);
-  font-size: var(--bn-fs-2xl);
+.ff-owed-card .card-locations-copy { position: relative; }
+.card-locations-badge {
+  position: absolute;
+  top: var(--bn-3);
+  right: var(--bn-3);
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--bn-r-full);
+  background: var(--bn-surface-2);
   color: var(--bn-ink);
+  font-family: var(--bn-font-display);
+  font-size: var(--ff-fs-base);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
-.ff-owed-pick-for { color: var(--bn-ink-2); }
 .ff-orders-more { margin-top: var(--bn-4); }
 
 /* ---- Browse by box ---------------------------------------------------------------------- */
