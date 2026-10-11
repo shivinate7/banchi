@@ -33,9 +33,9 @@ Five rules, ranked by cost. Each one is a rule the screen keeps.
 
 ## 2. What the owner asked for
 
-The owner's words: depending on the orders selected to walk, the screen dynamically adjusts
-which sections to pull from first. Across all selected orders, it uses the least total sections
-that satisfy them.
+The owner asked for this. The screen adjusts which sections to pull from first, based on the
+orders selected to walk. Across all selected orders, it uses the fewest total sections that
+satisfy them.
 
 **Two rulings are given and not reopened.**
 
@@ -47,7 +47,7 @@ that satisfy them.
 
 ## 3. The mandate that shapes every part of this
 
-The owner: boxes and sections should not be so demanding on how the app is built and operated.
+The owner ruled that boxes and sections must not be demanding to build and operate.
 The operator must not have to think in the box and section taxonomy. The screen says which
 place to open and which cards to take. The addressing is the machine's problem.
 
@@ -424,7 +424,7 @@ selection. There is no second list behind a tab.
 
 **The owner's rule:** walking an order is a tweaked way of routing inventory. It is a tailored
 prompt that still uses the inventory engine. The left portion of the inventory screen turns into
-orders, and the sort is by density. The owner also said: use Inventory's UI and words exactly.
+orders, and the sort is by density. The owner also ruled that the walk uses Inventory's UI and words exactly.
 **Do not design a stop, a row or a walk-only component where Inventory already has one.** If
 the walk needs something the card pane does not draw, add it to Inventory, and both screens
 get it.

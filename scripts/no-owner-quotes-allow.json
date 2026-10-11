@@ -88,12 +88,6 @@
         "The owner's words"
       ]
     },
-    "docs/decisions/D272-one-page-width-one-scaffold.md": {
-      "lane": "cut pass",
-      "marker": [
-        "The owner's words"
-      ]
-    },
     "docs/decisions/D273-one-press-sends-listings-live.md": {
       "lane": "cut pass",
       "marker": [
@@ -129,12 +123,6 @@
       "lane": "cut pass",
       "marker": [
         "verbatim:"
-      ]
-    },
-    "docs/specs/order-walk-plan.md": {
-      "lane": "cut pass",
-      "marker": [
-        "The owner's words"
       ]
     }
   }
