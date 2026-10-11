@@ -1743,6 +1743,17 @@ const WALK = [
    Fulfillment view drawing cards nobody put in this checkout. */
 sealEveryTest()
 
+/* The search-holds cases run at each size the screen is checked at (1440 and 820), not only the default viewport. */
+const SEARCH_SIZES = [
+  { width: 1440, height: 900 },
+  { width: 820, height: 1000 },
+] as const
+const NO_PLAN = { ...ONE_OPEN_ORDER_PLAN, stops: [], shortfall: [] }
+
+for (const size of SEARCH_SIZES) {
+test.describe(`search holds on load at ${size.width}`, () => {
+test.beforeEach(async ({ page }) => setViewport(page, size))
+
 /* ux-w2 (nothing on screen moves unless the person moved it). The search field keeps its place when the orders
    answer arrives and the count gains a digit. The orders read is held until the case releases it, so the first paint
    is the empty count and the second is the loaded one. */
@@ -1886,6 +1897,69 @@ test('ux-w2: the search field does not move when the count reaches 12,345', asyn
   const r = await searchHoldsOnLoad(page, owed, () => expect(view(page).getByText(/\b12,345\s+left\b/i).first()).toBeVisible())
   expectSearchFixed(r.before, r.after)
 })
+
+/* The count bar (the sticky .ff-bar, its loading skeleton included) holds its place while the cards read lands. The
+   orders read is answered at once; only the cards read is held, so the step under test is the cards landing. */
+test('ux-w2: the count bar does not move when the cards finish loading', async ({ page }) => {
+  await stubServer(page, [], { orders: NO_ORDERS as unknown as typeof ONE_OPEN_ORDER, plan: NO_PLAN as unknown as typeof ONE_OPEN_ORDER_PLAN })
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await page.route(/\/inventory$/, async (route) => {
+    await held
+    await route.fallback()
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  const bar = page.locator('.ff-bar').first()
+  await expect(bar, 'the bar is drawn while the cards load').toBeVisible()
+  await settleAnimations(page)
+  const before = await bar.boundingBox()
+  const landed = page.waitForResponse(/\/inventory$/)
+  release()
+  await landed
+  await expect(page.locator('.ff-bar-wait'), 'the loading bar gives way to the loaded one').toHaveCount(0)
+  await settleLayout(page)
+  await settleAnimations(page)
+  const after = await page.locator('.ff-bar').first().boundingBox()
+  expectSearchFixed(before, after)
+})
+
+/* R18 (owner ruling): the count slot always answers. With no order open it reads 0 Left, not blank. */
+test('ux-w2 R18: with no order open, the count slot reads 0 Left', async ({ page }) => {
+  await stubServer(page, [], { orders: NO_ORDERS as unknown as typeof ONE_OPEN_ORDER, plan: NO_PLAN as unknown as typeof ONE_OPEN_ORDER_PLAN })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(view(page).getByText(/\b0\s+left\b/i).first(), 'the count slot reads 0 Left').toBeVisible()
+})
+
+/* R18: a failed read keeps the last count the screen showed. The screen is left for another and returned to, and the
+   return read fails. */
+test('ux-w2 R18: a failed orders read keeps the last count shown', async ({ page }) => {
+  const owed = owedOrders(12)
+  await stubServer(page, [], { orders: owed.orders as typeof ONE_OPEN_ORDER, plan: owed.plan as typeof ONE_OPEN_ORDER_PLAN })
+  let failNow = false
+  await page.route(/\/orders$/, async (route) => {
+    if (!failNow) return route.fallback()
+    return route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'orders_unavailable', message: 'The orders could not be read.' } }),
+    })
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(view(page).getByText(/\b12\s+left\b/i).first(), 'the count reads 12 left before the failure').toBeVisible()
+  failNow = true
+  await page.evaluate(() => {
+    window.location.hash = '#/orders'
+  })
+  await page.evaluate(() => {
+    window.location.hash = '#/fulfillment'
+  })
+  await expect(view(page).getByText(/\b12\s+left\b/i).first(), 'the count keeps 12 left after a failed read').toBeVisible()
+})
+})
+}
 
 /* ux-w2 gap-check self-proof. Two plain buttons that overlap are NOT a covered pair: the gap floor must fail them. The
    covered skip applies only when a fixed or sticky layer is on top of a control. */
