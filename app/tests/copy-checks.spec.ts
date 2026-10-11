@@ -64,6 +64,8 @@ interface Attr {
 
 interface Casing {
   role: string
+  // True when the label is the accessible name alone (an icon control with no visible text of its own).
+  spoken: boolean
   text: string
   mono: boolean
   upper: boolean
@@ -133,6 +135,7 @@ function scanCopy(): CopyScan {
     if (text === '') continue
     casing.push({
       role,
+      spoken: inner === '',
       text,
       mono: el.closest('.bn-mono, code, kbd') !== null,
       upper: getComputedStyle(el).textTransform === 'uppercase',
@@ -152,7 +155,7 @@ function scanCopy(): CopyScan {
       .join('')
       .replace(/\s+/g, ' ')
       .trim()
-    if (text !== '') casing.push({ role: 'tooltip', text, mono: false, upper: getComputedStyle(tip).textTransform === 'uppercase', typed: tip.matches('[data-typed]'), marked: [] })
+    if (text !== '') casing.push({ role: 'tooltip', text, spoken: false, mono: false, upper: getComputedStyle(tip).textTransform === 'uppercase', typed: tip.matches('[data-typed]'), marked: [] })
   }
 
   const prose: string[] = []
@@ -179,6 +182,16 @@ function paintCasingDefect(): void {
   const button = document.createElement('button')
   button.textContent = 'Show all'
   document.querySelector('.bn-view')?.appendChild(button)
+}
+
+/** Runs INSIDE the page. Paints a visible two-sentence button label (must fail) and an icon button whose spoken name is
+ *  two sentences with no visible text (must pass). The mutation for the spoken-name rule. */
+function paintSentenceDefect(): void {
+  const visible = document.createElement('button')
+  visible.textContent = 'Mark sold. Undo'
+  const icon = document.createElement('button')
+  icon.setAttribute('aria-label', 'Order: High to low. Press to reverse.')
+  document.querySelector('.bn-view')?.append(visible, icon)
 }
 
 /** Runs INSIDE the page. Paints a button that holds a typed box name and one lower-case word (the mutation for the
@@ -261,7 +274,7 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
     for (const one of scan.casing) {
       if (one.mono || one.upper || one.typed) continue
       const checked = stripTyped(one.text, one.marked)
-      if (checked === '' || isSpokenSentences(checked)) continue
+      if (checked === '' || (one.spoken && isSpokenSentences(checked))) continue
       // A HEADING (h2, h3) OR A TITLE MAY BE A SENTENCE: an empty state or a greeting. A control, and a page title (h1),
       // is a label whatever its ending, so `Cards to pull.` on a control or an h1 is still checked.
       if ((one.role === 'heading' || one.role === 'title') && isSentence(checked)) continue
@@ -286,10 +299,12 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
     // only that check goes red on it. From `app/`:
     //   COPY_VOICE_MUTATE='#/pricing'  npx playwright test tests/copy-checks.spec.ts   (a first-person line)
     //   COPY_CASING_MUTATE='#/'        npx playwright test tests/copy-checks.spec.ts   (a lower-case button)
+    //   COPY_SENTENCE_MUTATE='#/inventory' npx playwright test tests/copy-checks.spec.ts   (a visible two-sentence label must fail; a spoken one must pass)
     //   COPY_TYPED_MUTATE='#/'         npx playwright test tests/copy-checks.spec.ts   (a typed name beside a lower-case word)
     if (process.env.COPY_VOICE_MUTATE === route) await page.evaluate(paintVoiceDefect)
     if (process.env.COPY_CASING_MUTATE === route) await page.evaluate(paintCasingDefect)
     if (process.env.COPY_TYPED_MUTATE === route) await page.evaluate(paintTypedDefect)
+    if (process.env.COPY_SENTENCE_MUTATE === route) await page.evaluate(paintSentenceDefect)
     read(route, await page.evaluate(scanCopy))
   })
 
