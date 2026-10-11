@@ -491,7 +491,7 @@ question entirely.
 
 Listing copy states plainly: physical cards shipped, codes messaged instantly, no returns.
 
-## C6 — Dispute policy: replace, not refund
+## C6 — Dispute policy: replace, don't refund
 
 It costs pennies and protects feedback.
 
