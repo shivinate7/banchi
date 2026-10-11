@@ -23,7 +23,7 @@ The answer was never coupled. `pipeline/corpus.py` is keyed by SKU. Its header s
 
 `NOT_THIS_STORE` was **membership**. The check is `if sku not in owned_since: refuse`. It fired third, before asking, market, basis or rule were consulted. D103 characterized those rows as *"Card Sleeves, Playmats, a YuGiOh row"*. That was true when written. It is false now. The set holds a $7,000 Kai'Sa. It also holds a Surging Sparks Booster Box Case asking **$155 below market on a $2,000 item**. It holds a Bard, Mercurial asking **218% above** market, not selling. These are two live money problems, drawn on the operator's screen and untouchable.
 
-`TOO_YOUNG` was **the wrong clock**. D100 ranked staleness on how long the CARD had been OWNED. It did so because `Listing` had no first-listed stamp, and `live_as_of` was null on all 443 records. Every report named the substitution in its header. At any sane window, the term measured when this project got a camera. It did not measure how long anything had been listed.
+`TOO_YOUNG` was **the wrong clock**. D100 ranked staleness on how long the CARD had been OWNED. It did so because `Listing` had no first-listed stamp, and `live_as_of` was null on all 443 records. Every report named the substitution in its header. But the operator's oldest capture is recent, younger than any sane window. So the term measured when this project got a camera. It did not measure how long anything had been listed.
 
 ### The ruling
 
@@ -54,7 +54,7 @@ The corpus is not seeded from the export. `corpus.stamp_answers` is diff-based. 
 
 **What would reopen this:** an operator who wants a typed price here to be authoritative over what TCGplayer reports. That is a genuine want. It is also the point where the figure would have to be stored beside the stamp and arbitrated. D87's "newer wins" does not generalise to it. `live` is a quantity both parties observe. An asking price is our instruction, which they execute. Those are not two readings of one fact.
 
-**The record it creates could not be settled when the listing sold out.** Every record this entry writes carries `pushed = 0`. That is correct, because this pipeline sent none of it. `pipeline/livecheck.py` bucketed on `claim`. A row at `claim == 0` reached `beyond` only `if live > 0`, so one reading **zero** fell into no bucket at all. `cli/cmd_reconcile.py` builds `settling` from `agreed + unexplained + beyond`. So `observe_live` was never called, and the stored reading stood forever.
+**The record it creates could not be settled when the listing sold out (amended).** Every record this entry writes carries `pushed = 0`. That is correct, because this pipeline sent none of it. `pipeline/livecheck.py` bucketed on `claim`. A row at `claim == 0` reached `beyond` only `if live > 0`, so one reading **zero** fell into no bucket at all. `cli/cmd_reconcile.py` builds `settling` from `agreed + unexplained + beyond`. So `observe_live` was never called, and the stored reading stood forever.
 
 **It took two exports to see, which is why it shipped.** The first records the listing. The second is where it goes wrong. On the owner's own book, that is 47 live SKUs holding 127 copies, 26 of them one booster pack. The first `--write` would have armed every one of them.
 

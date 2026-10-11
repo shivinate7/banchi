@@ -1,6 +1,6 @@
 ## D166 — The export belongs to the game
 
-**The owner re-joined the store, then measured `runs/`. This entry built the fix from that result.** Seven Riftbound catalog fetches went out in nine minutes. Five of them went out inside eighteen seconds. Five of the seven downloaded bytes this machine already had.
+**Built from a measurement of the owner's own `runs/` after they re-joined the store.** Seven Riftbound catalog fetches went out in nine minutes. Five of them went out inside eighteen seconds. Five of the seven downloaded bytes this machine already had.
 
 ```
 07:41:07  1,733,052 B  929bc425  runs/2026-09-01-box3-01/
