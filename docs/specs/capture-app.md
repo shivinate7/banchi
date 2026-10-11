@@ -223,7 +223,7 @@ it shares their trigger primitive.
   its height (`--cap-stage-w`) and not from a `1fr` track. On desktop, the last-capture column hugs its
   9:16 photo (`--cap-last-w`), and the freed width goes to the rail. On tablet, the receipt sits
   beside the photo. `capture-width.spec.ts` measures no unpainted band at 1440 and 820.
-- At tablet widths, the Last capture frame's height is a third of the stage height. The ratio is chosen here, and this spec owns it. Empty and loaded states share one frame element. Not built yet.
+- At tablet widths, the Last capture frame's height is a third of the stage height. The ratio is chosen here, and this spec owns it. Empty and loaded states share one frame element. Built in #838.
 - On a phone (390, 375, 430), the panel hugs the frame. It sits beside the last capture in one
   row, so the shutter stays above the tab bar. The receipt scrolls inside its panel.
 - Layout changes never touch capture, the motion trigger or rotation. §5.1's order holds.
