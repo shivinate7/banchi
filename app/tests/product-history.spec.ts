@@ -2,7 +2,6 @@
 // Governs: D278, D227
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
-import { absoluteDate } from '../src/dates'
 
 import type { OrderRow, OrdersPayload, ProductHistoryPayload, SearchGroup, SearchResult } from '../src/types'
 
@@ -380,19 +379,23 @@ test.describe('#/product — the per-product view', () => {
   })
 
   /* ux-wave1 A18. The range line prints the window's two dates. Raw yyyy-mm-dd reads as a machine
-     string on a screen the owner reads, so the window must print in the app's own date format. The
-     case reads only the element that carries the arrow, so a date printed elsewhere on the page
-     cannot pass or fail it, and it computes the expected text with the app's own formatter. */
-  test('ux-wave1: the product range prints dates in the app format, never raw ISO', async ({ page }) => {
-    await page.goto(VIEW_ROUTE)
-    const view = page.locator('main.producthistory')
-    await expect(view).toBeVisible()
-    const arrow = view.getByText('→', { exact: false }).first()
-    await expect(arrow, 'the range line is drawn').toBeVisible()
-    const line = (await arrow.evaluate((el) => el.textContent ?? '')).trim()
-    expect(line, 'the range line prints a raw yyyy-mm-dd date').not.toMatch(/\d{4}-\d{2}-\d{2}/)
-    expect(line, 'the range start prints in the app date format').toContain(absoluteDate('2026-08-01'))
-    expect(line, 'the range end prints in the app date format').toContain(absoluteDate('2026-08-05'))
+     string on a screen the owner reads, so the window must print as words. The case runs in Los
+     Angeles, where a date-only value read as UTC midnight lands on the day before, so it pins the
+     literal words the fixture's own dates should print. The expected text is written out, never built
+     with the app's formatter. */
+  test.describe('in Los Angeles', () => {
+    test.use({ timezoneId: 'America/Los_Angeles' })
+    test('ux-wave1: the product range prints dates as words, never raw ISO', async ({ page }) => {
+      await page.goto(VIEW_ROUTE)
+      const view = page.locator('main.producthistory')
+      await expect(view).toBeVisible()
+      const arrow = view.getByText('→', { exact: false }).first()
+      await expect(arrow, 'the range line is drawn').toBeVisible()
+      const line = (await arrow.evaluate((el) => el.textContent ?? '')).trim()
+      expect(line, 'the range line prints a raw yyyy-mm-dd date').not.toMatch(/\d{4}-\d{2}-\d{2}/)
+      expect(line, 'the range start prints as "Aug 1, 2026"').toContain('Aug 1, 2026')
+      expect(line, 'the range end prints as "Aug 5, 2026"').toContain('Aug 5, 2026')
+    })
   })
 
   /* ux-wave1 A19. A product with no saved sales keeps the Sales block's reserved height and

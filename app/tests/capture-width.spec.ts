@@ -1,6 +1,6 @@
 // Protects: The Capture screen leaves no unused horizontal band inside its page frame at 1440 and 820.
 // Governs: D118, D195, D197
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { card, sealEveryTest, settleAnimations } from './shell'
 import { setViewport } from './phoneSwitch'
 
@@ -135,9 +135,9 @@ test('setViewport leaves the shell columns final across the rail breakpoint', as
    is how the screen restores its last shot on load. The JPEG is drawn on a canvas in the page, the same
    way `capture-freeze.spec.ts` builds its photographs, so no code-card image is involved. Nothing is tuned
    to a pixel. */
-test('ux-wave1: at 820 the Last capture panel keeps its height when the first capture lands', async ({ page }) => {
-  /* 820 by 900 is the audit's own rail-width viewport (the shots in the UX audit were taken at it). */
-  await setViewport(page, { width: 820, height: 900 })
+async function keepsItsHeight(page: Page, width: number): Promise<void> {
+  /* 820 by 900 is the audit's own rail-width viewport; 768 and 1279 bracket the rail breakpoint. */
+  await setViewport(page, { width, height: 900 })
   let captured = false
   await page.route(/\/capture\/sitting$/, (route) =>
     route.fulfill({
@@ -197,4 +197,10 @@ test('ux-wave1: at 820 the Last capture panel keeps its height when the first ca
   await settleAnimations(page)
   const receipt = await panel.boundingBox()
   expect(empty?.height ?? 0, `empty panel ${empty?.height}px, with a loaded photograph ${receipt?.height}px`).toBeCloseTo(receipt?.height ?? -1, 0)
-})
+}
+
+for (const width of [820, 768, 1279]) {
+  test(`ux-wave1: at ${width} the Last capture panel keeps its height when the first capture lands`, async ({ page }) => {
+    await keepsItsHeight(page, width)
+  })
+}

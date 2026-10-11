@@ -571,3 +571,24 @@ test('ux-wave1: an unjoined Home run row still shows its card count from scope.c
   await expect(row, 'Home draws the unjoined run row').toBeVisible()
   expect(await row.innerText(), 'the unjoined row shows scope.cards').toMatch(/\b7\s+(cards?|copies)\b/)
 })
+
+/* ux-wave1 R3b (owner ruling). A whole-box run that has not been joined shows how many of its cards were
+   photographed. THE SERVER DOES NOT SEND THAT COUNT TODAY. `_summary` (server/pipeline_routes.py) sends
+   `counts` (empty before the join), `scope` (`cards` is null for a whole box) and nothing that holds the
+   identified total. The manifest keeps `submitted` (the keys sent to identify) and `matched` (the read
+   count), and neither is in the summary. The case is written against the field a builder should add:
+   `photographed`, an integer on each run summary, set from the number of cards identify submitted. */
+test('ux-wave1: an unjoined whole-box run row shows how many cards it photographed', async ({ page }) => {
+  const at = '2026-09-18T14:05:00Z'
+  await page.route(/\/orders$/, (route) => json(route, { summary: '', orders: [], resolution: { orders: [], counts: {} } }))
+  await page.route(/\/pipeline\/runs$/, (route) =>
+    json(route, {
+      runs: [runRow({ updated_at: at, created_at: at, joined: false, counts: {}, scope: { box: 9, whole_box: true, cards: null }, photographed: 12 })],
+    }),
+  )
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+  const row = page.locator('a.home-run').first()
+  await expect(row, 'Home draws the whole-box run row').toBeVisible()
+  expect(await row.innerText(), 'the whole-box row shows its photographed count').toMatch(/\b12\s+(cards?|photographed)\b/)
+})

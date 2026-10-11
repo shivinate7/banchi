@@ -1875,7 +1875,7 @@ test('the stage panel hugs the portrait frame: no dead side bands', async ({ pag
 })
 
 /* ux-wave1 B1. With no box picked, Capture is off, and the button alone does not say why. The case
-   asks for a visible sentence in the controls that names the reason. It takes no wording: a
+   asks for a visible sentence in the controls that names the reason. It must name the box: a
    sentence is visible text of three words or more, outside the buttons, the screen-reader-only
    text and the dispenser line. The sentence must sit in the same controls as the disabled button. */
 test('ux-wave1: with no box chosen, Capture is disabled and a visible sentence says why', async ({ page }) => {
@@ -1895,5 +1895,5 @@ test('ux-wave1: with no box chosen, Capture is disabled and a visible sentence s
       .filter((text) => text.split(/\s+/).length >= 3)
   })
   expect(sentences, 'the Capture controls are drawn beside the button').not.toBeNull()
-  expect(sentences ?? [], 'a visible sentence names why Capture is off').not.toEqual([])
+  expect((sentences ?? []).some((text) => /box/i.test(text)), 'a visible sentence names the missing box as the reason').toBe(true)
 })

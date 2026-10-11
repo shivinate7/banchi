@@ -5883,3 +5883,37 @@ test('ux-wave1: the last-send warning comes before the Send button in the DOM', 
   })
   expect(warningFirst, 'the warning precedes the Send button in the DOM').toBe(true)
 })
+
+/* ux-wave1 B21, nothing moves unless the person moved it. The first status read answers a send still
+   sending, so no warning is drawn at first paint. The page re-reads the status every few seconds while a
+   send is sending (`liveCheck.ts`, SENDING_POLL_MS), and the next read answers a short send. The Send
+   button's top edge must hold across that read: a warning that lands above the button pushes it down. */
+test('ux-wave1: the Send button does not move when the last-send warning arrives on a later poll', async ({ page }) => {
+  test.setTimeout(90_000)
+  const short = sendSummary({
+    state: 'short',
+    published_at: null,
+    held: false,
+    takeable: 3,
+    checked_at: new Date().toISOString(),
+    check: { export: 'live.csv', found: 0, expected: 3, missing: [{ sku: '8608459', name: 'Dunsparce', sent: 3, found: 0 }] },
+  })
+  let reads = 0
+  await open(page, {
+    sends: () => {
+      reads += 1
+      if (reads === 1) {
+        const sending = sendSummary({ state: 'sending', copies: 3, at: new Date().toISOString(), published_at: null, held: false, takeable: 0, checked_at: null, check: null })
+        return { ...SENDS_NONE, sends: [sending] }
+      }
+      return { ...SENDS_NONE, sends: [short] }
+    },
+  })
+  const send = page.locator('.pricing-emit')
+  await expect(send, 'the Send button is drawn at first paint').toBeVisible()
+  await expect(page.locator('.send-short-check'), 'the warning is absent at first paint').toHaveCount(0)
+  const first = await send.boundingBox()
+  await expect(page.locator('.send-short-check'), 'the warning arrives on a later status read').toHaveCount(1, { timeout: 30_000 })
+  const later = await send.boundingBox()
+  expect(Math.abs((later?.y ?? -1e9) - (first?.y ?? 1e9)), `Send top moved from ${first?.y}px to ${later?.y}px when the warning landed`).toBeLessThanOrEqual(1)
+})

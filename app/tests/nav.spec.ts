@@ -1090,6 +1090,18 @@ test('ux-wave1: visible buttons and links set touch-action to manipulation', asy
   expect(values.filter((v) => !v.endsWith(':manipulation')).slice(0, 8)).toEqual([])
 })
 
+/* ux-wave1 A6, the tap highlight. A tap on a button flashes the browser's default highlight unless the
+   button sets its own color. The case reads `-webkit-tap-highlight-color` on every visible button and
+   asks that none of them is fully transparent (rgba(0, 0, 0, 0)). */
+test('ux-wave1: visible buttons do not have a transparent tap highlight', async ({ page }) => {
+  await open(page, RING[0])
+  const highlights = await page.locator('button').evaluateAll((els) =>
+    els.filter((el) => el.getClientRects().length > 0).map((el) => getComputedStyle(el).getPropertyValue('-webkit-tap-highlight-color')),
+  )
+  expect(highlights.length, 'the screen draws buttons to measure').toBeGreaterThan(0)
+  expect(highlights.filter((c) => c.replace(/\s/g, '') === 'rgba(0,0,0,0)').slice(0, 8), 'a visible button has a transparent tap highlight').toEqual([])
+})
+
 /* ux-wave1 A7. A sheet that scrolls its own body must not chain the scroll to the page behind it.
    The case opens the keys sheet, which is an overlay with its own scrolling body, and reads the
    overscroll-behavior of that body. */
