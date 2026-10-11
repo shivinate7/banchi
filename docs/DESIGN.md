@@ -1078,7 +1078,7 @@ User-visible text speaks to the operator in the second person: "Under your price
 
 **NOT MECHANIZED:** a machine would have to read each user-visible string in `app/src` and flag "I", "my", "me" or "mine" as a whole word. Code, comments and paths do not count. No row of `scripts/docs-audit.py` checks this yet.
 
-**Casing.** Headings, buttons, tabs, nav items, column headers, chips and short field labels take Chicago Title Case. Example: "Price the Answers". On-screen page titles, section and card headings, and question headings are in scope too. Full sentences keep sentence case: empty states, notices, help text and toasts. Placeholders keep sentence case. The one exception is the browser tab title. It keeps its lowercase brand form, as `app/tests/brand.spec.ts` asserts.
+**Casing.** Headings, buttons, tabs, nav items, column headers, chips and short field labels take Chicago Title Case. That is the rule. It is not yet true of the app. The casing sweep is the pending work. Example: "Price the Answers". On-screen page titles, section and card headings, and question headings are in scope too. Full sentences keep sentence case: empty states, notices, help text and toasts. Placeholders keep sentence case. The one exception is the browser tab title. It keeps its lowercase brand form, as `app/tests/brand.spec.ts` asserts.
 
 **NOT MECHANIZED:** a machine would have to read the rendered accessible names of headings, buttons and tabs. It would flag each name that is not in Chicago Title Case. It would skip full sentences and placeholders. No such check exists yet.
 

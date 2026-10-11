@@ -342,7 +342,7 @@ spec's pinned roster against `App.tsx`'s `ROUTES` table.
 
 ---
 
-**The paste guard also covers in-app navigation (R12, built in #833).** Leaving Orders with paste text in the box asks first. The owner keeps this guard on Orders, knowing that the paste survives in-app moves. The prompt says the typing is not saved yet. The same leave guard covers Pricing's unsaved prices (R12b, built in #833): leaving Pricing for another screen with typed, unsaved prices asks first.
+**The paste guard also covers in-app navigation (R12, built in #838).** Leaving Orders with paste text in the box asks first. The owner keeps this guard on Orders, knowing that the paste survives in-app moves. The prompt says the typing is not saved yet. The same leave guard covers Pricing's unsaved prices (R12b, built in #838): leaving Pricing for another screen with typed, unsaved prices asks first.
 
 ## 5. What the shipping lane holds to, and must keep holding to
 
