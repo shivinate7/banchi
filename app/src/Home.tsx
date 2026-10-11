@@ -853,7 +853,7 @@ export function Home() {
                       <Icon name="box" size={16} />
                     </span>
                     <span className="home-box-text">
-                      <span className="home-box-name" title={name}>
+                      <span className="home-box-name" title={name} data-typed>
                         {name}
                       </span>
                       <span className="home-box-meta">

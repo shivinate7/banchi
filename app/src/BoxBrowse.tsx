@@ -2269,6 +2269,7 @@ export function BoxBrowse({
                 <span className="browse-boxcell-text">
                   <span
                     className="browse-boxcell-name"
+                    data-typed={typeof cell === 'number' ? '' : undefined}
                     title={typeof cell === 'number' ? boxTitle(record?.name, cell) : shelfLabel(cell)}
                   >
                     {typeof cell === 'number' ? boxTitle(record?.name, cell) : shelfLabel(cell)}

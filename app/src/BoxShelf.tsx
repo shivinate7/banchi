@@ -1007,7 +1007,7 @@ function BoxRow({
       data-drop={dragging?.target?.box === record.box ? 'true' : undefined}
     >
       <header className="shelf-box-head">
-        <h2 className="shelf-box-name">{boxName(record)}</h2>
+        <h2 className="shelf-box-name" data-typed>{boxName(record)}</h2>
         <span className="shelf-box-count">{cards(record.on_hand)}</span>
       </header>
       <ol className="shelf-box-body">
