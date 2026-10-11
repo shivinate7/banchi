@@ -63,14 +63,7 @@
   pointer-events: none;
 }
 
-/* B23: every in-flow child of the screen shares one grid cell, so the column is as tall as the
-   page and the sticky count bar stays pinned for the page's whole height. */
-.fulfillment { display: grid; grid-template-columns: minmax(0, 1fr); }
-.fulfillment > :not(.ff-glow) { grid-area: 1 / 1; }
-.fulfillment > .bn-page-body { display: flex; flex-direction: column; }
 .ff-column {
-  flex: 1 0 auto;
-  width: 100%;
   position: relative;
   max-width: var(--ff-col);
   margin: 0 auto;
