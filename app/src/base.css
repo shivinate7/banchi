@@ -239,7 +239,7 @@ summary::-webkit-details-marker { display: none; }
 }
 
 /* EVERY TOGGLE SHOWS FOCUS THE SAME WAY (UX-100). A chip or any other pressed-state control
-   can carry an outline of its own as decoration (Shipping's dashed "Needs a look" lane), and an
+   can carry an outline of its own as decoration (Shipping's "Needs a look" lane), and an
    author outline at one class outranks the `:focus-visible` ring above by source order. Two
    selectors of weight, so the ring wins over a one-class decoration without `!important`. */
 .bn-chip:focus-visible,

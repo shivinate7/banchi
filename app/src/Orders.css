@@ -439,6 +439,9 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-walkall,
 .orders-walk-tools .bn-btn { min-height: var(--bn-control-h-lg); }
 
+/* The buyer count beside the walk button: a caption, so a count that changes width moves nothing before it. */
+.orders-walkall-caption { margin-inline-start: var(--bn-2); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
 /* ---- the stand-down legend, said once per sheet (UX-240) ------------------------------ */
 .orders-manage-legend {
   display: grid;

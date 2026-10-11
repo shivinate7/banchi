@@ -477,6 +477,25 @@
   font-size: var(--bn-fs-sm);
   color: var(--bn-ink-3);
 }
+.browse-hero-chip { position: relative; }
+.browse-hero-chip-tip {
+  position: absolute;
+  inset-block-start: calc(100% + var(--bn-1));
+  inset-inline-start: 0;
+  z-index: 90;
+  inline-size: max-content;
+  max-inline-size: 18rem;
+  padding: var(--bn-1) var(--bn-2);
+  border-radius: var(--bn-r-sm);
+  background: var(--bn-ink);
+  color: var(--bn-bg);
+  font-size: var(--bn-fs-xs);
+  font-weight: 500;
+  visibility: hidden;
+  pointer-events: none;
+}
+.browse-hero-chip:hover .browse-hero-chip-tip,
+.browse-hero-chip:focus .browse-hero-chip-tip { visibility: visible; }
 .browse-hero-side b { color: var(--bn-ink); font-weight: 600; font-variant-numeric: tabular-nums; margin-left: var(--bn-1); }
 /* The two lead figures, equal weight, split by a hairline. */
 .browse-hero-lead { display: grid; grid-auto-flow: column; grid-auto-columns: auto; align-items: start; }
