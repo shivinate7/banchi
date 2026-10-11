@@ -740,9 +740,9 @@ def _photos(args, say) -> int:
                     refusals.append((key, str(exc)))
             # A KILL BETWEEN THE PHOTO MOVE AND THE SIDECAR MOVE LEAVES THE SIDECAR AT ITS
             # LEGACY ADDRESS. Move it now, or rewrite it from the record.
-            if write and box is not None and idx is not None:
-                if _move_sidecar(key, cid, box, idx, record, home, refusals, census):
-                    census["sidecars"] += 1
+            if (write and box is not None and idx is not None
+                    and _move_sidecar(key, cid, box, idx, record, home, refusals, census)):
+                census["sidecars"] += 1
             continue
         if record.get("photo_reclaimed_at"):
             census["reclaimed"] += 1
