@@ -151,10 +151,6 @@
   padding-block: var(--bn-2);
   border-bottom: 1px solid var(--bn-line);
   transition: background-color var(--bn-t-fast) var(--bn-ease);
-  /* OFF-SCREEN ROWS SKIP LAYOUT AND PAINT BUT STAY MOUNTED, so a typed price is never lost (D103). The
-     placeholder is the row's own floor, `min-height` above; `auto` swaps in the measured height once drawn. */
-  content-visibility: auto;
-  contain-intrinsic-size: auto var(--bn-10);
 }
 .pricing-group:last-child .pricing-row:last-child { border-bottom: 0; }
 .pricing-row:nth-child(even) { background-color: var(--bn-row-stripe); }
