@@ -5903,19 +5903,25 @@ test('ux-wave1: Download does not re-enable Send while the last send is incomple
     checked_at: new Date().toISOString(),
     check: { export: 'live.csv', found: 0, expected: 3, missing: [{ sku: '8608459', name: 'Dunsparce', sent: 3, found: 0 }] },
   })
-  let mode: 'short' | 'found' = 'short'
+  const download = sendSummary({ stamp: '20260924-130000', kind: 'download', state: 'written', at: new Date().toISOString(), published_at: null, check: null })
+  let mode: 'short' | 'downloaded' | 'found' = 'short'
   await open(page, {
-    sends: () =>
-      mode === 'short'
-        ? { ...SENDS_NONE, sends: [short] }
-        : { ...SENDS_NONE, sends: [sendSummary({ ...short, state: 'checked', check: { export: 'live.csv', found: 3, expected: 3, missing: [] } })] },
+    sends: () => {
+      if (mode === 'downloaded') return { ...SENDS_NONE, sends: [download, short] }
+      if (mode === 'found') return { ...SENDS_NONE, sends: [sendSummary({ ...short, state: 'checked', check: { export: 'live.csv', found: 3, expected: 3, missing: [] } })] }
+      return { ...SENDS_NONE, sends: [short] }
+    },
   })
   const send = page.locator('.pricing-emit')
   await expect(send, 'Send is drawn').toHaveCount(1)
   await expect(send, 'Send is disabled while the last send is incomplete').toBeDisabled()
 
+  /* The Download press writes a file and a download receipt. The status read that follows answers the
+     download as the newest receipt, with the short send still beneath it. */
   await page.locator('.send-card').getByRole('button', { name: /^Download/ }).first().click()
-  await expect(send, 'Download does not re-enable Send').toBeDisabled()
+  mode = 'downloaded'
+  await page.reload()
+  await expect(send, 'a newer download receipt does not re-enable Send').toBeDisabled()
 
   const anyway = page.getByRole('button', { name: /send anyway/i })
   await expect(anyway, 'the warning offers Send Anyway').toHaveCount(1)
@@ -5925,6 +5931,25 @@ test('ux-wave1: Download does not re-enable Send while the last send is incomple
   mode = 'found'
   await page.reload()
   await expect(page.locator('.pricing-emit'), 'a status that finds every copy re-enables Send').toBeEnabled()
+})
+
+/* ux-wave1 R15 (owner ruling), the reason and the override stay even when the check has not landed. An
+   incomplete send whose check is still null still holds Send, still names the last send beside it, and
+   still offers Send Anyway on the warning. */
+test('ux-wave1: an incomplete send with no check yet still holds Send, names why, and offers Send Anyway', async ({ page }) => {
+  const pending = sendSummary({ state: 'short', published_at: null, held: false, takeable: 3, checked_at: new Date().toISOString(), check: null })
+  await open(page, { sends: () => ({ ...SENDS_NONE, sends: [pending] }) })
+  const send = page.locator('.pricing-emit')
+  await expect(send, 'Send is drawn').toHaveCount(1)
+  await expect(send, 'Send is disabled while the send has no check').toBeDisabled()
+  await expect(page.getByRole('button', { name: /send anyway/i }), 'Send Anyway is still offered').toHaveCount(1)
+  const described = await send.evaluate((btn) =>
+    (btn.getAttribute('aria-describedby') ?? '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent?.trim() ?? ''),
+  )
+  expect(described.some((text) => /last send/i.test(text)), `Send's reason names the last send (reads ${JSON.stringify(described)})`).toBe(true)
 })
 
 /* ux-wave1 B21, R14, the other side. With no incomplete last send, Send is enabled and no line beside it

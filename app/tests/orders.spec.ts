@@ -5815,11 +5815,22 @@ test('ux-wave1: a refused leave adds no history entry, and a refused Back keeps 
   await page.keyboard.press('Escape')
 
   const cancel = page.getByRole('button', { name: /^(cancel|stay)/i })
-  page.on('dialog', (dialog) => void dialog.dismiss())
+  /* The leave ask arrives as the browser's dialog event, which is dismissed (that is cancel), or as an in-app
+     cancel button. The wait is registered before the navigation that causes it, and it fails if neither comes. */
+  const askFor = (): Promise<'native' | 'modal'> =>
+    Promise.any([
+      page.waitForEvent('dialog', { timeout: 3000 }).then(async (dialog) => {
+        await dialog.dismiss()
+        return 'native' as const
+      }),
+      cancel.first().waitFor({ state: 'visible', timeout: 3000 }).then(() => 'modal' as const),
+    ])
   const before = await page.evaluate(() => history.length)
+  const asked = askFor()
   await side.getByRole('link', { name: /^Inventory/ }).click()
-  await expect.poll(async () => (await cancel.count()) > 0 || (await page.url()).includes('#/orders'), { timeout: 3000 }).toBe(true)
-  if ((await cancel.count()) > 0) await cancel.first().click()
+  const how = await asked.catch(() => null)
+  expect(how, 'leaving Orders with text asks first').not.toBeNull()
+  if (how === 'modal') await cancel.first().click()
   await expect(page, 'the refused leave stays on Orders').toHaveURL(/#\/orders/)
   expect(await page.evaluate(() => history.length), 'the refused leave adds no history entry').toBe(before)
 
@@ -5834,9 +5845,11 @@ test('ux-wave1: a refused leave adds no history entry, and a refused Back keeps 
   await openStore(page)
   await box.fill('{"orders": []}')
   await page.keyboard.press('Escape')
+  const backAsk = askFor()
   await page.goBack()
-  await expect.poll(async () => (await cancel.count()) > 0 || (await page.url()).includes('#/orders'), { timeout: 3000 }).toBe(true)
-  if ((await cancel.count()) > 0) await cancel.first().click()
+  const backHow = await backAsk.catch(() => null)
+  expect(backHow, 'a Back with text asks first').not.toBeNull()
+  if (backHow === 'modal') await cancel.first().click()
   await expect(page, 'a refused Back keeps the person on Orders').toHaveURL(/#\/orders/)
 
   await openStore(page)
