@@ -10,7 +10,7 @@ import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 import { sweepEveryRoute } from './routeSweep'
 import { setViewport } from './phoneSwitch'
-import { casingProblems, isSentence, isTypedData, voiceHits } from './copyRules'
+import { casingProblems, isSentence, voiceHits } from './copyRules'
 
 /* ONE SWEEP, TWO CHECKS (D284, the shape `text-checks.spec.ts` set). Each screen is opened ONCE by
  * `routeSweep.ts:sweepEveryRoute`, the same owner routes and the same populated store the text checks
@@ -27,8 +27,8 @@ import { casingProblems, isSentence, isTypedData, voiceHits } from './copyRules'
  *   copy-voice   R4, R4a. A visible line or an attribute holds "I", "my", "me" or "mine" as a whole word.
  *                Pending list `copy-voice-allow.json`: route -> finding -> lane.
  *   copy-casing  R5. A heading, title, button, tab, radio option, nav link, column header or chip is not
- *                Chicago Title Case. Skipped: a full sentence (ends . ? !), anything inside `.bn-mono`,
- *                `code` or `kbd`, anything CSS draws in uppercase, and numbers or units.
+ *                Chicago Title Case. Skipped: prose (text nodes and description lines), anything inside `.bn-mono`,
+ *                `code` or `kbd`, anything CSS draws in uppercase, a value under a `data-typed` marker, and numbers or units.
  *                Pending list `copy-casing-allow.json`: route -> finding -> lane.
  *
  * A PENDING ENTRY EXCUSES ONE FINDING AND NO OTHER, and an entry that matches nothing this run is STALE
@@ -67,6 +67,7 @@ interface Casing {
   text: string
   mono: boolean
   upper: boolean
+  typed: boolean
 }
 
 interface CopyScan {
@@ -98,7 +99,8 @@ function scanCopy(): CopyScan {
     if (role === 'tab') return 'tab'
     if (role === 'radio') return 'option'
     if (tag === 'button' || role === 'button') return 'button'
-    if (tag === 'h1' || tag === 'h2' || tag === 'h3') return 'heading'
+    if (tag === 'h1') return 'page title'
+    if (tag === 'h2' || tag === 'h3') return 'heading'
     if (el.matches('[class*="title"]')) return 'title'
     if (el.matches('[class*="chip"]')) return 'chip'
     return null
@@ -123,8 +125,7 @@ function scanCopy(): CopyScan {
     const role = roleOf(el)
     if (role === null || !shown(el)) continue
     // THE LABEL IS THE FIRST LINE. A button or heading often carries a sentence under its name (the
-    // description on a `Read a box` card). That sentence is read by the sentence rule on its own line, not
-    // as part of the label, so the first non-empty line is the label.
+    // description on a `Read a box` card). That sentence is not read for casing. It is prose, not a label, so only the first non-empty line is read.
     const inner = ((el as HTMLElement).innerText ?? '').split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).find((line) => line !== '') ?? ''
     const text = inner !== '' ? inner : (el.getAttribute('aria-label') ?? '').trim()
     if (text === '') continue
@@ -133,6 +134,7 @@ function scanCopy(): CopyScan {
       text,
       mono: el.closest('.bn-mono, code, kbd') !== null,
       upper: getComputedStyle(el).textTransform === 'uppercase',
+      typed: el.closest('[data-typed]') !== null,
     })
   }
 
@@ -147,7 +149,7 @@ function scanCopy(): CopyScan {
       .join('')
       .replace(/\s+/g, ' ')
       .trim()
-    if (text !== '') casing.push({ role: 'tooltip', text, mono: false, upper: getComputedStyle(tip).textTransform === 'uppercase' })
+    if (text !== '') casing.push({ role: 'tooltip', text, mono: false, upper: getComputedStyle(tip).textTransform === 'uppercase', typed: tip.closest('[data-typed]') !== null })
   }
 
   const prose: string[] = []
@@ -243,8 +245,10 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
     }
 
     for (const one of scan.casing) {
-      if (one.mono || one.upper || isSentence(one.text)) continue
-      if (isTypedData(one.text)) continue
+      if (one.mono || one.upper || one.typed) continue
+      // A HEADING (h2, h3) OR A TITLE MAY BE A SENTENCE: an empty state or a greeting. A control, and a page title (h1),
+      // is a label whatever its ending, so `Cards to pull.` on a control or an h1 is still checked.
+      if ((one.role === 'heading' || one.role === 'title') && isSentence(one.text)) continue
       const problems = casingProblems(one.text)
       if (problems.length === 0) continue
       // A FINDING IS KEYED BY ITS TEXT, not its role: a control's label often shows twice (its tip and its

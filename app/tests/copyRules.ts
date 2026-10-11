@@ -12,7 +12,9 @@
  * CASING (R5, Chicago style). A label takes Title Case: the first and last word capitalized, and every
  * word between them capitalized except the small words below, which stay lowercase. A word with a
  * digit, a number, a dollar figure or a unit is not a word here. A hyphenated word must capitalize
- * each part. A full sentence (ends in . ? ! ) is not a label and is skipped by `isSentence`.
+ * each part. A control's first line is a label whatever its punctuation: `Cards to pull.` is checked as
+ * `Cards to pull`. Prose (a text node, or a description line under a title) is not read for casing.
+ * A typed value carries a `data-typed` marker in the DOM and is skipped by the sweep, not by this file.
  */
 
 /** Chicago's small words: lowercase in the middle of a title, capitalized first or last. */
@@ -24,24 +26,27 @@ export const SMALL_WORDS: ReadonlySet<string> = new Set([
 /** "I", "my", "me", "mine" as whole words, any case. Lookarounds bound the match by non-letters. */
 const FIRST_PERSON = /(?<![\p{L}\p{N}_])(?:i|my|me|mine)(?![\p{L}\p{N}_])/giu
 
+/** Quoted names that carry a first-person word and are not the app's own voice. `My Pricing` is the name of
+ *  TCGplayer's page, a proper name the owner ruled to keep (wave 2, copy map row 10). Only the quoted phrase
+ *  is exempt, in straight or curly quotes. The same words unquoted still count. */
+const NAMED_EXEMPT: readonly string[] = ['"My Pricing"', '“My Pricing”']
+
+/** The text with each named exemption blanked out. The browser sweep and the source scan both call this. */
+export function scrubNamed(text: string): string {
+  let scrubbed = text
+  for (const quoted of NAMED_EXEMPT) scrubbed = scrubbed.split(quoted).join(' ')
+  return scrubbed
+}
+
 /** The first-person words a string contains, lower-cased, in order, one entry per occurrence. */
 export function voiceHits(text: string): string[] {
-  return Array.from(text.matchAll(FIRST_PERSON), (match) => match[0].toLowerCase())
+  return Array.from(scrubNamed(text).matchAll(FIRST_PERSON), (match) => match[0].toLowerCase())
 }
 
-/** A full sentence: the trimmed text ends in . ? or ! (a closing quote or bracket may follow). */
+/** A full sentence: the trimmed text ends in . ? or ! (a closing quote or bracket may follow). Only a heading
+ *  (h2, h3) or a title may be a sentence; a control or a page title (h1) is a label whatever its ending. */
 export function isSentence(text: string): boolean {
   return /[.?!]["'”’)\]]*$/.test(text.trim())
-}
-
-/** Typed data, not a label. R2: a typed value never changes, and the owner names a box, so the name the
- *  owner typed is shown as typed. `SV commons` is the box name the store fixtures use. The exemption is the
- *  exact text only: a label that reuses the same words in another casing still goes red (see the unit cases). */
-export const TYPED_DATA: ReadonlySet<string> = new Set(['SV commons'])
-
-/** Is this text a typed value the casing rule does not read? */
-export function isTypedData(text: string): boolean {
-  return TYPED_DATA.has(text)
 }
 
 /** Units that may follow a number unchanged: `10 ml`, `1 month`. A count noun such as `cards` is a word. */
