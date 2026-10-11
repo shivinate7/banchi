@@ -55,6 +55,14 @@ export function isSpokenSentences(text: string): boolean {
   return /[.?!]["'”’)\]]*\s+\S/.test(text.trim())
 }
 
+/** The label with each typed value (a `data-typed` descendant's text) taken out. The rest is checked. A label that is
+ *  only a typed value is left empty, and an empty label has nothing to check. */
+export function stripTyped(text: string, typed: readonly string[]): string {
+  let rest = text
+  for (const value of typed) if (value !== '') rest = rest.split(value).join(' ')
+  return rest.replace(/\s+/g, ' ').trim()
+}
+
 /** Units that may follow a number unchanged: `10 ml`, `1 month`. A count noun such as `cards` is a word. */
 export const UNIT_WORDS: ReadonlySet<string> = new Set([
   'ml', 'mm', 'cm', 'kg', 'g', 'oz', 'px', 'x',

@@ -10,7 +10,7 @@ import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 import { sweepEveryRoute } from './routeSweep'
 import { setViewport } from './phoneSwitch'
-import { casingProblems, isSentence, isSpokenSentences, voiceHits } from './copyRules'
+import { casingProblems, isSentence, isSpokenSentences, stripTyped, voiceHits } from './copyRules'
 
 /* ONE SWEEP, TWO CHECKS (D284, the shape `text-checks.spec.ts` set). Each screen is opened ONCE by
  * `routeSweep.ts:sweepEveryRoute`, the same owner routes and the same populated store the text checks
@@ -68,7 +68,7 @@ interface Casing {
   mono: boolean
   upper: boolean
   typed: boolean
-  // The text of each data-typed element inside this control. A control whose label is one of them is a typed value.
+  // The text of each data-typed element inside this control. That text is taken out of the label before the check.
   marked: string[]
 }
 
@@ -136,7 +136,7 @@ function scanCopy(): CopyScan {
       text,
       mono: el.closest('.bn-mono, code, kbd') !== null,
       upper: getComputedStyle(el).textTransform === 'uppercase',
-      typed: el.closest('[data-typed]') !== null,
+      typed: el.matches('[data-typed]'),
       marked: Array.from(el.querySelectorAll('[data-typed]'), (m) => (m.textContent ?? '').replace(/\s+/g, ' ').trim()),
     })
   }
@@ -152,7 +152,7 @@ function scanCopy(): CopyScan {
       .join('')
       .replace(/\s+/g, ' ')
       .trim()
-    if (text !== '') casing.push({ role: 'tooltip', text, mono: false, upper: getComputedStyle(tip).textTransform === 'uppercase', typed: tip.closest('[data-typed]') !== null, marked: [] })
+    if (text !== '') casing.push({ role: 'tooltip', text, mono: false, upper: getComputedStyle(tip).textTransform === 'uppercase', typed: tip.matches('[data-typed]'), marked: [] })
   }
 
   const prose: string[] = []
@@ -178,6 +178,17 @@ function paintVoiceDefect(): void {
 function paintCasingDefect(): void {
   const button = document.createElement('button')
   button.textContent = 'Show all'
+  document.querySelector('.bn-view')?.appendChild(button)
+}
+
+/** Runs INSIDE the page. Paints a button that holds a typed box name and one lower-case word (the mutation for the
+ *  typed-descendant rule). The name is taken out; the lower-case word must still go red. */
+function paintTypedDefect(): void {
+  const button = document.createElement('button')
+  const name = document.createElement('span')
+  name.setAttribute('data-typed', '')
+  name.textContent = 'SV commons'
+  button.append(name, ' card')
   document.querySelector('.bn-view')?.appendChild(button)
 }
 
@@ -248,11 +259,13 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
     }
 
     for (const one of scan.casing) {
-      if (one.mono || one.upper || one.typed || one.marked.includes(one.text) || isSpokenSentences(one.text)) continue
+      if (one.mono || one.upper || one.typed) continue
+      const checked = stripTyped(one.text, one.marked)
+      if (checked === '' || isSpokenSentences(checked)) continue
       // A HEADING (h2, h3) OR A TITLE MAY BE A SENTENCE: an empty state or a greeting. A control, and a page title (h1),
       // is a label whatever its ending, so `Cards to pull.` on a control or an h1 is still checked.
-      if ((one.role === 'heading' || one.role === 'title') && isSentence(one.text)) continue
-      const problems = casingProblems(one.text)
+      if ((one.role === 'heading' || one.role === 'title') && isSentence(checked)) continue
+      const problems = casingProblems(checked)
       if (problems.length === 0) continue
       // A FINDING IS KEYED BY ITS TEXT, not its role: a control's label often shows twice (its tip and its
       // accessible name), and one string is one offender.
@@ -273,8 +286,10 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
     // only that check goes red on it. From `app/`:
     //   COPY_VOICE_MUTATE='#/pricing'  npx playwright test tests/copy-checks.spec.ts   (a first-person line)
     //   COPY_CASING_MUTATE='#/'        npx playwright test tests/copy-checks.spec.ts   (a lower-case button)
+    //   COPY_TYPED_MUTATE='#/'         npx playwright test tests/copy-checks.spec.ts   (a typed name beside a lower-case word)
     if (process.env.COPY_VOICE_MUTATE === route) await page.evaluate(paintVoiceDefect)
     if (process.env.COPY_CASING_MUTATE === route) await page.evaluate(paintCasingDefect)
+    if (process.env.COPY_TYPED_MUTATE === route) await page.evaluate(paintTypedDefect)
     read(route, await page.evaluate(scanCopy))
   })
 
