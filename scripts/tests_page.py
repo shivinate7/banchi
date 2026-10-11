@@ -61,7 +61,7 @@ AREAS: Tuple[Tuple[str, str], ...] = (
     ("Orders, sales and shipping", r"orders|order-walk|shipping|revenue|home|t11_"),
     ("The Fulfiller's screen", r"fulfillment|pull-confirm"),
     ("Shell, kit and layout", r"nav|themes|stability|request-budget|scaffold|page-edge|status-busy|phone|wide|cursor|icon-button|button-stack|filters|filter-standard|kit-data|gallery|brand|^match|did-you-mean|tab-title|t6_"),
-    ("Text and money checks", r"machine-words|money|text-shape|text-checks"),
+    ("Text and money checks", r"machine-words|money|text-shape|text-checks|copy-"),
     ("Public demo", r"demo-"),
     ("Code cards", r"t8_"),
     ("Store, identity and prices", r"cid-|holdings|identity-|sku|readings|price|archive|submission|repair-born|catalog-index|stockimages|pipeline-trends|pricehistory"),
