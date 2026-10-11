@@ -1132,6 +1132,8 @@ async function targets(page: Page): Promise<{ where: string; box: DOMRect; float
       let node: Element | null = hit
       while (node !== null) {
         const position = window.getComputedStyle(node).position
+        // A layer that contains the control itself is the control's own container, not something over it.
+        if (node.contains(element)) return false
         if (position === 'fixed' || position === 'sticky') return true
         node = node.parentElement
       }
@@ -1789,6 +1791,102 @@ test('ux-w2: the search field does not move when orders load and the count gains
   expect(Math.abs(after!.width - before!.width), 'the search keeps its width').toBeLessThanOrEqual(1)
 })
 
+/* ux-w2 (nothing on screen moves unless the person moved it). The same held-read shape as the case above, over the states
+   a count can arrive in: no open order, a failed read, and counts of four and five digits. */
+function owedOrders(copies: number): { orders: unknown; plan: unknown } {
+  const first = ONE_OPEN_ORDER.orders[0]!
+  return {
+    orders: {
+      ...ONE_OPEN_ORDER,
+      orders: [{ ...first, wanted: copies, progress: first.progress.map((line) => ({ ...line, wanted: copies, outstanding: copies })) }],
+      resolution: {
+        ...ONE_OPEN_ORDER.resolution,
+        orders: ONE_OPEN_ORDER.resolution.orders.map((order) => ({
+          ...order,
+          outstanding: copies,
+          lines: order.lines.map((line) => ({ ...line, wanted: copies, owed: copies, outstanding: copies, on_hand: copies })),
+        })),
+      },
+    },
+    plan: {
+      ...ONE_OPEN_ORDER_PLAN,
+      stops: ONE_OPEN_ORDER_PLAN.stops.map((stop) => ({ ...stop, takes: stop.takes.map((take) => ({ ...take, wanted: copies })) })),
+    },
+  }
+}
+
+async function searchHoldsOnLoad(
+  page: Page,
+  input: { orders: unknown; plan: unknown; fail?: boolean },
+  settle: () => Promise<void>,
+): Promise<{ before: Box | null; after: Box | null }> {
+  await stubServer(page, [], { orders: input.orders as typeof ONE_OPEN_ORDER, plan: input.plan as typeof ONE_OPEN_ORDER_PLAN })
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await page.route(/\/orders$/, async (route) => {
+    await held
+    if (input.fail === true) {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'orders_unavailable', message: 'The orders could not be read.' } }),
+      })
+      return
+    }
+    await route.fallback()
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(searchBox(page), 'the search is drawn before the orders answer').toBeVisible()
+  await settleAnimations(page)
+  const before = await searchBox(page).boundingBox()
+  const answered = page.waitForResponse(/\/orders$/)
+  release()
+  await answered
+  await settle()
+  await settleLayout(page)
+  await settleAnimations(page)
+  const after = await searchBox(page).boundingBox()
+  return { before, after }
+}
+
+function expectSearchFixed(before: Box | null, after: Box | null): void {
+  expect(before, 'the search has a box before the answer').not.toBeNull()
+  expect(after, 'the search has a box after the answer').not.toBeNull()
+  expect(Math.abs(after!.x - before!.x), 'the search does not move sideways').toBeLessThanOrEqual(1)
+  expect(Math.abs(after!.y - before!.y), 'the search does not move down or up').toBeLessThanOrEqual(1)
+  expect(Math.abs(after!.width - before!.width), 'the search keeps its width').toBeLessThanOrEqual(1)
+}
+
+test('ux-w2: the search field does not move when no order is open', async ({ page }) => {
+  const none = {
+    summary: '0 orders',
+    orders: [],
+    resolution: { orders: [], counts: { resolved: 0, short: 0, no_copies_on_hand: 0, sku_unknown: 0, sku_unseen: 0, not_a_single: 0 } },
+  }
+  const plan = { ...ONE_OPEN_ORDER_PLAN, stops: [], shortfall: [] }
+  const r = await searchHoldsOnLoad(page, { orders: none, plan }, () => expect(view(page).getByText(/no orders are waiting/i).first()).toBeVisible())
+  expectSearchFixed(r.before, r.after)
+})
+
+test('ux-w2: the search field does not move when the orders fail to load', async ({ page }) => {
+  const owed = owedOrders(1)
+  const r = await searchHoldsOnLoad(page, { ...owed, fail: true }, async () => undefined)
+  expectSearchFixed(r.before, r.after)
+})
+
+test('ux-w2: the search field does not move when the count reaches 1,000', async ({ page }) => {
+  const owed = owedOrders(1000)
+  const r = await searchHoldsOnLoad(page, owed, () => expect(view(page).getByText(/\b1,000\s+left\b/i).first()).toBeVisible())
+  expectSearchFixed(r.before, r.after)
+})
+
+test('ux-w2: the search field does not move when the count reaches 12,345', async ({ page }) => {
+  const owed = owedOrders(12345)
+  const r = await searchHoldsOnLoad(page, owed, () => expect(view(page).getByText(/\b12,345\s+left\b/i).first()).toBeVisible())
+  expectSearchFixed(r.before, r.after)
+})
+
 /* ux-w2 gap-check self-proof. Two plain buttons that overlap are NOT a covered pair: the gap floor must fail them. The
    covered skip applies only when a fixed or sticky layer is on top of a control. */
 test('ux-w2 gap check: two overlapping plain buttons fail the gap floor', async ({ page }) => {
@@ -1801,7 +1899,31 @@ test('ux-w2 gap check: two overlapping plain buttons fail the gap floor', async 
   await expect(fatTargets(page, 'overlap'), 'the overlapping pair is judged, not skipped').rejects.toThrow()
 })
 
-/* ux-w2 B23 (DESIGN.md Fulfillment, signed off, not built yet). The count bar is sticky: it holds the "N Left" count
+/* ux-w2 gap check. Two overlapping buttons that sit INSIDE a fixed sheet, or INSIDE a sticky bar, are the same
+   container's own controls. The layer that contains them does not cover them, so both must fail the gap floor. */
+test('ux-w2 gap check: overlapping buttons inside a fixed sheet fail the gap floor', async ({ page }) => {
+  await page.setContent(
+    '<!doctype html><html><body style="margin:0">' +
+      '<div style="position:fixed;left:0;top:0;width:300px;height:200px">' +
+      '<button style="position:absolute;left:10px;top:10px;width:60px;height:60px">A</button>' +
+      '<button style="position:absolute;left:30px;top:10px;width:60px;height:60px">B</button>' +
+      '</div></body></html>',
+  )
+  await expect(fatTargets(page, 'sheet overlap'), 'the pair inside the sheet is judged').rejects.toThrow()
+})
+
+test('ux-w2 gap check: overlapping buttons inside a sticky bar fail the gap floor', async ({ page }) => {
+  await page.setContent(
+    '<!doctype html><html><body style="margin:0">' +
+      '<div style="position:sticky;top:0;width:300px;height:200px">' +
+      '<button style="position:absolute;left:10px;top:10px;width:60px;height:60px">A</button>' +
+      '<button style="position:absolute;left:30px;top:10px;width:60px;height:60px">B</button>' +
+      '</div></body></html>',
+  )
+  await expect(fatTargets(page, 'bar overlap'), 'the pair inside the bar is judged').rejects.toThrow()
+})
+
+/* ux-w2 B23 (DESIGN.md Fulfillment). Asserts the count bar stays on screen as the list scrolls: it holds the "N Left" count
    beside the search, and it stays on screen as the list scrolls. The page is made tall here by a spacer under the search's
    own parent, so the scroll is real and the case cannot pass on a page too short to scroll. */
 test('ux-w2 B23: the count bar with N Left and the search stay on screen after scrolling 2000px', async ({ page }) => {

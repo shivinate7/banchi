@@ -3873,7 +3873,9 @@ test('a toast/U undo lowers the walk tally, so a later press against the same or
   await expect.poll(() => pulls().length).toBe(1)
 
   // 2. `U` undoes it — the toast's own fast path, never the row's own inline Undo. The copy
-  // becomes sellable again, so the button count goes back up.
+  // becomes sellable again, so the button count goes back up. Wait for the receipt first:
+  // Orders ignores `U` while the pull is still in flight.
+  await expect(page.locator('.bn-toast-receipt')).toBeVisible()
   await page.getByRole('heading', { name: 'Orders' }).click()
   await page.keyboard.press('u')
   await expect(markSold).toHaveCount(2)
