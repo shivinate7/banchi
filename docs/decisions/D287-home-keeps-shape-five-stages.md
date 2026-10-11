@@ -41,6 +41,10 @@ The Boxes panel sorts by `deviceMemory.ts:storedBoxRecency()`. That is the store
 
 The Capture tile is relabelled to match what it shows: the newest box's own card count, and its name in the note. It no longer implies that it is the box the operator is capturing into now.
 
+### Runs rows show a date, a time and a quantity
+
+Each row in Home's recent runs keeps what it shows now: the box label, the relative date and the stage. It also shows the run's date, its time stamp and its quantity run. The row adds no box name and no run name (D196, no mechanism on screen). A quantity run is the number of cards in the run. R3b: a whole-box run that has not been joined shows its count of photographed cards.
+
 ### Two smaller fixes, in the same files
 
 **UX-139**: a box row's trailing figure (every card ever captured into that box) drew no unit. It is removed. The bar and the "on hand"/"sold" pair already carry what the row needs. The unlabeled count was the one figure on this screen naming nothing.
@@ -48,6 +52,10 @@ The Capture tile is relabelled to match what it shows: the newest box's own card
 **UX-032 / UX-019**: Home had no link into `#/revenue`, the loop's last stage. The foot's own "sold" figure is now that link. It is also the one place where Home's "ever sold" count and Sales' order-ledger total could be read as one number. They count two different things.
 
 **UX-074**: the Capture tile said "no boxes yet" while `GET /boxes` was still loading. Those were the same words a genuinely empty store would draw. It now says "reading…" until the read lands.
+
+### The Pricing tile's unit at zero runs
+
+The Pricing tile's unit changes at zero runs. This is accepted (R13).
 
 ### What this entry does not touch
 

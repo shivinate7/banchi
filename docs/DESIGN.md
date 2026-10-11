@@ -1002,6 +1002,8 @@ Two things this does not cover. The requirement under the table rather than in i
 | Two-step pull | the sale control may occupy no part of the pull control's footprint, and begins below where it ended |
 | Jargon | copy passes a banned-word list: SKU, CSV, import, sync, batch, queue, staged |
 
+**Fulfillment (B23), signed off, not built yet.** The count bar is sticky. It shows `N Left` beside the search, and it stays on screen. Each location card has a small round ordinal badge in place of the `Pick N` label. The `Pick` heading is removed.
+
 **The numbers in that table are the spec's own constants**. They are `BODY_FLOOR` 20, `PLACE_FLOOR`
 32, `PHOTO_FLOOR` 320, `TARGET_FLOOR` 44, `GAP_FLOOR` 12, `CONTRAST_FLOOR` 7,
 `UNDO_FLOOR_MS` 10_000. The spec runs the photograph and the floors at two viewports, 1280x900 and 375x812. The built undo window is 20 seconds, twice the floor, and it is the
@@ -1071,6 +1073,14 @@ Active voice. The button says exactly what happens. An action keeps its name thr
 whole flow: the button that says "Pull" produces a confirmation that says "Pulled."
 Name things by what the Fulfiller controls, never by how the system is built — he has
 orders and cards, not SKUs and rows. Errors say what happened and what to do next.
+
+User-visible text speaks to the operator in the second person: "Under your price", "Already sent". The banned first-person forms are "I", "my", "me" and "mine". No user-visible string uses one. That is the rule. It is not yet true of the app. Known offenders until the sweep lands are these. Orders: "I already sent it", "I already sent these" and "I shipped these by hand" (`app/src/Orders.tsx`). Pricing: "Under my price", "At my price" and "Tell me when market is above" (`app/src/Pricing.tsx`). A pipeline reason code stays as it is. Its on-screen label follows this rule. The label sources are `REASON_LABELS` in `app/src/reasons.ts` and the `QUESTIONS` record in `app/src/ReviewQueue.tsx`.
+
+**NOT MECHANIZED:** a machine would have to read each user-visible string in `app/src` and flag "I", "my", "me" or "mine" as a whole word. Code, comments and paths do not count. No row of `scripts/docs-audit.py` checks this yet.
+
+**Casing.** Headings, buttons, tabs, nav items, column headers, chips and short field labels take Chicago Title Case. That is the rule. It is not yet true of the app. The casing sweep is the pending work. Example: "Price the Answers". On-screen page titles, section and card headings, and question headings are in scope too. Full sentences keep sentence case: empty states, notices, help text and toasts. Placeholders keep sentence case. The one exception is the browser tab title. It keeps its lowercase brand form, as `app/tests/brand.spec.ts` asserts.
+
+**NOT MECHANIZED:** a machine would have to read the rendered accessible names of headings, buttons and tabs. It would flag each name that is not in Chicago Title Case. It would skip full sentences and placeholders. No such check exists yet.
 
 The owner's screens are the exception and only the exception. There, the pipeline's own reason strings are shown verbatim beneath their labels. Being able to grep what you saw is worth more to the person debugging a run than a consistent register is.
 

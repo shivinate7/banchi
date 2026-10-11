@@ -412,8 +412,7 @@ Inventory's: `Orders`, one line under it, and a count chip at top right.
 1. **The search slot:** the buyer search, the status select and the sort (D296).
 2. **Where Inventory lists boxes, Orders lists orders.** One row per buyer, with the buyer, the placed date,
    what is left with its bar, and the status. A tick sits beside each walkable row. Clicking an order selects
-   it, and its walk starts at once. Ticking others joins them to the walk, live, and each tick re-plans. There
-   is no Start button. Clicking B while walking A replaces A. The walked set is the selected order plus every
+   it, and its walk starts at once. Ticking others joins them to the walk, live, and each tick re-plans. The walk has a `Start Walk` button with an `N buyers` caption (B17, signed off, not built yet). Clicking B while walking A replaces A. The walked set is the selected order plus every
    ticked one.
 3. **Where Inventory shows the box panel, Orders shows the selected order's panel.** It has the order id, the
    buyer's name, `Manage`, the status pill and the census figures in the kit's `bn-stat`. **Behind `Manage`**
@@ -483,6 +482,8 @@ boxes, then sold.
 A buyer chip must not disagree with that buyer's own figures. `lookWords` sums every reason's `outstanding`, never
 `owed` and never only the loudest reason. One reason explains the whole total, and the chip names it ("7 short"). Two
 or more reasons together read "N review".
+
+Orders chips keep their form and gain a hover text box that explains each one (B16, signed off, not built yet).
 
 ## 15. Every copy is fungible, and the row says so
 
