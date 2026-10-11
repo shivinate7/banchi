@@ -4104,7 +4104,8 @@ export function CaptureScreen() {
         key: 'box',
         icon: 'box',
         tone: 'plain',
-        text: null,
+        // The disabled Capture button above answers to this row, so it says why in a sentence.
+        text: 'Pick a box before you capture.',
         fix: { label: 'Box', icon: 'box', onPress: () => toggleField('box') },
       })
     }
