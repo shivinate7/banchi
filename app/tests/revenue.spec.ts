@@ -208,7 +208,7 @@ test('a failed read draws the failure notice', async ({ page }) => {
   await expect(page.getByText('Could not read your orders')).toBeVisible()
 })
 
-/* ux-w2 B19 (sales-screen.md, signed off, not built yet). The sort field and its direction live in ONE menu: one button that
+/* ux-w2 B19 (sales-screen.md, signed off). Red on main until the build lands. The sort field and its direction live in ONE menu: one button that
    opens a menu, not a segmented group of sort fields. The Singles, Sealed and All toggles stay as they are. */
 test('ux-w2 B19: the sort row is one menu button, not a segmented group, and Singles, Sealed and All stay', async ({ page }) => {
   await stub(page, generalOrders())

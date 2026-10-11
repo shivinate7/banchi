@@ -356,8 +356,21 @@ test('ux-w2 B16: each Captured, Hidden and Sent chip opens a text box on hover a
 
 /* ux-w2 B17 (order-walk-plan.md section 15 rail, signed off, not built yet). The walk control is a button whose name starts
    with a verb, "Start Walk", and a caption beside it gives the buyer count, "10 buyers". */
+/* Two tickable buyers, so the walk control draws (it shows only at two or more). Both buyers take the same on-hand copies. */
+function twoBuyersOpen(): OrdersPayload {
+  const base = oneOpenOrder()
+  const first = base.resolution.orders[0]!
+  const second = { ...first, key: 'TCGplayer:ORD-B1', number: 'ORD-B1', lines: first.lines.map((one) => ({ ...one, order: 'ORD-B1', order_key: 'TCGplayer:ORD-B1' })) }
+  return {
+    ...base,
+    summary: '2 orders',
+    orders: [base.orders[0]!, { ...base.orders[0]!, key: 'TCGplayer:ORD-B1', number: 'ORD-B1', buyer: 'Ben Franklin' }],
+    resolution: { ...base.resolution, orders: [first, second] },
+  }
+}
+
 test('ux-w2 B17: the walk control is a verb-led button with a buyer-count caption', async ({ page }) => {
-  await open(page)
+  await open(page, { orders: twoBuyersOpen() })
   const control = page.getByRole('button', { name: /^start walk/i })
   await expect(control, 'the walk control is a button whose name starts with a verb').toBeVisible()
   const bar = page.locator('.orders-filterbar')

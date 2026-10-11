@@ -2634,10 +2634,12 @@ test('at 390, the walk rows are on the page, and a tick from the sheet widens th
 /* ONE CONTROL THAT SAYS WHAT IT DOES (UX-232), with the same verb the checkboxes carry.
  * PRESSED, IT NAMES THE UNDO (review finding 4): "Walk one buyer" read as a different
  * control, not this same toggle's own off state — fixed to "Stop walking all". */
-test('"Walk N" ticks every row, and "Stop" clears them', async ({ page }) => {
+test('"Start Walk" ticks every row, and "Stop" clears them', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  const all = page.getByRole('button', { name: 'Walk 3' })
+  // ux-w2 B17: the walk control is a verb-led button, with its buyer count as a caption.
+  const all = page.getByRole('button', { name: /^start walk/i })
   await expect(all).toBeVisible()
+  await expect(page.locator('.orders-filterbar')).toContainText(/\b3\s+buyers?\b/i)
   await expect(page.getByRole('checkbox', { name: /^Walk / })).toHaveCount(3)
   await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
 
@@ -2646,7 +2648,7 @@ test('"Walk N" ticks every row, and "Stop" clears them', async ({ page }) => {
   /* SEVERAL BUYERS: the head says so, never one buyer's name (UX-230). */
   await expect(page.locator('.orders-walk-title')).toHaveText('3 buyers')
 
-  await page.getByRole('button', { name: 'Stop' }).click()
+  await page.getByRole('button', { name: /^stop\b/i }).click()
   await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
 })
 
@@ -5204,9 +5206,11 @@ for (const width of [1440, 820]) {
     )
     await open(page, { orders: payloadOf(seeds.map((one) => one.row), seeds.map((one) => one.resolved)) })
     const bar = page.locator(`${VIEW} .orders-filterbar`)
-    const walk = bar.locator('.orders-walkall')
-    await expect(walk).toHaveText('Walk 16')
-    await expect(page.locator('.orders-buyers-panel .orders-walkall')).toHaveCount(0)
+    // ux-w2 B17: the walk control is a verb-led button, captioned with its buyer count.
+    const walk = bar.getByRole('button', { name: /^start walk/i })
+    await expect(walk).toBeVisible()
+    await expect(bar).toContainText(/\b16\s+buyers?\b/i)
+    await expect(page.locator('.orders-buyers-panel').getByRole('button', { name: /^start walk/i })).toHaveCount(0)
     await settleMotion(page)
     const [box, count] = await Promise.all([walk.boundingBox(), bar.locator('.bn-filtercount').boundingBox()])
     expect(box!.height).toBeGreaterThanOrEqual(40)
@@ -5216,7 +5220,7 @@ for (const width of [1440, 820]) {
     expect(count!.x).toBeGreaterThan(box!.x)
     /* Its labels are unchanged: every row ticked turns it to Stop. */
     await walk.click()
-    await expect(walk).toHaveText('Stop')
+    await expect(bar.getByRole('button', { name: /^stop\b/i })).toBeVisible()
     await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(16)
   })
 }

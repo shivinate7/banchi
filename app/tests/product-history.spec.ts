@@ -421,7 +421,7 @@ test.describe('#/product — the per-product view', () => {
     await expect(refresh).toHaveAttribute('href', '#/pricing')
   })
 
-  /* ux-w2 B7 (sales-plan.md, signed off, not built yet). Each range chart takes three price ticks on its
+  /* ux-w2 B7 (sales-plan.md, signed off). Red on main until the build lands. Each range chart takes three price ticks on its
      value axis and three date ticks on its time axis. A tick is an SVG text node: a price tick carries a
      dollar sign, and a date tick is a digit-bearing label without one. The dates are pinned to Chicago. */
   test.describe('ux-w2: price chart ticks', () => {
