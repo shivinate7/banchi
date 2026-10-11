@@ -1,24 +1,17 @@
-13. ~~**Order flow, boxes, and search**~~ — **done 2026-08-23.** Spec at `docs/specs/order-flow.md`. the store's fungible-copy model (D7 amended), the box
-    object and its retroactive capacity (D20), per-box section layouts (D10 amended), the
-    search-and-sell screens on both sides, and the operations D26-D29 ratify.
+13. ~~**Order flow, boxes, and search**~~ — done. The spec is at `docs/specs/order-flow.md`. It covers the store's fungible-copy model (D7 amended) and the box object with its retroactive capacity (D20). It also covers per-box section layouts (D10 amended), the search-and-sell screens on both sides, and the operations D26-D29 ratify.
 
-    **Every item this step was scoped around is built and reachable as of 2026-08-23**:
-    schema v2 with its migration, the server routes, the shared search components, the
-    Fulfiller's search, D26 (`retired` and re-shoot in place, both with controls on the
-    owner's screen), D27 (session state in `sessionStorage`), D28 in both halves (the
-    layout fix and the twenty-second answer undo), D29 (group-answer a homogeneous queue)
-    and D58 (the gap convention as `neighbors` and `section_gaps`). D31 then merged
-    `#/boxes` and `#/pull` into `#/inventory`, so the screens this step names by their old
-    routes are modes of one.
+    Every item in the step's scope is built and reachable:
 
-    **This step's Outstanding list ran to five entries while all five were already on disk,
-    which is the failure this file warns about pointing the other way.** A stale record is
-    believed exactly as hard as a true one, and nothing mechanical checks a list of prose
-    claims against the tree. Rebuilt from a grep rather than from the previous list.
+    - schema v2 and its migration, the server routes, and the shared search components;
+    - the Fulfiller's search;
+    - D26: `retired` and re-shoot in place, both with controls on the owner's screen;
+    - D27: session state in `sessionStorage`;
+    - D28: the layout fix and the twenty-second answer undo;
+    - D29: group-answer a homogeneous queue;
+    - D58: the gap convention as `neighbors` and `section_gaps`.
 
-    **What was outstanding was never in this list at all: the CLIENT half.** Box delete,
-    the mid-box delete with its contiguous shift, and the retroactive claim corrections all
-    passed T7 with no client function and no control on any screen — so this step could
-    read as complete while three of its operations were unusable. They are reachable now,
-    and `app/tests/inventory.spec.ts` asserts it. `CLAUDE.md`'s route-is-not-a-feature rule
-    is that discovery written down as a standing rule.
+    D31 then merged `#/boxes` and `#/pull` into `#/inventory`. The screens this step names by their old routes are modes of one.
+
+    The Outstanding list ran to five entries. All five were already on disk. A stale record is believed as hard as a true one. No check compares a list of prose claims with the tree. The list was rebuilt from a grep.
+
+    The real gap was the client half. Box delete, the mid-box delete with its contiguous shift, and the retroactive claim corrections passed T7 with no client function and no control. The step could read as complete while three operations were unusable. They are reachable now, and `app/tests/inventory.spec.ts` asserts it. `CLAUDE.md`'s route-is-not-a-feature rule records that finding as a standing rule.

@@ -89,14 +89,7 @@
       "lane": "docs-sweep",
       "SPELLING": [
         "ellipsises",
-        "grey",
-        "recognised"
-      ]
-    },
-    "docs/decisions/*-docs-are-linted-as-documents.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "judgement"
+        "grey"
       ]
     },
     "docs/decisions/*-generators-write-never-gate.md": {
@@ -258,12 +251,6 @@
         "judgement"
       ]
     },
-    "docs/decisions/*-history-reads-one-box-at-a-time.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "optimiser"
-      ]
-    },
     "docs/decisions/*-home-keeps-shape-five-stages.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -335,13 +322,6 @@
         "serialises"
       ]
     },
-    "docs/decisions/*-resolve-a-product-from-its-sku.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behaviour",
-        "behaviour"
-      ]
-    },
     "docs/decisions/*-the-market-reading-is-a-table.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -378,13 +358,8 @@
     "docs/decisions/*-staleness-filters-it-never-gates.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "artefact",
-        "behaviour",
         "catalogue",
-        "catalogue",
-        "materialisation",
-        "materialised",
-        "synthesising"
+        "catalogue"
       ]
     },
     "docs/decisions/*-three-checks-replace-ceiling.md": {
