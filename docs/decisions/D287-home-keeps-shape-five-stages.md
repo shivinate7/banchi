@@ -1,6 +1,6 @@
 ## D287 — Home keeps shape; five stages
 
-**Amends D121.** The owner ruled this lane short and specific: keep Home as is. The Home button stays, and the "Behind that" repeats are cut. Box lists are most recent first. Boxes show names only, never a box number. Runs folds into Review, so Home's six-stage strip becomes five. The Runs tile goes, and its identify count points at Review. Do not redesign the hero. This entry records what the ruling changed in `app/src/standing.ts` and `app/src/Home.tsx`. It records nothing the ruling did not name.
+**Amends D121.** The owner's ruling on this lane was short and specific: keep Home as is. The Home button stays, and the "Behind that" repeats are cut. Box lists are most recent first. Boxes show names only, never a box number. Runs folds into Review, so Home's six-stage strip becomes five. The Runs tile goes, and its identify count points at Review. Do not redesign the hero. This entry records what the ruling changed in `app/src/standing.ts` and `app/src/Home.tsx`. It records nothing the ruling did not name.
 
 ### "Behind that" no longer repeats a spine figure (UX-050, TXT-25)
 
@@ -16,9 +16,9 @@ D121 built the line to say what the spine could not. Three of its five branches 
 
 The sentence names copies this store cannot find, across every open order. The press opens Orders on the buyer list's "Show" facet, as `#/orders?show=<facet>`. `standing.ts` builds that `href`.
 
-The first build set a per-reason filter (`OrdersHubStore.setHub`) before the press navigated. The orders lane removed that filter. The buyer list now filters only on each buyer's worst open order (UX-199). So the press names a facet in the URL (D285) and sets no shared state.
+Amended at the PR 2 integration, on the orchestrator's word. The first build set a per-reason filter (`OrdersHubStore.setHub`) before the press navigated. The orders lane removed that filter. The buyer list now filters only on each buyer's worst open order (UX-199). So the press names a facet in the URL (D285) and sets no shared state.
 
-The first mapping sent `REASON: short` and `no_copies_on_hand` to `show=short`. But `statusOf` files a no-copies line under "Needs a look" unless a copy was recorded for it. So the facet held 10 of the 135 copies the sentence counted. The other 125 sat under "Needs a look". Only 57 open orders missed a copy at all.
+The first mapping sent `REASON: short` and `no_copies_on_hand` to `show=short`. But `statusOf` files a no-copies line under "Needs a look" unless a copy was recorded for it. On the owner's store, Home said "135 copies missing across 71 orders" and opened `show=short`. That list held 6 buyers and 10 of the copies. The other 125 were under "Needs a look", and only 57 open orders missed a copy at all.
 
 The second build filed each buyer under `worstStatus` and opened the "Show" facet holding the most missing copies. That still split the copies across two facets: 125 under "Needs a look", 10 under "Short". No single status list matched the sentence.
 

@@ -16,7 +16,7 @@ Both shapes were mutation-tested against the live block, each on a `.bak`-protec
 
 ### The guard is `app/tests/button-stack.spec.ts`, and it discovers its subjects
 
-The argument `cursor.spec.ts` makes about controls, and `routesFromNav` makes about routes, applies here. A guard that checks only a `.bn-actions-stack` someone remembered to wrap is blind to a stack built with no wrapper.
+The argument `cursor.spec.ts` makes about controls, and `routesFromNav` makes about routes, applies here. A guard that checks only a `.bn-actions-stack` someone remembered to wrap is blind to the exact case the owner pointed at: a stack built with no wrapper.
 
 So the spec sweeps every rendered `.bn-btn` on every route `routesFromNav` discovers. It groups each button by its nearest sector ancestor. Those are `.bn-panel`, `.bn-well`, `.bn-sheet`, `.bn-dialog`, `[role=group]`, `section`, `.capture-block` and `.bn-empty`. It also groups by the FULL set of `bn-btn-*` classes each member carries. It uses no hand-typed roster of variants. A roster once folded a quiet Close beside a plain Reload into one group on #/gallery, because `bn-btn-quiet` was missing from the list.
 

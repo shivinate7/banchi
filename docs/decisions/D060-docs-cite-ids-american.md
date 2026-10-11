@@ -24,9 +24,13 @@
 
 `scripts/decision-context.py` builds each entry's summary from its bold runs. It ranks sentences ahead of labels and takes the first three. An entry that opens with a title or cross-reference gives the hook little to read.
 
+Measured before this landed: **36 of 59 entries led with a ruling, 16 led with a cross-reference or an amendment note, and 7 gave the hook nothing but their title** — D1, D4, D5, D6, D8, D11 and D14. **270 bold runs — 20% of all 1,318 — were lost that way**.
+
 That hook reads per line. A bold run split across a wrap is invisible to it. These documents wrap at 96 columns, so a long bold run can be lost silently, with `make docs-audit` green throughout. Short single-line bold sentences prevent that.
 
 ### Cite, do not restate
+
+Measured at **94 paragraphs over 600 bytes, 77,811 bytes**, across 433 cross-references.
 
 **A short citation does real work in one clause and is kept.** *D10 makes their gaps permanent* and *D18's rule: it writes* are the form.
 
@@ -48,7 +52,7 @@ These are frozen, because a parser reads them. The `## D<n> — <title>` heading
 
 ### The budget
 
-**A new entry's size is reported.** A rewrite alone does not hold the budget. Growth comes from new entries, so each one's size is printed.
+**A new entry's size is reported.** A rewrite alone does not hold the budget. Growth comes from new entries, so each one's size is printed. Growth over the two days before this landed was **+45,580 and +44,460 tokens**, and **80% of it was new entries** — 21 of them, averaging 11.6KB. A 49% cut is spent in under two days at that rate.
 
 `entry budget` is **advisory**. It prints and allows. A long entry is a judgement call, not something provably wrong. D16's test for what may block applies. A blocking row here would teach `--no-verify`, which takes the three opsec rules with it.
 
@@ -70,7 +74,7 @@ These are frozen, because a parser reads them. The `## D<n> — <title>` heading
 
 **Two names are out of scope, by name, with the reason recorded.** `fulfilment` is a table in `inventory/store.sqlite` and the ledger payload key the legacy-JSON migration reads (D88). `catalogued` is the game registry key in `pipeline/games.py`. It is a field on the wire in `GET /games`, and the stem of the `not_catalogued` reason code. A rename of either is a migration, not a spelling. Their relatives (`is_catalogued`, `NotCatalogued`, `_parse_fulfilment`) stay with them, so no file is split between spellings. `aria-labelledby` is the platform's own name and is allow-listed for the same reason.
 
-**The reader is the `identifier spelling` row, which blocks, in `scripts/docs-audit.py`.** It reads every tracked `.py`, `.ts`, `.tsx`, `.mjs`, `.sh` and `.css`. It blanks comments, docstrings, strings, template literals, regex literals and JSX text, byte for byte, before reading a token. It names the American form in every finding. Its -ise stems are a closed list, because an open pattern flags `raise`, `Promise` and `otherwise`. A miss is the cheaper error on a blocking row. `SPELLING_ALLOWED` is the allow-list, each entry a name with its reason. It is mutation-tested under `--self-test`, in both directions per language. A British name is found in each of the six file kinds. The same word in a comment, a string, a regex, JSX text or a docstring is not. A template literal's `${}` is read. A generic parameter list is not mistaken for a tag. An allow-listed stem passes, and the tree is clean.
+**The reader is the `identifier spelling` row, which blocks, in `scripts/docs-audit.py`.** It reads every tracked `.py`, `.ts`, `.tsx`, `.mjs`, `.sh` and `.css`. It blanks comments, docstrings, strings, template literals, regex literals and JSX text, byte for byte, before reading a token. It names the American form in every finding. Its -ise stems are a closed list, because an open pattern flags `raise`, `Promise` and `otherwise`. A miss is the cheaper error on a blocking row. `SPELLING_ALLOWED` is the allow-list, each entry a name with its reason. The row is mutation-tested under `--self-test`, in both directions per language. A British name is found in each of the six file kinds. The same word in a comment, a string, a regex, JSX text or a docstring is not. A template literal's `${}` is read. A generic parameter list is not mistaken for a tag. An allow-listed stem passes, and the tree is clean.
 
 **What landed with it.** The 119 identifiers renamed in place across 24 files include `_artefacts` to `_artifacts`, `summarise` to `summarize`, and `humanise` to `humanize`. They also include `_normalise_origin`, the `cancelled` flags, and the test locals. The three documents that named `_artefacts` followed it.
 

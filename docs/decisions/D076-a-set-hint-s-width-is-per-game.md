@@ -8,7 +8,7 @@ The rule gathered the hints that existed and never counted the cards with none. 
 
 Nothing could see it. The fetch reported success. D65's positive check passed, correctly, since it asks whether the requested sets arrived. It cannot ask about sets nobody requested, and that is the failure. The receipt named the scope only after the file was on disk.
 
-A box sorted by rarity showed the same gap. Most cards carried only a rarity claim. For that game the category is the correct answer, for a second reason below.
+The owner hit it on a box sorted by rarity. Some cards carried a set hint. Most carried only a rarity claim. The expectation was the whole category. For that game, that is the correct answer for a second reason, below.
 
 ### Unanimity, not presence
 
