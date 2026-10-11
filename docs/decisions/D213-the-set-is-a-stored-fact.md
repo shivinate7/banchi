@@ -1,8 +1,8 @@
 ## D213 — The set is a stored fact
 
-**AMENDED, WIDENED (`D258`).** This entry's rule covered `set_name` and `rarity`. It now covers `name`, `number` and `condition` too. Measured: 64 cards draw a name their own listing disputes, and 241 draw a number. The old premise was wrong. `name` and `number` stayed "what the model read" even after a SKU bound. They now write at bind time, from the SKU table, as `set_name` and `rarity` already did. The source moves from an export file to that table. A row outlives its export. "The hint was never a fact" generalizes: the read was never one either. The backfill press this entry built, `cards variants`, is retired. It wrote `set_name` and `rarity` outside the one writer. `cards identity --write` now fills both through `bind_sku`, from the SKU table. The old command prints one line, writes nothing, and exits 2.
+**AMENDED, WIDENED (`D258`).** This entry's rule covered `set_name` and `rarity`. It now covers `name`, `number` and `condition` too. Measured: 64 cards draw a name their own listing disputes, and 241 draw a number. The old premise was wrong. `name` and `number` stayed "what the model read" even after a SKU bound. They now write at bind time, from the SKU table, as `set_name` and `rarity` already did. The source moves from an export file to that table, which answers this entry's own second ground better than a file can. A row outlives its export. "The hint was never a fact" generalizes: the read was never one either. The backfill press this entry built, `cards variants`, is retired. It wrote `set_name` and `rarity` outside the one writer. `cards identity --write` now fills both through `bind_sku`, from the SKU table. The old command prints one line, writes nothing, and exits 2.
 
-**Origin.** The owner reported on `#/inventory` that searching `Mind Rune` or `Calm Rune` lands on one SKU. No move reaches a sibling printing. The only way is to click around boxes until a copy of another printing turns up. The owner's words: *"the inventory shows me the most of whatever SKU first and I have to pick around the boxes to find maybe the right SKU."* The owner widened the ask to a per-set view within a game, such as Spiritforged inside Riftbound.
+**Origin.** The owner reported on `#/inventory` that searching `Mind Rune` or `Calm Rune` lands on one SKU. No move reaches a sibling printing. The only way is to click around boxes until a copy of another printing turns up. The owner widened the ask to a per-set view within a game, such as Spiritforged inside Riftbound.
 
 This entry settles where a card's set and rarity live. The name-to-printing navigation is in `docs/specs/card-printings.md`.
 
@@ -65,9 +65,9 @@ The Pokemon hole is not a data problem. No Pokemon export exists in `inventory/.
 
 Two sources disagree, and both are real. `rarity_claim` is the operator's claim at the shutter, a list (D23). The catalogue `Rarity` column is what TCGplayer calls the product.
 
-The owner ruled for the catalogue. Data sitting in inventory after identification is the cleanest data available. The filter reads the catalogue rarity. The same write stores it alongside the set.
+The owner ruled for the catalogue, reasoning that data sitting in inventory after identification is the cleanest data available. The filter reads the catalogue rarity. The same write stores it alongside the set.
 
-The claim is kept and drawn beside it, because showing the capture claim costs nothing. **A disagreement between the two is itself information.** Card `4/383` is the worked example. Its claim reads `["Showcase"]`, and every candidate offered reads `Common`. `Showcase` is a real rarity in this export's vocabulary. Either the card is a Showcase printing whose number never matched, or the claim is wrong.
+The claim is kept and drawn beside it, on the owner's second clause, that showing the capture claim costs nothing. **A disagreement between the two is itself information.** Card `4/383` is the worked example. Its claim reads `["Showcase"]`, and every candidate offered reads `Common`. `Showcase` is a real rarity in this export's vocabulary. Either the card is a Showcase printing whose number never matched, or the claim is wrong.
 
 A filter that stored only the catalogue answer would erase that question. One that stored only the claim would filter on a word the catalogue does not use for this card. Both are kept. Neither is reconciled automatically.
 

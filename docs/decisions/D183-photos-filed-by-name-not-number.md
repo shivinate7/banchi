@@ -18,11 +18,11 @@ Six symptoms, each with its own guard, is the wrong shape. They are one defect: 
 
 **A number a person reads is never a key a machine uses.** D145 applies this to boxes: a drawer has a `bid` that is never reused, and the number on its front is a label. This entry applies it to cards, photographs and runs. `pipeline/join.py:Position` already computes the readable address. It stops being half-derived and half-stored in a filename.
 
-### What follows
+### What follows, and the third one is what the change is worth
 
 **A renumber is a no-op.** Photographs of cards behind a deleted one are not named after their indices, so nothing needs renaming. **A move is a field update**, because the path contains no box. **A capture cannot overwrite another capture's photograph, structurally, not by a guard.** `cards_cid` holds the name UNIQUE. The path is a pure function of it, so two cards cannot compose one path. That hazard is absent, not defended against.
 
-**`realign`, `_photo_digests` and `refuse_reallocated` become unnecessary for every run written from here. They are kept anyway, live, behind the replay branch.** A cid cannot reach backwards into an immutable file written before it existed. 3,728 existing run records are read by `#/pricing?run=<n>` and by "Join again". Both re-read an old receipt against today's store. Dropping the code would give up the 701 re-bindings, which is the whole reason it stays. It also gains something: `_photo_digests` stops reading 997 MB of photographs per box to build a digest-to-position map the store now holds as a column.
+**`realign`, `_photo_digests` and `refuse_reallocated` become unnecessary for every run written from here. They are kept anyway, live, behind the replay branch.** A cid cannot reach backwards into an immutable file written before it existed. 3,728 existing run records are read by `#/pricing?run=<n>` and by "Join again". Both re-read an old receipt against today's store. Dropping the code would give up the 701 re-bindings, which is the whole reason it stays. What the kept code gains is that `_photo_digests` stops reading 997 MB of photographs per box to build a digest-to-position map the store now holds as a column.
 
 ### The address is materialized on demand
 

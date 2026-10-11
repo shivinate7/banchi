@@ -60,7 +60,7 @@ T7 asserts that the unanimous run passes and narrows to its one set. It asserts 
 
 **`app/tests/capture-claims.spec.ts` asserts the note in both directions too,** on one stub that differs in one boolean. An outcome assertion cannot tell "drawn correctly" from "drawn always".
 
-**Eleven mutation arms, all caught.** Each arm was a single defect:
+**Eleven mutation arms, all caught.**
 
 - The refusal deleted.
 - Firing for the operator too.

@@ -2,11 +2,11 @@
 
 **A card's number counts the cards in the box.** Selling one makes the card behind it take that number on every screen. The owner's instruction: when cards are marked sold, the slot is not left empty. The cards before it move up one.
 
-This answers the open question about gaps. `Card 17` is the seventeenth slot, not the seventeenth card you can count. Once a section has holes, those two numbers differ, and every label in that section becomes impossible to count by hand. The earlier design used `neighbors` and `section_gaps` (both kept), and a physical marker for the emptied slot. That marker is moot now: no gap is left to mark. The box-audit paragraph gets simpler for the same reason. The section and the record now give the same count.
+This answers the open question about gaps. `Card 17` is the seventeenth slot, not the seventeenth card you can count. Once a section has holes, those two numbers differ, and every label in that section becomes impossible to count by hand. The earlier design used `neighbors` and `section_gaps` (both kept), and a physical marker for the emptied slot. That marker was the owner's open item and is moot now: no gap is left to mark. The box-audit paragraph gets simpler for the same reason. The section and the record now give the same count.
 
 ### Two things are wider than the ask, and both are the owner's
 
-**The stored index never moves. The label does.** The instruction said to assume indexes can move. D10, as amended, already set the seam this design uses: *positions are never renumbered* governs the index, and the label is a view. `pipeline/join.py:Position`'s docstring restates it. Moving the stored index was costed and rejected on four measurements:
+**The stored index never moves. The label does.** The instruction said to assume indexes can move. D10, as amended, already set the seam this design uses: *positions are never renumbered* governs the index, and the label is a view. `pipeline/join.py:Position`'s docstring restates it. Moving the stored index was costed and rejected on four measurements, each a reason not to reach for it later:
 
 - **`do_remove_card` deletes its target, and a sale must not.** A sold record's index has nowhere to go once the card above slides into it. Every answer needs a v3 schema. It rewrites `next_index`, `box_fill`, `copies_on_hand`, `positions_for_sku`, `_walk`, `_release_plan`, the box-delete gate and the migration.
 - **The Fulfiller's twenty-second undo would aim at the wrong card.** `undoSale` posts to `/inventory/<box>/<index>/sold`, a POSITION, with `SOLD_FIELDS = ("undo",)` and no aim check. After a shift, that position holds the next card.
@@ -38,7 +38,7 @@ Every label above a departed card moved once, on purpose. This is the same event
 | divider numbers | 1, 86, 171, 253, 394 | 1, **83**, **168**, **249**, **390** |
 | the card at index 200 | `Section 3 · Card 30` | `Section 3 · Card 30` |
 
-It becomes `Card 29` only when 180 sells. That card is in its own section, in front of it. A sale anywhere else in the box does not change the count. T7 asserts both halves. A build that mapped nothing would pass the second, and a build that mapped only the cards would pass the first.
+It becomes `Card 29` only when 180 sells. That card is in its own section, in front of it. *Go to the third divider and count twenty-nine cards*. A sale anywhere else in the box does not change the count. T7 asserts both halves. A build that mapped nothing would pass the second, and a build that mapped only the cards would pass the first.
 
 **An empty section keeps its number.** Two dividers with no card between them map to one number. They are deliberately not deduped. The plastic is still in the box, and renumbering the sections behind it would send a person to the wrong divider. `sections_detail` reports it with `count: 0`.
 
@@ -46,7 +46,7 @@ It becomes `Card 29` only when 180 sells. That card is in its own section, in fr
 
 **The stored layout stays in index space and is never rewritten.** A divider list rewritten on every sale would be an answer that can drift, and nobody could correct it. Only the rendering maps.
 
-**The dividers editor moved to count space.** `BoxOps.tsx` seeded the field from the raw `record.sections` and posted the same list. An operator would have typed index numbers that appear nowhere else in the product. It now seeds from `sections_detail[].start`. `do_put_box` maps the result through `join.divider_index` before `check_sections` sees it. **`divider_index` answers the index of the card the section starts at.** That is what `open_section` writes when the operator presses `S` at the box. A divider typed in and one put in at the feeder are the same kind of number. **Ordinal 1 is always index 1**, even where card 1 has sold. `check_sections`' rule is a fact about the front of a box, not its contents. Property-tested over 4,000 random boxes: the round trip is exact, and the result is always sorted, unique and starts at 1.
+**The dividers editor moved to count space.** This is the piece the owner's own question exposed. `BoxOps.tsx` seeded the field from the raw `record.sections` and posted the same list. An operator would have typed index numbers that appear nowhere else in the product. It now seeds from `sections_detail[].start`. `do_put_box` maps the result through `join.divider_index` before `check_sections` sees it. **`divider_index` answers the index of the card the section starts at.** That is what `open_section` writes when the operator presses `S` at the box. A divider typed in and one put in at the feeder are the same kind of number. **Ordinal 1 is always index 1**, even where card 1 has sold. `check_sections`' rule is a fact about the front of a box, not its contents. Property-tested over 4,000 random boxes: the round trip is exact, and the result is always sorted, unique and starts at 1.
 
 ### A departed card is in no slot
 
@@ -64,7 +64,7 @@ It becomes `Card 29` only when 180 sells. That card is in its own section, in fr
 
 **What `_denominator` gave is now held structurally, which is stronger.** It existed so two renderers could not disagree. `_Places.view` now computes the count from the walk it already runs, and `_box_row` reads it from the same instance. One scan, two renderers, nothing to keep in step.
 
-**`capacity` keeps its D20 job and loses this one.** It records how full the box got. `GET /boxes` still reports it. `close_box` still freezes it at the high-water mark. The seal control still names that number before it is pressed. It is no longer the divisor. A sealed box's identity line carries both (`542 of 543 sealed`). A bar beside `#40 of 542` would be the second-renderer failure with two numbers instead of one.
+**`capacity` keeps its D20 job and loses this one.** It records how full the box got. `GET /boxes` still reports it. `close_box` still freezes it at the high-water mark. The seal control still names that number before it is pressed. It is no longer the divisor. A sealed box's identity line carries both (`542 of 543 sealed`), because one of them beside a bar reading `#40 of 542` would be the second-renderer failure with two numbers instead of one.
 
 **`GET /boxes` gains `on_hand`.** `fill`, `next_index`, `cards`, `sold` and `retired` are unchanged. `BoxOps` promises its census greps to `inventory.json`, and it still does.
 

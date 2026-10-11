@@ -1,6 +1,6 @@
 ## D69 — Orders and Shipping are separate routes
 
-`#/orders` answers *which copies does this buyer get, and where in the boxes are they*, from D63's ledger. `#/shipping` answers *which envelope does this order go in*, from TCGplayer's `Orders → Export Shipping` file. These are two routes, not one screen with two modes. `app/src/App.tsx` carries NINE routes: eight are the owner's and one is the Fulfiller's. The build-order plan is discharged, since the screens exist.
+`#/orders` answers *which copies does this buyer get, and where in the boxes are they*, from D63's ledger. `#/shipping` answers *which envelope does this order go in*, from TCGplayer's `Orders → Export Shipping` file. These are two routes, not one screen with two modes. `app/src/App.tsx` carries NINE routes: eight are the owner's and one is the Fulfiller's. The build-order plan is discharged: the screens exist, so the transport had somewhere to arrive.
 
 ### Two routes, because they are two questions at two moments
 
@@ -48,7 +48,7 @@ The lane got its own surface. That is the second option.
 
 **The order host is a cookie session, not a Bearer challenge.** `order-management-api.tcgplayer.com` authenticates with `credentials: 'include'` and the `TCGAuthTicket_Production` cookie. That is the `.tcgplayer.com` cookie `server/tcg_export.py:_cookie()` already names, so one account session serves both hosts. No `www-authenticate` header appeared on any probed path. The portal's own XHR sets no `Authorization` header. The bridge extension authenticates by cookie alone.
 
-**This repo recorded the opposite in four places.** They are `server/tcg_export.py`'s docstring, D65's probe table, the build-order plan's exclusion paragraph, and `docs/specs/order-pipeline.md`'s T0. All four are amended in place, not deleted. Sound reasoning that reached a wrong conclusion is worth finding again. D65 treated its own price-history correction the same way.
+**This repo recorded the opposite in three places and repeated it in a fourth.** They are `server/tcg_export.py`'s docstring, D65's probe table, the build-order plan's exclusion paragraph, and `docs/specs/order-pipeline.md`'s T0. All four are amended in place, not deleted. Sound reasoning that reached a wrong conclusion is worth finding again. D65 treated its own price-history correction the same way.
 
 **What does NOT transfer between the hosts is the body convention, not the auth.** The admin host takes Knockout's `postJson` form: `model=<json>`, form-urlencoded, D65's shape. The order host takes a plain JSON document. A client carrying D65's form here fails, and the failure reads like an auth problem.
 

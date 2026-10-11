@@ -2,11 +2,11 @@
 
 A read-only audit asked of every written rule: has it been broken, and can a machine see it? Forty rules were mechanizable. Five are one command away from a session. Each has a measured incident. `scripts/guard-shell.py` enforces those five as a PreToolUse hook on Bash and on Write|Edit, armed in both tools' rosters (D135).
 
-D173 is the audit's ruling. This entry records which five, what each cost, and where these readers are blind.
+D173 is that audit's ruling: a rule that can be enforced mechanically is enforced mechanically, and a rule with no reader is advice. This entry records which five, what each cost, and where these readers are blind.
 
 ### Why a hook, not a rule (D171)
 
-Each of the five was already written down when it was broken. Four were in a memory file the session had loaded. One is in CLAUDE.md twice. The latest: a session ran `git checkout CLAUDE.md` over its own uncommitted work, while `mutation-tests-need-a-bak-not-git-checkout` sat in its context.
+Each of the five was already written down when it was broken. That is not carelessness, and writing the rule a third time is not the remedy. Four were in a memory file the session had loaded. One is in CLAUDE.md twice. The latest: a session ran `git checkout CLAUDE.md` over its own uncommitted work, while `mutation-tests-need-a-bak-not-git-checkout` sat in its context.
 
 D171: a rule is read once, at the start, then competes for attention with the work. So these five are mechanical. The audit's thesis: a rule phrased as an explanation to recall is recalled only when it is not needed.
 
@@ -22,7 +22,7 @@ The owner ruled that Claude Code runs `GUARD_SHELL_SKIP=checkout,stash,reset scr
 
 **3 and 4 are retired.** `gh api -f k=v` with no method is one. A field implies that a body exists, so gh sends POST. `ln -s` at an existing path is the other. The owner ruled both retired, with their hatches. The numbers stay as stable ids. Nothing renumbers.
 
-**5. A polling loop.** Twice in one day, a session wrote a loop that never ended. One was `until ! pgrep -f 'scratchpad/drive.sh'`. It never went false. Its chained work never ran, and a second driver raced a live one for about 15 minutes. The other was a backgrounded `while`/`sleep` merge driver. It ran **119 rounds over 3 h 58 m**. The session had been compacted during the run. The driver raced that session's own hand-merges and re-resolved branches it was resolving. A person stopped it by noticing a four-hour bash in their own window. The session had read the rule four days earlier.
+**5. A polling loop.** Twice in one day, a session wrote a loop that never ended. A session that had read the rule four days earlier wrote `until ! pgrep -f 'scratchpad/drive.sh'`. It never went false. Its chained work never ran, and a second driver raced a live one for about 15 minutes. The other was a backgrounded `while`/`sleep` merge driver. It ran **119 rounds over 3 h 58 m**. The session had been compacted during the run. The driver raced that session's own hand-merges and re-resolved branches it was resolving. A person stopped it by noticing a four-hour bash in their own window.
 
 D305 is the other half of that incident. This clause does not duplicate it. D305 teaches the sweep to ask whether anything still owns a process. A loop whose session is gone is offered up, not read as busy. This clause refuses the loop when it is created. D305 finds the one already running. Neither makes the other redundant. A poller started before this hook is D305's. A poller this hook refuses never becomes anybody's to find.
 
@@ -63,7 +63,7 @@ What did not move is any decision either guard makes. One is decidable from the 
 
 ### AMENDED: a named source is not a hatch
 
-The sentence this repeals, verbatim:
+The repealed sentence:
 
 ```
 A named source is allowed, on the ground that it WRITES a known version rather than discarding an unknown one — which is the audit's own must-pass. The one spelling where that reasoning is thin is `HEAD` itself... It is allowed today and the hatch is not needed for it.
@@ -85,7 +85,7 @@ That happened. A coordinating session resolving a merge conflict stood on a loca
 
 `clause_push` resolves the fact that git's own safety net already holds. `git rev-parse --abbrev-ref HEAD` gives the current branch. `branch.<name>.remote` and `branch.<name>.merge` give the tracked pair. They are read as git reads them, not re-derived from the command text. A push is refused when three things hold. Its remote matches `branch.<name>.remote`. Its lone refspec is an unqualified `HEAD` or the branch's own literal name. The tracked name differs.
 
-Everything else passes as before. That covers six cases. A branch with no configured upstream (an ordinary first push). A name matching its upstream. An explicit `HEAD:<branch>`. A push to a remote the branch does not track (a fork workflow). `--all`, `--mirror`, `--tags` and `--delete`, which push something other than this branch under its own name. `BANCHI_PUSH=off` is its hatch, honoured in both forms.
+Everything else passes as before. A branch with no configured upstream (an ordinary first push). A name matching its upstream. An explicit `HEAD:<branch>`. A push to a remote the branch does not track (a fork workflow). `--all`, `--mirror`, `--tags` and `--delete`, which push something other than this branch under its own name. `BANCHI_PUSH=off` is its hatch, honoured in both forms.
 
 Reproduced, not argued. `scripts/guard-shell-selftest.sh` builds a real bare origin. It pushes a branch under one name while its tracking points to a differently named branch. That is the incident's mechanism, `git push -u origin <local>:<remote>`. The guard is asked about that mismatch. The cases the ordinary first push, a matching upstream and fork workflows must never trip are asked too.
 
