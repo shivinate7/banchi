@@ -127,3 +127,29 @@ test('setViewport leaves the shell columns final across the rail breakpoint', as
     expect(await readLater(), `columns at ${width} still moving right after setViewport`).toBe(first)
   }
 })
+
+/* ux-wave1 B3 (A14). An empty "Last capture" panel keeps the height it has at 1440 when the page
+   narrows to the rail width, and it still says it is empty. The reference is measured at 1440 in the
+   same case, not a pixel tuned to one layout. */
+test('ux-wave1: the empty Last capture panel at 820 keeps its loaded height and says it is empty', async ({ page }) => {
+  const measure = async (width: number, height: number) => {
+    await setViewport(page, { width, height })
+    await page.goto('/#/capture')
+    await page.locator('.capture-shell').waitFor()
+    await settleAnimations(page)
+    const panel = page.locator('.capture-last')
+    await expect(panel).toHaveAttribute('data-has-last', 'false')
+    const note = page.locator('.capture-frame-last .capture-frame-title')
+    await expect(note, 'the empty panel names its state').toHaveText(/nothing captured yet/i)
+    const box = await panel.boundingBox()
+    const title = await note.boundingBox()
+    return {
+      height: box?.height ?? 0,
+      titleInside: box !== null && title !== null && title.y + title.height <= box.y + box.height + 1,
+    }
+  }
+  const reference = await measure(1440, 900)
+  const narrow = await measure(820, 1100)
+  expect(narrow.height, `Last capture is ${narrow.height}px at 820, ${reference.height}px empty at 1440`).toBeGreaterThanOrEqual(reference.height)
+  expect(narrow.titleInside, 'the empty sentence sits inside its panel at 820').toBe(true)
+})

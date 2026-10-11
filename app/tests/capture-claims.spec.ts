@@ -1873,3 +1873,27 @@ test('the stage panel hugs the portrait frame: no dead side bands', async ({ pag
     }
   }
 })
+
+/* ux-wave1 B1. With no box picked, Capture is off, and the button alone does not say why. The case
+   asks for a visible sentence in the controls that names the reason. It takes no wording: a
+   sentence is visible text of three words or more, outside the buttons, the screen-reader-only
+   text and the dispenser line. The sentence must sit in the same controls as the disabled button. */
+test('ux-wave1: with no box chosen, Capture is disabled and a visible sentence says why', async ({ page }) => {
+  await open(page)
+  const shutter = page.locator('.capture-shutter')
+  await expect(shutter).toBeVisible()
+  await expect(shutter).toBeDisabled()
+  const sentences = await shutter.evaluate((btn) => {
+    const scope = btn.closest('.capture-controls')
+    if (scope === null) return null
+    return [...scope.querySelectorAll('*')]
+      .filter((el) => el.children.length === 0)
+      .filter((el) => el.closest('button') === null && el.closest('.bn-sr') === null)
+      .filter((el) => !el.classList.contains('capture-dealer-said') && !el.classList.contains('capture-block-word'))
+      .filter((el) => el.getClientRects().length > 0)
+      .map((el) => (el.textContent ?? '').trim())
+      .filter((text) => text.split(/\s+/).length >= 3)
+  })
+  expect(sentences, 'the Capture controls are drawn beside the button').not.toBeNull()
+  expect(sentences ?? [], 'a visible sentence names why Capture is off').not.toEqual([])
+})

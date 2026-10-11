@@ -2,6 +2,7 @@
 // Governs: D278, D227
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { absoluteDate } from '../src/dates'
 
 import type { OrderRow, OrdersPayload, ProductHistoryPayload, SearchGroup, SearchResult } from '../src/types'
 
@@ -376,5 +377,44 @@ test.describe('#/product — the per-product view', () => {
     await chips.filter({ hasText: 'Holo' }).click()
     await expect(page).toHaveURL(/#\/product\?sku=555999/)
     await expect(view.getByText('This product has never been recorded to sell', { exact: false })).toBeVisible()
+  })
+
+  /* ux-wave1 A18. The range line prints the window's two dates. Raw yyyy-mm-dd reads as a machine
+     string on a screen the owner reads, so the window must print in the app's own date format. The
+     case reads only the element that carries the arrow, so a date printed elsewhere on the page
+     cannot pass or fail it, and it computes the expected text with the app's own formatter. */
+  test('ux-wave1: the product range prints dates in the app format, never raw ISO', async ({ page }) => {
+    await page.goto(VIEW_ROUTE)
+    const view = page.locator('main.producthistory')
+    await expect(view).toBeVisible()
+    const arrow = view.getByText('→', { exact: false }).first()
+    await expect(arrow, 'the range line is drawn').toBeVisible()
+    const line = (await arrow.evaluate((el) => el.textContent ?? '')).trim()
+    expect(line, 'the range line prints a raw yyyy-mm-dd date').not.toMatch(/\d{4}-\d{2}-\d{2}/)
+    expect(line, 'the range start prints in the app date format').toContain(absoluteDate('2026-08-01'))
+    expect(line, 'the range end prints in the app date format').toContain(absoluteDate('2026-08-05'))
+  })
+
+  /* ux-wave1 A19. A product with no saved sales keeps the Sales block's reserved height and
+     says where to read them. The case asks the empty note to fill its own reserved minimum height, and
+     asks for a link whose target is Pricing. The block is fed an empty facts payload, so it draws the
+     empty branch and nothing else. */
+  test('ux-wave1: an empty Sales block holds its reserved height and links to Pricing', async ({ page }) => {
+    await page.route(/\/pipeline\/price-facts/, (route) =>
+      json(route, { sku: SKU, name: 'Vilemaw', at: null, through: null, prices: null, shelf: null, days: [], facts: { sold_30d: 0 } }),
+    )
+    await page.goto(VIEW_ROUTE)
+    const view = page.locator('main.producthistory')
+    await expect(view).toBeVisible()
+    const empty = view.locator('p.pricefacts-sales-body.pricefacts-none')
+    await expect(empty, 'the empty Sales note is drawn').toBeVisible()
+    const reserved = await empty.evaluate((el) => parseFloat(getComputedStyle(el).minHeight))
+    const box = await empty.boundingBox()
+    expect(reserved, 'the Sales block reserves a minimum height').toBeGreaterThan(0)
+    /* One pixel of slack for sub-pixel layout: a rem minimum reads back as 191.99997px. */
+    expect(box?.height ?? 0, 'the empty note fills its reserved height').toBeGreaterThanOrEqual(reserved - 1)
+    const refresh = view.getByRole('link', { name: /Refresh now/i })
+    await expect(refresh, 'Refresh now on Pricing is a link').toHaveCount(1)
+    await expect(refresh).toHaveAttribute('href', '#/pricing')
   })
 })

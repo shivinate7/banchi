@@ -1413,3 +1413,30 @@ for (const theme of ['light', 'dark'] as const) {
     })
   }
 }
+
+/* ux-wave1 B18. The rarity bars share a row with a label column and a figure. With long rarity names
+   the label column must not take the row, or every bar collapses to a sliver. The case measures each
+   bar's track against its own row at 1440 and asks for at least 40 percent. */
+test('ux-wave1: rarity bar tracks keep at least 40% of their row with long rarity names', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await stub(page, [
+    orderRow({
+      number: 'ORD-3001',
+      lines: [
+        line({ sku: '7101', name: 'Long Rarity Alpha', condition: 'Near Mint', rarity: 'Special Illustration Rare Holo Gold Secret Edition', quantity: 1, unit_price: '120.00' }),
+        line({ sku: '7102', name: 'Long Rarity Beta', condition: 'Near Mint', rarity: 'Hyper Rare Alternate Art Gold Metal Foil Limited', quantity: 1, unit_price: '30.00' }),
+      ],
+    }),
+  ])
+  await open(page, '?period=all')
+  const mix = page.locator('.revenue-mix-rarity')
+  await expect(mix, 'the rarity breakdown is drawn').toHaveCount(1)
+  await expect(mix.locator('.revenue-mix-track'), 'both rarities have a bar').toHaveCount(2)
+  const shares = await mix.evaluate((grid) => {
+    const row = grid.getBoundingClientRect().width
+    return [...grid.querySelectorAll('.revenue-mix-track')].map((track) => track.getBoundingClientRect().width / row)
+  })
+  for (const share of shares) {
+    expect.soft(share, `a rarity bar takes ${(share * 100).toFixed(0)}% of its row`).toBeGreaterThanOrEqual(0.4)
+  }
+})

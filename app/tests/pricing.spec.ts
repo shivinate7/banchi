@@ -5861,3 +5861,25 @@ for (const theme of ['light', 'dark'] as const) {
     })
   }
 }
+
+/* ux-wave1 B21. The primary Send sits above the warning about the last send, so a person who presses
+   it has not read the warning first. The case asks the DOM which comes first: the warning must. */
+test('ux-wave1: the last-send warning comes before the Send button in the DOM', async ({ page }) => {
+  const short = sendSummary({
+    state: 'short',
+    published_at: null,
+    held: false,
+    takeable: 3,
+    checked_at: new Date().toISOString(),
+    check: { export: 'live.csv', found: 0, expected: 3, missing: [{ sku: '8608459', name: 'Dunsparce', sent: 3, found: 0 }] },
+  })
+  await open(page, { sends: () => ({ ...SENDS_NONE, sends: [short] }) })
+  await expect(page.locator('.send-short-check'), 'the last-send warning is drawn').toHaveCount(1)
+  await expect(page.locator('.pricing-emit'), 'the Send button is drawn').toHaveCount(1)
+  const warningFirst = await page.evaluate(() => {
+    const warning = document.querySelector('.send-short-check')
+    const send = document.querySelector('.pricing-emit')
+    return warning !== null && send !== null && (warning.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+  })
+  expect(warningFirst, 'the warning precedes the Send button in the DOM').toBe(true)
+})

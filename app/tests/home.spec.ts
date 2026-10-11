@@ -3,6 +3,7 @@
 import { test, expect, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { runRow } from './routeFixtures'
+import { absoluteDate, clockTime } from '../src/dates'
 
 import type { OrderRow, OrdersPayload, ResolvedLine, ResolvedOrder } from '../src/types'
 
@@ -488,4 +489,52 @@ test('a reworded owed sentence changes nothing on Home while its code stays', as
   await expect(page.locator('.home-standing .home-standing-say')).toContainText('send 2 copies to TCGplayer')
   await expect(page.locator('.home-standing')).toContainText('1 card needs a price')
   await expect(page.locator('.home-standing')).not.toContainText('cut-off')
+})
+
+/* ux-wave1 B10. The Pricing tile's headline and its subline must name the same number. A run with
+   nothing owing a price and five copies ready reads "0" over "5 ready" today. The case reads the
+   count the subline names and asks the headline to match it. */
+test('ux-wave1: the Pricing tile headline is the count its subline names', async ({ page }) => {
+  await page.route(/\/orders$/, (route) => json(route, { summary: '', orders: [], resolution: { orders: [], counts: {} } }))
+  await page.route(/\/pipeline\/pricing(\?|$)/, (route) =>
+    json(route, {
+      runs: [],
+      roster: [{ ...runRow({ joined: true, phase: 'emit' }), owes: [], owed: [], open: true, unsent: 5 }],
+      skus: ['7001', '7002', '7003', '7004', '7005'].map((sku) => mixedSku(sku, 'listable', 1)),
+      written_at: {},
+      skipped: [],
+      asked: [],
+      threshold: '0.49',
+      floor: '0.49',
+    }),
+  )
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+  const tile = page.locator('a.home-stage[href="#/pricing"]')
+  await expect(tile).toBeVisible()
+  const note = await tile.locator('.home-stage-note').innerText()
+  const named = /(\d[\d,]*)\s+ready/.exec(note)
+  expect(named, `the Pricing tile names a count of ready copies (note reads "${note}")`).not.toBeNull()
+  await expect(tile.locator('.home-stage-figure'), 'the headline matches the count the subline names').toHaveText(named?.[1] ?? '')
+})
+
+/* ux-wave1 R3. Each run row on Home names the date and the clock time the run was last touched and the
+   quantity it holds. The date and the time come from the app's own formatters, so the case does not
+   hard-code a zone. The quantity is read as a number followed by "cards" or "copies". */
+test('ux-wave1: each Home run row shows a date, a time and a quantity', async ({ page }) => {
+  const at = '2026-09-18T14:05:00Z'
+  await page.route(/\/orders$/, (route) => json(route, { summary: '', orders: [], resolution: { orders: [], counts: {} } }))
+  await page.route(/\/pipeline\/runs$/, (route) =>
+    json(route, {
+      runs: [runRow({ updated_at: at, created_at: at, counts: { cards: 12 }, scope: { box: 9, whole_box: true, cards: 12 } })],
+    }),
+  )
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+  const row = page.locator('a.home-run').first()
+  await expect(row, 'Home draws the run row').toBeVisible()
+  const text = await row.innerText()
+  expect(text, 'the row names the date').toContain(absoluteDate(at))
+  expect(text, 'the row names the clock time').toContain(clockTime(at))
+  expect(text, 'the row names the quantity the run holds').toMatch(/\b\d[\d,]*\s+(cards?|copies)\b/)
 })
