@@ -18,5 +18,5 @@ A new entry adds none. Git dates the commit.
 a vendor's release date. Name that source, and the source dates itself.
 
 **NOT MECHANIZED.** A machine cannot tell a date from a version number, a port or a test fixture
-without reading intent. A per-file ratchet would count fixtures. CLAUDE.md's "No date in repo
+without reading intent. A per-file ratchet would count fixtures. CLAUDE.md's "No history date in repo
 prose" rule carries the argument.
