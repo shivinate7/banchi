@@ -51,7 +51,7 @@ This keeps D274's amendment. The card's details table stays on `#/inventory` alo
 refuses any image outside the demo photo folders. A code-card photo is a bearer instrument,
 and the guard carves out no exception for a review mockup.
 
-**Hide picked, lane E's own ruling, folded in here because lane A builds on top of it.** A press folds every row picked so far. It is a press, never a live filter. A sale that
+**Hide picked, lane E's own ruling, folded in here because lane A builds on top of it.** The owner ruled it. A press folds every row picked so far. It is a press, never a live filter. A sale that
 lands while Hide picked is on leaves that row in place. It folds only at the next press or
 the next load. This is D263's ruling 2 (a sold row folds on the next load, never at once),
 read onto the Hide picked control and not only onto Mark sold. D118 (a press changes what is

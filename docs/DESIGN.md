@@ -646,8 +646,7 @@ and is `Card 1` of section 3 — the very front — at section scale. Both are t
 walking to a box needs the first to get near it and the second to land on it.
 
 **THE SECTION IS THE RULER AND THE BOX IS THE MARGIN NOTE, AND THAT ORDER WAS REVERSED ON
-2026-09-11** (D155, on the owner's *"the interface/view of the box is nicer
-than section"*). The section is a graduated 26px ruler with a fill and a pin that crosses it. Its own bounds are written inside its two ends. The box is an 8px strip of chips beneath it. The argument is resolution. At the 580px bar this screen draws, the box track is **1.45px a card**, and the mark's own footprint covers about 7.6 of them. The caption above it already says `#51 of 53 · 96% in` exactly. The section scale is 6.8 to 82.9px a card.
+2026-09-11** (D155, on the owner's praise of the box view's structure and ruling that the lens between the scales is noise). The section is a graduated 26px ruler with a fill and a pin that crosses it. Its own bounds are written inside its two ends. The box is an 8px strip of chips beneath it. The argument is resolution. At the 580px bar this screen draws, the box track is **1.45px a card**, and the mark's own footprint covers about 7.6 of them. The caption above it already says `#51 of 53 · 96% in` exactly. The section scale is 6.8 to 82.9px a card.
 
 Three cues separate them, and none is a new color. The two are **26px against 8px**. A caret on the box chip indents the ruler beneath it. The ruler's caption opens with the section number where the box caption opens with `#`. Each scale keeps exactly one of the two ornaments. The ruler has graduations and no chips. The strip has chips and no graduations. So they cannot be confused at any width. The marker convention is the server's own `fraction`, so a card at the
 front of both sits at the front of both.
@@ -942,7 +941,7 @@ the skip — the negative case, because nothing in the type system or the render
 **The question below is closed as of 2026-08-25 — D37 is the decision entry it asked for.**
 This section said the screen "needs a real defer that records a reason, and that is a decision
 entry rather than a button", and named counting skips as the measurement that would settle it.
-The owner asked for a defer instead: mark a card as known skip, like a stand-down on a flag.
+The owner asked for a defer instead: mark a card as known skip, like a stand-down on a flag. The owner accepts that the card keeps a wasted position.
 
 `X` now raises a panel offering a **stand-down**: three reasons, `cleared_by_human` set, and the card itself untouched. It sits beside D26's **retirement**, whose route existed with no control on this screen. The mid-box delete is deliberately not there. It renumbers every card behind the one being deleted, which would re-point the worklist the panel is drawn from. It is the one operation here with no undo. D37 carries the whole argument.
 
