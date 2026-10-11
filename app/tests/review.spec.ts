@@ -3038,30 +3038,23 @@ test.describe('the Review band sheets', () => {
     expect(Math.abs(zeroBox!.height - liveTile!.height), 'the tile keeps its height either way').toBeLessThanOrEqual(1)
   })
 
-  test.describe('17. empty sheets', () => {
+  /* ux-w2 B14 re-point (identify-engine-pick.md 10.4, signed off). A zero count is a plain figure and opens nothing:
+     no button, no sheet, and no "Back to Capture" sentence, because the at-zero empty states are retired with it. */
+  test.describe('17. zero counts open nothing', () => {
     for (const size of SIZES) {
       for (const scheme of ['light', 'dark'] as const) {
-        test(`the three count sheets answer a zero count with a sentence and Back to Capture at ${size.width}, ${scheme}`, async ({ page }) => {
+        test(`a zero count is a plain figure that opens no sheet at ${size.width}, ${scheme}`, async ({ page }) => {
           await page.emulateMedia({ colorScheme: scheme })
           await setViewport(page, size)
           await seed(page, { fates: { '3/1': 'done' }, sitting: ['3/1'] })
           await openReview(page)
           await loaded(page)
-          const cases: [RegExp, string][] = [
-            [/^0 waiting for a paid look$/, 'No card is waiting for a paid look.'],
-            [/^0 not yet looked at$/, 'The free reader has looked at every card.'],
-            [/^0 matched free$/, 'The free reader has not matched a card yet.'],
-          ]
-          for (const [name, sentence] of cases) {
-            await openCount(page, name)
-            await expect(sheet(page)).toContainText(sentence)
-            await expect(sheet(page).getByRole('button', { name: 'Back to Capture' })).toBeVisible()
-            const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
-            expect(overflow, 'no horizontal scroll').toBeLessThanOrEqual(0)
-            const inside = await sheet(page).evaluate((el) => el.scrollWidth <= el.clientWidth + 1)
-            expect(inside, 'the sheet does not scroll sideways').toBe(true)
-            await page.keyboard.press('Escape')
-            await expect(sheet(page)).toHaveCount(0)
+          for (const label of ['waiting for a paid look', 'not yet looked at', 'matched free']) {
+            const tile = count(page, label)
+            await expect(tile, `the ${label} tile reads zero`).toContainText('0')
+            await expect(tile.getByRole('button'), `a zero ${label} count has no button`).toHaveCount(0)
+            await tile.click({ force: true })
+            await expect(sheet(page), `a zero ${label} count opens no sheet`).toHaveCount(0)
           }
         })
       }
