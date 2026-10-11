@@ -12,7 +12,7 @@ The owner's answers to the plan's three questions:
 
 ### The premise that no longer holds
 
-D10 (the inventory model) said the next captured card goes on the end of the stack. D294 (a card's place is an order key apart from its index) already lets a placement go between two cards. This entry lets a capture do the same, into the picked section.
+D10 (the inventory model) said the next captured card goes on the end of the stack. That was the only way a card entered a box at capture. D294 (a card's place is an order key apart from its index) already lets a placement go between two cards. This entry lets a capture do the same, into the picked section.
 
 ### The rule
 
@@ -37,7 +37,7 @@ A wrong key files a card where the hand did not put it, and nothing reports it (
 
 ### S after a picked section
 
-S with `after` puts one new divider directly behind the last record of that section. No card key changes. The later sections move up one number, and their card numbers stay the same. A section that holds no record refuses with `section_empty`, as S on the last section does. U after such an S names the divider by its key (`DELETE /boxes/<box>/sections?div=`). It removes that divider only, and only while the box's newest layout change is that S. After an editor save, the divider stays.
+S with `after` puts one new divider directly behind the last record of that section. No card key changes. The later sections move up one number, and their card numbers stay the same. This is the one number that moves. A section that holds no record refuses with `section_empty`, as S on the last section does. U after such an S names the divider by its key (`DELETE /boxes/<box>/sections?div=`). It removes that divider only, and only while the box's newest layout change is that S. After an editor save, the divider stays.
 
 ### Move to box
 

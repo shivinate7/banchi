@@ -10,6 +10,7 @@
 - **Kept, if packaging meant choosing:** self-reload on Python edits, and per-checkout ports and stores (D43). Not kept by name: start at login, and the LAN name. Asked directly what happens after a reboot, the owner kept start at login.
 - **The window is Chrome, as today.** D108's dock app stays. The camera work is not re-litigated.
 - **The build is the server's, when `dist` is stale.** It is not a command the owner types, and it is not a nag.
+- **Scope for the session: record the decision and plan the rest.**
 
 ### The ruling
 

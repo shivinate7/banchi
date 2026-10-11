@@ -12,9 +12,9 @@
 
    Fill gaps, do not override. The toggle is a *claim*. A flag that could flatten a box toggled stack by stack would stop it being one. The flag exists for one case: a directory of photos with no sidecars, where nothing is recorded to override.
 
-   **The claim is a set, not a single finish.** The claim was one string. One string can describe only a uniform stack. A stack holding two finishes had no honest claim. The operator could name one finish and be wrong about half the cards. Or the operator could claim nothing and discard half of what they knew. Both are worse than saying what is true.
+   **The claim is a set, not a single finish** (amended by the owner). The claim was one string. One string can describe only a uniform stack. A stack holding two finishes had no honest claim. The operator could name one finish and be wrong about half the cards. Or the operator could claim nothing and discard half of what they knew. Both are worse than saying what is true.
 
-   **The number of members decides what the rung does.**
+   **The number of members decides what the rung does.** This is the whole of the amendment.
 
    - **One member behaves exactly as this rung always has.** It determines. It outranks the catalog at rung 2, and detection is cross-checked against it at rung 3. Every card captured before the amendment reads as a one-member claim, and resolves down the identical path.
    - **Two or more members FILTER rather than determine.** The candidate rows are narrowed to the claimed finishes. The rungs below choose within what survives. The catalog decides at rung 2 if exactly one row is left. Detection decides at rung 3 otherwise. The claim is still trusted. It is less specific, and a less specific claim can only narrow.
@@ -45,7 +45,7 @@ The owner ruled that `--bypass` on `banchi join` is retired. The bypass let a ru
 
 **The rule does not reach any other rung.** A card with no claim is decided by rung 3, because no claim exists to resolve it by. A claim the *catalog* contradicts is a different fact from a claim *detection* contradicts. Listing through a catalog contradiction would sell a finish the number is not stocked in. So `metadata_not_stocked` is unchanged. `no_catalog_row` is unchanged, because no row exists to resolve to. The claim decides. It never invents a row.
 
-**A claim-decided card resolves at rung 1 and is counted.** There is no new stage and no new reason code. Rung 1 means *the claim determined*. The contradictions detection would have raised are set aside before they reach rung 3. `Resolution.bypassed` is retired with the flag. Old manifests keep the `bypass_detection` key, unread.
+**A claim-decided card resolves at rung 1.** There is no new stage and no new reason code. Rung 1 means *the claim determined*. The contradictions detection would have raised are set aside before they reach rung 3. `Resolution.bypassed` is retired with the flag. `trust_claim`, `--bypass`, `Resolution.bypassed`, the manifest keys (kept, unread, on old runs) and the reason code are gone. The 16 events stay under a retired label. An entry the old rung queued is released on the next join, since the card now resolves.
 
 ### Emit reads the decision back
 

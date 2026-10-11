@@ -62,7 +62,8 @@ sit under them, for launchd and for `make`.
   how to make it permanent.
 - `make launch-agent` installs the login note. `ARGS=--remove` takes it down. `up` does not touch it.
 - `--restart` keeps `--confirm` on the main checkout. The thing on `:8000` there is the owner's,
-  possibly mid-capture. A session that bounced it once cut a write in flight.
+  mid-capture. A session that bounced it once cut a write in flight. Fewer words does not mean
+  fewer guards.
 
 ## 3. The static serve
 
