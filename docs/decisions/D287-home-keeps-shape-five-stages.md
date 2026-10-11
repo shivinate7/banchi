@@ -1,10 +1,6 @@
 ## D287 — Home keeps shape; five stages
 
-**Wave 2, home lane, 2026-09-24. Amends D121.** The owner's ruling on this lane was short and
-specific. Quoted here: *"Keep Home as is". The Home button stays, and the "Behind that"
-repeats are cut. box lists most recent first. box names only, never a box number. Runs FOLDS
-INTO REVIEW (2026-09-24), so Home's six-stage strip becomes five: the Runs tile goes. Point its
-identify count at Review. Do not redesign the hero.* This entry records what that ruling
+**Amends D121.** The owner's ruling on this lane was short and specific: keep Home as is. The Home button stays, and the "Behind that" repeats are cut. Box lists are most recent first. Boxes show names only, never a box number. Runs folds into Review, so Home's six-stage strip becomes five: the Runs tile goes. Point its identify count at Review. Do not redesign the hero. This entry records what that ruling
 changed in `app/src/standing.ts` and `app/src/Home.tsx`. It records nothing the ruling did not
 name.
 
@@ -37,12 +33,12 @@ The sentence names copies this store cannot find, across every open order. The p
 Orders on the buyer list's "Show" facet, as `#/orders?show=<facet>`. `standing.ts` builds that
 `href`.
 
-Amended at the PR 2 integration, 2026-09-25, on the orchestrator's word. The first build set a
+Amended at the PR 2 integration, on the orchestrator's word. The first build set a
 per-reason filter (`OrdersHubStore.setHub`) before the press navigated. The orders lane removed
 that filter. The buyer list now filters only on each buyer's worst open order (UX-199). So the
 press now names a facet in the URL (D285), and it sets no shared state.
 
-Amended a second time at the PR 2 integration review, 2026-09-25. The first mapping read the
+Amended a second time at the PR 2 integration review. The first mapping read the
 line REASON: `short` and `no_copies_on_hand` went to `show=short`. But `statusOf` files a
 no-copies line under "Needs a look" unless a copy was recorded for it. On the owner's store,
 Home said "135 copies missing across 71 orders" and opened `show=short`. That list held 6 buyers
@@ -53,8 +49,7 @@ The second build filed each buyer under `worstStatus` and opened the "Show" face
 most missing copies. On the owner's store that still split the copies across two facets (125
 under "Needs a look", 10 under "Short"), so no single status list matched the sentence.
 
-Amended a third time, 2026-09-25, on the owner's word (option c, verbatim): "New 'missing a
-copy' filter". The build now:
+Amended a third time, on the owner's word (option c): a "missing a copy" filter. The build now:
 
 - One rule, `orderBuyers.ts`'s `groupMissing`: a buyer's missing copies are the `outstanding`
   copies on its open orders (D121), and its missing orders are the open orders with any.
@@ -72,7 +67,7 @@ rows, and requires exactly 6 copies and 3 orders. The old code opened `show=look
 `app/tests/orders.spec.ts` checks the option's count, its list, and that it is not offered while
 no buyer owes a missing copy.
 
-### Five stages, not six (Q6, 2026-09-24)
+### Five stages, not six (Q6)
 
 Runs folded into Review. Review's own screen gains an "Identify N cards, ~$X" strip, and the
 Runs tile leaves the spine. Home's Review tile now falls back to the count of cards
@@ -80,8 +75,7 @@ photographed and never sent to a run (`status.states.captured`). It does this th
 own queue is answered. That backlog is never invisible for want of a tile — exactly what the
 removed Runs tile used to carry. `#/runs` stays a registered route. Nothing here removes it.
 
-### Box lists are most recent first (Q5), and a box is shown by its name (2026-09-23 ruling)
-
+### Box lists are most recent first (Q5), and a box is shown by its name
 The Boxes panel now sorts by `deviceMemory.ts:storedBoxRecency()`. That is the same store
 `BoxBrowse`'s own rail and `CaptureScreen`'s own picker read (D142). Then it sorts by cards on
 hand, then by number, read once on mount. No box on this screen draws its bare number any more.
@@ -91,8 +85,7 @@ names, now draw the box's NAME. That is `box.name`, or the owner's own endorsed 
 
 The Capture tile is relabelled to match what it actually shows: the newest box's own card
 count, and its name in the note. It no longer implies that it is the box the operator is
-capturing into right now. The owner's D142 note said *"Home's tile is relabelled to what it
-shows"*.
+capturing into right now.
 
 ### Two smaller fixes, in the same files
 
@@ -113,7 +106,7 @@ lands.
 
 **The hero.** The greeting, the date, the button and the deck keep their shape and their copy.
 TXT-28 and UX-129, both about the hero's own layout, are UNFIXED by name. The owner's ruling
-was "keep Home as is" and "do not redesign the hero". A bigger title, or a smaller greeting, is
+was to keep Home as is and not to redesign the hero. A bigger title, or a smaller greeting, is
 exactly that.
 
 **UX-021.** Home's one button (`Start capturing`) stays the primary action, regardless of what

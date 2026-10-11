@@ -1,7 +1,6 @@
 ## D76 — A set hint's width is per-game
 
-**A set filter needs the box to be unanimous, and the game decides whether to narrow at all.** Built 2026-08-31.
-
+**A set filter needs the box to be unanimous, and the game decides whether to narrow at all.**
 D65 scoped the export by the set hints the box's own cards carry. The reasoning — widening is always safe, narrowing is not — is right, and the rule built from it counted the wrong thing.
 
 ### The defect
@@ -48,7 +47,7 @@ D65 scoped the export by the set hints the box's own cards carry. The reasoning 
 
 ### Three fields of the request are instructions, and they are guarded as such
 
-**`ExcludeListos` is `True` — listings with photos are excluded.** The owner's standing instruction, 2026-08-31, and it stands on that rather than on an argument this repo can check.
+**`ExcludeListos` is `True` — listings with photos are excluded.** This is a standing instruction from the owner. It stands on that rather than on an argument this repo can check.
 
 **What the flag does to the file is NOT measured, and the entry says so rather than reasoning past it.** The name is read off the portal's own bundle. Nothing here has run the same request both ways to see what moves. The plausible mechanism is a guess. A seller-photo listing is usually a specific copy at a premium. So excluding them changes what the low-price columns aggregate. The export carries four price columns: `TCG Market Price`, `TCG Direct Low`, `TCG Low Price With Shipping`, `TCG Low Price`. They are TCGplayer's own, with no published rule for which listings feed them. Recorded as an open measurement rather than dressed as a finding. One authenticated fetch each way, diffed, would settle it.
 
@@ -58,7 +57,7 @@ D65 scoped the export by the set hints the box's own cards carry. The reasoning 
 
 **So the three are hoisted into `STANDING_FILTERS` and spread last**. A re-capture of the portal's body cannot silently paste over them. `scripts/docs-audit.py`'s `export request` row blocks the commit on any value that has moved. It names the instruction rather than the literal. Somebody who has just changed a value already knows what the literal is. T7 asserts all three on the wire. That is the half a literal check cannot reach.
 
-**The first fetch after this lands will refuse `export_narrower`, correctly.** It removes rows a previous export carried, which is the guard doing its job. `accept_narrower` is the honest answer once. The baseline moves with it (retired 2026-09-02).
+**The first fetch after this lands will refuse `export_narrower`, correctly.** It removes rows a previous export carried, which is the guard doing its job. `accept_narrower` is the honest answer once. The baseline moves with it (retired).
 
 **The rarity and condition axes stay unspent.** `Scope` carries `rarity_ids` and `condition_ids`, and both remain empty. D65 measured that a condition filter thins a number's rows. D3 rung 2 then decides a card from whichever row survived. A rarity claim is per-card. It would inherit the exact partial-claim defect this entry fixes.
 

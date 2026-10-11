@@ -1,6 +1,6 @@
 ## D155 — The section ruler leads the box
 
-**Settled 2026-09-11, on the owner's two sentences about their own copies list.** *"The interface/view of the box is nicer than section"*, and the lens between the two scales is *"more noise than useful"*. The section scale is promoted to a full-width graduated 26px ruler. It has a fill, a pin that crosses it, and the section's own bounds written inside its two ends. The box scale is demoted to an 8px strip of chips with a caret on the chip the card is in. The SVG trapezoid is deleted outright, with nothing drawn in its place. **The component's total height is unchanged at 73px, so no row on `#/inventory` moves by a pixel.**
+**Settled on the owner's two remarks about the copies list.** The box view is nicer than the section view. The lens between the two scales is more noise than useful. The section scale is promoted to a full-width graduated 26px ruler. It has a fill, a pin that crosses it, and the section's own bounds written inside its two ends. The box scale is demoted to an 8px strip of chips with a caret on the chip the card is in. The SVG trapezoid is deleted outright, with nothing drawn in its place. **The component's total height is unchanged at 73px, so no row on `#/inventory` moves by a pixel.**
 
 **The praise of the box view is a praise of STRUCTURE, and that is what the section is given.** The box track is nicer because it has chips, boundaries, a thing you can point at. The section track was a flat 8px bar with a 2px dot on it. A flip that only made the section TALLER would have produced a bigger flat bar. That answers the wrong half of the sentence. So the section gets graduations, a fill, a pin and its own bounds. The box keeps chips at a smaller scale, which is the honest cost of the instruction.
 
@@ -32,7 +32,7 @@
 
 ### The `spans.length > 1` gate goes, and a paragraph of DESIGN.md becomes true
 
-**An undivided box gains the ruler.** `docs/DESIGN.md` has ruled since 2026-08-29 that two agreeing scales in an undeclared box are "the truth rather than a redundancy to design away". That paragraph has been describing something the code does not do, since it was written. `spansOf` returns ONE span for an undeclared box, and the gate failed. Under the flip, keeping the gate would have left the owner's largest undivided box drawing only an 8px strip. That box holds 133 cards and no dividers. The result: **the biggest box on the smallest picture.** The cost is named rather than reframed. Such a box now spends 26px saying one fact twice. The two objects are told apart only because one has graduations and no chips. The other has chips and no graduations.
+**An undivided box gains the ruler.** `docs/DESIGN.md` has ruled that two agreeing scales in an undeclared box are "the truth rather than a redundancy to design away". That paragraph has been describing something the code does not do, since it was written. `spansOf` returns ONE span for an undeclared box, and the gate failed. Under the flip, keeping the gate would have left the owner's largest undivided box drawing only an 8px strip. That box holds 133 cards and no dividers. The result: **the biggest box on the smallest picture.** The cost is named rather than reframed. Such a box now spends 26px saying one fact twice. The two objects are told apart only because one has graduations and no chips. The other has chips and no graduations.
 
 ### The assertion that encoded the old priority is reversed in place
 
@@ -48,11 +48,7 @@
 
 ### What is given up
 
-**The box strip is 33% shorter and loses its head**, because a 7px dot on an 8px strip IS the strip. A 22-section box at a 294px bar gives about 11px chips, which is fine; the retire dialog at 194px gives about 7px, which is marginal. **This is the cost of the instruction, not a side effect of it.** The box caption also drops from `--bn-ink-2` to `--bn-ink-3` where the ruler is drawn, so anyone whose first question is "which drawer" reads past two bands to get there. **The graduations are a countable scale only when the section holds 24 cards or fewer** — on box 2 that is one section of five; above it they are a texture that says "this bar has a scale" without letting you read a number off it, and the claim should not be overstated. **And the fill reads one card short by convention**: `marker` is `(slot - 1) / of`, the server's own `fraction` rule, so the fill means "counted past" and a card at slot 1 draws an empty bar.
-
-**The graduations are a countable scale only when the section holds 24 cards or fewer.** On box 2, that is one section of five. Above 24 they are a texture. That texture says "this bar has a scale" without letting you read a number off it. The claim should not be overstated.
-
-**And the fill reads one card short by convention**: `marker` is `(slot - 1) / of`, the server's own `fraction` rule. So the fill means "counted past". A card at slot 1 draws an empty bar.
+**The box strip is 33% shorter and loses its head.** A 7px dot on an 8px strip is the strip. A 22-section box at a 294px bar gives about 11px chips, which is fine. The retire dialog at 194px gives about 7px, which is marginal. **This is the cost of the instruction, not a side effect of it.** The box caption also drops from `--bn-ink-2` to `--bn-ink-3` where the ruler is drawn. Anyone whose first question is "which drawer" reads past two bands to get there. **The graduations are a countable scale only when the section holds 24 cards or fewer.** On box 2, that is one section of five. Above 24 they are a texture. That texture says "this bar has a scale" without letting you read a number off it. The claim should not be overstated. **The fill reads one card short by convention.** `marker` is `(slot - 1) / of`, the server's own `fraction` rule. So the fill means "counted past". A card at slot 1 draws an empty bar.
 
 ### Two collisions the design did not predict, found by looking at it
 
@@ -62,21 +58,21 @@
 
 **These two are the receipt for the design's own tenth caveat**, which said every figure in it was arithmetic off the stylesheets and that nothing had been rendered. Six images at three widths in two themes settled the other eight — the gradient aliasing is not visible, the minor graduations survive over the fill in dark, the 10px edge labels are legible at both themes, the 4px caret is visible, and a 26px ruler over an 8px strip reads as one inverted pair.
 
-### Amendment, 2026-09-25: the box strip could pass its own card, and the two scales swap order
+### Amendment: the box strip could pass its own card, and the two scales swap order
 
-**The owner's report:** `"i notice sections can pass the width of their container (wb1 R2 has 12 sections but only 11 show on a card's locator)."` The chip floor here was `min-width: 3px`. That is legible for one digit. A two-digit section number loses its second digit instead. At the box's own right edge, a clipped chip reads as the ruler running off the card. That is what the owner saw.
+**The owner's report:** sections can pass the width of their container (WB1 R2 has 12 sections, but only 11 show on a card's locator). The chip floor here was `min-width: 3px`. That is legible for one digit. A two-digit section number loses its second digit instead. At the box's own right edge, a clipped chip reads as the ruler running off the card. That is what the owner saw.
 
 **The fix raises the floor to `min-width: 20px` under `[data-depth]`.** That is room for two tabular-nums digits at `--bn-fs-2xs`. Past that floor, `.position-bar-track` scrolls inside itself. It is the box strip only, never `.position-bar-sectiontrack`. `PositionBar.tsx` centres the current section into that scroll on mount and on every place change. It sets the track's own `scrollLeft` directly.
 
 It does not call `Element.scrollIntoView`. That method walks every scrollable ancestor looking for one to move. On this page it reached `window` and broke `inventory.spec.ts`'s "a walk-to scrolls the walk and never the page". `data-fade-back`/`data-fade-front`, measured off the track's real scroll position, mask whichever edge still has sections hidden past it. `app/tests/section-ruler.spec.ts` proves the strip never exceeds its own scroll width at 12 and 30 sections. It also proves a box past the shrink floor (60 sections) both scrolls and keeps the current section fully in view. This is mutation-checked: reverting the CSS turns the extreme case red.
 
-**The same day, a second message widened the ask**, verbatim: `"there's in an ineffective use of space here, the icons are small, i think we can make` `the card view locator and section view locator wiithin the box be larger/ more intuitive (also card view locator should be BELOW section view locator)."` Three of the four asks are built:
+**A second message the same day widened the ask.** Space is used ineffectively. The icons are too small. The card and section view locators within the box should be larger and more intuitive. The card view locator should sit BELOW the section view locator. Three of the four asks are built:
 
 - **Order**: the box strip and its `Section N of M` caption now sort ahead of the card-level ruler. Three `order` integers rotated in `PositionBar.css`. DOM order stays untouched, for the reason the comment above already gives. The spec's `querySelector('.position-bar-track')` depends on it.
 - **Icons**: the row form's `IconButton`s (`Mark sold`, `Retire`, `Move`) rose from `size="sm"` (24px face) to the kit's default `size="md"` (28px face). That change is in `Inventory.tsx`'s `Action`. `sm` was already the phone floor's own number under `tokens.css`'s coarse-pointer media query. So the complaint was read as a desktop one too.
 - **Whitespace**: `.card-locations-action` moved from the row's inherited `align-items: center` to its own `align-self: start`. That closes the gap the owner named as *above* the icons. The row's tallest cell is `.card-locations-place`, top-heavy with the big slot numeral. Centring against it left most of the air above the shorter action cell.
 
-**First round: two duplicates fell, one is a ruling and stays.** The owner named three. `Section 1` sat in the big header and again in the ruler's own caption head. `#17` sat in `PlaceNeighbors`' "this" row against `card 17 of 39` in the ruler's tail. The word `back`/`front` sat in both `PlaceNeighbors` and `PositionBar`'s own `.position-bar-ends-row`. A first pass found each pinned by an existing test. It stopped all three there, treating a test as a ruling. The owner corrected that: `"the owner's message IS the word ... a spec assertion that pins today's duplicated text is not a ruling."` `scripts/decision-context.py` on `PlaceNeighbors.tsx` and `PositionBar.tsx` was checked again. This time it was for which duplicate a DECISION pins, not which a spec pins.
+**First round: two duplicates fell, one is a ruling and stays.** The owner named three. `Section 1` sat in the big header and again in the ruler's own caption head. `#17` sat in `PlaceNeighbors`' "this" row against `card 17 of 39` in the ruler's tail. The word `back`/`front` sat in both `PlaceNeighbors` and `PositionBar`'s own `.position-bar-ends-row`. A first pass found each pinned by an existing test. It stopped all three there, treating a test as a ruling. The owner corrected that. The owner's message is the ruling. A spec assertion that pins today's duplicated text is not a ruling. `scripts/decision-context.py` on `PlaceNeighbors.tsx` and `PositionBar.tsx` was checked again. This time it was for which duplicate a DECISION pins, not which a spec pins.
 
 **`back`/`front` IS pinned, by D260, and stays.** D260's own built section: `"app/src/PositionBar.tsx: ... back and front are written under both. ... app/src/PlaceNeighbors.tsx draws back, this card, front."` Its rules section: `"Each drawing of a box or a section marks the far back (card 1) and the near end (the highest number)."` Two components each marking the far end is the ruling. It is not an accident two tests happened to pin. This one item stays, and only this one.
 
@@ -84,9 +80,9 @@ It does not call `Element.scrollIntoView`. That method walks every scrollable an
 
 **Second round: both rulers are taller, spent from the height freed.** `--pb-track` (the box strip) rises from 14px to 18px. `--pb-rule` (the card-level ruler) rises from 26px to 32px, under `[data-depth]`. That is +12px total on `PositionBar`'s own height. D119's fold assertions are the ground truth here, not a manual pixel count. `inventory.spec.ts`'s `toBeInViewport({ ratio: 1 })` on `.card-locations-row.is-current` stayed green at the new height. So did `the card panel holds one height for the whole walk`. The panel's own band had this much slack to spend. The dedup above argued the size increase would not read as clutter. It did not mechanically produce the twelve pixels. The two are one round because the owner asked for both together.
 
-### Amendment, 2026-09-25: Direction B, built into the real components
+### Amendment: Direction B, built into the real components
 
-**The owner reviewed two rendered mockups of the whole locator block.** These covered the header, BACK/THIS/FRONT, the action icons and both rulers. The owner picked one, verbatim: `"B, large ruler (Recommended)"`. Direction B keeps both rulers at their larger, graduated size. It also rebuilds the row's own place line as one sentence. Three corrections came with the pick.
+**The owner reviewed two rendered mockups of the whole locator block.** These covered the header, BACK/THIS/FRONT, the action icons and both rulers. The owner picked Direction B, the large ruler. Direction B keeps both rulers at their larger, graduated size. It also rebuilds the row's own place line as one sentence. Three corrections came with the pick.
 
 **No typed middle dot.** The mockup wrote `"WB1 R2 · Section 1 · Card 5 of 39"` as one string. D218 forbids a typed separator. The build draws each fact as its own `.card-locations-identity-fact` span. `CardLocations.css` then draws the dot in CSS, on the sibling selector. It never lives in a string `user-strings.mjs` can find.
 
@@ -107,19 +103,19 @@ static-fixture test never does. Reverted to a `.bak` copy of `Inventory.tsx`, th
 red. It read 186px after the sale against a real 190px before it. Restoring the fix turned it
 green again.
 
-**Corrected 2026-09-25, a lane review's finding.** An earlier draft of this entry named a different test for both fixes. The test was `"every copy row draws the same bar height, located or not"`. That test's own fixture carries no undoable row at all. It never could have caught the icon fix. The caption fix needs no mutation-proof of its own. The caption is retired from every render path. `PositionBar.tsx` no longer has a branch left to take. That is a stronger guarantee than a passing runtime check.
+**Corrected by a lane review.** An earlier draft of this entry named a different test for both fixes. The test was `"every copy row draws the same bar height, located or not"`. That test's own fixture carries no undoable row at all. It never could have caught the icon fix. The caption fix needs no mutation-proof of its own. The caption is retired from every render path. `PositionBar.tsx` no longer has a branch left to take. That is a stronger guarantee than a passing runtime check.
 
 **A third defect, in contrast rather than layout, turned up along the way.** `.card-locations-identity`'s ink went through `--bn-ink-3`, and that failed the dark theme's axe sweep. `--bn-ink-2` failed light instead. `--bn-ink` passes both. The same sweep (`gallery.spec.ts`) then flagged two stale `AXE_KNOWN` entries. They were `.position-path` and `.position-key`. They were flagged once the contrast fix removed the violation they were excusing.
 
-**The ruler sizes settle at `--pb-track: 22px`, `--pb-rule: 40px`, `--pb-cap-sect: 18px`.** That is up from this file's 2026-09-23 amendment, `18px`/`32px`/`18px`. A first attempt at `26px`/`48px` broke D119's fold check by roughly 12 to 14 pixels. `.card-locations-row.is-current` no longer held `toBeInViewport({ ratio: 1 })` on `#/inventory`'s seeded screen. Dialing back to `22px`/`40px` passed the same test again.
+**The ruler sizes settle at `--pb-track: 22px`, `--pb-rule: 40px`, `--pb-cap-sect: 18px`.** That is up from this file's earlier amendment, `18px`/`32px`/`18px`. A first attempt at `26px`/`48px` broke D119's fold check by roughly 12 to 14 pixels. `.card-locations-row.is-current` no longer held `toBeInViewport({ ratio: 1 })` on `#/inventory`'s seeded screen. Dialing back to `22px`/`40px` passed the same test again.
 
-**The net cost against D119's budget is zero.** The row stays inside the fold at the settled size, so nothing here trades away silently. The settled sizes are still clearly larger than the pre-2026-09-23 baseline, `12px`/`26px`, which is what "B, large ruler" asked for.
+**The net cost against D119's budget is zero.** The row stays inside the fold at the settled size, so nothing here trades away silently. The settled sizes are still clearly larger than the earlier baseline, `12px`/`26px`, which is what "B, large ruler" asked for.
 
-**The row form's action icons rose to `size="xl"`, the kit's own 40px ceiling.** That is past the first round's `md` (28px). The owner's plain "the icons are small" still read true after that round. No new pixel value was invented. `xl` is a size the kit already defines.
+**The row form's action icons rose to `size="xl"`, the kit's own 40px ceiling.** That is past the first round's `md` (28px). The owner's complaint that the icons were small still held after that round. No new pixel value was invented. `xl` is a size the kit already defines.
 
 **Proof.** `app/tests/section-ruler.spec.ts`, `inventory.spec.ts`, `locating.spec.ts`, `scaffold.spec.ts` and `gallery.spec.ts` all pass after this amendment. Screenshots at 1440 and 390, in light and dark, sit in `scratchpad/report/after-b/`. They are for this round's own review. They were not committed.
 
-### Amendment, 2026-09-25 (round two): five gaps against the mockup, closed
+### Amendment (round two): five gaps against the mockup, closed
 
 **The first build was not Direction B.** It kept the old three-row `back`/`this`/`front` ladder. It kept small bare icons with a gap above them. It carried a real layout bug, a thin card ruler, and a header in the wrong order. The coordinator named five gaps against `direction-b-1440-dark.png`. Each is closed below.
 

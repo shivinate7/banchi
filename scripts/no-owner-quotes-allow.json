@@ -25,13 +25,6 @@
         "verbatim:"
       ]
     },
-    "docs/decisions/D155-the-section-ruler-leads-the-box.md": {
-      "lane": "cut pass",
-      "marker": [
-        "verbatim:",
-        "verbatim:"
-      ]
-    },
     "docs/decisions/D164-undo-covers-the-whole-sitting.md": {
       "lane": "cut pass",
       "marker": [
@@ -48,13 +41,6 @@
       "lane": "cut pass",
       "marker": [
         "The owner's words"
-      ]
-    },
-    "docs/decisions/D220-orders-is-inventory-s-screen.md": {
-      "lane": "cut pass",
-      "marker": [
-        "verbatim:",
-        "verbatim:"
       ]
     },
     "docs/decisions/D241-early-catalogue-check-is-unbuilt.md": {
@@ -78,12 +64,6 @@
         "The owner's words",
         "The owner's words",
         "The owner's words",
-        "verbatim:"
-      ]
-    },
-    "docs/decisions/D287-home-keeps-shape-five-stages.md": {
-      "lane": "cut pass",
-      "marker": [
         "verbatim:"
       ]
     },

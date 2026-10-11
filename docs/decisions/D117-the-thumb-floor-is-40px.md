@@ -1,10 +1,6 @@
 ## D117 — The thumb floor is 40px
 
-**Built 2026-09-07, on the owner's instruction to review the mobile build.** CLAUDE.md has
-published two floors for this width since the Banchi rebuild and neither had a reader: *"Look at
-it at 1440, 820 and 390 … No horizontal page scroll at 390"* and *"anything a thumb presses is
-40px or more. The control-height tokens raise themselves under 767px and on a coarse pointer, so
-do not hand-roll a mouse-sized control on a phone."* Twenty-five controls hand-rolled one.
+**Built on the owner's instruction to review the mobile build.** CLAUDE.md set two floors for this width at the Banchi rebuild. Neither had a reader. Look at every screen at 1440, 820 and 390. No horizontal page scroll at 390. Anything a thumb presses is 40px or more. The control-height tokens raise themselves under 767px and on a coarse pointer. Do not hand-roll a mouse-sized control on a phone. Twenty-five controls hand-rolled one.
 
 **NOTHING IN `app/tests/` COULD HAVE SEEN IT.** `nav.spec.ts` scopes itself to `.bn-side` on
 purpose. `cursor.spec.ts` harvests its routes from `.bn-side a.bn-nav-link`, which is
@@ -70,13 +66,8 @@ the tab bar's height plus the safe area for exactly that. "Anything sticky" woul
 bar, which is the case this file exists to catch; "anything fixed" would miss `#/gallery`'s own
 sticky index strip. Three strips are written out in the spec and a fourth is a deliberate edit.
 
-**AND THE NAMED LIST WAS THE WRONG SHAPE (amended 2026-09-11).**
-It took five weeks and a red `main` to show. `#/inventory` failed this file's own case on the CI
-runner and passed on this Mac: the queued notice's `Open the review queue` missed its BOTTOM
-probe to `button.browse-boxchip`, a control 450px away from it in document flow. Nothing was
-crowding it. `.browse-mobilebar` is `position: sticky; top: var(--bn-topbar-h)`, so the link is
-overlapped only while it scrolls UNDER that bar, and which offsets the sweep samples is a
-function of font metrics — 143x16 on this rig, 148x16 on the runner.
+**AND THE NAMED LIST WAS THE WRONG SHAPE.**
+It took five weeks and a red `main` to show. `#/inventory` failed this file's own case on the CI runner. It passed on this Mac. The queued notice's `Open the review queue` missed its BOTTOM probe to `button.browse-boxchip`. That control sat 450px away in document flow, and nothing was crowding it. `.browse-mobilebar` is `position: sticky; top: var(--bn-topbar-h)`. So the link is overlapped only while it scrolls UNDER that bar. Which offsets the sweep samples depends on font metrics: 143x16 on this rig, 148x16 on the runner.
 
 **THE PROPERTY THIS SWEEP IS FOR IS THE ONE STATED ABOVE, AND WHAT IT ASKED WAS NARROWER.**
 "Impossible to press at any scroll position" is the property; what the sweep asked was whether
@@ -118,22 +109,7 @@ Mutation-tested, four arms, all red: the notice link's own pad deleted (a real 1
 crowding case, the one the probe was built for — and a fixed bottom bar grown to 60% of the
 viewport over content that cannot be scrolled clear of it.
 
-**AMENDED 2026-09-13: A COVERED CENTRE NOW FAILS ON ITS OWN, WHICH CLOSED HALF OF DEBT22 AND LEFT THE OTHER HALF NAMED.** The capture screen's shutter sat half under
-the phone tab bar on first paint — every one of its four corner probes AND its own centre
-landed inside `.bn-tabbar`, and `owns()`'s `chrome(n)` clause forgave every one of them, exactly
-as it is supposed to for a control legitimately scrolling PAST fixed chrome on its way up a
-route. The shutter was not scrolling past it; it was sitting behind it, on first paint, with no
-scroll at all — and this file could not tell the two apart, because `covered` (the CENTRE
-hit-test) reused the same forgiving `owns()` and its result drove nothing: `fails` read the four
-corner probes' `misses` alone, so a control whose centre AND every probe were all forgiven by
-`chrome()` reported clean. `centreOwns()` is `owns()` with `chrome(n)` dropped — `t.contains(n)`
-and `n.contains(t)` stay, because those cover a legitimate padded wrapper and a control cannot
-be COVERED by its own descendant or its own ancestor in the sense this check is for — and
-`covered` now uses it and now drives `fails` for probe mode. Proved red against the unfixed
-CaptureScreen.css (D205) and green with the fix;
-this file's other three cases — every owner route, the shell's three surfaces, the two sheets —
-still pass with the tightened predicate, so nothing legitimately scrolling under `.bn-topbar` /
-`.bn-tabbar` / `.kit-index` elsewhere in the product got newly flagged.
+**AMENDED: A COVERED CENTRE NOW FAILS ON ITS OWN. THIS CLOSED HALF OF DEBT22 AND LEFT THE OTHER HALF NAMED.** The capture screen's shutter sat half under the phone tab bar on first paint. All four corner probes and its own centre landed inside `.bn-tabbar`. `owns()`'s `chrome(n)` clause forgave every one of them. That clause is correct for a control scrolling PAST fixed chrome on its way up a route. The shutter was not scrolling past. It sat behind the bar, with no scroll at all. This file could not tell the two apart. `covered` read the CENTRE hit-test with the same forgiving `owns()`, and its result drove nothing. `fails` read the four corner probes' `misses` alone. So a control whose centre and every probe were forgiven reported clean. `centreOwns()` is `owns()` with `chrome(n)` dropped. `t.contains(n)` and `n.contains(t)` stay, because those cover a legitimate padded wrapper, and a control cannot be COVERED by its own descendant or its own ancestor in the sense this check is for. `covered` now uses `centreOwns()`, and it drives `fails` for probe mode. Proved red against the unfixed `CaptureScreen.css` (D205) and green with the fix. This file's other three cases (every owner route, the shell's three surfaces, the two sheets) still pass with the tightened predicate. Nothing that legitimately scrolls under `.bn-topbar`, `.bn-tabbar` or `.kit-index` got newly flagged.
 
 **THE `n.contains(t)` CLAUSE DEBT22 ACTUALLY OPENED WITH IS UNCHANGED, RE-MEASURED THE SAME DAY.** `.browse-boxchip` shrunk to 20px against the tightened file: still green. A
 shrunk control's own centre stays inside its own smaller box — nothing is covering it, so

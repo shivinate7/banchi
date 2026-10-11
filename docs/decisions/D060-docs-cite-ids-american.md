@@ -1,6 +1,6 @@
 ## D60 — Docs cite; identifiers use American spelling
 
-**The three referenced docs are read on demand rather than loaded in full, and their prose is dense American technical English.** Built 2026-08-30, on the owner's instruction to rewrite the prose denser; amended the same day when the measurement showed where the cost actually was.
+**The three referenced docs are read on demand rather than loaded in full, and their prose is dense American technical English.** Built on the owner's instruction to rewrite the prose denser. Amended when the measurement showed where the cost actually was.
 
 `CLAUDE.md` `@`-references the decisions file, `docs/GATES.md` and `docs/DESIGN.md`, so all four enter context in every checkout, on every turn, before a word of work. Measured the day this landed: **635,411 bytes, roughly 165,000 tokens.**
 
@@ -64,9 +64,9 @@ Frozen because a parser reads them. The list: the `## D<n> — <title>` heading 
 
 **What would reopen this: a session that reasons from the index alone.** The index names 60 entries and argues none of them. If decisions start being cited from their titles, or worse, re-litigated because nobody opened the entry, the answer is not a longer index. The honest answer is a louder instruction, and `CLAUDE.md` is where it would go.
 
-### Amended 2026-09-11 — every identifier is American, and prose outside these four docs is not governed
+### Amended — every identifier is American, and prose outside these four docs is not governed
 
-**Every identifier in the repository is spelled American; comments, docstrings, string literals and markdown outside the four docs this entry already governs are left as they are.** Ruled by the owner on 2026-09-11 during the D133 reversal interview, after `server/pipeline_routes.py:_artefacts` was found beside docs this entry rules American, and after the walk found the decisions file itself flipping the word between the two spellings across PRs #65 and #110.
+**Every identifier in the repository is spelled American.** Comments, docstrings, string literals and markdown outside the four docs this entry governs stay as they are. The owner ruled this during the D133 reversal interview. The trigger was `server/pipeline_routes.py:_artefacts`, found beside docs this entry rules American. The walk also found the decisions file flipping between the two spellings across PRs #65 and #110.
 
 **Measured before the ruling, over 291 tracked source and markdown files.** 1,580 British spellings in 198 files. Of these, 869 are in comments and docstrings across 169 files. 289 are in markdown across 23. 119 are in identifiers across 24. The rest are in string literals. The American side already held wherever the language itself has a say — 1,405 `color` and 463 `center` in CSS, 951 `fulfill`, 868 `catalog`.
 
@@ -78,18 +78,17 @@ Frozen because a parser reads them. The list: the `## D<n> — <title>` heading 
 
 **What landed with it.** The 119 identifiers renamed in place across 24 files include `_artefacts` to `_artifacts`, `summarise` to `summarize`, and `humanise` to `humanize`. They also include `_normalise_origin`, the `cancelled` flags, and the test locals. The three documents that named `_artefacts` followed it.
 
-### Amended 2026-09-27 — Vale retired
+### Amended — Vale retired
 
-Vale was retired 2026-09-27 (L3, owner's ruling: "Retire it, keep American spelling in
-docs-audit"). `docs-audit`'s `identifier spelling` row reads code today, as it always has.
+Vale was retired (L3, owner's ruling: keep American spelling in docs-audit). `docs-audit`'s `identifier spelling` row reads code today.
 It does not yet read markdown prose for spelling — that half is lane L2's work, which waits
 on the owner. Until L2 lands, markdown prose has no spelling reader at all.
 
-### Amended 2026-09-27 — the index is rendered, not hand-typed
+### Amended — the index is rendered, not hand-typed
 
 **CLAUDE.md's hand-typed index is retired. `make map ARGS=--decisions` replaces it.** The
 paragraph above measured the index at 60 lines, 3,929 bytes, the day this entry landed. It grew
-with the corpus and was never re-measured. On 2026-09-27 it read 301 lines, 26,420 bytes —
+with the corpus and was never re-measured. It then read 301 lines, 26,420 bytes —
 over six times its own stated size, and `docs/decisions/` had grown from 60 entries to 301.
 
 A rendered view cannot drift, because there is no second copy of the corpus's own headings

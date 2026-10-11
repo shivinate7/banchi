@@ -469,7 +469,7 @@ def check_identifier_spelling(report: Report) -> None:
             findings.append(
                 Finding(
                     f"{rel(path)}:{line}",
-                    f"`{name}` carries the British `{british}`; D60 (amended 2026-09-11) "
+                    f"`{name}` carries the British `{british}`; D60 (amended) "
                     f"spells every identifier American — `{american}`. A name that is "
                     f"stored or on the wire is not renamed: allow-list it by name in "
                     f"SPELLING_ALLOWED with the reason.",

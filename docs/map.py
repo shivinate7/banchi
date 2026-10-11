@@ -8253,7 +8253,7 @@ COMPONENTS = [
                                         "only OFFERS to, via a reserved chip; a changed status "
                                         "or hide-unknown toggle retakes immediately. "
                                         "`unnamedBuyerLabel` is the one composer for a nameless "
-                                        "buyer's NAME-slot text (D220 amended, 2026-09-20): "
+                                        "buyer's NAME-slot text (D220 amended): "
                                         "`MM-DD-YY_XXXXX` off the group's own `latest` date and "
                                         "the most recent order's id tail — never a typed dot "
                                         "(D218), never the full id.",
