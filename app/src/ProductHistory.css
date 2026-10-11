@@ -242,6 +242,6 @@
 
 /* B7: faint guides and quiet ticks, drawn in the chart's reserved gutters. */
 .producthistory-guide { stroke: var(--bn-line); stroke-width: 1; opacity: 0.5; }
-.producthistory-tick { fill: var(--bn-ink-3); font-size: 10px; }
+.producthistory-tick { fill: var(--bn-ink-3); font-size: var(--bn-fs-2xs); }
 /* Mirrors .bn-money: the kit's Money renders a span, which is invalid inside SVG <text>. */
 .producthistory-tick-price { font-family: var(--bn-font-mono); font-weight: 600; font-variant-numeric: tabular-nums; fill: var(--bn-money); }
