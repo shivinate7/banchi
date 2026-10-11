@@ -774,7 +774,7 @@ export function SendCard({
         </>
       )}
 
-      <div className="send-act" data-more={moreOpen ? 'open' : undefined}>
+      <div className="send-act" inert={!live.answered} data-waiting={live.answered ? undefined : ''} data-more={moreOpen ? 'open' : undefined}>
         <Button
           variant="primary"
           size="lg"

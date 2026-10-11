@@ -20,13 +20,15 @@ import type { LiveCheckAnswer, SendsStatus } from './types'
 export type LiveCheckState = {
   /** The newest status, or null before the first read (and always in the demo, which has none). */
   readonly status: SendsStatus | null
+  /** True once the first read has answered, whether it gave a status or was refused. */
+  readonly answered: boolean
   readonly checking: boolean
   /** What the last check found, for the send card's one sentence. */
   readonly last: LiveCheckAnswer | null
   readonly failure: { code: string; message: string } | null
 }
 
-let state: LiveCheckState = { status: null, checking: false, last: null, failure: null }
+let state: LiveCheckState = { status: null, answered: false, checking: false, last: null, failure: null }
 const listeners = new Set<() => void>()
 let timer: ReturnType<typeof setTimeout> | null = null
 let autoFailed = false
@@ -78,10 +80,10 @@ function schedule(status: SendsStatus): void {
 export async function refresh(): Promise<void> {
   try {
     const status = await sendsStatus()
-    publish({ status })
+    publish({ status, answered: true })
     schedule(status)
   } catch {
-    publish({ status: null })
+    publish({ status: null, answered: true })
   }
 }
 
