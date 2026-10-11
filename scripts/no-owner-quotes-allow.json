@@ -19,18 +19,6 @@
         "The owner's words"
       ]
     },
-    "docs/decisions/D179-shell-mistakes-refused.md": {
-      "lane": "cut pass",
-      "marker": [
-        "verbatim:"
-      ]
-    },
-    "docs/decisions/D213-the-set-is-a-stored-fact.md": {
-      "lane": "cut pass",
-      "marker": [
-        "The owner's words"
-      ]
-    },
     "docs/decisions/D241-early-catalogue-check-is-unbuilt.md": {
       "lane": "cut pass",
       "marker": [
