@@ -10,16 +10,9 @@
     filed it as a Someday item rather than as the missing half of a built feature.
 
     `server/pipeline_routes.py` is its own module because it is the one part of the capture
-    server that can cause money to be spent. **One route does, and it is named for it**:
-    `POST /pipeline/identify` refuses without an explicit `confirm`, and refuses a second run
-    over a capture directory a live run is already reading. The preflight beside it is free
-    and creates no run directory at all. Everything else there — the reads, and
-    `join`/`emit`/`reconcile` — is free and re-runnable, which is D1's two-phase split.
+    server that can cause money to be spent. **One route does, and it is named for it**: `POST /pipeline/identify`. It refuses without an explicit `confirm`, and it refuses a second run over a capture directory a live run is already reading. The preflight beside it is free and creates no run directory at all. Everything else there — the reads, and `join`/`emit`/`reconcile` — is free and re-runnable, which is D1's two-phase split.
 
-    **The money step spawns detached and is never awaited**; the free steps answer inside the
-    request with their own stdout attached. A run therefore outlives a restart of the server
-    that started it, which is what makes `GET /pipeline/runs` able to show a run somebody
-    started in a terminal.
+    **The money step spawns detached and is never awaited**; the free steps answer inside the request with their own stdout attached. A run therefore outlives a restart of the server that started it. That is what lets `GET /pipeline/runs` show a run somebody started in a terminal.
 
     `app/src/RunPanel.tsx` draws it UNFOLDED, the owner having overruled the fold on 2026-08-24
     — **on `#/inventory` until 2026-08-29, when D39 gave the pipeline `#/runs` of its own.**
@@ -30,16 +23,7 @@
     the control that spends does not exist.** Absent, not disabled.
 
     **The panel's address moved twice after this step and this paragraph named the first one.**
-    It read "on `#/inventory` — sharing one `.browse-boxrun` row with `BoxOps`", which D38
-    superseded within a day and D39 superseded outright: the pipeline has its own route, `#/runs`,
-    as of 2026-08-29. Corrected rather than left standing, because this is a build-order note
-    about what exists and not a measurement of a run — the numbers in the gate sections above are
-    what this file never rewrites. The case count went with it for the same reason `docs/DESIGN.md`
-    stopped publishing its assertion total: `npx playwright test` owns it.
+    It read "on `#/inventory` — sharing one `.browse-boxrun` row with `BoxOps`". D38 superseded that within a day. D39 superseded it outright: the pipeline has its own route, `#/runs`, as of 2026-08-29.
+    It was corrected rather than left standing. This is a build-order note about what exists, not a result from a run. The numbers in the gate sections above are what this file never rewrites. The case count went with it for the same reason `docs/DESIGN.md` stopped publishing its assertion total: `npx playwright test` owns it.
 
-    **What this step did NOT do**: no run has been started from the app. The panel's preflight
-    and its three free steps have been exercised against the real store — a real `join` of box
-    2 was driven end to end from the screen — but every identification this project has paid
-    for was submitted from a terminal, and `POST /pipeline/identify` has been proven only by
-    its refusals. Recorded here rather than left to be assumed from a green spec, in the same
-    words this file uses for T6's synthetic composites.
+    **What this step did NOT do**: no run has been started from the app. The panel's preflight and its three free steps have been exercised against the real store. A real `join` of box 2 was driven end to end from the screen. But every identification this project has paid for was submitted from a terminal. `POST /pipeline/identify` has been proven only by its refusals. Recorded here rather than left to be assumed from a green spec, in the same words this file uses for T6's synthetic composites.

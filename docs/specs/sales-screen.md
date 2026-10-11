@@ -144,8 +144,8 @@ counts as neither held nor sold, so the route leaves it out.
 
 `GET /stock/mix` returns `{asOf, cards: [...]}`. It lives in one home, `pipeline/stockmix.py`.
 `server/capture_server.py` calls it and nothing else does. It returns card rows only. It reads no
-order and carries no revenue, because the refund rule lives in `salesOf` (D225) and a server sum
-would be a second home for it.
+order and carries no revenue, because the refund rule lives in `salesOf` (D225).
+A server sum would be a second home for it.
 
 - Each card carries small fields only: `game`, `set`, `rarity`, `finish`, `state`, `box`,
   `capturedWeek`, `soldWeek` (null if not sold), `sku` (null if unlisted, the join key to

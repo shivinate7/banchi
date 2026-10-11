@@ -3,18 +3,17 @@
 Provenance and findings for `fixtures/orders-shipping.csv`. Taken **2026-08-30** from the
 seller portal: Orders tab → select all → **Export Shipping**.
 
-This note lives here rather than as a `#` comment inside the CSV for two reasons: every other
-fixture in `fixtures/` starts directly at its header row, so a comment would mean the fixture
-is no longer byte-shaped like the thing it exists to represent; and `.claude/settings.json`
-denies writes under `fixtures/**`, which is a rule worth respecting for a file that is not
-the deliverable. Moving it inline is a one-line change if the owner prefers.
+This note lives here rather than as a `#` comment inside the CSV, for two reasons. First, every
+other fixture in `fixtures/` starts directly at its header row. A comment would mean the fixture
+is no longer byte-shaped like the thing it exists to represent. Second, `.claude/settings.json`
+denies writes under `fixtures/**`. That rule is worth respecting for a file that is not the
+deliverable. Moving it inline is a one-line change if the owner prefers.
 
 ## Real, not hand-authored
 
 The owner declined a hand-authored fixture explicitly. A hand-authored one tests the
-*assumed* format rather than the real one — the failure the multi-game prompt seam nearly
-shipped, where a differently-named identifier field would have parsed cleanly and joined
-nothing.
+*assumed* format rather than the real one. That is the failure the multi-game prompt seam nearly
+shipped. A differently-named identifier field would have parsed cleanly and joined nothing.
 
 ## Shape
 
@@ -44,18 +43,18 @@ separate problems: the resolver needs per-line SKUs and this file cannot supply 
 | `State`, `Country` | kept verbatim |
 | `Order Date`, `Product Weight`, `Shipping Method`, `Item Count`, `Value Of Products`, `Shipping Fee Paid`, `Tracking #`, `Carrier` | kept verbatim, byte-identical to the export |
 
-`Order #` was **stabilized rather than kept**, which is a deviation from the brief's "KEEP"
-list and is recorded here as the brief asked. It resolves to a named buyer inside the seller
-portal — `/orders/<order#>` is a live URL — so 331 real order ids in a committed file are a
-lookup table into buyer identities for anyone with account access, and they survive into
-forks and backups. Nothing is lost: the format is preserved, and for the Pirate Ship emit
-path the order id is a passthrough field.
+`Order #` was **stabilized rather than kept**. That is a deviation from the brief's "KEEP"
+list, and it is recorded here as the brief asked. It resolves to a named buyer inside the seller
+portal: `/orders/<order#>` is a live URL. So 331 real order ids in a committed file are a
+lookup table into buyer identities for anyone with account access. They survive into
+forks and backups. Nothing is lost. The format is preserved. For the Pirate Ship emit
+path, the order id is a passthrough field.
 
 `Address2`'s empty/non-empty split is preserved (26 of 331 non-empty), because that is a real
 shape a reader has to handle.
 
 Verified before commit: **zero overlap** between any real value and its own column in the
-fixture, no surviving city+zip pairing, no `@` anywhere in the file.
+fixture. No surviving city+zip pairing remains. No `@` appears anywhere in the file.
 
 ## Two columns are structurally empty
 
@@ -79,8 +78,8 @@ The weight-per-item ratio takes **five exact values** across the 234 weight-bear
 Every non-singles order is an exact combination of a 0.07 unit and a 2.50 unit — 45.14 oz /
 20 items is 18 × 2.50 + 2 × 0.07, exactly. So TCGplayer assigns a **per-product catalog
 weight** and sums it. The ratio is therefore a proxy for *"does this order contain a
-non-single"*, which is what makes it a usable discriminator and also why it is not evidence
-about a real package.
+non-single"*. That makes it a usable discriminator. It is also why it is not evidence about a
+real package.
 
 **97 of 331 orders (29%) report `Product Weight` of 0.00**, including orders up to $1750.
 That is *absent data, not a light order*. Any consumer must abstain on these rather than read
@@ -102,9 +101,9 @@ Sample: 331 orders, 234 weight-bearing. Log-spaced bins:
 Empty band **(0.0700, 1.2850)** — an **18.4x** separation with nothing whatsoever inside it.
 
 **Cut: 0.30 oz/item**, the geometric midpoint of the empty band (√(0.07 × 1.285) = 0.2999).
-Derived from where the distribution is actually empty rather than picked, per D19's rule that
-the motion trigger was tuned from a real trace and not from a plausible number. At that cut,
-47 of 234 weight-bearing orders flag and the rule abstains on the 97 with no weight data.
+Derived from where the distribution is actually empty, rather than picked. That follows D19's
+rule: the motion trigger was tuned from a real trace, not from a plausible number. At that cut,
+47 of 234 weight-bearing orders flag. The rule abstains on the 97 with no weight data.
 
 **The signal is "heavier than cards alone — check contents". It must never say "contains a
 playmat".** Even at 18x separation that is an inference, and this repo prefers refusal over
@@ -115,11 +114,11 @@ Two limits, named rather than left to be discovered:
 - **It abstains on 29% of orders.** A zero-weight order is unjudgeable, and one of them is a
   $1750 order.
 - **A zero-weight non-card drags the ratio *down*, not up.** Because the weight is a summed
-  catalog constant, an order of one card plus one weightless non-card reads 0.035 oz/item —
-  *below* the singles constant, so it would read as safer than a pure-singles order. No such
-  row occurs in this sample (the minimum is exactly 0.07, confirmed with exact rational
-  arithmetic rather than floats, which reported a phantom sub-0.07 row on the first pass), but
-  the mechanism is real and is a false-negative path.
+  catalog constant, an order of one card plus one weightless non-card reads 0.035 oz/item.
+  That is *below* the singles constant. So it would read as safer than a pure-singles order. No
+  such row occurs in this sample. The minimum is exactly 0.07, confirmed with exact rational
+  arithmetic rather than floats. Floats reported a phantom sub-0.07 row on the first pass. The
+  mechanism is real, though, and is a false-negative path.
 
 This is a **cross-check and a pre-line-data stopgap**, not a dependency. The definitive answer
 comes from line items via the Bridge, and this cut should be retired rather than tuned when
@@ -132,11 +131,11 @@ this format something the code reads, then by D69, which gave it a screen.
 
 It read: *"RECORDED, not BUILT. Nothing reads this file and nothing reads the fixture."*
 **Both halves are now false.** `pipeline/shipping.py` reads this format and routes an order by
-the cut derived above, `pipeline/pirateship.py` writes the Pirate Ship import, and
+the cut derived above. `pipeline/pirateship.py` writes the Pirate Ship import. And
 `harness.tests.t7.shipping.check_shipping_lane` asserts the lane counts against this
-fixture's 331 real orders. Reachability followed within the day: `#/shipping` is in `ROUTES`,
-`POST /shipping/batches` is served by `server/shipping_routes.py`, `app/src/server.ts` carries
-the client functions, and `app/tests/shipping.spec.ts` asserts the screen.
+fixture's 331 real orders. Reachability followed within the day. `#/shipping` is in `ROUTES`.
+`POST /shipping/batches` is served by `server/shipping_routes.py`. `app/src/server.ts` carries
+the client functions. `app/tests/shipping.spec.ts` asserts the screen.
 
 **The intermediate wording — "no route, no client function, and no screen reaches either
 module" — was true for part of one day and false by the end of it**, because D61 and D69

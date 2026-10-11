@@ -96,7 +96,7 @@ card's photo is taken.
   write that is not the next expected one, and any payload off the allow list. Synthetic cases,
   labeled so: ERROR, silence, disconnect mid-loop, Stop while a START is pending (Stop is the next
   write, no START after it). Never replay `bad_card_length.json`.
-- Browser: like `motion-live.spec.ts`, the same fake via an init script. Arm motion, Connect, Start.
+- Browser: like `motion-live.spec.ts`, the same fake through an init script. Arm motion, Connect, Start.
   No box is picked, so the first fire drops and dealing must stop. Also: disabled with its reason in
   Manual; "Needs Chrome" with `navigator.bluetooth` removed.
 - Hardware, manual: load 10 cards, compare cards dealt with the HUD's `fires`.

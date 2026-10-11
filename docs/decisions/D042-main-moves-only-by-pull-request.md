@@ -2,7 +2,7 @@
 
 **`main` moves only by a merged pull request, and two local git hooks enforce it.** Built 2026-08-29, after main moved under live worktrees twice in one day.
 
-`637e2e4` was authored on one session's branch and fast-forwarded into main while three others were working on branches cut from it; `f5dcc2b` was pushed straight to `origin/main` during the session that wrote this entry. `origin/main`'s reflog is five consecutive `update by push`. Nothing in the repo had ever said a session may not do that, and nothing checked.
+`637e2e4` was authored on one session's branch and fast-forwarded into main while three others were working on branches cut from it. `f5dcc2b` was pushed straight to `origin/main` during the session that wrote this entry. `origin/main`'s reflog is five consecutive `update by push`. Nothing in the repo had ever said a session may not do that, and nothing checked.
 
 ### Branch protection was not available here, and is now on (amended 2026-09-06)
 
@@ -15,7 +15,7 @@ merged. `required_status_checks` is null because nothing runs on a PR yet, and
 
 **The hooks stay, and the paragraph below is why.**
 This entry already argued that a remote gate would have caught one of the two incidents and
-been silent through the other; that argument is unchanged, and it is now the reason the two
+been silent through the other. That argument is unchanged. It is now the reason the two
 guards are complementary rather than one superseding the other. Nothing about `make merge`,
 the two local hooks or `BANCHI_MAIN=off` changes.
 
@@ -27,7 +27,7 @@ Measured rather than assumed — both surfaces answered 403:
     GET repos/shivinate7/banchi/branches/main/protection   403
     "Upgrade to GitHub Pro or make this repository public to enable this feature."
 
-Free plan, private repo. Going public is not an option: `CLAUDE.md`'s opsec rule makes a live unredeemed code card a bearer instrument, and this tree carries the enforcement for it. So the server-side gate costs a subscription, and the owner chose the local guard. **They later bought it** — see the amendment above; the repo stayed private, which is what Pro buys and what going public would have cost.
+Free plan, private repo. Going public is not an option. `CLAUDE.md`'s opsec rule makes a live unredeemed code card a bearer instrument, and this tree carries the enforcement for it. So the server-side gate costs a subscription, and the owner chose the local guard. **They later bought it** — see the amendment above; the repo stayed private, which is what Pro buys and what going public would have cost.
 
 **It would not have closed this on its own**, which matters if the plan ever changes. Branch protection bites at `git push`. Both incidents moved main **locally** first, by which point every session cut from main is already on a different history. A gate at the remote would have caught the second and been silent through the first.
 

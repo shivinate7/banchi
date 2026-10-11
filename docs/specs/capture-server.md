@@ -135,7 +135,7 @@ anything else. It does not convert. Re-encoding at capture time is forbidden by 
 
 **Keys.** `sidecar_payload` writes `box`, `index` and the claims. `CLAIM_WIRE_NAMES` maps each
 claim to its wire spelling: `set_hint`, `variant` (the record's `metadata_finish`), `game`,
-`rarity_claim`, `product` and `note`. An empty claim is never written, because absent means no
+`rarity_claim`, `product` and `note`. An empty claim is never written, because absent means that no
 claim (D3, D23).
 
 Write `index` as an integer. Never write `position`. The reader accepts it as an alias, but the

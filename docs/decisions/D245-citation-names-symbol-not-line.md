@@ -79,7 +79,7 @@ citation right.
 number typed into this entry would rot exactly like the citations it describes.
 
 **It was wrong on its first build.** It scored a citation as verified when the file's own
-name appeared inside the file. A citation of line 1192 in `pipeline/join.py` contributed the
+name appeared inside the file. A citation that names line 1192 in `pipeline/join.py` contributed the
 token `join`. **59 of 155 hits, or 38%, were carried by nothing else.** A further 118
 sentences named no real identifier and were folded into the denominator as checkable. That is
 D149's own closing lesson reproduced inside the reader built to honour it. A probe that finds

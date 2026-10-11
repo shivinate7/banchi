@@ -30,8 +30,8 @@ capture port and resolves the host from the address bar.
 
 ### 1.1 Cold start — what serves before the build lands?
 
-A cold `vite build` of this app takes about 1.2 seconds. That figure decides the question. The
-supervisor builds when stale, and the old bundle answers while it does. With no `dist/` at all
+A cold `vite build` of this app takes about 1.2 seconds. That figure decides the question.
+When stale, the supervisor builds, and the old bundle answers while it does. With no `dist/` at all
 (a fresh clone or worktree), it builds before it opens the port.
 
 The capture route never waits on Node. If there is no `dist/` and the build fails, the API comes up anyway. The app path answers one plain sentence in Python, and no page. A build error must not stop the capture server from serving cards. The other process would hold it hostage.
@@ -180,7 +180,7 @@ Two things are keyed by origin in Chrome and both reset once:
 - **Every `localStorage` key** (D27): `banchi.capture.deviceId`, `banchi.capture.rotation`,
   `banchi.theme`, `banchi.rail`, `banchi.orders.fetch-filter` and `banchi.orders.last-check`. The rig
   re-picks its camera and rotation once, and the theme and the rail reset once. There is no
-  migration, because a fallback across origins is not possible.
+  migration, because a fallback across origins is impossible.
 
 `sessionStorage` is per tab. Reinstall between shifts and not mid-capture, for the `captureId`
 reason D27 names.

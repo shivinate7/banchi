@@ -10,4 +10,4 @@
 - **A copy allocated to another stop is refused by the allocation and not by the drawer** (D7). A pooled copy (D24) is refused too, since it has no slot for the aim check.
 - **The choice is session state.** A reload falls back to the resolver's picks with nothing on screen saying so. A take is a statement about the next press, not a fact about the store. A line the resolver could not answer at all is not walkable, since `stopsOf` keeps it out of the queue. The `orderWalk.ts` and `OrderWalkBanner` this was built over were deleted (D97), and the rules stand for a rebuilt pick.
 
-Reopen for a second pair of hands (two people walking one wave each hold a take the other spent), a line the resolver answered short while a copy sat takeable, or a tap that costs a card.
+Reopen for a second pair of hands (two people walking one wave each hold a take the other spent). Reopen also for a line the resolver answered short while a copy sat takeable. Reopen also for a tap that costs a card.

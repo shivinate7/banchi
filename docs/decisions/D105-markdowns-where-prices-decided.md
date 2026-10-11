@@ -2,13 +2,13 @@
 
 **The stale-listing markdown sheet opens from `#/pricing`'s header, not `#/runs`'s.** Moved 2026-09-06 on the owner's objection, in one sentence: *"that's kinda dumb, this should just live in pricing"*.
 
-They are right, and the flaw in D100's placement is nameable rather than a matter of taste. That entry put the sheet beside the store-wide reconcile because the two read the **same file** — TCGplayer's My Pricing export — and argued *"the order of the two buttons is the order of the work"*. That is kinship of **implementation**. `#/runs` is the pipeline over a box that was just photographed: identify, join, emit, and the money gate. A markdown decides a **price** over inventory that is already listed, and this product already has the screen where prices are decided — the one the operator asked for by name when they asked for this feature at all (*"the same pricing sorta setup I get when i'm first listing prices"*, D103).
+They are right, and the flaw in D100's placement is nameable rather than a matter of taste. That entry put the sheet beside the store-wide reconcile. It did so because the two read the **same file**, TCGplayer's My Pricing export. It argued *"the order of the two buttons is the order of the work"*. That is kinship of **implementation**. `#/runs` is the pipeline over a box that was just photographed: identify, join, emit, and the money gate. A markdown decides a **price** over inventory that is already listed. This product already has the screen where prices are decided. The operator asked for that screen by name when they asked for this feature at all (*"the same pricing sorta setup I get when i'm first listing prices"*, D103).
 
-**The sheet's own second step already went here.** `#/pricing?markdown=<stamp>` is where a written worklist is priced, and it was the sheet's terminal press from the day D103 landed. So the flow crossed screens for no reason the operator could see: press a button on Runs, get sent to Pricing, come back to Runs to read another export.
+**The sheet's own second step already went here.** `#/pricing?markdown=<stamp>` is where a written worklist is priced. It was the sheet's terminal press from the day D103 landed. So the flow crossed screens for no reason the operator could see. Press a button on Runs, get sent to Pricing, and come back to Runs to read another export.
 
 ### It lands rather than navigates, and that is a property of the shell
 
-`App.tsx` renders the view under `key={path}`, where `path` is the hash **minus its query**. `#/pricing` and `#/pricing?markdown=<stamp>` are one key, so the sheet's step-2 press does not remount anything: it closes itself, writes the hash, and `Pricing.tsx`'s own `hashchange` listener picks the stamp up. The operator presses **Price these** and the rows appear under them on the screen they are standing on.
+`App.tsx` renders the view under `key={path}`, where `path` is the hash **minus its query**. `#/pricing` and `#/pricing?markdown=<stamp>` are one key. So the sheet's step-2 press does not remount anything. It closes itself, writes the hash, and `Pricing.tsx`'s own `hashchange` listener picks the stamp up. The operator presses **Price these**, and the rows appear under them on the screen they are standing on.
 
 That was true before this move and is what makes the move worth having. On `#/runs` the same press was a screen change.
 
@@ -18,13 +18,13 @@ The obvious reading of the owner's objection is "the two export sheets are on th
 
 `POST /pipeline/reconcile-live` writes `live` onto the store's own listing records (D87) — how many copies TCGplayer holds. That is a fact about **inventory**, and it is settled where the other inventory facts are: beside the join, the emit and the run log. It writes no price and reads no corpus.
 
-Moving both sheets together would have preserved D100's co-location argument while accepting the objection to it — the two would still be siblings, just siblings somewhere else. Splitting them is what actually answers the objection: each sheet went to the screen that owns the kind of fact it writes.
+Moving both sheets together would have preserved D100's co-location argument. It would also have accepted the objection to it. The two would still be siblings, just siblings somewhere else. Splitting them is what actually answers the objection. Each sheet went to the screen that owns the kind of fact it writes.
 
 ### Two writers of one file now share a tab, and only one of them had the guard
 
 This is the real cost of the move and the only part of it that is not a button.
 
-`inventory/prices.json` is one file for the whole store (D86). D103 gave `#/pricing` a stale-write guard for exactly the hazard this move creates: the sheet's step 3 runs `reprice apply --write` in a **subprocess**, which writes the corpus behind the screen's back, and the screen's next keystroke would then be refused `corpus_moved` for a write made on its own behalf. While the sheet lived on `#/runs` there was no pricing screen mounted beside it, so the hazard was theoretical. It is not any more — the sheet is mounted **inside** the screen that holds the digest.
+`inventory/prices.json` is one file for the whole store (D86). D103 gave `#/pricing` a stale-write guard for exactly the hazard this move creates. The sheet's step 3 runs `reprice apply --write` in a **subprocess**. That writes the corpus behind the screen's back. The screen's next keystroke would then be refused `corpus_moved` for a write made on its own behalf. While the sheet lived on `#/runs`, there was no pricing screen mounted beside it. So the hazard was theoretical. It is not any more: the sheet is mounted **inside** the screen that holds the digest.
 
 So the digest travels: `Markdown` takes `revision` and hands back `onCorpusWritten`, and `Pricing.tsx` adopts the digest the apply produced. Undefined still means *"the host read no revision"*, which the route allows and the terminal user relies on.
 
@@ -34,7 +34,7 @@ So the digest travels: `Markdown` takes `revision` and hands back `onCorpusWritt
 
 `#/pricing` takes two unmodified keys — `R` reloads, held `T` peeks a price history — and both list the open surfaces they stand down for by name. The sheet is a surface that did not exist when they were written.
 
-`R` is the harmful one and it is not cosmetic: typed into the sheet's *"Cut, percent"* field it would call `load()`, re-read the worklist and the corpus, and **discard an in-flight survey out from under the operator** — bytes the screen is holding for an export they just waited on. `app/tests/markdown.spec.ts` carries a case for it that watches the host's own reads.
+`R` is the harmful one, and it is not cosmetic. Typed into the sheet's *"Cut, percent"* field, it would call `load()`. It would re-read the worklist and the corpus. It would **discard an in-flight survey out from under the operator**: bytes the screen is holding for an export they just waited on. `app/tests/markdown.spec.ts` carries a case for it that watches the host's own reads.
 
 ### A route is still not the answer
 
@@ -50,4 +50,4 @@ The lens already has an address — `#/pricing?markdown=<stamp>`, which can be b
 
 ### What would reopen this
 
-*The operator wanting the reconcile on `#/pricing` too* — which would be them saying the two sheets are one piece of work after all, and is theirs to say. *A third writer of `inventory/prices.json` in one tab*, at which point a digest passed hand to hand between components stops scaling and the corpus wants a subscription rather than a prop.
+*The operator wanting the reconcile on `#/pricing` too* would be them saying the two sheets are one piece of work after all. That is theirs to say. *A third writer of `inventory/prices.json` in one tab* is the other case. At that point, a digest passed hand to hand between components stops scaling. The corpus wants a subscription rather than a prop.

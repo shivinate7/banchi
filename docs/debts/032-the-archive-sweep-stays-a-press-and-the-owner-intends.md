@@ -2,7 +2,7 @@
 
 `banchi archive sweep` is a press. Nothing fires it on its own (D224, sweep preview is free and press commits, and the docstring of `cli/cmd_pricearchive.py`, which puts any timer, cron or launch agent out of scope by the owner's word). D219 (the price archive never deletes) governs what a sweep stores. `make launch-agent` starts only the capture server. The owner's intent is to leave it a press for now and schedule it eventually.
 
-A schedule reverses half of D224's rule, that every outbound read is free, cached, or a press a person chose to make. It needs its own argument: pace against a host already measured to throttle this client (D222), what runs when nobody watches a terminal, and what a scheduled failure does that a press's visible failure need not.
+A schedule reverses half of D224's rule, that every outbound read is free, cached, or a press a person chose to make. It needs its own argument: pace against a host already measured to throttle this client (D222). It also needs what runs when nobody watches a terminal, and what a scheduled failure does that a press's visible failure need not.
 
 **Outcome at risk.** Price history goes unarchived unless a person remembers to press.
 

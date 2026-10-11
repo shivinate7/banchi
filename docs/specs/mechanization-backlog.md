@@ -15,7 +15,7 @@ section for what the audit did not reach.
 
 ## How this file spells things that do not exist yet
 
-A `+` in front of a path, a `make` target or a `BANCHI_` name means the thing does not exist yet:
+A `+` in front of a path, a `make` target or a `BANCHI_` name means that the thing does not exist yet:
 `+make opsec-selftest`, `+BANCHI_PWARGS`. Three mechanical `make docs-audit` rows that verify a
 named thing is real read the sigil. So this file can name what it would create without failing a
 commit on every line.
@@ -26,7 +26,7 @@ in the PR that builds the thing. An allowlist line would also work. But it puts 
 
 ## Status of the 21 mechanisms
 
-The ranks are stable ids. They are not renumbered, so a citation of a rank keeps resolving.
+The ranks are stable ids. They are not renumbered, so citing a rank keeps resolving.
 
 | Rank | Rule | Status |
 |---|---|---|
@@ -52,7 +52,7 @@ The ranks are stable ids. They are not renumbered, so a citation of a rank keeps
 | 39 | Every server route is reachable from `app/src/server.ts`. | Shelved |
 | 40 | Register a window keydown listener in `useLayoutEffect` when its dependencies name state the handler reads. | Shelved |
 
-"Shelved" means the mechanism's named artifact is not in the tree. Each was checked by name and by the
+"Shelved" means that the mechanism's named artifact is not in the tree. Each was checked by name and by the
 recipe or function it would change. Rank 32, rank 33 and rank 37 are shelved on a weaker basis. No artifact with the named shape exists. I did not read every candidate site.
 
 **Rank 21, partly built.** `Report.add` takes `scanned`, and `render` prints `none` for a row that
@@ -123,8 +123,8 @@ and end with a per-target verdict table: target, pass, fail or not-run. Exit non
 Do the same for `ci-check`.
 
 **Where.** The `check:` and `ci-check:` recipes in the Makefile, with `scripts/checks.py` and
-`make help` updated so the `check registry` and `check census` rows stay green. Today `check` is a
-sequence of `@$(MAKE)` lines and stops at the first failure.
+`make help` updated so the `check registry` and `check census` rows stay green. Today `check` is made of
+`@$(MAKE)` lines and stops at the first failure.
 
 **Catches.** A suite that cannot tell "the rest passed" from "the rest never ran". `harness/run.py`
 already writes this rule down for its own tests. A runner that stops at the first failure hides the

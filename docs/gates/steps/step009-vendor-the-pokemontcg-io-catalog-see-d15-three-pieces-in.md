@@ -8,7 +8,7 @@
       that re-clones and refreshes it. Narrower than the whole upstream tree on purpose —
       `decks/` and the v1-conversion script are not vendored, because nothing downstream of
       this step reads a decklist. The "183 files, 27.4 MB" figure above this line was this
-      step's own estimate of the whole upstream tree, written before the fetch; the number
+      step's own estimate of the whole upstream tree, written before the fetch. The number
       moved because the tree grew and because this snapshot deliberately copies a narrower
       slice of it.
     - **BUILT.** The SQLite index — `vendor/pokemon-tcg-data/catalog.sqlite`, built by
@@ -16,8 +16,8 @@
       `printedTotal` is only in `sets/en.json`, and it is half the join key. Measured: 174
       sets, 20,444 cards, zero card files naming a set absent from `sets/en.json`. Guarded
       red-first by `make catalog-index-selftest`, against a throwaway two-set fixture rather
-      than the real snapshot. `pipeline/catalog.py` is the read-only reader; nothing in
-      `pipeline/join.py` calls it, and the runtime join's matching is unchanged — see the
+      than the real snapshot. `pipeline/catalog.py` is the read-only reader. Nothing in
+      `pipeline/join.py` calls it. The runtime join's matching is unchanged — see the
       decision entry below for why wiring it into a screen is a separate, unbuilt task (D77).
     - **RECORDED, NOT FILLED.** The image mirror from `images.pokemontcg.io`:
       `scripts/catalog-image-mirror.py` builds the manifest from the vendored snapshot (no
@@ -33,8 +33,8 @@
     is the only consumer, step 4's batch script does not depend on it, and a warm harness run
     already makes zero network calls. **Retiring the retry/backoff scaffolding in that file
     was NOT done this pass** — it is T1's own live-fetch fallback, D112-shaped (a banked
-    `manifest.json`, a `scorer_fingerprint()`, a HOLDOUT/TUNE split hashed per card id), and
-    swapping its source needs its own measurement that the vendored 150-card selection matches
-    what was banked, or the fingerprint check silently starts comparing against a different
-    population. Left open rather than done quietly; see
+    `manifest.json`, a `scorer_fingerprint()`, a HOLDOUT/TUNE split hashed per card id). Swapping
+    its source needs its own measurement. The measurement must show that the vendored 150-card
+    selection matches what was banked, or the fingerprint check silently starts comparing against
+    a different population. Left open rather than done quietly; see
     D15.

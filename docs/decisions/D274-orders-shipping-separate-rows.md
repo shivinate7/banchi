@@ -35,7 +35,7 @@ The held-screen pass measured main at PR #456, on a seeded store.
 
 ### What D220 protected, and what protects it now
 
-D220 protects three outcomes. A click on an order starts its walk at once. A tick widens the
+D220 protects three outcomes. A click starts an order's walk at once. A tick widens the
 walk to more orders. The card pane is inventory's own, with inventory's words. All three stay.
 Only the space changes: the walk is the tallest thing on the screen, not the smallest.
 

@@ -10,8 +10,7 @@ claude.md or otherwise."*
 
 ### The argument
 
-**This repo's prose is bypassed, and not by sessions that had not read it.** That is the whole
-case, and every item in it landed inside twenty-four hours on 2026-09-11/12:
+**This repo's prose is bypassed, and not by sessions that had not read it.** That is the whole case, and every item in it landed inside twenty-four hours on 2026-09-11/12:
 
 - A session wrote `a-pgrep-waiter-matches-itself` into its own memory directory,
 **read that file in the session** , and then wrote the exact waiter loop it forbids. The loop
@@ -31,35 +30,21 @@ matched its
   (`make screen-freshness-selftest`, added to `make check` afterward) had to wait for PR #307
   to fill the eighteen missing exports first — a guard cannot be turned on red.
 
-**Against all of that, the mechanised rows have a clean record.** `raw color`, `storage keys`,
-`route census`, `check census`, `codex hooks`, `id claims` and `shell substitution` have not
-been bypassed once. Not because the sessions reading them were more careful — several are the
-same sessions — but because **none of them can be.** A commit that breaks one does not land.
+**Against all of that, the mechanised rows have a clean record.** `raw color`, `storage keys`, `route census`, `check census`, `codex hooks`, `id claims` and `shell substitution` have not been bypassed once. Not because the sessions reading them were more careful — several are the same sessions — but because **none of them can be.** A commit that breaks one does not land.
 
-So the difference in outcome does not track how well a rule is written, how emphatically, or
-how recently. It tracks whether anything reads it.
+So the difference in outcome does not track how well a rule is written, how emphatically, or how recently. It tracks whether anything reads it.
 
 ### What this decides
 
-1. **A rule added to `CLAUDE.md`'s Hard rules arrives with its enforcement, in the same PR.**
-   Not as a follow-up: the first hard rule in that file already establishes that the remaining
-   half of a task is not a follow-up, and this is that rule applied to rule-writing.
-2. **If it cannot be mechanised, the rule says so inside itself** — `**NOT MECHANIZED:**`,
-   followed by what a machine would have to be able to SEE. That sentence is the deliverable,
-   not an apology. It is also where the next session looks when the mechanism becomes possible.
-3. **The count of unenforced rules is pinned and reconciled in both directions**, which is the
-   part a mutation arm had to teach (below).
+1. **A rule added to `CLAUDE.md`'s Hard rules arrives with its enforcement, in the same PR.** Not as a follow-up. The first hard rule in that file already establishes that the remaining half of a task is not a follow-up. This is that rule applied to rule-writing.
+2. **If it cannot be mechanised, the rule says so inside itself** — `**NOT MECHANIZED:**`, followed by what a machine would have to be able to SEE. That sentence is the deliverable, not an apology. It is also where the next session looks when the mechanism becomes possible.
+3. **The count of unenforced rules is pinned and reconciled in both directions**, which is the part a mutation arm had to teach (below).
 
 ### The mechanism
 
-`make docs-audit`'s **`rule enforcement`** row. It parses every top-level rule under
-`## Hard rules` and requires each to either name a mechanism **that resolves** — a `make`
-target real in the Makefile, a docs-audit row name this file actually registers, or a path
-under `scripts/`, `harness/tests/`, `app/tests/` or `.github/workflows/` that exists — or carry
-the bold sentinel with at least twelve words of argument after it.
+`make docs-audit`'s **`rule enforcement`** row. It parses every top-level rule under `## Hard rules`. It requires each rule to either name a mechanism **that resolves**. A mechanism can be a `make` target real in the Makefile. It can be a docs-audit row name this file actually registers. It can be a path under `scripts/`, `harness/tests/`, `app/tests/` or `.github/workflows/` that exists. Or the rule can carry the bold sentinel with at least twelve words of argument after it.
 
-**A citation is checked against the thing it names, not against a pattern.** A rule naming a
-deleted guard is worse than a rule naming nothing, because it reads as coverage.
+**A citation is checked against the thing it names, not against a pattern.** A rule naming a deleted guard is worse than a rule naming nothing, because it reads as coverage.
 
 Two numbers are pinned in the row rather than derived, and both are deliberate:
 
@@ -78,41 +63,20 @@ mechanised and the debt silently fell from six to five.
 mechanism and you lower the pin
   in the same commit; add an unenforced rule and you raise it and say why.
 
-**Today: twelve hard rules, six naming a mechanism that resolves, six arguing their own unenforceability.**
-Those six are named in the file itself: the route-reachability rule, never
-guess an identification, no manual third-party UI step, fix the cause never the symptom, a
-settled decision is an argument, and check whether a task is yours before handing it over.
+**Today: twelve hard rules, six naming a mechanism that resolves, six arguing their own unenforceability.** Those six are named in the file itself. The route-reachability rule is one. Never guess an identification is another. No manual third-party UI step is a third. Fix the cause never the symptom is a fourth. A settled decision is an argument is a fifth. Check whether a task is yours before handing it over is the sixth.
 
 ### Proved by violation — ten arms, ten caught
 
-A mechanism citation deleted · a sentinel deleted from a rule that names another mechanism
-(the arm that changed the design) · a sentinel deleted from a rule that names none · an
-argument truncated below the word floor · a citation naming a `make` target that does not
-exist · a citation naming a path that does not exist · the heading reworded · a rule deleted ·
-an extra unenforced rule added · a mechanism *built* without the pin lowered.
+A mechanism citation deleted. A sentinel deleted from a rule that names another mechanism (the arm that changed the design). A sentinel deleted from a rule that names none. An argument truncated below the word floor. A citation naming a `make` target that does not exist. A citation naming a path that does not exist. The heading reworded. A rule deleted. An extra unenforced rule added. A mechanism *built* without the pin lowered.
 
-**One arm survives by definition and is recorded rather than explained away**: deleting the
-rule-count floor from inside the row leaves it printing `ok` over a section a rule short.
-`check dispatch` sees a whole row go missing and nothing sees an assertion inside one go
-missing — the same shape that row's own comment already states, where a detector cannot detect
-its own absence.
+**One arm survives by definition and is recorded rather than explained away**: deleting the rule-count floor from inside the row leaves it printing `ok`. It does so over a section one rule short. `check dispatch` sees a whole row go missing. Nothing sees an assertion inside one go missing. That is the same shape that row's own comment already states: a detector cannot detect its own absence.
 
 ### What it cannot see
 
-**Whether the named mechanism actually covers the rule.** A rule could cite `make lint` and be
-about something lint never reads; this row reads the citation, not the coverage. That is the
-judgement it deliberately leaves to a person, and it is why the sentinel's argument has to be
-written out rather than ticked.
+**Whether the named mechanism actually covers the rule.** A rule could cite `make lint` and be about something lint never reads. This row reads the citation, not the coverage. That is the judgement it deliberately leaves to a person, and it is why the sentinel's argument has to be written out rather than ticked.
 
-**And it governs one surface.** `CLAUDE.md`'s Working agreement, its Commands prose, the
-~170 entries under `docs/decisions/`, the debts record, and the owner's standing instructions in
-the memory directory are all rule surfaces and none is read here yet. A full audit of those
-surfaces is the work this entry begins rather than completes.
+**And it governs one surface.** `CLAUDE.md`'s Working agreement and its Commands prose are rule surfaces. So are the ~170 entries under `docs/decisions/`, the debts record, and the owner's standing instructions in the memory directory. None of these is read here yet. A full audit of those surfaces is the work this entry begins rather than completes.
 
 ### Reopening condition
 
-**If the pin is raised twice without a mechanism landing between, this row has become a formality**
-and the answer is not a bigger number — it is that the rule being added does not
-belong in Hard rules at all. And if a mechanism proposed for one of the six turns out to be
-cheap, the sentinel it replaces is the specification for it: each one already names what a
-machine would have to see.
+**If the pin is raised twice without a mechanism landing between, this row has become a formality**. The answer is not a bigger number. It is that the rule being added does not belong in Hard rules at all. If a mechanism proposed for one of the six turns out to be cheap, the sentinel it replaces is the specification for it. Each one already names what a machine would have to see.

@@ -4,4 +4,4 @@
 
 **Outcome at risk.** A quadratic Python regression in the merge ships with the guard green.
 
-**Closes when.** Either the fixture's `n` rises until a synthetic `O(n^2)` Python loop trips the 10s backstop, measured and not guessed, or a call-count assertion on the merge's own per-card function joins the tick count. The choice is the owner's.
+**Closes when.** Either the fixture's `n` rises until a synthetic `O(n^2)` Python loop trips the 10s backstop, measured and not guessed. Or a call-count assertion on the merge's own per-card function joins the tick count. The choice is the owner's.

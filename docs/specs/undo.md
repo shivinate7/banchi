@@ -110,7 +110,7 @@ drawers, in the order the hand took them (D164). The granular press sits beside 
 
 ## 9. What would reopen this
 
-A second operator. Every ruling here assumes one hand. The fast path is one hand's own newest press. The slow path assumes the card in front of you is the card you are reversing. Two people pulling from the same drawers changes what a resurrect means to the other person.
+A second operator. Every ruling here assumes one hand. The fast path is one hand's own newest press. The slow path assumes that the card in front of you is the card you are reversing. Two people pulling from the same drawers changes what a resurrect means to the other person.
 
 ## 10. The order walk's own row: a rank, never a clock
 
