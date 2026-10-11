@@ -43,7 +43,7 @@ The Capture tile is relabelled to match what it shows: the newest box's own card
 
 ### Runs rows show a date, a time and a quantity
 
-Ruled, not built yet. Each row in Home's recent runs keeps what it shows now: the box label, the relative date and the stage. It also shows the run's date, its time stamp and its quantity run. The row adds no box name and no run name (D196, no mechanism on screen). A quantity run is the number of cards in the run. R3b, ruled, not built yet: a whole-box run that has not been joined shows its count of photographed cards.
+Each row in Home's recent runs keeps what it shows now: the box label, the relative date and the stage. It also shows the run's date, its time stamp and its quantity run. The row adds no box name and no run name (D196, no mechanism on screen). A quantity run is the number of cards in the run. R3b, ruled, not built yet: a whole-box run that has not been joined shows its count of photographed cards.
 
 ### Two smaller fixes, in the same files
 
