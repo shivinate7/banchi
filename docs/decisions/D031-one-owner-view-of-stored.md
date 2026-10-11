@@ -1,6 +1,6 @@
 ## D31 — One owner-side view of stored cards
 
-**Three routes rendered the same 767 records and read as separate instances of one thing.** `#/inventory` searched by SKU and sold a copy. `#/boxes` held the registry and the layout editor, with no way into a box's contents. `#/pull` walked a box with photographs. Same store, same records, three looks. A person arrives with one question: what is in this box, and can I click it? Only the fulfilment screen answered it.
+**Three routes rendered the same 767 records and the owner named it: they read as separate instances of one thing.** `#/inventory` searched by SKU and sold a copy. `#/boxes` held the registry and the layout editor, with no way into a box's contents. `#/pull` walked a box with photographs. Same store, same records, three looks. A person arrives with one question: what is in this box, and can I click it? Only the fulfilment screen answered it.
 
 **All three collapse into `#/inventory`.** `#/boxes` and `#/pull` cease to exist as routes. Box operations (name, sections, seal, delete) live on the box header inside the browse, beside the box they operate on.
 
@@ -10,7 +10,7 @@ Two tabs kept the old screens' boundary inside the new route. That is what a mer
 
 **The fold is presentation, never a filter.** Sections collapse (box 2 holds 22 of them over 544 cards). The collapsed set does not change what the keyboard walks. Arrows, PageUp/PageDown, Home/End and the box strip still traverse the whole box. Stepping into a shut section opens it. A fold that also filtered would make the arrow keys and the scrollbar disagree about the box's contents. The fold is not persisted, for the reason D19 gives about arming: state that acts on its own must be re-established deliberately.
 
-**Collapsed is the resting state. The control names what one press does.** The screen opened with the selected card's section already open, while the button offered `expand all`. The first press expanded, and a second press was needed to reach collapsed. The cause was the mark-never-hidden effect firing on the initial, automatic selection, which the operator never made. A move is now a step between two selections. Nothing opens on load, on reload, or on an upstream write.
+**Collapsed is the resting state. The control names what one press does.** Both were owner reports, and they are the same defect seen twice. The screen opened with the selected card's section already open, while the button offered `expand all`. The first press expanded, and a second press was needed to reach collapsed. The owner had to press the control twice to reach collapsed. The cause was the mark-never-hidden effect firing on the initial, automatic selection, which the operator never made. A move is now a step between two selections. Nothing opens on load, on reload, or on an upstream write.
 
 The fold control reads `any`, not `every`. From a partial state, one press always produces the state the label names. Collapse wins the tie, because collapsed is where the walk rests.
 
