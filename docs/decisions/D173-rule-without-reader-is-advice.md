@@ -2,7 +2,7 @@
 
 **A rule that can be mechanically enforced must be mechanically enforced, and a new rule is not finished until its enforcement exists or its unenforceability is argued.**
 
-The owner's instruction, 2026-09-12, and the second half is the part that makes this an entry
+The owner's instruction, and the second half is the part that makes this an entry
 rather than a chore: *"i need this everything fucking mechanically fixed im tired of prose
 being bypassed"* … *"every rule for all time, anything that can be mechanically enforced,
 should be mechanically enforced, and make this a rule to enforce going forward too via

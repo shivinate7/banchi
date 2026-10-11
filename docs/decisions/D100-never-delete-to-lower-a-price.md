@@ -1,6 +1,6 @@
 ## D100 — Never delete to lower a price
 
-**A live listing's price is lowered by re-uploading the same row with a new `TCG Marketplace Price` and `Add to Quantity` of 0. Nothing is deleted at TCGplayer, and nothing has to be.** Built 2026-09-03 on the owner's request: *"I then wanted to build some relationship where I can export my live inventory back out (for cards I have listed and aren't selling) and be able to mass re-edit the prices down (and then reupload it back) <maybe deleting inventory in between from tcgplayer?>"*
+**A live listing's price is lowered by re-uploading the same row with a new `TCG Marketplace Price` and `Add to Quantity` of 0. Nothing is deleted at TCGplayer, and nothing has to be.** Built on the owner's request: export live inventory (cards listed and not selling), mass re-edit the prices down, and re-upload. Deleting inventory in between was raised and is not needed.
 
 The parenthetical is the question this entry exists to answer, and the answer is measured rather than reasoned.
 
@@ -94,7 +94,7 @@ Two rules change.
   The rule then takes P% off, but never more than the cap off one copy. `pipeline/reprice.py:plan`
   proposes the rule's price or the asking price less the cap, whichever is higher. The cap lives
   in the read's `asked`, beside the percentage. With no cap in the last read, the sheet offers
-  none. Amended the same day, the owner's word verbatim: "Rule only". The cap limits the rule's
+  none. Amended the same day by owner ruling: rule only. The cap limits the rule's
   proposal and nothing else. `reprice apply` does not check it, and a typed price goes out as
   typed. The store's floor (`policy.threshold`) still holds for every price.
 - **No market price, no mark-down.** `plan` refuses a row with no `TCG Market Price` as
@@ -105,7 +105,7 @@ Proof: T7 `check_live_markdown_guards`, each rule red under its own mutation.
 
 ### Amended 2026-09-26, second: an earlier price goes out only when it is higher
 
-The owner's words, verbatim: "if the price i've typed is higher yea". `reprice apply` refuses an
+Owner ruling: a typed price goes out when it is higher. `reprice apply` refuses an
 edit that lowers the price and is exactly an answer the corpus held before the read was taken
 (`earlier_lower`), per row. A price written after the read is stamped later and goes. The read's
 own rule price always goes. Proof: T7 `check_live_markdown_guards`.
@@ -118,4 +118,4 @@ own rule price always goes. Proof: T7 `check_live_markdown_guards`.
 
 ### 2026-09-28 amendment: a sale or retirement in the app never lowers TCGplayer
 
-**The owner ruled on 2026-09-28, in paraphrase: marking a card sold or retired in the app must not lower its TCGplayer quantity.** The phantom-listing finding in the amendment above (sold or retired cards never lower TCGplayer) is therefore accepted behavior. The drift it leaves is corrected by an explicit write-down.
+**Owner ruling: marking a card sold or retired in the app must not lower its TCGplayer quantity.** The phantom-listing finding in the amendment above (sold or retired cards never lower TCGplayer) is therefore accepted behavior. The drift it leaves is corrected by an explicit write-down.

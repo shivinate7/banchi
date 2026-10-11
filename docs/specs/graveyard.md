@@ -1,6 +1,6 @@
 # Graveyard
 
-Status: the tab is deleted (direction A, the owner's word: "A: delete the tab"). D134 (a departed
+Status: the tab is deleted (direction A, owner ruling). D134 (a departed
 record is buried) point 5 says where its records live now. The shelf is built.
 
 ## What the tab did, and where each job lives now

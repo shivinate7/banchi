@@ -85,7 +85,7 @@ The pool is the fingerprinted printings of the sets that apply to the card.
 - A named set did not help accuracy in the spike. On Riftbound, pool-wide and set-only top-1 were both 98.7% (measured, first round).
   The pool rule exists for the absent-photo case. It does not exist for accuracy.
 
-**Cards the matcher does not accept.** The owner's flow: *"we have the free one do all first. Then for those it finds under a threshold of accuracy they get a second look by haiku, and then it reaches my queue. so haiku isnt on all of them just the low con"*.
+**Cards the matcher does not accept.** Owner ruling: the free read runs first. Cards it finds under an accuracy threshold get a second look by Haiku, then reach the review queue. Haiku is not on all of them, only the low-confidence ones.
 One press runs both reads. The matcher reads every selected card first. Four things stop it accepting a card.
 The look-alike guard fires. Its pool is not complete, so the guard cannot run. Its margin M is below the rule in section 3.
 Its floor S is below the rule in section 3. The first rounds of the spike never tested the absent-photo case.
@@ -112,7 +112,7 @@ Whenever the quote is not measured, it uses 40% as the unaccepted share and says
 So the estimate rounds up and never understates. It is also never under the count of cards the pool rules already send to the second look.
 The background reader (section 8) stays free. It never spends. A card it cannot accept waits for a press.
 
-**The owner's word on promos: "i have no promos".** Printings with no stock image that are promos are left out of the matcher's pool.
+**Promos are out, by owner ruling.** Printings with no stock image that are promos are left out of the matcher's pool.
 Unhinted Riftbound cards match against the main sets. A promo card is never read by the matcher. It goes to the paid read.
 
 **The premise holds today** (measured, store opened read-only). The check joined the `cards` table to the `skus` table.
@@ -162,7 +162,7 @@ minus the cosine of the second. The floor S is the cosine of the best match.
 
 **Accept only when all three hold:** the look-alike guard does not fire (section 2), M is at least 0.05, and S is
 at least 0.755. An accepted card gets `confidence` of `high` in the identification record.
-The margin floor of 0.05 is the owner's ruling: *"maybe those under .05 get a haiku auto pass"*.
+The margin floor of 0.05 is the owner's ruling: a card under it gets a Haiku auto pass.
 **Every other card gets the second look** (section 2). Haiku's answer for it is held for review, with one exception. If the free reader still named a top pick, and Haiku is `high` and names the same printing, the card is not held. It resolves like an accepted card. Finish and condition rules still apply. Same printing has two guards. The whole set label folds equal (`pipeline/setnames.fold`, so `Origins` is not `Origins: Proving Grounds`). The number part is present and equal. The printed total, from the pick or the paid read, equals the row's. A missing total holds the card (`join._pick_number_is`; `number_agrees` reads a blank as agreement, so it is not used). A name alone never counts. A readers_disagree card also offers the pick's rows, only those with the pick's number. Every other pairing stays held, with its own reason: `readers_disagree` when both are named and differ, `second_look_unsure` when Haiku is below `high`. Never `low_confidence` over a high read. Measured: the owner took the agreed card 12 of 12, and the free pick 0 of 10 on disagreement. The rule lives in `pipeline/join.default_router`. A queue refresh re-reads the pick from the entry (`cli/requeue.plan`).
 The join marks such a card as a second-look card, and the router sends it to review at any confidence setting.
 - **A rarity claim settles one card's printing.** When M is under 0.05, the top two are one card. That needs the names to match once a bracketed suffix goes, and the collector numbers to match once an alt-art letter goes. The card's `rarity_claim` equals the catalog `Rarity` of exactly one of the two. The matcher accepts that printing if S holds and both conditions above hold. Different cards, a claim that fits neither or both, and no claim stay refused. The rarity is read at read time from `StockImages.catalog_products`. Pokemon has none there, so it never settles. The result's code is `printing_settled_by_claim`. This is the same pick `variant.resolve` makes from a finish claim.
@@ -335,7 +335,7 @@ Nothing else about selection changes.
 
 **What each pick says.** The labels are the operator's words.
 D196 (no screen string names a mechanism) rules out model names on screen, with two named exceptions.
-The owner's word: plain words on the control, and each pick's model name in its hover tooltip.
+Owner ruling: plain words on the control, and each pick's model name in its hover tooltip.
 The two tooltips are the constants `HAIKU_NAME_TOOLTIP` and `MATCHER_NAME_TOOLTIP`, both exported from `app/src/engines.ts`.
 D196 records the exceptions. The `no mechanism on screen` row exempts exactly those two strings. It reads each from its constant.
 It exempts a word-list hit only. The build lane must export both constants under those names, or the exemption finds nothing.
@@ -513,12 +513,12 @@ Freeing the session does not return the memory in the same process (measured). S
 - A **worker** that the watcher starts when the queue is not empty. It loads the model, reads the queue to empty, and exits.
   Exit returns the memory. A cold start to the first vector took 0.26 seconds with the file cached (measured).
 
-The gate is a measurement, and it has no pass mark yet. The owner said: "let us measure first".
+The gate is a measurement, and it has no pass mark yet. Owner ruling: measure first.
 The build lane measures the watcher's idle resident memory, with an empty queue, on the shipped build.
 It brings the number to the owner before ship, and the owner sets the pass mark then.
 A queue with cards in it may use the 454 MB peak, in the worker only.
 
-**While cards are being fed (the capture gate).** The owner's ruling: the reader reads even mid-feed (*"Even mid-feed"*).
+**While cards are being fed (the capture gate).** The owner's ruling: the reader reads even mid-feed.
 The quiet time is 0. The worker starts as soon as a card waits, and a capture never stops it.
 The gate: 300 feeder-paced captures on a scratch store, run with the reader off and with it on. The metric is the p99 time of a capture request.
 The measured p99 is 30.5 ms with the reader on and 30.6 ms with it off, so the ruling stands on the figures below.
@@ -593,7 +593,7 @@ Turning the toggle on never downloads. With no model or no index, the toggle rea
 
 ## 9. The owner's rulings
 
-- The margin floor is 0.05. The S floor of 0.755 stays (section 3). The owner's word: *"maybe those under .05 get a haiku auto pass"*.
+- The margin floor is 0.05, by owner ruling. The S floor of 0.755 stays (section 3).
 - One press runs the free reader on every card, then sends each card it does not accept to Haiku for a second look. Haiku is on the low-confidence cards only (section 2).
 - Haiku's second-look answer goes to the review queue with the photo, the answer and the matcher's top pick. It is never saved on its own (section 2).
 - The quote names the free count, the second-look count and the cost before any spend. The runs sheet's press needs the paid confirm.
@@ -611,7 +611,7 @@ Turning the toggle on never downloads. With no model or no index, the toggle rea
 - The free read may run in the background, always, if its idle memory is barely any. D1 and D273 are rewritten for it (section 8).
 - A printing with no stock image blocks only a match that shares its card name. Radiance is no special case (section 2).
 - The pass marks for idle memory and capture speed are not set. Measure first, then bring the numbers to the owner (section 8).
-- The reader reads even mid-feed. The owner's word: *"Even mid-feed"*. The quiet time is 0, from the measured capture gate (section 8).
+- The reader reads even mid-feed, by owner ruling. The quiet time is 0, from the measured capture gate (section 8).
 - A paid press over matched cards asks every time and defaults to skip (section 6).
 - The on and off toggle is in the rig settings. Its state is a store row. The setup press downloads once (section 8).
 - A selection handed to Review wins over the open Capture sitting, because it is the newer, explicit pick (section 8).
