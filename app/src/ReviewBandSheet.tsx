@@ -159,7 +159,7 @@ function GroupView({ group, kind, readerOn }: { readonly group: Group; readonly 
       </ul>
       {seen.length < group.cards.length ? (
         <Button variant="ghost" size="sm" onClick={() => setShown(shown + PAGE)} className="rbs-more">
-          Show {PAGE} more
+          Show {PAGE} More
         </Button>
       ) : null}
     </section>
