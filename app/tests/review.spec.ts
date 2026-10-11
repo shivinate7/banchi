@@ -2995,30 +2995,66 @@ test.describe('the Review band sheets', () => {
     })
   })
 
-  test.describe('17. empty sheets', () => {
+  /* ux-w2 B13 (identify-engine-pick.md 10.4, signed off, not built yet). The "All caught up" card spans the band's width, edge for edge. */
+  test('ux-w2 B13: the empty "All caught up" card spans the band\'s width, left and right edges equal', async ({ page }) => {
+    await setViewport(page, { width: 1440, height: 900 })
+    await seed(page, { fates: {}, sitting: [] })
+    await openReview(page)
+    const done = page.locator('.review-done')
+    await expect(done).toBeVisible()
+    const band = await page.locator('.review-band').boundingBox()
+    const card = await done.boundingBox()
+    expect(band, 'the band is drawn').not.toBeNull()
+    expect(card, 'the empty card is drawn').not.toBeNull()
+    expect(Math.abs(card!.x - band!.x), 'left edges match within 1px').toBeLessThanOrEqual(1)
+    expect(Math.abs(card!.x + card!.width - (band!.x + band!.width)), 'right edges match within 1px').toBeLessThanOrEqual(1)
+  })
+
+  /* ux-w2 B14 (identify-engine-pick.md 10.4, signed off, not built yet). A zero count is a plain figure: no button role,
+     no chevron. A live count keeps both. The tile holds the same box either way (D313). */
+  test('ux-w2 B14: a zero count is a plain figure with no button and no chevron, and holds the box of a live count', async ({ page }) => {
+    await setViewport(page, { width: 1440, height: 900 })
+    await seed(page, { fates: { '3/1': 'matched', '3/4': 'paid' } })
+    await openReview(page)
+    await loaded(page)
+    const zero = count(page, 'not yet looked at')
+    await expect(zero, 'the zero tile is drawn').toContainText('0')
+    await expect(zero.getByRole('button'), 'a zero count has no button role').toHaveCount(0)
+    await expect(zero.getByRole('link'), 'a zero count has no link role').toHaveCount(0)
+    await expect(zero.locator('.bn-stat-go'), 'a zero count has no chevron').toHaveCount(0)
+    const live = count(page, 'matched free')
+    await expect(live.getByRole('button'), 'a live count keeps its button').toHaveCount(1)
+    await expect(live.locator('.bn-stat-go'), 'a live count keeps its chevron').toHaveCount(1)
+
+    const zeroBox = await zero.boundingBox()
+    await seed(page)
+    await page.reload()
+    await expect(page.locator('main.review')).toBeVisible()
+    await loaded(page)
+    const liveTile = await count(page, 'not yet looked at').boundingBox()
+    expect(zeroBox, 'the zero tile is measured').not.toBeNull()
+    expect(liveTile, 'the live tile is measured').not.toBeNull()
+    expect(Math.abs(zeroBox!.width - liveTile!.width), 'the tile keeps its width either way').toBeLessThanOrEqual(1)
+    expect(Math.abs(zeroBox!.height - liveTile!.height), 'the tile keeps its height either way').toBeLessThanOrEqual(1)
+  })
+
+  /* ux-w2 B14 re-point (identify-engine-pick.md 10.4, signed off). A zero count is a plain figure and opens nothing:
+     no button, no sheet, and no "Back to Capture" sentence, because the at-zero empty states are retired with it. */
+  test.describe('17. zero counts open nothing', () => {
     for (const size of SIZES) {
       for (const scheme of ['light', 'dark'] as const) {
-        test(`the three count sheets answer a zero count with a sentence and Back to Capture at ${size.width}, ${scheme}`, async ({ page }) => {
+        test(`a zero count is a plain figure that opens no sheet at ${size.width}, ${scheme}`, async ({ page }) => {
           await page.emulateMedia({ colorScheme: scheme })
           await setViewport(page, size)
           await seed(page, { fates: { '3/1': 'done' }, sitting: ['3/1'] })
           await openReview(page)
           await loaded(page)
-          const cases: [RegExp, string][] = [
-            [/^0 waiting for a paid look$/, 'No card is waiting for a paid look.'],
-            [/^0 not yet looked at$/, 'The free reader has looked at every card.'],
-            [/^0 matched free$/, 'The free reader has not matched a card yet.'],
-          ]
-          for (const [name, sentence] of cases) {
-            await openCount(page, name)
-            await expect(sheet(page)).toContainText(sentence)
-            await expect(sheet(page).getByRole('button', { name: 'Back to Capture' })).toBeVisible()
-            const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
-            expect(overflow, 'no horizontal scroll').toBeLessThanOrEqual(0)
-            const inside = await sheet(page).evaluate((el) => el.scrollWidth <= el.clientWidth + 1)
-            expect(inside, 'the sheet does not scroll sideways').toBe(true)
-            await page.keyboard.press('Escape')
-            await expect(sheet(page)).toHaveCount(0)
+          for (const label of ['waiting for a paid look', 'not yet looked at', 'matched free']) {
+            const tile = count(page, label)
+            await expect(tile, `the ${label} tile reads zero`).toContainText('0')
+            await expect(tile.getByRole('button'), `a zero ${label} count has no button`).toHaveCount(0)
+            await tile.click({ force: true })
+            await expect(sheet(page), `a zero ${label} count opens no sheet`).toHaveCount(0)
           }
         })
       }

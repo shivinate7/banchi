@@ -208,6 +208,24 @@ test('a failed read draws the failure notice', async ({ page }) => {
   await expect(page.getByText('Could not read your orders')).toBeVisible()
 })
 
+/* ux-w2 B19 (sales-screen.md, signed off). Red on main until the build lands. The sort field and its direction live in ONE menu: one button that
+   opens a menu, not a segmented group of sort fields. The Singles, Sealed and All toggles stay as they are. */
+test('ux-w2 B19: the sort row is one menu button, not a segmented group, and Singles, Sealed and All stay', async ({ page }) => {
+  await stub(page, generalOrders())
+  await open(page, '?period=all')
+  await expect(page.locator('main.revenue')).toBeVisible()
+
+  await expect(page.getByRole('group', { name: /^sort$/i }), 'no segmented group carries the sort fields').toHaveCount(0)
+  const trigger = page.getByRole('button', { name: /sort/i })
+  await expect(trigger, 'one button names the sort').toHaveCount(1)
+  await trigger.click()
+  await expect(page.getByRole('menu').or(page.getByRole('listbox')), 'the sort button opens one menu').toBeVisible()
+
+  for (const name of [/^singles$/i, /^sealed$/i, /^all$/i]) {
+    await expect(page.getByRole('button', { name }).first(), `the ${name} toggle stays`).toBeVisible()
+  }
+})
+
 test('gross-descending is the default sort, and its column carries aria-sort', async ({ page }) => {
   await stub(page, generalOrders())
   await open(page, '?period=all')

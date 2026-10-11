@@ -2205,6 +2205,33 @@ test('Refresh is a manual press that always runs', async ({ page }) => {
   expect(wire.find((r) => r.path === '/pipeline/live-check')?.body).toEqual({ force: true })
 })
 
+/* ux-w2 R2 (D103, signed off: content-visibility first, full windowing only if still slow). Typed values are never lost:
+   a price and a quantity typed into rows 5 and 6 of a 600-row worklist are still there after a scroll to the last row and
+   back. The case also records first-render time at 600 rows, as a probe for the before and after measure. Rows are found by
+   their card name, so the case does not depend on the order the worklist draws them in. */
+test('ux-w2 R2: typed price and quantity survive a scroll to the bottom of 600 rows and back', async ({ page }) => {
+  const rows = Array.from({ length: 600 }, (_, i) => sku({ sku: String(9100000 + i), name: `Card ${i}`, copies: 3, add_to_quantity: 3 }))
+  const started = Date.now()
+  await open(page, { skus: rows })
+  await expect(page.getByRole('textbox', { name: 'Price for Card 0', exact: true })).toBeVisible()
+  test.info().annotations.push({ type: 'first-render-600-rows-ms', description: String(Date.now() - started) })
+
+  const price = page.getByRole('textbox', { name: 'Price for Card 4', exact: true })
+  const quantity = page.getByRole('textbox', { name: /copies of Card 5 /i })
+  await price.scrollIntoViewIfNeeded()
+  await price.fill('6.50')
+  await quantity.scrollIntoViewIfNeeded()
+  await quantity.fill('2')
+
+  const last = page.getByRole('textbox', { name: 'Price for Card 599', exact: true })
+  await last.scrollIntoViewIfNeeded()
+  await expect(last, 'the last row is drawn').toBeInViewport()
+  await page.getByRole('textbox', { name: 'Price for Card 0', exact: true }).scrollIntoViewIfNeeded()
+
+  await expect(price, 'the typed price survives the scroll').toHaveValue('6.50')
+  await expect(quantity, 'the typed quantity survives the scroll').toHaveValue('2')
+})
+
 test('tabbing across a suggested row writes nothing', async ({ page }) => {
   const wire = await open(page)
 

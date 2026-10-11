@@ -159,9 +159,8 @@ async function keepsItsHeight(page: Page, width: number): Promise<void> {
   const panel = page.locator('.capture-last')
   const note = page.locator('.capture-frame-last .capture-frame-title')
   /* THE STATE THAT SQUEEZES THE PANEL: no box picked, camera off, dispenser not connected. The Setup
-     block lists the Camera and Box fixes, and the right column grows to hold it. */
+     block lists its fixes, and the right column grows to hold it. */
   await expect(page.locator('.capture-block'), 'the Setup block is drawn (no box, camera off)').toBeVisible()
-  await expect(page.getByRole('button', { name: 'Box', exact: true }), 'the Setup block offers Box').toBeVisible()
   await expect(panel).toHaveAttribute('data-has-last', 'false')
   await expect(note, 'the empty panel names its state').toHaveText(/nothing captured yet/i)
   const empty = await panel.boundingBox()

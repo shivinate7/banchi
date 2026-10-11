@@ -241,7 +241,7 @@ test.describe('the published demo draws what reviewers grade', () => {
   test.afterEach(async ({ page }, testInfo) => {
     if (testInfo.status === 'passed') return
     if (testInfo.title !== 'Orders draws a walk') return
-    const walkAll = page.getByRole('button', { name: /^Walk \d+$/ })
+    const walkAll = page.getByRole('button', { name: /^start walk/i })
     const walkAllCount = await walkAll.count().catch(() => -1)
     const walkAllLabel =
       walkAllCount > 0
@@ -538,7 +538,7 @@ test.describe('the published demo draws what reviewers grade', () => {
     // is the knob that actually needed raising.
     test.setTimeout(60_000)
     await visit(page, 'Orders')
-    await page.getByRole('button', { name: /^Walk \d+$/ }).first().click()
+    await page.getByRole('button', { name: /^start walk/i }).first().click()
     const walk = page.getByRole('list', { name: /cards to pick/i })
     await expect(walk).toBeVisible({ timeout: 30_000 })
     // DEBT23's shape: the list container appearing does not mean its rows have. A bare

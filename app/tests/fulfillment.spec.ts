@@ -1102,7 +1102,7 @@ async function runsIn(view: Locator): Promise<Run[]> {
  *  The label carries the accessible name as well as the visible text, because the receipts
  *  put the position in an `aria-label` — and the destructive-wording check below reads these
  *  labels, so a control whose only name is an attribute must not be invisible to it. */
-async function targets(page: Page): Promise<{ where: string; box: DOMRect; floating: boolean }[]> {
+async function targets(page: Page): Promise<{ where: string; box: DOMRect; floating: boolean; covered: boolean }[]> {
   return page.evaluate(() => {
     /* WHICH LAYER THE CONTROL IS ON. A receipt sheet is `position: fixed` over the page and
        takes every tap inside its own footprint, so a row it happens to be covering is not the
@@ -1117,16 +1117,29 @@ async function targets(page: Page): Promise<{ where: string; box: DOMRect; float
       }
       return false
     }
-    const out: { where: string; box: DOMRect; floating: boolean }[] = []
+    /* WHETHER A HAND CAN REACH THE CONTROL. A sticky bar that scrolls over a control covers it, and a
+       covered control cannot be pressed, so two controls with a gap between them are not a mis-tap
+       pair when one of them is under something opaque. The centre of the box is hit-tested. A
+       centre outside the viewport is not judged here, because it is not on screen to hit. */
+    const reachable = (element: Element, box: DOMRect): boolean => {
+      const cx = box.x + box.width / 2
+      const cy = box.y + box.height / 2
+      if (cx < 0 || cy < 0 || cx > window.innerWidth || cy > window.innerHeight) return true
+      const hit = document.elementFromPoint(cx, cy)
+      return hit !== null && (hit === element || element.contains(hit))
+    }
+    const out: { where: string; box: DOMRect; floating: boolean; covered: boolean }[] = []
     for (const element of document.querySelectorAll('button, a[href], input, select, textarea')) {
       if (!element.checkVisibility()) continue
       const classes = element.getAttribute('class')
       const named = element.getAttribute('aria-label')
       const text = `${(element.textContent ?? '').trim()} ${named ?? ''}`.trim()
+      const box = element.getBoundingClientRect().toJSON() as DOMRect
       out.push({
         where: `${element.tagName.toLowerCase()}${classes === null ? '' : `.${classes}`}: ${text.slice(0, 120)}`,
-        box: element.getBoundingClientRect().toJSON() as DOMRect,
+        box,
         floating: onAnOverlay(element),
+        covered: !reachable(element, box),
       })
     }
     return out
@@ -1292,6 +1305,10 @@ async function fatTargets(page: Page, where: string, hasControls = true): Promis
          every control in the sheet against every other control in the sheet, and every control
          on the page against every other control on the page. */
       if (a.floating !== b.floating) continue
+      /* A COVERED CONTROL IS NOT A NEIGHBOUR. The sticky count bar scrolls over a control and the
+         control cannot be pressed under it, so a gap to it is not a gap a thumb can land between.
+         Its size is still checked above, and every other pair still runs. */
+      if (a.covered || b.covered) continue
       expect(apart(a.box, b.box), `${where}: ${a.where} -> ${b.where}`).toBeGreaterThanOrEqual(
         GAP_FLOOR,
       )
@@ -1715,6 +1732,57 @@ const WALK = [
    Fulfillment view drawing cards nobody put in this checkout. */
 sealEveryTest()
 
+/* ux-w2 B23 (DESIGN.md Fulfillment, signed off, not built yet). The count bar is sticky: it holds the "N Left" count
+   beside the search, and it stays on screen as the list scrolls. The page is made tall here by a spacer under the search's
+   own parent, so the scroll is real and the case cannot pass on a page too short to scroll. */
+test('ux-w2 B23: the count bar with N Left and the search stay on screen after scrolling 2000px', async ({ page }) => {
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
+  await expect(view(page).getByText(/\b\d+\s+left\b/i).first(), 'the N Left count is drawn').toBeVisible()
+  await expect(searchBox(page), 'the search is drawn').toBeVisible()
+  await page.evaluate(() => {
+    const spacer = document.createElement('div')
+    spacer.setAttribute('data-ux-w2-spacer', '')
+    spacer.style.height = '3000px'
+    document.querySelector('main.fulfillment')?.appendChild(spacer)
+  })
+  await page.mouse.move(640, 450)
+  await page.mouse.wheel(0, 2000)
+  await expect
+    .poll(() => page.evaluate(() => Math.max(window.scrollY, ...Array.from(document.querySelectorAll('*'), (el) => el.scrollTop))), {
+      message: 'the page scrolled down 2000px',
+    })
+    .toBeGreaterThanOrEqual(1500)
+  await expect(searchBox(page), 'the search stays on screen').toBeInViewport()
+  await expect(view(page).getByText(/\b\d+\s+left\b/i).first(), 'the N Left count stays on screen').toBeInViewport()
+})
+
+/* ux-w2 B23. Each location card carries a small round ordinal badge in place of the "Pick N" label. */
+test('ux-w2 B23: each owed card carries a round ordinal badge', async ({ page }) => {
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
+  const card = view(page).locator('.ff-owed-card', { hasText: 'Charizard ex' })
+  await expect(card, 'the owed card is drawn').toHaveCount(1)
+  const badge = card.getByText('1', { exact: true }).first()
+  await expect(badge, 'the ordinal badge is drawn').toBeVisible()
+  const shape = await badge.evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    const radius = getComputedStyle(el).borderTopLeftRadius
+    const px = radius.endsWith('%') ? (parseFloat(radius) / 100) * r.width : parseFloat(radius)
+    return { w: r.width, h: r.height, px }
+  })
+  expect(Math.abs(shape.w - shape.h), 'the badge is square').toBeLessThanOrEqual(1)
+  expect(shape.px, `the badge corners are round (radius ${shape.px}px on ${shape.w}px)`).toBeGreaterThanOrEqual(shape.w / 2 - 1)
+})
+
+/* ux-w2 B23. The "Pick" heading and the "Pick N" row label are both removed. */
+test('ux-w2 B23: no Pick heading and no "Pick N" row label on the list', async ({ page }) => {
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
+  const card = view(page).locator('.ff-owed-card', { hasText: 'Charizard ex' })
+  await expect(card, 'the owed card is drawn, so the absence below is not vacuous').toHaveCount(1)
+  await expect(page.getByRole('heading', { name: /^pick$/i }), 'no Pick heading').toHaveCount(0)
+  await expect(page.getByRole('region', { name: /^pick$/i }), 'no Pick section').toHaveCount(0)
+  await expect(card, 'no Pick N label on the row').not.toContainText(/pick\s+\d/i)
+})
+
 test("the owner's position treatment never reaches the Fulfiller", async ({ page }) => {
   /* ONE HELPER CALL, and that is a property of the helpers rather than a shortcut. `openSearch`
      calls `openList` itself, and `openList` calls `stubServer` — routing a page twice leaves the
@@ -1794,18 +1862,26 @@ test('the cards for sale are listed in box-walk order, and nothing else is liste
  * The rest of this file runs against a ledger with nothing open, which is the same screen with
  * that section absent; this case is the one that renders it.
  */
-test('a card an open order owes is drawn as "Pick N" with every copy the store holds, none preselected', async ({
+test('a card an open order owes is drawn with its N Left count and every copy the store holds, none preselected', async ({
   page,
 }) => {
   await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
 
-  // The figure he reads first, and it counts copies rather than orders.
-  await expect(view(page)).toContainText('1 pick')
+  // The figure he reads first, and it counts copies rather than orders (B23: the "N Left" count).
+  await expect(view(page).getByText(/\b1\s+left\b/i).first()).toBeVisible()
 
   /* The card is on screen WITHOUT opening a box: an order's demand is the list, and the boxes
      below it are the other way in. */
   const card = view(page).locator('.ff-owed-card', { hasText: 'Charizard ex' })
-  await expect(card.locator('.ff-owed-pick')).toContainText('Pick 1')
+  // B23: the one copy owed carries its round ordinal badge in place of the "Pick N" label.
+  const badge = card.getByText('1', { exact: true }).first()
+  await expect(badge, 'the copy owed carries a round ordinal badge').toBeVisible()
+  const round = await badge.evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    const radius = getComputedStyle(el).borderTopLeftRadius
+    return Math.abs(r.width - r.height) <= 1 && (radius.endsWith('%') ? parseFloat(radius) >= 50 : parseFloat(radius) >= r.width / 2 - 1)
+  })
+  expect(round, 'the ordinal badge is round').toBe(true)
   /* NONE PRESELECTED: this is `CardLocations`' own copies list, the same one a search result
      draws, with a two-step Pull/Mark-sold control on the copy itself -- not a single card that
      opens on its own screen. D218: the seam is CSS now (`.ff-place-elem::before` /
@@ -1830,7 +1906,7 @@ test('a card an open order owes is drawn as "Pick N" with every copy the store h
 
 /* SCREEN PASS F11: a card owed by several orders read "Pick 1 , 6 orders" -- the heading is a
  * flex row and its gap sat before the comma. The comma belongs to the text it ends. */
-test('a card owed by two orders reads "Pick 1, 2 orders" with no space before the comma', async ({ page }) => {
+test('a card owed by two orders reads "2 orders" with no space before the comma', async ({ page }) => {
   const twoOrders = {
     ...ONE_OPEN_ORDER_PLAN,
     stops: [
@@ -1841,25 +1917,33 @@ test('a card owed by two orders reads "Pick 1, 2 orders" with no space before th
     ],
   }
   await openList(page, [], { orders: ONE_OPEN_ORDER, plan: twoOrders })
-  const pick = view(page).locator('.ff-owed-card', { hasText: 'Charizard ex' }).locator('.ff-owed-pick')
-  await expect(pick).toContainText('Pick 1')
-  const said = await pick.evaluate((el) => (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim())
-  expect(said).toBe('Pick 1, 2 orders')
+  const owed = view(page).locator('.ff-owed-card', { hasText: 'Charizard ex' })
+  // B23: the copy carries its round ordinal badge in place of the "Pick N" label.
+  await expect(owed.getByText('1', { exact: true }).first(), 'the copy carries a round ordinal badge').toBeVisible()
+  // The order count still reads beside it, and no stray space sits before a comma (SCREEN PASS F11).
+  const said = await owed.evaluate((el) => (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim())
+  expect(said, 'the card says it is owed by two orders').toMatch(/2 orders/)
+  expect(said, 'no space before a comma').not.toMatch(/\s,/)
 })
 
 /* THE OWNER'S OWN CASE. `MULTI_PLAN`'s own comment has the ruling verbatim: two wanted,
  * three on hand, three different boxes -- and the screen must say "Pick 2" and offer every
  * one of the three, never two preselected copies standing in for the SKU. */
-test('a SKU owed 2 with 3 copies on hand shows "Pick 2" and every copy, none preselected', async ({
+test('a SKU owed 2 with 3 copies on hand shows the 2 left count and every copy, none preselected', async ({
   page,
 }) => {
   await openList(page, [], { orders: MULTI_ORDER, plan: MULTI_PLAN })
 
-  const card = view(page).locator('.ff-owed-card', { hasText: 'Promising Future' })
-  await expect(card.locator('.ff-owed-pick')).toContainText('Pick 2')
+  // B23: the wanted count reads in the "N Left" count, not a "Pick 2" label on the card.
+  await expect(view(page).getByText(/\b2\s+left\b/i).first(), 'the owed count reads 2 left').toBeVisible()
 
+  const card = view(page).locator('.ff-owed-card', { hasText: 'Promising Future' })
   // ALL THREE, not two -- the wanted count never caps the copies list (D212, D93).
   await expect(card.locator('.card-locations-copy')).toHaveCount(3)
+  // B23: each of the three copies carries its round ordinal badge, 1 to 3.
+  for (const ordinal of ['1', '2', '3']) {
+    await expect(card.getByText(ordinal, { exact: true }).first(), `copy ${ordinal} carries its ordinal badge`).toBeVisible()
+  }
   await expect(card.locator('.card-locations-place-large')).toHaveText([
     'Box 1, Section 1, Card 5',
     'Box 2, Section 1, Card 9',

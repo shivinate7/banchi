@@ -333,6 +333,51 @@ const CURRENT_PICK = '.orders-cardcol'
 
 sealEveryTest()
 
+/* ux-w2 B16 (order-walk-plan.md section 14, signed off, not built yet). Each figure chip beside the card names carries a
+   text box that explains it. The box opens on hover and on keyboard focus, so a chip is reachable without a pointer. */
+test('ux-w2 B16: each Captured, Hidden and Sent chip opens a text box on hover and on keyboard focus', async ({ page }) => {
+  await open(page)
+  const side = page.locator('.browse-hero-side').first()
+  await expect(side, 'the card figures are drawn').toBeVisible()
+  for (const name of [/^\s*Captured/i, /^\s*Hidden/i, /^\s*Sent/i]) {
+    const chip = side.locator(':scope > *').filter({ hasText: name })
+    await expect(chip, `a chip for ${name} is drawn`).toHaveCount(1)
+    await chip.hover()
+    const box = page.getByRole('tooltip')
+    await expect(box, `hovering the ${name} chip opens its text box`).toBeVisible()
+    await expect(box).toHaveText(/\S/)
+    await page.mouse.move(0, 0)
+    await chip.focus()
+    await expect(chip, `the ${name} chip takes keyboard focus`).toBeFocused()
+    await expect(box, `focusing the ${name} chip opens its text box`).toBeVisible()
+    await page.keyboard.press('Escape')
+  }
+})
+
+/* ux-w2 B17 (order-walk-plan.md section 15 rail, signed off, not built yet). The walk control is a button whose name starts
+   with a verb, "Start Walk", and a caption beside it gives the buyer count, "10 buyers". */
+/* Two tickable buyers, so the walk control draws (it shows only at two or more). Both buyers take the same on-hand copies. */
+function twoBuyersOpen(): OrdersPayload {
+  const base = oneOpenOrder()
+  const first = base.resolution.orders[0]!
+  const second = { ...first, key: 'TCGplayer:ORD-B1', number: 'ORD-B1', lines: first.lines.map((one) => ({ ...one, order: 'ORD-B1', order_key: 'TCGplayer:ORD-B1' })) }
+  return {
+    ...base,
+    summary: '2 orders',
+    orders: [base.orders[0]!, { ...base.orders[0]!, key: 'TCGplayer:ORD-B1', number: 'ORD-B1', buyer: 'Ben Franklin' }],
+    resolution: { ...base.resolution, orders: [first, second] },
+  }
+}
+
+test('ux-w2 B17: the walk control is a verb-led button with a buyer-count caption', async ({ page }) => {
+  await open(page, { orders: twoBuyersOpen() })
+  const control = page.getByRole('button', { name: /^start walk/i })
+  await expect(control, 'the walk control is a button whose name starts with a verb').toBeVisible()
+  const bar = page.locator('.orders-filterbar')
+  await expect(bar.getByRole('button', { name: /^start walk/i }), 'the verb button sits in the filter bar').toHaveCount(1)
+  await expect(bar, 'the caption gives the buyer count').toContainText(/\b\d+\s+buyers?\b/i)
+})
+
 /* -------------------------------------------------------------------------------------- 1 */
 
 test('only the newest pull in the walk offers Undo — the older one reads Sold', async ({ page }) => {

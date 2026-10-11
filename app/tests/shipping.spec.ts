@@ -632,3 +632,22 @@ test('at 1440 every lane still opens shown, the desktop default', async ({ page 
   }
   await expect(page.locator('.shipping-row')).toHaveCount(3)
 })
+
+/* ux-w2 B15 (order-pipeline.md, signed off, not built yet). The "Needs a look" frame carries a solid warning border, not a
+   dashed one. The dash belongs to the upload area alone. The frame is found by its accessible name, whatever its casing. */
+test('ux-w2 B15: the "Needs a look" frame has a solid border and no dashed edge', async ({ page }) => {
+  await open(page, { batch: threeKinds() })
+  await readExport(page)
+  const frame = page.getByRole('button', { name: /needs a look/i })
+  await expect(frame, 'the Needs a look frame is drawn').toBeVisible()
+  const styles = await frame.evaluate((el) => {
+    const cs = getComputedStyle(el)
+    return { border: [cs.borderTopStyle, cs.borderRightStyle, cs.borderBottomStyle, cs.borderLeftStyle], outline: cs.outlineStyle }
+  })
+  expect(styles.border, 'no border edge is dashed').not.toContain('dashed')
+  expect(styles.outline, 'the outline is not dashed').not.toBe('dashed')
+  expect(
+    styles.border.includes('solid') || styles.outline === 'solid',
+    `the frame draws a solid edge (reads ${JSON.stringify(styles)})`,
+  ).toBe(true)
+})
