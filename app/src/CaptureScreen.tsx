@@ -5385,7 +5385,9 @@ export function CaptureScreen() {
               onClick={() => void doCapture()}
               disabled={shutterDisabled}
               aria-describedby={
-                blockers.length === 1 && blockers[0]?.key === 'camera' ? 'capture-shutter-why' : undefined
+                blockers.length === 1 && blockers[0]?.key === 'camera'
+                  ? 'capture-shutter-why'
+                  : blockers.filter((blocker) => blocker.text !== null).map((blocker) => `capture-block-${blocker.key}`).join(' ') || undefined
               }
               busy={busy}
               /* In motion mode the C key is genuinely disarmed, so the keycap goes; the
@@ -5447,7 +5449,7 @@ export function CaptureScreen() {
                       {blocker.text === null ? null : (
                         <>
                           <Icon name={blocker.icon} size={14} />
-                          <span className="capture-block-say">{blocker.text}</span>
+                          <span id={`capture-block-${blocker.key}`} className="capture-block-say">{blocker.text}</span>
                         </>
                       )}
                       {blocker.fix === null ? null : (
