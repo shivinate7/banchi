@@ -12,6 +12,6 @@
 
     D31 then merged `#/boxes` and `#/pull` into `#/inventory`. The screens this step names by their old routes are modes of one.
 
-    The Outstanding list ran to five entries. All five were already on disk. A stale record is believed as hard as a true one. No check compares a list of prose claims with the tree. The list was rebuilt from a grep.
+    The Outstanding list had five entries, all already on disk. It was rebuilt from a grep. No check compared a list of prose claims with the tree, so a stale record passed as readily as a true one.
 
     The real gap was the client half. Box delete, the mid-box delete with its contiguous shift, and the retroactive claim corrections passed T7 with no client function and no control. The step could read as complete while three operations were unusable. They are reachable now, and `app/tests/inventory.spec.ts` asserts it. `CLAUDE.md`'s route-is-not-a-feature rule records that finding as a standing rule.

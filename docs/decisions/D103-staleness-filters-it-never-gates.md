@@ -1,8 +1,6 @@
 ## D103 — Staleness filters; it never gates
 
-**`#/pricing` draws the operator's whole live inventory from a My Pricing export. The staleness terms are a filter over it.** They are not a decision taken before the data arrives. The operator wanted the live export on the same pricing UI as the runs path. That UI has the charts, the load-prices flow and familiar controls. A spreadsheet was the wrong answer.
-
-That UI already existed. It was wired to runs, and a live export is not a run.
+**`#/pricing` draws the operator's whole live inventory from a My Pricing export. The staleness terms are a filter over it.** They are not a decision taken before the data arrives. The operator wanted the live export on the same pricing UI as the runs path, which has the charts, the load-prices flow and familiar controls. A spreadsheet was rejected. That UI was wired to runs, and a live export is not a run.
 
 ### Why a lens and not a gate
 
@@ -14,7 +12,7 @@ The owner ruled that the stale rows are not the default view. The lens opens on 
 
 ### The record widens, and the offer does not
 
-This is the whole shape of the change. It applies D100 §5's distinction once more: **the file that records is not the file that offers.**
+It applies D100 §5's distinction once more: **the file that records is not the file that offers.**
 
 | file | what it is |
 |---|---|
@@ -25,7 +23,7 @@ This is the whole shape of the change. It applies D100 §5's distinction once mo
 
 **A fourth file rather than a wider manifest, for two measured reasons.** `cli/cmd_reprice.py:_apply` builds the upload's bytes from `manifest["skus"]`. Leaving that key alone keeps the money path provably untouched. Every existing assertion in `check_markdown` runs over byte-identical inputs. Also, `server/pipeline_routes.py:_markdown_summary` parses the manifest for every stamp to answer `GET /pipeline/markdowns`. At about 700 bytes a row, a wide manifest is about 530KB on the owner's export. Thirty markdowns would mean parsing 16MB to draw a list.
 
-**The worklist stays narrow. This is the strongest constraint here.** D100: "every file this feature writes is safe to upload, whichever one the operator grabs." A 441-row worklist has two bad options. It would carry a proposed price on rows the rule refused, a file that marks down the entire store if uploaded by accident. Or it would carry nulls through `set_writable`. `check_markdown`'s "the worklist holds the two listings above the floor and not the one at it" is the mechanical guard, and it is to be read as one.
+**The worklist stays narrow.** D100: "every file this feature writes is safe to upload, whichever one the operator grabs." A 441-row worklist has two bad options. It would carry a proposed price on rows the rule refused, a file that marks down the entire store if uploaded by accident. Or it would carry nulls through `set_writable`. `check_markdown`'s "the worklist holds the two listings above the floor and not the one at it" is the mechanical guard, and it is to be read as one.
 
 **`standing` is a third state that `skip` cannot express.** A `deferred` row qualified but fell below `--limit`. It carries `skip: null`, exactly as an offered row does. Without `standing`, the difference between "the rule proposes this" and "you asked for fewer" is invisible. It is not a second fact that can disagree. Both are projections of one partition, taken in one pass. **There is no `below_limit` refusal code,** because those rows qualified, and `plan` deliberately keeps them out of `skipped`.
 
@@ -33,7 +31,7 @@ This is the whole shape of the change. It applies D100 §5's distinction once mo
 
 Its old argument was "there are no bytes to build a row from". Once the survey carries the bytes, that is no longer true of a row the rule merely declined to propose. So `read_back` gains `offered=` and `unpriceable=`. Both are optional, so every caller written before this reads exactly as it did. The refusal narrows to a SKU this markdown's survey never saw: a typo'd id, or a row from some other export.
 
-**`dropped` follows the OFFER, not the record.** That assertion catches the sloppy version of this change. The figure means "SKUs this file was written for that you deleted". Measured over the wider set, it would tell an operator who priced three cards that they had deleted 438.
+**`dropped` follows the OFFER, not the record.** The figure means "SKUs this file was written for that you deleted". Measured over the wider set, it would tell an operator who priced three cards that they had deleted 438.
 
 ### The 33 that are drawn and may never be pushed
 
@@ -109,7 +107,7 @@ The record held every live row, and it also held every row TCGplayer no longer h
 
 So the lens draws `CutoffPanel` itself. It uses the same component, the same `policy.threshold`, and the same `bucketAt` partition. **The only difference between the doors is when the figure is spent.** `emit` prices a run's cheap half from `sub_threshold` at write time, so those rows need no press. A lens has no emit. `reprice apply` sends typed answers and nothing else. So the same figure is spent by a press that writes real answers, in one act with one reversal. `CutoffPanel.applyCount` is `null` on a run. A button there would offer to redo what the pipeline already does.
 
-**A first build of this was a bespoke two-field widget, and it was wrong twice.** It asked for a threshold and a price. D99 had already ruled that the pair is one variable. It also collided with `.pricing-cheap`, the run's own cut-off panel. That panel's `flex-direction: column` won on source order and stacked the control into a tower. **A screen-prefixed class needs more than its prefix to be unique.** Both mistakes came from building beside the thing instead of reading it.
+**A first build of this was a bespoke two-field widget, and it was wrong twice.** It asked for a threshold and a price. D99 had already ruled that the pair is one variable. It also collided with `.pricing-cheap`, the run's own cut-off panel. That panel's `flex-direction: column` won on source order and stacked the control into a tower. **A screen-prefixed class needs more than its prefix to be unique.**
 
 **The presets are real on the lens, and the press means something different on each door.** The operator asked what "Match market" and "Market −5%" do on the lens. The answer was nothing useful. `asRow` shipped `presets: {}`. So every lens row had no per-SKU figure, and the buttons filled nothing. They still wrote `policy.rule` and `policy.basis` to `inventory/prices.json`, the store-wide setting that every future joined run lists by. **On a copy of the owner's store, pressing `Market −5%` on the lens left 387 fields untouched and flipped the store's rule from `match` to `undercut:5`.** Repricing a live book silently repriced the next box out of the camera, and nothing on screen said so. D101's defect, on the money path.
 
@@ -128,7 +126,7 @@ The figures are now computed server-side by `pipeline/pricing.py:preset_prices`.
 - **Singles and Sealed.** The Live tab filters on its own by kind, in the URL (`?kind=singles` or `?kind=sealed`, D285). A row is sealed when its condition is `Unopened` (`pipeline/reprice.py:is_sealed`, `tcgcsv.SEALED_CONDITION`). No sales-lane rule existed to reuse. A name rule misfiles singles such as Tinkatink and Pack of Wonders. The survey carries the flag per row. The apply takes the filter as `kind` and refuses an edit of the other kind (`kind_mismatch`), so a Singles view never sends a sealed price.
 - **The counts add up.** "Passed over" read the survey's `counts.refused`, which also counts sold-out rows the tab never draws. On the owner's read, that gave 727 beside "All 408". Each lens count is now the rows it shows, under the kind filter. All is Not selling plus Passed over.
 - **The Live tab's heads.** "Needs you" on this tab used to count every listing worth $5 or more, 236 of 408. A live listing already has a price somebody chose. So on this tab only a row with no market price leads, under "No market price". The owner types its price, and the rule never lowers it.
-- **What "N new prices" counts.** A price that is not the price the read showed. It was written on this visit (typed, a preset, the cut-off press, or "Mark down"). Or it was stored on an earlier visit above the live price. The owner's ruling: a typed price higher than the live price counts. A lower earlier price does not. The bar names each earlier price that goes, card by card, before the press. Earlier, every stored answer on a surveyed row counted, most of them equal to the live price. That was the "280".
+- **What "N new prices" counts.** A price that is not the price the read showed. It was written on this visit (typed, a preset, the cut-off press, or "Mark down"). Or it was stored on an earlier visit above the live price. The owner ruled that a typed price higher than the live price counts. A lower earlier price does not. The bar names each earlier price that goes, card by card, before the press. Earlier, every stored answer on a surveyed row counted, most of them equal to the live price. That was the "280".
 - **The cap is the rule's only.** The owner ruled that the cap governs the rule and nothing else. "Mark down" writes the capped proposal. A typed price is never held back by the cap.
 - **A press for the rule.** A blank box keeps its price, as above. So the rule's price reaches a field only by a press. "Mark down N" on the rule line writes the server's proposal, capped and never on a no-market row, onto the rule's picks on screen. It is one act with one undo, the presets' own shape. A row the owner priced away from its live price keeps the owner's price.
 - **Money to the cent.** A field shows two decimal places. The export's `349.9900` is drawn as `349.99`. What the field shows is what the press sends (D221).
