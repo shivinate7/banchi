@@ -1,10 +1,6 @@
 ## D295 — The public demo is the scrubbed real store
 
-**What changed.** Before this entry, the published demo (`shivinate7.github.io/banchi`)
-showed an INVENTED store. `scripts/demo-seed.py` writes real catalogue rows out of
-`fixtures/`. But which card sits in which box, what has sold, and who bought it were all
-made up (`docs/specs/demo.md` §2). The owner has ruled that the demo
-should be a FULL MIRROR of the real store instead, with people scrubbed. The ruling, in full:
+**Ruling: the published demo (`shivinate7.github.io/banchi`) is a full mirror of the real store, with people scrubbed.** Before this entry, the demo showed an invented store. `scripts/demo-seed.py` writes real catalogue rows out of `fixtures/`. Which card sits in which box, what has sold, and who bought it were all made up (`docs/specs/demo.md` §2). The owner's ruling, in full:
 
 - The full mirror is fine.
 - Photos are capped at 512MB.

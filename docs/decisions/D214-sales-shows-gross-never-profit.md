@@ -1,80 +1,33 @@
 ## D214 — Sales shows gross, never profit
 
-**The problem this closes.** TCGplayer's own seller Orders page indexes orders, not line
-items. There is no way to ask it "how much have I made selling one named card". This store's
-own order ledger already carries every line's `unit_price` (`OrderLine`, `store/orders.py`).
-The answer was always one reshaping away. `#/revenue`, labelled **Sales**, is that reshaping:
-a verdict sentence for the selected period, a month strip, and a searchable table by name.
-Nothing here is new data.
+**Ruling: `#/revenue`, labeled Sales, shows gross revenue only. It never shows profit, fees or cost.** The screen reads the order ledger that already exists. Nothing here is new data.
 
-### Why its own route, and not a lens on `#/orders`
+**The problem.** TCGplayer's seller Orders page indexes orders, not line items. It cannot answer "how much have I made selling one named card". This store's order ledger already carries every line's `unit_price` (`OrderLine`, `store/orders.py`). Sales is one reshaping of that ledger. It shows a verdict sentence for the selected period, a month strip, and a product table that is searchable by name.
 
-D105 already drew the line this decision follows. Reading the same data is kinship of
-IMPLEMENTATION, and a route earns its place on kinship of JOB. `#/orders` is today's
-walk — which buyer gets which copies, where they physically are, pulled one at a time. This
-screen asks a different question of the same ledger. Not "what do I still owe", but "what did
-I make, and on what" — a retrospective over everything closed, months at a time, searched by
-a product's name rather than walked order by order. A `?view=` lens on `#/orders` would put a
-retrospective behind a screen whose whole shape answers an operational question. Two jobs,
-one shared table, two routes — the same shape D69 already gave `#/orders` and `#/shipping`.
+### Why its own route, not a lens on `#/orders`
 
-### Why gross-only is the honest product, not a half-built P&L
+D105 drew the line this decision follows. Reading the same data is kinship of implementation. A route earns its place on kinship of job. `#/orders` is the operational walk: which buyer gets which copies, where they are, pulled one at a time. Sales asks a different question of the same ledger: what did I make, and on what. It is a retrospective over closed orders, by month, searched by product name. A `?view=` lens on `#/orders` would put a retrospective behind a screen whose shape answers an operational question. Two jobs, one shared table, two routes. D69 gave `#/orders` and `#/shipping` the same shape.
 
-There is no cost basis anywhere in this repository. There is no fee, shipping or refund
-figure either: `server/order_transport.py`'s `project_order` allowlist drops `transaction`
-and `refunds` at parse, before either ever reaches a wire response. Building a "net" number
-here would mean inventing one of two things. Either a cost basis this store has never
-recorded, or a fee schedule read off nothing. Presenting either as a real figure would be a
-lie dressed as data. **Gross is the only number in this ledger that is actually true.** The
-screen says "gross" in its own lede rather than implying a profit or loss. It never subtracts,
-estimates, or asks for a cost. A real cost-basis feature, if it is ever built, is a second,
-clearly-labelled figure beside this one — never a silent replacement.
+### Why gross only
 
-### Why the table stays mixed, sealed and singles together
+No cost basis exists anywhere in this repository. No fee, shipping or refund figure exists either. `server/order_transport.py`'s `project_order` allowlist drops `transaction` and `refunds` at parse, before either reaches a wire response. A net figure would need one of two invented inputs: a cost basis this store never recorded, or a fee schedule read from nothing. Presenting either as real would be a lie dressed as data. Gross is the only number in this ledger that is true. The screen says "gross" in its own lede. It never subtracts, estimates or asks for a cost. A cost-basis feature, if built, is a second, clearly labeled figure beside this one. It never replaces this one silently.
 
-`OrderLine.kind` is null on nearly every line because the feed says nothing about it.
-Classifying a line by pattern-matching its product name is refused at length by CLAUDE.md and
-`pipeline/orders.py`'s own header. A guess dressed as a fact is worse than an admitted
-unknown. On the owner's live store, revenue is dominated by
-sealed product. Booster packs and boxes make up the top eight names by gross. A screen that
-assumed singles would be wrong about most of its own data on day one. The product table is
-one list, sorted by gross, and stays that way until the feed itself carries a real `kind`.
+### Why the table stays mixed
+
+`OrderLine.kind` is null on nearly every line, because the feed says nothing about it. CLAUDE.md and `pipeline/orders.py`'s header refuse classifying a line by pattern-matching its product name. A guess dressed as a fact is worse than an admitted unknown. On the owner's live store, sealed product dominates revenue. Booster packs and boxes make up the top eight names by gross. A screen that assumed singles would be wrong about most of its data on day one. The product table is one list, sorted by gross. It stays that way until the feed carries a real `kind`.
 
 ### Measured on the owner's live store
 
-804 orders, 1,346 lines, zero missing `unit_price`. Excluding Canceled: $66,334.71 gross over
-1,268 lines, 539 distinct product names, spanning the store's whole sales history. `GET /orders`
-answers in 230ms at 1.15MB. There is no new server route, no new parsing, and no change to
-`server/capture_server.py:do_orders` or to any order resolution or ledger behavior. This
-screen reads that one payload and reshapes it in `app/`.
+804 orders and 1,346 lines, with zero missing `unit_price`. Excluding Canceled: $66,334.71 gross over 1,268 lines and 539 distinct product names, across the store's whole sales history. `GET /orders` answers in 230ms at 1.15MB. The screen adds no server route, no parsing, and no change to `server/capture_server.py:do_orders`, to order resolution, or to ledger behavior. It reads that one payload and reshapes it in `app/`.
 
 ### Canceled is dropped, silently
 
-Ruling: an order the feed calls Canceled is not a sale. It does not appear on this screen,
-and no footnote explains its absence. This is narrower than `store/orders.py:is_terminal_status`'s own
-vocabulary. Shipped and Completed orders are terminal too, and they are real revenue. So this
-screen folds and compares exactly the one word `Canceled` against the wire's own `status`
-string. That mirrors how `is_terminal_status` folds case and edge whitespace before comparing
-its own wider set. It is not a second `TERMINAL_STATUSES` copy. It recognizes one word, not a
-vocabulary.
+**Ruling: an order the feed calls Canceled is not a sale.** It does not appear on this screen, and no footnote explains its absence. This is narrower than `store/orders.py:is_terminal_status`. Shipped and Completed orders are terminal too, and they are real revenue. So this screen compares exactly one word, `Canceled`, against the wire's `status` string. It folds case and edge whitespace first, as `is_terminal_status` does. It is not a second `TERMINAL_STATUSES` copy. It recognizes one word, not a vocabulary.
 
-See also: D69 (a screen earns a route on its job, not its data source), D86/D103/D105
-(kinship of implementation is not kinship of job), D193 (the ledger's own buyer field is
-unread here — this screen never draws a name, an address or a payment detail).
-
+See also: D69 (a screen earns a route on its job, not its data source), D86, D103 and D105 (kinship of implementation is not kinship of job), and D193 (the ledger's buyer field is unread here. This screen never draws a name, an address or a payment detail).
 
 ### The nav row
 
-`#/revenue` is an eleventh nav row, on purpose. The screen shipped with a nav row and a hotkey.
-The owner was shown the measurement. An eleventh nav row runs the phone drawer's rows 37px past
-the fold at 390x754, on the 40px thumb floor CLAUDE.md already sets. There is no lower step to
-give. The owner first ruled it off: keep the drawer whole, reach the screen from the command
-palette and a link on `#/orders` instead. That was reversed: Sales is a
-sidebar tab, and nothing is added to any other screen for it. The off-nav shape grafted a control
-onto `#/orders`, and onto `#/shipping` through the shared `OrdersHub`. That is reverted.
-`app/src/Orders.tsx` matches main again. A shared-component screen is the wrong place for a
-workaround. One change became two, on two screens, because the two routes share one component.
+`#/revenue` is an eleventh nav row, on purpose. An eleventh row runs the phone drawer 37px past the fold at 390x754. That breaks the 40px thumb floor CLAUDE.md sets, and there is no lower step to give. The owner first ruled the row off: keep the drawer whole, and reach Sales from the command palette and a link on `#/orders`. That ruling was reversed. Sales is a sidebar tab, and no other screen gets a control for it. The off-nav shape had grafted a control onto `#/orders`, and onto `#/shipping` through the shared `OrdersHub`. That graft is reverted. `app/src/Orders.tsx` matches main again. A workaround does not belong in a shared component. One change had become two, on two screens, because the two routes share one component.
 
-`app/tests/brand.spec.ts`'s two drawer-fit cases carry the arithmetic. They give up a TEST'S OWN
-stricter promise, every row on screen with nothing to scroll to. D266 already rules that the
-phone drawer's nav scrolls for any row count, so that promise was never a product floor. What the cases give up is a test's promise, never a decision.
+`app/tests/brand.spec.ts`'s two drawer-fit cases carry that arithmetic. They drop the test's own stricter promise: every row visible, with nothing to scroll to. D266 already rules that the phone drawer's nav scrolls for any row count, so that promise was never a product floor. Only a test's promise changes here. No decision does.
