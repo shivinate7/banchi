@@ -91,6 +91,9 @@ class CacheEntry:
     # The card's own name (`cid`), recorded by the background reader. A move or a renumber changes
     # the position key and never the cid, so the row can be matched back to its card.
     cid: Optional[str] = None
+    # The game the card was read under. Absent on every entry written before this field: such an
+    # entry is judged by its shape alone (`cli/cmd_identify.cached_refusal`).
+    game: Optional[str] = None
 
     @property
     def confidence(self) -> Optional[str]:
@@ -231,6 +234,7 @@ class Cache:
         engine: str = ENGINE_HAIKU,
         second_look: Optional[dict] = None,
         cid: Optional[str] = None,
+        game: Optional[str] = None,
     ) -> Optional[dict]:
         """Store an answer. Refuses to overwrite a cleared one; reports a disagreement.
 
@@ -259,6 +263,7 @@ class Cache:
             engine=engine,
             second_look=second_look,
             cid=cid,
+            game=game,
         )
         return None
 

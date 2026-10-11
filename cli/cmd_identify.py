@@ -834,7 +834,11 @@ def _adopt_cached(item: Item, entry, fingerprints: Dict[str, str]) -> None:
 def cached_refusal(item: Item, entry) -> Optional[str]:
     """Why this run's own parser refuses a cached answer, or None when it accepts it. The store
     cannot know a card's game; only the run holds its strategy, so only the run can judge a hit.
-    A refused answer is a miss: the caller leaves the card pending and names the refusal."""
+    A refused answer is a miss: the caller leaves the card pending and names the refusal.
+    An entry that recorded another game is a miss; one with no recorded game is judged by shape."""
+    recorded = getattr(entry, "game", None)
+    if recorded is not None and recorded != item.game:
+        return f"answer was read under game {recorded!r}, not {item.game!r}"
     if item.strategy is None:  # an unknown game never borrows Pokemon's profile
         return f"game {item.game!r} has no prompt strategy"
     try:
@@ -1636,6 +1640,14 @@ def run(args, say) -> int:
     items_by_key = {_custom_id(item.key): item for item in items}
     usage_in = usage_out = 0
 
+    # THE GAME EACH CARD WAS SENT UNDER, written to the manifest before every submission. A
+    # reattached answer was read under that game's prompt, whatever the sidecar says now.
+    sent_games = dict(run_dir.manifest.get("sent_games") or {})
+
+    def note_sent(sent) -> None:
+        sent_games.update({i.key: i.game for i in sent})
+        run_dir.set(sent_games=sent_games)
+
     existing = run_dir.batch_ids
     if existing and not run_dir.collected and not args.force_resubmit:
         say(f"reattaching to {len(existing)} unfinished batch(es) — results keep for 29 days")
@@ -1697,6 +1709,7 @@ def run(args, say) -> int:
             if item.unread is not None:
                 say(f"                {item.key}: {item.unread.code} - {item.unread.detail}")
         if second:
+            note_sent(second)
             try:
                 result = batch.run_batch(
                     _requests(second, with_crops=False, say=say),
@@ -1711,6 +1724,7 @@ def run(args, say) -> int:
             usage_in += result.usage.input_tokens
             usage_out += result.usage.output_tokens
     elif to_send:
+        note_sent(to_send)
         try:
             result = batch.run_batch(
                 _requests(to_send, with_crops=False, say=say),
@@ -1751,6 +1765,7 @@ def run(args, say) -> int:
         requests = _requests(wanted, with_crops=crops, say=say)
         if not requests:
             break
+        note_sent(wanted)
         try:
             result = batch.run_batch(requests, log=say, on_submit=run_dir.add_batch_id)
         except batch.BatchError as exc:
@@ -1909,6 +1924,7 @@ def run(args, say) -> int:
                     fingerprints.get(item.strategy, fingerprint),
                     engine=item.engine,
                     second_look=_second_look_record(item),
+                    game=sent_games.get(item.key, item.game),
                 )
                 if clash:
                     disagreements.append(clash)

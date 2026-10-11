@@ -235,11 +235,11 @@ def _adopt(target, accepted, meta, paths, session, *, rehearsal=False):
     adopted = []
     for result in accepted:
         card, _capture_id, digest, photo = meta[result.key]
+        game = str(card.game or games.DEFAULT_GAME)
         target.cache.put(
             result.key, result.payload, digest, match.MODEL_SHA256,
-            engine=ENGINE_MATCHER, cid=card.cid,
+            engine=ENGINE_MATCHER, cid=card.cid, game=game,
         )
-        game = str(card.game or games.DEFAULT_GAME)
         if game not in paths:
             continue
         now = target.inventory.cards[result.key]
