@@ -1774,10 +1774,13 @@ test('ux-w2: the search field does not move when orders load and the count gains
   await page.goto(VIEW_ROUTE)
   await settleFonts(page)
   await expect(searchBox(page), 'the search is drawn before the orders answer').toBeVisible()
+  // The column's entry animation (bn-page-in) moves the search on mount; read it only once that has ended.
+  await settleAnimations(page)
   const before = await searchBox(page).boundingBox()
   release()
   await expect(view(page).getByText(/\b12\s+left\b/i).first(), 'the count reads 12 left once loaded').toBeVisible()
   await settleLayout(page)
+  await settleAnimations(page)
   const after = await searchBox(page).boundingBox()
   expect(before, 'the search has a box before the load').not.toBeNull()
   expect(after, 'the search has a box after the load').not.toBeNull()
