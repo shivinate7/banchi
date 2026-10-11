@@ -1,15 +1,11 @@
 ## D137 — The catalog is Near Mint by rule
 
-**Settled 2026-09-11, from the owner asking where a feature had gone.** *"how come on
-review/pricing in the runs, ive somehow lost the ability to fast forward through the review
-by just stating all were near mint?"* — and then, when the first account of it was wrong,
-the correction that located it: *"I've never once been asked to judge the condition of cards
-in a review queue until today. They always were just pre-assumed to be Near Mint."*
+**Settled from the owner asking where a feature had gone.** The owner could no longer fast forward through the review queue by stating that every card was Near Mint. When the first account of this was wrong, the owner corrected it: until that day the owner had never been asked to judge a card's condition in the review queue. Conditions were always pre-assumed to be Near Mint.
 
 They were pre-assumed. That is the whole finding.
 **D12 hardcodes Near Mint and nothing in this tree had ever enforced it on the catalog.**
 `pipeline/join.py:Catalog.from_export` has
-been touched once since it was written (2026-08-23, when games became data) and has never
+been touched once since it was written (when games became data) and has never
 carried a `Condition` predicate. Every rung of `variant.resolve` resolves to a Near Mint
 string, so the *ladder* was never in doubt — but the candidate list a queue entry carries is
 `found.rows`, straight off the export, ungated. The catalog was narrow because the operator
@@ -17,10 +13,10 @@ was producing narrow files by hand.
 
 ### What changed was the input, and the date is exact
 
-D65 (2026-08-30, `fb516df`) built the automatic fetch. `Scope.condition_ids` was declared in
+D65 (`fb516df`) built the automatic fetch. `Scope.condition_ids` was declared in
 that commit, has never been populated by any caller since — one commit in the whole history
 touches that name — and `Scope.model`'s `ids()` turns `()` into `["0"]`, the portal's *All
-Conditions*. On **2026-09-01** every run was re-joined against fetched exports, including
+Conditions*. Then every run was re-joined against fetched exports, including
 `2026-08-24-box2-01`, whose original hand-downloaded CSV is still sitting unused beside the
 file its manifest now names.
 
@@ -31,11 +27,11 @@ file its manifest now names.
 
 **And the experience changed ten days after the mechanism did.**
 Counted off the store's own `answered` events, the operator has
-answered **8** grade-bearing questions against a wide export in total, all on 2026-09-01, out
-of 240 answers; on 2026-09-11 it was **108 of 131**. Before that the work was
+answered **8** grade-bearing questions against a wide export in total, all on the re-join day, out
+of 240 answers; later it was **108 of 131**. Before that the work was
 `number_unread_name_matched` — one candidate, one press — and the handful of `set_ambiguous`
 cards were 2-row choices between two *sets*, both Near Mint. A session telling the operator
-they had had this since the 1st was reading a mechanism as an experience.
+they had had this since the re-join was reading a mechanism as an experience.
 
 ### Three costs, and only one of them is the one that was reported
 
@@ -43,9 +39,7 @@ they had had this since the 1st was reading a mechanism as an experience.
 exactly one candidate. Nothing in `app/src/ReviewQueue.tsx` changed — `groupOffer` was
 byte-identical to its pre-Banchi self and `G` is still the key.
 
-**AND THE LAST SENTENCE OF THIS PARAGRAPH WAS WRONG, CORRECTED 2026-09-11.** It read: *"With
-five grades per finish no entry can ever carry one row, so the control correctly never
-draws."* The premise does not hold and the conclusion was never the reason. Counted off the
+**THE LAST SENTENCE OF THIS PARAGRAPH WAS WRONG.** It claimed that with five grades per finish no entry could carry one row, so the control never drew. The premise does not hold and the conclusion was never the reason. Counted off the
 store's own queue files: of the 141 `rarity_claim_mismatch` entries box 1 wrote that day,
 **139 carried exactly one row** — the grades never reached them, because D23's rarity filter
 runs before the candidate list is built and cut every row the claim excluded. In the parked
@@ -60,7 +54,7 @@ narrows what qualifies — the paragraph's subject is real — but "correctly ne
 defect wearing a ruling's clothes.
 
 **D3 rung 2 died outright, and that is the larger cost.** `CATALOG_FORCED` fires on
-`len(candidates) == 1`. Measured on the owner's 2026-09-11 Riftbound export: **0 of 1,246**
+`len(candidates) == 1`. Measured on the owner's Riftbound export: **0 of 1,246**
 numbers held a single row as fetched; **629** do once the grades are gone. Replaying that
 day's 122 queued cards through the narrowed rows,
 **50 would never have been queued at all** — 32 `detected_finish_not_stocked`, 17
@@ -96,7 +90,7 @@ its own separate reason, untouched.
 
 Given that, the fetch could safely narrow too — and deliberately does not. The rule belongs
 where it cannot depend again on how the CSV was produced, which is the exact dependency that
-broke on 2026-09-01; a hand-downloaded or re-used wide file must join correctly. Leaving the
+broke at the re-join; a hand-downloaded or re-used wide file must join correctly. Leaving the
 wire wide also keeps the filter's subject present in every real export rather than in
 fixtures alone.
 
@@ -108,8 +102,8 @@ Booster displays, bundles, blisters and event kits carry `Unopened`:
 and cannot change what any numbered card resolves to. Measured across both wide fixtures,
 **zero sealed `Product Name` cells collide with a single's**, exact or folded, so keeping
 them cannot put a Booster Box on a card. Riftbound's own export prices an Origins Booster
-Display at $250.78. The owner's call, and the measurement makes it free rather than a
-judgement: *"idk if you needed to drop sealed items"* — it did not.
+Display at $250.78. The owner's call. The measurement makes it free rather than a
+judgement: the sealed items did not need dropping.
 
 A play grade is a second reading of a card this product sells at one grade. `Unopened` is the
 only condition its product is ever listed in. They are not the same kind of cell, which is why
@@ -134,7 +128,7 @@ was made of: five grades of one finish is one finish and five candidates. Rung 2
 `len(candidates) == 1` over **rows**. It counts rows now and resolves one through the real
 ladder, because a count is not a resolution.
 
-### Not the whole of what made 2026-09-11 hurt
+### Not the whole of what made the re-join day hurt
 
 Box 4 was captured with **no set hint on 448 of its 464 cards**, where boxes 5 and 6 are 100%
 `Unleashed`. 178 of the 1,246 Riftbound numbers collide across sets, and an unhinted collision

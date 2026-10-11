@@ -1,6 +1,6 @@
 # The TCGplayer Export Shipping format, and what it can and cannot answer
 
-Provenance and findings for `fixtures/orders-shipping.csv`. Taken **2026-08-30** from the
+Provenance and findings for `fixtures/orders-shipping.csv`. Taken from the
 seller portal: Orders tab → select all → **Export Shipping**.
 
 This note lives here rather than as a `#` comment inside the CSV, for two reasons. First, every
@@ -126,7 +126,7 @@ that lands.
 
 ## STATUS
 
-**RECORDED, READ, AND NOW REACHABLE.** Amended twice on 2026-08-30 — first by D61, which made
+**RECORDED, READ, AND NOW REACHABLE.** Amended twice — first by D61, which made
 this format something the code reads, then by D69, which gave it a screen.
 
 It read: *"RECORDED, not BUILT. Nothing reads this file and nothing reads the fixture."*

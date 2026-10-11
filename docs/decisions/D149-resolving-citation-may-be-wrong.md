@@ -1,6 +1,6 @@
 ## D149 — A resolving citation may still be wrong
 
-**Seven citations across five files named DEBT11 for a record that has only ever been in section 8.** Repaired by hand 2026-09-11. The repair is two characters per site; what is decided here is that **no `docs-audit` row will be built to catch the next one**, and the measurement behind that.
+**Seven citations across five files named DEBT11 for a record that has only ever been in section 8.** Repaired by hand. The repair is two characters per site. This entry decides that **no `docs-audit` row will be built to catch the next one**. The measurement behind that follows.
 
 ### The five files, and the two that were nearly broken with them
 
@@ -16,7 +16,7 @@ Wrong, all citing section 11 for the one-in-thirteen `design-check` flake, which
 
 The obvious hypothesis is D80's: a section was renumbered and every citation went stale pointing at a real section. **It is not what happened, and the history settles it rather than suggesting it.** The flake record entered the debts record in `86e70c2` already under DEBT8, on a tree where DEBT11 was already the capture-server section. Across every revision of that file, DEBT11 has carried two wordings of one subject and the flake record has only ever been in DEBT8. The first wrong citation and three copies landed in ONE commit, `e06eb8a` (D136), across three files; `bc39785` (D141) copied it into two more and the Makefile took it from the same source.
 
-**That file does not renumber, and section 15 is the proof**: closed 2026-09-07 by deleting the heading and leaving 16 to 24 in place. So a renumber guard — the row this would otherwise argue for — would have caught none of the seven, and the hazard it guards is structurally absent in the one file at issue.
+**That file does not renumber, and section 15 is the proof**: it was closed by deleting the heading and leaving 16 to 24 in place. A renumber guard, the row this would otherwise argue for, would have caught none of the seven. The hazard it guards is absent in the one file at issue.
 
 **What this was instead is a copying failure**, and the reason it survived is that a wrong section number *still resolves*: section 11 is a coherent thing for a CI comment about worker counts to cite. It is `docs/map.py`'s rule about step ids — *"a renumber leaves every one pointing at a real step that is not the one meant — which nothing can detect"* — reaching a second file by a second route.
 

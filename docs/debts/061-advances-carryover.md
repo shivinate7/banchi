@@ -1,6 +1,6 @@
 ## DEBT61 — eight build proposals are still open
 
-Each item was checked against the code and stays open. None has an owner ruling to build it. The owner picks which to take.
+Each item was checked against the code and stays open. None is ruled to build. The owner picks which to take.
 
 1. `pipeline/join.py`, `Catalog._blank_number_by_name`: the index key is stripped and not case-folded, while D35's name index folds through `_name_compare_key`. A case mismatch in the name-only fallback (`rows_for_blank_number_name`) finds no row. Unmeasured: how often this fires on real cards.
 2. `server/pipeline_routes.py`, `do_pipeline_scope`: one GET reads the identifications file twice, because `_scope_counts` reads it and `_scope_for_run` calls `_scope_counts` again.

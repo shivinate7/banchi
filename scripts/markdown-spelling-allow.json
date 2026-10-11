@@ -89,14 +89,7 @@
       "lane": "docs-sweep",
       "SPELLING": [
         "ellipsises",
-        "grey",
-        "recognised"
-      ]
-    },
-    "docs/decisions/*-docs-are-linted-as-documents.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "judgement"
+        "grey"
       ]
     },
     "docs/decisions/*-generators-write-never-gate.md": {
@@ -146,11 +139,8 @@
     "docs/decisions/*-press-never-moves-content.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "behaviour",
-        "behaviour",
         "capitalisations",
-        "ellipsises",
-        "neighbours"
+        "ellipsises"
       ]
     },
     "docs/decisions/*-a-price-belongs-to-a-listing.md": {
@@ -188,17 +178,6 @@
         "neighbouring"
       ]
     },
-    "docs/decisions/*-feedback-belongs-to-product.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "colour",
-        "colour",
-        "colour",
-        "colour",
-        "travelling",
-        "travelling"
-      ]
-    },
     "docs/decisions/*-early-catalogue-check-is-unbuilt.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -222,8 +201,7 @@
       "SPELLING": [
         "catalogue",
         "catalogue",
-        "catalogue",
-        "honours"
+        "catalogue"
       ]
     },
     "docs/decisions/*-public-demo-is-scrubbed-store.md": {
@@ -258,17 +236,10 @@
         "judgement"
       ]
     },
-    "docs/decisions/*-history-reads-one-box-at-a-time.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "optimiser"
-      ]
-    },
     "docs/decisions/*-home-keeps-shape-five-stages.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "labelled",
-        "relabelled",
         "relabelled"
       ]
     },
@@ -285,12 +256,6 @@
       "SPELLING": [
         "behaviour",
         "catalogue"
-      ]
-    },
-    "docs/decisions/*-name-overrides-a-disputed-number.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "recognised"
       ]
     },
     "docs/decisions/*-a-typed-dot-is-a-defect.md": {
@@ -335,13 +300,6 @@
         "serialises"
       ]
     },
-    "docs/decisions/*-resolve-a-product-from-its-sku.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behaviour",
-        "behaviour"
-      ]
-    },
     "docs/decisions/*-the-market-reading-is-a-table.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -364,27 +322,11 @@
         "judgement"
       ]
     },
-    "docs/decisions/*-name-agreement-settles-sku.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "mislabelled"
-      ]
-    },
     "docs/decisions/*-staleness-filters-it-never-gates.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "artefact",
-        "behaviour",
         "catalogue",
-        "catalogue",
-        "materialisation",
-        "materialised",
-        "synthesising"
+        "catalogue"
       ]
     },
     "docs/decisions/*-three-checks-replace-ceiling.md": {
@@ -404,7 +346,6 @@
     "docs/decisions/*-the-export-belongs-to-the-game.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "catalogue",
         "generalised"
       ]
     },
@@ -423,8 +364,7 @@
     "docs/decisions/*-order-taken-once.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "behaviour",
-        "behaviours"
+        "behaviour"
       ]
     },
     "docs/decisions/*-one-pricing-file-for-the-store.md": {
@@ -513,12 +453,6 @@
         "labelled"
       ]
     },
-    "docs/decisions/*-shipping-three-lanes-unsure.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "judgement"
-      ]
-    },
     "docs/decisions/*-sqlite-is-the-store-of-record.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -556,7 +490,6 @@
     "docs/decisions/*-undo-covers-the-whole-sitting.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "behaviour",
         "unlabelled"
       ]
     },

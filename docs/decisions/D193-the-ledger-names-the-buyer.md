@@ -1,8 +1,8 @@
 ## D193 — The ledger names the buyer
 
-**The owner walks drawers per PERSON, not per order number, and the ledger has never named one.** D63 built the ledger with two rulings that read as a single PII stance — *"No buyer, no address, no email. The ledger holds a SKU, a quantity and what the feed called the card"* — and D69's paste projection enforces the same shape at the browser. **That was never an owner ruling.** It was a session's design, made under D63/D69's own scope, at a moment nobody had asked what the screen should be for. The owner's outcome, stated 2026-09-13, is a hand working through drawers for one buyer at a time. A list of order numbers with no name on it cannot be walked that way. D63's own working agreement is *"think in outcomes, not processes"*. That is what asks whether the exclusion still served anybody once the screen existed.
+**The owner walks drawers per PERSON, not per order number, and the ledger has never named one.** D63 built the ledger with two rulings that read as a single PII stance — *"No buyer, no address, no email. The ledger holds a SKU, a quantity and what the feed called the card"* — and D69's paste projection enforces the same shape at the browser. **That was never an owner ruling.** It was a session's design, made under D63/D69's own scope, at a moment nobody had asked what the screen should be for. The owner's outcome is a hand working through drawers for one buyer at a time. A list of order numbers with no name on it cannot be walked that way. D63's working agreement says to think in outcomes, not processes. That is what asks whether the exclusion still served anybody once the screen existed.
 
-### The owner's rulings, 2026-09-13
+### The owner's rulings
 
 1. **Store the buyer's display name only.** Address, email, payment, the transaction
    breakdown and tracking stay excluded. They stay excluded by the same allowlist mechanism D63 and D69 already
@@ -21,7 +21,7 @@
 gitignored, which keeps a bearer instrument or a mailing address out of a commit. That reason says nothing about a NAME, which is not a credential and not a delivery instruction. The
 first clause rode along on that argument without one of its own. It stood for three weeks
 because nothing on the commit path reads whether an exclusion still matches what the owner
-asked for. That is the same gap D63's amended working agreement now names directly. It says: *"if a decision made seems stale or overly bearing, flag it and ask to solve it the right way."* This is that
+asked for. That is the same gap D63's amended working agreement now names directly. It says to flag a stale or overly bearing decision and ask for the right fix. This is that
 flag, and the owner's word is what it waited for.
 
 **What is unchanged, and it is the part that was doing real work.** Three allowlists are the

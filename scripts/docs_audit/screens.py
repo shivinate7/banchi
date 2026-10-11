@@ -908,7 +908,7 @@ def check_storage_keys(report: Report) -> None:
     two presses on the rig, six on a capture tab left open across the deploy, and one key
     (`captureId`) that can burn a position if a capture was in flight at that moment. So
     there is no frozen set to remember, which is the only reason a prefix rule is checkable
-    at all — `banchi.` on every key, with the whole argument in D27's second amendment.
+    at all — `banchi.` on every key, with the whole argument in D27, Key naming.
 
     D94 IS NOT REOPENED BY THAT and this row is not evidence that it is. That entry governs
     the checkout, the CLI, the packages, the store on disk, every route on the wire and
@@ -929,7 +929,7 @@ def check_storage_keys(report: Report) -> None:
                 Finding(
                     where,
                     f"`{key}` does not carry the `banchi.` prefix every browser-storage key "
-                    "has carried since 2026-09-06 (D27, second amendment).\n"
+                    "has carried since 2026-09-06 (D27, Key naming).\n"
                     "  Ten keys were renamed off `banchi.` that day, with no migration and "
                     "the cost accepted in writing. A new key spelled the old way is not "
                     "continuity with them — they are gone — it is a second convention.",

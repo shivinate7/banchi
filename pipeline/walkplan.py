@@ -151,8 +151,8 @@ class StopKey:
     def walk_order(self) -> Tuple[int, int, int, str]:
         """The SOLVER's own deterministic order: sections by box then section, pooled LAST.
 
-        NOT THE DRAWN ORDER any more (the owner's ruling, 2026-09-27: "in order walk it's
-        sorted by density" — D220's own words, over a box-name draft that never shipped).
+        NOT THE DRAWN ORDER any more (the owner's ruling: the order walk is sorted by
+        density, D220's ruling, over a box-name draft that never shipped).
         This key still decides `_dominated`, `_greedy` and `solve`'s own search order, and
         `_assign` still divides overlapping demand between stops in this order — changing it
         would change WHICH stops the solver picks on a tie, not only the sequence they are
@@ -832,8 +832,8 @@ def _natural_key(text: str) -> Tuple[object, ...]:
 def _drawn_key(stop: "Stop", inventory: master.Inventory) -> Tuple:
     """The DRAWN order: density first, the box's own NAME breaks a tie, pooled stops last.
 
-    The owner's ruling, 2026-09-27, over D220's own words ("in order walk it's sorted by
-    density") and a box-name draft that never shipped. DENSITY IS `Stop.copies` — the count
+    The owner's ruling, over D220's ruling (the order walk is sorted by
+    density) and a box-name draft that never shipped. DENSITY IS `Stop.copies` — the count
     of cards this stop's takes already ask for, computed by `_assign` before this key ever
     runs — which is exactly "the density of the cards available in a section" the owner
     asked about. It is not re-derived: `Stop.copies` is `sum(take.wanted for take in

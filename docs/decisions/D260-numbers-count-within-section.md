@@ -1,17 +1,12 @@
 ## D260 — Card numbers count within a section
 
-**The owner's rulings, 2026-09-23, on how the owner finds a card.** Three rulings, one subject:
+**The owner's rulings on how the owner finds a card.** Three rulings, one subject:
 the place of a card as the hand uses it.
 
 1. **The card number counts within the section.** "Card 1, Card 2" under each section header,
    and the count starts again at every divider. This amends the display half of D58 (a card's
    number counts the cards in the box, not the slots).
-2. **Card 1 is at the far back.** The owner's words:
-
-   ```
-   if i have my cards standing up in a vertical row, the one closest to my body is the last
-   card, and the one all the way in the back is the first card
-   ```
+2. **Card 1 is at the far back.** Cards stand in a vertical row. The card nearest the owner is the last card, and the card furthest back is card 1.
 
    So the highest number is nearest the owner. Every drawing of a position shows that
    orientation.
@@ -79,7 +74,7 @@ BUILT in the locating lane:
 
 ### An unread card is a neighbour
 
-**The owner's ruling, 2026-09-24 (LOC-28):** unread cards count as neighbours, said as
+**The owner's ruling (LOC-28):** unread cards count as neighbours, said as
 "an unread card" or "N unread cards".
 
 **The premise that no longer holds.** The skip-landmark rule (a card nobody has named is not a landmark) walked

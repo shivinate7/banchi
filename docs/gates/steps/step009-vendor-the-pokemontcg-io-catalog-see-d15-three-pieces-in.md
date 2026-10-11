@@ -24,7 +24,7 @@
       network) and implements a rate-limited, resumable, per-file-skip downloader.
       Destination is overridable by `BANCHI_IMAGE_MIRROR` (D15); unset, it defaults to
       `harness/images/`. **Only `--dry-run` has ever run on this checkout**: 20,444 files,
-      ~14.18 GB extrapolated from a 200-image HEAD sample (2026-09-13) — the same order of
+      ~14.18 GB extrapolated from a 200-image HEAD sample — the same order of
       magnitude as D15's own ~16.7 GB estimate from a 197-image sample. `harness/images/` is
       untouched. Filling ~14-17 GB for real is the owner's disk to spend and nothing here
       reaches for it automatically.

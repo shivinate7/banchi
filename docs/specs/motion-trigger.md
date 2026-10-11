@@ -31,8 +31,7 @@ The rig's measured cadence is 0.6095 s a card (`app/src/storeHistory.ts`'s `RIG_
   step is a model over real plates.
 - **The camera lock (§4).** It is specified and recorded, and no parameter in `motion.ts` moves.
 
-There is one trigger. D144's beat-locked cadence machine and D131's dual were deleted on the
-owner's word, "motion is better. always", once the settle machine reached their cards without a
+There is one trigger. D144's beat-locked cadence machine and D131's dual were deleted by owner ruling: the motion trigger is always better than the beat-locked cadence machine and the dual, once the settle machine reached their cards without a
 beat. The recorded sessions stay in `harness/traces/`, because a recording is evidence about a rig
 and not about a trigger.
 

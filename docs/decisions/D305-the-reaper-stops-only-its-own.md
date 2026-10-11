@@ -1,6 +1,6 @@
 ## D305 — The reaper stops only its own
 
-**Built 2026-09-27, after an incident D43 did not anticipate.** An agent's own worktree
+**Built after an incident D43 did not anticipate.** An agent's own worktree
 vanished mid-session. It carried on inside another session's worktree. The two trees look
 identical from inside the wrong one. It ran `make reap ARGS=--confirm`.
 
@@ -13,15 +13,11 @@ under its own checkout. Everything it must not kill sits under somebody else's. 
 checkout" was a fine enough question for `verdict_for` to answer. Two sessions in one tree is a
 case nobody had hit yet. Both sessions' processes answer "yes" to that question now.
 
-### The owner's ruling
+### The ruling
 
-*"Make reap stop only what the caller started. This one belongs in Banchi, not the parent
-repo. It limits the damage when an agent does land in the wrong tree."* The sketch: tag each
-process with its owner's id. Let `--confirm` stop only processes carrying the caller's tag.
-List every other process, and stop none of them.
+Reap stops only what the caller started. Tag each process with its owner's id, and let `--confirm` stop only processes carrying the caller's tag. List every other process, and stop none of them. This belongs in Banchi, not the parent repo. It limits the damage when an agent lands in the wrong tree.
 
-**Narrowed the same day, on a second word**: *"Blanket for the orchestrator and limited to its
-own tagged processes for an agent."* Read this way: a bare `make reap ARGS=--confirm`, with no
+**Narrowed later:** the orchestrator's blanket sweep stays wide, and a subagent's is limited to its own tagged processes. Read this way: a bare `make reap ARGS=--confirm`, with no
 target named, stays D127's own full-checkout sweep. That holds when the caller is the top-level
 session a person drives. That case is unchanged in every respect. The same bare `--confirm`
 from a subagent stops only pids tagged with that subagent's own session id. See "What this
@@ -29,7 +25,7 @@ leaves open" below for the gap this choice leaves.
 
 ### The sketch's own mechanism failed a real measurement
 
-The owner's sketch read an env var back off a pid this session did not start, with `ps -E` or
+The sketch read an env var back off a pid this session did not start, with `ps -E` or
 `ps eww`. **Measured on this machine** (macOS 26, Darwin 27.0.0): `ps eww -p <pid>` prints no
 environment column for a process this session did not invoke `ps` from directly. Root does not
 help either. A real `subprocess.Popen` child, carrying a marker in its own environment, showed
@@ -66,7 +62,7 @@ recorded.
 sets. Every child already inherits it, by ordinary fork and exec. That is not the `ps -E`
 read-back the sketch assumed, and this file measured that read-back does not work. **The reaper's older method**
 solved a neighboring "whose is this" question with a Bash-wrapper argv fragment, because no
-per-session id existed on this machine in 2026-09-12. That fragment answers ANY session, never
+per-session id existed on this machine at that time. That fragment answers ANY session, never
 WHICH session. That method is not replaced. This entry answers a question it never asked.
 
 ### Every launcher, found by reading the code
@@ -99,8 +95,8 @@ the code found it starts nothing. That finding is recorded here, not dropped.
 **The orchestrator's blanket sweep is wider than the other three cases, on purpose.** A bare
 `--confirm`, no target, run by the top-level session, skips ownership entirely. It stops
 everything `verdict_for` already calls `OURS`, tagged to another session included. That is
-exactly what D127 built, before this entry. That is the owner's own word, quoted above:
-*"everything under the checkout except the caller's chain."* It names no exception for another
+exactly what D127 built, before this entry. That is the ruling in plain form: everything under the checkout except the caller's chain.
+It names no exception for another
 session's tag. It does not close the exact incident, had the wandering session been the
 orchestrator itself. See the next section.
 
@@ -125,7 +121,7 @@ false "top level" is the incident this entry exists to close.
 A misrouted TOP-LEVEL session, running a blanket `--confirm` in the wrong checkout, is not
 covered. The owner's own narrowing draws its line at subagent versus orchestrator. It does
 not draw a line at checkout versus checkout. A person driving the top-level session keeps the
-same full-sweep power D127 always gave it. Had the 2026-09-27 incident's wandering session been
+same full-sweep power D127 always gave it. Had the incident's wandering session been
 the top-level one, this entry would not have stopped it. This is a scope choice, not an
 oversight. It is recorded here so nobody rediscovers it by hitting it again.
 

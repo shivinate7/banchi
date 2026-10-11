@@ -1,18 +1,2 @@
-5. ~~Capture server: `POST /capture`, position-ordered filenames, JSON sidecars (position,
-   box, set hint, variant), `/status`, `GET /photo/<box>/<position>`, `GET`/`PUT` inventory
-   state shared across devices.~~ — done 2026-08-11, spec at `docs/specs/capture-server.md`.
-   Positions are allocated inside the store lock by `allocate_capture`. **T7 reaches it as
-   of 2026-08-13**: every route, every named refusal, and the sidecar seam read back through
-   the reader `identify` uses. This line said the opposite for two days.
-   The step shipped with nothing under `harness/tests` importing `server`, `store` or `cli`. The claim
-   outlived the gap it described. What T7 still does not assert is in `docs/debts/`, and
-   is now three named cases rather than a whole package.
-   The server has grown well past the five routes this line was written about: `DELETE
-   /inventory/<box>/<index>` arrived with step 7a's undo; `GET /queues`, `POST
-   /review/<box>/<index>/answer` and `POST /inventory/<box>/<index>/sold` with 7b; and
-   `GET /search`, `GET /boxes`, `POST /boxes` and `PUT /boxes/<box>` with the order flow.
-   Each came with its own T7 cases on the day it landed. **The count is deliberately not
-   published here.** It said "nine" while the server served thirteen. It was restated in
-   three files at once. It was a verifiable fact with nothing in it a later session could disagree
-   with. By D18's test, that means that it is not load-bearing prose and should not be maintained.
-   `server/capture_server.py`'s own header is the register.
+5. ~~Capture server: `POST /capture`, position-ordered filenames, JSON sidecars (position, box, set hint, variant), `/status`, `GET /photo/<box>/<position>`, `GET`/`PUT` inventory state shared across devices.~~ — done, spec at `docs/specs/capture-server.md`. Positions are allocated inside the store lock by `allocate_capture`. T7 reaches it: every route, every named refusal, and the sidecar seam read back through the reader `identify` uses. What T7 still does not assert is in `docs/debts/`, now three named cases.
+   The server now serves past the five routes this line named: `DELETE /inventory/<box>/<index>` (step 7a's undo); `GET /queues`, `POST /review/<box>/<index>/answer` and `POST /inventory/<box>/<index>/sold` (7b); and `GET /search`, `GET /boxes`, `POST /boxes` and `PUT /boxes/<box>` (order flow). Each has its own T7 cases. The route count is not published here. It is not load-bearing prose (D18's test), so it is not maintained. `server/capture_server.py`'s own header is the register.

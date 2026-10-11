@@ -1,6 +1,6 @@
 ## D224 — Sweep preview is free; press commits
 
-**MEASURED AGAINST THE OWNER'S REAL STORE, 2026-09-19.** `archive sweep`
+**MEASURED AGAINST THE OWNER'S REAL STORE.** `archive sweep`
 (D219) over 914 SKUs and 4 ranges printed nothing for over ten
 minutes. Then it printed the whole report at once. Silence and a hang look identical from
 outside.

@@ -346,7 +346,7 @@ that gap.
 
 ## 13. The store is a mirror, not an invention (D295)
 
-The owner's ruling was "full mirror is fine". Photos are capped "to just 512mb". Every name reads
+The owner ruled that a full mirror is fine. Photos are capped at 512 MB. Every name reads
 "Jane Doe N", and every address reads "123 Demo Way". D295 carries every quote in full. This
 section is the mechanism. D295 is the decision.
 

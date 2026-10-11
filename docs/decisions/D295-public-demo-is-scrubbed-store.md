@@ -3,21 +3,15 @@
 **What changed.** Before this entry, the published demo (`shivinate7.github.io/banchi`)
 showed an INVENTED store. `scripts/demo-seed.py` writes real catalogue rows out of
 `fixtures/`. But which card sits in which box, what has sold, and who bought it were all
-made up (`docs/specs/demo.md` §2). As of this entry, the owner has ruled that the demo
-should be a FULL MIRROR of the real store instead, with people scrubbed. The owner's own
-words:
+made up (`docs/specs/demo.md` §2). The owner has ruled that the demo
+should be a FULL MIRROR of the real store instead, with people scrubbed. The ruling, in full:
 
-- "full mirror is fine"
-- photos capped "to just 512mb"
-- "mirror all … just have all names be Jane Doe and all addresses be 123 Demo Way if that
-  is easy?"
-- Buyers numbered "Jane Doe N", one stable N per distinct buyer, because `#/orders` groups
-  by name: "ah yes agreed"
-- On the mechanism: "ah yeah 1 is fine if that is what the builder ocmes back with too" —
-  see below
-- On the scrub check: "I meant a ci on every name and address is too excessive it should be
-  more straightforward." So there is NO CI scrub check. The build itself overwrites every
-  name and address. It ends with one plain assert.
+- The full mirror is fine.
+- Photos are capped at 512MB.
+- Every name becomes Jane Doe and every address becomes 123 Demo Way.
+- Buyers are numbered Jane Doe N, one stable N per distinct buyer, because `#/orders` groups by name.
+- The mechanism is option 1, below.
+- A CI check on every name and address is too excessive. So there is NO CI scrub check. The build itself overwrites every name and address. It ends with one plain assert.
 
 **The mechanism (the owner's "option 1").** A `make` target builds the scrubbed mirror
 LOCALLY, from a COPY of the owner's store, on the owner's own Mac. Only the scrubbed
@@ -68,7 +62,7 @@ output — the recorded bundle and the QR-cleared photographs — is committed, 
 
 **One walk-plan subject list change, forced by scale.** The invented demo seeds seven
 orders and records every ticked subset (`WALK_PLAN_ORDERS = 7`, §5). The owner's real
-ledger holds 834 orders, measured 2026-09-26. Recording every subset of that is not a
+ledger holds 834 orders. Recording every subset of that is not a
 target to raise. It is a different shape of problem. `sweep_coverage` now reads only the
 OPEN orders the recorded `/orders` GET returned. Every caller of `walkPlan` sends open
 keys alone: `Fulfillment.tsx` filters `order.open`, and `Orders.tsx` walks
@@ -92,8 +86,7 @@ means reading the real store twice. Whether the real ledger's open-order count e
 exceeds `WALK_PLAN_ORDERS` on a future rebuild is unmeasured. If it does, the recorder
 refuses loudly rather than guessing.
 
-**Amended (L5, 2026-09-27).** The test-audit plan's Q5, the owner's ruling: "Cut the old
-seed guards." `demo-seed`/`demo-record`/`demo` stay, a generator anyone can run on demand.
+**Amended (L5).** Ruling (test-audit plan, Q5): cut the old seed guards. `demo-seed`/`demo-record`/`demo` stay, a generator anyone can run on demand.
 C4 named three guards over that seed's own bundle, `app/demo/bundle.json`. The published
 mirror has never read that bundle since this entry. `demo-determinism-selftest` ran in
 `make check`. `demo-determinism` ran on every demo publish, `.github/workflows/demo.yml`.
@@ -101,7 +94,7 @@ mirror has never read that bundle since this entry. `demo-determinism-selftest` 
 `demo-determinism.py` and `demo-freshness.py` are gone from the tree. None of the three ever
 tested the mirror this entry publishes.
 
-**Amended (standing grant, daily refresh).** The owner's ruling: the demo's data refreshes DAILY and
+**Amended (standing grant, daily refresh).** Ruling: the demo's data refreshes DAILY and
 AUTOMATICALLY, with auto-merge. A mirror-only PR auto-merges on green CI through the merge tool, with
 no word asked each time. The grant covers only a PR with head `demo/mirror-refresh`, opened by
 `scripts/demo-mirror-daily.py` after the scrub assert and the fence, whose whole diff is under

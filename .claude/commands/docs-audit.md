@@ -21,7 +21,7 @@ python3 scripts/docs-audit.py
 
 Exit 1 means that there is a provably wrong reference. Exit 2 means that **any ADVISORY row has findings**. Exit 0 means neither. Report what it found — do not re-derive it by hand.
 
-**Exit 2 is not the coupling question**, which is what this line said until 2026-09-05. The coupling row only runs under `--staged`. But `entry budget`, `game coverage`, `views exposure` and several others emit ADVISORY on every plain run. So exit 2 is the ordinary outcome here, not a signal that staged code and its docs disagreed. Read the rows; the code says which.
+**Exit 2 is not the coupling question.** The coupling row only runs under `--staged`. But `entry budget`, `game coverage`, `views exposure` and several others emit ADVISORY on every plain run. So exit 2 is the ordinary outcome here, not a signal that staged code and its docs disagreed. Read the rows; the code says which.
 
 **2. Read the diff, then the docs it touches.**
 

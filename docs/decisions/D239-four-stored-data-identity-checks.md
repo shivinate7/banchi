@@ -54,7 +54,7 @@ own full name (`Grandmaster at Arms`/`Jax, Grandmaster at Arms`). That second sh
 one the analysis names as `Draven, Glorious Executioner`, "resolved
 fine."
 
-### Measured against the owner's real store, read-only, 2026-09-20
+### Measured against the owner's real store, read-only
 
 | check | flags | subjects (unique names/sets) |
 |---|---|---|

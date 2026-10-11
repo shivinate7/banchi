@@ -35,24 +35,23 @@ clearly-labelled figure beside this one — never a silent replacement.
 `OrderLine.kind` is null on nearly every line because the feed says nothing about it.
 Classifying a line by pattern-matching its product name is refused at length by CLAUDE.md and
 `pipeline/orders.py`'s own header. A guess dressed as a fact is worse than an admitted
-unknown. Measured on the owner's live store, 2026-09-19, revenue is in fact dominated by
+unknown. On the owner's live store, revenue is dominated by
 sealed product. Booster packs and boxes make up the top eight names by gross. A screen that
 assumed singles would be wrong about most of its own data on day one. The product table is
 one list, sorted by gross, and stays that way until the feed itself carries a real `kind`.
 
-### Measured, once, on the owner's live store (2026-09-19)
+### Measured on the owner's live store
 
 804 orders, 1,346 lines, zero missing `unit_price`. Excluding Canceled: $66,334.71 gross over
-1,268 lines, 539 distinct product names, spanning 2026-05 through 2026-09. `GET /orders`
+1,268 lines, 539 distinct product names, spanning the store's whole sales history. `GET /orders`
 answers in 230ms at 1.15MB. There is no new server route, no new parsing, and no change to
 `server/capture_server.py:do_orders` or to any order resolution or ledger behavior. This
 screen reads that one payload and reshapes it in `app/`.
 
-### Canceled is dropped, silently, on the owner's own ruling
+### Canceled is dropped, silently
 
-The owner's instruction, 2026-09-19, having been shown the alternative: an order the feed
-calls Canceled is not a sale. It should not appear anywhere on this screen, with no footnote
-explaining the omission. This is narrower than `store/orders.py:is_terminal_status`'s own
+Ruling: an order the feed calls Canceled is not a sale. It does not appear on this screen,
+and no footnote explains its absence. This is narrower than `store/orders.py:is_terminal_status`'s own
 vocabulary. Shipped and Completed orders are terminal too, and they are real revenue. So this
 screen folds and compares exactly the one word `Canceled` against the wire's own `status`
 string. That mirrors how `is_terminal_status` folds case and edge whitespace before comparing
@@ -64,13 +63,18 @@ See also: D69 (a screen earns a route on its job, not its data source), D86/D103
 unread here — this screen never draws a name, an address or a payment detail).
 
 
-### Two rulings on the nav row, same day — the second one stands
+### The nav row
 
-The screen shipped with a nav row and a hotkey. The owner was shown the measurement. An eleventh nav row runs the phone drawer's rows 37px past the fold at 390x754, on the 40px thumb floor CLAUDE.md already sets. There is no lower step to give. The owner first ruled it off: keep the drawer
-whole, reach the screen from the command palette and a link on `#/orders` instead.
+`#/revenue` is an eleventh nav row, on purpose. The screen shipped with a nav row and a hotkey.
+The owner was shown the measurement. An eleventh nav row runs the phone drawer's rows 37px past
+the fold at 390x754, on the 40px thumb floor CLAUDE.md already sets. There is no lower step to
+give. The owner first ruled it off: keep the drawer whole, reach the screen from the command
+palette and a link on `#/orders` instead. That was reversed: Sales is a
+sidebar tab, and nothing is added to any other screen for it. The off-nav shape grafted a control
+onto `#/orders`, and onto `#/shipping` through the shared `OrdersHub`. That is reverted.
+`app/src/Orders.tsx` matches main again. A shared-component screen is the wrong place for a
+workaround. One change became two, on two screens, because the two routes share one component.
 
-**That ruling did not survive contact with what it actually meant.** The owner's own words were relayed back once the off-nav shape was built. *"I thought we are just making it a tab in the sidebar not inserting it into other screens."* The off-nav version had done the opposite of that expectation on both halves. It had no sidebar tab. It grafted a new control onto `#/orders`, and, because `OrdersHub` renders both stages from one component, onto `#/shipping` too. That was un-asked-for on that screen specifically. The owner reversed the ruling the same day: Sales
-is a sidebar tab, plainly, and nothing is added to any other screen for it.
-
-**So `#/revenue` is an eleventh nav row ON PURPOSE, the 37px cost accepted knowingly.**
-`app/tests/brand.spec.ts`'s two drawer-fit cases carry the arithmetic and the citation. What they give up is a TEST'S OWN stricter promise, never a decision. That promise is every row on screen with nothing to scroll to reach it. D266 already rules that the phone drawer's nav scrolls in the space above its foot for any row count. So full-fit-without-scrolling was never a floor this product promises past this row. The Orders/Shipping detour is fully reverted. `app/src/Orders.tsx` is byte-for-byte main's again. The detour is kept here as the record of why. A shared-component screen (`OrdersHub` draws two routes) is the wrong place to graft a workaround onto. One intended change became two, on two different screens, because the two routes are one component.
+`app/tests/brand.spec.ts`'s two drawer-fit cases carry the arithmetic. They give up a TEST'S OWN
+stricter promise, every row on screen with nothing to scroll to. D266 already rules that the
+phone drawer's nav scrolls for any row count, so that promise was never a product floor. What the cases give up is a test's promise, never a decision.
