@@ -134,19 +134,24 @@ test('setViewport leaves the shell columns final across the rail breakpoint', as
    to match. The receipt state is the attribute the screen itself sets after a capture (no capture is
    taken here). The empty sentence must sit inside the viewport. Nothing is tuned to a pixel. */
 test('ux-wave1: at 820 the Last capture panel keeps its height when the first capture lands', async ({ page }) => {
-  await setViewport(page, { width: 820, height: 1100 })
+  /* 820 by 900 is the audit's own rail-width viewport (the shots in the UX audit were taken at it). */
+  await setViewport(page, { width: 820, height: 900 })
   await page.goto('/#/capture')
   await page.locator('.capture-shell').waitFor()
   await settleAnimations(page)
   const panel = page.locator('.capture-last')
   const note = page.locator('.capture-frame-last .capture-frame-title')
+  /* THE STATE THAT SQUEEZES THE PANEL: no box picked, camera off, dispenser not connected. The Setup
+     block lists the Camera and Box fixes, and the right column grows to hold it. */
+  await expect(page.locator('.capture-block'), 'the Setup block is drawn (no box, camera off)').toBeVisible()
+  await expect(page.getByRole('button', { name: 'Box', exact: true }), 'the Setup block offers Box').toBeVisible()
   await expect(panel).toHaveAttribute('data-has-last', 'false')
   await expect(note, 'the empty panel names its state').toHaveText(/nothing captured yet/i)
   const empty = await panel.boundingBox()
   const noteBox = await note.boundingBox()
   const viewport = await page.evaluate(() => window.innerHeight)
   expect(noteBox !== null && noteBox.y + noteBox.height <= viewport, 'the empty sentence is inside the viewport').toBe(true)
-  expect(
+  expect.soft(
     noteBox !== null && empty !== null && noteBox.y + noteBox.height <= empty.y + empty.height + 1,
     `the empty sentence sits inside its panel at 820 (panel ${empty?.height}px, sentence bottom ${noteBox ? Math.round(noteBox.y + noteBox.height) : 'none'}, panel bottom ${empty ? Math.round(empty.y + empty.height) : 'none'})`,
   ).toBe(true)
