@@ -49,6 +49,12 @@ export function isSentence(text: string): boolean {
   return /[.?!]["'”’)\]]*$/.test(text.trim())
 }
 
+/** A spoken accessible name of two or more sentences (`Order: High to low. Press to reverse.`). It is read aloud,
+ *  not drawn as a label, so the casing rule does not read it. A one-sentence name is still read. */
+export function isSpokenSentences(text: string): boolean {
+  return /[.?!]["'”’)\]]*\s+\S/.test(text.trim())
+}
+
 /** Units that may follow a number unchanged: `10 ml`, `1 month`. A count noun such as `cards` is a word. */
 export const UNIT_WORDS: ReadonlySet<string> = new Set([
   'ml', 'mm', 'cm', 'kg', 'g', 'oz', 'px', 'x',

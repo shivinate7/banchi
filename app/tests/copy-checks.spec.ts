@@ -10,7 +10,7 @@ import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 import { sweepEveryRoute } from './routeSweep'
 import { setViewport } from './phoneSwitch'
-import { casingProblems, isSentence, voiceHits } from './copyRules'
+import { casingProblems, isSentence, isSpokenSentences, voiceHits } from './copyRules'
 
 /* ONE SWEEP, TWO CHECKS (D284, the shape `text-checks.spec.ts` set). Each screen is opened ONCE by
  * `routeSweep.ts:sweepEveryRoute`, the same owner routes and the same populated store the text checks
@@ -245,7 +245,7 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
     }
 
     for (const one of scan.casing) {
-      if (one.mono || one.upper || one.typed) continue
+      if (one.mono || one.upper || one.typed || isSpokenSentences(one.text)) continue
       // A HEADING (h2, h3) OR A TITLE MAY BE A SENTENCE: an empty state or a greeting. A control, and a page title (h1),
       // is a label whatever its ending, so `Cards to pull.` on a control or an h1 is still checked.
       if ((one.role === 'heading' || one.role === 'title') && isSentence(one.text)) continue

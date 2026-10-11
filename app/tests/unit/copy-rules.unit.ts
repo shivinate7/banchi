@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { test, expect } from './unit'
 import { REASON_LABELS, RETIRED_REASON_LABELS } from '../../src/reasons'
-import { casingProblems, isSentence, voiceHits } from '../copyRules'
+import { casingProblems, isSentence, isSpokenSentences, voiceHits } from '../copyRules'
 import { attrText, firstPersonInSource, jsxOpeningsIn, recordFromSource } from '../copySource'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -57,6 +57,15 @@ test('sentence: a closing period or question mark marks a sentence, which the sw
   expect(isSentence('Nothing captured yet.')).toBe(true)
   expect(isSentence('Which listing is this card?')).toBe(true)
   expect(isSentence('Cards to pull')).toBe(false)
+})
+
+/* THE SPOKEN NAME (copy map row 58). A two-sentence accessible name is read aloud, so the casing rule skips it; a
+ * one-sentence label with bad casing still fails. */
+test('spoken name: two sentences pass unread, and a one-sentence label with bad casing still fails', () => {
+  expect(isSpokenSentences('Order: High to low. Press to reverse.')).toBe(true)
+  expect(isSpokenSentences('Cards to pull.')).toBe(false)
+  expect(casingProblems('Show all cards.')).not.toEqual([])
+  expect(isSpokenSentences('Show all cards.')).toBe(false)
 })
 
 test('label: a closing period on a control label does not skip the casing check', () => {

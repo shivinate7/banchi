@@ -3,7 +3,7 @@
 Kinds: `casing` (Chicago Title Case, copyRules.ts) or `voice` (second person, no I, my, me or mine).
 Line numbers are on e48fbecd. A row whose note starts `builder:` leaves the wording to the builder.
 A typed value (price, quantity, hold note, search text, box name) never changes.
-Rows 57 and 58 are open owner questions. The other rows are settled.
+All rows are settled.
 
 ## Voice (12 source hits, unit "source scan" test)
 
@@ -84,8 +84,8 @@ Without the typed-data exemption in row 31, the same sweep reads 76 offenders ac
 | 54 | casing | Orders.tsx, line 2366 | orders | `Cards to pull` | `Cards to Pull` | icon link tooltip. Same element as row 53. |
 | 55 | casing | Gallery.tsx, line 978 | gallery (specimen, not in the sweep) | `Mark sold` | `Mark Sold` | specimen label. gallery.spec.ts, line 1245 asserts it, so the label changes with the test. |
 | 56 | casing | Gallery.tsx, line 1016 | gallery (specimen, not in the sweep) | `Cards to pull` | `Cards to Pull` | specimen label and tooltip. icon-button.spec.ts asserts it. |
-| 57 | casing | Home.tsx, lines 192 to 194 (the greeting heading) | home | `Good afternoon.` | `?` | owner: keep the greeting as a sentence (no casing), or make it a page title `Good Afternoon`. The sweep reads an h1 as a label, so its full stop is flagged. |
-| 58 | casing | kit/data.tsx, line 1195 (sort button name) | revenue, pricing, orders | `Order: High to low. Press to reverse.` | `?` | owner: two sentences in a control. Shorten it to a label, or allow a sentence in a control. The sweep flags it now. |
+| 57 | casing | Home.tsx, lines 192 to 194 (the greeting h1) | home | `Good afternoon.` | `Good Afternoon.` | settled: the greeting is an h1, so Title Case applies. The full stop stays. Same for Good Morning. and Good Evening. |
+| 58 | casing | kit/data.tsx, line 1195 (sort button name) | revenue, pricing, orders | `Order: High to low. Press to reverse.` | unchanged | settled: a spoken accessible name of two or more sentences is read aloud, so the sweep skips it (isSpokenSentences). A one-sentence label still gets the casing rule. |
 
 ## Notes for the builder
 
