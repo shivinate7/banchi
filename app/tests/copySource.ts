@@ -56,8 +56,8 @@ const FIRST_PERSON = /(?<![\p{L}\p{N}_])(?:i|my|me|mine)(?![\p{L}\p{N}_])/giu
 
 /** Quoted names that carry a first-person word and are not the app's own voice. `"My Pricing"` is the name
  *  of TCGplayer's page, a proper name the owner ruled to keep (wave 2, copy map row 10). The quotation marks
- *  mark it as a name, so only this exact quoted phrase is exempt. An unquoted `My Pricing` still counts. */
-const NAMED_EXEMPT: readonly string[] = ['"My Pricing"']
+ *  mark it as a name, so only this exact quoted phrase is exempt, in straight or curly quotes. An unquoted `My Pricing` still counts. */
+const NAMED_EXEMPT: readonly string[] = ['"My Pricing"', '\u201cMy Pricing\u201d']
 
 /** One rendered string that carries a first-person word. `line` is 1-based. */
 export interface VoiceFinding {

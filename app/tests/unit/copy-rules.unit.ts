@@ -161,11 +161,12 @@ test('source scan: the quoted TCGplayer page name is exempt, and the unquoted wo
   const source = [
     'export const View = () => (',
     '  <button title={\'Drop the "My Pricing" export here\'}>x</button>',
+    '  <button title="Drop the \u201cMy Pricing\u201d export here">x</button>',
     '  <button title="Drop the My Pricing export here">x</button>',
     ')',
   ].join('\n')
   const found = firstPersonInSource(source, 'View.tsx').map((one) => `${one.line} ${one.where}: ${one.words.join(',')}`)
-  expect(found).toEqual(['3 attribute title: My'])
+  expect(found).toEqual(['4 attribute title: My'])
 })
 
 /* THE TYPED-DATA EXEMPTION (copy map row 31). It is the exact text only, so a label with the same words in
