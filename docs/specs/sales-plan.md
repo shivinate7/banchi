@@ -92,7 +92,7 @@ The page is off-nav. The route's own SKU field is the control a person finds wit
   sits in a one-day bucket today and in a seven-day bucket months later. Precision decays for a fixed
   fact, so the width is stated beside any comparison.
 - **Nothing reaches back more than 357 days.** The chart states the date its own history begins.
-- **Product charts take three price ticks and three date ticks, with faint guides (B7, signed off).** The ticks sit on the axes of each range chart on `#/product`.
+- **Product charts take three price ticks and three date ticks, with faint guides (B7, built).** The ticks sit on the axes of each range chart on `#/product`.
 
 ### The posted-price view (OPEN: placement settled, build waits on the gate)
 
