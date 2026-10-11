@@ -8,6 +8,7 @@ import { enterReadScope, getStatus, leaveReadScope, onServerBoot, onServerReacha
 import { useSearch } from './useSearch'
 import { matchQuery } from './kit/match'
 import { usePoll } from './usePoll'
+import { confirmLeave } from './useLeaveWarning'
 import { Button, Icon, IconButton, Kbd, Lockup, Modal, Page, PageRouteContext, Sheet, SheetHost,
   appliedTheme, applyTheme, syncThemeColor, openSheet, overlayOpen, readTheme, stampTheme, type IconName, type Theme } from './kit'
 import { BLOCK, PARAMS, ROMAN_TRACK_SOLVED } from './kit/lockupGeometry'
@@ -322,7 +323,17 @@ function currentPath(): string {
 function useHashPath(): string {
   const [path, setPath] = useState(currentPath)
   useEffect(() => {
-    const read = () => setPath(currentPath())
+    let shown = currentPath()
+    const read = (event?: HashChangeEvent) => {
+      const next = currentPath()
+      if (event && next !== shown && !confirmLeave()) {
+        // Put the old address back without a second hashchange; the person stays where they were.
+        window.history.replaceState(null, '', event.oldURL)
+        return
+      }
+      shown = next
+      setPath(next)
+    }
     window.addEventListener('hashchange', read)
     read()
     return () => window.removeEventListener('hashchange', read)
