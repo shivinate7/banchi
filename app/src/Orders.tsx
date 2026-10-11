@@ -3637,7 +3637,7 @@ function PullStage({
      The count is last, so a count that changes width never moves it. */
   const allTicked = tickableKeys.size > 0 && [...tickableKeys].every((key) => walkTicked.has(key))
   const walkAll =
-    tickableKeys.size < 1 ? null : (
+    tickableKeys.size < 2 ? null : (
       <Button
         size="sm"
         className="orders-walkall"
