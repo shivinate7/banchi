@@ -2200,7 +2200,7 @@ for (const [width, height] of [
       ;(el as HTMLElement).style.width = '9ch'
     })
     const tail = name.locator('.orders-label-tail')
-    await expect(tail).toHaveText('order …006AC')
+    await expect(tail).toHaveText('Order …006AC')
     const lines = await tail.evaluate((el) => new Set([...el.getClientRects()].map((rect) => Math.round(rect.top))).size)
     expect(lines, 'the label broke inside "Order …006AC"').toBe(1)
   })
@@ -4196,7 +4196,7 @@ test('the walk folds every section at once, and Picked carries a count', async (
   await expect(page.locator('.orders-walk-list')).toContainText('Sunrise')
 
   const tools = page.locator('.orders-walk-tools')
-  const fold = tools.getByRole('button', { name: /sections$/ })
+  const fold = tools.getByRole('button', { name: /Sections$/ })
   await expect(fold).toHaveText('Fold 2 Sections')
   await expect(page.locator('.orders-walk-rows')).toHaveCount(2)
   await fold.click()

@@ -5105,7 +5105,7 @@ test('7b-14: T opens the sheet with every other figure, from a row and from the 
   await expect(sheet).toBeVisible()
   await expect(sheet.getByRole('heading', { name: /Prices Now/ })).toBeVisible()
   await expect(sheet.getByRole('heading', { name: /Sales, Last 30 Days/ })).toBeVisible()
-  await expect(sheet.getByRole('heading', { name: /On your shelf/ })).toBeVisible()
+  await expect(sheet.getByRole('heading', { name: /On Your Shelf/ })).toBeVisible()
   await expect(sheet.getByRole('img', { name: /sold|sales/i }).first()).toBeVisible()
   await expect.poll(() => factsReads(wire).length).toBe(1)
   expect(marketReads(wire)).toHaveLength(0)
