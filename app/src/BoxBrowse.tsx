@@ -2238,7 +2238,6 @@ export function BoxBrowse({
                 key={String(cell)}
                 className="browse-boxcell"
                 type="button"
-                data-typed={typeof cell === 'number' ? '' : undefined}
                 aria-label={
                   cell === 'pooled'
                     ? 'Pooled cards, which have no box'
@@ -2270,6 +2269,7 @@ export function BoxBrowse({
                 <span className="browse-boxcell-text">
                   <span
                     className="browse-boxcell-name"
+                    data-typed={typeof cell === 'number' ? '' : undefined}
                     title={typeof cell === 'number' ? boxTitle(record?.name, cell) : shelfLabel(cell)}
                   >
                     {typeof cell === 'number' ? boxTitle(record?.name, cell) : shelfLabel(cell)}
