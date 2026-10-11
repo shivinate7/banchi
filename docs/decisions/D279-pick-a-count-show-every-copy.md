@@ -2,7 +2,7 @@
 
 **The owner's ruling, 2026-09-23, in the UX review interview.** Cards to pull is built wrong
 by outcome. Copies are fungible. When an order wants 2 of card X and the store holds 14, the
-screen says "pick 2 of X". It then shows where every copy is. It never shows 2 copies that
+screen says "2 of X", with no Pick label (B23, signed off, not built yet). It then shows where every copy is. It never shows 2 copies that
 the app chose.
 
 ### The premise that no longer holds
