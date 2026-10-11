@@ -1002,6 +1002,8 @@ Two things this does not cover. The requirement under the table rather than in i
 | Two-step pull | the sale control may occupy no part of the pull control's footprint, and begins below where it ended |
 | Jargon | copy passes a banned-word list: SKU, CSV, import, sync, batch, queue, staged |
 
+**Taste sign-off, Fulfillment (B23).** The count bar is sticky. `N Left` and the search sit in one bar. The bar stays on screen. Each location card has a small round ordinal. The `Pick` heading and the `Pick N` labels are removed. The labels that replace them are not yet decided.
+
 **The numbers in that table are the spec's own constants**. They are `BODY_FLOOR` 20, `PLACE_FLOOR`
 32, `PHOTO_FLOOR` 320, `TARGET_FLOOR` 44, `GAP_FLOOR` 12, `CONTRAST_FLOOR` 7,
 `UNDO_FLOOR_MS` 10_000. The spec runs the photograph and the floors at two viewports, 1280x900 and 375x812. The built undo window is 20 seconds, twice the floor, and it is the
@@ -1072,9 +1074,13 @@ whole flow: the button that says "Pull" produces a confirmation that says "Pulle
 Name things by what the Fulfiller controls, never by how the system is built — he has
 orders and cards, not SKUs and rows. Errors say what happened and what to do next.
 
-User-visible text speaks to the operator in the second person: "Under your price", "Already sent". No user-visible string says "I" or "my".
+User-visible text speaks to the operator in the second person: "Under your price", "Already sent". The banned first-person forms are "I", "my", "me" and "mine". No user-visible string uses one. A pipeline reason code stays as it is. Its on-screen label follows this rule. The label sources are `REASON_LABELS` in `app/src/reasons.ts` and the `QUESTIONS` record in `app/src/ReviewQueue.tsx`.
 
-**NOT MECHANIZED:** a machine would have to read each user-visible string in `app/src` and flag "I" or "my" as a whole word. Code, comments and paths do not count. No row of `scripts/docs-audit.py` checks this yet.
+**NOT MECHANIZED:** a machine would have to read each user-visible string in `app/src` and flag "I", "my", "me" or "mine" as a whole word. Code, comments and paths do not count. No row of `scripts/docs-audit.py` checks this yet.
+
+**Casing.** Headings, buttons, tabs, nav items, column headers, chips and short field labels take Chicago Title Case. Example: "Price the Answers". Page titles, section and card headings, and question headings are in scope too. Full sentences keep sentence case: empty states, notices, help text and toasts. Placeholders keep sentence case. The browser tab title is not covered yet. `app/tests/brand.spec.ts` asserts that the tab title is lowercase. The owner has not yet decided it.
+
+**NOT MECHANIZED:** a machine would have to read the rendered accessible names of headings, buttons and tabs. It would flag each name that is not in Chicago Title Case. It would skip full sentences and placeholders. No such check exists yet.
 
 The owner's screens are the exception and only the exception. There, the pipeline's own reason strings are shown verbatim beneath their labels. Being able to grep what you saw is worth more to the person debugging a run than a consistent register is.
 

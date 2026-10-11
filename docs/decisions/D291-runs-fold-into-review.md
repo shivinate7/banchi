@@ -17,6 +17,10 @@ The Runs sheet on Review holds the run list. The twelve `review/ICON-MAP.md` row
 - **Past runs.** The full list sits behind one link: the `history` IconButton on Review's header. It opens the Runs sheet on its run list. A count with the list one press further was rejected. The list is the only way to a run's own steps (join, rescue, fetch). A count adds a press and reaches nothing new.
 - **One layer above another.** The composer and the rescue and live-check sheets moved onto the kit's own Dialog and Sheet (D275). That exposed a kit defect. A layer drawn inside another layer, mounted in the same commit, joined the overlay stack first. React runs a child's layout effects before its parent's. The outer Sheet then painted over the composer. It took the clicks, Escape and focus. `kit/overlay.tsx` now hands each layer's panel down to the layers inside it. A parent that joins late goes under them. Four `run-panel.spec.ts` cases traced to this, or to the rescue sheet staying in the DOM while hidden. They run again.
 
+### The empty card spans the strip's width
+
+When no card waits, Review's empty card spans the width of the strip. This is an owner sign-off (B13).
+
 ### The two presses
 
 The owner ruled that the strip has two presses. The owner wanted to choose between waiting for the free pre-check and going straight to the bill. "Identify now" spends at once. "Check first" opens the composer.
