@@ -198,7 +198,7 @@ function ProductChart({ range, fills, w = 640, h = 160 }: { range: ProductHistor
       {priceTicks.map((v, i) => (
         <g key={`pt-${i}`}>
           <line className="producthistory-guide" x1={0} x2={w} y1={y(v)} y2={y(v)} />
-          <text className="producthistory-tick bn-money" x={-6} y={y(v)} textAnchor="end" dominantBaseline="middle">{money(v)}</text>
+          <text className="producthistory-tick producthistory-tick-price" x={-6} y={y(v)} textAnchor="end" dominantBaseline="middle">{money(v)}</text>
         </g>
       ))}
       {dateTicks.map((ms, i) => (
