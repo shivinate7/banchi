@@ -1,8 +1,8 @@
 # Motion trigger — mechanism, derivations and rig-tuning protocol (Gate C)
 
-D19 (auto-capture fires live) is the decision. This file is the mechanism, the derivations, and
-the protocol for the part no computer can do: checking the rig. The gates corpus's `GateC` record
-carries the measurements that the numbers here lean on.
+D19 (auto-capture fires live) is the decision. This file holds the mechanism, the derivations, and
+the rig-check protocol, which no computer can run. The gates corpus's `GateC` record carries the
+measurements these numbers rely on.
 
 ## STATUS
 
@@ -17,10 +17,10 @@ the capture screen arms it. The screen shows a live HUD, a swallowed-fire counte
 `harness/tests/t9_traces.py` (T9) replays the ten real sessions in `harness/traces/` through the
 machine.
 
-**The 85/85 feeder run stands.** 72.5 s at a 620 ms period, 85 of 85 cycles fired, with zero doubles
-and zero misses, into a real box through the full path. One designed `no-card` suppression happened
-at arm time. That clears the 50-card bar for the trigger half of Gate C. The gate still owes the
-pipeline half (identify, join, emit and reconcile on a feeder-paced box) and foil under this lamp.
+**The 85/85 feeder run stands.** 72.5 s at a 620 ms period, 85 of 85 cycles fired, zero doubles,
+zero misses, into a real box through the full path. One designed `no-card` suppression happened at
+arm time. That clears the 50-card bar for the trigger half of Gate C. Still owed: the pipeline half
+(identify, join, emit and reconcile on a feeder-paced box) and foil under this lamp.
 The rig's measured cadence is 0.6095 s a card (`app/src/storeHistory.ts`'s `RIG_CEILING_PER_HOUR`).
 
 **Not validated at the rig:**
@@ -31,15 +31,14 @@ The rig's measured cadence is 0.6095 s a card (`app/src/storeHistory.ts`'s `RIG_
   step is a model over real plates.
 - **The camera lock (§4).** It is specified and recorded, and no parameter in `motion.ts` moves.
 
-There is one trigger. D144's beat-locked cadence machine and D131's dual were deleted by owner ruling: the motion trigger is always better than the beat-locked cadence machine and the dual, once the settle machine reached their cards without a
-beat. The recorded sessions stay in `harness/traces/`, because a recording is evidence about a rig
-and not about a trigger.
+There is one trigger. The owner ruled D144's beat-locked cadence machine and D131's dual deleted.
+The motion trigger beats both once the settle machine reaches their cards without a beat. The
+recorded sessions stay in `harness/traces/`, as evidence about a rig, not about a trigger.
 
-**D81 (every threshold is a multiple of a measurement) changed the shape of §4.** The parameters are
-no longer what a rig session tunes. A rig session now reads whether the machine's own measurements
-are sane and whether the baseline was taken on an empty stand. Read §4 before you treat any number
-here as something to edit. Read D84's ruling 3 before you treat `presenceMin` as re-derivable from
-anything this machine measures for itself.
+**D81 (every threshold is a multiple of a measurement) changed §4.** A rig session no longer tunes
+parameters. It reads whether the machine's own measurements are sane and whether the baseline was
+taken on an empty stand. Read §4 before you edit any number here. Read D84's ruling 3 before you
+treat `presenceMin` as re-derivable from what this machine measures.
 
 ## 1. The two halves
 
