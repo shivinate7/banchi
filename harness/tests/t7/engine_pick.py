@@ -1161,7 +1161,6 @@ def _cleared_press(home, cards, cache, review=()):
     caps = Path(home) / "cleared-caps"
     caps.mkdir()
     colors = [(30, 120, 200), (200, 40, 40), (40, 200, 40)]
-    digests = {}
     for n, (stem, sidecar) in enumerate(cards):
         identify_images.Image.new("RGB", (64, 89), colors[n]).save(caps / f"{stem}.jpg", "JPEG")
         if sidecar is not None:
@@ -1255,9 +1254,9 @@ def check_cleared_unparsed_held_report_and_join(checks: Checks) -> None:
         )
         text = "\n".join(lines)
         checks.equal(len(sent), 1, "fixture: the other card is paid for once")
-        checks.ok("identification_failed" not in text and not any(l.lstrip().startswith("failed") for l in lines),
+        checks.ok("identification_failed" not in text and not any(row.lstrip().startswith("failed") for row in lines),
                   "the held card is not reported as failed", text)
-        checks.ok(any(l.split() == ["identified", "1/1"] for l in lines),
+        checks.ok(any(row.split() == ["identified", "1/1"] for row in lines),
                   "and `identified N/M` counts only the card that was read", text)
         run = runs.latest()
         checks.ok(run is not None and "4/1" not in run.read_identifications().get("cards", {}),

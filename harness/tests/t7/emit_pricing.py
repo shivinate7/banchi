@@ -930,8 +930,8 @@ def check_prices_adopt(checks: Checks) -> None:
             "answer — one answer, not two, and the file's 21.00 does not overwrite it",
         )
         checks.ok(
-            "kept $18.5 (corpus)" in said and "file said $21 " in said,
-            "and the kept row names both figures (rendered as prices: $18.5, $21), so the dropped one is visible",
+            "kept $18.50 (corpus)" in said and "file said $21.00 " in said,
+            "and the kept row names both figures (rendered as prices: $18.50, $21.00), so the dropped one is visible",
             said,
         )
 
@@ -943,7 +943,7 @@ def check_prices_adopt(checks: Checks) -> None:
             "WITH `--force`, the newest file wins where the two differ — still one answer",
         )
         checks.ok(
-            "dropped $18.5 (corpus)" in said,
+            "dropped $18.50 (corpus)" in said,
             "and the corpus answer it replaced is named as dropped",
             said,
         )
@@ -1134,7 +1134,7 @@ def check_prices_adopt(checks: Checks) -> None:
         base = corpus.Corpus()
         base.answers[ARTICUNO_SKU] = corpus.Answer(value=bad_hold)
         checks.equal(
-            raises(lambda: corpus.adopt([("run-a", {"overrides": {ARTICUNO_SKU: "3.45"}})], base, replace=replace)),
+            raises(lambda base=base, replace=replace: corpus.adopt([("run-a", {"overrides": {ARTICUNO_SKU: "3.45"}})], base, replace=replace)),
             "",
             f"`corpus.adopt(replace={replace})` over a hold with watch_above 'abc' does not raise",
         )
@@ -1163,7 +1163,7 @@ def check_prices_adopt(checks: Checks) -> None:
     # in a compare key, including one inside a hold's reason text or a `$1,500` figure.
     for typed, printed in (("18.500", "$18.50"), ("0.400", "$0.40"), ("5.000", "$5.00"), ("0.505", "$0.505")):
         got = {}
-        failure = raises(lambda: got.update(text=pricing.money(typed)))
+        failure = raises(lambda got=got, typed=typed: got.update(text=pricing.money(typed)))
         checks.equal(
             got.get("text") or failure,
             printed,
@@ -1190,7 +1190,7 @@ def check_prices_adopt(checks: Checks) -> None:
             book.answers[ARTICUNO_SKU] = corpus.Answer(value={"withheld": "bullish", "watch_above": typed})
             book.write()
             outcome = {}
-            failure = raises(lambda: outcome.update(text=command(checks, "prices", "show", "--held")))
+            failure = raises(lambda outcome=outcome: outcome.update(text=command(checks, "prices", "show", "--held")))
             checks.ok(
                 not failure and f"{ARTICUNO_SKU}  bullish" in outcome.get("text", ""),
                 f"`prices show --held` over a hold with watch_above {typed!r} does not raise and "
