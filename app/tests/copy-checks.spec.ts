@@ -68,6 +68,8 @@ interface Casing {
   mono: boolean
   upper: boolean
   typed: boolean
+  // The text of each data-typed element inside this control. A control whose label is one of them is a typed value.
+  marked: string[]
 }
 
 interface CopyScan {
@@ -135,6 +137,7 @@ function scanCopy(): CopyScan {
       mono: el.closest('.bn-mono, code, kbd') !== null,
       upper: getComputedStyle(el).textTransform === 'uppercase',
       typed: el.closest('[data-typed]') !== null,
+      marked: Array.from(el.querySelectorAll('[data-typed]'), (m) => (m.textContent ?? '').replace(/\s+/g, ' ').trim()),
     })
   }
 
@@ -149,7 +152,7 @@ function scanCopy(): CopyScan {
       .join('')
       .replace(/\s+/g, ' ')
       .trim()
-    if (text !== '') casing.push({ role: 'tooltip', text, mono: false, upper: getComputedStyle(tip).textTransform === 'uppercase', typed: tip.closest('[data-typed]') !== null })
+    if (text !== '') casing.push({ role: 'tooltip', text, mono: false, upper: getComputedStyle(tip).textTransform === 'uppercase', typed: tip.closest('[data-typed]') !== null, marked: [] })
   }
 
   const prose: string[] = []
@@ -245,7 +248,7 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
     }
 
     for (const one of scan.casing) {
-      if (one.mono || one.upper || one.typed || isSpokenSentences(one.text)) continue
+      if (one.mono || one.upper || one.typed || one.marked.includes(one.text) || isSpokenSentences(one.text)) continue
       // A HEADING (h2, h3) OR A TITLE MAY BE A SENTENCE: an empty state or a greeting. A control, and a page title (h1),
       // is a label whatever its ending, so `Cards to pull.` on a control or an h1 is still checked.
       if ((one.role === 'heading' || one.role === 'title') && isSentence(one.text)) continue
