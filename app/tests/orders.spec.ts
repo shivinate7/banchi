@@ -5736,7 +5736,7 @@ async function expectShowEmpty(page: Page): Promise<void> {
 
 /* ux-wave1 A13. Order text typed into the paste box is not lost to a page unload. A route change
    inside the app does not fire beforeunload, so this case dispatches the event itself and reads
-   whether a listener cancelled it. It does not cover an in-app navigation away from the box. */
+   whether a listener canceled it. It does not cover an in-app navigation away from the box. */
 test('ux-wave1: the paste box with text asks before the page unloads', async ({ page }) => {
   await open(page)
   await openStore(page)
@@ -5744,10 +5744,10 @@ test('ux-wave1: the paste box with text asks before the page unloads', async ({ 
   await expect(box, 'the paste box is drawn').toHaveCount(1)
   await box.fill('{"orders": []}')
   await expect(box).toHaveValue('{"orders": []}')
-  const cancelled = await page.evaluate(() => {
+  const canceled = await page.evaluate(() => {
     const event = new Event('beforeunload', { cancelable: true })
     window.dispatchEvent(event)
     return event.defaultPrevented
   })
-  expect(cancelled, 'beforeunload is not cancelled while the paste box holds text').toBe(true)
+  expect(canceled, 'beforeunload is not canceled while the paste box holds text').toBe(true)
 })

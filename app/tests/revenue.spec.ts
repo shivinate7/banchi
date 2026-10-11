@@ -925,7 +925,7 @@ test('the shelf states two distinct counts: priced at the last reading, and neve
   await open(page, '?period=all')
   const shelf = page.locator('.revenue-shelf')
   await expect(shelf).toContainText('8 of 10 priced')
-  await expect(shelf).toContainText('1 never priced')
+  await expect(shelf).toContainText(/\b1 card\b.*never had a price/)
   await expect(shelf).not.toContainText('not yet')
   await expect(shelf).not.toContainText(/\d+ unpriced/)
 })
@@ -938,7 +938,7 @@ test('a partial first sweep is left off the line, said in words, and never drawn
   // Two full days draw one polyline of two points; the $1 day is not a point on it.
   const points = await page.locator('.revenue-spark polyline').getAttribute('points')
   expect(points?.trim().split(/\s+/)).toHaveLength(2)
-  await expect(shelf).toContainText('1 early reading left off, too few priced.')
+  await expect(shelf).toContainText(/1 early reading left off because too few of your cards had prices\./)
   // A relative span, no calendar date.
   await expect(shelf).toContainText('Daily, over the last 2 days')
   await expect(shelf).not.toContainText(/Aug|2026/)
@@ -999,7 +999,7 @@ test('only leading low-coverage readings are trimmed, so the line ends on the he
   await open(page, '?period=all')
   const points = await page.locator('.revenue-spark polyline').getAttribute('points')
   expect(points?.trim().split(/\s+/)).toHaveLength(3)
-  await expect(page.locator('.revenue-shelf')).toContainText('1 early reading left off')
+  await expect(page.locator('.revenue-shelf')).toContainText(/1 early reading left off because too few of your cards had prices/)
   await expect(page.locator('.revenue-shelf')).toContainText('9 of 10 priced')
 })
 

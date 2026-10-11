@@ -1099,11 +1099,11 @@ test('ux-wave1: an overlay body contains its own overscroll', async ({ page }) =
   await expect(page.locator('.app-keys[role="dialog"]')).toBeVisible()
   const body = page.locator('.app-keys .bn-overlay-body, .bn-overlay-body').first()
   await expect(body, 'the keys sheet draws an overlay body').toBeVisible()
-  const behaviour = await body.evaluate((el) => {
+  const behavior = await body.evaluate((el) => {
     const cs = getComputedStyle(el)
     return { x: cs.overscrollBehaviorX, y: cs.overscrollBehaviorY }
   })
-  expect(behaviour).toEqual({ x: 'contain', y: 'contain' })
+  expect(behavior).toEqual({ x: 'contain', y: 'contain' })
 })
 
 /* ux-wave1 A9. A heading that wraps onto a second line should balance its lines, so no single word

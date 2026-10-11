@@ -512,6 +512,8 @@ test('ux-wave1: the Pricing tile headline is the count its subline names', async
   await expect(page.locator('main.home')).toBeVisible()
   const tile = page.locator('a.home-stage[href="#/pricing"]')
   await expect(tile).toBeVisible()
+  /* The note reads "reading the worklist" until the worklist lands, so wait for it to settle. */
+  await expect.poll(() => tile.locator('.home-stage-note').innerText(), { message: 'the Pricing note settles' }).not.toMatch(/reading the worklist/)
   const note = await tile.locator('.home-stage-note').innerText()
   const named = /(\d[\d,]*)\s+ready/.exec(note)
   expect(named, `the Pricing tile names a count of ready copies (note reads "${note}")`).not.toBeNull()
