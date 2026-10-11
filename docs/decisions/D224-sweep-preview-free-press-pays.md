@@ -52,12 +52,14 @@ re-fetching it. `freshness_index` builds `sku -> {range: latest 'at'}` in one pa
 whole archive table. It never walks the table once per subject — the mistake
 the per-box inventory read (D192) already named and `cli/resolve.py:_copies_out` already paid for.
 `split_by_freshness` then asks, per SKU: does every range this pass wants already have a
-bucket read within `pipeline/pricehistory.py:HISTORY_TTL_SECONDS` (one hour) of now?
+bucket read within `pipeline.pricearchive.RESUME_TTL_SECONDS` (six days) of now?
 
-That hour is not new. `pipeline/pricehistory.py` already argues for it: short enough that
-nobody reads a stale figure. Long enough that repeating a pass in one sitting costs no
-requests. Reusing it means that a sweep resumed within the hour of an interrupt pays for nothing it already has. Per D222, that resumed-within-the-hour case is now the
-NORMAL one, not the exception.
+The window is not `pipeline.pricehistory.HISTORY_TTL_SECONDS` (one hour). That hour suits the live
+`#/pricing` read. It is too short for this walk. `rank_by_revenue` (D231) reads the same top names
+first on every pass. A one-hour window sends each later pass back to them, and it never advances.
+Six days lets a weekly press refresh the whole archive. A pass run again within the week moves on
+to ground the last one did not cover. Per D222, a resumed pass is the NORMAL case, not the
+exception.
 
 A SKU with genuinely no sales in a period never looks fresh by this test. An empty series
 writes no bucket row, so there is no `at` to check. That is the safe direction to be wrong
@@ -87,5 +89,3 @@ never-delete rule is unchanged. A chunk commits with `PriceArchive.upsert()`, th
 method, called more often on smaller inputs. No timer, cron or launch agent is added. The
 sweep is still a press a person runs, one invocation or several. The rule that this
 reader cannot fire by itself is untouched.
-
-A sweep resumes within six days, not one hour.
