@@ -1,17 +1,13 @@
 ## D295 — The public demo is the scrubbed real store
 
-**What changed.** Before this entry, the published demo (`shivinate7.github.io/banchi`)
-showed an INVENTED store. `scripts/demo-seed.py` writes real catalogue rows out of
-`fixtures/`. But which card sits in which box, what has sold, and who bought it were all
-made up (`docs/specs/demo.md` §2). The owner has ruled that the demo
-should be a FULL MIRROR of the real store instead, with people scrubbed. The ruling, in full:
+**Owner ruling: the published demo (`shivinate7.github.io/banchi`) is a full mirror of the real store, with people scrubbed.** Before this entry, the demo showed an invented store. `scripts/demo-seed.py` writes real catalogue rows out of `fixtures/`. Which card sits in which box, what has sold, and who bought it were all made up (`docs/specs/demo.md` §2). The owner ruled six points:
 
 - The full mirror is fine.
 - Photos are capped at 512MB.
 - Every name becomes Jane Doe and every address becomes 123 Demo Way.
 - Buyers are numbered Jane Doe N, one stable N per distinct buyer, because `#/orders` groups by name.
 - The mechanism is option 1, below.
-- A CI check on every name and address is too excessive. So there is NO CI scrub check. The build itself overwrites every name and address. It ends with one plain assert.
+- A CI check on every name and address costs more than it protects. So there is NO CI scrub check. The build itself overwrites every name and address. It ends with one plain assert.
 
 **The mechanism (the owner's "option 1").** A `make` target builds the scrubbed mirror
 LOCALLY, from a COPY of the owner's store, on the owner's own Mac. Only the scrubbed
