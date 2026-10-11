@@ -8,8 +8,9 @@ import { enterReadScope, getStatus, leaveReadScope, onServerBoot, onServerReacha
 import { useSearch } from './useSearch'
 import { matchQuery } from './kit/match'
 import { usePoll } from './usePoll'
+import { confirmLeave } from './useLeaveWarning'
 import { Button, Icon, IconButton, Kbd, Lockup, Modal, Page, PageRouteContext, Sheet, SheetHost,
-  appliedTheme, applyTheme, openSheet, overlayOpen, readTheme, stampTheme, type IconName, type Theme } from './kit'
+  appliedTheme, applyTheme, syncThemeColor, openSheet, overlayOpen, readTheme, stampTheme, type IconName, type Theme } from './kit'
 import { BLOCK, PARAMS, ROMAN_TRACK_SOLVED } from './kit/lockupGeometry'
 import { Toaster, toast } from './kit/toast'
 import { SearchField } from './SearchField'
@@ -322,7 +323,17 @@ function currentPath(): string {
 function useHashPath(): string {
   const [path, setPath] = useState(currentPath)
   useEffect(() => {
-    const read = () => setPath(currentPath())
+    let shown = currentPath()
+    const read = (event?: HashChangeEvent) => {
+      const next = currentPath()
+      if (event && next !== shown && !confirmLeave()) {
+        // Put the old address back without a second hashchange; the person stays where they were.
+        window.history.replaceState(null, '', event.oldURL)
+        return
+      }
+      shown = next
+      setPath(next)
+    }
     window.addEventListener('hashchange', read)
     read()
     return () => window.removeEventListener('hashchange', read)
@@ -479,6 +490,7 @@ function useTheme(): [Theme, () => void] {
     media.addEventListener('change', follow)
     return () => media.removeEventListener('change', follow)
   }, [])
+  useEffect(syncThemeColor, [theme])
   const toggle = useCallback(() => {
     const next = nextTheme(appliedTheme())
     const flip = () => {
@@ -1037,6 +1049,7 @@ function NavLink({ route, current, onNavigate }: { route: Route; current: boolea
       href={`#${route.path}`}
       aria-current={current ? 'page' : undefined}
       data-tip={route.label}
+      aria-label={route.label}
       onClick={onNavigate}
     >
       <Icon name={route.icon} size={18} />
@@ -1168,17 +1181,17 @@ function Sidebar({
           sized to the nav's own in App.css. */}
       <div className="bn-side-foot">
         {OWN_TAB.map((route) => (
-          <a key={route.path} className="bn-nav-link" href={`#${route.path}`} target="_blank" rel="noopener" data-tip="Pull">
+          <a key={route.path} className="bn-nav-link" href={`#${route.path}`} target="_blank" rel="noopener" data-tip="Pull" aria-label="Pull">
             <Icon name={route.icon} size={18} />
             <span className="bn-nav-text">Pull</span>
             <Icon name="external" size={14} className="bn-faint" />
           </a>
         ))}
-        <Button variant="ghost" icon="search" onClick={onPalette} data-tip="Go to" aria-haspopup="dialog">
+        <Button variant="ghost" icon="search" onClick={onPalette} data-tip="Go to" aria-label="Go to" aria-haspopup="dialog">
           <span className="bn-side-foot-text">Go to</span>
           <Kbd>⌘K</Kbd>
         </Button>
-        <Button variant="ghost" icon={theme === 'light' ? 'moon' : 'sun'} onClick={onToggleTheme} title={`Switch to ${themeLabel(nextTheme(theme))}`}>
+        <Button variant="ghost" icon={theme === 'light' ? 'moon' : 'sun'} onClick={onToggleTheme} aria-label="Theme" title={`Switch to ${themeLabel(nextTheme(theme))}`}>
           <span className="bn-side-foot-text">Theme</span>
         </Button>
       </div>

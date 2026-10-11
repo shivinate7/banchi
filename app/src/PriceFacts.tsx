@@ -155,7 +155,11 @@ export function PriceFactsBlock({ sku, onSales }: { readonly sku: string; readon
         <h3 id="pricefacts-sales">Sales, last 30 days</h3>
         <p className="pricefacts-when">{shown.through ? `Sales through ${absoluteDate(`${shown.through}T12:00:00`)}` : null}</p>
         {!loading && days.length === 0 ? (
-          <p className="pricefacts-none pricefacts-sales-body">No sales history is saved for this card yet. Refresh now on Pricing reads it.</p>
+          <p className="pricefacts-none pricefacts-sales-body">
+            <span>
+              No sales history is saved for this card yet. <a href="#/pricing">Refresh now on Pricing</a> reads it.
+            </span>
+          </p>
         ) : (
           <div className="pricefacts-sales-body">
             {loading ? <div className="pricefacts-chart-hold" /> : <DayChart days={days} />}

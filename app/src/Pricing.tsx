@@ -120,6 +120,7 @@ import { dismissToast, toast } from './kit/toast'
 import { PriceMovers } from './PriceMovers'
 import './Pricing.css'
 import { SendCard } from './SendCard'
+import { useLeaveWarning } from './useLeaveWarning'
 import { ABSENT_SENTENCE, AbsentPhotoNote, gameLabel, noPhotoSentence } from './CardHero'
 
 /* #/pricing — THE HAND-PRICING WORKLIST (D86), REBUILT TO THE OWNER'S RE-INTERVIEW (D277).
@@ -1155,13 +1156,7 @@ export function Pricing() {
     })()
   }, [dirty, book, saving])
 
-  useEffect(() => {
-    const warn = (event: BeforeUnloadEvent) => {
-      if (dirty || saving) event.preventDefault()
-    }
-    window.addEventListener('beforeunload', warn)
-    return () => window.removeEventListener('beforeunload', warn)
-  }, [dirty, saving])
+  useLeaveWarning(dirty || saving)
 
   const queued = runs.find((row) => row.run === run)?.counts?.queued_main ?? 0
 
