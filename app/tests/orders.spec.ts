@@ -2143,14 +2143,14 @@ test('an open order under Ready in the row draws its status LABEL, never the ord
   await expect(row).not.toContainText(SECOND_ORDER)
 })
 
-test('a nameless order groups on its own, as "Buyer on order" and the tail of its id, never the full id (UX-268)', async ({ page }) => {
+test('a nameless order groups on its own, as "Buyer on Order" and the tail of its id, never the full id (UX-268)', async ({ page }) => {
   const nameless = order({ buyer: null })
   await open(page, { orders: payloadOf([nameless], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
   /* The fixture's id ends `006AC` (`routeFixtures.ts:order`). The label is words, in the UI face,
      so it never reads as an order id. */
   const row = page.locator('.orders-index-row').first()
-  await expect(row.locator('.orders-index-number')).toHaveText('Buyer on order …006AC')
+  await expect(row.locator('.orders-index-number')).toHaveText('Buyer on Order …006AC')
   await expect(row).not.toContainText(ORDER_NUMBER)
   const face = await row.locator('.orders-index-number').evaluate((el) => getComputedStyle(el).fontFamily)
   expect(face).not.toContain('JetBrains')
@@ -2172,7 +2172,7 @@ test('two unnamed buyers draw two different labels, neither the full id', async 
   })
   /* Oldest first at rest (D296), so the 07-01 order leads. */
   const names = page.locator('.orders-index-number')
-  await expect(names).toHaveText(['Buyer on order …00001', 'Buyer on order …00002'])
+  await expect(names).toHaveText(['Buyer on Order …00001', 'Buyer on Order …00002'])
 })
 
 /* THE TAIL OF A NAMELESS LABEL NEVER BREAKS (review, round 3). At 1440 "Buyer on order …00099"
@@ -2185,14 +2185,14 @@ for (const [width, height] of [
   [820, 900],
   [390, 844],
 ] as const) {
-  test(`at ${width}, a nameless buyer's "order …006AC" tail stays on one line`, async ({ page }) => {
+  test(`at ${width}, a nameless buyer's "Order …006AC" tail stays on one line`, async ({ page }) => {
     await setViewport(page, { width, height })
     const nameless = order({ buyer: null })
     await open(page, { orders: payloadOf([nameless], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
     if (width === 390) await page.locator('.orders-buyerchip').click()
     const scope = width === 390 ? page.locator('.orders-buyers-sheet') : page.locator(VIEW)
     const name = scope.locator('.orders-index-number').first()
-    await expect(name).toHaveText('Buyer on order …006AC')
+    await expect(name).toHaveText('Buyer on Order …006AC')
     /* Squeeze the name to the width of "Buyer on order …" alone: without the no-wrap span the
        digits drop to a line of their own. */
     await name.evaluate((el) => {
@@ -2202,7 +2202,7 @@ for (const [width, height] of [
     const tail = name.locator('.orders-label-tail')
     await expect(tail).toHaveText('order …006AC')
     const lines = await tail.evaluate((el) => new Set([...el.getClientRects()].map((rect) => Math.round(rect.top))).size)
-    expect(lines, 'the label broke inside "order …006AC"').toBe(1)
+    expect(lines, 'the label broke inside "Order …006AC"').toBe(1)
   })
 }
 
@@ -4197,12 +4197,12 @@ test('the walk folds every section at once, and Picked carries a count', async (
 
   const tools = page.locator('.orders-walk-tools')
   const fold = tools.getByRole('button', { name: /sections$/ })
-  await expect(fold).toHaveText('Fold 2 sections')
+  await expect(fold).toHaveText('Fold 2 Sections')
   await expect(page.locator('.orders-walk-rows')).toHaveCount(2)
   await fold.click()
   await expect(page.locator('.orders-walk-rows')).toHaveCount(0)
   await expect(page.locator('.orders-walk-press')).toHaveCount(0)
-  await expect(fold).toHaveText('Open 2 sections')
+  await expect(fold).toHaveText('Open 2 Sections')
   await expect(page.locator('.orders-walk-sect')).toHaveCount(2)
   for (const head of await page.locator('.orders-walk-sect').all()) await expect(head).toBeInViewport()
   await expect(tools.getByRole('button', { name: /^Picked/ })).toContainText('0')
@@ -4628,7 +4628,7 @@ test('Manage says once what each stand-down press does, in words, with no code o
   })
   await openManage(page)
   const sheet = page.locator('.orders-manage-sheet')
-  await expect(sheet.getByRole('button', { name: /I already sent/ })).toHaveCount(2)
+  await expect(sheet.getByRole('button', { name: /Already sent/ })).toHaveCount(2)
   await expect(sheet.locator('.orders-manage-legend')).toHaveCount(1)
   const text = await sheet.innerText()
   expect(text).not.toContain('no_copies_on_hand')

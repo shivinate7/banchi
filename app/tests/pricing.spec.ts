@@ -2319,7 +2319,7 @@ test('a hold writes a reason and a watch, and never a price', async ({ page }) =
      the digits on this screen are price entry, so a digit inside a panel raised from a
      focused price field is unresolvable. */
   await page.getByRole('button', { name: /Bullish/ }).click()
-  await page.getByLabel(/Tell me when market is above/).fill('30.00')
+  await page.getByLabel(/Alert when market is above/).fill('30.00')
   await page.getByLabel('Note').fill('waiting on rotation')
   await page.getByRole('button', { name: 'Hold it' }).click()
 
@@ -2410,7 +2410,7 @@ test('UN-12 (the delta review round) — a hold on a no-market-price SKU is ONE 
   await page.locator('.pricing-hold').first().click()
   await expect(page.locator('.pricing-holdpanel')).toBeVisible()
   await page.getByRole('button', { name: /Keeping this one/ }).click()
-  await page.getByLabel('Notify you when market is above').fill('9.50')
+  await page.getByLabel('Alert when market is above').fill('9.50')
   await page.getByLabel('Note', { exact: true }).fill('waiting on a reprint')
   await page.getByRole('button', { name: 'Hold it' }).click()
 
@@ -3139,7 +3139,7 @@ test('D313: the panel holds its three lines whether the saved read has arrived o
   expect(sumOf(shifts.filter((s) => s.moved.some((m) => m.includes('pricemovers'))))).toBeLessThan(0.001)
 })
 
-test('D313: a row keeps its size when Refresh now runs over a drawn strip', async ({ page }) => {
+test('D313: a row keeps its size when Refresh Now runs over a drawn strip', async ({ page }) => {
   const wire = await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 3600) })
   const row = page.locator('.pricing-row').first()
   const size = async () => {
@@ -3149,7 +3149,7 @@ test('D313: a row keeps its size when Refresh now runs over a drawn strip', asyn
   }
   await expect(strip(page).first().locator('svg')).toHaveCount(2)
   const saved = await size()
-  await page.getByRole('button', { name: /Refresh now/ }).click()
+  await page.getByRole('button', { name: /Refresh Now/ }).click()
   await expect.poll(() => wire.filter((call) => call.method === 'POST' && call.path === '/pipeline/prices/refresh').length).toBe(1)
   expect(await size()).toEqual(saved)
   await expect(strip(page).first().locator('svg')).toHaveCount(2)
@@ -5103,8 +5103,8 @@ test('7b-14: T opens the sheet with every other figure, from a row and from the 
   await page.locator('.pricing-row').first().hover()
   await page.keyboard.press('t')
   await expect(sheet).toBeVisible()
-  await expect(sheet.getByRole('heading', { name: /Prices now/ })).toBeVisible()
-  await expect(sheet.getByRole('heading', { name: /Sales, last 30 days/ })).toBeVisible()
+  await expect(sheet.getByRole('heading', { name: /Prices Now/ })).toBeVisible()
+  await expect(sheet.getByRole('heading', { name: /Sales, Last 30 Days/ })).toBeVisible()
   await expect(sheet.getByRole('heading', { name: /On your shelf/ })).toBeVisible()
   await expect(sheet.getByRole('img', { name: /sold|sales/i }).first()).toBeVisible()
   await expect.poll(() => factsReads(wire).length).toBe(1)
@@ -5114,7 +5114,7 @@ test('7b-14: T opens the sheet with every other figure, from a row and from the 
   await expect(sheet).toHaveCount(0)
   await field(page).focus()
   await page.keyboard.press('t')
-  await expect(sheet.getByRole('heading', { name: /Sales, last 30 days/ })).toBeVisible()
+  await expect(sheet.getByRole('heading', { name: /Sales, Last 30 Days/ })).toBeVisible()
 })
 
 test('7b-14: T does nothing inside a text field', async ({ page }) => {
@@ -5200,19 +5200,19 @@ test('7b-16: the age line has a reserved line, so a fresh row and a stale row ar
   expect(Math.abs(heights[0]! - heights[1]!)).toBeLessThan(0.5)
 })
 
-test('7b-17: the header says Prices as of the catalog time, at rest, beside Refresh now', async ({ page }) => {
+test('7b-17: the header says Prices as of the catalog time, at rest, beside Refresh Now', async ({ page }) => {
   await open(page)
   await expect(page.getByText(AS_OF)).toBeVisible()
-  await expect(page.getByRole('button', { name: /Refresh now/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Refresh Now/ })).toBeVisible()
 })
 
 test('7b-17: a press asks for a refresh, and a running one shows its steps, the count and a bar', async ({ page }) => {
   const wire = await open(page, { refresh: refreshState('running', { step: 'history', done: 118, total: 366 }) })
-  await page.getByRole('button', { name: /Refresh now/ }).click()
+  await page.getByRole('button', { name: /Refresh Now/ }).click()
   expect(wire.some((call) => call.method === 'POST' && call.path === '/pipeline/prices/refresh')).toBe(true)
   await expect(page.getByText(/Sales history\s+118 of 366/)).toBeVisible()
   await expect(page.getByRole('progressbar')).toBeVisible()
-  await expect(page.getByRole('button', { name: /Refresh now/ })).toHaveAttribute('data-busy', 'true')
+  await expect(page.getByRole('button', { name: /Refresh Now/ })).toHaveAttribute('data-busy', 'true')
   await expect(page.getByText(AS_OF)).toBeVisible()
 })
 
@@ -5247,7 +5247,7 @@ for (const theme of ['light', 'dark'] as const) {
       await page.locator('.pricing-row').first().hover()
       await page.keyboard.press('t')
       const sheet = page.getByRole('dialog').last()
-      await expect(sheet.getByRole('heading', { name: /Sales, last 30 days/ })).toBeVisible()
+      await expect(sheet.getByRole('heading', { name: /Sales, Last 30 Days/ })).toBeVisible()
       /* THE CHART DRAWS FROM TOKENS ONLY (docs/DESIGN.md): no inline hex on a mark. */
       const literals = await sheet.locator('svg [fill], svg [stroke]').evaluateAll(
         (marks) => marks.filter((mark) => /#[0-9a-f]{3,8}\b/i.test(`${mark.getAttribute('fill') ?? ''} ${mark.getAttribute('stroke') ?? ''}`)).length,

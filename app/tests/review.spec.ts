@@ -885,7 +885,7 @@ async function openWide(page: Page): Promise<Sent[]> {
   return open(page, WIDE_ROWS, [], WIDE_CATALOG_ROWS)
 }
 
-test('nine rows are keyed, and the rest wait behind "Show N more"', async ({ page }) => {
+test('nine rows are keyed, and the rest wait behind "Show N More"', async ({ page }) => {
   await openWide(page)
 
   const rows = page.locator('.review-catalog .review-candidate')
@@ -907,7 +907,7 @@ test('nine rows are keyed, and the rest wait behind "Show N more"', async ({ pag
   await expect(rows.nth(9).locator('.review-key-blank')).toBeVisible()
 })
 
-test('"Show N more" reveals rows already on the wire, never a second fetch', async ({ page }) => {
+test('"Show N More" reveals rows already on the wire, never a second fetch', async ({ page }) => {
   const sent = await openWide(page)
   await page.getByRole('button', { name: /Show \d+ more/ }).click()
   await expect(page.locator('.review-catalog .review-candidate')).toHaveCount(16)
@@ -992,7 +992,7 @@ async function settled(page: Page, tries = 40): Promise<Record<string, Placed>> 
   return last
 }
 
-test('"Show N more" adds rows below and moves nothing outside the card panel (D118)', async ({
+test('"Show N More" adds rows below and moves nothing outside the card panel (D118)', async ({
   page,
 }) => {
   await openWide(page)

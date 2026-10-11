@@ -357,7 +357,7 @@ test('a drill-down opens a product row into the orders behind it, and closes aga
   await open(page, '?period=all')
 
   const row = page.locator('.revenue-table tbody tr', { hasText: 'Charizard ex' })
-  const toggle = row.getByRole('button', { name: /orders behind Charizard ex/ })
+  const toggle = row.getByRole('button', { name: /Orders Behind Charizard ex/ })
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
   await toggle.click()

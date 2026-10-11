@@ -11,14 +11,14 @@ No row is open.
 |---|---|---|---|---|---|
 | 1 | voice | Pricing.tsx, line 3753 | `Under my price` | `Under your price` | segmented option (owner example) |
 | 2 | voice | Pricing.tsx, line 3754 | `At my price` | `At your price` | segmented option |
-| 3 | voice | Pricing.tsx, line 3986 | `Tell me when market is above` | `Notify you when market is above` | hold field label |
+| 3 | voice | Pricing.tsx, line 3986 | `Tell me when market is above` | `Alert when market is above` | hold field label |
 | 4 | voice | Orders.tsx, line 4012 | `I already sent it` | `Already sent it` | stand-down legend term (owner example) |
 | 5 | voice | Orders.tsx, line 4022 | `I shipped these by hand` | `Shipped these by hand` | stand-down legend term |
 | 6 | voice | Orders.tsx, line 4609 | `I already sent {it or these N}` | `Already sent {it or these N}` | button; keep the template |
 | 7 | voice | Orders.tsx, line 4669 | `I shipped {this or these N} by hand` | `Shipped {this or these N} by hand` | button; keep the template |
 | 8 | voice | Pricing.tsx, line 2835 | `Price my live listings` | `Price your live listings` | button |
 | 9 | voice | LiveReconcile.tsx, line 149 | `Fetch my live listings` | `Fetch your live listings` | button |
-| 10 | voice | LiveReconcile.tsx, line 158 | title `Drop the My Pricing export here` | `Drop the "My Pricing" export here` | owner ruling: the page name goes in quotes, as the app's other on-screen strings do. The quoted phrase alone is exempt (NAMED_EXEMPT in copySource.ts). The same words unquoted still go red. |
+| 10 | voice | LiveReconcile.tsx, line 158 | title `Drop the My Pricing export here` | `Drop the “My Pricing” export here` | owner ruling: the page name goes in quotes, as the app's other on-screen strings do. The curly-quoted phrase alone is exempt (NAMED_EXEMPT in copySource.ts). The same words unquoted still go red. |
 | 11 | voice | RunPanel.tsx, line 67 | `Only the sets I tick` | `Only the sets you tick` | key label |
 | 12 | voice | RunsComposer.tsx, line 929 | `The cards I ticked` | `The cards you ticked` | key label |
 
@@ -43,7 +43,7 @@ Without the typed-data exemption in row 31, the same sweep reads 76 offenders ac
 | 13 | casing | Orders.tsx, lines 2363 and 2377 | orders | `Add orders` | `Add Orders` | icon label and sheet title |
 | 14 | casing | Orders.tsx, line 3921 | orders | `Skip to the walk` | `Skip to the Walk` | |
 | 15 | casing | Orders.tsx, line 4338 | orders | `Manage this buyer's orders` | `Manage This Buyer's Orders` | accessible name |
-| 16 | casing | Orders.tsx, line 3868 | orders | `Fold {n} section` | `Fold {n} Section` | builder: either, the rendered label must read `Fold {n} Section`. The noun comes from `countOf`, so fix either one. |
+| 16 | casing | Orders.tsx, line 3868 | orders | `Fold {n} section` | `Fold {n} Section` | builder: either, the rendered label must read `Fold {n} Section`. The noun comes from `countOf`, so fix either one. The folded form `Open {n} Section` takes the same rule. |
 | 17 | casing | orderView.ts, line 289 | orders | `Buyer on order` + NBSP + tail | `Buyer on Order` + NBSP + tail | keep the non-breaking space; the tail is data |
 | 18 | casing | OrdersWalkPane.tsx, line 976; Orders.tsx, line 5149 | orders | `Mark sold: {place}` | `Mark Sold: {place}` | the place is data |
 | 19 | casing | Inventory.tsx, line 1249 | inventory | `Mark sold: {place}` | `Mark Sold: {place}` | the visible text at line 1239 is the same words; the accessible name wins in the sweep |
