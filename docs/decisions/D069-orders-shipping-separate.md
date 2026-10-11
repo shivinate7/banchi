@@ -1,6 +1,6 @@
 ## D69 — Orders and Shipping are separate routes
 
-**Built 2026-08-30.** `#/orders` answers *which copies does this buyer get, and where in the boxes are they*, out of D63's ledger. `#/shipping` answers *which envelope does this order go in*, out of TCGplayer's own `Orders → Export Shipping` file. Two routes, not one screen with two modes. `app/src/App.tsx` now carries NINE routes. Eight are the owner's and one is the Fulfiller's. The build-order plan is discharged: the screens exist, so the transport had somewhere to arrive.
+`#/orders` answers *which copies does this buyer get, and where in the boxes are they*, out of D63's ledger. `#/shipping` answers *which envelope does this order go in*, out of TCGplayer's own `Orders → Export Shipping` file. Two routes, not one screen with two modes. `app/src/App.tsx` now carries NINE routes. Eight are the owner's and one is the Fulfiller's. The build-order plan is discharged: the screens exist, so the transport had somewhere to arrive.
 
 ### Two routes, because they are two questions asked at two moments
 
@@ -14,7 +14,7 @@
 
 ### The paste is projected in the browser, and the server's allowlist is the backstop
 
-**`app/src/orderPaste.ts` is the ONE place in this app that decides what leaves the browser about a purchase**. It NAMES what it dropped rather than dropping it silently. The projection was `{source, number, placed_at, status, lines[]}` and nothing else. It had no buyer, no address, no city, no postcode, no payment. **AMENDED 2026-09-13 (`D193`): the projection is now `{source, number, placed_at, status, buyer, lines[]}` — a display name, and nothing else added.** Address, city, postcode and payment are dropped exactly as before. The dropped list drawn on screen before the send now says so, with `buyer` no longer on it. That entry argues why a name is not the PII this boundary exists to keep out.
+**`app/src/orderPaste.ts` is the ONE place in this app that decides what leaves the browser about a purchase**. It NAMES what it dropped rather than dropping it silently. The projection was `{source, number, placed_at, status, lines[]}` and nothing else. It had no buyer, no address, no city, no postcode, no payment. **AMENDED (`D193`): the projection is now `{source, number, placed_at, status, buyer, lines[]}` — a display name, and nothing else added.** Address, city, postcode and payment are dropped exactly as before. The dropped list drawn on screen before the send now says so, with `buyer` no longer on it. That entry argues why a name is not the PII this boundary exists to keep out.
 
 **`server/capture_server.py`'s three allowlist tuples are a BACKSTOP AND NOT THE BOUNDARY.** An unprojected paste refuses BY NAME — `field_not_settable`, naming whichever excluded field it carried (`buyerName`, `shippingAddress`, `email`, …) — rather than being stored with the extra fields quietly trimmed. Trimming was the alternative, and it is worse in the only case that matters. A silent trim makes a broken projection indistinguishable from a working one, forever. The first person to notice would be whoever read the store. **`buyer` moved off this refusal list on 2026-09-13**. The mechanism — refuse by name rather than trim — is unchanged for everything still on it.
 
@@ -38,7 +38,7 @@
 
 ### THE TRANSPORT WAS MEASURED, AND THREE PLACES IN THIS TREE SAID THE WRONG THING
 
-**Captured 2026-08-30 off the owner's own logged-in browser**, request shapes were read off an in-page interceptor, and response SCHEMAS were walked with the values discarded. A third-party bridge extension the owner supplied corroborated them. No credential value was read, logged or echoed.
+**Captured off the owner's logged-in browser**, request shapes were read off an in-page interceptor, and response SCHEMAS were walked with the values discarded. A third-party bridge extension the owner supplied corroborated them. No credential value was read, logged or echoed.
 
 **The order host is a COOKIE SESSION and NOT a Bearer challenge.** `order-management-api.tcgplayer.com` authenticates with `credentials: 'include'` and the `TCGAuthTicket_Production` cookie. That is the same `.tcgplayer.com` cookie `server/tcg_export.py:_cookie()` already names, so ONE account session serves both hosts. No `www-authenticate` header appeared on any path probed. The portal's own XHR sets no `Authorization` header, and the bridge extension authenticates purely by cookie.
 
@@ -50,7 +50,7 @@
 
 **A 403 is `order_seller_key_rejected` and is NOT an expired session.** `filters.sellerKey` is required, and its absence answers 403 rather than 400. So a client that reads 403 as "log in again" sends the operator to re-authenticate over a body bug. The key is the lowercased prefix of every order number this account has. It is account-identifying rather than secret, so it belongs in `.env` as `BANCHI_TCG_SELLER_KEY`, and not in a constant.
 
-**Verified 2026-08-30, after this entry was written**: the operator ran `order_transport.search(page_size=3)` against the live host and got three real orders back. So the stored `TCGPLAYER_STORE_COOKIE` does authenticate it, and one credential serves both hosts. An agent may not read `.env` here, so the run was the operator's. **`detail` and `fetch_open_orders` are still unexercised against the live host.** They are the half that carries a buyer's name and address. The PII projection is proven against fixtures only.
+**Verified after this entry was written**: the operator ran `order_transport.search(page_size=3)` against the live host and got three real orders back. So the stored `TCGPLAYER_STORE_COOKIE` does authenticate it, and one credential serves both hosts. An agent may not read `.env` here, so the run was the operator's. **`detail` and `fetch_open_orders` are still unexercised against the live host.** They are the half that carries a buyer's name and address. The PII projection is proven against fixtures only.
 
 ### What this does not decide
 

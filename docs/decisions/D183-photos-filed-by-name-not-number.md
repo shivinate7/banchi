@@ -1,6 +1,6 @@
 ## D183 — Photos filed by name, not number
 
-**A card's photograph is stored under the card's own name — `photos/<aa>/<cid>.jpg` — and `Box 3 · Section 2 · Card 17` goes back to being purely derived.** The owner's instruction, 2026-09-12, on reading D172's spec: *"I think this is a systems problem rather than worrying about the outcome we need to solve — can you think bigger?"* On this answer, the owner added **"Yes rescope it, approved."** D172 gave the card a name; this says the name is what the bytes are filed under, which is the half that retires the work rather than defending against it.
+**A card's photograph is stored under the card's own name — `photos/<aa>/<cid>.jpg` — and `Box 3 · Section 2 · Card 17` goes back to being purely derived.** The owner's instruction, 2026-09-12, on reading D172's spec: *"I think this is a systems problem rather than worrying about the outcome we need to solve — can you think bigger?"* On this answer, the owner added **"Yes rescope it, approved."** D172 gave the card a name. This says the name is what the bytes are filed under. That is the half that retires the work rather than defending against it.
 
 ### The systems problem D172 left standing
 
@@ -34,7 +34,7 @@
 
 ### The move of 4.45 GB is verified per card, never trusted
 
-**D172's measurement is what makes this possible and it is the only reason this is safe**. 2,535 of 2,535 stored digests equal the file on disk, re-confirmed 2026-09-12 over 4,445,351,065 bytes with 0 mismatches and 0 duplicates. Every file therefore has an oracle before it moves.
+**D172's measurement is what makes this possible and it is the only reason this is safe**. 2,535 of 2,535 stored digests equal the file on disk, re-confirmed over 4,445,351,065 bytes with 0 mismatches and 0 duplicates. Every file therefore has an oracle before it moves.
 
 Per card, independently: hash the legacy file and **refuse that card by name** if it does not match its `cid`. Then `os.link` to the destination, and **re-hash the destination**. Only then unlink the source. **A hard link rather than a rename, and that is the whole argument**. A rename is atomic and cheaper to reason about. It is also the one form where the verification happens after the only other copy is gone. Between the link and the unlink there are two names for one inode. The digest is re-read from the new name before the old one is dropped. Killed anywhere, the bytes exist under at least one name and a re-run finishes it. **There is no state this can stop in that a re-run does not complete, and none in which a photograph exists under no name.**
 

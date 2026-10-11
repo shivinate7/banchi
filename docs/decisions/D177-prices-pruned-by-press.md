@@ -27,8 +27,7 @@ so the store remembers listings it never photographed. **So "no card matches" is
   number 1 has been created and deleted four times.
 - **1 is an orphan nothing in the tree can name**, worth $27.00. Only the older live exports
   still on disk identify `C-4669926` as a One Piece "Double Pack Set Vol. 11", live at
-  quantity 3 asking exactly the $27.00 the corpus holds, until it left the book between
-  2026-09-10 and 2026-09-12.
+  quantity 3 asking exactly the $27.00 the corpus holds, until it left the book.
 
 **The eleven carry 2.70% of the corpus's typed rows and 28.78% of its typed money** — mean
 $20.75 against the corpus's $1.95, a factor of 10.6. That skew is not chance. **The expensive answers in this file are disproportionately the ones with no card behind them. The reason is that the expensive things in this store are sealed product and accessories.**
@@ -39,7 +38,7 @@ One Piece, 2 YuGiOh, 1 Playmat, 1 Card Sleeves. Ten are answered today because t
 is new; every row the operator prices on it joins the group. **The prune list is not eleven rows heading for zero, it is eleven heading for three hundred and fifty.**
 
 **The holds survived on luck, not on the rule.** All 23 `bullish` holds are matched today, and
-two of them have no copy left on hand — matched only because their records still stand. **Had either been in box 1 on 2026-09-11, a prune would have deleted a judgment the operator wrote in words**. The card would go out at the rule's price on the next `emit` with nothing said.
+two of them have no copy left on hand — matched only because their records still stand. **Had either been in box 1 at the snapshot, a prune would have deleted a judgment the operator wrote in words**. The card would go out at the rule's price on the next `emit` with nothing said.
 
 ### What this decides
 
@@ -47,7 +46,7 @@ two of them have no copy left on hand — matched only because their records sti
 not behind a flag that defaults on.
 
 **The shape that is permitted already exists**: `pipeline/corpus.py:clearable`, which the
-owner's own *"Just give me a mass-clear button"* produced. It previews, and the operator points it. One press spends it. Holds and `unknown`-channel answers are excluded by kind. An undated answer is named rather than guessed at. **A prune takes that shape or it does not land.** Three things such a preview must show, each earned by a row above:
+owner's request for a mass-clear button produced. It previews, and the operator points it. One press spends it. Holds and `unknown`-channel answers are excluded by kind. An undated answer is named rather than guessed at. **A prune takes that shape or it does not land.** Three things such a preview must show, each earned by a row above:
 
 1. **Whether the SKU is live on TCGplayer right now.** This is the difference between a
    leftover and the asking price on stock that is for sale this minute.

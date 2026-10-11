@@ -14,7 +14,7 @@ particular readers are blind.
 
 **Every one of these five was already written down when it was broken.** Four were in a memory
 file the breaking session had loaded; one is in CLAUDE.md twice. The freshest is the plainest:
-on 2026-09-12 a session ran `git checkout CLAUDE.md` over its own uncommitted work with
+a session ran `git checkout CLAUDE.md` over its own uncommitted work with
 `mutation-tests-need-a-bak-not-git-checkout` in its context window.
 
 That is not carelessness, and writing the rule a third time is not the remedy. D171 states the

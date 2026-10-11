@@ -1,8 +1,8 @@
-14. ~~**Multi-game**~~ — **done 2026-08-24.** Spec at `docs/specs/multi-game.md`. The spec has four capture choices plus `misc`, per D21-D25. Landed: the vendored
+14. ~~**Multi-game**~~ — **done.** Spec at `docs/specs/multi-game.md`. The spec has four capture choices plus `misc`, per D21-D25. Landed: the vendored
     registry with four real TCGplayer exports behind it. Also landed: four audit rows, per-game dispatch,
     and `game` through all ten capture hops with the picker on the capture bar.
 
-    **Every step is now built** (2026-08-23). Step 5's rarity claim is done end to end. Step 6 has a
+    **Every step is now built.** Step 5's rarity claim is done end to end. Step 6 has a
     repeatable `--export` with per-game catalogs and one import file per game (D25). Step 7 has a
     pooled non-located inventory and both opsec discharges. Step 8's rarity clause was built
     behind its A/B flag, MEASURED, and switched off because it lost (holdout 0.9706 → 0.9559,
