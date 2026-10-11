@@ -149,6 +149,10 @@ deleted to lower a price, and the quantity is not a variable.
   live now is not ruled.
 - The screen shape is the entry with slug `pricing-is-one-list-and-one-send`.
 
+### The last send's warning sits below Send (R14)
+
+While the last send is incomplete, its warning sits below the Send button. Send is disabled, with a line that says why. Send never moves (D313). Ruled, being built in #837.
+
 ### The other decisions this touches
 
 - **D33 (the pipeline is reachable from a screen, and one route can spend).** Kept. The cost
