@@ -16,7 +16,7 @@ Three options went to the owner for the Pokemon catalogue fetch. The fetch sat a
 
 ### Where it is enforced, and why not the other three places
 
-**`server/pipeline_routes.py:_scope_for_run` decides how wide to ask.** It is the one function that does. The press-nothing preview and the paid fetch both call it, so one refusal gets two behaviors. `GET /pipeline/runs/<name>/scope` draws it, since that route already reads a `PipelineRefusal` as data. `POST .../export` refuses with 409 and opens no socket. The operator meets this before the money gate, on the screen D76 built for it.
+**`server/pipeline_routes.py:_scope_for_run` decides how wide to ask.** It is the one function that does. The press-nothing preview and the paid fetch both call it, so one refusal gets two behaviours. `GET /pipeline/runs/<name>/scope` draws it, since that route already reads a `PipelineRefusal` as data. `POST .../export` refuses with 409 and opens no socket. The operator meets this before the money gate, on the screen D76 built for it.
 
 **Not the shutter. This is the load-bearing rejection.** `app/src/setHint.ts`'s header carries D65's rule. It judges and never refuses. The rig does not stop for an autocomplete at a 623 ms feeder cadence. A capture refused mid-feeder is worse than an unhinted card. It leaves a physical card in the drawer with no record, which renumbers every card behind it. An unhinted card is repairable. A missing record means that the box and the store disagree.
 

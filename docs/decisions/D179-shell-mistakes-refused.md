@@ -85,7 +85,7 @@ That happened. A coordinating session resolving a merge conflict stood on a loca
 
 `clause_push` resolves the fact that git's own safety net already holds. `git rev-parse --abbrev-ref HEAD` gives the current branch. `branch.<name>.remote` and `branch.<name>.merge` give the tracked pair. They are read as git reads them, not re-derived from the command text. A push is refused when three things hold. Its remote matches `branch.<name>.remote`. Its lone refspec is an unqualified `HEAD` or the branch's own literal name. The tracked name differs.
 
-Everything else passes as before. That covers six cases. A branch with no configured upstream (an ordinary first push). A name matching its upstream. An explicit `HEAD:<branch>`. A push to a remote the branch does not track (a fork workflow). `--all`, `--mirror`, `--tags` and `--delete`, which push something other than this branch under its own name. `BANCHI_PUSH=off` is its hatch, honored in both forms.
+Everything else passes as before. That covers six cases. A branch with no configured upstream (an ordinary first push). A name matching its upstream. An explicit `HEAD:<branch>`. A push to a remote the branch does not track (a fork workflow). `--all`, `--mirror`, `--tags` and `--delete`, which push something other than this branch under its own name. `BANCHI_PUSH=off` is its hatch, honoured in both forms.
 
 Reproduced, not argued. `scripts/guard-shell-selftest.sh` builds a real bare origin. It pushes a branch under one name while its tracking points to a differently named branch. That is the incident's mechanism, `git push -u origin <local>:<remote>`. The guard is asked about that mismatch. The cases the ordinary first push, a matching upstream and fork workflows must never trip are asked too.
 
@@ -148,4 +148,4 @@ The guards that write it are `guard-shell.py`, `reap.py --hook`, `silent-write-g
 
 ### Standing
 
-**BUILT and self-tested**: seven clauses, `scripts/guard-shell-selftest.sh` with four reproductions, the swept allow list, every hatch in both forms, and the fail-open floor. **RECORDED**: this entry, `docs/map.py`, CLAUDE.md, `scripts/checks.py` and both hook rosters. **NEITHER**: nothing. What is unproven is what every hook here shares. `silent-write-selftest.sh` says so in as many words. The harness invokes the hook, and exit 2 blocks a call. Both are the harness's behavior, not this repository's.
+**BUILT and self-tested**: seven clauses, `scripts/guard-shell-selftest.sh` with four reproductions, the swept allow list, every hatch in both forms, and the fail-open floor. **RECORDED**: this entry, `docs/map.py`, CLAUDE.md, `scripts/checks.py` and both hook rosters. **NEITHER**: nothing. What is unproven is what every hook here shares. `silent-write-selftest.sh` says so in as many words. The harness invokes the hook, and exit 2 blocks a call. Both are the harness's behaviour, not this repository's.
