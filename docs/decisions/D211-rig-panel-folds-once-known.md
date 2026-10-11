@@ -1,42 +1,17 @@
 ## D211 — Rig panel folds once setup is known
 
-`app/src/CaptureScreen.tsx`'s Game/Camera/Rotation/Trigger panel — the SESSION box, "set once
-when the rig is set up, then read" per this file's own comment — rendered all four fields
-expanded on every mount, whether or not the operator had a box already. A walkthrough of the
-screen named this: seven settings stand between opening Capture and picking a box, on a screen
-D142 already built to remember that box across sittings.
+`app/src/CaptureScreen.tsx`'s Game, Camera, Rotation and Trigger panel is the SESSION box. Its own comment says the panel is set at rig setup and then read. It rendered all four fields expanded on every mount, whether or not the operator had a box. A walkthrough of the screen found seven settings between opening Capture and picking a box. D142 already remembers that box across sittings.
 
-**The fold is keyed off `restored.box`, the field `banchi.capture.setup` already carries (D142) — no new device-memory key.**
-A browser with no remembered box starts with the panel OPEN, because the four fields have to
-be visible to choose the first time; a browser that remembers one starts FOLDED, showing a
-one-line summary (game · rotation · trigger) instead.
-Picking a box for the first time in a fresh sitting folds the panel the same way, unless the
-operator has already touched the disclosure by hand this sitting — a manual re-open is never
-immediately re-closed by the box pick that follows it.
+**The fold is keyed off `restored.box`, the field `banchi.capture.setup` already carries (D142).** No new device-memory key is added. A browser with no remembered box starts with the panel open, since the four fields must be visible to choose the first time. A browser that remembers a box starts folded. It shows a one-line summary (game · rotation · trigger) instead.
 
-**Why a derived boolean and not a seventh stored field.** `deviceMemory.ts`'s own comments
-insist on "the six choices the capture screen remembers" and "ONE KEY FOR SIX VALUES, BECAUSE
-IT IS ONE HABIT" — the document's whole argument is that it holds exactly the operator's
-setup and nothing else. A `rigOpen` flag is a fact about which way a disclosure was left, not
-a claim about the rig or the box, and stuffing it into the same document would be answering a
-UI-state question with the vocabulary D142 built for a different one. `restored.box === null`
-is already read for the box field itself; the fold reuses that same read rather than adding a
-second one.
+Picking a box for the first time in a fresh sitting folds the panel the same way. The exception: the operator has already touched the disclosure by hand this sitting. A manual re-open is never re-closed by the box pick that follows it.
 
-**What is NOT covered by this entry.** Whether the operator's own manual open/close choice
-should PERSIST across sittings (rather than resetting to the box-based default on the next
-load) is left for the owner to weigh in on if it turns out to matter in practice — nothing
-here writes one, and `rigTouched` is scoped to the component instance, not to storage.
+**Why a derived boolean, not a seventh stored field.** `deviceMemory.ts`'s comments say "the six choices the capture screen remembers" and "ONE KEY FOR SIX VALUES, BECAUSE IT IS ONE HABIT". The document holds exactly the operator's setup and nothing else. A `rigOpen` flag records which way a disclosure was left. It is not a claim about the rig or the box. Storing it there would answer a UI-state question with the vocabulary D142 built for another one. `restored.box === null` is already read for the box field itself. The fold reuses that read.
+
+**What is NOT covered.** Whether the operator's manual open or close choice should persist across sittings is open. Today it resets to the box-based default on the next load. If it matters in practice, the owner should weigh in. Nothing here writes one. `rigTouched` is scoped to the component instance, not to storage.
 
 ### Mechanized
 
-`app/tests/capture-claims.spec.ts`, three cases: a box-empty fixture starts the panel open
-(`aria-expanded="true"`, the Game row visible); a box-seeded fixture (`{box: 3, bid: 23}`)
-starts it folded (`aria-expanded="false"`, the Game row ABSENT from the DOM rather than merely
-hidden, and the summary reading "Pokémon"), and a press on the summary re-opens it; and a
-keyboard shortcut (`g`) fired while the panel reads folded still opens that field's own picker,
-proving the fold never traps a shortcut behind hidden markup. Run by `make design-check`.
+`app/tests/capture-claims.spec.ts`, three cases. A box-empty fixture starts the panel open (`aria-expanded="true"`, the Game row visible). A box-seeded fixture (`{box: 3, bid: 23}`) starts it folded (`aria-expanded="false"`). The Game row is ABSENT from the DOM, not merely hidden, and the summary reads "Pokémon". A press on the summary re-opens it. A keyboard shortcut (`g`) fired while the panel is folded still opens that field's own picker. So the fold never traps a shortcut behind hidden markup. `make design-check` runs them.
 
-Whether the operator's own manual toggle should persist across sittings — the one open
-question this entry leaves for the owner — is deliberately NOT asserted either way, since
-nothing here writes one.
+The manual toggle persistence is deliberately not asserted either way, since nothing here writes one.
