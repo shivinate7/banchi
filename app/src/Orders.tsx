@@ -3647,9 +3647,10 @@ function PullStage({
           setWalkTicked(allTicked ? new Set() : new Set(tickableKeys))
         }}
       >
-        {allTicked ? 'Stop' : `Walk ${tickableKeys.size}`}
+        {allTicked ? 'Stop' : 'Start Walk'}
       </Button>
     )
+  const walkAllCaption = walkAll === null ? null : <span className="orders-walkall-caption">{`${tickableKeys.size} ${tickableKeys.size === 1 ? 'buyer' : 'buyers'}`}</span>
 
   const filterBar = (
     <FilterBar<OrderSortKey>
@@ -3667,7 +3668,14 @@ function PullStage({
         ...(unknownCount === 0 && !hideUnknown ? [] : [{ checked: hideUnknown, onChange: setHideUnknown, label: 'Hide unknown', count: unknownCount }]),
       ]}
       beside={storeControls}
-      action={walkAll}
+      action={
+        walkAll === null ? null : (
+          <>
+            {walkAll}
+            {walkAllCaption}
+          </>
+        )
+      }
     />
   )
 

@@ -372,7 +372,7 @@ reads "not a Pirate Ship column" invites the fix of adding it to the column set.
 the reason does not. `check_no_insurance` runs over the row's own keys on the way out of
 `render`. A row that reached the writer by another path still has to pass it.
 
-**The Shipping lane's "Needs a look" group gets a solid warning border (B15, signed off, not built yet).** It is the group of unjudged orders above.
+**The Shipping lane's "Needs a look" group gets a solid warning border.** It is the group of unjudged orders above.
 
 ---
 
