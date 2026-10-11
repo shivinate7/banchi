@@ -3307,7 +3307,7 @@ function PricingRow({
       {!source.copies ? null : (
         <span className="pricing-qty pricing-col-qty" data-asked={asked === '' ? undefined : 'true'}>
           {!showQty ? null : (
-            <input
+            <input name="bn-input"
               className="bn-input pricing-qty-input"
               type="text"
               inputMode="numeric"
@@ -3356,7 +3356,7 @@ function PricingRow({
             <span className="pricing-currency" aria-hidden="true">
               $
             </span>
-            <input
+            <input name="pricing-input"
               className="pricing-input"
               type="text"
               inputMode="decimal"
@@ -3461,7 +3461,7 @@ function BigMoney({ value, onCommit, label }: { value: string; onCommit: (next: 
       <span aria-hidden="true" className="pricing-cheap-currency">
         $
       </span>
-      <input
+      <input name="pricing-cheap-input"
         className="pricing-cheap-input"
         inputMode="decimal"
         aria-label={label}
@@ -3606,7 +3606,7 @@ function RuleSheet({
                 onChange={(kind) => onCustomDraft({ ...customDraft, kind }, true)}
               />
               <label className="pricing-pct">
-                <input
+                <input name="percentage"
                   className="bn-input pricing-pct-input"
                   type="text"
                   inputMode="decimal"
@@ -3744,7 +3744,7 @@ function LiveSheet({
       <div className="pricing-sheet-fields">
         <label className="bn-field">
           <span className="bn-field-label">Not sold in this many days</span>
-          <input className="bn-input" inputMode="numeric" value={days} onChange={(event) => setDays(event.currentTarget.value.replace(/\D/g, ''))} />
+          <input name="bn-input" className="bn-input" inputMode="numeric" value={days} onChange={(event) => setDays(event.currentTarget.value.replace(/\D/g, ''))} />
         </label>
         <Segmented<'cut' | 'match'>
           label="Price"
@@ -3758,13 +3758,13 @@ function LiveSheet({
         {match ? null : (
           <label className="bn-field">
             <span className="bn-field-label">Percent under</span>
-            <input className="bn-input" inputMode="decimal" value={percent} onChange={(event) => setPercent(event.currentTarget.value.replace(/[^0-9.]/g, ''))} />
+            <input name="bn-input" className="bn-input" inputMode="decimal" value={percent} onChange={(event) => setPercent(event.currentTarget.value.replace(/[^0-9.]/g, ''))} />
           </label>
         )}
         {match ? null : (
           <label className="bn-field">
             <span className="bn-field-label">At most this much off a card, in dollars</span>
-            <input
+            <input name="bn-input"
               className="bn-input pricing-cap-field"
               inputMode="decimal"
               placeholder="No limit"
@@ -3984,7 +3984,7 @@ function HoldPanel({
       <div className="pricing-holdpanel-fields">
         <label className="bn-field">
           <span className="bn-field-label">Notify you when market is above</span>
-          <input
+          <input name="bn-input"
             className="bn-input bn-input-mono"
             type="text"
             inputMode="decimal"
@@ -3995,7 +3995,7 @@ function HoldPanel({
         </label>
         <label className="bn-field">
           <span className="bn-field-label">Note</span>
-          <input className="bn-input" type="text" placeholder="why, in a few words" value={text} onChange={(event) => setText(event.target.value)} />
+          <input name="bn-input" className="bn-input" type="text" placeholder="why, in a few words" value={text} onChange={(event) => setText(event.target.value)} />
         </label>
       </div>
       <div className="pricing-holdpanel-actions">

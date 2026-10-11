@@ -1289,7 +1289,7 @@ export function RunsComposer({
                       </label>
                       <label className="runs-field-inline">
                         <span>Max edge</span>
-                        <input
+                        <input name="bn-input"
                           className="bn-input bn-input-mono runs-edge"
                           type="number"
                           min={256}

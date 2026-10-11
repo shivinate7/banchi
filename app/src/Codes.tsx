@@ -749,7 +749,7 @@ export function Codes() {
     ) : (
       <label className="bn-field codes-field">
         <span className="bn-field-label">Box</span>
-        <input
+        <input name="bn-input"
           className="bn-input"
           inputMode="numeric"
           value={value}
@@ -1496,7 +1496,7 @@ export function Codes() {
                 <div className="codes-confirm">
                   <label className="bn-field codes-field">
                     <span className="bn-field-label">Order name</span>
-                    <input
+                    <input name="bn-input"
                       className="bn-input"
                       value={orderId}
                       onChange={(e) => setOrderId(e.target.value)}
@@ -1576,7 +1576,7 @@ export function Codes() {
             ) : (
               <label className="bn-field codes-field">
                 <span className="bn-field-label">How many codes</span>
-                <input
+                <input name="bn-input"
                   className="bn-input"
                   inputMode="numeric"
                   value={lotBox}
@@ -1631,7 +1631,7 @@ export function Codes() {
               <div className="codes-confirm">
                 <label className="bn-field codes-field">
                   <span className="bn-field-label">Lot name</span>
-                  <input
+                  <input name="bn-input"
                     className="bn-input"
                     value={lotId}
                     onChange={(e) => setLotId(e.target.value)}

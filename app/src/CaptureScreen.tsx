@@ -5171,7 +5171,7 @@ export function CaptureScreen() {
               <div className="capture-entry">
                 <div className="capture-entrybox bn-input-wrap">
                   <Icon name="search" size={14} />
-                  <input
+                  <input name="capture-box-filter"
                     ref={boxEntryRef}
                     className="capture-filter bn-input"
                     type="text"
@@ -5757,7 +5757,7 @@ export function CaptureScreen() {
               >
                 <div className="capture-entrybox bn-input-wrap">
                   <Icon name="tag" size={14} />
-                  <input
+                  <input name="set-hint"
                     ref={hintRef}
                     className="capture-filter bn-input"
                     type="text"

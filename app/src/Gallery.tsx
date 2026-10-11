@@ -567,7 +567,7 @@ function OverlaySpecimens() {
           <Section title="The hint">
             <label className="bn-field">
               <span className="bn-field-label">Set</span>
-              <input className="bn-input" defaultValue="ME01" data-autofocus="" />
+              <input name="bn-input" className="bn-input" defaultValue="ME01" data-autofocus="" />
             </label>
           </Section>
           {/* A CONFIRM OPENED FROM INSIDE AN OPEN SHEET — the second scrimmed layer a static
@@ -1138,7 +1138,7 @@ export function Gallery() {
               <Spec label="input, with hint">
                 <label className="bn-field">
                   <span className="bn-field-label">Box name</span>
-                  <input className="bn-input" defaultValue="RB Epics" />
+                  <input name="section-note" className="bn-input" defaultValue="RB Epics" />
                   <span className="bn-field-hint">Names are unique; case is folded.</span>
                 </label>
               </Spec>
@@ -1147,7 +1147,7 @@ export function Gallery() {
                     field that is not one: Capture's section note is the real case. */}
                 <span className="bn-input-wrap">
                   <Icon name="list" size={16} />
-                  <input className="bn-input" placeholder="A note for this section" aria-label="Section note" />
+                  <input name="section-note" className="bn-input" placeholder="A note for this section" aria-label="Section note" />
                   <Kbd>N</Kbd>
                 </span>
               </Spec>
@@ -1161,15 +1161,15 @@ export function Gallery() {
               <Spec label="large, mono, disabled">
                 <label className="bn-field">
                   <span className="bn-field-label">Card name</span>
-                  <input className="bn-input bn-input-lg" placeholder="Type the name of the card" />
+                  <input name="bn-input" className="bn-input bn-input-lg" placeholder="Type the name of the card" />
                 </label>
                 <label className="bn-field">
                   <span className="bn-field-label">Run</span>
-                  <input className="bn-input bn-input-mono" defaultValue="2026-09-02-box6-01" />
+                  <input name="bn-input" className="bn-input bn-input-mono" defaultValue="2026-09-02-box6-01" />
                 </label>
                 <label className="bn-field">
                   <span className="bn-field-label">Disabled</span>
-                  <input className="bn-input" defaultValue="Not editable" disabled />
+                  <input name="bn-input" className="bn-input" defaultValue="Not editable" disabled />
                 </label>
               </Spec>
               <Spec label="checks">
