@@ -3983,7 +3983,7 @@ function HoldPanel({
       </div>
       <div className="pricing-holdpanel-fields">
         <label className="bn-field">
-          <span className="bn-field-label">Notify you when market is above</span>
+          <span className="bn-field-label">Alert when market is above</span>
           <input name="bn-input"
             className="bn-input bn-input-mono"
             type="text"
