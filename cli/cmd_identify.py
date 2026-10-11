@@ -829,11 +829,14 @@ def _queue_held(store, held, say) -> None:
     from pipeline import routing
     from store import queues
 
-    queued = already = unplaced = 0
+    queued = already = 0
+    unplaced: List[str] = []
     with store.write() as writable:
         for item, entry in held:
             if not item.capture.has_position:
-                unplaced += 1  # `cli/resolve.py` sends a card with no position to Review as `no_position`
+                # Not queued here: it stays in the run's `cards`, and `cli/resolve.py` files it in
+                # Review as `no_position` with its photograph on the next join.
+                unplaced.append(item.capture.photo.name)
                 continue
             said = entry.identification if isinstance(entry.identification, dict) else {}
             standing = writable.review.entries.get(item.key)
@@ -860,7 +863,10 @@ def _queue_held(store, held, say) -> None:
     if already:
         say(f"held            {already} card(s) already answered in Review: left as answered, not paid for")
     if unplaced:
-        say(f"held            {unplaced} card(s) with a saved answer that cannot be used and no position: not paid for")
+        say(
+            f"held            {len(unplaced)} card(s) with a saved answer that cannot be used and no position, "
+            f"not paid for; join files them as no_position: {', '.join(unplaced)}"
+        )
 
 
 def record_adopted(writable, item: Item, run_name: Optional[str] = None) -> bool:
@@ -1795,7 +1801,9 @@ def run(args, say) -> int:
                 "photo_sha256": item.photo_sha256,
             }
             for item in items
-            if item.stage != STAGE_HELD  # held in Review under its own reason, not a read
+            # A positioned held card is queued by `_queue_held`. A positionless one stays here so
+            # the join files it as `no_position` with its photograph: never silently lost.
+            if not (item.stage == STAGE_HELD and item.capture.has_position)
         },
     }
     run_dir.write_identifications(payload)
