@@ -1,6 +1,6 @@
 ## D220 — Orders is Inventory's screen
 
-**The owner's ruling:** Orders gets inventory's exact structure and layout skeleton, except the left column becomes all the orders. Selecting an order immediately starts that order's walk, with ticks to the side to select several and walk them together. The order walk is sorted by density.
+**The owner's ruling:** Orders gets inventory's exact structure and layout skeleton, except the left column becomes all the orders. Selecting an order immediately starts that order's walk, with the option to tick orders at the side, to select several and walk them together. The order walk is sorted by density.
 
 The full specification is `docs/specs/order-walk-plan.md` §13. This entry records why the screen is built that way and what it supersedes.
 

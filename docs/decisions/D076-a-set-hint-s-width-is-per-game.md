@@ -57,7 +57,7 @@ D65 scoped the export by the set hints the box's own cards carry. The reasoning 
 
 **So the three are hoisted into `STANDING_FILTERS` and spread last**. A re-capture of the portal's body cannot silently paste over them. `scripts/docs-audit.py`'s `export request` row blocks the commit on any value that has moved. It names the instruction rather than the literal. Somebody who has just changed a value already knows what the literal is. T7 asserts all three on the wire. That is the half a literal check cannot reach.
 
-**The first fetch after this lands will refuse `export_narrower`, correctly.** It removes rows a previous export carried, which is the guard doing its job. `accept_narrower` is the honest answer once. The baseline moves with it.
+**The first fetch after this lands will refuse `export_narrower`, correctly.** It removes rows a previous export carried, which is the guard doing its job. `accept_narrower` is the honest answer once. The baseline moves with it (retired).
 
 **The rarity and condition axes stay unspent.** `Scope` carries `rarity_ids` and `condition_ids`, and both remain empty. D65 measured that a condition filter thins a number's rows. D3 rung 2 then decides a card from whichever row survived. A rarity claim is per-card. It would inherit the exact partial-claim defect this entry fixes.
 

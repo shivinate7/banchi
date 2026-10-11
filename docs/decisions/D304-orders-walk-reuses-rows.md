@@ -36,7 +36,7 @@ does not revert to the card-then-walk order the first mockup drew. The walk is w
 steps through at the shelf.
 
 **Q5, the walk order.** Density first, box name breaks a tie. The owner asked whether the
-walk already sorted by density. They were right to ask. D220's own owner quote says it should.
+walk already sorted by density. They were right to ask. D220's ruling says it should.
 `pipeline/walkplan.py`'s built `plan` sorts by `walk_order`, the hidden box NUMBER, never by
 density or name. The fix keeps `walk_order` for the solver's own determinism (`_dominated`,
 `_greedy`, `solve`). It changes only `plan`'s drawn-order key, to `(pooled flag, density,
