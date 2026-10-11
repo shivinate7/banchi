@@ -1,6 +1,6 @@
 ## D41 — An address is a rank, not a list
 
-**A position renders as a rank: a muted two-line path with the card number beside it at size, and no separator at all.** Built 2026-08-29, from a design pass the owner asked for and then chose from. They had never liked the dot theme. The sidebar's own dotted line was going to two lines. Two designers worked it from opposite lenses. Six treatments were rendered against the real store. The owner picked the **terminal-dominant** address and the **census-triad** meta block.
+**A position renders as a rank: a muted two-line path with the card number beside it at size, and no separator at all.** Built from a design pass the owner chose from. The owner had disliked the dot theme. The sidebar's own dotted line was going to two lines. Two designers worked it from opposite lenses. Six treatments were rendered against the real store. The owner picked the **terminal-dominant** address and the **census-triad** meta block.
 
 ### It was not a font-size problem
 
@@ -32,7 +32,7 @@
 
 ### Full treatment for all, the same day
 
-The owner reopened it in those words. The paragraph this replaces named `.review-position` and `.card-locations-label`. It said taking the treatment to them was a decision about all three sites, **and the count was wrong**. The capture screen draws the address in **five** more places, three of them inside running sentences. Six owner sites, not three.
+The owner reopened it. The paragraph this replaces named `.review-position` and `.card-locations-label`. It said taking the treatment to them was a decision about all three sites, **and the count was wrong**. The capture screen draws the address in **five** more places, three of them inside running sentences. Six owner sites, not three.
 
 **The structure is universal and the size is per site**, which is what the old paragraph's warning buys. It predicted that a 44px figure repeated seven times in a list would be a different and worse defect. That is now measured. At 44px the copies row goes 114.17 to **126.48px**, +86px on a seven-copy list. Copies visible on landing drop 4 to 3. This is on the screen whose recorded complaint (D38 twice, D38 again) is that the copies scroll away. So what is shared is the RANK: muted stacked path, no separator, and the slot as the only thing drawn at size. Each site sets its own figure.
 
@@ -58,7 +58,7 @@ The owner reopened it in those words. The paragraph this replaces named `.review
 
 **What would reopen this: a two-part label, or a box with no name.** Both collapse a measurement this rests on. The first ends the 32.3px free plateau. The second costs the copies list 17px a row. Neither is hypothetical. D24 pools cards without positions, and D20 leaves names optional.
 
-**The mechanism was reused on the sentence under the label — see D58 (2026-08-30), which owns that argument.** Named here only so the trail exists. The one thing it does not share is that its payload takes position rather than size. Two thirty-character names cannot carry a 44px figure.
+**The mechanism was reused on the sentence under the label — see D58, which owns that argument.** Named here only so the trail exists. The one thing it does not share is that its payload takes position rather than size. Two thirty-character names cannot carry a 44px figure.
 
 ---
 

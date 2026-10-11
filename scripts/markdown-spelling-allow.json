@@ -146,11 +146,8 @@
     "docs/decisions/*-press-never-moves-content.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "behaviour",
-        "behaviour",
         "capitalisations",
-        "ellipsises",
-        "neighbours"
+        "ellipsises"
       ]
     },
     "docs/decisions/*-a-price-belongs-to-a-listing.md": {
