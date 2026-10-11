@@ -1,6 +1,6 @@
 ## D88 — SQLite is the store of record
 
-**`inventory/store.sqlite` is the master store, every `Store.write()` is one transaction over every table, and a session loads only the rows it names.** Built 2026-09-01, from the owner's plan for a 100,000-card run. The pile is 100,000 raw cards. Scanning is the highest-margin activity on the table, measured at $0.00105 per card in API cost against $138–921 of gross value discovered per scan-hour. Two things blocked the run, neither of them strategy. This entry is the first. **This reopens D13**, which said "server-side JSON" without ever arguing for it. D13 carries the amendment, and the rest of that entry stands.
+**`inventory/store.sqlite` is the master store, every `Store.write()` is one transaction over every table, and a session loads only the rows it names.** Built from the owner's plan for a 100,000-card run. The pile is 100,000 raw cards. Scanning is the highest-margin activity on the table, measured at $0.00105 per card in API cost against $138–921 of gross value discovered per scan-hour. Two things blocked the run, neither of them strategy. This entry is the first. **This reopens D13**, which said "server-side JSON" without ever arguing for it. D13 carries the amendment, and the rest of that entry stands.
 
 ### The argument is correctness first, and speed second on purpose
 
@@ -10,7 +10,7 @@ The speed argument is real and is deliberately second. **Every capture re-read, 
 
 | cards | read + parse | write | total |
 |---|---|---|---|
-| 1,560 (the store on 2026-09-01) | 13 ms | 57 ms | 70 ms |
+| 1,560 (the store at measurement) | 13 ms | 57 ms | 70 ms |
 | 10,000 | 67 ms | 309 ms | 374 ms |
 | 20,000 | 167 ms | 611 ms | 770 ms |
 | 50,000 | 498 ms | 1,616 ms | 2,112 ms |

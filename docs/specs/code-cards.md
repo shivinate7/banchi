@@ -347,10 +347,10 @@ Named rather than buried, and none of it blocks the build.
    no automated way to screen them, and no source publishes a rate. Price bulk assuming a
    loss and measure it on the first batch.
 3. **No channel has been executed.** Every price above is an ask or a catalog figure except
-   where a sold count is cited. The cheapest experiment that would settle the whole plan is
+   where a sold count is cited. The cheapest experiment settles the whole plan. It is
    **one wholesale submission of a few hundred booster codes to a buylist that accepts a
-   pasted list, and one premium code listed on a storefront** — a week's work that replaces
-   six MARGINAL verdicts with two realised prices.
+   pasted list.** Also make **one premium code listed on a storefront.** That is a week's
+   work. It replaces six MARGINAL verdicts with two realised prices.
 4. **Buylist counterparty risk is real and unquantified.** The one app that accepts a pasted
    list of codes rates 2.3 to 3.1 stars with recurring non-payment complaints. Submit a small
    batch first.
@@ -367,8 +367,7 @@ Named rather than buried, and none of it blocks the build.
    bans a user-visible string naming a pipeline-internal noun. D24 already hides this same
    number from a card's identity, for the reason D58 hides a singles card's stored index.
    No fix landed. Codes carry no section-relative number the way a located singles card
-   does (D260). There is nothing today to compose in its place. The owner's ruling:
-   **"Leave it, known gap."** Open until the dormant feature wakes.
+   does (D260). There is nothing today to compose in its place. The owner's ruling: leave it as a known gap. It stays open until the dormant feature wakes.
 
 ---
 
@@ -549,10 +548,7 @@ since a misread QR fails to decode rather than mispricing a $40 card.
 
 ## C8 — The code ledger: every code's text beside its photograph, for the dispute that will come
 
-Ratified by the owner, in his own words: code cards *"live in the arbitrary box of
-code cards, ideally sorted by set"*, and *"we likely will need both the code card image +
-image to text csv of them saved (in case a customer says a certain code didn't work, we check
-that code retroactively, tap its image, and likely it was an image to text error)."*
+Ratified by the owner. Code cards live in the arbitrary box of code cards, ideally sorted by set. The owner also said that both the code card image and an image-to-text CSV must be saved. If a customer says a code did not work, the code is checked against its image, and the likely cause is an image-to-text error.
 
 **The dispute flow is the spec.** A buyer says a code did not work. The owner looks the code
 up, opens the photograph it was read from, and re-reads it by eye — because the likeliest
