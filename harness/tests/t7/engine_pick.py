@@ -1200,17 +1200,38 @@ def _cleared_press(home, cards, cache, review=()):
 
 def check_cleared_unparsed_no_position_not_bought(checks: Checks) -> None:
     """A cleared answer that does not parse is never paid for, positioned or not. A photograph
-    with no sidecar is keyed `file:<name>`; its saved answer is just as settled."""
+    with no sidecar is keyed `file:<name>`; its saved answer is just as settled. It is never
+    silently lost: a join files it in Review as `no_position`, with its photograph."""
+    from cli import cmd_identify, runs
+    from harness.tests.t7.common import capture_payload, command, write_export
+    from server import capture_server
     from store.session import Store
 
     checks.note("")
-    checks.note("CLEARED ANSWER THAT DOES NOT PARSE, NO POSITION — never bought")
+    checks.note("CLEARED ANSWER THAT DOES NOT PARSE, NO POSITION — never bought, never lost")
     with isolated_home() as home:
-        sent, _ = _cleared_press(home, [("scan", None)], {"file:scan.jpg": {"name": "Human"}})
-        checks.equal(sent, [], "a cleared unreadable answer on a card with no position sends no paid read")
+        capture_server.do_capture(capture_payload(4))
+        sent, lines = _cleared_press(
+            home,
+            [("scan", None), ("4-001", {"box": 4, "position": 1, "game": "pokemon"})],
+            {"file:scan.jpg": {"name": "Human"}},
+        )
+        checks.equal(
+            sent, [cmd_identify._custom_id("4/1")],
+            "a cleared unreadable answer on a card with no position sends no paid read (the positioned card is the only one sent)",
+        )
         kept = Store().read().cache.get("file:scan.jpg")
         checks.ok(kept is not None and kept.cleared_by_human and kept.identification == {"name": "Human"},
                   "and the cleared entry is unchanged")
+        run = runs.latest()
+        joined = ""
+        if run is not None:
+            joined = command(checks, "join", str(run.directory), "--export", str(write_export(run.path("export.csv"))))
+        lost = Store().read().review.entries.get("file:scan.jpg")
+        checks.equal(lost.reason if lost else None, "no_position",
+                     "after a join the card is in Review as `no_position`, not silently dropped")
+        checks.ok(bool(lost and lost.photo), "with its photograph")
+        checks.ok("scan.jpg" in "\n".join(lines) + joined, "and the console names `scan.jpg`")
 
 
 def check_cleared_unparsed_held_report_and_join(checks: Checks) -> None:
