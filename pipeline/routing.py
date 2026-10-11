@@ -113,6 +113,12 @@ FREE_READER_DISAGREES = "free_reader_disagrees"
 READERS_DISAGREE = "readers_disagree"
 SECOND_LOOK_UNSURE = "second_look_unsure"
 
+# A card whose human-cleared cache answer the card's own parser cannot read. `./banchi identify`
+# opens it directly (`cli/cmd_identify.py`), never `route()`: the card is not paid for and the
+# cleared answer is not used, so a person looks at the photograph. Same shape as
+# `FREE_READER_DISAGREES`: in `ROUTING_REASONS` as a destination this module owns.
+CLEARED_ANSWER_UNREADABLE = "cleared_answer_unreadable"
+
 # ROUTING'S OWN REVIEW REASONS, PUBLISHED AS A SET. The ladder's six live in
 # `pipeline/variant.py:LADDER_REASONS`; together the two tuples are the whole vocabulary, and
 # the split is the same one docs/DESIGN.md credits each reason by.
@@ -135,6 +141,7 @@ ROUTING_REASONS = (
     FREE_READER_DISAGREES,
     READERS_DISAGREE,
     SECOND_LOOK_UNSURE,
+    CLEARED_ANSWER_UNREADABLE,
 )
 
 # Hard failures: no usable answer at all, so no price can be reasoned about. Always main,

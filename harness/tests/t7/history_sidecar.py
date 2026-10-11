@@ -285,7 +285,7 @@ def check_history(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.set_state("4/2", master.IDENTIFIED)
             _bind(snapshot, "4/2", "8608860")
-            snapshot.cache.put("4/2", {"name": "Rhyhorn"}, "sha-of-photo", "prompt-1")
+            snapshot.cache.put("4/2", {"name": "Rhyhorn", "number": "1", "printed_total": "9", "finish": "normal", "confidence": "high"}, "sha-of-photo", "prompt-1")
         capture_server.do_remove_card(4, 2, {"capture_id": None})
         paid = last_event("4/2")
         checks.equal(

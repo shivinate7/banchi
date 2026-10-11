@@ -391,6 +391,8 @@ const QUESTIONS: Readonly<Record<string, string>> = {
   /* `pipeline/routing.py:READERS_DISAGREE` and `SECOND_LOOK_UNSURE`. */
   readers_disagree: 'Which reader is right?',
   second_look_unsure: 'Is this the card?',
+  /* `pipeline/routing.py:CLEARED_ANSWER_UNREADABLE`: a saved answer for this card cannot be used. */
+  cleared_answer_unreadable: 'Which card is this?',
 }
 
 const RETIRED_HEADLINE = 'This question was retired.'

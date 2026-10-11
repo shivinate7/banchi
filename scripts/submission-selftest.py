@@ -145,13 +145,22 @@ def live_figures():
     return counts["claims"], counts["keys"], counts["stale"]
 
 
+def pokemon_answer(name: str) -> dict:
+    """A full Pokemon answer: every key `pokemon_card_v1` requires, read from its schema."""
+    from identify import prompt
+
+    answer = {key: "x" for key in prompt.profile("pokemon_card_v1").schema["required"]}
+    answer.update(name=name, number="1", printed_total="9", finish="normal", confidence="high")
+    return answer
+
+
 def answer_in_store(digests: dict) -> None:
     """Put a paid-for answer in the cache for each key, so it is a HIT for the next press."""
     from store.session import Store
 
     with Store().write() as session:
         for key, digest in digests.items():
-            session.cache.put(key, {"name": "Paid for already"}, digest, "fp-1")
+            session.cache.put(key, pokemon_answer("Paid for already"), digest, "fp-1")
 
 
 def case_disjoint_in_one_drawer() -> None:
