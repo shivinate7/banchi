@@ -1,8 +1,6 @@
 ## D103 — Staleness filters; it never gates
 
-**`#/pricing` draws the operator's whole live inventory from a My Pricing export. The staleness terms are a filter over it.** They are not a decision taken before the data arrives. The operator wanted the live export on the same pricing UI as the runs path. That UI has the charts, the load-prices flow and familiar controls. A spreadsheet was the wrong answer.
-
-That UI already existed. It was wired to runs, and a live export is not a run.
+**`#/pricing` draws the operator's whole live inventory from a My Pricing export. The staleness terms are a filter over it.** They are not a decision taken before the data arrives. The operator wanted the live export on the same pricing UI as the runs path, which has the charts, the load-prices flow and familiar controls. A spreadsheet was rejected. That UI was wired to runs, and a live export is not a run.
 
 ### Why a lens and not a gate
 
@@ -14,7 +12,7 @@ The owner ruled that the stale rows are not the default view. The lens opens on 
 
 ### The record widens, and the offer does not
 
-This is the whole shape of the change. It applies D100 §5's distinction once more: **the file that records is not the file that offers.**
+It applies D100 §5's distinction once more: **the file that records is not the file that offers.**
 
 | file | what it is |
 |---|---|
@@ -128,7 +126,7 @@ The figures are now computed server-side by `pipeline/pricing.py:preset_prices`.
 - **Singles and Sealed.** The Live tab filters on its own by kind, in the URL (`?kind=singles` or `?kind=sealed`, D285). A row is sealed when its condition is `Unopened` (`pipeline/reprice.py:is_sealed`, `tcgcsv.SEALED_CONDITION`). No sales-lane rule existed to reuse. A name rule misfiles singles such as Tinkatink and Pack of Wonders. The survey carries the flag per row. The apply takes the filter as `kind` and refuses an edit of the other kind (`kind_mismatch`), so a Singles view never sends a sealed price.
 - **The counts add up.** "Passed over" read the survey's `counts.refused`, which also counts sold-out rows the tab never draws. On the owner's read, that gave 727 beside "All 408". Each lens count is now the rows it shows, under the kind filter. All is Not selling plus Passed over.
 - **The Live tab's heads.** "Needs you" on this tab used to count every listing worth $5 or more, 236 of 408. A live listing already has a price somebody chose. So on this tab only a row with no market price leads, under "No market price". The owner types its price, and the rule never lowers it.
-- **What "N new prices" counts.** A price that is not the price the read showed. It was written on this visit (typed, a preset, the cut-off press, or "Mark down"). Or it was stored on an earlier visit above the live price. The owner's ruling: a typed price higher than the live price counts. A lower earlier price does not. The bar names each earlier price that goes, card by card, before the press. Earlier, every stored answer on a surveyed row counted, most of them equal to the live price. That was the "280".
+- **What "N new prices" counts.** A price that is not the price the read showed. It was written on this visit (typed, a preset, the cut-off press, or "Mark down"). Or it was stored on an earlier visit above the live price. The owner ruled that a typed price higher than the live price counts. A lower earlier price does not. The bar names each earlier price that goes, card by card, before the press. Earlier, every stored answer on a surveyed row counted, most of them equal to the live price. That was the "280".
 - **The cap is the rule's only.** The owner ruled that the cap governs the rule and nothing else. "Mark down" writes the capped proposal. A typed price is never held back by the cap.
 - **A press for the rule.** A blank box keeps its price, as above. So the rule's price reaches a field only by a press. "Mark down N" on the rule line writes the server's proposal, capped and never on a no-market row, onto the rule's picks on screen. It is one act with one undo, the presets' own shape. A row the owner priced away from its live price keeps the owner's price.
 - **Money to the cent.** A field shows two decimal places. The export's `349.9900` is drawn as `349.99`. What the field shows is what the press sends (D221).
