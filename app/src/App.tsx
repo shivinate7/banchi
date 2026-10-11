@@ -333,7 +333,10 @@ function useHashPath(): string {
     // Asked before the move happens, so a refusal cancels it and history never changes. Browsers
     // that cannot cancel a move fall back to the hashchange check below.
     const nav = (window as unknown as { navigation?: EventTarget & { currentEntry: { index: number } } }).navigation
-    let at = nav?.currentEntry.index ?? 0
+    let at = nav?.currentEntry.index ?? window.history.state?.bi ?? 0
+    // Without the Navigation API each entry carries its own index in history.state: a pushed entry
+    // has none yet (it is one past `at`), a visited one has the number it was stamped with.
+    const here = () => nav?.currentEntry.index ?? window.history.state?.bi ?? at + 1
     const ask = (event: Event) => {
       const e = event as Event & { cancelable: boolean; hashChange?: boolean; navigationType?: string; destination: { url: string } }
       if (!e.hashChange || !e.cancelable || e.navigationType === 'traverse') return
@@ -349,15 +352,14 @@ function useHashPath(): string {
       }
       if (event && next !== shown && !approved && !confirmLeave()) {
         // A move the browser would not let us cancel (the Back button): step history back to
-        // where it was, so no entry is added and none is overwritten.
-        if (nav) {
-          undoing = true
-          window.history.go(at - nav.currentEntry.index)
-        } else window.history.replaceState(null, '', event.oldURL)
+        // where it was, so no entry is overwritten.
+        undoing = true
+        window.history.go(at - here())
         return
       }
       approved = false
-      at = nav?.currentEntry.index ?? 0
+      at = here()
+      if (!nav && window.history.state?.bi !== at) window.history.replaceState({ ...window.history.state, bi: at }, '')
       shown = next
       setPath(next)
     }
