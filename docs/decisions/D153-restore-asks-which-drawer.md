@@ -1,6 +1,6 @@
 ## D153 — Restore asks which drawer
 
-**Settled 2026-09-12, on a defect found in merged work and an instruction given the same evening.** Two changes to the capture screen, and they are one change: D145 gave a drawer an identity, so the screen can start asking the question the number was never able to answer — and, having asked it there, can stop putting the number in front of the operator everywhere else.
+**Settled on a defect found in merged work and an instruction given the same evening.** Two changes to the capture screen are one change. D145 gave a drawer an identity. The screen can now ask which drawer it is. Having asked there, it can stop drawing the number everywhere else.
 
 ### The restore kept a box that was not the box
 
@@ -13,7 +13,7 @@ if (found !== undefined && found.state !== 'closed') return
 
 A reallocated number is found, and open, and takes cards. The restore holds, the operator resumes into a drawer that is not the one they left, and every photograph of that sitting is filed at an address that does not match the shelf. **Silently** — there is no refusal, no banner, and the screen is correct about everything it is able to check.
 
-**This repo already knew the hazard by name and had already refused it once.** D36 as amended refuses to JOIN a run over a reallocated box (`cli/resolve.py:refuse_reallocated`, on `store/master.py:box_disowns_run`), and it names the owner's own drawer: box 1 held 53 Pokemon cards on 2026-08-22 and 133 Riftbound cards since 2026-08-29. **What D36 cannot do is undo the photographs.** Its realign re-binds a run to the slots its photographs are at NOW; these photographs are in a drawer the operator never meant, so there is nothing to re-bind them to. The capture screen was the last place the mistake could still be prevented, and it was the one place with no rule about it.
+**This repo already knew the hazard by name and had already refused it once.** D36 as amended refuses to JOIN a run over a reallocated box (`cli/resolve.py:refuse_reallocated`, on `store/master.py:box_disowns_run`). It names the owner's own drawer: box 1 first held 53 Pokemon cards, and later 133 Riftbound cards. **What D36 cannot do is undo the photographs.** Its realign re-binds a run to the slots its photographs are at NOW. These photographs are in a drawer the operator never meant, so there is nothing to re-bind them to. The capture screen was the last place the mistake could still be prevented. It was the one place with no rule about it.
 
 ### The signal is the id, and the two plausible alternatives are both wrong
 
@@ -23,7 +23,7 @@ Both were considered and both are worth recording, because each looks serviceabl
 
 **`next_index` cannot tell a reallocation from an undo.** It does drop when a number is reused — and it drops identically on a capture-undo, which writes `target.index` back in `doUndo`. A decrease proves nothing, and the screen that would read it is the screen that causes the other case.
 
-**`Box.bid` is allocated once at creation and never reused (D145), so a disagreement is a fact rather than an inference.** It reaches the client as `bid` on `BoxRecord` — the spelling `store/master.py`'s column and `server/pipeline_routes.py`'s scope block already use, because this record IS a box; `box_bid` is that module's spelling on a RUN row, where it is one of three facts about some other object. **Nothing draws it.** The owner's ruling that the id is *"not visible anywhere in the app"* is unchanged: what a screen draws is the sentence a comparison of two ids produces.
+**`Box.bid` is set once at creation and never reused (D145). A disagreement is therefore a fact, not an inference.** It reaches the client as `bid` on `BoxRecord`. That is the spelling `store/master.py`'s column and `server/pipeline_routes.py`'s scope block already use, because this record is a box. `box_bid` is that module's spelling on a RUN row. There it is one of three facts about some other object. **Nothing draws it.** The owner's ruling that the id stays invisible is unchanged. What a screen draws is the sentence a comparison of two ids produces.
 
 ### The two silences are not the same silence, and that is the migration decision
 
@@ -62,7 +62,7 @@ A comparison needs two values and either can be missing. **They are answered dif
 
 **An unnamed box still draws its number and that is not an exception.** `captureBoxLabel` already puts it in the name's place (D142, D56: a placeholder would draw a fault where there is none). What had to be prevented is the doubling — a suffix beside it reads `Box 6 Box 6` — and the test for it is the TRIMMED name, which is what `captureBoxLabel` itself applies. The old test was `option.name === null`, and a whitespace-only name slipped past it into exactly that doubling.
 
-**Nothing is added to the row, and the space this frees is ATTENTION rather than width.** That distinction was checked against the renders rather than assumed, and the first draft of this paragraph had it wrong: the option row is a grid whose name column is `minmax(0, 1fr)`, so it already takes every pixel the trail does not, and dropping a suffix that sat AFTER the name inside that column moves no boundary. `UNL BBOX C/UC 1…` ellipsises at exactly the same character before and after. **What the number was costing is a second thing to read on every row** — the owner's *"waste of space"* about a list of drawers where one fact identifies each. The row already carries `next index N` or `Sealed`, which is the useful half, and adding anything to a row the operator reads at a feeder's pace would spend the instruction on fresh clutter.
+**Nothing is added to the row, and the space this frees is ATTENTION rather than width.** That distinction was checked against the renders. The first draft of this paragraph had it wrong. The option row is a grid whose name column is `minmax(0, 1fr)`. It already takes every pixel the trail does not. Dropping a suffix that sat AFTER the name moves no boundary. `UNL BBOX C/UC 1…` ellipsises at exactly the same character before and after. **What the number cost was a second thing to read on every row.** The owner said the number wastes space in a list of drawers where one fact identifies each. The row already carries `next index N` or `Sealed`, which is the useful half. Adding anything to a row the operator reads at a feeder's pace would spend the instruction on fresh clutter.
 
 ### What is guarded
 

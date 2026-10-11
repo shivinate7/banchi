@@ -15,7 +15,7 @@ case nobody had hit yet. Both sessions' processes answer "yes" to that question 
 
 ### The ruling
 
-Reap stops only what the caller started. Tag each process with its owner's id, and let `--confirm` stop only processes carrying the caller's tag. List every other process, and stop none of them. This belongs in Banchi, not the parent repo.
+Reap stops only what the caller started. Tag each process with its owner's id, and let `--confirm` stop only processes carrying the caller's tag. List every other process, and stop none of them. This belongs in Banchi, not the parent repo. It limits the damage when an agent lands in the wrong tree.
 
 **Narrowed later:** the orchestrator's blanket sweep stays wide, and a subagent's is limited to its own tagged processes. Read this way: a bare `make reap ARGS=--confirm`, with no
 target named, stays D127's own full-checkout sweep. That holds when the caller is the top-level

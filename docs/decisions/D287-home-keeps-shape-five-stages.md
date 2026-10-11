@@ -106,7 +106,7 @@ lands.
 
 **The hero.** The greeting, the date, the button and the deck keep their shape and their copy.
 TXT-28 and UX-129, both about the hero's own layout, are UNFIXED by name. The owner's ruling
-was "keep Home as is" and "do not redesign the hero". A bigger title, or a smaller greeting, is
+was to keep Home as is and not to redesign the hero. A bigger title, or a smaller greeting, is
 exactly that.
 
 **UX-021.** Home's one button (`Start capturing`) stays the primary action, regardless of what

@@ -1,6 +1,6 @@
 ## D95 — The shell is rail, palette, reference sheet
 
-**The owner's nav became a collapsible sidebar with a command palette over it, the phone got a tab bar and a drawer, and the Fulfiller got a crash page that offers no way out of his view.** Built 2026-09-03 with D94. `App.tsx`'s `ROUTES` table is still the one roster and every route is still registered in it; what changed is how a person reaches one.
+**The owner's nav became a collapsible sidebar with a command palette over it.** The phone got a tab bar and a drawer. The Fulfiller got a crash page that offers no way out of his view. Built with D94. `App.tsx`'s `ROUTES` table is still the one roster and every route is still registered in it; what changed is how a person reaches one.
 
 **The table holds eleven routes and `#/` changed meaning.** `#/` is a new Home screen, Capture moved to `#/capture`, and `#/gallery` is labelled "Kit". Main's table held ten with Capture at the root. Routes carry a `group` — `home`, `work`, `sell`, `library` — and the nav draws them in that order under those headings, which is the workflow (capture, runs, review, pricing, then orders and shipping, then inventory and codes) made visible instead of a flat list a newcomer has to infer an order from. `OFF_NAV` names the one group the nav deliberately omits, `aside`, holding the Fulfiller's screen and the kit; it is a constant because `scripts/docs-audit.py`'s `route rosters` row reads it, and without it that row can only conclude two routes have gone unreachable.
 
