@@ -178,17 +178,6 @@
         "neighbouring"
       ]
     },
-    "docs/decisions/*-feedback-belongs-to-product.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "colour",
-        "colour",
-        "colour",
-        "colour",
-        "travelling",
-        "travelling"
-      ]
-    },
     "docs/decisions/*-early-catalogue-check-is-unbuilt.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -212,8 +201,7 @@
       "SPELLING": [
         "catalogue",
         "catalogue",
-        "catalogue",
-        "honours"
+        "catalogue"
       ]
     },
     "docs/decisions/*-public-demo-is-scrubbed-store.md": {
@@ -465,12 +453,6 @@
         "labelled"
       ]
     },
-    "docs/decisions/*-shipping-three-lanes-unsure.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "judgement"
-      ]
-    },
     "docs/decisions/*-sqlite-is-the-store-of-record.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -508,7 +490,6 @@
     "docs/decisions/*-undo-covers-the-whole-sitting.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "behaviour",
         "unlabelled"
       ]
     },

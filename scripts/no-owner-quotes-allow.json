@@ -19,18 +19,6 @@
         "The owner's words"
       ]
     },
-    "docs/decisions/D145-box-bid-is-a-hidden-identity.md": {
-      "lane": "cut pass",
-      "marker": [
-        "verbatim:"
-      ]
-    },
-    "docs/decisions/D164-undo-covers-the-whole-sitting.md": {
-      "lane": "cut pass",
-      "marker": [
-        "verbatim:"
-      ]
-    },
     "docs/decisions/D179-shell-mistakes-refused.md": {
       "lane": "cut pass",
       "marker": [
@@ -58,13 +46,6 @@
         "The owner's words",
         "The owner's words",
         "verbatim:"
-      ]
-    },
-    "docs/decisions/D296-buyer-list-sorts-five-ways.md": {
-      "lane": "cut pass",
-      "marker": [
-        "The owner's words",
-        "The owner's words"
       ]
     },
     "docs/decisions/D299-boxes-have-no-lid-or-capacity.md": {
