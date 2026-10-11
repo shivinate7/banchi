@@ -3,7 +3,7 @@
 Kinds: `casing` (Chicago Title Case, copyRules.ts) or `voice` (second person, no I, my, me or mine).
 Line numbers are on e48fbecd. A row whose note starts `builder:` leaves the wording to the builder.
 A typed value (price, quantity, hold note, search text, box name) never changes.
-No row is open.
+Rows 57 and 58 are open owner questions. The other rows are settled.
 
 ## Voice (12 source hits, unit "source scan" test)
 
@@ -58,7 +58,7 @@ Without the typed-data exemption in row 31, the same sweep reads 76 offenders ac
 | 28 | casing | Revenue.tsx, line 87 | revenue | `Last sold` | `Last Sold` | sort label |
 | 29 | casing | Revenue.tsx, line 1414 | revenue | `Show the orders behind {name}` and `Hide the orders behind {name}` | `Show the Orders Behind {name}` and `Hide the Orders Behind {name}` | three names in the sweep |
 | 30 | casing | BoxBrowse.tsx, line 2196 | inventory | `Collapse the box rail` | `Collapse the Box Rail` | |
-| 31 | casing | box name in fixture data | inventory, fulfillment | `SV commons` | unchanged (typed data) | exempt. The owner typed the box name, so it is data, and the sweep and the unit tier skip it by exact text (TYPED_DATA in copyRules.ts). The fixture is not renamed. A label with the same words in other casing still goes red. |
+| 31 | casing | box name in fixture data | inventory, fulfillment | `SV commons` | unchanged (typed data) | exempt by a `data-typed` marker in the DOM. The copy builder adds the marker to box names and other typed values. The sweep skips a marked value; until the marker lands, `SV commons` stays red. The fixture is not renamed. |
 | 32 | casing | see note | inventory, orders, fulfillment, product | `Not identified yet` | `Not Identified Yet` | the fallback for a card with no name. Sources: OrdersWalkPane.tsx, lines 928 and 1009; CardHero.tsx, line 573; InventorySets.tsx, line 85; Home.tsx, line 748; DeletedBoxes.tsx, line 179; BoxBrowse.tsx, lines 727, 2528 and 3263; kit/data.tsx, line 346 |
 | 33 | casing | Codes.tsx, lines 797, 1163 and 1369 | codes | `Read a box` | `Read a Box` | button, title and sheet title |
 | 34 | casing | Codes.tsx, lines 1064 and 1068 | codes | `The pile` | `The Pile` | aria-label and heading |
@@ -84,10 +84,12 @@ Without the typed-data exemption in row 31, the same sweep reads 76 offenders ac
 | 54 | casing | Orders.tsx, line 2366 | orders | `Cards to pull` | `Cards to Pull` | icon link tooltip. Same element as row 53. |
 | 55 | casing | Gallery.tsx, line 978 | gallery (specimen, not in the sweep) | `Mark sold` | `Mark Sold` | specimen label. gallery.spec.ts, line 1245 asserts it, so the label changes with the test. |
 | 56 | casing | Gallery.tsx, line 1016 | gallery (specimen, not in the sweep) | `Cards to pull` | `Cards to Pull` | specimen label and tooltip. icon-button.spec.ts asserts it. |
+| 57 | casing | Home.tsx, lines 192 to 194 (the greeting heading) | home | `Good afternoon.` | `?` | owner: keep the greeting as a sentence (no casing), or make it a page title `Good Afternoon`. The sweep reads an h1 as a label, so its full stop is flagged. |
+| 58 | casing | kit/data.tsx, line 1195 (sort button name) | revenue, pricing, orders | `Order: High to low. Press to reverse.` | `?` | owner: two sentences in a control. Shorten it to a label, or allow a sentence in a control. The sweep flags it now. |
 
 ## Notes for the builder
 
-- The sweep reads the first non-empty line of a button or heading. A description under a title is a sentence and is not a label.
+- The sweep reads the first non-empty line of a button or heading. A description under a title is prose and is not read for casing. A control label keeps its label rule when it ends in a period or a question mark.
 - The sweep now also reads the icon links (`a[aria-label]`) and the icon tooltips (`.bn-icon-tip`). That closed the gap that hid rows 49 to 54.
 - `Export read` on several routes comes from one shared component. Fix it once at its source.
 - Row 10 is the only change to a voice string that keeps a first-person word. It stays red until the builder quotes the page name.
