@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { test, expect } from './unit'
 import { REASON_LABELS, RETIRED_REASON_LABELS } from '../../src/reasons'
-import { casingProblems, isSentence, isSpokenSentences, voiceHits } from '../copyRules'
+import { casingProblems, isSentence, isSpokenSentences, stripTyped, voiceHits } from '../copyRules'
 import { attrText, firstPersonInSource, jsxOpeningsIn, recordFromSource } from '../copySource'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -61,6 +61,13 @@ test('sentence: a closing period or question mark marks a sentence, which the sw
 
 /* THE SPOKEN NAME (copy map row 58). A two-sentence accessible name is read aloud, so the casing rule skips it; a
  * one-sentence label with bad casing still fails. */
+test('typed name: the marked text comes out of the label, and the rest is still checked', () => {
+  expect(stripTyped('SV commons card', ['SV commons'])).toBe('card')
+  expect(casingProblems(stripTyped('SV commons card', ['SV commons']))).not.toEqual([])
+  expect(stripTyped('SV commons', ['SV commons'])).toBe('')
+  expect(casingProblems(stripTyped('SV Commons Card', ['SV commons']))).toEqual([])
+})
+
 test('spoken name: two sentences pass unread, and a one-sentence label with bad casing still fails', () => {
   expect(isSpokenSentences('Order: High to low. Press to reverse.')).toBe(true)
   expect(isSpokenSentences('Cards to pull.')).toBe(false)
