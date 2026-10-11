@@ -829,9 +829,14 @@ def _queue_held(store, held, say) -> None:
     from pipeline import routing
     from store import queues
 
+    queued = already = unplaced = 0
     with store.write() as writable:
         for item, entry in held:
+            if not item.capture.has_position:
+                unplaced += 1  # `cli/resolve.py` sends a card with no position to Review as `no_position`
+                continue
             said = entry.identification if isinstance(entry.identification, dict) else {}
+            standing = writable.review.entries.get(item.key)
             writable.review.upsert(
                 queues.QueueEntry(
                     position=item.key,
@@ -846,7 +851,16 @@ def _queue_held(store, held, say) -> None:
                     reason=routing.CLEARED_ANSWER_UNREADABLE,
                 )
             )
-    say(f"held            {len(held)} card(s) with a saved answer that cannot be used: sent to Review, not paid for")
+            if standing is not None and standing.cleared_by_human:
+                already += 1  # `upsert` left the owner's answer alone
+            else:
+                queued += 1
+    if queued:
+        say(f"held            {queued} card(s) with a saved answer that cannot be used: in Review, not paid for")
+    if already:
+        say(f"held            {already} card(s) already answered in Review: left as answered, not paid for")
+    if unplaced:
+        say(f"held            {unplaced} card(s) with a saved answer that cannot be used and no position: not paid for")
 
 
 def record_adopted(writable, item: Item, run_name: Optional[str] = None) -> bool:
@@ -1117,7 +1131,7 @@ def run(args, say) -> int:
             item.retry_reasons.append("reidentify-stale")
             continue
         why = cached_refusal(item, entry)
-        if why is not None and entry.cleared_by_human and item.capture.has_position:
+        if why is not None and entry.cleared_by_human:
             # A PERSON SETTLED THIS CARD AND THE ANSWER CANNOT BE USED: never paid for, never
             # overwritten. It waits in review with its photograph (`_queue_held`).
             item.stage = STAGE_HELD
@@ -1781,6 +1795,7 @@ def run(args, say) -> int:
                 "photo_sha256": item.photo_sha256,
             }
             for item in items
+            if item.stage != STAGE_HELD  # held in Review under its own reason, not a read
         },
     }
     run_dir.write_identifications(payload)
@@ -1905,15 +1920,16 @@ def run(args, say) -> int:
                 released_keys = len(freed.keys)
 
     # --------------------------------------------------------------------------- report
-    answered = [i for i in items if i.identification is not None]
+    reported = [i for i in items if i.stage != STAGE_HELD]  # a held card is neither read nor failed
+    answered = [i for i in reported if i.identification is not None]
     second_looked = [i for i in items if i.unread is not None]
-    failed = [i for i in items if i.identification is None]
+    failed = [i for i in reported if i.identification is None]
     stale = [i for i in items if i.stale_prompt]
     not_detected = [i for i in items if i.detection == NOT_DETECTED]
     unfit_crops = [i for i in items if i.detection == UNFIT_CROP]
 
     say("")
-    say(f"identified      {len(answered)}/{len(items)}")
+    say(f"identified      {len(answered)}/{len(reported)}")
     say(f"tokens          in {usage_in}, out {usage_out}")
     # THE RATES ARE NAMED ON THE LINE so the figure explains itself and nobody reads it as an
     # invoice. It cannot collide with the preflight's own line, which `_ESTIMATE` anchors at
