@@ -1002,7 +1002,7 @@ Two things this does not cover. The requirement under the table rather than in i
 | Two-step pull | the sale control may occupy no part of the pull control's footprint, and begins below where it ended |
 | Jargon | copy passes a banned-word list: SKU, CSV, import, sync, batch, queue, staged |
 
-**Fulfillment (B23), built.** The count bar is sticky. It shows `N Left` beside the search, and it stays on screen. Each location card has a small round ordinal badge in place of the `Pick N` label. The `Pick` heading is removed.
+**Fulfillment (B23), built.** The count bar is sticky. It shows `N Left` beside the search, and it stays on screen. Each location card has a small round ordinal badge in place of the `Pick N` label. The `Pick` heading is removed. The count slot is never blank (R18). With no orders it reads `0 Left`. A failed load keeps the last count it showed. A load that never answered shows the same loading count the screen starts with. The bar and the search keep one box across the loading, no-order, failed and loaded states.
 
 **The numbers in that table are the spec's own constants**. They are `BODY_FLOOR` 20, `PLACE_FLOOR`
 32, `PHOTO_FLOOR` 320, `TARGET_FLOOR` 44, `GAP_FLOOR` 12, `CONTRAST_FLOOR` 7,

@@ -219,8 +219,7 @@
   padding: var(--bn-3) var(--ff-pad) var(--bn-5);
   background: var(--bn-bg);
 }
-.ff-bar-wait { position: static; }
-.ff-bar .ff-search, .ff-bar .ff-skel-search { grid-column: 2; min-width: 0; }
+.ff-bar .ff-search { grid-column: 2; min-width: 0; }
 .ff-count-track { grid-column: 1; grid-row: 1; container-type: inline-size; min-width: 0; }
 /* The figure is sized from its track, so any number of digits fits and the bar's row height is the
    search's alone. 0.62em is a digit's advance, 1.4em the word "Left" and its gap, both in em. */
@@ -400,7 +399,6 @@
   background: linear-gradient(90deg, transparent, var(--bn-surface-3), transparent);
   animation: bn-shimmer var(--bn-t-shimmer) var(--bn-ease-loop) infinite;
 }
-.ff-skel-search { height: 64px; margin-bottom: var(--bn-5); }
 .ff-skel-row { height: 88px; }
 .ff-skel-owed { height: 530px; border-radius: 22px; }
 .ff-skel-copy { height: 420px; border-radius: 22px; }
