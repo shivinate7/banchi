@@ -2,7 +2,7 @@
 
 **Settled on the owner's answer to a refuse-only proposal.** The primary checkout,
 `/Users/shivinate/Developer/banchi`, is the one directory D138 keeps a capture server alive
-out of at login over the real store. A guard that only refused was offered. The owner ruled
+out of at login over the real store. A guard that only refused was offered. The owner was asked whether the primary checkout is mechanically kept on `main` at `origin/main`. The owner ruled
 that both parts sync, since this is a one-person checkout.
 
 So it syncs. `git switch main`, then `git merge --ff-only origin/main`, run for them, at the

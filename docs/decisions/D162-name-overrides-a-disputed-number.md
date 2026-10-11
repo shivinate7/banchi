@@ -1,6 +1,6 @@
 ## D162 — Name overrides a disputed number
 
-**A review entry showed the wrong card.** A photograph plainly reads `Deathgrip`, `SFD · 163/221`. The headline was "Is this the right card at all?" The reason was `name_disputed`. The only row offered was **Blood Money 162/221**, the card the pipeline had just called wrong. Typing the name the model had read showed `Deathgrip · Spiritforged · 163/221` as the top hit.
+**A review entry showed the wrong card.** A photograph plainly reads `Deathgrip`, `SFD · 163/221`. The headline was "Is this the right card at all?" The reason was `name_disputed`. The only row offered was **Blood Money 162/221**, the card the pipeline had just called wrong. Pressing `L` and typing the name the model had already read showed `Deathgrip · Spiritforged · 163/221` as the top hit.
 
 The owner's ruling on that case has two parts. When the read name and the read number disagree, offer both readings on one page. Release the name's card when the name resolves to exactly one card.
 
@@ -49,7 +49,7 @@ Two conditions, and both must hold before anything is released. The name answers
 
 ### The group offer clustered on a word a rule had already fixed
 
-The owner asked for near-mint to be claimed in bulk, as a choice, not as the default.
+The owner had to claim Near Mint by hand in bulk, though Near Mint should be the default.
 
 `ReviewQueue.tsx:groupOffer` clustered on `only.condition`, and the route's own uniformity check required one condition STRING. `Near Mint` and `Near Mint Foil` are **one grade and two finishes**. The owner's runs generated 52 entries on a single day. Of those, **40 offered exactly one row, and every one of those rows was Near Mint**: 21 plain, 19 foil. Times three reason codes, that is up to six presses to confirm a grade **D137** fixes by rule.
 
@@ -76,7 +76,7 @@ None of these are started. Each is its own change with its own route, screen and
 1. **A store-wide queue refresh.** Every open entry re-resolved against a current export, independent of any run. `reconcile --live` (D87) is the precedent and the same argument. It must never re-queue a `cleared_by_human` entry. D28's undo is the only door back.
 2. **The answer does not fold through.** Answering the queue writes the SKU. The pricing table is written by `join`, so the operator must go to `#/runs` and press a step. The owner finds having to run `join` again after the review queue unintuitive. `D156`'s `_unsent_ledger` re-derives from the live store rather than from the join's table, and that is the shape to look at first.
 3. **99 identified, SKU'd cards are unreachable.** Run `2026-08-29-box1-01` is refused by `refuse_reallocated` (D36), because box 1 was deleted and its number reused. The cards are in box 3 at indices 724–822, a gap no live run covers. The upstream fault is that a run is bound to a box NUMBER. **D145** landed `bid`, allocated once and never reused, for this exact class, and the run object never adopted it. The owner's ruling: the problem is upstream, and the mistaken path should not exist. A `bid` binding protects only runs made after D145. A drawer deleted before it has no bid to recover, so the 99 need a one-time rescue keyed on the cards' own `(box, idx)` and digest.
-4. **A mass-clear for typed prices.** 428 answers in the corpus, 269 of them from one recent week. The owner chose a mass-clear button over auto-expiry.
+4. **A mass-clear for typed prices.** 428 answers in the corpus, 269 of them five days old. The owner chose a mass-clear button over auto-expiry.
 
 ### The thesis
 
