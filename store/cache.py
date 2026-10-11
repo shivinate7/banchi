@@ -30,7 +30,7 @@ lives on the sidecar, which this file never reads.
 `--reidentify-stale` is that targeted re-read: only entries that are both WEAK (confidence
 `low`, or currently sitting in a queue) and UNCLEARED. Everything else stands.
 
-A HUMAN-CLEARED IDENTIFICATION IS PERMANENT (D-cache-cleared-answers). If a later run
+A HUMAN-CLEARED IDENTIFICATION IS PERMANENT (D317). If a later run
 reads that photo and disagrees, `disagreements()` reports it, but the human answer stands.
 
 NOTHING SETS `cleared_by_human` ON THE CACHE. The review screen shipped 2026-08-13 and its

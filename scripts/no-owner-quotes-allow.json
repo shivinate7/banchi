@@ -1,5 +1,5 @@
 {
- "_about": "THE SHRINKING OFFENDER LIST for `make docs-audit`'s `no owner quotes` row (D-no-owner-quotes; D280, offender lists replace pinned counts). files: file -> lane (who owes the fix) and `marker` -> one marker per occurrence. A cut pass that rewrites a file deletes its entry. An entry that matches nothing is stale and red. Growth over the merge-base with origin/main is refused.",
+ "_about": "THE SHRINKING OFFENDER LIST for `make docs-audit`'s `no owner quotes` row (D318; D280, offender lists replace pinned counts). files: file -> lane (who owes the fix) and `marker` -> one marker per occurrence. A cut pass that rewrites a file deletes its entry. An entry that matches nothing is stale and red. Growth over the merge-base with origin/main is refused.",
  "files": {
   "docs/decisions/D002-identify-is-haiku-vision.md": {
    "lane": "cut pass",

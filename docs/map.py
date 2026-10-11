@@ -1987,7 +1987,7 @@ COMPONENTS = [
                                           "D29", "D36", "D138", "D63", "D69", "D88", "D113",
                                           "D193"],
                           "tested_by": ["T7"]},
-            "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88", "D-cache-cleared-answers"],
+            "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88", "D317"],
                          "tested_by": ["T7"]},
             # THE ONLY BINDING IN THIS PIPELINE THAT PROTECTS A DOLLAR, and it replaces a BOX
             # number with the cards actually being bought. The box form is wrong in both
@@ -3697,7 +3697,7 @@ COMPONENTS = [
                         "stale entry, and on growth over the merge-base with origin/main. Shrunk "
                         "by a cut pass or by `make offenders-prune`, which only deletes. Never "
                         "grown by a tool. Its keys are the files that hold a marker, so it cites their ids.",
-                "governed_by": ["D280", "D-no-owner-quotes", "D100", "D136", "D141", "D287", "D103", "D134", "D145", "D155", "D162", "D164", "D176", "D179", "D213", "D220", "D241", "D242", "D254", "D259", "D260", "D264", "D271", "D272", "D273", "D291", "D293", "D296", "D299", "D300", "D301", "D307"]},
+                "governed_by": ["D280", "D318", "D100", "D136", "D141", "D287", "D103", "D134", "D145", "D155", "D162", "D164", "D176", "D179", "D213", "D220", "D241", "D242", "D254", "D259", "D260", "D264", "D271", "D272", "D273", "D291", "D293", "D296", "D299", "D300", "D301", "D307"]},
             "ste/ste_lint.py": {
                 "does": "the STE prose check's linter, VENDORED verbatim from $HOME/.claude/"
                         "lint/ste_lint.py (MIT, LICENSE-ste_lint beside it) on 2026-09-19 — a "
