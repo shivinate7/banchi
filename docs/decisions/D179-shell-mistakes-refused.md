@@ -40,7 +40,7 @@ A pass the guard could not decide is printed. An operand that resolves to neithe
 
 ### Hatches: none is printed to an agent
 
-`BANCHI_CHECKOUT`, `BANCHI_TREE`, `BANCHI_WAIT` and the later clauses' hatches each take `=off`, read from the environment. Each is the owner's to set. The owner ruled that a refusal never prints a blocked switch's name to an agent. It prints "owner-only: ask the owner to run this command". `clause_owner_only` refuses an agent's tool call that sets any real `BANCHI_*=off`, read by `_hatches_set`. So a mention passes.
+`BANCHI_CHECKOUT`, `BANCHI_TREE`, `BANCHI_WAIT` and the later clauses' hatches each take `=off`, honoured in the environment. Each is the owner's to set. The owner ruled that a refusal never prints a blocked switch's name to an agent. It prints "owner-only: ask the owner to run this command". `clause_owner_only` refuses an agent's tool call that sets any real `BANCHI_*=off`, read by `_hatches_set`. So a mention passes.
 
 Four recovery levers stay open to an agent. Each frees a stuck session: `BANCHI_KILL`, `BANCHI_SUITE_LOCK`, `BANCHI_SERVE_MAIN` and `BANCHI_SYNC`. They keep their printed names. The owner's terminal and CI are not tool calls, so the clause never sees them. The clause lives in `hook`, not `read_command`. The self-test's older cases call `hook(payload, owner_only=False)`. Only its owner-only cases call `--hook`. There is no switch for this clause.
 
@@ -134,7 +134,7 @@ Two things are this repo's own, and the code names each. The splitter takes the 
 
 The owner ruled: log and surface every `BANCHI_*=off` use. A hatch lifts its guard and prints nothing, so a run of hatch uses was invisible. `guard-shell.py --hook` sees every Bash command, so it is the one home.
 
-A command can set any `BANCHI_<NAME>=off` by env prefix, `export`, or `env`. The hook reads that from the parsed stages. A mention in an argument, a comment or a heredoc is not a use. `_off` reads the same parsed set, so a hatch counts only as a real assignment. Every hatch a command sets is logged. A mention never lifts a guard. The three scope switches take `=all`, not `=off`. They only add checks, so they are not hatches and the log never counts them. A hatch set in the environment is not logged here. `make status` names it under `hatches`.
+A command can set any `BANCHI_<NAME>=off` by env prefix, `export`, or `env`. The hook reads that from the parsed stages. A mention in an argument, a comment or a heredoc is not a use. `_off` reads the same parsed set, so a hatch counts only as a real assignment. Every hatch a command sets is logged. A mention never lifts a guard. The three scope switches take `=all`, not `=off`. They only add checks, so they are not hatches and the log never counts them. A hatch honoured from the environment is not logged here. `make status` names it under `hatches`.
 
 The hook appends one line per name to `banchi-hatches.log` in `git rev-parse --git-common-dir`. Every worktree of the clone shares that file. A line holds the time, the hatch, the checkout, the branch and the first 120 characters of the command. The log never changes a verdict. It fails open on any logging error. `make status` prints the last 24 hours (name, checkout, branch), or nothing when there are none. The self-test pins that a hatch command writes one line and a plain command writes none.
 
