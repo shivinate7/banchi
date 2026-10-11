@@ -1,7 +1,7 @@
 // Protects: Orders groups by buyer, walks each order, sends a pull with the pressed row's capture id, and shows all six unfillable reasons.
 // Governs: D91, D97, D113, D118, D132, D193, D203
 import { test, expect, type Locator, type Page, type Route } from '@playwright/test'
-import { sealEveryTest } from './shell'
+import { sealEveryTest, stubStore } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
 import { afterPaint, settleMotion } from './motionSettled'
 
@@ -5799,6 +5799,9 @@ test('ux-wave1: leaving Orders with text in the paste box asks first, and cancel
    goes to the screen before it. A refused Back keeps the person on Orders, and the next Back still
    reaches the screen before Orders. The text is cleared between steps so only the history is measured. */
 test('ux-wave1: a refused leave adds no history entry, and a refused Back keeps the next Back working', async ({ page }) => {
+  /* Home and Inventory read the store on arrival, so the shared store stubs answer those reads first. Orders
+     registers its own routes inside `open`, which is newer and wins for the paths both use. */
+  await stubStore(page)
   await setViewport(page, { width: 1440, height: 900 })
   await open(page)
   const side = page.locator('.bn-side')
