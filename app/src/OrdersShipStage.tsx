@@ -52,7 +52,7 @@ const IS_DEMO = __BN_DEMO__
 const LANE_LABEL: Record<ShippingLane, string> = {
   envelope: 'Envelope',
   parcel: 'Parcel',
-  unjudged: 'Needs a look',
+  unjudged: 'Needs a Look',
 }
 
 const LANE_ICON: Record<ShippingLane, IconName> = {
@@ -199,7 +199,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
       toast({
         kind: 'ok',
         icon: 'truck',
-        title: 'Export read',
+        title: 'Export Read',
         // D218: `toast.body` is a plain string, so this is a sentence rather than two elements
         // joined by a typed dot.
         body: `Read ${count(answer.shipments, 'order')} from ${answer.name}.`,
@@ -489,7 +489,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
             {/* ICON-MAP.md "Shipping": Forget converts (UX-108's risk note applies to the
                 empty-state Button below, not this one — this drops the read batch from
                 memory only, and reading the file again brings it straight back). */}
-            <IconButton icon="trash" label="Forget this file" tone="danger" onClick={onForget} busy={busy === 'forget'} disabled={busy !== null} />
+            <IconButton icon="trash" label="Forget This File" tone="danger" onClick={onForget} busy={busy === 'forget'} disabled={busy !== null} />
           </div>
         </section>
 

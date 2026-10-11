@@ -724,7 +724,7 @@ function VariantChooser({
       <ul className="browse-variants-list" role="list">
         {listed.map(({ group, index }) => {
           const photoCopy = group.copies.find((copy) => copy.has_photo)
-          const name = group.names[0] ?? 'Not identified yet'
+          const name = group.names[0] ?? 'Not Identified Yet'
           // THE CATALOGUE'S OWN SET FIRST, `set_hint` ONLY WHEN THERE IS NO OTHER ANSWER
           // (D213) — the fallback D65
           // already established for the case no export has ever priced this game.
@@ -746,7 +746,7 @@ function VariantChooser({
                   )}
                 </span>
                 <span className="browse-variant-text">
-                  <span className={name === 'Not identified yet' ? 'browse-variant-name is-unnamed' : 'browse-variant-name'}>
+                  <span className={name === 'Not Identified Yet' ? 'browse-variant-name is-unnamed' : 'browse-variant-name'}>
                     {name}
                   </span>
                   {subParts.length === 0 ? null : (
@@ -2193,7 +2193,7 @@ export function BoxBrowse({
           phone ? undefined : (
             <IconButton
               icon="chevronLeft"
-              label="Collapse the box rail"
+              label="Collapse the Box Rail"
               className="browse-rail-toggle"
               onClick={() => setRailCollapsed(true)}
             />
@@ -2525,7 +2525,7 @@ export function BoxBrowse({
                                       : 'browse-row-name'
                                   }
                                 >
-                                  {nameOf(row.card) ?? 'Not identified yet'}
+                                  {nameOf(row.card) ?? 'Not Identified Yet'}
                                 </span>
                                 {/* A ROW THAT LEFT THE BOX (UX-222): the headstone, the product's one mark
                                     for a card that left (`ICON_MEANINGS`), named by its state. It
@@ -3260,7 +3260,7 @@ function CardOps({
               {/* The ADDRESS, not the store key: `1/1` in an eyebrow reads as a page counter. */}
               <span className="bn-eyebrow">{positionLabel(row.card) ?? `store key ${row.key}`}</span>
               <h2 className="inv-sheet-title">Correct claims</h2>
-              <p className="browse-claims-who">{nameOf(row.card) ?? 'Not identified yet'}</p>
+              <p className="browse-claims-who">{nameOf(row.card) ?? 'Not Identified Yet'}</p>
             </div>
             <IconButton icon="x" label="Close" onClick={() => setOpen(null)} />
           </header>

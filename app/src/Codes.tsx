@@ -794,7 +794,7 @@ export function Codes() {
               read. Once the ledger holds anything, this is the one persistent action again. */}
           {ledger === null || ledger.total > 0 ? (
             <Button variant="primary" icon="qr" onClick={() => openSheet('scan')}>
-              Read a box
+              Read a Box
             </Button>
           ) : null}
         </>
@@ -1061,11 +1061,11 @@ export function Codes() {
           )}
 
           {/* ---------------------------------------------------------------- hero */}
-          <section className="bn-panel codes-pile" aria-label="The pile">
+          <section className="bn-panel codes-pile" aria-label="The Pile">
             <div className="codes-pile-main">
               <div className="codes-pile-head">
                 <span className="bn-section-title">
-                  <Icon name="layers" size={16} /> The pile
+                  <Icon name="layers" size={16} /> The Pile
                 </span>
                 <span className="codes-pile-sum">
                   <span>
@@ -1117,10 +1117,10 @@ export function Codes() {
               </div>
             </div>
 
-            <aside className="codes-products" aria-label="By product">
+            <aside className="codes-products" aria-label="By Product">
               <div className="codes-products-head">
                 <span className="bn-section-title">
-                  <Icon name="tag" size={16} /> By product
+                  <Icon name="tag" size={16} /> By Product
                 </span>
                 <span className="bn-muted">{count(ledger.by_product.length, 'kind')}</span>
               </div>
@@ -1160,7 +1160,7 @@ export function Codes() {
           <section className="codes-tasks" aria-label="Tasks">
             <TaskCard
               icon="qr"
-              title="Read a box"
+              title="Read a Box"
               body="Decode a box's code-card photographs."
               meta="Free"
               tone="accent"
@@ -1169,7 +1169,7 @@ export function Codes() {
             />
             <TaskCard
               icon="hand"
-              title="Hand codes to a buyer"
+              title="Hand Codes to a Buyer"
               body="Reserve a lane's codes to an order."
               meta={
                 <>
@@ -1183,7 +1183,7 @@ export function Codes() {
             />
             <TaskCard
               icon="package"
-              title="Build a lot"
+              title="Build a Lot"
               body="A whole box, shipped, with its listing, packing slip and manifest."
               meta={lots.length === 0 ? 'No lots built yet' : `${count(lots.length, 'lot')} built`}
               tone="ok"
@@ -1213,7 +1213,7 @@ export function Codes() {
                   body="A whole box, shipped, with its listing, packing slip and manifest."
                   actions={
                     <Button icon="package" onClick={() => openSheet('lot')}>
-                      Build a lot
+                      Build a Lot
                     </Button>
                   }
                 />
@@ -1233,7 +1233,7 @@ export function Codes() {
                     <IconButton
                       size="sm"
                       icon={revealAll ? 'eyeOff' : 'eye'}
-                      label={revealAll ? 'Hide codes' : 'Reveal codes'}
+                      label={revealAll ? 'Hide Codes' : 'Reveal Codes'}
                       pressed={revealAll}
                       onClick={() => setRevealAll((r) => !r)}
                     />
@@ -1366,7 +1366,7 @@ export function Codes() {
       )}
 
       {/* ================================================================ sheets */}
-      <Sheet open={sheet === 'scan'} title="Read a box" icon="qr" onClose={closeSheet} className="codes-sheet">
+      <Sheet open={sheet === 'scan'} title="Read a Box" icon="qr" onClose={closeSheet} className="codes-sheet">
           {failureNode}
           <p className="codes-sheet-lede">Free.</p>
           <form
@@ -1433,7 +1433,7 @@ export function Codes() {
       </Sheet>
 
       {ledger !== null ? (
-        <Sheet open={sheet === 'hand'} title="Hand codes to a buyer" icon="hand" onClose={closeSheet} className="codes-sheet">
+        <Sheet open={sheet === 'hand'} title="Hand Codes to a Buyer" icon="hand" onClose={closeSheet} className="codes-sheet">
           {failureNode}
           <p className="codes-sheet-lede">
             Confirming reserves every code it returns, permanently. A reserved code is never offered again — that is what stands
@@ -1535,7 +1535,7 @@ export function Codes() {
         </Sheet>
       ) : null}
 
-      <Sheet open={sheet === 'lot'} title="Build a lot" icon="package" onClose={closeSheet} className="codes-sheet">
+      <Sheet open={sheet === 'lot'} title="Build a Lot" icon="package" onClose={closeSheet} className="codes-sheet">
           {failureNode}
           <p className="codes-sheet-lede">
             A physical lot is <strong>the whole box, or nothing</strong> — anything left in the box would go in the parcel anyway.

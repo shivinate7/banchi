@@ -1043,7 +1043,7 @@ export function Fulfillment() {
     <header className="ff-head">
       <Logo size={44} className="ff-mark" />
       <div className="ff-head-text">
-        <h1 className="fulfillment-title ff-title">Cards to pull</h1>
+        <h1 className="fulfillment-title ff-title">Cards to Pull</h1>
       </div>
     </header>
   )
@@ -1538,7 +1538,7 @@ export function Fulfillment() {
                   <span className="ff-h2-icon">
                     <Icon name="box" size={18} />
                   </span>
-                  Or look through a box
+                  Or Look Through a Box
                 </h2>
                 <p className="fulfillment-say ff-browse-lede">
                   {count(cards.length, 'card is', 'cards are')} in {count(boxes.length, 'box', 'boxes')}
@@ -1564,7 +1564,7 @@ export function Fulfillment() {
                           {/* THE BOX BY ITS NAME ALONE (D259): no number tile and no
                               "Box N", which is the store's key and not a label on the drawer. */}
                           <span className="ff-box-text">
-                            <span className="fulfillment-say ff-box-name">{group.name ?? 'Unnamed box'}</span>
+                            <span className="fulfillment-say ff-box-name">{group.name ?? 'Unnamed Box'}</span>
                             <span className="fulfillment-say ff-box-count">
                               {count(group.cards.length, 'card', 'cards')}
                             </span>

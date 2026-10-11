@@ -5085,6 +5085,7 @@ export function CaptureScreen() {
                   <input
                     className="bn-input capture-text capture-note"
                     type="text"
+                    name="capture-note"
                     placeholder={last.game.catalogued ? 'Add a note to this card' : 'What is this card?'}
                     aria-label={`Note on ${last.card.label}`}
                     value={noteDraft}
@@ -5424,7 +5425,7 @@ export function CaptureScreen() {
                   ? 'Connecting'
                   : dealerIdle
                     ? 'Start dispenser'
-                    : 'Connect dispenser'}
+                    : 'Connect Dispenser'}
             </Button>
             <Slot as="p" className="capture-quiet capture-dealer-said">
               {dealerSaid}

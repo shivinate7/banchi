@@ -570,7 +570,7 @@ export function CardHeroHead({
     <div className="browse-hero-head">
       <div className="browse-hero-text">
         <div className="browse-hero-titlerow">
-          <h2 className={name === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>{name ?? 'Not identified yet'}</h2>
+          <h2 className={name === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>{name ?? 'Not Identified Yet'}</h2>
           {/* THE RE-SORT BUTTON sits beside Actions, the same IconButton at the same size, so the row's
               height is the same with it or without it (D118). Shown only while the order is stale;
               the staleness sentence is its tooltip and accessible name. */}

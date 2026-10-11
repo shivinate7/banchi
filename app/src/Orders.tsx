@@ -2212,7 +2212,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
      Under the empty state the fetch is the EmptyState's own action, so the well there carries
      only the paste button rather than drawing the same control twice. */
   const wellOf = (withFetch: boolean) => (
-    <section className="orders-paste" aria-label="Add orders">
+    <section className="orders-paste" aria-label="Add Orders">
       <label className="bn-field">
         <span className="bn-field-label" title={`Only the SKU, the count and the card's name leave this browser. An order with no source is stamped ${DEFAULT_ORDER_SOURCE}.`}>
           Paste an order (JSON text)
@@ -2360,7 +2360,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
            its own tab. */
         storeControls={
           <span className="orders-store-controls">
-            <IconButton icon="plus" label="Add orders" style={BAR_SQUARE} aria-haspopup="dialog" onClick={() => setStoreOpen(true)} />
+            <IconButton icon="plus" label="Add Orders" style={BAR_SQUARE} aria-haspopup="dialog" onClick={() => setStoreOpen(true)} />
             <IconButton
               icon="external"
               label="Cards to pull"
@@ -2374,7 +2374,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         }
     />
 
-      <Sheet open={storeOpen} onClose={() => setStoreOpen(false)} title="Add orders" icon="plus" className="orders-store-sheet">
+      <Sheet open={storeOpen} onClose={() => setStoreOpen(false)} title="Add Orders" icon="plus" className="orders-store-sheet">
         {wellOf(true)}
         {receipt === null ? null : (
           <FetchReceipt
@@ -2801,12 +2801,12 @@ function OrderPickPane({
       />
       {/* THE TWO ARROWS PAGE THROUGH THE PICKS (the keys ← and → do the same). */}
       <div className="orders-pick-nav">
-        <IconButton icon="chevronLeft" label="Previous pick" onClick={() => stepPickAndReveal(walk, -1)} />
+        <IconButton icon="chevronLeft" label="Previous Pick" onClick={() => stepPickAndReveal(walk, -1)} />
         <span className="orders-pick-keys" aria-hidden="true">
           <Kbd>←</Kbd>
           <Kbd>→</Kbd>
         </span>
-        <IconButton icon="chevronRight" label="Next pick" onClick={() => stepPickAndReveal(walk, 1)} />
+        <IconButton icon="chevronRight" label="Next Pick" onClick={() => stepPickAndReveal(walk, 1)} />
       </div>
       {!zoomed ? null : (
         <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
@@ -3918,7 +3918,7 @@ function PullStage({
       ) : null}
       <div className="orders-body" ref={orderBody}>
         <button type="button" className="orders-skip-link" onClick={() => walkRef.current?.focus()}>
-          Skip to the walk
+          Skip to the Walk
         </button>
         <div className="orders-layout">
           {/* LAYOUT R (D304, Q1/Q2): Inventory's
@@ -4009,7 +4009,7 @@ function StandDownLegend({ orders, answers }: { readonly orders: readonly OrderR
     <dl className="orders-manage-legend">
       {gone ? (
         <>
-          <dt>I already sent it</dt>
+          <dt>Already sent it</dt>
           <dd>The copy left through a sale on Inventory. Nothing is marked sold twice.</dd>
           <dt>It isn&apos;t shipping</dt>
           <dd>Closes the line with no copy sent: a refund, a cancellation or a damaged card.</dd>
@@ -4019,7 +4019,7 @@ function StandDownLegend({ orders, answers }: { readonly orders: readonly OrderR
         <>
           <dt>Sealed product</dt>
           <dd>Marks the line as sealed product, not a single card.</dd>
-          <dt>I shipped these by hand</dt>
+          <dt>Shipped these by hand</dt>
           <dd>Counts copies this store never photographed. Nothing is marked sold.</dd>
         </>
       ) : null}
@@ -4335,7 +4335,7 @@ function OrderPanel({
             )}
           </p>
         </div>
-        <IconButton icon="settings" label="Manage" name="Manage this buyer's orders" className="orders-manage" aria-haspopup="dialog" onClick={onManage} />
+        <IconButton icon="settings" label="Manage" name="Manage This Buyer's Orders" className="orders-manage" aria-haspopup="dialog" onClick={onManage} />
       </div>
       <div className="orders-panel-facts">
         <Pill tone={pill.tone} icon={pill.icon}>
@@ -4606,7 +4606,7 @@ function LineStandDown({
               disabled={locked}
               onClick={() => onFill(order, line, owed, 'sold_separately')}
             >
-              I already sent {owed === 1 ? 'it' : `these ${owed}`}
+              Already sent {owed === 1 ? 'it' : `these ${owed}`}
             </Button>
           )}
           {/* THE ONE PLACE `not_shipping` IS REACHABLE, and it is LINE-shaped: on a three-line
@@ -4666,7 +4666,7 @@ function LineStandDown({
             {/* THE FIGURE IS IN THE LABEL. This press closes a line the store cannot corroborate,
                 so the number it will write belongs where the thumb is rather than in a sentence
                 above it — `CLAUDE.md`'s money-moment rule applied to a count. */}
-            I shipped {owed === 1 ? 'this' : `these ${owed}`} by hand
+            Shipped {owed === 1 ? 'this' : `these ${owed}`} by hand
           </Button>
         )}
       </div>
@@ -5146,7 +5146,7 @@ function PickLine({
         <IconButton
           icon="sold"
           label="Mark sold"
-          name={`Mark sold: ${pick.place.label === null ? `box ${pick.box}` : sayPlace(pick.place.label)}`}
+          name={`Mark Sold: ${pick.place.label === null ? `box ${pick.box}` : sayPlace(pick.place.label)}`}
           className="orders-pull"
           data-capture-id={target.capture_id}
           onClick={() => onPull(order, line, pick, target)}

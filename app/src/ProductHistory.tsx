@@ -543,7 +543,7 @@ function RealizedSection({ sku }: { readonly sku: string }) {
   if (!payload.configured) {
     return (
       <section className="producthistory-realized">
-        <h3>What you got</h3>
+        <h3>What You Got</h3>
         <p className="producthistory-note">Start Banchi with an OrderWand sales export to compare your sales with the market.</p>
       </section>
     )
@@ -558,7 +558,7 @@ function RealizedSection({ sku }: { readonly sku: string }) {
   ].filter(Boolean)
   return (
     <section className="producthistory-realized">
-      <h3>What you got</h3>
+      <h3>What You Got</h3>
       {payload.rows.length === 0 ? (
         <p className="producthistory-note">
           No sale of this exact condition and finish is in {payload.file}.
@@ -677,7 +677,7 @@ export function ProductHistory() {
   return (
     <Page
       className="producthistory"
-      title="Product history"
+      title="Product History"
       icon="history"
       toolbar={
         <SearchField
@@ -691,7 +691,7 @@ export function ProductHistory() {
             // gave, kept rather than lost when the field became a name search too.
             if (/^\d+$/.test(text.trim())) pick(text.trim())
           }}
-          submitLabel="Look up"
+          submitLabel="Look Up"
         />
       }
       empty={showEmpty ? <EmptyState icon="search" title="Enter a SKU to see its history." /> : undefined}

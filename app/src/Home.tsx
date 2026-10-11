@@ -745,7 +745,7 @@ export function Home() {
                       </span>
                       {depth === 1 && one.card !== null ? (
                         <>
-                          <div className="home-deck-name">{one.card.name ?? 'Not identified yet'}</div>
+                          <div className="home-deck-name">{one.card.name ?? 'Not Identified Yet'}</div>
                           <div className="home-deck-meta">
                             {[one.card.number_display ?? one.card.number, finishOf(one.card)]
                               .filter((part): part is string => typeof part === 'string' && part !== '')

@@ -343,7 +343,7 @@ export function CardLine({
 
   const title =
     name === null ? (
-      <span className="bn-cardline-name is-unknown">Not identified yet</span>
+      <span className="bn-cardline-name is-unknown">Not Identified Yet</span>
     ) : sku ? (
       <ProductLink sku={sku} name={name} className="bn-cardline-name">
         {name}

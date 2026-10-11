@@ -1246,7 +1246,7 @@ function Action({
         <MarkSoldButton
           busy={busy}
           disabled={busyKey !== null && !busy}
-          name={copy.place.label === null ? undefined : `Mark sold: ${sayPlace(copy.place.label)}`}
+          name={copy.place.label === null ? undefined : `Mark Sold: ${sayPlace(copy.place.label)}`}
           saleKey={copy.key}
           onClick={() => onSell(copy)}
         />

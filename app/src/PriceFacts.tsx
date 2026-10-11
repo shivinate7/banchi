@@ -137,7 +137,7 @@ export function PriceFactsBlock({ sku, onSales }: { readonly sku: string; readon
   return (
     <div className="pricefacts" aria-busy={loading ? 'true' : undefined}>
       <section className="pricefacts-section" aria-labelledby="pricefacts-now">
-        <h3 id="pricefacts-now">Prices now</h3>
+        <h3 id="pricefacts-now">Prices Now</h3>
         <p className="pricefacts-when">{read}</p>
         {!loading && prices === null ? (
           <p className="pricefacts-none pricefacts-body">No price has been read for this card yet.</p>
@@ -152,7 +152,7 @@ export function PriceFactsBlock({ sku, onSales }: { readonly sku: string; readon
       </section>
 
       <section className="pricefacts-section" aria-labelledby="pricefacts-sales">
-        <h3 id="pricefacts-sales">Sales, last 30 days</h3>
+        <h3 id="pricefacts-sales">Sales, Last 30 Days</h3>
         <p className="pricefacts-when">{shown.through ? `Sales through ${dayDate(shown.through)}` : null}</p>
         {!loading && days.length === 0 ? (
           <p className="pricefacts-none pricefacts-sales-body">
@@ -178,7 +178,7 @@ export function PriceFactsBlock({ sku, onSales }: { readonly sku: string; readon
       </section>
 
       <section className="pricefacts-section" aria-labelledby="pricefacts-shelf">
-        <h3 id="pricefacts-shelf">On your shelf</h3>
+        <h3 id="pricefacts-shelf">On Your Shelf</h3>
         {!loading && shelf === null ? (
           <p className="pricefacts-none pricefacts-body">This card is not on the waiting list.</p>
         ) : (

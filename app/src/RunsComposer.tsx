@@ -926,7 +926,7 @@ export function RunsComposer({
     { value: 'drawers' as StartKey, label: 'Boxes', icon: 'box' as const },
     ...(carried === null
       ? []
-      : [{ value: 'ticked' as StartKey, label: 'The cards I ticked', icon: 'check' as const }]),
+      : [{ value: 'ticked' as StartKey, label: 'The cards you ticked', icon: 'check' as const }]),
     { value: 'run' as StartKey, label: 'A previous run’s cards', icon: 'history' as const },
   ]
 

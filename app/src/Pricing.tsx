@@ -1655,7 +1655,7 @@ export function Pricing() {
     /* ON THE LIVE TAB THE HEADS SAY WHAT THEY HOLD: the rows with no market price, which the rule
        never lowers and the owner prices by hand, then every other live listing. */
     const live = stamp !== null
-    if (needs.length > 0) groups.push({ head: live ? 'No market price' : 'Needs you', rows: needs })
+    if (needs.length > 0) groups.push({ head: live ? 'No market price' : 'Needs You', rows: needs })
     if (ready.length > 0) {
       groups.push({ head: needs.length > 0 ? (live ? 'With a market price' : 'Ready') : '', rows: ready })
     }
@@ -2493,7 +2493,7 @@ export function Pricing() {
     <>
       <IconButton
         icon="eraser"
-        label="Clear typed prices"
+        label="Clear Typed Prices"
         onClick={() => setClearOpen(true)}
         disabled={clearableTotal === 0}
       />
@@ -2832,7 +2832,7 @@ export function Pricing() {
             actions={
               <>
                 <Button variant="primary" icon="tag" onClick={() => goTab('live')}>
-                  Price my live listings
+                  Price your live listings
                 </Button>
                 <Button icon="play" onClick={() => (window.location.hash = '#/review')}>
                   Go to Review
@@ -3410,8 +3410,8 @@ function PricingRow({
       <IconButton
         ref={registerHold}
         icon={withheld ? 'unlock' : 'lock'}
-        label={withheld ? 'Release' : 'Hold back'}
-        name={withheld ? `Release ${sku.name}` : `Hold back ${sku.name}`}
+        label={withheld ? 'Release' : 'Hold Back'}
+        name={withheld ? `Release ${sku.name}` : `Hold Back ${sku.name}`}
         kbd="H"
         pressed={withheld}
         className="pricing-hold"
@@ -3750,8 +3750,8 @@ function LiveSheet({
           label="Price"
           value={match ? 'match' : 'cut'}
           options={[
-            { value: 'cut', label: 'Under my price' },
-            { value: 'match', label: 'At my price' },
+            { value: 'cut', label: 'Under your price' },
+            { value: 'match', label: 'At your price' },
           ]}
           onChange={(next) => setMatch(next === 'match')}
         />
@@ -3983,7 +3983,7 @@ function HoldPanel({
       </div>
       <div className="pricing-holdpanel-fields">
         <label className="bn-field">
-          <span className="bn-field-label">Tell me when market is above</span>
+          <span className="bn-field-label">Notify you when market is above</span>
           <input
             className="bn-input bn-input-mono"
             type="text"

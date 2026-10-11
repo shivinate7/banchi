@@ -84,7 +84,7 @@ type SortDir = 'asc' | 'desc'
  *  copies, most recent sale, or the name from the top. Every later click on the same
  *  column just flips it. */
 const DEFAULT_DIR: Record<SortKey, SortDir> = { name: 'asc', copies: 'desc', gross: 'desc', last: 'desc' }
-const SORT_LABEL: Record<SortKey, string> = { name: 'Name', copies: 'Copies', gross: 'Revenue', last: 'Last sold' }
+const SORT_LABEL: Record<SortKey, string> = { name: 'Name', copies: 'Copies', gross: 'Revenue', last: 'Last Sold' }
 /** The podium's own segmented labels — the mock's own wording ("A to Z", "Latest") next to
  *  the same four keys the table's own column headers already sort by. One state, two faces. */
 const SORT_SEGMENT_LABEL: Record<SortKey, string> = { name: 'Alphabetical', copies: 'Copies', gross: 'Revenue', last: 'Latest' }
@@ -962,7 +962,7 @@ function SalesView() {
         <ReloadButton
           onReload={() => setHoldingsRange((r) => r)}
           busy={holdingsLoading}
-          label="Refresh what's on the shelf"
+          label="Refresh What's on the Shelf"
           hotkey={false}
         />
       </div>
@@ -1182,7 +1182,7 @@ function SalesView() {
           )}
         </div>
 
-        <h2 className="bn-sr">{granularity === 'week' ? 'By week' : 'By month'}</h2>
+        <h2 className="bn-sr">{granularity === 'week' ? 'By Week' : 'By Month'}</h2>
         <div className="revenue-months" ref={scrollToEnd} key={`${granularity}-${buckets.length}`} role="group" aria-label={granularity === 'week' ? 'Filter by week' : 'Filter by month'}>
           {buckets.map((b, i) => (
             <button
@@ -1370,7 +1370,7 @@ function SalesView() {
                 onClick={refreshReadings}
                 disabled={pricesLoading || products.length === 0}
               >
-                {pricesLoading ? 'Reading…' : "Compare to today's market"}
+                {pricesLoading ? 'Reading…' : "Compare to Today's Market"}
               </Button>
               {prices === null ? null : (
                 <p className="revenue-market-note">
@@ -1411,7 +1411,7 @@ function SalesView() {
                           <td className="revenue-disclosure-col">
                             <IconButton
                               icon={isOpen ? 'chevronDown' : 'chevronRight'}
-                              label={`${isOpen ? 'Hide' : 'Show'} the orders behind ${row.name}`}
+                              label={`${isOpen ? 'Hide' : 'Show'} the Orders Behind ${row.name}`}
                               size="sm"
                               aria-expanded={isOpen}
                               aria-controls={detailId}
