@@ -357,6 +357,9 @@ a.home-deck { pointer-events: auto; }
 .home-box-meta > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 .home-box-bar { width: 96px; height: 6px; border-radius: 3px; background: var(--bn-surface-2); overflow: hidden; flex: none; }
 .home-box-bar > span { display: block; height: 100%; background: var(--bn-accent); border-radius: 3px; transition: width var(--bn-t-slow) var(--bn-ease); }
+/* D218: date, clock time and cards are sibling spans; the seam is CSS. */
+.home-run-meta { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-run-meta > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1-5) 0 0; color: var(--bn-ink-4); }
 .home-run-when { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; }
 @media (max-width: 559px) { .home-box-bar { display: none; } }
 /* A THUMB PRESSES THESE ROWS (F8): the run link drew 38px on a tablet. The pointer decides, not the width. */
