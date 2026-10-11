@@ -13,14 +13,6 @@
         "verbatim:"
       ]
     },
-    "docs/decisions/D100-never-delete-to-lower-a-price.md": {
-      "lane": "cut pass",
-      "marker": [
-        "verbatim:",
-        "The owner's words",
-        "verbatim:"
-      ]
-    },
     "docs/decisions/D103-staleness-filters-it-never-gates.md": {
       "lane": "cut pass",
       "marker": [
@@ -105,12 +97,6 @@
         "verbatim:"
       ]
     },
-    "docs/decisions/D260-numbers-count-within-section.md": {
-      "lane": "cut pass",
-      "marker": [
-        "The owner's words"
-      ]
-    },
     "docs/decisions/D264-a-section-moves-as-one-object.md": {
       "lane": "cut pass",
       "marker": [
@@ -173,25 +159,6 @@
       "lane": "cut pass",
       "marker": [
         "verbatim:"
-      ]
-    },
-    "docs/specs/graveyard.md": {
-      "lane": "cut pass",
-      "marker": [
-        "The owner's words"
-      ]
-    },
-    "docs/specs/identify-engine-pick.md": {
-      "lane": "cut pass",
-      "marker": [
-        "The owner's words",
-        "The owner's words"
-      ]
-    },
-    "docs/specs/motion-trigger.md": {
-      "lane": "cut pass",
-      "marker": [
-        "The owner's words"
       ]
     },
     "docs/specs/order-walk-plan.md": {

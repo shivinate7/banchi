@@ -1,9 +1,7 @@
 ## D196 — No screen string names a mechanism
 
-**The owner's ruling, 2026-09-13:** the front end has to be minimal and must never explain
-mechanism on screen. Read beside the "hard rules" section's own standing instruction —
-*"every rule for all time, anything that can be mechanically enforced, should be mechanically
-enforced"* — this is that instruction applied to a design rule rather than a process rule: the
+**The owner's ruling:** the front end has to be minimal and must never explain
+mechanism on screen. Read beside the owner's standing instruction to mechanize every rule that can be mechanized (D173), this is that instruction applied to a design rule rather than a process rule: the
 front end is either minimal in this one checkable sense or it is not, and a session should not
 have to remember to look.
 
@@ -61,7 +59,7 @@ Reasoning stays in the decision, screens state facts; a note about zero does not
 
 ### Two named exceptions: the engine picks' hover tooltips
 
-The owner's word: plain words on the engine control, with each pick's model name in its hover tooltip.
+Owner ruling: plain words on the engine control, with each pick's model name in its hover tooltip.
 `docs/specs/identify-engine-pick.md` section 6 draws the control. These are the only exceptions to the rule.
 
 - The exempt strings are `HAIKU_NAME_TOOLTIP` and `MATCHER_NAME_TOOLTIP`, both exported from `app/src/engines.ts`.

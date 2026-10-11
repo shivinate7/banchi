@@ -7,8 +7,7 @@ and ruled that **a warning is the ceiling**.
 
 **It happened again the next night**, on `claude/debts-citation-repair`: a branch already merged
 as pull request #282, already behind `origin/main`, with **four live sessions in the tree**. Told
-about it, the owner said: *"i literally thought we had a guard in place that ENSURES our primary
-checkout IS ALWAYS MAIN"*. That sentence is the reopening, and what it reopens is the ceiling —
+about it, the owner expected a guard that ensures the primary checkout is always main. That is the reopening, and what it reopens is the ceiling —
 not the readers.
 
 ### The guard goes at the damage, not at the git command
@@ -49,7 +48,7 @@ worktree moves, which the primary/linked test disposes of); that reason was weak
 one is stronger.
 
 **A louder `post-checkout` is a bandaid, and the owner's standing instruction names the class.**
-*"Always ensure you take the best practices to resolve things, never the band aid routes."* The
+The owner's standing instruction: resolve things by best practice, never by band-aid routes. The
 warning already existed, already fired, and was already missed twice. Volume is not a mechanism.
 
 ### What is built: one refusal and two readers
