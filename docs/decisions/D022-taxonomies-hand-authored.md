@@ -8,19 +8,19 @@
 
 **Rarity strings render verbatim, the way reason codes do.** A second friendly vocabulary is a thing nothing audits, and the drift D16 exists to catch.
 
-**That state existed for two games and is now occupied by nobody** (measured 2026-08-23). The entry used to say it was "not yet established that TCGplayer carries Riftbound or One Piece as `Product Line` values at all". It also called that the highest-risk assumption in the design. If it were false, D8 and D11 would have no data, and the architecture would change shape. The owner exported all three. **TCGplayer carries both, on the identical 16-column header**, so the join is structurally valid for every product line. The exact cells, which nobody would have guessed:
+**The two empty games are now occupied.** The design had assumed TCGplayer carries Riftbound and One Piece as `Product Line` values at all. That was its highest-risk assumption. If false, D8 and D11 would have no data. The owner exported all three. **TCGplayer carries both, on the identical 16-column header**, so the join is structurally valid for every product line. The exact cells, which nobody would have guessed:
 
     Pokemon
     Riftbound League of Legends Trading Card Game
     One Piece Card Game
 
-**Every consumer still refuses on an empty vocabulary rather than falling back to Pokémon's.** A guessed rarity list is exactly what this repo refuses. An empty one that refuses loudly is strictly better than a plausible one that prices wrong. The state stays for the next game added. It is not deleted just because it is currently unoccupied.
+**Every consumer still refuses on an empty vocabulary rather than falling back to Pokémon's.** A guessed rarity list is exactly what this repo refuses. An empty list that refuses loudly beats a plausible one that prices wrong. The state stays for the next game added, even while unoccupied.
 
-**The superset rule collected its first evidence and won, and this is the paragraph to read before ever narrowing the matrix.** `finish_by_rarity["Rare"]` carried `normal` against an SV09 that stocks no plain Near Mint `Rare`. It was the authored-beyond-the-data example this entry and D23 both cited. The standing temptation was to trim it to what one export proved. The wider Pokémon export stocks **60 plain-NM Rares** (Cosmic Eclipse 38, Crown Zenith 22). Narrowing it would have made two whole eras unclaimable. On that screen the excluded chip is unselectable. The operator has no way to say what is true.
+**The superset rule has evidence. Read this before narrowing the matrix.** `finish_by_rarity["Rare"]` carried `normal` against an SV09 that stocks no plain Near Mint `Rare`. It was the authored-beyond-the-data example this entry and D23 both cited. The standing temptation was to trim it to what one export proved. The wider Pokémon export stocks **60 plain-NM Rares** (Cosmic Eclipse 38, Crown Zenith 22). Narrowing it would have made two whole eras unclaimable. On that screen the excluded chip is unselectable. The operator has no way to say what is true.
 
 The canonical unproved case is therefore no longer `Rare`/`normal`. It is One Piece's `SR` and `TR`, authored with `normal` against an export of three sets out of many. The audit asks about them as questions rather than blocking. That is the whole shape of the rule.
 
-**A third state, `catalogued`, sits orthogonal to `unverified`** (added 2026-08-23 with the `misc` entry). The two describe opposite situations and must never share a flag:
+**A third state, `catalogued`, sits orthogonal to `unverified`** (added with the `misc` entry). The two describe opposite situations and must never share a flag:
 
 - `catalogued: True, unverified: True` — a real product line nobody has an export for yet. **Temporary, with a remedy**: get the export. Refusing is right, because a guess becomes a price.
 - `catalogued: False` — `misc`: the occasional Yu-Gi-Oh, Weiss Schwarz, foreign-language or Magic card, about 1% of stock. **Permanent, and correct.** No export is coming. It must NOT refuse. Refusing on every misc capture would make a legitimate part of the shelf read as a fault. A real fault would then hide among them.
