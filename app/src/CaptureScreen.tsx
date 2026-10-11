@@ -1084,7 +1084,7 @@ const UndoFace = memo(
             from the rendered label. A tile with no label names its box alone. */}
         <span className="capture-undo-pos">
           {spansDrawers || undoFigure(target) === null ? (
-            <span className="capture-undo-drawer">{boxTitle(target.boxName, target.box)}</span>
+            <span className="capture-undo-drawer" data-typed>{boxTitle(target.boxName, target.box)}</span>
           ) : null}
           {undoFigure(target)}
         </span>

@@ -1001,7 +1001,7 @@ export function Codes() {
                         return (
                           <li key={row.box} className="codes-fix-row">
                             <div className="codes-fix-where">
-                              <span className="codes-fix-box">{boxName(row.box, boxes)}</span>
+                              <span className="codes-fix-box" data-typed>{boxName(row.box, boxes)}</span>
                               <span className="codes-fix-n">{count(row.indices.length, 'unclaimed code')}</span>
                               {row.company === null ? null : (
                                 <span className="codes-fix-company">

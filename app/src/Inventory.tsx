@@ -1440,7 +1440,7 @@ function RetirePanel({
               {copy.place.label === null ? <span className="bn-mono">{copy.key}</span> : <PositionLabel label={copy.place.label} />}
             </div>
             {copy.place.box_name === null ? null : (
-              <span className="inventory-confirm-boxname">{copy.place.box_name}</span>
+              <span className="inventory-confirm-boxname" data-typed>{copy.place.box_name}</span>
             )}
             {copy.place.located === false || isDeparted(copy.place) ? null : (
               <PositionBar place={copy.place} persona="owner" sections={sections} sectionDepth />

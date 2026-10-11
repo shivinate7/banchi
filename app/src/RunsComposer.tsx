@@ -1045,7 +1045,7 @@ export function RunsComposer({
                               {record.box}
                             </span>
                             <span className="runs-box-text">
-                              <span className="runs-box-name" title={boxLabel(record.box, record.name)}>
+                              <span className="runs-box-name" data-typed title={boxLabel(record.box, record.name)}>
                                 {boxLabel(record.box, record.name)}
                               </span>
                               <span className="runs-box-cards">{nounCount(record.cards, 'card')}</span>

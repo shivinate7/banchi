@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { test, expect } from './unit'
 import { REASON_LABELS, RETIRED_REASON_LABELS } from '../../src/reasons'
-import { casingProblems, isSentence, isTypedData, voiceHits } from '../copyRules'
+import { casingProblems, isSentence, isSpokenSentences, stripTyped, voiceHits } from '../copyRules'
 import { attrText, firstPersonInSource, jsxOpeningsIn, recordFromSource } from '../copySource'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -53,11 +53,38 @@ test('casing: a hyphenated word capitalizes each part, and a number or unit is n
   expect(casingProblems('Pull 12 cards')).toEqual(['"cards" should be capitalized'])
 })
 
-test('sentence: a label ending in . ? or ! is a sentence, and is not checked for casing', () => {
-  expect(isSentence('Under your price.')).toBe(true)
-  expect(isSentence('Which card is this?')).toBe(true)
-  expect(isSentence('Nothing here yet!')).toBe(true)
-  expect(isSentence('Show All')).toBe(false)
+test('sentence: a closing period or question mark marks a sentence, which the sweep reads only under a heading or title', () => {
+  expect(isSentence('Nothing captured yet.')).toBe(true)
+  expect(isSentence('Which listing is this card?')).toBe(true)
+  expect(isSentence('Cards to pull')).toBe(false)
+})
+
+/* THE SPOKEN NAME (copy map row 58). A two-sentence accessible name is read aloud, so the casing rule skips it; a
+ * one-sentence label with bad casing still fails. */
+test('typed name: the marked text comes out of the label, and the rest is still checked', () => {
+  expect(stripTyped('SV commons card', ['SV commons'])).toBe('card')
+  expect(casingProblems(stripTyped('SV commons card', ['SV commons']))).not.toEqual([])
+  expect(stripTyped('SV commons', ['SV commons'])).toBe('')
+  expect(casingProblems(stripTyped('SV Commons Card', ['SV commons']))).toEqual([])
+})
+
+test('spoken name: two sentences pass unread, and a one-sentence label with bad casing still fails', () => {
+  expect(isSpokenSentences('Order: High to low. Press to reverse.')).toBe(true)
+  expect(isSpokenSentences('Cards to pull.')).toBe(false)
+  expect(casingProblems('Show all cards.')).not.toEqual([])
+  expect(isSpokenSentences('Show all cards.')).toBe(false)
+})
+
+test('label: a closing period on a control label does not skip the casing check', () => {
+  expect(casingProblems('Cards to pull.')).not.toEqual([])
+  expect(casingProblems('Which Card Is This?')).toEqual([])
+  expect(casingProblems('Under Your Price.')).toEqual([])
+})
+
+test('voice: the quoted page name is exempt in voiceHits, and the unquoted words are not (browser path)', () => {
+  expect(voiceHits('Drop the \u201cMy Pricing\u201d export here')).toEqual([])
+  expect(voiceHits('Drop the "My Pricing" export here')).toEqual([])
+  expect(voiceHits('Drop the My Pricing export here')).toEqual(['my'])
 })
 
 /* A SOURCE SCANNER MUST RESPECT STRINGS. These fixtures put a comment opener inside a string, a
@@ -169,14 +196,11 @@ test('source scan: the quoted TCGplayer page name is exempt, and the unquoted wo
   expect(found).toEqual(['4 attribute title: My'])
 })
 
-/* THE TYPED-DATA EXEMPTION (copy map row 31). It is the exact text only, so a label with the same words in
- * another casing is still a label and still goes red. */
-test('casing: the typed box name is exempt by exact text only, and a label that reuses its words is not', () => {
-  expect(isTypedData('SV commons')).toBe(true)
-  expect(isTypedData('Sv commons')).toBe(false)
-  expect(isTypedData('sv commons')).toBe(false)
-  expect(isTypedData('SV commons Pick')).toBe(false)
+/* THE TYPED BOX NAME IS READ AS A LABEL HERE (copy map row 31). The data-typed marker that exempts it lives in the
+ * DOM, so the sweep skips it there; this rule still reads the words, and the same casing in a label goes red. */
+test('casing: the box name is a label to this rule, and only the data-typed marker exempts it in the sweep', () => {
   expect(casingProblems('sv commons')).not.toEqual([])
+  expect(casingProblems('SV commons')).not.toEqual([])
   expect(casingProblems('Export read')).not.toEqual([])
 })
 
