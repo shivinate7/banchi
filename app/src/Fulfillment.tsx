@@ -1487,19 +1487,16 @@ export function Fulfillment() {
                         key={item.key}
                         style={{ '--i': at } as CSSProperties}
                       >
-                        <span className="ff-owed-badge">{at + 1}</span>
-                        <p className="fulfillment-say ff-owed-pick">
-                          <b className="ff-owed-pick-num">Need {item.wanted}</b>
-                          {item.refs.length < 2 ? null : (
-                            <span className="ff-owed-pick-for">
-                              , {count(item.refs.length, 'order', 'orders')}
-                            </span>
-                          )}
-                        </p>
+                        {item.refs.length < 2 ? null : (
+                          <p className="fulfillment-say ff-owed-pick">
+                            For {count(item.refs.length, 'order', 'orders')}
+                          </p>
+                        )}
                         <CardLocations
                           group={group}
                           persona="fulfiller"
                           preserveOrder
+                          numbered
                           onSell={(copy) => doSellCopy(group, copy)}
                           busyKey={busyKey}
                           soldKeys={soldSet}

@@ -208,6 +208,9 @@ export type CardLocationsProps = {
    *  its own undo. */
   renderAction?: (copy: SearchCopy) => ReactNode
 
+  /** Fulfiller only: draw each copy's place in the list as a small round ordinal (B23). */
+  numbered?: boolean
+
   /** FOLD THE DEPARTED COPIES AWAY (D132, the owner's default). Hidden, a sold or retired copy
    *  is not drawn — except the copy the walk stands on and a copy sold from THIS screen whose
    *  receipt is still standing, both of which are the row the person is looking at. Shown, the
@@ -789,6 +792,7 @@ function FulfillerCard({
   sections,
   listedAt,
   renderAction,
+  numbered,
   photoSrc,
   missing,
   setMissing,
@@ -845,7 +849,7 @@ function FulfillerCard({
       </header>
 
       <ul className="card-locations-copies">
-        {group.copies.map((copy) => {
+        {group.copies.map((copy, at) => {
           const sold = isSold(copy, soldKeys)
           /* BY NAME (D172): `_copy_row` puts the card's own `cid` on every `SearchCopy`, so
              this thumbnail is THIS copy, not whatever occupies its slot by the time the
@@ -863,6 +867,7 @@ function FulfillerCard({
           return (
             <li key={copy.key}>
               <article className="card-locations-copy">
+                {numbered ? <span className="card-locations-badge">{at + 1}</span> : null}
                 {noPhoto ? (
                   <p className="card-locations-say">
                     The photo is missing. The card is still in the place below.

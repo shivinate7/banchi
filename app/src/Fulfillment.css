@@ -63,7 +63,14 @@
   pointer-events: none;
 }
 
+/* B23: every in-flow child of the screen shares one grid cell, so the column is as tall as the
+   page and the sticky count bar stays pinned for the page's whole height. */
+.fulfillment { display: grid; grid-template-columns: minmax(0, 1fr); }
+.fulfillment > :not(.ff-glow) { grid-area: 1 / 1; }
+.fulfillment > .bn-page-body { display: flex; flex-direction: column; }
 .ff-column {
+  flex: 1 0 auto;
+  width: 100%;
   position: relative;
   max-width: var(--ff-col);
   margin: 0 auto;
@@ -290,7 +297,8 @@
   align-items: center;
   gap: var(--bn-4);
   margin-inline: calc(var(--ff-pad) * -1);
-  padding: var(--bn-3) var(--ff-pad);
+  /* The bottom edge is where scrolled content tucks under the bar, so it holds the 12px target gap. */
+  padding: var(--bn-3) var(--ff-pad) var(--bn-5);
   background: var(--bn-bg);
 }
 .ff-bar .ff-search { flex: 1 1 0; min-width: 0; }
@@ -530,16 +538,13 @@
 .ff-owed-pick {
   /* A TEXT RUN, NOT A FLEX ROW: the gap sat before the comma ("Pick 1 , 6 orders"). */
   margin: 0 0 var(--bn-2);
+  color: var(--bn-ink-2);
 }
-.ff-owed-pick-num {
-  font-family: var(--bn-font-display);
-  font-size: var(--bn-fs-2xl);
-  color: var(--bn-ink);
-}
-.ff-owed-badge {
+.ff-owed-card .card-locations-copy { position: relative; }
+.card-locations-badge {
   position: absolute;
-  top: 0;
-  right: 0;
+  top: var(--bn-3);
+  right: var(--bn-3);
   display: grid;
   place-items: center;
   width: 40px;
@@ -552,7 +557,6 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.ff-owed-pick-for { color: var(--bn-ink-2); }
 .ff-orders-more { margin-top: var(--bn-4); }
 
 /* ---- Browse by box ---------------------------------------------------------------------- */
