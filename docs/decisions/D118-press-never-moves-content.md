@@ -18,11 +18,11 @@ Three things in one panel were sized by the card's own state. A write changes th
 - **The action slot, 18px.** `Mark sold` and `Retire` need 40px. The receipt needs 50px. The `Sold` pill needs 22px. The slot took whatever the current state needed.
 - **The copies list.** A card with copies makes the panel taller. Each card in the box had a different panel height.
 
-A fourth cause: `.browse-row` in the walk declares three grid columns, but it can draw four children. A sold copy's badge landed on a second grid row. A walk row is 32px before the sale and **50px** after it. That pushed every row below it 18px down the list.
+A fourth cause was found by the guard. `.browse-row` in the walk declares three grid columns, but it can draw four children. A sold copy's badge landed on a second grid row. A walk row is 32px before the sale and **50px** after it. That pushed every row below it 18px down the list.
 
 ### The lens stays and its mark leaves (amends D68 and D41)
 
-The owner ruled that a departed copy fills the row its lens used to occupy. The fill is a sentence or an animation. **D68 carries the reversal in its own second amendment.**
+The owner ruled that a departed copy fills the row its lens used to occupy. The fill is a sentence or, better, an animation. **D68 carries the reversal in its own second amendment.**
 
 D68 deleted an empty track with an unknown-position caption. That is not the object this entry puts back. The picture is still of the BOX, and the box stays. The section the copy left is still drawn. Its caption reads `no longer in the box`. The second scale reads `Section 1 · 10 slots · this copy is not in one`. Only the MARK is removed. It is the only part that would lie about a position. D58's refusal of a slot number for a departed card stands. D41's void where the figure would be stands.
 
@@ -57,7 +57,7 @@ The first draft skipped a rule whose selector matched nothing. A mutation that p
 
 Two more cases in `inventory.spec.ts` cover what the panel does when a write lands:
 
-- *the press that sells a copy moves nothing outside the panel it lands in.* A sweep checks every element outside `.browse-card`. It checks the document height, the scroll, and the heights of the location card and the copy row. The sweep compares page coordinates, not viewport coordinates. Playwright scrolls a control into view before it clicks. Viewport coordinates would report every element as moved.
+- *the press that sells a copy moves nothing outside the panel it lands in.* A sweep checks every element outside `.browse-card`. It checks the document height, the scroll, and the heights of the location card and the copy row. The sweep compares page coordinates, not viewport coordinates. Playwright scrolls a control into view before it clicks. Viewport coordinates would report all 192 elements as moved.
 - *the card panel holds one height for the whole walk.*
 
 Ten mutations, one per fix. Two found holes. `sellableStore()` moved `state` and nothing else. It served a sold card still in its slot, which the server cannot produce. Deleting the departed lens outright left the sale case green.
@@ -76,7 +76,7 @@ The job is separate, not a step in `check`. A chromium install is a real cost. A
 
 **The cost is D136's.** Measured over 56 jobs before D136: 940 to 1,020s wall-clock per run. The output was `481 passed (15.2m)` on one worker. A private repo's `ubuntu-latest` has two vCPUs. Playwright's default floors to one worker. The job runs three shards of one worker each. The seven real-clock sleeps use a fake clock. The post-merge run is skipped when the tree already passed on the PR. Current figures are in D136.
 
-**The first CI run went red on the sale case.** The walk row's slot cell is `minmax(34px, max-content)`. A sale rewrites `#1` to the store key `B2 #1`, in the mono face (D68). The key is wider. The column grows, and the name and badges slide right on the press. `B2 #1` sets at **33.0px in macOS's monospace fallback** and at **over 34px on Linux**. The column floor is 34px. One platform hid the movement. The other reported it as one pixel.
+**The first CI run went red on the sale case.** The rig had passed that tree 166 times. The walk row's slot cell is `minmax(34px, max-content)`. A sale rewrites `#1` to the store key `B2 #1`, in the mono face (D68). The key is wider. The column grows, and the name and badges slide right on the press. `B2 #1` sets at **33.0px in macOS's monospace fallback** and at **over 34px on Linux**. The column floor is 34px. One platform hid the movement. The other reported it as one pixel.
 
 The pixel was a symptom. `B2 #1` is the shortest key a store can produce. `B3 #96` is 40px. `B12 #133` is 46px. Those sales moved the name six and twelve pixels on **both** platforms. The case never saw them. Its fixture walks the one box whose key fits under the floor. A tolerance would hide the one small measurement and leave every larger one unguarded.
 
@@ -84,7 +84,7 @@ The pixel was a symptom. `B2 #1` is the shortest key a store can produce. `B3 #9
 
 The key is `content:`, not a text node. A hidden twin in the DOM would add `B2 #1` to every row's text. The census, the walk's locators and each row button's accessible name all read that text. The reservation uses the string, not a `ch` count. A face with synthesized weight does not set five characters at five times the advance of `0`.
 
-**Cost:** a row whose key is wider than its slot number starts its name further right. A long name ellipsises one word sooner. The cost is paid once at render, not at the sale.
+**Cost:** a row whose key is wider than its slot number starts its name further right. A long name ellipsises one word sooner. The cost is paid once at render, not at the sale. Looked at in both themes at 1440: the names now align down the list, where before the departed row's name sat out of line with its neighbors.
 
 **Guard:** a third case in `inventory.spec.ts`. Its subject is *the slot column is already as wide as the key the sale will write into it*. It has its own one-card fixture in box 12, card 133. The existing case could not see this. Its sweep records position and height, not width. Its box is the one whose key fits under the floor. The new case first reads its subject: the key must clear 34px, measured on the state the sale leaves. It was mutation-tested with the reservation deleted.
 
@@ -94,15 +94,15 @@ A press changes what is on the screen, never where the rest of it is. That is a 
 
 `D181` is the entry. Marking a copy sold under a search reordered the rankings in front of the operator. The operator was marking several copies as sold.
 
-The guards above were silent for a reason. `cursor.spec.ts`'s cases read the stylesheets, and a reshuffle is not a CSS rule. The sweep in `inventory.spec.ts` records every element outside `.browse-card` by a stable id and its rectangle. The copies list is inside that panel. The rows a re-rank exchanges are identically shaped boxes. Swap two of them, and every rectangle stays where it was. The document height and the scroll do not move.
+Why the four guards in this entry were silent: `cursor.spec.ts`'s cases read the stylesheets, and a reshuffle is not a CSS rule. The sweep in `inventory.spec.ts` records every element outside `.browse-card` by a stable id and its rectangle. The copies list is inside that panel. The rows a re-rank exchanges are identically shaped boxes. Swap two of them, and every rectangle stays where it was. The document height and the scroll do not move.
 
 So the proof compares the IDENTITY of the rows, not their geometry. It compares the ordered list of each row's `aria-label`. That label names the copy drawn there. The comparison runs in both directions. The fixture makes a frozen order and a recomputed order give different answers. `toHaveCount` cannot see a reshuffle that keeps the length.
 
 The control that fixes this is bound by this entry in the usual way. It appears on the press that makes the order stale. It sits inside a band with a fixed height, so its slot is reserved whether or not it is shown. This is the same bargain `.browse-row-slotghost` makes. It is paid once at render, not at the moment of the sale.
 
-### The copies column is not torn down and built again
+### The copies column may not be torn down and built again
 
-**The owner ruled that the CI flake is a product defect, and that the product gets fixed.**
+**The owner ruled that the CI flake is a product defect, and that the product gets fixed.** The same failure had shown on the real rig for weeks.
 
 `inventory.spec.ts`'s "a new search takes a new order" case failed on CI in 3 of 20 runs, at 2 workers, always the same way. `toHaveCount(6)` passed. A later read of the same rows, without retries, returned `[]`. No press was involved. The operator had typed a second query into the same box.
 
@@ -121,7 +121,7 @@ The case *the copies list holds while a new answer moves the walk to another dra
 
 ### The hold was too wide: a press is not a re-rank
 
-The first hold kept `selectedRow` across every shelf change. That is wider than the case it covers. A fresh search answer can move the walk to another drawer with no press behind it (D132). The hold exists for that case. A press to a different drawer has the same shape. So does a walk-to a copy elsewhere. The operator asked for a different card on purpose. The hold drew box 2's card under a `Box 7` header, with `CardOps` live against it. The list said "Nothing in box 7 yet" when the box held three cards.
+Review caught this before merge. The fix above held `selectedRow` across every shelf change. That is wider than the case it covers. A fresh search answer can move the walk to another drawer with no press behind it (D132). The hold exists for that case. A press to a different drawer has the same shape. So does a walk-to a copy elsewhere. The operator asked for a different card on purpose. The hold drew box 2's card under a `Box 7` header, with `CardOps` live against it. The list said "Nothing in box 7 yet" when the box held three cards.
 
 Proved live: box 2 to box 7, with `/inventory/7` delayed 1500ms. The header said Box 7. The list said the box was empty. The detail column kept box 2's card.
 
@@ -141,7 +141,7 @@ Reverting the `shelfSource` gate draws a `.browse-card` count of 1. Reverting ei
 
 **What is held.** `held` already kept the last found row in `visible` for a search re-rank. Two more refs join it. `heldSections` keeps the list's last answered `sections`. `heldDetail` keeps the `{detail}` prop from `Inventory.tsx`'s `CopiesPanel`. All three write only when the render is not `awaitingRows`. None can hold a partial or in-flight answer. Each holds only a box that fully answered.
 
-**A dimmed row is still a claim.** Box 2's row under a `Box 7` header is the shape the earlier regression named. What makes it safe is that it cannot be acted on.
+**Dimmed is not a smaller a4f3594b claim.** Box 2's row, drawn under a `Box 7` header, is literally the shape that regression named. What makes it safe is that it cannot be acted on.
 
 **Dimmed is drawn, never claimed.** `.browse-list[aria-busy='true']` and `.browse-card[aria-busy='true']` (in BoxBrowse.css) drop to `--bn-disabled` opacity. That token marks content that is on screen but not live. Both set `pointer-events: none`. The list sets `tabIndex={-1}`. Its `onKeyDown` is not attached while dimmed. So the one keyboard path onto a stale row (`TICK_KEY`) cannot fire. `aria-busy="true"` stays on both regions for the whole wait. A screen reader is told the content is not final.
 
@@ -151,7 +151,7 @@ The case *a press to another drawer dims its predecessor's rows* keeps the one-s
 
 ### Review found a keyboard path around pointer-events, and an untested column
 
-- **Finding 1, HIGH.** `pointer-events: none` blocks the mouse only. Tab still reached `CardOps`' "Card actions" button. Enter opened its menu on `held.current`, which is box 2's card, under the Box 7 header. That is the same regression, reached by keyboard. **Fixed with `inert`.** The dimmed `<section className="browse-card">` carries `inert={dimPanel}`. React 19 supports `inert` as a boolean prop. `inert` removes the subtree from the tab order and refuses activation. The list keeps its narrower fix (`tabIndex`, `onKeyDown`). It holds interactive rows that a blanket `inert` would also have to cover. **Guard:** the snapshot calls `.focus()` on the button directly. An `inert` subtree refuses a programmatic `.focus()`. The case asserts `cardInert` and `cardActionsFocusable`.
+- **Finding 1, HIGH.** `pointer-events: none` blocks the mouse only. Tab still reached `CardOps`' "Card actions" button. Enter opened its menu on `held.current`, which is box 2's card, under the Box 7 header. That is the same regression a4f3594b named, reached by keyboard. **Fixed with `inert`.** The dimmed `<section className="browse-card">` carries `inert={dimPanel}`. React 19 supports `inert` as a boolean prop. `inert` removes the subtree from the tab order and refuses activation. It is not `panelRow`/`panelDetail`'s own subtree, and it carries interactive rows of its own. The list keeps its narrower fix (`tabIndex`, `onKeyDown`). It holds interactive rows that a blanket `inert` would also have to cover. **Guard:** the snapshot calls `.focus()` on the button directly. An `inert` subtree refuses a programmatic `.focus()`. The case asserts `cardInert` and `cardActionsFocusable`.
 - **Finding 2, MEDIUM.** Mutating `panelDetail` back to the live `detail` left the case green. Nothing read `.browse-under`'s own content. `underOwnerCount` and `underRowCount` now read `.card-locations-owner` and `.card-locations-row` inside `.browse-under`. Both classes belong to `CopiesPanel` (`CardLocations.tsx`). The case now fails if the copies column draws nothing. It also fails if the column draws anything invented in place of the held card's real copies.
 
 Both were mutation-tested with `.bak` copies, restored by hand. Reverting `inert={dimPanel}` to `inert={false}` draws `cardInert` false. Reading the live `detail` instead of `heldDetail.current` draws `underOwnerCount` 0.

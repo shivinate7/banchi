@@ -7,7 +7,7 @@ implements sections 5 and 6. `harness/tests/t11_walk_plan.py` is its contract. S
 through `_Places.of` (`pipeline/join.py:Position`), never a second formula. The screen is
 `#/orders` (section 13). `#/fulfillment` reads the same route for its Owed section.
 
-**Two architectural calls are settled.** The solver runs **on the server**. The old client-side
+**Three architectural calls are settled.** The solver runs **on the server**. The old client-side
 `buildWalkPlan` was replaced, not extended. The plan is a live read of the walked set. It does
 not move on a press (section 8).
 
@@ -46,7 +46,7 @@ satisfy them.
 ## 3. The mandate that shapes every part of this
 
 The owner ruled that boxes and sections must not be demanding to build and operate. The operator
-does not think in the box and section taxonomy. The screen says which place to open and which
+must not have to think in the box and section taxonomy. The screen says which place to open and which
 cards to take. The addressing is the machine's problem.
 
 The taxonomy stays. Sections become the thing the solver minimizes. They are the machine's unit,
@@ -108,7 +108,7 @@ subject to Σ over s of supply[s][k] · x[s]  ≥  demand[k]   for every sku k
            x[s] ∈ {0, 1}
 ```
 
-`cost(s) = 1` for every section (`COST_SECTIONS` in `COST_FUNCTIONS`). Sections count flat. Boxes
+`cost(s) = 1` for every section (`COST_SECTIONS` in `COST_FUNCTIONS`). That is the owner's ruling: sections counted flat, boxes
 are free.
 
 **Why it is swappable, and what that costs.** `cost` is a named function, selected by a string on
@@ -288,7 +288,7 @@ write refuses a full line.
 
 - The row's figure is **Pick N of M** (D279, D212). `M` is capped at what is on hand
   (`take.copies.length`). A card that is too short drops `of M` for a short flag, such as `Pick 1`
-  beside `7 short`. `M` never counts a copy the store does not have.
+  beside `7 short`. `M` must never count a copy that the store does not have.
 - **Undo is per copy and has no clock** (`docs/specs/undo.md` §2-3, D164). A copy's `Undo` stays until
   a newer pull takes the "newest" rank from it, or the walk resets. `UNDO_WINDOW_MS` is only the
   toast's own lifetime.

@@ -103,7 +103,7 @@ Rows that describe a change commit in the same transaction as the change.
 
 ### 4.1 Preflight
 
-The preflight prints before anything is submitted. It shows the card count, total payload bytes,
+The preflight always prints before anything is submitted. It shows the card count, total payload bytes,
 batch chunk count, estimated cost, prompt fingerprint, and cache hits against sends. `--dry-run`
 does everything except the API call. Sidecar problems, unreadable images and a mistyped directory
 surface for free.
@@ -155,7 +155,7 @@ purpose, for example after a prompt change.
 
 Per-request failures are `errored`, `expired`, `canceled` and `malformed`. Each is retried within a
 bounded budget: default 1, `--retry-budget`. The run report gives the count and the reasons, so a
-systematic failure does not look like bad luck. A card that still fails after the budget goes to the
+systematic failure cannot look like scattered bad luck. A card that still fails after the budget goes to the
 main review queue as `identification_failed`. A card with no identification has no price. An unpriced
 card is not a cheap card.
 

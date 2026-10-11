@@ -5,9 +5,9 @@
 1. `pkill -f "capture_server.py"` targeted a scratch capture server started in a worktree. `pkill -f` is machine-wide. It also matched `/Users/shivinate/Developer/banchi/server/capture_server.py`, the owner's live capture server on :8000 over their real 1,625-card store. That process is the one **D138** keeps alive at login. The supervisor restored it 25 seconds later. **D88** kept the store intact, because every write is one SQLite transaction. Requests in flight were severed.
 2. `for p in $(lsof -ti tcp:5439); do kill $p; done` targeted the session's own Vite server. `lsof -ti tcp:PORT` returns every process holding a socket on that port, **including CLIENTS**. The second pid was the Claude desktop app's network-service helper. Electron started it again, and the app's network went down in the meantime.
 
-**Neither was a lapse of care.** Both commands are the obvious spelling of a correct intent. What is wrong with them is not visible in the text. The first has a blast radius that depends on what else is running. The second has a blast radius that depends on who is connected. A more careful session types the same two commands.
+**Neither was a lapse of care, and that is the entire argument for mechanism.** Both commands are the obvious spelling of a correct intent. What is wrong with them is not visible in the text. The first has a blast radius that depends on what else is running. The second has a blast radius that depends on who is connected. A more careful session types the same two commands.
 
-**Three session notes already warned about this class, and it happened twice anyway.** The project memory carries `pkill-f-is-machine-wide.md`, `dont-bounce-the-owners-servers.md` and `a-pgrep-waiter-matches-itself.md`. **A note that must be remembered is not a guard.** This repo already acts on that preference everywhere else. D16 checks the docs mechanically rather than asking. D42 refuses a move of `main` in a hook, not in a sentence. The claude-settings sweep, "The janitor is one machine-wide sweep" (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md), sweeps rather than reminds.
+**Three session notes already warned about this class, and it happened twice anyway.** The project memory carries `pkill-f-is-machine-wide.md` (a worktree cleanup that killed the main tree's servers), `dont-bounce-the-owners-servers.md` (the `restart` target killing the live capture server mid-request) and `a-pgrep-waiter-matches-itself.md`. **A note that must be remembered is not a guard.** This repo already acts on that preference everywhere else. D16 checks the docs mechanically rather than asking. D42 refuses a move of `main` in a hook, not in a sentence. The claude-settings sweep, "The janitor is one machine-wide sweep" (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md), sweeps rather than reminds.
 
 ### The rule
 
@@ -30,7 +30,7 @@ A guard that breaks cleanup gets disabled, and a disabled guard protects nothing
 
 ### Two refusals its own rule does not make
 
-**A target it cannot place is refused.** That covers a command with no absolute path in the argv and no readable working directory. Missing evidence is never read as absence of a problem. `janitor.py:_same_process` takes the same direction, for the same asymmetry. A false refusal costs a session one extra sentence. A false permission costs the owner a process they were using.
+**A target it cannot place is refused** — no absolute path in the argv and no readable working directory. Missing evidence is never read as absence of a problem. `janitor.py:_same_process` takes the same direction, for the same asymmetry. A false refusal costs a session one extra sentence. A false permission costs the owner a process they were using.
 
 **The main checkout's supervisor and its children are refused, even from inside it.** The rule above would clear them. This is D138 written as a set of integers. `scripts/serve.py` records each child's pid under `.serve/*.pid`. The guard reads each `.pid` marker and walks down the process tree from it. It walks down because the supervisor re-execs and replaces its children. So a child can run before the pidfile naming it is rewritten. The refusal names `make down ARGS=--confirm`, which **drains**, instead of a harder kill.
 
@@ -73,7 +73,7 @@ On a Bash call it has no opinion about, the guard costs 35 ms. Measured over fiv
 - **A kill placed after a heredoc's terminator**, dropped with the heredoc body. The trade is deliberate. It costs one extra line in a session's script.
 - **`os.kill` in a `python3 -c`**, which is not in the trigger set. Adding it would trade a real false-positive rate against a case nobody has hit.
 
-`make reap-selftest` proves the rest against a throwaway checkout and a throwaway sibling. The sibling stands in for everywhere-else. The test uses a real socket with a real client on it, and a `.serve/` pidfile. Both incidents are reproduced, not asserted about. **Mutation-tested: thirteen guards removed one at a time, and all thirteen were caught.** D18 keeps it out of the git hook and in `make check`, beside `janitor-selftest`, as that entry explains. The guard writes, and it signals.
+`make reap-selftest` proves the rest against a throwaway checkout and a throwaway sibling. The sibling stands in for everywhere-else. The test uses a real socket with a real client on it, and a `.serve/` pidfile. Both incidents are reproduced, not asserted about. **Mutation-tested: thirteen guards removed one at a time, and all thirteen were caught.** D18 keeps it out of the git hook and in `make check`, beside `janitor-selftest`, as that entry explains. It writes, and it signals.
 
 ### Amendment: "under this checkout" is no longer "one session's"
 
