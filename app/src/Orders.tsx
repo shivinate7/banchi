@@ -3865,7 +3865,7 @@ function PullStage({
               icon={anyFolded ? 'unfold' : 'fold'}
               onClick={() => setFoldedSections(anyFolded ? new Set() : new Set(walk.sections.map((section) => section.key)))}
             >
-              {anyFolded ? 'Open' : 'Fold'} {countOf(walk.sections.length, 'section')}
+              {anyFolded ? 'Open' : 'Fold'} {countOf(walk.sections.length, 'Section', 'Sections')}
             </Button>
             <span className="bn-spacer" />
             <HideToggle checked={hideSold} onChange={setHideSold} count={walk.soldKeys.size}>
