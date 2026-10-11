@@ -408,10 +408,13 @@ function SendStanding({
   send,
   takeBack,
   takingBack,
+  sendAnyway,
 }: {
   readonly send: SendSummary
   readonly takeBack: (stamp: string) => void
   readonly takingBack: boolean
+  /** The warning's own way past the lock (R15): held by the page for this send, never stored. */
+  readonly sendAnyway?: (stamp: string) => void
 }) {
   const copies = carried(send.copies, send.prices)
   const safeAfter = send.take_back_after ? `You can take them back after ${clockTime(send.take_back_after)}, once Banchi has checked.` : null
@@ -479,7 +482,16 @@ function SendStanding({
           compact
           className="send-standing send-short-check"
           title="Your last send is not all there yet."
-          action={action}
+          action={
+            <>
+              {action}
+              {sendAnyway === undefined ? null : (
+                <Button variant="quiet" size="sm" onClick={() => sendAnyway(send.stamp)}>
+                  Send Anyway
+                </Button>
+              )}
+            </>
+          }
         >
           {foundLine(send)} at TCGplayer {atClockTime(send.checked_at)}.
           <StagedWarning send={send} />
@@ -541,6 +553,7 @@ export function SendCard({
 }) {
   const live = useLiveCheck()
   const whyId = useId()
+  const [passed, setPassed] = useState<readonly string[]>([])
   const [phase, setPhase] = useState<'idle' | 'waiting' | 'sending' | 'downloading'>('idle')
   const [intent, setIntent] = useState<'send' | 'download'>('send')
   const [failure, setFailure] = useState<Failure | null>(null)
@@ -662,7 +675,12 @@ export function SendCard({
   const running = open.some((send) => send.state === 'sending')
   /* AN INCOMPLETE LAST SEND HOLDS THE PRESS (R14): Send stays off until the owner has seen what is
      missing, and the line beside it says why. */
-  const incomplete = latest?.state === 'short'
+  /* THE LOCK IS THE INCOMPLETE SEND ITSELF, NOT THE NEWEST RECEIPT (R15): a download writes a newer
+     receipt and must not lift it. It lifts when the status finds every copy or the copies are taken back
+     (the send's state changes), or when the owner presses Send Anyway on it (held in this page only). */
+  const lastSend = (live.status?.sends ?? []).find((send) => send.kind === 'send') ?? null
+  const blocking = lastSend !== null && lastSend.state === 'short' && !passed.includes(lastSend.stamp) ? lastSend : null
+  const incomplete = blocking !== null
   const busy = phase !== 'idle' || running
   /* NOTHING READY, NOTHING TO PRESS (R4 F5): with no copy and no price change the press could
      only be refused, so it is disabled until a copy is ready. */
@@ -777,7 +795,7 @@ export function SendCard({
         </Button>
         {incomplete ? (
           <span id={whyId} className="send-why">
-            Your last send is not all there yet.
+            Deal with your last send first.
           </span>
         ) : null}
         <span className="bn-sr" role="status">
@@ -857,8 +875,11 @@ export function SendCard({
       )}
 
       {open.map((send) => (
-        <SendStanding key={send.stamp} send={send} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} />
+        <SendStanding key={send.stamp} send={send} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} sendAnyway={(stamp) => setPassed((was) => [...was, stamp])} />
       ))}
+      {blocking === null || open.some((send) => send.stamp === blocking.stamp) || standing?.stamp === blocking.stamp ? null : (
+        <SendStanding send={blocking} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} sendAnyway={(stamp) => setPassed((was) => [...was, stamp])} />
+      )}
 
       {(live.status?.unreadable ?? []).map((row) => (
         <Notice
@@ -901,7 +922,7 @@ export function SendCard({
 
       {standing === null ? null : (
         <>
-          <SendStanding send={standing} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} />
+          <SendStanding send={standing} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} sendAnyway={(stamp) => setPassed((was) => [...was, stamp])} />
           {/* WHAT THE GUARD HELD BACK, ANSWERED TO THE PRESS THAT MADE IT. It is read once,
               right after this visit's own send; a later visit does not carry it in the bar. */}
           {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TrimList trimmed={standing.trimmed} /> : null}
