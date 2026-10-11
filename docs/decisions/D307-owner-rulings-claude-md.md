@@ -38,7 +38,7 @@ and raised only on the owner's word in `.claude/settings.local.json`.
 Each commit message ends with a `Done:` line and a `Next:` line.
 The `Next:` line names what is left, in order, so a lane resumes from its branch alone.
 
-**Experience is everything.** This is the owner's ruling for screen work.
+**Experience is everything.** These are the owner's words for screen work.
 Run a design pass before you build a screen.
 Review the built screen against that pass before you call it done.
 
@@ -56,7 +56,8 @@ README's route table stays. The `route rosters` row of `make docs-audit` reconci
 
 ### Store
 
-**A press has no spend cap and no threshold notice.** The owner's ruling: a press runs everything it selects. The confirm names the cards and the spend. D180 (press names the cards) holds the selection.
+**A press has no spend cap and no threshold notice.** The confirm names the cards and the spend. The owner's words:
+"if I want to run everything, then I get to run everything." D180 (press names the cards) holds the selection.
 
 **No standing cap on copies.** A cap is something a send asks for.
 `policy.live_cap` is deleted, and a stored key is refused by name.
