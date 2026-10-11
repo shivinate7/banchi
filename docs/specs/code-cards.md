@@ -181,7 +181,7 @@ headline. It is not softened here.
 ### 6.1 Destroying the card forecloses three things, conditionally
 
 **Owner ruling (amended).** The owner ruled that PREMIUM code cards are held physically. They
-sit in a box at tracked locations, and they are shipped. Only the BULK tier is destroyed. The
+sit in a box at tracked locations, and the owner will ship them. Only the BULK tier is destroyed. The
 points below hold **of a destroyed card and of nothing else.**
 
 The consequences of the split:
@@ -189,7 +189,7 @@ The consequences of the split:
 - **TCGplayer is open for the retained premium tier.** The existing `join -> emit -> Import to
   Staged` path reaches it. The fixture export holds 263 code-card rows, with five conditions
   each. The 16-column schema is byte-identical to singles.
-- **TCGplayer's bulk lane is open and CSV-listable, but economically dead.** All three hold.
+- **TCGplayer's bulk lane is open and CSV-listable, but economically dead.** All three hold. Corrected against first-party API reads after the owner challenged the first draft, which was wrong.
 
   **It is an ordinary catalog product.** `productId 253512`, category 56 "Bulk Lots", group 2303
   "Pokemon Bulk Card Lots", rarity "Code Card", `sellerListable: true`. It has exactly ONE SKU,
@@ -223,7 +223,7 @@ The consequences of the split:
 The owner's pile is **~30,000 codes**. Measured against that:
 
 - TCGplayer's bulk SKU absorbs **8,694 units a year across every seller combined, about $299 of
-  GMV**. It carries **31,493 standing units across 56 listings**, re-counted first-hand. The pile
+  GMV**. It carries **31,493 standing units across 56 listings**, re-counted first-hand; an earlier figure of ~19,300 was low. The pile
   alone is roughly **3.5 years of total market demand**. It queues behind **3.6 years** of
   existing supply.
 - The best eBay 1,000-lot comparable sold **twice, lifetime**.
@@ -273,9 +273,9 @@ barely move. The 100x, 50x and 1000x lots measured 16, 30 and 9 lifetime sales.
 **Demand and automatability point in opposite directions.** This is the central finding. Volume
 lives where delivery is manual. Automation lives where nothing sells.
 
-The buy side is closing. The largest dedicated shop has **shut its buylist** and cut payout to
+The buy side is closing. The largest dedicated shop has **shut its buylist** and demoted payout to
 store credit. A second shop buys only two premium product types and **no booster codes at all**.
-Its own stock counts show 500 to 1,350 units standing per set. This is a supply glut, not a
+The reason is visible in their own stock counts: 500 to 1,350 units standing per set. This is a supply glut, not a
 demand shortage.
 
 ### 6.3 The recommendation
@@ -524,8 +524,8 @@ decode rather than mispricing a $40 card.
 
 ## C8 — The code ledger: every code's text beside its photograph, for the dispute that will come
 
-Ratified by the owner. Code cards sit in an arbitrary box, ideally sorted by set. The owner ruled that
-both the code card image and an image-to-text CSV are saved. If a customer says a code did not work, the
+Ratified by the owner. Code cards live in the arbitrary box of code cards, ideally sorted by set. The owner also ruled that
+both the code card image and an image-to-text CSV must be saved. If a customer says a code did not work, the
 code is checked against its image. The likely cause is an image-to-text error.
 
 **The dispute flow is the spec.** A buyer says a code did not work. The owner checks the code, opens the

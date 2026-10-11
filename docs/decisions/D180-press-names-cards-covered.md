@@ -2,9 +2,9 @@
 
 **The box stops being the unit of work. `POST /pipeline/identify` and `banchi identify` take ONE SELECTION, a set of terms, each of which narrows a set of cards.** The drawer is a term in the selection. It is not what a run is made of. The owner ruled that this overtakes the cart design. The cart design's rot is recorded below, not deleted.
 
-### What stood
+### What stood, and the sentence it rested on
 
-`server/pipeline_routes.py:_resolve_scope` refused any request that did not name a positive integer `box`. A run was always scoped to one box. `banchi identify` took exactly one directory. `_scope_dir` symlinked a ticked selection into `.scopes/box3-<n>-<stamp>`, so a subset could be expressed as the one thing the command accepted: a path. The cart design sent a cart of those, one detached child per drawer.
+`server/pipeline_routes.py:_resolve_scope` refused any request that did not name a positive integer `box`. The refusal said a run is always scoped to one box. `banchi identify` took exactly one directory. `_scope_dir` symlinked a ticked selection into `.scopes/box3-<n>-<stamp>`, so a subset could be expressed as the one thing the command accepted: a path. The cart design sent a cart of those, one detached child per drawer.
 
 So "identify everything that still needs it" was not a request this product could take. A pile spanning two drawers was two presses, however few cards it held.
 
@@ -32,7 +32,7 @@ So `box` is list-valued. `{"box": [3, 4, 5]}` is one selection over 1,670 cards,
 
 The measurement does not support the per-leg reading. All three legs of that press carried `max_edge` 1200. The cart survives as a list-valued filter. The per-drawer reading does not.
 
-### The terms are names the store already has
+### The terms are names the store already has for a group of cards
 
 That is the whole design rule. Nothing here invents a grouping.
 
