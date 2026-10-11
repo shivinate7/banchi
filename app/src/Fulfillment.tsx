@@ -1051,8 +1051,8 @@ export function Fulfillment() {
   /* The loaded Today tile's own elements, hidden: loading and loaded share one box. Hidden from
      assistive tech too, so it never reads as an empty landmark. */
   const todayFrame = (
-    <p className="ff-count" aria-hidden="true">
-      <b className="ff-count-num">0</b> Left
+    <p className="ff-count" aria-hidden="true" style={{ '--ff-n': 1 } as CSSProperties}>
+      <b className="ff-count-num">0</b> <span className="ff-count-word">Left</span>
     </p>
   )
 
@@ -1081,8 +1081,10 @@ export function Fulfillment() {
         {header}
         <div className="ff-loading" aria-busy="true">
           <p className="fulfillment-say ff-loading-say">Getting the cards.</p>
-          {todayFrame}
-          <span className="ff-skel ff-skel-search" />
+          <div className="ff-bar ff-bar-wait">
+            <div className="ff-count-track">{todayFrame}</div>
+            <span className="ff-skel ff-skel-search" />
+          </div>
           <span className="ff-skel ff-skel-row" />
           <span className="ff-skel ff-skel-row" />
           <span className="ff-skel ff-skel-row" />
@@ -1361,9 +1363,10 @@ export function Fulfillment() {
     } else {
       /* B23: the count lives in the sticky bar with the search (`countFigure`); only the
          unlocated warning stays here, in the page. */
+      const said = totalWanted.toLocaleString()
       countFigure = (
-        <p className="ff-count">
-          <b className="ff-count-num">{totalWanted.toLocaleString()}</b> Left
+        <p className="ff-count" style={{ '--ff-n': said.length } as CSSProperties}>
+          <b className="ff-count-num">{said}</b> <span className="ff-count-word">Left</span>
         </p>
       )
       today =
@@ -1385,7 +1388,9 @@ export function Fulfillment() {
         {today}
 
         <div className="ff-bar">
-        {hunting ? null : countFigure}
+        {/* The track is always drawn, so the search sits in the same box whether the count is
+            loading, absent, hidden by a search, or five digits long. */}
+        <div className="ff-count-track">{hunting ? null : countFigure}</div>
         <div className="ff-search" data-clear={hunting ? 'true' : 'false'}>
           {/* No autoFocus: a software keyboard would cover the first thing he reads.
               F5 verbiage cut (row 191) deleted the worked-example placeholder ("For example,
