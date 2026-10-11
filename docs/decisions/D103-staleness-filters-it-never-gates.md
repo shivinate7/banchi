@@ -8,7 +8,7 @@ The operator's My Pricing export has 757 rows, 441 of them live. Against it, the
 
 The owner ruled that the stale rows are not the default view. The lens opens on everything.
 
-**Scale is a requirement the lens must meet, and its load time is unmeasured.** `app/src/Pricing.tsx` does not virtualize. It draws the merged worklist across eight runs, about 423 SKUs. The operator's export holds 441 live rows. Pricing must stay fast as the list grows. The first step is `content-visibility: auto`, so the browser may skip drawing rows that are off screen. Measure load before and after that change at 558 rows. Full windowing is the second step, and only if load is still slow after the first. Two rules hold at any step. A typed price, quantity or hold note is never lost when its row leaves the screen. The search bar filters the full list, not only the rows drawn.
+**Scale is a requirement the lens must meet, and its load time is unmeasured.** `app/src/Pricing.tsx` does not virtualize. It draws the merged worklist across eight runs, about 423 SKUs. The operator's export holds 441 live rows. Pricing must stay fast as the list grows. The first step is `content-visibility: auto`, so the browser may skip drawing rows that are off screen. Signed off, not built yet. Measure load before and after that change at 558 rows. Full windowing is the second step, and only if load is still slow after the first. Two rules hold at any step. A typed price, quantity or hold note is never lost when its row leaves the screen. The search bar filters the full list, not only the rows drawn.
 
 ### The record widens, and the offer does not
 

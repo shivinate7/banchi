@@ -1002,7 +1002,7 @@ Two things this does not cover. The requirement under the table rather than in i
 | Two-step pull | the sale control may occupy no part of the pull control's footprint, and begins below where it ended |
 | Jargon | copy passes a banned-word list: SKU, CSV, import, sync, batch, queue, staged |
 
-**Taste sign-off, Fulfillment (B23).** The count bar is sticky. It shows `N Left` beside the search, and it stays on screen. Each location card has a small round ordinal badge in place of the `Pick N` label. The `Pick` heading is removed.
+**Fulfillment (B23), signed off, not built yet.** The count bar is sticky. It shows `N Left` beside the search, and it stays on screen. Each location card has a small round ordinal badge in place of the `Pick N` label. The `Pick` heading is removed.
 
 **The numbers in that table are the spec's own constants**. They are `BODY_FLOOR` 20, `PLACE_FLOOR`
 32, `PHOTO_FLOOR` 320, `TARGET_FLOOR` 44, `GAP_FLOOR` 12, `CONTRAST_FLOOR` 7,
@@ -1074,7 +1074,7 @@ whole flow: the button that says "Pull" produces a confirmation that says "Pulle
 Name things by what the Fulfiller controls, never by how the system is built — he has
 orders and cards, not SKUs and rows. Errors say what happened and what to do next.
 
-User-visible text speaks to the operator in the second person: "Under your price", "Already sent". The banned first-person forms are "I", "my", "me" and "mine". No user-visible string uses one. A pipeline reason code stays as it is. Its on-screen label follows this rule. The label sources are `REASON_LABELS` in `app/src/reasons.ts` and the `QUESTIONS` record in `app/src/ReviewQueue.tsx`.
+User-visible text speaks to the operator in the second person: "Under your price", "Already sent". The banned first-person forms are "I", "my", "me" and "mine". No user-visible string uses one. That is the rule. It is not yet true of the app. Known offenders until the sweep lands are these. Orders: "I already sent it" and "I shipped these by hand" (`app/src/Orders.tsx`). Pricing: "Under my price" and "Tell me when market is above" (`app/src/Pricing.tsx`). A pipeline reason code stays as it is. Its on-screen label follows this rule. The label sources are `REASON_LABELS` in `app/src/reasons.ts` and the `QUESTIONS` record in `app/src/ReviewQueue.tsx`.
 
 **NOT MECHANIZED:** a machine would have to read each user-visible string in `app/src` and flag "I", "my", "me" or "mine" as a whole word. Code, comments and paths do not count. No row of `scripts/docs-audit.py` checks this yet.
 

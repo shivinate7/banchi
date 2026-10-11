@@ -396,7 +396,7 @@ A worker that dies inside a chunk, even by an out-of-memory kill, leaves the fil
 
 ### 10.1 The sheets
 
-Each opens from its count above zero, or from the set-named line, in the band (B14). Its title is the count's own words with the number, for example "12 waiting for a paid look". Each holds a snapshot taken at open (D313, nothing on screen moves unless the person moved it, and D181, the order is taken once). When the band's count later differs, the sheet shows one line, "The count has moved", with one press, "Show it again". It never rewrites itself. A row press leaves the screen for the card's own place. The sheet does not change under the person's eyes.
+Each opens from its count above zero, or from the set-named line, in the band (B14, signed off, not built yet). Its title is the count's own words with the number, for example "12 waiting for a paid look". Each holds a snapshot taken at open (D313, nothing on screen moves unless the person moved it, and D181, the order is taken once). When the band's count later differs, the sheet shows one line, "The count has moved", with one press, "Show it again". It never rewrites itself. A row press leaves the screen for the card's own place. The sheet does not change under the person's eyes.
 
 1. **Waiting for a paid look (the main one).** It lists `paid_keys`. Groups are the plain reasons in 10.3, largest first. Each group shows its count and, when one exists, one pointer line to the free fix. A row has the photo (40 by 56 px, held from first paint), the box name and the slot, and the free reader's top two candidates (name, set, number, one line each). Rows inside a group sort by box, then slot, so a pattern in one box reads as a run. A row press opens the card's panel on Inventory. There the claim and the set hint are corrected, and the photo is shot again.
 2. **Not yet looked at.** It lists the cards the reader has not tried. No reason exists yet, so groups are by box. A row has the photo, the box name and the slot. Nothing else is known. A row press opens the same card panel.
@@ -405,7 +405,7 @@ Each opens from its count above zero, or from the set-named line, in the band (B
 
 "Waiting for you" is not pressable, at any width (10.6). Review's rail is its list, and it is unchanged.
 
-**Zero counts open nothing (B14, owner sign-off).** A zero count is a plain `div`, so no sheet opens from it. The at-zero empty states are retired with it. Those were the sheet copy for paid look, not yet looked at, and matched free at 0.
+**Zero counts open nothing (B14, signed off, not built yet).** A zero count is a plain `div`, so no sheet opens from it. The at-zero empty states are retired with it. Those were the sheet copy for paid look, not yet looked at, and matched free at 0.
 
 ### 10.2 The data, and where it comes from
 
@@ -449,9 +449,9 @@ A group with a free fix shows it once, as one line under the group title, with t
 
 The band has four figures in four equal columns. Three of them become one `button` each while their count is above zero: matched free, waiting for a paid look and not yet looked at. "Waiting for you" stays a plain `div`, because it opens nothing. The "N need a set named" line in the health row becomes a `button` too. No figure changes its size (D313).
 
-**A zero count is plain (B14, owner sign-off).** A count at zero is a plain `div`, not a `button`. It has no chevron and no hover. Its count is in `--bn-ink-3`. It keeps the same size and box as a live count, so nothing shifts. It leaves the tab order. A count above zero keeps its chevron and its link. Dark contrast for `--bn-ink-3` on `--bn-surface-2` is unchecked.
+**A zero count is plain (B14, signed off, not built yet).** A count at zero is a plain `div`, not a `button`. It has no chevron and no hover. Its count is in `--bn-ink-3`. It keeps the same size and box as a live count, so nothing shifts. It leaves the tab order. A count above zero keeps its chevron and its link. Dark contrast for `--bn-ink-3` on `--bn-surface-2` is unchecked.
 
-**The empty card matches the band's width (B13, owner sign-off).** The band spans the page. The "All caught up" card spans the same width. Both are capped at about 960px and left-aligned to the shell inset. The card's content stays centered inside it.
+**The empty card matches the band's width (B13, signed off, not built yet).** The band spans the page. The "All caught up" card spans the same width. Both are capped at about 960px and left-aligned to the shell inset. The card's content stays centered inside it.
 
 - The `button` wraps the existing number and label, with the number above the label. Its name is the count and its label, "12 waiting for a paid look". It is a real `button`, not a `role="button"` on a `div`.
 - The cursor is a pointer, from the floor in `base.css`. Hover lifts the surface one step with an inset `box-shadow`. Hover moves no layout. The label takes `--bn-ink-2`. A chevron icon from the kit shows at rest at the label's end. A count then reads as a door before the hand is on it. The button is 40 px tall or more (a thumb press, CLAUDE.md).
