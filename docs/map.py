@@ -6668,6 +6668,11 @@ COMPONENTS = [
                                               "D189", "D192", "D193", "D203", "D207", "D213",
                                               "D219", "D225", "D227", "D236", "D252", "D264",
                                               "D261", "D273", "D291", "D298", "D299", "D300", "D301"]},
+            "src/useLeaveWarning.ts": {"does": "ONE HOME OF THE PAGE-UNLOAD GUARD. While typed work is "
+                                               "held that the person has not put anywhere (unsaved "
+                                               "prices on `Pricing.tsx`, a paste on `Orders.tsx`), "
+                                               "leaving the page asks first.",
+                                       "governed_by": ["D168", "D313"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "

@@ -8,6 +8,7 @@ import { enterReadScope, getStatus, leaveReadScope, onServerBoot, onServerReacha
 import { useSearch } from './useSearch'
 import { matchQuery } from './kit/match'
 import { usePoll } from './usePoll'
+import { confirmLeave } from './useLeaveWarning'
 import { Button, Icon, IconButton, Kbd, Lockup, Modal, Page, PageRouteContext, Sheet, SheetHost,
   appliedTheme, applyTheme, syncThemeColor, openSheet, overlayOpen, readTheme, stampTheme, type IconName, type Theme } from './kit'
 import { BLOCK, PARAMS, ROMAN_TRACK_SOLVED } from './kit/lockupGeometry'
@@ -322,10 +323,51 @@ function currentPath(): string {
 function useHashPath(): string {
   const [path, setPath] = useState(currentPath)
   useEffect(() => {
-    const read = () => setPath(currentPath())
+    let shown = currentPath()
+    let approved = false
+    let undoing = false
+    const pathOf = (hash: string) => {
+      const raw = hash.replace(/^#/, '').split('?')[0] ?? ''
+      return raw === '' ? '/' : raw.length > 1 ? raw.replace(/\/$/, '') : raw
+    }
+    // Asked before the move happens, so a refusal cancels it and history never changes. Browsers
+    // that cannot cancel a move fall back to the hashchange check below.
+    const nav = (window as unknown as { navigation?: EventTarget & { currentEntry: { index: number } } }).navigation
+    let at = nav?.currentEntry.index ?? 0
+    const ask = (event: Event) => {
+      const e = event as Event & { cancelable: boolean; hashChange?: boolean; navigationType?: string; destination: { url: string } }
+      if (!e.hashChange || !e.cancelable || e.navigationType === 'traverse') return
+      if (pathOf(new URL(e.destination.url).hash) === shown) return
+      if (confirmLeave()) approved = true
+      else e.preventDefault()
+    }
+    const read = (event?: HashChangeEvent) => {
+      const next = currentPath()
+      if (undoing) {
+        undoing = false
+        return
+      }
+      if (event && next !== shown && !approved && !confirmLeave()) {
+        // A move the browser would not let us cancel (the Back button): step history back to
+        // where it was, so no entry is added and none is overwritten.
+        if (nav) {
+          undoing = true
+          window.history.go(at - nav.currentEntry.index)
+        } else window.history.replaceState(null, '', event.oldURL)
+        return
+      }
+      approved = false
+      at = nav?.currentEntry.index ?? 0
+      shown = next
+      setPath(next)
+    }
+    nav?.addEventListener('navigate', ask)
     window.addEventListener('hashchange', read)
     read()
-    return () => window.removeEventListener('hashchange', read)
+    return () => {
+      nav?.removeEventListener('navigate', ask)
+      window.removeEventListener('hashchange', read)
+    }
   }, [])
   return path
 }
