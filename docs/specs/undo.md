@@ -15,9 +15,9 @@ it. After that, the fix is an ordinary action. A toast fades on a timer. The und
 | the record's control | the hand-fill, the stand-down | for the life of the line | the line's own row |
 
 No server enforces a time limit. `undo_too_late` is a state test, not a clock. Every reversal decides
-"built on" from a fact in the store, and the server refuses with a sentence. The screen never guesses.
-`store/orders.py`'s `reopen_line` has no window and no clock. How long an undo stays offered is the screen's business, and no screen offers a fixed window. The
-receipt has no window. `UNDO_WINDOW_MS` is only the toast's own TTL (`Inventory.tsx`, `Orders.tsx`).
+"built on" from a store fact, and the server refuses with a sentence. The screen never guesses.
+`store/orders.py`'s `reopen_line` has no window or clock. How long an undo stays offered is the screen's business, and no screen offers a fixed window. The receipt has no
+window. `UNDO_WINDOW_MS` is only the toast's TTL (`Inventory.tsx`, `Orders.tsx`).
 
 ## 2. Two mechanisms, and they are not the same mechanism
 
@@ -64,10 +64,9 @@ did not happen, and the card would go to the next buyer.
 
 ## 5. The order record keeps the fact and drops the position
 
-The operator ruled that a fulfilled order need not stay connected to inventory positions. A past order
-should keep only the details: what was pulled, and how many.
+The operator ruled that a fulfilled order need not stay connected to inventory positions. A past order should keep only the details: what was pulled, and how many.
 
-During the walk, positions are real. Pick a copy, mark it sold, and that specific indexed card is sold.
+During the walk, positions are real. Mark a copy sold, and that specific indexed card is sold.
 `U` brings that one back. Afterwards, a past order says what left, not where it was. Its line reads the
 card and the count. It draws no drawer, no index and no way back. This is D212 (every copy is fungible and
 no order claims one), arriving one screen later. `OrderLineProgress` no longer joins a position per copy at
@@ -116,8 +115,7 @@ same drawers changes what a resurrect means to the other person.
 "Newest" is a position, not a countdown. A pull is newest until a later pull replaces it. Undoing the newest
 pull hands the rank back to the pull before it, if one still stands. Only one row ever carries `Undo`, so a
 walk never piles up open buttons. An older sold copy is a dead end in this row on purpose. Its way back is the
-card on `#/inventory` (§4). A test proves that `Undo` on the newest pull survives after the old window would
-have closed it. It fakes the clock and only advances it.
+card on `#/inventory` (§4). A test fakes the clock and advances it past the old window. `Undo` on the newest pull survives.
 
 ## 11. The undo rules
 
@@ -125,21 +123,19 @@ The owner's rulings, in plain words:
 
 - Undo lasts from the history, with no time limit.
 - A press that cannot be undone gets no confirm, with one exception (Q2).
-- An undo lasts until the next step is built on it. The owner took the recommended option.
+- An undo lasts until the next step is built on it. The owner chose the recommended option.
 - Capture mistakes are the largest source of pain, at 50%. Marking the wrong card sold is 30%. A wrong
   review answer is 20%.
 
 ### 11.1 The one undo model
 
-An undo has no clock. It lasts until the next step depends on the action. That step is "built on". After
-it, the fix is an ordinary action.
+An undo has no clock. It lasts until a later step depends on the action: "built on". After that, the fix is
+an ordinary action.
 
 - A clock limits nothing. A toast fades, and the undo does not.
-- Rank decides the fast path. Rank never decides which rows draw a control.
 - "Built on" limits both paths.
-- "Never ask" holds everywhere except one press. No other press gets a confirm. A press that cannot be undone
-  gets an undo instead. The one exception is "undo just N" on the capture strip (Q2). It keeps its confirm and
-  stays permanent.
+- "Never ask" holds everywhere except one press. A press that cannot be undone gets an undo instead. The one
+  exception is "undo just N" on the capture strip (Q2). It keeps its confirm and stays permanent.
 
 | Action | Built on when | The fix after that |
 |---|---|---|
@@ -294,9 +290,9 @@ sentence. It is a reason to give, not an outcome to name. Never borrow "undone" 
 
 `.review-tray`'s own row, in the body, reserves its height and moves nothing when the receipt mounts. A second,
 unreserved receipt in the page header pushed `.review-filters` and everything below it down 56px on the first
-answer of a session. Reserving that header row would cost `#/review`'s no-scrolling floor 54px it has no slack
-for. So `ReviewQueue.tsx` draws only the in-body Tray. The Tray sits inside `.review-body`, on screen with the card
-at every width the product ships. That keeps D118 and the no-scrolling floor intact together.
+answer of a session. Reserving that header row would cost `#/review`'s no-scrolling floor 54px it has no slack for. So
+`ReviewQueue.tsx` draws only the in-body Tray, inside `.review-body`, on screen with the card at every width the
+product ships. That keeps D118 and the no-scrolling floor intact together.
 
 An overlay `.bn-page-undo` never moves layout. So a screen that needs both a header door and zero reserved space
 can build one from `PageUndo`.
