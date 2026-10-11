@@ -1008,3 +1008,130 @@ test('the phone tab bar lights More when the screen is behind it (UX-046)', asyn
   await expect(more).not.toHaveAttribute('aria-current', 'page')
   await expect(page.locator('.bn-tabbar a[href="#/capture"]')).toHaveAttribute('aria-current', 'page')
 })
+
+/* ux-wave1 (UX audit A1, A5). Red on main until the rail and the palette carry what they draw. */
+
+/* ux-wave1 A1 / R7. At 820 the sidebar is the icon rail (`--bn-rail-break-px` is 1280), so every
+   visible label is hidden and the name has to come from somewhere else. The case reads each item's
+   own label from the DOM, then asks the accessibility tree for an element of that role whose name
+   starts with that label. It asserts rail mode first, so a width that still shows labels cannot
+   pass it. The Theme button's name is its content text ("Theme"). */
+test('ux-wave1: at 820 every rail item has an accessible name equal to its label', async ({ page }) => {
+  await setViewport(page, { width: 820, height: 1000 })
+  await open(page, RING[0])
+  const side = page.locator('.bn-side')
+  await expect(side.locator('.bn-nav-text').first()).toBeHidden()
+
+  const items = await side.locator('a.bn-nav-link, .bn-side-foot button').evaluateAll((els) =>
+    els.map((el) => ({
+      role: el.tagName === 'A' ? 'link' : 'button',
+      label: (el.querySelector('.bn-nav-text, .bn-side-foot-text')?.textContent ?? '').trim(),
+    })),
+  )
+  expect(items.filter((i) => i.label === 'Pull'), 'the rail carries its Pull anchor').not.toHaveLength(0)
+  expect(items.some((i) => i.label === 'Go to'), 'Go to is in the rail').toBe(true)
+  expect(items.some((i) => i.label === 'Theme'), 'Theme is in the rail').toBe(true)
+  expect(items.filter((i) => i.label === ''), 'every rail item carries a label to name it by').toEqual([])
+
+  for (const item of items) {
+    const name = new RegExp(`^${item.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`)
+    await expect
+      .soft(side.getByRole(item.role as 'link' | 'button', { name }), `rail ${item.role} "${item.label}" has no accessible name`)
+      .not.toHaveCount(0)
+  }
+})
+
+/* ux-wave1 A5. The palette input has outline:none and, in the kit, no replacement ring. The case
+   measures the input and its wrapper focused and then blurred, and asks for a difference in the
+   outline or the box-shadow. Comparing against the blurred state keeps a resting shadow from
+   passing the case by itself. */
+test('ux-wave1: the palette input shows a focus indicator when focused', async ({ page }) => {
+  await open(page, RING[0])
+  await page.keyboard.press('Meta+k')
+  const input = page.getByPlaceholder('Go to a screen, or a card')
+  await expect(input).toBeVisible()
+
+  const snap = () =>
+    input.evaluate((el) => {
+      const pick = (node: Element) => {
+        const cs = getComputedStyle(node)
+        return { outline: `${cs.outlineStyle} ${cs.outlineWidth}`, shadow: cs.boxShadow }
+      }
+      return { self: pick(el), wrap: pick(el.parentElement ?? el) }
+    })
+
+  await input.blur()
+  const blurred = await snap()
+  await input.focus()
+  await expect(input).toBeFocused()
+  const focused = await snap()
+
+  const visibleOutline = (s: { outline: string }) => !s.outline.startsWith('none') && !s.outline.endsWith(' 0px')
+  const indicator =
+    visibleOutline(focused.self) ||
+    visibleOutline(focused.wrap) ||
+    focused.self.shadow !== blurred.self.shadow ||
+    focused.wrap.shadow !== blurred.wrap.shadow
+  expect(indicator, `focused palette input has no outline or box-shadow change: ${JSON.stringify({ blurred, focused })}`).toBe(true)
+})
+
+/* ux-wave1 A6. Taps on a button or a link wait for a double-tap zoom unless `touch-action` says
+   otherwise. The case reads the computed value on every visible button and link on the screen and
+   asks for `manipulation` on each. Hidden elements are skipped, so a drawer that is not open
+   cannot carry the case. */
+test('ux-wave1: visible buttons and links set touch-action to manipulation', async ({ page }) => {
+  await open(page, RING[0])
+  const values = await page.locator('button, a[href]').evaluateAll((els) =>
+    els
+      .filter((el) => el.getClientRects().length > 0)
+      .map((el) => `${el.tagName.toLowerCase()}:${getComputedStyle(el).touchAction}`),
+  )
+  expect(values.length, 'the screen draws buttons and links to measure').toBeGreaterThan(0)
+  expect(values.filter((v) => !v.endsWith(':manipulation')).slice(0, 8)).toEqual([])
+})
+
+/* ux-wave1 A6, the tap highlight. A tap on a button flashes the browser's default highlight unless the
+   button sets its own color. The case reads `-webkit-tap-highlight-color` on every visible button and
+   asks that none of them is fully transparent (rgba(0, 0, 0, 0)). */
+test('ux-wave1: visible buttons do not have a transparent tap highlight', async ({ page }) => {
+  await open(page, RING[0])
+  const highlights = await page.locator('button').evaluateAll((els) =>
+    els.filter((el) => el.getClientRects().length > 0).map((el) => getComputedStyle(el).getPropertyValue('-webkit-tap-highlight-color')),
+  )
+  expect(highlights.length, 'the screen draws buttons to measure').toBeGreaterThan(0)
+  expect(highlights.filter((c) => c.replace(/\s/g, '') === 'rgba(0,0,0,0)').slice(0, 8), 'a visible button has a transparent tap highlight').toEqual([])
+})
+
+/* ux-wave1 A7. A sheet that scrolls its own body must not chain the scroll to the page behind it.
+   The case opens the keys sheet, which is an overlay with its own scrolling body, and reads the
+   overscroll-behavior of that body. */
+test('ux-wave1: an overlay body contains its own overscroll', async ({ page }) => {
+  await open(page, RING[0])
+  await page.keyboard.press('?')
+  await expect(page.locator('.app-keys[role="dialog"]')).toBeVisible()
+  const body = page.locator('.app-keys .bn-overlay-body, .bn-overlay-body').first()
+  await expect(body, 'the keys sheet draws an overlay body').toBeVisible()
+  const behavior = await body.evaluate((el) => {
+    const cs = getComputedStyle(el)
+    return { x: cs.overscrollBehaviorX, y: cs.overscrollBehaviorY }
+  })
+  expect(behavior).toEqual({ x: 'contain', y: 'contain' })
+})
+
+/* ux-wave1 A9. A heading that wraps onto a second line should balance its lines, so no single word
+   is left alone on the last one. The case reads `text-wrap-style` (or the `text-wrap` shorthand
+   where the first is absent) on every visible page title and section heading of the Pricing screen,
+   and asks for `balance` on each. */
+test('ux-wave1: visible page and section headings balance their lines', async ({ page }) => {
+  await open(page, '#/pricing')
+  const headings = await page.locator('.bn-title, h2, h3').evaluateAll((els) =>
+    els
+      .filter((el) => el.getClientRects().length > 0)
+      .map((el) => {
+        const cs = getComputedStyle(el)
+        return `${el.tagName.toLowerCase()}:${cs.getPropertyValue('text-wrap-style') || cs.getPropertyValue('text-wrap')}`
+      }),
+  )
+  expect(headings.length, 'the screen draws headings to measure').toBeGreaterThan(0)
+  expect(headings.filter((h) => !h.includes('balance')).slice(0, 8)).toEqual([])
+})

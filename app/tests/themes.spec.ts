@@ -155,3 +155,40 @@ test('switching theme moves nothing (D313)', async ({ page }) => {
     expect(await boxes(), `after ${i + 1} presses`).toEqual(before)
   }
 })
+
+/* ux-wave1 A8. `index.html` carries two theme-color metas keyed to the OS scheme, and nothing in
+   `app/src` rewrites them, so an in-app theme that differs from the OS keeps the OS color in the
+   browser chrome. The case switches theme in-app and checks the switch landed (attrs), then
+   compares every theme-color meta that applies (no media, or a media matching the OS) with the
+   body's computed background. Both sides pass through one probe element, so hex and rgb compare. */
+test('ux-wave1: switching the in-app theme moves theme-color to the page background', async ({ page }) => {
+  await open(page)
+  const probe = () =>
+    page.evaluate(() => {
+      const p = document.createElement('div')
+      document.body.appendChild(p)
+      const norm = (c: string) => {
+        p.style.color = c
+        return getComputedStyle(p).color
+      }
+      const bg = norm(getComputedStyle(document.body).backgroundColor)
+      const applying = [...document.querySelectorAll('meta[name="theme-color"]')]
+        .filter((m) => !m.getAttribute('media') || window.matchMedia(m.getAttribute('media') ?? '').matches)
+        .map((m) => norm(m.getAttribute('content') ?? ''))
+      p.remove()
+      return { bg, applying }
+    })
+
+  const start = await probe()
+  expect(start.applying.length, 'index.html carries a theme-color meta that applies').toBeGreaterThan(0)
+  for (const id of ORDER.slice(1)) {
+    await toggle(page).click()
+    expect(await attrs(page), `after switching to ${id}`).toMatchObject({ ...attrsFor(id), stored: id })
+    await expect
+      .poll(async () => {
+        const s = await probe()
+        return s.applying.length === 0 ? ['none'] : s.applying.filter((c) => c !== s.bg)
+      }, { message: `theme-color should match the page background after switching to ${id}` })
+      .toEqual([])
+  }
+})

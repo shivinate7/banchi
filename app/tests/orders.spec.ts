@@ -1,7 +1,7 @@
 // Protects: Orders groups by buyer, walks each order, sends a pull with the pressed row's capture id, and shows all six unfillable reasons.
 // Governs: D91, D97, D113, D118, D132, D193, D203
 import { test, expect, type Locator, type Page, type Route } from '@playwright/test'
-import { sealEveryTest } from './shell'
+import { sealEveryTest, stubStore } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
 import { afterPaint, settleMotion } from './motionSettled'
 
@@ -5733,3 +5733,128 @@ async function expectShowEmpty(page: Page): Promise<void> {
   await expect(options.and(page.locator('[aria-selected="true"]'))).toHaveCount(0)
   await page.keyboard.press('Escape')
 }
+
+/* ux-wave1 A13. Order text typed into the paste box is not lost to a page unload. A route change
+   inside the app does not fire beforeunload, so this case dispatches the event itself and reads
+   whether a listener canceled it. It does not cover an in-app navigation away from the box. */
+test('ux-wave1: the paste box with text asks before the page unloads', async ({ page }) => {
+  await open(page)
+  await openStore(page)
+  const box = page.locator('textarea.orders-paste-box')
+  await expect(box, 'the paste box is drawn').toHaveCount(1)
+  await box.fill('{"orders": []}')
+  await expect(box).toHaveValue('{"orders": []}')
+  const canceled = await page.evaluate(() => {
+    const event = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(event)
+    return event.defaultPrevented
+  })
+  expect(canceled, 'beforeunload is not canceled while the paste box holds text').toBe(true)
+})
+
+/* ux-wave1 A13b (owner ruling). Order text typed into the paste box is not lost to a click on another
+   screen. Leaving Orders from the sidebar asks first. Cancelling keeps the person on Orders, with the
+   text still in the box. The ask may be the browser's own dialog or an in-app one with a cancel button;
+   the case counts either, and cancels it. */
+test('ux-wave1: leaving Orders with text in the paste box asks first, and cancel stays on Orders', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page)
+  await openStore(page)
+  const box = page.locator('textarea.orders-paste-box')
+  await expect(box, 'the paste box is drawn').toHaveCount(1)
+  const text = '{"orders": []}'
+  await box.fill(text)
+  /* The paste well lives in the Add orders sheet, which is modal, so the sidebar is reachable only with
+     the sheet shut. The typed text stays on the screen's state when the sheet closes. */
+  await page.keyboard.press('Escape')
+  await expect(box, 'the sheet is shut').toHaveCount(0)
+
+  let asked = false
+  let prompt = ''
+  page.on('dialog', (dialog) => {
+    asked = true
+    prompt += dialog.message()
+    void dialog.dismiss()
+  })
+  const cancel = page.getByRole('button', { name: /^(cancel|stay)/i })
+  const sidebarInventory = page.locator('.bn-side').getByRole('link', { name: /^Inventory/ })
+  await expect(sidebarInventory, 'the sidebar offers Inventory').toHaveCount(1)
+  await sidebarInventory.click()
+  await expect
+    .poll(async () => asked || (await cancel.count()) > 0, { message: 'leaving Orders with text in the paste box asks first', timeout: 3000 })
+    .toBe(true)
+  if (!asked) {
+    prompt += await page.getByRole('dialog').first().innerText()
+    await cancel.first().click()
+  }
+  /* The prompt must not say the typing will be lost: Orders keeps the paste in memory, so nothing is lost. */
+  expect(prompt, 'the leave prompt does not say the typing will be lost').not.toMatch(/lost/i)
+
+  await expect(page, 'cancelling keeps the person on Orders').toHaveURL(/#\/orders/)
+  await openStore(page)
+  await expect(page.locator('textarea.orders-paste-box'), 'the typed text is still in the paste box').toHaveValue(text)
+})
+
+/* ux-wave1 A13c (owner ruling, history). A refused leave adds no history entry, so one Back from Orders
+   goes to the screen before it. A refused Back keeps the person on Orders, and the next Back still
+   reaches the screen before Orders. The text is cleared between steps so only the history is measured. */
+test('ux-wave1: a refused leave adds no history entry, and a refused Back keeps the next Back working', async ({ page }) => {
+  /* Home and Inventory read the store on arrival, so the shared store stubs answer those reads first. Orders
+     registers its own routes inside `open`, which is newer and wins for the paths both use. */
+  await stubStore(page)
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page)
+  const side = page.locator('.bn-side')
+  await side.getByRole('link', { name: /^Home/ }).click()
+  await expect(page.locator('main.home'), 'Home is drawn').toBeVisible()
+  await side.getByRole('link', { name: /^Orders/ }).click()
+  await expect(page, 'back on Orders').toHaveURL(/#\/orders/)
+  await openStore(page)
+  const box = page.locator('textarea.orders-paste-box')
+  await box.fill('{"orders": []}')
+  await page.keyboard.press('Escape')
+
+  const cancel = page.getByRole('button', { name: /^(cancel|stay)/i })
+  /* The leave ask arrives as the browser's dialog event, which is dismissed (that is cancel), or as an in-app
+     cancel button. The wait is registered before the navigation that causes it, and it fails if neither comes. */
+  const askFor = (): Promise<'native' | 'modal'> =>
+    Promise.any([
+      page.waitForEvent('dialog', { timeout: 3000 }).then(async (dialog) => {
+        await dialog.dismiss()
+        return 'native' as const
+      }),
+      cancel.first().waitFor({ state: 'visible', timeout: 3000 }).then(() => 'modal' as const),
+    ])
+  const before = await page.evaluate(() => history.length)
+  const asked = askFor()
+  await side.getByRole('link', { name: /^Inventory/ }).click()
+  const how = await asked.catch(() => null)
+  expect(how, 'leaving Orders with text asks first').not.toBeNull()
+  if (how === 'modal') await cancel.first().click()
+  await expect(page, 'the refused leave stays on Orders').toHaveURL(/#\/orders/)
+  expect(await page.evaluate(() => history.length), 'the refused leave adds no history entry').toBe(before)
+
+  await openStore(page)
+  await box.fill('')
+  await page.keyboard.press('Escape')
+  await page.goBack()
+  await expect(page, 'one Back from Orders reaches the screen before it (Home)').toHaveURL(/#\/$|#\/\?|#\/$/)
+
+  await page.goForward()
+  await expect(page, 'forward returns to Orders').toHaveURL(/#\/orders/)
+  await openStore(page)
+  await box.fill('{"orders": []}')
+  await page.keyboard.press('Escape')
+  const backAsk = askFor()
+  await page.goBack()
+  const backHow = await backAsk.catch(() => null)
+  expect(backHow, 'a Back with text asks first').not.toBeNull()
+  if (backHow === 'modal') await cancel.first().click()
+  await expect(page, 'a refused Back keeps the person on Orders').toHaveURL(/#\/orders/)
+
+  await openStore(page)
+  await box.fill('')
+  await page.keyboard.press('Escape')
+  await page.goBack()
+  await expect(page, 'the next Back still reaches the screen before Orders').toHaveURL(/#\/$|#\/\?/)
+})
