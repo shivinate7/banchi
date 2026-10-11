@@ -36,6 +36,6 @@ It differs from the other keys in what a reload means. Those exist so a reload d
 
 `banchi.session.homeDeck` records that the deck's full entry already played in this sitting, so a reload inside the sitting does not replay it (`docs/specs/motion.md`, P3). It names no card, box or position. A new sitting should play the deck again, which is why it is session scope and not device scope.
 
-`useCamera.ts` already applies this carve-out to the device id and the rotation chip. This entry states it generally and makes it checkable.
+`useCamera.ts` argues this carve-out informally for the device id and the rotation chip. This entry generalizes that and makes it checkable.
 
 **Trigger mode is not covered.** D19 keeps arming an act. An armed machine that survives a reload is the automatic behavior that entry refuses.
