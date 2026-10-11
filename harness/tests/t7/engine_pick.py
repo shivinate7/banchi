@@ -1136,6 +1136,70 @@ def check_cache_game_miss(checks: Checks) -> None:
     case("a cleared entry read under Riftbound, card now One Piece", "riftbound", True, "review")
 
 
+def check_cache_game_sent(checks: Checks) -> None:
+    """A reattached answer is filed under the game its batch was SENT under, not the card's game
+    now (D317, the cache keeps a cleared answer). Outcome protected: an answer read under one
+    game's prompt is never filed as another game's answer. A run whose manifest has no
+    `sent_games` (written before the rule) falls back to the card's game and still finishes."""
+    from cli import __main__ as cli_entry, cmd_identify
+    from store.session import Store
+
+    checks.note("")
+    checks.note("REATTACH FILES THE ANSWER UNDER THE GAME ITS BATCH WAS SENT UNDER")
+
+    def case(label, manifest_has_sent_games, expect):
+        with isolated_home() as home:
+            caps = Path(home) / "reattach-caps"
+            caps.mkdir()
+            identify_images.Image.new("RGB", (64, 89), (30, 120, 200)).save(caps / "4-001.jpg", "JPEG")
+            sidecar = caps / "4-001.json"
+
+            def claim_game(game):
+                sidecar.write_text(json.dumps({"box": 4, "position": 1, "game": game}), "utf-8")
+
+            def press(*extra):
+                with quiet():
+                    return cmd_identify.run(
+                        cli_entry.build_parser().parse_args(["identify", str(caps), "--engine", "haiku", *extra]),
+                        lambda _line: None,
+                    )
+
+            def dying_batch(requests, log=None, on_submit=None):
+                if on_submit is not None:
+                    on_submit("msgbatch_x")
+                raise batch.BatchError("the line dropped")
+
+            def fake_collect(ids, strategies=None, **_kwargs):
+                body = {"name": "Old", "number": "1", "finish": "normal", "confidence": "high"}
+                return batch.BatchRun(outcomes={
+                    cid: batch.Outcome(cid, batch.SUCCEEDED, identification=prompt.parse(dict(body), strategy))
+                    for cid, strategy in (strategies or {}).items()
+                })
+
+            claim_game("pokemon")
+            real_run, real_collect = cmd_identify.batch.run_batch, cmd_identify.batch.collect_batches
+            cmd_identify.batch.run_batch = dying_batch
+            try:
+                first = press()
+                run_dir = sorted(d for d in (Path(home) / "runs").iterdir() if d.is_dir())[-1]
+                if not manifest_has_sent_games:
+                    manifest = json.loads((run_dir / "manifest.json").read_text("utf-8"))
+                    manifest.pop("sent_games", None)
+                    (run_dir / "manifest.json").write_text(json.dumps(manifest), "utf-8")
+                claim_game("riftbound")  # the box's game changes between the send and the reattach
+                cmd_identify.batch.collect_batches = fake_collect
+                second = press("--run-dir", str(run_dir))
+            finally:
+                cmd_identify.batch.run_batch, cmd_identify.batch.collect_batches = real_run, real_collect
+            checks.equal(first, 1, f"{label}: the first press dies with its batch in flight")
+            checks.equal(second, 0, f"{label}: the reattach finishes")
+            held = Store().read().cache.get("4/1")
+            checks.equal(getattr(held, "game", None), expect, f"{label}: the cache entry records {expect!r}")
+
+    case("a batch sent as Pokemon, card now Riftbound", True, "pokemon")
+    case("an old manifest with no sent_games (guard)", False, "riftbound")
+
+
 def check_cleared_unparsed_goes_to_review(checks: Checks) -> None:
     """A human-cleared cache answer the card's own parser cannot read is never paid for and never
     used: the card waits in review with its photo and a reason, once, and the cleared entry stays
@@ -1579,6 +1643,7 @@ CHECKS = (
     check_cache_position_key,
     check_refused_hit_is_claimed,
     check_cache_game_miss,
+    check_cache_game_sent,
     check_cleared_unparsed_goes_to_review,
     check_cleared_unparsed_no_position_not_bought,
     check_cleared_unparsed_held_report_and_join,
