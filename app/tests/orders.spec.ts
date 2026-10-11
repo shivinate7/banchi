@@ -5770,8 +5770,10 @@ test('ux-wave1: leaving Orders with text in the paste box asks first, and cancel
   await expect(box, 'the sheet is shut').toHaveCount(0)
 
   let asked = false
+  let prompt = ''
   page.on('dialog', (dialog) => {
     asked = true
+    prompt += dialog.message()
     void dialog.dismiss()
   })
   const cancel = page.getByRole('button', { name: /^(cancel|stay)/i })
@@ -5781,9 +5783,62 @@ test('ux-wave1: leaving Orders with text in the paste box asks first, and cancel
   await expect
     .poll(async () => asked || (await cancel.count()) > 0, { message: 'leaving Orders with text in the paste box asks first', timeout: 3000 })
     .toBe(true)
-  if (!asked) await cancel.first().click()
+  if (!asked) {
+    prompt += await page.getByRole('dialog').first().innerText()
+    await cancel.first().click()
+  }
+  /* The prompt must not say the typing will be lost: Orders keeps the paste in memory, so nothing is lost. */
+  expect(prompt, 'the leave prompt does not say the typing will be lost').not.toMatch(/lost/i)
 
   await expect(page, 'cancelling keeps the person on Orders').toHaveURL(/#\/orders/)
   await openStore(page)
   await expect(page.locator('textarea.orders-paste-box'), 'the typed text is still in the paste box').toHaveValue(text)
+})
+
+/* ux-wave1 A13c (owner ruling, history). A refused leave adds no history entry, so one Back from Orders
+   goes to the screen before it. A refused Back keeps the person on Orders, and the next Back still
+   reaches the screen before Orders. The text is cleared between steps so only the history is measured. */
+test('ux-wave1: a refused leave adds no history entry, and a refused Back keeps the next Back working', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page)
+  const side = page.locator('.bn-side')
+  await side.getByRole('link', { name: /^Home/ }).click()
+  await expect(page.locator('main.home'), 'Home is drawn').toBeVisible()
+  await side.getByRole('link', { name: /^Orders/ }).click()
+  await expect(page, 'back on Orders').toHaveURL(/#\/orders/)
+  await openStore(page)
+  const box = page.locator('textarea.orders-paste-box')
+  await box.fill('{"orders": []}')
+  await page.keyboard.press('Escape')
+
+  const cancel = page.getByRole('button', { name: /^(cancel|stay)/i })
+  page.on('dialog', (dialog) => void dialog.dismiss())
+  const before = await page.evaluate(() => history.length)
+  await side.getByRole('link', { name: /^Inventory/ }).click()
+  await expect.poll(async () => (await cancel.count()) > 0 || (await page.url()).includes('#/orders'), { timeout: 3000 }).toBe(true)
+  if ((await cancel.count()) > 0) await cancel.first().click()
+  await expect(page, 'the refused leave stays on Orders').toHaveURL(/#\/orders/)
+  expect(await page.evaluate(() => history.length), 'the refused leave adds no history entry').toBe(before)
+
+  await openStore(page)
+  await box.fill('')
+  await page.keyboard.press('Escape')
+  await page.goBack()
+  await expect(page, 'one Back from Orders reaches the screen before it (Home)').toHaveURL(/#\/$|#\/\?|#\/$/)
+
+  await page.goForward()
+  await expect(page, 'forward returns to Orders').toHaveURL(/#\/orders/)
+  await openStore(page)
+  await box.fill('{"orders": []}')
+  await page.keyboard.press('Escape')
+  await page.goBack()
+  await expect.poll(async () => (await cancel.count()) > 0 || (await page.url()).includes('#/orders'), { timeout: 3000 }).toBe(true)
+  if ((await cancel.count()) > 0) await cancel.first().click()
+  await expect(page, 'a refused Back keeps the person on Orders').toHaveURL(/#\/orders/)
+
+  await openStore(page)
+  await box.fill('')
+  await page.keyboard.press('Escape')
+  await page.goBack()
+  await expect(page, 'the next Back still reaches the screen before Orders').toHaveURL(/#\/$|#\/\?/)
 })

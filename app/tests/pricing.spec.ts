@@ -5878,7 +5878,53 @@ test('ux-wave1: with a pending incomplete last send, Send is disabled and a line
   const send = page.locator('.pricing-emit')
   await expect(send, 'the Send button is drawn').toHaveCount(1)
   await expect.soft(send, 'Send is disabled while the last send is incomplete').toBeDisabled()
-  await expect.soft(page.locator('.send-card').getByText(/last send/i), 'a visible line beside Send says why').not.toHaveCount(0)
+  /* Send's reason is the text its own aria-describedby resolves to. It must exist, name the last send, and
+     not be the warning's title sentence, which is a different line from the reason. */
+  const reason = await send.evaluate((btn) => {
+    const ids = (btn.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean)
+    const text = ids.map((id) => document.getElementById(id)?.textContent?.trim() ?? '').join(' ')
+    const title = document.querySelector('.send-short-check .bn-notice-title, .send-short-check [class*="title"]')?.textContent?.trim() ?? ''
+    return { text, title, described: ids.length }
+  })
+  expect(reason.described, 'Send has an aria-describedby reason').toBeGreaterThan(0)
+  expect(reason.text, 'the Send reason names the last send').toMatch(/last send/i)
+  expect(reason.text, 'the Send reason is not the warning title sentence').not.toBe('Your last send is not all there yet.')
+})
+
+/* ux-wave1 R15 (owner ruling). With an incomplete last send, Send stays disabled until the send is resolved.
+   Downloading the file does not re-enable it. A "Send Anyway" press on the warning does, and a status that
+   finds every copy does. The case walks those three steps in order. */
+test('ux-wave1: Download does not re-enable Send while the last send is incomplete; Send Anyway and a full find do', async ({ page }) => {
+  const short = sendSummary({
+    state: 'short',
+    published_at: null,
+    held: false,
+    takeable: 3,
+    checked_at: new Date().toISOString(),
+    check: { export: 'live.csv', found: 0, expected: 3, missing: [{ sku: '8608459', name: 'Dunsparce', sent: 3, found: 0 }] },
+  })
+  let mode: 'short' | 'found' = 'short'
+  await open(page, {
+    sends: () =>
+      mode === 'short'
+        ? { ...SENDS_NONE, sends: [short] }
+        : { ...SENDS_NONE, sends: [sendSummary({ ...short, state: 'checked', check: { export: 'live.csv', found: 3, expected: 3, missing: [] } })] },
+  })
+  const send = page.locator('.pricing-emit')
+  await expect(send, 'Send is drawn').toHaveCount(1)
+  await expect(send, 'Send is disabled while the last send is incomplete').toBeDisabled()
+
+  await page.locator('.send-card').getByRole('button', { name: /^Download/ }).first().click()
+  await expect(send, 'Download does not re-enable Send').toBeDisabled()
+
+  const anyway = page.getByRole('button', { name: /send anyway/i })
+  await expect(anyway, 'the warning offers Send Anyway').toHaveCount(1)
+  await anyway.click()
+  await expect(send, 'Send Anyway re-enables Send').toBeEnabled()
+
+  mode = 'found'
+  await page.reload()
+  await expect(page.locator('.pricing-emit'), 'a status that finds every copy re-enables Send').toBeEnabled()
 })
 
 /* ux-wave1 B21, R14, the other side. With no incomplete last send, Send is enabled and no line beside it
