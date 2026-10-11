@@ -673,11 +673,9 @@ def _two_box_store(box_a, name_a, skus_a, box_b, name_b, skus_b):
 
 
 def _drawn_order_is_density_not_box_number(c: Checks) -> None:
-    """THE DRAWN ORDER IS DENSITY, NOT THE HIDDEN BOX NUMBER — the owner's ruling,
-    2026-09-27, over a box-name-only draft that never shipped: `PLAN-PR4-PR5.md`'s Q5, "i
-    thought we sort formulaically be density of the cards available in a section?", answered
-    "Density first, name breaks ties." D220's own words are the same: "in order walk it's
-    sorted by density." `StopKey.walk_order` still carries the box number for the SOLVER's own
+    """THE DRAWN ORDER IS DENSITY, NOT THE HIDDEN BOX NUMBER (D220): the order walk is
+    sorted by density, and the box name breaks ties. A box-name-only draft never shipped.
+    `StopKey.walk_order` still carries the box number for the SOLVER's own
     determinism (`_dominated`, `_greedy`, `solve`, `_assign`) — this checks the DRAWN order
     alone, which `plan`'s `_drawn_key` computes after every take is already assigned.
 
