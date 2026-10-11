@@ -5861,3 +5861,66 @@ for (const theme of ['light', 'dark'] as const) {
     })
   }
 }
+
+/* ux-wave1 B21, owner ruling R14. With a pending incomplete last send, Send is disabled and a line beside
+   it says why. The warning sits below the button. The case asks for a disabled Send and a visible line
+   inside the same send card that names the last send. */
+test('ux-wave1: with a pending incomplete last send, Send is disabled and a line beside it says why', async ({ page }) => {
+  const short = sendSummary({
+    state: 'short',
+    published_at: null,
+    held: false,
+    takeable: 3,
+    checked_at: new Date().toISOString(),
+    check: { export: 'live.csv', found: 0, expected: 3, missing: [{ sku: '8608459', name: 'Dunsparce', sent: 3, found: 0 }] },
+  })
+  await open(page, { sends: () => ({ ...SENDS_NONE, sends: [short] }) })
+  const send = page.locator('.pricing-emit')
+  await expect(send, 'the Send button is drawn').toHaveCount(1)
+  await expect.soft(send, 'Send is disabled while the last send is incomplete').toBeDisabled()
+  await expect.soft(page.locator('.send-card').getByText(/last send/i), 'a visible line beside Send says why').not.toHaveCount(0)
+})
+
+/* ux-wave1 B21, R14, the other side. With no incomplete last send, Send is enabled and no line beside it
+   names a last send. */
+test('ux-wave1: with no incomplete last send, Send is enabled and no line says why it is off', async ({ page }) => {
+  await open(page, { sends: () => SENDS_NONE })
+  const send = page.locator('.pricing-emit')
+  await expect(send, 'the Send button is drawn').toHaveCount(1)
+  await expect(send, 'Send is enabled with no incomplete last send').toBeEnabled()
+  await expect(page.locator('.send-card').getByText(/last send/i), 'no line names a last send').toHaveCount(0)
+})
+
+/* ux-wave1 B21, nothing moves unless the person moved it. The first status read answers a send still
+   sending, so no warning is drawn at first paint. The page re-reads the status every few seconds while a
+   send is sending (`liveCheck.ts`, SENDING_POLL_MS), and the next read answers a short send. The Send
+   button's top edge must hold across that read: a warning that lands above the button pushes it down. */
+test('ux-wave1: the Send button does not move when the last-send warning arrives on a later poll', async ({ page }) => {
+  test.setTimeout(90_000)
+  const short = sendSummary({
+    state: 'short',
+    published_at: null,
+    held: false,
+    takeable: 3,
+    checked_at: new Date().toISOString(),
+    check: { export: 'live.csv', found: 0, expected: 3, missing: [{ sku: '8608459', name: 'Dunsparce', sent: 3, found: 0 }] },
+  })
+  let reads = 0
+  await open(page, {
+    sends: () => {
+      reads += 1
+      if (reads === 1) {
+        const sending = sendSummary({ state: 'sending', copies: 3, at: new Date().toISOString(), published_at: null, held: false, takeable: 0, checked_at: null, check: null })
+        return { ...SENDS_NONE, sends: [sending] }
+      }
+      return { ...SENDS_NONE, sends: [short] }
+    },
+  })
+  const send = page.locator('.pricing-emit')
+  await expect(send, 'the Send button is drawn at first paint').toBeVisible()
+  await expect(page.locator('.send-short-check'), 'the warning is absent at first paint').toHaveCount(0)
+  const first = await send.boundingBox()
+  await expect(page.locator('.send-short-check'), 'the warning arrives on a later status read').toHaveCount(1, { timeout: 30_000 })
+  const later = await send.boundingBox()
+  expect(Math.abs((later?.y ?? -1e9) - (first?.y ?? 1e9)), `Send top moved from ${first?.y}px to ${later?.y}px when the warning landed`).toBeLessThanOrEqual(1)
+})

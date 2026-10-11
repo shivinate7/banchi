@@ -5733,3 +5733,57 @@ async function expectShowEmpty(page: Page): Promise<void> {
   await expect(options.and(page.locator('[aria-selected="true"]'))).toHaveCount(0)
   await page.keyboard.press('Escape')
 }
+
+/* ux-wave1 A13. Order text typed into the paste box is not lost to a page unload. A route change
+   inside the app does not fire beforeunload, so this case dispatches the event itself and reads
+   whether a listener canceled it. It does not cover an in-app navigation away from the box. */
+test('ux-wave1: the paste box with text asks before the page unloads', async ({ page }) => {
+  await open(page)
+  await openStore(page)
+  const box = page.locator('textarea.orders-paste-box')
+  await expect(box, 'the paste box is drawn').toHaveCount(1)
+  await box.fill('{"orders": []}')
+  await expect(box).toHaveValue('{"orders": []}')
+  const canceled = await page.evaluate(() => {
+    const event = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(event)
+    return event.defaultPrevented
+  })
+  expect(canceled, 'beforeunload is not canceled while the paste box holds text').toBe(true)
+})
+
+/* ux-wave1 A13b (owner ruling). Order text typed into the paste box is not lost to a click on another
+   screen. Leaving Orders from the sidebar asks first. Cancelling keeps the person on Orders, with the
+   text still in the box. The ask may be the browser's own dialog or an in-app one with a cancel button;
+   the case counts either, and cancels it. */
+test('ux-wave1: leaving Orders with text in the paste box asks first, and cancel stays on Orders', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page)
+  await openStore(page)
+  const box = page.locator('textarea.orders-paste-box')
+  await expect(box, 'the paste box is drawn').toHaveCount(1)
+  const text = '{"orders": []}'
+  await box.fill(text)
+  /* The paste well lives in the Add orders sheet, which is modal, so the sidebar is reachable only with
+     the sheet shut. The typed text stays on the screen's state when the sheet closes. */
+  await page.keyboard.press('Escape')
+  await expect(box, 'the sheet is shut').toHaveCount(0)
+
+  let asked = false
+  page.on('dialog', (dialog) => {
+    asked = true
+    void dialog.dismiss()
+  })
+  const cancel = page.getByRole('button', { name: /^(cancel|stay)/i })
+  const sidebarInventory = page.locator('.bn-side').getByRole('link', { name: /^Inventory/ })
+  await expect(sidebarInventory, 'the sidebar offers Inventory').toHaveCount(1)
+  await sidebarInventory.click()
+  await expect
+    .poll(async () => asked || (await cancel.count()) > 0, { message: 'leaving Orders with text in the paste box asks first', timeout: 3000 })
+    .toBe(true)
+  if (!asked) await cancel.first().click()
+
+  await expect(page, 'cancelling keeps the person on Orders').toHaveURL(/#\/orders/)
+  await openStore(page)
+  await expect(page.locator('textarea.orders-paste-box'), 'the typed text is still in the paste box').toHaveValue(text)
+})

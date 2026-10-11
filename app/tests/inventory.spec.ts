@@ -9572,3 +9572,15 @@ test('a sold card loses its review badge and its pane question without a reload'
   await expect(badge, 'a sold card still shows its review badge').toHaveCount(0)
   await expect(question, 'a sold card still shows its open question').toHaveCount(0)
 })
+
+/* ux-wave1 A17. The Inventory box search writes its query into the address, so a reload restores
+   what was typed. The case types a query, reads the hash, reloads, and reads the field again. */
+test('ux-wave1: the Inventory search query is in the hash and survives a reload', async ({ page }) => {
+  await open(page)
+  const search = page.getByRole('searchbox').first()
+  await expect(search, 'the Inventory search is drawn').toBeVisible()
+  await search.fill('Thievul')
+  await expect.poll(() => page.evaluate(() => location.hash), { message: 'the query reaches the hash' }).toContain('Thievul')
+  await page.reload()
+  await expect(page.getByRole('searchbox').first(), 'the query is restored after a reload').toHaveValue('Thievul')
+})
