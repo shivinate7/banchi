@@ -239,3 +239,7 @@
   margin: 0;
   font-size: var(--bn-fs-lg);
 }
+
+/* B7: faint guides and quiet ticks, drawn in the chart's reserved gutters. */
+.producthistory-guide { stroke: var(--bn-line); stroke-width: 1; opacity: 0.5; }
+.producthistory-tick { fill: var(--bn-ink-3); font-size: 10px; }
