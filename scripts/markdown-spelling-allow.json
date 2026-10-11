@@ -364,17 +364,6 @@
         "judgement"
       ]
     },
-    "docs/decisions/*-name-agreement-settles-sku.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "catalogue",
-        "mislabelled"
-      ]
-    },
     "docs/decisions/*-staleness-filters-it-never-gates.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -404,7 +393,6 @@
     "docs/decisions/*-the-export-belongs-to-the-game.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "catalogue",
         "generalised"
       ]
     },
