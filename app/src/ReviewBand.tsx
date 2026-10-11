@@ -25,7 +25,7 @@ const COUNTS = [
   ['you', 'waiting for you'],
 ] as const
 
-/* THREE COUNTS AND THE SET-NAMED LINE OPEN A SHEET (`ReviewBandSheet.tsx`); "waiting for you" opens nothing, so it stays plain
+/* THREE COUNTS ABOVE ZERO AND THE SET-NAMED LINE OPEN A SHEET (`ReviewBandSheet.tsx`); "waiting for you" opens nothing, so it stays plain
    (Review's rail is its list). A sheet is a snapshot taken at open: `sigOf` is the signature of what the band counts now, so
    the sheet can tell when the count has moved. */
 
@@ -212,11 +212,11 @@ export function ReviewBand({
         {COUNTS.map(([id, label]) => (
           <Stat
             key={id}
-            className="review-band-count"
+            className={figures[id] === 0 && loaded ? 'review-band-count review-band-zero' : 'review-band-count'}
             value={figures[id]}
             label={label}
             pending={!loaded}
-            press={id === 'you' ? undefined : press(id)}
+            press={id === 'you' || (loaded && figures[id] === 0) ? undefined : press(id)}
           />
         ))}
       </div>

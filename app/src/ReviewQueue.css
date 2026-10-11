@@ -127,6 +127,7 @@
   background: var(--bn-surface-2);
 }
 .review-band-count:not(.bn-stat-pressable) { padding-inline: var(--bn-1); } /* the plain figure lines up with the pressable ones */
+.review-band-zero .bn-stat-value { color: var(--bn-ink-3); } /* a zero count is plain and quiet (B14) */
 .review-band-counts {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1027,6 +1028,7 @@
 
 /* ---- the reward at zero, and the lone panels --------------------------------------- */
 .review-lone { margin-bottom: var(--bn-6); }
+.review-done.bn-empty-frame { max-width: none; margin-inline: 0; } /* spans the band's width (B13); the content stays centered */
 .review-done {
   position: relative;
   margin-top: var(--bn-6);
