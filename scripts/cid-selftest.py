@@ -282,9 +282,18 @@ def seed_legacy_store(home: Path, box: int, count: int) -> Dict[str, str]:
             card, _ = snapshot.inventory.allocate_capture(
                 box, capture_id=f"seed-{box}-{index}", cid=digest, game="pokemon"
             )
-            snapshot.cache.put(card.key, {"name": f"Card {index}"}, digest, "fp")
+            snapshot.cache.put(card.key, pokemon_answer(f"Card {index}"), digest, "fp")
     _unname(home)
     return digests
+
+
+def pokemon_answer(name: str) -> dict:
+    """A full Pokemon answer: every key `pokemon_card_v1` requires, read from its schema."""
+    from identify import prompt
+
+    answer = {key: "x" for key in prompt.profile("pokemon_card_v1").schema["required"]}
+    answer.update(name=name, number="1", printed_total="9", finish="normal", confidence="high")
+    return answer
 
 
 def _unname(home: Path) -> None:

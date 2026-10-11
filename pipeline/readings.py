@@ -122,7 +122,7 @@ def reading_from_table(parsed: dict, *, at: int, source: str) -> Tuple[Dict[str,
     return found, source_row
 
 
-def _run_readings(root: Path) -> Tuple[Dict[str, Reading], List[Source]]:
+def _run_readings(root: Path, bad: Optional[List[str]] = None) -> Tuple[Dict[str, Reading], List[Source]]:
     """Every run's `pricing.json` under `root`, oldest to newest by directory name."""
     found: Dict[str, Reading] = {}
     sources: List[Source] = []
@@ -135,7 +135,16 @@ def _run_readings(root: Path) -> Tuple[Dict[str, Reading], List[Source]]:
         try:
             parsed = json.loads(table.read_text("utf-8"))
             at = int(table.stat().st_mtime)
+            if not isinstance(parsed, dict) or not isinstance(parsed.get("skus"), list):
+                raise ValueError("not a pricing table")
+            if bad is not None and any(
+                isinstance(row, dict) and not isinstance(row.get("snap") or {}, dict)
+                for row in parsed["skus"]
+            ):  # only a caller that collects `bad` can refuse; the rest still see the defect
+                raise ValueError("a row's snap is not an object")
         except (OSError, ValueError):
+            if bad is not None:
+                bad.append(str(table))
             continue
         run_found, run_source = reading_from_table(parsed, at=at, source=entry.name)
         for sku, candidate in run_found.items():
@@ -179,7 +188,7 @@ def reading_from_export(export, *, at: int, source: str) -> Tuple[Dict[str, Read
     return found, source_row
 
 
-def _newest_live_reading(directory: Path) -> Tuple[Dict[str, Reading], List[Source]]:
+def _newest_live_reading(directory: Path, skipped: Optional[List[str]] = None) -> Tuple[Dict[str, Reading], List[Source]]:
     """The newest file under `directory`, and only the newest — never the whole directory.
 
     `do_live_export` never sweeps that directory — the file is the evidence for the reading
@@ -194,20 +203,24 @@ def _newest_live_reading(directory: Path) -> Tuple[Dict[str, Reading], List[Sour
         return found, sources
     newest = fetched[-1]
     at = live_export_at(newest.name)
-    if at is None:
-        return found, sources
     try:
+        if at is None:
+            raise ValueError("unreadable stamp")
         export = tcgcsv.read_export(newest)
-    except (tcgcsv.MalformedCsv, OSError):
+    except (tcgcsv.MalformedCsv, OSError, ValueError):
+        if skipped is not None:
+            skipped.append(newest.name)
         return found, sources
     live_found, live_source = reading_from_export(export, at=at, source=newest.name)
     found.update(live_found)
     if live_source is not None:
         sources.append(live_source)
+    elif skipped is not None and not {tcgcsv.SKU_COLUMN, tcgcsv.MARKET_PRICE_COLUMN} <= set(export.header):
+        skipped.append(newest.name)  # not a price export: no SKU or Market Price column
     return found, sources
 
 
-def collect() -> Tuple[Dict[str, Reading], List[Source]]:
+def collect(bad: Optional[List[str]] = None, skipped: Optional[List[str]] = None) -> Tuple[Dict[str, Reading], List[Source]]:
     """`sku -> the NEWEST market price this machine can read for it`, and where each source's
     reading came from. The whole two-source walk; see the module docstring for the rule.
 
@@ -216,6 +229,10 @@ def collect() -> Tuple[Dict[str, Reading], List[Source]]:
     that ties the live export's `at` keeps the same "later source wins ties" rule the
     original single-pass version had (`>=`, not `>`), so a live export fetched in the same
     second as a run table's mtime still displaces it.
+
+    `bad`, when given, collects the path of each `pricing.json` that could not be read, so a
+    caller that WRITES (`readings adopt`) can refuse instead of dropping those SKUs.
+    `skipped` collects the name of a newest live export that was skipped as unreadable.
     """
     found: Dict[str, Reading] = {}
 
@@ -226,12 +243,12 @@ def collect() -> Tuple[Dict[str, Reading], List[Source]]:
 
     sources: List[Source] = []
 
-    run_found, run_sources = _run_readings(files.runs_dir())
+    run_found, run_sources = _run_readings(files.runs_dir(), bad)
     for sku, reading in run_found.items():
         offer(sku, reading)
     sources.extend(run_sources)
 
-    live_found, live_sources = _newest_live_reading(files.inventory_dir() / files.LIVE_DIRNAME)
+    live_found, live_sources = _newest_live_reading(files.inventory_dir() / files.LIVE_DIRNAME, skipped)
     for sku, reading in live_found.items():
         offer(sku, reading)
     sources.extend(live_sources)

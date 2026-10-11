@@ -167,7 +167,7 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | `scripts/cid-selftest.py` | A card keeps its stable name, and the photograph store refuses and saves work correctly on a throwaway store. | D18, D172, D183 |
 | `scripts/holdings-selftest.py` | The holdings reader answers correctly over in-memory inventory, archive and ledger fixtures. | D236, D247 |
 | `scripts/identity-binding-selftest.py` | The identity migration classifier and its report give every class in order and exclude human-bound cards. | D242 |
-| `scripts/identity-checks-selftest.py` | Each stored-data identity check goes red on its own named defect and stays quiet on clean data. | D239, D247 |
+| `scripts/identity-checks-selftest.py` | Each stored-data identity check goes red on its own named defect and stays quiet on clean data; `cards identity --write` keeps same-named cards on distinct SKUs and is a no-op on a second run; a preview writes nothing; `cards photos --limit N` moves at most N photographs and stamps nothing short of a full pass. | D239, D247 |
 | `scripts/identity-cli-selftest.py` | The CLI writers bind a SKU through the one bind function, on a fresh store. | D18, D137, D253 |
 | `scripts/identity-readers-selftest.py` | The identity evidence readers do not go silent when a card has no camera-read fields. | D253 |
 | `scripts/identity-store-selftest.py` | Binding and unbinding a SKU is the one writer of card identity, and its refusals write nothing. | D18, D63 |
