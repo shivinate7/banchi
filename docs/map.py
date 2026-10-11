@@ -8032,8 +8032,8 @@ COMPONENTS = [
                                                "data starts; a fill older than that is listed "
                                                "separately as having no market data at all, "
                                                "never plotted.",
-                                       "governed_by": ["D50", "D278", "D196", "D212", "D218", "D219",
-                                                       "D227"],
+                                       "governed_by": ["D50", "D196", "D212", "D218", "D219",
+                                                       "D227", "D278", "D313"],
                                        "note": "No harness test -- a Playwright spec would be "
                                                "the honest coverage and none exists yet, named "
                                                "rather than silently absent."},
