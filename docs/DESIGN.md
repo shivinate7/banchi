@@ -1072,6 +1072,10 @@ whole flow: the button that says "Pull" produces a confirmation that says "Pulle
 Name things by what the Fulfiller controls, never by how the system is built — he has
 orders and cards, not SKUs and rows. Errors say what happened and what to do next.
 
+User-visible text speaks to the operator in the second person: "Under your price", "Already sent". No user-visible string says "I" or "my".
+
+**NOT MECHANIZED:** a machine would have to read each user-visible string in `app/src` and flag "I" or "my" as a whole word. Code, comments and paths do not count. No row of `scripts/docs-audit.py` checks this yet.
+
 The owner's screens are the exception and only the exception. There, the pipeline's own reason strings are shown verbatim beneath their labels. Being able to grep what you saw is worth more to the person debugging a run than a consistent register is.
 
 Mechanized past the reason-string exception: `scripts/docs-audit.py`'s `no mechanism on screen` row (D196) refuses a decision citation, a repository path, or a pipeline-internal noun. It does so in any other user-visible string in `app/src`.

@@ -41,6 +41,10 @@ The Boxes panel sorts by `deviceMemory.ts:storedBoxRecency()`. That is the store
 
 The Capture tile is relabelled to match what it shows: the newest box's own card count, and its name in the note. It no longer implies that it is the box the operator is capturing into now.
 
+### Runs rows show a date, a time and a quantity
+
+Each row in Home's recent runs keeps what it shows now: the box label, the relative date and the stage. It also shows the run's date, its time stamp and its quantity run. The row adds no box name and no run name (D196, no mechanism on screen). The source field for the quantity is not named in the ruling. It stays open until the owner names it.
+
 ### Two smaller fixes, in the same files
 
 **UX-139**: a box row's trailing figure (every card ever captured into that box) drew no unit. It is removed. The bar and the "on hand"/"sold" pair already carry what the row needs. The unlabeled count was the one figure on this screen naming nothing.
