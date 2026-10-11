@@ -1058,6 +1058,8 @@ export function Fulfillment() {
 
   let body: ReactNode
   let wide = false
+  /* The list draws the stale notice itself, below its search bar, so the notice never pushes the search. */
+  let staleBelowBar = false
 
   if (cards === null && loadFailed) {
     body = (
@@ -1378,14 +1380,13 @@ export function Fulfillment() {
         )
     }
 
+    staleBelowBar = true
     const shownOwed = allOwed ? owed : owed.slice(0, SHOWN_OWED)
     const hiddenOwed = owed.length - shownOwed.length
 
     body = (
       <>
         {header}
-
-        {today}
 
         <div className="ff-bar">
         {/* The track is always drawn, so the search sits in the same box whether the count is
@@ -1420,6 +1421,10 @@ export function Fulfillment() {
           ) : null}
         </div>
         </div>
+
+        {/* Below the bar, never above it: a sentence that arrives with the orders must not push the search. */}
+        {stale}
+        {today}
 
         {hunting ? (
           <section className="fulfillment-results ff-results" aria-live="polite">
@@ -1674,7 +1679,7 @@ export function Fulfillment() {
     >
       <div className="ff-glow" aria-hidden="true" />
       <div className="ff-column" data-wide={wide ? 'true' : 'false'}>
-        {stale}
+        {staleBelowBar ? null : stale}
         {body}
       </div>
       {sheet}
