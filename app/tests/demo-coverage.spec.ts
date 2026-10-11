@@ -468,9 +468,9 @@ test.describe('the published demo draws what reviewers grade', () => {
     await visit(page, 'Inventory')
     // The card pressed names its own box: its button reads "Mark sold: <box>, Section n, Card m".
     // The box's count is read from the cell's own meta element, never the joined button text.
-    const sell = page.getByRole('button', { name: /^Mark sold/ }).first()
+    const sell = page.getByRole('button', { name: /^Mark Sold/ }).first()
     await expect(sell).toBeVisible()
-    const placed = /^Mark sold: (.+), Section \d+, Card \d+$/.exec((await sell.getAttribute('aria-label')) ?? '')
+    const placed = /^Mark Sold: (.+), Section \d+, Card \d+$/.exec((await sell.getAttribute('aria-label')) ?? '')
     expect(placed, 'a Mark sold button names its card\'s box').not.toBeNull()
     const meta = page
       .locator('.browse-boxcell', { has: page.locator('.browse-boxcell-name', { hasText: new RegExp(`^${(placed![1] ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) }) })
@@ -482,7 +482,7 @@ test.describe('the published demo draws what reviewers grade', () => {
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
     await page.getByRole('button', { name: /^Undo/ }).first().click()
     await expect(meta).toHaveText(`${startCount} stored`)
-    await expect(page.getByRole('button', { name: 'Mark sold' }).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Mark Sold/ }).first()).toBeVisible()
   })
 
   test('Inventory: a Game pick draws a count on every box', async ({ page }) => {

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { test, expect } from './unit'
 import { REASON_LABELS, RETIRED_REASON_LABELS } from '../../src/reasons'
-import { casingProblems, isSentence, voiceHits } from '../copyRules'
+import { casingProblems, isSentence, isTypedData, voiceHits } from '../copyRules'
 import { attrText, firstPersonInSource, jsxOpeningsIn, recordFromSource } from '../copySource'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -154,6 +154,29 @@ test('A12: the input rule reads a raw input, skips typed controls and spreads, a
     'View.tsx:1 <input> type "" has no name or autocomplete',
     'View.tsx:6 <input> type "text" has no name or autocomplete',
   ])
+})
+
+/* THE NAMED EXEMPTION (copy map row 10). The quoted page name is exempt; the same words unquoted are not. */
+test('source scan: the quoted TCGplayer page name is exempt, and the unquoted words still go red', () => {
+  const source = [
+    'export const View = () => (',
+    '  <button title={\'Drop the "My Pricing" export here\'}>x</button>',
+    '  <button title="Drop the My Pricing export here">x</button>',
+    ')',
+  ].join('\n')
+  const found = firstPersonInSource(source, 'View.tsx').map((one) => `${one.line} ${one.where}: ${one.words.join(',')}`)
+  expect(found).toEqual(['3 attribute title: My'])
+})
+
+/* THE TYPED-DATA EXEMPTION (copy map row 31). It is the exact text only, so a label with the same words in
+ * another casing is still a label and still goes red. */
+test('casing: the typed box name is exempt by exact text only, and a label that reuses its words is not', () => {
+  expect(isTypedData('SV commons')).toBe(true)
+  expect(isTypedData('Sv commons')).toBe(false)
+  expect(isTypedData('sv commons')).toBe(false)
+  expect(isTypedData('SV commons Pick')).toBe(false)
+  expect(casingProblems('sv commons')).not.toEqual([])
+  expect(casingProblems('Export read')).not.toEqual([])
 })
 
 /* THE SOURCE SCAN RESPECTS STRINGS AND COMMENTS. A comment opener inside a string, a multi-line template

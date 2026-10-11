@@ -1037,7 +1037,7 @@ test('a copy another line already holds is drawn as spoken for, and is not offer
        than a `stubWalkPlan` call after — see that option's comment for the race it closes. */
     walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ copies: [walkPlanCopy({ capture_id: 'cap-a' })] })] })]),
   })
-  await expect(page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' })).toBeVisible()
+  await expect(page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
 
   /* THE PROMISED ONE IS NOT — it is not takeable, so `hidePicks` never touches it, and it is
      right where `OrderDetail`'s own list always drew it. ONE ROW, not two: the free copy above
@@ -1083,7 +1083,7 @@ test('the pull sends the capture_id of the row that was pressed, and its own pos
 
   /* THE SECOND ROW, DELIBERATELY. Pressing the first would pass against a screen that sent
      `picks[0]` for every row — the exact bug this case exists to catch. */
-  await page.locator(`${CURRENT_PICK} .card-locations-row`).nth(1).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(`${CURRENT_PICK} .card-locations-row`).nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
 
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
@@ -1332,7 +1332,7 @@ test('Hide picked folds at the PRESS, not the sale (owner ruling, 2026-09-27)', 
   await expect(page.locator('.orders-walk-line')).toHaveCount(2)
 
   // Sell Volcanion (the default landing card). The row must NOT fold at once (UN-6's own fix).
-  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeVisible()
   await expect(page.locator('.orders-walk-tools .bn-hidetoggle-count')).toHaveText('1')
   await expect(page.locator('.orders-walk-line')).toHaveCount(2)
@@ -1347,7 +1347,7 @@ test('Hide picked folds at the PRESS, not the sale (owner ruling, 2026-09-27)', 
 
   // Sell Tricksy Tentacles while Hide picked is already on: it stays in place, this time.
   await page.locator('.orders-walk-press', { hasText: 'Tricksy Tentacles' }).click()
-  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeVisible()
   await expect(page.locator('.orders-walk-tools .bn-hidetoggle-count')).toHaveText('2')
   await expect(page.locator('.orders-walk-line')).toHaveCount(1)
@@ -1393,7 +1393,7 @@ test('finding #16 (the Opus review round) — the struck-out row in the walk lis
 
   /* THE PANE AGREES, reopened the same way (Q4): still the same one row, not a second story. */
   await page.getByRole('button', { name: /Volcanion/ }).click()
-  await expect(page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' })).toBeVisible()
+  await expect(page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
 })
 
 /* -------------------------------------------------------------------------------------- 5 */
@@ -1426,7 +1426,7 @@ test('the receipt names where the card just was, never the departed label the sa
     walkPlan: walkPlanOf([walkPlanStop()]),
   })
 
-  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
 
   /* THE RECEIPT IS A TOAST NOW, which is the owner's ruling and changes nothing this case is
      about: it is still composed at the moment of the press, it still has to name the place the
@@ -1464,7 +1464,7 @@ test('U undoes the newest pull, on the Pull stage', async ({ page }) => {
     walkPlan: walkPlanOf([walkPlanStop()]),
   })
 
-  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
@@ -1501,7 +1501,7 @@ test('finding #11 (the Opus review round) — `U` still undoes the newest pull a
     walkPlan: walkPlanOf([walkPlanStop()]),
   })
 
-  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
@@ -1550,7 +1550,7 @@ test('finding #8 (the Opus review round) — a pull already reversed elsewhere r
     })
   })
 
-  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
@@ -1584,7 +1584,7 @@ test('u typed into the buyer search field does not undo the pull', async ({ page
     walkPlan: walkPlanOf([walkPlanStop()]),
   })
 
-  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
@@ -2911,7 +2911,7 @@ test('Mark sold does not re-rank the Card count sort under the hand', async ({ p
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Mona', 'Zeta', 'Abel'])
 
   await page.locator('.orders-index-row', { hasText: 'Zeta' }).click()
-  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect.poll(() => pulled).toBe(true)
   /* THE POST-PULL READ HAS TO ACTUALLY LAND before the freeze can be asserted against it —
      otherwise a case whose re-read never arrived would pass by doing nothing. The panel's own
@@ -3617,7 +3617,7 @@ test('the card pane is the photograph, the pick and every copy with its place an
   /* THE COPIES ARE THE PANE'S, BESIDE THE PHOTOGRAPH, as Inventory's hero draws them (section 18): one row
      per copy at the stop, with Mark sold on it. */
   await expect(pane.locator('.card-locations-row')).toHaveCount(1)
-  await expect(pane.getByRole('button', { name: 'Mark sold' }).first()).toBeVisible()
+  await expect(pane.getByRole('button', { name: /^Mark Sold/ }).first()).toBeVisible()
 
   /* THE REST IS `#/inventory`'s: no details table, no listing counts, and none of inventory's
      own editing actions (retire, move and re-shoot are Inventory-only, §13). */
@@ -3770,7 +3770,7 @@ test('four presses over two orders go to the order pickOrderFor names, smallest 
     },
   })
 
-  const markSold = page.locator(`${CURRENT_PICK} .card-locations-row`).getByRole('button', { name: 'Mark sold' })
+  const markSold = page.locator(`${CURRENT_PICK} .card-locations-row`).getByRole('button', { name: /^Mark Sold/ })
   for (let n = 0; n < 4; n++) {
     /* WAIT FOR THE BUTTON COUNT TO FALL, NOT ONLY FOR THE WIRE — the wire records a request
        the instant it fires, before the state update `onSell`'s own `then` makes lands, so a
@@ -3819,7 +3819,7 @@ test('a tie between two orders is not won by the one with no placed_at', async (
     },
   })
 
-  await page.locator(`${CURRENT_PICK} .card-locations-row`).getByRole('button', { name: 'Mark sold' }).first().click()
+  await page.locator(`${CURRENT_PICK} .card-locations-row`).getByRole('button', { name: /^Mark Sold/ }).first().click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
   const sent = wire.find((one) => one.path.endsWith('/orders/pull'))
   expect((sent?.body as { number: string }).number).toBe('C-3')
@@ -3860,7 +3860,7 @@ test('a toast/U undo lowers the walk tally, so a later press against the same or
      a request the instant it fires, before the state update the click's own `then` makes has
      landed, so polling `pulls().length` right after a click can race that update — exactly the
      trap `expect(locator).toHaveCount` (which retries) does not fall into. */
-  const markSold = page.locator(`${CURRENT_PICK} .card-locations-row`).getByRole('button', { name: 'Mark sold' })
+  const markSold = page.locator(`${CURRENT_PICK} .card-locations-row`).getByRole('button', { name: /^Mark Sold/ })
   await expect(markSold).toHaveCount(2)
 
   // 1. Sell the first copy.
@@ -3921,7 +3921,7 @@ test('a take holding a copy elsewhere still records the stop\'s own copy against
      still records against the owing order. */
   const copies = page.locator(`${CURRENT_PICK} .card-locations-row`)
   await expect(copies).toHaveCount(1)
-  await copies.nth(0).getByRole('button', { name: 'Mark sold' }).click()
+  await copies.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
   const sent = wire.find((one) => one.path.endsWith('/orders/pull'))
@@ -3942,7 +3942,7 @@ test('pressing Mark sold with no order left to fill draws the refusal sentence, 
     walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ for: [] })] })]),
   })
 
-  await page.locator(`${CURRENT_PICK} .card-locations-row`).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(`${CURRENT_PICK} .card-locations-row`).getByRole('button', { name: /^Mark Sold/ }).click()
 
   await expect(page.locator('.bn-toast', { hasText: 'Nobody here still owes a copy' })).toBeVisible()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(0)
@@ -3974,7 +3974,7 @@ test('Mark sold records the copy against the owing order, and the order panel up
     walkPlan: volcanionPlan(),
   })
 
-  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
 
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
@@ -4126,7 +4126,7 @@ test('a sale does not re-sort the walk list, and this section leads', async ({ p
 
   const before = await page.locator('.orders-walk-list .browse-secttitle, .orders-walk-list .orders-walk-name').allTextContents()
 
-  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
   /* UN-6 REBUILD: the pane no longer advances itself. Wait for the sale to land (the row's
      own control reads Undo), then step forward on purpose — the same door the operator has. */
   await expect(page.locator(CURRENT_PICK).getByRole('button', { name: /^Undo/ })).toBeVisible()
@@ -4218,7 +4218,7 @@ test('the walk folds every section at once, and Picked carries a count', async (
 
   const hide = tools.getByRole('button', { name: /^Picked/ })
   await expect(hide).toContainText('0')
-  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect(page.locator(CURRENT_PICK).getByRole('button', { name: /^Undo/ })).toBeVisible()
   await expect(hide).toContainText('1')
 })
@@ -4261,7 +4261,7 @@ test('a focus re-read with a changed plan keeps Hide picked and the folded secti
   /* Hide picked folds at the PRESS: sell Volcanion with it off, then press it on, so that line is folded away. */
   if ((await hide.getAttribute('aria-pressed')) === 'true') await hide.click()
   await expect(hide).toHaveAttribute('aria-pressed', 'false')
-  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect(page.locator(CURRENT_PICK).getByRole('button', { name: /^Undo/ })).toBeVisible()
   await hide.click()
   await expect(hide).toHaveAttribute('aria-pressed', 'true')
@@ -4359,7 +4359,7 @@ test('a sale never advances the pane on its own (UN-6 rebuild): the operator ste
   await page.locator('.orders-index-item', { hasText: 'Nora Second' }).locator('.orders-index-tick input').check()
   await expect(page.locator('.browse-card .browse-hero-name')).toHaveText('Volcanion')
 
-  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBeGreaterThan(0)
@@ -4433,7 +4433,7 @@ test('a SKU split across two stops does not advance early — the second stop ne
      by THIS stop's own copies, never a store-wide tally) still holds, over the pull count and
      the row that reads Undo, without depending on the pane switching on its own. */
   const undoBtn = page.locator(CURRENT_PICK).getByRole('button', { name: /^Undo/ })
-  const markSold = page.locator(`${CURRENT_PICK} .card-locations-row`).getByRole('button', { name: 'Mark sold' })
+  const markSold = page.locator(`${CURRENT_PICK} .card-locations-row`).getByRole('button', { name: /^Mark Sold/ })
   await expect(markSold).toHaveCount(1)
 
   // James's own single copy — its own stop, fully satisfied on its own.
@@ -4655,7 +4655,7 @@ test('the last sale leaves the buyer on screen, says all sold, and points to Shi
     },
     walkPlan: volcanionPlan(),
   })
-  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
 
   const done = page.locator('.orders-walk-done')
   await expect(done).toContainText('All 1 sold.')
@@ -4789,7 +4789,7 @@ for (const [width, height] of [
        RE-MEASURED beside each button rather than reused from above: the two boxes must come
        from the same tick, or a sub-pixel settle between the loop's two turns reads as the
        button drifting off a line that itself moved. */
-    for (const [name, role] of [['Add Orders', 'button'], ['Cards to pull', 'link']] as const) {
+    for (const [name, role] of [['Add Orders', 'button'], ['Cards to Pull, in a New Tab', 'link']] as const) {
       const press = bar.getByRole(role, { name, exact: true })
       await expect(press).toBeVisible()
       const [freshBox, square, search] = await Promise.all([
@@ -4835,7 +4835,7 @@ test('finishing a buyer never asks for another buyer\'s walk, and draws no card 
 
   await page.locator('.orders-index-row', { hasText: 'Ada Lovelace' }).click()
   await expect(page.locator('.browse-card')).toContainText('Volcanion')
-  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).first().click()
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).first().click()
   await expect(page.locator('.orders-walk-done')).toContainText('All 1 sold.')
 
   /* A window long enough for the stray plan to have been asked for and to have landed. */
@@ -5051,7 +5051,7 @@ test('landing view: a sale does not re-sort the list or drop the buyer whose las
   /* WAIT ON THE RE-READ, NEVER A CLOCK: the assertions below mean nothing until the post-sale
      answer has been read and drawn (the headline then names the short line). */
   const reread = page.waitForResponse((r) => /\/orders$/.test(new URL(r.url()).pathname) && r.request().method() === 'GET')
-  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
   await reread
   await expect(page.locator(VIEW)).toContainText('short')
   await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeVisible()
@@ -5073,7 +5073,7 @@ test('landing view: the last sale leaves the buyer on screen', async ({ page }) 
   /* WAIT ON THE RE-READ, NEVER A CLOCK: the assertions below mean nothing until the post-sale
      answer has been read and drawn (the headline then names the short line). */
   const reread = page.waitForResponse((r) => /\/orders$/.test(new URL(r.url()).pathname) && r.request().method() === 'GET')
-  await page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
   await reread
   await expect(page.locator(VIEW)).toContainText('short')
   await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeVisible()
@@ -5166,7 +5166,7 @@ test('the key 2 marks the second copy of the current pick sold, and Undo puts it
   const undo = page.locator(CURRENT_PICK).getByRole('button', { name: /^Undo/ })
   await expect(undo).toBeVisible()
   await undo.click()
-  await expect(page.locator(CURRENT_PICK).getByRole('button', { name: 'Mark sold' })).toHaveCount(2)
+  await expect(page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ })).toHaveCount(2)
 })
 
 test('the arrow key selects the next pick and brings its line into view', async ({ page }) => {

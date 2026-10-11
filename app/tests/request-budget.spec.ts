@@ -355,7 +355,7 @@ test('a sale re-reads no more than it must', async ({ page }) => {
   await openSettled(page, hash('inventory'))
   await quiet(page, watch)
   const reads = await readsAfter(page, watch, (s) => s.method === 'POST' && /\/sold$/.test(s.path), async () => {
-    await page.getByRole('button', { name: 'Mark sold' }).first().click()
+    await page.getByRole('button', { name: /^Mark Sold/ }).first().click()
   })
   judgeBurst('sale-reads', hash('inventory'), reads)
 })
