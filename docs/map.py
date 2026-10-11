@@ -9173,6 +9173,27 @@ COMPONENTS = [
                     "only. `injectRepeatedSentence` is the mutation hook, and trips all four."),
                 "governed_by": ["D284", "D269"],
             },
+            "tests/copy-checks.spec.ts": {
+                "does": ("ONE sweep, TWO copy checks over every nav route and the Fulfiller's: "
+                    "voice (no I, my, me or mine on screen) and casing (Title Case on labels "
+                    "and headings), the two DESIGN.md copy rules. Each keeps a pending list "
+                    "(`copy-voice-allow.json`, `copy-casing-allow.json`) that only shrinks."),
+                "governed_by": ["D173", "D284", "D196"],
+            },
+            "tests/copyRules.ts": {
+                "does": ("The word rules the copy checks read: which words are first person, "
+                    "which short words Title Case keeps lower, and which text is exempt."),
+                "governed_by": ["D173"],
+            },
+            "tests/copySource.ts": {
+                "does": ("Reads the reason labels and Review questions straight from source, so "
+                    "the voice check covers labels no fixture puts on screen."),
+                "governed_by": ["D173"],
+            },
+            "tests/unit/copy-rules.unit.ts": {
+                "does": "Unit cases for `copyRules.ts`: each rule, true and false, in isolation.",
+                "governed_by": ["D173"],
+            },
             "tests/text-checks.spec.ts": {
                 "does": ("ONE sweep, THREE checks (D284): every route is opened once through "
                     "`routeSweep.ts:sweepEveryRoute` and read by money-face (D221, over "
