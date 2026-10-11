@@ -1715,6 +1715,57 @@ const WALK = [
    Fulfillment view drawing cards nobody put in this checkout. */
 sealEveryTest()
 
+/* ux-w2 B23 (DESIGN.md Fulfillment, signed off, not built yet). The count bar is sticky: it holds the "N Left" count
+   beside the search, and it stays on screen as the list scrolls. The page is made tall here by a spacer under the search's
+   own parent, so the scroll is real and the case cannot pass on a page too short to scroll. */
+test('ux-w2 B23: the count bar with N Left and the search stay on screen after scrolling 2000px', async ({ page }) => {
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
+  await expect(view(page).getByText(/\b\d+\s+left\b/i).first(), 'the N Left count is drawn').toBeVisible()
+  await expect(searchBox(page), 'the search is drawn').toBeVisible()
+  await page.evaluate(() => {
+    const spacer = document.createElement('div')
+    spacer.setAttribute('data-ux-w2-spacer', '')
+    spacer.style.height = '3000px'
+    document.querySelector('main.fulfillment')?.appendChild(spacer)
+  })
+  await page.mouse.move(640, 450)
+  await page.mouse.wheel(0, 2000)
+  await expect
+    .poll(() => page.evaluate(() => Math.max(window.scrollY, ...Array.from(document.querySelectorAll('*'), (el) => el.scrollTop))), {
+      message: 'the page scrolled down 2000px',
+    })
+    .toBeGreaterThanOrEqual(1500)
+  await expect(searchBox(page), 'the search stays on screen').toBeInViewport()
+  await expect(view(page).getByText(/\b\d+\s+left\b/i).first(), 'the N Left count stays on screen').toBeInViewport()
+})
+
+/* ux-w2 B23. Each location card carries a small round ordinal badge in place of the "Pick N" label. */
+test('ux-w2 B23: each owed card carries a round ordinal badge', async ({ page }) => {
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
+  const card = view(page).locator('.ff-owed-card', { hasText: 'Charizard ex' })
+  await expect(card, 'the owed card is drawn').toHaveCount(1)
+  const badge = card.getByText('1', { exact: true }).first()
+  await expect(badge, 'the ordinal badge is drawn').toBeVisible()
+  const shape = await badge.evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    const radius = getComputedStyle(el).borderTopLeftRadius
+    const px = radius.endsWith('%') ? (parseFloat(radius) / 100) * r.width : parseFloat(radius)
+    return { w: r.width, h: r.height, px }
+  })
+  expect(Math.abs(shape.w - shape.h), 'the badge is square').toBeLessThanOrEqual(1)
+  expect(shape.px, `the badge corners are round (radius ${shape.px}px on ${shape.w}px)`).toBeGreaterThanOrEqual(shape.w / 2 - 1)
+})
+
+/* ux-w2 B23. The "Pick" heading and the "Pick N" row label are both removed. */
+test('ux-w2 B23: no Pick heading and no "Pick N" row label on the list', async ({ page }) => {
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
+  const card = view(page).locator('.ff-owed-card', { hasText: 'Charizard ex' })
+  await expect(card, 'the owed card is drawn, so the absence below is not vacuous').toHaveCount(1)
+  await expect(page.getByRole('heading', { name: /^pick$/i }), 'no Pick heading').toHaveCount(0)
+  await expect(page.getByRole('region', { name: /^pick$/i }), 'no Pick section').toHaveCount(0)
+  await expect(card, 'no Pick N label on the row').not.toContainText(/pick\s+\d/i)
+})
+
 test("the owner's position treatment never reaches the Fulfiller", async ({ page }) => {
   /* ONE HELPER CALL, and that is a property of the helpers rather than a shortcut. `openSearch`
      calls `openList` itself, and `openList` calls `stubServer` — routing a page twice leaves the

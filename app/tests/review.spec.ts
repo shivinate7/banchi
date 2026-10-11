@@ -2995,6 +2995,49 @@ test.describe('the Review band sheets', () => {
     })
   })
 
+  /* ux-w2 B13 (identify-engine-pick.md 10.4, signed off, not built yet). The "All caught up" card spans the band's width, edge for edge. */
+  test('ux-w2 B13: the empty "All caught up" card spans the band\'s width, left and right edges equal', async ({ page }) => {
+    await setViewport(page, { width: 1440, height: 900 })
+    await seed(page, { fates: {}, sitting: [] })
+    await openReview(page)
+    const done = page.locator('.review-done')
+    await expect(done).toBeVisible()
+    const band = await page.locator('.review-band').boundingBox()
+    const card = await done.boundingBox()
+    expect(band, 'the band is drawn').not.toBeNull()
+    expect(card, 'the empty card is drawn').not.toBeNull()
+    expect(Math.abs(card!.x - band!.x), 'left edges match within 1px').toBeLessThanOrEqual(1)
+    expect(Math.abs(card!.x + card!.width - (band!.x + band!.width)), 'right edges match within 1px').toBeLessThanOrEqual(1)
+  })
+
+  /* ux-w2 B14 (identify-engine-pick.md 10.4, signed off, not built yet). A zero count is a plain figure: no button role,
+     no chevron. A live count keeps both. The tile holds the same box either way (D313). */
+  test('ux-w2 B14: a zero count is a plain figure with no button and no chevron, and holds the box of a live count', async ({ page }) => {
+    await setViewport(page, { width: 1440, height: 900 })
+    await seed(page, { fates: { '3/1': 'matched', '3/4': 'paid' } })
+    await openReview(page)
+    await loaded(page)
+    const zero = count(page, 'not yet looked at')
+    await expect(zero, 'the zero tile is drawn').toContainText('0')
+    await expect(zero.getByRole('button'), 'a zero count has no button role').toHaveCount(0)
+    await expect(zero.getByRole('link'), 'a zero count has no link role').toHaveCount(0)
+    await expect(zero.locator('.bn-stat-go'), 'a zero count has no chevron').toHaveCount(0)
+    const live = count(page, 'matched free')
+    await expect(live.getByRole('button'), 'a live count keeps its button').toHaveCount(1)
+    await expect(live.locator('.bn-stat-go'), 'a live count keeps its chevron').toHaveCount(1)
+
+    const zeroBox = await zero.boundingBox()
+    await seed(page)
+    await page.reload()
+    await expect(page.locator('main.review')).toBeVisible()
+    await loaded(page)
+    const liveTile = await count(page, 'not yet looked at').boundingBox()
+    expect(zeroBox, 'the zero tile is measured').not.toBeNull()
+    expect(liveTile, 'the live tile is measured').not.toBeNull()
+    expect(Math.abs(zeroBox!.width - liveTile!.width), 'the tile keeps its width either way').toBeLessThanOrEqual(1)
+    expect(Math.abs(zeroBox!.height - liveTile!.height), 'the tile keeps its height either way').toBeLessThanOrEqual(1)
+  })
+
   test.describe('17. empty sheets', () => {
     for (const size of SIZES) {
       for (const scheme of ['light', 'dark'] as const) {
