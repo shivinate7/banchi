@@ -6,7 +6,7 @@
 
 **THERE IS NO STANDING CAP (rewritten in place, 2026-09-07, operator's instruction).** Every copy a run holds that TCGplayer does not already have goes out. A cap is something a SEND asks for. That is `emit --cap N`, and the field beside the emit options on `#/pricing`'s ship bar. The ordinary press asks for none.
 
-**The operator retired both reasons.** Asked whether either still applied, the answer was "neither still applies". The struck text stays as the record of why the bound existed.
+**The operator retired both reasons.** Asked whether either still applied, the operator said neither did. The struck text stays as the record of why the bound existed.
 
 **A cap never stopped a copy being sent twice.** That is what makes removing it safe. The `add_to_quantity` docstring splits the jobs. `committed_positions` keeps a copy out of the sellable set. The cap reads a quantity. Removing the bound removes exposure limiting only. `uncommitted_positions` is untouched. It still makes a re-emit a no-op.
 
@@ -26,7 +26,7 @@
 
 **The merge took the wrong cap.** `max` returns the LOOSEST bound. A send spanning a run held to 2 and a run at 4 offered 4. Every other cross-run rule in that module is conservative. `_merged_cap` takes the smallest cap any leg names. `None` never outranks a figure. No bound is not a large bound.
 
-**The figure is a ceiling on copies live.** `add_to_quantity` is `live_cap - copies_out`. That is D59's arithmetic, and it is right. A SKU with seven copies already at TCGplayer and a figure of four adds **nothing**. The control read "at most N of each card". `--cap N` read "send at most N copies". Both describe a send quantity, which is a different control. Measured on a ten-copy SKU with seven out, every figure from 1 to 7 wrote no row.
+**The figure is a ceiling on copies live (amended 2026-09-08).** `add_to_quantity` is `live_cap - copies_out`. That is D59's arithmetic, and it is right. A SKU with seven copies already at TCGplayer and a figure of four adds **nothing**. The control read "at most N of each card". `--cap N` read "send at most N copies". Both describe a send quantity, which is a different control. Measured on a ten-copy SKU with seven out, every figure from 1 to 7 wrote no row.
 
 **The cap counts the copies the live guard sees (amended 2026-09-25, a defect fix).** `emit --cap N --live-guard F` spent the cap against `copies_out` alone. That figure reads the store and the join's export. When `F` showed more live copies than either, the cap did not move. So `--cap 1` over one live copy sent one more, with two live. `cli/cmd_emit.py:_apply_guard` wrote the guard's count to `SkuMatch.guard_live`. `copies_out` and `live_now` took the larger reading. `pipeline/merge.py:_merged_match` took the largest reading of its legs. The one-run and several-run paths then agreed. The send route passes no `--cap`, so it could not reach the defect. T7's `check_send_matrix` pinned it in the `capguard/*` rows. Those cover live copies below, at and over the cap, on both paths. Each row was red on the unfixed emit.
 
@@ -36,7 +36,7 @@
 
 **The mismatch was survivable only while the cap stood.** A bound of four over everything kept `copies_out` near it, so the two readings agreed in practice. A per-send cap made uncapped the default. `copies_out` now grows with every press. The subtraction then answers zero for any SKU ever sent. That is the ordinary case, not the corner.
 
-**The rule above is replaced (owner ruled, 2026-09-27).** The operator ruled that capping is available only once a send is reconciled with live. Asked to choose between "the larger" and this rule, the owner chose this one. It replaces the 2026-09-25 amendment. It does not sit beside it.
+**The rule above is replaced (owner ruled, 2026-09-27).** The operator ruled that capping is available only once the store is reconciled with live. Asked to choose between "the larger" and this rule, the owner chose this one. It replaces the 2026-09-25 amendment. It does not sit beside it.
 
 **`emit --cap` now refuses a card outright while a copy sent since is still pending.** It no longer spends the cap against either reading. Each reading can be wrong alone. Measured overshoots: one pending copy and one unseen live copy, under a cap of 2, sent a third. Three pending copies with four live, under a cap of 5, sent an eighth. "Pending" is not a new clock. It is `nothing_to_add`'s arithmetic, `copies_out - live_now`. `cli/resolve.py:_copies_out` computes both halves. `SkuMatch._cap_pending` reads that gap as a yes-or-no answer. It is not a second copy of the sum.
 
@@ -54,7 +54,7 @@
 
 **The operator chose the ceiling.** The operator first picked the send-quantity reading. That choice rested on an estimate of implementation cost that was wrong. The ceiling needed four label edits and no test changes. The send quantity needed one arithmetic line and **19 harness assertions rewritten**, because D59's tests encode the ceiling throughout. The estimate was corrected and the choice retaken. The wording is the fix. The arithmetic was never in question.
 
-**A number on each card's row is a send quantity (amended 2026-09-11, on the operator's report).** The operator reported that quantities could no longer be selected to sell. The operator wanted caps removed at store level, and still wanted per-card quantities case by case. The ship-bar field, labelled "hold to N live per card", was a ceiling on copies live. It counted copies already out. It could not say "two of THIS card". On a SKU with copies already out, it said nothing. The Qty column beside it was a read-only "N of M". Nothing had been removed. The owner had been asked to choose on 2026-09-08. The control they now wanted was the other reading, per card.
+**A number on each card's row is a send quantity (amended 2026-09-11, on the operator's report).** The operator reported that quantities could no longer be selected to sell. The operator wanted caps removed at store level, and still wanted per-card quantities case by case. The ship-bar field, present on both bars and labelled "hold to N live per card", was a ceiling on copies live. It counted copies already out. It could not say "two of THIS card". On a SKU with copies already out, it said nothing. The Qty column beside it was a read-only "N of M". Nothing had been removed. The owner had been asked to choose on 2026-09-08. The control they now wanted was the other reading, per card.
 
 **The owner ruled that a number on each row means COPIES TO SEND IN THIS FILE.** Type 2 and two copies go, whatever TCGplayer already holds. The bound is the copies on hand that are not already listed. The ceiling stays in the ship bar for a send that wants one. The two compose to the tighter one. This entry names two per-send controls, and still no standing one:
 - `--cap N` and the field beside the emit options hold every card to a ceiling.
@@ -80,7 +80,7 @@ So the three listing stages moved off the card and onto the SKU:
 
 - A position's `state` is `captured`, `identified` or `sold`. It describes one physical card. `pushed`, `staged` and `live` are no longer in `master.STATES`. `check_state` refuses them. That stops a caller using the old `set_state(key, LIVE)` and getting a per-position flag back.
 - `store/master.py:Listing` holds `pushed`, `staged` and `live` as counts per SKU.
-- **Every unsold copy is sellable.** The pull marks whichever copy the hand reached. A sale is COUNTED AGAINST the SKU's reading. It does not edit that reading (D115). `live` is what the last export said. `sold_here` is what has sold here since. The figure on screen is the difference, floored at zero. It used to decrement `live` directly. That is how one copy was subtracted twice. An export that already knew subtracted it once. The sale subtracted it again.
+- **Every unsold copy is sellable.** The pull marks whichever copy the hand reached. A sale is COUNTED AGAINST the SKU's reading. It does not edit that reading (D115, 2026-09-07). `live` is what the last export said. `sold_here` is what has sold here since. The figure on screen is the difference, floored at zero. It decremented `live` directly until then. That is how one copy was subtracted twice. An export that already knew subtracted it once. The sale subtracted it again.
 - Copies on hand is a count of unsold positions. Listed quantity is `min(cap, on hand)`.
 
 **That `min` reached the pipeline, not the screen, until the owner caught it (2026-08-25).** `pipeline/join.py:add_to_quantity` has always bounded by copies held (`min(room, uncommitted)`). But `GET /search` sent the bare `LIVE_QUANTITY_CAP`. `CardLocations.tsx` drew it as the denominator of `listed N of ...`. A card the owner had one of read **`listed 0 of 4`**, beside `on hand 1`. The cap was not wrong. The fraction was wrong. A denominator reads as what is achievable. Three of those four copies do not exist. D20 names this failure at box scale. Here it was at SKU scale.
@@ -95,7 +95,7 @@ So the three listing stages moved off the card and onto the SKU:
 
 The owner found this on 2026-08-30. `cli/cmd_emit.py` wrote the card's identity (`sku`, `condition`, `run`) inside a loop. The loop ran over `SkuMatch.live_positions`, which is `uncommitted_positions[:add_to_quantity]`. So it was bounded by the `live_cap` of 4. The cap reached the record. The record is how many copies of a card we know the name of.
 
-The owner's words on finding it, paraphrased: a gentle heads-up to list four by default, mainly for cheap cards. It took a different shape. The cap is a rule about the LISTING, meaning the envelope-buster order and the stale-price spike above. It had become a rule about the RECORD.
+The owner ruled that the cap was meant as a gentle heads-up to list four by default, mainly for cheap cards, and was never meant to shape the record. It took a different shape. The cap is a rule about the LISTING, meaning the envelope-buster order and the stale-price spike above. It had become a rule about the RECORD.
 
 **An unstamped copy is not backstock as defined above.** Backstock is a number, and `backstock_positions` is a real answer this pipeline computes. A copy with `sku: null` is something else. It is invisible to `GET /search`, absent from `positions_for_sku`, and uncounted by `copies_on_hand`. The map this entry promises did not contain it.
 
@@ -109,7 +109,7 @@ The owner's words on finding it, paraphrased: a gentle heads-up to list four by 
 
 **Idempotence is untouched.** It lives in `cli/resolve.py:_committed_keys`, which reads the `Listing` counts and never `card.sku`. Widening what gets stamped cannot change what gets pushed. D54's rule that a re-emit adds and never subtracts still holds.
 
-**What it recovers is small today and structural from here.** Three cards on the owner's store, Rengar's backstock. Only two runs were ever emitted, and only one SKU in them holds more copies than the cap. Of the 715 records, 502 carry `sku: null`. **498 of them are box 2, whose run was joined and never emitted.** That is a different gap with a different remedy.
+**What it recovers is small today and structural from here.** Three cards on the owner's store, Rengar's backstock. Only two runs were ever emitted, and only one SKU in them holds more copies than the cap. Of the 715 records, 502 carry `sku: null`. They are overwhelmingly not this gap: **498 of them are box 2, whose run was joined and never emitted.** That is a different gap with a different remedy.
 
 **A second effect, smaller than first claimed.** `_committed_keys` slices `copies_on_hand(sku)[:held]`. An unstamped copy is missing from that list, so the slice can return fewer keys than `held`. That under-counts `committed_positions` and inflates `add_to_quantity`. Full stamping makes the list complete. It fixes nothing on the store today. Four SKUs are short now, and all four are short because their stamped copies SOLD. A sold copy is committed by the terminal branch, so the count is right anyway. Recorded as a hole closed, not a bug fixed.
 
@@ -117,7 +117,7 @@ The owner's words on finding it, paraphrased: a gentle heads-up to list four by 
 
 ### The cap itself is the owner's next question. Recorded, not built
 
-On 2026-08-30 the owner was shown the fix above. The owner was also shown the note that a value-dependent cap was the other half of their instruction. They would like the cap to depend on value. For now the flat 4 stands. This paragraph marks that it stands by default, not by argument.
+On 2026-08-30 the owner was shown the fix above. The owner was also shown the note that a value-dependent cap was the other half of their instruction. They would like the cap to depend on value, and ruled that for now what was done is fine. So the flat 4 stands. This paragraph marks that it stands by default, not by argument.
 
 **What is questioned is the flatness, not the cap.** The reasoning above is untouched. A cap still blocks the envelope-buster order. It still bounds how many copies a price spike sells at a stale number. The owner doubts one number serving every card. The concrete case is Rengar at **$30.81**, capped at four by a default reasoned about with commons in mind. D9 draws the same line one register over. There, the threshold and the floor are derived from a labor bar, not picked. A cap derived the same way would be a number with an argument behind it. It would not be a constant nobody has revisited.
 
