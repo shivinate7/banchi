@@ -3,7 +3,6 @@
 import { test, expect, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { runRow } from './routeFixtures'
-import { absoluteDate, clockTime } from '../src/dates'
 
 import type { OrderRow, OrdersPayload, ResolvedLine, ResolvedOrder } from '../src/types'
 
@@ -549,8 +548,10 @@ test('ux-wave1: each Home run row shows a date, a time and a quantity', async ({
   const row = page.locator('a.home-run').first()
   await expect(row, 'Home draws the run row').toBeVisible()
   const text = await row.innerText()
-  expect(text, 'the row names the date').toContain(absoluteDate(at))
-  expect(text, 'the row names the clock time').toContain(clockTime(at))
+  /* The browser runs in America/Chicago (playwright.config.ts), so 14:05 UTC on Sep 18 reads 9:05 AM on Sep 18.
+     The expected words are literal: a formatter in this process would follow the machine's zone, not the page's. */
+  expect(text, 'the row names the date').toContain('Sep 18, 2026')
+  expect(text, 'the row names the clock time').toContain('9:05 AM')
   expect(text, 'the row names the quantity the run holds (counts.cards_in)').toMatch(/\b12\s+(cards?|copies)\b/)
 })
 
