@@ -36,7 +36,7 @@ The panel has two parts.
 - The old header spent rows on the name, the number line and a chip row. The figures sat beside the photo, under a
   "Copies" heading, and read as facts about the list. The figures are facts about the card, so they go in the band
   with the card.
-- Two lead figures answer the two questions a person opens the panel with: how many they hold, and how many are
+- Two lead figures answer the two questions the owner opens the panel with: how many they hold, and how many are
   for sale". The side facts are history and are quieter.
 - The meter replaces the headroom sentence ("Room for 2 more live"). The eye reads it as a count against a ceiling,
   and its end names the ceiling.

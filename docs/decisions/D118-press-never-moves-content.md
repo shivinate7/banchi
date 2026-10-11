@@ -22,11 +22,11 @@ A fourth cause was found by the guard. `.browse-row` in the walk declares three 
 
 ### The lens stays and its mark leaves (amends D68 and D41)
 
-The owner ruled that a departed copy fills the row its lens used to occupy, with a sentence or an animation. **D68 carries the reversal in its own second amendment.**
+The owner ruled that a departed copy fills the row its lens used to occupy, with a sentence or, better, an animation. **D68 carries the reversal in its own second amendment.**
 
 D68 deleted an empty track with an unknown-position caption. **That is not the object this entry puts back.** The picture is still of the BOX, and the box stays. The section the copy left is still drawn. Its caption reads `no longer in the box`. The second scale reads `Section 1 · 10 slots · this copy is not in one`. Only the MARK is removed, because it is the only part that would lie about a position. D58's refusal of a slot number for a departed card stands. D41's void where the figure would be stands.
 
-The mark leaves by animation, not by deletion. `PositionBar` keeps the mark mounted through the write, with `data-gone`. It holds the `left` it last stood at in a ref. It eases the mark out and down over `--bn-t-slow`. The section fades to a muted ground. A deleted node cannot animate. Three assertions in two specs said `toHaveCount(0)` for that bar. They now assert the opposite.
+The mark leaves by animation, not by deletion. `PositionBar` keeps the mark mounted through the write, with `data-gone`. It holds the `left` it last stood at in a ref. It eases the mark out and down over `--bn-t-slow`. The section fades to a muted ground. A deleted node cannot animate. Three assertions in two specs said `toHaveCount(0)` for that bar. They now assert the opposite. They are amended in place with the argument rather than deleted, so a later session reads this as a reversal and not as drift.
 
 ### One height for the whole walk
 
@@ -34,13 +34,13 @@ The mark leaves by animation, not by deletion. `PositionBar` keeps the mark moun
 
 The copies list absorbs the difference, because it is the only part of the band that is a list. Its bottom edge fades. `BoxBrowse.css`'s own scroller uses the same fade. A clipped row with no fade looks like a rendering fault.
 
-**Cost:** a card with more copies than the band holds shows about one and a half rows before it scrolls.
+**Cost:** a card with more copies than the band holds shows about one and a half rows before it scrolls. The owner chose that trade over the panel changing size on every step.
 
 **Protects:** `.browse-shot` is `align-self: start`. A grid cell that stretches to a fixed band is D38's `.browse-frame` defect again. `inventory.spec.ts`'s "never a card-shaped hole" case failed by 192px when this height landed without that rule.
 
 ### The press was on two clocks
 
-`base.css`'s press floor sets `translate: 0 1px` on the frame the finger goes down. Three rules also eased the movement on that same press. `.bn-btn` transitioned `transform`, where its `scale(0.99)` lives. `.pull-confirm` and `.bn-tab-link .bn-icon` did the same. The last one used a 200ms spring.
+`base.css`'s press floor sets `translate: 0 1px` on the frame the finger goes down. Three rules also eased the movement on that same press. `.bn-btn` transitioned `transform`, where its `scale(0.99)` lives, so every button in the product dipped instantly and eased into the squeeze over 120ms and released the two the same way in reverse. `.pull-confirm` and `.bn-tab-link .bn-icon` did the same. The last one used a 200ms spring.
 
 **The rule is a pair, not a ban on one property.** A control may ease a `transform`. `.pull-confirm`'s hover lift is one. A lift answers the pointer arriving, not the finger landing. A control may not ease the movement its own `:active` rule makes. The two controls that need both name their repaints inside the `:active` rule. They leave the movement out of the list.
 
@@ -58,13 +58,19 @@ Two more cases in `inventory.spec.ts` cover what the panel does when a write lan
 
 Ten mutations, one per fix. Two of them found holes. `sellableStore()` moved `state` and nothing else. It served a sold card still in its slot, which the server cannot produce. Deleting the departed lens outright left the sale case green.
 
+### What is left, and why it is left
+
+**A copy an open order was waiting on still moves the panel's contents by 46px when it is sold**, because `wantedOf` names only copies that are still on hand and the claim line goes with it. That is `Inventory.tsx`'s own documented behavior — a pulled copy already reads `Sold` — and reserving 46px of blank on every unclaimed card to hold a line that is usually absent would be padding rather than stability. **Nothing outside the panel moves for it**, which is the floor this entry actually sets.
+
+**What would reopen this**: a card whose copies list is long enough that one and a half visible rows is the wrong trade, or an operator who would rather the panel grew than scrolled.
+
 ### Platform floor: `make design-check` runs in CI
 
 `make design-check` is a job in `.github/workflows/check.yml`. It runs on `pull_request` and on `push: main`. Before this, it ran in neither `make check` nor CI. Every floor in this entry fired only when a person typed the command on one Mac. That covers D50's three, D117's thumb floor and the Fulfiller's contractual constraints.
 
 The job is separate, not a step in `check`. A chromium install is a real cost. A red `check` and a red `design-check` make claims about different things. It has no `scripts/checks.py` entry, because `check registry` refuses an entry for a target that `make check` does not run.
 
-**The cost is D136's.** Before the move to CI, 56 jobs took 940 to 1,020 seconds of wall-clock time each. The output was `481 passed (15.2m)` on one worker. A private repo's `ubuntu-latest` has two vCPUs. Playwright's default floors to one worker. The job now runs three shards of one worker each. The seven real-clock sleeps use a fake clock. The post-merge run is skipped when the tree already passed on the PR. Current figures are in D136.
+**The cost is D136's.** Measured over 56 jobs before D136: 940-1,020s wall-clock per run. The output was `481 passed (15.2m)` on one worker. A private repo's `ubuntu-latest` has two vCPUs. Playwright's default floors to one worker. The job now runs three shards of one worker each. The seven real-clock sleeps use a fake clock. The post-merge run is skipped when the tree already passed on the PR. Current figures are in D136.
 
 **Its first run went red on the sale case.** The rig had passed that tree 166 times. The walk row's slot cell is `minmax(34px, max-content)`. A sale rewrites `#1` to the store key `B2 #1`, in the mono face (D68). The key is wider. The column grows, and the name and badges slide right on the press. `B2 #1` sets at **33.0px in macOS's monospace fallback** and at **over 34px on Linux**. The column floor is 34px, so one platform hid the movement and the other reported it as one pixel.
 
@@ -74,7 +80,7 @@ The pixel was a symptom, not the subject. `B2 #1` is the shortest key a store ca
 
 The key is `content:`, not a text node. A hidden twin in the DOM would add `B2 #1` to every row's text. The census, the walk's locators and each row button's accessible name all read that text. The reservation uses the string, not a `ch` count. A face with synthesized weight does not set five characters at five times the advance of `0`.
 
-**Cost:** a row whose key is wider than its slot number starts its name further right. A long name ellipsises one word sooner. The cost is paid once at render, not at the sale.
+**Cost:** a row whose key is wider than its slot number starts its name further right. A long name ellipsises one word sooner. The cost is paid once at render, not at the sale. Looked at in both themes at 1440: the names now align down the list, where before the departed row's name sat out of line with its neighbors.
 
 **Guard:** a third case in `inventory.spec.ts`. Its subject is *the slot column is already as wide as the key the sale will write into it*. It has its own one-card fixture in box 12, card 133. The existing case could not see this. Its sweep records position and height, not width, and its box is the one whose key fits under the floor. The new case first reads its subject: the key must clear 34px, measured on the state the sale leaves. It was mutation-tested with the reservation deleted.
 
@@ -88,7 +94,7 @@ Why the four guards in this entry were silent: `cursor.spec.ts`'s two cases read
 
 So the new proof compares the IDENTITY of the rows, not their geometry. It compares the ordered list of each row's `aria-label`, which names the copy drawn there, in both directions. The fixture makes a frozen order and a recomputed order give different answers. `toHaveCount` cannot see a reshuffle that keeps the length.
 
-The control that fixes this is bound by this entry in the usual way. It appears on the press that makes the order stale. It sits inside a band with a fixed height, so its slot is reserved whether or not it is shown.
+The control that fixes this is bound by this entry in the usual way. It appears on the press that makes the order stale. It sits inside a band with a fixed height, so its slot is reserved whether or not it is shown: the same bargain `.browse-row-slotghost` makes in the platform-floor section, paid once at render rather than at the moment of the sale.
 
 ### The copies column may not be torn down and built again
 
@@ -98,7 +104,7 @@ The control that fixes this is bound by this entry in the usual way. It appears 
 
 An earlier amendment from the same day is withdrawn. It named the landing effect's `answered` ref. It came from the trace and was never reproduced. Both of its changes were mutation-tested under an ordering that does reproduce the defect. Both passed with the defect present. The `BoxBrowse.tsx` half was also a hazard. Recording a query on a render whose `visible` is empty spends `fresh` on a landing that never happened. That is D132's rule failing to fire. Both changes are reverted.
 
-**The column was destroyed and built again from nothing.** `CopiesPanel` owns a `useSearch()`. Rebuilding it discards the answer on screen. It then starts a 200ms debounce and a fetch. The operator saw six copy rows, then a skeleton, then six rows again, with no press. Two mechanisms caused the rebuild.
+**The column was destroyed and built again from nothing.** It was never a re-point. `CopiesPanel` owns a `useSearch()`. Rebuilding it discards the answer on screen. It then starts a 200ms debounce and a fetch. The operator saw six copy rows, then a skeleton, then six rows again, with no press. Two mechanisms caused the rebuild.
 
 - **One: the walk's row read null while the new drawer was in flight.** Since D192, `rows` holds ONE drawer's cards. `visible` is `rows` narrowed to `shelf`. A fresh answer can move `shelf` to another drawer. Until that drawer's `GET /inventory/<box>` lands, `visible` holds nothing for it. `selectedRow` was `visible.find(...) ?? null`. So `Inventory.tsx`'s `detail` became null, and the whole column unmounted. The fix treats a row as gone only when its drawer has answered. `rowsShelf` becomes state, so the render can read it. The walk keeps the row it stands on across that window. Null remains for the honest case: the shelf has answered and holds no row to walk. The render where the rows land, while `selected` still holds the previous drawer's key, follows the same rule.
 - **Two: `.browse-card` carried `key={selectedRow.key}`.** The key came in with the rebuild (D94 to D99). The `bn-page-in` entrance replayed on every card. `{detail}`, the copies column, sits inside that section. So the key rebuilt the column on every change of selection, including the change a fresh answer makes. Every guard in `CopiesPanel` for a row change assumes that the column survives one. This key is why none of those guards ever ran. The key is removed. The entrance now plays when the panel appears. `CardOps` keeps its own key. That key resets a menu, not a fetch.
@@ -131,6 +137,8 @@ Reverting the `shelfSource` gate draws a `.browse-card` count of 1. Reverting ei
 
 **What is held.** `held` already kept the last found row in `visible` for a search re-rank. Two more refs join it. `heldSections` keeps the list's last answered `sections`. `heldDetail` keeps the `{detail}` prop from `Inventory.tsx`'s `CopiesPanel`. All three write only when the render is not `awaitingRows`. None can hold a partial or in-flight answer. Each holds only a box that fully answered.
 
+**Dimmed is not a smaller a4f3594b claim.** Box 2's row, drawn under a `Box 7` header, is literally the shape that regression named. What makes it safe is that it cannot be acted on.
+
 **Dimmed is drawn, never claimed.** `.browse-list[aria-busy='true']` and `.browse-card[aria-busy='true']` (in BoxBrowse.css) drop to `--bn-disabled` opacity. That token marks content that is on screen but not live. Both set `pointer-events: none`. The list sets `tabIndex={-1}`, and its `onKeyDown` is not attached while dimmed. So the one keyboard path onto a stale row (`TICK_KEY`) cannot fire. `aria-busy="true"` stays on both regions for the whole wait. A screen reader is told the content is not final.
 
 **No layout jump.** Neither region unmounts. The list keeps its node across the wait. The card panel's key does not change between the held row and the same row once it lands. Only a different card remounts `CardOps`.
@@ -139,7 +147,7 @@ The case *a press to another drawer dims its predecessor's rows* keeps the one-s
 
 ### Review found a keyboard path around pointer-events, and an untested column
 
-- **Finding 1, HIGH.** `pointer-events: none` blocks the mouse only. Tab still reached `CardOps`' "Card actions" button. Enter opened its menu on `held.current`, which is box 2's card, under the Box 7 header. **Fixed with `inert`.** The dimmed `<section className="browse-card">` carries `inert={dimPanel}`. React 19 supports `inert` as a boolean prop. `inert` removes the subtree from the tab order and refuses activation. The list keeps its narrower fix (`tabIndex`, `onKeyDown`). It holds interactive rows that a blanket `inert` would also have to cover. **Guard:** the snapshot calls `.focus()` on the button directly. An `inert` subtree refuses a programmatic `.focus()`. The case asserts `cardInert` and `cardActionsFocusable`.
+- **Finding 1, HIGH.** `pointer-events: none` blocks the mouse only. Tab still reached `CardOps`' "Card actions" button. Enter opened its menu on `held.current`, which is box 2's card, under the Box 7 header: the same regression a4f3594b named, reached by keyboard. **Fixed with `inert`.** The dimmed `<section className="browse-card">` carries `inert={dimPanel}`. React 19 supports `inert` as a boolean prop. `inert` removes the subtree from the tab order and refuses activation. It is not `panelRow`/`panelDetail`'s own subtree, and it carries interactive rows of its own. The list keeps its narrower fix (`tabIndex`, `onKeyDown`). It holds interactive rows that a blanket `inert` would also have to cover. **Guard:** the snapshot calls `.focus()` on the button directly. An `inert` subtree refuses a programmatic `.focus()`. The case asserts `cardInert` and `cardActionsFocusable`.
 - **Finding 2, MEDIUM.** Mutating `panelDetail` back to the live `detail` left the case green. Nothing read `.browse-under`'s own content. `underOwnerCount` and `underRowCount` now read `.card-locations-owner` and `.card-locations-row` inside `.browse-under`. Both classes belong to `CopiesPanel` (`CardLocations.tsx`). The case now fails if the copies column draws nothing, or draws anything invented, in place of the held card's real copies.
 
 Both were mutation-tested with `.bak` copies, restored by hand. Reverting `inert={dimPanel}` to `inert={false}` draws `cardInert` false. Reading the live `detail` instead of `heldDetail.current` draws `underOwnerCount` 0.

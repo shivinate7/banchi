@@ -1,6 +1,6 @@
 ## D272 — One page width, one scaffold
 
-**This amends D197.** D197 fixed the left edge and let the width vary by screen. This removes the second half. There is one page width, 1600 px, and every screen stays competent at every narrower width. The owner ruled both points.
+**This amends D197.** D197 fixed the left edge and let the width vary by screen. This removes the second half. There is one page width, 1600 px, and every screen must stay competent at every narrower width. The owner ruled both points.
 
 **What D197 protected, and what protects it now.** D197 protected one left edge for every screen. That rule stands. `.bn-page` keeps `margin: 0`, and `app/tests/page-edge.spec.ts` still asserts the edge. What goes is D197's sentence that "a pricing table and a three-column inventory legitimately want different caps". Measured by the review (UX-144): three caps (1120, 1344 and 1600 px) gave three right edges, and at 1440 px Pricing stopped 84 px short of the screens beside it.
 
@@ -18,4 +18,4 @@
 
 **Why `[data-bn-page]` and not `.bn-page`.** Screens not yet on `Page` still draw a bare `.bn-page` and may set `--bn-page-max`. The one-width rule reads `[data-bn-page]`, so it reaches a screen when that screen moves onto `Page`, and not before. Each screen lane deletes its dead `--bn-page-max` when it moves. When the last screen moves, `--bn-page-max` and `--bn-page-w-rows` have no reader, and they go.
 
-**Enforced by** `app/tests/scaffold.spec.ts` (the frame at each width) and `make kit-adoption` (a routed view that skips `Page` fails).
+**Enforced by** `app/tests/scaffold.spec.ts` (the frame, per route and per width) and `make kit-adoption` (a routed view that skips `Page` fails).
