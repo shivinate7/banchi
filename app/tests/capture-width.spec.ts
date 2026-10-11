@@ -1,7 +1,7 @@
 // Protects: The Capture screen leaves no unused horizontal band inside its page frame at 1440 and 820.
 // Governs: D118, D195, D197
 import { expect, test } from '@playwright/test'
-import { sealEveryTest, settleAnimations } from './shell'
+import { card, sealEveryTest, settleAnimations } from './shell'
 import { setViewport } from './phoneSwitch'
 
 /* SPARE WIDTH GOES TO THE BLACK STAGE PANEL, NEVER TO A WHITE BAND (owner, 2026-09-28, 2026-09-29).
@@ -129,13 +129,30 @@ test('setViewport leaves the shell columns final across the rail breakpoint', as
 })
 
 /* ux-wave1 B3 (A14). The "Last capture" panel does not change height when the first capture lands
-   (nothing on screen moves unless the person moved it). At the rail width the case measures the empty
-   panel, then the same panel in its has-a-receipt state at the same width, and asks for the two heights
-   to match. The receipt state is the attribute the screen itself sets after a capture (no capture is
-   taken here). The empty sentence must sit inside the viewport. Nothing is tuned to a pixel. */
+   (nothing on screen moves unless the person moved it). At 820 by 900 the case measures the empty
+   panel, then the same page with one captured card whose real JPEG is served through the photo route,
+   and asks for the two heights to match. The captured card comes back from `GET /capture/sitting`, which
+   is how the screen restores its last shot on load. The JPEG is drawn on a canvas in the page, the same
+   way `capture-freeze.spec.ts` builds its photographs, so no code-card image is involved. Nothing is tuned
+   to a pixel. */
 test('ux-wave1: at 820 the Last capture panel keeps its height when the first capture lands', async ({ page }) => {
   /* 820 by 900 is the audit's own rail-width viewport (the shots in the UX audit were taken at it). */
   await setViewport(page, { width: 820, height: 900 })
+  let captured = false
+  await page.route(/\/capture\/sitting$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        captured
+          ? { open: true, gap_minutes: 30, cards: [card({ box: 2, index: 1, section: 1, card: 1, name: 'Test card', boxTotal: 1, state: 'captured' })] }
+          : { open: false, gap_minutes: 30, cards: [] },
+      ),
+    }),
+  )
+  let jpeg = Buffer.alloc(0)
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 200, contentType: 'image/jpeg', body: jpeg }))
+
   await page.goto('/#/capture')
   await page.locator('.capture-shell').waitFor()
   await settleAnimations(page)
@@ -156,8 +173,28 @@ test('ux-wave1: at 820 the Last capture panel keeps its height when the first ca
     `the empty sentence sits inside its panel at 820 (panel ${empty?.height}px, sentence bottom ${noteBox ? Math.round(noteBox.y + noteBox.height) : 'none'}, panel bottom ${empty ? Math.round(empty.y + empty.height) : 'none'})`,
   ).toBe(true)
 
-  await panel.evaluate((el) => el.setAttribute('data-has-last', 'true'))
+  /* A REAL JPEG, drawn in the page: a plain card-sized canvas, encoded as the screen's own capture
+     path encodes one. */
+  const b64 = await page.evaluate(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 180
+    canvas.height = 252
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = '#7a8fd6'
+    ctx.fillRect(0, 0, 180, 252)
+    ctx.fillStyle = '#f2d16b'
+    ctx.fillRect(18, 28, 144, 196)
+    return canvas.toDataURL('image/jpeg', 0.9).replace(/^data:[^;]*;base64,/, '')
+  })
+  jpeg = Buffer.from(b64, 'base64')
+
+  captured = true
+  await page.reload()
+  await page.locator('.capture-shell').waitFor()
+  await expect(panel, 'the captured card restores as the last shot').toHaveAttribute('data-has-last', 'true')
+  await expect(panel.locator('img'), 'the last shot draws its photograph').toBeVisible()
+  await expect.poll(() => panel.locator('img').evaluate((img) => (img as HTMLImageElement).naturalWidth), { message: 'the JPEG decodes' }).toBeGreaterThan(0)
   await settleAnimations(page)
   const receipt = await panel.boundingBox()
-  expect(empty?.height ?? 0, `empty panel ${empty?.height}px, with a receipt ${receipt?.height}px`).toBeCloseTo(receipt?.height ?? -1, 0)
+  expect(empty?.height ?? 0, `empty panel ${empty?.height}px, with a loaded photograph ${receipt?.height}px`).toBeCloseTo(receipt?.height ?? -1, 0)
 })
