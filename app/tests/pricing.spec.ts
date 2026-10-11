@@ -5862,9 +5862,10 @@ for (const theme of ['light', 'dark'] as const) {
   }
 }
 
-/* ux-wave1 B21. The primary Send sits above the warning about the last send, so a person who presses
-   it has not read the warning first. The case asks the DOM which comes first: the warning must. */
-test('ux-wave1: the last-send warning comes before the Send button in the DOM', async ({ page }) => {
+/* ux-wave1 B21, owner ruling R14. With a pending incomplete last send, Send is disabled and a line beside
+   it says why. The warning sits below the button. The case asks for a disabled Send and a visible line
+   inside the same send card that names the last send. */
+test('ux-wave1: with a pending incomplete last send, Send is disabled and a line beside it says why', async ({ page }) => {
   const short = sendSummary({
     state: 'short',
     published_at: null,
@@ -5874,14 +5875,20 @@ test('ux-wave1: the last-send warning comes before the Send button in the DOM', 
     check: { export: 'live.csv', found: 0, expected: 3, missing: [{ sku: '8608459', name: 'Dunsparce', sent: 3, found: 0 }] },
   })
   await open(page, { sends: () => ({ ...SENDS_NONE, sends: [short] }) })
-  await expect(page.locator('.send-short-check'), 'the last-send warning is drawn').toHaveCount(1)
-  await expect(page.locator('.pricing-emit'), 'the Send button is drawn').toHaveCount(1)
-  const warningFirst = await page.evaluate(() => {
-    const warning = document.querySelector('.send-short-check')
-    const send = document.querySelector('.pricing-emit')
-    return warning !== null && send !== null && (warning.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
-  })
-  expect(warningFirst, 'the warning precedes the Send button in the DOM').toBe(true)
+  const send = page.locator('.pricing-emit')
+  await expect(send, 'the Send button is drawn').toHaveCount(1)
+  await expect.soft(send, 'Send is disabled while the last send is incomplete').toBeDisabled()
+  await expect.soft(page.locator('.send-card').getByText(/last send/i), 'a visible line beside Send says why').not.toHaveCount(0)
+})
+
+/* ux-wave1 B21, R14, the other side. With no incomplete last send, Send is enabled and no line beside it
+   names a last send. */
+test('ux-wave1: with no incomplete last send, Send is enabled and no line says why it is off', async ({ page }) => {
+  await open(page, { sends: () => SENDS_NONE })
+  const send = page.locator('.pricing-emit')
+  await expect(send, 'the Send button is drawn').toHaveCount(1)
+  await expect(send, 'Send is enabled with no incomplete last send').toBeEnabled()
+  await expect(page.locator('.send-card').getByText(/last send/i), 'no line names a last send').toHaveCount(0)
 })
 
 /* ux-wave1 B21, nothing moves unless the person moved it. The first status read answers a send still
