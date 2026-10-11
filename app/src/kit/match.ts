@@ -181,7 +181,7 @@ function numberMatch(raw: string, row: Prepared): boolean {
   const bare = raw.replace(/^#/u, '')
   if (!HAS_DIGIT.test(bare)) return false
   // THE HYPHEN SPLITS THE NUMBER, IT NEVER JOINS IT (the owner's ruling, 2026-09-25,
-  // round-11 gaps review, quoted verbatim in D271: "No, a hyphen splits"). The second
+  // round-11 gaps review, recorded in D271). The second
   // replace below folds a hyphen BETWEEN TWO DIGITS into the composed `/` it stands
   // for. When it changes `bare` at all, that hyphen was doing exactly that job, and
   // `bare` itself must NEVER also be read as one plain joined number —

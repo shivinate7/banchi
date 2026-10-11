@@ -1,6 +1,6 @@
 # Sales: the gross-revenue screen
 
-**Status: BUILT.** `#/revenue` is a nav row on purpose. D214 (sales shows gross, never profit) records
+**Status: BUILT.** `#/revenue` is a nav row on purpose. It was tried off-nav and the owner reversed that. D214 (sales shows gross, never profit) records
 why it is its own route and why it is gross-only. D217 (sales sorts, filters and deep links) records
 the sort, filter, cross-filter, drill-down and URL work. `docs/specs/sales-plan.md` holds the build
 record, and `docs/specs/sales-findings.md` holds the open findings.

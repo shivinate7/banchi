@@ -59,7 +59,7 @@ So the proof compares the identity of the rows, not their geometry. Both new cas
 
 ### Mutation results
 
-Each reader of the freeze was deleted in turn, and the suite re-ran. Nine arms go red.
+Each reader of the freeze was deleted in turn, and the suite re-ran. Nine arms go red. One arm deleted a parameter. One survives, named below.
 
 | arm | verdict |
 |---|---|
@@ -72,11 +72,11 @@ Each reader of the freeze was deleted in turn, and the suite re-ran. Nine arms g
 | a sale never holds the order | red (8 cases) |
 | a new query never takes a new order | red |
 | the control's slot reserves nothing | red |
-| the landing ignores the freeze | not covered, see below |
+| the landing ignores the freeze | deleted, see below |
 | an undo never releases its hold | survives, see below |
 
 - Four of the nine were green on the first run, for one reason. The case acted on the row the walk stood on. `stays` keeps a row for three reasons: a current copy, a receipt from this sale, or a freeze. The first two answered every assertion. The cases now act on a mid-list row. The retirement case reaches the freeze alone, because `Inventory.tsx` hands the copies list `soldKeys`, not `retiredKeys`. A fifth needed a box whose last live match departs. That is the only state the shelf pool can notice.
-- **The landing's freeze is not covered.** `landingInFullest` runs only on a fresh query. A fresh query releases the freeze, so the parameter is never populated. A mutation that ignored it left the whole suite green. The landing ranks on current state, as a fresh answer should.
+- **The landing's freeze was deleted, not covered.** `landingInFullest` runs only on a fresh query. A fresh query releases the freeze, so the parameter could never be populated. A mutation that ignored it left the whole suite green. The landing ranks on current state, as a fresh answer should.
 - **The undo's release survives.** Deleting `releaseRank` leaves all 108 cases green. The chip disappears shortly after the undo, so something else on that path clears the hold. Bounding the assertion to two seconds did not separate the two. That does not show the call is redundant. The claim is weaker than the landing's, and the code stays. A later session with a reproduction should find the second clearer and delete one, or find the case this one misses.
 
 ### What the control costs

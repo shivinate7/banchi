@@ -2,14 +2,14 @@
 
 **Ruling: the capture setup persists on the device, not per browser session.** The owner gave four instructions in one message. Three concern memory. One concerns what a box is called.
 
-- Capture's box picker orders boxes as Inventory does: most recently reached for, or most filled, first. It does not order by box number.
-- Capture remembers the last-used settings, game and camera included.
+- Capture's box picker orders boxes as Inventory does: most recently selected or most filled first. It does not order by box number.
+- Capture remembers the last-used settings, game and camera included, as a session history.
 - A quick clear-all-settings button.
 - Box numbers are not shown on the capture screen.
 
-### D27's premise was wrong about shifts
+### D27's premise was wrong about shifts, and the owner is the authority on that
 
-D27 put seven values in `sessionStorage`, with one reason: "a new tab is a new shift and closing the browser ends one." That is a claim about how the operator works, not about how a browser works. The operator says it is false. A shift ends when they stop feeding cards. Closing the browser is a laptop lid. A new tab is a link opened from elsewhere. Neither is a fact about the stack on the desk.
+D27 put seven values in `sessionStorage`, with one reason: "a new tab is a new shift and closing the browser ends one." That is a claim about how the operator works, not about how a browser works. The owner, who works at this screen, says it is false. A shift ends when they stop feeding cards. Closing the browser is a laptop lid. A new tab is a link opened from elsewhere. Neither is a fact about the stack on the desk.
 
 The camera was already the counter-example. `useCamera.ts` has kept `banchi.capture.deviceId` and `banchi.capture.rotation` in `localStorage` from the start. The owner's message names the camera and the game together, as two things that should behave alike. They behaved differently, and nothing explained why.
 
@@ -55,7 +55,7 @@ The restore waits for the answer, not for a non-empty list. `boxRecords` starts 
 
 ### The clear asks first, then gives a receipt and a way back
 
-**Ruling (replacing the earlier no-dialog press).** The press opens a confirmation. The confirmation carries the sentence that used to sit under the button, and a Clear button. Esc cancels, and Enter confirms. Only the confirm clears. The screen then shows its empty state. A receipt toast carries an Undo.
+**Owner ruling (replacing the earlier no-dialog press).** The press opens a confirmation. The confirmation carries the sentence that used to sit under the button, and a Clear button. Esc cancels, and Enter confirms. Only the confirm clears. The screen then shows its empty state. A receipt toast carries an Undo.
 
 The clear covers choices about cards and leaves the rig alone. Box, game, set hint, rarity, finish and product are decisions about the stack in front of the operator. The next stack is a different decision. The camera and the rotation describe which hardware is plugged in and how it is mounted (D13). Those are the same tomorrow as today. Clearing them would make the operator re-pick a 4K capture card for a run that needs no change. So the confirmation says what it leaves behind.
 

@@ -2,6 +2,8 @@
 
 **Ruling: prices are one corpus keyed by SKU, in `inventory/prices.json`, not one file per run.** Per-run data stays per run only where it is a property of the lot.
 
+The owner saw the fan-out write and the conflict detector and asked why the front end was not a central pricing corpus and dashboard, with boxes feeding it.
+
 `runs/<n>/decisions.json` held two kinds of fact in one file:
 
 | scope | keys | what it is |
@@ -11,7 +13,7 @@
 
 The per-SKU half is what a price is. TCGplayer prices per SKU globally. D7 states "price is per-SKU and shared across copies". `pipeline/join.py` spends the live cap against every box at once. Stored per run, one card held one answer per drawer it was ever photographed in.
 
-**Home:** `pipeline/corpus.py`. The file is `inventory/prices.json`, keyed by SKU, and it holds the policy too. A per-run policy override stays for a lot that differs. `Corpus.for_run`/`scoped_to` project it into a `Decisions`, so `join`, `emit` and `prices_for` do not change. The pricing design and the price history both named this gap and did not close it. `banchi prices show --held` shows held SKUs across runs.
+**Home:** `pipeline/corpus.py`. The file is `inventory/prices.json`, keyed by SKU, and it holds the policy too, on the owner's instruction. A per-run policy override stays for a lot that differs. `Corpus.for_run`/`scoped_to` project it into a `Decisions`, so `join`, `emit` and `prices_for` do not change. The pricing design and the price history both named this gap and did not close it: no durable home for a hold outside the run directory, and no cross-run view of what is held. `banchi prices show --held` shows held SKUs across runs.
 
 **Deleted.** The first build answered the duplication with a fan-out write into N files, conflict detection on every row, and an agreement refusal. All of it reconciled a duplication. The first `pipeline/merge.py` carried a `PriceDisagreement`. Run against three real runs, it refused 66 SKUs. Almost all were the market moving between two joins, not a disagreement. Making a defect unrepresentable is worth more than reporting it.
 
@@ -20,6 +22,7 @@ The per-SKU half is what a price is. TCGplayer prices per SKU globally. D7 state
 **Migration.** `banchi prices adopt` previews by default, because it holds a real decision. Ruling: newest wins. Three of the eight contested SKUs are a `withheld` hold answered by a later price. Newest-wins resolves those to the price, the direction that cost money. The command names those three.
 
 - A legacy run file is never a fallback. It would bring the duplication back on the first re-join of an old run.
+- The first refusal fired only while the corpus was empty. After the first adoption, eight files on the owner's store were silently ignored.
 - `join` and `emit` refuse, unconditionally and before anything is read or written. The refusal names `banchi prices adopt --write`.
 - `adopt --write` retires each folded file to `decisions.json.adopted` (`cli/runs.py:retire_decisions`, never overwriting).
 - A re-adopt keeps the corpus's answer for a SKU the corpus already answers. It reports the file's answer under `kept`. It retires the file without `--force`.
@@ -30,11 +33,11 @@ The policy default is D9's amendment of the same day.
 
 ### The merged view
 
-`#/pricing` opens on every run that still has pricing. It merges one SKU across runs into one row, and it writes one answer into the corpus. The rule: boxes captured together are priced together. Pricing by box also matters and must not be lost.
+`#/pricing` opens on every run that still has pricing. It merges one SKU across runs into one row, and it writes one answer into the corpus. Built on the owner's instruction. Boxes captured together are priced together. The general form: unprocessed items are processed all at once. The owner also set a boundary: pricing by box must not be lost.
 
 This is D180's resolution one register over, and it overturns nothing. D180 ruled that a send is a cart of boxes and that a run is still one box. A run carries a reading, a `--bypass` ruling and a `decisions.json`. All three are properties of what is in the drawer. The view merges. The file does not. Nothing downstream learns a new shape. D180 protects that property.
 
-The picker is a single-select over `GET /pipeline/runs`. Nothing argued for it. A set over the same single source has the same property. D39's one-mass-select rule covers cards, not runs, and `#/inventory` keeps the only one.
+The single-select this replaces had no argument for it. The design defends where the run comes from (`GET /pipeline/runs` is the one source) and says nothing about how many runs may be picked. A set over the same source has the same property. D39's one-mass-select rule covers cards, not runs. `#/inventory` keeps the only one.
 
 ### What it costs today
 
@@ -79,7 +82,7 @@ Boxes sort ascending within a sitting. `GET /pipeline/runs` sorted by directory 
 
 ### The threshold and the cheap-card price are one figure
 
-**Ruling: threshold and cheap-card price are one variable and must match.** The cut-off is one number with two jobs. It is the line a card sits above or below. Everything below it lists at that figure. `#/pricing` cannot write one without the other.
+**Owner ruling, made with the two defaults shown side by side: threshold and cheap-card price are one variable and must match.** The cut-off is one number with two jobs. It is the line a card sits above or below. Everything below it lists at that figure. `#/pricing` cannot write one without the other.
 
 The inversion forced this. A threshold of $0.40 beside a cheap-card answer of $0.49 prices a card worth $0.38 at $0.49. It prices a card worth $0.42 at $0.42. The card that failed the bar is sold dearer than the card that cleared it. That happens across the 9-cent window between them. The window is where bulk lives. D9's derivation puts the threshold where card density is highest. Two figures free to cross cannot be kept apart by care. Only a design that makes crossing unrepresentable survives an operator typing.
 

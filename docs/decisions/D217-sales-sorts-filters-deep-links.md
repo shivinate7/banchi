@@ -12,7 +12,7 @@ Name, Copies, Gross and Last sold each get a `<button>` inside their `<th>`. `ar
 
 Period, search text, sort column and sort direction live in `#/revenue`'s query string. So do the active month or week filter, and a custom range's two dates. `readUrlState` reads the query once at mount. `writeUrlState` writes it on every change. This is D103's mechanism (`?band=`, `?markdown=`), applied to a fourth screen. `App.tsx` strips the query before it compares paths (D201), so a filter change does not remount the screen or reset its scroll.
 
-Pricing's two lenses write the hash directly, which pushes a history entry. That fits one discrete press. Revenue's search field fires on every keystroke. One history entry per letter would turn Back into an undo. So `writeUrlState` uses `history.replaceState` for every control on this screen, sort and month included. The trade: Back no longer steps through this screen's filter changes one at a time. Deep links and reloads still work, because both depend only on the URL's current string.
+`Pricing.tsx`'s two lenses write the hash directly, which pushes a history entry. That fits one discrete press. Revenue's search field fires on every keystroke. One history entry per letter would turn Back into an undo. So `writeUrlState` uses `history.replaceState` for every control on this screen, sort and month included. The trade: Back no longer steps through this screen's filter changes one at a time. Deep links and reloads still work, because both depend only on the URL's current string.
 
 ### Cross-filtering the month strip
 

@@ -2,11 +2,13 @@
 
 **Ruling: the join keeps only Near Mint and sealed rows of the catalog.** Play grades are dropped in the join, not on the wire.
 
+Settled from the owner asking where a feature had gone. The owner could no longer fast-forward the review queue by stating that every card was Near Mint. The owner corrected the first account: until that day the owner had never been asked to judge a card's condition in the review queue. Conditions were always pre-assumed Near Mint.
+
 D12 hardcodes Near Mint. Nothing in the tree enforced it on the catalog. `pipeline/join.py:Catalog.from_export` never carried a `Condition` predicate. Every rung of `variant.resolve` resolves to a Near Mint string, so the ladder was never in doubt. The candidate list a queue entry carries is `found.rows`, straight off the export, ungated. The catalog looked narrow only because the operator produced narrow files by hand.
 
 ### What changed was the input
 
-D65 built the automatic fetch. `Scope.condition_ids` was declared in that change. No caller has populated it since. `Scope.model`'s `ids()` turns `()` into `["0"]`, the portal's "All Conditions". After that change, every run was re-joined against fetched exports. The first wide file was `2026-08-24-box2-01`, whose hand-downloaded CSV still sits unused beside the file its manifest now names.
+D65 built the automatic fetch. `Scope.condition_ids` was declared in that change. No caller has populated it since. `Scope.model`'s `ids()` turns `()` into `["0"]`, the portal's "All Conditions". After that change, every run was re-joined against fetched exports, including `2026-08-24-box2-01`, whose hand-downloaded CSV still sits unused beside the file its manifest now names.
 
 | run | export | grades |
 |---|---|---|

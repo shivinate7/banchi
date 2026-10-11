@@ -223,13 +223,6 @@
         "labelled"
       ]
     },
-    "docs/decisions/*-sales-shows-gross-never-profit.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "labelled",
-        "labelled"
-      ]
-    },
     "docs/decisions/*-guard-self-tests-are-path-gated.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -276,8 +269,6 @@
       "SPELLING": [
         "behaviour",
         "behaviour",
-        "behaviour",
-        "behaviour",
         "neighbours"
       ]
     },
@@ -294,22 +285,10 @@
         "relabelled"
       ]
     },
-    "docs/decisions/*-inventory-fetches-one-box-only.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "serialises"
-      ]
-    },
     "docs/decisions/*-the-market-reading-is-a-table.md": {
       "lane": "docs-sweep",
       "SPELLING": [
         "judgement"
-      ]
-    },
-    "docs/decisions/*-sales-sorts-filters-deep-links.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "colours"
       ]
     },
     "docs/decisions/*-shell-mistakes-refused.md": {
@@ -335,14 +314,6 @@
         "judgement"
       ]
     },
-    "docs/decisions/*-the-catalog-is-near-mint-by-rule.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "judgement",
-        "neighbours",
-        "travelled"
-      ]
-    },
     "docs/decisions/*-the-export-belongs-to-the-game.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -359,20 +330,6 @@
       "lane": "docs-sweep",
       "SPELLING": [
         "judgement"
-      ]
-    },
-    "docs/decisions/*-order-taken-once.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "behaviour"
-      ]
-    },
-    "docs/decisions/*-one-pricing-file-for-the-store.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "centralising",
-        "initialiser",
-        "memoised"
       ]
     },
     "docs/decisions/*-primary-checkout-syncs.md": {
@@ -436,15 +393,6 @@
         "catalogue",
         "catalogue",
         "catalogue"
-      ]
-    },
-    "docs/decisions/*-setup-outlives-the-browser.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "emphasised",
-        "generalised",
-        "generalised",
-        "recognise"
       ]
     },
     "docs/decisions/*-shell-rail-palette-sheet.md": {

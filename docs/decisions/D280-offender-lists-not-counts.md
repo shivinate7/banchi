@@ -8,7 +8,7 @@
 
 ### Why a count fails
 
-A count passes a new defect when an old one leaves in the same change. Fix one typed dot and type a new one, and the count holds still. Rewrite one bad sentence and write a new one, and the ratio can fall. The pin reported "no change" on both. The owner wanted the new defect to fail. A pin also needs a person to move it. The old scripts wrote a new number on request, and nothing asked why.
+A count passes a new defect when an old one leaves in the same change. Fix one typed dot and type a new one, and the count holds still. Rewrite one bad sentence and write a new one, and the ratio can fall. The pin reported "no change" on both. The owner wanted the new defect to fail. A pin also needs a person to move it. The old scripts wrote a new number on request, and nothing asked why. That is the stagnant static pin the owner refused.
 
 ### What replaces each pin
 
@@ -17,7 +17,7 @@ Each list has the shape of `scripts/kit-adoption-allow.json`: file, then rule, t
 - **Typed dots.** `scripts/typed-interpunct-allow.json` lists each offending string in each file, as `scripts/user-strings.mjs` extracts it. The rule key is `interpunct`. D218's two extractor widenings stay as they were.
 - **Prose.** The prose list is cut. See "The prose list is cut" below.
 
-**The key is the offender, never a number.** A typed-dot entry is `<scope>: <string>`. The scope is the named function, class, arrow binding or module-level constant around the string. A nested scope is named with the scope around it, as `Outer.helper`. One entry excuses one string in one place. A bare `·` typed in another component is a new offender. An offender that occurs twice in one file is listed twice, so a copy needs its own entry.
+**The key is the offender, never a number.** A typed-dot entry is `<scope>: <string>`. The scope is the named function, class, arrow binding or module-level constant around the string. A nested scope is named with the scope around it, as `Outer.helper`. One entry excuses one string in one place. A bare `·` typed in another component is a new offender. A prose entry is a hash of the sentence and a short label. The label helps the person who rewrites the sentence. Only the hash is compared. An offender that occurs twice in one file is listed twice, so a copy needs its own entry.
 
 ### The three failures
 
@@ -29,7 +29,7 @@ Typed-dot growth is counted per file, by the string without its scope. A dot str
 
 ### A new file starts clean
 
-A new file is not in the list at the merge-base. So any entry for it is growth, and the row refuses it. The one exception is a sentence that left another file in the same branch. A new component with a typed dot has no exception. A file that git renamed is not new. Its entries map back to the old path.
+A new file is not in the list at the merge-base. So any entry for it is growth, and the row refuses it. For prose, the one exception is a sentence that left another file in the same branch. A new file starts clean because there is no pin to re-pin, and the author can fix new prose at no extra cost. A new component with a typed dot has no exception. A file that git renamed is not new. Its entries map back to the old path.
 
 ### A sentence keeps its identity through edits that do not change its prose
 
@@ -84,7 +84,7 @@ The rows read tracked files only. `markdown_files()` in `scripts/docs_audit/core
 
 ### The line-anchor pin becomes a list
 
-D245's `line anchor ratchet` row pinned a count of line anchors per file. The owner ruled to convert both of the last pins. The row is now `line anchor offenders`, over an offender list. The pin's file is deleted.
+D245's `line anchor ratchet` row pinned a count of line anchors per file. The owner ruled to convert both of the last pins. The row is now `line anchor offenders`, over an offender list that was deleted when the last anchor was converted.
 
 - **An entry is the anchor as written**, `path:N` or `path:N-M`, once per occurrence. An edit elsewhere in the file, or a reflow, does not touch it.
 - **A claim moves nothing.** A decision entry's number is folded out of the document's own file key, as the prose list folded it. It is folded out of an anchor's decision path too, so both read `docs/decisions/*-<slug>.md`.
@@ -110,7 +110,7 @@ Each caller still decides what an identity is, and so whether growth counts per 
 
 **Ruling (test-audit plan, row 92): cut the `ste offenders` row and its list.** The write-time STE hook lints new prose. The hook makes a prose list unneeded. The `ste offenders` row, `scripts/ste-offenders.json` and `scripts/docs-audit.py:check_ste_offenders` are deleted. D60 is amended to match.
 
-A third list stays. `scripts/markdown-spelling-allow.json` covers the `identifier spelling` row's markdown half (D60). It has the same shape as the other lists: file, then lane, then SPELLING, then the British word, lower-cased, once per occurrence. `make offenders-prune` covers all three lists. A new file starts clean. Never add an entry to excuse new prose.
+The owner ruled in the same review round to shrink the offender list now. `scripts/markdown-spelling-allow.json` joined as the third list. It covers the `identifier spelling` row's markdown half (D60). It has the same shape as the other lists: file, then lane, then SPELLING, then the British word, lower-cased, once per occurrence. `make offenders-prune` covers all three lists. A new file starts clean. Never add an entry to excuse new prose.
 
 Offender lists, never a repo-wide count. A shared number is one every merge takes from somebody.
 
