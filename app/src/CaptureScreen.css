@@ -1475,7 +1475,13 @@
   }
   /* Sized by the row the stage leaves it, not by a ratio of its own: the frame inside is
      already container-bound, so it simply takes what is left under the run card. */
-  .capture-last { align-self: stretch; height: auto; max-height: none; }
+  /* WHY THE PANEL STARVED: the stage spans both rows at a fixed height, so a tall Setup block in the run
+     row left this row almost nothing, and the size-contained viewport (no intrinsic height) collapsed to
+     its head. The photo row has a floor at the photo's 9:16, so empty and loaded hold one height and the first capture moves nothing (D313). */
+  .capture-last {
+    align-self: stretch; height: auto; max-height: none;
+    grid-template-rows: auto minmax(calc(var(--bn-10) * 2 * 16 / 9), 1fr);
+  }
 }
 
 @media (min-width: 768px) and (max-width: 1279px) {
@@ -1610,7 +1616,7 @@
   /* Same row and same height as the stage; the photo is sized by the viewport's own container
      query (base rule), and the receipt under it scrolls inside the panel rather than pushing
      the row taller. */
-  .capture-last { order: 1; height: var(--cap-stage-h); max-height: none; align-self: start; }
+  .capture-last { order: 1; height: var(--cap-stage-h); min-height: 0; max-height: none; align-self: start; }
   .capture-last-viewport { overflow-y: auto; }
   .capture-card-stack { order: 5; }
   .capture-card-rig { order: 6; align-self: stretch; }
