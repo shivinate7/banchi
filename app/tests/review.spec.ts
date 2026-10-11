@@ -895,7 +895,7 @@ test('nine rows are keyed, and the rest wait behind "Show N More"', async ({ pag
   // five Commons never offered — the whole point of the widen this amendment builds.
   await expect(rows.first()).toContainText('Calm Rune')
 
-  const more = page.getByRole('button', { name: /Show \d+ more/ })
+  const more = page.getByRole('button', { name: /Show \d+ More/ })
   await expect(more).toBeVisible()
   await expect(more).toHaveText('Show 7 More')
 
@@ -909,7 +909,7 @@ test('nine rows are keyed, and the rest wait behind "Show N More"', async ({ pag
 
 test('"Show N More" reveals rows already on the wire, never a second fetch', async ({ page }) => {
   const sent = await openWide(page)
-  await page.getByRole('button', { name: /Show \d+ more/ }).click()
+  await page.getByRole('button', { name: /Show \d+ More/ }).click()
   await expect(page.locator('.review-catalog .review-candidate')).toHaveCount(16)
 
   // One GET on arrival, none from the press — the wire already carried all 16.
@@ -996,7 +996,7 @@ test('"Show N More" adds rows below and moves nothing outside the card panel (D1
   page,
 }) => {
   await openWide(page)
-  const more = page.getByRole('button', { name: /Show \d+ more/ })
+  const more = page.getByRole('button', { name: /Show \d+ More/ })
   await expect(more).toBeVisible()
   // `confirm-identity.spec.ts`'s own precedent: scrolled into view BEFORE the "before"
   // sample, so the click's own actionability scroll is not read as something the PRESS
@@ -2821,7 +2821,7 @@ test.describe('the Review band sheets', () => {
         await expect(groups.nth(0).getByRole('listitem')).toHaveCount(50)
         await groups.nth(0).getByRole('button', { name: 'Show 50 More', exact: true }).click()
         await expect(groups.nth(0).getByRole('listitem')).toHaveCount(60)
-        await expect(groups.nth(0).getByRole('button', { name: /Show .* more/ })).toHaveCount(0)
+        await expect(groups.nth(0).getByRole('button', { name: /Show .* more/i })).toHaveCount(0)
         const first = groups.nth(0).getByRole('listitem').first()
         await expect(first).toContainText('Band box')
         await expect(first).toContainText(/\b1\b/)
