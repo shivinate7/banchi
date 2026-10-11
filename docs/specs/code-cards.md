@@ -3,19 +3,17 @@
 **Status: the decode path and the ledger are BUILT. The channel decision is RECORDED and
 unexecuted. Read section 8 before treating any number here as settled.**
 
-**While dormant** (CLAUDE.md), `scripts/docs-audit.py`'s `views exposure` advisory stays OFF
+**Dormant** (CLAUDE.md). `scripts/docs-audit.py`'s `views exposure` advisory stays OFF
 (`VIEWS_EXPOSURE_ENABLED = False`), because no session draws pooled captures onto a screen.
-Flip the constant to `True` when code-card work resumes. `scripts/guard-opsec.sh` stays
-ARMED regardless — it refuses a real code-card photo or code string into a commit whether
-this feature is dormant or not.
+Set the constant to `True` when code-card work resumes. `scripts/guard-opsec.sh` stays ARMED
+regardless. It refuses a real code-card photo or code string in a commit.
 
-The codes track, from the operator putting a stack of code cards on the feeder to the money
-arriving. It supersedes `code-card-fork/CLAUDE.md`'s architecture section and amends
-C2, C4 and C5 below, each of which is named where it is overturned.
+The codes track runs from the operator putting a stack of code cards on the feeder to the
+money arriving. It supersedes `code-card-fork/CLAUDE.md`'s architecture section. It amends C2,
+C4 and C5 below. Each is named where it is overturned.
 
-Everything numeric here was measured, either against
-`fixtures/pokemon_wide_export_untouched.csv`, or on this machine, or by web research whose
-sources are named. Nothing is carried forward from an earlier draft unmeasured.
+Every number is measured against `fixtures/pokemon_wide_export_untouched.csv`, measured on this
+machine, or sourced from web research named in the text.
 
 ---
 
@@ -32,103 +30,96 @@ sources are named. Nothing is carried forward from an earlier draft unmeasured.
       -> export a channel file            a list of code strings, per channel
     disposal                              D24: the card is destroyed, the ledger survives
 
-Two properties of that chain are the whole design, and both are departures from how the
-singles track works:
+Two properties of the chain are the design. Both depart from the singles track.
 
-**Identification costs nothing and calls nothing.** The redemption code IS the QR's payload,
-so the field that must be exactly right is recovered arithmetically. The singles track's
-paid Batch API call has no role on the primary path here.
+**Identification costs nothing and calls nothing.** The redemption code is the QR's payload.
+The field that must be exactly right is recovered arithmetically. The singles track's paid
+Batch API call has no role on the primary path.
 
-**The product is a claim, not a reading.** Which set and which product a code redeems comes
-from the operator at capture time, because code cards arrive in sealed-product batches. See
-section 4.
+**The product is a claim, not a reading.** Set and product come from the operator at capture
+time. Code cards arrive in sealed-product batches. See section 4.
 
 ---
 
 ## 2. What a code card is, verified
 
-Confirmed against first-party sources, correcting C1 in two places.
+Verified against first-party sources. Two corrections to C1 and C3.
 
-- **The QR payload is a redeem URL carrying the code in a `2d_code` parameter.** Confirmed
-  by reading the official redeemer's own JavaScript bundle: it reads `2d_code`, stores it,
-  and feeds it straight into the redemption form. The parameter value IS the code.
-- **CORRECTION to C1: it is a real query string, on `redeem.tcg.pokemon.com`.** C1 recorded
-  a `#redeem` fragment on `tcg.pokemon.com`; that host now returns 404 for the redeem path.
-  A fragment form still exists on a different redirect chain, so `codes/qr.py` reads both.
-- **The printed code is 13 characters, `XXX-XXXX-XXX-XXX`.** Read off The Pokemon Company's
-  own sample card image. Three widely-repeated community figures are wrong: Bulbapedia says
-  11 characters, one guide publishes a 4-4-4-1 mask, and a third-party parser validates
-  4-4-4-3.
-- **The QR carries no set or product metadata.** Negative evidence — the official client
-  reads no other parameter — rather than a decoded real card. This is why section 4 exists.
-- **Codes are globally single-use, and do not expire.** Old PTCGO-branded cards still redeem
-  in TCG Live with no cutoff. There is no visual difference between a redeemed and an
-  unredeemed card, which is why the ledger is the only record of a code's state.
-- **CORRECTION to C3: the redemption limits are SOFT.** Past the limit a code grants a small
-  amount of in-game currency instead of the product; it is not refused. Official figures:
-  booster 400 per expansion, Build & Battle 25, preconstructed deck 4, other products 4 (or
-  1 if only cosmetic). At most 10 codes per redemption batch.
-- **Validity CAN be checked without consuming a code.** The official flow is two-phase —
-  a `verify` step returns a per-code `validationStatus`, and only codes marked valid are
-  sent to `redeem`. **But there is no usable API**: every call carries a session cookie
-  against an authenticated endpoint, passes a `can_redeem` gate, and the redeem step
-  additionally requires a reCAPTCHA token. So automated dead-code screening is not
-  available, and section 8 keeps that as the open question it is.
+- **The QR payload is a redeem URL carrying the code in a `2d_code` parameter.** Confirmed by
+  reading the official redeemer's JavaScript bundle. It reads `2d_code`, stores it, and feeds
+  it into the redemption form. The parameter value is the code.
+- **Correction to C1: it is a query string on `redeem.tcg.pokemon.com`.** C1 recorded a
+  `#redeem` fragment on `tcg.pokemon.com`. That host now returns 404 for the redeem path. A
+  fragment form still exists on a different redirect chain. `codes/qr.py` reads both.
+- **The printed code is 13 characters, `XXX-XXXX-XXX-XXX`.** Read off The Pokemon Company's own
+  sample card image. Three common community figures are wrong. Bulbapedia says 11 characters.
+  One guide gives a 4-4-4-1 mask. A third-party parser validates 4-4-4-3.
+- **The QR carries no set or product metadata.** The official client reads no other parameter.
+  This negative evidence, not a decoded real card, is why section 4 exists.
+- **Codes are globally single-use and do not expire.** Old PTCGO-branded cards still redeem in
+  TCG Live with no cutoff. A redeemed card looks the same as an unredeemed one. The ledger is
+  the only record of a code's state.
+- **Correction to C3: redemption limits are soft.** Past the limit, a code grants a small amount
+  of in-game currency instead of the product. It is not refused. Official figures: booster 400
+  per expansion, Build & Battle 25, preconstructed deck 4, other products 4 (or 1 if only
+  cosmetic). At most 10 codes per redemption batch.
+- **Validity can be checked without consuming a code, but no usable API exists.** The official
+  flow is two-phase. A `verify` step returns a per-code `validationStatus`. Only codes marked
+  valid go to `redeem`. Every call carries a session cookie against an authenticated endpoint.
+  Each call also passes a `can_redeem` gate. The redeem step requires a reCAPTCHA token too.
+  Automated dead-code screening is therefore unavailable. Section 8 keeps it as the open question.
 
 ---
 
 ## 3. Decoding, and why there is no OCR
 
-`codes/qr.py` carries the full measurement; the summary is that at the rig's real frame size
-of 3840x2160 the shipped ladder reads **140 of 140 physically-possible frames with zero
-mis-reads at 87 ms each**, and refuses the rest. Three cases are unrecoverable by ablation
-against eleven transforms: a QR under about 40 px, a 3.5 px defocus, and glare that clips the
-symbol to white.
+`codes/qr.py` carries the full measurement. In summary, at the rig's frame size of 3840x2160,
+the shipped ladder reads **140 of 140 physically-possible frames with zero mis-reads at 87 ms
+each**. It refuses the rest. Ablation against eleven transforms shows three cases are
+unrecoverable: a QR under about 40 px, a 3.5 px defocus, and glare that clips the symbol to
+white.
 
 **The decoder is pinned, and the pin is load-bearing.** `codes/qr.py` uses `zxing-cpp==2.3.0`.
-Plain `pip install zxing-cpp` fails on this repo's Python 3.9. Install from
-`requirements.txt`, never freehand.
+Plain `pip install zxing-cpp` fails on this repo's Python 3.9. Install from `requirements.txt`.
+Never install freehand.
 
-**C2's OCR half is not built and should not be.** C2 specified a SKU crop taken off the QR as
-a fiducial, then Tesseract with an `A-Z0-9` whitelist. Three findings retire it:
+**C2's OCR half is not built, and should not be.** C2 specified a SKU crop taken off the QR as a
+fiducial. Then Tesseract, with an `A-Z0-9` whitelist. Three findings retire it:
 
-1. The research measured Apple's Vision OCR returning **confidence 1.0 on all 24 renders of
-   which 10 were misreads**, with a single candidate every time. An OCR that is confidently
-   wrong and offers no alternative cannot be an authority over a bearer instrument.
-2. Tesseract's character whitelist **does not work with its default LSTM engine** — the
-   maintainers confirm it. The whitelist was the mitigation C2 was relying on.
-3. The question OCR was for is answered better by section 4.
+1. Measured: Apple's Vision OCR returned **confidence 1.0 on all 24 renders, 10 of them
+   misreads**. It offered a single candidate every time. An OCR that is confidently wrong, with
+   no alternative, cannot be an authority over a bearer instrument.
+2. Tesseract's character whitelist does not work with its default LSTM engine. Its maintainers
+   confirm this. The whitelist was the mitigation C2 relied on.
+3. Section 4 answers the question OCR was for.
 
-**A mis-read is worse than a refusal, and that asymmetry decides the architecture.** A
-refusal costs a re-shoot. A mis-read sells a stranger something that does not work, is
-discovered days later, and lands in C6's replace-don't-refund with the operator unable to
-tell whether the code was bad or the read was.
+**A mis-read is worse than a refusal, and that asymmetry decides the architecture.** A refusal
+costs a re-shoot. A mis-read sells a stranger something that does not work. It is found days
+later and lands in C6's replace-not-refund. The operator then cannot tell whether the code or
+the read was bad.
 
 ---
 
 ## 4. The product is a capture claim
 
-**Code cards arrive in sealed-product batches.** A booster box yields 36 identical booster
-code cards. An Elite Trainer Box yields one ETB code. The operator is not sorting a shuffled
-pile; they are feeding a stack that came out of one thing, and they can see the box it came
-out of while the camera cannot.
+**Code cards arrive in sealed-product batches.** A booster box yields 36 identical booster code
+cards. An Elite Trainer Box yields one ETB code. The operator feeds a stack from one source. They
+can see the box it came from. The camera cannot.
 
 So the product joins `game`, `set_hint`, `metadata_finish` and `rarity_claim` as a **capture
-claim** in D21's sense: client state, resent with every capture, written to the record and
-the sidecar, correctable afterwards on the card that got it wrong. One picker on a screen
-replaces a fiducial crop, an OCR engine, a whitelist, a fuzzy matcher, and a hand-built SKU
-table that no published source exists for — the research confirmed there is **no public list
-of code-card SKU strings**, official or community, and a GitHub code search for the two
-examples in the fork's own notes returns zero hits.
+claim** in D21's sense. It is client state, resent with every capture. It is written to the
+record and the sidecar, and it is correctable afterwards on the card that got it wrong. One
+picker replaces a fiducial crop, an OCR engine, a whitelist, a fuzzy matcher and a hand-built SKU
+table. No public list of code-card SKU strings exists, official or community. A GitHub code
+search for the two examples in the fork's own notes returns zero hits.
 
-**What is given up, plainly**: a genuinely shuffled pile of unknown provenance cannot be
-sorted this way. Three things say the trade is right. A booster code is worth $0.03 and sells
-undifferentiated, so sorting those by set earns nothing. The premium products, where the
-product decides the price, arrive in ones and twos and are trivially declared. And where
-provenance really is unknown the paid vision read remains available at about $0.002 a card —
-worth spending on a $1.39 code and never on a $0.03 one.
+**What is given up:** a shuffled pile of unknown provenance cannot be sorted this way. The trade
+is still right. A booster code is worth $0.03 and sells undifferentiated, so sorting those by set
+earns nothing. Premium products arrive in ones and twos, and their product sets the price. They
+are declared trivially. Where provenance is unknown, the paid vision read costs about $0.002 a
+card. Spend it on a $1.39 code, never on a $0.03 one.
 
-`codes/products.py` holds the vocabulary, derived from the catalog rather than invented.
+`codes/products.py` holds the vocabulary. It is derived from the catalog, not invented.
 
 ---
 
@@ -136,9 +127,9 @@ worth spending on a $1.39 code and never on a $0.03 one.
 
 ### 5.1 TCGplayer catalog, from the real export
 
-Read off the Near Mint rows of `fixtures/pokemon_wide_export_untouched.csv` — a real Filtered
-Export scoped to four sets, 51 distinct code-card products. **A catalog price, not a realised
-sale.**
+Read off the Near Mint rows of `fixtures/pokemon_wide_export_untouched.csv`. That is a real
+Filtered Export scoped to four sets, with 51 distinct code-card products. **A catalog price, not a
+realised sale.**
 
     pc_etb              1.19 - 1.50   median 1.39
     premium_collection  0.09 - 1.50   median 0.26
@@ -148,11 +139,10 @@ sale.**
     tin                 0.03 - 0.12   median 0.05
     booster             0.03 - 0.05   median 0.03
 
-**A Pokemon Center ETB code lists at roughly 46x a booster code, and boosters are the
-overwhelming majority of any real pile.** The pile's value is a long flat floor with a few
-tall spikes. The fork's instinct — "separate non-BST codes on sight" — is confirmed by the
-first numbers anyone here has looked at, and D9's $0.40 threshold falls between the two
-populations, which it predicted three months early.
+**A Pokemon Center ETB code lists at roughly 46x a booster code.** Boosters are the overwhelming
+majority of any real pile. The pile's value is a long flat floor with a few tall spikes. The
+fork's rule, "separate non-BST codes on sight", is confirmed by these numbers. D9's $0.40
+threshold falls between the two populations.
 
 ### 5.2 What the market actually pays, from live sources
 
@@ -164,20 +154,20 @@ populations, which it predicted three months early.
     eBay digital 100-lot                      $0.056 - $0.130
     eBay 5-lot                                $0.142
 
-**Recency beats chase status.** Retail spread newest-to-oldest is 4.9x, and Prismatic
-Evolutions — the most hyped physical set of the era — sits near the bottom at $0.09. What
-buyers pay for is a set still in print and standard-legal in TCG Live. **This is a decay
-curve, and it means inventory must move rather than be held.**
+**Recency beats chase status.** Retail spread from newest to oldest is 4.9x. Prismatic
+Evolutions, the most hyped physical set of the era, sits near the bottom at $0.09. Buyers pay
+for a set still in print and standard-legal in TCG Live. **This is a decay curve. Inventory
+must move, not be held.**
 
-**Product type beats set.** A Build & Battle code is about 5x a booster from the same set,
-widening to 15x for older sets. Deck codes run 10x to 200x a booster.
+**Product type beats set.** A Build & Battle code is about 5x a booster from the same set. The
+gap widens to 15x for older sets. Deck codes run 10x to 200x a booster.
 
 ---
 
 ## 6. Channels, and what destroying the card costs
 
-Six channel families were researched independently. **Every one returned MARGINAL.** That is
-the honest headline and it is not softened here.
+Six channel families were researched independently. **Every one returned MARGINAL.** This is the
+headline. It is not softened here.
 
 | channel | digital delivery? | verdict |
 |---|---|---|
@@ -188,127 +178,119 @@ the honest headline and it is not softened here.
 | Etsy / Gameflip / Kinguin | yes | permitted, effectively no buyers |
 | Whatnot / Mercari / FB / Amazon | **no — policy** | foreclosed |
 
-### 6.1 Destroying the card forecloses three things — CONDITIONALLY, and the condition changed
+### 6.1 Destroying the card forecloses three things, conditionally
 
-**AMENDED by the owner's ruling. Read this before the list below.** The owner
-holds the PREMIUM code cards physically, in a box, at tracked locations, and will ship them.
-Only the BULK tier is destroyed. Everything below is therefore true **of a destroyed card and
-of nothing else** — the original draft stated it unconditionally and that was wrong.
+**Owner ruling (amended).** The owner ruled that PREMIUM code cards are held physically. They
+sit in a box at tracked locations, and the owner will ship them. Only the BULK tier is destroyed. The
+points below hold **of a destroyed card and of nothing else.**
 
-The consequences of the split, settled:
+The consequences of the split:
 
-- **TCGplayer is OPEN for the retained premium tier**, and the existing `join -> emit ->
-  Import to Staged` path already reaches it: 263 code-card rows in the fixture export, five
-  conditions each, a 16-column schema byte-identical to singles.
-- **TCGplayer's BULK lane is open, CSV-listable, and economically dead. All three.**
-  Corrected against first-party API reads after the owner challenged the first
-  draft, which was wrong.
+- **TCGplayer is open for the retained premium tier.** The existing `join -> emit -> Import to
+  Staged` path reaches it. The fixture export holds 263 code-card rows, with five conditions
+  each. The 16-column schema is byte-identical to singles.
+- **TCGplayer's bulk lane is open and CSV-listable, but economically dead.** All three hold. Corrected against first-party API reads after the owner challenged the first draft, which was wrong.
 
-  **It IS an ordinary catalog product.** `productId 253512`, category 56 "Bulk Lots", group
-  2303 "Pokemon Bulk Card Lots", rarity "Code Card", `sellerListable: true`, and exactly ONE
-  SKU — `productConditionId 5274046`, condition "Unopened". That id is what the export's
-  `TCGplayer Id` column carries, so a CSV row for it is an ordinary row.
+  **It is an ordinary catalog product.** `productId 253512`, category 56 "Bulk Lots", group 2303
+  "Pokemon Bulk Card Lots", rarity "Code Card", `sellerListable: true`. It has exactly ONE SKU,
+  `productConditionId 5274046`, condition "Unopened". The export's `TCGplayer Id` column carries
+  that id, so a CSV row for it is an ordinary row.
 
-  **Photos are policy, not a mechanism.** TCGplayer's Bulk Lots FAQ says verbatim "Do Bulk
-  Lots need to be added as Listings with Photos? **Yes.**" But of 56 live listings, **26 are
-  `listingType: standard` with zero images, zero title and zero description, and they hold
-  28,936 of the 31,493 standing units — 92%.** A CSV row produces exactly a standard listing.
-  So the first draft's "cannot be listed by CSV" was wrong; what is true is that 92% of the
-  inventory on this SKU is in open violation of a stated rule with no visible consequence,
-  which is a risk to weigh rather than a mechanism to route around.
+  **Photos are policy, not a mechanism.** TCGplayer's Bulk Lots FAQ says "Do Bulk Lots need to be
+  added as Listings with Photos? **Yes.**" Of 56 live listings, **26 are `listingType: standard`
+  with zero images, zero title and zero description.** They hold 28,936 of the 31,493 standing
+  units, which is 92%. A CSV row produces exactly a standard listing. So "cannot be listed by
+  CSV" was wrong. What is true: 92% of this SKU's inventory breaks a stated rule with no visible
+  consequence. That is a risk to weigh. It is not a mechanism to route around.
 
-  **A standard listing has no title and no description**, so the CSV path commits you to
-  physical shipment with no way to say otherwise on the listing — and there is no "1,000-card
-  lot" structure at all. One SKU, priced per card; **the BUYER chooses the quantity**. Real
-  weekly sales run 1,425 / 1,100 / 975 / 734 / 700 / 558 units. This is a commodity listing,
-  not a lot.
+  **A standard listing has no title and no description.** The CSV path therefore commits you to
+  physical shipment. The listing offers no way to say otherwise. There is no "1,000-card lot"
+  structure. One SKU is priced per card, and **the buyer chooses the quantity**. Real weekly sales
+  run 1,425 / 1,100 / 975 / 734 / 700 / 558 units. This is a commodity listing, not a lot.
 
-  **And it cannot absorb the pile.** The SKU's entire annual market across all 56 sellers is
-  **8,694 units — about $299 of gross merchandise value in a year** — against **31,493 units
-  already standing, roughly 3.6 years of demand.** Adding 30,000 takes it to about seven
-  years. The lane works and is not worth using at this scale.
-- **eBay's dispute defense is restored for anything shipped**, and only for Item Not Received.
-  It does nothing for Item Not As Described, which is the dispute code cards actually attract.
-- **The hybrid — ship the cards AND message the codes — is the worst case, not the best.** The
-  buyer redeems from the message, files INAD, and returns worthless redeemed cards. Zero of six
-  high-feedback specialists examined do it.
+  **It cannot absorb the pile.** The SKU's entire annual market across all 56 sellers is **8,694
+  units, about $299 of gross merchandise value a year**. **31,493 units already stand, roughly
+  3.6 years of demand.** Adding 30,000 takes it to about seven years. The lane works, and it is
+  not worth using at this scale.
+- **eBay's dispute defense is restored for anything shipped, and only for Item Not Received.** It
+  does nothing for Item Not As Described, the dispute code cards actually attract.
+- **The hybrid, shipping the cards AND messaging the codes, is the worst case.** The buyer redeems
+  from the message, files INAD, and returns worthless redeemed cards. Zero of six high-feedback
+  specialists examined do this.
 
 ### 6.1a The binding constraint is ABSORPTION, not price or postage
 
 The owner's pile is **~30,000 codes**. Measured against that:
 
-- TCGplayer's bulk SKU absorbs **8,694 units/year across every seller combined — about $299
-  of GMV** — and already carries **31,493 standing units across 56 listings** (re-counted
-  first-hand; an earlier figure of ~19,300 was low). The pile alone is roughly
-  **3.5 years of total market demand**, queued behind **3.6 years** of existing supply.
+- TCGplayer's bulk SKU absorbs **8,694 units a year across every seller combined, about $299 of
+  GMV**. It carries **31,493 standing units across 56 listings**, re-counted first-hand; an earlier figure of ~19,300 was low. The pile
+  alone is roughly **3.5 years of total market demand**. It queues behind **3.6 years** of
+  existing supply.
 - The best eBay 1,000-lot comparable sold **twice, lifetime**.
-- The entire PREMIUM tier absorbs **924 units and $231 gross per year, marketplace-wide**. At a
-  3% premium fraction the pile holds ~900 premium codes — about a year of the whole market's
-  appetite — decaying at a measured **-25%/year**.
+- The entire PREMIUM tier absorbs **924 units and $231 gross a year, marketplace-wide**. At a 3%
+  premium fraction, the pile holds ~900 premium codes. That is about a year of the whole market's
+  appetite. They decay at a measured **-25% a year**.
 
-**Nothing in the pipeline can move that number.** It is why the lot builder's most valuable
-property is not the listing text but the guarantee that a code is never committed twice across
-two concurrently-listed venues, and why the honest expectation is a multi-year tail at
-clearing prices rather than a liquidation.
+**Nothing in the pipeline moves that number.** The lot builder's most valuable property is the
+guarantee that a code is never committed twice across two concurrently listed venues. Expect a
+multi-year tail at clearing prices, not a liquidation.
 
 ### 6.1b Lot size and mixing, settled by measurement
 
-- **1,000 cards is the postage optimum**: $9.70 Ground Advantage = **$0.0097/code**, against
-  **$0.100-$0.168/code at 50**, which falls off the eBay Standard Envelope cliff on both weight
-  and thickness. There is no good lot size between 16 and ~250.
-- **15 cards is the eSE optimum** at $0.78 = $0.052/code, and 20 is the absolute ceiling on
+- **1,000 cards is the postage optimum.** $9.70 Ground Advantage is **$0.0097 a code**. At 50
+  cards it is **$0.100-$0.168 a code**, because the eBay Standard Envelope cliff hits on weight
+  and thickness. No good lot size exists between 16 and ~250.
+- **15 cards is the eSE optimum** at $0.78, or $0.052 a code. 20 is the absolute ceiling on
   thickness.
-- **Mixing costs nothing at scale**: the mixed-versus-named discount is ~80% at 5-count, 62% at
-  single-code retail, ~11% at 24-30, and **~0% by 50+**. So bulk lots need no set sorting, and
-  mixing only destroys value on small lots and singles — where the premium codes are.
+- **Mixing costs nothing at scale.** The mixed-versus-named discount is ~80% at 5-count, 62% at
+  single-code retail, ~11% at 24-30, and **~0% by 50+**. Bulk lots need no set sorting. Mixing
+  destroys value only on small lots and singles, where the premium codes are.
 
-### 6.1c What the original list said, which still holds for a DESTROYED card
+### 6.1c The original list, which still holds for a DESTROYED card
 
-1. **TCGplayer is foreclosed outright.** Its own help article permits code cards *"attached
-   to a physical card"* and states that *"the sale of promo codes not attached to a physical
-   card is prohibited."* No physical card, no TCGplayer — regardless of the 1,254 code-card
-   SKUs in its catalog.
+1. **TCGplayer is foreclosed outright.** Its help article permits code cards *"attached to a
+   physical card"*. It states that *"the sale of promo codes not attached to a physical card is
+   prohibited."* No physical card, no TCGplayer. This holds regardless of the 1,254
+   code-card SKUs in its catalog.
 2. **eBay dispute defense is foreclosed.** eBay's Money Back Guarantee explicitly excludes
-   *"Digital content, Intangible goods"*, and seller protection requires evidence of physical
+   *"Digital content, Intangible goods"*. Seller protection requires evidence of physical
    delivery. Every digital-delivery dispute is a guaranteed loss plus a dispute fee.
 3. **Six consumer marketplaces are foreclosed** by their own digital-goods bans.
 
-**This directly overturns C5**, which specified shipping the physical cards precisely to buy
-the protection above. C5 is superseded: its mechanism is unavailable under D24, and the
-protection it bought cannot be replaced on eBay. What replaces it is channel choice — a
-buylist or an own storefront, where there is no marketplace dispute machinery to lose to —
-and C6's replace-don't-refund, which costs pennies and is the only defense left.
+**This overturns C5.** C5 specified shipping the physical cards to buy the protection above. Its
+mechanism is unavailable under D24. The protection cannot be replaced on eBay. Channel choice
+replaces it: a buylist or an own storefront, with no marketplace dispute machinery to lose to. C6's
+replace-not-refund costs pennies. It is the only defense left.
 
 ### 6.2 The economics, unsoftened
 
-The best-performing code listing found anywhere on eBay — 7,201 lifetime orders, 41 sold in
-one day — nets roughly **$4,728 a year**. That is the ceiling of a well-run operation on the
-single best listing in the category, and it lives at 1x-5x lot sizes where **the $0.30
-per-order fee is 42% of a $0.71 order and eBay's total take is 55.5%**. Bulk lots, the only
-automatable size, barely move: 16, 30 and 9 lifetime sales on the 100x, 50x and 1000x lots
-measured.
+The best-performing code listing found anywhere on eBay has 7,201 lifetime orders. It sold 41 in
+one day. It nets roughly **$4,728 a year**. That is the ceiling of a well-run operation on the
+single best listing in the category. It lives at 1x-5x lot sizes. There, **the $0.30 per-order fee
+is 42% of a $0.71 order, and eBay's total take is 55.5%**. Bulk lots, the only automatable size,
+barely move. The 100x, 50x and 1000x lots measured 16, 30 and 9 lifetime sales.
 
-**Demand and automatability point in opposite directions**, and that is the central finding.
-Volume lives where delivery is manual; automation lives where nothing sells.
+**Demand and automatability point in opposite directions.** This is the central finding. Volume
+lives where delivery is manual. Automation lives where nothing sells.
 
-The buy side is also closing. The largest dedicated shop has **shut its buylist** and demoted
-payout to store credit; a second now buys only two premium product types and **no booster
-codes at all**. The reason is visible in their own stock counts — 500 to 1,350 units standing
-per set. This is a supply glut, not a demand shortage.
+The buy side is closing. The largest dedicated shop has **shut its buylist** and demoted payout to
+store credit. A second shop buys only two premium product types and **no booster codes at all**.
+The reason is visible in their own stock counts: 500 to 1,350 units standing per set. This is a supply glut, not a
+demand shortage.
 
 ### 6.3 The recommendation
 
-**Tier the pile and run two lanes**, which is what `codes/products.py:is_premium` exists for:
+**Tier the pile and run two lanes.** `codes/products.py:is_premium` exists for this.
 
-- **Premium codes** (pc_etb, etb, premium_collection — the $0.99 to $2.00 population) are
-  worth listing individually on an own storefront or as named single-product lots. These are
-  the spikes and they justify per-card attention.
-- **Booster and bulk codes** go out in one undifferentiated wholesale submission. They are
-  worth $0.01 to $0.13 and no amount of sorting changes that.
+- **Premium codes** (pc_etb, etb, premium_collection, the $0.99 to $2.00 population) are worth
+  listing individually on an own storefront, or as named single-product lots. These are the
+  spikes. They justify per-card attention.
+- **Booster and bulk codes** go out in one undifferentiated wholesale submission. They are worth
+  $0.01 to $0.13. No amount of sorting changes that.
 
-**Do not build delivery automation yet.** C7's eBay Trading API call is still live but is now
-**deprecated**, replaced by a REST Message API. Building against either is premature while
-the channel decision is unexecuted, and section 8 names the experiment that would settle it.
+**Do not build delivery automation yet.** C7's eBay Trading API call is still live, but it is
+**deprecated**. A REST Message API replaces it. Building against either is premature while the
+channel decision is unexecuted. Section 8 names the experiment that would settle it.
 
 ---
 
@@ -316,101 +298,101 @@ the channel decision is unexecuted, and section 8 names the experiment that woul
 
 `codes/ledger.py` carries the argument. In brief:
 
-- **The key is the code**, not the position. C3 asked for this and C8's first build used the
-  position; under D24 the card is destroyed, so the position is a filing reference and the
-  code is the identity. This is what makes dedupe and reservation possible at all.
-- **Codes are fungible pool inventory, not located items** (D24). No box, no section, no
-  position — the code string is the primary key. Do not reuse the singles schema.
+- **The key is the code**, not the position. C3 asked for this. C8's first build used the
+  position. Under D24 the card is destroyed. The position is therefore a filing reference, and
+  the code is the identity. That makes dedupe and reservation possible.
+- **Codes are fungible pool inventory, not located items** (D24). There is no box, no section and
+  no position. The code string is the primary key. Do not reuse the singles schema.
 - **`inventory/codes.jsonl`, gitignored.** A ledger of unredeemed codes is a file of bearer
-  instruments. The runtime writing into a gitignored file is the sanctioned path; the commit
+  instruments. The runtime writes into a gitignored file. That is the sanctioned path. The commit
   guards protect the repository, not the store.
-- **States are the code's, not the card's**: `held`, `reserved`, `delivered`, `dead`. A card
-  can be destroyed under D24 while its code is still `held` and perfectly saleable, and
-  conflating the two would make disposal look like losing the asset.
-- **Reservation is all-or-nothing and refuses anything not `held`.** Double-selling is
-  unrecoverable, so the refusal is loud rather than a no-op.
-- **The ledger is one file parsed in full on every request.** It breaks past about 100,000 code entries. That is a different axis from the singles card count. Measure it when a real code card runs through it, and not before.
-- **A duplicate is recorded, never resolved.** One code read at two positions means either
-  one card photographed twice or two cards bearing one code. A human decides with both
-  photographs; a rule would be wrong half the time.
+- **States belong to the code, not the card**: `held`, `reserved`, `delivered`, `dead`. Under D24
+  a card can be destroyed while its code is still `held` and saleable. Conflating the two would
+  make disposal look like losing the asset.
+- **Reservation is all-or-nothing, and it refuses anything not `held`.** Double-selling is
+  unrecoverable, so the refusal is loud, not a no-op.
+- **The ledger is one file, parsed in full on every request.** It breaks past about 100,000 code
+  entries. That is a different axis from the singles card count. Measure it when a real code card
+  runs through it, not before.
+- **A duplicate is recorded, never resolved.** A code read at two positions is either one card
+  photographed twice, or two cards bearing one code. A human decides with both photographs. A rule
+  would be wrong half the time.
 
 ---
 
 ## 8. What is NOT settled
 
-Named rather than buried, and none of it blocks the build.
+Named rather than buried. None of it blocks the build.
 
-1. **No real code card has ever been through this pipeline.** Every decode number is
-   synthetic. The first real stack is the measurement that matters, and it may find a layout,
-   a glare pattern or a print run nothing here anticipates.
-2. **The dead-code rate is unknown.** Bulk lots are sold "unused" and unverifiable, there is
-   no automated way to screen them, and no source publishes a rate. Price bulk assuming a
-   loss and measure it on the first batch.
-3. **No channel has been executed.** Every price above is an ask or a catalog figure except
-   where a sold count is cited. The cheapest experiment that would settle the whole plan is
-   **one wholesale submission of a few hundred booster codes to a buylist that accepts a
-   pasted list, and one premium code listed on a storefront** — a week's
-   work that replaces six MARGINAL verdicts with two realised prices.
-4. **Buylist counterparty risk is real and unquantified.** The one app that accepts a pasted
-   list of codes rates 2.3 to 3.1 stars with recurring non-payment complaints. Submit a small
-   batch first.
-5. **The redemption limits are TPCi's published figures and have not been re-verified
-   against a current source by this repo.**
-6. **The SKU suffix vocabulary is undetermined.** Only `BST` was ever observed. This costs
-   nothing while section 4 stands, and would matter if OCR were ever revisited.
-7. **Whether the code string itself encodes the product** is unverified in either direction.
-   If it did, section 4's picker becomes unnecessary — worth ten minutes against the first
-   real batch.
-8. **`#/codes` names a card by its stored index, and D196 stays open on it.** The round-2
-   library-lane review found `Codes.tsx` printing `slot {index}` on screen. It shows in the
-   dup-positions list and the Position column. That is the ledger's own row number. D196
-   bans a user-visible string naming a pipeline-internal noun. D24 already hides this same
-   number from a card's identity, for the reason D58 hides a singles card's stored index.
-   No fix landed. Codes carry no section-relative number the way a located singles card
-   does (D260). There is nothing today to compose in its place. The owner's ruling: leave it as a known gap. It stays open until the dormant feature wakes.
+1. **No real code card has been through this pipeline.** Every decode number is synthetic. The
+   first real stack is the measurement that matters. It may find a layout, a glare pattern or a
+   print run that nothing here anticipates.
+2. **The dead-code rate is unknown.** Bulk lots are sold "unused" and cannot be verified. There is
+   no automated way to screen them, and no source publishes a rate. Price bulk assuming a loss.
+   Measure it on the first batch.
+3. **No channel has been executed.** Every price above is an ask or a catalog figure, except where
+   a sold count is cited. The cheapest experiment that would settle the plan has two parts. Submit
+   one wholesale batch of a few hundred booster codes to a buylist that accepts a pasted list. List
+   one premium code on a storefront. A week's work replaces six MARGINAL verdicts with two
+   realised prices.
+4. **Buylist counterparty risk is real and unquantified.** The one app that accepts a pasted list
+   of codes rates 2.3 to 3.1 stars, with recurring non-payment complaints. Submit a small batch
+   first.
+5. **The redemption limits are TPCi's published figures.** This repo has not re-verified them
+   against a current source.
+6. **The SKU suffix vocabulary is undetermined.** Only `BST` was ever observed. This costs nothing
+   while section 4 stands. It would matter if OCR were revisited.
+7. **Whether the code string itself encodes the product is unverified, either way.** If it does,
+   section 4's picker is unnecessary. It is worth ten minutes against the first real batch.
+8. **`#/codes` names a card by its stored index, and D196 stays open on it.** A review found
+   `Codes.tsx` printing `slot {index}` on screen, in the dup-positions list and the Position
+   column. That is the ledger's own row number. D196 bans a user-visible string that names a
+   pipeline-internal noun. D24 already hides this number from a card's identity, for the reason
+   D58 hides a singles card's stored index. No fix landed. Codes carry no section-relative number
+   the way a located singles card does (D260). Nothing today can stand in its place. The owner
+   ruled: leave it as a known gap until the dormant feature wakes.
 
 ---
 
 ## 9. Lots
 
-`codes/lots.py` builds them; `#/codes` is where a human does. Two rules carry the design and
-both were found by reading generated output rather than by reasoning.
+`codes/lots.py` builds them. A human builds them on `#/codes`. Two rules carry the design. Both
+were found by reading generated output, not by reasoning.
 
-**A PHYSICAL LOT IS SCOPED TO A BOX.** The obvious shape — "reserve any 1,000 sellable bulk
-codes" — commits codes A through J while the operator, standing at a shelf, grabs a different
-thousand cards. The buyer then receives cardboard whose codes were never committed to them,
-and the ledger is confidently wrong about both. No packing discipline fixes it, because the
-cards are indistinguishable by eye. A count-scoped lot is legal only for a DIGITAL sale, where
-nothing is pulled.
+**A PHYSICAL LOT IS SCOPED TO A BOX.** The obvious shape is "reserve any 1,000 sellable bulk
+codes". That commits codes A through J. Meanwhile the operator, standing at a shelf, grabs a
+different thousand cards. The buyer receives cardboard whose codes were never committed to them,
+and the ledger is confidently wrong about both. No packing discipline fixes this. The cards are
+indistinguishable by eye. A count-scoped lot is legal only for a DIGITAL sale, where nothing is
+pulled.
 
-**A PHYSICAL LOT TAKES THE WHOLE BOX OR IT IS REFUSED.** A lot that took 1,000 of a box's
-1,003 cards produces a correct ledger and a packing slip reading "Box 12, 1000 card(s)" — and
-the operator, holding that slip and that box, ships 1,003. Two of those three strays list at
-roughly 46x a booster. "Pull all of them except these three" is not an instruction anybody
-executes reliably against a thousand identical pieces of cardboard, so it is not offered:
-`plan` refuses and names the strays by index.
+**A PHYSICAL LOT TAKES THE WHOLE BOX, OR IT IS REFUSED.** A lot that takes 1,000 of a box's 1,003
+cards produces a correct ledger. It also produces a packing slip reading "Box 12, 1000 card(s)".
+The operator holds that slip and that box, and ships 1,003. Two of those three strays list at
+roughly 46x a booster. "Pull all of them except these three" is not an instruction anyone executes
+reliably against a thousand identical pieces of cardboard. So it is not offered. `plan` refuses and
+names the strays by index.
 
-**That check asks what is PHYSICALLY IN THE BOX, not what is sellable from it**, and the
-difference is two classes of card that a first version missed entirely — a code with no product
-claim, which every lot filter drops on purpose, and a code **already reserved to another lot**,
-which would then be shipped to two buyers. Only `delivered` means the cardboard has left. The
-second class was caught on real data: two cards in a demo box were already committed to an
-earlier order and would have gone out twice.
+**That check asks what is PHYSICALLY IN THE BOX, not what is sellable from it.** A first version
+missed two classes of card. The first is a code with no product claim. Every lot filter drops it on
+purpose. The second is a code **already reserved to another lot**, which would ship to two buyers.
+Only `delivered` shows that the cardboard has left. The second class was caught on real data. Two
+cards in a demo box were already committed to an earlier order, and they would have gone out twice.
 
-**Three artifacts, because three different people read them.** `listing.txt` for the seller,
-once. `manifest.txt` for the BUYER — one code per line and nothing else, because it is pasted
-whole. `packing.txt` for the operator at the shelf. The manifest is **never returned inline by
-the route**: a thousand live codes in a JSON response also land in every devtools network tab
-and screenshot that catches it, so the screen links to the file.
+**Three artifacts, because three different people read them.** `listing.txt` is for the seller,
+once. `manifest.txt` is for the BUYER: one code per line and nothing else, because it is pasted
+whole. `packing.txt` is for the operator at the shelf. The manifest is **never returned inline by
+the route**. A thousand live codes in a JSON response land in every devtools network tab and in any
+screenshot that catches it. The screen links to the file instead.
 
-`lots/` is gitignored for `inventory/`'s reason and not a weaker one.
+`lots/` is gitignored for `inventory/`'s reason, and for no weaker one.
 
 ---
 
 ## 10. Seller level gates the whole TCGplayer plan
 
-Measured from TCGplayer's own help articles. **The item cap counts QUANTITY, not
-distinct products**, which is what makes it bite here:
+Measured from TCGplayer's own help articles. **The item cap counts QUANTITY, not distinct
+products.** That is what makes it bite here:
 
     Level 1     100 items        30,000 units is impossible
     Level 2     500 items        still impossible
@@ -418,280 +400,242 @@ distinct products**, which is what makes it bite here:
     Level 4     unlimited        and the ONLY level with Export Filtered CSV / Import to
                                  Staged, and the only one that may set shipping to $0
 
-**So the CSV path this repo already emits is a Level 4 feature.** Below that, listing is UI
-work whatever the pipeline can produce. The owner's seller level is not recorded here and
-decides which of these paragraphs applies.
+**So the CSV path this repo already emits is a Level 4 feature.** Below that, listing is UI work,
+whatever the pipeline can produce. The owner's seller level is not recorded here. It decides which
+of these paragraphs applies.
 
-**The $1.49 shipping minimum only fires under a $5.00 product total**, verified against twelve
-live listings: a $0.02 item with a $0.00 seller rate still charges the buyer $1.49, while a
-$9.00 item with a $0.00 seller rate charges $0.00. That matters in both directions — it is
-what makes a sub-$5 PREMIUM single net more than its own price, and it is why a $40 bulk order
-carries no shipping subsidy at all and the seller eats the postage.
+**The $1.49 shipping minimum fires only under a $5.00 product total.** Verified against twelve live
+listings. A $0.02 item with a $0.00 seller rate still charges the buyer $1.49. A $9.00 item with a
+$0.00 seller rate charges $0.00. This cuts both ways. It is what makes a sub-$5 PREMIUM single net
+more than its own price. It is also why a $40 bulk order carries no shipping subsidy, and the seller
+pays the postage.
 
-Tracking is advised over $20, **mandatory over $49.99**, signature over $250. Enforcement is
-by dispute forfeiture rather than a hard block.
+Tracking is advised over $20. It is **mandatory over $49.99**. Signature is advised over $250.
+Enforcement runs by dispute forfeiture, not a hard block.
 
 ---
 
-The settled decisions of the codes track follow, C1 to C11. They moved here from
-the old codes decisions file, which is deleted. Sections 1 to 10 above amend C2, C4 and C5,
-and each one is named where it is overturned. A `C<n>` citation resolves to the `## C<n>`
-heading below.
+The settled decisions of the codes track, C1 to C11, follow. Sections 1 to 10 amend C2, C4 and C5.
+Each amendment is named where it is overturned. A `C<n>` citation resolves to the `## C<n>` heading
+below.
 
 ## C1 — Card anatomy, verified on physical cards
 
 The face side carries everything needed. Single-sided capture, no flipping.
 
-- **QR code** decodes to `https://tcg.pokemon.com/en-us/tcgl/#redeem?2d_code=<CODE>`. The
-  payload is the code only — no set metadata, no product metadata.
+- **QR code** decodes to `https://tcg.pokemon.com/en-us/tcgl/#redeem?2d_code=<CODE>`. The payload is
+  the code only, with no set or product metadata.
 - **Printed code**, format `XXX-XXXX-XXX-XXX`.
-- **Product SKU** printed directly above the code: `EN` + set code + product suffix.
-  Observed: `ENME1BST` (Mega Evolution booster), `ENSV8P5BST` (Prismatic Evolutions
-  booster). This is the identification key.
-- **Plain-English name line** at the bottom ("Scarlet & Violet—Prismatic Evolutions").
-  Secondary cross-check only — em-dashes and spaces make it a worse OCR target.
-- **Reverse art is useless.** Five randomized designs, set-independent, across the whole
-  modern range.
+- **Product SKU** printed directly above the code: `EN` + set code + product suffix. Observed:
+  `ENME1BST` (Mega Evolution booster), `ENSV8P5BST` (Prismatic Evolutions booster). This is the
+  identification key.
+- **Plain-English name line** at the bottom ("Scarlet & Violet—Prismatic Evolutions"). It is a
+  secondary cross-check only. Em-dashes and spaces make it a worse OCR target.
+- **Reverse art is useless.** Five randomized designs, set-independent, across the whole modern
+  range.
 
 ## C2 — Identification architecture
 
-**SUPERSEDED IN PART. Steps 1 and 2 stand; steps 3, 4 and 5 are retired.** The QR
-decode is built and is the primary path. The OCR half — SKU crop, Tesseract, fuzzy match
-against a hand-built SKU table — is NOT built and should not be: see C9. The cost argument
-below still holds and is now stronger, because the primary path costs nothing at all.
+**SUPERSEDED IN PART. Steps 1 and 2 stand. Steps 3, 4 and 5 are retired.** The QR decode is built
+and is the primary path. The OCR half (SKU crop, Tesseract, fuzzy match against a hand-built SKU
+table) is NOT built, and should not be. See C9. The cost argument below still holds. It is stronger
+now, because the primary path costs nothing.
 
-1. Decode QR locally. Deterministic, and doubles as an "in frame and readable" check.
-2. Use the QR as a fiducial: four corners give scale, rotation, and perspective for free.
-   Crop the SKU relative to the QR bounding box.
+1. Decode QR locally. Deterministic, and it doubles as an "in frame and readable" check.
+2. Use the QR as a fiducial. Its four corners give scale, rotation and perspective for free. Crop the
+   SKU relative to the QR bounding box.
 3. OCR the crop, `A-Z0-9` whitelist, Tesseract.
-4. Fuzzy-match against the SKU table → set + product type.
-5. Low confidence → cross-check the English name line.
-6. No match → review queue.
+4. Fuzzy-match against the SKU table to get set and product type.
+5. Low confidence: cross-check the English name line.
+6. No match: review queue.
 
-**The SKU table is built empirically**: scan a few dozen cards across eras, dump
-unrecognized strings, map by hand once. A couple hundred entries covers everything. Haiku
-is the fallback for unknown SKUs only — same shape as the singles variant ladder.
+**The SKU table is built empirically.** Scan a few dozen cards across eras. Dump the unrecognized
+strings. Map them by hand, once. A couple hundred entries cover everything. Haiku is the fallback for
+unknown SKUs only. It has the same shape as the singles variant ladder.
 
-Cost on the primary path is effectively zero, versus ~$0.002/card if Haiku ran on every
-card. That is 1–2% of a code's retail value — tolerable, but unnecessary.
+On the primary path the cost is effectively zero. Haiku on every card would cost ~$0.002 a card. That
+is 1–2% of a code's retail value. It is tolerable, but unnecessary.
 
 ## C3 — Data model
 
-**AMENDED (C9): the redemption limits below are SOFT, not hard caps.** Past a
-limit a code grants a small amount of in-game currency instead of the product; it is not
-refused. The figures are otherwise confirmed against the official FAQ.
+**AMENDED (C9): the redemption limits below are SOFT, not hard caps.** Past a limit, a code grants a
+small amount of in-game currency instead of the product. It is not refused. The figures are otherwise
+confirmed against the official FAQ.
 
-Fungible pool inventory. Code string is the natural primary key, giving free dedupe and
+Fungible pool inventory. The code string is the natural primary key. That gives free dedupe and
 structural protection against double-selling. Atomic dequeue on order assignment.
 
-Per-code audit trail: source, `scanned_at`, capture photo, SKU, `order_id`, buyer,
-`delivered_at`.
+Per-code audit trail: source, `scanned_at`, capture photo, SKU, `order_id`, buyer, `delivered_at`.
 
-Product type matters as much as set. Redemption limits: booster 400, Build & Battle 25,
-precon deck 4, other products 4 (or 1 if only cosmetic). `BST` will dominate the pile;
-non-`BST` codes are the scarce, high-value ones and must be separated out.
+Product type matters as much as set. Redemption limits: booster 400, Build & Battle 25, precon deck 4,
+other products 4 (or 1 if only cosmetic). `BST` will dominate the pile. Non-`BST` codes are the scarce,
+high-value ones, and they must be separated out.
 
 ## C4 — Sales: eBay bulk lots, sorted by set
 
-25x / 50x / 100x. Single-code and 5-for-$1 lots are negative margin once eBay's ~13% plus
-per-order fee applies. Mystery mixed lots sell at a real discount — which is the entire
-justification for the SKU OCR work.
+25x / 50x / 100x. Single-code and 5-for-$1 lots are negative margin once eBay's ~13% plus per-order fee
+applies. Mystery mixed lots sell at a real discount. That discount is the entire justification for the
+SKU OCR work.
 
 ## C5 — Ship the physical cards AND message the codes instantly
 
-**OVERTURNED by C11.** Its mechanism is unavailable: D24 disposes of the physical
-cards, so there is nothing to ship. The problem it identified is real and its solution is
-gone — read C11 for what replaces it. The analysis below is kept because the risk it names
-is exactly the risk the track now carries unmitigated.
+**OVERTURNED by C11.** Its mechanism is unavailable. D24 disposes of the physical cards, so there is
+nothing to ship. The problem it identified is real, and its solution is gone. C11 says what replaces
+it. The analysis below stays, because the risk it names is the risk the track now carries unmitigated.
 
-Pure digital delivery has no seller protection. eBay requires carrier tracking with
-delivery confirmation for an item-not-received defense, so a buyer can redeem 100 codes,
-file INR, and win automatically. At 100-count lots, $1.50–4 postage against a $15–25 sale
-converts an unprotected digital sale into a protected physical one — and sidesteps the
-electronically-delivered-goods approval question entirely.
+Pure digital delivery has no seller protection. eBay requires carrier tracking with delivery
+confirmation for an item-not-received defense. So a buyer can redeem 100 codes, file INR, and win
+automatically. At 100-count lots, $1.50–4 postage against a $15–25 sale converts an unprotected digital
+sale into a protected physical one. It also sidesteps the electronically-delivered-goods approval
+question entirely.
 
 Listing copy states plainly: physical cards shipped, codes messaged instantly, no returns.
 
-## C6 — Dispute policy: replace, don't refund
+## C6 — Dispute policy: replace, not refund
 
-Costs pennies, protects feedback.
+It costs pennies and protects feedback.
 
 ## C7 — Automation, gated on singles Gate B
 
-`ORDER.CREATED` webhook → dequeue N codes → Trading API
-`AddMemberMessageAAQToPartner` (75 calls per 60s, 90-day order window; no REST equivalent
-exists) → mark shipped → decrement listing quantity.
+`ORDER.CREATED` webhook → dequeue N codes → Trading API `AddMemberMessageAAQToPartner` (75 calls per
+60s, 90-day order window; no REST equivalent exists) → mark shipped → decrement listing quantity.
 
-Until Gate B passes: manual listing, semi-manual code delivery. Cash flow can start there.
+Until Gate B passes: manual listing and semi-manual code delivery. Cash flow can start there.
 
 ---
 
 ## Open questions
 
-- **CODES-A — vintage SKU geometry.** Pre-TCG-Live (green PTCGO-era) cards may not carry
-  the SKU in the same format or position. Verify before assuming the fiducial offset holds
-  across the whole pile.
-- **CODES-B — SKU table coverage.** Build the mapping table; confirm coverage against
-  actual inventory.
-- Confirm eBay account standing, and whether digital-goods approval is needed even under
-  the ship-physical model.
-- Codes cannot be validated without redeeming them. Codes from own sealed product are safe;
-  anything acquired in bulk should be priced assuming a dead percentage.
-- Resale of codes is a gray zone. Nothing in TPCi's terms formally authorizes
-  redistribution, though the market is large and openly tolerated. Read the terms.
+- **CODES-A — vintage SKU geometry.** Pre-TCG-Live (green PTCGO-era) cards may not carry the SKU in the
+  same format or position. Verify before assuming the fiducial offset holds across the whole pile.
+- **CODES-B — SKU table coverage.** Build the mapping table. Confirm coverage against actual inventory.
+- Confirm eBay account standing. Confirm whether digital-goods approval is needed, even under the
+  ship-physical model.
+- Codes cannot be validated without redeeming them. Codes from our own sealed product are safe. Price
+  anything acquired in bulk assuming a dead percentage.
+- Resale of codes is a gray zone. Nothing in TPCi's terms formally authorizes redistribution. The market
+  is large and openly tolerated. Read the terms.
 
 ## Why codes goes first
 
-Small track: QR decode, SKU OCR, codes table, eBay lot listings, delivery worker. It rides
-the shared foundation and serves as the feeder's shakedown cruise — low stakes to fail on,
-since a misread QR fails to decode rather than mispricing a $40 card.
+Small track: QR decode, SKU OCR, codes table, eBay lot listings, delivery worker. It rides the shared
+foundation and serves as the feeder's shakedown cruise. Failure costs little, since a misread QR fails to
+decode rather than mispricing a $40 card.
 
 ## C8 — The code ledger: every code's text beside its photograph, for the dispute that will come
 
-Ratified by the owner. Code cards live in the arbitrary box of code cards, ideally sorted by set. The owner also said that both the code card image and an image-to-text CSV must be saved. If a customer says a code did not work, the code is checked against its image, and the likely cause is an image-to-text error.
+Ratified by the owner. Code cards live in the arbitrary box of code cards, ideally sorted by set. The owner also ruled that
+both the code card image and an image-to-text CSV must be saved. If a customer says a code did not work, the
+code is checked against its image. The likely cause is an image-to-text error.
 
-**The dispute flow is the spec.** A buyer says a code did not work. The owner looks the code
-up, opens the photograph it was read from, and re-reads it by eye — because the likeliest
-failure is the image-to-text step, and C6 already rules the remedy (replace, don't refund).
-Everything below exists to make that lookup two taps.
+**The dispute flow is the spec.** A buyer says a code did not work. The owner checks the code, opens the
+photograph it was read from, and re-reads it by eye. The likeliest failure is the image-to-text step. C6
+already rules the remedy: replace, not refund. Everything below exists to make that lookup two taps.
 
-**The mechanism rides what the singles track already built.** `pokemon_code` gets a real
-prompt profile whose job is transcription: the printed code, exactly as printed. The
-extracted code lands on the card record the way every identification does, which makes it
-searchable through the existing search with zero new UI — type the code, get the card, tap
-the photo. The ledger file is the fork's export: code text keyed to box/index and photo path.
+**The mechanism rides what the singles track already built.** `pokemon_code` gets a real prompt profile.
+Its job is transcription: the printed code, exactly as printed. The extracted code lands on the card
+record, the way every identification does. The existing search then finds it with zero new UI. Type the
+code, get the card, tap the photo. The ledger file is the fork's export: code text keyed to box/index and
+photo path.
 
-**A LEDGER OF UNREDEEMED CODES IS A FILE OF BEARER INSTRUMENTS**, and that sentence decides
-its storage: it lives under the store beside `inventory.json`, gitignored like everything
-there, and never in a commit — the commit-time opsec rules and the re-enabled PreToolUse
-guard both fire on a code literal precisely because a file like this must never cross them.
-The runtime writing codes into a gitignored file is the sanctioned path; an agent pasting one
-into a tracked file is what the guards exist to stop.
+**A LEDGER OF UNREDEEMED CODES IS A FILE OF BEARER INSTRUMENTS.** That sentence decides its storage. It
+lives under the store beside `inventory.json`. It is gitignored like everything there, and it never enters
+a commit. The commit-time opsec rules and the re-enabled PreToolUse guard both fire on a code literal. A file
+like this must never cross them. The runtime writing codes into a gitignored file is the sanctioned path. An
+agent pasting one into a tracked file is what the guards exist to stop.
 
-**BUILT.** The profile is `pokemon_code_v1`:
-`{code, name, confidence}`, uncertainty per character (`?` outside the printed alphabet, so
-the owner's re-read knows exactly which character was doubtful), the 3-4-3-3 layout described
-in words because a literal example would trip the commit guard on the prompt's own source.
-The code lands in the record's `number` — free because this game joins by name — which makes
-the existing search the dispute lookup with zero new UI: type the code, get the card, tap the
-photo (demonstrated over real HTTP against a scratch store). The ledger is two files with two
-jobs: `inventory/codes.jsonl`, a standing index upserted by position so one-line-per-card
-stays literally true across re-identifications, and `runs/<run>/codes.jsonl`, the run's
-deletable export — both verified gitignored (`git check-ignore -v`) before a byte was
-written. Transcription accuracy is unmeasured and cannot be measured without paid runs; the
-dispute flow is the corrective loop by design, which is what this entry says it is for.
+**BUILT.** The profile is `pokemon_code_v1`: `{code, name, confidence}`. It carries uncertainty per character.
+A `?` marks a character outside the printed alphabet, so the owner's re-read knows which character was doubtful.
+The 3-4-3-3 layout is described in words, because a literal example would trip the commit guard on the prompt's
+own source. The code lands in the record's `number`. That is free, because this game joins by name. The existing
+search then serves as the dispute lookup, with zero new UI. It was demonstrated over real HTTP against a scratch
+store. The ledger is two files with two jobs. `inventory/codes.jsonl` is a standing index, upserted by position,
+so one line per card stays literally true across re-identifications. `runs/<run>/codes.jsonl` is the run's
+deletable export. Both were verified gitignored (`git check-ignore -v`) before a byte was written.
+Transcription accuracy is unmeasured. It cannot be measured without paid runs. The dispute flow is the
+corrective loop by design.
 
-**Sorted by set is a capture convention, not a schema**: the set hint field already carries
-it, and the code-card box is its own box by the same owner ruling (recorded in D24 — a
-pooled card in a located box knowingly consumes a slot number, so the convention is what
-keeps the located boxes' denominators honest).
-
+**Sorted by set is a capture convention, not a schema.** The set hint field already carries it. The
+code-card box is its own box, by the same owner ruling (recorded in D24). A pooled card in a located box
+knowingly consumes a slot number. The convention is what keeps the located boxes' denominators honest.
 
 ---
 
 ## C9 — The QR is the whole identification, and the OCR half is retired
 
-Ratified by measurement. `docs/specs/code-cards.md` carries the full argument;
-this entry records the decision and what it overturns.
+Ratified by measurement. Section 3 carries the argument. This entry records the decision and what it
+overturns.
 
-**The redemption code IS the QR's payload.** Confirmed first-party by reading the official
-redeemer's own JavaScript bundle: it reads a `2d_code` parameter and feeds the value straight
-into the redemption form. So the one field that must be exactly right — the thing being sold
-— is recovered by arithmetic over pixels, with no model call, no network call and no cost.
+**The redemption code IS the QR's payload.** Confirmed first-party by reading the official redeemer's
+JavaScript bundle. It reads a `2d_code` parameter and feeds the value straight into the redemption form.
+The one field that must be exactly right is the thing being sold. It is recovered by arithmetic over
+pixels. There is no model call, no network call and no cost.
 
-**Measured, at the rig's real frame size of 3840x2160: 140 of 140 physically-possible frames,
-ZERO mis-reads, 87 ms each.** Three cases are unrecoverable and were established by ablation
-against eleven transforms rather than assumed: a QR under about 40 px, a 3.5 px defocus, and
-glare that clips the symbol to white. All three return nothing.
+**Measured at 3840x2160, the rig's frame size: 140 of 140 physically-possible frames, ZERO mis-reads, 87 ms
+each.** Three cases are unrecoverable. Ablation against eleven transforms established them: a QR under
+about 40 px, a 3.5 px defocus, and glare that clips the symbol to white. All three return nothing.
 
-**C2's OCR half is retired rather than deferred**, on three findings:
+**C2's OCR half is retired, not deferred,** on three findings:
 
-1. Vision OCR was measured returning **confidence 1.0 on all 24 renders, of which 10 were
-   misreads**, offering a single candidate every time. An OCR that is confidently wrong and
-   offers no alternative cannot be an authority over a bearer instrument.
-2. **Tesseract's character whitelist does not work with its default LSTM engine**, confirmed
-   by its maintainers. The whitelist was the mitigation C2 depended on.
-3. There is **no published list of code-card SKU strings**, official or community, to fuzzy
-   match against — a GitHub code search for the two examples in the fork's own notes returns
-   zero hits. C2's "build the table empirically" would be building the only copy in
-   existence, kept honest by nobody.
+1. Vision OCR returned **confidence 1.0 on all 24 renders, 10 of them misreads**. It offered a single
+   candidate every time. An OCR that is confidently wrong, with no alternative, cannot be an authority over
+   a bearer instrument.
+2. **Tesseract's character whitelist does not work with its default LSTM engine.** Its maintainers confirm
+   this. The whitelist was the mitigation C2 depended on.
+3. There is **no published list of code-card SKU strings**, official or community, to fuzzy-match against.
+   A GitHub code search for the two examples in the fork's own notes returns zero hits. C2's "build the
+   table empirically" would build the only copy in existence. Nobody would keep it honest.
 
-**The decoder is `zxing-cpp==2.3.0` and the pin is load-bearing.** This repo's venv is Python
-3.9.6; the 3.x line dropped cp39 wheels, so an unpinned install resolves 3.1.1, finds no
-wheel, falls back to source and dies in CMake. An unpinned requirement here is a broken clone.
+**The decoder is `zxing-cpp==2.3.0`, and the pin is load-bearing.** This repo's venv is Python 3.9.6. The 3.x
+line dropped cp39 wheels. An unpinned install resolves 3.1.1, finds no wheel, falls back to source, and dies
+in CMake. An unpinned requirement here is a broken clone.
 
-**OpenCV was declined a SECOND time, and the first refusal stands.** A first pass at this took
-opencv's two QR detectors on a benchmark whose frames were at most 1600 px wide — which is not
-this rig. Re-measured at 3840x2160, opencv scored 72.7% at 211 ms including **0 of 8 on a card
-filling a quarter of the frame and 0 of 8 with glare**, against zxing-cpp's 100% at 67 ms. The
-46 MB stays unspent.
+**OpenCV was declined twice. The first refusal stands.** A first pass tested opencv's two QR detectors on a
+benchmark whose frames were at most 1600 px wide. That is not this rig. Re-measured at 3840x2160, opencv scored
+72.7% at 211 ms. It scored **0 of 8 on a card filling a quarter of the frame, and 0 of 8 with glare**.
+zxing-cpp scored 100% at 67 ms. The 46 MB stays unspent.
 
 ---
 
 ## C10 — The product is a capture claim, not a reading
 
-**Code cards arrive in sealed-product batches.** A booster box yields 36 identical booster
-code cards; an Elite Trainer Box yields one ETB code. The operator is not sorting a shuffled
-pile — they are feeding a stack that came out of one thing, and they can see the box while
-the camera cannot.
+Section 4 carries the facts. This entry records the decision.
 
-So which set and which product a code redeems is a **capture claim** in D21's exact sense:
-client state, resent with every capture, written to the record and the sidecar, correctable
-afterwards on the card that got it wrong. It joins `game`, `set_hint`, `metadata_finish` and
-`rarity_claim`, and it is what makes C9's retirement of the OCR possible — the OCR existed to
-answer this question, and one picker answers it more reliably.
+Which set and product a code redeems is a **capture claim** in D21's exact sense. It is client state, resent
+with every capture. It is written to the record and the sidecar, and it is correctable afterwards on the card
+that got it wrong. It joins `game`, `set_hint`, `metadata_finish` and `rarity_claim`. This is what makes C9's
+retirement of the OCR possible. The OCR existed to answer this question. One picker answers it more reliably.
 
-**What is given up**: a genuinely shuffled pile of unknown provenance cannot be sorted this
-way. The trade is right anyway. A booster code is worth $0.03 and sells undifferentiated, so
-sorting those by set earns nothing. The premium products, where the product decides the price,
-arrive in ones and twos and are trivially declared. And where provenance really is unknown the
-paid vision read remains available at ~$0.002 a card — worth spending on a $1.39 code and
-never on a $0.03 one.
+What is given up: a shuffled pile of unknown provenance cannot be sorted this way. The trade is still right.
+Section 4 has the numbers.
 
-**The vocabulary is derived from the catalog, never invented** (`codes/products.py`), which is
-the rule D22 already imposes on rarities and which has no reason to be weaker one track over.
+**The vocabulary is derived from the catalog, never invented** (`codes/products.py`). D22 already imposes this
+rule on rarities. It has no reason to be weaker on this track.
 
 ---
 
 ## C11 — Disposal forecloses two channels, and the tier decides the rest
 
-D24 rules that the physical card is destroyed once the code is extracted, and the owner
-reaffirmed it. **It has a price, recorded here so nobody rediscovers it.**
+D24 rules that the physical card is destroyed once the code is extracted. The owner reaffirmed it. **It has a
+price, recorded here so nobody rediscovers it.** Section 6.1c has the detail.
 
-**TCGplayer is foreclosed outright.** Its own help article permits code cards *"attached to a
-physical card"* and states that *"the sale of promo codes not attached to a physical card is
-prohibited"*. No physical card, no TCGplayer — regardless of the 1,254 code-card SKUs in its
-catalog, and regardless of this repo's entire join-and-emit pipeline pointing at it.
+**TCGplayer is foreclosed outright.** Its help article permits code cards *"attached to a physical card"*. It
+prohibits promo codes *"not attached to a physical card"*. Without a physical card, TCGplayer is closed. This holds
+regardless of the 1,254 code-card SKUs in its catalog. It holds regardless of this repo's join-and-emit
+pipeline pointing at it.
 
-**eBay's dispute defense is foreclosed.** The Money Back Guarantee explicitly excludes
-*"Digital content, Intangible goods"*, and seller protection requires evidence of physical
-delivery. Every digital-delivery dispute is a guaranteed loss plus a dispute fee. **This is
-precisely what C5 was written to solve, and C5's mechanism is gone.** What replaces it is
-channel choice — a buylist or an own storefront, where there is no marketplace dispute
-machinery to lose to — and C6's replace-don't-refund, which costs pennies.
+**eBay's dispute defense is foreclosed.** Every digital-delivery dispute is a guaranteed loss plus a dispute
+fee. **This is what C5 was written to solve, and C5's mechanism is gone.** Channel choice replaces it: a buylist
+or an own storefront, with no marketplace dispute machinery to lose to. C6's replace-not-refund also replaces it.
 
-**Every researched channel came back MARGINAL**, and that is stated rather than softened. Six
-channel families, researched independently. The best-performing code listing found anywhere on
-eBay nets about $4,728 a year, at 1x-5x lot sizes where the $0.30 per-order fee is 42% of the
-order and eBay's total take is 55.5%. Bulk lots, the only automatable size, barely move. **Demand
-and automatability point in opposite directions.** The buy side is closing too: the largest
-dedicated shop has shut its buylist, a second buys no booster codes at all, and their own stock
-counts show 500 to 1,350 units standing per set — a supply glut.
+**Every researched channel came back MARGINAL.** Six channel families were researched independently. The buy
+side is closing too. The largest dedicated shop has shut its buylist, and a second shop buys no booster codes.
+Their stock counts show a supply glut. Section 6 has the figures.
 
-**THE OPERATING RULE IS THE TIER.** A Pokemon Center ETB code lists at roughly **46x** a booster
-code, and boosters are the overwhelming majority of any pile. So:
+**THE OPERATING RULE IS THE TIER.** Premium codes (`pc_etb`, `etb`, `premium_collection`) are listed individually
+or as named single-product lots. Booster and bulk codes go out in one undifferentiated wholesale submission.
+`codes/products.py:is_premium` is that rule in code. D9's $0.40 threshold falls between the two populations.
+Section 6.3 has the lanes.
 
-- **premium codes** (`pc_etb`, `etb`, `premium_collection`) are listed individually or as named
-  single-product lots. They justify per-card attention.
-- **booster and bulk codes** go out in one undifferentiated wholesale submission. No amount of
-  sorting changes what they are worth.
-
-`codes/products.py:is_premium` is that rule in code. D9's $0.40 threshold falls between the two
-populations, which it predicted three months early.
-
-**Delivery automation is NOT built and should not be yet.** C7's eBay Trading API call is still
-live but is now **deprecated**, replaced by a REST Message API. Building against either is
-premature while no channel has been executed even once. The cheapest experiment that would
-settle the whole plan is one wholesale submission of a few hundred booster codes and one premium
-code listed on a storefront — a week's work that replaces six MARGINAL verdicts with two
-realized prices.
+**Delivery automation is NOT built, and should not be yet.** Section 6.3 gives the reason. Section 8, item 3,
+names the experiment that would settle the plan.
