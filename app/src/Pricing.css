@@ -35,14 +35,16 @@
   box-shadow: var(--bn-shadow-1);
 }
 .pricing-bar-says {
-  flex: 1 1 16rem;
+  flex: 0 0 auto;
   min-width: 0;
   margin: 0;
   font-size: var(--bn-fs-md);
   font-weight: 600;
   color: var(--bn-ink);
 }
-.pricing-bar .send-card { flex: 0 1 auto; min-width: 0; }
+/* THE CARD TAKES WHAT THE SAYS LINE LEAVES (basis 0), so a notice under the press never decides whether
+   the line wraps above it: the press holds its place whatever the status says (D313). */
+.pricing-bar .send-card { flex: 1 1 0; min-width: 0; }
 
 /* ---- the rule line (Q5) -------------------------------------------------------------------- */
 .pricing-rule-line {
