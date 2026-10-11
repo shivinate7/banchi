@@ -1,9 +1,7 @@
 ## D196 — No screen string names a mechanism
 
 **The owner's ruling:** the front end has to be minimal and must never explain
-mechanism on screen. Read beside the "hard rules" section's own standing instruction —
-*"every rule for all time, anything that can be mechanically enforced, should be mechanically
-enforced"* — this is that instruction applied to a design rule rather than a process rule: the
+mechanism on screen. Read beside the owner's standing instruction to mechanize every rule that can be mechanized (D173), this is that instruction applied to a design rule rather than a process rule: the
 front end is either minimal in this one checkable sense or it is not, and a session should not
 have to remember to look.
 

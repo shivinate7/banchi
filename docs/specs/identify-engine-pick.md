@@ -112,7 +112,7 @@ Whenever the quote is not measured, it uses 40% as the unaccepted share and says
 So the estimate rounds up and never understates. It is also never under the count of cards the pool rules already send to the second look.
 The background reader (section 8) stays free. It never spends. A card it cannot accept waits for a press.
 
-**Promos are out, by owner ruling.** Printings with no stock image that are promos are left out of the matcher's pool.
+**The owner has no promos, so promos are out.** Printings with no stock image that are promos are left out of the matcher's pool.
 Unhinted Riftbound cards match against the main sets. A promo card is never read by the matcher. It goes to the paid read.
 
 **The premise holds today** (measured, store opened read-only). The check joined the `cards` table to the `skus` table.

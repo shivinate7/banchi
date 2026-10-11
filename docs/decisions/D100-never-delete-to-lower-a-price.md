@@ -1,8 +1,8 @@
 ## D100 — Never delete to lower a price
 
-**A live listing's price is lowered by re-uploading the same row with a new `TCG Marketplace Price` and `Add to Quantity` of 0. Nothing is deleted at TCGplayer, and nothing has to be.** Built on the owner's request: export live inventory (cards listed and not selling), mass re-edit the prices down, and re-upload. Deleting inventory in between was raised and is not needed.
+**A live listing's price is lowered by re-uploading the same row with a new `TCG Marketplace Price` and `Add to Quantity` of 0. Nothing is deleted at TCGplayer, and nothing has to be.** Built on the owner's request: export live inventory (cards listed and not selling), mass re-edit the prices down, and re-upload. The owner asked whether inventory must be deleted at TCGplayer in between.
 
-The parenthetical is the question this entry exists to answer, and the answer is measured rather than reasoned.
+That question is what this entry exists to answer, and the answer is measured rather than reasoned.
 
 ### `Add to Quantity` is a delta, and TCGplayer's own export is the proof
 
