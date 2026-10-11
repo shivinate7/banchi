@@ -1477,9 +1477,11 @@
      already container-bound, so it simply takes what is left under the run card. */
   /* WHY THE PANEL STARVED: the stage spans both rows at a fixed height, so a tall Setup block in the run
      row left this row almost nothing, and the size-contained viewport (no intrinsic height) collapsed to
-     its head. The floor is the head, the gap and a 9:16 photo at the thumbnail width, so empty and
-     loaded hold one height and the first capture moves nothing (D313). */
-  .capture-last { align-self: stretch; height: auto; max-height: none; --cap-last-photo-w: 120px; min-height: calc(32px + var(--bn-2) + var(--cap-last-photo-w) * 16 / 9); }
+     its head. The photo row has a floor at the photo's 9:16, so empty and loaded hold one height and the first capture moves nothing (D313). */
+  .capture-last {
+    align-self: stretch; height: auto; max-height: none;
+    grid-template-rows: auto minmax(calc(var(--bn-10) * 2 * 16 / 9), 1fr);
+  }
 }
 
 @media (min-width: 768px) and (max-width: 1279px) {
