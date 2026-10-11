@@ -271,12 +271,6 @@
         "catalogue"
       ]
     },
-    "docs/decisions/*-name-overrides-a-disputed-number.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "recognised"
-      ]
-    },
     "docs/decisions/*-a-typed-dot-is-a-defect.md": {
       "lane": "docs-sweep",
       "SPELLING": [

@@ -1,11 +1,9 @@
 ## D176 — The primary checkout syncs itself
 
-**Settled 2026-09-12, on the owner's answer to a refuse-only proposal.** Asked whether the
-primary checkout — `/Users/shivinate/Developer/banchi`, the one directory D138 keeps a capture
-server alive out of at login over their real store — is mechanically kept on `main` at
-`origin/main`, and offered a guard that would only refuse, they said:
-
-> *"why can't both parts sync, remember this is a one man show, it's just me working."*
+**Settled on the owner's answer to a refuse-only proposal.** The primary checkout,
+`/Users/shivinate/Developer/banchi`, is the one directory D138 keeps a capture server alive
+out of at login over the real store. A guard that only refused was offered. The owner was asked whether the primary checkout is mechanically kept on `main` at `origin/main`. The owner ruled
+that both parts sync, since this is a one-person checkout.
 
 So it syncs. `git switch main`, then `git merge --ff-only origin/main`, run for them, at the
 three moments something in this repository already knows main may have moved.
@@ -29,7 +27,7 @@ main **moves**: `scripts/serve.py`'s four adoption moments, which tick once a se
 D42 is *"main moves by pull request"*, enforced by `scripts/githooks/reference-transaction` and
 `scripts/githooks/pre-push`. **The sentence is not repealed and the hooks are not touched.** What
 this entry claims is narrower: the move made here is one that hook has permitted since the day it
-was written. Its header, verbatim:
+was written. Its header reads:
 
 ```
 #   3. Moving main to a commit ORIGIN ALREADY HAS. This is the whole legitimate path: a PR is
