@@ -420,7 +420,7 @@ for (const width of [1440, 820]) {
   })
 }
 
-/* ORDERS: THE WALK OPENS OVER A READ. `Walk 3` asks the plan for three buyers' orders, so the walk
+/* ORDERS: THE WALK OPENS OVER A READ. The `Start Walk` control (three buyers) asks the plan for three buyers' orders, so the walk
    holds the buyer it showed until the answer lands, then swaps once. The answer for several buyers
    is taller than the answer for one, which is content and is why only the read-out window and the
    cluster count are asked of it. */
@@ -446,7 +446,7 @@ for (const width of [1440, 820]) {
     await setViewport(page, { width, height: 1000 })
     await page.goto(screen('orders'))
     await expect(page.locator('.orders-walk-list')).toBeVisible()
-    const r = await heldPress(page, gate, () => page.getByRole('button', { name: 'Walk 3' }).click())
+    const r = await heldPress(page, gate, () => page.getByRole('button', { name: /^start walk/i }).click())
     /* A TIGHTER BUDGET: the walk list is short here, so a head swapped over the old rows moves them
        by a few hundredths at most. Nothing else on this screen moves in the window. */
     expectHeld(r, 0.001)
