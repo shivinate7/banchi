@@ -1102,7 +1102,7 @@ async function runsIn(view: Locator): Promise<Run[]> {
  *  The label carries the accessible name as well as the visible text, because the receipts
  *  put the position in an `aria-label` — and the destructive-wording check below reads these
  *  labels, so a control whose only name is an attribute must not be invisible to it. */
-async function targets(page: Page): Promise<{ where: string; box: DOMRect; floating: boolean }[]> {
+async function targets(page: Page): Promise<{ where: string; box: DOMRect; floating: boolean; covered: boolean }[]> {
   return page.evaluate(() => {
     /* WHICH LAYER THE CONTROL IS ON. A receipt sheet is `position: fixed` over the page and
        takes every tap inside its own footprint, so a row it happens to be covering is not the
@@ -1117,16 +1117,29 @@ async function targets(page: Page): Promise<{ where: string; box: DOMRect; float
       }
       return false
     }
-    const out: { where: string; box: DOMRect; floating: boolean }[] = []
+    /* WHETHER A HAND CAN REACH THE CONTROL. A sticky bar that scrolls over a control covers it, and a
+       covered control cannot be pressed, so two controls with a gap between them are not a mis-tap
+       pair when one of them is under something opaque. The centre of the box is hit-tested. A
+       centre outside the viewport is not judged here, because it is not on screen to hit. */
+    const reachable = (element: Element, box: DOMRect): boolean => {
+      const cx = box.x + box.width / 2
+      const cy = box.y + box.height / 2
+      if (cx < 0 || cy < 0 || cx > window.innerWidth || cy > window.innerHeight) return true
+      const hit = document.elementFromPoint(cx, cy)
+      return hit !== null && (hit === element || element.contains(hit))
+    }
+    const out: { where: string; box: DOMRect; floating: boolean; covered: boolean }[] = []
     for (const element of document.querySelectorAll('button, a[href], input, select, textarea')) {
       if (!element.checkVisibility()) continue
       const classes = element.getAttribute('class')
       const named = element.getAttribute('aria-label')
       const text = `${(element.textContent ?? '').trim()} ${named ?? ''}`.trim()
+      const box = element.getBoundingClientRect().toJSON() as DOMRect
       out.push({
         where: `${element.tagName.toLowerCase()}${classes === null ? '' : `.${classes}`}: ${text.slice(0, 120)}`,
-        box: element.getBoundingClientRect().toJSON() as DOMRect,
+        box,
         floating: onAnOverlay(element),
+        covered: !reachable(element, box),
       })
     }
     return out
@@ -1292,6 +1305,10 @@ async function fatTargets(page: Page, where: string, hasControls = true): Promis
          every control in the sheet against every other control in the sheet, and every control
          on the page against every other control on the page. */
       if (a.floating !== b.floating) continue
+      /* A COVERED CONTROL IS NOT A NEIGHBOUR. The sticky count bar scrolls over a control and the
+         control cannot be pressed under it, so a gap to it is not a gap a thumb can land between.
+         Its size is still checked above, and every other pair still runs. */
+      if (a.covered || b.covered) continue
       expect(apart(a.box, b.box), `${where}: ${a.where} -> ${b.where}`).toBeGreaterThanOrEqual(
         GAP_FLOOR,
       )
@@ -1845,7 +1862,7 @@ test('the cards for sale are listed in box-walk order, and nothing else is liste
  * The rest of this file runs against a ledger with nothing open, which is the same screen with
  * that section absent; this case is the one that renders it.
  */
-test('a card an open order owes is drawn as "Pick N" with every copy the store holds, none preselected', async ({
+test('a card an open order owes is drawn with its N Left count and every copy the store holds, none preselected', async ({
   page,
 }) => {
   await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
