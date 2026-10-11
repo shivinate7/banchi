@@ -639,8 +639,7 @@ switch. The `breakpoints` row asks this as a QUESTION rather than blocking on it
 ## The address is drawn, not printed
 
 **The position bar carries TWO SCALES, and they must be distinguishable at a glance.**
-Added 2026-08-23 on the owner's ask — *"not only its location at the box level but section
-level"*, then *"while retaining box depth too"*. The box scale answers how far into the box
+The owner asked for section-level location as well as box-level location, and kept box depth too. The box scale answers how far into the box
 to put your thumb (D20's original argument); the section scale answers where you are inside a
 divider. They routinely disagree: a card reading `#51 of 53` draws hard right at box scale
 and is `Card 1` of section 3 — the very front — at section scale. Both are true, and a person
@@ -670,7 +669,7 @@ UNTIL 2026-09-11** (D155). `PositionBar` gated the second scale on `spans.length
 real and is named in the entry: such a box now spends 26px saying one fact twice.
 
 **`pipeline/join.py:Position.label` is the record; HOW A SCREEN DRAWS IT IS A VIEW (D41).**
-The owner: *"i did not ever like the dot theme to separate"*. The interpuncts are deleted rather than restyled. The box and section become a tracked muted stack, and the card number a figure beside them. The server still emits the identical string, which travels verbatim on `aria-label`.
+The owner disliked the dot separators. The interpuncts are deleted rather than restyled. The box and section become a tracked muted stack, and the card number a figure beside them. The server still emits the identical string, which travels verbatim on `aria-label`.
 
 - **A tracked key is a word, never a figure.** `--bn-tracking-caps` on `BOX` / `SECTION` /
   `CARD`. Every NUMBER keeps `letter-spacing: 0`, because the mono face is fixed-advance and
@@ -715,7 +714,7 @@ answers cost two taps each.
 the irreversible one carried none.
 
 **AND THE OTHER HALF OF THAT CORRECTION LANDED ON 2026-08-30 (D57), WHICH IS WHY THE SENTENCE
-ABOVE IS PAST TENSE ON THE OWNER'S SCREEN.** D28 gave the irreversible action an undo. It left the reversible one carrying three guards, because taking a press off mark-sold was not what it was asked to do. The owner asked for it directly: *"single tap immediately marks it as sold, with the button changing to undo afterwards."* On `#/inventory` the sale writes on one press now. The way back is an `Undo` in the copy row plus the receipt that outlives it. That is this rule as written, applied at last to the most reversible write in the product. The
+ABOVE IS PAST TENSE ON THE OWNER'S SCREEN.** D28 gave the irreversible action an undo. It left the reversible one carrying three guards, because taking a press off mark-sold was not what it was asked to do. The owner asked for one tap to mark a card sold, with the button changing to undo. On `#/inventory` the sale writes on one press now. The way back is an `Undo` in the copy row plus the receipt that outlives it. That is this rule as written, applied at last to the most reversible write in the product. The
 photograph it used to confirm against is on the same screen, in the card band, at 449x627.
 **`#/fulfillment` keeps all three guards**, and the table below still asserts its undo.
 
@@ -849,7 +848,7 @@ disablement.
 sentence is drawn before the press and repeated in the receipt.
 
 **The panel is NOT folded, and none of the Fulfillment floors reach it.** It is an owner
-surface at the 4–16 end of the scale. This paragraph used to argue the fold on `BoxOps`' measured grounds: ~250px, reached once a box. That sits above the card detail on the screen whose question is *where is this card*. The owner overruled it: *"both box and run, i do not want click in functionality, i want their buttons just there."* D33 carries the argument.
+surface at the 4–16 end of the scale. This paragraph used to argue the fold on `BoxOps`' measured grounds: ~250px, reached once a box. That sits above the card detail on the screen whose question is *where is this card*. The owner overruled it. Box and run keep their buttons in place, with no click-in function. D33 carries the argument.
 
 **What replaces the fold's saving is the panel's own MEASURE, and this sentence has now been
 rewritten three times.** It first read *the ROW*: `.browse-boxrun` put the run panel and `BoxOps` side by side at `1fr 1fr` beneath the card. So the pair cost one panel's height instead of two.
@@ -943,8 +942,7 @@ the skip — the negative case, because nothing in the type system or the render
 **The question below is closed as of 2026-08-25 — D37 is the decision entry it asked for.**
 This section said the screen "needs a real defer that records a reason, and that is a decision
 entry rather than a button", and named counting skips as the measurement that would settle it.
-The owner asked for the defer directly instead: *"why cannot i mark something as known skip
-kinda like a stand down on the flag i get that this is a wasted position"*.
+The owner asked for a defer instead: mark a card as known skip, like a stand-down on a flag.
 
 `X` now raises a panel offering a **stand-down**: three reasons, `cleared_by_human` set, and the card itself untouched. It sits beside D26's **retirement**, whose route existed with no control on this screen. The mid-box delete is deliberately not there. It renumbers every card behind the one being deleted, which would re-point the worklist the panel is drawn from. It is the one operation here with no undo. D37 carries the whole argument.
 
