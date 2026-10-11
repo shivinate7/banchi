@@ -1,6 +1,6 @@
 ### T9 — Motion trigger against ten recorded rig sessions
 
-New 2026-08-31 with D81, widened 2026-09-01 with D84 and again 2026-09-11 with the rescue. **Pass: on every saved trace an empty stand sits within 2 of its own baseline and every card sits
+Built with D81, widened with D84, then with the rescue. **Pass: on every saved trace an empty stand sits within 2 of its own baseline and every card sits
 17 or more away; the dimmest card on one rig is dimmer than the empty stand on another, so
 no brightness constant separates them; the adaptive thresholds reach at least as many
 verdicts as the hand-tuned constants did live on all ten; and on the two sessions D84
@@ -14,9 +14,9 @@ session's baseline while refusing no real card on any of them, while every pre-r
 session keeps the verdict count it had.**
 
 **The inputs are `harness/traces/` — ten armed sessions**, saved from the capture screen's
-HUD by the owner between 2026-08-23 and 2026-09-11: ONE recorded under the brightness floor
-D81 replaced, TWO recorded on 2026-09-01 under the distance gate that replaced it (the
-sessions D84 was derived from), FOUR recorded overnight on 2026-09-11 over a re-arranged feeder
+HUD by the owner: ONE recorded under the brightness floor
+D81 replaced, TWO recorded under the distance gate that replaced it (the
+sessions D84 was derived from), FOUR recorded overnight over a re-arranged feeder
 under a bright lamp — two on which the shipped settle trigger fired five times each against 29
 and ~34 cards, one with the lamp dimmed, and one run LIVE under
 D131's rule (51 fires, two stalls, no double) — the sessions that convicted the
@@ -46,10 +46,9 @@ tripwire for a constant moved without re-scoring, legitimately updatable as a de
 the sweep re-run, never as a reflex. The *D84 pair* is a claim about the two defects those
 two sessions cost — that the presence floor refuses both settles that photographed the bare
 stand and nothing else that fired, and that a card which never completes a settle is never
-lost in silence — reported as a stall when D84 was written, photographed by the rescue since
-2026-09-11, at the same second either way. Both are asserted by TIME and not by count, because
+lost in silence — reported as a stall when D84 was written, photographed by the rescue, at the same second either way. Both are asserted by TIME and not by count, because
 "two fires are refused" would pass just as happily on a floor that had climbed far enough to
-refuse two cards. The *rescue* is a claim about the three evening sessions of 2026-09-11 — that
+refuse two cards. The *rescue* is a claim about the three evening sessions — that
 the rule photographs the cards `stillWindow` was dropping — **and, in the same block, that the
 pre-rescue sessions do not move while it does**. That second half is the load-bearing one:
 a stillness rule that buys cards on one rig by spending them on another is this subsystem's
@@ -57,7 +56,7 @@ entire history, and it is what the sweep behind `rescueAfter` was constrained by
 scored against.
 
 **The answer key is written down, not inferred**, and that is the point rather than a
-convenience. The 2026-08-29 fix derived its "empty stand" brightness table from twenty frames
+convenience. The brightness-table fix derived its "empty stand" brightness table from twenty frames
 that were photographs of real cards, because a refusal was read as evidence about what was on
 the stand. Every verdict frame was rendered and inspected before the labels in
 `t9_traces.py` were written; `scripts/score-trace.py contact` is how.

@@ -1,6 +1,6 @@
 ## D271 — Every search uses one matcher
 
-**The owner's ruling, 2026-09-23 (FLT-06, FLT-04).** One forgiving matcher runs everywhere. It
+**Ruling (FLT-06, FLT-04).** One forgiving matcher runs everywhere. It
 matches:
 
 - the words of a name, in any order,
@@ -48,7 +48,7 @@ cards. The browser's fold lives behind the kit-data lane's `useSearch`, and ever
 uses it. A shared table of cases proves both sides agree. It runs in `make harness` for the
 server and in a browser spec for the client.
 
-**EVERY SEARCH FIELD IN THE BROWSER USES `matchQuery`/`filterByQuery`, WITH NO NAMED EXCEPTION (lane F11b, 2026-09-28).** The palette's ranking, the shortcut sheet, and Capture's box picker
+**EVERY SEARCH FIELD IN THE BROWSER USES `matchQuery`/`filterByQuery`, WITH NO NAMED EXCEPTION (lane F11b).** The palette's ranking, the shortcut sheet, and Capture's box picker
 still hand-rolled their own match before this lane. Each now calls the shared matcher. Ranking
 stays local where a screen must order results, not only filter them. The palette's `rankMatch`
 still gives an exact or prefix hit a higher tier than a plain match. `matchQuery` decides
@@ -63,7 +63,7 @@ Codes, the shortcut sheet's key caps, and Capture's box number all use `raw` for
 
 ### What is still open
 
-- ~~Typos and a near match.~~ CLOSED by the owner's word: the owner picked "Suggest". On a
+- ~~Typos and a near match.~~ CLOSED by ruling: Suggest was chosen. On a
   search with ZERO results, `EmptyState`'s `didYouMean` shows "Did you mean <name>?" as a tap
   target that runs that search. The matcher's ranking and results are untouched. The server
   (`match.did_you_mean`, in `do_search`'s answer) and the browser (`kit/match.ts:didYouMean`)
@@ -91,7 +91,7 @@ The server half. `server/match.py` is a same-behaviour Python port of `app/src/k
 `scripts/match-selftest.py` proves the two agree, over `app/src/kit/match.cases.json`.
 
 The server's own search (`server/capture_server.py:do_search`) now calls `match.match_query`.
-The Opus review (2026-09-25) found the port existed. `do_search` never called it. The case
+The Opus review found the port existed. `do_search` never called it. The case
 table proved nothing about the actual search. `_fts_query`'s FTS5 candidate step and
 `_match_rank`'s ranking tier stay in their own right. `match.match_query` is now the deciding
 vote for a candidate, alongside them, not instead of them. See the two functions' own
@@ -106,7 +106,7 @@ under the `u` (Unicode) flag — the flag widens `\p{L}`, never `\d`. Python's b
 `_drop_leading_zeros`/`_number_shape_ok`) are now ASCII-only on purpose. It is the one place
 this file departs from Python's own Unicode-aware defaults.
 
-**The ccc-0 gap this entry once recorded was wrong (F7, round-3 Opus review, 2026-09-25).**
+**The ccc-0 gap this entry once recorded was wrong (F7, round-3 Opus review).**
 The earlier text here said `unicodedata` alone could not express `kit/match.ts:foldText`'s
 `\p{M}` (every Unicode Mark, whatever its category) without the `regex` package. It called
 the gap a dependency decision rather than a bug. That premise was false.
@@ -122,13 +122,12 @@ The two implementations agree on every mark, spacing or not. `scripts/match-self
 `case_match_fold_text_strips_every_mark_by_category` proves it, verified red on the old
 code and green on the new one.
 
-**MID-WORD SEARCH IS ADDED, the owner's ruling, 2026-09-25, verbatim: "Add mid-word search."** The owner set one condition. Mid-word ships "only if a measurement... says
-search stays fast." This entry wins over the FTS5 step's own prefix-only trade-off. That
+**MID-WORD SEARCH IS ADDED. Ruling: add mid-word search.** The ruling set one condition. Mid-word ships only if a measurement shows search stays fast. This entry wins over the FTS5 step's own prefix-only trade-off. That
 trade-off is now SUPERSEDED on this one point (below). `do_search("izard")` now finds
 "Charizard", the exact case the FTS5 step measured and traded away.
 
 `server/capture_server.py:_fts_substring_candidates_for_term` is a fourth candidate
-source, one term at a time (R1, round-4 Opus review, 2026-09-25 — see below). It folds
+source, one term at a time (R1, round-4 Opus review — see below). It folds
 both the query term and each candidate field in Python (`match.fold_text`,
 `match.compact_text`). FTS5's own prefix index can never answer this shape: a token has
 to start with what was typed. A substring scan cannot use an index. No B-tree ordering
@@ -160,11 +159,10 @@ included, matching UX-263's own method) against a running `CaptureServer`:
 | Hostile 50×`001` | 136ms | 89.6ms / 133.9ms | 142.8ms / 149.9ms | 51.7ms / 55.4ms |
 | Bare number (`132`) | — | 94.0ms / 115.5ms | 136.2ms / 145.9ms | 48.0ms / 51.7ms |
 
-**THE GOVERNING NUMBER IS THE IN-PROCESS ONE (owner's ruling, round-5 Opus delta review reply, 2026-09-25).** The owner's condition on both mid-word and R1's fix was "fast on a
-real-sized store." The real-store column meets it at every shape measured. p95 tops out at
+**THE GOVERNING NUMBER IS THE IN-PROCESS ONE.** The condition on both mid-word and R1's fix was speed on a real-sized store. The real-store column meets it at every shape measured. p95 tops out at
 359ms, and the mid-word row's own p95 is 33ms. THIS ENTRY ONCE SAID the three
 synthetic-HTTP columns' slower numbers came from PAYLOAD SIZE alone, "never from the
-matcher." That claim was ITSELF FALSE (R5-1, round-6 Opus delta review, 2026-09-25). The
+matcher." That claim was ITSELF FALSE (R5-1, round-6 Opus delta review). The
 rank loop spent real time on the matcher's own decisive check. It did this for every
 candidate a broad union could surface, before that check ever ran. See ROUND 6, below,
 for the fix and the corrected numbers. The payload-size ceiling this paragraph pointed to
@@ -181,7 +179,7 @@ deliberately hostile one does (measured: the real-store column's own p95 tops ou
 where the body is built, and here. Upgrade path: page the response, a `limit`/`cursor` on
 `groups`. That is a real change, and it needs its own decision, named and not built here.
 
-**R1 AND F2, ROUND-5 OPUS DELTA REVIEW, 2026-09-25, ON 65b8f39d.** `do_search`'s rank loop
+**R1 AND F2, ROUND-5 OPUS DELTA REVIEW ON 65b8f39d.** `do_search`'s rank loop
 ran `_match_rank` once per REPEATED term per candidate. It was never deduped, a second
 copy of R1's own defect one function over from where R1 first fixed it. `("1 " * 100)`
 measured 5.6-12.4s at 3,000 cards and 19.9s at 10,000 on the real-name fixture (round-4's
@@ -208,12 +206,11 @@ condition ("if mid-word still cannot stay under about 200ms for 3+ characters, s
 report") is met at the store's real scale, confirmed twice now. Once by extrapolation in
 round 4, and once directly against a copy of the real store in round 5. It is not met at
 10,000 cards, a scale the store is nowhere near. Shipped on that measurement, per the
-owner's word. Round-4 reply: "Ship it as built." Round-5 reply: "Do not add a result
-cap." The ceiling and its upgrade path are recorded at `_fts_substring_candidates_for_
+ruling. Round 4 ruled: ship as built. Round 5 ruled: add no result cap. The ceiling and its upgrade path are recorded at `_fts_substring_candidates_for_
 term`'s own `ponytail:` comment, never only here. The upgrade path is an FTS5 trigram
 index, a schema change needing its own decision.
 
-**ROUND 6, OPUS DELTA REVIEW, 2026-09-25, ON ce5a6168.** Four more defects. All found on
+**ROUND 6, OPUS DELTA REVIEW ON ce5a6168.** Four more defects. All found on
 the owner's OWN real store (a read-only copy), or by this session's own new fuzz test.
 Round 5's fixture still hid them.
 
@@ -280,8 +277,7 @@ target, not a mid-word measurement at all. Real fragments the owner's own names 
 (R3, the owner's own accepted condition) is a floor on the CANDIDATE step. It is not a
 floor on `match_query`'s own rule 7, which has none at all. A 1-2 character text token
 matches as a substring ANYWHERE in a folded field, with no length minimum. ONE UNIT
-THROUGHOUT THIS ENTRY, CARD RECORDS, NEVER SKUS (F6-7, round-8 Opus delta review,
-2026-09-25, correcting round-7's own SKU-counted version, which then also picked
+THROUGHOUT THIS ENTRY, CARD RECORDS, NEVER SKUS (F6-7, round-8 Opus delta review correcting round-7's own SKU-counted version, which then also picked
 `on_hand` — excluding sold and departed copies — where `match_query`'s own count
 covers every state). `sc` measured on the real store: `match_query` accepts 195 card
 records, `do_search` returns 56, DROPPING 139. This is the floor's own known cost,
@@ -299,7 +295,7 @@ file's own case table, nor the permanent fuzz, has ever needed a 9th distinct te
 widening to find a real card. The cap is sized against every query shape measured so
 far, not against zero cost.
 
-**ROUND 7, OPUS DELTA REVIEW, 2026-09-25, ON e76f6fc2.** Seven more findings, from the
+**ROUND 7, OPUS DELTA REVIEW ON e76f6fc2.** Seven more findings, from the
 reviewer's own fuzz and mutation tools (`fz.py`, `mut.py`, in the scratchpad) run
 against a real-store copy. R5-1 through R5-5 held. Reverting any of them still turns
 the fuzz or a named case red.
@@ -399,7 +395,7 @@ isolation, confirmed red, then restored:
 | M3 | R5-3 (case-folded widening dedupe) | 2 cases fail |
 | M4 | F6-1 (letter-prefixed number widening) | 2 cases fail, INCLUDING the fuzz |
 
-**ROUND 8, OPUS DELTA REVIEW, 2026-09-25, ON f2d13ae7.** Four blocking items, narrow —
+**ROUND 8, OPUS DELTA REVIEW ON f2d13ae7.** Four blocking items, narrow —
 0 false positives found in 7,000 fuzz queries, timing already inside bound, the
 wolf-crying gone. Three more disclosures.
 
@@ -453,7 +449,7 @@ only ever checked the NUMBER columns, never `name`/`set_hint`/`note`. Fixed by
 text fields the substring rule already reads. Re-verified at scale on a fresh real-store
 copy: 0 of 52 bare-letter composed queries missed. 0 of 52 extra-zero letter composed
 queries missed. 0 of 300 extra-zero plain composed queries missed.
-**52 IS CARD RECORDS, NEVER DISTINCT QUERIES** (round 10's own check, 2026-09-25, after
+**52 IS CARD RECORDS, NEVER DISTINCT QUERIES** (round 10's own check after
 the reviewer counted 22 on the same store). 52 letter-composed card records share only
 22 distinct numbers.
 Several boxes hold more than one physical copy of the same printing. A sweep built per
@@ -513,7 +509,7 @@ Every shape stays under 240ms p95. F6-2's own `6a` row went from a 30-byte empty
 
 M6, M7, M9, M11 and M12 are not described in this round's brief. This entry names only
 the mutations it was given a definition for, rather than guessing at the rest.
-**ROUND 9, OPUS DELTA REVIEW, 2026-09-25, ON 28d233b2.** Three blocking items, one doc
+**ROUND 9, OPUS DELTA REVIEW ON 28d233b2.** Three blocking items, one doc
 item. All four closed here.
 
 **F1 IS THE FOUR-SHAPE FIX ABOVE (item 5).** Round 8's own text was wrong about it,
@@ -561,7 +557,7 @@ Documented at the dict's own definition: tests must read it single-threaded, one
 Every mutation here was chosen because round 9's own review named it directly.
 
 
-**ROUND 10, OPUS DELTA REVIEW, 2026-09-25, ON fdc84825.** One blocking item, one medium,
+**ROUND 10, OPUS DELTA REVIEW ON fdc84825.** One blocking item, one medium,
 two doc-only disclosures, one figure check.
 
 **N1: THE SAME CLASS AS F1, ONE LEVEL UP — THE TOKENIZER, NOT THE COMPARISON.** F1
@@ -624,19 +620,14 @@ printing.
 Both mutations were chosen because round 10's own review named them directly.
 
 
-**ROUND 11, GAPS REVIEW, 2026-09-25, ON 74b4682d.** Two owner rulings, one check,
-three doc fixes. Both quoted verbatim.
+**ROUND 11, GAPS REVIEW, ON 74b4682d.** Two rulings, one check, three doc fixes.
 
-**RULING 1, QUOTED VERBATIM.**
+**RULING 1: a hyphen splits the number.** `002-64` must NOT match 264. The hyphen splits
+the number, so it must not read as `compact_text`'s joined digits. Change it in BOTH matchers,
+`server/match.py` and `app/src/match.ts`, and keep them in agreement (the matcher selftest and
+any parity test). `0027-166` must still find Hand Hammer, because the hyphen-to-slash composed form stays.
 
-> "No, a hyphen splits (Recommended)": "002-64" must NOT match 264. The hyphen splits
-> the number. It must no longer read as `compact_text`'s joined digits. Change it in
-> BOTH matchers, `server/match.py` and `app/src/match.ts`, and keep them in agreement
-> (the matcher selftest and any parity test). `0027-166` must still find Hand Hammer,
-> because the hyphen-to-slash composed form stays.
-
-Round 10's own N3 disclosed this as a doc-only gap. The owner overturned that
-disclosure. `_hyphen_to_slash` only changes its input when a hyphen stands BETWEEN TWO
+Round 10 disclosed this as a doc-only gap. The ruling overturned that disclosure. `_hyphen_to_slash` only changes its input when a hyphen stands BETWEEN TWO
 DIGITS. When it does, the hyphen is doing a real job. It stands for the
 collector-number slash. `bare` read WHOLE must never also be a candidate form then.
 `canonical_number` does not split on `-`. So the whole-string form joins two digit
@@ -658,11 +649,8 @@ candidate from reaching the decisive check for this exact query. Without the dir
 assertion, a mutation of `match.py` alone would hide behind `do_search`'s own
 filtering.
 
-**RULING 2, QUOTED VERBATIM.**
-
-> "Bring it back (Recommended)": letters that spell a dotted name match it again, so
-> "bf" and "B.F" behave the same and both find B.F. Sword. The reviewer's lead: make
-> the floor test measure a token AFTER folding, so `B.F` and `bf` classify the same
+**RULING 2: letters that spell a dotted name match it again.** "bf" and "B.F" behave the same, and both find B.F. Sword. The reviewer's lead: make
+the floor test measure a token AFTER folding, so `B.F` and `bf` classify the same
 > way. Then give the folded dotted-initial case a path to B.F. Sword without opening
 > every 2-letter term to widening. Show that the 2-character timing stays under 500ms
 > p95.
@@ -765,7 +753,7 @@ the `match.py` mutation above are what prove the rule itself.
 Seeded fuzz re-run after every fix: 0 false positives, 640 queries (`_FUZZ_QUERIES`
 plus 200 card-sampled).
 
-**ROUND 12, INVENTORY PASS, LANE `ux/pr4-search`, 2026-09-26.** Briefed to close the gaps still open: "`#` forms, composed forms
+**ROUND 12, INVENTORY PASS, LANE `ux/pr4-search`.** Briefed to close the gaps still open: "`#` forms, composed forms
 with a letter or an extra zero, and a digit word in name text," and N4 (`B.F` and `bf`
 disagreeing on the 1-2 character floor). Verified each against the code and a run, per the
 brief's own instruction, never trusting the prose alone.
@@ -795,12 +783,12 @@ a real algorithm choice (an edit-distance threshold, a "did you mean" surface, w
 near match returns rows or only a suggestion) that the matcher's own "one matcher, both
 sides" rule does not settle by itself. Left as a disclosed, unruled gap.
 
-**LANE F11b, THE OWNER'S RULING, 2026-09-28: one matcher, called the same way everywhere.** Lane F11 moved Sales' by-name search onto `matchQuery`. It left the SKU and set
+**LANE F11b, RULING: one matcher, called the same way everywhere.** Lane F11 moved Sales' by-name search onto `matchQuery`. It left the SKU and set
 name unsearched. This lane finished the sweep.
 
 - **Sales.** The query in `Revenue.tsx` now also matches `row.skus` and the set name. Both
   fields already existed on `matchQuery`. No new field.
-- **Codes.** The owner's word: "keep substring on codes." The old
+- **Codes.** Ruling: keep substring matching on codes. The old
   `code.toLowerCase().includes(needle)` found a digit run in the middle of a code. Rule 7's
   digit test cannot do this. It only matches the start of a word. Added `raw`, a plain
   substring field with no word rules. Moved `code` onto it.
@@ -817,7 +805,7 @@ name unsearched. This lane finished the sweep.
   purpose. This screen's own exception to that rule stays local and explicit, through
   `raw`, instead of bent into the shared field.
 - **Graveyard.** Found still hand-rolled: the same defect this entry's own evidence section
-  named at FLT-06 in 2026-09-23, never closed. Moved onto `matchQuery`, over `text`,
+  named at FLT-06 in never closed. Moved onto `matchQuery`, over `text`,
   `numbers` and `skus`.
 
 **Grep swept for every other hand-rolled match.** Two literal-string checks survive. Neither

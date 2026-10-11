@@ -1,6 +1,6 @@
 ## D142 — Setup outlives the browser
 
-**Settled 2026-09-11, on the owner's own words about the screen they spend the most hours in.** Four instructions in one message, three of them about memory and one about what a box is called:
+**Settled from the owner's instructions about the screen they spend the most hours in.** Four instructions in one message, three about memory and one about what a box is called:
 
 > *same box style sorting in inventory (where most recently selected/most filled go to the top, rather than box #, determines the order of box in Workflow: Capture)*
 >
@@ -48,7 +48,7 @@
 
 ### A RESTORED BOX IS CHECKED AGAINST THE STORE, AND FAILS SOFTLY
 
-**Photographing into the wrong drawer is the expensive failure on this screen**. The setup now outlives the browser, so the gap between "the box I last picked" and "a box that still exists and still takes cards" can be days wide. Between two sittings a box can be sealed (D20) or deleted (D34's panel). Or it can be **deleted and its number handed to a different physical drawer** by `next_box_number`'s lowest-free allocation. The first two are refused at the shutter anyway. **The third was refused nowhere when this entry was written, and this entry BUILT two of the three it had just enumerated**. Box 7 exists and takes cards, so a reallocated number passed every test the restore made. It is simply not the box the operator thinks they are looking at. **That gap is closed as of 2026-09-12 (D153), and the closing needed a fact this entry did not have**. The closing needed a drawer's identity, which D145 gave it. The sentence below described two cases in words that read as three. It is corrected rather than deleted, because the overclaim is the defect worth remembering.
+**Photographing into the wrong drawer is the expensive failure on this screen**. The setup now outlives the browser, so the gap between "the box I last picked" and "a box that still exists and still takes cards" can be days wide. Between two sittings a box can be sealed (D20) or deleted (D34's panel). Or it can be **deleted and its number handed to a different physical drawer** by `next_box_number`'s lowest-free allocation. The first two are refused at the shutter anyway. **The third was refused nowhere when this entry was written, and this entry BUILT two of the three it had just enumerated**. Box 7 exists and takes cards, so a reallocated number passed every test the restore made. It is simply not the box the operator thinks they are looking at. **That gap is closed (D153), and the closing needed a fact this entry did not have**. The closing needed a drawer's identity, which D145 gave it. The sentence below described two cases in words that read as three. It is corrected rather than deleted, because the overclaim is the defect worth remembering.
 
 **So the restore falls back to NO SELECTION, never to a guess**. It applies to the box that is GONE, the box that is SEALED here, and the reallocated one since D153. It names the box it let go of, says why, and opens the field with focus in the entry. That is the state `Pick a box` would have put them in, so the remedy is the press they were about to make.
 
@@ -56,7 +56,7 @@
 
 ### THE CLEAR ASKS FIRST, THEN GIVES A RECEIPT AND A WAY BACK
 
-**The press opens a confirmation (owner's ruling, 2026-09-28, replacing "no dialog").** It carries the sentence that used to sit under the button and a Clear button; Esc cancels, Enter confirms. Only the confirm clears. The screen then visibly returns to its empty state, and a receipt toast carries an Undo.
+**The press opens a confirmation (owner's ruling, replacing the earlier no-dialog press).** It carries the sentence that used to sit under the button and a Clear button; Esc cancels, Enter confirms. Only the confirm clears. The screen then visibly returns to its empty state, and a receipt toast carries an Undo.
 
 **It clears choices about CARDS and leaves the RIG alone.** Box, game, set hint, rarity, finish and product are decisions about the stack in front of the operator. The next stack is a different decision. The camera and the rotation are which hardware is plugged in and which way it is mounted (D13) — the same tomorrow as today. Clearing those would mean re-picking a 4K capture card to start a run that needs none of it re-picked. So the confirmation says what it leaves behind.
 
@@ -78,7 +78,7 @@
 
 **The PICKER keeps the number, inverted.** The name leads, and `Box 3` trails as a de-emphasised suffix. The entry above it searches number and name together. A row that hid the number would answer a search for `9` with nine rows that do not visibly contain a 9. That is the one place on this screen where the number is still doing a job.
 
-**AMENDED 2026-09-12 (D153), ON THE OWNER LOOKING AT THIS VERY LIST**: *"on the capture screen, i shouldn't even need to see box. numbers here, it's waste of space"*. The reason above is correct and was spent too widely. It is about a row's answer to a TYPED NUMBER. It was applied to every row, always. The suffix is now drawn only where the row matched BECAUSE of a number the operator typed. So the list is names at rest, and the `9` case is untouched. The reason survives the amendment intact; what changed is its scope.
+**AMENDED (D153), AFTER THE OWNER SAW THIS LIST**: on the capture screen the box numbers were waste of space. The reason above is correct and was spent too widely. It is about a row's answer to a TYPED NUMBER. It was applied to every row, always. The suffix is now drawn only where the row matched BECAUSE of a number the operator typed. So the list is names at rest, and the `9` case is untouched. The reason survives the amendment intact; what changed is its scope.
 
 **Nothing else moved.** `pipeline/join.py:Position` is untouched, including on this screen's own filmstrip and receipts: the Fulfiller reads those, and he is walking a shelf he did not pack. Nothing on the wire changed and no route was added.
 
