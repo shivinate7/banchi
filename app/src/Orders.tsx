@@ -884,7 +884,7 @@ const STATUS_PILL: Record<Status, { label: string; tone: PillTone; icon: IconNam
 const SORT_OPTIONS: readonly SortOption<OrderSortKey>[] = [
   { key: 'waited', label: 'Oldest order', desc: 'Newest first', asc: 'Oldest first', first: 'asc' },
   { key: 'placed', label: 'Placed', desc: 'Newest first', asc: 'Oldest first', first: 'desc' },
-  { key: 'value', label: 'Value', desc: 'High to low', asc: 'Low to high', first: 'desc' },
+  { key: 'value', label: 'Value', desc: 'High to Low', asc: 'Low to High', first: 'desc' },
   { key: 'cards', label: 'Cards', desc: 'Most first', asc: 'Fewest first', first: 'desc' },
   { key: 'buyer', label: 'Buyer', desc: 'Z to A', asc: 'A to Z', first: 'asc' },
   { key: 'drawers', label: 'Fewest drawers', desc: 'Most first', asc: 'Fewest first', first: 'asc' },
@@ -2363,8 +2363,8 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             <IconButton icon="plus" label="Add Orders" style={BAR_SQUARE} aria-haspopup="dialog" onClick={() => setStoreOpen(true)} />
             <IconButton
               icon="external"
-              label="Cards to pull"
-              name="Cards to pull, in a new tab"
+              label="Cards to Pull"
+              name="Cards to Pull, in a New Tab"
               style={BAR_SQUARE}
               href="#/fulfillment"
               target="_blank"
@@ -5145,7 +5145,7 @@ function PickLine({
            (owner's ruling, 2026-09-25 — no "wanted by <order>" visual descriptor). */
         <IconButton
           icon="sold"
-          label="Mark sold"
+          label="Mark Sold"
           name={`Mark Sold: ${pick.place.label === null ? `box ${pick.box}` : sayPlace(pick.place.label)}`}
           className="orders-pull"
           data-capture-id={target.capture_id}

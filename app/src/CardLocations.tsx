@@ -341,7 +341,7 @@ export function MarkSoldButton({
   return (
     <IconButton
       icon="sold"
-      label="Mark sold"
+      label="Mark Sold"
       name={name}
       size="xl"
       className="card-locations-sell"
@@ -911,7 +911,7 @@ function FulfillerCard({
                     renderAction(copy)
                   ) : sold ? null : (
                     <PullConfirm
-                      label="Mark sold"
+                      label="Mark Sold"
                       onConfirm={() => {
                         if (busyKey !== null) return
                         onSell(copy)

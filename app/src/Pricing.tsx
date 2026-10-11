@@ -541,10 +541,10 @@ function bandOf(row: PricingSku): string {
 type PricingSortKey = 'arranged' | 'price' | 'low' | 'range' | 'asking' | 'name'
 const SORT_OPTIONS: readonly SortOption<PricingSortKey>[] = [
   { key: 'arranged', label: 'Suggested', asc: 'Needs you first', desc: 'Needs you first', first: 'desc' },
-  { key: 'price', label: 'Market price', desc: 'High to low', asc: 'Low to high', first: 'desc' },
-  { key: 'low', label: 'Lowest price', desc: 'High to low', asc: 'Low to high', first: 'desc' },
-  { key: 'range', label: 'Range 7d', desc: 'High to low', asc: 'Low to high', first: 'desc' },
-  { key: 'asking', label: 'Asking price', desc: 'High to low', asc: 'Low to high', first: 'desc' },
+  { key: 'price', label: 'Market price', desc: 'High to Low', asc: 'Low to High', first: 'desc' },
+  { key: 'low', label: 'Lowest price', desc: 'High to Low', asc: 'Low to High', first: 'desc' },
+  { key: 'range', label: 'Range 7d', desc: 'High to Low', asc: 'Low to High', first: 'desc' },
+  { key: 'asking', label: 'Asking price', desc: 'High to Low', asc: 'Low to High', first: 'desc' },
   { key: 'name', label: 'Name', desc: 'Z to A', asc: 'A to Z', first: 'asc' },
 ]
 const SORT_AT_REST: SortValue<PricingSortKey> = { key: 'arranged', dir: 'desc' }

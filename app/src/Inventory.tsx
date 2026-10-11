@@ -1236,7 +1236,7 @@ function Action({
           glyph — a round seal, never confused with Retire's box. */}
       {primary ? (
         <Button variant="primary" size="lg" icon="check" busy={busy} disabled={busyKey !== null && !busy} onClick={() => onSell(copy)}>
-          Mark sold
+          Mark Sold
         </Button>
       ) : (
         /* THE ROW FORM'S OWN FLOOR RAISED TO `xl`, THE KIT'S LARGEST (the owner's Direction-B

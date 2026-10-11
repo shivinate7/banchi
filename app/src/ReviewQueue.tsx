@@ -2870,7 +2870,7 @@ function Waiting({
           Up next
           <Pill>{rows.length}</Pill>
         </span>
-        <IconButton icon="x" label="Close the queue" size="sm" onClick={onClose} className="review-rail-close" />
+        <IconButton icon="x" label="Close the Queue" size="sm" onClick={onClose} className="review-rail-close" />
       </div>
 
       {done === 0 && tally.skipped === 0 && receipts.length === 0 ? null : (

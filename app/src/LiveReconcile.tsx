@@ -155,7 +155,7 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
 
           <div className="livecheck-pick">
             <DropZone
-              title="Drop the “My Pricing” export here"
+              title={'Drop the "My Pricing" export here'}
               hint="or click to choose the .csv"
               fileName={fileName}
               disabled={busy}

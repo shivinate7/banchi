@@ -975,7 +975,7 @@ export function Gallery() {
             <div className="kit-grid">
               <Spec label="the vocabulary">
                 <div className="kit-row kit-row-wrap">
-                  <IconButton icon="sold" label="Mark sold" />
+                  <IconButton icon="sold" label="Mark Sold" />
                   <IconButton icon="undo" label="Undo" />
                   <IconButton icon="archive" label="Retire" />
                   <IconButton icon="pencil" label="Edit" />
@@ -1013,7 +1013,7 @@ export function Gallery() {
                 note="`href` (plus `target`/`rel`) renders an `<a>` with the same face, hit area, tooltip and accessible name — an icon-only control that opens another route keeps the browser's own middle-click, right-click and copy-link, which a `window.open` in an `onClick` cannot give."
               >
                 <div className="kit-row kit-row-wrap">
-                  <IconButton icon="external" label="Cards to pull" href="#/fulfillment" target="_blank" rel="noreferrer" />
+                  <IconButton icon="external" label="Cards to Pull" href="#/fulfillment" target="_blank" rel="noreferrer" />
                 </div>
               </Spec>
             </div>

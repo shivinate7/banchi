@@ -1477,7 +1477,7 @@ export function Fulfillment() {
                 </div>
               </section>
             ) : owed.length === 0 ? null : (
-              <section className="ff-owed" aria-label="Cards to pull">
+              <section className="ff-owed" aria-label="Cards to Pull">
                 <div className="ff-found ff-owed-list">
                   {shownOwed.map((item, at) => {
                     const group = owedGroup(item)

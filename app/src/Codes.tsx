@@ -941,7 +941,7 @@ export function Codes() {
                                 target="_blank"
                                 rel="noreferrer"
                                 className="codes-dup-link"
-                                aria-label={`Open the photograph at ${boxName(p.box, boxes)}, slot ${p.index}`}
+                                aria-label={`Open the Photograph at ${boxName(p.box, boxes)}, Slot ${p.index}`}
                               >
                                 <Icon name="image" size={13} />
                                 <span>{boxName(p.box, boxes)}</span>
@@ -1326,7 +1326,7 @@ export function Codes() {
                                       target="_blank"
                                       rel="noreferrer"
                                       className="codes-photo-link"
-                                      aria-label={`Open the photograph at ${boxName(e.box, boxes)}, slot ${e.index}`}
+                                      aria-label={`Open the Photograph at ${boxName(e.box, boxes)}, Slot ${e.index}`}
                                     >
                                       <Icon name="image" size={15} />
                                       <span className="codes-photo-word">Photograph</span>
