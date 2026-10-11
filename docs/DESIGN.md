@@ -1002,7 +1002,7 @@ Two things this does not cover. The requirement under the table rather than in i
 | Two-step pull | the sale control may occupy no part of the pull control's footprint, and begins below where it ended |
 | Jargon | copy passes a banned-word list: SKU, CSV, import, sync, batch, queue, staged |
 
-**Taste sign-off, Fulfillment (B23).** The count bar is sticky. `N Left` and the search sit in one bar. The bar stays on screen. Each location card has a small round ordinal. The `Pick` heading and the `Pick N` labels are removed. The labels that replace them are not yet decided.
+**Taste sign-off, Fulfillment (B23).** The count bar is sticky. It shows `N Left` beside the search, and it stays on screen. Each location card has a small round ordinal badge in place of the `Pick N` label. The `Pick` heading is removed.
 
 **The numbers in that table are the spec's own constants**. They are `BODY_FLOOR` 20, `PLACE_FLOOR`
 32, `PHOTO_FLOOR` 320, `TARGET_FLOOR` 44, `GAP_FLOOR` 12, `CONTRAST_FLOOR` 7,
@@ -1078,7 +1078,7 @@ User-visible text speaks to the operator in the second person: "Under your price
 
 **NOT MECHANIZED:** a machine would have to read each user-visible string in `app/src` and flag "I", "my", "me" or "mine" as a whole word. Code, comments and paths do not count. No row of `scripts/docs-audit.py` checks this yet.
 
-**Casing.** Headings, buttons, tabs, nav items, column headers, chips and short field labels take Chicago Title Case. Example: "Price the Answers". Page titles, section and card headings, and question headings are in scope too. Full sentences keep sentence case: empty states, notices, help text and toasts. Placeholders keep sentence case. The browser tab title is not covered yet. `app/tests/brand.spec.ts` asserts that the tab title is lowercase. The owner has not yet decided it.
+**Casing.** Headings, buttons, tabs, nav items, column headers, chips and short field labels take Chicago Title Case. Example: "Price the Answers". On-screen page titles, section and card headings, and question headings are in scope too. Full sentences keep sentence case: empty states, notices, help text and toasts. Placeholders keep sentence case. The one exception is the browser tab title. It keeps its lowercase brand form, as `app/tests/brand.spec.ts` asserts.
 
 **NOT MECHANIZED:** a machine would have to read the rendered accessible names of headings, buttons and tabs. It would flag each name that is not in Chicago Title Case. It would skip full sentences and placeholders. No such check exists yet.
 

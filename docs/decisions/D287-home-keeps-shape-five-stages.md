@@ -41,10 +41,6 @@ The Boxes panel sorts by `deviceMemory.ts:storedBoxRecency()`. That is the store
 
 The Capture tile is relabelled to match what it shows: the newest box's own card count, and its name in the note. It no longer implies that it is the box the operator is capturing into now.
 
-### A zero-count Review tile goes plain (B14)
-
-On Home, a Review tile at zero draws plain. It has no chevron, and its count is quiet. It keeps the same box as the other tiles.
-
 ### Runs rows show a date, a time and a quantity
 
 Each row in Home's recent runs keeps what it shows now: the box label, the relative date and the stage. It also shows the run's date, its time stamp and its quantity run. The row adds no box name and no run name (D196, no mechanism on screen). A quantity run is the number of cards in the run.
