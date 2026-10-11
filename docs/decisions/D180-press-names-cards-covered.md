@@ -1,16 +1,16 @@
 ## D180 — A press names the cards it covers
 
-**The box stops being the unit of work. `POST /pipeline/identify` and `banchi identify` take ONE SELECTION, a set of terms, each of which narrows a set of cards.** The drawer is a term in the selection. It is not the thing a run is made of. This overtakes the cart design, on the owner's word. The cart design's rot is recorded below rather than deleted.
+**The box stops being the unit of work. `POST /pipeline/identify` and `banchi identify` take ONE SELECTION, a set of terms, each of which narrows a set of cards.** The drawer is a term in the selection. It is not what a run is made of. The owner ruled that this overtakes the cart design. The cart design's rot is recorded below, not deleted.
 
-### What stood, and the sentence it rested on
+### What stood
 
-`server/pipeline_routes.py:_resolve_scope` refused any request that did not name a positive integer `box`. The refusal said a run is always scoped to one box. `banchi identify` took exactly one directory. `_scope_dir` symlinked a ticked selection into `.scopes/box3-<n>-<stamp>`, so a subset could be expressed as the one thing the command accepted: a path. The cart design made a send a cart of those, one detached child per drawer.
+`server/pipeline_routes.py:_resolve_scope` refused any request that did not name a positive integer `box`. A run was always scoped to one box. `banchi identify` took exactly one directory. `_scope_dir` symlinked a ticked selection into `.scopes/box3-<n>-<stamp>`, so a subset could be expressed as the one thing the command accepted: a path. The cart design sent a cart of those, one detached child per drawer.
 
 So "identify everything that still needs it" was not a request this product could take. A pile spanning two drawers was two presses, however few cards it held.
 
-### The cart design's supports, and which of them rotted
+### The cart design's supports, and which rotted
 
-The cart design argued that a run carries a reading, a `--bypass` ruling and a `decisions.json`. All three are properties of the drawer. So one run across three boxes forces one answer to three questions that deserve three. That was right when it was written. All three supports are gone now. Two of them went by other entries that did not look back at this one.
+The cart design argued that a run carries a reading, a `--bypass` ruling and a `decisions.json`. All three are properties of the drawer. So one run across three boxes forced one answer to three questions that deserve three. That was right when written. All three supports are gone. Two went by other entries that did not look back at this one.
 
 - **`--bypass` was retired** by D3's amendment. `pipeline/variant.resolve` decides the ladder now. 16 of 16 measured.
 - **`decisions.json` moved store-wide** by D86. The pricing answer is one file for the whole store, keyed by SKU. 0 live `decisions.json` files exist in `runs/`, and 8 `.adopted` tombstones. A run carries no pricing answer at all.
@@ -20,19 +20,19 @@ The reading is still per run as code. It is not a reason to carry a list on the 
 
 ### What the cart protected, and what protects it now
 
-The cart protected the operator's ability to give a bulk drawer and a collector drawer different readings. That is D32's cost-against-sharpness frontier, decided per drawer. That want is real and is not dismissed.
+The cart protected the operator's ability to give a bulk drawer and a collector drawer different readings. That is D32's cost-against-sharpness frontier, decided per drawer. The want is real.
 
-It is protected by pressing twice. One selection gets one reading. Two readings is two presses, two runs and two receipts. What is given up is doing that in one press, which no press has done.
+Pressing twice protects it now. One selection gets one reading. Two readings is two presses, two runs and two receipts. What is given up is doing that in one press, which no press has done.
 
-### The cart design named its own reopening condition, and the measurement does not meet it
+### The reopening condition is not met
 
-The cart design named its own reopening condition: a cart never used with more than one box. The measurement is whether any `POST /pipeline/identify` carries more than one scope. The condition is not met. The operator sent boxes 3, 4 and 5 in one press. Three run directories were created in the same second, all `started_by: app`. A selection that could name only one drawer would have taken that capability away.
+The cart design named its own reopening condition: a cart never used with more than one box. The measurement is whether any `POST /pipeline/identify` carries more than one scope. The operator sent boxes 3, 4 and 5 in one press. Three run directories were created in the same second, all `started_by: app`. A selection that could name only one drawer would have removed that capability.
 
-So `box` is list-valued. That is this entry's answer to the condition. `{"box": [3, 4, 5]}` is one selection over 1,670 cards, verified by running it. It produces one run where that press produced three. One join, one export fetch and one emit replace three of each. A filter naming three values is still one filter.
+So `box` is list-valued. `{"box": [3, 4, 5]}` is one selection over 1,670 cards, verified by running it. It produces one run where that press produced three. One join, one export fetch and one emit replace three of each. A filter naming three values is still one filter.
 
 The measurement does not support the per-leg reading. All three legs of that press carried `max_edge` 1200. The cart survives as a list-valued filter. The per-drawer reading does not.
 
-### The terms are names the store already has for a group of cards
+### The terms are names the store already has
 
 That is the whole design rule. Nothing here invents a grouping.
 
@@ -48,7 +48,7 @@ That is the whole design rule. Nothing here invents a grouping.
 | `keys` | `box/index` position keys | `Capture.key`, the cache's, the queues', the join's, D174's |
 | `run` | the cards a run's own answers name | the run directory |
 
-Every term narrows. None widens. So the order they apply in cannot change the answer, and there is no precedence to remember. This also makes an empty answer safe to refuse. Nothing matched means that the terms name no card. It never means one term overrode another.
+Every term narrows. None widens. So the order they apply in cannot change the answer, and no precedence needs remembering. This also makes an empty answer safe to refuse. Nothing matched means that the terms name no card. It never means one term overrode another.
 
 `unjoined` was requested and is not here. It is a property of a run, whether that run was joined against an export, not of a card. It would be a sixth value beside five real ones, with a different kind of answer behind it. Nothing would identify an unjoined card either, because the join is the next step over an answer already bought. The re-read is `--state identified` plus `--reidentify-stale`.
 
@@ -79,7 +79,7 @@ One name for both is how a press aimed at box 3 quietly relabels an unpositioned
 
 The path arm is deleted. `_run_box` answers `None` where the manifest does not say. `runScope.ts:boxOf`, a TypeScript copy of the same regex, goes with it. It was a second implementation of the thing being removed.
 
-The cost is the drawer label on a pre-D145 terminal run that was never re-joined. There are two on this store. The label answered wrongly for both. What it buys: a run filed under the wrong drawer stops being undetectable. A wrong box number resolves. A null does not.
+The cost is the drawer label on a pre-D145 terminal run that was never re-joined. There are two on this store, and the label answered wrongly for both. What it buys: a run filed under the wrong drawer stops being undetectable. A wrong box number resolves. A null does not.
 
 This does not make those two runs right. Their own `scope.box` says 1 and 6 as well. Both voices agree, and both are wrong. Repairing the records is `banchi rescue`'s job (D36), not this entry's.
 
@@ -87,7 +87,7 @@ This does not make those two runs right. Their own `scope.box` says 1 and 6 as w
 
 ### `.scopes/` is deleted, and the count is the finding
 
-`_scope_dir`, `_scopes_root` and `_sweep_scopes` are gone, with the `.scopes/` root. On the operator's checkout there were 264 directories. All 264 are named `box<n>-1-<stamp>`, one card each. Every one was built by the crop preview stepping a card at a time. None was ever a submission. 13 of 13 run manifests record `whole_box: True, cards: None`, so no ticked-selection run has ever started on this store.
+`_scope_dir`, `_scopes_root` and `_sweep_scopes` are gone, with the `.scopes/` root. On the operator's checkout there were 264 directories. All 264 are named `box<n>-1-<stamp>`, one card each. The crop preview built each one, stepping a card at a time. None was ever a submission. 13 of 13 run manifests record `whole_box: True, cards: None`, so no ticked-selection run has ever started on this store.
 
 A free read wrote symlinks to disk and then swept them. That was the clearest evidence that the directory stood in for a vocabulary that did not exist. The selection is a list of position keys on the wire. The preview writes nothing.
 
@@ -141,4 +141,4 @@ The work is counted, not only the outcome. Deleting the hash-first gate left eve
 
 **A selection term nobody uses.** Each term names something the store already has. That argues for coherence, not for use. The measurement is `selection` blocks in `runs/*/manifest.json`. A term that appears in none of them after a month of real presses is surface area with no reader. D80's rule applies to it.
 
-**A press that wants two readings.** If the operator asks for one drawer at 1200 and another at 900 in one act, the cart design's deciding argument is live again. It is live for the one support that has not rotted: a run carries a **reading**, a `--bypass` ruling and a `decisions.json`, and all three are properties of what is IN the drawer — so one run across three boxes forces one answer to three questions that deserve three. The honest answer is a cart of readings, not a cart of boxes.
+**A press that wants two readings.** If the operator asks for one drawer at 1200 and another at 900 in one act, the cart design's deciding argument is live again. It is live for the one support that has not rotted. A run carries a **reading**, a `--bypass` ruling and a `decisions.json`. All three are properties of what is IN the drawer, so one run across three boxes forces one answer to three questions that deserve three. The honest answer is a cart of readings, not a cart of boxes.
