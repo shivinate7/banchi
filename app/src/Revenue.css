@@ -300,7 +300,9 @@
 .revenue-mix-swatch-b { background: var(--bn-ink-4); }
 .revenue-mix-rarity {
   display: grid;
-  grid-template-columns: minmax(64px, auto) minmax(0, 1fr) auto;
+  /* LABEL CAPPED, NEVER `auto` (same trap as `.revenue-summary`): a long rarity name's one-line
+     width would starve the bar track. The name wraps inside its capped column instead. */
+  grid-template-columns: minmax(64px, 22%) minmax(0, 1fr) auto;
   gap: var(--bn-2) var(--bn-3);
   align-items: center;
   font-size: var(--bn-fs-sm);
