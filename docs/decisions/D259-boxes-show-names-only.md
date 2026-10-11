@@ -49,7 +49,7 @@ On the server:
   ./banchi boxes names --write    # one transaction; a second run changes nothing
   ```
 
-- A cleared name stores the default name `Box <count+1>`, the next free one. It is never None, so no box falls back to a bare number. The box's own row is not counted, so a box that already carries its default keeps it. `count` is the number of OTHER boxes standing. A lone box cleared stays `Box 1`.
+- A cleared name stores the default name `Box <count+1>`, the next free one. It is never None, so no box falls back to a bare number. The box's own row is not counted, so a box that already carries its default keeps it. `count` is the number of OTHER boxes standing. `Inventory.default_box_name` holds the rule: its starting count, `len(self.boxes) + 1`, once counted the box being cleared. `set_name` calls `ensure_box` first, so the row is already in the registry when the default is computed. A lone box cleared stays `Box 1`.
 - The backfill gives each unnamed box its own `Box <number>` where that name is free. Only then does it move the boxes that clash. A clash never pushes a later box off a free name.
 - A server refusal that names a box says the box's name. A refusal that names a card also says its section and its card in the section, through `pipeline/join.py:said_place`. The store's own refusals use `store/master.py:Inventory.box_title`. Both read `store/numbers.py:box_title`. The error codes do not change.
 

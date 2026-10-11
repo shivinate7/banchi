@@ -31,7 +31,7 @@ The owner asked for sectioning the operator can create from the capture screen, 
 
 ### The next card goes into an empty last section
 
-**Ruling: the next captured or moved-in card goes into an empty last section, behind its divider.** A box that ends with an empty section (S pressed, no card behind it yet) takes the next card into that section.
+**Owner's ruling: the next captured or moved-in card goes into an empty last section, behind its divider.** A box that ends with an empty section (S pressed, no card behind it yet) takes the next card into that section.
 
 `store/master.py:Inventory._behind_empty_section` holds it. `next_key` and `_birth_key` read it. Every capture and every move-in takes its key from one of the two. So one rule covers every write the divider proof named. Before this, a write that lowered the box's highest key left the divider above the next card's key. Such writes were a capture undo, a Manage box remove and a move that takes the last card forward. Also a section reorder, a section-move undo and a move undo. The next card then went into the section in front of the divider (the proof's F1).
 
@@ -71,7 +71,7 @@ A tombstone would be a third thing the store has to explain: not captured, not s
 
 A sale is the opposite case. `sold` is a state. The record stays, and the gap is permanent.
 
-### Three rulings that narrow the lines above
+### Three owner rulings, each narrowing a line above
 
 1. **Mid-box delete with contiguous shift exists, bounded.** The rule "Nothing that renumbers may exist" is overruled for one case. That case is deleting a junk capture mid-box. Every higher-index card in that box must still be `captured` or `identified`, with no listing hold. The cards behind it slide forward, as in a contiguous stack. The boundary keeps the old rule's reason alive. A sold or retired gap above the deleted index refuses (`renumber_blocked`). Shifting across it would close a gap that means something. A listed card's row is already in a file that names its position. Photos and sidecars are renamed in the same locked operation. A `renumbered` history event maps every old index to its new one, so the log stays true across the shift.
 

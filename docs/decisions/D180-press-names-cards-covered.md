@@ -1,6 +1,6 @@
 ## D180 — A press names the cards it covers
 
-**The box stops being the unit of work. `POST /pipeline/identify` and `banchi identify` take ONE SELECTION, a set of terms, each of which narrows a set of cards.** The drawer is a term in the selection. It is not the thing a run is made of. This overtakes the cart design. The cart design's rot is recorded below rather than deleted.
+**The box stops being the unit of work. `POST /pipeline/identify` and `banchi identify` take ONE SELECTION, a set of terms, each of which narrows a set of cards.** The drawer is a term in the selection. It is not the thing a run is made of. This overtakes the cart design, on the owner's word. The cart design's rot is recorded below rather than deleted.
 
 ### What stood, and the sentence it rested on
 
@@ -24,9 +24,9 @@ The cart protected the operator's ability to give a bulk drawer and a collector 
 
 It is protected by pressing twice. One selection gets one reading. Two readings is two presses, two runs and two receipts. What is given up is doing that in one press, which no press has done.
 
-### The cart's reopening condition has been met
+### The cart design named its own reopening condition, and the measurement does not meet it
 
-The cart design named its own reopening condition: a cart never used with more than one box. The measurement is whether any `POST /pipeline/identify` carries more than one scope. The condition was met. Once, the operator sent boxes 3, 4 and 5 in one press. Three run directories were created in the same second, all `started_by: app`. A selection that could name only one drawer would have taken that capability away.
+The cart design named its own reopening condition: a cart never used with more than one box. The measurement is whether any `POST /pipeline/identify` carries more than one scope. The condition is not met. The operator sent boxes 3, 4 and 5 in one press. Three run directories were created in the same second, all `started_by: app`. A selection that could name only one drawer would have taken that capability away.
 
 So `box` is list-valued. That is this entry's answer to the condition. `{"box": [3, 4, 5]}` is one selection over 1,670 cards, verified by running it. It produces one run where that press produced three. One join, one export fetch and one emit replace three of each. A filter naming three values is still one filter.
 
@@ -109,7 +109,7 @@ The export-scope argument is untouched, and so is the unanimity rule. A hint nar
 
 ### `_busy_run` is deleted
 
-D174 said deleting `_busy_run`'s callers would be a separate change, because a guard is removed only once its replacement has been exercised. This is that change.
+`_busy_run` is left in place by this entry. Both checks now run in `do_pipeline_identify`. D174 said deleting `_busy_run`'s callers would be a separate change, because a guard is removed only once its replacement has been exercised. This is that change.
 
 `_busy_run` took a box number, and this route no longer has one to give it. Widening it was never the fix. D174 says so, and the vocabulary was the problem.
 
@@ -141,4 +141,4 @@ The work is counted, not only the outcome. Deleting the hash-first gate left eve
 
 **A selection term nobody uses.** Each term names something the store already has. That argues for coherence, not for use. The measurement is `selection` blocks in `runs/*/manifest.json`. A term that appears in none of them after a month of real presses is surface area with no reader. D80's rule applies to it.
 
-**A press that wants two readings.** If the operator asks for one drawer at 1200 and another at 900 in one act, the cart design's deciding argument is live again. It is live for the one support that has not rotted. The honest answer is a cart of readings, not a cart of boxes.
+**A press that wants two readings.** If the operator asks for one drawer at 1200 and another at 900 in one act, the cart design's deciding argument is live again. It is live for the one support that has not rotted: a run carries a **reading**, a `--bypass` ruling and a `decisions.json`, and all three are properties of what is IN the drawer — so one run across three boxes forces one answer to three questions that deserve three. The honest answer is a cart of readings, not a cart of boxes.

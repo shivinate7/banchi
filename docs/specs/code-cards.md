@@ -347,10 +347,10 @@ Named rather than buried, and none of it blocks the build.
    no automated way to screen them, and no source publishes a rate. Price bulk assuming a
    loss and measure it on the first batch.
 3. **No channel has been executed.** Every price above is an ask or a catalog figure except
-   where a sold count is cited. The cheapest experiment settles the whole plan. It is
+   where a sold count is cited. The cheapest experiment that would settle the whole plan is
    **one wholesale submission of a few hundred booster codes to a buylist that accepts a
-   pasted list.** Also make **one premium code listed on a storefront.** That is a week's
-   work. It replaces six MARGINAL verdicts with two realised prices.
+   pasted list, and one premium code listed on a storefront** — a week's
+   work that replaces six MARGINAL verdicts with two realised prices.
 4. **Buylist counterparty risk is real and unquantified.** The one app that accepts a pasted
    list of codes rates 2.3 to 3.1 stars with recurring non-payment complaints. Submit a small
    batch first.
