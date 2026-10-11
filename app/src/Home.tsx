@@ -189,9 +189,9 @@ function deckFromCards(cards: Record<string, InventoryCard> | null): DeckCard[] 
 function greeting(): string {
   const hour = new Date().getHours()
   if (hour < 5) return 'Still up'
-  if (hour < 12) return 'Good morning'
-  if (hour < 18) return 'Good afternoon'
-  return 'Good evening'
+  if (hour < 12) return 'Good Morning'
+  if (hour < 18) return 'Good Afternoon'
+  return 'Good Evening'
 }
 
 /** A BOX IS SHOWN BY ITS NAME, EVERYWHERE (the owner's ruling, 2026-09-23) — never a bare
