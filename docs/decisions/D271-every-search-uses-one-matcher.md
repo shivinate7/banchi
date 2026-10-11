@@ -651,9 +651,9 @@ filtering.
 
 **RULING 2: letters that spell a dotted name match it again.** "bf" and "B.F" behave the same, and both find B.F. Sword. The reviewer's lead: make
 the floor test measure a token AFTER folding, so `B.F` and `bf` classify the same
-> way. Then give the folded dotted-initial case a path to B.F. Sword without opening
-> every 2-letter term to widening. Show that the 2-character timing stays under 500ms
-> p95.
+way. Then give the folded dotted-initial case a path to B.F. Sword without opening
+every 2-letter term to widening. Show that the 2-character timing stays under 500ms
+p95.
 
 Two halves. First, the TEST HARNESS. `_is_floor_query`
 (`scripts/match-selftest.py`) measured the RAW token's own length. `B.F` keeps its own
@@ -805,7 +805,7 @@ name unsearched. This lane finished the sweep.
   purpose. This screen's own exception to that rule stays local and explicit, through
   `raw`, instead of bent into the shared field.
 - **Graveyard.** Found still hand-rolled: the same defect this entry's own evidence section
-  named at FLT-06 in never closed. Moved onto `matchQuery`, over `text`,
+  named at FLT-06, never closed. Moved onto `matchQuery`, over `text`,
   `numbers` and `skus`.
 
 **Grep swept for every other hand-rolled match.** Two literal-string checks survive. Neither

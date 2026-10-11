@@ -20,7 +20,7 @@ D28's ruling: *"The review answer gets an undo window, and the list stops moving
 
 **The set holds the DEPARTURES, not the survivors.** A copy captured after the order was taken is new evidence. Nothing was ranked around it, so nothing holds it. A copy that LEFT since the order was taken is held. Every reader treats it as it was.
 
-**One set, one press, for both lists.** It lives in `Inventory.tsx` beside the writes, not inside either list. One sale makes the copies list and the box rail stale at the same instant.
+**One set, one press, for both lists.** It lives in `Inventory.tsx` beside the writes, not inside either list. One sale makes the copies list and the box rail stale at the same instant. Two freezes released by two controls would be the owner pressing twice to stop one list moving.
 
 ### Four readers, and the fourth is the easy one to miss
 
@@ -44,7 +44,7 @@ D28's ruling: *"The review answer gets an undo window, and the list stops moving
 - **Absent while the order is current.** A control that recomputes a current order does nothing. A permanent one reads as a setting, not as the state of this list.
 - **`copies`, not `sales`.** A sale is what the operator will nearly always have pressed. A RETIREMENT (D26's other door) changes the same arithmetic and is held by the same set. This screen does not record which door a hold came through. Threading that through three components to keep one word would carry a field for a label. `copy` is the panel's word for these rows everywhere else.
 
-**It counts the copies THIS LIST draws, not every departure the screen has recorded.** A sentence saying `3 copies stale` over a list holding one of them would count somebody else's cards.
+**It counts the copies THIS LIST draws, not every departure the screen has recorded.** `frozen` is the screen's. A sentence saying `3 copies stale` over a list holding one of them would count somebody else's cards.
 
 **It takes a new order on its own in two places. That is not a reshuffle.** A new search is a new order, so `BoxBrowse` releases the freeze when the searchbox text changes. An undo releases that copy's hold. A staleness figure that survived an undo would offer to re-rank a store that never moved.
 
@@ -61,9 +61,23 @@ D28's ruling: *"The review answer gets an undo window, and the list stops moving
 
 Each reader of the freeze was deleted in turn, and the suite was re-run. Nine arms go red. One arm deleted a parameter. One survives, named below.
 
+| arm | verdict |
+|---|---|
+| the copies list's rank ignores the freeze | red |
+| the copies list's fold ignores it | red |
+| the box rail's rank ignores it | red |
+| the walk's fold ignores it | red |
+| the shelf pool ignores it | red |
+| the re-rank press does nothing | red |
+| a sale never holds the order | red (8 cases) |
+| a new query never takes a new order | red |
+| the control's slot reserves nothing | red |
+| the landing ignores the freeze | deleted, see below |
+| an undo never releases its hold | survives, see below |
+
 - Four of the nine were green on the first run, for one reason. The case acted on the row the walk stood on. `stays` keeps a row for three reasons: current copy, a receipt from this sale, or a freeze. The first two answered every assertion. The cases now act on a mid-list row. The retirement case reaches the freeze alone, because `Inventory.tsx` hands the copies list `soldKeys` and not `retiredKeys`. A fifth needed a box whose last live match departs. That is the only state the shelf pool can notice.
-- **The landing's freeze was deleted, not covered.** `landingInFullest` runs only on a fresh query. A fresh query releases the freeze, so the parameter could never be populated. The landing ranks on current state, as a fresh answer should.
-- **The undo's release survives.** Deleting `releaseRank` leaves all 108 cases green. The chip is gone again shortly after the undo, so something else on that path clears the hold. Bounding the assertion to two seconds did not separate them. That does NOT show the call is redundant. The code stays. A later session with a reproduction should find the second clearer and delete one. Or it should find the case this one misses.
+- **The landing's freeze was deleted, not covered.** `landingInFullest` runs only on a fresh query. A fresh query releases the freeze, so the parameter could never be populated. A mutation that ignored it left the whole suite green. The landing ranks on current state, as a fresh answer should.
+- **The undo's release survives.** Deleting `releaseRank` leaves all 108 cases green. The chip is gone again shortly after the undo, so something else on that path clears the hold. Bounding the assertion to two seconds did not separate them. That does NOT show the call is redundant. It is a weaker claim than the landing's, and is why the code stays. The code stays. A later session with a reproduction should find the second clearer and delete one. Or it should find the case this one misses.
 
 ### What the control costs
 
@@ -73,7 +87,7 @@ Each reader of the freeze was deleted in turn, and the suite was re-run. Nine ar
 
 ### What is not built, and what would reopen this
 
-**No preference is stored.** The freeze is always on, and the re-rank is the only escape. So there is no ninth `banchi.*` key, and D27's roster is unchanged. A remembered "re-rank live" toggle was not built. Nobody has asked for the old behaviour back.
+**No preference is stored.** The freeze is always on, and the re-rank is the only escape. So there is no ninth `banchi.*` key, and D27's roster is unchanged. A remembered "re-rank live" toggle was not built. Nobody has asked for the old behaviour back. A setting nobody changes is a second code path nobody tests.
 
 **The staleness figure counts DEPARTURES, not "rows that would move".** `Order is 3 copies stale` is easy to believe. `3 rows would move` would be truer. But it means recomputing the order on every render to compare it with the frozen one. That is the live re-rank this entry deletes, running invisibly. If an operator presses re-rank and sees nothing change, that is the trade.
 

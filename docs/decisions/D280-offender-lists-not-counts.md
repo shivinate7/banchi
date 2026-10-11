@@ -122,10 +122,7 @@ Each caller still decides what an identity is, and so whether growth is counted 
 
 ### Amended — the prose list is CUT, and a new one joins
 
-Ruling (test-audit plan, row 92):
-"Row 92, `ste offenders`, and its list `scripts/ste-offenders.json`: CUT. The write-time
-STE hook lints new prose. This needs dated amendments to D60 (the prose
-ratchet decisions) in the lane that cuts it." Lane L2 deletes the `ste offenders` row,
+Ruling (test-audit plan, row 92): cut the `ste offenders` row and its list `scripts/ste-offenders.json`. The write-time STE hook lints new prose. The lane that cuts them amends D60 (the prose ratchet decisions). Lane L2 deletes the `ste offenders` row,
 `scripts/ste-offenders.json` and `scripts/docs-audit.py:check_ste_offenders`.
 
 Two offender lists remained right after the cut: `scripts/typed-interpunct-allow.json` and

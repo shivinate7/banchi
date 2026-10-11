@@ -65,14 +65,16 @@ unread here — this screen never draws a name, an address or a payment detail).
 
 ### The nav row
 
-`#/revenue` is an eleventh nav row, on purpose. Its 37px drawer overflow at 390x754 breaks the
-40px thumb floor (CLAUDE.md), and no lower step exists. The first ruling put Sales off-nav,
-reached from the command palette and a link on `#/orders`. That was reversed: Sales is a
+`#/revenue` is an eleventh nav row, on purpose. The screen shipped with a nav row and a hotkey.
+The owner was shown the measurement. An eleventh nav row runs the phone drawer's rows 37px past
+the fold at 390x754, on the 40px thumb floor CLAUDE.md already sets. There is no lower step to
+give. The owner first ruled it off: keep the drawer whole, reach the screen from the command
+palette and a link on `#/orders` instead. That was reversed: Sales is a
 sidebar tab, and nothing is added to any other screen for it. The off-nav shape grafted a control
 onto `#/orders`, and onto `#/shipping` through the shared `OrdersHub`. That is reverted.
 `app/src/Orders.tsx` matches main again. A shared-component screen is the wrong place for a
 workaround. One change became two, on two screens, because the two routes share one component.
 
-`app/tests/brand.spec.ts`'s two drawer-fit cases carry the arithmetic. They give up a test's
+`app/tests/brand.spec.ts`'s two drawer-fit cases carry the arithmetic. They give up a TEST'S OWN
 stricter promise, every row on screen with nothing to scroll to. D266 already rules that the
-phone drawer's nav scrolls for any row count, so that promise was never a product floor.
+phone drawer's nav scrolls for any row count, so that promise was never a product floor. What the cases give up is a test's promise, never a decision.

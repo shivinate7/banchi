@@ -2,13 +2,10 @@
 
 **Settled from the owner's instructions about the screen they spend the most hours in.** Four instructions in one message, three about memory and one about what a box is called:
 
-> *same box style sorting in inventory (where most recently selected/most filled go to the top, rather than box #, determines the order of box in Workflow: Capture)*
->
-> *ideally let it save my last used on capture on all settings ... so the game i picked, camera i picked, all stay saved in some sorta session history*
->
-> *a quick clear all settings button*
->
-> *i dont need to see box number in capture screen*
+- Capture's box picker orders boxes as Inventory does, most recently selected or most filled first, not by box number.
+- Capture remembers the last-used settings, game and camera included, as a session history.
+- A quick clear-all-settings button.
+- Box numbers are not shown on the capture screen.
 
 ### D27's premise was wrong about shifts, and the owner is the authority on that
 

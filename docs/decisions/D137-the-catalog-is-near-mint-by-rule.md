@@ -1,6 +1,6 @@
 ## D137 — The catalog is Near Mint by rule
 
-**Settled from the owner asking where a feature had gone.** The owner found the review queue no longer let them fast forward, because every card was stated as Near Mint. Then the owner corrected the first account. Nobody had ever been asked to judge a card's condition in the review queue. Conditions were always pre-assumed to be Near Mint.
+**Settled from the owner asking where a feature had gone.** The owner could no longer fast forward through the review queue by stating that every card was Near Mint. When the first account of this was wrong, the owner corrected it: until that day the owner had never been asked to judge a card's condition in the review queue. Conditions were always pre-assumed to be Near Mint.
 
 They were pre-assumed. That is the whole finding.
 **D12 hardcodes Near Mint and nothing in this tree had ever enforced it on the catalog.**
@@ -25,7 +25,7 @@ file its manifest now names.
 | `2026-08-29-box1` … `2026-08-31-box3` | hand-downloaded | 2 conditions, **0 played** |
 | `2026-09-01-box3/4/5` onward | fetched | 11 conditions, **8,032 played** |
 
-**And the experience changed after the mechanism did.**
+**And the experience changed ten days after the mechanism did.**
 Counted off the store's own `answered` events, the operator has
 answered **8** grade-bearing questions against a wide export in total, all on the re-join day, out
 of 240 answers; later it was **108 of 131**. Before that the work was
@@ -128,7 +128,7 @@ was made of: five grades of one finish is one finish and five candidates. Rung 2
 `len(candidates) == 1` over **rows**. It counts rows now and resolves one through the real
 ladder, because a count is not a resolution.
 
-### Not the whole of what made the day hurt
+### Not the whole of what made the re-join day hurt
 
 Box 4 was captured with **no set hint on 448 of its 464 cards**, where boxes 5 and 6 are 100%
 `Unleashed`. 178 of the 1,246 Riftbound numbers collide across sets, and an unhinted collision

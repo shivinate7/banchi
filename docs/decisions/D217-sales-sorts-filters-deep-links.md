@@ -16,7 +16,7 @@ Period, search text, sort column and sort direction live in `#/revenue`'s query 
 
 ### Cross-filtering the month strip
 
-The sparkline stays `aria-hidden`. Each row in the strip is now a `<button aria-pressed>`. Selecting a bucket narrows the product table to that bucket's date range. The verdict and the chart stay scoped to the whole selected period. Only the product table narrows. The active filter is a dismissible `Pill` and `Button` pair above the table, reading `Aug 2026 only` and `Clear`. Pressing the same row again clears it, as the Clear button does.
+The sparkline stays `aria-hidden`. A `<polyline>` was never going to be the accessible control. Each row in the strip is now a `<button aria-pressed>`. The strip itself is the control the brief asked for, not a chip added beside it. Selecting a bucket narrows the product table to that bucket's date range. The verdict and the chart stay scoped to the whole selected period. Only the product table narrows. The active filter is a dismissible `Pill` and `Button` pair above the table, reading `Aug 2026 only` and `Clear`. Pressing the same row again clears it, as the Clear button does.
 
 A stale bucket cannot filter the wrong thing. Switching the period or the custom range clears the active bucket. The clearing effect skips its own first run. A deep link such as `?period=6m&month=2026-08` survives a reload.
 
@@ -32,7 +32,7 @@ Selecting Custom reveals two `<input type="date">` fields, `From` and `To`. The 
 
 CLAUDE.md's citation names the research behind this choice. Stripe derives granularity from the range. Square offers a separate dropdown. This screen follows Stripe. The month strip becomes a week strip when the selected window's nominal span is 60 days or fewer. That threshold is chosen, not measured. It sits where a monthly bar would draw one or two bars, and a weekly one would draw eight or nine.
 
-Only a bucket with a real sale draws. One exception: the bucket containing `now` always draws, even at $0.00, whenever the selection reaches today.
+Only a bucket with a real sale draws. One exception: the bucket containing `now` always draws, even at $0.00, whenever the selection reaches today. A first draft zero-filled every gap in the whole span instead. That draft measured 75 words against the ratchet's old 56, mostly from empty historical months nobody asked to see.
 
 ### Partial-period honesty
 
@@ -47,7 +47,7 @@ The bucket that contains `now`, when the selection reaches today, carries `inPro
 
 `#/revenue`'s copy is measured with the leaked `#/orders` fixture still live, because `copy-budget.spec.ts` seeds real orders and never tears them down. The old ceiling, 56, already reflected that populated screen.
 
-The new ceiling is 64, eight words higher. `Custom` on the period control costs one. The comparison's "So far, " costs two, only when the current window has not fully elapsed. The `ongoing` bucket costs the other five: its month name, "ongoing," and "orders" against a zero count. It is forced onto the strip even at $0.00. `node scripts/copy-budget.mjs --pin` set the new number.
+The new ceiling is 64, eight words higher. `Custom` on the period control costs one. The comparison's "So far, " costs two, only when the current window has not fully elapsed. The `ongoing` bucket costs the other five: its month name, "ongoing," and "orders" against a zero count. It is forced onto the strip even at $0.00. Every one of the eight was asked for by name, in the brief this entry answers. `node scripts/copy-budget.mjs --pin` set the new number.
 
 ### Layout defects found in build
 
