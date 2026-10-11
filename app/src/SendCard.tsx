@@ -762,22 +762,6 @@ export function SendCard({
 
   return (
     <div className="send-card">
-      {open.map((send) => (
-        <SendStanding key={send.stamp} send={send} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} />
-      ))}
-
-      {standing === null ? null : (
-        <>
-          <SendStanding send={standing} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} />
-          {/* WHAT THE GUARD HELD BACK, ANSWERED TO THE PRESS THAT MADE IT. It is read once,
-              right after this visit's own send; a later visit does not carry it in the bar. */}
-          {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TrimList trimmed={standing.trimmed} /> : null}
-          {sent !== null && sent.stamp === standing.stamp ? <NotSent gone={standing.gone} /> : null}
-          {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TookOff taken={standing.taken_off} download={false} /> : null}
-          {sent !== null && sent.stamp === standing.stamp ? <PricesLeft send={standing} /> : null}
-        </>
-      )}
-
       <div className="send-act" data-more={moreOpen ? 'open' : undefined}>
         <Button
           variant="primary"
@@ -872,6 +856,10 @@ export function SendCard({
         <Refusal compact className="send-failure send-undo-failure" title={undoFailure.title} code={undoFailure.failure.code} detail={undoFailure.failure.message} />
       )}
 
+      {open.map((send) => (
+        <SendStanding key={send.stamp} send={send} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} />
+      ))}
+
       {(live.status?.unreadable ?? []).map((row) => (
         <Notice
           key={row.key}
@@ -910,6 +898,18 @@ export function SendCard({
       {warned.map((send) => (
         <TakenBackWarning key={send.stamp} send={send} dismiss={(stamp) => void dismiss(stamp)} dismissing={dismissing} />
       ))}
+
+      {standing === null ? null : (
+        <>
+          <SendStanding send={standing} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} />
+          {/* WHAT THE GUARD HELD BACK, ANSWERED TO THE PRESS THAT MADE IT. It is read once,
+              right after this visit's own send; a later visit does not carry it in the bar. */}
+          {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TrimList trimmed={standing.trimmed} /> : null}
+          {sent !== null && sent.stamp === standing.stamp ? <NotSent gone={standing.gone} /> : null}
+          {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TookOff taken={standing.taken_off} download={false} /> : null}
+          {sent !== null && sent.stamp === standing.stamp ? <PricesLeft send={standing} /> : null}
+        </>
+      )}
 
       {live.failure === null ? null : (
         <Retry
