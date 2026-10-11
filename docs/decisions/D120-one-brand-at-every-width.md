@@ -1,7 +1,7 @@
 ## D120 — One brand at every width
 
-**Built 2026-09-07, on the owner's instruction, after they asked what the mobile build gets wrong.**
-The 2026-09 rebuild put the lockup in the desktop sidebar
+**Built on the owner's instruction, after they asked what the mobile build gets wrong.**
+The rebuild put the lockup in the desktop sidebar
 (D102, `docs/specs/logo.md` §16) and left the phone chrome exactly as it was before the lockup
 existed. Nothing was decided about the phone; it simply was not asked about.
 
@@ -10,7 +10,7 @@ Above 1023px: 番地 over BANCHI, in the mark's own brackets. Below 768px: a `Lo
 
 **THE LOCKUP CANNOT GO IN THE TOP BAR, AND THE ARITHMETIC WAS ALREADY WRITTEN DOWN.** Its floor is kanji 32 (§11), which is a 102 × 75 block; `--bn-topbar-h` is 52px. That is the same refusal the 64px rail takes. It has the same measurement behind it: 番's counters close at about kanji 30, before the roman gives out and long before the bracket does. A bar tall enough for it is 84px. That is 10% of an 844px viewport, spent on a brand row on every screen. It was considered and refused.
 
-**SO THE BAR DRAWS WHAT THE RAIL DRAWS, AND THAT IS NOT A NEW RULING.** §18 settled the same question for the browser tab, on the owner's own instruction: *"the tab should be what the collapsed sidebar is"*. It cites §1: *"with the card removed the same brackets become an empty slot, which is the in-product mark."* The phone bar is the rail's case one breakpoint down, so it takes the rail's drawing and the rail's paint. Unlike the tab's flat gold, it is an in-app surface and keeps `--bn-lockup-metal`, which `kit.css` resolves per theme.
+**SO THE BAR DRAWS WHAT THE RAIL DRAWS, AND THAT IS NOT A NEW RULING.** §18 settled the same question for the browser tab, on the owner's own instruction: the tab should be what the collapsed sidebar is. It cites §1: *"with the card removed the same brackets become an empty slot, which is the in-product mark."* The phone bar is the rail's case one breakpoint down, so it takes the rail's drawing and the rail's paint. Unlike the tab's flat gold, it is an in-app surface and keeps `--bn-lockup-metal`, which `kit.css` resolves per theme.
 
 **AND THE DRAWER IS THE SIDEBAR AT A PHONE'S WIDTH** — same nav, same groups, same foot, one tap away instead of always on. So it draws the sidebar's brand at the sidebar's number. Kanji 40 was taken over 32 by forced choice. It was drawn in the real drawer at 390 and 320 in both themes. Both fit, and both leave the nav clear of a scroll. And 40 is the sidebar's own value, so there is one number rather than two to keep in step.
 
@@ -21,7 +21,7 @@ Above 1023px: 番地 over BANCHI, in the mark's own brackets. Below 768px: a `Lo
 *"Every one has an address."*, which is the sentence a person actually reads and is bound to the
 count in front of it. `.bn-brand-text`, `.bn-brand-name` and `.bn-brand-tag` are deleted.
 
-**THE DRAWER'S SERVER LINE IS DELETED** (2026-09-28, D152).
+**THE DRAWER'S SERVER LINE IS DELETED** (D152).
 
 **WHY NOTHING CAUGHT ANY OF THIS.** `app/tests/nav.spec.ts` scopes itself to `.bn-side` on purpose. `app/tests/cursor.spec.ts` harvests its routes from `.bn-side a.bn-nav-link`. That link is `display: none` below 768, so that file cannot run at a phone width even in principle. Of twenty specs, only `app/tests/fulfillment.spec.ts` sets a phone viewport at all. The shell had no test at any width. `app/tests/brand.spec.ts` covers the phone bar and the drawer now, and carries the size floor §15 asked for and nothing built — `Lockup` refuses below `LOCKUP_FLOOR = 32`.
 
