@@ -1,12 +1,12 @@
 ## D42 — Main moves only by pull request
 
-**`main` moves only by a merged pull request, and two local git hooks enforce it.** Built 2026-08-29, after main moved under live worktrees twice in one day.
+**`main` moves only by a merged pull request, and two local git hooks enforce it.** Built after main moved under live worktrees twice in one day.
 
 `637e2e4` was authored on one session's branch and fast-forwarded into main while three others were working on branches cut from it. `f5dcc2b` was pushed straight to `origin/main` during the session that wrote this entry. `origin/main`'s reflog is five consecutive `update by push`. Nothing in the repo had ever said a session may not do that, and nothing checked.
 
-### Branch protection was not available here, and is now on (amended 2026-09-06)
+### Branch protection was not available here, and is now on
 
-**AMENDED 2026-09-06: the owner upgraded to GitHub Pro and protection is now on.**
+**AMENDED: the owner upgraded to GitHub Pro and protection is now on.**
 A pull request is required, force pushes and deletions are refused, and `enforce_admins` is
 true so it binds the owner as well. `required_approving_review_count` is **0** — GitHub
 refuses a self-approval, so requiring one on a solo repo would mean nothing could ever be
@@ -48,7 +48,7 @@ The payload is `<old> <new> <ref>`, so the obvious rules are *allow a no-op* (`o
 
 Git reports zeros whenever the caller did not state an expected value, even where main exists at a real commit. A deletion is indistinguishable from a no-op and `branch -f` from a creation — the first draft waved both through, and main was genuinely deleted in the test rig. The hook decides on `new` alone and asks git for the pre-update value itself.
 
-**One exemption: packing.** `pack-refs` and `gc` write main into packed-refs, then delete the loose main stating `<sha> 0000`. A delete is allowed only when `old` is nonzero, equals main's value on disk, and a loose file exists. A real delete states zeros first, so it stays refused (2026-09-28).
+**One exemption: packing.** `pack-refs` and `gc` write main into packed-refs, then delete the loose main stating `<sha> 0000`. A delete is allowed only when `old` is nonzero, equals main's value on disk, and a loose file exists. A real delete states zeros first, so it stays refused.
 
 **It fails open on its own bugs, which is a trade rather than a weakness.** This runs on every ref update in every worktree of the clone, so a version exiting non-zero by accident breaks git for every concurrent session at once. The only non-zero exit in the file is the deliberate refusal; an unknown phase, an unparseable line or a missing git allows. Same rule `scripts/docs_audit/core.py:nested_worktrees` states for itself, and the same one `scripts/guard-opsec.sh` took after it over-triggered (D16).
 
@@ -94,7 +94,7 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
     git fetch origin && git fetch origin main:main
 
-**A path printed — main is checked out there.** Added 2026-08-30 after PR #38, because `git fetch origin main:main` is exactly what git will not do to a branch somebody is standing on:
+**A path printed — main is checked out there.** Added after PR #38, because `git fetch origin main:main` is exactly what git will not do to a branch somebody is standing on:
 
     fatal: refusing to fetch into branch 'refs/heads/main' checked out at '/Users/shivinate/Developer/banchi'
 
@@ -110,7 +110,7 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 **What it costs is real and is this entry's own subject.** Advancing main reshapes what every live worktree is cut from. What makes it a decision rather than a repeat is the pair of conditions above: an explicit instruction, and only to a commit that was on origin first.
 
-**That rejection is amended, and the sentence moves while the reasoning does not** (owner, 2026-09-01). `make merge` exists. It runs the shared merge tool from claude-settings (D140, merge claims the decision number).
+**That rejection is amended, and the sentence moves while the reasoning does not** (owner). `make merge` exists. It runs the shared merge tool from claude-settings (D140, merge claims the decision number).
 
 **The rejection was aimed at automating the decision, and the decision is untouched.** Whether this pull request gets merged stays the owner's word, per *The word* below: a bare `make merge` refuses and says there is no default and will not be one, `ARGS=<n>` is a preview that presses nothing, and only `ARGS="<n> --confirm"` acts. That is D33's instrument one register down — the route that can spend money refuses without an explicit field, and this refuses without an explicit number and flag.
 
@@ -124,9 +124,9 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 ### The main checkout going stale
 
-**The SessionStart hook reports the main working tree left on a feature branch after that branch merged.** Added 2026-08-30. Everything above governs how main MOVES; this is the tree that holds it drifting a different way.
+**The SessionStart hook reports the main working tree left on a feature branch after that branch merged.** Everything above governs how main MOVES; this is the tree that holds it drifting a different way.
 
-**Measured that day: 70 commits behind, on a branch merged in PR #43, serving the owner's real store.** Nothing was lost, because the branch was fully merged. What it cost was the live rig running behind four merged PRs while `make status` reported `0 ahead of main, 70 behind it` and nobody read it.
+**Measured at the time: 70 commits behind, on a branch merged in PR #43, serving the owner's real store.** Nothing was lost, because the branch was fully merged. What it cost was the live rig running behind four merged PRs while `make status` reported `0 ahead of main, 70 behind it` and nobody read it.
 
 **`scripts/worktree-guard.sh` carries it because that runs unasked.** D43 puts the ports there for the same reason rather than in a target somebody has to remember.
 
@@ -148,9 +148,9 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 **Why this is safe to grant and was not safe to assume.** What was missing was never the owner's consent — they had it either time. It was any record that consent was required, and any mechanism that noticed its absence. Both now exist, so an explicit instruction is a decision rather than a default.
 
-### A standing grant to the orchestrating session (amended 2026-09-13)
+### A standing grant to the orchestrating session
 
-**"The word" above is still per-PR by default. This is the one exception, and it is scoped rather than a repeal.** After being asked twice to name the act for PR #349, the owner said to the orchestrating session: *"You are the orchestrator -- you have my explicit permission to do merges."* That names the act once for a whole batch instead of once per PR in it.
+**"The word" above is still per-PR by default. This is the one exception, and it is scoped rather than a repeal.** After being asked twice to name the act for PR #349, the owner gave the orchestrating session a standing permission to do merges. That names the act once for a whole batch instead of once per PR in it.
 
 **The grant is to the ORCHESTRATING session, and only for PRs it stood behind.** It covers a PR only when that session put the PR's plan to the owner and reviewed its diff — never a worker or a peer session merging a PR of its own, which still needs the word exactly as above. It is exercised only through `make merge ARGS="<n> --confirm"`, from a checkout standing on the PR's own branch, only once CI is green, and never with `--admin`. A later session — a new orchestrator, or the same one returned to a fresh batch — re-asks; the grant does not carry forward on its own.
 
@@ -168,7 +168,7 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 **What would reopen this: GitHub Pro, or the repository going public.** Either makes rulesets available, and the honest response is to add one requiring a pull request on main and keep both hooks — the server gate for what reaches the repository, these for what reaches this clone's main. Not either/or: the two incidents were one of each.
 
-**Amended 2026-09-19.** The premise here — "the server-side guard is not for sale" — went false, twice over. Both are done rather than hypothetical. Branch protection has required `check` and `revert-guard` since 2026-09-11. And `gh api /repos/shivinate7/banchi` answers `"private": false`. The repository is public, on the owner's own separate decision. The subscription this entry's opening measurement paid to avoid is no longer the question. Server-side rulesets exist and are required now.
+**Amended.** The premise here — "the server-side guard is not for sale" — went false, twice over. Both are done rather than hypothetical. Branch protection has required `check` and `revert-guard` And `gh api /repos/shivinate7/banchi` answers `"private": false`. The repository is public, on the owner's own separate decision. The subscription this entry's opening measurement paid to avoid is no longer the question. Server-side rulesets exist and are required now.
 
 What this protected — main moving from inside this clone, unreviewed — is caught remotely too. A required check on a PR is the server-side gate this entry once could not buy. **What the two local hooks still cover is the one thing a required check cannot see: a local ref move that never goes through `git push`.** `reference-transaction` catches a fast-forward, a rebase, or a `branch -f` of `refs/heads/main`, before any network call exists to gate. `pre-push` is now the redundant one. A direct push it refuses would also fail remotely. It stays, because a local guard costs nothing to keep. The local guard's ground is narrower now: not "the only gate there is," but "the one gate a `git update-ref` never reaches."
 

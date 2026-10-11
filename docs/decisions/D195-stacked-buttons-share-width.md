@@ -1,7 +1,6 @@
 ## D195 — Stacked same-role buttons share a width
 
-**The owner's ruling, 2026-09-13:** *"Buttons should be the same sizes if they're in the same
-sort of sector — make this a guard and correct any/all instances across the app."* Read beside
+**Ruling: buttons of the same role in the same sector share a width. Make it a guard, and correct every instance in the app.** Read beside
 D50, this is a fourth thing `base.css` cannot supply. It has the same shape as D118's stability floor.
 It is a rule about the relationship between controls rather than about any one control's own paint.
 So a stylesheet cannot carry it, and a guard has to look at the rendered page.
@@ -32,7 +31,7 @@ spanning a flexible (`1fr`) track is skipped when the browser sizes a `max-conte
 spanning columns 2–3 (to run the full row width when its blocker has no fix) does not inflate column 2.
 Only the buttons that sit in column 2 alone do, and column 2 is sized by them.
 
-Both shapes were mutation-tested against the live block on 2026-09-13. Each shape was a `.bak`-protected copy.
+Both shapes were mutation-tested against the live block. Each shape was a `.bak`-protected copy.
 One copy of `kit.css` had `.bn-actions-stack`'s `justify-self: stretch` deleted. One copy of `CaptureScreen.css`
 had `.capture-block-fix`'s `justify-self` reverted to `start`. Together, these turned the capture block's own two
 fix buttons unequal: "Open the camera" 147.3px against "Pick a box" 107.0px. `make design-check PW_ARGS=tests/button-stack.spec.ts`

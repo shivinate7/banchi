@@ -1,13 +1,6 @@
 ## D220 — Orders is Inventory's screen
 
-**The owner's ruling, 2026-09-19, verbatim:**
-
-```
-Orders gets inventory's exact structure/layout skeleton, except the left column becomes
-all the orders, and when I select an order it immediately starts that order's walk, with
-the option to hit ticks to the side so I can select multiple and then walk. Then in order
-walk it's sorted by density.
-```
+**The owner's ruling:** Orders gets inventory's exact structure and layout skeleton, except the left column becomes all the orders. Selecting an order immediately starts that order's walk, with ticks to the side to select several and walk them together. The order walk is sorted by density.
 
 The full specification is `docs/specs/order-walk-plan.md` §13. This entry records why the screen is built that way and what it supersedes.
 
@@ -15,7 +8,7 @@ The full specification is `docs/specs/order-walk-plan.md` §13. This entry recor
 
 Three builds in two days took inventory's frame and not its engine. Section 8's stop, section 9a's findings row, and the rebuilt stop on `CardLocations` (#406) each drew a walk-specific component. A stop header, a take row, a bar, a pill. The owner saw the third on the live store and rejected all of it. He could not see where every copy of a card was. The words on the screen (`identified`, `pull`, `drawer`) were nowhere else in the app.
 
-D90 had the shape right in 2026-08. An order drives the walk as a mode of the inventory screen. D97 deleted it on the interview's word. The owner overruled that deletion. He did not restore D90 verbatim: "do not just bring d90 back, take into account what I'm saying right now."
+D90 had the shape right. An order drives the walk as a mode of the inventory screen. D97 deleted it on the interview's word. The owner overruled that deletion. He did not restore D90 verbatim. He asked for the current ruling to be taken into account.
 
 ### The decision
 
@@ -37,9 +30,9 @@ One pane means one place where a card's copies, position and details are drawn. 
 
 ### What is still open
 
-Which order a press records against when one card serves several buyers is answered by D212. No order claims a copy, and the write is the only refusal. D97's lost pass figure stays open in the spec. Amended 2026-09-19: the filter strip became a native dropdown on the owner's word, and its place at 390 is discharged with it. The selected order's text in the pane's top-right corner was dropped by the owner the same day.
+Which order a press records against when one card serves several buyers is answered by D212. No order claims a copy, and the write is the only refusal. D97's lost pass figure stays open in the spec. Amended: the filter strip became a native dropdown on the owner's word, and its place at 390 is discharged with it. The selected order's text in the pane's top-right corner was dropped by the owner the same day.
 
-### Amended 2026-09-20: the nameless buyer's own label, and four small readings fixed with it
+### Amended: the nameless buyer's own label, and four small readings fixed with it
 
 Three places drew a nameless buyer's NAME slot as `No name` then a typed dot then the order's own full id. This typed the separator D218 refuses. It also repeated the full order id twice, once in the number slot and once in the name slot.
 
@@ -49,9 +42,9 @@ A nameless group can only ever hold one order. `orderBuyers.ts` keys a nameless 
 
 Landing this also surfaced four small readings on the same screen. Each was fixed in the same pass. A buyer row's per-order pill drew the order's own number, not its status word. "Hide unknown SKUs" named the wrong reason. It filters `sku_unseen`, the "Never seen" chip's own reason. It never filtered `sku_unknown`. "Tick all" and "Untick all" over-claimed their reach. Both act on the rows in view. Both now read "Tick shown" and "Untick shown", matching `#/inventory`'s own wording. "Untick shown" also read the wrong set for its disabled state. The step-through arrow-key hint rendered below phone width, where its handler is gated off.
 
-### Amended 2026-09-20: market and listings are wired, by the same path Inventory uses
+### Amended: market and listings are wired, by the same path Inventory uses
 
-The owner reversed the "ship as is" ruling above. He asked for `market` and `listings` on Orders. He asked for them by the path Inventory already uses. This entry is amended to say so.
+The owner reversed the ship-as-is ruling above. He asked for `market` and `listings` on Orders. He asked for them by the path Inventory already uses. This entry is amended to say so.
 
 `WalkMainPane` now reads both facts the same way `BoxBrowse.tsx` reads them. `Orders.tsx` threads `listings` from the free third face of the copies read that already answers `rawCards`. No second fetch is made for it. The walk pane keeps a per-run market cache, copied from Inventory's own `priced`/`asked` pair. It is keyed on the current row's real card. A copy whose run is null never asks for a reading.
 
@@ -61,7 +54,7 @@ The measured word count on `#/orders` did not move. The pinned fixture prices no
 
 D189 is not adopted here. It puts the market reading in a table. This amendment keeps the per-run live read Inventory already uses. The ask was parity with Inventory's own path. It was not a switch to the newer one.
 
-### Amended 2026-09-27: the pane and the row drifted, and the owner's answers are recorded elsewhere
+### Amended: the pane and the row drifted, and the owner's answers are recorded elsewhere
 
 The built screen did not keep point 3 (full location detail on every pick row). It did not
 keep the walk-only pane point 4 asked to reuse. D304 records the owner's answers that fix the drift. Full `CardLocations` rows, the hero head with every on-hand copy below it, and a

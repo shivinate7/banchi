@@ -1,10 +1,6 @@
 ## D117 — The thumb floor is 40px
 
-**Built 2026-09-07, on the owner's instruction to review the mobile build.** CLAUDE.md has
-published two floors for this width since the Banchi rebuild and neither had a reader: *"Look at
-it at 1440, 820 and 390 … No horizontal page scroll at 390"* and *"anything a thumb presses is
-40px or more. The control-height tokens raise themselves under 767px and on a coarse pointer, so
-do not hand-roll a mouse-sized control on a phone."* Twenty-five controls hand-rolled one.
+**Built on the owner's instruction to review the mobile build.** CLAUDE.md set two floors for this width at the Banchi rebuild. Neither had a reader. Look at every screen at 1440, 820 and 390. No horizontal page scroll at 390. Anything a thumb presses is 40px or more. The control-height tokens raise themselves under 767px and on a coarse pointer. Do not hand-roll a mouse-sized control on a phone. Twenty-five controls hand-rolled one.
 
 **NOTHING IN `app/tests/` COULD HAVE SEEN IT.** `nav.spec.ts` scopes itself to `.bn-side` on
 purpose. `cursor.spec.ts` harvests its routes from `.bn-side a.bn-nav-link`, which is

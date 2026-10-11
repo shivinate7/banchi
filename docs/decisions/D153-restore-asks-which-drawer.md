@@ -40,7 +40,7 @@ A comparison needs two values and either can be missing. **They are answered dif
 
 **So it clears.** D142's own rule decides it without needing a new one: a stored number with no id IS *"a guess"*, and that paragraph already says the restore never falls back to one.
 
-**D27's amendment is the precedent for declining a fallback and it is not in tension with this.** There the owner declined a read-time fallback for a renamed key on the ground that *"a fallback can never safely be deleted afterwards"*. This arm has no such problem, and the difference is exact: **it is not a fallback preserving old behaviour, it is the same refusal the unknown-box arm already makes**, self-extinguishing after one pick, and correct whether it is kept for ever or folded into the disagreement arm later.
+**D27's amendment is the precedent for declining a fallback. It is not in tension with this.** There the owner declined a read-time fallback for a renamed key, because a fallback can never safely be deleted afterwards. This arm has no such problem. The difference is exact. **It is not a fallback that preserves old behaviour. It is the same refusal the unknown-box arm already makes.** It extinguishes itself after one pick. It stays correct whether it is kept for ever or merged into the disagreement arm later.
 
 **It says "cannot tell" and never "your drawer changed"**, because it does not hold that fact. D145 forbids an abstention softening a fact; the same care forbids it hardening into one.
 
@@ -50,7 +50,7 @@ A comparison needs two values and either can be missing. **They are answered dif
 
 ### The picker stops drawing numbers, and D142's reason survives its own amendment
 
-**The owner, looking at the list:** *"on the capture screen, i shouldn't even need to see box. numbers here, it's waste of space"*. Their screenshot: `WB1 R2  Box 4  next index 679` over `ME01 C/UC  Box 2  Sealed` over an already-ellipsised `UNL BBOX C/UC 1…`.
+**The owner, looking at the list, said the capture screen should not show box numbers.** They are waste of space. Their screenshot: `WB1 R2  Box 4  next index 679` over `ME01 C/UC  Box 2  Sealed` over an already-ellipsised `UNL BBOX C/UC 1…`.
 
 **D142 argued the picker should keep the number and the argument was right:** *"a row that hid the number would answer a search for `9` with nine rows that do not visibly contain a 9."* **It was spent too widely.** That is a claim about a row's answer to a TYPED NUMBER, and it was applied to every row all of the time, including the resting list the owner was looking at — where nothing has been typed and no row is answering anything.
 
