@@ -151,7 +151,11 @@ deleted to lower a price, and the quantity is not a variable.
 
 ### The last send's warning sits below Send (R14)
 
-While the last send is incomplete, its warning sits below the Send button. Send is disabled, with a line that says why. Send never moves (D313). Ruled, being built in #837.
+While the last send is incomplete, its warning sits below the Send button. Send is disabled, with a line that says why. Send never moves (D313). Ruled and built in #837.
+
+### The Send lock lifts on three things (R15)
+
+The Send lock lifts when the check finds every copy. It also lifts when the person takes the missing copies back, or on a "Send Anyway" press on the warning. A download alone does not release it. Being built.
 
 ### The other decisions this touches
 
