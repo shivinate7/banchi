@@ -62,7 +62,7 @@ import { useSearch } from './useSearch'
 import { Button, Chip, EmptyState, FilterBar, Icon, IconButton, Loading, Money, Notice, Popover, boxesMostRecentFirst, countFacets, filterRows, useHeld, type PickGroup, type SortValue } from './kit'
 import { boxTitle, UNNAMED_BOX } from './kit/data'
 import type { FilterFacet, FilterValue } from './kit/data'
-import { useFacetParams } from './kit/viewState'
+import { patchViewQuery, useFacetParams } from './kit/viewState'
 import { storedBoxRecency, touchBox } from './deviceMemory'
 import { toast } from './kit/toast'
 import { Dialog as Overlay } from './kit/overlay'
@@ -1994,6 +1994,16 @@ export function BoxBrowse({
     if (text !== null) setQuery(text)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  /* The typed text rides in the address (`q`, D285), so a reload restores it. The first run is
+     skipped: the seed above has not yet read the `q` a link carried. */
+  const wroteQuery = useRef(false)
+  useEffect(() => {
+    if (!wroteQuery.current) {
+      wroteQuery.current = true
+      return
+    }
+    patchViewQuery({ q: query.trim() === '' ? null : query })
+  }, [query])
   useEffect(() => {
     if (goTo === undefined || goTo === null) return
     if (askedAt.current === goTo.at) return
