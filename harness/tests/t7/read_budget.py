@@ -126,9 +126,9 @@ ROUTE_URLS = {
 
 # Read-only POSTs, named by hand: `do_GET` cannot list them.
 POST_READS = {
-    "POST /pipeline/waiting": ("/pipeline/waiting", {"selection": {"all": True}}),
+    "POST /pipeline/waiting": ("/pipeline/waiting", {}),
     "POST /inventory/copies": ("/inventory/copies", {"skus": ["SKU1", "SKU2"]}),
-    "POST /pipeline/preflight": ("/pipeline/preflight", {"selection": {"all": True}}),
+    "POST /pipeline/preflight": ("/pipeline/preflight", {}),
     "POST /pipeline/preflight keys": ("/pipeline/preflight", {"keys": ["4/1", "4/2"]}),
     "POST /orders/walk-plan": ("/orders/walk-plan", {"keys": ["tcgplayer:o-1", "tcgplayer:o-2"]}),
 }

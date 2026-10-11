@@ -1005,7 +1005,7 @@ def check_store_of_record(checks: Checks) -> None:
         files.write_json(directory / db.LEGACY_INVENTORY, legacy_inventory)
         files.write_json(
             directory / db.LEGACY_CACHE,
-            {"2/1": {"identification": {"name": "Moonfall", "confidence": "high"},
+            {"2/1": {"identification": {"name": "Moonfall", "number": "1", "printed_total": "9", "finish": "normal", "confidence": "high"},
                      "photo_sha256": "abc", "prompt_fingerprint": "p1", "at": "2026-08-01"}},
         )
         files.write_json(

@@ -92,6 +92,7 @@ from .records import (
     check_decision_slug_length,
     check_decision_structure,
     check_id_claims,
+    check_no_owner_quotes,
     check_numbered_record_growth,
 )
 from .registry_scopes import (
@@ -186,6 +187,7 @@ ROWS: Tuple[AuditRow, ...] = (
     AuditRow("evidence freshness", 3, check_evidence_freshness, ("staged_only",)),
     AuditRow("decision ids", 1, check_decision_ids, ("docs",)),
     AuditRow("decision structure", 1, check_decision_structure, ()),
+    AuditRow("no owner quotes", 1, check_no_owner_quotes, ()),
     AuditRow("decision slug length", 1, check_decision_slug_length, ()),
     AuditRow("id claims", 1, check_id_claims, ()),
     AuditRow("numbered record growth", 1, check_numbered_record_growth, ("staged_only",)),

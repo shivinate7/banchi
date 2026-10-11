@@ -669,15 +669,15 @@ def _say_prices(changes, left, moves, args, say) -> None:
     say("")
     say(f"{'price changes':<16} {len(changes)} card(s) already live, Add to Quantity 0")
     for change in changes[:8]:
-        was = f"${change.was}" if change.was is not None else "no price"
-        say(f"{'':<16} {change.sku} {change.name} — {was} to ${change.price}")
+        was = pricing.money(change.was) if change.was is not None else "no price"
+        say(f"{'':<16} {change.sku} {change.name} — {was} to {pricing.money(change.price)}")
     if len(changes) > 8:
         say(f"{'':<16} ...and {len(changes) - 8} more")
     for note in left[:8]:
         say(f"{'':<16} left out: {note.sku} {note.name} — {note.why}")
     for move in moves[:8]:
-        was = f"${move.was}" if move.was is not None else "no price"
-        say(f"{'':<16} moves: {move.copies} live {move.sku} {move.name} — {was} to ${move.price}")
+        was = pricing.money(move.was) if move.was is not None else "no price"
+        say(f"{'':<16} moves: {move.copies} live {move.sku} {move.name} — {was} to {pricing.money(move.price)}")
     say(json.dumps(sendguard.price_report(changes, left, (), moves), sort_keys=True))
 
 

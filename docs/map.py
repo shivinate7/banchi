@@ -832,12 +832,13 @@ COMPONENTS = [
                                     "note": "PROVED BY `make identity-checks-selftest`, "
                                             "PATH GATED and IN `make check` as of D247's "
                                             "nineteenth entry (owner's word, 2026-09-23): "
-                                            "13 arms, including a mutation arm over the "
-                                            "denominator check's dominant-vs-first-seen "
-                                            "choice. Its one caller is the "
-                                            "`cli/cmd_cards.py:checks` CLI subcommand — "
-                                            "`grep -rl identity_checks harness/` names "
-                                            "nothing, so no harness id tests it either."},
+                                            "arms over the four checks, a mutation arm over "
+                                            "the denominator check's dominant-vs-first-seen "
+                                            "choice, and CLI cases through `cmd_cards.run` "
+                                            "(`checks`, `identity`, `photos --limit`). Its "
+                                            "one caller is the `cli/cmd_cards.py:checks` "
+                                            "subcommand — `grep -rl identity_checks "
+                                            "harness/` names nothing."},
             # THE SKU SELF-CONTRADICTION CHECK, KEPT SEPARATE FROM identity_checks.py (a
             # separate, sibling PR) ON THE OWNER'S OWN RULING.
             "sku_number_contradictions.py": {
@@ -1851,10 +1852,9 @@ COMPONENTS = [
                 "T7 reaches this package as of 2026-08-13 — the allocator, the lock and "
                 "the atomic replace — and as of 2026-08-22 asserts queues.apply_run "
                 "outright: check_queue_supersede calls it directly rather than watching it "
-                "through a route, which is what earned queues.py its tested_by. cache.py is "
-                "still only read through a session there, with nothing asserting its own "
-                "behavior, so it carries no tested_by: an unenforced claim is the defect "
-                "docs/debts/ names, not a rounding error.",
+                "through a route, which is what earned queues.py its tested_by. cache.py earned "
+                "its own the same way: check_cache_position_key asserts its key and its "
+                "corrupt-record rule directly.",
         "modules": {
             "clock.py": {
                 "does": "the one UTC-second stamp every receipt writes, and the one way to read "
@@ -1987,7 +1987,8 @@ COMPONENTS = [
                                           "D29", "D36", "D138", "D63", "D69", "D88", "D113",
                                           "D193"],
                           "tested_by": ["T7"]},
-            "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88"]},
+            "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88", "D317"],
+                         "tested_by": ["T7"]},
             # THE ONLY BINDING IN THIS PIPELINE THAT PROTECTS A DOLLAR, and it replaces a BOX
             # number with the cards actually being bought. The box form is wrong in both
             # directions — it refuses two disjoint selections in one drawer (D180's accepted
@@ -2186,8 +2187,7 @@ COMPONENTS = [
                                   "OUTSIDE `captures/` for `_scopes_root`'s reason: `sidecar.scan` "
                                   "walks recursively and every photograph it finds is a PAID Batch "
                                   "request",
-                          "governed_by": ["D172", "D183", "D26",
-                                          "D43", "D83", "D89"],
+                          "governed_by": ["D3", "D23", "D26", "D43", "D83", "D89", "D172", "D183"],
                           "tested_by": ["T7"]},
         },
     },
@@ -3077,7 +3077,8 @@ COMPONENTS = [
             },
             "identity-checks-selftest.py": {
                 "does": "proves pipeline/identity_checks.py against literal CardRecord "
-                        "fixtures, no store, no network (D239). One "
+                        "fixtures (D239), and the `identity`, `photos` and `checks` "
+                        "subcommands of cli/cmd_cards.py against a temp store. One "
                         "positive and one negative arm per check, built from the exact "
                         "subjects the cited analysis measured. A case proving the "
                         "denominator and digit-count checks flag a genuine rare print "
@@ -3086,7 +3087,7 @@ COMPONENTS = [
                         "arm: a denominator check comparing against the first-seen value "
                         "instead of the dominant one is shown to blame the wrong card "
                         "before the real function is shown to survive the same fixture. "
-                        "13 assertions. PATH GATED, IN `make check` and `make ci-check` "
+                        "PATH GATED, IN `make check` and `make ci-check` "
                         "as of D247's nineteenth entry (owner's word, 2026-09-23) — the "
                         "sentence that used to sit here (\"already covered by T7's "
                         "harness sweep\") was itself wrong: T7 drives `cli/cmd_cards.py` "
@@ -3689,6 +3690,14 @@ COMPONENTS = [
                         "(D280). Shrunk by hand or by "
                         "`make offenders-prune`, which only deletes. Never grown by a tool.",
                 "governed_by": ["D41", "D218", "D280"]},
+            "no-owner-quotes-allow.json": {
+                "does": "the shrinking offender list for `make docs-audit`'s `no owner quotes` row: "
+                        "file -> lane and `marker` -> one marker per occurrence of an owner-quote "
+                        "marker in `docs/`. The row fails on a marker the list does not name, on a "
+                        "stale entry, and on growth over the merge-base with origin/main. Shrunk "
+                        "by a cut pass or by `make offenders-prune`, which only deletes. Never "
+                        "grown by a tool. Its keys are the files that hold a marker, so it cites their ids.",
+                "governed_by": ["D280", "D318", "D100", "D136", "D141", "D287", "D103", "D134", "D145", "D155", "D162", "D164", "D176", "D179", "D213", "D220", "D241", "D242", "D254", "D259", "D260", "D264", "D271", "D272", "D273", "D291", "D293", "D296", "D299", "D300", "D301", "D307"]},
             "ste/ste_lint.py": {
                 "does": "the STE prose check's linter, VENDORED verbatim from $HOME/.claude/"
                         "lint/ste_lint.py (MIT, LICENSE-ste_lint beside it) on 2026-09-19 — a "
@@ -3906,7 +3915,7 @@ COMPONENTS = [
             "docs_audit/records.py": {
                 "does": "The rows over the decision, gate and debt records: decision ids, id claims, numbering "
                         "growth, heading structure and the debts index.",
-                "governed_by": ["D2", "D50", "D60", "D92", "D140", "D149", "D160", "D182"]},
+                "governed_by": ["D2", "D50", "D60", "D92", "D140", "D149", "D160", "D182", "D280"]},
             "docs_audit/registry_scopes.py": {
                 "does": "The rows over the check registry, the commit path, the suite lock, the browser, spec, "
                         "serve and guard scopes, and how callers invoke the audit.",
@@ -4655,9 +4664,9 @@ COMPONENTS = [
                         "overtaken in ordinary prose reads as current.",
             },
             "offenders-prune.py": {
-                "does": "`make offenders-prune` — delete the STALE entries from the two "
+                "does": "`make offenders-prune` — delete the STALE entries from the three "
                         "shrinking offender lists (`typed-interpunct-allow.json`, "
-                        "`markdown-spelling-allow.json`), and "
+                        "`markdown-spelling-allow.json`, `no-owner-quotes-allow.json`), and "
                         "re-key a listed file that git's "
                         "rename detection (`git diff -M` from the merge-base with origin/main) "
                         "says moved. Two lists were CUT: `ste-offenders.json` on 2026-09-27 "

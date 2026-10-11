@@ -638,6 +638,34 @@ def _identity(args, say) -> int:
 # ----------------------------------------------------------------------- cards photos
 
 
+def _move_sidecar(key, cid, box, idx, record, home, refusals, census) -> bool:
+    """Bring a card's legacy sidecar to its name. True when a sidecar was moved or rewritten.
+
+    A SIDECAR THAT CANNOT MOVE IS REWRITTEN FROM THE STORE'S RECORD (`photos.claims_payload`),
+    because the sidecar is the backup the store is rebuilt from and a card without one has
+    none. Only when that write fails too is the card counted refused, so the run exits
+    non-zero and does not stamp. When `adopt_sidecar` failed after the target already
+    existed (copied, source not unlinked), the target is kept and not rewritten.
+    """
+    sidecar = photos.legacy_path(box, idx, home).with_suffix(photos.SIDECAR_SUFFIX)
+    if not sidecar.is_file():
+        return False
+    try:
+        photos.adopt_sidecar(sidecar, cid, home)
+        return True
+    except OSError:
+        if photos.sidecar_path(cid, home).is_file():
+            return True
+    claims = {name: record.get(name) for name in photos.CLAIM_WIRE_NAMES}
+    try:
+        photos.write_sidecar(cid, photos.claims_payload(box, idx, claims), home)
+        return True
+    except OSError as exc:
+        census["refused"] += 1
+        refusals.append((key, f"sidecar: {exc}"))
+        return False
+
+
 def _photos(args, say) -> int:
     """Move the corpus onto the card's own name. Previews unless `--write`.
 
@@ -652,6 +680,9 @@ def _photos(args, say) -> int:
     """
     write = bool(getattr(args, "write", False))
     limit = getattr(args, "limit", None)
+    if limit is not None and int(limit) < 0:
+        say("--limit must be 0 or more.")
+        return 2
     directory = files.inventory_dir()
     conn = _read_only(directory)
     home = directory.parent
@@ -680,7 +711,12 @@ def _photos(args, say) -> int:
     bytes_moved = 0
     would: List[Tuple[str, Path, Path]] = []
 
+    stopped_at_limit = False
     for key, cid, box, idx, record in rows:
+        # `--limit 0` moves none; the test is `is not None`, never truthiness.
+        if limit is not None and census["moved"] >= int(limit):
+            stopped_at_limit = True
+            break
         if not photos.is_photo_cid(cid):
             # A `moved:` tombstone or a `nophoto:` card names no file. Neither is a problem
             # and both are counted rather than skipped silently.
@@ -702,6 +738,11 @@ def _photos(args, say) -> int:
                 except files.StoreError as exc:
                     census["refused"] += 1
                     refusals.append((key, str(exc)))
+            # A KILL BETWEEN THE PHOTO MOVE AND THE SIDECAR MOVE LEAVES THE SIDECAR AT ITS
+            # LEGACY ADDRESS. Move it now, or rewrite it from the record.
+            if (write and box is not None and idx is not None
+                    and _move_sidecar(key, cid, box, idx, record, home, refusals, census)):
+                census["sidecars"] += 1
             continue
         if record.get("photo_reclaimed_at"):
             census["reclaimed"] += 1
@@ -713,8 +754,6 @@ def _photos(args, say) -> int:
             would.append((key, source, target))
             bytes_moved += source.stat().st_size
             census["moved"] += 1
-            if limit and census["moved"] >= int(limit):
-                break
             continue
         size = source.stat().st_size
         try:
@@ -726,18 +765,8 @@ def _photos(args, say) -> int:
         census[verdict] += 1
         if verdict == "moved":
             bytes_moved += size
-        sidecar = photos.legacy_path(box, idx, home).with_suffix(photos.SIDECAR_SUFFIX)
-        if sidecar.is_file():
-            try:
-                photos.adopt_sidecar(sidecar, cid, home)
-                census["sidecars"] += 1
-            except OSError as exc:
-                # NEVER FATAL. `identify.sidecar.scan` keys on the PHOTOGRAPH, so a sidecar
-                # that did not travel costs the recovery path in that module's docstring and
-                # never a card.
-                refusals.append((key, f"sidecar: {exc}"))
-        if limit and census["moved"] >= int(limit):
-            break
+        if _move_sidecar(key, cid, box, idx, record, home, refusals, census):
+            census["sidecars"] += 1
 
     say("  " + "  ".join(f"{name}={value}" for name, value in census.items()))
     say(f"  {bytes_moved:,} bytes {'moved' if write else 'would move'}")
@@ -770,6 +799,11 @@ def _photos(args, say) -> int:
             "stamped and the legacy address is still read. Fix or accept those and run "
             "again.")
         return 1
+    if stopped_at_limit:
+        say("")
+        say("  Stopped at --limit, so `photos_relocated` is NOT stamped and the legacy "
+            "address is still read. Run again to move the rest.")
+        return 0
     with files.exclusive(directory):
         conn = db.connect(directory, locked=True)
         conn.execute("BEGIN IMMEDIATE")

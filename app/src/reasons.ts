@@ -97,6 +97,8 @@ export const REASON_LABELS: Readonly<Record<string, string>> = {
    * refused, held after the paid second look. */
   readers_disagree: 'The two readers name different cards',
   second_look_unsure: 'The second look is not sure',
+  /* `pipeline/routing.py:CLEARED_ANSWER_UNREADABLE`, opened by `./banchi identify`. */
+  cleared_answer_unreadable: 'The saved answer cannot be used',
 }
 
 /* CODES THE PIPELINE NO LONGER EMITS AND THE STORE STILL HOLDS. A separate map on purpose:
