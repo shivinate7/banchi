@@ -2,7 +2,7 @@
 
 **This amends D196's one exemption.** D196 exempted `Notice`'s `code` prop from the rule that no user-visible string names a mechanism. Its premise was that the raw string "stays available on hover and in the run log". The review found that premise false (UX-038, COPY-24). The code drew in plain view, under every refusal, on eight screens. Server text drew verbatim, so request paths and a repository command reached the owner.
 
-**The owner's ruling, 2026-09-23:** codes go behind a details disclosure.
+**Ruling:** codes go behind a details disclosure.
 
 **What changes.** `Notice` keeps its `code` prop and gains `detail`, for server text that holds a path, a command or a code. Both draw inside a `<details>` element whose summary reads "What the server said". It is closed by default. The sentence above it is the person's sentence. Capture already drew its server text this way, and that is the shape the kit now uses everywhere.
 
@@ -12,4 +12,4 @@
 
 **The demo says one sentence.** Every refusal in `app/src/demoServer.ts` now says "Not in this demo." (TXT-46). The code still names the refusal, behind the disclosure.
 
-**Tone, 2026-09-28.** Red means something broke and amber means that the server declined. `failureTone` in `server.ts` decides for a Notice and, through `refusalToast`, for a refusal toast.
+**Tone.** Red means something broke and amber means that the server declined. `failureTone` in `server.ts` decides for a Notice and, through `refusalToast`, for a refusal toast.

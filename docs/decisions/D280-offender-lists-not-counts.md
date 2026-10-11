@@ -1,6 +1,6 @@
 ## D280 — Offender lists replace pinned counts
 
-**The rule.** On 2026-09-23 the owner retired D284's word ceiling, because he did not want to keep a "stagnant static pin". D284 carried out that ruling. On 2026-09-24 the owner extended the ruling to the two other pinned counts. This entry replaces both.
+**The rule.** The owner retired D284's word ceiling, because a pin that no person moves goes stale. D284 carried out that ruling. The owner then extended it to the two other pinned counts. This entry replaces both.
 
 - D218's typed-dot ratchet. `make docs-audit`'s `typed interpunct` row failed only when the COUNT of typed dots rose past a pinned number.
 - The per-file prose ratchet. `make docs-audit`'s `ste ratchet` row failed only when a file's error RATIO rose past its own pinned number. It amended D60, so the ratchet half of D60 goes too.
@@ -11,7 +11,7 @@ This entry supersedes the ratchet parts of D218 and D60. Each of those entries c
 
 A count passes a new defect when an old one goes in the same change. Fix one typed dot and type a new one, and the count holds still. Rewrite one bad sentence and write a new one, and the ratio can fall. The pin reported "no change" on both. The owner wanted the new defect to fail.
 
-A pin also needs a person to move it. The old scripts wrote a new number on request, and nothing asked why. That is the "stagnant static pin" the owner refused.
+A pin also needs a person to move it. The old scripts wrote a new number on request, and nothing asked why. That is the stagnant static pin the owner refused.
 
 ### What replaces each pin
 
@@ -50,7 +50,7 @@ Any other edit to an offending sentence gives it a new identity. So a lane that 
 
 ### What the lists hold on the day they are born
 
-Both lists were seeded from the offenders on the integration branch on 2026-09-24, measured, not typed.
+Both lists were seeded from the offenders on the integration branch, measured, not typed.
 
 - **Typed dots:** 47 strings in 3 files. `Gallery.tsx` holds 45, owned by `kit-frame`. `PositionBar.tsx` holds 1, owned by `locating`. `RunsComposer.tsx` holds 1, owned by `b-runs`. Each was keyed again with its scope on the day the scope joined the key. The 47 strings are the same.
 - **Prose:** 11,387 sentences in 358 files, all owned by `docs-sweep`. The row still prints the repo-wide ratio beside the survey's floor (below), and gates neither.
@@ -98,7 +98,7 @@ The rows read tracked files only. `markdown_files()` in `scripts/docs_audit/core
 
 ### The line-anchor pin becomes a list too
 
-The owner's ruling, later on 2026-09-24, was "convert both of the last pins". D245's `line anchor ratchet` row pinned a count of line anchors per file, in the ratchet's shape. It is now the `line anchor offenders` row, over an offender list (deleted 2026-09-28, when the last anchor was converted).
+The owner ruled to convert both of the last pins. D245's `line anchor ratchet` row pinned a count of line anchors per file, in the ratchet's shape. It is now the `line anchor offenders` row, over an offender list (deleted when the last anchor was converted).
 
 - **An entry is the anchor as written**, `path:N` or `path:N-M`, once per occurrence. An edit elsewhere in the file, or a reflow, does not touch it.
 - **A claim moves nothing.** A decision entry's number is folded out of the document's own file key, as the prose list folds it. It is also folded out of an anchor's decision path, so both read `docs/decisions/*-<slug>.md`.
@@ -120,19 +120,16 @@ Three copies of the only-shrinks rules existed: `scripts/kit-adoption.mjs` and t
 
 Each caller still decides what an identity is, and so whether growth is counted per file. The prose and line-anchor lists count over the whole list. The typed-dot list puts the file in the identity. The kit list keys one entry per file and rule.
 
-### Amended 2026-09-27 — the prose list is CUT, and a new one joins the same day
+### Amended — the prose list is CUT, and a new one joins
 
-Owner's ruling (test-audit plan, row 92):
-"Row 92, `ste offenders`, and its list `scripts/ste-offenders.json`: CUT. The write-time
-STE hook lints new prose. This needs dated amendments to D60 (the prose
-ratchet decisions) in the lane that cuts it." Lane L2 deletes the `ste offenders` row,
+Ruling (test-audit plan, row 92): cut the `ste offenders` row and its list `scripts/ste-offenders.json`. The write-time STE hook lints new prose. The lane that cuts them amends D60 (the prose ratchet decisions). Lane L2 deletes the `ste offenders` row,
 `scripts/ste-offenders.json` and `scripts/docs-audit.py:check_ste_offenders`.
 
 Two offender lists remained right after the cut: `scripts/typed-interpunct-allow.json` and
-the line-anchor list (deleted 2026-09-28). `scripts/only_shrinks.py` and `_offender_list_shape`/
+the line-anchor list (deleted). `scripts/only_shrinks.py` and `_offender_list_shape`/
 `_offender_diff`/`_offender_growth` still serve both, unchanged by the cut.
 
-A third list joined the same day. The owner's later word, in the same review round: "Shrinking offender list now."
+A third list joined. Same review round, the ruling: shrink the offender list now.
 `scripts/markdown-spelling-allow.json` covers the `identifier spelling` row's markdown half
 (D60). It carries the same shape as the other two: file -> lane and SPELLING -> the British
 word, lower-cased, once per occurrence. `make offenders-prune` now covers all three lists.

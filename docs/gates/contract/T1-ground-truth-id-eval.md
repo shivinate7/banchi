@@ -22,12 +22,12 @@ per set and overall.
   instructions rather than spending. That rule is cause-independent by design. It was not
   always. The moved-prompt case was guarded. Every other cause of a cold cache fell straight
   through to a fresh submission of ~150 images. The submission ran **under the Stop hook, at the
-  end of every turn**. Found on 2026-08-29 in a git worktree, where `harness/.cache/` is gitignored and
+  end of every turn**. Found in a git worktree, where `harness/.cache/` is gitignored and
   therefore does not travel. Nothing was billed only because that worktree had no key either.
   That is luck rather than a design. Submitting is now an act — `BANCHI_RERUN_T1=1` — and
   `make worktree-setup` is how a worktree answers the refusal without paying for an answer
   this machine already holds.
-- **AN ORDINARY RUN REPLAYS NOTHING, AS OF 2026-09-06 (D112).** Between two turns the only
+- **AN ORDINARY RUN REPLAYS NOTHING (D112).** Between two turns the only
   things about T1 that can change are its prompt, its eval set and its arithmetic. The model
   is pinned and the answers are banked. All three now carry fingerprints. So when they agree
   with what `harness/results/t1.json` was generated under, the test ASSERTS the committed
@@ -53,7 +53,7 @@ per set and overall.
   re-measurement stops being visible among the noise. That is the one thing the committed score
   exists to show. `batch_ids` and `usage` are part of the comparison. So a fresh submission
   always writes, even if the accuracy lands on the same number.
-- **The rarity-clause A/B was run on 2026-08-23 and the clause lost.** `BANCHI_T1_RARITY=1`
+- **The rarity-clause A/B lost.** `BANCHI_T1_RARITY=1`
   scores the eval with each card's TRUE rarity as a one-element stack claim. That is the best
   case the feature could ever see. It writes into its own results file, `harness/results/t1-rarity.json`
   (one file per configuration, as above). Measured against baseline: holdout 0.9706 → 0.9559,
@@ -67,7 +67,7 @@ per set and overall.
   the ladder cross-check and the chip narrowing — are unaffected. Cost of knowing: $0.17.
 - **Known blind spot**: official API images show no foil texture, so T1 cannot validate the
   `finish` field. Do not let a green T1 be read as variant detection working. **Gate B did
-  that job on 2026-08-22 and the answer was bad**: 16 of 53 normals read as foil, a 30%
+  that job and the answer was bad**: 16 of 53 normals read as foil, a 30%
   false-positive rate. Detection agreed with itself across every duplicate pair: both
   Thievuls, both Eiscues, both Pyroars. So it is systematic sheen under the rig's lighting
   rather than noise. D3's disagreement routing carried all 16 to a human instead of to a

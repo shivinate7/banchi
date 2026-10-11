@@ -1,14 +1,6 @@
 ## D293 — Inventory has a by-set view
 
-**The owner's request, verbatim, 2026-09-25:**
-
-```
-do i have anyway of seeing my inventory by set order? basically a view where i just know
-what qty of each card and then can click in if interested and it pops me to inventory
-screen?
-```
-
-The owner then said: *"send a sonnet builder on it now."*
+**The request:** a view of on-hand cards in set order, showing the quantity of each card. A tap opens the inventory screen at that card.
 
 ### The ruling
 
@@ -69,7 +61,7 @@ search, and a card of interest is one tap away from it. No price: the owner's as
 quantity. D264's ruling on the sibling box-map feature already argued the case for holding
 money back from a v1 count view.
 
-### The fix round, 2026-09-25
+### The fix round
 
 A lane review caught two defects and asked for one more case.
 
@@ -90,9 +82,9 @@ A lane review caught two defects and asked for one more case.
    `089a` one, and a digit-width one, `9` before `10`. It also proves a captured, a sold,
    a retired and a moved card are all excluded. Each rung is mutation-proved.
 
-### The switch labels, 2026-09-25
+### The switch labels
 
-The owner's ruling, verbatim: "List / Map / Sets". The PR 3 integration merged this view's
+Ruling: the switch reads List, Map and Sets. The PR 3 integration merged this view's
 switch with the box map's (D264) into one kit `Segmented` control, `BoxShelf.tsx:ShelfSwitch`.
 The box walk is "List", the box map is "Map", and this view is "Sets". The first build's
 `.bn-tabs` switch, which called the walk "Shelf", is gone. The URL values stay `view=walk`,

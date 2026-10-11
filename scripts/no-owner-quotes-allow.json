@@ -49,13 +49,6 @@
         "The owner's words"
       ]
     },
-    "docs/decisions/D271-every-search-uses-one-matcher.md": {
-      "lane": "cut pass",
-      "marker": [
-        "verbatim:",
-        "The owner's words"
-      ]
-    },
     "docs/decisions/D273-one-press-sends-listings-live.md": {
       "lane": "cut pass",
       "marker": [
@@ -63,13 +56,6 @@
         "The owner's words",
         "The owner's words",
         "The owner's words",
-        "The owner's words",
-        "verbatim:"
-      ]
-    },
-    "docs/decisions/D293-inventory-has-a-by-set-view.md": {
-      "lane": "cut pass",
-      "marker": [
         "The owner's words",
         "verbatim:"
       ]

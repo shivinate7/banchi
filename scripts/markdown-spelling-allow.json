@@ -376,8 +376,7 @@
     "docs/decisions/*-order-taken-once.md": {
       "lane": "docs-sweep",
       "SPELLING": [
-        "behaviour",
-        "behaviours"
+        "behaviour"
       ]
     },
     "docs/decisions/*-one-pricing-file-for-the-store.md": {
