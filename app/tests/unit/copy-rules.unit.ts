@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { test, expect } from './unit'
 import { REASON_LABELS, RETIRED_REASON_LABELS } from '../../src/reasons'
 import { casingProblems, isSentence, voiceHits } from '../copyRules'
-import { firstPersonInSource, recordFromSource } from '../copySource'
+import { attrText, firstPersonInSource, jsxOpeningsIn, recordFromSource } from '../copySource'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REVIEW_QUEUE = resolve(HERE, '..', '..', 'src', 'ReviewQueue.tsx')
@@ -106,6 +106,54 @@ test('labels: every review question headline is free of "I", "my", "me" and "min
     voiceHits(headline).map((word) => `${code}: "${headline}" has "${word}"`),
   )
   expect(problems, problems.join('\n')).toEqual([])
+})
+
+/* THE INPUT CHECK (A12). One line per offender, `file:line what`. A spread `{...props}` can supply the
+ * attribute, so the element is skipped, and a computed type is skipped too. It reads every `.tsx` under
+ * app/src and app/src/kit. (A11 placeholders and A4 img sizes are NOT added: each has more than 30
+ * offenders on the wave-2 head, so they are reported, not gated.) */
+const RAW_INPUT_TYPES: ReadonlySet<string> = new Set(['', 'text', 'search', 'email', 'tel', 'url', 'number', 'password'])
+
+function inputProblems(source: string, file: string): string[] {
+  const out: string[] = []
+  for (const element of jsxOpeningsIn(source, file)) {
+    if (element.spread || element.tag !== 'input') continue
+    const type = element.attrs.get('type')
+    const kind = type === undefined ? '' : attrText(type)
+    const named = element.attrs.has('name') || element.attrs.has('autocomplete') || element.attrs.has('autoComplete')
+    if (kind !== null && RAW_INPUT_TYPES.has(kind) && !named) {
+      out.push(`${file}:${element.line} <input> type "${kind}" has no name or autocomplete`)
+    }
+  }
+  return out
+}
+
+function screenSourceFiles(): string[] {
+  const src = resolve(HERE, '..', '..', 'src')
+  return [
+    ...readdirSync(src).filter((f) => f.endsWith('.tsx')).map((f) => resolve(src, f)),
+    ...readdirSync(resolve(src, 'kit')).filter((f) => f.endsWith('.tsx')).map((f) => resolve(src, 'kit', f)),
+  ]
+}
+
+test('A12: every raw text input carries a name or an autocomplete attribute', () => {
+  const problems = screenSourceFiles().flatMap((file) => inputProblems(readFileSync(file, 'utf8'), file.slice(resolve(HERE, '..', '..', 'src').length - 3)))
+  expect(problems, problems.join('\n')).toEqual([])
+})
+
+test('A12: the input rule reads a raw input, skips typed controls and spreads, and accepts autoComplete', () => {
+  const source = [
+    '<input placeholder="Search cards…" />',
+    '<input placeholder="Search cards…" name="q" />',
+    '<input type="checkbox" />',
+    '<input {...props} />',
+    '<input type="text" autoComplete="off" />',
+    '<input type="text" />',
+  ].join('\n')
+  expect(inputProblems(source, 'View.tsx')).toEqual([
+    'View.tsx:1 <input> type "" has no name or autocomplete',
+    'View.tsx:6 <input> type "text" has no name or autocomplete',
+  ])
 })
 
 /* THE SOURCE SCAN RESPECTS STRINGS AND COMMENTS. A comment opener inside a string, a multi-line template

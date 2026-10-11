@@ -119,7 +119,10 @@ function scanCopy(): CopyScan {
   for (const el of Array.from(candidates)) {
     const role = roleOf(el)
     if (role === null || !shown(el)) continue
-    const inner = ((el as HTMLElement).innerText ?? '').replace(/\s+/g, ' ').trim()
+    // THE LABEL IS THE FIRST LINE. A button or heading often carries a sentence under its name (the
+    // description on a `Read a box` card). That sentence is read by the sentence rule on its own line, not
+    // as part of the label, so the first non-empty line is the label.
+    const inner = ((el as HTMLElement).innerText ?? '').split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).find((line) => line !== '') ?? ''
     const text = inner !== '' ? inner : (el.getAttribute('aria-label') ?? '').trim()
     if (text === '') continue
     casing.push({

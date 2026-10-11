@@ -281,10 +281,10 @@ test('a card says its reason only where it differs from its lane, and never the 
   await expect(unjudged.locator('.shipping-quality')).toHaveCount(0)
 
   /* The abstention lane is still counted and still named in words of its own — the words are
-     'Needs a look' now, which is the same third answer D61 argued for under a label that says
+     'Needs a Look' now, which is the same third answer D61 argued for under a label that says
      what to do about it. */
   const chip = page.locator('.shipping-chip-unjudged')
-  await expect(chip.locator('.shipping-chip-label')).toHaveText('Needs a look')
+  await expect(chip.locator('.shipping-chip-label')).toHaveText('Needs a Look')
   await expect(chip.locator('.shipping-chip-count')).toHaveText('1')
 })
 
@@ -477,7 +477,7 @@ test('the file card names an object with its verb, and says its own memory note 
   await readExport(page)
 
   /* UX-108: a verb and its object, so a screen reader and a skim both learn what is dropped. */
-  await expect(page.getByRole('button', { name: 'Forget this file' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Forget This File', exact: true })).toBeVisible()
 
   /* UX-150/TXT-05: one line for the memory note, not "held in memory for about N minutes" next
      to "nothing written to disk" — the empty state already says the file is never written. */

@@ -1440,7 +1440,7 @@ async function openList(page: Page, wire: Wire[] = [], mood: Mood = {}): Promise
     view(page),
     `no Fulfillment view at ${VIEW_ROUTE} — is the route registered in App.tsx?`,
   ).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Cards to pull' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Cards to Pull', exact: true })).toBeVisible()
   return states
 }
 

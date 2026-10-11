@@ -291,11 +291,11 @@ test.describe('the published demo draws what reviewers grade', () => {
     expect(missing, 'SKUs whose /skus/photos answer the bundle lacks; re-run make demo-mirror').toEqual([])
   })
 
-  for (const screen of ['Inventory', 'Review', 'Pricing', 'Home', 'Cards to pull'] as const) {
+  for (const screen of ['Inventory', 'Review', 'Pricing', 'Home', 'Cards to Pull'] as const) {
     test(`${screen} draws its photographs, and every one answers 200`, async ({ page }) => {
       test.setTimeout(60_000)
       let photos = watchPhotos(page)
-      if (screen === 'Cards to pull') {
+      if (screen === 'Cards to Pull') {
         // LISTEN ON THE CONTEXT BEFORE THE WINDOW OPENS, NEVER AFTER. This used to attach to the
         // popup once it had loaded and then `reload()` it to see its photographs again, which
         // loaded the 75 MB `demoServer` chunk a second time and started the poll's clock before

@@ -897,7 +897,7 @@ test('nine rows are keyed, and the rest wait behind "Show N more"', async ({ pag
 
   const more = page.getByRole('button', { name: /Show \d+ more/ })
   await expect(more).toBeVisible()
-  await expect(more).toHaveText('Show 7 more')
+  await expect(more).toHaveText('Show 7 More')
 
   await more.click()
   await expect(rows).toHaveCount(16)
@@ -2819,7 +2819,7 @@ test.describe('the Review band sheets', () => {
         await expect(groups.nth(1)).toHaveAccessibleName('A weak match')
         await expect(groups.nth(2)).toHaveAccessibleName('A look-alike with no photo of its own')
         await expect(groups.nth(0).getByRole('listitem')).toHaveCount(50)
-        await groups.nth(0).getByRole('button', { name: 'Show 50 more' }).click()
+        await groups.nth(0).getByRole('button', { name: 'Show 50 More', exact: true }).click()
         await expect(groups.nth(0).getByRole('listitem')).toHaveCount(60)
         await expect(groups.nth(0).getByRole('button', { name: /Show .* more/ })).toHaveCount(0)
         const first = groups.nth(0).getByRole('listitem').first()

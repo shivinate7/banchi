@@ -299,7 +299,7 @@ async function openManage(page: Page, at: 'order' | 'overview' = 'order'): Promi
  *  receipt, the status picker and both backlog stand-downs. They act on every buyer, so they are
  *  never inside one buyer's sheet. */
 async function openStore(page: Page): Promise<void> {
-  await page.locator('main.orders .orders-filterbar').getByRole('button', { name: 'Add orders' }).click()
+  await page.locator('main.orders .orders-filterbar').getByRole('button', { name: 'Add Orders', exact: true }).click()
 }
 
 /** THE FILTER BAR IS ONE LINE (the owner, 2026-09-24): every facet, the sort and the hide toggle
@@ -4789,8 +4789,8 @@ for (const [width, height] of [
        RE-MEASURED beside each button rather than reused from above: the two boxes must come
        from the same tick, or a sub-pixel settle between the loop's two turns reads as the
        button drifting off a line that itself moved. */
-    for (const [name, role] of [['Add orders', 'button'], ['Cards to pull', 'link']] as const) {
-      const press = bar.getByRole(role, { name })
+    for (const [name, role] of [['Add Orders', 'button'], ['Cards to pull', 'link']] as const) {
+      const press = bar.getByRole(role, { name, exact: true })
       await expect(press).toBeVisible()
       const [freshBox, square, search] = await Promise.all([
         bar.boundingBox(),

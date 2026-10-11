@@ -1454,7 +1454,7 @@ test('a card with no name and no SKU still offers both doors', async ({ page }) 
   // a one-copy group rather than drawing a second kind of panel (D119); one copy and its two
   // controls, in the row shape every other copy on this screen draws.
   await expandAll(page)
-  await page.locator('.browse-row', { hasText: 'Not identified yet' }).first().click()
+  await page.locator('.browse-row', { hasText: /Not Identified Yet/ }).first().click()
   /* The list is drawn, and the screen still says why there is only one row in it. */
   await expect(page.locator('.inventory-lone')).toBeVisible()
   await expect(page.locator('.card-locations-owner')).toHaveCount(1)
@@ -1487,7 +1487,7 @@ test('a card with no name and no SKU is a one-copy list, not a special case', as
    * the same component every identified card uses. */
   await open(page)
   await expandAll(page)
-  await page.locator('.browse-row', { hasText: 'Not identified yet' }).first().click()
+  await page.locator('.browse-row', { hasText: /Not Identified Yet/ }).first().click()
 
   const rows = page.locator('.card-locations-row')
   await expect(rows).toHaveCount(1)
@@ -2345,7 +2345,7 @@ test('the receipt is the undo that survives the rows being replaced', async ({ p
      measurement that decides the owner's ruling to keep BOTH controls: without the receipt a
      twenty-second promise would be good only for as long as you stand still. */
   await expandAll(page)
-  await page.locator('.browse-row', { hasText: 'Not identified yet' }).first().click()
+  await page.locator('.browse-row', { hasText: /Not Identified Yet/ }).first().click()
   await expect(page.locator('.inventory-lone')).toBeVisible()
   /* THE ROW IS WHAT WENT, NOT THE PANEL. Since D119 the lone card draws a one-copy group of its
      own, so a count of `.card-locations-owner` no longer says the rows were replaced — the claim
@@ -2998,7 +2998,7 @@ test('the last section of an open box counts what is in it, and the box line dro
 test('the card with no group gets both depths too', async ({ page }) => {
   await open(page)
   await expandAll(page)
-  await page.locator('.browse-row', { hasText: 'Not identified yet' }).first().click()
+  await page.locator('.browse-row', { hasText: /Not Identified Yet/ }).first().click()
 
   /* THE BRANCH THAT NEARLY MISSED OUT — a card with no SKU and no name, which `GET /search`
    * cannot reach at all, so it draws through the lone-copy fallback rather than through a group.
@@ -6846,7 +6846,7 @@ test('the two claims the correction button can overwrite are both on the panel',
      appeared nowhere on screen. Worse than silent: the editor opens with those fields EMPTY and
      reads armed-and-empty as a clear, so the correction was a blind overwrite. `rarity_claim` is
      set on 543 of 543 real records, so this was live rather than latent. */
-  await page.locator('.browse-row', { hasText: 'Not identified yet' }).first().click()
+  await page.locator('.browse-row', { hasText: /Not Identified Yet/ }).first().click()
 
   /* `Common, Uncommon` and never `common,uncommon` — the array-coercion guard, identical in kind
      to the finish case above, and the reason both rows go through one renderer. */

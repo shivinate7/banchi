@@ -118,3 +118,53 @@ export function recordFromSource(source: string, name: string): Record<string, s
   }
   return out
 }
+
+/** One JSX opening or self-closing element of a `.tsx` source. `attrs` holds the named attributes;
+ *  `spread` is true when the element also takes `{...props}`, which can supply any attribute, so a
+ *  check that needs an attribute reads that element as unknown rather than as a finding. */
+export interface JsxOpening {
+  readonly tag: string
+  readonly line: number
+  readonly attrs: ReadonlyMap<string, ts.JsxAttribute>
+  readonly spread: boolean
+}
+
+/** Every JSX opening element in `source`, read by the TypeScript parser (comments and strings are never
+ *  elements). */
+export function jsxOpeningsIn(source: string, file: string): JsxOpening[] {
+  const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const out: JsxOpening[] = []
+  const visit = (node: ts.Node): void => {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const attrs = new Map<string, ts.JsxAttribute>()
+      let spread = false
+      for (const property of node.attributes.properties) {
+        if (ts.isJsxSpreadAttribute(property)) spread = true
+        else attrs.set(property.name.getText(sf), property)
+      }
+      out.push({
+        tag: node.tagName.getText(sf),
+        line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1,
+        attrs,
+        spread,
+      })
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sf)
+  return out
+}
+
+/** The text an attribute carries: '' for a bare attribute, the value for a string, or the fixed text of
+ *  a plain template or a string under `{...}`. `null` when the value is computed and this reader cannot
+ *  see it, so a check skips it rather than guessing. */
+export function attrText(attr: ts.JsxAttribute): string | null {
+  const init = attr.initializer
+  if (init === undefined) return ''
+  if (ts.isStringLiteral(init)) return init.text
+  if (ts.isJsxExpression(init) && init.expression) {
+    const value = unwrap(init.expression)
+    if (ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value)) return value.text
+  }
+  return null
+}

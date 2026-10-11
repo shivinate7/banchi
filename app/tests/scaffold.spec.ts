@@ -35,7 +35,7 @@ import { phoneOff, setViewport } from './phoneSwitch'
  *            motion settings. WHICH string each route gets is `tests/unit/tab-title.unit.ts`, over
  *            every `ROUTES` entry. The window is this file's own number, never read from App.tsx:
  *            a test that reads the value it checks passes when that value is wrong.
- *   palette  the palette ("Go to", D276) lists the route in its Screens group
+ *   palette  the palette ("Go To", D276) lists the route in its Screens group
  *   keys     the keyboard sheet, every screen shown, has an entry that names the route
  *
  * THE ROUTES ARE READ FROM `ROUTES` ITSELF, by the same reader the static check uses
@@ -401,7 +401,7 @@ test('the palette and the keyboard sheet name every route', async ({ page }) => 
   await settle(page)
 
   await page.keyboard.press('ControlOrMeta+k')
-  const palette = page.getByRole('dialog', { name: 'Go to' })
+  const palette = page.getByRole('dialog', { name: 'Go To', exact: true })
   await expect(palette).toBeVisible()
   const goTo = await palette.evaluate((root) => {
     const out: string[] = []

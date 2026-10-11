@@ -774,7 +774,7 @@ test('a throwaway ROUTES row gets its nav, palette, keys, title and scaffold wit
 
   // PALETTE: its Screens group lists it, and Enter goes there
   await page.keyboard.press('Meta+k')
-  const palette = page.getByRole('dialog', { name: 'Go to' })
+  const palette = page.getByRole('dialog', { name: 'Go To', exact: true })
   await expect(palette).toBeVisible()
   await palette.getByRole('combobox').fill('throwaway')
   await expect(palette.getByRole('option').first()).toHaveText(/Throwaway/)
@@ -839,7 +839,7 @@ test('a throwaway row with a letter takes its drawn place in the ring, and its c
   await expect(page.getByText('A throwaway screen.')).toBeVisible()
 })
 
-/* ---- the palette is "Go to", and it finds cards (D276, amends D95) ------------------ */
+/* ---- the palette is "Go To", and it finds cards (D276, amends D95) ------------------ */
 
 test('the palette lists every screen, off-nav ones included, and finds a card', async ({ page }) => {
   await open(page, RING[0])
@@ -860,11 +860,11 @@ test('the palette lists every screen, off-nav ones included, and finds a card', 
     }),
   )
   await page.keyboard.press('Meta+k')
-  const palette = page.getByRole('dialog', { name: 'Go to' })
+  const palette = page.getByRole('dialog', { name: 'Go To', exact: true })
   await expect(palette).toBeVisible()
 
   // every screen, the three off the nav included (UX-003)
-  for (const label of ['Product history', 'Kit', 'Cards to pull']) {
+  for (const label of ['Product History', 'Kit', 'Cards to Pull']) {
     await expect(palette.getByRole('option', { name: new RegExp(`^${label}`) })).toHaveCount(1)
   }
 
@@ -897,7 +897,7 @@ test('a refused card search hides the Cards group and says so in one line', asyn
     }),
   )
   await page.keyboard.press('Meta+k')
-  const palette = page.getByRole('dialog', { name: 'Go to' })
+  const palette = page.getByRole('dialog', { name: 'Go To', exact: true })
   await palette.getByRole('combobox').fill('abra')
   /* The line is the demo's own sentence in the published build (`__BN_DEMO__`); this dev build
      says the server did not answer. Either way it is ONE line, and no Cards group. "abra" matches
@@ -1029,7 +1029,7 @@ test('ux-wave1: at 820 every rail item has an accessible name equal to its label
     })),
   )
   expect(items.filter((i) => i.label === 'Pull'), 'the rail carries its Pull anchor').not.toHaveLength(0)
-  expect(items.some((i) => i.label === 'Go to'), 'Go to is in the rail').toBe(true)
+  expect(items.some((i) => i.label === 'Go To'), 'Go to is in the rail').toBe(true)
   expect(items.some((i) => i.label === 'Theme'), 'Theme is in the rail').toBe(true)
   expect(items.filter((i) => i.label === ''), 'every rail item carries a label to name it by').toEqual([])
 

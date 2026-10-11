@@ -2410,7 +2410,7 @@ test('UN-12 (the delta review round) — a hold on a no-market-price SKU is ONE 
   await page.locator('.pricing-hold').first().click()
   await expect(page.locator('.pricing-holdpanel')).toBeVisible()
   await page.getByRole('button', { name: /Keeping this one/ }).click()
-  await page.getByLabel('Tell me when market is above').fill('9.50')
+  await page.getByLabel('Notify you when market is above').fill('9.50')
   await page.getByLabel('Note', { exact: true }).fill('waiting on a reprint')
   await page.getByRole('button', { name: 'Hold it' }).click()
 
@@ -2723,7 +2723,7 @@ test('a row that adds nothing sinks to the bottom of its section, under its head
   /* THE HEADING IS OVER THE ROWS IT NAMES: the two rows worth $5 or more need the owner (D277,
      Q2), and the row that adds nothing falls under the server's own sentence, last. */
   await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
-    'Needs you',
+    'Needs You',
     'every copy in this run is already listed or has left the box',
   ])
   const lastGroup = page.locator('.pricing-group').last()
@@ -2766,7 +2766,7 @@ test('a row that is both held and at the cap sinks to the deeper heading', async
   })
 
   await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
-    'Needs you',
+    'Needs You',
     'every copy in this run is already listed or has left the box',
   ])
   await expect(page.locator('.pricing-row').nth(1).locator('.pricing-state')).toHaveAttribute(
@@ -3721,14 +3721,14 @@ test('the clear control is absent on a server that does not offer it', async ({ 
      answers no `clearable` block, and the screen has no way to know which of its answers are
      holds — so the control is dead rather than drawn over an assumption about money. */
   await open(page, { skus: CLEAR_ROWS })
-  await expect(page.getByRole('button', { name: 'Clear typed prices' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Clear Typed Prices', exact: true })).toBeDisabled()
 })
 
 test('the sheet leads with the worklist, and the label carries the figure', async ({ page }) => {
   await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
 
-  const sheet = page.getByRole('dialog', { name: 'Clear typed prices' })
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
   await expect(sheet).toBeVisible()
 
   /* THE NARROW SCOPE IS SELECTED. The corpus is one file for the whole store (D86), so
@@ -3747,7 +3747,7 @@ test('the sheet leads with the worklist, and the label carries the figure', asyn
 
 test('what the clear leaves alone is on the screen, not in a tooltip', async ({ page }) => {
   await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
 
   /* THE HOLDS AND THE UNPRICED ROWS ARE NAMED BY COUNT. An operator asking "does this touch my
      holds" has to be able to answer it without pressing anything — D86's holds carry a reason
@@ -3767,9 +3767,9 @@ test('no typed middle dot or bullet reaches the mass-clear sheet (D218)', async 
      `worklistName` falls to "N runs" instead, which keeps this case about the sites this lane
      fixed rather than about that one. */
   await open(page, { worklist: SPAN, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
 
-  const sheet = page.getByRole('dialog', { name: 'Clear typed prices' })
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
   await expect(sheet).toBeVisible()
   const text = await sheet.innerText()
   expect(text).not.toMatch(/[·•]/)
@@ -3777,8 +3777,8 @@ test('no typed middle dot or bullet reaches the mass-clear sheet (D218)', async 
 
 test('an age window narrows the label, and never takes an undated answer', async ({ page }) => {
   await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
-  const sheet = page.getByRole('dialog', { name: 'Clear typed prices' })
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
   const press = sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })
 
   /* EVERY WINDOW DRAWS ITS OWN COUNT BEFORE THE PRESS, which is D103's finding: a window can
@@ -3807,8 +3807,8 @@ test('an age window narrows the label, and never takes an undated answer', async
 
 test('the scope the operator chose is the scope that travels', async ({ page }) => {
   const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
-  const sheet = page.getByRole('dialog', { name: 'Clear typed prices' })
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
 
   /* THE WORKLIST SCOPE SENDS SKUS. This is the assertion the whole sheet exists for: the
      press an operator makes while looking at one run's rows must not reach the rest of the
@@ -3829,8 +3829,8 @@ test('the scope the operator chose is the scope that travels', async ({ page }) 
 
 test('the store-wide scope sends no SKUs, and says so in the label', async ({ page }) => {
   const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
-  const sheet = page.getByRole('dialog', { name: 'Clear typed prices' })
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
 
   await sheet.getByRole('button', { name: /Everywhere/ }).click()
   /* THE BLAST RADIUS IS IN THE LABEL AND IN A SENTENCE BESIDE IT. "Clear" over four hundred
@@ -3904,13 +3904,13 @@ test('a clear empties the fields it cleared, and offers the way back', async ({ 
     })
   })
 
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
-  await page.getByRole('dialog', { name: 'Clear typed prices' }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
 
   /* THE FIELD GOES BACK TO THE SUGGESTION. The row is not removed and nothing else moves —
      a press changes what is on the screen, never where the rest of it is (D118). */
   await expect(field).toHaveValue('')
-  await expect(page.getByRole('dialog', { name: 'Clear typed prices' })).toHaveCount(0)
+  await expect(page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })).toHaveCount(0)
 
   /* THE RECEIPT CARRIES THE FIGURE AND NAMES WHAT SURVIVED. */
   const toast = page.locator('.bn-toast').last()
@@ -3940,8 +3940,8 @@ test('a clear empties the fields it cleared, and offers the way back', async ({ 
 
   /* AND THE SHEET AGREES WITH THE STORE AFTERWARDS. Reopened, it counts the restored answer
      again rather than the four it opened on. */
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
-  await expect(page.getByRole('dialog', { name: 'Clear typed prices' }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })).toContainText(
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })).toContainText(
     'Clear 1 typed price',
   )
 })
@@ -4093,9 +4093,9 @@ test('the clear is refused while the screen has an unsaved answer', async ({ pag
     await new Promise(() => {})
   })
   await page.getByLabel('Price for Articuno').fill('3.21')
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
-  await expect(page.getByRole('dialog', { name: 'Clear typed prices' }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })).toBeDisabled()
-  await expect(page.getByRole('dialog', { name: 'Clear typed prices' })).toContainText('Wait for your last price')
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })).toBeDisabled()
+  await expect(page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })).toContainText('Wait for your last price')
 })
 
 /* ============================================================================================
@@ -4311,7 +4311,7 @@ test('the rows that need the owner come first, each with its reason, and the res
   /* Q2's three reasons, and the order: no market price first, then by value. The card at the
      cut-off is the floor at work, not a drift, so it is not flagged (the call in the decision
      entry). */
-  await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText(['Needs you', 'Ready'])
+  await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText(['Needs You', 'Ready'])
   await expect(page.locator('.pricing-group').nth(0).locator('.pricing-name')).toHaveText(['Unpriced', 'Dear', 'Drifted'])
   await expect(page.locator('.pricing-group').nth(1).locator('.pricing-name')).toHaveText(['Ordinary', 'Cheap on the cut-off'])
   /* ONLY A DRIFTED PRICE STILL DRAWS A REASON (the owner's review and add-on, 2026-09-26): "No
@@ -4356,7 +4356,7 @@ test('a hold taken now keeps its row where it is, and so does the next load', as
     sku({ sku: '3', name: 'Wattrel', snap: { market: '1.00', direct_low: null, low: '0.80', low_with_shipping: '1.80', now: null } }),
   ]
   await open(page, { skus })
-  await page.getByRole('button', { name: 'Hold back Dunsparce' }).click()
+  await page.getByRole('button', { name: 'Hold Back Dunsparce', exact: true }).click()
   await page.getByRole('button', { name: /Keeping this one/ }).click()
   await page.getByRole('button', { name: 'Hold it' }).click()
   await expect(page.locator('.pricing-row').nth(1).locator('.pricing-state')).toHaveAttribute('title', 'withheld: keeping')
@@ -4436,7 +4436,7 @@ test('finding #2 (the Opus review round) — a hold toast\'s own Undo reverses t
   ]
   const wire = await open(page, { skus })
 
-  await page.getByRole('button', { name: 'Hold back Dunsparce' }).click()
+  await page.getByRole('button', { name: 'Hold Back Dunsparce', exact: true }).click()
   await page.getByRole('button', { name: /Keeping this one/ }).click()
   await page.getByRole('button', { name: 'Hold it' }).click()
   const holdToast = page.locator('.bn-toast', { hasText: 'Held Dunsparce' })
@@ -4882,7 +4882,7 @@ test('F3: the price sort orders within each heading, and a row with no price goe
      price) goes last in its own group. */
   const names = await page.locator('.pricing-row .pricing-name').allInnerTexts()
   expect(firstWords(names)).toEqual(['Articuno', 'Poro', 'Annie', 'Dunsparce'])
-  await expect(page.locator('.pricing-group-head .pricing-group-why').first()).toHaveText('Needs you')
+  await expect(page.locator('.pricing-group-head .pricing-group-why').first()).toHaveText('Needs You')
 })
 
 test('F3: the game filter and the set filter each narrow the list, and together with a search they combine', async ({ page }) => {
@@ -5585,7 +5585,7 @@ function leftBoxExpected(): [string, string[]][] {
     const rows = byMarket.filter((row) => (Number(row.market) >= 5) === needs)
     return [...rows.filter((row) => row.on_hand > 0), ...rows.filter((row) => row.on_hand === 0)].map((row) => row.name)
   }
-  return [['Needs you', group(true)], ['Ready', group(false)]]
+  return [['Needs You', group(true)], ['Ready', group(false)]]
 }
 async function openLeftBox(page: Page): Promise<void> {
   await setViewport(page, { width: 1440, height: 900 })
