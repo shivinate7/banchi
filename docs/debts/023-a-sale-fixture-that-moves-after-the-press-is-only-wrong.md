@@ -6,4 +6,4 @@ The shape does not say whether a case is wrong. Some cases read state the server
 
 **Outcome at risk.** A new sale case passes on a fast machine and fails on the runner.
 
-**Closes when.** A case declares the property it requires ("this case needs the re-read to disagree with the overlay"), not a flag. A check then flags a post-click mutation in any case that did not declare it. Until then `sellableStore()`'s comment and `movesOnSale` carry the rule. A probe finds it: `await page.waitForTimeout(300)` between a click and its mutation turns the latent race into a deterministic red, and is never committed.
+**Closes when.** A case declares the property it requires ("this case needs the re-read to disagree with the overlay"), not a flag. A check then flags a post-click mutation in any case that did not declare it. Until then `sellableStore()`'s comment and `movesOnSale` carry the rule. A probe finds it: `await page.waitForTimeout(300)` between a click and its mutation turns the latent race into a deterministic red. Never commit the probe.

@@ -1,132 +1,47 @@
 ## D117 — The thumb floor is 40px
 
-**Built on the owner's instruction to review the mobile build.** CLAUDE.md set two floors for this width at the Banchi rebuild. Neither had a reader. Look at every screen at 1440, 820 and 390. No horizontal page scroll at 390. Anything a thumb presses is 40px or more. The control-height tokens raise themselves under 767px and on a coarse pointer. Do not hand-roll a mouse-sized control on a phone. Twenty-five controls hand-rolled one.
+**Anything a thumb presses is 40px or more.** The owner ordered the mobile build reviewed. CLAUDE.md sets two floors for this width: no horizontal page scroll at 390, and the 40px thumb floor. Neither had a reader. Look at every screen at 1440, 820 and 390. The control-height tokens raise themselves under 767px and on a coarse pointer. Do not hand-roll a mouse-sized control on a phone. Twenty-five controls hand-rolled one.
 
-**NOTHING IN `app/tests/` COULD HAVE SEEN IT.** `nav.spec.ts` scopes itself to `.bn-side` on
-purpose. `cursor.spec.ts` harvests its routes from `.bn-side a.bn-nav-link`, which is
-`display: none` below 768 — so that file cannot run at a phone width even in principle, and its
-own comment names the phone drawer as a second copy it does not walk. Of twenty specs only
-`fulfillment.spec.ts` set a phone viewport, for the Fulfiller's one route.
-**The owner-side shell had no test at any width**, so every shortfall below was invisible to
-`make check` and `make design-check` together.
+**Nothing in `app/tests/` could have seen it.** `nav.spec.ts` scopes itself to `.bn-side`. `cursor.spec.ts` harvests its routes from `.bn-side a.bn-nav-link`, which is `display: none` below 768. So that file cannot run at a phone width. Its own comment names the phone drawer as a second copy it does not walk. Of twenty specs, only `fulfillment.spec.ts` sets a phone viewport, for the Fulfiller's one route. The owner-side shell had no test at any width. So every shortfall below was invisible to `make check` and `make design-check` together.
 
-**THE FLOOR BELONGS TO THE KIT, AND PATCHING IT PER SCREEN IS HOW IT HID.** `.bn-check` has no
-height at all — an `inline-flex` label around a fixed 16×16 box, measuring 19.5px at 390 — and
-`Markdown.css` lifted its own copy and said so in a comment: *"The check is still somebody
-else's."* `BoxBrowse.css` did the same for `.bn-menu-item`. Both are deleted; `kit.css` holds
-`.bn-check`, `.bn-seg-item`, `.bn-tab`, `.bn-menu-item`, `.bn-toast-action` and `.bn-toast-close`
-now, and every screen gets them rather than the two that happened to notice.
+**The floor belongs to the kit. Patching it per screen is how it hid.** `.bn-check` has no height. It is an `inline-flex` label around a fixed 16×16 box, measuring 19.5px at 390. `Markdown.css` kept its own copy, and a comment there says so: "The check is still somebody else's." `BoxBrowse.css` did the same for `.bn-menu-item`. Both copies are deleted. `kit.css` now holds `.bn-check`, `.bn-seg-item`, `.bn-tab`, `.bn-menu-item`, `.bn-toast-action` and `.bn-toast-close`. Every screen gets them.
 
-**THE LIFT BLOCK IS LAST IN `kit.css`, AND THAT IS LOAD-BEARING.** Every rule in it lifts a base
-rule above it at the same specificity, so it has to come after them or it does nothing. That is
-not hypothetical: `Markdown.css` records the same mistake being made and shipped — *"a phone lift
-written before the base rules at the same specificity, dead on arrival"* — and the kit's own
-`.bn-seg-item` phone rule was written at the top of the sheet, where it lost the cascade at 28px.
+**The lift block is last in `kit.css`, and that is load-bearing.** Every rule in it lifts a base rule above it at the same specificity. So it must come after them, or it does nothing. `Markdown.css` records the same mistake shipping: "a phone lift written before the base rules at the same specificity, dead on arrival." The kit's own `.bn-seg-item` phone rule sat at the top of the sheet. It lost the cascade and stayed at 28px.
 
-**THE ARM IS THE POINTER, NOT THE WIDTH.** `tokens.css` has raised `--bn-control-h*` on
-`(max-width: 767px), (hover: none) and (pointer: coarse)` since it was written, and
-`docs/DESIGN.md` says why: an iPad in portrait is 820px wide and all thumb. Ten stylesheets
-carried width-only blocks full of control heights, so a tablet got none of them.
+**The arm is the pointer, not the width.** `tokens.css` has raised `--bn-control-h*` on `(max-width: 767px), (hover: none) and (pointer: coarse)` since it was written. `docs/DESIGN.md` says why: an iPad in portrait is 820px wide and all thumb. Ten stylesheets carried width-only blocks full of control heights, so a tablet got none of them.
 
-**THE MEASUREMENT IS THE HIT AREA, NOT THE BOX, WHICH IS WHAT REMOVES THE ALLOW-LIST.**
-`BoxBrowse`'s ticks draw at 22px and take the tap at 46 through an `::after`
-with a negative inset; the composer's stage chips do the same. A box-only assertion calls both
-of those failures and needs a list of names to forgive them — and a list of names is a list
-somebody adds to. Probing the four cardinal points of the required 40px box asks the question
-the floor is actually about: can a thumb landing 19px off centre still press it.
-**It found a pad that was there and did nothing**: the row button is a sibling in the same grid and paints
-later, so it took every press in the 12px to the tick's right, and the tick answered 46px tall
-and 34px wide until a `z-index` put the pad above the sibling it was drawn to overlap.
+**The measurement is the hit area, not the box. That removes the allow-list.** `BoxBrowse`'s ticks draw at 22px. They take the tap at 46 through an `::after` with a negative inset. The composer's stage chips do the same. A box-only assertion flags both, and needs a list of names to forgive them. A list of names is a list somebody adds to. The probe checks the four cardinal points of the required 40px box. That asks the question the floor is about: can a thumb landing 19px off centre still press it?
 
-**ONE SURFACE IS SWEPT FOR THE BOX INSTEAD, AND IT IS THE ONE THAT MATTERS MOST.** `#/gallery`
-draws specimens side by side to be compared, so every probe there lands on the next specimen and
-the probe cannot be asked. What can be asked is the box — CLAUDE.md's floor verbatim — and that
-sweep is the only thing in the product that draws every kit control. Measured: with the sheet
-swept for the box, deleting `.bn-check`'s floor turns `phone.spec.ts` red; swept for the probe,
-it does not.
+**It found a pad that was there and did nothing.** The row button is a sibling in the same grid and paints later. It took every press in the 12px to the tick's right. The tick answered 46px tall and 34px wide, until a `z-index` put the pad above the sibling it overlapped.
 
-**AND THE SWEEP SCROLLS, because `elementFromPoint` answers about the viewport.** One pass at the
-top of a route measures the first 844px of it. `#/gallery` is thirteen thousand pixels long and
-its checkbox sits at y=13124, so a single-pass version of this file stayed green through three
-mutations that deleted kit floors outright.
+**One surface is swept for the box instead, and it matters most.** `#/gallery` draws specimens side by side. Every probe there lands on the next specimen, so the probe cannot be asked. The box can be asked. It is CLAUDE.md's floor, verbatim. That sweep is the only thing in the product that draws every kit control. Measured: with the sheet swept for the box, deleting `.bn-check`'s floor turns `phone.spec.ts` red. Swept for the probe, it stays green.
 
-**A STICKY BAR MAY NOT LEAVE A CONTROL UNPRESSABLE.** `#/pricing`'s ship bar stood 430px of an 844px viewport — half the screen, four wrapped rows —
-with `Pick a run` underneath it: visible, and impossible to press at any scroll position. The cap
-sentence is hidden on a phone (the pill beside it already states the scope) and both split
-checkboxes have short forms, which is 152px.
-**The obvious second fix was built and then refused**: padding the page by the measured
-`--pricing-ship-h` added 172px of dead scroll under a
-list the operator is walking, and with the bar back to two rows `.bn-page`'s own 64px foot
-already leaves the last row 24px clear. `pricing.spec.ts` asserts that clearance geometrically,
-so whatever provides it is free to change.
+**The sweep scrolls, because `elementFromPoint` answers about the viewport.** One pass at the top of a route measures only the first 844px. `#/gallery` is thirteen thousand pixels long, and its checkbox sits at y=13124. A single-pass version of this file stayed green through three mutations that deleted kit floors outright.
 
-**THE FIXED CHROME IS NOT AN OBSTRUCTION, AND THE LIST IS NAMED RATHER THAN DERIVED.**
-Content scrolls under the top bar and the tab bar by design — `.bn-shell-main` pads its foot by
-the tab bar's height plus the safe area for exactly that. "Anything sticky" would excuse the ship
-bar, which is the case this file exists to catch; "anything fixed" would miss `#/gallery`'s own
-sticky index strip. Three strips are written out in the spec and a fourth is a deliberate edit.
+**A sticky bar may not leave a control unpressable.** `#/pricing`'s ship bar stood 430px of an 844px viewport. That is half the screen, in four wrapped rows. `Pick a run` sat underneath it: visible, and impossible to press at any scroll position. The cap sentence is hidden on a phone, because the pill beside it already states the scope. Both split checkboxes have short forms, which is 152px.
 
-**AND THE NAMED LIST WAS THE WRONG SHAPE.**
-It took five weeks and a red `main` to show. `#/inventory` failed this file's own case on the CI runner. It passed on this Mac. The queued notice's `Open the review queue` missed its BOTTOM probe to `button.browse-boxchip`. That control sat 450px away in document flow, and nothing was crowding it. `.browse-mobilebar` is `position: sticky; top: var(--bn-topbar-h)`. So the link is overlapped only while it scrolls UNDER that bar. Which offsets the sweep samples depends on font metrics: 143x16 on this rig, 148x16 on the runner.
+**The obvious second fix was built, then refused.** Padding the page by the measured `--pricing-ship-h` added 172px of dead scroll under a list the operator walks. With the bar back to two rows, `.bn-page`'s own 64px foot already leaves the last row 24px clear. `pricing.spec.ts` asserts that clearance geometrically, so whatever provides it may change.
 
-**THE PROPERTY THIS SWEEP IS FOR IS THE ONE STATED ABOVE, AND WHAT IT ASKED WAS NARROWER.**
-"Impossible to press at any scroll position" is the property; what the sweep asked was whether
-the control was pressable at whichever offset the 40 scroll steps happened to sample. Measured
-on `#/inventory` at 390 at every whole-pixel offset rather than at the sampled ones: the link is
-intercepted at 101 of 558 and clean at 457, including where it rests. The failing band is 101
-CONSECUTIVE offsets, not a knife edge — it reads as one only because this page has two sample
-points, which is what made a font-metric shift enough to move the suite from green to red.
+**Fixed chrome is not an obstruction. The exempt strips are named, not derived.** Content scrolls under the top bar and the tab bar by design. `.bn-shell-main` pads its foot by the tab bar's height plus the safe area for that. "Anything sticky" would excuse the ship bar, which is the case this file exists to catch. "Anything fixed" would miss `#/gallery`'s own sticky index strip. Three strips are written out in the spec. A fourth is a deliberate edit.
 
-**SO THE MISS IS RE-ASKED WITH THE CONTROL SCROLLED CLEAR.**
-Its own centre is put at the middle of the viewport and the four probes are fired again; it is
-reported only if it still fails. Real crowding survives that and bar occlusion does not: a
-sibling painting over a pad moves WITH the control and crowds it at every offset, while a bar
-the page scrolls under is behind it at some offsets and not others. That distinction is derived
-rather than named, which is what the three-strip list could never be.
+**A named list was the wrong shape.** `#/inventory` failed this file's case on the CI runner and passed on this Mac. The queued notice's `Open the review queue` missed its bottom probe to `button.browse-boxchip`. That control sat 450px away in document flow, and nothing crowded it. `.browse-mobilebar` is `position: sticky; top: var(--bn-topbar-h)`. So the link is overlapped only while it scrolls under that bar. Which offsets the sweep samples depends on font metrics: 143x16 on this rig, 148x16 on the runner.
 
-**NAMING `.browse-mobilebar` AS A FOURTH STRIP WOULD HAVE GONE GREEN AND LEFT THE NEXT ONE ARMED.**
-`.browse-details-summary` is intercepted by `.browse-actionbar` at 99 of its 197 offsets and
-pressable at the other 98 — the same non-defect, on a bar that is `position: fixed`, which is
-exactly what that list must not excuse. The 40-step sweep has simply never sampled it. A list of
-names is a list somebody adds to, and this is the entry that found out what that costs.
+**The property is "impossible to press at any scroll position". The sweep asked something narrower.** It asked whether the control was pressable at the offsets its 40 scroll steps sampled. Measured on `#/inventory` at 390 at every whole-pixel offset, the link is intercepted at 101 of 558 and clean at 457, including where it rests. The failing band is 101 consecutive offsets, not a knife edge. It reads as one only because the page has two sample points. A font-metric shift was enough to move the suite from green to red.
 
-**THE `[DEBUG ...]` SUFFIX ON THE FAILURE LINE IS KEPT, AGAINST ITS AUTHOR'S STATED INTENT.**
-#252 added it "diagnostic only, to be reverted once the CI log gives the answer" and the answer
-has been got, so the literal reading is that it goes. It stays. It is what made a defect three
-sessions had theories about solvable at all: #252 changed a value on a font-metric hypothesis,
-could not tell whether it had worked, and wrote "the vertical-margin theory is wrong and the real
-cause is unknown"; the next failing run named the intercepting element and the coordinates, and
-every session since reasoned from that one string. The clearance retry makes failures that reach
-this line RARER, and a rare failure on a runner whose metrics no rig can recreate is one the log
-has to carry by itself. Intent stated before the value was known does not bind once it is
-measured. The argument is written beside the code, because a PR body is not what the next reader
-opens.
+**So a miss is re-asked with the control scrolled clear.** Its centre goes to the middle of the viewport, and the four probes fire again. It is reported only if it still fails. Real crowding survives that retry, and bar occlusion does not. A sibling painting over a pad moves WITH the control, so it crowds the control at every offset. A bar the page scrolls under is behind the control at some offsets and not others. The retry derives that distinction. A list of names could never do so.
 
-**THE SIZE FLOOR IS UNTOUCHED AND SO IS `#/gallery`'s BOX SWEEP.**
-Scrolling cannot make a 22px control 40px, so the retry is asked only of the probe.
-Mutation-tested, four arms, all red: the notice link's own pad deleted (a real 143x16 hit area),
-`.bn-check`'s kit floor deleted, `.browse-rowtick`'s `z-index` removed — this entry's own
-crowding case, the one the probe was built for — and a fixed bottom bar grown to 60% of the
-viewport over content that cannot be scrolled clear of it.
+**Naming `.browse-mobilebar` as a fourth strip would have gone green and left the next one armed.** `.browse-details-summary` is intercepted by `.browse-actionbar` at 99 of its 197 offsets, and pressable at the other 98. It is the same non-defect, on a bar that is `position: fixed`. That is exactly what the list must not excuse. The 40-step sweep never sampled it.
 
-**AMENDED: A COVERED CENTRE NOW FAILS ON ITS OWN. THIS CLOSED HALF OF DEBT22 AND LEFT THE OTHER HALF NAMED.** The capture screen's shutter sat half under the phone tab bar on first paint. All four corner probes and its own centre landed inside `.bn-tabbar`. `owns()`'s `chrome(n)` clause forgave every one of them. That clause is correct for a control scrolling PAST fixed chrome on its way up a route. The shutter was not scrolling past. It sat behind the bar, with no scroll at all. This file could not tell the two apart. `covered` read the CENTRE hit-test with the same forgiving `owns()`, and its result drove nothing. `fails` read the four corner probes' `misses` alone. So a control whose centre and every probe were forgiven reported clean. `centreOwns()` is `owns()` with `chrome(n)` dropped. `t.contains(n)` and `n.contains(t)` stay, because those cover a legitimate padded wrapper, and a control cannot be COVERED by its own descendant or its own ancestor in the sense this check is for. `covered` now uses `centreOwns()`, and it drives `fails` for probe mode. Proved red against the unfixed `CaptureScreen.css` (D205) and green with the fix. This file's other three cases (every owner route, the shell's three surfaces, the two sheets) still pass with the tightened predicate. Nothing that legitimately scrolls under `.bn-topbar`, `.bn-tabbar` or `.kit-index` got newly flagged.
+**The `[DEBUG ...]` suffix on the failure line is kept.** #252 added it as "diagnostic only, to be reverted once the CI log gives the answer." The answer has been got, so the literal reading says it goes. It stays. The suffix made a defect that three sessions had theories about solvable. #252 changed a value on a font-metric hypothesis and could not tell whether it worked. Its message read "the vertical-margin theory is wrong and the real cause is unknown." The next failing run named the intercepting element and the coordinates. Every session since reasoned from that one string. The clearance retry makes failures that reach this line rarer. A rare failure on a runner whose metrics no rig can recreate must be carried by the log alone. An intent stated before the value was known does not bind once the value is measured. The argument sits beside the code, because a PR body is not what the next reader opens.
 
-**THE `n.contains(t)` CLAUSE DEBT22 ACTUALLY OPENED WITH IS UNCHANGED, RE-MEASURED THE SAME DAY.** `.browse-boxchip` shrunk to 20px against the tightened file: still green. A
-shrunk control's own centre stays inside its own smaller box — nothing is covering it, so
-`centreOwns` correctly finds the control itself there. It is the CORNER probes that land outside
-the shrunk box and onto `.browse-mobilebar`, its ancestor, forgiven by `n.contains(t)` — the
-clause this entry already calls load-bearing for the padded-wrapper case, and narrowing it is
-still the unmeasured, twelve-route change #22 always said it was. Today's amendment closes a
-different clause (`chrome(n)`, at the centre) on a different reproduction (fixed chrome, not an
-ancestor bar); DEBT22 is updated to record that split rather than marked closed
-outright.
+**The size floor is untouched, and so is `#/gallery`'s box sweep.** Scrolling cannot make a 22px control 40px, so the retry is asked only of the probe. Four mutation arms were tested, and all went red. The first deletes the notice link's own pad, a real 143x16 hit area. The second deletes `.bn-check`'s kit floor. The third removes `.browse-rowtick`'s `z-index`, this entry's own crowding case, the one the probe was built for. The fourth grows a fixed bottom bar to 60% of the viewport, over content that cannot be scrolled clear of it.
 
-**What is NOT decided here.** D50's three interaction floors are still derived from a mouse:
-`base.css` has no coarse-pointer arm at all, its response floor argues entirely from a hover
-sweep of 315 controls, and its 1px press dip is a mouse-derived number applied to a finger. That
-is a real question and it is not this entry's.
+**Amended: a covered centre now fails on its own.** The capture screen's shutter sat half under the phone tab bar on first paint. All four corner probes and its own centre landed inside `.bn-tabbar`. `owns()`'s `chrome(n)` clause forgave every one. That clause is correct for a control scrolling past fixed chrome on its way up a route. The shutter was not scrolling past. It sat behind the bar with no scroll at all. The file could not tell the two apart. `covered` read the centre hit-test with the same forgiving `owns()`, and its result drove nothing. `fails` read the four corner probes' `misses` alone. So a control whose centre and every probe were forgiven reported clean.
 
-**What would reopen this:** a second Playwright project at a device profile rather than
-per-test viewports. `playwright.config.ts` has one chromium project today, and the phone width is
-set per case; a project would run every existing spec at both. It doubles `design-check`'s
-runtime, which is why it is named here rather than taken.
+`centreOwns()` is `owns()` with `chrome(n)` dropped. `t.contains(n)` and `n.contains(t)` stay, since they cover a legitimate padded wrapper. A control cannot be covered by its own descendant or ancestor in the sense this check is for. `covered` now uses `centreOwns()`, and it drives `fails` in probe mode. It was proved red against the unfixed `CaptureScreen.css` (D205) and green with the fix. The file's other three cases still pass with the tighter predicate. Nothing that legitimately scrolls under `.bn-topbar`, `.bn-tabbar` or `.kit-index` is newly flagged.
+
+**The `n.contains(t)` clause that DEBT22 opened with is unchanged.** It was re-measured the same day. `.browse-boxchip` shrank to 20px against the tighter file, and stayed green. A shrunk control's own centre stays inside its own smaller box. Nothing covers it, so `centreOwns` correctly finds the control itself there. The corner probes land outside the shrunk box, onto `.browse-mobilebar`, its ancestor. `n.contains(t)` forgives them. That clause is load-bearing for the padded-wrapper case. Narrowing it is the unmeasured, twelve-route change that #22 always said it was. Today's amendment closes a different clause (`chrome(n)`, at the centre) on a different reproduction (fixed chrome, not an ancestor bar). DEBT22 records that split. It is not marked closed.
+
+**Not decided here.** D50's three interaction floors are still derived from a mouse. `base.css` has no coarse-pointer arm. Its response floor argues entirely from a hover sweep of 315 controls. Its 1px press dip is a mouse-derived number applied to a finger. That is a real question, and it is not this entry's.
+
+**What would reopen this:** a second Playwright project at a device profile, not per-test viewports. `playwright.config.ts` has one chromium project today, and the phone width is set per case. A project would run every existing spec at both widths. It doubles `design-check`'s runtime, which is why it is named here and not taken.
