@@ -170,8 +170,6 @@
   margin-bottom: var(--bn-4);
 }
 .revenue-search { flex: 1 1 360px; min-width: 0; max-width: 560px; margin-left: auto; }
-/* The table already counts the rows; a second count line under the search would appear on the first keystroke and move the table. */
-.revenue-search .bn-filtercount { display: none; }
 @media (max-width: 767px) { .revenue-search { max-width: none; width: 100%; margin-left: 0; } }
 
 .revenue-podium {
