@@ -1923,7 +1923,7 @@ test('ux-w2 gap check: overlapping buttons inside a sticky bar fail the gap floo
   await expect(fatTargets(page, 'bar overlap'), 'the pair inside the bar is judged').rejects.toThrow()
 })
 
-/* ux-w2 B23 (DESIGN.md Fulfillment, signed off, not built yet). The count bar is sticky: it holds the "N Left" count
+/* ux-w2 B23 (DESIGN.md Fulfillment). Asserts the count bar stays on screen as the list scrolls: it holds the "N Left" count
    beside the search, and it stays on screen as the list scrolls. The page is made tall here by a spacer under the search's
    own parent, so the scroll is real and the case cannot pass on a page too short to scroll. */
 test('ux-w2 B23: the count bar with N Left and the search stay on screen after scrolling 2000px', async ({ page }) => {

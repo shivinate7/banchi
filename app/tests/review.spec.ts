@@ -2995,7 +2995,7 @@ test.describe('the Review band sheets', () => {
     })
   })
 
-  /* ux-w2 B13 (identify-engine-pick.md 10.4, signed off, not built yet). The "All caught up" card spans the band's width, edge for edge. */
+  /* ux-w2 B13 (identify-engine-pick.md 10.4). Asserts the "All caught up" card spans the band's width, edge for edge. */
   test('ux-w2 B13: the empty "All caught up" card spans the band\'s width, left and right edges equal', async ({ page }) => {
     await setViewport(page, { width: 1440, height: 900 })
     await seed(page, { fates: {}, sitting: [] })
@@ -3010,7 +3010,7 @@ test.describe('the Review band sheets', () => {
     expect(Math.abs(card!.x + card!.width - (band!.x + band!.width)), 'right edges match within 1px').toBeLessThanOrEqual(1)
   })
 
-  /* ux-w2 B14 (identify-engine-pick.md 10.4, signed off, not built yet). A zero count is a plain figure: no button role,
+  /* ux-w2 B14 (identify-engine-pick.md 10.4). Asserts a zero count is a plain figure: no button role,
      no chevron. A live count keeps both. The tile holds the same box either way (D313). */
   test('ux-w2 B14: a zero count is a plain figure with no button and no chevron, and holds the box of a live count', async ({ page }) => {
     await setViewport(page, { width: 1440, height: 900 })

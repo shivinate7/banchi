@@ -1874,7 +1874,7 @@ test('the stage panel hugs the portrait frame: no dead side bands', async ({ pag
   }
 })
 
-/* ux-w2 B2 (D211, signed off, not built yet). With no box chosen, the Setup panel does not repeat the stage's Camera control
+/* ux-w2 B2 (D211). Asserts that with no box chosen, the Setup panel does not repeat the stage's Camera control
    or the Shooting group's Box select. The sentence that says why stays. Add divider stays where it is. */
 test('ux-w2 B2: with no box chosen, the Setup panel repeats neither the Camera control nor the Box select', async ({ page }) => {
   await open(page)

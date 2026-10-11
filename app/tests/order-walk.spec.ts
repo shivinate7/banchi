@@ -333,7 +333,7 @@ const CURRENT_PICK = '.orders-cardcol'
 
 sealEveryTest()
 
-/* ux-w2 B16 (order-walk-plan.md section 14, signed off, not built yet). Each figure chip beside the card names carries a
+/* ux-w2 B16 (order-walk-plan.md section 14). Asserts each figure chip beside the card names carries a
    text box that explains it. The box opens on hover and on keyboard focus, so a chip is reachable without a pointer. */
 test('ux-w2 B16: each Captured, Hidden and Sent chip opens a text box on hover and on keyboard focus', async ({ page }) => {
   await open(page)
@@ -354,7 +354,7 @@ test('ux-w2 B16: each Captured, Hidden and Sent chip opens a text box on hover a
   }
 })
 
-/* ux-w2 B17 (order-walk-plan.md section 15 rail, signed off, not built yet). The walk control is a button whose name starts
+/* ux-w2 B17 (order-walk-plan.md section 15 rail). Asserts the walk control is a button whose name starts
    with a verb, "Start Walk", and a caption beside it gives the buyer count, "10 buyers". */
 /* Two tickable buyers, so the walk control draws (it shows only at two or more). Both buyers take the same on-hand copies. */
 function twoBuyersOpen(): OrdersPayload {
