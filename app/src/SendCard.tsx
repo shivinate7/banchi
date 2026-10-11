@@ -475,7 +475,6 @@ function SendStanding({
         </Notice>
       )
     case 'short':
-      if (send.check === null) return null
       return (
         <Notice
           tone="warn"
@@ -493,7 +492,13 @@ function SendStanding({
             </>
           }
         >
-          {foundLine(send)} at TCGplayer {atClockTime(send.checked_at)}.
+          {send.check === null ? (
+            'Banchi has not finished checking what TCGplayer holds.'
+          ) : (
+            <>
+              {foundLine(send)} at TCGplayer {atClockTime(send.checked_at)}.
+            </>
+          )}
           <StagedWarning send={send} />
           <MissingList send={send} />
           <PriceMisses send={send} />
