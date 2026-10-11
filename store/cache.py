@@ -30,10 +30,8 @@ lives on the sidecar, which this file never reads.
 `--reidentify-stale` is that targeted re-read: only entries that are both WEAK (confidence
 `low`, or currently sitting in a queue) and UNCLEARED. Everything else stands.
 
-A HUMAN-CLEARED IDENTIFICATION IS PERMANENT. Once someone has looked at the photo and picked
-the row, no re-run, prompt change, or re-identification pass overwrites it. If a later run
-happens to read that photo and disagrees, `disagreements()` reports it — cheap evidence that
-either the prompt improved or a clearing was a mistake — but the human answer stands.
+A HUMAN-CLEARED IDENTIFICATION IS PERMANENT (D-cache-cleared-answers). If a later run
+reads that photo and disagrees, `disagreements()` reports it, but the human answer stands.
 
 NOTHING SETS `cleared_by_human` ON THE CACHE. The review screen shipped 2026-08-13 and its
 answer route sets the flag on the queue entry, not here — deliberately: marking a model
