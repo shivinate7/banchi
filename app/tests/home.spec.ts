@@ -522,13 +522,26 @@ test('ux-wave1: the Pricing tile headline is the count its subline names', async
 
 /* ux-wave1 R3. Each run row on Home names the date and the clock time the run was last touched and the
    quantity it holds. The date and the time come from the app's own formatters, so the case does not
-   hard-code a zone. The quantity is read as a number followed by "cards" or "copies". */
+   hard-code a zone. The quantity is read as a number followed by "cards" or "copies".
+
+   THE WIRE FIELDS (server/pipeline_routes.py:_summary). A joined run's count is `counts.cards_in`, which
+   only `cli/cmd_join.py:record_join` writes. Before the join `counts` is empty, and the only card count
+   a run carries is `scope.cards`, which identify writes (null for a whole-box run). The two cases below
+   use those fields and no others. */
 test('ux-wave1: each Home run row shows a date, a time and a quantity', async ({ page }) => {
   const at = '2026-09-18T14:05:00Z'
   await page.route(/\/orders$/, (route) => json(route, { summary: '', orders: [], resolution: { orders: [], counts: {} } }))
   await page.route(/\/pipeline\/runs$/, (route) =>
     json(route, {
-      runs: [runRow({ updated_at: at, created_at: at, counts: { cards: 12 }, scope: { box: 9, whole_box: true, cards: 12 } })],
+      runs: [
+        runRow({
+          updated_at: at,
+          created_at: at,
+          joined: true,
+          counts: { cards_in: 12, skus: 9, queued_main: 0, queued_parked: 0, no_market_data: 0, sub_threshold: 0 },
+          scope: { box: 9, whole_box: true, cards: null },
+        }),
+      ],
     }),
   )
   await page.goto('/#/')
@@ -538,5 +551,23 @@ test('ux-wave1: each Home run row shows a date, a time and a quantity', async ({
   const text = await row.innerText()
   expect(text, 'the row names the date').toContain(absoluteDate(at))
   expect(text, 'the row names the clock time').toContain(clockTime(at))
-  expect(text, 'the row names the quantity the run holds').toMatch(/\b\d[\d,]*\s+(cards?|copies)\b/)
+  expect(text, 'the row names the quantity the run holds (counts.cards_in)').toMatch(/\b12\s+(cards?|copies)\b/)
+})
+
+/* ux-wave1 R3, before the join. A run not yet joined has no `counts`, so its card count is the one
+   identify wrote into `scope.cards` (a run over a chosen set of cards, not a whole box). Its row still
+   shows that count. */
+test('ux-wave1: an unjoined Home run row still shows its card count from scope.cards', async ({ page }) => {
+  const at = '2026-09-18T14:05:00Z'
+  await page.route(/\/orders$/, (route) => json(route, { summary: '', orders: [], resolution: { orders: [], counts: {} } }))
+  await page.route(/\/pipeline\/runs$/, (route) =>
+    json(route, {
+      runs: [runRow({ updated_at: at, created_at: at, joined: false, counts: {}, scope: { box: 9, whole_box: false, cards: 7 } })],
+    }),
+  )
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+  const row = page.locator('a.home-run').first()
+  await expect(row, 'Home draws the unjoined run row').toBeVisible()
+  expect(await row.innerText(), 'the unjoined row shows scope.cards').toMatch(/\b7\s+(cards?|copies)\b/)
 })

@@ -128,28 +128,31 @@ test('setViewport leaves the shell columns final across the rail breakpoint', as
   }
 })
 
-/* ux-wave1 B3 (A14). An empty "Last capture" panel keeps the height it has at 1440 when the page
-   narrows to the rail width, and it still says it is empty. The reference is measured at 1440 in the
-   same case, not a pixel tuned to one layout. */
-test('ux-wave1: the empty Last capture panel at 820 keeps its loaded height and says it is empty', async ({ page }) => {
-  const measure = async (width: number, height: number) => {
-    await setViewport(page, { width, height })
-    await page.goto('/#/capture')
-    await page.locator('.capture-shell').waitFor()
-    await settleAnimations(page)
-    const panel = page.locator('.capture-last')
-    await expect(panel).toHaveAttribute('data-has-last', 'false')
-    const note = page.locator('.capture-frame-last .capture-frame-title')
-    await expect(note, 'the empty panel names its state').toHaveText(/nothing captured yet/i)
-    const box = await panel.boundingBox()
-    const title = await note.boundingBox()
-    return {
-      height: box?.height ?? 0,
-      titleInside: box !== null && title !== null && title.y + title.height <= box.y + box.height + 1,
-    }
-  }
-  const reference = await measure(1440, 900)
-  const narrow = await measure(820, 1100)
-  expect(narrow.height, `Last capture is ${narrow.height}px at 820, ${reference.height}px empty at 1440`).toBeGreaterThanOrEqual(reference.height)
-  expect(narrow.titleInside, 'the empty sentence sits inside its panel at 820').toBe(true)
+/* ux-wave1 B3 (A14). The "Last capture" panel does not change height when the first capture lands
+   (nothing on screen moves unless the person moved it). At the rail width the case measures the empty
+   panel, then the same panel in its has-a-receipt state at the same width, and asks for the two heights
+   to match. The receipt state is the attribute the screen itself sets after a capture (no capture is
+   taken here). The empty sentence must sit inside the viewport. Nothing is tuned to a pixel. */
+test('ux-wave1: at 820 the Last capture panel keeps its height when the first capture lands', async ({ page }) => {
+  await setViewport(page, { width: 820, height: 1100 })
+  await page.goto('/#/capture')
+  await page.locator('.capture-shell').waitFor()
+  await settleAnimations(page)
+  const panel = page.locator('.capture-last')
+  const note = page.locator('.capture-frame-last .capture-frame-title')
+  await expect(panel).toHaveAttribute('data-has-last', 'false')
+  await expect(note, 'the empty panel names its state').toHaveText(/nothing captured yet/i)
+  const empty = await panel.boundingBox()
+  const noteBox = await note.boundingBox()
+  const viewport = await page.evaluate(() => window.innerHeight)
+  expect(noteBox !== null && noteBox.y + noteBox.height <= viewport, 'the empty sentence is inside the viewport').toBe(true)
+  expect(
+    noteBox !== null && empty !== null && noteBox.y + noteBox.height <= empty.y + empty.height + 1,
+    `the empty sentence sits inside its panel at 820 (panel ${empty?.height}px, sentence bottom ${noteBox ? Math.round(noteBox.y + noteBox.height) : 'none'}, panel bottom ${empty ? Math.round(empty.y + empty.height) : 'none'})`,
+  ).toBe(true)
+
+  await panel.evaluate((el) => el.setAttribute('data-has-last', 'true'))
+  await settleAnimations(page)
+  const receipt = await panel.boundingBox()
+  expect(empty?.height ?? 0, `empty panel ${empty?.height}px, with a receipt ${receipt?.height}px`).toBeCloseTo(receipt?.height ?? -1, 0)
 })
