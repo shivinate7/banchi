@@ -464,10 +464,10 @@ function Ribbon({ plot, live }: { readonly plot: Ribbon; readonly live: boolean 
   )
 }
 
-/** The cards a run holds, as the wire says: the join's count, else the selection's. Null where the
+/** The cards a run holds, as the wire says: the join's count, else the selection that ran (`scope.cards`, null for a whole box). Null where the
  *  run has neither (a whole box not yet joined), so the row says nothing rather than a guess. */
 function runCards(run: RunSummary): number | null {
-  const n = run.counts.cards_in ?? run.counts.cards ?? run.scope?.cards
+  const n = run.counts.cards_in ?? run.scope?.cards
   return typeof n === 'number' ? n : null
 }
 
@@ -911,7 +911,7 @@ export function Home() {
                         ))}
                       </span>
                       {/* DATE, CLOCK TIME AND THE CARDS READ, AND NOTHING ELSE (R3, D196). The number is
-                          the join's `cards_in`; a run not yet joined names its selection instead. */}
+                          the join's `cards_in`; a run not yet joined shows no number. */}
                       <span className="home-run-meta">
                         {/* The spaces keep the three facts apart for a reader that skips the CSS seam. */}
                         <span>{absoluteDate(run.updated_at ?? run.created_at)}</span>{' '}
