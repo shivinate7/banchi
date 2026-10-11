@@ -18,7 +18,7 @@ Two answers are the orchestrator's defaults, not the owner's rulings. The owner 
 
 D83 (a card leaves a box through a third door: moved) built the move as a card-level act. A card lands at the back of the destination. Its divider and its section name stay in the source box. D83 says that `Box.section_names` has no write path on a move. The comment on `store/master.py:Box` says the opposite. The code does what D83 says, so the comment is false.
 
-The owner does not think of a move as many cards. The owner thinks of a section as one object. Under D83, a moved section joins the destination's last section, and an empty divider stays in the source box. So after one move, the map and the physical box disagree.
+The owner thinks of a section as one object, not as many cards. Under D83, a moved section joins the destination's last section, and an empty divider stays in the source box. So after one move, the map and the physical box disagree.
 
 D83 also says a box emptied by a merge cannot be reclaimed. The box map review read D134 (a departed record is buried, not kept) as making that sentence stale, so a merged-out box could be deleted now. That reading is proposed. It awaits the owner's word.
 

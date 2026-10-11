@@ -4,17 +4,19 @@
 says it exactly. A status date ("DORMANT as of ...") goes stale with no reader to notice.
 Prose is rewritten in place and holds only what is true now.
 
-**What follows.** New prose carries no date. CLAUDE.md carries none. An existing date goes when its
+**What follows.** New prose carries no history date. CLAUDE.md carries none. An existing history date goes when its
 file is next rewritten. Never in a sweep: a sweep spends review on text nobody is editing.
+
+**A deadline date is allowed.** It is a date something will stop or must happen, such as a provider's shutdown on 2027-03-01. A reader needs that fixed future fact, and git cannot supply it. A history date, when something happened, stays out. Git keeps it.
 
 **A decision file is a rule, not a log.** A change rewrites it. Old records are deleted, not archived, and git keeps them. A reader, a citation or a check that would break is not a reason to keep a record. Judge it by what it protects.
 
-**A decision entry is no exception.** It loses its dates when it is next edited, like any other file.
+**A decision entry is no exception.** It loses its history dates when it is next edited, like any other file.
 A new entry adds none. Git dates the commit.
 
 **Fact that would date this entry.** A prose date that a reader needs and git cannot supply, such as
 a vendor's release date. Name that source, and the source dates itself.
 
 **NOT MECHANIZED.** A machine cannot tell a date from a version number, a port or a test fixture
-without reading intent. A per-file ratchet would count fixtures. CLAUDE.md's "No date in repo
+without reading intent. A per-file ratchet would count fixtures. CLAUDE.md's "No history date in repo
 prose" rule carries the argument.

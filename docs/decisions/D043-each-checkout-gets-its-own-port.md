@@ -9,9 +9,9 @@
 
 The second case is silent and cannot be undone. Neither screen says which process replied.
 
-**Half of this was already fixed, and the half left is the one that writes.** `app/devPort.ts` had already given each checkout its own **Vite** port. Before that, `make design-check` ran in a worktree attached to the main tree's dev server. It asserted `docs/DESIGN.md`'s floors against code the worktree had never seen, and it passed. The shared PORT is the whole fault. The fix stopped at Vite and Playwright. The capture server writes photographs and inventory to disk, and it kept the shared constant.
+**`app/devPort.ts` gave each checkout its own Vite port. The shared PORT was the fault that remained.** The fix stopped at Vite and Playwright. Before it, `make design-check` in a worktree attached to the main tree's dev server, asserted `docs/DESIGN.md`'s floors against code the worktree had never seen, and passed. The capture server writes photographs and inventory to disk, and it kept the shared constant.
 
-**`app/tests/inventory.spec.ts` had already described the bug.** Its stubs are justified in a comment. The comment says an unstubbed read goes to whatever listens on port 8000. In this repo, that is the owner's live capture server over the live 767-card inventory. The defect was observed, worked around locally, and never filed.
+**`app/tests/inventory.spec.ts` described the bug in a comment.** An unstubbed read goes to whatever listens on port 8000: the owner's live capture server over the live 767-card inventory. The defect was observed, worked around locally, and never filed.
 
 ### One slot, two ports
 
@@ -39,7 +39,7 @@ The slot is the `sha256` of the checkout's canonical path, first four bytes, mod
 
 `.claude/launch.json` was fixed in a later change. It was tracked, and it hardcoded `"port": 5173`. That is right in the main tree and wrong in every linked worktree. `vite.config.ts`, `playwright.config.ts`, `server/capture_server.py` and `app/src/server.ts` all use the derivation. The Browser pane's launch config did not. So `preview_start` would start THIS tree's dev server on its own port, then open a tab on 5173.
 
-**That is this entry's defect in a different form, and the worse half.** A dead tab is a nuisance. A tab on 5173 while the main tree's `make dev` runs is a worktree **previewing main and looking like it worked**. `app/devPort.ts` records the same silent-wrong-answer shape for `make design-check`. It calls it the worst shape a check can fail in, because the only signal it gives is the one you were hoping for.
+**This is the same defect in a different form, and the worse half.** A dead tab is a nuisance. A tab on 5173 while the main tree's `make dev` runs is a worktree **previewing main and looking like it worked**. `app/devPort.ts` records the same silent-wrong-answer shape for `make design-check`. It calls it the worst shape a check can fail in, because the only signal it gives is the one you were hoping for.
 
 **A tracked file cannot hold a per-checkout value, so the file is no longer tracked.** `.claude/launch.json` is gitignored. `make launch-config` writes it from `server/ports.py`, the same derivation the other four readers use, so all five agree. The target hangs off `make venv`, the documented first step in a fresh clone, and `make worktree-setup` calls it. It is also a standalone target, because **the port follows the PATH**. A renamed worktree needs the file written again.
 
@@ -49,9 +49,9 @@ The slot is the `sha256` of the checkout's canonical path, first four bytes, mod
 
 **The trade was wrong about what an absent file costs. It took twenty-three days and a measurement to see.** The paragraph above reasons that absent beats wrong. It does not. **Nothing leaves the file absent.** The Browser pane's instructions tell an agent that finds no `launch.json` to create one from a template with a literal port. So absent lasts until the first `preview_start`. Then it becomes wrong, written by a session that had no way to know this repo derives the number. Absent is not the safe end of the trade. It is the entrance to the unsafe end.
 
-**Measured across the five worktrees of this clone:** four correct, one absent, and one holding a hand-written **5173** that nobody remembered writing. That was the tree the measurement ran in. It is a linked worktree whose Browser pane would start its own dev server on 5470, then open a tab on the MAIN TREE's port.
+**Measured across the five worktrees of this clone:** four correct, one absent, and one holding a hand-written **5173**. That linked worktree's Browser pane would start its own dev server on 5470, then open a tab on the MAIN TREE's port. That was the tree the measurement ran in.
 
-**The absent one became a 5173 while the fix was being written.** `card-sku-stamping-fix-d11945` had no config at 10:16. At 10:29 it had one naming **5173** against a derived **5313**. A session in that worktree wrote it from the template, in the twenty minutes between the two readings. Nobody was careless. The port is a fact about the checkout's path, and nothing inside a tool that offers a template can know it. **The absent state is not a resting state. It decays in one direction.**
+**An absent file became a wrong one within twenty minutes.** `card-sku-stamping-fix-d11945` had no config, then one naming **5173** against a derived **5313**. A session in that worktree wrote it from the template. The port is a fact about the checkout's path, and nothing inside a tool that offers a template can know it. **The absent state is not a resting state. It decays in one direction.**
 
 **The fault was that the fix was a Makefile target, and a target runs only when somebody runs it.** `make launch-config` hangs off `make venv`, which `make worktree-setup` calls. So it reaches only worktrees provisioned that way. The five readers this entry moved onto one derivation are code, and code runs whether or not anyone remembers. This one was a file that somebody had to ask for.
 

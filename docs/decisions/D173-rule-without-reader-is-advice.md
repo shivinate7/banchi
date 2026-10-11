@@ -6,7 +6,7 @@ The owner's instruction has two halves: mechanize every rule that can be mechani
 
 ### The argument
 
-**This repo's prose is bypassed, and not by sessions that had not read it.** That is the whole case, and every item in it landed inside twenty-four hours on 2026-09-11/12:
+**This repo's prose is bypassed, and not by sessions that had not read it.** That is the whole case. Every item below landed inside twenty-four hours:
 
 - A session wrote `a-pgrep-waiter-matches-itself` into its own memory directory,
 **read that file in the session** , and then wrote the exact waiter loop it forbids. The loop

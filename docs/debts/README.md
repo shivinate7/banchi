@@ -44,7 +44,7 @@ DEBT23 A sale fixture that moves after the press is only wrong sometimes, so no 
 DEBT25 A cited number still resolves when it is the wrong one, and no check can read what a sentence is about
 DEBT26 The Intelligent Mail barcode encoder is written, correct against the Postal Service's own examples, and parked on a branch
 DEBT27 `Fulfillment.tsx`'s store-wide `GET /inventory` browse is argued and left
-DEBT30 The copies panel flash guard is shelved, on the owner's own word
+DEBT30 The copies panel flash guard is shelved by owner ruling
 DEBT31 The path guard never reads code, so a decision cited by path in a comment goes unchecked
 DEBT32 The archive sweep stays a press, and the owner intends to schedule it eventually
 DEBT33 An answered queue entry can never resurface, even when it is wrong

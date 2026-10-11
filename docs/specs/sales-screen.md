@@ -1,10 +1,9 @@
 # Sales: the gross-revenue screen
 
-**Status: BUILT.** `#/revenue` is a nav row on purpose. It was tried off-nav and reversed on the
-owner's word. D214 (sales shows gross, never profit) records why it is its own route and why it is
-gross-only. D217 (sales sorts, filters and deep links) records the sort, filter, cross-filter,
-drill-down and URL work. `docs/specs/sales-plan.md` holds what was built beside it, and
-`docs/specs/sales-findings.md` holds the open findings.
+**Status: BUILT.** `#/revenue` is a nav row on purpose. It was tried off-nav and the owner reversed that. D214 (sales shows gross, never profit) records
+why it is its own route and why it is gross-only. D217 (sales sorts, filters and deep links) records
+the sort, filter, cross-filter, drill-down and URL work. `docs/specs/sales-plan.md` holds the build
+record, and `docs/specs/sales-findings.md` holds the open findings.
 
 ## What it answers
 
@@ -93,12 +92,12 @@ entry.
 
 ## Mix: a view inside Sales (`#/revenue?lens=mix`)
 
-**Status: BUILT.** The owner approved a Mix view inside Sales, not a new route. D214
-(sales shows gross, never profit) keeps its rules: Mix is a lens on the same retrospective job, and
-it adds no profit, fee or cost figure. D31 (one owner-side view of stored cards) stays whole: Mix
-draws counts and sums and never a card walk. `ROUTES` gains no row, so the route census and
-README's route table do not move. A `Segmented` control, `Sales | Mix`, sits under the page
-heading and writes `lens` (Sales keeps `view` for singles, sealed and all).
+**Status: BUILT.** Mix is a view inside Sales, not a new route (owner ruling). D214 (sales shows
+gross, never profit) keeps its rules: Mix is a lens on the same retrospective job, and it adds no
+profit, fee or cost figure. D31 (one owner-side view of stored cards) stays whole: Mix draws counts
+and sums and never a card walk. `ROUTES` gains no row, so the route census and README's route table
+do not move. A `Segmented` control, `Sales | Mix`, sits under the page heading and writes `lens`.
+Sales keeps `view` for singles, sealed and all.
 
 **The job.** A pivot over what the owner captured, holds and sold, to decide what to capture next.
 Filters on any dimension. Rows and columns split by any dimension. A choice of measures.

@@ -313,7 +313,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **Check whether a task is yours before you hand it to the owner.** Grep the routes, the Commands block and
   `docs/map.py` first. **NOT MECHANIZED:** a machine cannot read a sentence to a person and decide whether
   this repo can already do it.
-- **No date in repo prose.** History is git's. Rewrite a claim in place, and keep only what is true now.
+- **No history date in repo prose.** D308 (no dates in repo prose) allows a deadline date. History is git's. Rewrite a claim in place, and keep only what is true now.
   Old dates go when their file is next rewritten. Never in a sweep. A decision file is a rule, not a log. A change rewrites it.
   Old records are deleted, not archived. See D308 (no dates in repo prose).
   **NOT MECHANIZED:** a machine cannot tell a date from a version number, a port or a test fixture without intent.

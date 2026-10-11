@@ -1,88 +1,89 @@
 ## D142 — Setup outlives the browser
 
-**Settled from the owner's instructions about the screen they spend the most hours in.** Four instructions in one message, three about memory and one about what a box is called:
+**Ruling: the capture setup persists on the device, not per browser session.** The owner gave four instructions in one message. Three concern memory. One concerns what a box is called.
 
-- Capture's box picker orders boxes as Inventory does, most recently selected or most filled first, not by box number.
+- Capture's box picker orders boxes as Inventory does: most recently selected or most filled first. It does not order by box number.
 - Capture remembers the last-used settings, game and camera included, as a session history.
 - A quick clear-all-settings button.
 - Box numbers are not shown on the capture screen.
 
 ### D27's premise was wrong about shifts, and the owner is the authority on that
 
-**D27 put seven values in `sessionStorage` and gave one reason**: *"a new tab is a new shift and closing the browser ends one."* That is a claim about how the operator works, not about how a browser works. The person it describes says it is false. A shift ends when they stop feeding cards. The browser closing is a laptop lid; a new tab is a link opened from somewhere else. Neither is a fact about the stack on the desk.
+D27 put seven values in `sessionStorage`, with one reason: "a new tab is a new shift and closing the browser ends one." That is a claim about how the operator works, not about how a browser works. The owner, who works at this screen, says it is false. A shift ends when they stop feeding cards. Closing the browser is a laptop lid. A new tab is a link opened from elsewhere. Neither is a fact about the stack on the desk.
 
-**The camera was already the counter-example and had been since before D27 existed.** `useCamera.ts` has held `banchi.capture.deviceId` and `banchi.capture.rotation` in `localStorage` from the beginning. It argued informally what D27 later generalised. The owner's message names the camera and the game in one breath, as two things that should behave the same way. They were behaving differently, and nothing about either value explains why.
+The camera was already the counter-example. `useCamera.ts` has kept `banchi.capture.deviceId` and `banchi.capture.rotation` in `localStorage` from the start. The owner's message names the camera and the game together, as two things that should behave alike. They behaved differently, and nothing explained why.
 
-**So six of the seven move to the device**: box, game, set hint, finish, rarity claim, product. `app/src/deviceMemory.ts` holds them as `banchi.capture.setup`. They sit under the same `banchi.capture.*` prefix the camera already used, so everything this screen remembers about this machine now sits under one name.
+**Six of the seven move to the device:** box, game, set hint, finish, rarity claim and product. `app/src/deviceMemory.ts` holds them as `banchi.capture.setup`. That key sits under the `banchi.capture.*` prefix the camera already used. Everything this screen remembers about the machine now sits under one name.
 
-### ONE DOCUMENT, NOT SIX KEYS
+### One document, not six keys
 
-**It is one habit.** "The setup I work at" is a single thing the operator arranges once and clears in one press. `banchi.orders.fetch-filter` makes this argument already for its own two fields — *"splitting them would put two rows in `CLAUDE.md`'s roster for one habit"* — and it holds harder at six.
+"The setup I work at" is one thing. The operator arranges it once and clears it in one press. `banchi.orders.fetch-filter` makes the same argument for its two fields. The argument holds harder at six.
 
-**And it makes the clear one removal rather than six that can fail apart.** `localStorage` throws on the accessor in a private window. It can also throw on quota. Six writes have five ways to half-succeed and leave a setup that is neither the old one nor nothing.
+The clear is one removal, not six writes that can fail apart. `localStorage` throws on the accessor in a private window, and it can throw on quota. Six writes have five ways to half-succeed. A half-written setup is neither the old one nor nothing.
 
-**What it gave up is the absent-means-empty trick, and that turned out to be worth nothing.** Each old key stored "empty" as ABSENT so a cleared field and an unwritten one read alike. A document is present or absent as a whole. So `storedCaptureSetup` reads a missing FIELD as the same nothing it reads a missing document as. An empty list can be stored as an empty list. What the wire carries is unchanged: an empty claim is still no claim (D3), and the screen still omits the key from the capture.
+The cost is the absent-means-empty trick. Each old key stored "empty" as absent, so a cleared field and an unwritten one read alike. A document is present or absent as a whole. So `storedCaptureSetup` reads a missing field as nothing, the same as a missing document. An empty list can be stored as an empty list. The wire is unchanged. An empty claim is still no claim (D3), and the screen still omits the key from the capture.
 
-### `captureId` DID NOT MOVE, AND IT IS WHAT THE CARVE-OUT WAS ALWAYS FOR
+### `captureId` does not move
 
-**A restored setting is a claim on screen that is one press from being right. A restored `captureId` is a request for a card nobody is holding.** It is the in-flight id of a capture whose response was lost. Everything about it is scoped to one page load. It was minted for a photograph being taken now, and it is answered or abandoned within seconds. The banner it raises asks the operator to put THAT card back at the lens.
+A restored setting is a claim on screen, one press from right. A restored `captureId` is a request for a card nobody is holding. It is the in-flight id of a capture whose response was lost. It is scoped to one page load. It was minted for a photograph taken now, and it is answered or abandoned within seconds. The banner it raises asks the operator to put that card back at the lens.
 
-**Restoring it into a new shift would be strictly worse than losing it.** The banner would name a capture that resolved yesterday. The honest answer to it, which is to feed that card again, burns a position under D10's high-water mark. Session scope is what holds the window to "this page load", which is the only window the banner's own sentence is true in.
+Restoring it into a new shift would be worse than losing it. The banner would name a capture that resolved yesterday. Feeding that card again burns a position under D10's high-water mark. Session scope keeps the window to "this page load", the only window in which the banner's sentence is true.
 
-**D27 is amended rather than overturned.** Its reason for existing is this value; what it got wrong is the six it generalised to. `banchi.run-scope` (D39) is unaffected and stays for its own stated reason: reading nothing is its safe answer by construction.
+D27 is amended, not overturned. Its reason for existing is this value. What it got wrong is the six it generalized to. `banchi.run-scope` (D39) is unaffected and stays for its own reason: reading nothing is its safe answer by construction.
 
-### THE BOX LIST IS ORDERED BY THE HAND, AND IT IS THE SAME STORE `#/inventory` USES
+### The box list is ordered by the hand, from the same store as `#/inventory`
 
-**The field's own comment had already conceded the point.** It sorted by number and took the highest nine, on the reasoning that *"boxes are allocated upward and recency is not a fact either route carries"*. True of the ROUTES, and it stopped being true of the BROWSER when D132 started recording which boxes the hand opened. The proxy fails exactly where it matters. A drawer fed for three weeks sinks below every box made since. The one box that can never sink is the one made last. That is the one case nobody needs help finding.
+The field's old comment sorted by number and took the highest nine. Its reason: "boxes are allocated upward and recency is not a fact either route carries." That stopped being true when D132 began recording which boxes the hand opened. The number proxy fails where it matters. A drawer fed for three weeks sinks below every box made since. The box made last never sinks, and that is the one box nobody needs help finding.
 
-**Three terms, D132's rail comparator exactly**. The terms are: the box this browser last reached for, then the box holding the most cards, then the number. The number is the last thing the owner thinks in, and so the last thing this sorts by. `on_hand` and not `cards`, `fill` or `next_index`, for D132's reason — a box full of sold records is not a box worth reaching for.
+The sort uses D132's rail comparator, in three terms. First, the box this browser last reached for. Then the box holding the most cards. Then the number. The number is the last thing the operator thinks in, so it sorts last. The fill term uses `on_hand`, not `cards`, `fill` or `next_index`, for D132's reason: a box full of sold records is not worth reaching for.
 
-**ONE STORE, SHARED, AND THAT IS A RULING RATHER THAN AN ECONOMY.** Capture could have kept a recency store of its own. The argument against it is that there is one operator with one hand. Photographing into box 7 and then walking to `#/inventory` is the same person still thinking about box 7. A rail that opened on some other drawer would be answering a question nobody asked. The shared store is what makes the second screen agree with the first without either knowing about the other.
+**Ruling: one store, shared.** Capture could have kept a recency store of its own. The argument against it is that one operator has one hand. Photographing into box 7 and then opening `#/inventory` is the same person still thinking about box 7. A rail that opened on another drawer would answer a question nobody asked. The shared store makes the second screen agree with the first, and neither needs to know about the other.
 
-**So the key is renamed** — `banchi.inventory.box-recency` to `banchi.box-recency`. Two screens write it now, and the old name said which SCREEN had written the fact instead of what the fact is. **No migration**. That is D27's own second-amendment rule, and the reason a read-time fallback was declined there. The cost is one sitting of the fallback order until the first box is opened or captured into.
+The key is renamed from `banchi.inventory.box-recency` to `banchi.box-recency`. Two screens write it now, and the old name named the screen that wrote it, not the fact. There is no migration. That follows D27's second-amendment rule, which declined a read-time fallback. The cost is one sitting on the fallback order, until the first box is opened or captured into.
 
-**A PICK IS A REACH AND A CAPTURE IS NOT.** Only `chooseBox` touches the store. A capture fires once per card at a measured 623 ms cadence. So touching there would put a `localStorage` read-modify-write on the feeder's hot path, hundreds of times a box. That would re-record a fact that has not changed since the pick that preceded every one of them. A page LOAD is not a reach either. That is `BoxBrowse`'s own rule: the restore carries the box the operator last picked, and that pick already wrote its stamp.
+**A pick is a reach. A capture is not.** Only `chooseBox` writes the store. A capture fires once per card at a measured 623 ms cadence. Writing there would put a `localStorage` read-modify-write on the feeder's hot path, hundreds of times a box. It would re-record a fact that the pick before each capture already recorded. A page load is not a reach either. `BoxBrowse`'s rule applies: the restore carries the box the operator last picked, and that pick already wrote its stamp.
 
-### A RESTORED BOX IS CHECKED AGAINST THE STORE, AND FAILS SOFTLY
+### A restored box is checked against the store and fails softly
 
-**Photographing into the wrong drawer is the expensive failure on this screen**. The setup now outlives the browser, so the gap between "the box I last picked" and "a box that still exists and still takes cards" can be days wide. Between two sittings a box can be sealed (D20) or deleted (D34's panel). Or it can be **deleted and its number handed to a different physical drawer** by `next_box_number`'s lowest-free allocation. The first two are refused at the shutter anyway. **The third was refused nowhere when this entry was written, and this entry BUILT two of the three it had just enumerated**. Box 7 exists and takes cards, so a reallocated number passed every test the restore made. It is simply not the box the operator thinks they are looking at. **That gap is closed (D153), and the closing needed a fact this entry did not have**. The closing needed a drawer's identity, which D145 gave it. The sentence below described two cases in words that read as three. It is corrected rather than deleted, because the overclaim is the defect worth remembering.
+Photographing into the wrong drawer is the expensive failure on this screen. The setup outlives the browser, so the gap between "the box I last picked" and "a box that still exists and takes cards" can be days wide. Between sittings, a box can be sealed (D20) or deleted (D34's panel). It can also be deleted, with its number handed to a different physical drawer by `next_box_number`'s lowest-free allocation.
 
-**So the restore falls back to NO SELECTION, never to a guess**. It applies to the box that is GONE, the box that is SEALED here, and the reallocated one since D153. It names the box it let go of, says why, and opens the field with focus in the entry. That is the state `Pick a box` would have put them in, so the remedy is the press they were about to make.
+The first two were refused at the shutter already. The third was refused nowhere when this entry was written, and this entry built two of the three cases it had just listed. Box 7 exists and takes cards, so a reallocated number passed every test the restore made. It was not the box the operator thought they were looking at. D153 closes that gap. The close needed a drawer's identity, which D145 supplies. The earlier text here described two cases in words that read as three. It is corrected, not deleted, because the overclaim is the defect worth remembering.
 
-**It waits for the answer, not for a non-empty list.** `boxRecords` starts `[]`. `[]` is also what a store with no boxes returns. Judging on emptiness would clear a good box on every slow fetch. On a cold capture server, that is every fetch. A separate flag records that `GET /boxes` actually answered.
+The restore falls back to no selection, never to a guess. That applies to a box that is gone, a box sealed here, and a reallocated box since D153. The screen names the box it let go of, says why, and opens the field with focus in the entry. That is the state `Pick a box` would have produced, so the remedy is the press the operator was about to make.
 
-### THE CLEAR ASKS FIRST, THEN GIVES A RECEIPT AND A WAY BACK
+The restore waits for the answer, not for a non-empty list. `boxRecords` starts as `[]`. A store with no boxes also returns `[]`. Judging on emptiness would clear a good box on every slow fetch, and on a cold capture server that is every fetch. A separate flag records that `GET /boxes` answered.
 
-**The press opens a confirmation (owner's ruling, replacing the earlier no-dialog press).** It carries the sentence that used to sit under the button and a Clear button; Esc cancels, Enter confirms. Only the confirm clears. The screen then visibly returns to its empty state, and a receipt toast carries an Undo.
+### The clear asks first, then gives a receipt and a way back
 
-**It clears choices about CARDS and leaves the RIG alone.** Box, game, set hint, rarity, finish and product are decisions about the stack in front of the operator. The next stack is a different decision. The camera and the rotation are which hardware is plugged in and which way it is mounted (D13) — the same tomorrow as today. Clearing those would mean re-picking a 4K capture card to start a run that needs none of it re-picked. So the confirmation says what it leaves behind.
+**Owner ruling (replacing the earlier no-dialog press).** The press opens a confirmation. The confirmation carries the sentence that used to sit under the button, and a Clear button. Esc cancels, and Enter confirms. Only the confirm clears. The screen then shows its empty state. A receipt toast carries an Undo.
 
-**It leaves `banchi.box-recency` alone too**. That is the same line drawn once more. The clear is about the setup, not about which drawers this hand has been in.
+The clear covers choices about cards and leaves the rig alone. Box, game, set hint, rarity, finish and product are decisions about the stack in front of the operator. The next stack is a different decision. The camera and the rotation describe which hardware is plugged in and how it is mounted (D13). Those are the same tomorrow as today. Clearing them would make the operator re-pick a 4K capture card for a run that needs no change. So the confirmation says what it leaves behind.
 
-**The game goes to the registry's default, not to null.** A null game draws the blocked reason for a registry that has not ARRIVED — *"Waiting for the game list from the server"* — which after a successful load is simply untrue. A fresh browser does not sit on no game either; `loadGames` puts it on `registry.default`. That IS nothing chosen, for this one field.
+The clear also leaves `banchi.box-recency` alone. That is the same line, drawn again. The clear covers the setup, not the drawers this hand has been in.
 
-**Quiet, not danger.** It destroys nothing, `docs/DESIGN.md` reserves red for acts that do, and the sentence under it names the store explicitly. This is the screen where cards are made and "clear" is a word that could be misread.
+The game goes to the registry's default, not to null. A null game shows the blocked reason "Waiting for the game list from the server". After a successful load, that text is untrue. A fresh browser does not sit on no game either, because `loadGames` sets `registry.default`. For this one field, the default means nothing chosen.
 
-**No keyboard binding, deliberately.** Every unmodified letter at rest is spoken for by `FIELD_KEYS` plus `c`/`u`/`s`. A reset on a bare letter at a rig is a mis-press that wipes the setup mid-run. At the rig, the operator is pressing keys fast with a card in hand. The owner asked for a button. `SHORTCUTS` gains nothing, which is the correct outcome rather than an omission.
+**Quiet, not danger.** The clear destroys nothing. `docs/DESIGN.md` reserves red for acts that destroy. The sentence under the button names the store. This is the screen where cards are made, and "clear" could be misread.
 
-### THE BOX NUMBER COMES OFF THIS SCREEN, AND OFF THIS SCREEN ONLY
+**No keyboard binding, on purpose.** Every unmodified letter at rest is taken by `FIELD_KEYS` plus `c`, `u` and `s`. A reset on a bare letter at the rig is a mis-press that wipes the setup mid-run. At the rig the operator presses keys fast, with a card in hand. The owner asked for a button. `SHORTCUTS` gains nothing. That is the correct outcome, not an omission.
 
-**D20 is what makes the instruction answerable**. A box is addressed by its name, and names are unique. So `RB Epics` identifies a drawer as completely as `Box 3` does. It identifies it in the word the operator actually thinks in. At the lens they are not walking a shelf or reading a path. They are putting cards into the box open on the desk, and they named it.
+### The box number comes off this screen, and off this screen only
 
-**An unnamed box still draws its number, and that is not an exception.** D20 makes a name unique and deliberately NOT required. A box with none is an ordinary box. Its number is the only thing it has to be called. A placeholder in the name's place would draw a fault where there is none (D56). The number is removed as the thing the operator reads PAST, never as the thing a box is.
+D20 lets the instruction work. A box is addressed by its name, and names are unique. So `RB Epics` identifies a drawer as completely as `Box 3` does. It identifies the drawer in the word the operator thinks in. At the lens, the operator is not walking a shelf or reading a path. They are putting cards into the open box, and they named it.
 
-**`runScope.ts:captureBoxLabel` is that rule, beside `boxLabel` rather than inside it.** Every other screen keeps `Box 3 · RB Epics` for the reason written there: the number is the shelf, the photograph directory, and what every refusal in `server/pipeline_routes.py` names. The capture screen is the one place the operator is holding the physical box.
+An unnamed box still draws its number. That is not an exception. D20 makes a name unique but does not require one. A box with no name is an ordinary box, and its number is the only thing it can be called. A placeholder in the name's place would draw a fault where there is none (D56). The number leaves this screen as the thing the operator reads past. It is never the thing a box is.
 
-**The PICKER keeps the number, inverted.** The name leads, and `Box 3` trails as a de-emphasised suffix. The entry above it searches number and name together. A row that hid the number would answer a search for `9` with nine rows that do not visibly contain a 9. That is the one place on this screen where the number is still doing a job.
+`runScope.ts:captureBoxLabel` holds that rule, beside `boxLabel` rather than inside it. Other screens keep `Box 3 · RB Epics`. The number is the shelf, the photograph directory, and what every refusal in `server/pipeline_routes.py` names. The capture screen is the one place where the operator holds the physical box.
 
-**AMENDED (D153), AFTER THE OWNER SAW THIS LIST**: on the capture screen the box numbers were waste of space. The reason above is correct and was spent too widely. It is about a row's answer to a TYPED NUMBER. It was applied to every row, always. The suffix is now drawn only where the row matched BECAUSE of a number the operator typed. So the list is names at rest, and the `9` case is untouched. The reason survives the amendment intact; what changed is its scope.
+The picker keeps the number, inverted. The name leads, and `Box 3` trails as a de-emphasized suffix. The entry above the list searches number and name together. A row that hid its number would answer a search for `9` with nine rows that do not visibly contain a 9. That is the one place on this screen where the number still does a job.
 
-**Nothing else moved.** `pipeline/join.py:Position` is untouched, including on this screen's own filmstrip and receipts: the Fulfiller reads those, and he is walking a shelf he did not pack. Nothing on the wire changed and no route was added.
+**Amended (D153), after the owner saw this list.** On the capture screen, box numbers were wasted space. The reason above is correct, but it was applied too widely. It concerns a row's answer to a typed number. It was applied to every row, always. Now the suffix draws only where the row matched because of a number the operator typed. So the list shows names at rest, and the `9` case is unchanged. The reason survives. Its scope changed.
+
+**Nothing else moved.** `pipeline/join.py:Position` is untouched, including on this screen's filmstrip and receipts. The Fulfiller reads those, and walks a shelf they did not pack. The wire is unchanged, and no route was added.
 
 ### What would reopen it
 
-**A second person at a second rig.** Every argument here assumes one operator with one hand and one desk — the shared recency store most of all. Two people feeding two rigs from one browser profile would make "most recently reached for" a question with two answers. The right shape then is probably per-rig rather than per-device.
+- **A second person at a second rig.** Every argument here assumes one operator, one hand and one desk. The shared recency store most of all. Two people feeding two rigs from one browser profile would make "most recently reached for" a question with two answers. The right shape then is probably per rig, not per device.
+- **A box whose name is not the word the operator uses.** The rendering assumes that the name is what they recognize. If drawers are named by content and referred to by position, the number comes back.
 
-**A box whose name is not the word the operator uses.** The rendering assumes that the name is what they recognise. If drawers start being named by content and referred to by position, the number comes back.
-
-Capture asks for a box on a fresh device ("No box yet") and Home's tile says so.
+Capture asks for a box on a fresh device ("No box yet"), and Home's tile says so.
