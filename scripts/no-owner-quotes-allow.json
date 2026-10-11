@@ -13,16 +13,6 @@
         "verbatim:"
       ]
     },
-    "docs/decisions/D103-staleness-filters-it-never-gates.md": {
-      "lane": "cut pass",
-      "marker": [
-        "verbatim:",
-        "The owner's words",
-        "verbatim:",
-        "The owner's words",
-        "verbatim:"
-      ]
-    },
     "docs/decisions/D136-suite-sharded-never-widened.md": {
       "lane": "cut pass",
       "marker": [
@@ -91,19 +81,6 @@
         "The owner's words"
       ]
     },
-    "docs/decisions/D254-resolve-a-product-from-its-sku.md": {
-      "lane": "cut pass",
-      "marker": [
-        "verbatim:"
-      ]
-    },
-    "docs/decisions/D264-a-section-moves-as-one-object.md": {
-      "lane": "cut pass",
-      "marker": [
-        "The owner's words",
-        "verbatim:"
-      ]
-    },
     "docs/decisions/D271-every-search-uses-one-matcher.md": {
       "lane": "cut pass",
       "marker": [
@@ -131,13 +108,6 @@
     "docs/decisions/D287-home-keeps-shape-five-stages.md": {
       "lane": "cut pass",
       "marker": [
-        "verbatim:"
-      ]
-    },
-    "docs/decisions/D291-runs-fold-into-review.md": {
-      "lane": "cut pass",
-      "marker": [
-        "The owner's words",
         "verbatim:"
       ]
     },
