@@ -7,14 +7,13 @@ import {
 import type { HoldingsRange, HoldingsTotal, HoldingsValuePayload, OrderRow } from './types'
 import {
   Button, CardThumb, EmptyState, Icon, IconButton, Money, Notice, Page, Pill,
-  ProductLink, ReloadButton, Segmented, SortHeader, type SortValue,
+  FilterBar, ProductLink, ReloadButton, Segmented, SortControl, SortHeader, type SortValue,
 } from './kit'
 import { moneyGrouped } from './money'
 import { salesOf, sum, type Sale } from './revenueMath'
 import { absoluteDate, localDay, monthOf, saleDate, weekOf } from './dates'
 import { useCardCropWhenSeen } from './cardCrop'
 import { didYouMean, matchQuery } from './kit/match'
-import { SearchField } from './SearchField'
 import { ReadingAge } from './CardLocations'
 import { LensSwitch, MixView } from './MixView'
 import { useViewQuery } from './kit/viewState'
@@ -1232,18 +1231,21 @@ function SalesView() {
           options={PRODUCT_VIEWS}
           onChange={setView}
         />
-        <Segmented
-          label="Sort"
-          value={sortKey}
-          options={SORT_KEYS.map((k) => ({ value: k, label: SORT_SEGMENT_LABEL[k] }))}
-          onChange={(k) => {
-            setSortKey(k)
-            if (k !== sortKey) setSortDir(DEFAULT_DIR[k])
-          }}
+        <FilterBar
+          className="revenue-search"
+          facets={[]}
+          value={{}}
+          onChange={() => {}}
+          count={{ shown: products.length, total: products.length, quietAtRest: true }}
+          search={{ query, onChange: setQuery, placeholder: 'Search' }}
+          beside={
+            <SortControl
+              options={SORT_KEYS.map((k) => ({ key: k, label: SORT_SEGMENT_LABEL[k], first: DEFAULT_DIR[k] }))}
+              value={sortValue}
+              onChange={(v) => { setSortKey(v.key); setSortDir(v.dir) }}
+            />
+          }
         />
-        <div className="revenue-search">
-          <SearchField value={query} onChange={setQuery} persona="owner" placeholder="Search" />
-        </div>
       </div>
 
       {products.length === 0 ? (
