@@ -24,7 +24,7 @@
  * NO PIPELINE WORD REACHES THE SCREEN (D196): not emit, not staged, not reconcile. */
 
 import { count } from './kit/dataRules'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Button, Icon, IconButton, Money, Notice, Refusal, Retry } from './kit'
 import { atClockTime, clockTime } from './dates'
 import { describeFailure, dismissSendWarning, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, takeBackSend } from './server'
@@ -540,6 +540,7 @@ export function SendCard({
   readonly onSent: () => void
 }) {
   const live = useLiveCheck()
+  const whyId = useId()
   const [phase, setPhase] = useState<'idle' | 'waiting' | 'sending' | 'downloading'>('idle')
   const [intent, setIntent] = useState<'send' | 'download'>('send')
   const [failure, setFailure] = useState<Failure | null>(null)
@@ -659,6 +660,9 @@ export function SendCard({
           ? latest
           : null
   const running = open.some((send) => send.state === 'sending')
+  /* AN INCOMPLETE LAST SEND HOLDS THE PRESS (R14): Send stays off until the owner has seen what is
+     missing, and the line beside it says why. */
+  const incomplete = latest?.state === 'short'
   const busy = phase !== 'idle' || running
   /* NOTHING READY, NOTHING TO PRESS (R4 F5): with no copy and no price change the press could
      only be refused, so it is disabled until a copy is ready. */
@@ -758,34 +762,24 @@ export function SendCard({
 
   return (
     <div className="send-card">
-      {open.map((send) => (
-        <SendStanding key={send.stamp} send={send} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} />
-      ))}
-
-      {standing === null ? null : (
-        <>
-          <SendStanding send={standing} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} />
-          {/* WHAT THE GUARD HELD BACK, ANSWERED TO THE PRESS THAT MADE IT. It is read once,
-              right after this visit's own send; a later visit does not carry it in the bar. */}
-          {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TrimList trimmed={standing.trimmed} /> : null}
-          {sent !== null && sent.stamp === standing.stamp ? <NotSent gone={standing.gone} /> : null}
-          {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TookOff taken={standing.taken_off} download={false} /> : null}
-          {sent !== null && sent.stamp === standing.stamp ? <PricesLeft send={standing} /> : null}
-        </>
-      )}
-
-      <div className="send-act" inert={!live.answered} data-waiting={live.answered ? undefined : ''} data-more={moreOpen ? 'open' : undefined}>
+      <div className="send-act" data-more={moreOpen ? 'open' : undefined}>
         <Button
           variant="primary"
           size="lg"
           icon="send"
           className="pricing-emit send-press"
           busy={phase === 'sending' || phase === 'waiting' || running}
-          disabled={busy || empty}
+          disabled={busy || empty || incomplete}
+          aria-describedby={incomplete ? whyId : undefined}
           onClick={() => press('send')}
         >
           {label}
         </Button>
+        {incomplete ? (
+          <span id={whyId} className="send-why">
+            Your last send is not all there yet.
+          </span>
+        ) : null}
         <span className="bn-sr" role="status">
           {doing}
         </span>
@@ -862,6 +856,10 @@ export function SendCard({
         <Refusal compact className="send-failure send-undo-failure" title={undoFailure.title} code={undoFailure.failure.code} detail={undoFailure.failure.message} />
       )}
 
+      {open.map((send) => (
+        <SendStanding key={send.stamp} send={send} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} />
+      ))}
+
       {(live.status?.unreadable ?? []).map((row) => (
         <Notice
           key={row.key}
@@ -900,6 +898,18 @@ export function SendCard({
       {warned.map((send) => (
         <TakenBackWarning key={send.stamp} send={send} dismiss={(stamp) => void dismiss(stamp)} dismissing={dismissing} />
       ))}
+
+      {standing === null ? null : (
+        <>
+          <SendStanding send={standing} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} />
+          {/* WHAT THE GUARD HELD BACK, ANSWERED TO THE PRESS THAT MADE IT. It is read once,
+              right after this visit's own send; a later visit does not carry it in the bar. */}
+          {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TrimList trimmed={standing.trimmed} /> : null}
+          {sent !== null && sent.stamp === standing.stamp ? <NotSent gone={standing.gone} /> : null}
+          {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TookOff taken={standing.taken_off} download={false} /> : null}
+          {sent !== null && sent.stamp === standing.stamp ? <PricesLeft send={standing} /> : null}
+        </>
+      )}
 
       {live.failure === null ? null : (
         <Retry
