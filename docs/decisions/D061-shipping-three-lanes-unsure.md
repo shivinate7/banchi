@@ -86,3 +86,5 @@ No route, no client function in `app/src/server.ts`, and no screen reaches eithe
 ### This entry's number
 
 Its number is free now that the number below it has merged. Two unmerged branches claimed it when this was written. That is the heading collision D16 records, in progress again. **The owner's rule: a session renumbers its OWN branch, never another's.** That is narrower than D16's renumber-by-position rule, and it does not conflict with it. D16 settles headings that have already landed. This rule settles who yields before they land: the incoming branch, always. The alternative is each session moving whichever entry it finds easiest. Then a cited id points at a different entry.
+
+Lane order stays; phones open every lane folded; the rule is said once.

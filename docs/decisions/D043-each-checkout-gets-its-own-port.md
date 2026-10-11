@@ -47,7 +47,7 @@ The slot is the `sha256` of the checkout's canonical path, first four bytes, mod
 
 **What this gives up:** a fresh clone has no launch config until `make venv` runs. Before, it had a wrong one at once. That is the right direction for a file whose only failure is pointing somewhere plausible and wrong.
 
-**The trade was wrong about what an absent file costs. A measurement showed it.** The paragraph above reasons that absent beats wrong. It does not. **Nothing leaves the file absent.** The Browser pane's instructions tell an agent that finds no `launch.json` to create one from a template with a literal port. So absent lasts until the first `preview_start`. Then it becomes wrong, written by a session that had no way to know this repo derives the number. Absent is not the safe end of the trade. It is the entrance to the unsafe end.
+**The trade was wrong about what an absent file costs. It took twenty-three days and a measurement to see.** The paragraph above reasons that absent beats wrong. It does not. **Nothing leaves the file absent.** The Browser pane's instructions tell an agent that finds no `launch.json` to create one from a template with a literal port. So absent lasts until the first `preview_start`. Then it becomes wrong, written by a session that had no way to know this repo derives the number. Absent is not the safe end of the trade. It is the entrance to the unsafe end.
 
 **Measured across the five worktrees of this clone:** four correct, one absent, and one holding a hand-written **5173** that nobody remembered writing. That was the tree the measurement ran in. It is a linked worktree whose Browser pane would start its own dev server on 5470, then open a tab on the MAIN TREE's port.
 

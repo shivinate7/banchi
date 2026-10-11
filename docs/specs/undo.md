@@ -2,7 +2,7 @@
 
 Built. Code comments cite the section numbers and the `UN-<n>` ids below, so they do not change.
 
-Undo has two mechanisms and no clock. A mis-press is undone with `U`, in the second mechanism. A
+Undo has two mechanisms and no clock. A mis-press is undone in the second with `U`. A
 mistake found later is undone from the card's own record. An undo lasts until the next step is built on
 it. After that, the fix is an ordinary action. A toast fades on a timer. The undo does not fade with it.
 
@@ -16,8 +16,8 @@ it. After that, the fix is an ordinary action. A toast fades on a timer. The und
 
 No server enforces a time limit. `undo_too_late` is a state test, not a clock. Every reversal decides
 "built on" from a fact in the store, and the server refuses with a sentence. The screen never guesses.
-`store/orders.py`'s `reopen_line` has no window and no clock. No screen offers a fixed window. The
-receipt has no window either. `UNDO_WINDOW_MS` is only the toast's own TTL (`Inventory.tsx`, `Orders.tsx`).
+`store/orders.py`'s `reopen_line` has no window and no clock. How long an undo stays offered is the screen's business, and no screen offers a fixed window. The
+receipt has no window. `UNDO_WINDOW_MS` is only the toast's own TTL (`Inventory.tsx`, `Orders.tsx`).
 
 ## 2. Two mechanisms, and they are not the same mechanism
 
@@ -125,7 +125,7 @@ The owner's rulings, in plain words:
 
 - Undo lasts from the history, with no time limit.
 - A press that cannot be undone gets no confirm, with one exception (Q2).
-- An undo lasts until the next step is built on it. The default is the recommended option.
+- An undo lasts until the next step is built on it. The owner took the recommended option.
 - Capture mistakes are the largest source of pain, at 50%. Marking the wrong card sold is 30%. A wrong
   review answer is 20%.
 
@@ -287,7 +287,7 @@ sentence. It is a reason to give, not an outcome to name. Never borrow "undone" 
 - Orders' pull undo reads "Pull undone". Its `pull_not_recorded` case, where the pull was already reversed
   elsewhere, reads "Already undone".
 - Pricing's restore reads "N prices undone".
-- Refusals read plainly, with a sentence such as "The card was not put back." The reason goes in the body,
+- Refusals read plainly: "Not undone" and "The card was not put back". The reason goes in the body,
   never the raw code.
 
 ### 11.12 Review draws no header undo

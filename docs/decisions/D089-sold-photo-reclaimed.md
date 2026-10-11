@@ -2,6 +2,8 @@
 
 **`POST /boxes/<box>/photos/reclaim` deletes the photographs of a box's sold cards, keeps every record, and writes the photograph's digest onto the record before the bytes go.** Photographs measure about 1.8 MB each. `captures/` is 2.7 GB for about 1,560 cards, so 100,000 cards would be about 176 GB. If about 95% sell or go out as bulk, and are reclaimed per batch, the retained set is about 9 GB.
 
+This is the second of the two things the owner's 100k plan named as blocking the run.
+
 Ruling: records are permanent. Photographs may be discarded once the card is sold through.
 
 ### The operation did not exist, and it is a third shape
@@ -26,4 +28,4 @@ There is no undo. The bytes are gone, and the card is not in hand. So this sits 
 
 **No store-wide reclaim.** The plan's shape is per batch. Reclaim each 5,000-card lot as it sells through, so the peak stays near 9 GB rather than climbing to 176 GB. A box is the batch this product has. A whole-store press is one loop over `GET /boxes` away. That holds if the per-box gesture is resented. The history of the box delete shows what a resented gate becomes.
 
-**No probe of the pile.** Neither this entry nor D88 measures whether the 100,000 cards are worth scanning. The 2,000-card probe that decides it is work at the rig, and it needs none of this. At 2,000 cards the JSON store took 25 ms. This is the second half of the plan, built ahead of the first. The record says so. It does not say the probe was done.
+**No probe of the pile.** Neither this entry nor D88 measures whether the 100,000 cards are worth scanning. The 2,000-card probe that decides it is work at the rig, and it needs none of this. At 2,000 cards the JSON store took 25 ms. This is the second half of the plan, built ahead of the first. The owner instructed execution of the plan end to end. The record says so. It does not say the probe was done.
