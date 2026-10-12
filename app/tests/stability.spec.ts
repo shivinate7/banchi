@@ -1192,7 +1192,9 @@ for (const width of [1440, 820]) {
          so the press is a mouse click at that point, and Playwright does not scroll the control first. */
       /* The control sits at page y `at`. The window is made short enough that only its top 24px show at scroll 0. */
       await page.evaluate(() => window.scrollTo(0, 0))
-      const at = await sell.evaluate((el) => el.getBoundingClientRect().top + window.scrollY)
+      /* The control is briefly unplaced (top 0) while the card settles, so wait for a real position before sizing. */
+      let at = 0
+      await expect.poll(async () => { at = await sell.evaluate((el) => el.getBoundingClientRect().top + window.scrollY); return at }, { message: 'the control never got a position' }).toBeGreaterThan(100)
       const h = Math.round(at) + 24
       await page.setViewportSize({ width, height: h })
       await page.evaluate(() => window.scrollTo(0, 0))
@@ -1216,20 +1218,20 @@ for (const width of [1440, 820]) {
       const bad: string[] = []
       const subText = () => page.locator('.browse-hero-sub').innerText()
       await press(sell)
-      /* A press that does not register is reported as such, so a missed click never reads as a move. */
-      if (!(await expect.poll(subText, { timeout: 5000 }).toContain('Sold').then(() => true, () => false))) bad.push('sale did not register')
+      /* A press that does not register fails the case by name, before any move is read: a missed press is never a pass. */
+      const sold = await expect.poll(subText, { timeout: 5000 }).toContain('Sold').then(() => true, () => false)
+      expect(sold, 'the sale did not register: the Mark sold press never showed Sold').toBe(true)
       await settleMotion(page)
       await afterPaint(page)
       const afterSale = await read()
       if (JSON.stringify(afterSale) !== JSON.stringify(before)) bad.push(`sale ${JSON.stringify(afterSale)}`)
-      if (!bad.includes('sale did not register')) {
-        await press(page.getByRole('button', { name: /^Undo/ }).first())
-        if (!(await expect.poll(subText, { timeout: 5000 }).not.toContain('Sold').then(() => true, () => false))) bad.push('undo did not register')
-        await settleMotion(page)
-        await afterPaint(page)
-        const afterUndo = await read()
-        if (JSON.stringify(afterUndo) !== JSON.stringify(before)) bad.push(`undo ${JSON.stringify(afterUndo)}`)
-      }
+      await press(page.getByRole('button', { name: /^Undo/ }).first())
+      const undone = await expect.poll(subText, { timeout: 5000 }).not.toContain('Sold').then(() => true, () => false)
+      expect(undone, 'the undo did not register: Sold stayed on the card header').toBe(true)
+      await settleMotion(page)
+      await afterPaint(page)
+      const afterUndo = await read()
+      if (JSON.stringify(afterUndo) !== JSON.stringify(before)) bad.push(`undo ${JSON.stringify(afterUndo)}`)
       expect(bad, `these moved the page or the card header (before ${JSON.stringify(before)})`).toEqual([])
     } finally {
       Object.assign(mine, kept)
