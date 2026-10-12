@@ -132,7 +132,8 @@ function scanCopy(): CopyScan {
       if (!(node instanceof HTMLElement)) return
       // SPOKEN-ONLY TEXT AND DATA VALUES ARE NOT LABEL LINES: `.bn-sr` is read aloud and never drawn (a section title's count
       // clause), and `data-value` marks a figure beside a label (a box cell's `797 stored`). Their text stays out of the lines.
-      if (node.classList.contains('bn-sr') || node.hasAttribute('data-value')) return
+      // THE ROOT IS NEVER SKIPPED: a candidate that is itself screen-reader text (`<h2 class="bn-sr">`) is still graded.
+      if (node !== root && (node.classList.contains('bn-sr') || node.hasAttribute('data-value'))) return
       const style = getComputedStyle(node)
       if (style.display === 'none' || style.visibility === 'hidden') return
       if (node.tagName === 'BR') {
@@ -809,11 +810,6 @@ test.describe('clip: no fact is cut off at 1440 or 820', () => {
       })
       await page.goto('/#/orders')
       await settleFonts(page)
-      /* THE REVERT PROOF. `HERO_NUMBER_REVERT=1` puts the number back under the rule that clipped it: `overflow: hidden` from
-       * `.browse-hero-parts > span`, with the override that exempted it removed. The case must then go red. */
-      if (process.env.HERO_NUMBER_REVERT === '1') {
-        await page.addStyleTag({ content: '.browse-hero-parts > .browse-hero-number { overflow: hidden; text-overflow: ellipsis; }' })
-      }
       await expect(page.locator('.orders-pick-chip'), 'the pick chip has loaded').toBeVisible()
       /* NOT `toBeVisible`: once the chips take their room the meta line can shrink to no width at all, and Playwright then
        * calls it hidden. That is the clip itself, so the check measures what the line draws against the box it has. */
@@ -839,6 +835,14 @@ test.describe('reader: sr-only text and data values are not labels', () => {
     const scan = await page.evaluate(scanCopy)
     const one = scan.casing.find((c) => c.role === 'button')
     expect(one?.lines, 'the drawn words are the label, and the spoken clause is not in it').toEqual(['Head'])
+  })
+
+  // THE ROOT ITSELF IS GRADED. A heading that is only screen-reader text is still a heading; only its spoken descendants are skipped.
+  test('a screen-reader-only heading is graded, because the skip applies below the root only', async ({ page }) => {
+    await page.setContent('<main><h2 class="bn-sr">by week and month</h2></main>')
+    const scan = await page.evaluate(scanCopy)
+    const one = scan.casing.find((c) => c.role === 'heading')
+    expect(one?.lines, 'the sr-only heading is its own label line').toEqual(['by week and month'])
   })
 
   test('a data value is a figure beside a label, not a label of its own', async ({ page }) => {

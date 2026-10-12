@@ -128,8 +128,8 @@ def check_committed_copies_are_the_oldest(checks: Checks) -> None:
     and the copies photographed an hour ago were marked as the ones TCGplayer already holds.
     The older backstock stayed uncommitted — and no run is joining box 3, so nobody could
     list it either. **52 of run `2026-09-11-box1-01`'s 119 matched SKUs offered zero copies
-    and 59 real cards were stranded**, under the sentence *"every copy in this run is already
-    listed or has left the box"*. The operator's words were that this is *"just not
+    and 59 real cards were stranded**, under the sentence *"Every copy in this run is already
+    listed or has left the box."* The operator's words were that this is *"just not
     true/possible"*.
 
     SO THE FIXTURE INVERTS THE TWO ORDERS DELIBERATELY: the LOWER-numbered box is the NEWER
