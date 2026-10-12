@@ -228,6 +228,7 @@
   display: flex; align-items: baseline; gap: 0.2em; margin: 0; white-space: nowrap;
   font-family: var(--bn-font-display); font-size: min(var(--ff-fs-4xl), var(--ff-fit)); font-weight: 800; line-height: 1;
 }
+.ff-count-skel { display: inline-block; width: 1.4em; height: 0.8em; border-radius: var(--bn-r-sm); }
 .ff-count-word { font-size: 0.5em; line-height: 1; }
 .ff-count-num { letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 .ff-search {
