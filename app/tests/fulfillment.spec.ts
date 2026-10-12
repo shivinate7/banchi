@@ -1744,6 +1744,18 @@ const WALK = [
 sealEveryTest()
 
 /* The search-holds cases run at each size the screen is checked at (1440 and 820), not only the default viewport. */
+/* R19 (owner ruling, review #849): the stale notice is a floating banner that must be inside the viewport when it appears.
+   toBeVisible alone passes for a box below the fold, so this reads the box against the viewport. */
+async function expectInViewport(page: Page, target: Locator, why: string): Promise<void> {
+  const box = await target.boundingBox()
+  const size = page.viewportSize()
+  expect(box, `${why}: the box exists`).not.toBeNull()
+  expect(size, 'the viewport has a size').not.toBeNull()
+  const top = box!.y
+  const bottom = box!.y + box!.height
+  expect(top >= 0 && bottom <= size!.height, `${why}: box spans ${Math.round(top)} to ${Math.round(bottom)} in a ${size!.height}px viewport`).toBe(true)
+}
+
 const SEARCH_SIZES = [
   { width: 1440, height: 900 },
   { width: 820, height: 1000 },
@@ -2080,6 +2092,97 @@ test('ux-w2: a stale notice that arrives on the list moves no Pick row', async (
   expect(after, 'the Pidgeot row has a box after the notice').not.toBeNull()
   expect(Math.abs(after!.y - before!.y), 'the Pick row does not move down or up when the notice arrives').toBeLessThanOrEqual(1)
   expect(Math.abs(after!.x - before!.x), 'the Pick row does not move sideways when the notice arrives').toBeLessThanOrEqual(1)
+  await expectInViewport(page, view(page).locator('.ff-notice'), 'the stale notice on the list')
+})
+
+/* R19 (review #849): with a long list scrolled to the top, the stale notice that arrives on the list is inside the viewport.
+   The sale and the held orders read are the list case's own. The page is scrolled to the top before the notice arrives. */
+test('ux-w2 R19: a stale notice on a long list, scrolled to the top, is inside the viewport', async ({ page }) => {
+  const extra = Array.from({ length: 12 }, (_, i) => {
+    const index = i + 1
+    return {
+      ...ORDER_TAKE,
+      sku: `LONG-SKU-${index}`,
+      name: `Long list card ${index}`,
+      copies: [
+        {
+          ...ORDER_WALK_COPY,
+          key: `6/${index}`,
+          capture_id: `cap-long-${index}`,
+          place: { ...ORDER_COPY_PLACE, label: `Box 6, Section 1, Card ${index}`, box: 6, index, slot: index, card: index },
+        },
+      ],
+    }
+  })
+  const plan = {
+    ...ONE_OPEN_ORDER_PLAN,
+    stops: [{ ...ONE_OPEN_ORDER_PLAN.stops[0]!, takes: [ORDER_TAKE, ...extra] }],
+    counts: { ...ONE_OPEN_ORDER_PLAN.counts, copies: 1 + extra.length },
+  }
+  await stubServer(page, [], { orders: ONE_OPEN_ORDER as unknown as typeof ONE_OPEN_ORDER, plan: plan as unknown as typeof ONE_OPEN_ORDER_PLAN })
+  let holdNow = false
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await page.route(/\/orders$/, async (route) => {
+    if (!holdNow) return route.fallback()
+    await held
+    return route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'orders_unavailable', message: 'The orders could not be read.' } }),
+    })
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(view(page).locator('.ff-owed-card').first(), 'the list has Pick rows on screen').toBeVisible()
+  await openCard(page, 'Charizard ex')
+  await page.getByRole('button', { name: 'Pull' }).click()
+  await expect(view(page)).toContainText('Pulled.')
+  holdNow = true
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
+  await expect(view(page).locator('.ff-owed-card').first(), 'the list is back').toBeVisible()
+  await settleLayout(page)
+  await settleAnimations(page)
+  await page.evaluate(() => window.scrollTo(0, 0))
+  expect(await page.evaluate(() => window.scrollY), 'the page is scrolled to the top').toBe(0)
+  const answered = page.waitForResponse(/\/orders$/)
+  release()
+  await answered
+  await expect(view(page).locator('.ff-notice'), 'the stale notice is drawn on the list').toBeVisible()
+  await settleLayout(page)
+  await settleAnimations(page)
+  expect(await page.evaluate(() => window.scrollY), 'the page is still at the top when the notice lands').toBe(0)
+  await expectInViewport(page, view(page).locator('.ff-notice'), 'the stale notice on a long list scrolled to the top')
+})
+
+/* R19 (review #849): on a return, while the cards read has not answered, the count slot shows the last count, not the
+   loading frame. Code reason (Fulfillment.tsx, the `cards === null` branch): it draws `todayFrame` and never `lastCount`. */
+test('ux-w2 R19: on a return with the cards read held, the count slot shows the last count', async ({ page }) => {
+  const owed = owedOrders(12)
+  await stubServer(page, [], { orders: owed.orders as typeof ONE_OPEN_ORDER, plan: owed.plan as typeof ONE_OPEN_ORDER_PLAN })
+  let holdNow = false
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await page.route(/\/inventory$/, async (route) => {
+    if (holdNow) await held
+    await route.fallback()
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(view(page).getByText(/\b12\s+left\b/i).first(), 'the count reads 12 left on the first visit').toBeVisible()
+  holdNow = true
+  await page.route(/\/boxes(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ boxes: [], facet_cells: [] }) }))
+  await page.evaluate(() => {
+    window.location.hash = '#/gallery'
+  })
+  await page.evaluate(() => {
+    window.location.hash = '#/fulfillment'
+  })
+  const track = view(page).locator('.ff-count-track')
+  await expect(track, 'the count slot is drawn on the return').toBeVisible()
+  const text = await track.evaluate((el) => (el as HTMLElement).innerText)
+  expect(text, 'the return shows the last count, 12 left, while the cards read is held').toMatch(/\b12\s+left\b/i)
+  release()
 })
 })
 }
@@ -2125,6 +2228,7 @@ test('ux-w2: a failed refresh on the card view moves nothing once the stale noti
   expect(after, 'the photograph has a box after the refresh').not.toBeNull()
   expect(Math.abs(after!.y - before!.y), 'the photograph does not move down or up').toBeLessThanOrEqual(1)
   expect(Math.abs(after!.x - before!.x), 'the photograph does not move sideways').toBeLessThanOrEqual(1)
+  await expectInViewport(page, view(page).locator('.ff-notice'), 'the stale notice on the card view')
 })
 
 /* ux-w2 gap-check self-proof. Two plain buttons that overlap are NOT a covered pair: the gap floor must fail them. The
