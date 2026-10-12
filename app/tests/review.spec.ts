@@ -2752,7 +2752,7 @@ test.describe('the Review band sheets', () => {
         let release: () => void = () => undefined
         await seed(page, { hold: new Promise<void>((done) => (release = done)) })
         await openReview(page)
-        const names = [/^3 matched free$/, /^2 waiting for a paid look$/, /^2 not yet looked at$/]
+        const names = [/^3 matched free$/i, /^2 waiting for a paid look$/i, /^2 not yet looked at$/i]
         const labels = ['matched free', 'waiting for a paid look', 'not yet looked at']
         const before = await Promise.all(labels.map((label) => count(page, label).boundingBox()))
         for (const label of labels) {

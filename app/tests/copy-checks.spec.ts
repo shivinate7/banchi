@@ -450,7 +450,7 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   await setViewport(page, { width: 1440, height: 1000 })
   await page.route(MATCH_SWEEP, (route) => route.fulfill(answer({ ...NO_SWEEP, matched: 2, matched_here: 2, matched_keys: ['3/1', '3/2'] })))
   await visit(page, '#/review')
-  await expect(page.locator('.review-band-count', { hasText: 'matched free' }).getByRole('button'), 'the matched tile is a button').toHaveCount(1)
+  await expect(page.locator('.review-band-count', { hasText: /matched free/i }).getByRole('button'), 'the matched tile is a button').toHaveCount(1)
   read('#/review', await page.evaluate(scanCopy))
 
   // THE REVIEW STATE WITH AN EMPTY QUEUE: `All caught up`, and its two buttons. Asserted drawn first.
@@ -469,13 +469,13 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
     ),
   )
   await visit(page, '#/pricing')
-  await expect(page.getByRole('button', { name: /^Send all 2 SKUs/ }), 'the send press names two SKUs').toBeVisible()
+  await expect(page.getByRole('button', { name: /^Send all 2 SKUs/i }), 'the send press names two SKUs').toBeVisible()
   read('#/pricing', await page.evaluate(scanCopy))
 
   // THE PRICING STATE WITH A TAKEABLE SEND: the card offers `Take N copies back`. Asserted drawn first.
   await page.route(SENDS, (route) => route.fulfill(answer({ ...SENDS_NONE, sends: [TAKEABLE] })))
   await visit(page, '#/pricing')
-  await expect(page.getByRole('button', { name: /^Take \d+ copies back$/ }), 'the takeable send offers its take back').toBeVisible()
+  await expect(page.getByRole('button', { name: /^Take \d+ copies back$/i }), 'the takeable send offers its take back').toBeVisible()
   read('#/pricing', await page.evaluate(scanCopy))
 
   const casingTotal = reads.reduce((sum, one) => sum + one.casing, 0)

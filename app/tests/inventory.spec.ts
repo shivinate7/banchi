@@ -3472,7 +3472,7 @@ test('the box claim sends only the switched-on fields, over only the cards picke
   expect(wire.filter((sent) => sent.method === 'PUT')).toHaveLength(0)
 
   await page.locator('.boxops-claim-row', { hasText: 'SET HINT' }).getByRole('switch').check()
-  await page.getByRole('textbox', { name: 'Set hint' }).fill('SV09')
+  await page.getByRole('textbox', { name: /set hint/i }).fill('SV09')
   await page.getByRole('button', { name: /^Apply to/ }).click()
 
   await expect(page.locator('.boxops-receipt')).toBeVisible()

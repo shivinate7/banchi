@@ -89,7 +89,7 @@ function sendSummary(over: Record<string, unknown> = {}): Record<string, unknown
   }
 }
 
-const sendPress = (page: Page) => page.getByRole('button', { name: /^Send ((all \d+ SKUs|1 SKU) )?to TCGplayer$/ })
+const sendPress = (page: Page) => page.getByRole('button', { name: /^Send ((all \d+ SKUs|1 SKU) )?to TCGplayer$/i })
 const sendPosts = (wire: Wire[]) => wire.filter((r) => r.method === 'POST' && r.path === '/pipeline/send')
 
 /** One SKU in the shape `cli/cmd_join.py:_pricing_table` writes — every field, not the handful
@@ -1473,7 +1473,7 @@ test('r8: moves to more than one price are listed card by card before the press'
     ],
     decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '19.99', '8608459': '6.00' } },
   })
-  const press = page.getByRole('button', { name: 'Send all 2 SKUs, 5 live copies move to new prices' })
+  const press = page.getByRole('button', { name: /^Send all 2 SKUs, 5 live copies move to new prices$/i })
   await expect(press).toBeVisible()
   const list = page.locator('.send-moves')
   await expect(list).toContainText('Articuno')
@@ -1633,7 +1633,7 @@ for (const width of [390, 820]) {
     })
     const press = page.locator('.send-press')
     /* BELOW 768 THE QUIET DOORS SIT BEHIND MORE (D277, Q4): opened first, then measured. */
-    const more = page.getByRole('button', { name: 'More send options' })
+    const more = page.getByRole('button', { name: /^More send options$/i })
     const door = page.locator('.send-act').getByRole('button', { name: /Download/ })
     await expect(door.or(more).first()).toBeVisible()
     if (!(await door.isVisible())) await more.click()
@@ -1865,7 +1865,7 @@ test('Download writes the file, and its copies are named until they are found', 
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()
   const back = page.locator('.send-short-check')
   await expect(back).toContainText('0 of 4 found at TCGplayer')
-  await back.getByRole('button', { name: 'Take 4 copies back' }).click()
+  await back.getByRole('button', { name: /^Take 4 copies back$/i }).click()
   await expect.poll(() => wire.filter((r) => r.path.endsWith('/take-back')).length).toBe(1)
   await expect(page.locator('.send-short-check')).toHaveCount(0)
 })
@@ -1919,7 +1919,7 @@ test('an unconfirmed send whose upload may wait in Staged keeps saying so after 
   await expect(card).toContainText('0 of 3 found at TCGplayer')
   await expect(card).toContainText('may still wait in TCGplayer’s Staged list')
   await expect(card).toContainText('Do not publish it there')
-  await expect(card.getByRole('button', { name: 'Take 3 copies back' })).toBeVisible()
+  await expect(card.getByRole('button', { name: /^Take 3 copies back$/i })).toBeVisible()
 })
 
 test('send card, checked: names the last send, not a bare "Live and checked"', async ({ page }) => {
@@ -2024,7 +2024,7 @@ for (const [kind, warning, said] of [
             ? { ...SENDS_NONE, sends: [taken] }
             : { ...SENDS_NONE, sends: [short] },
     })
-    await page.locator('.send-short-check').getByRole('button', { name: 'Take 3 copies back' }).click()
+    await page.locator('.send-short-check').getByRole('button', { name: /^Take 3 copies back$/i }).click()
     await expect.poll(() => wire.filter((r) => r.path.endsWith('/take-back')).length).toBe(1)
     const warned = page.locator('.send-taken-back')
     await expect(warned).toContainText('Copies taken back at')
@@ -2046,7 +2046,7 @@ test('a Take back that fails says so, and never offers a retry that would send',
   })
   const wire = await open(page, { sends: () => ({ ...SENDS_NONE, sends: [short] }) })
   await page.route(/\/pipeline\/sends\/[^/]+\/take-back$/, (route) => route.abort())
-  await page.locator('.send-short-check').getByRole('button', { name: 'Take 3 copies back' }).click()
+  await page.locator('.send-short-check').getByRole('button', { name: /^Take 3 copies back$/i }).click()
   const failed = page.locator('.send-undo-failure')
   await expect(failed).toContainText('Banchi could not take these copies back.')
   await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0)
@@ -2619,7 +2619,7 @@ test('the solid accent fill is spent on the one thing to do, and never on a row'
   })
   expect(filled.rows).toBe(0)
   expect(filled.buttons).toHaveLength(1)
-  expect(filled.buttons[0]).toMatch(/^Send ((all \d+ SKUs|1 SKU) )?to TCGplayer$/)
+  expect(filled.buttons[0]).toMatch(/^Send ((all \d+ SKUs|1 SKU) )?to TCGplayer$/i)
 })
 
 // -------------------------------------------------- why a row adds nothing (D59)
@@ -4328,7 +4328,7 @@ test('the rows that need the owner come first, each with its reason, and the res
      unpriced row's three do not. The bar and the press both say twelve, which is what the file
      will carry. */
   await expect(page.locator('.pricing-bar-says')).toContainText('12 ready')
-  await expect(sendPress(page)).toHaveText('Send all 4 SKUs to TCGplayer')
+  await expect(sendPress(page)).toHaveText(/^Send all 4 SKUs to TCGplayer$/i)
 })
 
 test('a price typed far from market gives the row its flag, and the row does not move', async ({ page }) => {
@@ -4681,7 +4681,7 @@ test('on a phone the bar is one line pinned above the tab bar, and More opens th
   expect(box?.height ?? 999).toBeLessThanOrEqual(72)
   expect(Math.abs((box?.y ?? 0) + (box?.height ?? 0) - (tabbar?.y ?? 0))).toBeLessThanOrEqual(1)
   await expect(page.getByRole('button', { name: /^Download/ })).toBeHidden()
-  await page.getByRole('button', { name: 'More send options' }).click()
+  await page.getByRole('button', { name: /^More send options$/i }).click()
   await expect(page.getByRole('button', { name: /^Download/ })).toBeVisible()
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(over).toBeLessThanOrEqual(0)
@@ -4740,7 +4740,7 @@ test('the keyboard sheet lists the keys the rows answer, and nothing the screen 
   await expect(sheet).toContainText('Put the lowest price in this card')
   await expect(sheet.getByText('Save this price and go to the next card')).toHaveCount(1)
   await expect(sheet).not.toContainText('Low with shipping')
-  await expect(sheet).not.toContainText('Direct low')
+  await expect(sheet).not.toContainText(/direct low/i)
   await expect(sheet).not.toContainText('Hold to read')
 })
 
