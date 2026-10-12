@@ -2737,19 +2737,16 @@ export function Pricing() {
             </span>
             {/* THE PRESS KEEPS ITS WORDS WHILE IT RUNS (D118, b-runs round 9): the spinner says it
                 is busy, and the status line says what it is doing. */}
-            <Button
-              variant="quiet"
+            <IconButton
               icon="download"
-              words="word-only-control"
+              label="Download File"
               busy={push === 'writing'}
               disabled={push !== 'idle' || pushable.length === 0}
               onClick={() => {
                 setLinkHeld(wroteUpload)
                 setPush('writing')
               }}
-            >
-              Download File
-            </Button>
+            />
             {!wroteUpload || (push !== 'idle' && !linkHeld) ? null : (
               <a className="bn-btn" href={markdownFileUrl(stamp, 'import.csv')} download="import.csv">
                 <Icon name="download" size={16} />
