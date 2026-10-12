@@ -1290,7 +1290,7 @@ test('r6: a mixed press counts only the prices typed on this list, and names the
         at_cap: true,
         add_to_quantity: 0,
         live_before: 2,
-        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        nothing_to_add: 'Every copy in this run is already listed or has left the box.',
         snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now: '9.99' },
         listing: { pushed: 2, staged: 0, live: 2 },
       }),
@@ -1300,7 +1300,7 @@ test('r6: a mixed press counts only the prices typed on this list, and names the
         at_cap: true,
         add_to_quantity: 0,
         live_before: 1,
-        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        nothing_to_add: 'Every copy in this run is already listed or has left the box.',
         snap: { market: '4.10', direct_low: null, low: '3.90', low_with_shipping: '4.90', now: '4.00' },
         listing: { pushed: 1, staged: 0, live: 1 },
       }),
@@ -1310,7 +1310,7 @@ test('r6: a mixed press counts only the prices typed on this list, and names the
         at_cap: true,
         add_to_quantity: 0,
         live_before: 1,
-        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        nothing_to_add: 'Every copy in this run is already listed or has left the box.',
         snap: { market: '6.00', direct_low: null, low: '5.50', low_with_shipping: '6.50', now: '7.00' },
         listing: { pushed: 1, staged: 0, live: 1 },
       }),
@@ -1382,7 +1382,7 @@ test('r7: a moved live price is offered back, and one press sends it at the owne
         at_cap: true,
         add_to_quantity: 0,
         live_before: 2,
-        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        nothing_to_add: 'Every copy in this run is already listed or has left the box.',
         snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now: '11.00' },
         listing: { pushed: 2, staged: 0, live: 2 },
         live_now: { export: 'live-tcgplayer-20260924-120000.csv', copies: 2, price: '9.99' },
@@ -1428,7 +1428,7 @@ test('r7: undo takes a typed price off the button', async ({ page }) => {
         at_cap: true,
         add_to_quantity: 0,
         live_before: 2,
-        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        nothing_to_add: 'Every copy in this run is already listed or has left the box.',
         snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now: '11.00' },
         listing: { pushed: 2, staged: 0, live: 2 },
         live_now: { export: 'live-tcgplayer-20260924-120000.csv', copies: 2, price: '9.99' },
@@ -2713,7 +2713,7 @@ test('a row that adds nothing sinks to the bottom of its section, under its head
         name: 'Dunsparce',
         at_cap: true,
         add_to_quantity: 0,
-        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        nothing_to_add: 'Every copy in this run is already listed or has left the box.',
       }),
       sku({ sku: '8608659', name: 'Wattrel' }),
     ],
@@ -2725,7 +2725,7 @@ test('a row that adds nothing sinks to the bottom of its section, under its head
      Q2), and the row that adds nothing falls under the server's own sentence, last. */
   await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
     'Needs You',
-    'every copy in this run is already listed or has left the box',
+    'Every copy in this run is already listed or has left the box.',
   ])
   const lastGroup = page.locator('.pricing-group').last()
   await expect(lastGroup.locator('.pricing-name')).toHaveText(['Dunsparce'])
@@ -2755,7 +2755,7 @@ test('a row that is both held and at the cap sinks to the deeper heading', async
         name: 'Dunsparce',
         at_cap: true,
         add_to_quantity: 0,
-        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        nothing_to_add: 'Every copy in this run is already listed or has left the box.',
       }),
     ],
     decisions: {
@@ -2768,7 +2768,7 @@ test('a row that is both held and at the cap sinks to the deeper heading', async
 
   await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
     'Needs You',
-    'every copy in this run is already listed or has left the box',
+    'Every copy in this run is already listed or has left the box.',
   ])
   await expect(page.locator('.pricing-row').nth(1).locator('.pricing-state')).toHaveAttribute(
     'title',
@@ -3187,7 +3187,7 @@ test('a row this run can add nothing for has no saved strip drawn, and no market
         sku: '222',
         name: 'Closed card',
         at_cap: true,
-        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        nothing_to_add: 'Every copy in this run is already listed or has left the box.',
       }),
     ],
     saved: { skus: { '111': { at, ranges: trends(['111']).skus['111']!.ranges } }, note: null },
@@ -4953,7 +4953,7 @@ test('F3: the held count on the button and in the bar are one number, a sent row
   await open(page, {
     skus: [
       sku({ sku: '8608859', name: 'Articuno' }),
-      sku({ sku: '8608459', name: 'Dunsparce', at_cap: true, add_to_quantity: 0, nothing_to_add: 'every copy in this run is already listed or has left the box' }),
+      sku({ sku: '8608459', name: 'Dunsparce', at_cap: true, add_to_quantity: 0, nothing_to_add: 'Every copy in this run is already listed or has left the box.' }),
       sku({ sku: '8608460', name: 'Snorlax' }),
     ],
     decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608459': { withheld: 'keeping' }, '8608460': { withheld: 'bullish' } } },

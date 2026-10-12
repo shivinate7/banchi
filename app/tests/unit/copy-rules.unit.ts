@@ -39,6 +39,9 @@ test('casing: Chicago Title Case passes, and each small word in the middle must 
   expect(casingProblems('Show all')).toEqual(['"all" should be capitalized'])
   expect(casingProblems('Back to')).toEqual(['"to" should be capitalized'])
   expect(casingProblems('Refresh now on Pricing')).toEqual(['"now" should be capitalized'])
+  // The review tile's proposed wording: `at` is a small word, so Chicago lowercases it mid-title.
+  expect(casingProblems('Not Looked At Yet')).toEqual(['"At" should be lowercase'])
+  expect(casingProblems('Not Looked at Yet')).toEqual([])
 })
 
 test('casing: a hyphenated word capitalizes each part, and a number or unit is not a word', () => {

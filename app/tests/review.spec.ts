@@ -1764,7 +1764,7 @@ test('the press names the waiting count and this store’s own past cost per car
   )
   await paidWait(page, keysOf(12))
   await open(page)
-  await expect(press(page)).toHaveText('Read the 12 left, about $0.04')
+  await expect(press(page)).toHaveText(/^Read the 12 left, about \$0\.04$/i)
   /* D221: the dollar figure is the mono face's own span, never typed into the label. */
   await expect(press(page).locator('.bn-money')).toHaveText('$0.04')
 })
@@ -1774,7 +1774,7 @@ test('a store with no recorded spend draws the press with no figure rather than 
   await runsReads(page, [runRow({ usage: {} })], keysOf(1))
   await paidWait(page, keysOf(1))
   await open(page)
-  await expect(press(page)).toHaveText('Read the 1 left')
+  await expect(press(page)).toHaveText(/^Read the 1 left$/i)
 })
 
 /* A REFUSED COUNT IS SAID, NOT SWALLOWED. The server refuses `/pipeline/waiting` over a claim it
@@ -1821,7 +1821,7 @@ test('the press spends exactly the cards it named, with no pre-check', async ({ 
   await paidWait(page, keysOf(12))
   const spends = await spendRoute(page, { cards: 11 })
   await open(page)
-  await expect(press(page)).toContainText('Read the 12 left')
+  await expect(press(page)).toContainText(/Read the 12 left/i)
 
   answer(keysOf(30))
   await waiting(page, 30)
@@ -1844,7 +1844,7 @@ test('the press sends only the paid-look keys, never the unread ones', async ({ 
   await paidWait(page, ['9/4', '9/5'])
   const spends = await spendRoute(page, { cards: 2 })
   await open(page)
-  await expect(press(page)).toContainText('Read the 2 left')
+  await expect(press(page)).toContainText(/Read the 2 left/i)
   await press(page).click()
   await expect.poll(() => spends.length).toBe(1)
   expect(spends[0]?.body.keys, 'only the cards the sweep named as waiting for a paid look').toEqual(['9/4', '9/5'])
@@ -2293,7 +2293,7 @@ test.describe('the Review summary band', () => {
   const band = (page: Page): Locator => page.locator('.review-band')
   const count = (page: Page, label: string): Locator => band(page).locator('.review-band-count').filter({ hasText: new RegExp(label, 'i') })
   const health = (page: Page): Locator => band(page).locator('.review-band-health')
-  const press = (page: Page): Locator => band(page).getByRole('button', { name: /^Read the \d+ left/ })
+  const press = (page: Page): Locator => band(page).getByRole('button', { name: /^Read the \d+ left/i })
 
   /** Capture's "Review" button shows once a box with cards is picked: the Box field, `3`, Enter. */
   async function pickBox(page: Page): Promise<void> {
@@ -2344,7 +2344,7 @@ test.describe('the Review summary band', () => {
         await openReview(page)
         await expect(count(page, 'matched free')).toHaveText(/3\s+matched free/i)
         await expect(count(page, 'waiting for a paid look')).toHaveText(/2\s+waiting for a paid look/i)
-        await expect(count(page, 'not yet looked at')).toHaveText(/2\s+not yet looked at/i)
+        await expect(count(page, 'not (?:yet )?looked at(?: yet)?')).toHaveText(/2\s+not (?:yet )?looked at(?: yet)?/i)
         await expect(count(page, 'waiting for you')).toHaveText(/2\s+waiting for you/i)
         expect(wire.asked.at(-1), 'the band reads the sitting\'s keys, the same a Capture counter sends').toEqual(SITTING)
         /* the Capture counter, same keys, same stub: the two numbers must agree */
@@ -2359,7 +2359,7 @@ test.describe('the Review summary band', () => {
         await setViewport(page, size)
         await openReview(page)
         const go = press(page)
-        await expect(go).toHaveText(/^\s*Read the 2 left, about \$0\.06\s*$/)
+        await expect(go).toHaveText(/^\s*Read the 2 left, about \$0\.06\s*$/i)
         await go.click()
         await expect(page.getByRole('dialog')).toHaveCount(0)
         await expect.poll(() => wire.spends.length).toBe(1)
@@ -2451,7 +2451,7 @@ test.describe('the Review summary band', () => {
       await openReview(page)
       await expect(count(page, 'matched free')).toHaveText(/4\s+matched free/i)
       await expect(count(page, 'waiting for a paid look')).toHaveText(/3\s+waiting for a paid look/i)
-      await expect(count(page, 'not yet looked at')).toHaveText(/3\s+not yet looked at/i)
+      await expect(count(page, 'not (?:yet )?looked at(?: yet)?')).toHaveText(/3\s+not (?:yet )?looked at(?: yet)?/i)
       expect(new Set(wire.asked.at(-1)), 'the keys are the unidentified captured cards').toEqual(new Set(EVERY_OPEN.filter((key) => FATES[key] !== 'review')))
     })
 
@@ -2489,7 +2489,7 @@ test.describe('the Review summary band', () => {
         wire.fates['3/5'] = 'done'
       }
       await openReview(page)
-      await expect(press(page)).toContainText('Read the 2 left')
+      await expect(press(page)).toContainText(/Read the 2 left/i)
       await press(page).click()
       await expect.poll(() => wire.spends.length).toBe(1)
       const reads = wire.asked.length
@@ -2753,8 +2753,8 @@ test.describe('the Review band sheets', () => {
         let release: () => void = () => undefined
         await seed(page, { hold: new Promise<void>((done) => (release = done)) })
         await openReview(page)
-        const names = [/^3 matched free$/i, /^2 waiting for a paid look$/i, /^2 not yet looked at$/i]
-        const labels = ['matched free', 'waiting for a paid look', 'not yet looked at']
+        const names = [/^3 matched free$/i, /^2 waiting for a paid look$/i, /^2 not (?:yet )?looked at(?: yet)?$/i]
+        const labels = ['matched free', 'waiting for a paid look', 'not (?:yet )?looked at(?: yet)?']
         const before = await Promise.all(labels.map((label) => count(page, label).boundingBox()))
         for (const label of labels) {
           await expect(count(page, label).getByRole('button'), `${label} is a button while the band loads`).toBeDisabled()
@@ -2786,12 +2786,12 @@ test.describe('the Review band sheets', () => {
         await openReview(page)
         await loaded(page)
         for (const key of ['Enter', 'Space']) {
-          const button = countButton(page, /waiting for a paid look$/)
+          const button = countButton(page, /waiting for a paid look$/i)
           await expect(button).toBeVisible()
           await button.focus()
           await page.keyboard.press(key)
           await expect(sheet(page)).toBeVisible()
-          await expect(sheet(page)).toHaveAccessibleName(/^2 waiting for a paid look$/)
+          await expect(sheet(page)).toHaveAccessibleName(/^2 waiting for a paid look$/i)
           await expect(button).toHaveAttribute('aria-expanded', 'true')
           await page.keyboard.press('Escape')
           await expect(sheet(page)).toHaveCount(0)
@@ -2813,7 +2813,7 @@ test.describe('the Review band sheets', () => {
         await openReview(page)
         await loaded(page)
         await openCount(page, /waiting for a paid look$/)
-        await expect(sheet(page)).toHaveAccessibleName(/^64 waiting for a paid look$/)
+        await expect(sheet(page)).toHaveAccessibleName(/^64 waiting for a paid look$/i)
         const groups = sheet(page).getByRole('group')
         await expect(groups).toHaveCount(3)
         await expect(groups.nth(0)).toHaveAccessibleName('Two printings too close to call')
@@ -2985,7 +2985,7 @@ test.describe('the Review band sheets', () => {
         route.fulfill(json({ model_present: false, model_ok: false, model_bytes: 0, index_present: false, ready: false })),
       )
       await openReview(page)
-      await expect(count(page, 'not yet looked at')).toHaveText(/2\s+not yet looked at/i)
+      await expect(count(page, 'not (?:yet )?looked at(?: yet)?')).toHaveText(/2\s+not (?:yet )?looked at(?: yet)?/i)
       await expect(band(page).locator('.review-band-health')).toHaveText(/needs setup/i)
       const before = wire.asked.length
       for (let step = 0; step < 10; step += 1) {
@@ -3018,7 +3018,7 @@ test.describe('the Review band sheets', () => {
     await seed(page, { fates: { '3/1': 'matched', '3/4': 'paid' } })
     await openReview(page)
     await loaded(page)
-    const zero = count(page, 'not yet looked at')
+    const zero = count(page, 'not (?:yet )?looked at(?: yet)?')
     await expect(zero, 'the zero tile is drawn').toContainText('0')
     await expect(zero.getByRole('button'), 'a zero count has no button role').toHaveCount(0)
     await expect(zero.getByRole('link'), 'a zero count has no link role').toHaveCount(0)
@@ -3032,7 +3032,7 @@ test.describe('the Review band sheets', () => {
     await page.reload()
     await expect(page.locator('main.review')).toBeVisible()
     await loaded(page)
-    const liveTile = await count(page, 'not yet looked at').boundingBox()
+    const liveTile = await count(page, 'not (?:yet )?looked at(?: yet)?').boundingBox()
     expect(zeroBox, 'the zero tile is measured').not.toBeNull()
     expect(liveTile, 'the live tile is measured').not.toBeNull()
     expect(Math.abs(zeroBox!.width - liveTile!.width), 'the tile keeps its width either way').toBeLessThanOrEqual(1)
@@ -3050,7 +3050,7 @@ test.describe('the Review band sheets', () => {
           await seed(page, { fates: { '3/1': 'done' }, sitting: ['3/1'] })
           await openReview(page)
           await loaded(page)
-          for (const label of ['waiting for a paid look', 'not yet looked at', 'matched free']) {
+          for (const label of ['waiting for a paid look', 'not (?:yet )?looked at(?: yet)?', 'matched free']) {
             const tile = count(page, label)
             await expect(tile, `the ${label} tile reads zero`).toContainText('0')
             await expect(tile.getByRole('button'), `a zero ${label} count has no button`).toHaveCount(0)

@@ -334,7 +334,7 @@ function liveSku(sku: string, name: string, live: number, now: string, capped: b
     ...worklistSku(sku, name),
     listing: { pushed: live, staged: 0, live },
     snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now },
-    ...(capped ? { at_cap: true, add_to_quantity: 0, live_before: live, nothing_to_add: 'every copy in this run is already listed or has left the box' } : {}),
+    ...(capped ? { at_cap: true, add_to_quantity: 0, live_before: live, nothing_to_add: 'Every copy in this run is already listed or has left the box.' } : {}),
   }
 }
 
