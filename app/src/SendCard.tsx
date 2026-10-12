@@ -244,10 +244,10 @@ function MovesList({ moves }: { readonly moves: readonly LiveMove[] }) {
     <Notice tone="info" compact className="send-moves" title="Live copies this press moves to their new price.">
       <Button variant="quiet" icon={open ? 'chevronUp' : 'chevronDown'} onClick={() => setOpen((on) => !on)} aria-expanded={open} words="word-only-control">
         {/* THE LABEL HOLDS THE WIDER OF ITS TWO STATES: "Show" and "Hide" differ in width, so a panel title beside it could wrap
-            in one state and not the other, and the bar would change height as the list opened. The other state is paint (`::before`), never read. */}
+            in one state and not the other, and the bar would change height as the list opened. The other state is a hidden span. */}
         <span className="send-toggle">
-          <span>{`${open ? 'Hide' : 'Show'} ${total}`}</span>
-          <span className="send-toggle-reserve" aria-hidden="true" data-text={`${open ? 'Show' : 'Hide'} ${total}`} />
+          <span aria-hidden={open ? undefined : 'true'} data-hidden={open ? undefined : 'true'}>{`Hide ${total}`}</span>
+          <span aria-hidden={open ? 'true' : undefined} data-hidden={open ? 'true' : undefined}>{`Show ${total}`}</span>
         </span>
       </Button>
       <ul className="send-names" hidden={!open}>
