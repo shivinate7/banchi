@@ -82,10 +82,10 @@ export function numberCell(card: InventoryCard): string {
 }
 
 /** Chicago keeps these lowercase between the first and last word. */
-const SMALL_WORDS = new Set([
+export const SMALL_WORDS: ReadonlySet<string> = new Set([
   'a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'so', 'yet',
   'as', 'at', 'by', 'in', 'of', 'on', 'to', 'up', 'via', 'per', 'unless', 'with',
-  'about', 'under', 'over', 'into', 'onto', 'from', 'upon', 'near', 'past', 'off', 'out', 'down',
+  'vs', 'about', 'under', 'over', 'into', 'onto', 'from', 'upon', 'near', 'past', 'off', 'out', 'down',
 ])
 
 /** THE ONE HOME FOR TITLE CASE. An enum value drawn as a word: `reverse_holofoil` → `Reverse Holofoil`.
@@ -293,7 +293,7 @@ export function factGroupsOf(
       title: 'Claims',
       facts: [
         { label: 'Finish', value: claimText(card.metadata_finish, (member) => titleCase(member, true)) },
-        { label: 'Rarity', value: claimText(card.rarity_claim, (member) => titleCase(member, true)) },
+        { label: 'Rarity', value: claimText(card.rarity_claim) },
         { label: 'Note', value: card.note ?? 'none' },
       ],
     },
@@ -607,8 +607,8 @@ export function CardHeroHead({
             </Pill>
           ))}
           {claimList(card.rarity_claim).map((rarity) => (
-            <Pill key={`r-${rarity}`} outline title={titleCase(rarity, true)}>
-              {titleCase(rarity, true)}
+            <Pill key={`r-${rarity}`} outline title={rarity}>
+              {rarity}
             </Pill>
           ))}
           {/* THE CARD'S STATE ONLY WHEN IT IS THE EXCEPTION (UX-221) — `BoxBrowse.tsx`'s own
