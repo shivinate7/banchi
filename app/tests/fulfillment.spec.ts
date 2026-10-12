@@ -1964,13 +1964,15 @@ test('ux-w2 R18: a failed orders read keeps the last count shown', async ({ page
 })
 }
 
-/* ux-w2 (nothing on screen moves unless the person moved it, on the card view). The stale notice is drawn above the card's body, so when a failed refresh brings it in
-   after first paint, the photograph moves. A sale is the refresh the screen makes; the orders read that follows it fails. */
+/* ux-w2 (nothing on screen moves unless the person moved it, on the card view). The stale notice is drawn below the card,
+   so the photograph moves only if the notice arrives in a layout that pushes it. */
 test('ux-w2: a failed refresh on the card view moves nothing once the stale notice arrives', async ({ page }) => {
   await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
   await openCard(page, 'Charizard ex')
-  // The card stays open through a refused sale: a refusal that is neither sold nor stale re-reads the screen and leaves
-  // the card where it is. The sale's pull is refused, and the re-read's orders answer fails.
+  // Code reason (Fulfillment.tsx, `doSell`): the refusal path re-reads the screen only for ALREADY_SOLD, a PULL_STALE
+  // code, or a success. Any other refusal sets trouble and returns without `reread()`, so no notice can follow it.
+  // A PULL_STALE refusal (`over_fulfilled`) keeps the card open (no `drop`) and calls `reread()`. The re-read's orders
+  // read fails, so `ordersFailed` is set while `cards` is still loaded, and the notice draws on the open card.
   let failNow = false
   await page.route(/\/orders$/, async (route) => {
     if (!failNow) return route.fallback()
@@ -1982,9 +1984,9 @@ test('ux-w2: a failed refresh on the card view moves nothing once the stale noti
   })
   await page.route(/\/orders\/pull$/, async (route) => {
     await route.fulfill({
-      status: 500,
+      status: 409,
       contentType: 'application/json',
-      body: JSON.stringify({ error: { code: 'pull_unavailable', message: 'The pull could not be recorded.' } }),
+      body: JSON.stringify({ error: { code: 'over_fulfilled', message: 'The list no longer describes the store.' } }),
     })
   })
   await page.getByRole('button', { name: 'Pull' }).click()
