@@ -2212,9 +2212,9 @@ export function CaptureScreen() {
   const hintRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (openField === 'box') boxEntryRef.current?.focus()
+    if (openField === 'box') boxEntryRef.current?.focus({ preventScroll: true })
     else if (openField === 'set') {
-      hintRef.current?.focus()
+      hintRef.current?.focus({ preventScroll: true })
       /* THE VOCABULARY FOLLOWS THE FIELD BEING OPEN, not the row being tapped. `H` opens it
          from the key handler and never touches the row's `onToggle`, so hanging the load off
          the tap left the list empty for every operator who uses the keyboard — which on this

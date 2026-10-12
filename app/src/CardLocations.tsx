@@ -459,7 +459,7 @@ export function UndoSaleButton({
     UNDONE_AT.delete(saleKey)
     /* The Mark sold that held focus is gone, so focus would drop to the body: a sale hands it to
        the Undo, and a keyboard user can take it back at once. */
-    if (wasFresh) button.current?.focus()
+    if (wasFresh) button.current?.focus({ preventScroll: true })
   }, [saleKey, wasFresh])
   /* THE UNDO LEAVING, BY ANY PATH (a click, `U`, a toast), inside the sale's window: the Mark sold that
      stands here next plays the burst backwards. A LAYOUT cleanup, so it runs before that Mark sold's
