@@ -809,7 +809,9 @@ function LiftBar({
             title={sourceChanged ? 'Already changed in this draft' : undefined}
             onClick={() => onDest(source.box)}
           >
-            Another Place <span data-typed>in {boxName(source)}</span>
+            <span>
+              Another Place in <span data-typed>{boxName(source)}</span>
+            </span>
             {sourceChanged ? ' (already changed)' : ''}
           </Button>
         ) : null}
