@@ -62,9 +62,12 @@ export function stripTyped(text: string, typed: readonly string[]): string {
   let rest = text
   for (const value of typed) {
     // A WHOLE TOKEN ONLY: a letter or digit on either side keeps the match inside a longer word (`in` in `Waiting`).
-    if (value !== '') rest = rest.replace(new RegExp(`(?<![\\p{L}\\p{N}])${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'gu'), ' ')
+    // THE PLACEHOLDER IS A CAPITALIZED WORD (`X`), so the words around a typed name grade as they would with a name there:
+    // `Another Place in <box>` passes and `another place in <box>` fails. A label that is only typed values leaves nothing.
+    if (value !== '') rest = rest.replace(new RegExp(`(?<![\\p{L}\\p{N}])${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'gu'), ' X ')
   }
-  return rest.replace(/\s+/g, ' ').trim()
+  const out = rest.replace(/\s+/g, ' ').trim()
+  return out.split(' ').every((word) => word === 'X') ? '' : out
 }
 
 /** The labels a control draws: every line that carries a letter, is not a key cap alone, and is not a sentence. A tile's

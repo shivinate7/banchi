@@ -65,7 +65,7 @@ test('sentence: a closing period or question mark marks a sentence, which the sw
 /* THE SPOKEN NAME (copy map row 58). A two-sentence accessible name is read aloud, so the casing rule skips it; a
  * one-sentence label with bad casing still fails. */
 test('typed name: the marked text comes out of the label, and the rest is still checked', () => {
-  expect(stripTyped('SV commons card', ['SV commons'])).toBe('card')
+  expect(stripTyped('SV commons card', ['SV commons'])).toBe('X card')
   expect(casingProblems(stripTyped('SV commons card', ['SV commons']))).not.toEqual([])
   expect(stripTyped('SV commons', ['SV commons'])).toBe('')
   expect(casingProblems(stripTyped('SV Commons Card', ['SV commons']))).toEqual([])
@@ -121,8 +121,13 @@ test('small words: the short Chicago prepositions stay lower-case in the middle 
   expect(casingProblems('Costs Under Ten')).toEqual(['"Under" should be lowercase'])
 })
 
+test('typed name is a placeholder word: the words around it grade as they would with a name there', () => {
+  expect(casingProblems(stripTyped('Another Place in SV commons', ['SV commons']))).toEqual([])
+  expect(casingProblems(stripTyped('another place in SV commons', ['SV commons']))).toEqual(['"another" should be capitalized', '"place" should be capitalized'])
+})
+
 test('typed value: only a whole token comes out of a label, so a word that contains it stays whole', () => {
-  expect(stripTyped('Waiting in Line', ['in'])).toBe('Waiting Line')
+  expect(stripTyped('Waiting in Line', ['in'])).toBe('Waiting X Line')
   expect(stripTyped('Waiting in Line', ['in'])).not.toMatch(/Wait\s+g/)
 })
 
