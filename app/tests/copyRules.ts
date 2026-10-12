@@ -21,6 +21,7 @@
 export const SMALL_WORDS: ReadonlySet<string> = new Set([
   'a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'so', 'yet',
   'as', 'at', 'by', 'in', 'of', 'on', 'to', 'up', 'via', 'per', 'unless', 'with',
+  'about', 'under', 'over', 'into', 'onto', 'from', 'upon', 'near', 'past', 'off', 'out', 'down',
 ])
 
 /** "I", "my", "me", "mine" as whole words, any case. Lookarounds bound the match by non-letters. */
@@ -59,7 +60,10 @@ export function isSpokenSentences(text: string): boolean {
  *  only a typed value is left empty, and an empty label has nothing to check. */
 export function stripTyped(text: string, typed: readonly string[]): string {
   let rest = text
-  for (const value of typed) if (value !== '') rest = rest.split(value).join(' ')
+  for (const value of typed) {
+    // A WHOLE TOKEN ONLY: a letter or digit on either side keeps the match inside a longer word (`in` in `Waiting`).
+    if (value !== '') rest = rest.replace(new RegExp(`(?<![\\p{L}\\p{N}])${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'gu'), ' ')
+  }
   return rest.replace(/\s+/g, ' ').trim()
 }
 
@@ -73,7 +77,9 @@ export function labelsOf(lines: readonly string[], keyCaps: readonly string[]): 
   const lettered = lines
     .map((line) => line.replace(/\s+/g, ' ').trim())
     .filter((text) => text !== '' && /\p{L}/u.test(text) && !keyCaps.includes(text))
-  const labels = lettered.filter((text) => !isSentence(text))
+  // A FULL SENTENCE IS A LINE THAT ENDS IN . ? OR ! AND HAS FIVE WORDS OR MORE. A shorter line ending in a period is a label
+  // (`Cards to pull.`), so it is kept beside a second label. The five-word floor is a ceiling: a four-word caption is graded.
+  const labels = lettered.filter((text) => !(isSentence(text) && text.split(' ').length >= 5))
   return labels.length > 0 ? labels : lettered.slice(0, 1)
 }
 

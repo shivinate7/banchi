@@ -109,6 +109,21 @@ test('label lines: every label line is graded, so a lower-case second label is f
 test('label lines: a description sentence under a title is not graded, and a one-sentence control is still graded', () => {
   expect(labelsOf(['Read a box', 'Tap a box to read every card in it.'], [])).toEqual(['Read a box'])
   expect(labelsOf(['Cards to pull.'], [])).toEqual(['Cards to pull.'])
+  /* A SHORT LINE THAT ENDS IN A PERIOD IS A LABEL, NOT A SENTENCE: it is kept beside a second label. */
+  expect(labelsOf(['Cards to pull.', 'Set Hint'], [])).toEqual(['Cards to pull.', 'Set Hint'])
+  expect(labelsOf(['Tap a box to read every card in it.', 'Set Hint'], [])).toEqual(['Set Hint'])
+})
+
+test('small words: the short Chicago prepositions stay lower-case in the middle of a title', () => {
+  expect(casingProblems('Learn about Pricing')).toEqual([])
+  expect(casingProblems('Learn About Pricing')).toEqual(['"About" should be lowercase'])
+  expect(casingProblems('Costs under Ten')).toEqual([])
+  expect(casingProblems('Costs Under Ten')).toEqual(['"Under" should be lowercase'])
+})
+
+test('typed value: only a whole token comes out of a label, so a word that contains it stays whole', () => {
+  expect(stripTyped('Waiting in Line', ['in'])).toBe('Waiting Line')
+  expect(stripTyped('Waiting in Line', ['in'])).not.toMatch(/Wait\s+g/)
 })
 
 test('label lines: a control with only key caps, or only a figure, has no label, so its accessible name is read instead', () => {

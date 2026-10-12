@@ -535,6 +535,80 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   await expect(page.getByRole('dialog'), 'the matched sheet opens').toBeVisible()
   read('#/review', await page.evaluate(scanCopy))
 
+  // THE REVIEW BAND'S UNHINTED LINE: two cards with no set hint. Its health button is read, then its sheet opens and is read.
+  await page.route(MATCH_SWEEP, (route) => route.fulfill(answer({ ...NO_SWEEP, unhinted: 2 })))
+  await visit(page, '#/review')
+  const needSet = page.locator('.review-band-health').getByRole('button', { name: /need a set named/i })
+  await expect(needSet, 'the unhinted line is a button').toHaveCount(1)
+  read('#/review', await page.evaluate(scanCopy))
+  await needSet.click()
+  await expect(page.getByRole('dialog'), 'the unhinted sheet opens').toBeVisible()
+  read('#/review', await page.evaluate(scanCopy))
+
+  // THE PRICE FACTS SALES LABELS: the product view with sales saved, so the sales grid draws its five labels.
+  await page.route(/\/pipeline\/price-facts/, (route) =>
+    route.fulfill(
+      answer({
+        sku: '9191486',
+        name: 'Volcanion',
+        at: 1,
+        through: '2026-10-01',
+        prices: null,
+        shelf: null,
+        days: [
+          ['2026-09-30', 2, 2, '14.00', '17.00', '16.00'],
+          ['2026-10-01', 1, 1, '15.00', '15.00', '15.00'],
+        ],
+        facts: { sold_30d: 3, avg_30d: '15.67', low_30d: '14.00', high_30d: '17.00', sold_7d: 1, avg_7d: '15.00', low_7d: '15.00', high_7d: '15.00', best_day: ['2026-09-30', 2] },
+      }),
+    ),
+  )
+  await visit(page, '#/product?sku=9191486')
+  await expect(page.locator('.pricefacts-grid'), 'the sales grid is drawn').toBeVisible()
+  read('#/product?sku=9191486', await page.evaluate(scanCopy))
+
+  // THE CODES LOT LINE: one built lot, so the meta reads `N lots built` rather than `No Lots Built Yet`.
+  await page.route(/\/codes\/lots$/, (route) =>
+    route.fulfill(
+      answer({
+        lots: [
+          {
+            lot_id: 'LOT-1',
+            scope: 'all',
+            delivery: 'mail',
+            venue: 'Mail',
+            box: null,
+            count: 2,
+            by_product: [{ product: 'booster', display: 'Booster pack', premium: false, count: 2 }],
+            sets: [],
+            built_at: '2026-10-01T10:00:00Z',
+          },
+        ],
+      }),
+    ),
+  )
+  await visit(page, '#/codes')
+  read('#/codes', await page.evaluate(scanCopy))
+
+  // THE CLAIM EDITOR ON A CARD: the walk's first card, Actions, then Correct. The sheet's field labels are read.
+  await visit(page, '#/inventory')
+  // The walk's section folds start shut, and a row exists only inside an open fold: open every shut one first.
+  const shutFold = page.locator('.browse-sectfold[aria-expanded="false"]')
+  for (let guard = 0; guard < 40 && (await shutFold.count()) > 0; guard += 1) await shutFold.first().click()
+  await page.locator('.browse-row').first().click()
+  await page.getByRole('button', { name: 'Actions' }).click()
+  await page.getByRole('menuitem', { name: 'Correct' }).click()
+  await expect(page.getByRole('dialog'), 'the correct-claims sheet opens').toBeVisible()
+  read('#/inventory', await page.evaluate(scanCopy))
+  await page.keyboard.press('Escape')
+
+  // THE CLAIM EDITOR ON A BOX: Manage, then Claims. The box's set-claims editor is read.
+  await visit(page, '#/inventory')
+  await page.getByRole('button', { name: 'Manage' }).click()
+  await page.getByRole('button', { name: /^Claims/ }).click()
+  await expect(page.getByRole('dialog'), 'the set-claims sheet opens').toBeVisible()
+  read('#/inventory', await page.evaluate(scanCopy))
+
   // THE REVIEW STATE WITH AN EMPTY QUEUE: `All caught up`, and its two buttons. Asserted drawn first.
   await page.route(QUEUES, (route) => route.fulfill(answer({ review: [], parked: [] })))
   await page.route(MATCH_SWEEP, (route) => route.fulfill(answer(NO_SWEEP)))
@@ -647,8 +721,9 @@ async function seedEverySweepScreen(page: Page): Promise<void> {
 }
 
 test.describe('clip: no fact is cut off at 1440 or 820', () => {
-  for (const width of [1440, 820] as const) {
-    test(`pricing: no item line clips its last fact at ${width}`, async ({ page }) => {
+  for (const width of [1440, 820, 360] as const) {
+    // THE PRICING LINES ARE CHECKED AT 1440 AND 820 ONLY. The Orders hero is also checked at 360, where its meta line is narrowest.
+    if (width !== 360) test(`pricing: no item line clips its last fact at ${width}`, async ({ page }) => {
       await setViewport(page, { width, height: 1000 })
       await seedEverySweepScreen(page)
       await page.goto('/#/pricing')
@@ -694,6 +769,11 @@ test.describe('clip: no fact is cut off at 1440 or 820', () => {
       await expect(parts, 'the hero meta line carries the card number').toHaveAttribute('title', /078\/076/)
       const measure = await parts.evaluate((el) => ({ drawn: el.scrollWidth, box: el.clientWidth }))
       expect(measure.drawn - measure.box, `the meta line draws ${measure.drawn}px in a ${measure.box}px box, so its number, set or game is cut off`).toBeLessThanOrEqual(1)
+      /* THE NUMBER ITSELF. Its span has `overflow: hidden` and shrinks inside the line, so the line can pass while the digits are cut. */
+      const number = page.locator('.browse-hero-number').first()
+      await expect(number, 'the card number is drawn in its own span').toHaveText('078/076')
+      const digits = await number.evaluate((el) => ({ drawn: el.scrollWidth, box: el.clientWidth }))
+      expect(digits.drawn - digits.box, `the card number draws ${digits.drawn}px of text in a ${digits.box}px box, so its digits are cut off`).toBeLessThanOrEqual(1)
     })
   }
 })
