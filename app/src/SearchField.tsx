@@ -147,7 +147,7 @@ export function SearchField({
   }, [persona])
 
   useEffect(() => {
-    if (autoFocus) input.current?.focus()
+    if (autoFocus) input.current?.focus({ preventScroll: true })
   }, [autoFocus])
 
   const submit = () => {
