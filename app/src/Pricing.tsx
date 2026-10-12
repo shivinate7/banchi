@@ -2740,6 +2740,7 @@ export function Pricing() {
             <Button
               variant="quiet"
               icon="download"
+              words="word-only-control"
               busy={push === 'writing'}
               disabled={push !== 'idle' || pushable.length === 0}
               onClick={() => {
