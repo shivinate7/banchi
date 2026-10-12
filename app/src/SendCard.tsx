@@ -239,10 +239,16 @@ function ResendPrices({
 function MovesList({ moves }: { readonly moves: readonly LiveMove[] }) {
   const [open, setOpen] = useState(false)
   if (new Set(moves.map((move) => Number(move.price))).size < 2) return null
+  const total = count(moves.reduce((sum, move) => sum + move.copies, 0), 'Live Copy', 'Live Copies')
   return (
     <Notice tone="info" compact className="send-moves" title="Live copies this press moves to their new price.">
       <Button variant="quiet" icon={open ? 'chevronUp' : 'chevronDown'} onClick={() => setOpen((on) => !on)} aria-expanded={open} words="word-only-control">
-        {`${open ? 'Hide' : 'Show'} ${count(moves.reduce((sum, move) => sum + move.copies, 0), 'Live Copy', 'Live Copies')}`}
+        {/* THE LABEL HOLDS THE WIDER OF ITS TWO STATES: "Show" and "Hide" differ in width, so a panel title beside it could wrap
+            in one state and not the other, and the bar would change height as the list opened. The other state is paint (`::before`), never read. */}
+        <span className="send-toggle">
+          <span>{`${open ? 'Hide' : 'Show'} ${total}`}</span>
+          <span className="send-toggle-reserve" aria-hidden="true" data-text={`${open ? 'Show' : 'Hide'} ${total}`} />
+        </span>
       </Button>
       <ul className="send-names" hidden={!open}>
         {moves.map((move) => (
