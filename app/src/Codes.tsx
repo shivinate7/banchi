@@ -916,7 +916,7 @@ export function Codes() {
                           className="codes-code-btn"
                           onClick={() => toggleRow(e.code)}
                           aria-pressed={shown}
-                          aria-label={shown ? 'Hide this code' : 'Reveal this code'}
+                          aria-label={shown ? 'Hide This Code' : 'Reveal This Code'}
                         >
                           <Code code={e.code} shown={shown} odd={!e.well_formed} />
                           <Icon name={shown ? 'eyeOff' : 'eye'} size={13} />
@@ -1281,7 +1281,7 @@ export function Codes() {
                                     className="codes-code-btn"
                                     onClick={() => toggleRow(e.code)}
                                     aria-pressed={shown}
-                                    aria-label={shown ? 'Hide this code' : 'Reveal this code'}
+                                    aria-label={shown ? 'Hide This Code' : 'Reveal This Code'}
                                   >
                                     <Code code={e.code} shown={shown} odd={!e.well_formed} />
                                     <Icon name={shown ? 'eyeOff' : 'eye'} size={13} />

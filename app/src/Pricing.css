@@ -203,17 +203,16 @@
    `--bn-ink-3`, never the non-text `--bn-ink-4`. */
 .pricing-meta {
   display: flex;
-  flex-wrap: nowrap;
-  overflow: hidden;
+  /* WRAPS RATHER THAN CLIPS: a long set or rarity ("Secret Rare") once ran past the column and was cut. A "·" drawn
+     after an item would be stranded at a line end when the next item wraps, so the facts are separated by the gap alone. */
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--bn-0-5) var(--bn-1-5);
+  gap: var(--bn-0-5) var(--bn-3);
   min-width: 0;
   font-size: var(--bn-fs-sm);
   color: var(--bn-ink-3);
 }
 .pricing-meta > * { flex: none; white-space: nowrap; }
-/* A separator is drawn by CSS, never typed (D218). */
-.pricing-meta > *:not(:last-child)::after { content: '·'; margin-left: var(--bn-1-5); color: var(--bn-ink-3); }
 .pricing-number { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); }
 /* THE SINGLE BOX/SECTION/CARD LOCATION IS GONE FROM THIS LINE (the owner's review, 2026-09-26:
    "why would I need to see one location for only one copy of a card when I'm handling pricing

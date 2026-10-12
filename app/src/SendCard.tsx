@@ -46,9 +46,9 @@ function carried(copies: number, prices: number): string {
 }
 /** What the PRESS says it carries: every SKU the list holds ready, whatever a filter draws
  *  (the filter note, moved onto the act). Copies stay in the bar's own line beside it. */
-function pressCarries(skus: number, copies: number, prices: number): string {
+function pressCarries(skus: number, copies: number, prices: number, title = false): string {
   const parts = [
-    copies > 0 || prices === 0 ? (skus === 1 ? '1 SKU' : `all ${skus} SKUs`) : null,
+    copies > 0 || prices === 0 ? (skus === 1 ? '1 SKU' : `${title ? 'All' : 'all'} ${skus} SKUs`) : null,
     prices > 0 ? count(prices, 'price change', 'price changes') : null,
   ].filter((part): part is string => part !== null)
   return parts.join(' and ')
@@ -420,8 +420,14 @@ function SendStanding({
   const safeAfter = send.take_back_after ? `You can take them back after ${clockTime(send.take_back_after)}, once Banchi has checked.` : null
   const action =
     send.takeable > 0 ? (
-      <Button size="sm" busy={takingBack} disabled={takingBack} onClick={() => takeBack(send.stamp)}>
-        {`Take ${count(send.takeable, 'copy', 'copies')} back`}
+      <Button
+        size="sm"
+        busy={takingBack}
+        disabled={takingBack}
+        aria-label={`Take ${count(send.takeable, 'copy', 'copies')} back`}
+        onClick={() => takeBack(send.stamp)}
+      >
+        {`Take ${count(send.takeable, 'Copy', 'Copies')} Back`}
       </Button>
     ) : undefined
   switch (send.state) {
@@ -709,15 +715,18 @@ export function SendCard({
                "Send 1 copy, 2 live copies move to $19.99". */
             (
               <>
-                {`Send ${pressCarries(skus, copies ?? 0, priceChanges.length)}, `}
+                {`Send ${pressCarries(skus, copies ?? 0, priceChanges.length, true)}, `}
                 <MovesPhrase moves={liveMoves} />
               </>
             )
           : priceChanges.length > 0
-            ? `Send ${pressCarries(skus, copies ?? 0, priceChanges.length)}`
+            ? `Send ${pressCarries(skus, copies ?? 0, priceChanges.length, true)}`
             : copies !== null && copies > 0
-              ? `Send ${pressCarries(skus, copies, 0)} to TCGplayer`
+              ? `Send ${pressCarries(skus, copies, 0, true)} to TCGplayer`
               : 'Send to TCGplayer'
+
+  /* THE SPOKEN NAME IS THE SENTENCE FORM, split from the Title Case label drawn on the press (a label is Title Case, a spoken name is prose). */
+  const spoken = typeof label === 'string' ? label.replace(/^Send All /, 'Send all ') : undefined
 
   const takeBack = async (stamp: string) => {
     setTakingBack(true)
@@ -793,6 +802,7 @@ export function SendCard({
           className="pricing-emit send-press"
           busy={phase === 'sending' || phase === 'waiting' || running}
           disabled={busy || empty || incomplete}
+          aria-label={spoken}
           aria-describedby={incomplete ? whyId : undefined}
           onClick={() => press('send')}
         >
@@ -808,7 +818,7 @@ export function SendCard({
         </span>
         <IconButton
           icon="more"
-          label="More send options"
+          label="More Send Options"
           className="send-more-press"
           aria-expanded={moreOpen}
           onClick={() => setMoreOpen((open) => !open)}

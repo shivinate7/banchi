@@ -19,7 +19,7 @@ import { roundsToNothing } from './money'
  * label, so a figure gaining a digit moves nothing; the health line and the press row always take their room. */
 
 const COUNTS = [
-  ['matched', 'matched free'],
+  ['matched', 'Matched Free'],
   ['paid', 'waiting for a paid look'],
   ['unread', 'not yet looked at'],
   ['you', 'waiting for you'],

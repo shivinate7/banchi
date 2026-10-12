@@ -145,8 +145,8 @@ export function PriceFactsBlock({ sku, onSales }: { readonly sku: string; readon
           <dl className="pricefacts-grid pricefacts-body">
             <Cell label="Market">{loading ? '—' : cash(prices?.market)}</Cell>
             <Cell label="Lowest">{loading ? '—' : cash(prices?.low)}</Cell>
-            <Cell label="Lowest with shipping">{loading ? '—' : cash(prices?.low_with_shipping)}</Cell>
-            <Cell label="Direct low">{loading ? '—' : prices?.direct_low ? cash(prices.direct_low) : <span className="pricefacts-quiet">not carried</span>}</Cell>
+            <Cell label="Lowest with Shipping">{loading ? '—' : cash(prices?.low_with_shipping)}</Cell>
+            <Cell label="Direct Low">{loading ? '—' : prices?.direct_low ? cash(prices.direct_low) : <span className="pricefacts-quiet">not carried</span>}</Cell>
           </dl>
         )}
       </section>
@@ -183,10 +183,10 @@ export function PriceFactsBlock({ sku, onSales }: { readonly sku: string; readon
           <p className="pricefacts-none pricefacts-body">This card is not on the waiting list.</p>
         ) : (
           <dl className="pricefacts-grid pricefacts-body">
-            <Cell label="On hand">{loading ? '—' : (shelf?.on_hand ?? '—')}</Cell>
-            <Cell label="Can be sent">{loading ? '—' : (shelf?.can_be_sent ?? '—')}</Cell>
-            <Cell label="Listed now">{loading ? '—' : (shelf?.listed_now ?? '—')}</Cell>
-            <Cell label="Your price">{loading ? '—' : cash(shelf?.asking)}</Cell>
+            <Cell label="On Hand">{loading ? '—' : (shelf?.on_hand ?? '—')}</Cell>
+            <Cell label="Can Be Sent">{loading ? '—' : (shelf?.can_be_sent ?? '—')}</Cell>
+            <Cell label="Listed Now">{loading ? '—' : (shelf?.listed_now ?? '—')}</Cell>
+            <Cell label="Your Price">{loading ? '—' : cash(shelf?.asking)}</Cell>
           </dl>
         )}
       </section>

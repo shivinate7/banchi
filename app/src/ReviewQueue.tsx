@@ -1912,10 +1912,10 @@ function Done({
         actions={
           <>
             <Button variant="primary" size="lg" icon="tag" iconRight="arrowRight" onClick={() => (window.location.hash = '#/pricing')}>
-              Price the answers
+              Price the Answers
             </Button>
             <Button size="lg" icon="play" onClick={onOpenRuns}>
-              Run another box
+              Run Another Box
             </Button>
           </>
         }
