@@ -1861,6 +1861,15 @@ async function searchHoldsOnLoad(
   return { before, after }
 }
 
+/* The count slot's VISIBLE text, innerText, which keeps an aria-hidden copy that is drawn. An accessible-name check would
+   miss it. R18: "0 Left" is allowed only once the orders are known and none wait. */
+async function expectNoZeroLeft(page: Page, why: string): Promise<void> {
+  const track = view(page).locator('.ff-count-track')
+  await expect(track, 'the count slot is drawn').toBeVisible()
+  const text = await track.evaluate((el) => (el as HTMLElement).innerText)
+  expect(text, why).not.toMatch(/\b0\s+left\b/i)
+}
+
 function expectSearchFixed(before: Box | null, after: Box | null): void {
   expect(before, 'the search has a box before the answer').not.toBeNull()
   expect(after, 'the search has a box after the answer').not.toBeNull()
@@ -1882,10 +1891,8 @@ test('ux-w2: the search field does not move when no order is open', async ({ pag
 
 test('ux-w2: the search field does not move when the orders fail to load', async ({ page }) => {
   const owed = owedOrders(1)
-  // R18: the first read fails with no count ever shown, and the slot still answers: it reads 0 Left, not blank.
-  const r = await searchHoldsOnLoad(page, { ...owed, fail: true }, () =>
-    expect(view(page).getByText(/\b0\s+left\b/i).first(), 'the count slot reads 0 Left after the first read fails').toBeVisible(),
-  )
+  // R18: "0 Left" is allowed only when orders are known and none wait. A first read that fails has no such knowledge.
+  const r = await searchHoldsOnLoad(page, { ...owed, fail: true }, () => expectNoZeroLeft(page, 'the count slot shows no 0 Left after the first read fails'))
   expectSearchFixed(r.before, r.after)
 })
 
@@ -1966,9 +1973,9 @@ test('ux-w2 R18: a failed orders read keeps the last count shown', async ({ page
   await expect(view(page).getByText(/\b12\s+left\b/i).first(), 'the count keeps 12 left after a failed read').toBeVisible()
 })
 
-/* R18 (owner ruling, review #849): the count slot answers while orders are unread. The first paint reads 0 Left, and
-   the slot never goes blank. The orders read is held for the whole case, so only the unread state is on screen. */
-test('ux-w2 R18: while orders are unread, the count slot reads 0 Left', async ({ page }) => {
+/* R18 (owner ruling, review #849): "0 Left" is allowed only once the orders are known and none wait. While they are unread,
+   the slot's visible text never reads 0 Left. The orders read is held for the whole case, so only the unread state is on screen. */
+test('ux-w2 R18: while orders are unread, the count slot never reads 0 Left', async ({ page }) => {
   const owed = owedOrders(1)
   await stubServer(page, [], { orders: owed.orders as typeof ONE_OPEN_ORDER, plan: owed.plan as typeof ONE_OPEN_ORDER_PLAN })
   let release: () => void = () => undefined
@@ -1979,7 +1986,7 @@ test('ux-w2 R18: while orders are unread, the count slot reads 0 Left', async ({
   })
   await page.goto(VIEW_ROUTE)
   await settleFonts(page)
-  await expect(view(page).getByText(/\b0\s+left\b/i).first(), 'the count slot reads 0 Left while orders are unread').toBeVisible()
+  await expectNoZeroLeft(page, 'the count slot shows no 0 Left while orders are unread')
   release()
 })
 
