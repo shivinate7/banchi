@@ -2350,6 +2350,8 @@ test('ux-w2 R19: zooming the photo with the receipt sheet open moves neither the
   // would move the page before the zoom opens, so both presses are plain DOM clicks with no scroll.
   await page.getByRole('button', { name: 'Show the photo bigger' }).evaluate((el) => (el as HTMLElement).click())
   await expect(page.locator('.ff-zoom'), 'the big photo is open').toBeVisible()
+  // The case must cross the collapse: while the zoom is open the receipt sheet is content-visibility hidden, before close.
+  await expect(page.locator('.ff-sheet'), 'the receipt sheet is content-visibility hidden while the zoom is open').toHaveCSS('content-visibility', 'hidden')
   await settleAnimations(page)
   await page.getByRole('button', { name: 'Close the big photo' }).evaluate((el) => (el as HTMLElement).click())
   await expect(page.locator('.ff-zoom'), 'the big photo is closed').toHaveCount(0)
