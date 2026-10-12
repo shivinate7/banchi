@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 import { test, expect } from './unit'
 import { REASON_LABELS, RETIRED_REASON_LABELS } from '../../src/reasons'
-import { casingProblems, isSentence, isSpokenSentences, labelsOf, smallWordsOf, statProblems, stripTyped, voiceHits } from '../copyRules'
+import { casingProblems, fieldLabelProblems, isSentence, isSpokenSentences, labelsOf, smallWordsOf, statProblems, stripTyped, voiceHits } from '../copyRules'
 import { attrText, firstPersonInSource, jsxOpeningsIn, recordFromSource, routeLiteralsIn } from '../copySource'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -176,6 +176,26 @@ test('the leftover casing misses: each label is a Title Case problem, and a hyph
   expect(casingProblems('Read Again')).toEqual([])
   expect(casingProblems('Not Selling 4')).toEqual([])
   expect(casingProblems('Find a Product')).toEqual([])
+})
+
+/* A RANGE OF NUMBERS IS A NUMBER, so the unit after it is a unit (`days`), not a word. A hyphenated range (`1-2`) sets the
+ * number flag as a plain number does; a hyphenated word that carries a digit (`3-day`) does not (see the cases above). */
+test('numbers: a hyphenated range of numbers ends a number, so the unit after it is not a word', () => {
+  expect(casingProblems('Ships in 1-2 days')).toEqual([])
+  expect(casingProblems('Ships in 1-2 Days')).toEqual([])
+  expect(casingProblems('Ships in 3-day Bundles')).toEqual(['"3-day": "day" should be capitalized'])
+})
+
+/* A FIELD LABEL IS GRADED BY THE CONTROL IT NAMES (the owner's ruling). A checkbox or radio label is an option sentence, which is
+ * prose. A text, search or select field's label is a field label, and takes Title Case. */
+test('field labels: a checkbox or radio label is prose, and a text, search or select field label is Title Case', () => {
+  expect(fieldLabelProblems('Split in two files at the cut-off', 'checkbox')).toEqual([])
+  expect(fieldLabelProblems('Split in two files at the cut-off', 'radio')).toEqual([])
+  expect(fieldLabelProblems('Find a product', 'text')).toEqual(['"product" should be capitalized'])
+  expect(fieldLabelProblems('Search buyers', 'search')).toEqual(['"buyers" should be capitalized'])
+  expect(fieldLabelProblems('Pick a Format', 'select')).toEqual([])
+  expect(fieldLabelProblems('Pick a format', 'select')).toEqual(['"format" should be capitalized'])
+  expect(fieldLabelProblems('Find a Product', 'search')).toEqual([])
 })
 
 /* THE RECASED EXACT TEXT (the fix branch's pass, merged here). Each label now reads Title Case on screen, and the sweep and the

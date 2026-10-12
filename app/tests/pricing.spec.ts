@@ -4616,16 +4616,86 @@ test('rule panel: a newer rule change retires the older toast, so Undo cannot cl
   await expect.poll(() => sentPolicy(wire).rule).toBe('undercut:5')
 })
 
-test('rule panel: the example card is the same under every lens', async ({ page }) => {
+/** THE LIVE TAB WITH A SAVED READ. The lens chips draw only with a read's sheet, and this spec's `open` stubs no sheet, so the
+ *  Live tab is opened here with one read of one listing. The read is taken a minute ago, so the chips carry their counts. */
+async function openLiveWithRead(page: Page): Promise<void> {
   await open(page)
+  const at = new Date(Date.now() - 60_000).toISOString()
+  const asked = { days: 7, rule: 'undercut:10' }
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  await page.route(/\/pipeline\/markdowns$/, (route) =>
+    route.fulfill(json({ markdowns: [{ stamp: '20260924-093000', at, asked, source: null, skus: 1, files: [] }] })),
+  )
+  await page.route(/\/pipeline\/markdowns\/[^/]+\/table$/, (route) =>
+    route.fulfill(
+      json({
+        stamp: '20260924-093000',
+        at,
+        asked,
+        counts: { considered: 1, offered: 1, deferred: 0, refused: 0 },
+        source: {},
+        skus: [
+          {
+            sku: '8608859',
+            standing: 'offered',
+            skip: null,
+            name: 'Articuno - 161/159',
+            condition: 'Near Mint Holofoil',
+            live: 3,
+            asking: '20.0000',
+            market: '22.03',
+            above_market: '-9',
+            at_risk: '60.00',
+            proposed: '18.00',
+            cut: '2.00',
+            given_up: '6.00',
+            owned_since: '2026-08-01T00:00:00.000+00:00',
+            presets: { market_match: '22.03', market_undercut_5: '20.93', low_undercut_1: '19.79' },
+            listed_since: null,
+            held_here: true,
+            last_sold: null,
+            priced_at: null,
+            on_hand: 3,
+            row: { 'TCGplayer Id': '8608859', 'Product Line': 'Pokemon', 'Set Name': 'SV: Prismatic Evolutions', 'Product Name': 'Articuno', 'TCG Market Price': '22.03', 'TCG Low Price': '21.98', 'Total Quantity': '3', 'Add to Quantity': '0' },
+          },
+        ],
+        says: {},
+        unpriceable: [],
+        floor: '0.49',
+        stale_after_s: 86400,
+      }),
+    ),
+  )
+  await page.route(/\/pipeline\/trends-saved$/, (route) => route.fulfill(json({ skus: {}, note: null })))
+  await page.goto('/#/pricing?live')
+  await expect(page.locator('.pricing-tabs').getByRole('button', { name: 'Live' })).toHaveAttribute('aria-pressed', 'true')
+}
+
+/** The Market −5% example line in the rule panel, read from the Unsent tab's rule line, then the panel closed. */
+async function ruleExample(page: Page): Promise<string> {
   await page.getByRole('button', { name: 'Change' }).click()
-  const row = page.getByRole('dialog', { name: 'Pricing rule' }).locator('.pricing-rule-row', { hasText: 'Market −5%' })
-  const before = await row.locator('.pricing-rule-says').innerText()
+  const dialog = page.getByRole('dialog', { name: 'Pricing rule' })
+  const says = await dialog.locator('.pricing-rule-row', { hasText: 'Market −5%' }).locator('.pricing-rule-says').innerText()
   await page.keyboard.press('Escape')
-  const lens = page.getByRole('radio', { name: /^Not Selling/ })
-  if (await lens.count()) await lens.click()
-  await page.getByRole('button', { name: 'Change' }).click()
-  await expect(page.getByRole('dialog', { name: 'Pricing rule' }).locator('.pricing-rule-row', { hasText: 'Market −5%' }).locator('.pricing-rule-says')).toHaveText(before)
+  await expect(dialog).toBeHidden()
+  return says
+}
+
+/* THE EXAMPLE IS THE SAME UNDER EVERY LENS. The lens chips are on the Live tab; the rule panel's example is on the Unsent tab.
+ * Read the example, press Not Selling on the Live tab, then read it again. The lens press must take (aria-pressed) before the
+ * comparison counts, so a lens that never changed fails here instead of passing with nothing compared. */
+test('rule panel: the example card is the same under every lens', async ({ page }) => {
+  await openLiveWithRead(page)
+  const tabs = page.locator('.pricing-tabs')
+  await tabs.getByRole('button', { name: 'Unsent' }).click()
+  const before = await ruleExample(page)
+  await tabs.getByRole('button', { name: 'Live' }).click()
+  const lens = page.getByRole('button', { name: /^Not Selling/ })
+  await expect(lens, 'the Not Selling lens is drawn on the Live tab').toBeVisible()
+  await lens.click()
+  await expect(lens, 'the lens changes: Not Selling is pressed').toHaveAttribute('aria-pressed', 'true')
+  await tabs.getByRole('button', { name: 'Unsent' }).click()
+  expect(await ruleExample(page), 'the example under Not Selling').toBe(before)
 })
 
 test('a product name opens the one product view, and T opens it from the keyboard', async ({ page }) => {

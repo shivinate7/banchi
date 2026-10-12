@@ -119,6 +119,14 @@ export const UNIT_WORDS: ReadonlySet<string> = new Set([
   'day', 'days', 'week', 'weeks', 'month', 'months', 'year', 'years',
 ])
 
+/** A token that is a number: `10`, `$184`, or a range of numbers (`1-2`). A hyphenated token with a word in it (`3-day`) is not,
+ *  so its word part is read as a word. */
+function isNumberToken(token: string): boolean {
+  if (!/\d/.test(token)) return false
+  if (!token.includes('-')) return true
+  return token.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '').split('-').every((part) => !/\p{L}/u.test(part))
+}
+
 /** Each Title Case problem in one label, as a sentence a reader can act on. Empty means it passes.
  *  Numbers do not count as words, but they still END a title: in `Pick 1 of 1` the word `of` is in
  *  the middle, so it stays lower-case. */
@@ -134,7 +142,7 @@ export function casingProblems(text: string): string[] {
   tokens.forEach((token, index) => {
     // A token with a digit is a number (`10`, `$184`), unless it is hyphenated (`3-day`): a hyphenated compound is a word,
     // so its digit part is skipped and its word part is read below.
-    if (/\d/.test(token) && !token.includes('-')) {
+    if (isNumberToken(token)) {
       afterNumber = true
       return
     }
@@ -169,4 +177,11 @@ export function casingProblems(text: string): string[] {
  */
 export function statProblems(text: string, press: boolean): string[] {
   return press ? casingProblems(text) : []
+}
+
+/** A field label, graded by the control it names. A checkbox or radio label is an option sentence (`Split in two files at the
+ *  cut-off`), which is prose and is not read. A text, search or select field's label takes Title Case. `control` is the input
+ *  type the label names (`text`, `search`, `checkbox`, `radio`), `select` for a select, or '' when no control is named. */
+export function fieldLabelProblems(text: string, control: string): string[] {
+  return control === 'checkbox' || control === 'radio' ? [] : casingProblems(text)
 }

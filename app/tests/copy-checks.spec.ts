@@ -9,10 +9,10 @@ import ts from 'typescript'
 
 import { settleFonts } from './fontsReady'
 import { card, sealEveryTest } from './shell'
-import { POPULATED_ROUTE_SEEDS } from './routeFixtures'
+import { POPULATED_ROUTE_SEEDS, line, order, payloadOf } from './routeFixtures'
 import { sweepEveryRoute } from './routeSweep'
 import { setViewport } from './phoneSwitch'
-import { casingProblems, isSentence, isSpokenSentences, labelsOf, statProblems, stripTyped, voiceHits } from './copyRules'
+import { casingProblems, fieldLabelProblems, isSentence, isSpokenSentences, labelsOf, statProblems, stripTyped, voiceHits } from './copyRules'
 
 /* ONE SWEEP, TWO CHECKS (D284, the shape `text-checks.spec.ts` set). Each screen is opened ONCE by
  * `routeSweep.ts:sweepEveryRoute`, the same owner routes and the same populated store the text checks
@@ -109,6 +109,9 @@ interface Casing {
   // Whether the control is a press: true for every control, and for a stat label (`dt`) only when a button or link holds it.
   // A stat label outside a press is a caption under a figure, and `statProblems` does not read it.
   press: boolean
+  // For a field label (`label`): the control it names, `checkbox`, `radio`, `search`, `text`, `select` or '' when none. Read by
+  // `copyRules.ts:fieldLabelProblems`, so a checkbox's option sentence is prose and a field label is graded.
+  control: string
 }
 
 interface CopyScan {
@@ -129,6 +132,15 @@ function scanCopy(): CopyScan {
       if (style.display === 'none' || style.visibility === 'hidden') return false
     }
     return el.getClientRects().length > 0
+  }
+
+  // THE CONTROL A LABEL NAMES: its `control` (a wrapped or `for=` control), read as its input type. '' when it names none.
+  const labelControlOf = (label: HTMLLabelElement): string => {
+    const target = label.control
+    if (target === null) return ''
+    if (target instanceof HTMLInputElement) return target.type
+    if (target instanceof HTMLSelectElement) return 'select'
+    return 'text'
   }
 
   const roleOf = (el: Element): string | null => {
@@ -212,6 +224,7 @@ function scanCopy(): CopyScan {
       typed: el.matches('[data-typed]'),
       marked: Array.from(el.querySelectorAll('[data-typed]'), (m) => (m.textContent ?? '').replace(/\s+/g, ' ').trim()),
       press: el.tagName !== 'DT' || el.closest('button, [role="button"], a') !== null,
+      control: el instanceof HTMLLabelElement ? labelControlOf(el) : '',
     })
   }
 
@@ -226,7 +239,7 @@ function scanCopy(): CopyScan {
       .join('')
       .replace(/\s+/g, ' ')
       .trim()
-    if (text !== '') casing.push({ role: 'tooltip', lines: [text], keyCaps: [], aria: '', mono: false, upper: getComputedStyle(tip).textTransform === 'uppercase', typed: tip.matches('[data-typed]'), marked: [], press: true })
+    if (text !== '') casing.push({ role: 'tooltip', lines: [text], keyCaps: [], aria: '', mono: false, upper: getComputedStyle(tip).textTransform === 'uppercase', typed: tip.matches('[data-typed]'), marked: [], press: true, control: '' })
   }
 
   const prose: string[] = []
@@ -549,6 +562,22 @@ async function stubLiveRead(page: Page, at: string): Promise<void> {
   await page.route(/\/pipeline\/trends-saved$/, (route) => route.fulfill(answer({ skus: {}, note: null })))
 }
 
+/** One order whose only line is `over`, so the buyer's sheet draws that line's stand-down presses. The line's order key is the
+ *  fixture's own (`routeFixtures.ts`'s `order()`), so the read and the picks echo agree on it. */
+async function stubStandDownOrder(page: Page, over: Parameters<typeof line>[0]): Promise<void> {
+  const resolved = line(over)
+  const payload = payloadOf([order()], [{ key: resolved.order_key, number: resolved.order, complete: false, outstanding: 1, lines: [resolved] }])
+  await page.route(/\/orders$/, (route) => route.fulfill(answer(payload)))
+  await page.route(/\/orders\/picks$/, (route) => route.fulfill(answer({ orders: payload.resolution.orders })))
+  await page.route(/\/boxes(\?.*)?$/, (route) => route.fulfill(answer({ boxes: [], facet_cells: [] })))
+}
+
+/** Opens the buyer's sheet and its first order's editor, where a line's stand-down presses are drawn (`orders.spec.ts`'s `openManage`). */
+async function openStandDownSheet(page: Page): Promise<void> {
+  await page.locator('main.orders .orders-manage').first().click()
+  await page.locator('.orders-manage-sheet .bn-set-op').first().click()
+}
+
 async function visit(page: Page, route: string): Promise<void> {
   await page.goto('/')
   await settleBody(page, route)
@@ -618,7 +647,10 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
         // A HEADING (h2, h3) OR A TITLE MAY BE A SENTENCE: an empty state or a greeting. A control, and a page title (h1),
         // is a label whatever its ending, so `Cards to pull.` on a control or an h1 is still checked.
         if ((one.role === 'heading' || one.role === 'title') && isSentence(checked)) continue
-        const problems = one.role === 'stat label' ? statProblems(checked, one.press) : casingProblems(checked)
+        const problems =
+          one.role === 'stat label' ? statProblems(checked, one.press)
+          : one.role === 'field label' ? fieldLabelProblems(checked, one.control)
+          : casingProblems(checked)
         if (problems.length === 0) continue
         // A FINDING IS KEYED BY ITS TEXT, not its role: a control's label often shows twice (its tip and its
         // accessible name), and one string is one offender.
@@ -841,6 +873,21 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   await expect(page.getByRole('button', { name: /^Price your live listings$/i }), 'the empty worklist offers the Live tab').toBeVisible()
   read(hashOf('pricing'), await page.evaluate(scanCopy))
 
+  // THE ORDERS STAND-DOWN PRESSES. A line no copy can reach (`no_copies_on_hand`) draws `Already sent it` and `It isn't shipping`;
+  // a line whose card is not a single (`not_a_single`) draws `Sealed product`. Each is asserted drawn before it is read.
+  await stubStandDownOrder(page, { reason: 'no_copies_on_hand', fulfilled: 0, outstanding: 1, on_hand: 0, sold: 3, picks: [] })
+  await visit(page, `${hashOf('orders')}?pullable=0`)
+  await openStandDownSheet(page)
+  await expect(page.getByRole('button', { name: 'Already sent it', exact: true }), 'the gone line draws Already sent it').toBeVisible()
+  await expect(page.getByRole('button', { name: "It isn't shipping", exact: true }), 'the gone line draws It isn\'t shipping').toBeVisible()
+  read(`${hashOf('orders')}?pullable=0`, await page.evaluate(scanCopy))
+
+  await stubStandDownOrder(page, { reason: 'not_a_single', fulfilled: 0, outstanding: 1, on_hand: 1, picks: [] })
+  await visit(page, `${hashOf('orders')}?pullable=0`)
+  await openStandDownSheet(page)
+  await expect(page.getByRole('button', { name: 'Sealed product', exact: true }), 'the not-a-single line draws Sealed product').toBeVisible()
+  read(`${hashOf('orders')}?pullable=0`, await page.evaluate(scanCopy))
+
   // THE PRODUCT HISTORY'S QUARTER RANGE: its heading is `3-Day`, drawn only when the history holds a quarter range. Asserted drawn first.
   const PRODUCT_SKU_ROUTE = `${hashOf('product')}?sku=${QUARTER_HISTORY.sku}`
   await page.route(/\/pipeline\/products\/[^/]+\/history$/, (route) => route.fulfill(answer(QUARTER_HISTORY)))
@@ -1030,6 +1077,16 @@ test.describe('reader: a field label is graded as a label', () => {
     const scan = await page.evaluate(scanCopy)
     const one = scan.casing.find((c) => c.role === 'field label')
     expect(one?.lines, 'the label text is the label line, so the casing rule reads it').toEqual(['Find a Product'])
+    expect(one?.control, 'the label names a text field').toBe('text')
+  })
+
+  // THE CONTROL A LABEL NAMES. A checkbox's label is an option sentence (prose), so the reader names its control, and the rule
+  // (`fieldLabelProblems`) does not grade it.
+  test('a checkbox label names a checkbox, so its option sentence is prose', async ({ page }) => {
+    await page.setContent('<main><label><input type="checkbox" /> Split in two files at the cut-off</label></main>')
+    const scan = await page.evaluate(scanCopy)
+    const one = scan.casing.find((c) => c.role === 'field label')
+    expect(one?.control, 'the label names a checkbox').toBe('checkbox')
   })
 })
 
