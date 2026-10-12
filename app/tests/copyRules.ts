@@ -63,6 +63,19 @@ export function stripTyped(text: string, typed: readonly string[]): string {
   return rest.replace(/\s+/g, ' ').trim()
 }
 
+/** The label a control draws: its first line that carries a letter and is not a key cap alone. A tile's figure sits
+ *  ABOVE its label (`12` over `matched free`), and a row's key cap sits BEFORE its name (`H` over `Set hint`), so
+ *  neither is the label. Only the first qualifying line is the label: a description under a title is never read.
+ *  Empty when no line qualifies, which makes the control a spoken name (its accessible name is read instead). */
+export function labelOf(lines: readonly string[], keyCaps: readonly string[]): string {
+  for (const line of lines) {
+    const text = line.replace(/\s+/g, ' ').trim()
+    if (text === '' || !/\p{L}/u.test(text) || keyCaps.includes(text)) continue
+    return text
+  }
+  return ''
+}
+
 /** Units that may follow a number unchanged: `10 ml`, `1 month`. A count noun such as `cards` is a word. */
 export const UNIT_WORDS: ReadonlySet<string> = new Set([
   'ml', 'mm', 'cm', 'kg', 'g', 'oz', 'px', 'x',

@@ -7,10 +7,11 @@ import { fileURLToPath } from 'node:url'
 import { test, expect, type Page } from '@playwright/test'
 
 import { settleFonts } from './fontsReady'
-import { sealEveryTest } from './shell'
+import { card, sealEveryTest } from './shell'
+import { POPULATED_ROUTE_SEEDS } from './routeFixtures'
 import { sweepEveryRoute } from './routeSweep'
 import { setViewport } from './phoneSwitch'
-import { casingProblems, isSentence, isSpokenSentences, stripTyped, voiceHits } from './copyRules'
+import { casingProblems, isSentence, isSpokenSentences, labelOf, stripTyped, voiceHits } from './copyRules'
 
 /* ONE SWEEP, TWO CHECKS (D284, the shape `text-checks.spec.ts` set). Each screen is opened ONCE by
  * `routeSweep.ts:sweepEveryRoute`, the same owner routes and the same populated store the text checks
@@ -18,7 +19,11 @@ import { casingProblems, isSentence, isSpokenSentences, stripTyped, voiceHits } 
  * text checks), so it is read here after the sweep, at 1440 only. The kit, `#/gallery`, stays out.
  *
  * WHAT IS READ. Each screen's landing state, as the browser draws it: every rendered text node
- * (sidebar, bars and view), plus every rendered `aria-label`, `title`, `placeholder` and `alt`. A sheet,
+ * (sidebar, bars and view), plus every rendered `aria-label`, `title`, `placeholder` and `alt`. A control's
+ * label is its first line that carries a letter and is not a key cap (`copyRules.ts:labelOf`), so a tile's
+ * figure above its label is skipped, and a stat label (`dt`) is read as a label. Four states the landing
+ * sweep never builds are read after it (the two Review states and the two Pricing send states, see
+ * `MATCH_SWEEP`). A sheet,
  * modal, toast or palette is NOT opened, so its copy is not read. Key caps (`kbd`, the chord letters the
  * rail draws) and machine strings (`.bn-mono`, `code`) are NOT prose, so the voice check skips them.
  *
@@ -64,9 +69,12 @@ interface Attr {
 
 interface Casing {
   role: string
-  // True when the label is the accessible name alone (an icon control with no visible text of its own).
-  spoken: boolean
-  text: string
+  // The control's visible lines, in order, as the browser draws them (innerText split on newlines, blanks dropped).
+  lines: string[]
+  // The text of each key cap (`kbd`) inside the control. A key cap is never the label (`H` before `Set hint`).
+  keyCaps: string[]
+  // The accessible name, read when no line is a label (an icon control with no visible text of its own).
+  aria: string
   mono: boolean
   upper: boolean
   typed: boolean
@@ -105,6 +113,7 @@ function scanCopy(): CopyScan {
     if (tag === 'button' || role === 'button') return 'button'
     if (tag === 'h1') return 'page title'
     if (tag === 'h2' || tag === 'h3') return 'heading'
+    if (tag === 'dt') return 'stat label'
     if (el.matches('[class*="title"]')) return 'title'
     if (el.matches('[class*="chip"]')) return 'chip'
     return null
@@ -123,20 +132,20 @@ function scanCopy(): CopyScan {
   // THE ICON LINK. An icon control drawn as a link (`IconButton` with an `href`, such as the Fulfiller's
   // `Cards to pull` on Orders) is an `<a>`, not a button, so the list below must name it too.
   const candidates = document.querySelectorAll(
-    'a.bn-nav-link, a[aria-label], th, [role="tab"], [role="radio"], button, [role="button"], h1, h2, h3, [class*="title"], [class*="chip"]',
+    'a.bn-nav-link, a[aria-label], th, [role="tab"], [role="radio"], button, [role="button"], h1, h2, h3, dt, [class*="title"], [class*="chip"]',
   )
   for (const el of Array.from(candidates)) {
     const role = roleOf(el)
     if (role === null || !shown(el)) continue
-    // THE LABEL IS THE FIRST LINE. A button or heading often carries a sentence under its name (the
-    // description on a `Read a box` card). That sentence is not read for casing. It is prose, not a label, so only the first non-empty line is read.
-    const inner = ((el as HTMLElement).innerText ?? '').split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).find((line) => line !== '') ?? ''
-    const text = inner !== '' ? inner : (el.getAttribute('aria-label') ?? '').trim()
-    if (text === '') continue
+    // THE LINES AND THE KEY CAPS ARE SENT; Node picks the label (`copyRules.ts:labelOf`). A tile draws its figure
+    // above its label, and a row draws its key cap before its name, so the first line is not always the label.
+    const lines = ((el as HTMLElement).innerText ?? '').split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).filter((line) => line !== '')
+    const keyCaps = Array.from(el.querySelectorAll('kbd'), (key) => (key.textContent ?? '').replace(/\s+/g, ' ').trim()).filter((key) => key !== '')
     casing.push({
       role,
-      spoken: inner === '',
-      text,
+      lines,
+      keyCaps,
+      aria: (el.getAttribute('aria-label') ?? '').trim(),
       mono: el.closest('.bn-mono, code, kbd') !== null,
       upper: getComputedStyle(el).textTransform === 'uppercase',
       typed: el.matches('[data-typed]'),
@@ -155,7 +164,7 @@ function scanCopy(): CopyScan {
       .join('')
       .replace(/\s+/g, ' ')
       .trim()
-    if (text !== '') casing.push({ role: 'tooltip', text, spoken: false, mono: false, upper: getComputedStyle(tip).textTransform === 'uppercase', typed: tip.matches('[data-typed]'), marked: [] })
+    if (text !== '') casing.push({ role: 'tooltip', lines: [text], keyCaps: [], aria: '', mono: false, upper: getComputedStyle(tip).textTransform === 'uppercase', typed: tip.matches('[data-typed]'), marked: [] })
   }
 
   const prose: string[] = []
@@ -223,6 +232,124 @@ async function settleBody(page: Page, route: string): Promise<void> {
   throw new Error(`${route}: the body never settled to readable text`)
 }
 
+/* THE STATES THE LANDING SWEEP NEVER BUILDS. Each is opened by its own stubs, after the sweep, and read by the same
+ * classifier under its screen's route, so the allow lists apply to it too. Each one is asserted built before it is
+ * read, so a green read cannot be a state that never drew. Review: the matched figure above zero, which makes its
+ * tile a button (`ReviewBand`'s `Stat press`), and the empty queue, which draws `All caught up` and its two buttons.
+ * Pricing: a run with two SKUs and copies to send, which draws the press `Send all 2 SKUs`, and a send that the
+ * server says can be taken back, which draws `Take N copies back`. */
+const MATCH_SWEEP = /\/pipeline\/match\/sweep(\?.*)?$/
+const QUEUES = /\/queues$/
+const PRICING_WORKLIST = /\/pipeline\/pricing/
+const SENDS = /\/pipeline\/sends$/
+const RUN = '2026-09-24-box7-01'
+
+const answer = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+
+const NO_SWEEP = { on: true, running: false, blocked: null, aside: 0, matched: 0, matched_here: 0, matched_keys: [], paid: 0, paid_keys: [], unread: 0, unhinted: 0 }
+const SENDS_NONE = { sends: [], unconfirmed: { copies: 0, stamps: [] }, due: false, check_at: null, now: '2026-09-24T12:00:00+00:00' }
+
+/** One SKU of the worklist, in the shape `Pricing` reads. A worklist of one run, two SKUs, three copies each. */
+function worklistSku(sku: string, name: string) {
+  return {
+    sku,
+    game: 'pokemon',
+    row: {
+      'TCGplayer Id': sku,
+      'Product Line': 'Pokemon',
+      'Set Name': 'SV: Prismatic Evolutions',
+      'Product Name': name,
+      Title: '',
+      Number: '161/159',
+      Rarity: 'Secret Rare',
+      Condition: 'Near Mint Holofoil',
+      'TCG Market Price': '22.03',
+      'TCG Direct Low': '21.98',
+      'TCG Low Price With Shipping': '22.98',
+      'TCG Low Price': '21.98',
+      'Total Quantity': '0',
+      'Add to Quantity': '0',
+      'TCG Marketplace Price': '',
+      'Photo URL': '',
+    },
+    bucket: 'listable',
+    copies: 3,
+    add_to_quantity: 3,
+    backstock: 0,
+    live_before: 0,
+    committed: 0,
+    copies_out: 0,
+    nothing_to_add: null,
+    at_cap: false,
+    condition: 'Near Mint Holofoil',
+    set_name: 'SV: Prismatic Evolutions',
+    name,
+    image_url: null,
+    snap: { market: '22.03', direct_low: null, low: '21.98', low_with_shipping: '22.98', now: null },
+    presets: { market_match: '22.03', market_undercut_5: '20.93', low_undercut_1: '21.76' },
+    rule_price: '22.03',
+    positions: [
+      { box: 7, index: 1, label: 'Box 7, Section 1, Card 1' },
+      { box: 7, index: 2, label: 'Box 7, Section 1, Card 2' },
+      { box: 7, index: 3, label: 'Box 7, Section 1, Card 3' },
+    ],
+    listing: null,
+    in: [{ run: RUN, add_to_quantity: 3 }],
+    claimed_add: 3,
+    over_cap: false,
+  }
+}
+
+function worklist() {
+  const run = { run: RUN, path: `/tmp/runs/${RUN}`, box: 7, box_name: 'Riftbound epics', created_at: null, live: false, phase: 'emit', joined: true, collected: true, counts: { skus: 2, cards_in: 6, queued_main: 0, queued_parked: 0 }, batch_ids: [], usage: {} }
+  return {
+    runs: [run],
+    roster: [{ ...run, owes: ['never emitted'], owed: [{ code: 'never_emitted', count: null }], open: true, unsent: 0 }],
+    skus: [worklistSku('8608859', 'Articuno - 161/159'), worklistSku('8608860', 'Articuno - 162/159')],
+    written_at: {},
+    skipped: [],
+    asked: [],
+    threshold: '0.40',
+    floor: '0.40',
+  }
+}
+
+/** One send the server says can be taken back: a check ran past the wait, and six copies were not found. */
+const TAKEABLE = {
+  stamp: '20260924-120000',
+  kind: 'send',
+  state: 'short',
+  at: '2026-09-24T12:00:00+00:00',
+  copies: 6,
+  prices: 0,
+  price_check: null,
+  rows: 2,
+  published_at: '2026-09-24T12:00:05+00:00',
+  check_after: '2026-09-24T12:15:05+00:00',
+  checked_at: '2026-09-24T12:18:00+00:00',
+  check: { export: 'live.csv', found: 0, expected: 6, missing: [] },
+  trimmed: [],
+  trimmed_copies: 0,
+  accepted: 2,
+  turned_away: 0,
+  failure: null,
+  unknown: null,
+  held: false,
+  staged: false,
+  takeable: 6,
+  take_back_after: null,
+  files: ['import.csv'],
+  taken_back_at: null,
+  warning: null,
+  prices_left: [],
+  moves: [],
+}
+
+async function visit(page: Page, route: string): Promise<void> {
+  await page.goto('/')
+  await settleBody(page, route)
+}
+
 interface Finding {
   check: 'copy-voice' | 'copy-casing'
   route: string
@@ -273,8 +400,14 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
 
     for (const one of scan.casing) {
       if (one.mono || one.upper || one.typed) continue
-      const checked = stripTyped(one.text, one.marked)
-      if (checked === '' || (one.spoken && isSpokenSentences(checked))) continue
+      // THE LABEL IS ONE LINE OF THE CONTROL (`labelOf`). No line qualifies for an icon control, and its accessible
+      // name is read instead, as a spoken name. A description under a title is never reached.
+      const label = labelOf(one.lines, one.keyCaps)
+      const spoken = label === ''
+      const text = spoken ? one.aria : label
+      if (text === '') continue
+      const checked = stripTyped(text, one.marked)
+      if (checked === '' || (spoken && isSpokenSentences(checked))) continue
       // A HEADING (h2, h3) OR A TITLE MAY BE A SENTENCE: an empty state or a greeting. A control, and a page title (h1),
       // is a label whatever its ending, so `Cards to pull.` on a control or an h1 is still checked.
       if ((one.role === 'heading' || one.role === 'title') && isSentence(checked)) continue
@@ -282,14 +415,14 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
       if (problems.length === 0) continue
       // A FINDING IS KEYED BY ITS TEXT, not its role: a control's label often shows twice (its tip and its
       // accessible name), and one string is one offender.
-      const id = JSON.stringify(one.text)
+      const id = JSON.stringify(text)
       if (seen.has(`c|${id}`)) continue
       seen.add(`c|${id}`)
       if (casingAllow[route]?.[id] !== undefined) {
         casingUsed.add(`${route}\u0000${id}`)
         continue
       }
-      findings.push({ check: 'copy-casing', route, id, text: one.text, kind: one.role, detail: problems.join('; ') })
+      findings.push({ check: 'copy-casing', route, id, text, kind: one.role, detail: problems.join('; ') })
     }
   }
 
@@ -313,12 +446,46 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   read(FULFILLER, await page.evaluate(scanCopy))
   swept.add(FULFILLER)
 
+  // THE REVIEW STATE WITH A MATCHED FIGURE: its tile is a button, so its label is read. Asserted drawn first.
+  await setViewport(page, { width: 1440, height: 1000 })
+  await page.route(MATCH_SWEEP, (route) => route.fulfill(answer({ ...NO_SWEEP, matched: 2, matched_here: 2, matched_keys: ['3/1', '3/2'] })))
+  await visit(page, '#/review')
+  await expect(page.locator('.review-band-count', { hasText: 'matched free' }).getByRole('button'), 'the matched tile is a button').toHaveCount(1)
+  read('#/review', await page.evaluate(scanCopy))
+
+  // THE REVIEW STATE WITH AN EMPTY QUEUE: `All caught up`, and its two buttons. Asserted drawn first.
+  await page.route(QUEUES, (route) => route.fulfill(answer({ review: [], parked: [] })))
+  await page.route(MATCH_SWEEP, (route) => route.fulfill(answer(NO_SWEEP)))
+  await visit(page, '#/review')
+  await expect(page.locator('.review-done'), 'the empty queue draws its card').toBeVisible()
+  read('#/review', await page.evaluate(scanCopy))
+
+  // THE PRICING STATE WITH A RUN TO SEND: the press names all two SKUs. Asserted drawn first.
+  await page.route(PRICING_WORKLIST, (route) => route.fulfill(answer(worklist())))
+  await page.route(SENDS, (route) => route.fulfill(answer(SENDS_NONE)))
+  await page.route(/\/pipeline\/runs\/[^/]+$/, (route) =>
+    route.fulfill(
+      answer({ run: RUN, path: `/tmp/runs/${RUN}`, box: 7, box_name: 'Riftbound epics', live: false, phase: 'emit', joined: true, collected: true, counts: { skus: 2, cards_in: 6, queued_main: 0, queued_parked: 0 }, batch_ids: [], usage: {}, console: '', files: [], manifest: {} }),
+    ),
+  )
+  await visit(page, '#/pricing')
+  await expect(page.getByRole('button', { name: /^Send all 2 SKUs/ }), 'the send press names two SKUs').toBeVisible()
+  read('#/pricing', await page.evaluate(scanCopy))
+
+  // THE PRICING STATE WITH A TAKEABLE SEND: the card offers `Take N copies back`. Asserted drawn first.
+  await page.route(SENDS, (route) => route.fulfill(answer({ ...SENDS_NONE, sends: [TAKEABLE] })))
+  await visit(page, '#/pricing')
+  await expect(page.getByRole('button', { name: /^Take \d+ copies back$/ }), 'the takeable send offers its take back').toBeVisible()
+  read('#/pricing', await page.evaluate(scanCopy))
+
   const casingTotal = reads.reduce((sum, one) => sum + one.casing, 0)
   expect(casingTotal, `the sweep read ${casingTotal} labels, under the floor of ${CASING_FLOOR}`).toBeGreaterThan(CASING_FLOOR)
 
   // THE RECEIPT. Counts and the top ten, written before any assertion so a red run still leaves it.
+  // One offender is one (check, route, text), however many reads saw it: a state read repeats the screen's landing copy.
+  const offenders = findings.filter((one, at) => findings.findIndex((other) => other.check === one.check && other.route === one.route && other.id === one.id) === at)
   const tally = (check: Finding['check']) => {
-    const mine = findings.filter((one) => one.check === check)
+    const mine = offenders.filter((one) => one.check === check)
     const byText = new Map<string, number>()
     for (const one of mine) byText.set(one.text, (byText.get(one.text) ?? 0) + 1)
     const top = [...byText.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 10)
@@ -358,5 +525,64 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
       }
     }
     expect.soft(problems, problems.join('\n')).toEqual([])
+  }
+})
+
+/* THE CLIP CASES (copy map: Pricing at 820, and Orders' hero once the chips load). A line clips when its `scrollWidth` is
+ * above its `clientWidth`: its last fact is drawn past the edge of its box, and the box hides it or cuts it to an ellipsis.
+ * Each screen is opened with the populated seeds the route sweep registers, so it draws the rows the sweep reads. */
+async function seedEverySweepScreen(page: Page): Promise<void> {
+  for (const seed of Object.values(POPULATED_ROUTE_SEEDS)) await seed(page)
+}
+
+test.describe('clip: no fact is cut off at 1440 or 820', () => {
+  for (const width of [1440, 820] as const) {
+    test(`pricing: no item line clips its last fact at ${width}`, async ({ page }) => {
+      await setViewport(page, { width, height: 1000 })
+      await seedEverySweepScreen(page)
+      await page.goto('/#/pricing')
+      await settleFonts(page)
+      const lines = page.locator('.pricing-meta:not(.pricing-where)')
+      await expect(lines.first(), 'the item rows are drawn').toBeVisible()
+      const clipped = await lines.evaluateAll((els) =>
+        els
+          .filter((el) => el.scrollWidth > el.clientWidth + 1)
+          .map((el) => `${(el.textContent ?? '').replace(/\s+/g, ' ').trim()} (drawn ${el.scrollWidth}px, box ${el.clientWidth}px)`),
+      )
+      expect(clipped, 'item lines whose last fact is cut off').toEqual([])
+    })
+
+    test(`orders: the card number stays whole once the chips load at ${width}`, async ({ page }) => {
+      await setViewport(page, { width, height: 1000 })
+      await seedEverySweepScreen(page)
+      /* THE HERO'S OWN CARD, with a printed total and the rarity and finish chips a real walk shows. The seeds' copy has no
+       * printed total, so its number is short and nothing can clip. */
+      await page.route(/\/inventory\/copies$/, (route) => {
+        const copy = {
+          ...card({ box: 3, index: 21, section: 2, card: 17, name: 'Volcanion', boxName: 'SV commons', boxTotal: 3 }),
+          /* `number_display` is the server's own fold and wins over `number` and `printed_total` (`cardNumber.ts`). */
+          number_display: '078/076',
+          number: '078',
+          printed_total: '076',
+          set_hint: 'Prismatic Evolutions',
+          rarity_claim: ['Common', 'Uncommon'],
+          metadata_finish: 'Normal',
+          /* THE LINE'S OWN SKU (`routeFixtures.ts`'s `PRODUCT_SKU`): the store is indexed by it, so another SKU leaves the hero on its fallback. */
+          sku: '9191486',
+        }
+        /* KEYED BY THE PICK'S OWN POSITION (`routeFixtures.ts`'s `pick`: box 3, index 21), the key the store indexes the hero by. */
+        return route.fulfill(answer({ cards: { '3/21': copy } }))
+      })
+      await page.goto('/#/orders')
+      await settleFonts(page)
+      await expect(page.locator('.orders-pick-chip'), 'the pick chip has loaded').toBeVisible()
+      /* NOT `toBeVisible`: once the chips take their room the meta line can shrink to no width at all, and Playwright then
+       * calls it hidden. That is the clip itself, so the check measures what the line draws against the box it has. */
+      const parts = page.locator('.browse-hero-parts').first()
+      await expect(parts, 'the hero meta line is in the page').toHaveCount(1)
+      await expect(parts, 'the hero meta line carries the card number').toHaveAttribute('title', /078\/076/)
+      const measure = await parts.evaluate((el) => ({ drawn: el.scrollWidth, box: el.clientWidth }))
+      expect(measure.drawn - measure.box, `the meta line draws ${measure.drawn}px in a ${measure.box}px box, so its number, set or game is cut off`).toBeLessThanOrEqual(1)
+    })
   }
 })

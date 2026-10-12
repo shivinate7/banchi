@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { test, expect } from './unit'
 import { REASON_LABELS, RETIRED_REASON_LABELS } from '../../src/reasons'
-import { casingProblems, isSentence, isSpokenSentences, stripTyped, voiceHits } from '../copyRules'
+import { casingProblems, isSentence, isSpokenSentences, labelOf, stripTyped, voiceHits } from '../copyRules'
 import { attrText, firstPersonInSource, jsxOpeningsIn, recordFromSource } from '../copySource'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -79,6 +79,34 @@ test('label: a closing period on a control label does not skip the casing check'
   expect(casingProblems('Cards to pull.')).not.toEqual([])
   expect(casingProblems('Which Card Is This?')).toEqual([])
   expect(casingProblems('Under Your Price.')).toEqual([])
+})
+
+/* THE LABEL LINE (the sweep's first-line rule was wrong for two shapes). A tile draws its figure above its label, and a
+ * row draws its key cap before its name. The label is the first line with a letter that is not a key cap alone. A
+ * description under a title is never the label. */
+test('label line: a figure above the label picks the label, and a key cap before the name is skipped', () => {
+  expect(labelOf(['12', 'matched free', '›'], [])).toBe('matched free')
+  expect(labelOf(['0', 'matched free'], [])).toBe('matched free')
+  expect(labelOf(['H', 'Set hint', 'Needed'], ['H'])).toBe('Set hint')
+})
+
+test('label line: a title keeps its own line, and the description under it is never the label', () => {
+  expect(labelOf(['Read a box', 'Tap a box to read every card in it.'], [])).toBe('Read a box')
+})
+
+test('label line: a control with only key caps has no label, so its accessible name is read instead', () => {
+  expect(labelOf(['⌘K'], ['⌘K'])).toBe('')
+  expect(labelOf(['12'], [])).toBe('')
+})
+
+/* THE NINE STRINGS THAT WENT UNREAD ON ee5b389a. Each one must be a casing problem under the rule, and a caption or an
+ * instruction sentence must not be one. The state reads in `copy-checks.spec.ts` show each string on its own screen. */
+test('the nine casing misses: each label is a Title Case problem, and a caption is prose the rule does not read', () => {
+  for (const label of ['Set hint', 'Price the answers', 'Run another box', 'matched free', 'Lowest with shipping', 'Can be sent', 'Listed now', 'Your price', 'Take 6 copies back', 'Send all 3 SKUs to TCGplayer']) {
+    expect(casingProblems(label), label).not.toEqual([])
+  }
+  expect(isSentence('Started at 9:15 PM. The result shows here when TCGplayer answers.')).toBe(true)
+  expect(isSpokenSentences('Order: High to low. Press to reverse.')).toBe(true)
 })
 
 test('voice: the quoted page name is exempt in voiceHits, and the unquoted words are not (browser path)', () => {
