@@ -1214,7 +1214,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
       let at = 0
       await expect.poll(async () => { at = await sell.evaluate((el) => el.getBoundingClientRect().top + window.scrollY); return at }, { message: 'the control never got a position' }).toBeGreaterThan(100)
       const h = Math.round(at) + 24
-      await page.setViewportSize({ width, height: h })
+      await setViewport(page, { width, height: h })
       await page.evaluate(() => window.scrollTo(0, 0))
       await settleMotion(page)
       await afterPaint(page)
@@ -1252,7 +1252,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
       const subText = () => page.locator('.browse-hero-sub').innerText()
       await press(sell, 'Mark sold')
       /* A press that does not register fails the case by name, before any move is read: a missed press is never a pass. */
-      const sold = await expect.poll(subText, { timeout: 5000 }).toContain('Sold').then(() => true, () => false)
+      const sold = await expect.poll(subText, { timeout: 5000 }).toContain('Sold').then(() => true).catch(() => false)
       expect(sold, 'the sale did not register: the Mark sold press never showed Sold').toBe(true)
       await settleMotion(page)
       await afterPaint(page)
@@ -1262,7 +1262,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
       /* The Undo holds focus after a sale (the card hands it there, for a keyboard user), so Enter presses it. A
          mouse press at the bottom edge can land on the receipt toast, which carries the same Undo action. */
       await page.keyboard.press('Enter')
-      const undone = await expect.poll(subText, { timeout: 5000 }).not.toContain('Sold').then(() => true, () => false)
+      const undone = await expect.poll(subText, { timeout: 5000 }).not.toContain('Sold').then(() => true).catch(() => false)
       expect(undone, 'the undo did not register: Sold stayed on the card header').toBe(true)
       await settleMotion(page)
       await afterPaint(page)
