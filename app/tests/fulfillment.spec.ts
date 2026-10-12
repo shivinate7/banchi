@@ -1950,6 +1950,9 @@ test('ux-w2 R18: a failed orders read keeps the last count shown', async ({ page
   await settleFonts(page)
   await expect(view(page).getByText(/\b12\s+left\b/i).first(), 'the count reads 12 left before the failure').toBeVisible()
   failNow = true
+  // The hop to #/orders makes its own reads, which this case stubs: no boxes, and an empty store.
+  await page.route(/\/boxes(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ boxes: [], facet_cells: [] }) }))
+  await page.route(/\/inventory$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: 2, cards: {}, boxes: {}, listings: {} }) }))
   await page.evaluate(() => {
     window.location.hash = '#/orders'
   })
