@@ -130,6 +130,9 @@ function scanCopy(): CopyScan {
         return
       }
       if (!(node instanceof HTMLElement)) return
+      // SPOKEN-ONLY TEXT AND DATA VALUES ARE NOT LABEL LINES: `.bn-sr` is read aloud and never drawn (a section title's count
+      // clause), and `data-value` marks a figure beside a label (a box cell's `797 stored`). Their text stays out of the lines.
+      if (node.classList.contains('bn-sr') || node.hasAttribute('data-value')) return
       const style = getComputedStyle(node)
       if (style.display === 'none' || style.visibility === 'hidden') return
       if (node.tagName === 'BR') {
@@ -433,6 +436,9 @@ interface Finding {
 sealEveryTest({ store: true, cards: 122 })
 
 test('one sweep: every screen is read once by the copy-voice and copy-casing checks', async ({ page }) => {
+  // THE SWEEP READS EVERY SCREEN AND EVERY STATE, one after another. On the owner's loaded machine (load average near 150) it took
+  // 28 to 49 seconds, past the 30-second default, so the case gets room of its own.
+  test.setTimeout(180_000)
   const voiceAllow = readAllow('copy-voice-allow.json')
   const casingAllow = readAllow('copy-casing-allow.json')
   const voiceUsed = new Set<string>()
@@ -534,6 +540,48 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   await page.locator('.review-band-count', { hasText: /matched free/i }).getByRole('button').click()
   await expect(page.getByRole('dialog'), 'the matched sheet opens').toBeVisible()
   read('#/review', await page.evaluate(scanCopy))
+
+  // THE SHELF'S LIFT BAR: a section lifted in Layout mode draws its scope picker (`This section`, `This and the next`,
+  // `The whole box`, `Some Cards`). The grip is pressed from the keyboard, so the bar opens the same way for every reader.
+  // THE SHELF READS `/boxes?...` (WITH A QUERY), which the shell's `/boxes$` stub does not answer. One box with two sections
+  // gives the bar both range scopes (`This and the next`, `The whole box`).
+  await page.route(/\/boxes\?.*$/, (route) =>
+    route.fulfill(
+      answer({
+        boxes: [
+          {
+            box: 2,
+            bid: 12,
+            name: 'SV commons',
+            sections: [1, 2],
+            state: 'open',
+            capacity: 100,
+            fill: 4,
+            next_index: 5,
+            cards: 4,
+            on_hand: 3,
+            sold: 1,
+            retired: 0,
+            moved: 0,
+            listed: 0,
+            sections_detail: [
+              { section: 1, start: 1, end: 2, count: 2, name: 'Commons' },
+              { section: 2, start: 3, end: 4, count: 2, name: 'Uncommons' },
+            ],
+          },
+        ],
+        facets: { games: [], sets: {}, rarities: {} },
+      }),
+    ),
+  )
+  await visit(page, '#/inventory?view=shelf')
+  await page.getByRole('button', { name: 'Layout' }).click()
+  const grip = page.getByRole('button', { name: /^(Drag|Move) section/ }).first()
+  await grip.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.shelf-lift'), 'the lift bar is drawn once a section is lifted').toBeVisible()
+  read('#/inventory', await page.evaluate(scanCopy))
+  await page.keyboard.press('Escape')
 
   // THE REVIEW BAND'S UNHINTED LINE: two cards with no set hint. Its health button is read, then its sheet opens and is read.
   await page.route(MATCH_SWEEP, (route) => route.fulfill(answer({ ...NO_SWEEP, unhinted: 2 })))
@@ -761,6 +809,11 @@ test.describe('clip: no fact is cut off at 1440 or 820', () => {
       })
       await page.goto('/#/orders')
       await settleFonts(page)
+      /* THE REVERT PROOF. `HERO_NUMBER_REVERT=1` puts the number back under the rule that clipped it: `overflow: hidden` from
+       * `.browse-hero-parts > span`, with the override that exempted it removed. The case must then go red. */
+      if (process.env.HERO_NUMBER_REVERT === '1') {
+        await page.addStyleTag({ content: '.browse-hero-parts > .browse-hero-number { overflow: hidden; text-overflow: ellipsis; }' })
+      }
       await expect(page.locator('.orders-pick-chip'), 'the pick chip has loaded').toBeVisible()
       /* NOT `toBeVisible`: once the chips take their room the meta line can shrink to no width at all, and Playwright then
        * calls it hidden. That is the clip itself, so the check measures what the line draws against the box it has. */
@@ -776,6 +829,31 @@ test.describe('clip: no fact is cut off at 1440 or 820', () => {
       expect(digits.drawn - digits.box, `the card number draws ${digits.drawn}px of text in a ${digits.box}px box, so its digits are cut off`).toBeLessThanOrEqual(1)
     })
   }
+})
+
+// SPOKEN-ONLY TEXT AND DATA VALUES ARE NOT LABELS. A section title's sr-only count clause is prose the screen reader hears
+// (`Head, 3 cards`), and a box cell's figure (`797 stored`) is a data value beside a label. A real label of the same shape still flags.
+test.describe('reader: sr-only text and data values are not labels', () => {
+  test('a screen-reader-only clause is spoken, not drawn, so it is not in the label', async ({ page }) => {
+    await page.setContent('<main><button type="button"><div>Head<span class="bn-sr">, 3 cards</span></div></button></main>')
+    const scan = await page.evaluate(scanCopy)
+    const one = scan.casing.find((c) => c.role === 'button')
+    expect(one?.lines, 'the drawn words are the label, and the spoken clause is not in it').toEqual(['Head'])
+  })
+
+  test('a data value is a figure beside a label, not a label of its own', async ({ page }) => {
+    await page.setContent('<main><button type="button"><div>Box 1</div><div><span data-value="">797 stored</span></div></button></main>')
+    const scan = await page.evaluate(scanCopy)
+    const one = scan.casing.find((c) => c.role === 'button')
+    expect(one?.lines, 'the data value is not a label line').toEqual(['Box 1'])
+  })
+
+  test('a real label of the same shape still flags, so the rule is not a blanket pass', async ({ page }) => {
+    await page.setContent('<main><button type="button"><div>Box 1</div><div>797 stored</div></button></main>')
+    const scan = await page.evaluate(scanCopy)
+    const one = scan.casing.find((c) => c.role === 'button')
+    expect(one?.lines, 'an unmarked second line is still a label line').toEqual(['Box 1', '797 stored'])
+  })
 })
 
 // THE READER JOINS ADJACENT ELEMENTS WITH A SPACE. innerText glued `SV commons` and `Section 1` into one word.
