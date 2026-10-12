@@ -1961,6 +1961,35 @@ test('ux-w2 R18: a failed orders read keeps the last count shown', async ({ page
 })
 }
 
+/* ux-w2 (nothing on screen moves unless the person moved it, on the card view). The stale notice is drawn above the card's body, so when a failed refresh brings it in
+   after first paint, the photograph moves. A sale is the refresh the screen makes; the orders read that follows it fails. */
+test('ux-w2: a failed refresh on the card view moves nothing once the stale notice arrives', async ({ page }) => {
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
+  await openCard(page, 'Charizard ex')
+  let failNow = false
+  await page.route(/\/orders$/, async (route) => {
+    if (!failNow) return route.fallback()
+    return route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'orders_unavailable', message: 'The orders could not be read.' } }),
+    })
+  })
+  const photo = view(page).locator('.fulfillment-photo')
+  await settleAnimations(page)
+  const before = await photo.boundingBox()
+  failNow = true
+  await sellOpenCard(page)
+  await expect(view(page).locator('.ff-notice'), 'the stale notice is drawn after the failed refresh').toBeVisible()
+  await settleLayout(page)
+  await settleAnimations(page)
+  const after = await photo.boundingBox()
+  expect(before, 'the photograph has a box before the refresh').not.toBeNull()
+  expect(after, 'the photograph has a box after the refresh').not.toBeNull()
+  expect(Math.abs(after!.y - before!.y), 'the photograph does not move down or up').toBeLessThanOrEqual(1)
+  expect(Math.abs(after!.x - before!.x), 'the photograph does not move sideways').toBeLessThanOrEqual(1)
+})
+
 /* ux-w2 gap-check self-proof. Two plain buttons that overlap are NOT a covered pair: the gap floor must fail them. The
    covered skip applies only when a fixed or sticky layer is on top of a control. */
 test('ux-w2 gap check: two overlapping plain buttons fail the gap floor', async ({ page }) => {
