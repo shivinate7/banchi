@@ -184,6 +184,9 @@ test('spoken names: a trailing value clause after a comma that starts with a num
   expect(spokenNameProblems('Filters, 1 on')).toEqual([])
   expect(spokenNameProblems('Filters 1')).toEqual([])
   expect(spokenNameProblems('filters, 1 on')).toEqual(['"filters" should be capitalized'])
+  // THE CLAUSE IS BOUNDED: a count and the one ruled state word (`on`), never any words after a comma.
+  expect(spokenNameProblems('Order, 2 items to ship'), 'a clause that is not a count and on is graded').not.toEqual([])
+  expect(spokenNameProblems('order, 2 items to ship'), 'a lower-case word before the clause is graded').toEqual(expect.arrayContaining(['"order" should be capitalized']))
   expect(stripValueClause('Sort, Market price')).toBe('Sort, Market price')
 })
 

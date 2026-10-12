@@ -177,7 +177,8 @@ function scanCopy(): CopyScan {
       // THE ROOT IS NEVER SKIPPED: a candidate that is itself screen-reader text (`<h2 class="bn-sr">`) is still graded.
       // A PRESS'S DETAIL LINE (`.bn-set-op-detail`, the caption under a press such as `Can be undone`) is prose under the press, not
       // a label line: the press's own label (`.bn-set-op-label`) is what is graded.
-      if (node !== root && (node.classList.contains('bn-sr') || node.hasAttribute('data-value') || node.classList.contains('bn-set-op-detail'))) return
+      // A KIT STATE CAPTION (`.bn-thumb-none`, the `No Photo Found` line drawn over an image frame, aria-hidden) is prose too.
+      if (node !== root && (node.classList.contains('bn-sr') || node.hasAttribute('data-value') || node.classList.contains('bn-set-op-detail') || node.classList.contains('bn-thumb-none'))) return
       const style = getComputedStyle(node)
       if (style.display === 'none' || style.visibility === 'hidden') return
       if (node.tagName === 'BR') {
@@ -1103,6 +1104,18 @@ test.describe('reader: a press detail line is prose, the press label is graded',
     const scan = await page.evaluate(scanCopy)
     const one = scan.casing.find((c) => c.role === 'button')
     expect(one?.lines, 'only the press label is a label line').toEqual(['Cancelled or Refunded'])
+  })
+
+  // THE KIT STATE CAPTION IS PROSE, and a real label beside it still flags.
+  test('a no-photo caption over an image frame is prose, and a real label beside it still flags', async ({ page }) => {
+    await page.setContent(
+      '<main><button type="button"><span class="bn-thumb-none" aria-hidden="true">No Photo Found</span></button><button type="button">show all</button></main>',
+    )
+    const scan = await page.evaluate(scanCopy)
+    const buttons = scan.casing.filter((c) => c.role === 'button')
+    expect(buttons[0]?.lines, 'the no-photo caption is not a label line').toEqual([])
+    expect(buttons[1]?.lines, 'the real label beside it is a label line').toEqual(['show all'])
+    expect(casingProblems('show all'), 'the real lower-case label still flags').not.toEqual([])
   })
 
   test('a real press label in lower case still flags, with its detail caption left out', async ({ page }) => {

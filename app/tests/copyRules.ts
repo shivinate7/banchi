@@ -182,7 +182,7 @@ export function statProblems(text: string, press: boolean): string[] {
 /** A spoken name's value clause: a trailing comma clause that starts with a number (`Filters, 1 on`). The clause says the
  *  control's state, not a label word, so it is not graded, the way a screen reader's count clause is not drawn (`.bn-sr`). */
 export function stripValueClause(text: string): string {
-  return text.replace(/,\s*\d[^,]*$/, '')
+  return text.replace(/,\s*\d+\s+on$/, '')
 }
 
 /** A spoken name's Title Case problems, with its value clause left out (`Filters, 1 on` is the name of `Filters`, with 1 on). */
@@ -190,6 +190,7 @@ export function spokenNameProblems(text: string): string[] {
   return casingProblems(stripValueClause(text))
 }
 
+// UNENFORCED: a checkbox or radio label that is a sentence but Title Case passes here; no sentence grade is added for it.
 /** A field label, graded by the control it names. A checkbox or radio label is an option sentence (`Split in two files at the
  *  cut-off`), which is prose and is not read. A text, search or select field's label takes Title Case. `control` is the input
  *  type the label names (`text`, `search`, `checkbox`, `radio`), `select` for a select, or '' when no control is named. */
