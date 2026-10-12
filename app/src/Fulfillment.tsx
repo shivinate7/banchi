@@ -502,6 +502,10 @@ function CardRow({ card, onOpen }: { card: Sellable; onOpen: (card: Sellable) =>
   )
 }
 
+/** The last count the orders read gave, kept across a leave and return so a failed read keeps it (R18).
+ *  One number for this device's sitting; it names no card and is never stored. */
+let lastCount: number | null = null
+
 export function Fulfillment() {
   const [cards, setCards] = useState<Sellable[] | null>(null)
   const [unplaced, setUnplaced] = useState(0)
@@ -1056,9 +1060,18 @@ export function Fulfillment() {
     </p>
   )
 
+  const countOf = (n: number): ReactNode => {
+    const said = n.toLocaleString()
+    return (
+      <p className="ff-count" style={{ '--ff-n': said.length } as CSSProperties}>
+        <b className="ff-count-num">{said}</b> <span className="ff-count-word">Left</span>
+      </p>
+    )
+  }
+
   let body: ReactNode
   let wide = false
-  /* The list draws the stale notice itself, below its search bar, so the notice never pushes the search. */
+  /* The list and the card draw the stale notice themselves, below their bar or card, so it never pushes either. */
   let staleBelowBar = false
 
   if (cards === null && loadFailed) {
@@ -1081,12 +1094,15 @@ export function Fulfillment() {
     body = (
       <>
         {header}
+        {/* The same bar the list draws, with the real search, so nothing moves when the cards land. */}
+        <div className="ff-bar">
+          <div className="ff-count-track">{todayFrame}</div>
+          <div className="ff-search" data-clear="false">
+            <SearchField value={query} onChange={setQuery} persona="fulfiller" placeholder="Card name or number" />
+          </div>
+        </div>
         <div className="ff-loading" aria-busy="true">
           <p className="fulfillment-say ff-loading-say">Getting the cards.</p>
-          <div className="ff-bar ff-bar-wait">
-            <div className="ff-count-track">{todayFrame}</div>
-            <span className="ff-skel ff-skel-search" />
-          </div>
           <span className="ff-skel ff-skel-row" />
           <span className="ff-skel ff-skel-row" />
           <span className="ff-skel ff-skel-row" />
@@ -1226,8 +1242,11 @@ export function Fulfillment() {
           </div>
           </div>
         </article>
+        {/* Below the card, never above it: a notice that arrives after first paint must not push the card. */}
+        {stale}
       </>
     )
+    staleBelowBar = true
   } else {
     const hunting = query.trim() !== ''
 
@@ -1335,8 +1354,11 @@ export function Fulfillment() {
     let countFigure: ReactNode = null
     if (orders === null) {
       today = null
-      countFigure = ordersFailed ? null : todayFrame
+      /* Never blank: a read that has not answered, or that failed before it ever did, shows the
+         loading count. A failed re-read keeps `orders`, so the count it last showed stays. */
+      countFigure = ordersFailed && lastCount !== null ? countOf(lastCount) : todayFrame
     } else if (openOrderKeys.length === 0) {
+      countFigure = countOf(0)
       /* No order is open at all — the ONE state allowed to say "nothing waits" (the owner's
          own review finding, UX-001: a green "nothing waits" while orders are open and unread
          is the defect this screen had). */
@@ -1349,6 +1371,7 @@ export function Fulfillment() {
         </p>
       )
     } else if (owed.length === 0) {
+      countFigure = countOf(0)
       /* Orders are open, but not one copy any of them wants is on hand — never drawn as
          "nothing waits", which would read as caught up rather than stuck. */
       today = (
@@ -1365,12 +1388,7 @@ export function Fulfillment() {
     } else {
       /* B23: the count lives in the sticky bar with the search (`countFigure`); only the
          unlocated warning stays here, in the page. */
-      const said = totalWanted.toLocaleString()
-      countFigure = (
-        <p className="ff-count" style={{ '--ff-n': said.length } as CSSProperties}>
-          <b className="ff-count-num">{said}</b> <span className="ff-count-word">Left</span>
-        </p>
-      )
+      countFigure = countOf(totalWanted)
       today =
         shortfallCount === 0 ? null : (
           <p className="fulfillment-say ff-today-warn">
@@ -1380,6 +1398,7 @@ export function Fulfillment() {
         )
     }
 
+    if (orders !== null && !ordersFailed) lastCount = openOrderKeys.length === 0 || owed.length === 0 ? 0 : totalWanted
     staleBelowBar = true
     const shownOwed = allOwed ? owed : owed.slice(0, SHOWN_OWED)
     const hiddenOwed = owed.length - shownOwed.length
