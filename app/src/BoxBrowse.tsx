@@ -707,7 +707,7 @@ function VariantChooser({
     )
   const boxRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (focusOnMount) boxRef.current?.focus(FOCUS)
+    if (focusOnMount) boxRef.current?.focus()
   }, [focusOnMount])
 
   /* RARITY DRAWN ONLY WHERE THE PRINTINGS ON SCREEN ACTUALLY DIFFER IN IT. The Runes all
