@@ -5407,6 +5407,15 @@ COMPONENTS = [
         "governed_by": ["D16"],
     },
     {
+        "path": "docs/specs/home-assistant.md",
+        "status": "tbd",
+        "does": "PROPOSAL, nothing built: what the owner's home, ios-adblock and degen repos do "
+                "with Home Assistant and over-the-air updates, and which of those patterns would "
+                "help banchi (failure alerts, a heartbeat, a dashboard card), with open "
+                "questions and what not to do.",
+        "governed_by": ["D176", "D316", "D104", "D295", "D42"],
+    },
+    {
         "path": "fixtures/",
         "status": "built",
         "does": "real TCGplayer exports for three product lines — Pokemon (SV09), Riftbound "
