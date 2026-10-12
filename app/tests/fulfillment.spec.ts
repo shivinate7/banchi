@@ -2346,10 +2346,12 @@ test('ux-w2 R19: zooming the photo with the receipt sheet open moves neither the
   await expect(last, 'a last interactive element is on the page').toHaveCount(1)
   const scrollBefore = await page.evaluate(() => window.scrollY)
   const lastBefore = await last.boundingBox()
-  await page.getByRole('button', { name: 'Show the photo bigger' }).click()
+  // This case checks layout across the zoom, not hit-testing. A Playwright click scrolls its target into view first, which
+  // would move the page before the zoom opens, so both presses are plain DOM clicks with no scroll.
+  await page.getByRole('button', { name: 'Show the photo bigger' }).evaluate((el) => (el as HTMLElement).click())
   await expect(page.locator('.ff-zoom'), 'the big photo is open').toBeVisible()
   await settleAnimations(page)
-  await page.getByRole('button', { name: 'Close the big photo' }).click()
+  await page.getByRole('button', { name: 'Close the big photo' }).evaluate((el) => (el as HTMLElement).click())
   await expect(page.locator('.ff-zoom'), 'the big photo is closed').toHaveCount(0)
   await settleLayout(page)
   await settleAnimations(page)
