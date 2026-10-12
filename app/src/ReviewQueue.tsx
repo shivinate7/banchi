@@ -2515,7 +2515,7 @@ export function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoos
             if (!busy) onSearch()
           }}
           submitLabel="Search"
-          label="Search this export"
+          label="Search This Export"
           placeholder="Name, collector number, or SKU"
           busy={busy}
         />

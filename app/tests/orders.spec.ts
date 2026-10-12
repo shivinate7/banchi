@@ -759,7 +759,7 @@ test('a line no pull can reach offers the two presses that can, and each sends i
   /* THE CLASSIFICATION IS A SEPARATE PRESS FROM THE FILL, and the shipping lane is why: a sealed
      product must be classifiable BEFORE it ships, or the routing answer arrives after it stopped
      mattering. Two controls here is the assertion, not an accident of layout. */
-  await stand.getByRole('button', { name: 'Sealed product' }).click()
+  await stand.getByRole('button', { name: 'Sealed Product' }).click()
   await expect
     .poll(() => wire.filter((one) => one.path === '/orders/line-kind').length)
     .toBe(1)
@@ -1593,13 +1593,13 @@ test('u typed into the buyer search field does not undo the pull', async ({ page
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
 
-  await page.getByRole('searchbox', { name: 'Search buyers' }).click()
+  await page.getByRole('searchbox', { name: 'Search Buyers' }).click()
   await page.keyboard.press('u')
 
   // No second `/orders/pull` call — the field ate the key.
   await expect(page.locator('.bn-toast', { hasText: 'Pull undone' })).toHaveCount(0)
   expect(wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
-  await expect(page.getByRole('searchbox', { name: 'Search buyers' })).toHaveValue('u')
+  await expect(page.getByRole('searchbox', { name: 'Search Buyers' })).toHaveValue('u')
 })
 
 /* -------------------------------------------------------------------------------------- 6 */
@@ -4634,7 +4634,7 @@ test('Manage says once what each stand-down press does, in words, with no code o
   })
   await openManage(page)
   const sheet = page.locator('.orders-manage-sheet')
-  await expect(sheet.getByRole('button', { name: /Already sent/ })).toHaveCount(2)
+  await expect(sheet.getByRole('button', { name: /Already Sent/ })).toHaveCount(2)
   await expect(sheet.locator('.orders-manage-legend')).toHaveCount(1)
   const text = await sheet.innerText()
   expect(text).not.toContain('no_copies_on_hand')

@@ -310,7 +310,7 @@ test('staleness is a filter and All is the default, which is the whole of the le
   })
 
   await expect(page.locator('.pricing-row')).toHaveCount(2)
-  await page.getByRole('button', { name: /Not selling/ }).click()
+  await page.getByRole('button', { name: /Not Selling/ }).click()
   await expect(page.locator('.pricing-row')).toHaveCount(1)
   await expect(page.locator('.pricing-name').first()).toContainText('Articuno')
 
@@ -332,7 +332,7 @@ test('the Live tab draws the strips of the rows on screen, and asks no market ho
   })
 
   /* THE TRENDS PRESS IS GONE (spec 7b): the filter narrows what is drawn, and nothing is asked. */
-  await page.getByRole('button', { name: /Not selling/ }).click()
+  await page.getByRole('button', { name: /Not Selling/ }).click()
   await expect(page.locator('.pricing-row')).toHaveCount(1)
   await expect(page.locator('.pricing-row .pricetrend svg')).toHaveCount(2)
   expect(wire.filter((row) => /\/trends(\?|$)/.test(row.path))).toHaveLength(0)
@@ -380,7 +380,7 @@ test('the press sends only the rows a hand priced, and carries the revision it r
   await field.blur()
   await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBeGreaterThan(0)
 
-  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
+  await page.getByRole('button', { name: 'Send 1 Price to TCGplayer' }).click()
   await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
 
   const sent = wire.find((row) => row.path.includes('/apply'))?.body as Record<string, unknown>
@@ -409,7 +409,7 @@ test('one press writes the file, sends it and makes it live', async ({ page }) =
   /* ONE PRESS (`D273`, Q7): the file is written, then the server
      reads what is live, sends it and makes it live. No check press and no second press. */
   await expect(page.getByRole('button', { name: 'Check these prices' })).toHaveCount(0)
-  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
+  await page.getByRole('button', { name: 'Send 1 Price to TCGplayer' }).click()
   await expect.poll(() => wire.filter((row) => row.path.endsWith('/send')).length).toBe(1)
   const order = wire.filter((row) => row.path.includes('/apply') || row.path.endsWith('/send')).map((row) => row.path.split('/').pop())
   expect(order).toEqual(['apply', 'send'])
@@ -446,7 +446,7 @@ test('a refused write sends nothing and says so', async ({ page }) => {
   await field.fill('')
   await field.type('17.50')
   await field.blur()
-  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
+  await page.getByRole('button', { name: 'Send 1 Price to TCGplayer' }).click()
 
   await expect(page.getByRole('region', { name: 'Send these prices' })).toContainText('These prices could not be written, so nothing was sent.')
   expect(wire.filter((row) => row.path.endsWith('/send'))).toHaveLength(0)
@@ -459,7 +459,7 @@ test('a send the live read refuses says nothing changed, and offers Try again', 
   await field.fill('')
   await field.type('17.50')
   await field.blur()
-  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
+  await page.getByRole('button', { name: 'Send 1 Price to TCGplayer' }).click()
   await expect(page.getByText('Nothing was sent. The prices at TCGplayer did not change.')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(1)
 })
@@ -695,7 +695,7 @@ function expectStill(
 }
 
 /* ROUND 9, D118: A PRESS CHANGES WHAT IS ON THE SCREEN, NEVER WHERE THE REST OF IT IS. The lens's
-   press read "Send 1 price to TCGplayer" and became "Checking TCGplayer, then sending…" while it
+   press read "Send 1 Price to TCGplayer" and became "Checking TCGplayer, then sending…" while it
    ran, so it changed its size under the finger and moved the door beside it. Measured before and
    during a press held open. */
 for (const width of [390, 820]) {
@@ -708,7 +708,7 @@ for (const width of [390, 820]) {
     await field.type('17.50')
     await field.blur()
     const bar = page.getByRole('region', { name: 'Send these prices' })
-    await expect(bar.getByRole('button', { name: 'Send 1 price to TCGplayer' })).toBeVisible()
+    await expect(bar.getByRole('button', { name: 'Send 1 Price to TCGplayer' })).toBeVisible()
     /* BY ITS PLACE AND NOT ITS NAME: the name is what changed under the finger. */
     const press = bar.locator('.pricing-emit')
     const locators = { press, door: bar.getByRole('button', { name: /Download/ }) }
@@ -810,11 +810,11 @@ test('Read again keeps its words and its place while it reads', async ({ page })
   })
   await open(page)
   await settleMotion(page)
-  const press = page.getByRole('button', { name: 'Read again' })
+  const press = page.getByRole('button', { name: 'Read Again' })
   const before = await press.boundingBox()
   await press.click()
   await expect(press).toHaveAttribute('data-busy', 'true')
-  await expect(press).toHaveText('Read again')
+  await expect(press).toHaveText('Read Again')
   const during = await press.boundingBox()
   for (const side of ['x', 'y', 'width', 'height'] as const) {
     expect(Math.abs((during?.[side] ?? 0) - (before?.[side] ?? 0)), side).toBeLessThanOrEqual(0.5)
@@ -857,13 +857,13 @@ test('a read older than a day offers Read again in place of Send, and no count a
   await open(page, { at: new Date(Date.now() - 3 * 86_400_000).toISOString() })
   const bar = page.getByRole('region', { name: 'Send these prices' })
   await expect(bar).toContainText('more than a day ago')
-  await expect(bar.getByRole('button', { name: 'Read again' })).toBeVisible()
+  await expect(bar.getByRole('button', { name: 'Read Again' })).toBeVisible()
   await expect(page.getByRole('button', { name: /^Send/ })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /^Download/ })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /^Mark down/ })).toHaveCount(0)
   /* THE LENSES DROP THEIR NUMBERS: a stale read's counts are not offered as current. */
   await expect(page.getByRole('button', { name: 'All', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Not selling', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Not Selling', exact: true })).toBeVisible()
 
   /* A TYPED PRICE OFF A STALE READ OFFERS NO SEND EITHER. */
   const field = page.locator('.pricing-input').first()
@@ -886,7 +886,7 @@ test('Mark down fills the rule price to the cent, and Send counts and sends exac
   await expect(page.getByRole('textbox', { name: 'Price for Articuno' })).toHaveValue('18.00')
   await expect(page.getByRole('textbox', { name: 'Price for Dunsparce' })).toHaveValue('4.50')
   await expect(page.getByRole('textbox', { name: 'Price for Kled' })).toHaveValue('')
-  await page.getByRole('button', { name: 'Send 2 prices to TCGplayer' }).click()
+  await page.getByRole('button', { name: 'Send 2 Prices to TCGplayer' }).click()
   await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
   const sent = wire.find((row) => row.path.includes('/apply'))?.body as Record<string, unknown>
   /* THE VALUE SENT IS THE VALUE SHOWN, to the cent. */
@@ -919,7 +919,7 @@ test('a card with no market price is never marked down, and leads the list for t
   await expect(page.getByRole('textbox', { name: 'Price for Kai Sa' })).toHaveAttribute('placeholder', '6000.00')
   await page.getByRole('button', { name: 'Mark down 1' }).click()
   await expect(page.getByRole('textbox', { name: 'Price for Kai Sa' })).toHaveValue('')
-  await expect(page.getByRole('button', { name: 'Send 1 price to TCGplayer' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Send 1 Price to TCGplayer' })).toBeVisible()
 })
 
 test('the counts add up: All is Not selling plus Passed over, whatever the survey counted sold out', async ({ page }) => {
@@ -934,8 +934,8 @@ test('the counts add up: All is Not selling plus Passed over, whatever the surve
     counts: { considered: 400, offered: 1, deferred: 0, refused: 399 },
   })
   await expect(page.getByRole('button', { name: 'All 3' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Not selling 1' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Passed over 2' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Not Selling 1' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Passed Over 2' })).toBeVisible()
 })
 
 test('the dollar cap is said on the rule line, and it is the rule\'s only: a typed price goes as typed', async ({ page }) => {
@@ -951,7 +951,7 @@ test('the dollar cap is said on the rule line, and it is the rule\'s only: a typ
   await field.blur()
   await expect(field).toHaveValue('15.00')
   await expect(page.locator(VIEW)).not.toContainText('More than')
-  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
+  await page.getByRole('button', { name: 'Send 1 Price to TCGplayer' }).click()
   await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
   const sent = wire.find((row) => row.path.includes('/apply'))?.body as Record<string, unknown>
   expect(sent.edits).toEqual([{ sku: '8608859', price: '15.00' }])
@@ -970,7 +970,7 @@ test('Singles and Sealed filter the tab from the URL, and the send carries the k
   await expect(page.locator('.pricing-name').first()).toContainText('Booster Box')
   await expect(page.getByRole('button', { name: 'All 1' })).toBeVisible()
   await page.getByRole('button', { name: 'Mark down 1' }).click()
-  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
+  await page.getByRole('button', { name: 'Send 1 Price to TCGplayer' }).click()
   await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
   const sent = wire.find((row) => row.path.includes('/apply'))?.body as Record<string, unknown>
   expect(sent.kind).toBe('sealed')
@@ -995,7 +995,7 @@ test('an earlier stored price rides only when it is above the live price, and is
     answers: { '8608859': { value: '20.00' }, '8608464': { value: '4.75' }, '8608000': { value: '3.5' } },
   })
   const bar = page.getByRole('region', { name: 'Send these prices' })
-  await expect(bar.getByRole('button', { name: 'Send 1 price to TCGplayer' })).toBeVisible()
+  await expect(bar.getByRole('button', { name: 'Send 1 Price to TCGplayer' })).toBeVisible()
   await expect(bar).toContainText('1 of them is a price you typed before, above the live price')
   await bar.locator('.pricing-earlier summary').click()
   await expect(bar.locator('.pricing-earlier li')).toHaveText(['Kled: $3.00 to $3.50'])
@@ -1005,7 +1005,7 @@ test('an earlier stored price rides only when it is above the live price, and is
   await field.click()
   await field.fill('4.60')
   await field.blur()
-  await bar.getByRole('button', { name: 'Send 2 prices to TCGplayer' }).click()
+  await bar.getByRole('button', { name: 'Send 2 Prices to TCGplayer' }).click()
   await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
   const sent = wire.find((row) => row.path.includes('/apply'))?.body as Record<string, unknown>
   expect(sent.edits).toEqual([

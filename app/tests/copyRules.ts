@@ -11,9 +11,9 @@
  * "Mineral" and "Remember" do not, because the match must be bounded by non-letters on both sides.
  *
  * CASING (R5, Chicago style). A label takes Title Case: the first and last word capitalized, and every
- * word between them capitalized except the small words below, which stay lowercase. A word with a
- * digit, a number, a dollar figure or a unit is not a word here. A hyphenated word must capitalize
- * each part. A control's first line is a label whatever its punctuation: `Cards to pull.` is checked as
+ * word between them capitalized except the small words below, which stay lowercase. A number, a dollar
+ * figure or a unit is not a word here, but a hyphenated word with a digit (`3-day`) reads its word part.
+ * A hyphenated word must capitalize each part. A control's first line is a label whatever its punctuation: `Cards to pull.` is checked as
  * `Cards to pull`. Prose (a text node, or a description line under a title) is not read for casing.
  * A typed value carries a `data-typed` marker in the DOM and is skipped by the sweep, not by this file.
  */
@@ -119,6 +119,14 @@ export const UNIT_WORDS: ReadonlySet<string> = new Set([
   'day', 'days', 'week', 'weeks', 'month', 'months', 'year', 'years',
 ])
 
+/** A token that is a number: `10`, `$184`, or a range of numbers (`1-2`). A hyphenated token with a word in it (`3-day`) is not,
+ *  so its word part is read as a word. */
+function isNumberToken(token: string): boolean {
+  if (!/\d/.test(token)) return false
+  if (!token.includes('-')) return true
+  return token.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '').split('-').every((part) => !/\p{L}/u.test(part))
+}
+
 /** Each Title Case problem in one label, as a sentence a reader can act on. Empty means it passes.
  *  Numbers do not count as words, but they still END a title: in `Pick 1 of 1` the word `of` is in
  *  the middle, so it stays lower-case. */
@@ -132,19 +140,22 @@ export function casingProblems(text: string): string[] {
   const problems: string[] = []
   let afterNumber = false
   tokens.forEach((token, index) => {
-    if (/\d/.test(token)) {
+    // A token with a digit is a number (`10`, `$184`), unless it is hyphenated (`3-day`): a hyphenated compound is a word,
+    // so its digit part is skipped and its word part is read below.
+    if (isNumberToken(token)) {
       afterNumber = true
       return
     }
     const wasAfterNumber = afterNumber
     afterNumber = false
-    const core = token.replace(/^[^\p{L}]+/u, '').replace(/[^\p{L}]+$/u, '')
+    const core = token.replace(/^[^\p{L}\p{N}]+/u, '').replace(/[^\p{L}\p{N}]+$/u, '')
     if (core === '') return
     if (wasAfterNumber && UNIT_WORDS.has(core.toLowerCase())) return
 
-    const parts = core.split('-').map((part) => part.replace(/^[^\p{L}]+/u, '')).filter((part) => part !== '')
+    const parts = core.split('-').map((part) => part.replace(/^[^\p{L}\p{N}]+/u, '')).filter((part) => part !== '')
     if (parts.length > 1) {
       for (const part of parts) {
+        if (/\d/.test(part)) continue
         if (!/^\p{Lu}/u.test(part)) problems.push(`"${core}": "${part}" should be capitalized`)
       }
       return
@@ -159,4 +170,30 @@ export function casingProblems(text: string): string[] {
     }
   })
   return problems
+}
+
+/** A stat's label, graded by whether the stat is a press. `press` is true for a figure that is a button (the Review band
+ *  tiles), and false for a caption under a figure (`copies owed`, `12 captured`, `to pick`), which is prose and not read.
+ */
+export function statProblems(text: string, press: boolean): string[] {
+  return press ? casingProblems(text) : []
+}
+
+/** A spoken name's value clause: a trailing comma clause that starts with a number (`Filters, 1 on`). The clause says the
+ *  control's state, not a label word, so it is not graded, the way a screen reader's count clause is not drawn (`.bn-sr`). */
+export function stripValueClause(text: string): string {
+  return text.replace(/,\s*\d+\s+on$/, '')
+}
+
+/** A spoken name's Title Case problems, with its value clause left out (`Filters, 1 on` is the name of `Filters`, with 1 on). */
+export function spokenNameProblems(text: string): string[] {
+  return casingProblems(stripValueClause(text))
+}
+
+// UNENFORCED: a checkbox or radio label that is a sentence but Title Case passes here; no sentence grade is added for it.
+/** A field label, graded by the control it names. A checkbox or radio label is an option sentence (`Split in two files at the
+ *  cut-off`), which is prose and is not read. A text, search or select field's label takes Title Case. `control` is the input
+ *  type the label names (`text`, `search`, `checkbox`, `radio`), `select` for a select, or '' when no control is named. */
+export function fieldLabelProblems(text: string, control: string): string[] {
+  return control === 'checkbox' || control === 'radio' ? [] : casingProblems(text)
 }

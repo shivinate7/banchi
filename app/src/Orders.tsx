@@ -3659,7 +3659,7 @@ function PullStage({
       value={picked}
       onChange={setPicked}
       count={{ shown: shownGroups.length, total: base.length, noun: { one: 'buyer', many: 'buyers' } }}
-      search={{ query, onChange: setQuery, placeholder: 'Buyer or order', label: 'Search buyers' }}
+      search={{ query, onChange: setQuery, placeholder: 'Buyer or order', label: 'Search Buyers' }}
       sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
       hide={[
         ...(unpullableCount === 0 && !hideUnpullable
@@ -3968,7 +3968,7 @@ function PullStage({
       <Sheet
         open={manageOpen && selectedGroup !== null}
         onClose={() => setManageOpen(false)}
-        title={selectedGroup === null ? 'Orders' : `${buyerLabel(selectedGroup)}'s orders`}
+        title={selectedGroup === null ? 'Orders' : <><span data-typed>{buyerLabel(selectedGroup)}&apos;s</span> Orders</>}
         className="orders-manage-sheet"
       >
         {selectedGroup === null ? null : (
@@ -4009,17 +4009,17 @@ function StandDownLegend({ orders, answers }: { readonly orders: readonly OrderR
     <dl className="orders-manage-legend">
       {gone ? (
         <>
-          <dt>Already sent it</dt>
+          <dt>Already Sent It</dt>
           <dd>The copy left through a sale on Inventory. Nothing is marked sold twice.</dd>
-          <dt>It isn&apos;t shipping</dt>
+          <dt>It Isn&apos;t Shipping</dt>
           <dd>Closes the line with no copy sent: a refund, a cancellation or a damaged card.</dd>
         </>
       ) : null}
       {byHand ? (
         <>
-          <dt>Sealed product</dt>
+          <dt>Sealed Product</dt>
           <dd>Marks the line as sealed product, not a single card.</dd>
-          <dt>Shipped these by hand</dt>
+          <dt>Shipped These by Hand</dt>
           <dd>Counts copies this store never photographed. Nothing is marked sold.</dd>
         </>
       ) : null}
@@ -4075,7 +4075,7 @@ function ManagePanel({
     }
     return (
       <div className="orders-manage-orders">
-        <SettingsEditor title="This order" onBack={() => setEditing(null)}>
+        <SettingsEditor title="This Order" onBack={() => setEditing(null)}>
           <StandDownLegend orders={[order]} answers={answers} />
           <OrderDetail
             order={order}
@@ -4097,8 +4097,8 @@ function ManagePanel({
             <SettingsGroup title="Stand down this order" note="Marks nothing sold" danger>
               {(
                 [
-                  ['not_shipping', 'Cancelled or refunded', 'x'],
-                  ['shipped_elsewhere', 'Already shipped', 'truck'],
+                  ['not_shipping', 'Cancelled or Refunded', 'x'],
+                  ['shipped_elsewhere', 'Already Shipped', 'truck'],
                 ] as const
               ).map(([reason, label, icon]) => (
                 <SettingsOp
@@ -4606,7 +4606,7 @@ function LineStandDown({
               disabled={locked}
               onClick={() => onFill(order, line, owed, 'sold_separately')}
             >
-              Already sent {owed === 1 ? 'it' : `these ${owed}`}
+              Already Sent {owed === 1 ? 'It' : <>These <span data-value>{owed}</span></>}
             </Button>
           )}
           {/* THE ONE PLACE `not_shipping` IS REACHABLE, and it is LINE-shaped: on a three-line
@@ -4616,7 +4616,7 @@ function LineStandDown({
             disabled={locked}
             onClick={() => onCloseLine(order, line, 'not_shipping')}
           >
-            It isn&apos;t shipping
+            It Isn&apos;t Shipping
           </Button>
         </div>
       </div>
@@ -4643,7 +4643,7 @@ function LineStandDown({
             disabled={locked}
             onClick={() => onDeclareKind(order, line, 'sealed')}
           >
-            Sealed product
+            Sealed Product
           </Button>
         ) : (
           <IconButton
@@ -4666,7 +4666,7 @@ function LineStandDown({
             {/* THE FIGURE IS IN THE LABEL. This press closes a line the store cannot corroborate,
                 so the number it will write belongs where the thumb is rather than in a sentence
                 above it — `CLAUDE.md`'s money-moment rule applied to a count. */}
-            Shipped {owed === 1 ? 'this' : `these ${owed}`} by hand
+            Shipped {owed === 1 ? 'This' : <>These <span data-value>{owed}</span></>} by Hand
           </Button>
         )}
       </div>

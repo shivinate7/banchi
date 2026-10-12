@@ -2536,9 +2536,9 @@ export function Pricing() {
           label="Which live listings to show"
           options={[
             /* A STALE READ'S COUNTS ARE NOT OFFERED AS CURRENT (the owner's ruling, 2026-09-26). */
-            { value: 'all', label: readStale ? 'All' : `All ${lensCounts.all}` },
-            { value: 'offered', label: readStale ? 'Not selling' : `Not selling ${lensCounts.offered}` },
-            { value: 'refused', label: readStale ? 'Passed over' : `Passed over ${lensCounts.refused}` },
+            { value: 'all', label: readStale ? 'All' : <>All <span data-value>{lensCounts.all}</span></> },
+            { value: 'offered', label: readStale ? 'Not Selling' : <>Not Selling <span data-value>{lensCounts.offered}</span></> },
+            { value: 'refused', label: readStale ? 'Passed Over' : <>Passed Over <span data-value>{lensCounts.refused}</span></> },
           ]}
           onChange={setLens}
         />
@@ -2606,7 +2606,7 @@ export function Pricing() {
       </Button>
       {readStale ? null : (
         <Button size="sm" icon="refresh" busy={liveBusy} disabled={liveBusy} onClick={readAgain}>
-          Read again
+          Read Again
         </Button>
       )}
       <span className="bn-sr" role="status">
@@ -2690,7 +2690,7 @@ export function Pricing() {
         <div className="send-card">
           <div className="send-act">
             <Button variant="primary" size="lg" icon="refresh" className="send-press" busy={liveBusy} disabled={liveBusy} onClick={readAgain}>
-              Read again
+              Read Again
             </Button>
           </div>
         </div>
@@ -2730,26 +2730,23 @@ export function Pricing() {
                 setPush('sending')
               }}
             >
-              {`Send ${pushable.length} ${pushable.length === 1 ? 'price' : 'prices'} to TCGplayer`}
+              {`Send ${pushable.length} ${pushable.length === 1 ? 'Price' : 'Prices'} to TCGplayer`}
             </Button>
             <span className="bn-sr" role="status">
               {push === 'sending' ? 'Checking TCGplayer, then sending…' : push === 'writing' ? 'Writing the file…' : ''}
             </span>
             {/* THE PRESS KEEPS ITS WORDS WHILE IT RUNS (D118, b-runs round 9): the spinner says it
                 is busy, and the status line says what it is doing. */}
-            <Button
-              variant="quiet"
+            <IconButton
               icon="download"
+              label="Download File"
               busy={push === 'writing'}
               disabled={push !== 'idle' || pushable.length === 0}
               onClick={() => {
                 setLinkHeld(wroteUpload)
                 setPush('writing')
               }}
-            >
-              <span className="send-long">Download the file instead</span>
-              <span className="send-short">Download file</span>
-            </Button>
+            />
             {!wroteUpload || (push !== 'idle' && !linkHeld) ? null : (
               <a className="bn-btn" href={markdownFileUrl(stamp, 'import.csv')} download="import.csv">
                 <Icon name="download" size={16} />
@@ -2921,7 +2918,7 @@ export function Pricing() {
               value={facetPicks}
               onChange={setFacetPicks}
               count={{ shown: drawn.reduce((sum, group) => sum + group.rows.length, 0), total: rows.length, noun: { one: 'item', many: 'items' } }}
-              search={{ query, onChange: setQuery, placeholder: 'Name, set, number or SKU', label: 'Search this list' }}
+              search={{ query, onChange: setQuery, placeholder: 'Name, set, number or SKU', label: 'Search This List' }}
               sort={{ options: sortOptions, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
             />
           )}

@@ -1228,7 +1228,7 @@ export function Codes() {
                   value={filterValue}
                   onChange={onFilterChange}
                   count={{ shown: rows.length, total: ledger.total, noun: { one: 'code', many: 'codes' } }}
-                  search={{ query: filter, onChange: setFilter, placeholder: 'Find a code, product, set or order', label: 'Find a code' }}
+                  search={{ query: filter, onChange: setFilter, placeholder: 'Find a code, product, set or order', label: 'Find a Code' }}
                   beside={
                     <IconButton
                       size="sm"

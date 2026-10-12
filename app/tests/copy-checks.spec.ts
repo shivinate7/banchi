@@ -9,10 +9,10 @@ import ts from 'typescript'
 
 import { settleFonts } from './fontsReady'
 import { card, sealEveryTest } from './shell'
-import { POPULATED_ROUTE_SEEDS } from './routeFixtures'
+import { POPULATED_ROUTE_SEEDS, line, order, payloadOf } from './routeFixtures'
 import { sweepEveryRoute } from './routeSweep'
 import { setViewport } from './phoneSwitch'
-import { casingProblems, isSentence, isSpokenSentences, labelsOf, stripTyped, voiceHits } from './copyRules'
+import { casingProblems, fieldLabelProblems, isSentence, isSpokenSentences, labelsOf, spokenNameProblems, statProblems, stripTyped, voiceHits } from './copyRules'
 
 /* ONE SWEEP, TWO CHECKS (D284, the shape `text-checks.spec.ts` set). Each screen is opened ONCE by
  * `routeSweep.ts:sweepEveryRoute`, the same owner routes and the same populated store the text checks
@@ -106,6 +106,12 @@ interface Casing {
   typed: boolean
   // The text of each data-typed element inside this control. That text is taken out of the label before the check.
   marked: string[]
+  // Whether the control is a press: true for every control, and for a stat label (`dt`) only when a button or link holds it.
+  // A stat label outside a press is a caption under a figure, and `statProblems` does not read it.
+  press: boolean
+  // For a field label (`label`): the control it names, `checkbox`, `radio`, `search`, `text`, `select` or '' when none. Read by
+  // `copyRules.ts:fieldLabelProblems`, so a checkbox's option sentence is prose and a field label is graded.
+  control: string
 }
 
 interface CopyScan {
@@ -128,6 +134,15 @@ function scanCopy(): CopyScan {
     return el.getClientRects().length > 0
   }
 
+  // THE CONTROL A LABEL NAMES: its `control` (a wrapped or `for=` control), read as its input type. '' when it names none.
+  const labelControlOf = (label: HTMLLabelElement): string => {
+    const target = label.control
+    if (target === null) return ''
+    if (target instanceof HTMLInputElement) return target.type
+    if (target instanceof HTMLSelectElement) return 'select'
+    return 'text'
+  }
+
   const roleOf = (el: Element): string | null => {
     const tag = el.tagName.toLowerCase()
     const role = el.getAttribute('role')
@@ -139,6 +154,7 @@ function scanCopy(): CopyScan {
     if (tag === 'button' || role === 'button') return 'button'
     if (tag === 'h1') return 'page title'
     if (tag === 'h2' || tag === 'h3') return 'heading'
+    if (tag === 'label') return 'field label'
     if (tag === 'dt') return 'stat label'
     if (el.matches('[class*="title"]')) return 'title'
     if (el.matches('[class*="chip"]')) return 'chip'
@@ -159,7 +175,10 @@ function scanCopy(): CopyScan {
       // SPOKEN-ONLY TEXT AND DATA VALUES ARE NOT LABEL LINES: `.bn-sr` is read aloud and never drawn (a section title's count
       // clause), and `data-value` marks a figure beside a label (a box cell's `797 stored`). Their text stays out of the lines.
       // THE ROOT IS NEVER SKIPPED: a candidate that is itself screen-reader text (`<h2 class="bn-sr">`) is still graded.
-      if (node !== root && (node.classList.contains('bn-sr') || node.hasAttribute('data-value'))) return
+      // A PRESS'S DETAIL LINE (`.bn-set-op-detail`, the caption under a press such as `Can be undone`) is prose under the press, not
+      // a label line: the press's own label (`.bn-set-op-label`) is what is graded.
+      // A KIT STATE CAPTION (`.bn-thumb-none`, the `No Photo Found` line drawn over an image frame, aria-hidden) is prose too.
+      if (node !== root && (node.classList.contains('bn-sr') || node.hasAttribute('data-value') || node.classList.contains('bn-set-op-detail') || node.classList.contains('bn-thumb-none'))) return
       const style = getComputedStyle(node)
       if (style.display === 'none' || style.visibility === 'hidden') return
       if (node.tagName === 'BR') {
@@ -189,7 +208,7 @@ function scanCopy(): CopyScan {
   // THE ICON LINK. An icon control drawn as a link (`IconButton` with an `href`, such as the Fulfiller's
   // `Cards to pull` on Orders) is an `<a>`, not a button, so the list below must name it too.
   const candidates = document.querySelectorAll(
-    'a.bn-nav-link, a[aria-label], th, [role="tab"], [role="radio"], button, [role="button"], h1, h2, h3, dt, [class*="title"], [class*="chip"]',
+    'a.bn-nav-link, a[aria-label], th, [role="tab"], [role="radio"], button, [role="button"], h1, h2, h3, dt, label, [class*="title"], [class*="chip"]',
   )
   for (const el of Array.from(candidates)) {
     const role = roleOf(el)
@@ -207,6 +226,8 @@ function scanCopy(): CopyScan {
       upper: getComputedStyle(el).textTransform === 'uppercase',
       typed: el.matches('[data-typed]'),
       marked: Array.from(el.querySelectorAll('[data-typed]'), (m) => (m.textContent ?? '').replace(/\s+/g, ' ').trim()),
+      press: el.tagName !== 'DT' || el.closest('button, [role="button"], a') !== null,
+      control: el instanceof HTMLLabelElement ? labelControlOf(el) : '',
     })
   }
 
@@ -221,7 +242,7 @@ function scanCopy(): CopyScan {
       .join('')
       .replace(/\s+/g, ' ')
       .trim()
-    if (text !== '') casing.push({ role: 'tooltip', lines: [text], keyCaps: [], aria: '', mono: false, upper: getComputedStyle(tip).textTransform === 'uppercase', typed: tip.matches('[data-typed]'), marked: [] })
+    if (text !== '') casing.push({ role: 'tooltip', lines: [text], keyCaps: [], aria: '', mono: false, upper: getComputedStyle(tip).textTransform === 'uppercase', typed: tip.matches('[data-typed]'), marked: [], press: true, control: '' })
   }
 
   const prose: string[] = []
@@ -446,6 +467,120 @@ const TAKEABLE = {
   moves: [],
 }
 
+/** One product's history with a quarter range. Product History draws a quarter range under the heading `3-Day`. */
+const QUARTER_HISTORY = {
+  sku: '555123',
+  product_id: 42,
+  name: 'Vilemaw',
+  set_name: 'Twilight Masquerade',
+  condition: 'Near Mint',
+  source: 'archive',
+  history_begins: '2026-03-01',
+  never_sold: false,
+  ranges: [
+    {
+      range: 'quarter',
+      width_days: 3,
+      buckets: 2,
+      from: '2026-07-01',
+      to: '2026-08-05',
+      latest_market: '16.33',
+      points: [
+        { at: '2026-07-01', market: '15.00', quantity: 2, low: '14.00', high: '16.00' },
+        { at: '2026-07-04', market: '16.33', quantity: 1, low: '12.54', high: '20.35' },
+      ],
+    },
+  ],
+}
+
+const LIVE_STAMP = '20260924-093000'
+const DAY_MS = 86_400_000
+const readAt = (agoMs: number): string => new Date(Date.now() - agoMs).toISOString()
+
+/** One listing of a live read, in the shape `Pricing` reads (the same fields `pricing-markdown.spec.ts`'s `live()` carries). */
+function liveRow() {
+  return {
+    sku: '8608859',
+    standing: 'offered',
+    skip: null,
+    name: 'Articuno - 161/159',
+    condition: 'Near Mint Holofoil',
+    live: 3,
+    asking: '20.0000',
+    market: '22.03',
+    above_market: '-9',
+    at_risk: '60.00',
+    proposed: '18.00',
+    cut: '2.00',
+    given_up: '6.00',
+    owned_since: '2026-08-01T00:00:00.000+00:00',
+    presets: { market_match: '22.03', market_undercut_5: '20.93', low_undercut_1: '19.79' },
+    listed_since: null,
+    held_here: true,
+    last_sold: null,
+    priced_at: null,
+    on_hand: 3,
+    row: {
+      'TCGplayer Id': '8608859',
+      'Product Line': 'Pokemon',
+      'Set Name': 'SV: Prismatic Evolutions',
+      'Product Name': 'Articuno',
+      Number: '161/159',
+      Rarity: 'Secret Rare',
+      Condition: 'Near Mint Holofoil',
+      'TCG Market Price': '22.03',
+      'TCG Direct Low': '21.98',
+      'TCG Low Price': '21.98',
+      'TCG Low Price With Shipping': '22.98',
+      'Total Quantity': '3',
+      'Add to Quantity': '0',
+      'TCG Marketplace Price': '',
+      'Photo URL': '',
+    },
+  }
+}
+
+/** One saved live read, taken at `at`. `Pricing` opens the newest read on the Live tab, so the read is the sheet the lenses filter. */
+async function stubLiveRead(page: Page, at: string): Promise<void> {
+  const asked = { days: 7, rule: 'undercut:10' }
+  await page.route(/\/pipeline\/markdowns$/, (route) =>
+    route.fulfill(answer({ markdowns: [{ stamp: LIVE_STAMP, at, asked, source: null, skus: 1, files: [] }] })),
+  )
+  await page.route(/\/pipeline\/markdowns\/[^/]+\/table$/, (route) =>
+    route.fulfill(
+      answer({
+        stamp: LIVE_STAMP,
+        at,
+        asked,
+        counts: { considered: 1, offered: 1, deferred: 0, refused: 0 },
+        source: {},
+        skus: [liveRow()],
+        says: {},
+        unpriceable: [],
+        floor: '0.49',
+        stale_after_s: 86400,
+      }),
+    ),
+  )
+  await page.route(/\/pipeline\/trends-saved$/, (route) => route.fulfill(answer({ skus: {}, note: null })))
+}
+
+/** One order whose only line is `over`, so the buyer's sheet draws that line's stand-down presses. The line's order key is the
+ *  fixture's own (`routeFixtures.ts`'s `order()`), so the read and the picks echo agree on it. */
+async function stubStandDownOrder(page: Page, over: Parameters<typeof line>[0]): Promise<void> {
+  const resolved = line(over)
+  const payload = payloadOf([order()], [{ key: resolved.order_key, number: resolved.order, complete: false, outstanding: 1, lines: [resolved] }])
+  await page.route(/\/orders$/, (route) => route.fulfill(answer(payload)))
+  await page.route(/\/orders\/picks$/, (route) => route.fulfill(answer({ orders: payload.resolution.orders })))
+  await page.route(/\/boxes(\?.*)?$/, (route) => route.fulfill(answer({ boxes: [], facet_cells: [] })))
+}
+
+/** Opens the buyer's sheet and its first order's editor, where a line's stand-down presses are drawn (`orders.spec.ts`'s `openManage`). */
+async function openStandDownSheet(page: Page): Promise<void> {
+  await page.locator('main.orders .orders-manage').first().click()
+  await page.locator('.orders-manage-sheet .bn-set-op').first().click()
+}
+
 async function visit(page: Page, route: string): Promise<void> {
   await page.goto('/')
   await settleBody(page, route)
@@ -515,7 +650,11 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
         // A HEADING (h2, h3) OR A TITLE MAY BE A SENTENCE: an empty state or a greeting. A control, and a page title (h1),
         // is a label whatever its ending, so `Cards to pull.` on a control or an h1 is still checked.
         if ((one.role === 'heading' || one.role === 'title') && isSentence(checked)) continue
-        const problems = casingProblems(checked)
+        const problems =
+          spoken ? spokenNameProblems(checked)
+          : one.role === 'stat label' ? statProblems(checked, one.press)
+          : one.role === 'field label' ? fieldLabelProblems(checked, one.control)
+          : casingProblems(checked)
         if (problems.length === 0) continue
         // A FINDING IS KEYED BY ITS TEXT, not its role: a control's label often shows twice (its tip and its
         // accessible name), and one string is one offender.
@@ -738,6 +877,44 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   await expect(page.getByRole('button', { name: /^Price your live listings$/i }), 'the empty worklist offers the Live tab').toBeVisible()
   read(hashOf('pricing'), await page.evaluate(scanCopy))
 
+  // THE ORDERS STAND-DOWN PRESSES. A line no copy can reach (`no_copies_on_hand`) draws `Already sent it` and `It isn't shipping`;
+  // a line whose card is not a single (`not_a_single`) draws `Sealed product`. Each is asserted drawn before it is read.
+  await stubStandDownOrder(page, { reason: 'no_copies_on_hand', fulfilled: 0, outstanding: 1, on_hand: 0, sold: 3, picks: [] })
+  await visit(page, `${hashOf('orders')}?pullable=0`)
+  await openStandDownSheet(page)
+  await expect(page.getByRole('button', { name: /^already sent it$/i }), 'the gone line draws Already sent it').toBeVisible()
+  await expect(page.getByRole('button', { name: /^it isn't shipping$/i }), 'the gone line draws It isn\'t shipping').toBeVisible()
+  read(`${hashOf('orders')}?pullable=0`, await page.evaluate(scanCopy))
+
+  await stubStandDownOrder(page, { reason: 'not_a_single', fulfilled: 0, outstanding: 1, on_hand: 1, picks: [] })
+  await visit(page, `${hashOf('orders')}?pullable=0`)
+  await openStandDownSheet(page)
+  await expect(page.getByRole('button', { name: /^sealed product$/i }), 'the not-a-single line draws Sealed product').toBeVisible()
+  read(`${hashOf('orders')}?pullable=0`, await page.evaluate(scanCopy))
+
+  // THE PRODUCT HISTORY'S QUARTER RANGE: its heading is `3-Day`, drawn only when the history holds a quarter range. Asserted drawn first.
+  const PRODUCT_SKU_ROUTE = `${hashOf('product')}?sku=${QUARTER_HISTORY.sku}`
+  await page.route(/\/pipeline\/products\/[^/]+\/history$/, (route) => route.fulfill(answer(QUARTER_HISTORY)))
+  await page.route(/\/pipeline\/products\/[^/]+\/realized$/, (route) => route.fulfill(answer({ sku: '0', configured: false })))
+  await page.route(/\/search\?/, (route) => route.fulfill(answer({ query: QUARTER_HISTORY.name, groups: [] })))
+  await visit(page, PRODUCT_SKU_ROUTE)
+  await expect(page.getByRole('heading', { name: /^3-day$/i }), 'the quarter range draws its heading').toBeVisible()
+  read(PRODUCT_SKU_ROUTE, await page.evaluate(scanCopy))
+
+  // THE LIVE TAB WITH A FRESH READ: `Read Again` is drawn, and the lens chips carry their counts. Asserted drawn first.
+  await stubLiveRead(page, readAt(60_000))
+  await visit(page, `${hashOf('pricing')}?live`)
+  await expect(page.getByRole('group', { name: 'Which live listings to show' }), 'the Live tab draws its lens chips').toBeVisible()
+  await expect(page.getByRole('button', { name: /^read again$/i }), 'a fresh read draws its Read Again press').toBeVisible()
+  read(`${hashOf('pricing')}?live`, await page.evaluate(scanCopy))
+
+  // THE LIVE TAB WITH A STALE READ: the read is older than a day, so the chips drop their counts, and its bar offers Read Again in place of Send.
+  await stubLiveRead(page, readAt(3 * DAY_MS))
+  await visit(page, `${hashOf('pricing')}?live`)
+  await expect(page.getByRole('button', { name: /^not selling$/i }), 'a stale read draws its chips without counts').toBeVisible()
+  await expect(page.getByRole('region', { name: 'Send these prices' }).getByRole('button', { name: /^read again$/i }), 'a stale read offers Read Again in its bar').toBeVisible()
+  read(`${hashOf('pricing')}?live`, await page.evaluate(scanCopy))
+
   const casingTotal = reads.reduce((sum, one) => sum + one.casing, 0)
   expect(casingTotal, `the sweep read ${casingTotal} labels, under the floor of ${CASING_FLOOR}`).toBeGreaterThan(CASING_FLOOR)
 
@@ -801,7 +978,7 @@ test.describe('clip: no fact is cut off at 1440 or 820', () => {
     if (width !== 360) test(`pricing: no item line clips its last fact at ${width}`, async ({ page }) => {
       await setViewport(page, { width, height: 1000 })
       await seedEverySweepScreen(page)
-      await page.goto('/#/pricing')
+      await page.goto(`/${hashOf('pricing')}`)
       await settleFonts(page)
       const lines = page.locator('.pricing-meta:not(.pricing-where)')
       await expect(lines.first(), 'the item rows are drawn').toBeVisible()
@@ -834,7 +1011,7 @@ test.describe('clip: no fact is cut off at 1440 or 820', () => {
         /* KEYED BY THE PICK'S OWN POSITION (`routeFixtures.ts`'s `pick`: box 3, index 21), the key the store indexes the hero by. */
         return route.fulfill(answer({ cards: { '3/21': copy } }))
       })
-      await page.goto('/#/orders')
+      await page.goto(`/${hashOf('orders')}`)
       await settleFonts(page)
       await expect(page.locator('.orders-pick-chip'), 'the pick chip has loaded').toBeVisible()
       /* NOT `toBeVisible`: once the chips take their room the meta line can shrink to no width at all, and Playwright then
@@ -893,5 +1070,78 @@ test.describe('reader: adjacent elements join with a space, not glued', () => {
     const scan = await page.evaluate(scanCopy)
     const link = scan.casing.find((one) => one.role === 'icon link')
     expect(link?.lines, 'the two spans are two words, not one glued word').toEqual(['SV commons Section 1'])
+  })
+})
+
+// THE FIELD LABEL IS A CONTROL'S LABEL. A search field's `<label>` holds the words a screen reader and a visually hidden
+// label draw, so it is a candidate in its own right. Its text is graded, not read as prose.
+test.describe('reader: a field label is graded as a label', () => {
+  test('a visually hidden search field label is a candidate, so its text is graded', async ({ page }) => {
+    await page.setContent('<main><label class="search-field-label bn-sr" for="q">Find a Product</label><input id="q" /></main>')
+    const scan = await page.evaluate(scanCopy)
+    const one = scan.casing.find((c) => c.role === 'field label')
+    expect(one?.lines, 'the label text is the label line, so the casing rule reads it').toEqual(['Find a Product'])
+    expect(one?.control, 'the label names a text field').toBe('text')
+  })
+
+  // THE CONTROL A LABEL NAMES. A checkbox's label is an option sentence (prose), so the reader names its control, and the rule
+  // (`fieldLabelProblems`) does not grade it.
+  test('a checkbox label names a checkbox, so its option sentence is prose', async ({ page }) => {
+    await page.setContent('<main><label><input type="checkbox" /> Split in two files at the cut-off</label></main>')
+    const scan = await page.evaluate(scanCopy)
+    const one = scan.casing.find((c) => c.role === 'field label')
+    expect(one?.control, 'the label names a checkbox').toBe('checkbox')
+  })
+})
+
+// A PRESS'S DETAIL LINE IS PROSE. A settings press draws its label (`.bn-set-op-label`) and a detail caption (`.bn-set-op-detail`,
+// `Can be undone`). The caption is not a label line; the press's own label still is, and a lower-case one still flags.
+test.describe('reader: a press detail line is prose, the press label is graded', () => {
+  test('the detail caption under a press is not a label line, and the press label is', async ({ page }) => {
+    await page.setContent(
+      '<main><button type="button" class="bn-set-op"><span class="bn-set-op-label">Cancelled or Refunded</span><span class="bn-set-op-detail">Can be undone</span></button></main>',
+    )
+    const scan = await page.evaluate(scanCopy)
+    const one = scan.casing.find((c) => c.role === 'button')
+    expect(one?.lines, 'only the press label is a label line').toEqual(['Cancelled or Refunded'])
+  })
+
+  // THE KIT STATE CAPTION IS PROSE, and a real label beside it still flags.
+  test('a no-photo caption over an image frame is prose, and a real label beside it still flags', async ({ page }) => {
+    await page.setContent(
+      '<main><button type="button"><span class="bn-thumb-none" aria-hidden="true">No Photo Found</span></button><button type="button">show all</button></main>',
+    )
+    const scan = await page.evaluate(scanCopy)
+    const buttons = scan.casing.filter((c) => c.role === 'button')
+    expect(buttons[0]?.lines, 'the no-photo caption is not a label line').toEqual([])
+    expect(buttons[1]?.lines, 'the real label beside it is a label line').toEqual(['show all'])
+    expect(casingProblems('show all'), 'the real lower-case label still flags').not.toEqual([])
+  })
+
+  test('a real press label in lower case still flags, with its detail caption left out', async ({ page }) => {
+    await page.setContent(
+      '<main><button type="button" class="bn-set-op"><span class="bn-set-op-label">cancelled or refunded</span><span class="bn-set-op-detail">Can be undone</span></button></main>',
+    )
+    const scan = await page.evaluate(scanCopy)
+    const one = scan.casing.find((c) => c.role === 'button')
+    expect(one?.lines).toEqual(['cancelled or refunded'])
+    expect(casingProblems(one?.lines[0] ?? ''), 'the lower-case press label is a casing problem').not.toEqual([])
+  })
+})
+
+// THE STAT RULE (R5). A caption under a figure is prose and is not graded; a stat that is a press is a label and is graded.
+test.describe('reader: a stat caption is prose, a press stat is a label', () => {
+  test('a stat label outside a press is a caption, and is marked as not a press', async ({ page }) => {
+    await page.setContent('<main><dl><dt>copies owed</dt><dd>3</dd></dl></main>')
+    const scan = await page.evaluate(scanCopy)
+    const one = scan.casing.find((c) => c.role === 'stat label')
+    expect(one?.press, 'a stat label that no button holds is a caption under a figure').toBe(false)
+  })
+
+  test('a stat label inside a button is a press, and is marked as one', async ({ page }) => {
+    await page.setContent('<main><button type="button"><dt>matched free</dt></button></main>')
+    const scan = await page.evaluate(scanCopy)
+    const one = scan.casing.find((c) => c.role === 'stat label')
+    expect(one?.press, 'a stat label that a button holds is a press').toBe(true)
   })
 })
