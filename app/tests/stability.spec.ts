@@ -1207,7 +1207,8 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
       await settleFonts(page)
       await settleMotion(page)
       await afterPaint(page)
-      const sell = page.getByRole('button', { name: /Mark sold/ }).first()
+      /* Wave 2 capitalised the label ("Mark Sold"), so the name is matched without case. */
+      const sell = page.getByRole('button', { name: /Mark sold/i }).first()
       /* The control sits at page y `at`. The window is made short enough that only its top 24px show at scroll 0. */
       await page.evaluate(() => window.scrollTo(0, 0))
       /* The control is briefly unplaced (top 0) while the card settles, so wait for a real position before sizing. */
