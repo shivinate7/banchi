@@ -12,7 +12,7 @@ import { card, sealEveryTest } from './shell'
 import { POPULATED_ROUTE_SEEDS, line, order, payloadOf } from './routeFixtures'
 import { sweepEveryRoute } from './routeSweep'
 import { setViewport } from './phoneSwitch'
-import { casingProblems, fieldLabelProblems, isSentence, isSpokenSentences, labelsOf, statProblems, stripTyped, voiceHits } from './copyRules'
+import { casingProblems, fieldLabelProblems, isSentence, isSpokenSentences, labelsOf, spokenNameProblems, statProblems, stripTyped, voiceHits } from './copyRules'
 
 /* ONE SWEEP, TWO CHECKS (D284, the shape `text-checks.spec.ts` set). Each screen is opened ONCE by
  * `routeSweep.ts:sweepEveryRoute`, the same owner routes and the same populated store the text checks
@@ -175,7 +175,9 @@ function scanCopy(): CopyScan {
       // SPOKEN-ONLY TEXT AND DATA VALUES ARE NOT LABEL LINES: `.bn-sr` is read aloud and never drawn (a section title's count
       // clause), and `data-value` marks a figure beside a label (a box cell's `797 stored`). Their text stays out of the lines.
       // THE ROOT IS NEVER SKIPPED: a candidate that is itself screen-reader text (`<h2 class="bn-sr">`) is still graded.
-      if (node !== root && (node.classList.contains('bn-sr') || node.hasAttribute('data-value'))) return
+      // A PRESS'S DETAIL LINE (`.bn-set-op-detail`, the caption under a press such as `Can be undone`) is prose under the press, not
+      // a label line: the press's own label (`.bn-set-op-label`) is what is graded.
+      if (node !== root && (node.classList.contains('bn-sr') || node.hasAttribute('data-value') || node.classList.contains('bn-set-op-detail'))) return
       const style = getComputedStyle(node)
       if (style.display === 'none' || style.visibility === 'hidden') return
       if (node.tagName === 'BR') {
@@ -648,7 +650,8 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
         // is a label whatever its ending, so `Cards to pull.` on a control or an h1 is still checked.
         if ((one.role === 'heading' || one.role === 'title') && isSentence(checked)) continue
         const problems =
-          one.role === 'stat label' ? statProblems(checked, one.press)
+          spoken ? spokenNameProblems(checked)
+          : one.role === 'stat label' ? statProblems(checked, one.press)
           : one.role === 'field label' ? fieldLabelProblems(checked, one.control)
           : casingProblems(checked)
         if (problems.length === 0) continue
@@ -1087,6 +1090,29 @@ test.describe('reader: a field label is graded as a label', () => {
     const scan = await page.evaluate(scanCopy)
     const one = scan.casing.find((c) => c.role === 'field label')
     expect(one?.control, 'the label names a checkbox').toBe('checkbox')
+  })
+})
+
+// A PRESS'S DETAIL LINE IS PROSE. A settings press draws its label (`.bn-set-op-label`) and a detail caption (`.bn-set-op-detail`,
+// `Can be undone`). The caption is not a label line; the press's own label still is, and a lower-case one still flags.
+test.describe('reader: a press detail line is prose, the press label is graded', () => {
+  test('the detail caption under a press is not a label line, and the press label is', async ({ page }) => {
+    await page.setContent(
+      '<main><button type="button" class="bn-set-op"><span class="bn-set-op-label">Cancelled or Refunded</span><span class="bn-set-op-detail">Can be undone</span></button></main>',
+    )
+    const scan = await page.evaluate(scanCopy)
+    const one = scan.casing.find((c) => c.role === 'button')
+    expect(one?.lines, 'only the press label is a label line').toEqual(['Cancelled or Refunded'])
+  })
+
+  test('a real press label in lower case still flags, with its detail caption left out', async ({ page }) => {
+    await page.setContent(
+      '<main><button type="button" class="bn-set-op"><span class="bn-set-op-label">cancelled or refunded</span><span class="bn-set-op-detail">Can be undone</span></button></main>',
+    )
+    const scan = await page.evaluate(scanCopy)
+    const one = scan.casing.find((c) => c.role === 'button')
+    expect(one?.lines).toEqual(['cancelled or refunded'])
+    expect(casingProblems(one?.lines[0] ?? ''), 'the lower-case press label is a casing problem').not.toEqual([])
   })
 })
 

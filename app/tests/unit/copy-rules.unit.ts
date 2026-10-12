@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 import { test, expect } from './unit'
 import { REASON_LABELS, RETIRED_REASON_LABELS } from '../../src/reasons'
-import { casingProblems, fieldLabelProblems, isSentence, isSpokenSentences, labelsOf, smallWordsOf, statProblems, stripTyped, voiceHits } from '../copyRules'
+import { casingProblems, fieldLabelProblems, isSentence, isSpokenSentences, labelsOf, smallWordsOf, spokenNameProblems, statProblems, stripTyped, stripValueClause, voiceHits } from '../copyRules'
 import { attrText, firstPersonInSource, jsxOpeningsIn, recordFromSource, routeLiteralsIn } from '../copySource'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -176,6 +176,15 @@ test('the leftover casing misses: each label is a Title Case problem, and a hyph
   expect(casingProblems('Read Again')).toEqual([])
   expect(casingProblems('Not Selling 4')).toEqual([])
   expect(casingProblems('Find a Product')).toEqual([])
+})
+
+/* A SPOKEN NAME'S VALUE CLAUSE (the owner's ruling, with the filter button): `Filters, 1 on` names the filter and its count. The clause
+ * after the comma that starts with a number is not a label word and is not graded; the name before it still is. */
+test('spoken names: a trailing value clause after a comma that starts with a number is not graded, and the name before it is', () => {
+  expect(spokenNameProblems('Filters, 1 on')).toEqual([])
+  expect(spokenNameProblems('Filters 1')).toEqual([])
+  expect(spokenNameProblems('filters, 1 on')).toEqual(['"filters" should be capitalized'])
+  expect(stripValueClause('Sort, Market price')).toBe('Sort, Market price')
 })
 
 /* A RANGE OF NUMBERS IS A NUMBER, so the unit after it is a unit (`days`), not a word. A hyphenated range (`1-2`) sets the
