@@ -1966,6 +1966,8 @@ test('ux-w2 R18: a failed orders read keeps the last count shown', async ({ page
 test('ux-w2: a failed refresh on the card view moves nothing once the stale notice arrives', async ({ page }) => {
   await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
   await openCard(page, 'Charizard ex')
+  // The card stays open through a refused sale: a refusal that is neither sold nor stale re-reads the screen and leaves
+  // the card where it is. The sale's pull is refused, and the re-read's orders answer fails.
   let failNow = false
   await page.route(/\/orders$/, async (route) => {
     if (!failNow) return route.fallback()
@@ -1975,11 +1977,21 @@ test('ux-w2: a failed refresh on the card view moves nothing once the stale noti
       body: JSON.stringify({ error: { code: 'orders_unavailable', message: 'The orders could not be read.' } }),
     })
   })
-  const photo = view(page).locator('.fulfillment-photo')
+  await page.route(/\/orders\/pull$/, async (route) => {
+    await route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'pull_unavailable', message: 'The pull could not be recorded.' } }),
+    })
+  })
+  await page.getByRole('button', { name: 'Pull' }).click()
+  await expect(view(page)).toContainText('Pulled.')
   await settleAnimations(page)
+  const photo = view(page).locator('.fulfillment-photo')
+  await expect(photo, 'the card stays open').toBeVisible()
   const before = await photo.boundingBox()
   failNow = true
-  await sellOpenCard(page)
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
   await expect(view(page).locator('.ff-notice'), 'the stale notice is drawn after the failed refresh').toBeVisible()
   await settleLayout(page)
   await settleAnimations(page)
