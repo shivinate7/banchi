@@ -1130,8 +1130,13 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
         mine.set_hint = HINT
         await page.goto('about:blank')
         await page.goto(screen('inventory'))
+        /* The page starts at the top, and the box click's own scroll-into-view is pinned back to the top, so
+           the header is read at rest. Whether a press scrolls the page is owned by the case below
+           ("with the control clipped at the bottom edge"), which measures scrollY itself. */
+        await page.evaluate(() => window.scrollTo(0, 0))
         await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
         await expect(page.locator('.card-locations').first()).toBeVisible()
+        await page.evaluate(() => window.scrollTo(0, 0))
         await settleFonts(page)
         await settleMotion(page)
         await afterPaint(page)
@@ -1151,6 +1156,82 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
         if (!(await oneRow())) bad.push('undo: the facts row is not one pill tall')
       }
       expect(bad, 'these moved the card header').toEqual([])
+    } finally {
+      Object.assign(mine, kept)
+    }
+  })
+}
+
+/* A SCROLLED PAGE HOLDS ITS SCROLL THROUGH A SALE AND ITS UNDO (D313). The person scrolls down until
+   the Mark sold control is in view, then presses it. The control is in view, so the press needs no
+   scroll of its own: any change in scrollY, or in the header's boxes, is the page moving. The
+   sale case above used to read the page at whatever scroll the box click left it at; this case owns
+   the scroll check. */
+for (const width of [1440, 820]) {
+  test(`held frame: marking a copy sold and undoing it, with the control clipped at the bottom edge, moves neither the scroll nor the card header, at ${width}`, async ({ page }) => {
+    test.setTimeout(120_000)
+    await l1Inventory(page)
+    const mine = L1_CARDS['2/1'] as Record<string, unknown>
+    const kept = { ...mine }
+    try {
+      const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+      await page.route(/\/inventory\/2\/1\/sold$/, (route) => {
+        const undo = (route.request().postDataJSON() as { undo?: boolean } | null)?.undo === true
+        mine.state = undo ? 'identified' : 'sold'
+        return json(route, { position: '2/1', box: 2, index: 1, undone: undo, state: mine.state, previous_state: undo ? 'sold' : 'identified', restores_to: undo ? null : 'identified', listing: null, card: null })
+      })
+      await setViewport(page, { width, height: 1000 })
+      await page.goto(screen('inventory'))
+      await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
+      await expect(page.locator('.card-locations').first()).toBeVisible()
+      await settleFonts(page)
+      await settleMotion(page)
+      await afterPaint(page)
+      const sell = page.getByRole('button', { name: /Mark sold/ }).first()
+      /* Scroll until the control sits at the bottom edge: 24px of it shows. A person presses the part they can see,
+         so the press is a mouse click at that point, and Playwright does not scroll the control first. */
+      /* The control sits at page y `at`. The window is made short enough that only its top 24px show at scroll 0. */
+      await page.evaluate(() => window.scrollTo(0, 0))
+      const at = await sell.evaluate((el) => el.getBoundingClientRect().top + window.scrollY)
+      const h = Math.round(at) + 24
+      await page.setViewportSize({ width, height: h })
+      await page.evaluate(() => window.scrollTo(0, 0))
+      await settleMotion(page)
+      await afterPaint(page)
+      expect(await page.evaluate(() => window.scrollY), 'the page scrolled before the press').toBe(0)
+      const seen = await sell.evaluate((el) => { const r = el.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) } })
+      expect(seen.top, 'the control is not clipped at the bottom edge').toBeGreaterThan(h - 40)
+      expect(seen.top, 'the control is not clipped at the bottom edge').toBeLessThan(h)
+      /* A person presses the sliver they can see: the centre of the visible part, by a mouse click. Playwright does not scroll first. */
+      const press = async (btn: typeof sell) => {
+        const r = await btn.evaluate((el) => {
+          const b = el.getBoundingClientRect()
+          return { x: b.left + b.width / 2, y: (Math.max(b.top, 0) + Math.min(b.bottom, window.innerHeight)) / 2 }
+        })
+        await page.mouse.click(r.x, r.y)
+      }
+      const read = () =>
+        page.evaluate((sels) => ({
+          y: Math.round(window.scrollY),
+          boxes: sels.map((s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return r ? [s, Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)] : [s] }),
+        }), [...HERO_PARTS])
+      const before = await read()
+      const bad: string[] = []
+      const subText = () => page.locator('.browse-hero-sub').innerText()
+      await press(sell)
+      /* A press that does not register is reported as such, so a missed click never reads as a move. */
+      if (!(await expect.poll(subText, { timeout: 5000 }).toContain('Sold').then(() => true, () => false))) bad.push('sale did not register')
+      await settleMotion(page)
+      await afterPaint(page)
+      const afterSale = await read()
+      if (JSON.stringify(afterSale) !== JSON.stringify(before)) bad.push(`sale ${JSON.stringify(afterSale)}`)
+      await press(page.getByRole('button', { name: /^Undo/ }).first())
+      if (!(await expect.poll(subText, { timeout: 5000 }).not.toContain('Sold').then(() => true, () => false))) bad.push('undo did not register')
+      await settleMotion(page)
+      await afterPaint(page)
+      const afterUndo = await read()
+      if (JSON.stringify(afterUndo) !== JSON.stringify(before)) bad.push(`undo ${JSON.stringify(afterUndo)}`)
+      expect(bad, `these moved the page or the card header (before ${JSON.stringify(before)})`).toEqual([])
     } finally {
       Object.assign(mine, kept)
     }
