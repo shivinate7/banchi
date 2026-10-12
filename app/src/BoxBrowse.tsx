@@ -2289,7 +2289,7 @@ export function BoxBrowse({
                       : record && sort.key === 'value' && typeof cell === 'number'
                         ? valueByBox?.has(cell) ? <Money value={valueByBox.get(cell)} /> : 'no reading'
                         : record
-                          ? <><span data-value>{(onHand ?? 0).toLocaleString()}</span> Stored</>
+                          ? <span data-value>{(onHand ?? 0).toLocaleString()} stored</span>
                           : cell === 'pooled'
                             ? 'a count, not a location'
                             : cell === 'unplaced'
