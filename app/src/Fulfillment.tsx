@@ -986,6 +986,12 @@ export function Fulfillment() {
       root.style.removeProperty('--ff-sheet-h')
     }
   }, [hasSheet])
+  /* When the big photo closes, measure again: the sheet may have changed (an undo) while it was hidden and unmeasured. */
+  useEffect(() => {
+    if (zoom) return
+    const el = sheetNode.current
+    el?.closest<HTMLElement>('main')?.style.setProperty('--ff-sheet-h', `${el.offsetHeight}px`)
+  }, [zoom])
   const [failures, setFailures] = useState(0)
   const [dismissedAt, setDismissedAt] = useState(-1)
   const staleDismissed = dismissedAt === failures
