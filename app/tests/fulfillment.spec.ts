@@ -1756,6 +1756,19 @@ async function expectInViewport(page: Page, target: Locator, why: string): Promi
   expect(top >= 0 && bottom <= size!.height, `${why}: box spans ${Math.round(top)} to ${Math.round(bottom)} in a ${size!.height}px viewport`).toBe(true)
 }
 
+/* Marks the last visible interactive element of the Fulfiller's view, in document order, outside the banner and the sheet. */
+function markLastControl(page: Page): Promise<void> {
+  return page.evaluate(() => {
+    document.querySelectorAll('[data-last-control]').forEach((el) => el.removeAttribute('data-last-control'))
+    const main = document.querySelector('main.fulfillment')
+    const found = Array.from(main?.querySelectorAll('button, a[href], input, select, textarea, [role="button"]') ?? []).filter((el) => {
+      const r = el.getBoundingClientRect()
+      return r.width > 0 && r.height > 0 && el.closest('.ff-notice, .ff-sheet') === null
+    })
+    found[found.length - 1]?.setAttribute('data-last-control', '')
+  })
+}
+
 /* A list longer than SHOWN_OWED (6), so the last list control is "Show the other N cards". */
 function longListPlan(): unknown {
   const extra = Array.from({ length: 12 }, (_, i) => {
@@ -2298,6 +2311,54 @@ test('ux-w2 R19: the last list control is not covered by the banner at the botto
   await markLast()
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
   await expectNotCovered(page, last, 'at maximum scroll, with the receipt sheet closed')
+})
+
+/* R19 (review #849, seventh): with the receipt sheet open and the page at its maximum scroll, opening the big photo and
+   closing it moves nothing. The scroll position and the last interactive element's top stay where they were. */
+test('ux-w2 R19: zooming the photo with the receipt sheet open moves neither the scroll nor the last control', async ({ page }) => {
+  const SECOND = {
+    ...ORDER_TAKE,
+    sku: 'PIDGEOT-SKU',
+    name: 'Pidgeot ex',
+    copies: [{ ...ORDER_WALK_COPY, key: '3/26', capture_id: 'cap-pidgeot', place: { ...ORDER_COPY_PLACE, label: 'Box 3, Section 1, Card 26', index: 26, slot: 26, card: 26 } }],
+  }
+  const plan = {
+    ...ONE_OPEN_ORDER_PLAN,
+    stops: [{ ...ONE_OPEN_ORDER_PLAN.stops[0]!, takes: [ORDER_TAKE, SECOND] }],
+    counts: { ...ONE_OPEN_ORDER_PLAN.counts, copies: 2 },
+  }
+  await stubServer(page, [], { orders: ONE_OPEN_ORDER as unknown as typeof ONE_OPEN_ORDER, plan: plan as unknown as typeof ONE_OPEN_ORDER_PLAN })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  // Pidgeot is sold first, so the receipt sheet is open; then Charizard's card is opened beside it.
+  await openCard(page, 'Pidgeot ex')
+  await page.getByRole('button', { name: 'Pull' }).click()
+  await expect(view(page)).toContainText('Pulled.')
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
+  await expect(page.locator('.ff-sheet'), 'the receipt sheet is open').toBeVisible()
+  await openCard(page, 'Charizard ex')
+  await expect(page.locator('.ff-sheet'), 'the receipt sheet is still open with the card').toBeVisible()
+  await settleAnimations(page)
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  const markLast = () => markLastControl(page)
+  await markLast()
+  const last = page.locator('[data-last-control]')
+  await expect(last, 'a last interactive element is on the page').toHaveCount(1)
+  const scrollBefore = await page.evaluate(() => window.scrollY)
+  const lastBefore = await last.boundingBox()
+  await page.getByRole('button', { name: 'Show the photo bigger' }).click()
+  await expect(page.locator('.ff-zoom'), 'the big photo is open').toBeVisible()
+  await settleAnimations(page)
+  await page.getByRole('button', { name: 'Close the big photo' }).click()
+  await expect(page.locator('.ff-zoom'), 'the big photo is closed').toHaveCount(0)
+  await settleLayout(page)
+  await settleAnimations(page)
+  const scrollAfter = await page.evaluate(() => window.scrollY)
+  const lastAfter = await last.boundingBox()
+  expect(Math.abs(scrollAfter - scrollBefore), `the scroll position holds: ${scrollBefore} before the zoom, ${scrollAfter} after`).toBeLessThanOrEqual(1)
+  expect(lastBefore, 'the last control has a box before the zoom').not.toBeNull()
+  expect(lastAfter, 'the last control has a box after the zoom').not.toBeNull()
+  expect(Math.abs(lastAfter!.y - lastBefore!.y), 'the last control top holds through the zoom').toBeLessThanOrEqual(1)
 })
 
 /* R19 (review #849, sixth): the banner clears on a successful read at the bottom of the page, and nothing on screen moves.
