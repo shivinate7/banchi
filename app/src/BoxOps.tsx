@@ -1144,8 +1144,8 @@ export function ClaimEditor({
         />
       </ClaimRow>
 
-      <ClaimRow field="setHint" label="Set hint" armed={isArmed('setHint')} onArm={arm} says="leave empty to clear it">
-        <PlainInput value={setHint} onChange={setSetHint} placeholder="ME01" label="Set hint" mono />
+      <ClaimRow field="setHint" label="Set Hint" armed={isArmed('setHint')} onArm={arm} says="leave empty to clear it">
+        <PlainInput value={setHint} onChange={setSetHint} placeholder="ME01" label="Set Hint" mono />
       </ClaimRow>
 
       <ClaimRow

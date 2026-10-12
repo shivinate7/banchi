@@ -2291,7 +2291,7 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
     chips.push(
       <span key="hint" className="review-chip review-chip-sorted" title="The set hint recorded at capture">
         <Icon name="tag" size={12} />
-        <span className="review-chip-key">Set hint</span>
+        <span className="review-chip-key">Set Hint</span>
         <span className="review-chip-value review-chip-value-mono">{claims.hint}</span>
       </span>,
     )
@@ -2571,7 +2571,7 @@ function Facts({ row }: { row: Row }) {
     { label: 'Number', value: collectorNumber(entry.read) ?? 'none', mono: true },
     { label: 'Market', value: priceText(entry.market), mono: true },
     { label: 'Confidence', value: humanize(text(entry.confidence) ?? 'none recorded') },
-    { label: 'Set hint', value: text(entry.read.set_hint) ?? 'none', mono: true },
+    { label: 'Set Hint', value: text(entry.read.set_hint) ?? 'none', mono: true },
     {
       label: 'Sorted as',
       value: (() => {

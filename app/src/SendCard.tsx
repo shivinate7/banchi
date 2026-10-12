@@ -424,7 +424,6 @@ function SendStanding({
         size="sm"
         busy={takingBack}
         disabled={takingBack}
-        aria-label={`Take ${count(send.takeable, 'copy', 'copies')} back`}
         onClick={() => takeBack(send.stamp)}
       >
         {`Take ${count(send.takeable, 'Copy', 'Copies')} Back`}
@@ -725,9 +724,6 @@ export function SendCard({
               ? `Send ${pressCarries(skus, copies, 0, true)} to TCGplayer`
               : 'Send to TCGplayer'
 
-  /* THE SPOKEN NAME IS THE SENTENCE FORM, split from the Title Case label drawn on the press (a label is Title Case, a spoken name is prose). */
-  const spoken = typeof label === 'string' ? label.replace(/^Send All /, 'Send all ') : undefined
-
   const takeBack = async (stamp: string) => {
     setTakingBack(true)
     setUndoFailure(null)
@@ -802,7 +798,6 @@ export function SendCard({
           className="pricing-emit send-press"
           busy={phase === 'sending' || phase === 'waiting' || running}
           disabled={busy || empty || incomplete}
-          aria-label={spoken}
           aria-describedby={incomplete ? whyId : undefined}
           onClick={() => press('send')}
         >
