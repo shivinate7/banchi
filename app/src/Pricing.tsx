@@ -2151,7 +2151,7 @@ export function Pricing() {
         ttlMs: 8000,
         action: { label: 'Undo', kbd: 'U', onPress: () => undoByIdRef.current(id) },
       })
-      inputs.current.get(sku.sku)?.focus()
+      inputs.current.get(sku.sku)?.focus({ preventScroll: true })
     },
     [write, book],
   )
