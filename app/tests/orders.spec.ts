@@ -4848,7 +4848,7 @@ test('finishing a buyer never asks for another buyer\'s walk, and draws no card 
   await page.waitForTimeout(600) // keep: asserts the stray plan is never asked for
   expect(asked.filter((keys) => keys.includes(secondBuyerKey))).toEqual([])
   await expect(page.locator('.browse-card')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /^Mark sold/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Mark Sold/ })).toHaveCount(0)
 })
 
 /* THE LIGHTBOX IS `OrdersWalkPane.tsx`'s OWN `Overlay` (kind="lightbox"), which is the kit's
