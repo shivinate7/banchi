@@ -46,10 +46,10 @@ function carried(copies: number, prices: number): string {
 }
 /** What the PRESS says it carries: every SKU the list holds ready, whatever a filter draws
  *  (the filter note, moved onto the act). Copies stay in the bar's own line beside it. */
-function pressCarries(skus: number, copies: number, prices: number, title = false): string {
+function pressCarries(skus: number, copies: number, prices: number): string {
   const parts = [
-    copies > 0 || prices === 0 ? (skus === 1 ? '1 SKU' : `${title ? 'All' : 'all'} ${skus} SKUs`) : null,
-    prices > 0 ? count(prices, 'price change', 'price changes') : null,
+    copies > 0 || prices === 0 ? (skus === 1 ? '1 SKU' : `All ${skus} SKUs`) : null,
+    prices > 0 ? count(prices, 'Price Change', 'Price Changes') : null,
   ].filter((part): part is string => part !== null)
   return parts.join(' and ')
 }
@@ -161,14 +161,14 @@ function TrimList({ trimmed }: { readonly trimmed: readonly SendTrim[] }) {
 function MovesPhrase({ moves }: { readonly moves: readonly { copies: number; price: string }[] }) {
   const copies = moves.reduce((total, move) => total + move.copies, 0)
   const prices = new Set(moves.map((move) => Number(move.price)))
-  const head = `${count(copies, 'live copy moves', 'live copies move')} to `
+  const head = `${count(copies, 'Live Copy Moves', 'Live Copies Move')} to `
   return prices.size === 1 ? (
     <>
       {head}
       <Money value={Number(moves[0]?.price)} />
     </>
   ) : (
-    <>{`${head}new prices`}</>
+    <>{`${head}New Prices`}</>
   )
 }
 
@@ -242,7 +242,7 @@ function MovesList({ moves }: { readonly moves: readonly LiveMove[] }) {
   return (
     <Notice tone="info" compact className="send-moves" title="Live copies this press moves to their new price.">
       <Button variant="quiet" icon={open ? 'chevronUp' : 'chevronDown'} onClick={() => setOpen((on) => !on)} aria-expanded={open} words="word-only-control">
-        {`${open ? 'Hide' : 'Show'} ${count(moves.reduce((sum, move) => sum + move.copies, 0), 'live copy', 'live copies')}`}
+        {`${open ? 'Hide' : 'Show'} ${count(moves.reduce((sum, move) => sum + move.copies, 0), 'Live Copy', 'Live Copies')}`}
       </Button>
       <ul className="send-names" hidden={!open}>
         {moves.map((move) => (
@@ -714,14 +714,14 @@ export function SendCard({
                "Send 1 copy, 2 live copies move to $19.99". */
             (
               <>
-                {`Send ${pressCarries(skus, copies ?? 0, priceChanges.length, true)}, `}
+                {`Send ${pressCarries(skus, copies ?? 0, priceChanges.length)}, `}
                 <MovesPhrase moves={liveMoves} />
               </>
             )
           : priceChanges.length > 0
-            ? `Send ${pressCarries(skus, copies ?? 0, priceChanges.length, true)}`
+            ? `Send ${pressCarries(skus, copies ?? 0, priceChanges.length)}`
             : copies !== null && copies > 0
-              ? `Send ${pressCarries(skus, copies, 0, true)} to TCGplayer`
+              ? `Send ${pressCarries(skus, copies, 0)} to TCGplayer`
               : 'Send to TCGplayer'
 
   const takeBack = async (stamp: string) => {

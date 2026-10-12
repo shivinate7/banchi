@@ -2272,7 +2272,7 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
       chips.push(
         <span key="sorted" className="review-chip review-chip-sorted" title={`Finish at capture: ${claims.sorted.join(' or ')}`}>
           <Icon name="hand" size={12} />
-          <span className="review-chip-key">Sorted as</span>
+          <span className="review-chip-key">Sorted As</span>
           <span className="review-chip-value">{claims.sorted.map(humanize).join(' or ')}</span>
         </span>,
       )
@@ -2573,7 +2573,7 @@ function Facts({ row }: { row: Row }) {
     { label: 'Confidence', value: humanize(text(entry.confidence) ?? 'none recorded') },
     { label: 'Set Hint', value: text(entry.read.set_hint) ?? 'none', mono: true },
     {
-      label: 'Sorted as',
+      label: 'Sorted As',
       value: (() => {
         const members = claimMembers(entry.read.metadata_finish)
         if (members === null) return 'no claim'
@@ -2587,7 +2587,7 @@ function Facts({ row }: { row: Row }) {
       })(),
       mono: true,
     },
-    { label: 'Photo read', value: text(entry.read.detected_finish) ?? 'none', mono: true },
+    { label: 'Photo Read', value: text(entry.read.detected_finish) ?? 'none', mono: true },
     ...(entry.read.matcher_pick
       ? [
           {

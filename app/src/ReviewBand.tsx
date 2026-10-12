@@ -20,9 +20,9 @@ import { roundsToNothing } from './money'
 
 const COUNTS = [
   ['matched', 'Matched Free'],
-  ['paid', 'waiting for a paid look'],
-  ['unread', 'not yet looked at'],
-  ['you', 'waiting for you'],
+  ['paid', 'Waiting for a Paid Look'],
+  ['unread', 'Not yet Looked At'],
+  ['you', 'Waiting for You'],
 ] as const
 
 /* THREE COUNTS ABOVE ZERO AND THE SET-NAMED LINE OPEN A SHEET (`ReviewBandSheet.tsx`); "waiting for you" opens nothing, so it stays plain
@@ -242,7 +242,7 @@ export function ReviewBand({
           <span className="review-band-slot">
             {!loaded || left === 0 ? null : (
               <Button variant="primary" icon="zap" busy={busy} disabled={busy} onClick={() => void read()} className="review-band-read">
-                Read the {left} left
+                Read the {left} Left
                 {about === null ? null : roundsToNothing(about) ? (
                   ', under a cent'
                 ) : (

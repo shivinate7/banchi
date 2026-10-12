@@ -450,10 +450,11 @@
    holds none is a text line shorter: the hero below it moved 3.5px on the press. */
 .browse-hero-sub {
   display: flex;
-  /* THE CHIPS WRAP BELOW THE FACTS, NEVER OVER THEM: the card number, set and game keep their whole width (the
-     fact is never shrunk to nothing by the chips beside it), so the number sits where it first drew and the
-     chips that arrive later take the next line. */
-  flex-wrap: wrap;
+  /* ONE LINE, ALWAYS (D313): a chip arriving (Sold, after a sale) must never wrap onto a line of its own and push
+     the stats, the photo and the panel down. The set and game text gives way first (an ellipsis, its full text
+     is the title); the finish and rarity chips clip next; the state chip never shrinks. The card NUMBER never
+     shrinks (`.browse-hero-parts` below). */
+  flex-wrap: nowrap;
   /* `clip`, not `hidden`: its margin keeps the 2px ring and 2px offset of a focused chip (base.css) inside the paint. */
   overflow: clip;
   overflow-clip-margin: var(--bn-1);
@@ -464,7 +465,10 @@
   color: var(--bn-ink-3);
 }
 .browse-hero-sub > * { flex: none; }
-.browse-hero-sub > .browse-hero-parts { flex: none; max-width: 100%; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* THE PARTS ARE A GRID SO ITS FIRST CELL (the card number) HOLDS ITS WIDTH: the other cells are `minmax(0, max-content)`,
+   so the line's min-content is the number alone, and the set and game take the ellipsis when the chips need the room. */
+.browse-hero-sub > .browse-hero-parts { flex: 0 100 auto; min-width: min-content; display: grid; grid-auto-flow: column; grid-template-columns: auto; grid-auto-columns: minmax(0, max-content); }
+.browse-hero-parts > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .browse-hero-sub > .bn-pill-outline { flex: 0 1 auto; min-width: 0; overflow: hidden; }
 .browse-hero-parts > span + span::before { content: '·'; margin: 0 var(--bn-2); color: var(--bn-ink-4); }
 .browse-hero-number { font-family: var(--bn-font-mono); font-weight: 600; color: var(--bn-ink-2); }

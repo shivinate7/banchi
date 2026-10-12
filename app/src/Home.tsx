@@ -767,7 +767,9 @@ export function Home() {
                   // between its parts is CSS now (`.home-deck-card-no > span::before`).
                   <span className="home-deck-card-no">
                     {placeWordsOf(frontCard.place.label).map((part, at) => (
-                      <span key={at}>{part}</span>
+                      <span key={at} data-typed={at === 0 ? true : undefined}>
+                        {part}
+                      </span>
                     ))}
                   </span>
                 ) : (

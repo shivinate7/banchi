@@ -24,15 +24,15 @@ const PAGE = 50
 const SETTLED_BY_CLAIM = new Set(['printing_settled_by_claim', 'narrowed_by_claim'])
 
 export const SHEET_LABELS: Record<MatchSweepDetail, string> = {
-  matched: 'matched free',
-  paid: 'waiting for a paid look',
-  unread: 'not yet looked at',
-  unhinted: 'need a set named',
+  matched: 'Matched Free',
+  paid: 'Waiting for a Paid Look',
+  unread: 'Not yet Looked At',
+  unhinted: 'Need a Set Named',
 }
 
 /** The sheet's title and the count button's name: the count's own words with the number. */
 export function sheetTitle(kind: MatchSweepDetail, n: number): string {
-  return kind === 'unhinted' && n === 1 ? '1 needs a set named' : `${n} ${SHEET_LABELS[kind]}`
+  return kind === 'unhinted' && n === 1 ? '1 Needs a Set Named' : `${n} ${SHEET_LABELS[kind]}`
 }
 
 type Group = {

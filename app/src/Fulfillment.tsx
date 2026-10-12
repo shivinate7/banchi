@@ -1620,7 +1620,7 @@ export function Fulfillment() {
                           <span className="ff-box-text">
                             <span className="fulfillment-say ff-box-name" data-typed>{group.name ?? 'Unnamed Box'}</span>
                             <span className="fulfillment-say ff-box-count">
-                              {count(group.cards.length, 'card', 'cards')}
+                              {count(group.cards.length, 'Card', 'Cards')}
                             </span>
                           </span>
                           <Icon name="chevronDown" size={26} className="ff-box-chev" />
