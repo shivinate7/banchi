@@ -1950,8 +1950,12 @@ test('ux-w2 R18: a failed orders read keeps the last count shown', async ({ page
   await settleFonts(page)
   await expect(view(page).getByText(/\b12\s+left\b/i).first(), 'the count reads 12 left before the failure').toBeVisible()
   failNow = true
+  // The hop to #/gallery leaves this screen and comes back, which re-mounts it. The hop's own reads are stubbed here:
+  // no boxes, and an empty store. Gallery is the one other route this file already pins, so the hop adds no roster.
+  await page.route(/\/boxes(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ boxes: [], facet_cells: [] }) }))
+  await page.route(/\/inventory$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: 2, cards: {}, boxes: {}, listings: {} }) }))
   await page.evaluate(() => {
-    window.location.hash = '#/orders'
+    window.location.hash = '#/gallery'
   })
   await page.evaluate(() => {
     window.location.hash = '#/fulfillment'
@@ -1960,6 +1964,49 @@ test('ux-w2 R18: a failed orders read keeps the last count shown', async ({ page
 })
 })
 }
+
+/* ux-w2 (nothing on screen moves unless the person moved it, on the card view). The stale notice is drawn below the card,
+   so the photograph moves only if the notice arrives in a layout that pushes it. */
+test('ux-w2: a failed refresh on the card view moves nothing once the stale notice arrives', async ({ page }) => {
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
+  await openCard(page, 'Charizard ex')
+  // Code reason (Fulfillment.tsx, `doSell`): the refusal path re-reads the screen only for ALREADY_SOLD, a PULL_STALE
+  // code, or a success. Any other refusal sets trouble and returns without `reread()`, so no notice can follow it.
+  // A PULL_STALE refusal (`over_fulfilled`) keeps the card open (no `drop`) and calls `reread()`. The re-read's orders
+  // read fails, so `ordersFailed` is set while `cards` is still loaded, and the notice draws on the open card.
+  let failNow = false
+  await page.route(/\/orders$/, async (route) => {
+    if (!failNow) return route.fallback()
+    return route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'orders_unavailable', message: 'The orders could not be read.' } }),
+    })
+  })
+  await page.route(/\/orders\/pull$/, async (route) => {
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'over_fulfilled', message: 'The list no longer describes the store.' } }),
+    })
+  })
+  await page.getByRole('button', { name: 'Pull' }).click()
+  await expect(view(page)).toContainText('Pulled.')
+  await settleAnimations(page)
+  const photo = view(page).locator('.fulfillment-photo')
+  await expect(photo, 'the card stays open').toBeVisible()
+  const before = await photo.boundingBox()
+  failNow = true
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
+  await expect(view(page).locator('.ff-notice'), 'the stale notice is drawn after the failed refresh').toBeVisible()
+  await settleLayout(page)
+  await settleAnimations(page)
+  const after = await photo.boundingBox()
+  expect(before, 'the photograph has a box before the refresh').not.toBeNull()
+  expect(after, 'the photograph has a box after the refresh').not.toBeNull()
+  expect(Math.abs(after!.y - before!.y), 'the photograph does not move down or up').toBeLessThanOrEqual(1)
+  expect(Math.abs(after!.x - before!.x), 'the photograph does not move sideways').toBeLessThanOrEqual(1)
+})
 
 /* ux-w2 gap-check self-proof. Two plain buttons that overlap are NOT a covered pair: the gap floor must fail them. The
    covered skip applies only when a fixed or sticky layer is on top of a control. */
