@@ -2537,8 +2537,8 @@ export function Pricing() {
           options={[
             /* A STALE READ'S COUNTS ARE NOT OFFERED AS CURRENT (the owner's ruling, 2026-09-26). */
             { value: 'all', label: readStale ? 'All' : `All ${lensCounts.all}` },
-            { value: 'offered', label: readStale ? 'Not selling' : `Not selling ${lensCounts.offered}` },
-            { value: 'refused', label: readStale ? 'Passed over' : `Passed over ${lensCounts.refused}` },
+            { value: 'offered', label: readStale ? 'Not Selling' : `Not Selling ${lensCounts.offered}` },
+            { value: 'refused', label: readStale ? 'Passed Over' : `Passed Over ${lensCounts.refused}` },
           ]}
           onChange={setLens}
         />
@@ -2606,7 +2606,7 @@ export function Pricing() {
       </Button>
       {readStale ? null : (
         <Button size="sm" icon="refresh" busy={liveBusy} disabled={liveBusy} onClick={readAgain}>
-          Read again
+          Read Again
         </Button>
       )}
       <span className="bn-sr" role="status">
@@ -2690,7 +2690,7 @@ export function Pricing() {
         <div className="send-card">
           <div className="send-act">
             <Button variant="primary" size="lg" icon="refresh" className="send-press" busy={liveBusy} disabled={liveBusy} onClick={readAgain}>
-              Read again
+              Read Again
             </Button>
           </div>
         </div>
@@ -2730,7 +2730,7 @@ export function Pricing() {
                 setPush('sending')
               }}
             >
-              {`Send ${pushable.length} ${pushable.length === 1 ? 'price' : 'prices'} to TCGplayer`}
+              {`Send ${pushable.length} ${pushable.length === 1 ? 'Price' : 'Prices'} to TCGplayer`}
             </Button>
             <span className="bn-sr" role="status">
               {push === 'sending' ? 'Checking TCGplayer, then sending…' : push === 'writing' ? 'Writing the file…' : ''}
@@ -2747,8 +2747,8 @@ export function Pricing() {
                 setPush('writing')
               }}
             >
-              <span className="send-long">Download the file instead</span>
-              <span className="send-short">Download file</span>
+              <span className="send-long">Download the File Instead</span>
+              <span className="send-short">Download File</span>
             </Button>
             {!wroteUpload || (push !== 'idle' && !linkHeld) ? null : (
               <a className="bn-btn" href={markdownFileUrl(stamp, 'import.csv')} download="import.csv">
@@ -2921,7 +2921,7 @@ export function Pricing() {
               value={facetPicks}
               onChange={setFacetPicks}
               count={{ shown: drawn.reduce((sum, group) => sum + group.rows.length, 0), total: rows.length, noun: { one: 'item', many: 'items' } }}
-              search={{ query, onChange: setQuery, placeholder: 'Name, set, number or SKU', label: 'Search this list' }}
+              search={{ query, onChange: setQuery, placeholder: 'Name, set, number or SKU', label: 'Search This List' }}
               sort={{ options: sortOptions, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
             />
           )}

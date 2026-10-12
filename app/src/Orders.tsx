@@ -3659,7 +3659,7 @@ function PullStage({
       value={picked}
       onChange={setPicked}
       count={{ shown: shownGroups.length, total: base.length, noun: { one: 'buyer', many: 'buyers' } }}
-      search={{ query, onChange: setQuery, placeholder: 'Buyer or order', label: 'Search buyers' }}
+      search={{ query, onChange: setQuery, placeholder: 'Buyer or order', label: 'Search Buyers' }}
       sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
       hide={[
         ...(unpullableCount === 0 && !hideUnpullable

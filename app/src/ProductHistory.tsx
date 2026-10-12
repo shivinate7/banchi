@@ -63,7 +63,7 @@ import './ProductHistory.css'
 
 const RANGE_LABEL: Record<string, string> = {
   month: 'Daily',
-  quarter: '3-day',
+  quarter: '3-Day',
   semiannual: 'Weekly',
   annual: 'Weekly',
 }
@@ -684,7 +684,7 @@ export function ProductHistory() {
           value={searchState.query}
           onChange={searchState.setQuery}
           persona="owner"
-          label="Find a product"
+          label="Find a Product"
           placeholder="Card name, number or SKU"
           onSubmit={(text) => {
             // A full SKU jumps straight there — the fast path the old "TCGplayer SKU" field
