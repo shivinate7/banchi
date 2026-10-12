@@ -20,7 +20,7 @@
 /** Chicago's small words: lowercase in the middle of a title, capitalized first or last. */
 export const SMALL_WORDS: ReadonlySet<string> = new Set([
   'a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'so', 'yet',
-  'as', 'at', 'by', 'in', 'of', 'on', 'to', 'up', 'via', 'per', 'unless',
+  'as', 'at', 'by', 'in', 'of', 'on', 'to', 'up', 'via', 'per', 'unless', 'with',
 ])
 
 /** "I", "my", "me", "mine" as whole words, any case. Lookarounds bound the match by non-letters. */

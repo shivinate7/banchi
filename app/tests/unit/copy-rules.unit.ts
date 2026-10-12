@@ -81,6 +81,13 @@ test('label: a closing period on a control label does not skip the casing check'
   expect(casingProblems('Under Your Price.')).toEqual([])
 })
 
+/* THE PREPOSITION (Chicago lowercases every preposition in the middle of a title). `with` is the one the label corpus uses
+ * mid-title (`Lowest with Shipping`); the capitalized form is the defect. */
+test('casing: a preposition in the middle of a title stays lower-case, so "with" passes lower and fails capitalized', () => {
+  expect(casingProblems('Lowest with Shipping')).toEqual([])
+  expect(casingProblems('Lowest With Shipping')).toEqual(['"With" should be lowercase'])
+})
+
 /* THE LABEL LINE (the sweep's first-line rule was wrong for two shapes). A tile draws its figure above its label, and a
  * row draws its key cap before its name. The label is the first line with a letter that is not a key cap alone. A
  * description under a title is never the label. */
