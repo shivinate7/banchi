@@ -961,6 +961,11 @@ export function Fulfillment() {
     reread()
   }
 
+  /* R19: the stale notice floats and stays until it is dismissed or its cause clears; a new failure shows it again. */
+  const [staleDismissed, setStaleDismissed] = useState(false)
+  useEffect(() => {
+    if (!loadFailed && !ordersFailed) setStaleDismissed(false)
+  }, [loadFailed, ordersFailed])
   const tryAgain = () => {
     setLoadFailed(false)
     setOrdersFailed(false)
@@ -1033,8 +1038,8 @@ export function Fulfillment() {
 
   /* ---- the list may have moved under him -------------------------------------------- */
   const stale =
-    (loadFailed || ordersFailed) && cards !== null ? (
-      <div className="ff-notice">
+    (loadFailed || ordersFailed) && cards !== null && !staleDismissed ? (
+      <div className="ff-notice" role="status">
         <Icon name="alert" size={26} className="ff-notice-icon" />
         <p className="fulfillment-say">
           These cards may have changed since they were last checked.
@@ -1042,6 +1047,9 @@ export function Fulfillment() {
         <button className="ff-quiet" type="button" onClick={tryAgain}>
           <Icon name="refresh" size={22} />
           Try again
+        </button>
+        <button className="ff-notice-x" type="button" aria-label="Dismiss" onClick={() => setStaleDismissed(true)}>
+          <Icon name="x" size={22} />
         </button>
       </div>
     ) : null
@@ -1097,7 +1105,7 @@ export function Fulfillment() {
         {header}
         {/* The same bar the list draws, with the real search, so nothing moves when the cards land. */}
         <div className="ff-bar">
-          <div className="ff-count-track">{todayFrame}</div>
+          <div className="ff-count-track">{lastCount !== null ? countOf(lastCount) : todayFrame}</div>
           <div className="ff-search" data-clear="false">
             <SearchField value={query} onChange={setQuery} persona="fulfiller" placeholder="Card name or number" />
           </div>
