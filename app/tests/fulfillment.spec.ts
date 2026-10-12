@@ -2144,12 +2144,14 @@ test('ux-w2 R19: a stale notice on a long list, scrolled to the top, is inside t
   await settleLayout(page)
   await settleAnimations(page)
   await page.evaluate(() => window.scrollTo(0, 0))
+  expect(await page.evaluate(() => window.scrollY), 'the page is scrolled to the top').toBe(0)
   const answered = page.waitForResponse(/\/orders$/)
   release()
   await answered
   await expect(view(page).locator('.ff-notice'), 'the stale notice is drawn on the list').toBeVisible()
   await settleLayout(page)
   await settleAnimations(page)
+  expect(await page.evaluate(() => window.scrollY), 'the page is still at the top when the notice lands').toBe(0)
   await expectInViewport(page, view(page).locator('.ff-notice'), 'the stale notice on a long list scrolled to the top')
 })
 
