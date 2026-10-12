@@ -502,6 +502,10 @@ function CardRow({ card, onOpen }: { card: Sellable; onOpen: (card: Sellable) =>
   )
 }
 
+/** The last count the orders read gave, kept across a leave and return so a failed read keeps it (R18).
+ *  One number for this device's sitting; it names no card and is never stored. */
+let lastCount: number | null = null
+
 export function Fulfillment() {
   const [cards, setCards] = useState<Sellable[] | null>(null)
   const [unplaced, setUnplaced] = useState(0)
@@ -1067,7 +1071,7 @@ export function Fulfillment() {
 
   let body: ReactNode
   let wide = false
-  /* The list draws the stale notice itself, below its search bar, so the notice never pushes the search. */
+  /* The list and the card draw the stale notice themselves, below their bar or card, so it never pushes either. */
   let staleBelowBar = false
 
   if (cards === null && loadFailed) {
@@ -1238,8 +1242,11 @@ export function Fulfillment() {
           </div>
           </div>
         </article>
+        {/* Below the card, never above it: a notice that arrives after first paint must not push the card. */}
+        {stale}
       </>
     )
+    staleBelowBar = true
   } else {
     const hunting = query.trim() !== ''
 
@@ -1349,7 +1356,7 @@ export function Fulfillment() {
       today = null
       /* Never blank: a read that has not answered, or that failed before it ever did, shows the
          loading count. A failed re-read keeps `orders`, so the count it last showed stays. */
-      countFigure = todayFrame
+      countFigure = ordersFailed && lastCount !== null ? countOf(lastCount) : todayFrame
     } else if (openOrderKeys.length === 0) {
       countFigure = countOf(0)
       /* No order is open at all — the ONE state allowed to say "nothing waits" (the owner's
@@ -1391,6 +1398,7 @@ export function Fulfillment() {
         )
     }
 
+    if (orders !== null && !ordersFailed) lastCount = openOrderKeys.length === 0 || owed.length === 0 ? 0 : totalWanted
     staleBelowBar = true
     const shownOwed = allOwed ? owed : owed.slice(0, SHOWN_OWED)
     const hiddenOwed = owed.length - shownOwed.length
