@@ -2625,7 +2625,7 @@ test('the solid accent fill is spent on the one thing to do, and never on a row'
 
 // -------------------------------------------------- why a row adds nothing (D59)
 
-test('the reason a row adds nothing is a heading, composed by the SERVER, verbatim', async ({
+test('the reason a row adds nothing is a heading, composed by the CLIENT, verbatim', async ({
   page,
 }) => {
   /* THE SENTENCE IS THE SERVER'S AND THE CLIENT MAY NOT COMPOSE ONE. This note read

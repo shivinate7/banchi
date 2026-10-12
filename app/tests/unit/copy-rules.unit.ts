@@ -1,12 +1,13 @@
 // Protects: the first-person and Title Case rules that the copy sweep applies are themselves right, and every reason label and review question headline is free of "I", "my", "me" and "mine" (R4, R4a).
 // Governs: DESIGN.md "Copy rules" (R4, R4a, R5), D173
-import { readFileSync, readdirSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { test, expect } from './unit'
 import { REASON_LABELS, RETIRED_REASON_LABELS } from '../../src/reasons'
-import { casingProblems, isSentence, isSpokenSentences, labelsOf, stripTyped, voiceHits } from '../copyRules'
+import { casingProblems, isSentence, isSpokenSentences, labelsOf, smallWordsOf, stripTyped, voiceHits } from '../copyRules'
 import { attrText, firstPersonInSource, jsxOpeningsIn, recordFromSource } from '../copySource'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -121,6 +122,18 @@ test('small words: the short Chicago prepositions stay lower-case in the middle 
   expect(casingProblems('Costs Under Ten')).toEqual(['"Under" should be lowercase'])
   // `vs` is a small word in the one home (CardHero.tsx's SMALL_WORDS), so a title keeps it lowercase.
   expect(casingProblems('Card vs Box')).toEqual([])
+})
+
+// THE READER FAILS LOUDLY. A missing list, or a list that is not a literal, throws. An empty set would let every small word
+// grade as a capital word and pass silently, which is the false green this reader exists to prevent.
+test('small words: the reader throws when the literal is missing or not a literal list, and never returns an empty set', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'small-words-'))
+  const missing = join(dir, 'missing.tsx')
+  writeFileSync(missing, 'export const OTHER: ReadonlySet<string> = new Set(["a"])\n')
+  expect(() => smallWordsOf(missing), 'a file with no SMALL_WORDS').toThrow(/SMALL_WORDS not found/)
+  const dynamic = join(dir, 'dynamic.tsx')
+  writeFileSync(dynamic, 'const w = "a"\nexport const SMALL_WORDS: ReadonlySet<string> = new Set([w])\n')
+  expect(() => smallWordsOf(dynamic), 'a list built from a variable').toThrow(/non-literal word/)
 })
 
 test('typed name is a placeholder word: the words around it grade as they would with a name there', () => {

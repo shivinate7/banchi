@@ -1,6 +1,7 @@
 /* THE COPY RULES, IN ONE FILE, READ BY THE SWEEP AND BY THE UNIT TIER (DESIGN.md "Copy rules", R4, R4a, R5).
  *
- * Pure functions only: no page, no import of Playwright. `copy-checks.spec.ts` sends the rendered
+ * Functions only: no page, no import of Playwright. The one file it reads is `src/CardHero.tsx`, for its SMALL_WORDS
+ * literal (`smallWordsOf`). `copy-checks.spec.ts` sends the rendered
  * strings in through `page.evaluate` and classifies them HERE, in Node, so the rule lives in exactly
  * one place and the unit tier can test the same function the sweep runs. A second copy of the word
  * list in a browser closure would drift the first time one of them changed.
@@ -29,7 +30,7 @@ import ts from 'typescript'
  * the Node unit runner cannot load. A missing or non-literal list is a throw, not an empty set. */
 const CARD_HERO = resolve(dirname(fileURLToPath(import.meta.url)), '../src/CardHero.tsx')
 
-function smallWordsOf(path: string): ReadonlySet<string> {
+export function smallWordsOf(path: string): ReadonlySet<string> {
   const file = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   for (const statement of file.statements) {
     if (!ts.isVariableStatement(statement)) continue
