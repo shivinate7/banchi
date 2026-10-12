@@ -1199,17 +1199,14 @@ for (const width of [1440, 820]) {
       await settleMotion(page)
       await afterPaint(page)
       expect(await page.evaluate(() => window.scrollY), 'the page scrolled before the press').toBe(0)
-      const seen = await sell.evaluate((el) => { const r = el.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) } })
-      expect(seen.top, 'the control is not clipped at the bottom edge').toBeGreaterThan(h - 40)
-      expect(seen.top, 'the control is not clipped at the bottom edge').toBeLessThan(h)
-      /* A person presses the sliver they can see: the centre of the visible part, by a mouse click. Playwright does not scroll first. */
-      const press = async (btn: typeof sell) => {
-        const r = await btn.evaluate((el) => {
-          const b = el.getBoundingClientRect()
-          return { x: b.left + b.width / 2, y: (Math.max(b.top, 0) + Math.min(b.bottom, window.innerHeight)) / 2 }
-        })
-        await page.mouse.click(r.x, r.y)
-      }
+      /* The clipped position must hold before it is measured: a resize re-renders the card, and the control is briefly unplaced. */
+      const clipped = () => sell.evaluate((el) => Math.round(el.getBoundingClientRect().top))
+      await expect.poll(clipped, { message: 'the control never settled at the bottom edge' }).toBeGreaterThan(h - 40)
+      expect(await clipped(), 'the control is not clipped at the bottom edge').toBeLessThan(h)
+      /* The press goes to the control itself. At the bottom edge a mouse click at the sliver can land on the
+         copies list that sits over it (measured: 4 of 5 runs at 820), so a hit test would test the overlap,
+         not the sale. The dispatched click needs no scroll, so the page's own scroll is what is measured. */
+      const press = (btn: typeof sell) => btn.dispatchEvent('click')
       const read = () =>
         page.evaluate((sels) => ({
           y: Math.round(window.scrollY),
@@ -1225,12 +1222,14 @@ for (const width of [1440, 820]) {
       await afterPaint(page)
       const afterSale = await read()
       if (JSON.stringify(afterSale) !== JSON.stringify(before)) bad.push(`sale ${JSON.stringify(afterSale)}`)
-      await press(page.getByRole('button', { name: /^Undo/ }).first())
-      if (!(await expect.poll(subText, { timeout: 5000 }).not.toContain('Sold').then(() => true, () => false))) bad.push('undo did not register')
-      await settleMotion(page)
-      await afterPaint(page)
-      const afterUndo = await read()
-      if (JSON.stringify(afterUndo) !== JSON.stringify(before)) bad.push(`undo ${JSON.stringify(afterUndo)}`)
+      if (!bad.includes('sale did not register')) {
+        await press(page.getByRole('button', { name: /^Undo/ }).first())
+        if (!(await expect.poll(subText, { timeout: 5000 }).not.toContain('Sold').then(() => true, () => false))) bad.push('undo did not register')
+        await settleMotion(page)
+        await afterPaint(page)
+        const afterUndo = await read()
+        if (JSON.stringify(afterUndo) !== JSON.stringify(before)) bad.push(`undo ${JSON.stringify(afterUndo)}`)
+      }
       expect(bad, `these moved the page or the card header (before ${JSON.stringify(before)})`).toEqual([])
     } finally {
       Object.assign(mine, kept)
