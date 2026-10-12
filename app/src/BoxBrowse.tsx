@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 
 import { isEditableTarget } from './keys'
-import { countLabel, placePartsOf, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
+import { placePartsOf, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { SectionTitle } from './SectionTitle'
 import type {
   BoxRecord,
@@ -2289,7 +2289,7 @@ export function BoxBrowse({
                       : record && sort.key === 'value' && typeof cell === 'number'
                         ? valueByBox?.has(cell) ? <Money value={valueByBox.get(cell)} /> : 'no reading'
                         : record
-                          ? `${(onHand ?? 0).toLocaleString()} Stored`
+                          ? <span data-value>{(onHand ?? 0).toLocaleString()} stored</span>
                           : cell === 'pooled'
                             ? 'a count, not a location'
                             : cell === 'unplaced'
@@ -2466,8 +2466,8 @@ export function BoxBrowse({
                         <Icon name="chevronRight" size={14} className="browse-sectmark" />
                         <SectionTitle parts={section.parts} />
                         {section.parts.count === null ? null : (
-                          <span className="browse-secttotal" aria-hidden="true">
-                            {countLabel(section.parts.count)}
+                          <span className="browse-secttotal" aria-hidden="true" data-value>
+                            {section.parts.count}
                           </span>
                         )}
                       </button>

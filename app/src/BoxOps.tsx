@@ -1151,7 +1151,7 @@ export function ClaimEditor({
         <Select
           label="Game"
           value={entries === null ? null : key}
-          placeholder={entries === null ? 'Reading the Registry…' : 'Choose a game'}
+          placeholder={entries === null ? 'Loading Games…' : 'Choose a Game'}
           options={(entries ?? []).map((candidate) => ({ value: candidate.key, label: candidate.display }))}
           onChange={setPickedGame}
         />

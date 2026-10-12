@@ -3836,8 +3836,8 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
                 }
         row["over_cap"] = claimed > row["add_to_quantity"]
         # A MERGED ROW THAT CAN ADD MUST NOT CARRY ONE RUN'S REASON FOR ADDING NOTHING.
-        # `nothing_to_add` reads "every copy in this run is already listed or has left the
-        # box" — true of that leg, false of the merge the moment another leg can add.
+        # `nothing_to_add` reads "Every copy in this run is already listed or has left the
+        # box." — true of that leg, false of the merge the moment another leg can add.
         if row["add_to_quantity"] > 0:
             row["nothing_to_add"] = None
             row["at_cap"] = False

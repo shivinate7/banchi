@@ -81,12 +81,15 @@ export function numberCell(card: InventoryCard): string {
   return collectorNumber(card) ?? 'none'
 }
 
-/** An enum value drawn as a word: `reverse_holofoil` → `Reverse Holofoil`. */
-export function titleCase(raw: string): string {
-  return raw
-    .split(/[_\s]+/)
-    .filter((word) => word !== '')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+/** Chicago keeps these lowercase between the first and last word. */
+const SMALL_WORDS = new Set(['a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'of', 'in', 'on', 'at', 'to', 'as', 'by', 'with'])
+
+/** THE ONE HOME FOR TITLE CASE. An enum value drawn as a word: `reverse_holofoil` → `Reverse Holofoil`.
+ *  With `chicago`, the small words stay lowercase unless first or last: `waiting for a paid look` → `Waiting for a Paid Look`. */
+export function titleCase(raw: string, chicago = false): string {
+  const words = raw.split(/[_\s]+/).filter((word) => word !== '')
+  return words
+    .map((word, i) => (chicago && i > 0 && i < words.length - 1 && SMALL_WORDS.has(word) ? word : word.charAt(0).toUpperCase() + word.slice(1)))
     .join(' ')
 }
 

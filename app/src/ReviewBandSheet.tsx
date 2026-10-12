@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { MatchSweepCard, MatchSweepDetail } from './types'
 import { previewUrl } from './server'
+import { titleCase } from './CardHero'
 import { NO_REASON, NO_REASON_OFF, unreadGroup } from './reasons'
 import { Button, EmptyState, Loading, Sheet, Slot } from './kit'
 import './ReviewBandSheet.css'
@@ -35,11 +36,9 @@ export function sheetTitle(kind: MatchSweepDetail, n: number): string {
   return kind === 'unhinted' && n === 1 ? '1 needs a set named' : `${n} ${SHEET_LABELS[kind]}`
 }
 
-/** The sheet's HEADING: the same words as `sheetTitle`, in Title Case. The count button keeps `sheetTitle`, a spoken sentence. */
+/** The sheet's HEADING: the words of `sheetTitle` in Title Case (`titleCase`, the one home). */
 export function sheetHeading(kind: MatchSweepDetail, n: number): string {
-  const words = sheetTitle(kind, n).split(' ')
-  const small = new Set(['a', 'for', 'at', 'yet'])
-  return words.map((w, i) => (i > 0 && i < words.length - 1 && small.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1))).join(' ')
+  return titleCase(sheetTitle(kind, n), true)
 }
 
 type Group = {

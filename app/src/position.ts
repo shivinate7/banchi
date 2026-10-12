@@ -383,11 +383,6 @@ export function sectionCountWords(count: SectionCount | null): string | null {
   return count === null ? null : `${count.of} card${count.of === 1 ? '' : 's'}`
 }
 
-/** A section count as a standalone label: `19 Cards`. Inside a sentence it stays `19 cards`. */
-export function countLabel(words: string): string {
-  return words.replace('card', 'Card')
-}
-
 /** The whole title as one sentence: what a screen reader hears, what a fold groups by, and
  *  exactly the text `SectionTitle` draws. */
 export function sectionTitleText(parts: SectionTitleParts): string {
