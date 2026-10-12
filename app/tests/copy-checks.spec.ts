@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { test, expect, type Page } from '@playwright/test'
+import ts from 'typescript'
 
 import { settleFonts } from './fontsReady'
 import { card, sealEveryTest } from './shell'
@@ -48,8 +49,33 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(HERE, '..', '..')
 const RECEIPT_PATH = resolve(ROOT, '.serve', 'copy-checks.json')
 
+/* THE SCREEN'S HASH, READ FROM App.tsx's ROUTES TABLE AT RUN TIME. A screen named here must have a row in that table, or this
+ * throws. Reading the table (not the nav strip) keeps this a read: the nav is only reachable by navigating to Home, which would
+ * move the page in the middle of a state. A name is the route's path without its slash (`review`); `''` is Home. */
+const APP_TSX = resolve(HERE, '..', 'src', 'App.tsx')
+function hashOf(name: string): string {
+  const wanted = name === '' ? '/' : `/${name}`
+  const file = ts.createSourceFile(APP_TSX, readFileSync(APP_TSX, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  for (const statement of file.statements) {
+    if (!ts.isVariableStatement(statement)) continue
+    for (const decl of statement.declarationList.declarations) {
+      const table = decl.initializer
+      if (!ts.isIdentifier(decl.name) || decl.name.text !== 'ROUTES' || table === undefined || !ts.isArrayLiteralExpression(table)) continue
+      for (const row of table.elements) {
+        if (!ts.isObjectLiteralExpression(row)) continue
+        for (const prop of row.properties) {
+          if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name) && prop.name.text === 'path' && ts.isStringLiteral(prop.initializer) && prop.initializer.text === wanted) {
+            return `#${wanted}`
+          }
+        }
+      }
+    }
+  }
+  throw new Error(`no ROUTES row with path ${wanted} in App.tsx`)
+}
+
 /** The one route the owner sweep does not read, opened here by hash. */
-const FULFILLER = '#/fulfillment'
+const FULFILLER = hashOf('fulfillment')
 /** A floor on how much casing text the sweep found, so an empty read cannot pass green. */
 const CASING_FLOOR = 20
 
@@ -532,15 +558,15 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   await page.route(MATCH_SWEEP, (route) =>
     route.fulfill(answer({ ...NO_SWEEP, matched: 2, matched_here: 2, matched_keys: ['3/1', '3/2'], paid: 2, paid_keys: ['3/3', '3/4'], unread: 3 })),
   )
-  await visit(page, '#/review')
+  await visit(page, hashOf('review'))
   // Case-insensitive on purpose: the copy sweep is the casing guard; these specs check behaviour.
   await expect(page.locator('.review-band-count', { hasText: /matched free/i }).getByRole('button'), 'the matched tile is a button').toHaveCount(1)
   await expect(page.locator('.review-band-count', { hasText: /waiting for a paid look/i }).getByRole('button'), 'the paid tile is a button').toHaveCount(1)
   await expect(page.locator('.review-band-count', { hasText: /not looked at yet/i }).getByRole('button'), 'the unread tile is a button').toHaveCount(1)
-  read('#/review', await page.evaluate(scanCopy))
+  read(hashOf('review'), await page.evaluate(scanCopy))
   await page.locator('.review-band-count', { hasText: /matched free/i }).getByRole('button').click()
   await expect(page.getByRole('dialog'), 'the matched sheet opens').toBeVisible()
-  read('#/review', await page.evaluate(scanCopy))
+  read(hashOf('review'), await page.evaluate(scanCopy))
 
   // THE SHELF'S LIFT BAR: a section lifted in Layout mode draws its scope picker (`This section`, `This and the next`,
   // `The whole box`, `Some Cards`). The grip is pressed from the keyboard, so the bar opens the same way for every reader.
@@ -575,24 +601,24 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
       }),
     ),
   )
-  await visit(page, '#/inventory?view=shelf')
+  await visit(page, hashOf('inventory') + '?view=shelf')
   await page.getByRole('button', { name: 'Layout' }).click()
   const grip = page.getByRole('button', { name: /^(Drag|Move) section/ }).first()
   await grip.focus()
   await page.keyboard.press('Enter')
   await expect(page.locator('.shelf-lift'), 'the lift bar is drawn once a section is lifted').toBeVisible()
-  read('#/inventory', await page.evaluate(scanCopy))
+  read(hashOf('inventory'), await page.evaluate(scanCopy))
   await page.keyboard.press('Escape')
 
   // THE REVIEW BAND'S UNHINTED LINE: two cards with no set hint. Its health button is read, then its sheet opens and is read.
   await page.route(MATCH_SWEEP, (route) => route.fulfill(answer({ ...NO_SWEEP, unhinted: 2 })))
-  await visit(page, '#/review')
+  await visit(page, hashOf('review'))
   const needSet = page.locator('.review-band-health').getByRole('button', { name: /need a set named/i })
   await expect(needSet, 'the unhinted line is a button').toHaveCount(1)
-  read('#/review', await page.evaluate(scanCopy))
+  read(hashOf('review'), await page.evaluate(scanCopy))
   await needSet.click()
   await expect(page.getByRole('dialog'), 'the unhinted sheet opens').toBeVisible()
-  read('#/review', await page.evaluate(scanCopy))
+  read(hashOf('review'), await page.evaluate(scanCopy))
 
   // THE PRICE FACTS SALES LABELS: the product view with sales saved, so the sales grid draws its five labels.
   await page.route(/\/pipeline\/price-facts/, (route) =>
@@ -612,9 +638,9 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
       }),
     ),
   )
-  await visit(page, '#/product?sku=9191486')
+  await visit(page, hashOf('product') + '?sku=9191486')
   await expect(page.locator('.pricefacts-grid'), 'the sales grid is drawn').toBeVisible()
-  read('#/product?sku=9191486', await page.evaluate(scanCopy))
+  read(hashOf('product') + '?sku=9191486', await page.evaluate(scanCopy))
 
   // THE CODES LOT LINE: one built lot, so the meta reads `N lots built` rather than `No Lots Built Yet`.
   await page.route(/\/codes\/lots$/, (route) =>
@@ -636,11 +662,11 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
       }),
     ),
   )
-  await visit(page, '#/codes')
-  read('#/codes', await page.evaluate(scanCopy))
+  await visit(page, hashOf('codes'))
+  read(hashOf('codes'), await page.evaluate(scanCopy))
 
   // THE CLAIM EDITOR ON A CARD: the walk's first card, Actions, then Correct. The sheet's field labels are read.
-  await visit(page, '#/inventory')
+  await visit(page, hashOf('inventory'))
   // The walk's section folds start shut, and a row exists only inside an open fold: open every shut one first.
   const shutFold = page.locator('.browse-sectfold[aria-expanded="false"]')
   for (let guard = 0; guard < 40 && (await shutFold.count()) > 0; guard += 1) await shutFold.first().click()
@@ -648,22 +674,22 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   await page.getByRole('button', { name: 'Actions' }).click()
   await page.getByRole('menuitem', { name: 'Correct' }).click()
   await expect(page.getByRole('dialog'), 'the correct-claims sheet opens').toBeVisible()
-  read('#/inventory', await page.evaluate(scanCopy))
+  read(hashOf('inventory'), await page.evaluate(scanCopy))
   await page.keyboard.press('Escape')
 
   // THE CLAIM EDITOR ON A BOX: Manage, then Claims. The box's set-claims editor is read.
-  await visit(page, '#/inventory')
+  await visit(page, hashOf('inventory'))
   await page.getByRole('button', { name: 'Manage' }).click()
   await page.getByRole('button', { name: /^Claims/ }).click()
   await expect(page.getByRole('dialog'), 'the set-claims sheet opens').toBeVisible()
-  read('#/inventory', await page.evaluate(scanCopy))
+  read(hashOf('inventory'), await page.evaluate(scanCopy))
 
   // THE REVIEW STATE WITH AN EMPTY QUEUE: `All caught up`, and its two buttons. Asserted drawn first.
   await page.route(QUEUES, (route) => route.fulfill(answer({ review: [], parked: [] })))
   await page.route(MATCH_SWEEP, (route) => route.fulfill(answer(NO_SWEEP)))
-  await visit(page, '#/review')
+  await visit(page, hashOf('review'))
   await expect(page.locator('.review-done'), 'the empty queue draws its card').toBeVisible()
-  read('#/review', await page.evaluate(scanCopy))
+  read(hashOf('review'), await page.evaluate(scanCopy))
 
   // THE PRICING STATE WITH A RUN TO SEND: the press names all two SKUs. Asserted drawn first.
   await page.route(PRICING_WORKLIST, (route) => route.fulfill(answer(worklist())))
@@ -673,15 +699,15 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
       answer({ run: RUN, path: `/tmp/runs/${RUN}`, box: 7, box_name: 'Riftbound epics', live: false, phase: 'emit', joined: true, collected: true, counts: { skus: 2, cards_in: 6, queued_main: 0, queued_parked: 0 }, batch_ids: [], usage: {}, console: '', files: [], manifest: {} }),
     ),
   )
-  await visit(page, '#/pricing')
+  await visit(page, hashOf('pricing'))
   await expect(page.getByRole('button', { name: /^Send all 2 SKUs/i }), 'the send press names two SKUs').toBeVisible()
-  read('#/pricing', await page.evaluate(scanCopy))
+  read(hashOf('pricing'), await page.evaluate(scanCopy))
 
   // THE PRICING STATE WITH A TAKEABLE SEND: the card offers `Take N copies back`. Asserted drawn first.
   await page.route(SENDS, (route) => route.fulfill(answer({ ...SENDS_NONE, sends: [TAKEABLE] })))
-  await visit(page, '#/pricing')
+  await visit(page, hashOf('pricing'))
   await expect(page.getByRole('button', { name: /^Take \d+ copies back$/i }), 'the takeable send offers its take back').toBeVisible()
-  read('#/pricing', await page.evaluate(scanCopy))
+  read(hashOf('pricing'), await page.evaluate(scanCopy))
 
   // THE PRICE-CHANGE PRESS: two rows at cap carry live copies, and the owner types a new price on each this visit (a change
   // needs a typed price). The press names the SKUs and the changes as one label, read whole. Asserted drawn first.
@@ -691,26 +717,26 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
       answer(worklistOf([liveSku('8608459', 'Dunsparce', 2, '9.99', true), liveSku('8608659', 'Wattrel', 1, '4.00', true), worklistSku('8608559', 'Riftbound Ember'), worklistSku('8608560', 'Riftbound Tide')])),
     ),
   )
-  await visit(page, '#/pricing')
+  await visit(page, hashOf('pricing'))
   await typePrice(page, 'Dunsparce', '12.50')
   await typePrice(page, 'Wattrel', '5.50')
   await expect(page.getByRole('button', { name: /^Send all 2 SKUs and 2 price changes$/i }), 'the press names the two price changes').toBeVisible()
-  read('#/pricing', await page.evaluate(scanCopy))
+  read(hashOf('pricing'), await page.evaluate(scanCopy))
 
   // THE MOVES PRESS: two uncapped rows add copies over live ones at new stored prices, so the press also names the moved copies.
   await stubCorpus(page, { '8608859': '11.00', '8608959': '8.00' })
   await page.route(PRICING_WORKLIST, (route) =>
     route.fulfill(answer(worklistOf([liveSku('8608859', 'Articuno', 2, '9.99', false), liveSku('8608959', 'Kled', 3, '7.00', false)]))),
   )
-  await visit(page, '#/pricing')
+  await visit(page, hashOf('pricing'))
   await expect(page.getByRole('button', { name: /^Send all 2 SKUs, 5 live copies move to new prices$/i }), 'the press names the moved copies').toBeVisible()
-  read('#/pricing', await page.evaluate(scanCopy))
+  read(hashOf('pricing'), await page.evaluate(scanCopy))
 
   // THE EMPTY WORKLIST: nothing to price yet, and the button that opens the Live tab. Asserted drawn first.
   await page.route(PRICING_WORKLIST, (route) => route.fulfill(answer(worklistOf([]))))
-  await visit(page, '#/pricing')
+  await visit(page, hashOf('pricing'))
   await expect(page.getByRole('button', { name: /^Price your live listings$/i }), 'the empty worklist offers the Live tab').toBeVisible()
-  read('#/pricing', await page.evaluate(scanCopy))
+  read(hashOf('pricing'), await page.evaluate(scanCopy))
 
   const casingTotal = reads.reduce((sum, one) => sum + one.casing, 0)
   expect(casingTotal, `the sweep read ${casingTotal} labels, under the floor of ${CASING_FLOOR}`).toBeGreaterThan(CASING_FLOOR)
