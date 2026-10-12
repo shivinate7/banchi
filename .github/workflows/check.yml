@@ -140,11 +140,11 @@ permissions:
 # main, a nightly and a manual run each get a group of their own (the run id), so a second
 # merge can neither cancel the first one's verdict nor replace it while it waits.
 concurrency:
-  group: check-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  group: check-${{ github.event_name == 'pull_request' && format('{0}-{1}', github.ref, github.event.pull_request.draft) || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # SIX SHARDS IN PARALLEL, NONE MUCH OVER 150s (`timeout-minutes` IS OVER 2x THE SLOWEST SHARD), AND ONE JOB NAMED `check` THAT ANSWERS FOR THEM (owner's word,
+  # SIX SHARDS IN PARALLEL, MEASURED AT 140 TO 297s EACH (`timeout-minutes` IS OVER 2x THE SLOWEST SHARD), AND ONE JOB NAMED `check` THAT ANSWERS FOR THEM (owner's word,
   # 2026-09-28; D161, amended). The serial `make ci-check` took 600s on run 36509895299. The
   # shards' recipes together are exactly `ci-check`'s, and `make docs-audit`'s `check registry`
   # row fails when they are not. Each shard installs the same way and keeps D161's order, product
@@ -158,7 +158,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [ci-check-product, ci-check-product-2, ci-check-product-3, ci-check-static, ci-check-guards-1, ci-check-guards-2]
+        target: [ci-check-product, ci-check-product-2, ci-check-product-3, ci-check-guards-1, ci-check-guards-2]
     steps:
       # The self-tests build throwaway clones and read `git worktree list`, and `revert-selftest`
       # walks main against a fixture origin. Full history is not needed for any of that, but a
@@ -229,6 +229,82 @@ jobs:
           BANCHI_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
         run: make ${{ matrix.target }}
 
+  # The static targets run alone so `design-check` can wait for them and not for the slowest shard.
+  ci-static:
+    name: ci-check (ci-check-static)
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      # The self-tests build throwaway clones and read `git worktree list`, and `revert-selftest`
+      # walks main against a fixture origin. Full history is not needed for any of that, but a
+      # detached single commit is: `renumbered ids` compares this branch against main.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          # 3.12 for the reason demo.yml gives at length: the rig's 3.9.6 is EOL and pinned for
+          # a cp39 wheel this path never loads. Nothing here runs the QR decode or the camera.
+          # `ruff` reads its target from ruff.toml (`py312`), not from the interpreter, so lint
+          # fidelity is unaffected by running on a newer one.
+          python-version: '3.12'
+          cache: pip
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          npm ci --prefix app
+
+      # `git config user.*` because revert-selftest and janitor-selftest COMMIT inside their own
+      # temp fixtures, and a runner has no identity by default. Fixture-local, and neither test
+      # ever touches this checkout.
+      - name: Identify git
+        run: |
+          git config --global user.email "check@example.com"
+          git config --global user.name "check"
+
+      # STORE-SCALING ITEM 8: `store/db.py:_add_search_index` needs FTS5, and the rig's own
+      # SQLite (3.54.0, macOS) having it says nothing about THIS runner's — a different Python
+      # build with its own bundled or system-linked SQLite. Failing loud HERE, before a single
+      # test runs, beats letting `_add_search_index` raise an opaque
+      # `sqlite3.OperationalError: no such module: fts5` three functions deep inside a schema
+      # migration on the first store open — every `make ci-check`/`make check` test that opens
+      # a store hits this the moment `actions/setup-python@v5`'s pinned 3.12 build ever changes.
+      - name: FTS5 is compiled into this runner's SQLite
+        run: |
+          python3 -c "
+          import sqlite3
+          print('sqlite3 module version:', sqlite3.version)
+          print('SQLite library version:', sqlite3.sqlite_version)
+          conn = sqlite3.connect(':memory:')
+          try:
+              conn.execute(\"CREATE VIRTUAL TABLE t USING fts5(x)\")
+          except sqlite3.OperationalError as exc:
+              raise SystemExit(
+                  f'FTS5 is not compiled into this Python\'s SQLite (sqlite3 {sqlite3.sqlite_version}): {exc}. '
+                  'do_search (store/db.py:_add_search_index) cannot run without it.'
+              )
+          print('FTS5 is available.')
+          "
+
+      # A schedule or a dispatch runs every self-test: the two path gates answer "run" on
+      # their own hatches, which is what those hatches are for. A PR keeps its scope.
+      - name: make ci-check-static
+        env:
+          BANCHI_GUARD_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
+          BANCHI_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
+        run: make ci-check-static
+
   # THE REQUIRED CHECK. The ruleset names `check`, so this job keeps that name and passes only
   # when every shard passed AND the browser matrix passed or was skipped ON PURPOSE.
   # `if: always()` because a job that `needs` a red job is otherwise SKIPPED, and a skipped
@@ -240,7 +316,7 @@ jobs:
   # ponytail: the smallest in-repo gate;
   # it can move to claude-settings' `actions/all-jobs-passed` once that is merged.
   check:
-    needs: [ci-check, design-check, already-passed, browser-scope, records]
+    needs: [ci-check, ci-static, design-check, already-passed, browser-scope, records]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -248,6 +324,7 @@ jobs:
       - name: every shard succeeded and the browser matrix passed or was skipped on purpose
         env:
           SHARDS: ${{ needs.ci-check.result }}
+          STATIC: ${{ needs.ci-static.result }}
           BROWSER: ${{ needs.design-check.result }}
           SCOPE_RUN: ${{ needs.browser-scope.outputs.run }}
           ALREADY_PASSED: ${{ needs.already-passed.outputs.skip }}
@@ -259,6 +336,7 @@ jobs:
           if [ "${DRAFT}" = "true" ]; then echo "::error::draft: mark ready to run the checks"; exit 1; fi
           echo "shards: ${SHARDS}; browser matrix: ${BROWSER} (scope run=${SCOPE_RUN}, already-passed skip=${ALREADY_PASSED})"
           [ "${SHARDS}" = "success" ] || { echo "a shard did not succeed"; exit 1; }
+          [ "${STATIC}" = "success" ] || { echo "the static checks did not succeed"; exit 1; }
           [ "${RECORDS}" = "success" ] || { echo "the record-number check did not succeed: ${RECORDS}"; exit 1; }
           [ "${BROWSER}" = "success" ] && exit 0
           if [ "${BROWSER}" = "skipped" ] && { [ "${SCOPE_RUN}" = "false" ] || [ "${ALREADY_PASSED}" = "true" ]; }; then
@@ -415,7 +493,7 @@ jobs:
 
   # The browser half. Same tree, different question: what a person actually sees.
   #
-  # SIX SHARDS, TWO WORKERS EACH — WIDENED ON THE OWNER'S WORD, 2026-09-19 ("both": raise the
+  # TWELVE SHARDS, TWO WORKERS EACH — WIDENED ON THE OWNER'S WORD, 2026-09-19 ("both": raise the
   # worker count AND build the spec allow-list). D136 SAID "the suite is sharded and never
   # widened" on the premise that `ubuntu-latest` was 2 vCPU on a PRIVATE repo, so half-of-cores
   # floored to one and more workers meant more of DEBT8's one-in-thirteen red. THAT PREMISE WENT
@@ -430,12 +508,12 @@ jobs:
   # `fail-fast: false` because a red shard is a claim about its own cases and the other five are
   # still worth their verdict.
   design-check:
-    needs: [already-passed, browser-scope]
+    needs: [already-passed, browser-scope, ci-static]
     # TWO GATES, EACH SKIPPING ONLY ON ITS OWN EXPLICIT ANSWER. `!cancelled()` replaces the
     # implicit `success()`, so a gate job that FAILED releases the matrix instead of skipping
     # it — a broken lookup or a broken classifier is not a reason to test less (the browser-scope entry in docs/decisions/). Until
     # this line, a failed `already-passed` skipped the matrix; now it runs it.
-    if: ${{ !cancelled() && !github.event.pull_request.draft && needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' }}
+    if: ${{ !cancelled() && !github.event.pull_request.draft && needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' && needs.ci-static.result == 'success' }}
     runs-on: ubuntu-latest
     # the long sitting (monthly, or a dispatch that asks) puts a 16-minute case on one shard
     timeout-minutes: ${{ (github.event.schedule == '47 4 1 * *' || inputs.long_sitting) && 40 || 20 }}
@@ -448,7 +526,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -589,7 +667,7 @@ jobs:
   # a week of red nights is one issue and not seven. `issues: write` is the whole grant: the
   # job checks nothing out and reads its verdict from `needs`. A skipped job is not a failure.
   nightly-alarm:
-    needs: [ci-check, revert-guard, zizmor, design-check, records]
+    needs: [ci-check, ci-static, revert-guard, zizmor, design-check, records]
     if: ${{ always() && (github.event_name == 'schedule' || inputs.report_failure) && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5

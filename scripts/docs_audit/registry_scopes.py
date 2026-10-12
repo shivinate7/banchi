@@ -182,6 +182,8 @@ def _check_registry() -> Row:
     workflow = read(CHECK_WORKFLOW) if exists(CHECK_WORKFLOW) else ""
     matrix = re.search(r"target:\s*\[([^\]]*)\]", workflow)
     listed = {t.strip() for t in matrix.group(1).split(",")} if matrix else set()
+    # a shard that runs as a job of its own (`ci-static`, so `design-check` can wait on it alone)
+    listed |= set(re.findall(r"run: make (ci-check-[\w-]+)\s*$", workflow, flags=re.M))
     if listed != set(CI_SHARD_RULES):
         findings.append(Finding(rel(CHECK_WORKFLOW), (
             "the `ci-check` job's matrix lists {0}, and the shards are {1}.\n"
