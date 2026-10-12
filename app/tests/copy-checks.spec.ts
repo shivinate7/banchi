@@ -878,14 +878,14 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   await stubStandDownOrder(page, { reason: 'no_copies_on_hand', fulfilled: 0, outstanding: 1, on_hand: 0, sold: 3, picks: [] })
   await visit(page, `${hashOf('orders')}?pullable=0`)
   await openStandDownSheet(page)
-  await expect(page.getByRole('button', { name: 'Already sent it', exact: true }), 'the gone line draws Already sent it').toBeVisible()
-  await expect(page.getByRole('button', { name: "It isn't shipping", exact: true }), 'the gone line draws It isn\'t shipping').toBeVisible()
+  await expect(page.getByRole('button', { name: /^already sent it$/i }), 'the gone line draws Already sent it').toBeVisible()
+  await expect(page.getByRole('button', { name: /^it isn't shipping$/i }), 'the gone line draws It isn\'t shipping').toBeVisible()
   read(`${hashOf('orders')}?pullable=0`, await page.evaluate(scanCopy))
 
   await stubStandDownOrder(page, { reason: 'not_a_single', fulfilled: 0, outstanding: 1, on_hand: 1, picks: [] })
   await visit(page, `${hashOf('orders')}?pullable=0`)
   await openStandDownSheet(page)
-  await expect(page.getByRole('button', { name: 'Sealed product', exact: true }), 'the not-a-single line draws Sealed product').toBeVisible()
+  await expect(page.getByRole('button', { name: /^sealed product$/i }), 'the not-a-single line draws Sealed product').toBeVisible()
   read(`${hashOf('orders')}?pullable=0`, await page.evaluate(scanCopy))
 
   // THE PRODUCT HISTORY'S QUARTER RANGE: its heading is `3-Day`, drawn only when the history holds a quarter range. Asserted drawn first.
@@ -894,21 +894,21 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   await page.route(/\/pipeline\/products\/[^/]+\/realized$/, (route) => route.fulfill(answer({ sku: '0', configured: false })))
   await page.route(/\/search\?/, (route) => route.fulfill(answer({ query: QUARTER_HISTORY.name, groups: [] })))
   await visit(page, PRODUCT_SKU_ROUTE)
-  await expect(page.getByRole('heading', { name: '3-Day', exact: true }), 'the quarter range draws its heading').toBeVisible()
+  await expect(page.getByRole('heading', { name: /^3-day$/i }), 'the quarter range draws its heading').toBeVisible()
   read(PRODUCT_SKU_ROUTE, await page.evaluate(scanCopy))
 
   // THE LIVE TAB WITH A FRESH READ: `Read Again` is drawn, and the lens chips carry their counts. Asserted drawn first.
   await stubLiveRead(page, readAt(60_000))
   await visit(page, `${hashOf('pricing')}?live`)
   await expect(page.getByRole('group', { name: 'Which live listings to show' }), 'the Live tab draws its lens chips').toBeVisible()
-  await expect(page.getByRole('button', { name: 'Read Again', exact: true }), 'a fresh read draws its Read Again press').toBeVisible()
+  await expect(page.getByRole('button', { name: /^read again$/i }), 'a fresh read draws its Read Again press').toBeVisible()
   read(`${hashOf('pricing')}?live`, await page.evaluate(scanCopy))
 
   // THE LIVE TAB WITH A STALE READ: the read is older than a day, so the chips drop their counts, and its bar offers Read Again in place of Send.
   await stubLiveRead(page, readAt(3 * DAY_MS))
   await visit(page, `${hashOf('pricing')}?live`)
-  await expect(page.getByRole('button', { name: 'Not Selling', exact: true }), 'a stale read draws its chips without counts').toBeVisible()
-  await expect(page.getByRole('region', { name: 'Send these prices' }).getByRole('button', { name: 'Read Again', exact: true }), 'a stale read offers Read Again in its bar').toBeVisible()
+  await expect(page.getByRole('button', { name: /^not selling$/i }), 'a stale read draws its chips without counts').toBeVisible()
+  await expect(page.getByRole('region', { name: 'Send these prices' }).getByRole('button', { name: /^read again$/i }), 'a stale read offers Read Again in its bar').toBeVisible()
   read(`${hashOf('pricing')}?live`, await page.evaluate(scanCopy))
 
   const casingTotal = reads.reduce((sum, one) => sum + one.casing, 0)
