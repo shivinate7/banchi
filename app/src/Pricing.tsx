@@ -2536,9 +2536,9 @@ export function Pricing() {
           label="Which live listings to show"
           options={[
             /* A STALE READ'S COUNTS ARE NOT OFFERED AS CURRENT (the owner's ruling, 2026-09-26). */
-            { value: 'all', label: readStale ? 'All' : `All ${lensCounts.all}` },
-            { value: 'offered', label: readStale ? 'Not Selling' : `Not Selling ${lensCounts.offered}` },
-            { value: 'refused', label: readStale ? 'Passed Over' : `Passed Over ${lensCounts.refused}` },
+            { value: 'all', label: readStale ? 'All' : <>All <span data-value>{lensCounts.all}</span></> },
+            { value: 'offered', label: readStale ? 'Not Selling' : <>Not Selling <span data-value>{lensCounts.offered}</span></> },
+            { value: 'refused', label: readStale ? 'Passed Over' : <>Passed Over <span data-value>{lensCounts.refused}</span></> },
           ]}
           onChange={setLens}
         />
