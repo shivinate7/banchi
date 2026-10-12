@@ -964,6 +964,23 @@ export function Fulfillment() {
   }
 
   /* R19: the stale notice floats and stays until it is dismissed or its cause clears; a new failure shows it again. */
+  /* The page keeps room for the receipt sheet's REAL height, not its cap: a cap-sized room beside the banner's
+     leaves too little screen between the sticky bar and the layers at the bottom. Falls back to the cap in CSS. */
+  const sheetNode = useRef<HTMLDivElement>(null)
+  const hasSheet = sales.length > 0
+  useEffect(() => {
+    const el = sheetNode.current
+    const root = el?.closest<HTMLElement>('main')
+    if (el == null || root == null) return
+    const measure = () => root.style.setProperty('--ff-sheet-h', `${el.offsetHeight}px`)
+    measure()
+    const watch = new ResizeObserver(measure)
+    watch.observe(el)
+    return () => {
+      watch.disconnect()
+      root.style.removeProperty('--ff-sheet-h')
+    }
+  }, [hasSheet])
   const [failures, setFailures] = useState(0)
   const [dismissedAt, setDismissedAt] = useState(-1)
   const staleDismissed = dismissedAt === failures
@@ -986,7 +1003,7 @@ export function Fulfillment() {
   const done = sales.slice(1)
   const sheet =
     newest === null ? null : (
-      <div className="ff-sheet" role="status" aria-live="polite">
+      <div className="ff-sheet" role="status" aria-live="polite" ref={sheetNode}>
         <div className="fulfillment-panel ff-receipt" key={newest.card.key}>
           <span className="ff-receipt-icon" data-tone={newest.canUndo ? 'ok' : 'note'}>
             {newest.canUndo ? <CheckMark /> : <Icon name="info" size={24} />}

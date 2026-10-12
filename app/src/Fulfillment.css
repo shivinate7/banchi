@@ -57,7 +57,7 @@
   --ff-notice-room: calc(var(--ff-notice-h) + var(--bn-5) + var(--bn-3));
   padding-bottom: var(--ff-notice-room);
 }
-.fulfillment.ff-has-sheet { padding-bottom: calc(var(--ff-sheet-max) + var(--bn-8) + var(--ff-notice-room)); }
+.fulfillment.ff-has-sheet { padding-bottom: calc(var(--ff-sheet-h, var(--ff-sheet-max)) + var(--bn-8) + var(--ff-notice-room)); }
 @media (max-width: 767px) {
   .fulfillment { --ff-pad: var(--bn-4); }
 }
@@ -362,7 +362,7 @@
   box-shadow: inset 0 0 0 2px var(--bn-warn), var(--bn-shadow-1);
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
-.ff-has-sheet .ff-notice { bottom: calc(var(--ff-sheet-max) + var(--bn-8)); }
+.ff-has-sheet .ff-notice { bottom: calc(var(--ff-sheet-h, var(--ff-sheet-max)) + var(--bn-8)); }
 .ff-notice-x {
   flex: none;
   display: grid;
