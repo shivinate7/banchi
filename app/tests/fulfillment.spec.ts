@@ -1830,7 +1830,11 @@ async function expectNotCovered(page: Page, target: Locator, why: string): Promi
   expect(box, `${why}: the control has a box`).not.toBeNull()
   expect(size, 'the viewport has a size').not.toBeNull()
   const inside = box!.y >= 0 && box!.y + box!.height <= size!.height && box!.x >= 0 && box!.x + box!.width <= size!.width
-  const metrics = await page.evaluate(() => `scrollY ${Math.round(window.scrollY)} of ${Math.round(document.documentElement.scrollHeight)}`)
+  const metrics = await page.evaluate(() => {
+    const column = document.querySelector('.ff-column')
+    const kids = column ? Array.from(column.children).map((el) => `${el.className.toString().slice(0, 24)}@${Math.round(el.getBoundingClientRect().bottom + window.scrollY)}`) : []
+    return `scrollY ${Math.round(window.scrollY)} of ${Math.round(document.documentElement.scrollHeight)}; column ${kids.join(' | ')}`
+  })
   expect(inside, `${why}: the control spans ${Math.round(box!.y)} to ${Math.round(box!.y + box!.height)} in a ${size!.height}px viewport (${metrics})`).toBe(true)
   const hit = await target.evaluate(
     (el, point) => {
