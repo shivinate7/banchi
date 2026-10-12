@@ -12,7 +12,7 @@ import { card, sealEveryTest } from './shell'
 import { POPULATED_ROUTE_SEEDS } from './routeFixtures'
 import { sweepEveryRoute } from './routeSweep'
 import { setViewport } from './phoneSwitch'
-import { casingProblems, isSentence, isSpokenSentences, labelsOf, stripTyped, voiceHits } from './copyRules'
+import { casingProblems, isSentence, isSpokenSentences, labelsOf, statProblems, stripTyped, voiceHits } from './copyRules'
 
 /* ONE SWEEP, TWO CHECKS (D284, the shape `text-checks.spec.ts` set). Each screen is opened ONCE by
  * `routeSweep.ts:sweepEveryRoute`, the same owner routes and the same populated store the text checks
@@ -106,6 +106,9 @@ interface Casing {
   typed: boolean
   // The text of each data-typed element inside this control. That text is taken out of the label before the check.
   marked: string[]
+  // Whether the control is a press: true for every control, and for a stat label (`dt`) only when a button or link holds it.
+  // A stat label outside a press is a caption under a figure, and `statProblems` does not read it.
+  press: boolean
 }
 
 interface CopyScan {
@@ -139,6 +142,7 @@ function scanCopy(): CopyScan {
     if (tag === 'button' || role === 'button') return 'button'
     if (tag === 'h1') return 'page title'
     if (tag === 'h2' || tag === 'h3') return 'heading'
+    if (tag === 'label') return 'field label'
     if (tag === 'dt') return 'stat label'
     if (el.matches('[class*="title"]')) return 'title'
     if (el.matches('[class*="chip"]')) return 'chip'
@@ -189,7 +193,7 @@ function scanCopy(): CopyScan {
   // THE ICON LINK. An icon control drawn as a link (`IconButton` with an `href`, such as the Fulfiller's
   // `Cards to pull` on Orders) is an `<a>`, not a button, so the list below must name it too.
   const candidates = document.querySelectorAll(
-    'a.bn-nav-link, a[aria-label], th, [role="tab"], [role="radio"], button, [role="button"], h1, h2, h3, dt, [class*="title"], [class*="chip"]',
+    'a.bn-nav-link, a[aria-label], th, [role="tab"], [role="radio"], button, [role="button"], h1, h2, h3, dt, label, [class*="title"], [class*="chip"]',
   )
   for (const el of Array.from(candidates)) {
     const role = roleOf(el)
@@ -207,6 +211,7 @@ function scanCopy(): CopyScan {
       upper: getComputedStyle(el).textTransform === 'uppercase',
       typed: el.matches('[data-typed]'),
       marked: Array.from(el.querySelectorAll('[data-typed]'), (m) => (m.textContent ?? '').replace(/\s+/g, ' ').trim()),
+      press: el.tagName !== 'DT' || el.closest('button, [role="button"], a') !== null,
     })
   }
 
@@ -221,7 +226,7 @@ function scanCopy(): CopyScan {
       .join('')
       .replace(/\s+/g, ' ')
       .trim()
-    if (text !== '') casing.push({ role: 'tooltip', lines: [text], keyCaps: [], aria: '', mono: false, upper: getComputedStyle(tip).textTransform === 'uppercase', typed: tip.matches('[data-typed]'), marked: [] })
+    if (text !== '') casing.push({ role: 'tooltip', lines: [text], keyCaps: [], aria: '', mono: false, upper: getComputedStyle(tip).textTransform === 'uppercase', typed: tip.matches('[data-typed]'), marked: [], press: true })
   }
 
   const prose: string[] = []
@@ -446,6 +451,104 @@ const TAKEABLE = {
   moves: [],
 }
 
+/** One product's history with a quarter range. Product History draws a quarter range under the heading `3-day`. */
+const QUARTER_HISTORY = {
+  sku: '555123',
+  product_id: 42,
+  name: 'Vilemaw',
+  set_name: 'Twilight Masquerade',
+  condition: 'Near Mint',
+  source: 'archive',
+  history_begins: '2026-03-01',
+  never_sold: false,
+  ranges: [
+    {
+      range: 'quarter',
+      width_days: 3,
+      buckets: 2,
+      from: '2026-07-01',
+      to: '2026-08-05',
+      latest_market: '16.33',
+      points: [
+        { at: '2026-07-01', market: '15.00', quantity: 2, low: '14.00', high: '16.00' },
+        { at: '2026-07-04', market: '16.33', quantity: 1, low: '12.54', high: '20.35' },
+      ],
+    },
+  ],
+}
+
+const LIVE_STAMP = '20260924-093000'
+const DAY_MS = 86_400_000
+const readAt = (agoMs: number): string => new Date(Date.now() - agoMs).toISOString()
+
+/** One listing of a live read, in the shape `Pricing` reads (the same fields `pricing-markdown.spec.ts`'s `live()` carries). */
+function liveRow() {
+  return {
+    sku: '8608859',
+    standing: 'offered',
+    skip: null,
+    name: 'Articuno - 161/159',
+    condition: 'Near Mint Holofoil',
+    live: 3,
+    asking: '20.0000',
+    market: '22.03',
+    above_market: '-9',
+    at_risk: '60.00',
+    proposed: '18.00',
+    cut: '2.00',
+    given_up: '6.00',
+    owned_since: '2026-08-01T00:00:00.000+00:00',
+    presets: { market_match: '22.03', market_undercut_5: '20.93', low_undercut_1: '19.79' },
+    listed_since: null,
+    held_here: true,
+    last_sold: null,
+    priced_at: null,
+    on_hand: 3,
+    row: {
+      'TCGplayer Id': '8608859',
+      'Product Line': 'Pokemon',
+      'Set Name': 'SV: Prismatic Evolutions',
+      'Product Name': 'Articuno',
+      Number: '161/159',
+      Rarity: 'Secret Rare',
+      Condition: 'Near Mint Holofoil',
+      'TCG Market Price': '22.03',
+      'TCG Direct Low': '21.98',
+      'TCG Low Price': '21.98',
+      'TCG Low Price With Shipping': '22.98',
+      'Total Quantity': '3',
+      'Add to Quantity': '0',
+      'TCG Marketplace Price': '',
+      'Photo URL': '',
+    },
+  }
+}
+
+/** One saved live read, taken at `at`. `Pricing` opens the newest read on the Live tab, so the read is the sheet the lenses filter. */
+async function stubLiveRead(page: Page, at: string): Promise<void> {
+  const asked = { days: 7, rule: 'undercut:10' }
+  await page.route(/\/pipeline\/markdowns$/, (route) =>
+    route.fulfill(answer({ markdowns: [{ stamp: LIVE_STAMP, at, asked, source: null, skus: 1, files: [] }] })),
+  )
+  await page.route(/\/pipeline\/markdowns\/[^/]+\/table$/, (route) =>
+    route.fulfill(
+      answer({
+        stamp: LIVE_STAMP,
+        at,
+        asked,
+        counts: { considered: 1, offered: 1, deferred: 0, refused: 0 },
+        source: {},
+        skus: [liveRow()],
+        says: {},
+        unpriceable: [],
+        floor: '0.49',
+        stale_after_s: 86400,
+      }),
+    ),
+  )
+  await page.route(/\/pipeline\/trends-saved$/, (route) => route.fulfill(answer({ skus: {}, note: null })))
+}
+
 async function visit(page: Page, route: string): Promise<void> {
   await page.goto('/')
   await settleBody(page, route)
@@ -515,7 +618,7 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
         // A HEADING (h2, h3) OR A TITLE MAY BE A SENTENCE: an empty state or a greeting. A control, and a page title (h1),
         // is a label whatever its ending, so `Cards to pull.` on a control or an h1 is still checked.
         if ((one.role === 'heading' || one.role === 'title') && isSentence(checked)) continue
-        const problems = casingProblems(checked)
+        const problems = one.role === 'stat label' ? statProblems(checked, one.press) : casingProblems(checked)
         if (problems.length === 0) continue
         // A FINDING IS KEYED BY ITS TEXT, not its role: a control's label often shows twice (its tip and its
         // accessible name), and one string is one offender.
@@ -738,6 +841,29 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   await expect(page.getByRole('button', { name: /^Price your live listings$/i }), 'the empty worklist offers the Live tab').toBeVisible()
   read(hashOf('pricing'), await page.evaluate(scanCopy))
 
+  // THE PRODUCT HISTORY'S QUARTER RANGE: its heading is `3-day`, drawn only when the history holds a quarter range. Asserted drawn first.
+  const PRODUCT_SKU_ROUTE = `${hashOf('product')}?sku=${QUARTER_HISTORY.sku}`
+  await page.route(/\/pipeline\/products\/[^/]+\/history$/, (route) => route.fulfill(answer(QUARTER_HISTORY)))
+  await page.route(/\/pipeline\/products\/[^/]+\/realized$/, (route) => route.fulfill(answer({ sku: '0', configured: false })))
+  await page.route(/\/search\?/, (route) => route.fulfill(answer({ query: QUARTER_HISTORY.name, groups: [] })))
+  await visit(page, PRODUCT_SKU_ROUTE)
+  await expect(page.getByRole('heading', { name: '3-day', exact: true }), 'the quarter range draws its heading').toBeVisible()
+  read(PRODUCT_SKU_ROUTE, await page.evaluate(scanCopy))
+
+  // THE LIVE TAB WITH A FRESH READ: `Read again` is drawn, and the lens chips carry their counts. Asserted drawn first.
+  await stubLiveRead(page, readAt(60_000))
+  await visit(page, `${hashOf('pricing')}?live`)
+  await expect(page.getByRole('group', { name: 'Which live listings to show' }), 'the Live tab draws its lens chips').toBeVisible()
+  await expect(page.getByRole('button', { name: 'Read again', exact: true }), 'a fresh read draws its Read again press').toBeVisible()
+  read(`${hashOf('pricing')}?live`, await page.evaluate(scanCopy))
+
+  // THE LIVE TAB WITH A STALE READ: the read is older than a day, so the chips drop their counts, and its bar offers Read again in place of Send.
+  await stubLiveRead(page, readAt(3 * DAY_MS))
+  await visit(page, `${hashOf('pricing')}?live`)
+  await expect(page.getByRole('button', { name: 'Not selling', exact: true }), 'a stale read draws its chips without counts').toBeVisible()
+  await expect(page.getByRole('region', { name: 'Send these prices' }).getByRole('button', { name: 'Read again', exact: true }), 'a stale read offers Read again in its bar').toBeVisible()
+  read(`${hashOf('pricing')}?live`, await page.evaluate(scanCopy))
+
   const casingTotal = reads.reduce((sum, one) => sum + one.casing, 0)
   expect(casingTotal, `the sweep read ${casingTotal} labels, under the floor of ${CASING_FLOOR}`).toBeGreaterThan(CASING_FLOOR)
 
@@ -801,7 +927,7 @@ test.describe('clip: no fact is cut off at 1440 or 820', () => {
     if (width !== 360) test(`pricing: no item line clips its last fact at ${width}`, async ({ page }) => {
       await setViewport(page, { width, height: 1000 })
       await seedEverySweepScreen(page)
-      await page.goto('/#/pricing')
+      await page.goto(`/${hashOf('pricing')}`)
       await settleFonts(page)
       const lines = page.locator('.pricing-meta:not(.pricing-where)')
       await expect(lines.first(), 'the item rows are drawn').toBeVisible()
@@ -834,7 +960,7 @@ test.describe('clip: no fact is cut off at 1440 or 820', () => {
         /* KEYED BY THE PICK'S OWN POSITION (`routeFixtures.ts`'s `pick`: box 3, index 21), the key the store indexes the hero by. */
         return route.fulfill(answer({ cards: { '3/21': copy } }))
       })
-      await page.goto('/#/orders')
+      await page.goto(`/${hashOf('orders')}`)
       await settleFonts(page)
       await expect(page.locator('.orders-pick-chip'), 'the pick chip has loaded').toBeVisible()
       /* NOT `toBeVisible`: once the chips take their room the meta line can shrink to no width at all, and Playwright then
@@ -893,5 +1019,33 @@ test.describe('reader: adjacent elements join with a space, not glued', () => {
     const scan = await page.evaluate(scanCopy)
     const link = scan.casing.find((one) => one.role === 'icon link')
     expect(link?.lines, 'the two spans are two words, not one glued word').toEqual(['SV commons Section 1'])
+  })
+})
+
+// THE FIELD LABEL IS A CONTROL'S LABEL. A search field's `<label>` holds the words a screen reader and a visually hidden
+// label draw, so it is a candidate in its own right. Its text is graded, not read as prose.
+test.describe('reader: a field label is graded as a label', () => {
+  test('a visually hidden search field label is a candidate, so its text is graded', async ({ page }) => {
+    await page.setContent('<main><label class="search-field-label bn-sr" for="q">Find a product</label><input id="q" /></main>')
+    const scan = await page.evaluate(scanCopy)
+    const one = scan.casing.find((c) => c.role === 'field label')
+    expect(one?.lines, 'the label text is the label line, so the casing rule reads it').toEqual(['Find a product'])
+  })
+})
+
+// THE STAT RULE (R5). A caption under a figure is prose and is not graded; a stat that is a press is a label and is graded.
+test.describe('reader: a stat caption is prose, a press stat is a label', () => {
+  test('a stat label outside a press is a caption, and is marked as not a press', async ({ page }) => {
+    await page.setContent('<main><dl><dt>copies owed</dt><dd>3</dd></dl></main>')
+    const scan = await page.evaluate(scanCopy)
+    const one = scan.casing.find((c) => c.role === 'stat label')
+    expect(one?.press, 'a stat label that no button holds is a caption under a figure').toBe(false)
+  })
+
+  test('a stat label inside a button is a press, and is marked as one', async ({ page }) => {
+    await page.setContent('<main><button type="button"><dt>matched free</dt></button></main>')
+    const scan = await page.evaluate(scanCopy)
+    const one = scan.casing.find((c) => c.role === 'stat label')
+    expect(one?.press, 'a stat label that a button holds is a press').toBe(true)
   })
 })

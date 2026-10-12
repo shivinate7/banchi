@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url'
 
 import { test, expect } from './unit'
 import { REASON_LABELS, RETIRED_REASON_LABELS } from '../../src/reasons'
-import { casingProblems, isSentence, isSpokenSentences, labelsOf, smallWordsOf, stripTyped, voiceHits } from '../copyRules'
-import { attrText, firstPersonInSource, jsxOpeningsIn, recordFromSource } from '../copySource'
+import { casingProblems, isSentence, isSpokenSentences, labelsOf, smallWordsOf, statProblems, stripTyped, voiceHits } from '../copyRules'
+import { attrText, firstPersonInSource, jsxOpeningsIn, recordFromSource, routeLiteralsIn } from '../copySource'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REVIEW_QUEUE = resolve(HERE, '..', '..', 'src', 'ReviewQueue.tsx')
@@ -159,6 +159,52 @@ test('the nine casing misses: each label is a Title Case problem, and a caption 
   }
   expect(isSentence('Started at 9:15 PM. The result shows here when TCGplayer answers.')).toBe(true)
   expect(isSpokenSentences('Order: High to low. Press to reverse.')).toBe(true)
+})
+
+/* THE LEFTOVER CASING MISSES ON e38e52ea. `3-day` is a heading whose hyphenated word carries a digit: the rule read the whole
+ * token as a number and passed it. The rest are the Pricing lens chips and the Read again press, and the two sr-only input
+ * labels. Each is a Title Case problem; the sweep must reach each one (`copy-checks.spec.ts`). */
+test('the leftover casing misses: each label is a Title Case problem, and a hyphenated word with a digit reads its word', () => {
+  expect(casingProblems('3-day')).toEqual(['"3-day": "day" should be capitalized'])
+  expect(casingProblems('3-Day')).toEqual([])
+  expect(casingProblems('Find a product')).toEqual(['"product" should be capitalized'])
+  expect(casingProblems('Search buyers')).toEqual(['"buyers" should be capitalized'])
+  expect(casingProblems('Not selling')).toEqual(['"selling" should be capitalized'])
+  expect(casingProblems('Not selling 4')).toEqual(['"selling" should be capitalized'])
+  expect(casingProblems('Passed over')).toEqual(['"over" should be capitalized'])
+  expect(casingProblems('Read again')).toEqual(['"again" should be capitalized'])
+  expect(casingProblems('Read Again')).toEqual([])
+  expect(casingProblems('Not Selling 4')).toEqual([])
+  expect(casingProblems('Find a Product')).toEqual([])
+})
+
+/* THE STAT RULE (R5, the owner's ruling). A caption under a figure is prose; a stat that is a press is a label. */
+test('stat: a caption under a figure passes in lower case, and a press stat is a label that must be Title Case', () => {
+  expect(statProblems('copies owed', false)).toEqual([])
+  expect(statProblems('12 captured', false)).toEqual([])
+  expect(statProblems('to pick', false)).toEqual([])
+  expect(statProblems('matched free', true)).not.toEqual([])
+  expect(statProblems('Matched Free', true)).toEqual([])
+})
+
+/* THE ROUTE RULE. A spec names its routes from ROUTES (copy-checks' `hashOf`), never by a hand-typed hash literal. */
+test('routes: a route literal is a string or template that starts with a hash route; a comment, a sentence or markup is not', () => {
+  expect(routeLiteralsIn("await page.goto('/#/pricing')", 'x.ts')).toEqual(['/#/pricing'])
+  expect(routeLiteralsIn('await page.goto(`/#/orders`)', 'x.ts')).toEqual(['/#/orders'])
+  // A comment opener inside a string, and a route named only in a comment.
+  expect(routeLiteralsIn("const a = '// keep /* open'\n// '/#/pricing' in a comment", 'x.ts')).toEqual([])
+  // A route inside a sentence, and a route inside markup, are not a route literal.
+  expect(routeLiteralsIn("const b = 'Open the page at #/pricing soon'", 'x.ts')).toEqual([])
+  expect(routeLiteralsIn("const c = '<a href=\"#/x\">Set</a>'", 'x.ts')).toEqual([])
+  // A multi-line template literal that starts with a route, and a lone quote in JSX text.
+  expect(routeLiteralsIn('const d = `\n/#/review\n`', 'x.ts')).toEqual(['/#/review'])
+  expect(routeLiteralsIn("const e = <p>Don't</p>; const f = '#/fulfillment'", 'x.tsx')).toEqual(['#/fulfillment'])
+})
+
+test('routes: copy-checks.spec.ts names no route by hand, so every route it opens is read from ROUTES', () => {
+  const file = resolve(HERE, '..', 'copy-checks.spec.ts')
+  const literals = routeLiteralsIn(readFileSync(file, 'utf8'), file)
+  expect(literals, 'hand-typed route literals in copy-checks.spec.ts: read the route with hashOf instead').toEqual([])
 })
 
 test('voice: the quoted page name is exempt in voiceHits, and the unquoted words are not (browser path)', () => {

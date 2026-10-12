@@ -169,3 +169,20 @@ export function attrText(attr: ts.JsxAttribute): string | null {
   }
   return null
 }
+
+/** Every string literal or template text in `source` that names a route by hash (`#/pricing`, `/#/pricing?live`). A spec
+ *  reads its routes from `App.tsx`'s ROUTES (copy-checks' `hashOf`), so a literal here is a hand-typed route. The parser
+ *  reads the text, so a route in a comment, a route inside a sentence and a `<a href>` in markup are not literals. */
+export function routeLiteralsIn(source: string, file: string): string[] {
+  const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const found: string[] = []
+  const visit = (node: ts.Node): void => {
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node)) {
+      const text = node.text.trim()
+      if (text.startsWith('#/') || text.startsWith('/#/')) found.push(text)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sf)
+  return found
+}

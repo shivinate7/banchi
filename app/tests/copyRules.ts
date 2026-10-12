@@ -11,9 +11,9 @@
  * "Mineral" and "Remember" do not, because the match must be bounded by non-letters on both sides.
  *
  * CASING (R5, Chicago style). A label takes Title Case: the first and last word capitalized, and every
- * word between them capitalized except the small words below, which stay lowercase. A word with a
- * digit, a number, a dollar figure or a unit is not a word here. A hyphenated word must capitalize
- * each part. A control's first line is a label whatever its punctuation: `Cards to pull.` is checked as
+ * word between them capitalized except the small words below, which stay lowercase. A number, a dollar
+ * figure or a unit is not a word here, but a hyphenated word with a digit (`3-day`) reads its word part.
+ * A hyphenated word must capitalize each part. A control's first line is a label whatever its punctuation: `Cards to pull.` is checked as
  * `Cards to pull`. Prose (a text node, or a description line under a title) is not read for casing.
  * A typed value carries a `data-typed` marker in the DOM and is skipped by the sweep, not by this file.
  */
@@ -132,19 +132,22 @@ export function casingProblems(text: string): string[] {
   const problems: string[] = []
   let afterNumber = false
   tokens.forEach((token, index) => {
-    if (/\d/.test(token)) {
+    // A token with a digit is a number (`10`, `$184`), unless it is hyphenated (`3-day`): a hyphenated compound is a word,
+    // so its digit part is skipped and its word part is read below.
+    if (/\d/.test(token) && !token.includes('-')) {
       afterNumber = true
       return
     }
     const wasAfterNumber = afterNumber
     afterNumber = false
-    const core = token.replace(/^[^\p{L}]+/u, '').replace(/[^\p{L}]+$/u, '')
+    const core = token.replace(/^[^\p{L}\p{N}]+/u, '').replace(/[^\p{L}\p{N}]+$/u, '')
     if (core === '') return
     if (wasAfterNumber && UNIT_WORDS.has(core.toLowerCase())) return
 
-    const parts = core.split('-').map((part) => part.replace(/^[^\p{L}]+/u, '')).filter((part) => part !== '')
+    const parts = core.split('-').map((part) => part.replace(/^[^\p{L}\p{N}]+/u, '')).filter((part) => part !== '')
     if (parts.length > 1) {
       for (const part of parts) {
+        if (/\d/.test(part)) continue
         if (!/^\p{Lu}/u.test(part)) problems.push(`"${core}": "${part}" should be capitalized`)
       }
       return
@@ -159,4 +162,11 @@ export function casingProblems(text: string): string[] {
     }
   })
   return problems
+}
+
+/** A stat's label, graded by whether the stat is a press. `press` is true for a figure that is a button (the Review band
+ *  tiles), and false for a caption under a figure (`copies owed`, `12 captured`, `to pick`), which is prose and not read.
+ */
+export function statProblems(text: string, press: boolean): string[] {
+  return press ? casingProblems(text) : []
 }
