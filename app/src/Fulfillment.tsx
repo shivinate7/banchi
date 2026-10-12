@@ -586,6 +586,7 @@ export function Fulfillment() {
       .catch(() => {
         if (!livePage) return
         setLoadFailed(true)
+        setFailures((n) => n + 1)
       })
     return () => {
       livePage = false
@@ -618,6 +619,7 @@ export function Fulfillment() {
       } catch {
         if (!livePage) return
         setOrdersFailed(true)
+        setFailures((n) => n + 1)
       }
     })()
     return () => {
@@ -962,10 +964,26 @@ export function Fulfillment() {
   }
 
   /* R19: the stale notice floats and stays until it is dismissed or its cause clears; a new failure shows it again. */
-  const [staleDismissed, setStaleDismissed] = useState(false)
+  /* The page keeps room for the receipt sheet's REAL height, not its cap: a cap-sized room beside the banner's
+     leaves too little screen between the sticky bar and the layers at the bottom. Falls back to the cap in CSS. */
+  const sheetNode = useRef<HTMLDivElement>(null)
+  const hasSheet = sales.length > 0
   useEffect(() => {
-    if (!loadFailed && !ordersFailed) setStaleDismissed(false)
-  }, [loadFailed, ordersFailed])
+    const el = sheetNode.current
+    const root = el?.closest<HTMLElement>('main')
+    if (el == null || root == null) return
+    const measure = () => root.style.setProperty('--ff-sheet-h', `${el.offsetHeight}px`)
+    measure()
+    const watch = new ResizeObserver(measure)
+    watch.observe(el)
+    return () => {
+      watch.disconnect()
+      root.style.removeProperty('--ff-sheet-h')
+    }
+  }, [hasSheet])
+  const [failures, setFailures] = useState(0)
+  const [dismissedAt, setDismissedAt] = useState(-1)
+  const staleDismissed = dismissedAt === failures
   const tryAgain = () => {
     setLoadFailed(false)
     setOrdersFailed(false)
@@ -985,7 +1003,7 @@ export function Fulfillment() {
   const done = sales.slice(1)
   const sheet =
     newest === null ? null : (
-      <div className="ff-sheet" role="status" aria-live="polite">
+      <div className="ff-sheet" role="status" aria-live="polite" ref={sheetNode}>
         <div className="fulfillment-panel ff-receipt" key={newest.card.key}>
           <span className="ff-receipt-icon" data-tone={newest.canUndo ? 'ok' : 'note'}>
             {newest.canUndo ? <CheckMark /> : <Icon name="info" size={24} />}
@@ -1048,7 +1066,7 @@ export function Fulfillment() {
           <Icon name="refresh" size={22} />
           Try again
         </button>
-        <button className="ff-notice-x" type="button" aria-label="Dismiss" onClick={() => setStaleDismissed(true)}>
+        <button className="ff-notice-x" type="button" aria-label="Dismiss" onClick={() => setDismissedAt(failures)}>
           <Icon name="x" size={22} />
         </button>
       </div>
@@ -1701,10 +1719,10 @@ export function Fulfillment() {
       <div className="ff-glow" aria-hidden="true" />
       <div className="ff-column" data-wide={wide ? 'true' : 'false'}>
         {body}
-        {/* ONE RULE: the stale notice is the last thing in the column, in every view, so a notice that
-            arrives after first paint pushes nothing that was already drawn. */}
-        {stale}
       </div>
+      {/* The stale notice floats over the screen (R19), outside the column, whose entry animation
+          is a transform: a fixed banner inside it would land against a moving parent. */}
+      {stale}
       {sheet}
       {bigPhoto}
       {keysSheet}
