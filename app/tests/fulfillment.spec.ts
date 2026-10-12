@@ -2275,17 +2275,29 @@ test('ux-w2 R19: on a return with the cards read held, the count slot shows the 
    viewport and not covered by the banner, with the receipt sheet open and then closed. */
 test('ux-w2 R19: the last list control is not covered by the banner at the bottom of the page', async ({ page }) => {
   await openLongListBanner(page)
-  // The Browse section follows the list, so at maximum scroll the last control is still above the fold. The control is
-  // brought to the bottom edge of the viewport instead, where the banner sits.
-  const control = view(page).getByRole('button', { name: /^Show the other / })
-  await expect(control, 'the last list control is drawn').toBeVisible()
-  await control.evaluate((el) => el.scrollIntoView({ block: 'end' }))
-  await expectNotCovered(page, control, 'with the receipt sheet open')
+  // The last interactive element on the whole page, in document order, outside the banner and the sheet. Browse follows
+  // the list, so at maximum scroll it is the element at the page's bottom edge, where the banner floats.
+  const markLast = () =>
+    page.evaluate(() => {
+      document.querySelectorAll('[data-last-control]').forEach((el) => el.removeAttribute('data-last-control'))
+      const main = document.querySelector('main.fulfillment')
+      const found = Array.from(main?.querySelectorAll('button, a[href], input, select, textarea, [role="button"]') ?? []).filter((el) => {
+        const r = el.getBoundingClientRect()
+        return r.width > 0 && r.height > 0 && el.closest('.ff-notice, .ff-sheet') === null
+      })
+      found[found.length - 1]?.setAttribute('data-last-control', '')
+    })
+  const last = page.locator('[data-last-control]')
+  await markLast()
+  await expect(last, 'a last interactive element is on the page').toHaveCount(1)
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  await expectNotCovered(page, last, 'at maximum scroll, with the receipt sheet open')
   await view(page).getByRole('button', { name: 'Dismiss this receipt' }).click()
   await expect(view(page).locator('.ff-sheet'), 'the receipt sheet is closed').toHaveCount(0)
   await settleAnimations(page)
-  await control.evaluate((el) => el.scrollIntoView({ block: 'end' }))
-  await expectNotCovered(page, control, 'with the receipt sheet closed')
+  await markLast()
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  await expectNotCovered(page, last, 'at maximum scroll, with the receipt sheet closed')
 })
 
 /* R19 (review #849, sixth): the banner clears on a successful read at the bottom of the page, and nothing on screen moves.
@@ -2336,13 +2348,19 @@ test('ux-w2 R19: a dismissed banner shows again when a later re-read fails', asy
   await page.getByRole('button', { name: 'Pull' }).click()
   await expect(view(page)).toContainText('Pulled.')
   state.failing = true
+  const firstRead = page.waitForResponse(/\/orders$/)
   await page.getByRole('button', { name: 'Mark it sold' }).click()
+  await firstRead
   const banner = view(page).locator('.ff-notice')
-  await expect(banner, 'the banner shows after the first failed re-read').toBeVisible()
+  await expect(banner, 'the banner shows after the first failed re-read').toBeVisible({ timeout: 5000 })
   await banner.getByRole('button', { name: 'Dismiss', exact: true }).click()
   await expect(banner, 'the banner is dismissed').toHaveCount(0)
+  // The second re-read is awaited to its own answer, a failure, before the banner is looked for: the poll is bounded.
+  const secondRead = page.waitForResponse(/\/orders$/)
   await page.getByRole('button', { name: 'Mark it sold' }).click()
-  await expect(banner, 'a later failed re-read shows the banner again').toBeVisible()
+  const answer = await secondRead
+  expect(answer.status(), 'the second re-read answers with the failure').toBe(500)
+  await expect(banner, 'a later failed re-read shows the banner again').toBeVisible({ timeout: 5000 })
 })
 })
 }
