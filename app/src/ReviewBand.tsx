@@ -3,7 +3,7 @@ import { getCaptureSitting, getMatchSweep, getMatchState, getQueues, getRuns } f
 import type { MatchSweep, MatchSweepDetail } from './types'
 import { usePoll } from './usePoll'
 import { Button, Money, Stat } from './kit'
-import { BandSheet, sheetTitle, type BandSheetData } from './ReviewBandSheet'
+import { BandSheet, sheetHeading, type BandSheetData } from './ReviewBandSheet'
 import { roundsToNothing } from './money'
 
 /* THE REVIEW SUMMARY BAND (`docs/specs/identify-engine-pick.md`, section 8). It sits where the Identify strip sat.
@@ -233,7 +233,7 @@ export function ReviewBand({
                 aria-expanded={shown && sheet?.kind === 'unhinted'}
                 onClick={() => void openSheet('unhinted')}
               >
-                {sheetTitle('unhinted', unhinted)}
+                {sheetHeading('unhinted', unhinted)}
               </button>
             </>
           )}

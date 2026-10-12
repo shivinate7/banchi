@@ -760,7 +760,7 @@ function LiftBar({
   const scopes: { value: Scope; label: string }[] = [{ value: 'one', label: 'This section' }]
   if (after > 0) scopes.push({ value: 'after', label: after === 1 ? 'This and the next' : `This and the ${after} after it` })
   if (total > 1) scopes.push({ value: 'all', label: 'The whole box' })
-  if (canPickCards) scopes.push({ value: 'cards', label: 'Some cards' })
+  if (canPickCards) scopes.push({ value: 'cards', label: 'Some Cards' })
   const others = destinations.filter((r) => r.box !== source.box)
   const what = cardMode ? chosenName || 'No card picked' : lifted.scope === 'all' ? boxName(source) : name
   const sourceChanged = cardMode && dirtied.has(source.box)

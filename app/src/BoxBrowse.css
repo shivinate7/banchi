@@ -469,6 +469,8 @@
    so the line's min-content is the number alone, and the set and game take the ellipsis when the chips need the room. */
 .browse-hero-sub > .browse-hero-parts { flex: 0 100 auto; min-width: min-content; display: grid; grid-auto-flow: column; grid-template-columns: auto; grid-auto-columns: minmax(0, max-content); }
 .browse-hero-parts > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* THE NUMBER NEVER CLIPS: it is not a clipped cell, so its track cannot shrink below its digits. */
+.browse-hero-parts > .browse-hero-number { overflow: visible; text-overflow: clip; }
 .browse-hero-sub > .bn-pill-outline { flex: 0 1 auto; min-width: 0; overflow: hidden; }
 .browse-hero-parts > span + span::before { content: '·'; margin: 0 var(--bn-2); color: var(--bn-ink-4); }
 .browse-hero-number { font-family: var(--bn-font-mono); font-weight: 600; color: var(--bn-ink-2); }

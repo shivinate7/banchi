@@ -378,9 +378,14 @@ export function sectionCountOf(place: Place): SectionCount | null {
  *  a narrow column may cut the name but never the count (`SectionTitle.tsx` draws them). */
 export type SectionTitleParts = { readonly head: string; readonly count: string | null }
 
-/** `19 Cards`, `1 Card`. The words every section title states its count in. */
+/** `19 cards`, `1 card`. The words every section title states its count in. */
 export function sectionCountWords(count: SectionCount | null): string | null {
-  return count === null ? null : `${count.of} Card${count.of === 1 ? '' : 's'}`
+  return count === null ? null : `${count.of} card${count.of === 1 ? '' : 's'}`
+}
+
+/** A section count as a standalone label: `19 Cards`. Inside a sentence it stays `19 cards`. */
+export function countLabel(words: string): string {
+  return words.replace('card', 'Card')
 }
 
 /** The whole title as one sentence: what a screen reader hears, what a fold groups by, and

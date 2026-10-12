@@ -1185,7 +1185,7 @@ export function Codes() {
               icon="package"
               title="Build a Lot"
               body="A whole box, shipped, with its listing, packing slip and manifest."
-              meta={lots.length === 0 ? 'No Lots Built Yet' : `${count(lots.length, 'lot')} built`}
+              meta={lots.length === 0 ? 'No Lots Built Yet' : `${count(lots.length, 'Lot')} Built`}
               tone="ok"
               at={2}
               onOpen={() => openSheet('lot')}

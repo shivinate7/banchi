@@ -1,4 +1,4 @@
-import type { SectionTitleParts } from './position'
+import { countLabel, type SectionTitleParts } from './position'
 
 /** ONE SECTION TITLE FOR EVERY BOX-WALK LIST (`#/inventory`'s shelf and `#/orders`' walk).
  *
@@ -12,7 +12,7 @@ export function SectionTitle({ parts }: { parts: SectionTitleParts }) {
   return (
     <span className="browse-secttitle">
       <span className="browse-secttitle-head">{parts.head}</span>
-      {parts.count === null ? null : <span className="browse-secttitle-count bn-sr">, {parts.count}</span>}
+      {parts.count === null ? null : <span className="browse-secttitle-count bn-sr">, {countLabel(parts.count)}</span>}
     </span>
   )
 }
