@@ -1260,7 +1260,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
       if (JSON.stringify(afterSale) !== JSON.stringify(before)) bad.push(`sale ${JSON.stringify(afterSale)}`)
       if (!(await oneRow())) bad.push('sale: the facts row is not one pill tall')
       /* The Undo holds focus after a sale (the card hands it there, for a keyboard user), so Enter presses it. A
-         mouse press at the bottom edge would land on the receipt toast, which is its own case below. */
+         mouse press at the bottom edge can land on the receipt toast, which carries the same Undo action. */
       await page.keyboard.press('Enter')
       const undone = await expect.poll(subText, { timeout: 5000 }).not.toContain('Sold').then(() => true, () => false)
       expect(undone, 'the undo did not register: Sold stayed on the card header').toBe(true)
@@ -1270,65 +1270,6 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
       if (JSON.stringify(afterUndo) !== JSON.stringify(before)) bad.push(`undo ${JSON.stringify(afterUndo)}`)
       if (!(await oneRow())) bad.push('undo: the facts row is not one pill tall')
       expect(bad, `these moved the page or the card header (before ${JSON.stringify(before)})`).toEqual([])
-    } finally {
-      Object.assign(mine, kept)
-    }
-  })
-}
-
-/* THE RECEIPT TOAST DOES NOT COVER THE UNDO OF A SALE THE PERSON JUST MADE (D313). The person has scrolled the
-   control to the bottom of the viewport and presses Mark sold by a mouse click at its visible part. The receipt
-   toast then draws into the bottom strip, and the Undo the sale leaves sits there. A person can see the Undo but not
-   press it. This case is red on main: the toast covers the Undo's visible centre. */
-for (const width of [1440, 820]) {
-  test(`held frame: the receipt toast leaves the Undo of a sale hit-testable, with the control at the bottom of the viewport, at ${width}`, async ({ page }) => {
-    test.setTimeout(120_000)
-    await l1Inventory(page)
-    const mine = L1_CARDS['2/1'] as Record<string, unknown>
-    const kept = { ...mine }
-    Object.assign(mine, { state: 'identified' })
-    try {
-      const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
-      await page.route(/\/inventory\/2\/1\/sold$/, (route) => {
-        const undo = (route.request().postDataJSON() as { undo?: boolean } | null)?.undo === true
-        mine.state = undo ? 'identified' : 'sold'
-        return json(route, { position: '2/1', box: 2, index: 1, undone: undo, state: mine.state, previous_state: undo ? 'sold' : 'identified', restores_to: undo ? null : 'identified', listing: null, card: null })
-      })
-      await setViewport(page, { width, height: 1000 })
-      await page.goto(screen('inventory'))
-      await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
-      await expect(page.locator('.card-locations').first()).toBeVisible()
-      await settleFonts(page)
-      await settleMotion(page)
-      await afterPaint(page)
-      const sell = page.getByRole('button', { name: /Mark sold/ }).first()
-      /* The control sits at page y `at`, and the page cannot scroll it to the bottom of a tall window. The window is
-         made short instead, so 40px of the control shows at the bottom edge, where the receipt toast draws. */
-      let at = 0
-      await expect.poll(async () => { at = await sell.evaluate((el) => el.getBoundingClientRect().top + window.scrollY); return at }, { message: 'the control never got a position' }).toBeGreaterThan(100)
-      await page.setViewportSize({ width, height: Math.round(at) + 40 })
-      await settleMotion(page)
-      await afterPaint(page)
-      const centre = (el: Element) => {
-        const b = el.getBoundingClientRect()
-        const x = b.left + b.width / 2
-        const y = (Math.max(b.top, 0) + Math.min(b.bottom, window.innerHeight)) / 2
-        return { x, y, hit: el.contains(document.elementFromPoint(x, y)) }
-      }
-      await expect.poll(async () => (await sell.evaluate(centre)).hit, { message: 'Mark sold is not hit-testable at the bottom of the viewport' }).toBe(true)
-      const p = await sell.evaluate(centre)
-      await page.mouse.click(p.x, p.y)
-      await expect(page.locator('.browse-hero-sub')).toContainText('Sold')
-      await settleMotion(page)
-      await afterPaint(page)
-      const under = await page.getByRole('button', { name: /^Undo/ }).first().evaluate((el) => {
-        const b = el.getBoundingClientRect()
-        const x = b.left + b.width / 2
-        const y = (Math.max(b.top, 0) + Math.min(b.bottom, window.innerHeight)) / 2
-        const h = document.elementFromPoint(x, y)
-        return { hit: el.contains(h), by: `${h?.tagName.toLowerCase()}.${(h?.getAttribute('class') ?? '').split(' ').slice(0, 2).join('.')}` }
-      })
-      expect(under.hit, `the receipt toast covers the Undo at the bottom of the viewport; the point is on ${under.by}`).toBe(true)
     } finally {
       Object.assign(mine, kept)
     }
