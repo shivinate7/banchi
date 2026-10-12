@@ -1062,8 +1062,6 @@ export function Stat({
     readonly expanded: boolean
     readonly popup?: 'dialog' | 'menu'
     readonly disabled?: boolean
-    /** The spoken name when it differs from the drawn label (a label is Title Case, a spoken name is prose). */
-    readonly name?: string
   }
   /** The figure has not answered yet: its room is held and its digits are not drawn (D313). */
   readonly pending?: boolean
@@ -1092,7 +1090,6 @@ export function Stat({
           aria-haspopup={press.popup ?? 'dialog'}
           aria-expanded={press.expanded}
           disabled={press.disabled}
-          aria-label={press.name}
           onClick={press.onPress}
         >
           {figure}

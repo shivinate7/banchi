@@ -363,15 +363,9 @@ function targetOf(bucket: PricingSku['bucket']): 'overrides' | 'no_market_data' 
   return bucket === 'no_market_data' ? 'no_market_data' : 'overrides'
 }
 
-/** A reason drawn as a sentence: a capital first, an end stop last. */
-function sentence(text: string): string {
-  const said = text.charAt(0).toUpperCase() + text.slice(1)
-  return /[.!?]$/.test(said) ? said : `${said}.`
-}
-
 /** Why this run adds no row for this SKU, as a heading — or null for the ordinary row. */
 function groupOf(sku: PricingSku): string | null {
-  return sku.at_cap ? sentence(sku.nothing_to_add ?? 'nothing to add this run') : null
+  return sku.at_cap ? (sku.nothing_to_add ?? 'nothing to add this run') : null
 }
 
 /* ONE VOCABULARY (UN-5, finding #15, the Opus review round): a reversal reads "<what it

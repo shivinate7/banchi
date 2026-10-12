@@ -21,7 +21,7 @@ import { roundsToNothing } from './money'
 const COUNTS = [
   ['matched', 'Matched Free'],
   ['paid', 'Waiting for a Paid Look'],
-  ['unread', 'Not yet Looked At'],
+  ['unread', 'Not Looked at Yet'],
   ['you', 'Waiting for You'],
 ] as const
 
@@ -196,7 +196,6 @@ export function ReviewBand({
     onPress: () => void openSheet(kind),
     expanded: shown && sheet?.kind === kind,
     disabled: !loaded,
-    name: sheetTitle(kind, figures[kind]),
   })
 
   const read = async () => {

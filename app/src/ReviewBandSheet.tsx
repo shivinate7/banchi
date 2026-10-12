@@ -26,7 +26,7 @@ const SETTLED_BY_CLAIM = new Set(['printing_settled_by_claim', 'narrowed_by_clai
 export const SHEET_LABELS: Record<MatchSweepDetail, string> = {
   matched: 'matched free',
   paid: 'waiting for a paid look',
-  unread: 'not yet looked at',
+  unread: 'not looked at yet',
   unhinted: 'need a set named',
 }
 
@@ -216,7 +216,7 @@ export function BandSheet({
     </>
   )
   return (
-    <Sheet open={open} onClose={onClose} title={sheetHeading(kind, cards === null ? figure : cards.length)} name={sheetTitle(kind, cards === null ? figure : cards.length)} icon="list" className="review-band-sheet">
+    <Sheet open={open} onClose={onClose} title={sheetHeading(kind, cards === null ? figure : cards.length)} icon="list" className="review-band-sheet">
       <div className="rbs-moved" aria-live="polite">
         <Slot show={moved} ghost={again} className="rbs-moved-slot">
           {line}

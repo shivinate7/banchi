@@ -497,8 +497,6 @@ type OverlayProps = {
   /** False while the layer must not close: its Close is disabled, and Escape and the scrim do
    *  nothing. A confirm is not dismissible while it writes. */
   readonly dismissible?: boolean
-  /** The spoken name when it differs from the drawn heading (a heading is Title Case, a spoken name is prose). */
-  readonly name?: string
 }
 
 type FrameProps = OverlayProps & {
@@ -506,7 +504,7 @@ type FrameProps = OverlayProps & {
   readonly role?: 'dialog' | 'alertdialog'
 }
 
-function OverlayFrame({ kind, role = 'dialog', dismissible = true, open, onClose, title, icon, footer, children, className, name }: FrameProps) {
+function OverlayFrame({ kind, role = 'dialog', dismissible = true, open, onClose, title, icon, footer, children, className }: FrameProps) {
   const { mounted, leaving } = useLeave(open)
   /* THE FULFILLER GETS WORDS, ALWAYS (D288, spec rule 1; DESIGN.md's 20px floor).
      A Sheet or Modal is portalled to <body>, so it cannot read its persona from where it
@@ -531,8 +529,7 @@ function OverlayFrame({ kind, role = 'dialog', dismissible = true, open, onClose
         className={[base, className].filter(Boolean).join(' ')}
         role={role}
         aria-modal="true"
-        aria-labelledby={name === undefined ? titleId : undefined}
-        aria-label={name}
+        aria-labelledby={titleId}
         tabIndex={-1}
         data-leaving={leaving ? 'true' : undefined}
         data-bn-overlay={kind}
