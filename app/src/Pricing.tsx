@@ -2747,8 +2747,7 @@ export function Pricing() {
                 setPush('writing')
               }}
             >
-              <span className="send-long">Download the File Instead</span>
-              <span className="send-short">Download File</span>
+              Download File
             </Button>
             {!wroteUpload || (push !== 'idle' && !linkHeld) ? null : (
               <a className="bn-btn" href={markdownFileUrl(stamp, 'import.csv')} download="import.csv">

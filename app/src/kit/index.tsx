@@ -160,7 +160,7 @@ export function Button({
    the icon alone (D118). `badge` draws a small count at the corner, `aria-hidden` and
    `pointer-events: none`, so its arrival moves nothing (D118) — the accessible name for a
    badged control is the caller's job (`name`), because only the caller knows the right
-   phrasing ("Filters, 3 on"). `kbd` also sets `aria-keyshortcuts`, so the key survives in the
+   phrasing ("Filters 3"). `kbd` also sets `aria-keyshortcuts`, so the key survives in the
    accessible name's own metadata even though it is drawn only in the tooltip, not the face. */
 const LONG_PRESS_MS = 500
 const FACE_PX: Record<ButtonSize, number> = { sm: 24, md: 28, lg: 34, xl: 40 }

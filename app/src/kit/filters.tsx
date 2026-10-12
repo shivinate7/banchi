@@ -247,7 +247,7 @@ export function FilterBar<K extends string = string>({
               /* The badge is aria-hidden (D118: its arrival moves nothing, kit.css), so the
                  active count only reaches a screen reader through `name` — round 2's own
                  finding: before IconButton, the count sat in the button's own text. */
-              name={badge > 0 ? `${label}, ${badge} on` : label}
+              name={badge > 0 ? `${label} ${badge}` : label}
               badge={badge > 0 ? badge : undefined}
               /* Sized to the field beside it through the SAME inline `style` IconButton already
                  merges a caller's `style` into — never a CSS override (FLT-24), the same pattern
