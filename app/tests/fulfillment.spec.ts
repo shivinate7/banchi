@@ -1830,11 +1830,7 @@ async function expectNotCovered(page: Page, target: Locator, why: string): Promi
   expect(box, `${why}: the control has a box`).not.toBeNull()
   expect(size, 'the viewport has a size').not.toBeNull()
   const inside = box!.y >= 0 && box!.y + box!.height <= size!.height && box!.x >= 0 && box!.x + box!.width <= size!.width
-  const metrics = await page.evaluate(() => {
-    const column = document.querySelector('.ff-column')
-    const kids = column ? Array.from(column.children).map((el) => `${el.className.toString().slice(0, 24)}@${Math.round(el.getBoundingClientRect().bottom + window.scrollY)}`) : []
-    return `scrollY ${Math.round(window.scrollY)} of ${Math.round(document.documentElement.scrollHeight)}; column ${kids.join(' | ')}`
-  })
+  const metrics = await page.evaluate(() => `scrollY ${Math.round(window.scrollY)} of ${Math.round(document.documentElement.scrollHeight)}`)
   expect(inside, `${why}: the control spans ${Math.round(box!.y)} to ${Math.round(box!.y + box!.height)} in a ${size!.height}px viewport (${metrics})`).toBe(true)
   const hit = await target.evaluate(
     (el, point) => {
@@ -2279,14 +2275,16 @@ test('ux-w2 R19: on a return with the cards read held, the count slot shows the 
    viewport and not covered by the banner, with the receipt sheet open and then closed. */
 test('ux-w2 R19: the last list control is not covered by the banner at the bottom of the page', async ({ page }) => {
   await openLongListBanner(page)
-  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  // The Browse section follows the list, so at maximum scroll the last control is still above the fold. The control is
+  // brought to the bottom edge of the viewport instead, where the banner sits.
   const control = view(page).getByRole('button', { name: /^Show the other / })
   await expect(control, 'the last list control is drawn').toBeVisible()
+  await control.evaluate((el) => el.scrollIntoView({ block: 'end' }))
   await expectNotCovered(page, control, 'with the receipt sheet open')
   await view(page).getByRole('button', { name: 'Dismiss this receipt' }).click()
   await expect(view(page).locator('.ff-sheet'), 'the receipt sheet is closed').toHaveCount(0)
   await settleAnimations(page)
-  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  await control.evaluate((el) => el.scrollIntoView({ block: 'end' }))
   await expectNotCovered(page, control, 'with the receipt sheet closed')
 })
 
