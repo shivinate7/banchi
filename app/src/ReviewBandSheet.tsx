@@ -24,15 +24,22 @@ const PAGE = 50
 const SETTLED_BY_CLAIM = new Set(['printing_settled_by_claim', 'narrowed_by_claim'])
 
 export const SHEET_LABELS: Record<MatchSweepDetail, string> = {
-  matched: 'Matched Free',
-  paid: 'Waiting for a Paid Look',
-  unread: 'Not yet Looked At',
-  unhinted: 'Need a Set Named',
+  matched: 'matched free',
+  paid: 'waiting for a paid look',
+  unread: 'not yet looked at',
+  unhinted: 'need a set named',
 }
 
 /** The sheet's title and the count button's name: the count's own words with the number. */
 export function sheetTitle(kind: MatchSweepDetail, n: number): string {
-  return kind === 'unhinted' && n === 1 ? '1 Needs a Set Named' : `${n} ${SHEET_LABELS[kind]}`
+  return kind === 'unhinted' && n === 1 ? '1 needs a set named' : `${n} ${SHEET_LABELS[kind]}`
+}
+
+/** The sheet's HEADING: the same words as `sheetTitle`, in Title Case. The count button keeps `sheetTitle`, a spoken sentence. */
+export function sheetHeading(kind: MatchSweepDetail, n: number): string {
+  const words = sheetTitle(kind, n).split(' ')
+  const small = new Set(['a', 'for', 'at', 'yet'])
+  return words.map((w, i) => (i > 0 && i < words.length - 1 && small.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1))).join(' ')
 }
 
 type Group = {
@@ -209,7 +216,7 @@ export function BandSheet({
     </>
   )
   return (
-    <Sheet open={open} onClose={onClose} title={sheetTitle(kind, cards === null ? figure : cards.length)} icon="list" className="review-band-sheet">
+    <Sheet open={open} onClose={onClose} title={sheetHeading(kind, cards === null ? figure : cards.length)} name={sheetTitle(kind, cards === null ? figure : cards.length)} icon="list" className="review-band-sheet">
       <div className="rbs-moved" aria-live="polite">
         <Slot show={moved} ghost={again} className="rbs-moved-slot">
           {line}

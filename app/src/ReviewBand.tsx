@@ -192,10 +192,11 @@ export function ReviewBand({
     }
   }
   const moved = sheet !== null && sheet.cards !== null && sheet.sig !== sigOf(sheet.kind, sweep)
-  const press = (kind: MatchSweepDetail) => ({
+  const press = (kind: 'matched' | 'paid' | 'unread') => ({
     onPress: () => void openSheet(kind),
     expanded: shown && sheet?.kind === kind,
     disabled: !loaded,
+    name: sheetTitle(kind, figures[kind]),
   })
 
   const read = async () => {
