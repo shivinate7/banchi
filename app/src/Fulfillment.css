@@ -49,7 +49,15 @@
 :root[data-theme='dark'] .fulfillment { --ff-fill: var(--bn-accent-hover); }
 /* The sheet is capped at `--ff-sheet-max` (below), and the page clears the whole of it. */
 .fulfillment { --ff-sheet-max: min(50vh, 420px); --ff-sheet-max: min(50dvh, 420px); }
-.fulfillment.ff-has-sheet { padding-bottom: calc(var(--ff-sheet-max) + var(--bn-8)); }
+/* THE STALE BANNER'S ROOM IS ALWAYS KEPT (R19). The banner is `--ff-notice-h` tall at most (padding plus three
+   lines of text), floating `--bn-5` off the bottom; the page keeps that room whether the banner shows or not, so
+   showing or clearing it moves nothing, and at the end of the page it never hides the last control. */
+.fulfillment {
+  --ff-notice-h: calc(var(--bn-4) * 2 + var(--ff-fs-base) * 1.5 * 3);
+  --ff-notice-room: calc(var(--ff-notice-h) + var(--bn-5) + var(--bn-3));
+  padding-bottom: var(--ff-notice-room);
+}
+.fulfillment.ff-has-sheet { padding-bottom: calc(var(--ff-sheet-max) + var(--bn-8) + var(--ff-notice-room)); }
 @media (max-width: 767px) {
   .fulfillment { --ff-pad: var(--bn-4); }
 }
@@ -342,6 +350,8 @@
   bottom: var(--bn-5);
   margin: 0 auto;
   width: min(680px, calc(100% - 32px));
+  max-height: var(--ff-notice-h);
+  overflow-y: auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;

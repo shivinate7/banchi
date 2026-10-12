@@ -586,6 +586,7 @@ export function Fulfillment() {
       .catch(() => {
         if (!livePage) return
         setLoadFailed(true)
+        setFailures((n) => n + 1)
       })
     return () => {
       livePage = false
@@ -618,6 +619,7 @@ export function Fulfillment() {
       } catch {
         if (!livePage) return
         setOrdersFailed(true)
+        setFailures((n) => n + 1)
       }
     })()
     return () => {
@@ -962,10 +964,9 @@ export function Fulfillment() {
   }
 
   /* R19: the stale notice floats and stays until it is dismissed or its cause clears; a new failure shows it again. */
-  const [staleDismissed, setStaleDismissed] = useState(false)
-  useEffect(() => {
-    if (!loadFailed && !ordersFailed) setStaleDismissed(false)
-  }, [loadFailed, ordersFailed])
+  const [failures, setFailures] = useState(0)
+  const [dismissedAt, setDismissedAt] = useState(-1)
+  const staleDismissed = dismissedAt === failures
   const tryAgain = () => {
     setLoadFailed(false)
     setOrdersFailed(false)
@@ -1048,7 +1049,7 @@ export function Fulfillment() {
           <Icon name="refresh" size={22} />
           Try again
         </button>
-        <button className="ff-notice-x" type="button" aria-label="Dismiss" onClick={() => setStaleDismissed(true)}>
+        <button className="ff-notice-x" type="button" aria-label="Dismiss" onClick={() => setDismissedAt(failures)}>
           <Icon name="x" size={22} />
         </button>
       </div>
@@ -1701,10 +1702,10 @@ export function Fulfillment() {
       <div className="ff-glow" aria-hidden="true" />
       <div className="ff-column" data-wide={wide ? 'true' : 'false'}>
         {body}
-        {/* ONE RULE: the stale notice is the last thing in the column, in every view, so a notice that
-            arrives after first paint pushes nothing that was already drawn. */}
-        {stale}
       </div>
+      {/* The stale notice floats over the screen (R19), outside the column, whose entry animation
+          is a transform: a fixed banner inside it would land against a moving parent. */}
+      {stale}
       {sheet}
       {bigPhoto}
       {keysSheet}
