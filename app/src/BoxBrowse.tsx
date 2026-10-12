@@ -2289,7 +2289,7 @@ export function BoxBrowse({
                       : record && sort.key === 'value' && typeof cell === 'number'
                         ? valueByBox?.has(cell) ? <Money value={valueByBox.get(cell)} /> : 'no reading'
                         : record
-                          ? `${(onHand ?? 0).toLocaleString()} stored`
+                          ? <span data-value>{(onHand ?? 0).toLocaleString()} stored</span>
                           : cell === 'pooled'
                             ? 'a count, not a location'
                             : cell === 'unplaced'
@@ -2466,7 +2466,7 @@ export function BoxBrowse({
                         <Icon name="chevronRight" size={14} className="browse-sectmark" />
                         <SectionTitle parts={section.parts} />
                         {section.parts.count === null ? null : (
-                          <span className="browse-secttotal" aria-hidden="true">
+                          <span className="browse-secttotal" aria-hidden="true" data-value>
                             {section.parts.count}
                           </span>
                         )}
@@ -2947,7 +2947,7 @@ function ReshootControl({ row, busy, failure, onPick }: ReshootControlProps) {
   if (row.card.state === 'sold' || row.card.state === 'retired') return null
 
   /* The label stays put while busy; the button's own spinner says the replacement is in flight. */
-  const label = row.card.photo === null ? 'Add a photo' : 'Re-shoot this photo'
+  const label = row.card.photo === null ? 'Add a photo' : 'Re-Shoot This Photo'
 
   return (
     <div className="browse-reshoot">
@@ -3255,12 +3255,12 @@ function CardOps({
       </Popover>
 
       {open !== 'claims' ? null : (
-        <Overlay kind="sheet" label="Correct claims" onClose={() => setOpen(null)} className="browse-claims-sheet">
+        <Overlay kind="sheet" label="Correct Claims" onClose={() => setOpen(null)} className="browse-claims-sheet">
           <header className="inv-sheet-head">
             <div className="inv-sheet-head-text">
               {/* The ADDRESS, not the store key: `1/1` in an eyebrow reads as a page counter. */}
               <span className="bn-eyebrow">{positionLabel(row.card) ?? `store key ${row.key}`}</span>
-              <h2 className="inv-sheet-title">Correct claims</h2>
+              <h2 className="inv-sheet-title">Correct Claims</h2>
               <p className="browse-claims-who">{nameOf(row.card) ?? 'Not Identified Yet'}</p>
             </div>
             <IconButton icon="x" label="Close" onClick={() => setOpen(null)} />
@@ -3274,6 +3274,7 @@ function CardOps({
             )}
             <ClaimEditor
               scope="this card"
+              scopeLabel="This Card"
               game={row.card.game}
               busy={busy}
               onApply={(patch) => void correct(patch)}

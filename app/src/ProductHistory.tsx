@@ -261,7 +261,7 @@ function RangeSection({ range, fills }: { range: ProductHistoryRange; fills: rea
       <header className="producthistory-range-head">
         <div className="producthistory-range-title">
           <h3>{label}</h3>
-          <span className="producthistory-machine">{range.range}</span>
+          <span className="producthistory-machine" data-typed>{range.range}</span>
         </div>
         <span className="producthistory-span">
           {range.from ? dayDate(range.from) : '?'} → {range.to ? dayDate(range.to) : '?'}

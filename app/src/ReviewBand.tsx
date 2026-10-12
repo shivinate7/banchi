@@ -3,7 +3,7 @@ import { getCaptureSitting, getMatchSweep, getMatchState, getQueues, getRuns } f
 import type { MatchSweep, MatchSweepDetail } from './types'
 import { usePoll } from './usePoll'
 import { Button, Money, Stat } from './kit'
-import { BandSheet, sheetTitle, type BandSheetData } from './ReviewBandSheet'
+import { BandSheet, sheetHeading, type BandSheetData } from './ReviewBandSheet'
 import { roundsToNothing } from './money'
 
 /* THE REVIEW SUMMARY BAND (`docs/specs/identify-engine-pick.md`, section 8). It sits where the Identify strip sat.
@@ -19,10 +19,10 @@ import { roundsToNothing } from './money'
  * label, so a figure gaining a digit moves nothing; the health line and the press row always take their room. */
 
 const COUNTS = [
-  ['matched', 'matched free'],
-  ['paid', 'waiting for a paid look'],
-  ['unread', 'not yet looked at'],
-  ['you', 'waiting for you'],
+  ['matched', 'Matched Free'],
+  ['paid', 'Waiting for a Paid Look'],
+  ['unread', 'Not Looked at Yet'],
+  ['you', 'Waiting for You'],
 ] as const
 
 /* THREE COUNTS ABOVE ZERO AND THE SET-NAMED LINE OPEN A SHEET (`ReviewBandSheet.tsx`); "waiting for you" opens nothing, so it stays plain
@@ -192,7 +192,7 @@ export function ReviewBand({
     }
   }
   const moved = sheet !== null && sheet.cards !== null && sheet.sig !== sigOf(sheet.kind, sweep)
-  const press = (kind: MatchSweepDetail) => ({
+  const press = (kind: 'matched' | 'paid' | 'unread') => ({
     onPress: () => void openSheet(kind),
     expanded: shown && sheet?.kind === kind,
     disabled: !loaded,
@@ -233,7 +233,7 @@ export function ReviewBand({
                 aria-expanded={shown && sheet?.kind === 'unhinted'}
                 onClick={() => void openSheet('unhinted')}
               >
-                {sheetTitle('unhinted', unhinted)}
+                {sheetHeading('unhinted', unhinted)}
               </button>
             </>
           )}
@@ -242,7 +242,7 @@ export function ReviewBand({
           <span className="review-band-slot">
             {!loaded || left === 0 ? null : (
               <Button variant="primary" icon="zap" busy={busy} disabled={busy} onClick={() => void read()} className="review-band-read">
-                Read the {left} left
+                Read the {left} Left
                 {about === null ? null : roundsToNothing(about) ? (
                   ', under a cent'
                 ) : (

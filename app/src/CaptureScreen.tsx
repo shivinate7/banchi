@@ -5733,7 +5733,7 @@ export function CaptureScreen() {
           {openField === 'set' ? (
             <OpenField
               k="H"
-              label="Set hint"
+              label="Set Hint"
               icon="tag"
               /* THE FIELD'S OWN MODALITY, AND IT IS NOT ALWAYS "OPTIONAL". On a game whose
                  export cannot be fetched without one, this field is required in every sense
@@ -5762,7 +5762,7 @@ export function CaptureScreen() {
                     className="capture-filter bn-input"
                     type="text"
                     placeholder="sv09"
-                    aria-label="Set hint"
+                    aria-label="Set Hint"
                     list="capture-set-names"
                     value={setHint}
                     onChange={(event) => setSetHint(event.target.value)}
@@ -5795,7 +5795,7 @@ export function CaptureScreen() {
           ) : (
             <Row
               k="H"
-              label="Set hint"
+              label="Set Hint"
               icon="tag"
               right={
                 setHint.trim() === '' ? (

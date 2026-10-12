@@ -48,8 +48,8 @@ function carried(copies: number, prices: number): string {
  *  (the filter note, moved onto the act). Copies stay in the bar's own line beside it. */
 function pressCarries(skus: number, copies: number, prices: number): string {
   const parts = [
-    copies > 0 || prices === 0 ? (skus === 1 ? '1 SKU' : `all ${skus} SKUs`) : null,
-    prices > 0 ? count(prices, 'price change', 'price changes') : null,
+    copies > 0 || prices === 0 ? (skus === 1 ? '1 SKU' : `All ${skus} SKUs`) : null,
+    prices > 0 ? count(prices, 'Price Change', 'Price Changes') : null,
   ].filter((part): part is string => part !== null)
   return parts.join(' and ')
 }
@@ -161,14 +161,14 @@ function TrimList({ trimmed }: { readonly trimmed: readonly SendTrim[] }) {
 function MovesPhrase({ moves }: { readonly moves: readonly { copies: number; price: string }[] }) {
   const copies = moves.reduce((total, move) => total + move.copies, 0)
   const prices = new Set(moves.map((move) => Number(move.price)))
-  const head = `${count(copies, 'live copy moves', 'live copies move')} to `
+  const head = `${count(copies, 'Live Copy Moves', 'Live Copies Move')} to `
   return prices.size === 1 ? (
     <>
       {head}
       <Money value={Number(moves[0]?.price)} />
     </>
   ) : (
-    <>{`${head}new prices`}</>
+    <>{`${head}New Prices`}</>
   )
 }
 
@@ -239,10 +239,16 @@ function ResendPrices({
 function MovesList({ moves }: { readonly moves: readonly LiveMove[] }) {
   const [open, setOpen] = useState(false)
   if (new Set(moves.map((move) => Number(move.price))).size < 2) return null
+  const total = count(moves.reduce((sum, move) => sum + move.copies, 0), 'Live Copy', 'Live Copies')
   return (
     <Notice tone="info" compact className="send-moves" title="Live copies this press moves to their new price.">
       <Button variant="quiet" icon={open ? 'chevronUp' : 'chevronDown'} onClick={() => setOpen((on) => !on)} aria-expanded={open} words="word-only-control">
-        {`${open ? 'Hide' : 'Show'} ${count(moves.reduce((sum, move) => sum + move.copies, 0), 'live copy', 'live copies')}`}
+        {/* THE LABEL HOLDS THE WIDER OF ITS TWO STATES: "Show" and "Hide" differ in width, so a panel title beside it could wrap
+            in one state and not the other, and the bar would change height as the list opened. The other state is a hidden span. */}
+        <span className="send-toggle">
+          <span aria-hidden={open ? undefined : 'true'} data-hidden={open ? undefined : 'true'}>{`Hide ${total}`}</span>
+          <span aria-hidden={open ? 'true' : undefined} data-hidden={open ? 'true' : undefined}>{`Show ${total}`}</span>
+        </span>
       </Button>
       <ul className="send-names" hidden={!open}>
         {moves.map((move) => (
@@ -420,8 +426,13 @@ function SendStanding({
   const safeAfter = send.take_back_after ? `You can take them back after ${clockTime(send.take_back_after)}, once Banchi has checked.` : null
   const action =
     send.takeable > 0 ? (
-      <Button size="sm" busy={takingBack} disabled={takingBack} onClick={() => takeBack(send.stamp)}>
-        {`Take ${count(send.takeable, 'copy', 'copies')} back`}
+      <Button
+        size="sm"
+        busy={takingBack}
+        disabled={takingBack}
+        onClick={() => takeBack(send.stamp)}
+      >
+        {`Take ${count(send.takeable, 'Copy', 'Copies')} Back`}
       </Button>
     ) : undefined
   switch (send.state) {
@@ -808,7 +819,7 @@ export function SendCard({
         </span>
         <IconButton
           icon="more"
-          label="More send options"
+          label="More Send Options"
           className="send-more-press"
           aria-expanded={moreOpen}
           onClick={() => setMoreOpen((open) => !open)}

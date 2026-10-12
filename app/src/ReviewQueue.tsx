@@ -1912,10 +1912,10 @@ function Done({
         actions={
           <>
             <Button variant="primary" size="lg" icon="tag" iconRight="arrowRight" onClick={() => (window.location.hash = '#/pricing')}>
-              Price the answers
+              Price the Answers
             </Button>
             <Button size="lg" icon="play" onClick={onOpenRuns}>
-              Run another box
+              Run Another Box
             </Button>
           </>
         }
@@ -2272,7 +2272,7 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
       chips.push(
         <span key="sorted" className="review-chip review-chip-sorted" title={`Finish at capture: ${claims.sorted.join(' or ')}`}>
           <Icon name="hand" size={12} />
-          <span className="review-chip-key">Sorted as</span>
+          <span className="review-chip-key">Sorted As</span>
           <span className="review-chip-value">{claims.sorted.map(humanize).join(' or ')}</span>
         </span>,
       )
@@ -2291,7 +2291,7 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
     chips.push(
       <span key="hint" className="review-chip review-chip-sorted" title="The set hint recorded at capture">
         <Icon name="tag" size={12} />
-        <span className="review-chip-key">Set hint</span>
+        <span className="review-chip-key">Set Hint</span>
         <span className="review-chip-value review-chip-value-mono">{claims.hint}</span>
       </span>,
     )
@@ -2571,9 +2571,9 @@ function Facts({ row }: { row: Row }) {
     { label: 'Number', value: collectorNumber(entry.read) ?? 'none', mono: true },
     { label: 'Market', value: priceText(entry.market), mono: true },
     { label: 'Confidence', value: humanize(text(entry.confidence) ?? 'none recorded') },
-    { label: 'Set hint', value: text(entry.read.set_hint) ?? 'none', mono: true },
+    { label: 'Set Hint', value: text(entry.read.set_hint) ?? 'none', mono: true },
     {
-      label: 'Sorted as',
+      label: 'Sorted As',
       value: (() => {
         const members = claimMembers(entry.read.metadata_finish)
         if (members === null) return 'no claim'
@@ -2587,7 +2587,7 @@ function Facts({ row }: { row: Row }) {
       })(),
       mono: true,
     },
-    { label: 'Photo read', value: text(entry.read.detected_finish) ?? 'none', mono: true },
+    { label: 'Photo Read', value: text(entry.read.detected_finish) ?? 'none', mono: true },
     ...(entry.read.matcher_pick
       ? [
           {

@@ -365,7 +365,7 @@ function targetOf(bucket: PricingSku['bucket']): 'overrides' | 'no_market_data' 
 
 /** Why this run adds no row for this SKU, as a heading — or null for the ordinary row. */
 function groupOf(sku: PricingSku): string | null {
-  return sku.at_cap ? (sku.nothing_to_add ?? 'nothing to add this run') : null
+  return sku.at_cap ? (sku.nothing_to_add ?? 'Nothing to add this run.') : null
 }
 
 /* ONE VOCABULARY (UN-5, finding #15, the Opus review round): a reversal reads "<what it
@@ -2827,12 +2827,12 @@ export function Pricing() {
         ) : roster.length === 0 ? (
           <EmptyState
             icon="tag"
-            title="Nothing to price yet"
+            title="Nothing to Price Yet"
             body="Price your live listings on the Live tab, or read a box on Review."
             actions={
               <>
                 <Button variant="primary" icon="tag" onClick={() => goTab('live')}>
-                  Price your live listings
+                  Price Your Live Listings
                 </Button>
                 <Button icon="play" onClick={() => (window.location.hash = '#/review')}>
                   Go to Review

@@ -89,7 +89,7 @@ function sendSummary(over: Record<string, unknown> = {}): Record<string, unknown
   }
 }
 
-const sendPress = (page: Page) => page.getByRole('button', { name: /^Send ((all \d+ SKUs|1 SKU) )?to TCGplayer$/ })
+const sendPress = (page: Page) => page.getByRole('button', { name: /^Send ((all \d+ SKUs|1 SKU) )?to TCGplayer$/i })
 const sendPosts = (wire: Wire[]) => wire.filter((r) => r.method === 'POST' && r.path === '/pipeline/send')
 
 /** One SKU in the shape `cli/cmd_join.py:_pricing_table` writes — every field, not the handful
@@ -1290,7 +1290,7 @@ test('r6: a mixed press counts only the prices typed on this list, and names the
         at_cap: true,
         add_to_quantity: 0,
         live_before: 2,
-        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        nothing_to_add: 'Every copy in this run is already listed or has left the box.',
         snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now: '9.99' },
         listing: { pushed: 2, staged: 0, live: 2 },
       }),
@@ -1300,7 +1300,7 @@ test('r6: a mixed press counts only the prices typed on this list, and names the
         at_cap: true,
         add_to_quantity: 0,
         live_before: 1,
-        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        nothing_to_add: 'Every copy in this run is already listed or has left the box.',
         snap: { market: '4.10', direct_low: null, low: '3.90', low_with_shipping: '4.90', now: '4.00' },
         listing: { pushed: 1, staged: 0, live: 1 },
       }),
@@ -1310,7 +1310,7 @@ test('r6: a mixed press counts only the prices typed on this list, and names the
         at_cap: true,
         add_to_quantity: 0,
         live_before: 1,
-        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        nothing_to_add: 'Every copy in this run is already listed or has left the box.',
         snap: { market: '6.00', direct_low: null, low: '5.50', low_with_shipping: '6.50', now: '7.00' },
         listing: { pushed: 1, staged: 0, live: 1 },
       }),
@@ -1382,7 +1382,7 @@ test('r7: a moved live price is offered back, and one press sends it at the owne
         at_cap: true,
         add_to_quantity: 0,
         live_before: 2,
-        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        nothing_to_add: 'Every copy in this run is already listed or has left the box.',
         snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now: '11.00' },
         listing: { pushed: 2, staged: 0, live: 2 },
         live_now: { export: 'live-tcgplayer-20260924-120000.csv', copies: 2, price: '9.99' },
@@ -1428,7 +1428,7 @@ test('r7: undo takes a typed price off the button', async ({ page }) => {
         at_cap: true,
         add_to_quantity: 0,
         live_before: 2,
-        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        nothing_to_add: 'Every copy in this run is already listed or has left the box.',
         snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now: '11.00' },
         listing: { pushed: 2, staged: 0, live: 2 },
         live_now: { export: 'live-tcgplayer-20260924-120000.csv', copies: 2, price: '9.99' },
@@ -1473,13 +1473,13 @@ test('r8: moves to more than one price are listed card by card before the press'
     ],
     decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '19.99', '8608459': '6.00' } },
   })
-  const press = page.getByRole('button', { name: 'Send all 2 SKUs, 5 live copies move to new prices' })
+  const press = page.getByRole('button', { name: /^Send all 2 SKUs, 5 live copies move to new prices$/i })
   await expect(press).toBeVisible()
   const list = page.locator('.send-moves')
   await expect(list).toContainText('Articuno')
-  await expect(list).toContainText('2 live copies, $22.03 to $19.99')
+  await expect(list).toContainText(/2 live copies, \$22\.03 to \$19\.99/i)
   await expect(list).toContainText('Dunsparce')
-  await expect(list).toContainText('3 live copies, $5.00 to $6.00')
+  await expect(list).toContainText(/3 live copies, \$5\.00 to \$6\.00/i)
   await press.click()
   await expect.poll(() => sendPosts(wire).length).toBe(1)
   expect(sendPosts(wire)[0]?.body).toMatchObject({
@@ -1536,7 +1536,7 @@ test('send panel: the full list is collapsed behind a disclosure by default', as
   await setViewport(page, { width: 1440, height: 900 })
   await openManyMoves(page)
   const panel = page.locator('.send-moves')
-  await expect(panel).toContainText('240 live copies')
+  await expect(panel).toContainText(/240 live copies/i)
   const toggle = panel.getByRole('button')
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await expect(panel.locator('.send-name').first()).toBeHidden()
@@ -1602,7 +1602,7 @@ test('r8: a refused count of live copies is offered back at TCGplayer count', as
   })
   await sendPress(page).click()
   const offer = page.locator('.send-resend')
-  await expect(offer).toContainText('2 live copies at $22.03 move to $19.99.')
+  await expect(offer).toContainText(/2 live copies at \$22\.03 move to \$19\.99\./i)
   await offer.getByRole('button', { name: 'Send $19.99' }).click()
   await expect.poll(() => sendPosts(wire).length).toBe(2)
   expect(sendPosts(wire)[1]?.body).toMatchObject({ moves: [{ sku: '8608859', price: '19.99', copies: 2 }] })
@@ -1633,11 +1633,11 @@ for (const width of [390, 820]) {
     })
     const press = page.locator('.send-press')
     /* BELOW 768 THE QUIET DOORS SIT BEHIND MORE (D277, Q4): opened first, then measured. */
-    const more = page.getByRole('button', { name: 'More send options' })
+    const more = page.getByRole('button', { name: /^More send options$/i })
     const door = page.locator('.send-act').getByRole('button', { name: /Download/ })
     await expect(door.or(more).first()).toBeVisible()
     if (!(await door.isVisible())) await more.click()
-    await expect(press).toContainText('2 live copies move to')
+    await expect(press).toContainText(/2 live copies move to/i)
     const before = { press: await press.boundingBox(), door: await door.boundingBox() }
     await press.click()
     await expect(press).toHaveAttribute('data-busy', 'true')
@@ -1865,7 +1865,7 @@ test('Download writes the file, and its copies are named until they are found', 
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()
   const back = page.locator('.send-short-check')
   await expect(back).toContainText('0 of 4 found at TCGplayer')
-  await back.getByRole('button', { name: 'Take 4 copies back' }).click()
+  await back.getByRole('button', { name: /^Take 4 copies back$/i }).click()
   await expect.poll(() => wire.filter((r) => r.path.endsWith('/take-back')).length).toBe(1)
   await expect(page.locator('.send-short-check')).toHaveCount(0)
 })
@@ -1919,7 +1919,7 @@ test('an unconfirmed send whose upload may wait in Staged keeps saying so after 
   await expect(card).toContainText('0 of 3 found at TCGplayer')
   await expect(card).toContainText('may still wait in TCGplayer’s Staged list')
   await expect(card).toContainText('Do not publish it there')
-  await expect(card.getByRole('button', { name: 'Take 3 copies back' })).toBeVisible()
+  await expect(card.getByRole('button', { name: /^Take 3 copies back$/i })).toBeVisible()
 })
 
 test('send card, checked: names the last send, not a bare "Live and checked"', async ({ page }) => {
@@ -2024,7 +2024,7 @@ for (const [kind, warning, said] of [
             ? { ...SENDS_NONE, sends: [taken] }
             : { ...SENDS_NONE, sends: [short] },
     })
-    await page.locator('.send-short-check').getByRole('button', { name: 'Take 3 copies back' }).click()
+    await page.locator('.send-short-check').getByRole('button', { name: /^Take 3 copies back$/i }).click()
     await expect.poll(() => wire.filter((r) => r.path.endsWith('/take-back')).length).toBe(1)
     const warned = page.locator('.send-taken-back')
     await expect(warned).toContainText('Copies taken back at')
@@ -2046,7 +2046,7 @@ test('a Take back that fails says so, and never offers a retry that would send',
   })
   const wire = await open(page, { sends: () => ({ ...SENDS_NONE, sends: [short] }) })
   await page.route(/\/pipeline\/sends\/[^/]+\/take-back$/, (route) => route.abort())
-  await page.locator('.send-short-check').getByRole('button', { name: 'Take 3 copies back' }).click()
+  await page.locator('.send-short-check').getByRole('button', { name: /^Take 3 copies back$/i }).click()
   const failed = page.locator('.send-undo-failure')
   await expect(failed).toContainText('Banchi could not take these copies back.')
   await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0)
@@ -2572,6 +2572,7 @@ test('the photo is on demand, names which copy it is, and the same key closes it
      recorded misses are confident answers with the digits wrong — so the pick is the first in
      box-walk order, said out loud, and steppable. */
   await expect(page.locator('.pricing-photo')).toBeVisible()
+  // Case-insensitive on purpose: the copy sweep is the casing guard; these specs check behaviour.
   await expect(page.locator('.pricing-photo-caption')).toContainText(/card\s*1/i)
   await expect(page.locator('.pricing-photo-caption')).toContainText('1 of 3')
 
@@ -2619,12 +2620,12 @@ test('the solid accent fill is spent on the one thing to do, and never on a row'
   })
   expect(filled.rows).toBe(0)
   expect(filled.buttons).toHaveLength(1)
-  expect(filled.buttons[0]).toMatch(/^Send ((all \d+ SKUs|1 SKU) )?to TCGplayer$/)
+  expect(filled.buttons[0]).toMatch(/^Send ((all \d+ SKUs|1 SKU) )?to TCGplayer$/i)
 })
 
 // -------------------------------------------------- why a row adds nothing (D59)
 
-test('the reason a row adds nothing is a heading, composed by the SERVER, verbatim', async ({
+test('the reason a row adds nothing is a heading, composed by the CLIENT, verbatim', async ({
   page,
 }) => {
   /* THE SENTENCE IS THE SERVER'S AND THE CLIENT MAY NOT COMPOSE ONE. This note read
@@ -2682,7 +2683,7 @@ test('the reason a row adds nothing is a heading, composed by the SERVER, verbat
   const heads = page.locator('.pricing-group-head')
   await expect(heads).toHaveCount(2)
   await expect(heads.nth(0).locator('.pricing-group-why')).toHaveText(pending)
-  await expect(heads.nth(1).locator('.pricing-group-why')).toHaveText('nothing to add this run')
+  await expect(heads.nth(1).locator('.pricing-group-why')).toHaveText(/^Nothing to add this run\.$/)
   await expect(page.locator('.pricing-row .pricing-why')).toHaveCount(0)
 
   /* THE FALSE SENTENCE BY NAME, so a client that starts composing again is caught even if it
@@ -2712,7 +2713,7 @@ test('a row that adds nothing sinks to the bottom of its section, under its head
         name: 'Dunsparce',
         at_cap: true,
         add_to_quantity: 0,
-        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        nothing_to_add: 'Every copy in this run is already listed or has left the box.',
       }),
       sku({ sku: '8608659', name: 'Wattrel' }),
     ],
@@ -2724,7 +2725,7 @@ test('a row that adds nothing sinks to the bottom of its section, under its head
      Q2), and the row that adds nothing falls under the server's own sentence, last. */
   await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
     'Needs You',
-    'every copy in this run is already listed or has left the box',
+    'Every copy in this run is already listed or has left the box.',
   ])
   const lastGroup = page.locator('.pricing-group').last()
   await expect(lastGroup.locator('.pricing-name')).toHaveText(['Dunsparce'])
@@ -2754,7 +2755,7 @@ test('a row that is both held and at the cap sinks to the deeper heading', async
         name: 'Dunsparce',
         at_cap: true,
         add_to_quantity: 0,
-        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        nothing_to_add: 'Every copy in this run is already listed or has left the box.',
       }),
     ],
     decisions: {
@@ -2767,7 +2768,7 @@ test('a row that is both held and at the cap sinks to the deeper heading', async
 
   await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
     'Needs You',
-    'every copy in this run is already listed or has left the box',
+    'Every copy in this run is already listed or has left the box.',
   ])
   await expect(page.locator('.pricing-row').nth(1).locator('.pricing-state')).toHaveAttribute(
     'title',
@@ -3186,7 +3187,7 @@ test('a row this run can add nothing for has no saved strip drawn, and no market
         sku: '222',
         name: 'Closed card',
         at_cap: true,
-        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        nothing_to_add: 'Every copy in this run is already listed or has left the box.',
       }),
     ],
     saved: { skus: { '111': { at, ranges: trends(['111']).skus['111']!.ranges } }, note: null },
@@ -4328,7 +4329,7 @@ test('the rows that need the owner come first, each with its reason, and the res
      unpriced row's three do not. The bar and the press both say twelve, which is what the file
      will carry. */
   await expect(page.locator('.pricing-bar-says')).toContainText('12 ready')
-  await expect(sendPress(page)).toHaveText('Send all 4 SKUs to TCGplayer')
+  await expect(sendPress(page)).toHaveText(/^Send all 4 SKUs to TCGplayer$/i)
 })
 
 test('a price typed far from market gives the row its flag, and the row does not move', async ({ page }) => {
@@ -4681,7 +4682,7 @@ test('on a phone the bar is one line pinned above the tab bar, and More opens th
   expect(box?.height ?? 999).toBeLessThanOrEqual(72)
   expect(Math.abs((box?.y ?? 0) + (box?.height ?? 0) - (tabbar?.y ?? 0))).toBeLessThanOrEqual(1)
   await expect(page.getByRole('button', { name: /^Download/ })).toBeHidden()
-  await page.getByRole('button', { name: 'More send options' }).click()
+  await page.getByRole('button', { name: /^More send options$/i }).click()
   await expect(page.getByRole('button', { name: /^Download/ })).toBeVisible()
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(over).toBeLessThanOrEqual(0)
@@ -4740,7 +4741,7 @@ test('the keyboard sheet lists the keys the rows answer, and nothing the screen 
   await expect(sheet).toContainText('Put the lowest price in this card')
   await expect(sheet.getByText('Save this price and go to the next card')).toHaveCount(1)
   await expect(sheet).not.toContainText('Low with shipping')
-  await expect(sheet).not.toContainText('Direct low')
+  await expect(sheet).not.toContainText(/direct low/i)
   await expect(sheet).not.toContainText('Hold to read')
 })
 
@@ -4952,7 +4953,7 @@ test('F3: the held count on the button and in the bar are one number, a sent row
   await open(page, {
     skus: [
       sku({ sku: '8608859', name: 'Articuno' }),
-      sku({ sku: '8608459', name: 'Dunsparce', at_cap: true, add_to_quantity: 0, nothing_to_add: 'every copy in this run is already listed or has left the box' }),
+      sku({ sku: '8608459', name: 'Dunsparce', at_cap: true, add_to_quantity: 0, nothing_to_add: 'Every copy in this run is already listed or has left the box.' }),
       sku({ sku: '8608460', name: 'Snorlax' }),
     ],
     decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608459': { withheld: 'keeping' }, '8608460': { withheld: 'bullish' } } },

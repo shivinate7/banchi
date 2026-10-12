@@ -104,7 +104,7 @@ test('read-only: every box is drawn horizontally, Back/Front replaces the senten
   await expect(page.locator('.shelf')).not.toContainText('drawn from above')
   await expect(page.locator('.shelf-edges')).toContainText('Back')
   await expect(page.locator('.shelf-edges')).toContainText('Front')
-  await expect(page.getByRole('button', { name: /Move section/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Move section/i })).toHaveCount(0)
   /* Sections run in one row, left to right: a block's WIDTH follows its count now, not height. */
   const widths = await first.locator('.shelf-block').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width))
   expect(widths[2]).toBeGreaterThan(widths[1] ?? 0)
@@ -424,7 +424,7 @@ test('Cancel throws the whole draft away: nothing is sent, and the map returns t
   await page.getByRole('button', { name: 'Cancel' }).click()
   expect(sent).toHaveLength(0)
   await expect(page.getByRole('button', { name: 'Layout' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /Move section/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Move section/i })).toHaveCount(0)
 })
 
 test('the keyboard alone moves a section in edit mode, and Esc puts it down', async ({ page }) => {

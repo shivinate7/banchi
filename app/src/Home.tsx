@@ -188,7 +188,7 @@ function deckFromCards(cards: Record<string, InventoryCard> | null): DeckCard[] 
 
 function greeting(): string {
   const hour = new Date().getHours()
-  if (hour < 5) return 'Still up'
+  if (hour < 5) return 'Still Up'
   if (hour < 12) return 'Good Morning'
   if (hour < 18) return 'Good Afternoon'
   return 'Good Evening'
@@ -767,7 +767,9 @@ export function Home() {
                   // between its parts is CSS now (`.home-deck-card-no > span::before`).
                   <span className="home-deck-card-no">
                     {placeWordsOf(frontCard.place.label).map((part, at) => (
-                      <span key={at}>{part}</span>
+                      <span key={at} data-typed={at === 0 ? true : undefined}>
+                        {part}
+                      </span>
                     ))}
                   </span>
                 ) : (

@@ -1,6 +1,7 @@
 /* THE COPY RULES, IN ONE FILE, READ BY THE SWEEP AND BY THE UNIT TIER (DESIGN.md "Copy rules", R4, R4a, R5).
  *
- * Pure functions only: no page, no import of Playwright. `copy-checks.spec.ts` sends the rendered
+ * Functions only: no page, no import of Playwright. The one file it reads is `src/CardHero.tsx`, for its SMALL_WORDS
+ * literal (`smallWordsOf`). `copy-checks.spec.ts` sends the rendered
  * strings in through `page.evaluate` and classifies them HERE, in Node, so the rule lives in exactly
  * one place and the unit tier can test the same function the sweep runs. A second copy of the word
  * list in a browser closure would drift the first time one of them changed.
@@ -18,17 +19,43 @@
  */
 
 /** Chicago's small words: lowercase in the middle of a title, capitalized first or last. */
-export const SMALL_WORDS: ReadonlySet<string> = new Set([
-  'a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'so', 'yet',
-  'as', 'at', 'by', 'in', 'of', 'on', 'to', 'up', 'via', 'per', 'unless',
-])
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import ts from 'typescript'
+
+/* THE ONE HOME FOR THE SMALL WORDS is `src/CardHero.tsx` (the list `titleCase` uses). This rule READS that literal with the
+ * TypeScript parser, never a copy. CardHero.tsx itself cannot be imported here: its import chain reaches a stylesheet, which
+ * the Node unit runner cannot load. A missing or non-literal list is a throw, not an empty set. */
+const CARD_HERO = resolve(dirname(fileURLToPath(import.meta.url)), '../src/CardHero.tsx')
+
+export function smallWordsOf(path: string): ReadonlySet<string> {
+  const file = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  for (const statement of file.statements) {
+    if (!ts.isVariableStatement(statement)) continue
+    for (const decl of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(decl.name) || decl.name.text !== 'SMALL_WORDS' || decl.initializer === undefined) continue
+      const set = decl.initializer
+      const array = ts.isNewExpression(set) && set.arguments?.[0] ? set.arguments[0] : undefined
+      if (array === undefined || !ts.isArrayLiteralExpression(array)) throw new Error(`SMALL_WORDS in ${path} is not a Set of a literal array`)
+      return new Set(array.elements.map((element) => {
+        if (!ts.isStringLiteral(element)) throw new Error(`SMALL_WORDS in ${path} holds a non-literal word`)
+        return element.text
+      }))
+    }
+  }
+  throw new Error(`SMALL_WORDS not found in ${path}`)
+}
+
+export const SMALL_WORDS: ReadonlySet<string> = smallWordsOf(CARD_HERO)
 
 /** "I", "my", "me", "mine" as whole words, any case. Lookarounds bound the match by non-letters. */
 const FIRST_PERSON = /(?<![\p{L}\p{N}_])(?:i|my|me|mine)(?![\p{L}\p{N}_])/giu
 
 /** Quoted names that carry a first-person word and are not the app's own voice. `My Pricing` is the name of
  *  TCGplayer's page, a proper name the owner ruled to keep (wave 2, copy map row 10). Only the quoted phrase
- *  is exempt, in straight or curly quotes. The same words unquoted still count. */
+ *  is exempt, in straight or curly quotes. The same words unquoted still count. The exemption is DESIGN.md's R17. */
 const NAMED_EXEMPT: readonly string[] = ['"My Pricing"', '“My Pricing”']
 
 /** The text with each named exemption blanked out. The browser sweep and the source scan both call this. */
@@ -59,8 +86,30 @@ export function isSpokenSentences(text: string): boolean {
  *  only a typed value is left empty, and an empty label has nothing to check. */
 export function stripTyped(text: string, typed: readonly string[]): string {
   let rest = text
-  for (const value of typed) if (value !== '') rest = rest.split(value).join(' ')
-  return rest.replace(/\s+/g, ' ').trim()
+  for (const value of typed) {
+    // A WHOLE TOKEN ONLY: a letter or digit on either side keeps the match inside a longer word (`in` in `Waiting`).
+    // THE PLACEHOLDER IS A CAPITALIZED WORD (`X`), so the words around a typed name grade as they would with a name there:
+    // `Another Place in <box>` passes and `another place in <box>` fails. A label that is only typed values leaves nothing.
+    if (value !== '') rest = rest.replace(new RegExp(`(?<![\\p{L}\\p{N}])${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'gu'), ' X ')
+  }
+  const out = rest.replace(/\s+/g, ' ').trim()
+  return out.split(' ').every((word) => word === 'X') ? '' : out
+}
+
+/** The labels a control draws: every line that carries a letter, is not a key cap alone, and is not a sentence. A tile's
+ *  figure carries no letter (`12` over `matched free`), so it is not a label, and a key cap is not one (`H` over
+ *  `Set hint`). Every other line is graded, so a second label in a control (`New` over `Set Hint`) is not skipped.
+ *  A sentence line is a description (`Tap a box to read every card in it.`) and is not graded. When every lettered
+ *  line is a sentence, the first one is graded, so a one-line sentence control (`Cards to pull.`) is still checked.
+ *  Empty when no line carries a letter, which makes the control a spoken name (its accessible name is read instead). */
+export function labelsOf(lines: readonly string[], keyCaps: readonly string[]): string[] {
+  const lettered = lines
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter((text) => text !== '' && /\p{L}/u.test(text) && !keyCaps.includes(text))
+  // A FULL SENTENCE IS A LINE THAT ENDS IN . ? OR ! AND HAS FIVE WORDS OR MORE. A shorter line ending in a period is a label
+  // (`Cards to pull.`), so it is kept beside a second label. The five-word floor is a ceiling: a four-word caption is graded.
+  const labels = lettered.filter((text) => !(isSentence(text) && text.split(' ').length >= 5))
+  return labels.length > 0 ? labels : lettered.slice(0, 1)
 }
 
 /** Units that may follow a number unchanged: `10 ml`, `1 month`. A count noun such as `cards` is a word. */

@@ -1,12 +1,13 @@
 // Protects: the first-person and Title Case rules that the copy sweep applies are themselves right, and every reason label and review question headline is free of "I", "my", "me" and "mine" (R4, R4a).
 // Governs: DESIGN.md "Copy rules" (R4, R4a, R5), D173
-import { readFileSync, readdirSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { test, expect } from './unit'
 import { REASON_LABELS, RETIRED_REASON_LABELS } from '../../src/reasons'
-import { casingProblems, isSentence, isSpokenSentences, stripTyped, voiceHits } from '../copyRules'
+import { casingProblems, isSentence, isSpokenSentences, labelsOf, smallWordsOf, stripTyped, voiceHits } from '../copyRules'
 import { attrText, firstPersonInSource, jsxOpeningsIn, recordFromSource } from '../copySource'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -39,6 +40,9 @@ test('casing: Chicago Title Case passes, and each small word in the middle must 
   expect(casingProblems('Show all')).toEqual(['"all" should be capitalized'])
   expect(casingProblems('Back to')).toEqual(['"to" should be capitalized'])
   expect(casingProblems('Refresh now on Pricing')).toEqual(['"now" should be capitalized'])
+  // The review tile's proposed wording: `at` is a small word, so Chicago lowercases it mid-title.
+  expect(casingProblems('Not Looked At Yet')).toEqual(['"At" should be lowercase'])
+  expect(casingProblems('Not Looked at Yet')).toEqual([])
 })
 
 test('casing: a hyphenated word capitalizes each part, and a number or unit is not a word', () => {
@@ -62,7 +66,7 @@ test('sentence: a closing period or question mark marks a sentence, which the sw
 /* THE SPOKEN NAME (copy map row 58). A two-sentence accessible name is read aloud, so the casing rule skips it; a
  * one-sentence label with bad casing still fails. */
 test('typed name: the marked text comes out of the label, and the rest is still checked', () => {
-  expect(stripTyped('SV commons card', ['SV commons'])).toBe('card')
+  expect(stripTyped('SV commons card', ['SV commons'])).toBe('X card')
   expect(casingProblems(stripTyped('SV commons card', ['SV commons']))).not.toEqual([])
   expect(stripTyped('SV commons', ['SV commons'])).toBe('')
   expect(casingProblems(stripTyped('SV Commons Card', ['SV commons']))).toEqual([])
@@ -79,6 +83,82 @@ test('label: a closing period on a control label does not skip the casing check'
   expect(casingProblems('Cards to pull.')).not.toEqual([])
   expect(casingProblems('Which Card Is This?')).toEqual([])
   expect(casingProblems('Under Your Price.')).toEqual([])
+})
+
+/* THE PREPOSITION (Chicago lowercases every preposition in the middle of a title). `with` is the one the label corpus uses
+ * mid-title (`Lowest with Shipping`); the capitalized form is the defect. */
+test('casing: a preposition in the middle of a title stays lower-case, so "with" passes lower and fails capitalized', () => {
+  expect(casingProblems('Lowest with Shipping')).toEqual([])
+  expect(casingProblems('Lowest With Shipping')).toEqual(['"With" should be lowercase'])
+})
+
+/* THE LABEL LINES. A tile draws its figure above its label, and a row draws its key cap before its name: neither is a
+ * label. Every other lettered line that is not a sentence is a label and is graded, so a second label is not skipped. */
+test('label lines: a figure and a key cap are not labels; the lettered lines that are, are', () => {
+  expect(labelsOf(['12', 'matched free', '›'], [])).toEqual(['matched free'])
+  expect(labelsOf(['H', 'Set hint', 'Needed'], ['H'])).toEqual(['Set hint', 'Needed'])
+})
+
+/* THE BYPASS. A control with two label lines (`New` over `Set hint`) must grade both: the second line's casing problem is
+ * found. On the old first-line rule (`labelOf`, now removed) only `New` was graded, so this case went green on a lower-case label. */
+test('label lines: every label line is graded, so a lower-case second label is found and a Title Case one passes', () => {
+  expect(labelsOf(['New', 'Set hint'], []).flatMap((label) => casingProblems(label))).toEqual(['"hint" should be capitalized'])
+  expect(labelsOf(['New', 'Set Hint'], []).flatMap((label) => casingProblems(label))).toEqual([])
+})
+
+/* A CAPTION IS NOT A LABEL. The description under a title is a sentence, so it is not graded; the title still is. */
+test('label lines: a description sentence under a title is not graded, and a one-sentence control is still graded', () => {
+  expect(labelsOf(['Read a box', 'Tap a box to read every card in it.'], [])).toEqual(['Read a box'])
+  expect(labelsOf(['Cards to pull.'], [])).toEqual(['Cards to pull.'])
+  /* A SHORT LINE THAT ENDS IN A PERIOD IS A LABEL, NOT A SENTENCE: it is kept beside a second label. */
+  expect(labelsOf(['Cards to pull.', 'Set Hint'], [])).toEqual(['Cards to pull.', 'Set Hint'])
+  expect(labelsOf(['Tap a box to read every card in it.', 'Set Hint'], [])).toEqual(['Set Hint'])
+})
+
+test('small words: the short Chicago prepositions stay lower-case in the middle of a title', () => {
+  expect(casingProblems('Learn about Pricing')).toEqual([])
+  expect(casingProblems('Learn About Pricing')).toEqual(['"About" should be lowercase'])
+  expect(casingProblems('Costs under Ten')).toEqual([])
+  expect(casingProblems('Costs Under Ten')).toEqual(['"Under" should be lowercase'])
+  // `vs` is a small word in the one home (CardHero.tsx's SMALL_WORDS), so a title keeps it lowercase.
+  expect(casingProblems('Card vs Box')).toEqual([])
+})
+
+// THE READER FAILS LOUDLY. A missing list, or a list that is not a literal, throws. An empty set would let every small word
+// grade as a capital word and pass silently, which is the false green this reader exists to prevent.
+test('small words: the reader throws when the literal is missing or not a literal list, and never returns an empty set', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'small-words-'))
+  const missing = join(dir, 'missing.tsx')
+  writeFileSync(missing, 'export const OTHER: ReadonlySet<string> = new Set(["a"])\n')
+  expect(() => smallWordsOf(missing), 'a file with no SMALL_WORDS').toThrow(/SMALL_WORDS not found/)
+  const dynamic = join(dir, 'dynamic.tsx')
+  writeFileSync(dynamic, 'const w = "a"\nexport const SMALL_WORDS: ReadonlySet<string> = new Set([w])\n')
+  expect(() => smallWordsOf(dynamic), 'a list built from a variable').toThrow(/non-literal word/)
+})
+
+test('typed name is a placeholder word: the words around it grade as they would with a name there', () => {
+  expect(casingProblems(stripTyped('Another Place in SV commons', ['SV commons']))).toEqual([])
+  expect(casingProblems(stripTyped('another place in SV commons', ['SV commons']))).toEqual(['"another" should be capitalized', '"place" should be capitalized'])
+})
+
+test('typed value: only a whole token comes out of a label, so a word that contains it stays whole', () => {
+  expect(stripTyped('Waiting in Line', ['in'])).toBe('Waiting X Line')
+  expect(stripTyped('Waiting in Line', ['in'])).not.toMatch(/Wait\s+g/)
+})
+
+test('label lines: a control with only key caps, or only a figure, has no label, so its accessible name is read instead', () => {
+  expect(labelsOf(['⌘K'], ['⌘K'])).toEqual([])
+  expect(labelsOf(['12'], [])).toEqual([])
+})
+
+/* THE NINE STRINGS THAT WENT UNREAD ON ee5b389a. Each one must be a casing problem under the rule, and a caption or an
+ * instruction sentence must not be one. The state reads in `copy-checks.spec.ts` show each string on its own screen. */
+test('the nine casing misses: each label is a Title Case problem, and a caption is prose the rule does not read', () => {
+  for (const label of ['Set hint', 'Price the answers', 'Run another box', 'matched free', 'Lowest with shipping', 'Can be sent', 'Listed now', 'Your price', 'Take 6 copies back', 'Send all 3 SKUs to TCGplayer']) {
+    expect(casingProblems(label), label).not.toEqual([])
+  }
+  expect(isSentence('Started at 9:15 PM. The result shows here when TCGplayer answers.')).toBe(true)
+  expect(isSpokenSentences('Order: High to low. Press to reverse.')).toBe(true)
 })
 
 test('voice: the quoted page name is exempt in voiceHits, and the unquoted words are not (browser path)', () => {

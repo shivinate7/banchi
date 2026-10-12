@@ -916,7 +916,7 @@ export function Codes() {
                           className="codes-code-btn"
                           onClick={() => toggleRow(e.code)}
                           aria-pressed={shown}
-                          aria-label={shown ? 'Hide this code' : 'Reveal this code'}
+                          aria-label={shown ? 'Hide This Code' : 'Reveal This Code'}
                         >
                           <Code code={e.code} shown={shown} odd={!e.well_formed} />
                           <Icon name={shown ? 'eyeOff' : 'eye'} size={13} />
@@ -1185,7 +1185,7 @@ export function Codes() {
               icon="package"
               title="Build a Lot"
               body="A whole box, shipped, with its listing, packing slip and manifest."
-              meta={lots.length === 0 ? 'No lots built yet' : `${count(lots.length, 'lot')} built`}
+              meta={lots.length === 0 ? 'No Lots Built Yet' : `${count(lots.length, 'Lot')} Built`}
               tone="ok"
               at={2}
               onOpen={() => openSheet('lot')}
@@ -1209,7 +1209,7 @@ export function Codes() {
               lots.length === 0 ? (
                 <EmptyState
                   icon="package"
-                  title="No lots built yet"
+                  title="No Lots Built Yet"
                   body="A whole box, shipped, with its listing, packing slip and manifest."
                   actions={
                     <Button icon="package" onClick={() => openSheet('lot')}>
@@ -1281,7 +1281,7 @@ export function Codes() {
                                     className="codes-code-btn"
                                     onClick={() => toggleRow(e.code)}
                                     aria-pressed={shown}
-                                    aria-label={shown ? 'Hide this code' : 'Reveal this code'}
+                                    aria-label={shown ? 'Hide This Code' : 'Reveal This Code'}
                                   >
                                     <Code code={e.code} shown={shown} odd={!e.well_formed} />
                                     <Icon name={shown ? 'eyeOff' : 'eye'} size={13} />

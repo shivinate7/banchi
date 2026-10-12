@@ -4206,7 +4206,7 @@ _M_HELD = "held back or answered unlisted"
 
 _M_ASKED0 = "this send asked for none of this card"
 
-_M_SENT = "every copy in this run is already listed or has left the box"
+_M_SENT = "Every copy in this run is already listed or has left the box."
 
 # THE HEADLINES, WRITTEN OUT (R7 F6). The matrix never asks `merge` for the sentence it is
 # checking, so a defect in the sentence builder goes red here.

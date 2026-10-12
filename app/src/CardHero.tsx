@@ -81,12 +81,19 @@ export function numberCell(card: InventoryCard): string {
   return collectorNumber(card) ?? 'none'
 }
 
-/** An enum value drawn as a word: `reverse_holofoil` → `Reverse Holofoil`. */
-export function titleCase(raw: string): string {
-  return raw
-    .split(/[_\s]+/)
-    .filter((word) => word !== '')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+/** Chicago keeps these lowercase between the first and last word. */
+export const SMALL_WORDS: ReadonlySet<string> = new Set([
+  'a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'so', 'yet',
+  'as', 'at', 'by', 'in', 'of', 'on', 'to', 'up', 'via', 'per', 'unless', 'with',
+  'vs', 'about', 'under', 'over', 'into', 'onto', 'from', 'upon', 'near', 'past', 'off', 'out', 'down',
+])
+
+/** THE ONE HOME FOR TITLE CASE. An enum value drawn as a word: `reverse_holofoil` → `Reverse Holofoil`.
+ *  With `chicago`, the small words stay lowercase unless first or last: `waiting for a paid look` → `Waiting for a Paid Look`. */
+export function titleCase(raw: string, chicago = false): string {
+  const words = raw.split(/[_\s]+/).filter((word) => word !== '')
+  return words
+    .map((word, i) => (chicago && i > 0 && i < words.length - 1 && SMALL_WORDS.has(word) ? word : word.charAt(0).toUpperCase() + word.slice(1)))
     .join(' ')
 }
 
@@ -110,7 +117,7 @@ function isCode(text: string): boolean {
 
 /** A set-valued claim, rendered — a bare string reads as a one-member set. */
 export function claimText(claim: string | string[] | null, word: (member: string) => string = (member) => member): string {
-  const members = claimList(claim).map(word)
+  const members = claimList(claim).map((member) => word(member))
   return members.length === 0 ? 'none recorded' : members.join(', ')
 }
 
@@ -274,7 +281,7 @@ export function factGroupsOf(
         ...(listedAs !== null ? [listedAs] : []),
         ...(readAs !== null ? [readAs] : []),
         { label: 'Game', value: gameWord(card) ?? 'not recorded' },
-        { label: 'Set hint', value: card.set_hint ?? 'none', kind: 'mono' },
+        { label: 'Set Hint', value: card.set_hint ?? 'none', kind: 'mono' },
         /* THE COPIES HEADER'S SKU AND CONDITION LINE IS GONE: these two are its facts, said here. */
         ...(card.sku === null || card.sku.trim() === '' ? [] : [{ label: 'SKU', value: card.sku.trim(), kind: 'mono' as const }]),
         ...(card.sku === null || listings[card.sku.trim()]?.condition == null
@@ -285,8 +292,8 @@ export function factGroupsOf(
     {
       title: 'Claims',
       facts: [
-        { label: 'Finish', value: claimText(card.metadata_finish, titleCase) },
-        { label: 'Rarity', value: claimText(card.rarity_claim, titleCase) },
+        { label: 'Finish', value: claimText(card.metadata_finish, (member) => titleCase(member, true)) },
+        { label: 'Rarity', value: claimText(card.rarity_claim) },
         { label: 'Note', value: card.note ?? 'none' },
       ],
     },
@@ -595,13 +602,13 @@ export function CardHeroHead({
           </span>
           {preChips}
           {claimList(card.metadata_finish).map((finish) => (
-            <Pill key={`f-${finish}`} icon="sparkles" outline title={titleCase(finish)}>
-              {titleCase(finish)}
+            <Pill key={`f-${finish}`} icon="sparkles" outline title={titleCase(finish, true)}>
+              {titleCase(finish, true)}
             </Pill>
           ))}
           {claimList(card.rarity_claim).map((rarity) => (
-            <Pill key={`r-${rarity}`} outline title={titleCase(rarity)}>
-              {titleCase(rarity)}
+            <Pill key={`r-${rarity}`} outline title={rarity}>
+              {rarity}
             </Pill>
           ))}
           {/* THE CARD'S STATE ONLY WHEN IT IS THE EXCEPTION (UX-221) — `BoxBrowse.tsx`'s own

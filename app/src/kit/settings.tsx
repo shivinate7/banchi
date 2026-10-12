@@ -193,7 +193,7 @@ export function SettingsEditor({
   return (
     <div className="bn-set-editor">
       <button type="button" className="bn-set-back" onClick={onBack}>
-        <Icon name="chevronLeft" size={14} /> All settings
+        <Icon name="chevronLeft" size={14} /> All Settings
       </button>
       <h3 className="bn-set-editor-title">{title}</h3>
       {children}
@@ -242,8 +242,8 @@ export function CardPicker({
         label="Cards to include"
         value={picked === null ? 'all' : 'some'}
         options={[
-          { value: 'all', label: `${whole}, ${count(all.length, 'card', 'cards')}` },
-          { value: 'some', label: 'Some cards' },
+          { value: 'all', label: `${whole}, ${count(all.length, 'Card', 'Cards')}` },
+          { value: 'some', label: 'Some Cards' },
         ]}
         onChange={(next) => onChange(next === 'all' ? null : all)}
       />

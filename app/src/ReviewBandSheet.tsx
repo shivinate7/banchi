@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { MatchSweepCard, MatchSweepDetail } from './types'
 import { previewUrl } from './server'
+import { titleCase } from './CardHero'
 import { NO_REASON, NO_REASON_OFF, unreadGroup } from './reasons'
 import { Button, EmptyState, Loading, Sheet, Slot } from './kit'
 import './ReviewBandSheet.css'
@@ -26,13 +27,18 @@ const SETTLED_BY_CLAIM = new Set(['printing_settled_by_claim', 'narrowed_by_clai
 export const SHEET_LABELS: Record<MatchSweepDetail, string> = {
   matched: 'matched free',
   paid: 'waiting for a paid look',
-  unread: 'not yet looked at',
+  unread: 'not looked at yet',
   unhinted: 'need a set named',
 }
 
 /** The sheet's title and the count button's name: the count's own words with the number. */
 export function sheetTitle(kind: MatchSweepDetail, n: number): string {
   return kind === 'unhinted' && n === 1 ? '1 needs a set named' : `${n} ${SHEET_LABELS[kind]}`
+}
+
+/** The sheet's HEADING: the words of `sheetTitle` in Title Case (`titleCase`, the one home). */
+export function sheetHeading(kind: MatchSweepDetail, n: number): string {
+  return titleCase(sheetTitle(kind, n), true)
 }
 
 type Group = {
@@ -209,7 +215,7 @@ export function BandSheet({
     </>
   )
   return (
-    <Sheet open={open} onClose={onClose} title={sheetTitle(kind, cards === null ? figure : cards.length)} icon="list" className="review-band-sheet">
+    <Sheet open={open} onClose={onClose} title={sheetHeading(kind, cards === null ? figure : cards.length)} icon="list" className="review-band-sheet">
       <div className="rbs-moved" aria-live="polite">
         <Slot show={moved} ghost={again} className="rbs-moved-slot">
           {line}

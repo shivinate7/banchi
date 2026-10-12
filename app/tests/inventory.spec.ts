@@ -2777,6 +2777,7 @@ test('the walk arrives with only the planted selection\'s section open, and the 
   await expect(folds.nth(1)).toHaveAttribute('aria-expanded', 'false')
   await expect(page.locator('.browse-row')).toHaveCount(0)
 
+  // Case-insensitive on purpose: the copy sweep is the casing guard; these specs check behaviour.
   await expect(page.locator('.browse-quiet').getByText(/^expand$/i)).toBeVisible()
   await page.locator('.browse-quiet').getByText(/^expand$/i).click()
   await expect(page.locator('.browse-row')).toHaveCount(7)
@@ -3425,7 +3426,7 @@ test('the card picker in the Claims sheet starts whole, narrows by card and by s
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Claims/ }).click()
   const picker = page.locator('.bn-set-picker')
-  await expect(picker.getByRole('button', { name: /^Whole box/ })).toHaveAttribute('aria-pressed', 'true')
+  await expect(picker.getByRole('button', { name: /^Whole box/i })).toHaveAttribute('aria-pressed', 'true')
   await expect(picker.locator('.bn-set-picker-list')).toHaveCount(0)
 
   await picker.getByRole('button', { name: 'Some cards' }).click()
@@ -3472,7 +3473,7 @@ test('the box claim sends only the switched-on fields, over only the cards picke
   expect(wire.filter((sent) => sent.method === 'PUT')).toHaveLength(0)
 
   await page.locator('.boxops-claim-row', { hasText: 'SET HINT' }).getByRole('switch').check()
-  await page.getByRole('textbox', { name: 'Set hint' }).fill('SV09')
+  await page.getByRole('textbox', { name: /set hint/i }).fill('SV09')
   await page.getByRole('button', { name: /^Apply to/ }).click()
 
   await expect(page.locator('.boxops-receipt')).toBeVisible()
@@ -3505,7 +3506,7 @@ test('Move lists on-hand cards only', async ({ page }) => {
   await open(page)
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Move,/ }).click()
-  await expect(page.locator('.bn-set-picker').getByRole('button', { name: /^Whole box, 5 cards/ })).toBeVisible()
+  await expect(page.locator('.bn-set-picker').getByRole('button', { name: /^Whole box, 5 cards/i })).toBeVisible()
   await page.locator('.bn-set-picker').getByRole('button', { name: 'Some cards' }).click()
   await expect(page.locator('.bn-set-picker-group', { hasText: 'Sold or moved out' })).toHaveCount(0)
 })
@@ -3514,7 +3515,7 @@ test('every card picked in the Claims sheet is the whole box and sends no indice
   const wire = await open(page)
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Claims/ }).click()
-  await expect(page.locator('.bn-set-picker').getByRole('button', { name: /^Whole box, 7 cards/ })).toBeVisible()
+  await expect(page.locator('.bn-set-picker').getByRole('button', { name: /^Whole box, 7 cards/i })).toBeVisible()
   await page.locator('.bn-set-picker').getByRole('button', { name: 'Some cards' }).click()
   await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
   await page.getByRole('textbox', { name: 'Note' }).fill('all')
@@ -3587,7 +3588,7 @@ for (const width of [1440, 820]) {
 
     test('picking a section selects exactly its on-hand cards and scrolls them into view', async ({ page }) => {
       await openClaims(page)
-      await choose(page, /Section 2.*59 cards/)
+      await choose(page, /Section 2.*59 Cards/)
       const picker = page.locator('.bn-set-picker')
       await expect(picker.locator('.bn-set-picker-count')).toHaveText('59 of 88 picked')
       const boxes = picker.locator('.bn-set-picker-card input')
@@ -3601,7 +3602,7 @@ for (const width of [1440, 820]) {
 
     test("applying with a section picked writes only that section's positions", async ({ page }) => {
       const wire = await openClaims(page)
-      await choose(page, /Section 2.*59 cards/)
+      await choose(page, /Section 2.*59 Cards/)
       await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
       await page.getByRole('textbox', { name: 'Note' }).fill('wb1 r1')
       await page.getByRole('button', { name: /^Apply to/ }).click()
@@ -3611,8 +3612,8 @@ for (const width of [1440, 820]) {
 
     test("whole box keeps today's behavior: no indices key", async ({ page }) => {
       const wire = await openClaims(page)
-      await choose(page, /Section 2.*59 cards/)
-      await choose(page, /^Whole box/)
+      await choose(page, /Section 2.*59 Cards/)
+      await choose(page, /^Whole box/i)
       await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
       await page.getByRole('textbox', { name: 'Note' }).fill('all')
       await page.getByRole('button', { name: /^Apply to/ }).click()
@@ -3629,7 +3630,7 @@ for (const width of [1440, 820]) {
         control: await control.boundingBox(),
         scroll: await sheet.evaluate((el) => el.scrollTop),
       }
-      await choose(page, /Section 2.*59 cards/)
+      await choose(page, /Section 2.*59 Cards/)
       await expect(page.locator('.bn-set-picker-count')).toHaveText('59 of 88 picked')
       const after = {
         control: await control.boundingBox(),
@@ -3732,14 +3733,14 @@ test('the box-claims finish control is a multi-select and sends a list', async (
      restated later — a `corrected` event and a rewritten sidecar for every card in the box,
      which is exactly what `do_put_box_claims` promises it does not do. */
   const chips = page.locator('.boxops-claim-row', { hasText: 'FINISH' }).locator('.boxops-chip')
-  await chips.filter({ hasText: 'reverse_holo' }).click()
-  await chips.filter({ hasText: /^normal$/ }).click()
+  await chips.filter({ hasText: /^reverse holo$/i }).click()
+  await chips.filter({ hasText: /^normal$/i }).click()
 
   /* BOTH read as pressed — the control is a multi-select, not a picker where the second tap
      replaces the first. That is what a `<select>` could not express, and the reason a stack
      holding two finishes had no honest claim available before the amendment. */
-  await expect(chips.filter({ hasText: /^normal$/ })).toHaveAttribute('aria-pressed', 'true')
-  await expect(chips.filter({ hasText: 'reverse_holo' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(chips.filter({ hasText: /^normal$/i })).toHaveAttribute('aria-pressed', 'true')
+  await expect(chips.filter({ hasText: /^reverse holo$/i })).toHaveAttribute('aria-pressed', 'true')
 
   await page.getByRole('button', { name: /^Apply to/ }).click()
 
@@ -3756,8 +3757,8 @@ test('untapping the last finish clears the claim rather than sending an empty li
   await page.getByRole('button', { name: /^Claims/ }).click()
   await page.locator('.boxops-claim-row', { hasText: 'FINISH' }).getByRole('switch').check()
   const chips = page.locator('.boxops-claim-row', { hasText: 'FINISH' }).locator('.boxops-chip')
-  await chips.filter({ hasText: /^normal$/ }).click()
-  await chips.filter({ hasText: /^normal$/ }).click()
+  await chips.filter({ hasText: /^normal$/i }).click()
+  await chips.filter({ hasText: /^normal$/i }).click()
   await page.getByRole('button', { name: /^Apply to/ }).click()
 
   /* `null`, never `[]`. An armed row that is empty CLEARS the claim, and null is how this

@@ -957,7 +957,7 @@ def _committed_keys(
     copies were marked as the ones TCGplayer already holds and the older backstock — which
     no run is joining — was left uncommitted and therefore unreachable. **52 of the run's 119
     matched SKUs offered zero copies and 59 real cards were stranded**, every one of them
-    reported as *"every copy in this run is already listed or has left the box"*. The
+    reported as *"Every copy in this run is already listed or has left the box."*. The
     operator read that sentence and said it was *"just not true/possible"*. 52 of the 59 are
     this defect; the other 7 are the stuck claim `_copies_out` could not age, which is
     D150's Staged case, out of scope by the owner's choice, — `_copies_out` aged them the next day

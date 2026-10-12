@@ -2370,7 +2370,7 @@ class SkuMatch:
         if self.add_to_quantity or not self.copies:
             return None
         if not self.uncommitted_positions:
-            return "every copy in this run is already listed or has left the box"
+            return "Every copy in this run is already listed or has left the box."
         # THE SEND'S OWN ANSWER, BEFORE ANY SENTENCE ABOUT A CAP (D7, amended 2026-09-11): a
         # zero typed for this card is why nothing goes, and it is not a hold, so the way
         # back is the field and not the corpus.
@@ -2396,7 +2396,7 @@ class SkuMatch:
         # refactor away from being reachable, and a false sentence is what this method's own
         # docstring exists to prevent.
         if self.live_cap is None:
-            return "every copy in this run is already listed or has left the box"
+            return "Every copy in this run is already listed or has left the box."
         # THE OWNER'S RULING, 2026-09-27, REPLACING THE 2026-09-25 "TAKE THE LARGER" AMENDMENT:
         # `--cap` is refused for this card outright while a copy sent since is still pending —
         # no copy is silently maxed or summed across two readings any more (D7). `pending`

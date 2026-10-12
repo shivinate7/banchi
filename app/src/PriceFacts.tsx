@@ -145,8 +145,8 @@ export function PriceFactsBlock({ sku, onSales }: { readonly sku: string; readon
           <dl className="pricefacts-grid pricefacts-body">
             <Cell label="Market">{loading ? '—' : cash(prices?.market)}</Cell>
             <Cell label="Lowest">{loading ? '—' : cash(prices?.low)}</Cell>
-            <Cell label="Lowest with shipping">{loading ? '—' : cash(prices?.low_with_shipping)}</Cell>
-            <Cell label="Direct low">{loading ? '—' : prices?.direct_low ? cash(prices.direct_low) : <span className="pricefacts-quiet">not carried</span>}</Cell>
+            <Cell label="Lowest with Shipping">{loading ? '—' : cash(prices?.low_with_shipping)}</Cell>
+            <Cell label="Direct Low">{loading ? '—' : prices?.direct_low ? cash(prices.direct_low) : <span className="pricefacts-quiet">not carried</span>}</Cell>
           </dl>
         )}
       </section>
@@ -165,12 +165,12 @@ export function PriceFactsBlock({ sku, onSales }: { readonly sku: string; readon
             {loading ? <div className="pricefacts-chart-hold" /> : <DayChart days={days} />}
             <dl className="pricefacts-grid">
               <Cell label="Sold">{loading ? '—' : sold}</Cell>
-              <Cell label="Per sale">{loading ? '—' : perSale}</Cell>
-              <Cell label="Avg sale 30d">{loading ? '—' : cash(f.avg_30d)}</Cell>
-              <Cell label="Avg sale 7d">{loading ? '—' : cash(f.avg_7d)}</Cell>
-              <Cell label="Sale range 30d">{loading ? '—' : span(f.low_30d, f.high_30d)}</Cell>
-              <Cell label="Sale range 7d">{loading ? '—' : span(f.low_7d, f.high_7d)}</Cell>
-              <Cell label="Best day">{loading ? '—' : f.best_day ? `${shortDay(f.best_day[0])}, ${f.best_day[1]} sold` : '—'}</Cell>
+              <Cell label="Per Sale">{loading ? '—' : perSale}</Cell>
+              <Cell label="Avg Sale 30d">{loading ? '—' : cash(f.avg_30d)}</Cell>
+              <Cell label="Avg Sale 7d">{loading ? '—' : cash(f.avg_7d)}</Cell>
+              <Cell label="Sale Range 30d">{loading ? '—' : span(f.low_30d, f.high_30d)}</Cell>
+              <Cell label="Sale Range 7d">{loading ? '—' : span(f.low_7d, f.high_7d)}</Cell>
+              <Cell label="Best Day">{loading ? '—' : f.best_day ? `${shortDay(f.best_day[0])}, ${f.best_day[1]} sold` : '—'}</Cell>
               <Cell label="Market 30d">{loading ? '—' : percent(f.change_30d)}</Cell>
             </dl>
           </div>
@@ -183,10 +183,10 @@ export function PriceFactsBlock({ sku, onSales }: { readonly sku: string; readon
           <p className="pricefacts-none pricefacts-body">This card is not on the waiting list.</p>
         ) : (
           <dl className="pricefacts-grid pricefacts-body">
-            <Cell label="On hand">{loading ? '—' : (shelf?.on_hand ?? '—')}</Cell>
-            <Cell label="Can be sent">{loading ? '—' : (shelf?.can_be_sent ?? '—')}</Cell>
-            <Cell label="Listed now">{loading ? '—' : (shelf?.listed_now ?? '—')}</Cell>
-            <Cell label="Your price">{loading ? '—' : cash(shelf?.asking)}</Cell>
+            <Cell label="On Hand">{loading ? '—' : (shelf?.on_hand ?? '—')}</Cell>
+            <Cell label="Can Be Sent">{loading ? '—' : (shelf?.can_be_sent ?? '—')}</Cell>
+            <Cell label="Listed Now">{loading ? '—' : (shelf?.listed_now ?? '—')}</Cell>
+            <Cell label="Your Price">{loading ? '—' : cash(shelf?.asking)}</Cell>
           </dl>
         )}
       </section>
