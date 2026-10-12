@@ -119,6 +119,33 @@ function scanCopy(): CopyScan {
     return null
   }
 
+  // THE VISIBLE LINES, WALKED. innerText glues inline siblings that have no whitespace between them (`SV commons`
+  // then `Section 1` read as `SV commonsSection 1`), so this walk adds a space at each inline edge and a line break
+  // at each block edge, the way innerText breaks lines, and skips what is not drawn.
+  const linesOf = (root: HTMLElement): string[] => {
+    let text = ''
+    const walk = (node: Node): void => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        text += node.textContent ?? ''
+        return
+      }
+      if (!(node instanceof HTMLElement)) return
+      const style = getComputedStyle(node)
+      if (style.display === 'none' || style.visibility === 'hidden') return
+      if (node.tagName === 'BR') {
+        text += '\n'
+        return
+      }
+      // innerText breaks a line only at block-level boxes, so every inline-level display (inline, inline-block, inline-flex) takes a space.
+      const edge = style.display.startsWith('inline') || style.display === 'contents' ? ' ' : '\n'
+      text += edge
+      node.childNodes.forEach(walk)
+      text += edge
+    }
+    walk(root)
+    return text.split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).filter((line) => line !== '')
+  }
+
   const attrs: Attr[] = []
   for (const el of Array.from(document.querySelectorAll('[aria-label], [title], [placeholder], [alt]'))) {
     if (!shown(el)) continue
@@ -139,7 +166,7 @@ function scanCopy(): CopyScan {
     if (role === null || !shown(el)) continue
     // THE LINES AND THE KEY CAPS ARE SENT; Node picks the label (`copyRules.ts:labelsOf`). A tile draws its figure
     // above its label, and a row draws its key cap before its name, so the first line is not always the label.
-    const lines = ((el as HTMLElement).innerText ?? '').split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).filter((line) => line !== '')
+    const lines = linesOf(el as HTMLElement)
     const keyCaps = Array.from(el.querySelectorAll('kbd'), (key) => (key.textContent ?? '').replace(/\s+/g, ' ').trim()).filter((key) => key !== '')
     casing.push({
       role,
@@ -669,4 +696,14 @@ test.describe('clip: no fact is cut off at 1440 or 820', () => {
       expect(measure.drawn - measure.box, `the meta line draws ${measure.drawn}px in a ${measure.box}px box, so its number, set or game is cut off`).toBeLessThanOrEqual(1)
     })
   }
+})
+
+// THE READER JOINS ADJACENT ELEMENTS WITH A SPACE. innerText glued `SV commons` and `Section 1` into one word.
+test.describe('reader: adjacent elements join with a space, not glued', () => {
+  test('two inline spans in an icon link read as two words', async ({ page }) => {
+    await page.setContent('<main><a href="#/x" aria-label="Set"><span>SV commons</span><span>Section 1</span></a></main>')
+    const scan = await page.evaluate(scanCopy)
+    const link = scan.casing.find((one) => one.role === 'icon link')
+    expect(link?.lines, 'the two spans are two words, not one glued word').toEqual(['SV commons Section 1'])
+  })
 })
