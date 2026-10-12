@@ -413,7 +413,7 @@ export function BoxOps({
     { value: 'whole', label: `Whole Box, ${count(everyIndex.length, 'Card', 'Cards')}` },
     ...sectionPools.map((section) => ({
       value: section.key,
-      label: `${section.title}, ${count(section.cards.length, 'card', 'cards')}`,
+      label: `${section.title}, ${count(section.cards.length, 'Card', 'Cards')}`,
     })),
   ]
   /* The one deliberate scroll: the picker's own list, never the sheet (D313). */

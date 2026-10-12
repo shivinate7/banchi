@@ -82,7 +82,11 @@ export function numberCell(card: InventoryCard): string {
 }
 
 /** Chicago keeps these lowercase between the first and last word. */
-const SMALL_WORDS = new Set(['a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'of', 'in', 'on', 'at', 'to', 'as', 'by', 'with'])
+const SMALL_WORDS = new Set([
+  'a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'so', 'yet',
+  'as', 'at', 'by', 'in', 'of', 'on', 'to', 'up', 'via', 'per', 'unless', 'with',
+  'about', 'under', 'over', 'into', 'onto', 'from', 'upon', 'near', 'past', 'off', 'out', 'down',
+])
 
 /** THE ONE HOME FOR TITLE CASE. An enum value drawn as a word: `reverse_holofoil` → `Reverse Holofoil`.
  *  With `chicago`, the small words stay lowercase unless first or last: `waiting for a paid look` → `Waiting for a Paid Look`. */
@@ -113,7 +117,7 @@ function isCode(text: string): boolean {
 
 /** A set-valued claim, rendered — a bare string reads as a one-member set. */
 export function claimText(claim: string | string[] | null, word: (member: string) => string = (member) => member): string {
-  const members = claimList(claim).map(word)
+  const members = claimList(claim).map((member) => word(member))
   return members.length === 0 ? 'none recorded' : members.join(', ')
 }
 
@@ -288,8 +292,8 @@ export function factGroupsOf(
     {
       title: 'Claims',
       facts: [
-        { label: 'Finish', value: claimText(card.metadata_finish, titleCase) },
-        { label: 'Rarity', value: claimText(card.rarity_claim, titleCase) },
+        { label: 'Finish', value: claimText(card.metadata_finish, (member) => titleCase(member, true)) },
+        { label: 'Rarity', value: claimText(card.rarity_claim, (member) => titleCase(member, true)) },
         { label: 'Note', value: card.note ?? 'none' },
       ],
     },
@@ -598,13 +602,13 @@ export function CardHeroHead({
           </span>
           {preChips}
           {claimList(card.metadata_finish).map((finish) => (
-            <Pill key={`f-${finish}`} icon="sparkles" outline title={titleCase(finish)}>
-              {titleCase(finish)}
+            <Pill key={`f-${finish}`} icon="sparkles" outline title={titleCase(finish, true)}>
+              {titleCase(finish, true)}
             </Pill>
           ))}
           {claimList(card.rarity_claim).map((rarity) => (
-            <Pill key={`r-${rarity}`} outline title={titleCase(rarity)}>
-              {titleCase(rarity)}
+            <Pill key={`r-${rarity}`} outline title={titleCase(rarity, true)}>
+              {titleCase(rarity, true)}
             </Pill>
           ))}
           {/* THE CARD'S STATE ONLY WHEN IT IS THE EXCEPTION (UX-221) — `BoxBrowse.tsx`'s own
