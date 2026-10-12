@@ -55,7 +55,7 @@ const FIRST_PERSON = /(?<![\p{L}\p{N}_])(?:i|my|me|mine)(?![\p{L}\p{N}_])/giu
 
 /** Quoted names that carry a first-person word and are not the app's own voice. `My Pricing` is the name of
  *  TCGplayer's page, a proper name the owner ruled to keep (wave 2, copy map row 10). Only the quoted phrase
- *  is exempt, in straight or curly quotes. The same words unquoted still count. */
+ *  is exempt, in straight or curly quotes. The same words unquoted still count. The exemption is DESIGN.md's R17. */
 const NAMED_EXEMPT: readonly string[] = ['"My Pricing"', '“My Pricing”']
 
 /** The text with each named exemption blanked out. The browser sweep and the source scan both call this. */
