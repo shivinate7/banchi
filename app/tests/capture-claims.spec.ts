@@ -753,6 +753,7 @@ test('the set hint offers the real set names, and still takes free text', async 
   await open(page)
   await page.keyboard.press('h')
 
+  // Case-insensitive on purpose: the copy sweep is the casing guard; these specs check behaviour.
   const hint = page.getByLabel(/set hint/i)
   await expect(hint).toBeVisible()
 

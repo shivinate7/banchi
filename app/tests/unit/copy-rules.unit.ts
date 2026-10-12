@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { test, expect } from './unit'
 import { REASON_LABELS, RETIRED_REASON_LABELS } from '../../src/reasons'
-import { casingProblems, isSentence, isSpokenSentences, labelOf, stripTyped, voiceHits } from '../copyRules'
+import { casingProblems, isSentence, isSpokenSentences, labelsOf, stripTyped, voiceHits } from '../copyRules'
 import { attrText, firstPersonInSource, jsxOpeningsIn, recordFromSource } from '../copySource'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -88,22 +88,29 @@ test('casing: a preposition in the middle of a title stays lower-case, so "with"
   expect(casingProblems('Lowest With Shipping')).toEqual(['"With" should be lowercase'])
 })
 
-/* THE LABEL LINE (the sweep's first-line rule was wrong for two shapes). A tile draws its figure above its label, and a
- * row draws its key cap before its name. The label is the first line with a letter that is not a key cap alone. A
- * description under a title is never the label. */
-test('label line: a figure above the label picks the label, and a key cap before the name is skipped', () => {
-  expect(labelOf(['12', 'matched free', '›'], [])).toBe('matched free')
-  expect(labelOf(['0', 'matched free'], [])).toBe('matched free')
-  expect(labelOf(['H', 'Set hint', 'Needed'], ['H'])).toBe('Set hint')
+/* THE LABEL LINES. A tile draws its figure above its label, and a row draws its key cap before its name: neither is a
+ * label. Every other lettered line that is not a sentence is a label and is graded, so a second label is not skipped. */
+test('label lines: a figure and a key cap are not labels; the lettered lines that are, are', () => {
+  expect(labelsOf(['12', 'matched free', '›'], [])).toEqual(['matched free'])
+  expect(labelsOf(['H', 'Set hint', 'Needed'], ['H'])).toEqual(['Set hint', 'Needed'])
 })
 
-test('label line: a title keeps its own line, and the description under it is never the label', () => {
-  expect(labelOf(['Read a box', 'Tap a box to read every card in it.'], [])).toBe('Read a box')
+/* THE BYPASS. A control with two label lines (`New` over `Set hint`) must grade both: the second line's casing problem is
+ * found. On the old first-line rule (`labelOf`, now removed) only `New` was graded, so this case went green on a lower-case label. */
+test('label lines: every label line is graded, so a lower-case second label is found and a Title Case one passes', () => {
+  expect(labelsOf(['New', 'Set hint'], []).flatMap((label) => casingProblems(label))).toEqual(['"hint" should be capitalized'])
+  expect(labelsOf(['New', 'Set Hint'], []).flatMap((label) => casingProblems(label))).toEqual([])
 })
 
-test('label line: a control with only key caps has no label, so its accessible name is read instead', () => {
-  expect(labelOf(['⌘K'], ['⌘K'])).toBe('')
-  expect(labelOf(['12'], [])).toBe('')
+/* A CAPTION IS NOT A LABEL. The description under a title is a sentence, so it is not graded; the title still is. */
+test('label lines: a description sentence under a title is not graded, and a one-sentence control is still graded', () => {
+  expect(labelsOf(['Read a box', 'Tap a box to read every card in it.'], [])).toEqual(['Read a box'])
+  expect(labelsOf(['Cards to pull.'], [])).toEqual(['Cards to pull.'])
+})
+
+test('label lines: a control with only key caps, or only a figure, has no label, so its accessible name is read instead', () => {
+  expect(labelsOf(['⌘K'], ['⌘K'])).toEqual([])
+  expect(labelsOf(['12'], [])).toEqual([])
 })
 
 /* THE NINE STRINGS THAT WENT UNREAD ON ee5b389a. Each one must be a casing problem under the rule, and a caption or an

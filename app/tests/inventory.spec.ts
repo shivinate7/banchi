@@ -2777,6 +2777,7 @@ test('the walk arrives with only the planted selection\'s section open, and the 
   await expect(folds.nth(1)).toHaveAttribute('aria-expanded', 'false')
   await expect(page.locator('.browse-row')).toHaveCount(0)
 
+  // Case-insensitive on purpose: the copy sweep is the casing guard; these specs check behaviour.
   await expect(page.locator('.browse-quiet').getByText(/^expand$/i)).toBeVisible()
   await page.locator('.browse-quiet').getByText(/^expand$/i).click()
   await expect(page.locator('.browse-row')).toHaveCount(7)

@@ -1302,6 +1302,7 @@ test('a free pick that resolves to no catalog row is said so, and Search stays',
     read: { ...DISAGREE_ENTRY.read, matcher_pick: { name: 'Raichu', number: '999', set: 'Nowhere', reason: 'margin_too_small' } },
   }
   await open(page, [gone])
+  // Case-insensitive on purpose: the copy sweep is the casing guard; these specs check behaviour.
   await expect(page.locator('.review-sentence')).toContainText(/not in the catalog|no catalog row|could not find/i)
   await expect(page.getByRole('button', { name: /^Search/ }).first()).toBeVisible()
 })

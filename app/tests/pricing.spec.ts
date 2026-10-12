@@ -2572,6 +2572,7 @@ test('the photo is on demand, names which copy it is, and the same key closes it
      recorded misses are confident answers with the digits wrong — so the pick is the first in
      box-walk order, said out loud, and steppable. */
   await expect(page.locator('.pricing-photo')).toBeVisible()
+  // Case-insensitive on purpose: the copy sweep is the casing guard; these specs check behaviour.
   await expect(page.locator('.pricing-photo-caption')).toContainText(/card\s*1/i)
   await expect(page.locator('.pricing-photo-caption')).toContainText('1 of 3')
 

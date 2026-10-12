@@ -11,7 +11,7 @@ import { card, sealEveryTest } from './shell'
 import { POPULATED_ROUTE_SEEDS } from './routeFixtures'
 import { sweepEveryRoute } from './routeSweep'
 import { setViewport } from './phoneSwitch'
-import { casingProblems, isSentence, isSpokenSentences, labelOf, stripTyped, voiceHits } from './copyRules'
+import { casingProblems, isSentence, isSpokenSentences, labelsOf, stripTyped, voiceHits } from './copyRules'
 
 /* ONE SWEEP, TWO CHECKS (D284, the shape `text-checks.spec.ts` set). Each screen is opened ONCE by
  * `routeSweep.ts:sweepEveryRoute`, the same owner routes and the same populated store the text checks
@@ -20,7 +20,7 @@ import { casingProblems, isSentence, isSpokenSentences, labelOf, stripTyped, voi
  *
  * WHAT IS READ. Each screen's landing state, as the browser draws it: every rendered text node
  * (sidebar, bars and view), plus every rendered `aria-label`, `title`, `placeholder` and `alt`. A control's
- * label is its first line that carries a letter and is not a key cap (`copyRules.ts:labelOf`), so a tile's
+ * labels are every line that carries a letter, is not a key cap and is not a sentence (`copyRules.ts:labelsOf`), so a tile's
  * figure above its label is skipped, and a stat label (`dt`) is read as a label. Four states the landing
  * sweep never builds are read after it (the two Review states and the two Pricing send states, see
  * `MATCH_SWEEP`). A sheet,
@@ -137,7 +137,7 @@ function scanCopy(): CopyScan {
   for (const el of Array.from(candidates)) {
     const role = roleOf(el)
     if (role === null || !shown(el)) continue
-    // THE LINES AND THE KEY CAPS ARE SENT; Node picks the label (`copyRules.ts:labelOf`). A tile draws its figure
+    // THE LINES AND THE KEY CAPS ARE SENT; Node picks the label (`copyRules.ts:labelsOf`). A tile draws its figure
     // above its label, and a row draws its key cap before its name, so the first line is not always the label.
     const lines = ((el as HTMLElement).innerText ?? '').split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).filter((line) => line !== '')
     const keyCaps = Array.from(el.querySelectorAll('kbd'), (key) => (key.textContent ?? '').replace(/\s+/g, ' ').trim()).filter((key) => key !== '')
@@ -300,6 +300,50 @@ function worklistSku(sku: string, name: string) {
   }
 }
 
+/** A worklist row whose live copies sit on the store at `now`. A `capped` row adds no copies (`at_cap`), so a price typed on it
+ *  is a price change; an uncapped row adds copies, so a changed price moves its live copies. */
+function liveSku(sku: string, name: string, live: number, now: string, capped: boolean) {
+  return {
+    ...worklistSku(sku, name),
+    listing: { pushed: live, staged: 0, live },
+    snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now },
+    ...(capped ? { at_cap: true, add_to_quantity: 0, live_before: live, nothing_to_add: 'every copy in this run is already listed or has left the box' } : {}),
+  }
+}
+
+/** The worklist over these rows: one run when there are rows, and none when there are not (the screen then draws its
+ *  own `Price your live listings` empty state). */
+function worklistOf(skus: readonly unknown[]) {
+  const run = { run: RUN, path: `/tmp/runs/${RUN}`, box: 7, box_name: 'Riftbound epics', created_at: null, live: false, phase: 'emit', joined: true, collected: true, counts: { skus: skus.length, cards_in: 3 * skus.length, queued_main: 0, queued_parked: 0 }, batch_ids: [], usage: {} }
+  return {
+    runs: skus.length > 0 ? [run] : [],
+    roster: skus.length > 0 ? [{ ...run, owes: ['never emitted'], owed: [{ code: 'never_emitted', count: null }], open: true, unsent: 0 }] : [],
+    skus,
+    written_at: {},
+    skipped: [],
+    asked: [],
+    threshold: '0.40',
+    floor: '0.40',
+  }
+}
+
+/** The stored answers, by SKU, in the corpus's own shape. A press that moves live copies reads these. */
+async function stubCorpus(page: Page, prices: Record<string, string>): Promise<void> {
+  await page.route(/\/pricing$/, (route) => {
+    if (route.request().url().includes('/pipeline/')) return route.fallback()
+    if (route.request().method() === 'PUT') return route.fulfill(answer({ ok: true, written: '/tmp/prices.json', answers: 0, revision: 'rev-2' }))
+    const skus = Object.fromEntries(Object.entries(prices).map(([sku, value]) => [sku, { value }]))
+    return route.fulfill(answer({ corpus: { version: 1, policy: { rule: 'match', basis: 'market', sub_threshold: { flat: '0.49' } }, skus }, path: '/tmp/prices.json', revision: 'rev-1' }))
+  })
+}
+
+/** Types one price into a row's price field and leaves it, as the owner does. A price typed this visit is what a change counts. */
+async function typePrice(page: Page, name: string, price: string): Promise<void> {
+  const field = page.getByRole('textbox', { name: `Price for ${name}` })
+  await field.fill(price)
+  await field.press('Tab')
+}
+
 function worklist() {
   const run = { run: RUN, path: `/tmp/runs/${RUN}`, box: 7, box_name: 'Riftbound epics', created_at: null, live: false, phase: 'emit', joined: true, collected: true, counts: { skus: 2, cards_in: 6, queued_main: 0, queued_parked: 0 }, batch_ids: [], usage: {} }
   return {
@@ -400,29 +444,30 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
 
     for (const one of scan.casing) {
       if (one.mono || one.upper || one.typed) continue
-      // THE LABEL IS ONE LINE OF THE CONTROL (`labelOf`). No line qualifies for an icon control, and its accessible
-      // name is read instead, as a spoken name. A description under a title is never reached.
-      const label = labelOf(one.lines, one.keyCaps)
-      const spoken = label === ''
-      const text = spoken ? one.aria : label
-      if (text === '') continue
-      const checked = stripTyped(text, one.marked)
-      if (checked === '' || (spoken && isSpokenSentences(checked))) continue
-      // A HEADING (h2, h3) OR A TITLE MAY BE A SENTENCE: an empty state or a greeting. A control, and a page title (h1),
-      // is a label whatever its ending, so `Cards to pull.` on a control or an h1 is still checked.
-      if ((one.role === 'heading' || one.role === 'title') && isSentence(checked)) continue
-      const problems = casingProblems(checked)
-      if (problems.length === 0) continue
-      // A FINDING IS KEYED BY ITS TEXT, not its role: a control's label often shows twice (its tip and its
-      // accessible name), and one string is one offender.
-      const id = JSON.stringify(text)
-      if (seen.has(`c|${id}`)) continue
-      seen.add(`c|${id}`)
-      if (casingAllow[route]?.[id] !== undefined) {
-        casingUsed.add(`${route}\u0000${id}`)
-        continue
+      // THE LABELS ARE THE CONTROL'S LABEL LINES (`copyRules.ts:labelsOf`): every lettered line that is not a sentence, so
+      // a second label (`New` over `Set Hint`) is graded too. A control with none is a spoken name, read as its accessible name.
+      const labels = labelsOf(one.lines, one.keyCaps)
+      const spoken = labels.length === 0
+      for (const text of spoken ? [one.aria] : labels) {
+        if (text === '') continue
+        const checked = stripTyped(text, one.marked)
+        if (checked === '' || (spoken && isSpokenSentences(checked))) continue
+        // A HEADING (h2, h3) OR A TITLE MAY BE A SENTENCE: an empty state or a greeting. A control, and a page title (h1),
+        // is a label whatever its ending, so `Cards to pull.` on a control or an h1 is still checked.
+        if ((one.role === 'heading' || one.role === 'title') && isSentence(checked)) continue
+        const problems = casingProblems(checked)
+        if (problems.length === 0) continue
+        // A FINDING IS KEYED BY ITS TEXT, not its role: a control's label often shows twice (its tip and its
+        // accessible name), and one string is one offender.
+        const id = JSON.stringify(text)
+        if (seen.has(`c|${id}`)) continue
+        seen.add(`c|${id}`)
+        if (casingAllow[route]?.[id] !== undefined) {
+          casingUsed.add(`${route}\u0000${id}`)
+          continue
+        }
+        findings.push({ check: 'copy-casing', route, id, text, kind: one.role, detail: problems.join('; ') })
       }
-      findings.push({ check: 'copy-casing', route, id, text, kind: one.role, detail: problems.join('; ') })
     }
   }
 
@@ -448,9 +493,19 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
 
   // THE REVIEW STATE WITH A MATCHED FIGURE: its tile is a button, so its label is read. Asserted drawn first.
   await setViewport(page, { width: 1440, height: 1000 })
-  await page.route(MATCH_SWEEP, (route) => route.fulfill(answer({ ...NO_SWEEP, matched: 2, matched_here: 2, matched_keys: ['3/1', '3/2'] })))
+  // EVERY COUNT ABOVE ZERO: the three tiles are buttons, so their labels are read; then the matched tile opens its sheet,
+  // whose title (`N matched free`) is read too. Each tile and the sheet is asserted drawn first.
+  await page.route(MATCH_SWEEP, (route) =>
+    route.fulfill(answer({ ...NO_SWEEP, matched: 2, matched_here: 2, matched_keys: ['3/1', '3/2'], paid: 2, paid_keys: ['3/3', '3/4'], unread: 3 })),
+  )
   await visit(page, '#/review')
+  // Case-insensitive on purpose: the copy sweep is the casing guard; these specs check behaviour.
   await expect(page.locator('.review-band-count', { hasText: /matched free/i }).getByRole('button'), 'the matched tile is a button').toHaveCount(1)
+  await expect(page.locator('.review-band-count', { hasText: /waiting for a paid look/i }).getByRole('button'), 'the paid tile is a button').toHaveCount(1)
+  await expect(page.locator('.review-band-count', { hasText: /not yet looked at/i }).getByRole('button'), 'the unread tile is a button').toHaveCount(1)
+  read('#/review', await page.evaluate(scanCopy))
+  await page.locator('.review-band-count', { hasText: /matched free/i }).getByRole('button').click()
+  await expect(page.getByRole('dialog'), 'the matched sheet opens').toBeVisible()
   read('#/review', await page.evaluate(scanCopy))
 
   // THE REVIEW STATE WITH AN EMPTY QUEUE: `All caught up`, and its two buttons. Asserted drawn first.
@@ -476,6 +531,35 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   await page.route(SENDS, (route) => route.fulfill(answer({ ...SENDS_NONE, sends: [TAKEABLE] })))
   await visit(page, '#/pricing')
   await expect(page.getByRole('button', { name: /^Take \d+ copies back$/i }), 'the takeable send offers its take back').toBeVisible()
+  read('#/pricing', await page.evaluate(scanCopy))
+
+  // THE PRICE-CHANGE PRESS: two rows at cap carry live copies, and the owner types a new price on each this visit (a change
+  // needs a typed price). The press names the SKUs and the changes as one label, read whole. Asserted drawn first.
+  await page.route(SENDS, (route) => route.fulfill(answer(SENDS_NONE)))
+  await page.route(PRICING_WORKLIST, (route) =>
+    route.fulfill(
+      answer(worklistOf([liveSku('8608459', 'Dunsparce', 2, '9.99', true), liveSku('8608659', 'Wattrel', 1, '4.00', true), worklistSku('8608559', 'Riftbound Ember'), worklistSku('8608560', 'Riftbound Tide')])),
+    ),
+  )
+  await visit(page, '#/pricing')
+  await typePrice(page, 'Dunsparce', '12.50')
+  await typePrice(page, 'Wattrel', '5.50')
+  await expect(page.getByRole('button', { name: /^Send all 2 SKUs and 2 price changes$/i }), 'the press names the two price changes').toBeVisible()
+  read('#/pricing', await page.evaluate(scanCopy))
+
+  // THE MOVES PRESS: two uncapped rows add copies over live ones at new stored prices, so the press also names the moved copies.
+  await stubCorpus(page, { '8608859': '11.00', '8608959': '8.00' })
+  await page.route(PRICING_WORKLIST, (route) =>
+    route.fulfill(answer(worklistOf([liveSku('8608859', 'Articuno', 2, '9.99', false), liveSku('8608959', 'Kled', 3, '7.00', false)]))),
+  )
+  await visit(page, '#/pricing')
+  await expect(page.getByRole('button', { name: /^Send all 2 SKUs, 5 live copies move to new prices$/i }), 'the press names the moved copies').toBeVisible()
+  read('#/pricing', await page.evaluate(scanCopy))
+
+  // THE EMPTY WORKLIST: nothing to price yet, and the button that opens the Live tab. Asserted drawn first.
+  await page.route(PRICING_WORKLIST, (route) => route.fulfill(answer(worklistOf([]))))
+  await visit(page, '#/pricing')
+  await expect(page.getByRole('button', { name: /^Price your live listings$/i }), 'the empty worklist offers the Live tab').toBeVisible()
   read('#/pricing', await page.evaluate(scanCopy))
 
   const casingTotal = reads.reduce((sum, one) => sum + one.casing, 0)

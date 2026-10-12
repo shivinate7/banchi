@@ -63,17 +63,18 @@ export function stripTyped(text: string, typed: readonly string[]): string {
   return rest.replace(/\s+/g, ' ').trim()
 }
 
-/** The label a control draws: its first line that carries a letter and is not a key cap alone. A tile's figure sits
- *  ABOVE its label (`12` over `matched free`), and a row's key cap sits BEFORE its name (`H` over `Set hint`), so
- *  neither is the label. Only the first qualifying line is the label: a description under a title is never read.
- *  Empty when no line qualifies, which makes the control a spoken name (its accessible name is read instead). */
-export function labelOf(lines: readonly string[], keyCaps: readonly string[]): string {
-  for (const line of lines) {
-    const text = line.replace(/\s+/g, ' ').trim()
-    if (text === '' || !/\p{L}/u.test(text) || keyCaps.includes(text)) continue
-    return text
-  }
-  return ''
+/** The labels a control draws: every line that carries a letter, is not a key cap alone, and is not a sentence. A tile's
+ *  figure carries no letter (`12` over `matched free`), so it is not a label, and a key cap is not one (`H` over
+ *  `Set hint`). Every other line is graded, so a second label in a control (`New` over `Set Hint`) is not skipped.
+ *  A sentence line is a description (`Tap a box to read every card in it.`) and is not graded. When every lettered
+ *  line is a sentence, the first one is graded, so a one-line sentence control (`Cards to pull.`) is still checked.
+ *  Empty when no line carries a letter, which makes the control a spoken name (its accessible name is read instead). */
+export function labelsOf(lines: readonly string[], keyCaps: readonly string[]): string[] {
+  const lettered = lines
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter((text) => text !== '' && /\p{L}/u.test(text) && !keyCaps.includes(text))
+  const labels = lettered.filter((text) => !isSentence(text))
+  return labels.length > 0 ? labels : lettered.slice(0, 1)
 }
 
 /** Units that may follow a number unchanged: `10 ml`, `1 month`. A count noun such as `cards` is a word. */
