@@ -1167,12 +1167,32 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
    scroll of its own: any change in scrollY, or in the header's boxes, is the page moving. The
    sale case above used to read the page at whatever scroll the box click left it at; this case owns
    the scroll check. */
-for (const width of [1440, 820]) {
-  test(`held frame: marking a copy sold and undoing it, with the control clipped at the bottom edge, moves neither the scroll nor the card header, at ${width}`, async ({ page }) => {
+for (const width of [1440, 820]) for (const wide of [false, true]) {
+  test(`held frame: marking a copy sold and undoing it, with the control clipped at the bottom edge, moves neither the scroll nor the card header, ${wide ? 'wide face, ' : ''}at ${width}`, async ({ page }) => {
     test.setTimeout(120_000)
+    if (wide) {
+      await page.route(/\.(woff2?|ttf)(\?|$)/, (route) => route.abort())
+      await page.addInitScript(() => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const st = document.createElement('style')
+          st.textContent = '*{font-family:Verdana,sans-serif !important}'
+          document.head.append(st)
+        })
+      })
+    }
     await l1Inventory(page)
+    /* The sidebar open narrows the header, which is where the chip wraps; seeded before first paint. */
+    await page.addInitScript((value) => {
+      try {
+        /* eslint-disable-next-line no-restricted-syntax -- seeding the shell's own device key, as `page-edge.spec.ts:withRail` does. */
+        window.localStorage.setItem('banchi.rail', value)
+      } catch {
+        /* unreadable storage reads as never chosen */
+      }
+    }, 'wide')
     const mine = L1_CARDS['2/1'] as Record<string, unknown>
     const kept = { ...mine }
+    Object.assign(mine, { state: 'identified', set_hint: HINT, metadata_finish: 'foil', rarity_claim: ['Common'], game: 'riftbound', number: '047', printed_total: '221' })
     try {
       const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
       await page.route(/\/inventory\/2\/1\/sold$/, (route) => {
@@ -1188,8 +1208,6 @@ for (const width of [1440, 820]) {
       await settleMotion(page)
       await afterPaint(page)
       const sell = page.getByRole('button', { name: /Mark sold/ }).first()
-      /* Scroll until the control sits at the bottom edge: 24px of it shows. A person presses the part they can see,
-         so the press is a mouse click at that point, and Playwright does not scroll the control first. */
       /* The control sits at page y `at`. The window is made short enough that only its top 24px show at scroll 0. */
       await page.evaluate(() => window.scrollTo(0, 0))
       /* The control is briefly unplaced (top 0) while the card settles, so wait for a real position before sizing. */
@@ -1201,23 +1219,38 @@ for (const width of [1440, 820]) {
       await settleMotion(page)
       await afterPaint(page)
       expect(await page.evaluate(() => window.scrollY), 'the page scrolled before the press').toBe(0)
-      /* The clipped position must hold before it is measured: a resize re-renders the card, and the control is briefly unplaced. */
       const clipped = () => sell.evaluate((el) => Math.round(el.getBoundingClientRect().top))
       await expect.poll(clipped, { message: 'the control never settled at the bottom edge' }).toBeGreaterThan(h - 40)
       expect(await clipped(), 'the control is not clipped at the bottom edge').toBeLessThan(h)
-      /* The press goes to the control itself. At the bottom edge a mouse click at the sliver can land on the
-         copies list that sits over it (measured: 4 of 5 runs at 820), so a hit test would test the overlap,
-         not the sale. The dispatched click needs no scroll, so the page's own scroll is what is measured. */
-      const press = (btn: typeof sell) => btn.dispatchEvent('click')
+      /* The visible centre of a control, and whether the element at that point is the control itself. */
+      const centre = (el: Element) => {
+        const b = el.getBoundingClientRect()
+        const x = b.left + b.width / 2
+        const y = (Math.max(b.top, 0) + Math.min(b.bottom, window.innerHeight)) / 2
+        return { x, y, hit: el.contains(document.elementFromPoint(x, y)) }
+      }
+      /* The press waits until the control is the element under its visible centre, then a real mouse click lands there. */
+      const press = async (btn: typeof sell, what: string) => {
+        await expect.poll(async () => (await btn.evaluate(centre)).hit, { message: `${what} is covered at the bottom edge, so a press would land on something else` }).toBe(true)
+        const p = await btn.evaluate(centre)
+        await page.mouse.click(p.x, p.y)
+      }
       const read = () =>
         page.evaluate((sels) => ({
           y: Math.round(window.scrollY),
           boxes: sels.map((s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return r ? [s, Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)] : [s] }),
         }), [...HERO_PARTS])
+      const oneRow = () =>
+        page.evaluate(() => {
+          const sub = document.querySelector('.browse-hero-sub')?.getBoundingClientRect().height ?? 0
+          const pill = document.querySelector('.browse-hero-sub .bn-pill')?.getBoundingClientRect().height ?? -1
+          return Math.abs(sub - pill) < 1
+        })
       const before = await read()
       const bad: string[] = []
+      if (!(await oneRow())) bad.push('before: the facts row is not one pill tall')
       const subText = () => page.locator('.browse-hero-sub').innerText()
-      await press(sell)
+      await press(sell, 'Mark sold')
       /* A press that does not register fails the case by name, before any move is read: a missed press is never a pass. */
       const sold = await expect.poll(subText, { timeout: 5000 }).toContain('Sold').then(() => true, () => false)
       expect(sold, 'the sale did not register: the Mark sold press never showed Sold').toBe(true)
@@ -1225,13 +1258,17 @@ for (const width of [1440, 820]) {
       await afterPaint(page)
       const afterSale = await read()
       if (JSON.stringify(afterSale) !== JSON.stringify(before)) bad.push(`sale ${JSON.stringify(afterSale)}`)
-      await press(page.getByRole('button', { name: /^Undo/ }).first())
+      if (!(await oneRow())) bad.push('sale: the facts row is not one pill tall')
+      /* The Undo holds focus after a sale (the card hands it there, for a keyboard user), so Enter presses it. A
+         mouse press at the bottom edge can land on the receipt toast, which carries the same Undo action. */
+      await page.keyboard.press('Enter')
       const undone = await expect.poll(subText, { timeout: 5000 }).not.toContain('Sold').then(() => true, () => false)
       expect(undone, 'the undo did not register: Sold stayed on the card header').toBe(true)
       await settleMotion(page)
       await afterPaint(page)
       const afterUndo = await read()
       if (JSON.stringify(afterUndo) !== JSON.stringify(before)) bad.push(`undo ${JSON.stringify(afterUndo)}`)
+      if (!(await oneRow())) bad.push('undo: the facts row is not one pill tall')
       expect(bad, `these moved the page or the card header (before ${JSON.stringify(before)})`).toEqual([])
     } finally {
       Object.assign(mine, kept)
@@ -1404,3 +1441,4 @@ test('ticking: the Capture head\'s matched counter shifts nothing as its number 
   const shifts = (await readShifts(page)).shifts.filter((s) => s.at >= mark)
   expect(sumOf(shifts), describeShifts(shifts)).toBe(0)
 })
+
