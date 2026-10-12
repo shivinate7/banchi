@@ -1222,17 +1222,17 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
       const clipped = () => sell.evaluate((el) => Math.round(el.getBoundingClientRect().top))
       await expect.poll(clipped, { message: 'the control never settled at the bottom edge' }).toBeGreaterThan(h - 40)
       expect(await clipped(), 'the control is not clipped at the bottom edge').toBeLessThan(h)
-      /* The visible centre of a control, and whether the element at that point is the control itself. */
-      const centre = (el: Element) => {
+      /* The visible center of a control, and whether the element at that point is the control itself. */
+      const center = (el: Element) => {
         const b = el.getBoundingClientRect()
         const x = b.left + b.width / 2
         const y = (Math.max(b.top, 0) + Math.min(b.bottom, window.innerHeight)) / 2
         return { x, y, hit: el.contains(document.elementFromPoint(x, y)) }
       }
-      /* The press waits until the control is the element under its visible centre, then a real mouse click lands there. */
+      /* The press waits until the control is the element under its visible center, then a real mouse click lands there. */
       const press = async (btn: typeof sell, what: string) => {
-        await expect.poll(async () => (await btn.evaluate(centre)).hit, { message: `${what} is covered at the bottom edge, so a press would land on something else` }).toBe(true)
-        const p = await btn.evaluate(centre)
+        await expect.poll(async () => (await btn.evaluate(center)).hit, { message: `${what} is covered at the bottom edge, so a press would land on something else` }).toBe(true)
+        const p = await btn.evaluate(center)
         await page.mouse.click(p.x, p.y)
       }
       const read = () =>
