@@ -328,7 +328,7 @@ test.describe('#/product — the per-product view', () => {
     await page.goto('/#/product')
     await expect(page.getByText('Enter a SKU to see its history.', { exact: false })).toBeVisible()
 
-    await page.getByLabel('Find a product').fill('Charizard')
+    await page.getByLabel('Find a Product').fill('Charizard')
     const result = page.locator('.producthistory-result', { hasText: 'Charizard' })
     await expect(result).toBeVisible()
     await result.click()

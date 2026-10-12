@@ -4622,7 +4622,7 @@ test('rule panel: the example card is the same under every lens', async ({ page 
   const row = page.getByRole('dialog', { name: 'Pricing rule' }).locator('.pricing-rule-row', { hasText: 'Market −5%' })
   const before = await row.locator('.pricing-rule-says').innerText()
   await page.keyboard.press('Escape')
-  const lens = page.getByRole('radio', { name: /^Not selling/ })
+  const lens = page.getByRole('radio', { name: /^Not Selling/ })
   if (await lens.count()) await lens.click()
   await page.getByRole('button', { name: 'Change' }).click()
   await expect(page.getByRole('dialog', { name: 'Pricing rule' }).locator('.pricing-rule-row', { hasText: 'Market −5%' }).locator('.pricing-rule-says')).toHaveText(before)
@@ -4864,7 +4864,7 @@ async function pickFilter(page: Page, facet: string, option: RegExp): Promise<vo
 test('F3: the name search finds a card by any words of it, in any order, and by its set', async ({ page }) => {
   await open(page, { skus: FILTER_SKUS })
   await expect(page.locator('.pricing-row')).toHaveCount(4)
-  const search = page.getByRole('searchbox', { name: 'Search this list' })
+  const search = page.getByRole('searchbox', { name: 'Search This List' })
   await search.fill('child annie')
   await expect(page.locator('.pricing-row')).toHaveCount(1)
   await expect(page.locator('.pricing-row')).toContainText('Annie')
@@ -4892,7 +4892,7 @@ test('F3: the game filter and the set filter each narrow the list, and together 
   await expect(page.locator('.pricing-row')).toHaveCount(2)
   await pickFilter(page, 'Set', /Origins/)
   await expect(page.locator('.pricing-row')).toHaveCount(2)
-  await page.getByRole('searchbox', { name: 'Search this list' }).fill('snax')
+  await page.getByRole('searchbox', { name: 'Search This List' }).fill('snax')
   await expect(page.locator('.pricing-row')).toHaveCount(1)
 })
 
@@ -4916,7 +4916,7 @@ test('F3: a filter narrows the view only, and the Send press carries every row',
 
   const other = await context.newPage()
   const wire = await open(other, { skus: FILTER_SKUS })
-  await other.getByRole('searchbox', { name: 'Search this list' }).fill('dunsparce')
+  await other.getByRole('searchbox', { name: 'Search This List' }).fill('dunsparce')
   await expect(other.locator('.pricing-row')).toHaveCount(1)
   await expect(other.getByText('Filters hide rows only')).toHaveCount(0)
   /* THE BUTTON AND THE REQUEST UNDER A FILTER EQUAL THE UNFILTERED ONES. A send fed the drawn
@@ -4937,7 +4937,7 @@ for (const width of [1440, 820]) {
     await settleFonts(page)
     await settleMotion(page)
     await afterPaint(page)
-    const search = page.getByRole('searchbox', { name: 'Search this list' })
+    const search = page.getByRole('searchbox', { name: 'Search This List' })
     for (const [text, rows] of [['dunsparce', 1], ['', 4]] as const) {
       const from = await markNow(page)
       await search.fill(text)
@@ -5548,7 +5548,7 @@ test('7b-24: a sort and a filter work together', async ({ page }) => {
   await openSortable(page)
   await sortHead(page, 'Market').click()
   await expect(columnHead(page, 'Market')).toHaveAttribute('aria-sort', 'descending')
-  const search = page.getByRole('searchbox', { name: 'Search this list' })
+  const search = page.getByRole('searchbox', { name: 'Search This List' })
   /* The search also reads set and condition, so the token is one no fixture set or condition holds. */
   const token = 'ha'
   const byName = sortRows().filter((row) => row.name.toLowerCase().includes(token)).map((row) => row.name)

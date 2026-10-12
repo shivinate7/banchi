@@ -178,6 +178,29 @@ test('the leftover casing misses: each label is a Title Case problem, and a hyph
   expect(casingProblems('Find a Product')).toEqual([])
 })
 
+/* THE RECASED EXACT TEXT (the fix branch's pass, merged here). Each label now reads Title Case on screen, and the sweep and the
+ * specs match these exact strings. A label that passes here must be the string the screen draws. */
+test('the recased labels: each exact Title Case string the screens draw passes the rule', () => {
+  for (const label of [
+    '3-Day',
+    'Find a Product',
+    'Find a Code',
+    'Search Buyers',
+    'Search This List',
+    'Search This Export',
+    'Not Selling',
+    'Not Selling 4',
+    'Passed Over',
+    'Read Again',
+    'Download File',
+    'Download the File Instead',
+    'Send 1 Price to TCGplayer',
+    'Send 2 Prices to TCGplayer',
+  ]) {
+    expect(casingProblems(label), label).toEqual([])
+  }
+})
+
 /* THE STAT RULE (R5, the owner's ruling). A caption under a figure is prose; a stat that is a press is a label. */
 test('stat: a caption under a figure passes in lower case, and a press stat is a label that must be Title Case', () => {
   expect(statProblems('copies owed', false)).toEqual([])

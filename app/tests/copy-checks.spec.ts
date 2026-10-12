@@ -451,7 +451,7 @@ const TAKEABLE = {
   moves: [],
 }
 
-/** One product's history with a quarter range. Product History draws a quarter range under the heading `3-day`. */
+/** One product's history with a quarter range. Product History draws a quarter range under the heading `3-Day`. */
 const QUARTER_HISTORY = {
   sku: '555123',
   product_id: 42,
@@ -841,27 +841,27 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   await expect(page.getByRole('button', { name: /^Price your live listings$/i }), 'the empty worklist offers the Live tab').toBeVisible()
   read(hashOf('pricing'), await page.evaluate(scanCopy))
 
-  // THE PRODUCT HISTORY'S QUARTER RANGE: its heading is `3-day`, drawn only when the history holds a quarter range. Asserted drawn first.
+  // THE PRODUCT HISTORY'S QUARTER RANGE: its heading is `3-Day`, drawn only when the history holds a quarter range. Asserted drawn first.
   const PRODUCT_SKU_ROUTE = `${hashOf('product')}?sku=${QUARTER_HISTORY.sku}`
   await page.route(/\/pipeline\/products\/[^/]+\/history$/, (route) => route.fulfill(answer(QUARTER_HISTORY)))
   await page.route(/\/pipeline\/products\/[^/]+\/realized$/, (route) => route.fulfill(answer({ sku: '0', configured: false })))
   await page.route(/\/search\?/, (route) => route.fulfill(answer({ query: QUARTER_HISTORY.name, groups: [] })))
   await visit(page, PRODUCT_SKU_ROUTE)
-  await expect(page.getByRole('heading', { name: '3-day', exact: true }), 'the quarter range draws its heading').toBeVisible()
+  await expect(page.getByRole('heading', { name: '3-Day', exact: true }), 'the quarter range draws its heading').toBeVisible()
   read(PRODUCT_SKU_ROUTE, await page.evaluate(scanCopy))
 
-  // THE LIVE TAB WITH A FRESH READ: `Read again` is drawn, and the lens chips carry their counts. Asserted drawn first.
+  // THE LIVE TAB WITH A FRESH READ: `Read Again` is drawn, and the lens chips carry their counts. Asserted drawn first.
   await stubLiveRead(page, readAt(60_000))
   await visit(page, `${hashOf('pricing')}?live`)
   await expect(page.getByRole('group', { name: 'Which live listings to show' }), 'the Live tab draws its lens chips').toBeVisible()
-  await expect(page.getByRole('button', { name: 'Read again', exact: true }), 'a fresh read draws its Read again press').toBeVisible()
+  await expect(page.getByRole('button', { name: 'Read Again', exact: true }), 'a fresh read draws its Read Again press').toBeVisible()
   read(`${hashOf('pricing')}?live`, await page.evaluate(scanCopy))
 
-  // THE LIVE TAB WITH A STALE READ: the read is older than a day, so the chips drop their counts, and its bar offers Read again in place of Send.
+  // THE LIVE TAB WITH A STALE READ: the read is older than a day, so the chips drop their counts, and its bar offers Read Again in place of Send.
   await stubLiveRead(page, readAt(3 * DAY_MS))
   await visit(page, `${hashOf('pricing')}?live`)
-  await expect(page.getByRole('button', { name: 'Not selling', exact: true }), 'a stale read draws its chips without counts').toBeVisible()
-  await expect(page.getByRole('region', { name: 'Send these prices' }).getByRole('button', { name: 'Read again', exact: true }), 'a stale read offers Read again in its bar').toBeVisible()
+  await expect(page.getByRole('button', { name: 'Not Selling', exact: true }), 'a stale read draws its chips without counts').toBeVisible()
+  await expect(page.getByRole('region', { name: 'Send these prices' }).getByRole('button', { name: 'Read Again', exact: true }), 'a stale read offers Read Again in its bar').toBeVisible()
   read(`${hashOf('pricing')}?live`, await page.evaluate(scanCopy))
 
   const casingTotal = reads.reduce((sum, one) => sum + one.casing, 0)
@@ -1026,10 +1026,10 @@ test.describe('reader: adjacent elements join with a space, not glued', () => {
 // label draw, so it is a candidate in its own right. Its text is graded, not read as prose.
 test.describe('reader: a field label is graded as a label', () => {
   test('a visually hidden search field label is a candidate, so its text is graded', async ({ page }) => {
-    await page.setContent('<main><label class="search-field-label bn-sr" for="q">Find a product</label><input id="q" /></main>')
+    await page.setContent('<main><label class="search-field-label bn-sr" for="q">Find a Product</label><input id="q" /></main>')
     const scan = await page.evaluate(scanCopy)
     const one = scan.casing.find((c) => c.role === 'field label')
-    expect(one?.lines, 'the label text is the label line, so the casing rule reads it').toEqual(['Find a product'])
+    expect(one?.lines, 'the label text is the label line, so the casing rule reads it').toEqual(['Find a Product'])
   })
 })
 

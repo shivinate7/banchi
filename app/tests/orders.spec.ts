@@ -1593,13 +1593,13 @@ test('u typed into the buyer search field does not undo the pull', async ({ page
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
 
-  await page.getByRole('searchbox', { name: 'Search buyers' }).click()
+  await page.getByRole('searchbox', { name: 'Search Buyers' }).click()
   await page.keyboard.press('u')
 
   // No second `/orders/pull` call — the field ate the key.
   await expect(page.locator('.bn-toast', { hasText: 'Pull undone' })).toHaveCount(0)
   expect(wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
-  await expect(page.getByRole('searchbox', { name: 'Search buyers' })).toHaveValue('u')
+  await expect(page.getByRole('searchbox', { name: 'Search Buyers' })).toHaveValue('u')
 })
 
 /* -------------------------------------------------------------------------------------- 6 */
