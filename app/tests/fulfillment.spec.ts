@@ -1861,6 +1861,15 @@ async function searchHoldsOnLoad(
   return { before, after }
 }
 
+/* The count slot's VISIBLE text, innerText, which keeps an aria-hidden copy that is drawn. An accessible-name check would
+   miss it. R18: "0 Left" is allowed only once the orders are known and none wait. */
+async function expectNoZeroLeft(page: Page, why: string): Promise<void> {
+  const track = view(page).locator('.ff-count-track')
+  await expect(track, 'the count slot is drawn').toBeVisible()
+  const text = await track.evaluate((el) => (el as HTMLElement).innerText)
+  expect(text, why).not.toMatch(/\b0\s+left\b/i)
+}
+
 function expectSearchFixed(before: Box | null, after: Box | null): void {
   expect(before, 'the search has a box before the answer').not.toBeNull()
   expect(after, 'the search has a box after the answer').not.toBeNull()
@@ -1882,7 +1891,8 @@ test('ux-w2: the search field does not move when no order is open', async ({ pag
 
 test('ux-w2: the search field does not move when the orders fail to load', async ({ page }) => {
   const owed = owedOrders(1)
-  const r = await searchHoldsOnLoad(page, { ...owed, fail: true }, async () => undefined)
+  // R18: "0 Left" is allowed only when orders are known and none wait. A first read that fails has no such knowledge.
+  const r = await searchHoldsOnLoad(page, { ...owed, fail: true }, () => expectNoZeroLeft(page, 'the count slot shows no 0 Left after the first read fails'))
   expectSearchFixed(r.before, r.after)
 })
 
@@ -1961,6 +1971,115 @@ test('ux-w2 R18: a failed orders read keeps the last count shown', async ({ page
     window.location.hash = '#/fulfillment'
   })
   await expect(view(page).getByText(/\b12\s+left\b/i).first(), 'the count keeps 12 left after a failed read').toBeVisible()
+})
+
+/* R18 (owner ruling, review #849): "0 Left" is allowed only once the orders are known and none wait. While they are unread,
+   the slot's visible text never reads 0 Left. The orders read is held for the whole case, so only the unread state is on screen. */
+test('ux-w2 R18: while orders are unread, the count slot never reads 0 Left', async ({ page }) => {
+  const owed = owedOrders(1)
+  await stubServer(page, [], { orders: owed.orders as typeof ONE_OPEN_ORDER, plan: owed.plan as typeof ONE_OPEN_ORDER_PLAN })
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await page.route(/\/orders$/, async (route) => {
+    await held
+    await route.fallback()
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expectNoZeroLeft(page, 'the count slot shows no 0 Left while orders are unread')
+  release()
+})
+
+/* R18 (owner ruling, review #849): a return to the screen shows the last count at once, while the new read is still held.
+   Code reason (Fulfillment.tsx, `countFigure`): on a remount `orders` is null and `ordersFailed` is false, so the slot takes
+   the loading frame, not `lastCount`. The return must draw the kept count, never the loading "0 Left". */
+test('ux-w2 R18: on a return, the count slot shows the last count before the new read answers', async ({ page }) => {
+  const owed = owedOrders(12)
+  await stubServer(page, [], { orders: owed.orders as typeof ONE_OPEN_ORDER, plan: owed.plan as typeof ONE_OPEN_ORDER_PLAN })
+  let holdNow = false
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await page.route(/\/orders$/, async (route) => {
+    if (holdNow) await held
+    await route.fallback()
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(view(page).getByText(/\b12\s+left\b/i).first(), 'the count reads 12 left on the first visit').toBeVisible()
+  holdNow = true
+  // The hop's own reads are stubbed, as in the keep-count case: no boxes, and an empty store.
+  await page.route(/\/boxes(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ boxes: [], facet_cells: [] }) }))
+  await page.route(/\/inventory$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: 2, cards: {}, boxes: {}, listings: {} }) }))
+  await page.evaluate(() => {
+    window.location.hash = '#/gallery'
+  })
+  await page.evaluate(() => {
+    window.location.hash = '#/fulfillment'
+  })
+  await expect(view(page).getByText(/\b12\s+left\b/i).first(), 'the return shows the last count, 12 left, before the read answers').toBeVisible()
+  await expect(view(page).getByText(/\b0\s+left\b/i).first(), 'the return never flashes 0 left').not.toBeVisible()
+  release()
+})
+
+/* R18 (review #849): the stale notice that arrives on the list view after first paint moves no Pick row. The
+   sale that brings it in is the one the card-view case uses: Charizard is sold, the list re-reads, and the orders read
+   that follows fails. The orders read is held until the list has settled, so the row is measured before the notice. */
+test('ux-w2: a stale notice that arrives on the list moves no Pick row', async ({ page }) => {
+  const SECOND_TAKE = {
+    ...ORDER_TAKE,
+    sku: 'PIDGEOT-SKU',
+    name: 'Pidgeot ex',
+    copies: [
+      {
+        ...ORDER_WALK_COPY,
+        key: '3/26',
+        capture_id: 'cap-pidgeot',
+        place: { ...ORDER_COPY_PLACE, label: 'Box 3, Section 1, Card 26', index: 26, slot: 26, card: 26 },
+      },
+    ],
+  }
+  const plan = {
+    ...ONE_OPEN_ORDER_PLAN,
+    stops: [{ ...ONE_OPEN_ORDER_PLAN.stops[0]!, takes: [ORDER_TAKE, SECOND_TAKE] }],
+    counts: { ...ONE_OPEN_ORDER_PLAN.counts, copies: 2 },
+  }
+  await stubServer(page, [], { orders: ONE_OPEN_ORDER as unknown as typeof ONE_OPEN_ORDER, plan: plan as unknown as typeof ONE_OPEN_ORDER_PLAN })
+  let holdNow = false
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await page.route(/\/orders$/, async (route) => {
+    if (!holdNow) return route.fallback()
+    await held
+    return route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'orders_unavailable', message: 'The orders could not be read.' } }),
+    })
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  const pidgeot = view(page).locator('.ff-owed-card', { hasText: 'Pidgeot ex' })
+  await expect(pidgeot, 'the Pidgeot Pick row is on screen').toBeVisible()
+  await openCard(page, 'Charizard ex')
+  await page.getByRole('button', { name: 'Pull' }).click()
+  await expect(view(page)).toContainText('Pulled.')
+  holdNow = true
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
+  await expect(pidgeot, 'the list is back, with the Pidgeot row still on it').toBeVisible()
+  await settleLayout(page)
+  await settleAnimations(page)
+  const before = await pidgeot.boundingBox()
+  const answered = page.waitForResponse(/\/orders$/)
+  release()
+  await answered
+  await expect(view(page).locator('.ff-notice'), 'the stale notice is drawn on the list').toBeVisible()
+  await settleLayout(page)
+  await settleAnimations(page)
+  const after = await pidgeot.boundingBox()
+  expect(before, 'the Pidgeot row has a box before the notice').not.toBeNull()
+  expect(after, 'the Pidgeot row has a box after the notice').not.toBeNull()
+  expect(Math.abs(after!.y - before!.y), 'the Pick row does not move down or up when the notice arrives').toBeLessThanOrEqual(1)
+  expect(Math.abs(after!.x - before!.x), 'the Pick row does not move sideways when the notice arrives').toBeLessThanOrEqual(1)
 })
 })
 }
