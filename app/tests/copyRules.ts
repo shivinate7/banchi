@@ -18,11 +18,36 @@
  */
 
 /** Chicago's small words: lowercase in the middle of a title, capitalized first or last. */
-export const SMALL_WORDS: ReadonlySet<string> = new Set([
-  'a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'so', 'yet',
-  'as', 'at', 'by', 'in', 'of', 'on', 'to', 'up', 'via', 'per', 'unless', 'with',
-  'about', 'under', 'over', 'into', 'onto', 'from', 'upon', 'near', 'past', 'off', 'out', 'down',
-])
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import ts from 'typescript'
+
+/* THE ONE HOME FOR THE SMALL WORDS is `src/CardHero.tsx` (the list `titleCase` uses). This rule READS that literal with the
+ * TypeScript parser, never a copy. CardHero.tsx itself cannot be imported here: its import chain reaches a stylesheet, which
+ * the Node unit runner cannot load. A missing or non-literal list is a throw, not an empty set. */
+const CARD_HERO = resolve(dirname(fileURLToPath(import.meta.url)), '../src/CardHero.tsx')
+
+function smallWordsOf(path: string): ReadonlySet<string> {
+  const file = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  for (const statement of file.statements) {
+    if (!ts.isVariableStatement(statement)) continue
+    for (const decl of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(decl.name) || decl.name.text !== 'SMALL_WORDS' || decl.initializer === undefined) continue
+      const set = decl.initializer
+      const array = ts.isNewExpression(set) && set.arguments?.[0] ? set.arguments[0] : undefined
+      if (array === undefined || !ts.isArrayLiteralExpression(array)) throw new Error(`SMALL_WORDS in ${path} is not a Set of a literal array`)
+      return new Set(array.elements.map((element) => {
+        if (!ts.isStringLiteral(element)) throw new Error(`SMALL_WORDS in ${path} holds a non-literal word`)
+        return element.text
+      }))
+    }
+  }
+  throw new Error(`SMALL_WORDS not found in ${path}`)
+}
+
+export const SMALL_WORDS: ReadonlySet<string> = smallWordsOf(CARD_HERO)
 
 /** "I", "my", "me", "mine" as whole words, any case. Lookarounds bound the match by non-letters. */
 const FIRST_PERSON = /(?<![\p{L}\p{N}_])(?:i|my|me|mine)(?![\p{L}\p{N}_])/giu

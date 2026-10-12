@@ -119,6 +119,8 @@ test('small words: the short Chicago prepositions stay lower-case in the middle 
   expect(casingProblems('Learn About Pricing')).toEqual(['"About" should be lowercase'])
   expect(casingProblems('Costs under Ten')).toEqual([])
   expect(casingProblems('Costs Under Ten')).toEqual(['"Under" should be lowercase'])
+  // `vs` is a small word in the one home (CardHero.tsx's SMALL_WORDS), so a title keeps it lowercase.
+  expect(casingProblems('Card vs Box')).toEqual([])
 })
 
 test('typed name is a placeholder word: the words around it grade as they would with a name there', () => {

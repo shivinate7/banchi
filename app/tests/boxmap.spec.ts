@@ -548,7 +548,7 @@ test('a lifted section shows its cards, and a range queues into the draft (no wr
   await list.getByRole('button', { name: /u3/ }).click()
   await expect(list.getByRole('button', { pressed: true })).toHaveCount(2)
   await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
-  await page.getByRole('button', { name: /Put 2 cards just on the far side of m2/i }).click()
+  await page.getByRole('button', { name: /Put 2 cards just on the far side of m2/ }).click()
   expect(sent).toHaveLength(0)
   await expect(page.getByText('1 change queued.', { exact: false })).toBeVisible()
 
