@@ -1756,6 +1756,91 @@ async function expectInViewport(page: Page, target: Locator, why: string): Promi
   expect(top >= 0 && bottom <= size!.height, `${why}: box spans ${Math.round(top)} to ${Math.round(bottom)} in a ${size!.height}px viewport`).toBe(true)
 }
 
+/* A list longer than SHOWN_OWED (6), so the last list control is "Show the other N cards". */
+function longListPlan(): unknown {
+  const extra = Array.from({ length: 12 }, (_, i) => {
+    const index = i + 1
+    return {
+      ...ORDER_TAKE,
+      sku: `LONG-SKU-${index}`,
+      name: `Long list card ${index}`,
+      copies: [
+        {
+          ...ORDER_WALK_COPY,
+          key: `6/${index}`,
+          capture_id: `cap-long-${index}`,
+          place: { ...ORDER_COPY_PLACE, label: `Box 6, Section 1, Card ${index}`, box: 6, index, slot: index, card: index },
+        },
+      ],
+    }
+  })
+  return {
+    ...ONE_OPEN_ORDER_PLAN,
+    stops: [{ ...ONE_OPEN_ORDER_PLAN.stops[0]!, takes: [ORDER_TAKE, ...extra] }],
+    counts: { ...ONE_OPEN_ORDER_PLAN.counts, copies: 1 + extra.length },
+  }
+}
+
+/* The orders route for a case that fails on demand: held while `holdNow` is set, failing while `failing` is set. */
+async function ordersOnDemand(page: Page, state: { holdNow: boolean; failing: boolean }, held: Promise<void>): Promise<void> {
+  await page.route(/\/orders$/, async (route) => {
+    if (state.holdNow) await held
+    if (!state.failing) return route.fallback()
+    return route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'orders_unavailable', message: 'The orders could not be read.' } }),
+    })
+  })
+}
+
+/* Opens the long list, sells Charizard with its orders read held and then failed, and waits for the banner. The sale
+   leaves the receipt sheet open. */
+async function openLongListBanner(page: Page): Promise<{ failing: boolean }> {
+  await stubServer(page, [], { orders: ONE_OPEN_ORDER as unknown as typeof ONE_OPEN_ORDER, plan: longListPlan() as typeof ONE_OPEN_ORDER_PLAN })
+  const state = { holdNow: false, failing: false }
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await ordersOnDemand(page, state, held)
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(view(page).locator('.ff-owed-card').first(), 'the list has Pick rows on screen').toBeVisible()
+  await openCard(page, 'Charizard ex')
+  await page.getByRole('button', { name: 'Pull' }).click()
+  await expect(view(page)).toContainText('Pulled.')
+  state.holdNow = true
+  state.failing = true
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
+  await expect(view(page).locator('.ff-owed-card').first(), 'the list is back').toBeVisible()
+  await settleLayout(page)
+  await settleAnimations(page)
+  const answered = page.waitForResponse(/\/orders$/)
+  release()
+  await answered
+  await expect(view(page).locator('.ff-notice'), 'the stale banner shows on the list').toBeVisible()
+  await settleLayout(page)
+  await settleAnimations(page)
+  return state
+}
+
+/* The element at the centre of the target is the target or inside it: nothing floats over the control. */
+async function expectNotCovered(page: Page, target: Locator, why: string): Promise<void> {
+  const box = await target.boundingBox()
+  const size = page.viewportSize()
+  expect(box, `${why}: the control has a box`).not.toBeNull()
+  expect(size, 'the viewport has a size').not.toBeNull()
+  const inside = box!.y >= 0 && box!.y + box!.height <= size!.height && box!.x >= 0 && box!.x + box!.width <= size!.width
+  expect(inside, `${why}: the control spans ${Math.round(box!.y)} to ${Math.round(box!.y + box!.height)} in a ${size!.height}px viewport`).toBe(true)
+  const hit = await target.evaluate(
+    (el, point) => {
+      const at = document.elementFromPoint(point.x, point.y)
+      return at !== null && (el === at || el.contains(at))
+    },
+    { x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 },
+  )
+  expect(hit, `${why}: the centre of the control is covered by another layer`).toBe(true)
+}
+
 const SEARCH_SIZES = [
   { width: 1440, height: 900 },
   { width: 820, height: 1000 },
@@ -2183,6 +2268,78 @@ test('ux-w2 R19: on a return with the cards read held, the count slot shows the 
   const text = await track.evaluate((el) => (el as HTMLElement).innerText)
   expect(text, 'the return shows the last count, 12 left, while the cards read is held').toMatch(/\b12\s+left\b/i)
   release()
+})
+
+/* R19 (review #849, sixth): with the banner showing at the bottom of the page, the last list control is fully inside the
+   viewport and not covered by the banner, with the receipt sheet open and then closed. */
+test('ux-w2 R19: the last list control is not covered by the banner at the bottom of the page', async ({ page }) => {
+  await openLongListBanner(page)
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  const control = view(page).getByRole('button', { name: /^Show the other / })
+  await expect(control, 'the last list control is drawn').toBeVisible()
+  await expectNotCovered(page, control, 'with the receipt sheet open')
+  await view(page).getByRole('button', { name: 'Dismiss this receipt' }).click()
+  await expect(view(page).locator('.ff-sheet'), 'the receipt sheet is closed').toHaveCount(0)
+  await settleAnimations(page)
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  await expectNotCovered(page, control, 'with the receipt sheet closed')
+})
+
+/* R19 (review #849, sixth): the banner clears on a successful read at the bottom of the page, and nothing on screen moves.
+   This case may already pass; it is the guard that the clearing never moves a control or a row. */
+test('ux-w2 R19: the banner clears on a successful read at the bottom of the page and nothing moves', async ({ page }) => {
+  const state = await openLongListBanner(page)
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  const control = view(page).getByRole('button', { name: /^Show the other / })
+  const row = view(page).locator('.ff-owed-card').first()
+  await settleAnimations(page)
+  const scrollBefore = await page.evaluate(() => window.scrollY)
+  const controlBefore = await control.boundingBox()
+  const rowBefore = await row.boundingBox()
+  state.failing = false
+  await view(page).locator('.ff-notice').getByRole('button', { name: 'Try again' }).click()
+  await expect(view(page).locator('.ff-notice'), 'the banner clears once the read succeeds').toHaveCount(0)
+  await settleLayout(page)
+  await settleAnimations(page)
+  const scrollAfter = await page.evaluate(() => window.scrollY)
+  const controlAfter = await control.boundingBox()
+  const rowAfter = await row.boundingBox()
+  expect(Math.abs(scrollAfter - scrollBefore), 'the page does not scroll when the banner clears').toBeLessThanOrEqual(1)
+  expect(controlBefore, 'the control has a box before').not.toBeNull()
+  expect(controlAfter, 'the control has a box after').not.toBeNull()
+  expect(Math.abs(controlAfter!.y - controlBefore!.y), 'the last control does not move when the banner clears').toBeLessThanOrEqual(1)
+  expect(rowBefore, 'the first row has a box before').not.toBeNull()
+  expect(rowAfter, 'the first row has a box after').not.toBeNull()
+  expect(Math.abs(rowAfter!.y - rowBefore!.y), 'the first row does not move when the banner clears').toBeLessThanOrEqual(1)
+})
+
+/* R19 (review #849, sixth): a banner the person dismissed shows again when a later re-read fails. Code reason
+   (Fulfillment.tsx, `staleDismissed`): it resets only after a read succeeds, so a failure with no success between leaves it
+   hidden unless the failure brings it back. The sale is the card-view case's own: refused as stale, card kept open. */
+test('ux-w2 R19: a dismissed banner shows again when a later re-read fails', async ({ page }) => {
+  await stubServer(page, [], { orders: ONE_OPEN_ORDER as unknown as typeof ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN as unknown as typeof ONE_OPEN_ORDER_PLAN })
+  const state = { holdNow: false, failing: false }
+  await ordersOnDemand(page, state, new Promise<void>(() => undefined))
+  await page.route(/\/orders\/pull$/, (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'over_fulfilled', message: 'The list no longer describes the store.' } }),
+    }),
+  )
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await openCard(page, 'Charizard ex')
+  await page.getByRole('button', { name: 'Pull' }).click()
+  await expect(view(page)).toContainText('Pulled.')
+  state.failing = true
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
+  const banner = view(page).locator('.ff-notice')
+  await expect(banner, 'the banner shows after the first failed re-read').toBeVisible()
+  await banner.getByRole('button', { name: 'Dismiss', exact: true }).click()
+  await expect(banner, 'the banner is dismissed').toHaveCount(0)
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
+  await expect(banner, 'a later failed re-read shows the banner again').toBeVisible()
 })
 })
 }
