@@ -541,10 +541,10 @@ function bandOf(row: PricingSku): string {
 type PricingSortKey = 'arranged' | 'price' | 'low' | 'range' | 'asking' | 'name'
 const SORT_OPTIONS: readonly SortOption<PricingSortKey>[] = [
   { key: 'arranged', label: 'Suggested', asc: 'Needs you first', desc: 'Needs you first', first: 'desc' },
-  { key: 'price', label: 'Market price', desc: 'High to low', asc: 'Low to high', first: 'desc' },
-  { key: 'low', label: 'Lowest price', desc: 'High to low', asc: 'Low to high', first: 'desc' },
-  { key: 'range', label: 'Range 7d', desc: 'High to low', asc: 'Low to high', first: 'desc' },
-  { key: 'asking', label: 'Asking price', desc: 'High to low', asc: 'Low to high', first: 'desc' },
+  { key: 'price', label: 'Market price', desc: 'High to Low', asc: 'Low to High', first: 'desc' },
+  { key: 'low', label: 'Lowest price', desc: 'High to Low', asc: 'Low to High', first: 'desc' },
+  { key: 'range', label: 'Range 7d', desc: 'High to Low', asc: 'Low to High', first: 'desc' },
+  { key: 'asking', label: 'Asking price', desc: 'High to Low', asc: 'Low to High', first: 'desc' },
   { key: 'name', label: 'Name', desc: 'Z to A', asc: 'A to Z', first: 'asc' },
 ]
 const SORT_AT_REST: SortValue<PricingSortKey> = { key: 'arranged', dir: 'desc' }
@@ -1655,7 +1655,7 @@ export function Pricing() {
     /* ON THE LIVE TAB THE HEADS SAY WHAT THEY HOLD: the rows with no market price, which the rule
        never lowers and the owner prices by hand, then every other live listing. */
     const live = stamp !== null
-    if (needs.length > 0) groups.push({ head: live ? 'No market price' : 'Needs you', rows: needs })
+    if (needs.length > 0) groups.push({ head: live ? 'No market price' : 'Needs You', rows: needs })
     if (ready.length > 0) {
       groups.push({ head: needs.length > 0 ? (live ? 'With a market price' : 'Ready') : '', rows: ready })
     }
@@ -2493,7 +2493,7 @@ export function Pricing() {
     <>
       <IconButton
         icon="eraser"
-        label="Clear typed prices"
+        label="Clear Typed Prices"
         onClick={() => setClearOpen(true)}
         disabled={clearableTotal === 0}
       />
@@ -2832,7 +2832,7 @@ export function Pricing() {
             actions={
               <>
                 <Button variant="primary" icon="tag" onClick={() => goTab('live')}>
-                  Price my live listings
+                  Price your live listings
                 </Button>
                 <Button icon="play" onClick={() => (window.location.hash = '#/review')}>
                   Go to Review
@@ -3307,7 +3307,7 @@ function PricingRow({
       {!source.copies ? null : (
         <span className="pricing-qty pricing-col-qty" data-asked={asked === '' ? undefined : 'true'}>
           {!showQty ? null : (
-            <input
+            <input name="bn-input"
               className="bn-input pricing-qty-input"
               type="text"
               inputMode="numeric"
@@ -3356,7 +3356,7 @@ function PricingRow({
             <span className="pricing-currency" aria-hidden="true">
               $
             </span>
-            <input
+            <input name="pricing-input"
               className="pricing-input"
               type="text"
               inputMode="decimal"
@@ -3410,8 +3410,8 @@ function PricingRow({
       <IconButton
         ref={registerHold}
         icon={withheld ? 'unlock' : 'lock'}
-        label={withheld ? 'Release' : 'Hold back'}
-        name={withheld ? `Release ${sku.name}` : `Hold back ${sku.name}`}
+        label={withheld ? 'Release' : 'Hold Back'}
+        name={withheld ? `Release ${sku.name}` : `Hold Back ${sku.name}`}
         kbd="H"
         pressed={withheld}
         className="pricing-hold"
@@ -3461,7 +3461,7 @@ function BigMoney({ value, onCommit, label }: { value: string; onCommit: (next: 
       <span aria-hidden="true" className="pricing-cheap-currency">
         $
       </span>
-      <input
+      <input name="pricing-cheap-input"
         className="pricing-cheap-input"
         inputMode="decimal"
         aria-label={label}
@@ -3606,7 +3606,7 @@ function RuleSheet({
                 onChange={(kind) => onCustomDraft({ ...customDraft, kind }, true)}
               />
               <label className="pricing-pct">
-                <input
+                <input name="percentage"
                   className="bn-input pricing-pct-input"
                   type="text"
                   inputMode="decimal"
@@ -3744,27 +3744,27 @@ function LiveSheet({
       <div className="pricing-sheet-fields">
         <label className="bn-field">
           <span className="bn-field-label">Not sold in this many days</span>
-          <input className="bn-input" inputMode="numeric" value={days} onChange={(event) => setDays(event.currentTarget.value.replace(/\D/g, ''))} />
+          <input name="bn-input" className="bn-input" inputMode="numeric" value={days} onChange={(event) => setDays(event.currentTarget.value.replace(/\D/g, ''))} />
         </label>
         <Segmented<'cut' | 'match'>
           label="Price"
           value={match ? 'match' : 'cut'}
           options={[
-            { value: 'cut', label: 'Under my price' },
-            { value: 'match', label: 'At my price' },
+            { value: 'cut', label: 'Under your price' },
+            { value: 'match', label: 'At your price' },
           ]}
           onChange={(next) => setMatch(next === 'match')}
         />
         {match ? null : (
           <label className="bn-field">
             <span className="bn-field-label">Percent under</span>
-            <input className="bn-input" inputMode="decimal" value={percent} onChange={(event) => setPercent(event.currentTarget.value.replace(/[^0-9.]/g, ''))} />
+            <input name="bn-input" className="bn-input" inputMode="decimal" value={percent} onChange={(event) => setPercent(event.currentTarget.value.replace(/[^0-9.]/g, ''))} />
           </label>
         )}
         {match ? null : (
           <label className="bn-field">
             <span className="bn-field-label">At most this much off a card, in dollars</span>
-            <input
+            <input name="bn-input"
               className="bn-input pricing-cap-field"
               inputMode="decimal"
               placeholder="No limit"
@@ -3983,8 +3983,8 @@ function HoldPanel({
       </div>
       <div className="pricing-holdpanel-fields">
         <label className="bn-field">
-          <span className="bn-field-label">Tell me when market is above</span>
-          <input
+          <span className="bn-field-label">Alert when market is above</span>
+          <input name="bn-input"
             className="bn-input bn-input-mono"
             type="text"
             inputMode="decimal"
@@ -3995,7 +3995,7 @@ function HoldPanel({
         </label>
         <label className="bn-field">
           <span className="bn-field-label">Note</span>
-          <input className="bn-input" type="text" placeholder="why, in a few words" value={text} onChange={(event) => setText(event.target.value)} />
+          <input name="bn-input" className="bn-input" type="text" placeholder="why, in a few words" value={text} onChange={(event) => setText(event.target.value)} />
         </label>
       </div>
       <div className="pricing-holdpanel-actions">

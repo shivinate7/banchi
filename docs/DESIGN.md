@@ -1002,7 +1002,7 @@ Two things this does not cover. The requirement under the table rather than in i
 | Two-step pull | the sale control may occupy no part of the pull control's footprint, and begins below where it ended |
 | Jargon | copy passes a banned-word list: SKU, CSV, import, sync, batch, queue, staged |
 
-**Fulfillment (B23), signed off, not built yet.** The count bar is sticky. It shows `N Left` beside the search, and it stays on screen. Each location card has a small round ordinal badge in place of the `Pick N` label. The `Pick` heading is removed.
+**Fulfillment (B23), built.** The count bar is sticky. It shows `N Left` beside the search, and it stays on screen. Each location card has a small round ordinal badge in place of the `Pick N` label. The `Pick` heading is removed. The count slot is never blank (R18). With no orders it reads `0 Left`. A failed load keeps the last count it showed. A load that never answered shows the same loading count the screen starts with. The bar and the search keep one box across the loading, no-order, failed and loaded states. The stale notice is a floating banner over the bottom of the screen (R19). It takes no room in the page, stays until it is dismissed or its cause clears, always shows `Try again` at 40px or more, and moves nothing. The count slot shows the last known count on a return, and a skeleton only when none is known. It reads `0 Left` when orders wait but none of their cards are on hand.
 
 **The numbers in that table are the spec's own constants**. They are `BODY_FLOOR` 20, `PLACE_FLOOR`
 32, `PHOTO_FLOOR` 320, `TARGET_FLOOR` 44, `GAP_FLOOR` 12, `CONTRAST_FLOOR` 7,
@@ -1074,13 +1074,11 @@ whole flow: the button that says "Pull" produces a confirmation that says "Pulle
 Name things by what the Fulfiller controls, never by how the system is built — he has
 orders and cards, not SKUs and rows. Errors say what happened and what to do next.
 
-User-visible text speaks to the operator in the second person: "Under your price", "Already sent". The banned first-person forms are "I", "my", "me" and "mine". No user-visible string uses one. That is the rule. It is not yet true of the app. Known offenders until the sweep lands are these. Orders: "I already sent it", "I already sent these" and "I shipped these by hand" (`app/src/Orders.tsx`). Pricing: "Under my price", "At my price" and "Tell me when market is above" (`app/src/Pricing.tsx`). A pipeline reason code stays as it is. Its on-screen label follows this rule. The label sources are `REASON_LABELS` in `app/src/reasons.ts` and the `QUESTIONS` record in `app/src/ReviewQueue.tsx`.
+User-visible text speaks to the operator in the second person: "Under your price", "Already sent". The banned first-person forms are "I", "my", "me" and "mine". No user-visible string uses one. The one exemption is "Drop the “My Pricing” export here": “My Pricing” is TCGplayer's own page name, and it is written in quotes. A pipeline reason code stays as it is. Its on-screen label follows this rule. The label sources are `REASON_LABELS` in `app/src/reasons.ts` and the `QUESTIONS` record in `app/src/ReviewQueue.tsx`. `app/tests/unit/copy-rules.unit.ts` scans `app/src` for these words.
 
-**NOT MECHANIZED:** a machine would have to read each user-visible string in `app/src` and flag "I", "my", "me" or "mine" as a whole word. Code, comments and paths do not count. No row of `scripts/docs-audit.py` checks this yet.
+**Casing.** Headings, buttons, tabs, nav items, column headers, chips and short field labels take Chicago Title Case. Example: "Price the Answers". On-screen page titles, section and card headings, and question headings are in scope too. Full sentences keep sentence case: empty states, notices, help text and toasts. Placeholders keep sentence case. The one exception is the browser tab title. It keeps its lowercase brand form, as `app/tests/brand.spec.ts` asserts.
 
-**Casing.** Headings, buttons, tabs, nav items, column headers, chips and short field labels take Chicago Title Case. That is the rule. It is not yet true of the app. The casing sweep is the pending work. Example: "Price the Answers". On-screen page titles, section and card headings, and question headings are in scope too. Full sentences keep sentence case: empty states, notices, help text and toasts. Placeholders keep sentence case. The one exception is the browser tab title. It keeps its lowercase brand form, as `app/tests/brand.spec.ts` asserts.
-
-**NOT MECHANIZED:** a machine would have to read the rendered accessible names of headings, buttons and tabs. It would flag each name that is not in Chicago Title Case. It would skip full sentences and placeholders. No such check exists yet.
+`app/tests/copyRules.ts` encodes the rule and `app/tests/copy-checks.spec.ts` sweeps every route for it.
 
 The owner's screens are the exception and only the exception. There, the pipeline's own reason strings are shown verbatim beneath their labels. Being able to grep what you saw is worth more to the person debugging a run than a consistent register is.
 

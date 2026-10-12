@@ -221,7 +221,7 @@ async function startDealing(page: Page, count: number) {
   await armMotion(page)
   await injectScene(page)
   await expect(page.locator('.capture-motion-hud')).toBeAttached({ timeout: 5_000 })
-  await control(page, 'Connect dispenser').click()
+  await control(page, 'Connect Dispenser').click()
   const start = control(page, 'Start dispenser')
   await expect(start).toBeEnabled({ timeout: 5_000 })
   await start.click()

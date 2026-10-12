@@ -23,7 +23,7 @@ test('in Manual the control is there, and Start is off with its reason', async (
   await page.goto('/#/capture')
   await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'manual:c')
   await expect(page.locator('.capture-controls').getByText('Not connected')).toBeVisible()
-  await control(page, 'Connect dispenser').click()
+  await control(page, 'Connect Dispenser').click()
   const start = control(page, 'Start dispenser')
   await expect(start).toBeVisible()
   await expect(start).toBeDisabled()
@@ -37,7 +37,7 @@ test('with no navigator.bluetooth the screen says it needs Chrome on the Mac', a
   })
   await page.goto('/#/capture')
   await expect(page.locator('.capture-controls').getByText('Needs Chrome on the Mac')).toBeVisible()
-  await expect(control(page, 'Connect dispenser')).toBeDisabled()
+  await expect(control(page, 'Connect Dispenser')).toBeDisabled()
 })
 
 /* THE WIRE THIS SCREEN NEEDS, stubbed. `POST /capture` answers an ERROR, so a fire with a box
@@ -91,7 +91,7 @@ async function ready(page: Page, withBox: boolean, manual = false): Promise<void
   await armMotion(page)
   await injectScene(page)
   await expect(page.locator('.capture-motion-hud')).toBeAttached({ timeout: 5_000 })
-  await control(page, 'Connect dispenser').click()
+  await control(page, 'Connect Dispenser').click()
 }
 
 test('armed with a camera but no box, Start is off and says to pick a box first', async ({ page }) => {

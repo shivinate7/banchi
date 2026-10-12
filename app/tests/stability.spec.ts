@@ -420,7 +420,7 @@ for (const width of [1440, 820]) {
   })
 }
 
-/* ORDERS: THE WALK OPENS OVER A READ. `Walk 3` asks the plan for three buyers' orders, so the walk
+/* ORDERS: THE WALK OPENS OVER A READ. The `Start Walk` control (three buyers) asks the plan for three buyers' orders, so the walk
    holds the buyer it showed until the answer lands, then swaps once. The answer for several buyers
    is taller than the answer for one, which is content and is why only the read-out window and the
    cluster count are asked of it. */
@@ -446,7 +446,7 @@ for (const width of [1440, 820]) {
     await setViewport(page, { width, height: 1000 })
     await page.goto(screen('orders'))
     await expect(page.locator('.orders-walk-list')).toBeVisible()
-    const r = await heldPress(page, gate, () => page.getByRole('button', { name: 'Walk 3' }).click())
+    const r = await heldPress(page, gate, () => page.getByRole('button', { name: /^start walk/i }).click())
     /* A TIGHTER BUDGET: the walk list is short here, so a head swapped over the old rows moves them
        by a few hundredths at most. Nothing else on this screen moves in the window. */
     expectHeld(r, 0.001)
@@ -1142,7 +1142,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
         await afterPaint(page)
         const before = await read()
         if (!(await oneRow())) bad.push('before: the facts row is not one pill tall')
-        await page.getByRole('button', { name: /Mark sold/ }).first().click()
+        await page.getByRole('button', { name: /Mark Sold/ }).first().click()
         await expect(page.locator('.browse-hero-sub')).toContainText('Sold')
         await settleMotion(page)
         await afterPaint(page)
@@ -1207,7 +1207,8 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
       await settleFonts(page)
       await settleMotion(page)
       await afterPaint(page)
-      const sell = page.getByRole('button', { name: /Mark sold/ }).first()
+      /* Wave 2 capitalised the label ("Mark Sold"), so the name is matched without case. */
+      const sell = page.getByRole('button', { name: /Mark sold/i }).first()
       /* The control sits at page y `at`. The window is made short enough that only its top 24px show at scroll 0. */
       await page.evaluate(() => window.scrollTo(0, 0))
       /* The control is briefly unplaced (top 0) while the card settles, so wait for a real position before sizing. */
@@ -1330,7 +1331,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
     const before = await read()
     const was = await pickFigure.textContent()
     const bad: string[] = []
-    await page.getByRole('button', { name: /Mark sold/ }).first().click()
+    await page.getByRole('button', { name: /Mark Sold/ }).first().click()
     await expect(pickFigure).not.toHaveText(was ?? '')
     await settleMotion(page)
     if ((await read()) !== before) bad.push('sale')
@@ -1410,7 +1411,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
     await settleMotion(page)
     const before = await boxes()
     const bad: string[] = []
-    await page.getByRole('button', { name: /Mark sold/ }).first().click()
+    await page.getByRole('button', { name: /Mark Sold/ }).first().click()
     await expect(page.locator('.orders-strip-card.is-done').first()).toBeVisible()
     await settleMotion(page)
     if ((await boxes()) !== before) bad.push('sale')

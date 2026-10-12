@@ -82,7 +82,7 @@ function SetCardTile({ card, market }: { readonly card: SetGroupCard; readonly m
     <button type="button" className="sets-tile" onClick={() => openInWalk(card)}>
       <SetCardImage url={card.image_url} />
       <span className="sets-tile-number bn-mono">{card.number_display ?? '—'}</span>
-      <span className="sets-tile-name">{card.name ?? 'Not identified yet'}</span>
+      <span className="sets-tile-name">{card.name ?? 'Not Identified Yet'}</span>
       <span className="sets-tile-meta">
         {/* A FOIL AND A NORMAL PRINTING CAN SHARE THE IMAGE ABOVE (the owner's own addition,
             mid-build) — this is what still tells the two rows apart. `null` for a plain Near

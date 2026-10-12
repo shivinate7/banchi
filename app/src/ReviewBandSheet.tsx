@@ -35,12 +35,6 @@ export function sheetTitle(kind: MatchSweepDetail, n: number): string {
   return kind === 'unhinted' && n === 1 ? '1 needs a set named' : `${n} ${SHEET_LABELS[kind]}`
 }
 
-const EMPTY: Record<'paid' | 'unread' | 'matched', string> = {
-  paid: 'No card is waiting for a paid look.',
-  unread: 'The free reader has looked at every card.',
-  matched: 'The free reader has not matched a card yet.',
-}
-
 type Group = {
   readonly key: string
   readonly title: string
@@ -165,7 +159,7 @@ function GroupView({ group, kind, readerOn }: { readonly group: Group; readonly 
       </ul>
       {seen.length < group.cards.length ? (
         <Button variant="ghost" size="sm" onClick={() => setShown(shown + PAGE)} className="rbs-more">
-          Show {PAGE} more
+          Show {PAGE} More
         </Button>
       ) : null}
     </section>
@@ -226,9 +220,8 @@ export function BandSheet({
       ) : cards === null ? (
         <Loading rows={4} label="Loading the cards" />
       ) : cards.length === 0 ? (
-        kind === 'unhinted' ? null : (
-          <EmptyState icon="inbox" title={EMPTY[kind]} actions={<Button onClick={back}>Back to Capture</Button>} />
-        )
+        /* A sheet opened above zero whose count has since fallen to it: one sentence, and the way back. A zero count opens nothing (B14). */
+        <EmptyState icon="inbox" title="Nothing is left in this count." actions={<Button onClick={back}>Back to Capture</Button>} />
       ) : (
         <>
           {kind === 'unhinted' ? <p className="rbs-pointer">Name the set on the card.</p> : null}

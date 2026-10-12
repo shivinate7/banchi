@@ -2205,6 +2205,33 @@ test('Refresh is a manual press that always runs', async ({ page }) => {
   expect(wire.find((r) => r.path === '/pipeline/live-check')?.body).toEqual({ force: true })
 })
 
+/* ux-w2 R2 (D103, signed off: content-visibility first, full windowing only if still slow). Typed values are never lost:
+   a price and a quantity typed into rows 5 and 6 of a 600-row worklist are still there after a scroll to the last row and
+   back. The case also records first-render time at 600 rows, as a probe for the before and after measure. Rows are found by
+   their card name, so the case does not depend on the order the worklist draws them in. */
+test('ux-w2 R2: typed price and quantity survive a scroll to the bottom of 600 rows and back', async ({ page }) => {
+  const rows = Array.from({ length: 600 }, (_, i) => sku({ sku: String(9100000 + i), name: `Card ${i}`, copies: 3, add_to_quantity: 3 }))
+  const started = Date.now()
+  await open(page, { skus: rows })
+  await expect(page.getByRole('textbox', { name: 'Price for Card 0', exact: true })).toBeVisible()
+  test.info().annotations.push({ type: 'first-render-600-rows-ms', description: String(Date.now() - started) })
+
+  const price = page.getByRole('textbox', { name: 'Price for Card 4', exact: true })
+  const quantity = page.getByRole('textbox', { name: /copies of Card 5 /i })
+  await price.scrollIntoViewIfNeeded()
+  await price.fill('6.50')
+  await quantity.scrollIntoViewIfNeeded()
+  await quantity.fill('2')
+
+  const last = page.getByRole('textbox', { name: 'Price for Card 599', exact: true })
+  await last.scrollIntoViewIfNeeded()
+  await expect(last, 'the last row is drawn').toBeInViewport()
+  await page.getByRole('textbox', { name: 'Price for Card 0', exact: true }).scrollIntoViewIfNeeded()
+
+  await expect(price, 'the typed price survives the scroll').toHaveValue('6.50')
+  await expect(quantity, 'the typed quantity survives the scroll').toHaveValue('2')
+})
+
 test('tabbing across a suggested row writes nothing', async ({ page }) => {
   const wire = await open(page)
 
@@ -2292,7 +2319,7 @@ test('a hold writes a reason and a watch, and never a price', async ({ page }) =
      the digits on this screen are price entry, so a digit inside a panel raised from a
      focused price field is unresolvable. */
   await page.getByRole('button', { name: /Bullish/ }).click()
-  await page.getByLabel(/Tell me when market is above/).fill('30.00')
+  await page.getByLabel(/Alert when market is above/).fill('30.00')
   await page.getByLabel('Note').fill('waiting on rotation')
   await page.getByRole('button', { name: 'Hold it' }).click()
 
@@ -2383,7 +2410,7 @@ test('UN-12 (the delta review round) — a hold on a no-market-price SKU is ONE 
   await page.locator('.pricing-hold').first().click()
   await expect(page.locator('.pricing-holdpanel')).toBeVisible()
   await page.getByRole('button', { name: /Keeping this one/ }).click()
-  await page.getByLabel('Tell me when market is above').fill('9.50')
+  await page.getByLabel('Alert when market is above').fill('9.50')
   await page.getByLabel('Note', { exact: true }).fill('waiting on a reprint')
   await page.getByRole('button', { name: 'Hold it' }).click()
 
@@ -2696,7 +2723,7 @@ test('a row that adds nothing sinks to the bottom of its section, under its head
   /* THE HEADING IS OVER THE ROWS IT NAMES: the two rows worth $5 or more need the owner (D277,
      Q2), and the row that adds nothing falls under the server's own sentence, last. */
   await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
-    'Needs you',
+    'Needs You',
     'every copy in this run is already listed or has left the box',
   ])
   const lastGroup = page.locator('.pricing-group').last()
@@ -2739,7 +2766,7 @@ test('a row that is both held and at the cap sinks to the deeper heading', async
   })
 
   await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
-    'Needs you',
+    'Needs You',
     'every copy in this run is already listed or has left the box',
   ])
   await expect(page.locator('.pricing-row').nth(1).locator('.pricing-state')).toHaveAttribute(
@@ -3112,7 +3139,7 @@ test('D313: the panel holds its three lines whether the saved read has arrived o
   expect(sumOf(shifts.filter((s) => s.moved.some((m) => m.includes('pricemovers'))))).toBeLessThan(0.001)
 })
 
-test('D313: a row keeps its size when Refresh now runs over a drawn strip', async ({ page }) => {
+test('D313: a row keeps its size when Refresh Now runs over a drawn strip', async ({ page }) => {
   const wire = await open(page, { skus: SAVED_ROWS(), saved: savedTrends(NOW_S() - 3600) })
   const row = page.locator('.pricing-row').first()
   const size = async () => {
@@ -3122,7 +3149,7 @@ test('D313: a row keeps its size when Refresh now runs over a drawn strip', asyn
   }
   await expect(strip(page).first().locator('svg')).toHaveCount(2)
   const saved = await size()
-  await page.getByRole('button', { name: /Refresh now/ }).click()
+  await page.getByRole('button', { name: /Refresh Now/ }).click()
   await expect.poll(() => wire.filter((call) => call.method === 'POST' && call.path === '/pipeline/prices/refresh').length).toBe(1)
   expect(await size()).toEqual(saved)
   await expect(strip(page).first().locator('svg')).toHaveCount(2)
@@ -3694,14 +3721,14 @@ test('the clear control is absent on a server that does not offer it', async ({ 
      answers no `clearable` block, and the screen has no way to know which of its answers are
      holds — so the control is dead rather than drawn over an assumption about money. */
   await open(page, { skus: CLEAR_ROWS })
-  await expect(page.getByRole('button', { name: 'Clear typed prices' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Clear Typed Prices', exact: true })).toBeDisabled()
 })
 
 test('the sheet leads with the worklist, and the label carries the figure', async ({ page }) => {
   await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
 
-  const sheet = page.getByRole('dialog', { name: 'Clear typed prices' })
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
   await expect(sheet).toBeVisible()
 
   /* THE NARROW SCOPE IS SELECTED. The corpus is one file for the whole store (D86), so
@@ -3720,7 +3747,7 @@ test('the sheet leads with the worklist, and the label carries the figure', asyn
 
 test('what the clear leaves alone is on the screen, not in a tooltip', async ({ page }) => {
   await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
 
   /* THE HOLDS AND THE UNPRICED ROWS ARE NAMED BY COUNT. An operator asking "does this touch my
      holds" has to be able to answer it without pressing anything — D86's holds carry a reason
@@ -3740,9 +3767,9 @@ test('no typed middle dot or bullet reaches the mass-clear sheet (D218)', async 
      `worklistName` falls to "N runs" instead, which keeps this case about the sites this lane
      fixed rather than about that one. */
   await open(page, { worklist: SPAN, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
 
-  const sheet = page.getByRole('dialog', { name: 'Clear typed prices' })
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
   await expect(sheet).toBeVisible()
   const text = await sheet.innerText()
   expect(text).not.toMatch(/[·•]/)
@@ -3750,8 +3777,8 @@ test('no typed middle dot or bullet reaches the mass-clear sheet (D218)', async 
 
 test('an age window narrows the label, and never takes an undated answer', async ({ page }) => {
   await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
-  const sheet = page.getByRole('dialog', { name: 'Clear typed prices' })
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
   const press = sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })
 
   /* EVERY WINDOW DRAWS ITS OWN COUNT BEFORE THE PRESS, which is D103's finding: a window can
@@ -3780,8 +3807,8 @@ test('an age window narrows the label, and never takes an undated answer', async
 
 test('the scope the operator chose is the scope that travels', async ({ page }) => {
   const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
-  const sheet = page.getByRole('dialog', { name: 'Clear typed prices' })
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
 
   /* THE WORKLIST SCOPE SENDS SKUS. This is the assertion the whole sheet exists for: the
      press an operator makes while looking at one run's rows must not reach the rest of the
@@ -3802,8 +3829,8 @@ test('the scope the operator chose is the scope that travels', async ({ page }) 
 
 test('the store-wide scope sends no SKUs, and says so in the label', async ({ page }) => {
   const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
-  const sheet = page.getByRole('dialog', { name: 'Clear typed prices' })
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
 
   await sheet.getByRole('button', { name: /Everywhere/ }).click()
   /* THE BLAST RADIUS IS IN THE LABEL AND IN A SENTENCE BESIDE IT. "Clear" over four hundred
@@ -3877,13 +3904,13 @@ test('a clear empties the fields it cleared, and offers the way back', async ({ 
     })
   })
 
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
-  await page.getByRole('dialog', { name: 'Clear typed prices' }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
 
   /* THE FIELD GOES BACK TO THE SUGGESTION. The row is not removed and nothing else moves —
      a press changes what is on the screen, never where the rest of it is (D118). */
   await expect(field).toHaveValue('')
-  await expect(page.getByRole('dialog', { name: 'Clear typed prices' })).toHaveCount(0)
+  await expect(page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })).toHaveCount(0)
 
   /* THE RECEIPT CARRIES THE FIGURE AND NAMES WHAT SURVIVED. */
   const toast = page.locator('.bn-toast').last()
@@ -3913,8 +3940,8 @@ test('a clear empties the fields it cleared, and offers the way back', async ({ 
 
   /* AND THE SHEET AGREES WITH THE STORE AFTERWARDS. Reopened, it counts the restored answer
      again rather than the four it opened on. */
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
-  await expect(page.getByRole('dialog', { name: 'Clear typed prices' }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })).toContainText(
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })).toContainText(
     'Clear 1 typed price',
   )
 })
@@ -4066,9 +4093,9 @@ test('the clear is refused while the screen has an unsaved answer', async ({ pag
     await new Promise(() => {})
   })
   await page.getByLabel('Price for Articuno').fill('3.21')
-  await page.getByRole('button', { name: 'Clear typed prices' }).click()
-  await expect(page.getByRole('dialog', { name: 'Clear typed prices' }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })).toBeDisabled()
-  await expect(page.getByRole('dialog', { name: 'Clear typed prices' })).toContainText('Wait for your last price')
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })).toBeDisabled()
+  await expect(page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })).toContainText('Wait for your last price')
 })
 
 /* ============================================================================================
@@ -4284,7 +4311,7 @@ test('the rows that need the owner come first, each with its reason, and the res
   /* Q2's three reasons, and the order: no market price first, then by value. The card at the
      cut-off is the floor at work, not a drift, so it is not flagged (the call in the decision
      entry). */
-  await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText(['Needs you', 'Ready'])
+  await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText(['Needs You', 'Ready'])
   await expect(page.locator('.pricing-group').nth(0).locator('.pricing-name')).toHaveText(['Unpriced', 'Dear', 'Drifted'])
   await expect(page.locator('.pricing-group').nth(1).locator('.pricing-name')).toHaveText(['Ordinary', 'Cheap on the cut-off'])
   /* ONLY A DRIFTED PRICE STILL DRAWS A REASON (the owner's review and add-on, 2026-09-26): "No
@@ -4329,7 +4356,7 @@ test('a hold taken now keeps its row where it is, and so does the next load', as
     sku({ sku: '3', name: 'Wattrel', snap: { market: '1.00', direct_low: null, low: '0.80', low_with_shipping: '1.80', now: null } }),
   ]
   await open(page, { skus })
-  await page.getByRole('button', { name: 'Hold back Dunsparce' }).click()
+  await page.getByRole('button', { name: 'Hold Back Dunsparce', exact: true }).click()
   await page.getByRole('button', { name: /Keeping this one/ }).click()
   await page.getByRole('button', { name: 'Hold it' }).click()
   await expect(page.locator('.pricing-row').nth(1).locator('.pricing-state')).toHaveAttribute('title', 'withheld: keeping')
@@ -4409,7 +4436,7 @@ test('finding #2 (the Opus review round) — a hold toast\'s own Undo reverses t
   ]
   const wire = await open(page, { skus })
 
-  await page.getByRole('button', { name: 'Hold back Dunsparce' }).click()
+  await page.getByRole('button', { name: 'Hold Back Dunsparce', exact: true }).click()
   await page.getByRole('button', { name: /Keeping this one/ }).click()
   await page.getByRole('button', { name: 'Hold it' }).click()
   const holdToast = page.locator('.bn-toast', { hasText: 'Held Dunsparce' })
@@ -4855,7 +4882,7 @@ test('F3: the price sort orders within each heading, and a row with no price goe
      price) goes last in its own group. */
   const names = await page.locator('.pricing-row .pricing-name').allInnerTexts()
   expect(firstWords(names)).toEqual(['Articuno', 'Poro', 'Annie', 'Dunsparce'])
-  await expect(page.locator('.pricing-group-head .pricing-group-why').first()).toHaveText('Needs you')
+  await expect(page.locator('.pricing-group-head .pricing-group-why').first()).toHaveText('Needs You')
 })
 
 test('F3: the game filter and the set filter each narrow the list, and together with a search they combine', async ({ page }) => {
@@ -5076,9 +5103,9 @@ test('7b-14: T opens the sheet with every other figure, from a row and from the 
   await page.locator('.pricing-row').first().hover()
   await page.keyboard.press('t')
   await expect(sheet).toBeVisible()
-  await expect(sheet.getByRole('heading', { name: /Prices now/ })).toBeVisible()
-  await expect(sheet.getByRole('heading', { name: /Sales, last 30 days/ })).toBeVisible()
-  await expect(sheet.getByRole('heading', { name: /On your shelf/ })).toBeVisible()
+  await expect(sheet.getByRole('heading', { name: /Prices Now/ })).toBeVisible()
+  await expect(sheet.getByRole('heading', { name: /Sales, Last 30 Days/ })).toBeVisible()
+  await expect(sheet.getByRole('heading', { name: /On Your Shelf/ })).toBeVisible()
   await expect(sheet.getByRole('img', { name: /sold|sales/i }).first()).toBeVisible()
   await expect.poll(() => factsReads(wire).length).toBe(1)
   expect(marketReads(wire)).toHaveLength(0)
@@ -5087,7 +5114,7 @@ test('7b-14: T opens the sheet with every other figure, from a row and from the 
   await expect(sheet).toHaveCount(0)
   await field(page).focus()
   await page.keyboard.press('t')
-  await expect(sheet.getByRole('heading', { name: /Sales, last 30 days/ })).toBeVisible()
+  await expect(sheet.getByRole('heading', { name: /Sales, Last 30 Days/ })).toBeVisible()
 })
 
 test('7b-14: T does nothing inside a text field', async ({ page }) => {
@@ -5173,19 +5200,19 @@ test('7b-16: the age line has a reserved line, so a fresh row and a stale row ar
   expect(Math.abs(heights[0]! - heights[1]!)).toBeLessThan(0.5)
 })
 
-test('7b-17: the header says Prices as of the catalog time, at rest, beside Refresh now', async ({ page }) => {
+test('7b-17: the header says Prices as of the catalog time, at rest, beside Refresh Now', async ({ page }) => {
   await open(page)
   await expect(page.getByText(AS_OF)).toBeVisible()
-  await expect(page.getByRole('button', { name: /Refresh now/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Refresh Now/ })).toBeVisible()
 })
 
 test('7b-17: a press asks for a refresh, and a running one shows its steps, the count and a bar', async ({ page }) => {
   const wire = await open(page, { refresh: refreshState('running', { step: 'history', done: 118, total: 366 }) })
-  await page.getByRole('button', { name: /Refresh now/ }).click()
+  await page.getByRole('button', { name: /Refresh Now/ }).click()
   expect(wire.some((call) => call.method === 'POST' && call.path === '/pipeline/prices/refresh')).toBe(true)
   await expect(page.getByText(/Sales history\s+118 of 366/)).toBeVisible()
   await expect(page.getByRole('progressbar')).toBeVisible()
-  await expect(page.getByRole('button', { name: /Refresh now/ })).toHaveAttribute('data-busy', 'true')
+  await expect(page.getByRole('button', { name: /Refresh Now/ })).toHaveAttribute('data-busy', 'true')
   await expect(page.getByText(AS_OF)).toBeVisible()
 })
 
@@ -5220,7 +5247,7 @@ for (const theme of ['light', 'dark'] as const) {
       await page.locator('.pricing-row').first().hover()
       await page.keyboard.press('t')
       const sheet = page.getByRole('dialog').last()
-      await expect(sheet.getByRole('heading', { name: /Sales, last 30 days/ })).toBeVisible()
+      await expect(sheet.getByRole('heading', { name: /Sales, Last 30 Days/ })).toBeVisible()
       /* THE CHART DRAWS FROM TOKENS ONLY (docs/DESIGN.md): no inline hex on a mark. */
       const literals = await sheet.locator('svg [fill], svg [stroke]').evaluateAll(
         (marks) => marks.filter((mark) => /#[0-9a-f]{3,8}\b/i.test(`${mark.getAttribute('fill') ?? ''} ${mark.getAttribute('stroke') ?? ''}`)).length,
@@ -5558,7 +5585,7 @@ function leftBoxExpected(): [string, string[]][] {
     const rows = byMarket.filter((row) => (Number(row.market) >= 5) === needs)
     return [...rows.filter((row) => row.on_hand > 0), ...rows.filter((row) => row.on_hand === 0)].map((row) => row.name)
   }
-  return [['Needs you', group(true)], ['Ready', group(false)]]
+  return [['Needs You', group(true)], ['Ready', group(false)]]
 }
 async function openLeftBox(page: Page): Promise<void> {
   await setViewport(page, { width: 1440, height: 900 })

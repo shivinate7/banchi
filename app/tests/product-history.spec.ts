@@ -3,7 +3,7 @@
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 
-import type { OrderRow, OrdersPayload, ProductHistoryPayload, SearchGroup, SearchResult } from '../src/types'
+import type { OrderRow, OrdersPayload, ProductHistoryPayload, ProductHistoryRange, SearchGroup, SearchResult } from '../src/types'
 
 /* `#/product` — THE PER-PRODUCT VIEW (D227, D278). Off-nav, reached
  * by hash and `?sku=`, so `VIEW_ROUTE` below is the one thing a compiler cannot check for this
@@ -419,5 +419,31 @@ test.describe('#/product — the per-product view', () => {
     const refresh = view.getByRole('link', { name: /Refresh now/i })
     await expect(refresh, 'Refresh now on Pricing is a link').toHaveCount(1)
     await expect(refresh).toHaveAttribute('href', '#/pricing')
+  })
+
+  /* ux-w2 B7 (sales-plan.md, signed off). Red on main until the build lands. Each range chart takes three price ticks on its
+     value axis and three date ticks on its time axis. A tick is an SVG text node: a price tick carries a
+     dollar sign, and a date tick is a digit-bearing label without one. The dates are pinned to Chicago. */
+  test.describe('ux-w2: price chart ticks', () => {
+    test.use({ timezoneId: 'America/Chicago' })
+    test('ux-w2: each price chart carries three price ticks and three date ticks', async ({ page }) => {
+      await page.route(/\/pipeline\/products\/[^/]+\/history$/, (route) => {
+        const payload = historyPayload()
+        const [first] = payload.ranges
+        payload.ranges.push({ ...first, range: 'annual', width_days: 7, buckets: 5 } as ProductHistoryRange)
+        return json(route, payload)
+      })
+      await page.goto(VIEW_ROUTE)
+      const charts = page.locator('main.producthistory svg.producthistory-chart')
+      await expect(charts.first()).toBeVisible()
+      expect(await charts.count(), 'two range charts are drawn').toBe(2)
+      for (let i = 0; i < 2; i += 1) {
+        const texts = (await charts.nth(i).locator('text').allTextContents()).map((t) => t.trim())
+        const priceTicks = texts.filter((t) => t.includes('$'))
+        const dateTicks = texts.filter((t) => /\d/.test(t) && !t.includes('$'))
+        expect(priceTicks, `chart ${i + 1} price ticks (reads ${JSON.stringify(texts)})`).toHaveLength(3)
+        expect(dateTicks, `chart ${i + 1} date ticks (reads ${JSON.stringify(texts)})`).toHaveLength(3)
+      }
+    })
   })
 })

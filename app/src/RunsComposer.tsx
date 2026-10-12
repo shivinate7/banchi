@@ -926,7 +926,7 @@ export function RunsComposer({
     { value: 'drawers' as StartKey, label: 'Boxes', icon: 'box' as const },
     ...(carried === null
       ? []
-      : [{ value: 'ticked' as StartKey, label: 'The cards I ticked', icon: 'check' as const }]),
+      : [{ value: 'ticked' as StartKey, label: 'The cards you ticked', icon: 'check' as const }]),
     { value: 'run' as StartKey, label: 'A previous run’s cards', icon: 'history' as const },
   ]
 
@@ -1045,7 +1045,7 @@ export function RunsComposer({
                               {record.box}
                             </span>
                             <span className="runs-box-text">
-                              <span className="runs-box-name" title={boxLabel(record.box, record.name)}>
+                              <span className="runs-box-name" data-typed title={boxLabel(record.box, record.name)}>
                                 {boxLabel(record.box, record.name)}
                               </span>
                               <span className="runs-box-cards">{nounCount(record.cards, 'card')}</span>
@@ -1289,7 +1289,7 @@ export function RunsComposer({
                       </label>
                       <label className="runs-field-inline">
                         <span>Max edge</span>
-                        <input
+                        <input name="bn-input"
                           className="bn-input bn-input-mono runs-edge"
                           type="number"
                           min={256}

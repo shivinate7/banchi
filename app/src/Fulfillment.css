@@ -47,9 +47,18 @@
      children of it, and a transformed ancestor would pin them to the page, not the screen. */
 }
 :root[data-theme='dark'] .fulfillment { --ff-fill: var(--bn-accent-hover); }
-/* The sheet is capped at `--ff-sheet-max` (below), and the page clears the whole of it. */
+/* The page clears the sheet's measured height, `--ff-sheet-h` (set in Fulfillment.tsx); the cap `--ff-sheet-max` is the
+   fallback until it is measured. */
 .fulfillment { --ff-sheet-max: min(50vh, 420px); --ff-sheet-max: min(50dvh, 420px); }
-.fulfillment.ff-has-sheet { padding-bottom: calc(var(--ff-sheet-max) + var(--bn-8)); }
+/* THE STALE BANNER'S ROOM IS ALWAYS KEPT (R19). The banner is `--ff-notice-h` tall at most (padding plus three
+   lines of text), floating `--bn-5` off the bottom; the page keeps that room whether the banner shows or not, so
+   showing or clearing it moves nothing, and at the end of the page it never hides the last control. */
+.fulfillment {
+  --ff-notice-h: calc(var(--bn-4) * 2 + var(--ff-fs-base) * 1.5 * 3);
+  --ff-notice-room: calc(var(--ff-notice-h) + var(--bn-5) + var(--bn-3));
+  padding-bottom: var(--ff-notice-room);
+}
+.fulfillment.ff-has-sheet { padding-bottom: calc(var(--ff-sheet-h, var(--ff-sheet-max)) + var(--bn-8) + var(--ff-notice-room)); }
 @media (max-width: 767px) {
   .fulfillment { --ff-pad: var(--bn-4); }
 }
@@ -174,54 +183,7 @@
 }
 .ff-h2-icon-ok { background: var(--bn-ok-tint); color: var(--bn-ok); }
 
-/* ---- today: the figure, and where to start --------------------------------------------
-   The first thing on the screen after his name for it: how many cards the open orders are
-   waiting for, and one press that opens the first of them. The fill here is INK, not the
-   accent: the accent fill is reserved for the press that writes (the sale), and this one
-   only opens a card. */
-.ff-today {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--bn-5);
-  padding: var(--bn-6);
-  border-radius: 22px;
-  background: var(--bn-surface);
-  box-shadow: var(--bn-shadow-3);
-  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
-}
-.ff-today-text {
-  flex: 1 1 20ch;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--bn-2);
-}
-.ff-today-figure {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--bn-1) var(--bn-3);
-}
-.ff-today-num {
-  font-family: var(--bn-font-display);
-  font-size: var(--ff-fs-4xl);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  color: var(--bn-ink);
-}
-.ff-today-words {
-  font-family: var(--bn-font-display);
-  font-size: var(--bn-fs-3xl);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  color: var(--bn-ink);
-}
-.ff-today-say { color: var(--bn-ink-2); }
+/* ---- today: the unlocated warning (the count itself is in the sticky bar, `.ff-bar`) ---- */
 /* A copy an open order wants that the store cannot find at all (UX-001's direction: "if the
    screen cannot place a copy, it says how many"). The icon carries the warm tint; the text
    stays at the body's own ink so it clears the 7:1 floor — `--bn-warn` is a 5.0:1 token,
@@ -233,37 +195,6 @@
   margin-top: var(--bn-2);
 }
 .ff-today-warn-icon { color: var(--bn-warn); flex: none; }
-
-.ff-start {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--bn-3);
-  min-height: 68px;
-  min-width: 44px;
-  padding: 0 var(--bn-6);
-  border-radius: var(--bn-r-full);
-  background: var(--bn-ink);
-  color: var(--bn-bg);
-  font-family: var(--bn-font-ui);
-  font-size: var(--bn-fs-2xl);
-  font-weight: 700;
-  line-height: 1.2;
-  white-space: nowrap;
-  box-shadow: var(--bn-shadow-2);
-  transition: transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
-}
-.ff-start:hover { transform: translateY(-1px); box-shadow: var(--bn-shadow-3); }
-.ff-start:active { transform: scale(0.98); }
-.ff-start-arrow { transition: transform var(--bn-t) var(--bn-ease-spring); }
-.ff-start:hover .ff-start-arrow { transform: translateX(3px); }
-@media (max-width: 559px) {
-  .ff-today { padding: var(--bn-5); }
-  .ff-today-num { font-size: var(--bn-fs-5xl); }
-  .ff-today-words { font-size: var(--ff-fs-md); }
-  .ff-start { width: 100%; }
-}
 
 /* Nothing waiting: the same sentence register, with the tick that means "you are done". */
 .ff-today-none {
@@ -281,6 +212,34 @@
    logic — promoted to `.bn-icon-badge bn-icon-badge--ok` (system review, 2026-09-20). */
 
 /* ---- search: the hero ----------------------------------------------------------------- */
+/* B23: one bar holds the count and the search, pinned while the list scrolls. */
+.ff-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  /* TWO TRACKS WITH FIXED SHARES, so the search's box never depends on the count: not on its
+     digits, nor on whether it is drawn at all. The count fits its own track (below). */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+  align-items: center;
+  column-gap: var(--bn-4);
+  margin-inline: calc(var(--ff-pad) * -1);
+  /* The bottom edge is where scrolled content tucks under the bar, so it holds the 12px target gap. */
+  padding: var(--bn-3) var(--ff-pad) var(--bn-5);
+  background: var(--bn-bg);
+}
+.ff-bar .ff-search { grid-column: 2; min-width: 0; }
+.ff-count-track { grid-column: 1; grid-row: 1; container-type: inline-size; min-width: 0; }
+/* The figure is sized from its track, so any number of digits fits and the bar's row height is the
+   search's alone. 0.62em is a digit's advance, 1.4em the word "Left" and its gap, both in em. */
+.ff-count {
+  --ff-fit: calc(100cqw / (var(--ff-n, 1) * 0.62 + 1.4));
+  display: flex; align-items: baseline; gap: 0.2em; margin: 0; white-space: nowrap;
+  font-family: var(--bn-font-display); font-size: min(var(--ff-fs-4xl), var(--ff-fit)); font-weight: 800; line-height: 1;
+}
+.ff-count-skel { display: inline-block; width: 1.4em; height: 0.8em; border-radius: var(--bn-r-sm); }
+.ff-count-word { font-size: 0.5em; line-height: 1; }
+.ff-count-num { letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 .ff-search {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -384,6 +343,16 @@
 
 /* ---- notice / empty / loading -------------------------------------------------------- */
 .ff-notice {
+  /* R19: a floating banner over the bottom of the screen. It takes no room in the page, so nothing moves. */
+  position: fixed;
+  z-index: 60;
+  left: 0;
+  right: 0;
+  bottom: var(--bn-5);
+  margin: 0 auto;
+  width: min(680px, calc(100% - 32px));
+  max-height: var(--ff-notice-h);
+  overflow-y: auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -394,6 +363,17 @@
   box-shadow: inset 0 0 0 2px var(--bn-warn), var(--bn-shadow-1);
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
+.ff-has-sheet .ff-notice { bottom: calc(var(--ff-sheet-h, var(--ff-sheet-max)) + var(--bn-8)); }
+.ff-notice-x {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: var(--bn-r-full);
+  color: var(--bn-ink-2);
+}
+.ff-notice-x:hover { background: var(--bn-surface-3); }
 .ff-notice-icon { color: var(--bn-warn); flex: none; }
 .ff-notice .fulfillment-say { flex: 1 1 24ch; min-width: 0; }
 
@@ -440,24 +420,20 @@
   display: block;
   overflow: hidden;
   border-radius: var(--bn-r-2xl-sm);
-  background: var(--bn-surface-2);
+  /* `--bn-line`, as the kit's skeleton: the sunken ground reads as a hole in dark. */
+  background: var(--bn-line);
 }
 .ff-skel::after {
   content: '';
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, var(--bn-surface-3), transparent);
+  background: linear-gradient(90deg, transparent, var(--bn-line-strong), transparent);
   animation: bn-shimmer var(--bn-t-shimmer) var(--bn-ease-loop) infinite;
 }
-.ff-skel-search { height: 64px; margin-bottom: var(--bn-5); }
 .ff-skel-row { height: 88px; }
 .ff-skel-owed { height: 530px; border-radius: 22px; }
 .ff-skel-copy { height: 420px; border-radius: 22px; }
-/* The today tile while the orders read is out: the loaded tile's own elements, hidden, so the
-   box is the loaded box. */
-.ff-today-wait { background: var(--bn-surface-2); box-shadow: none; animation: none; }
-.ff-today-wait > * { visibility: hidden; }
 
 /* ---- Pulled today ----------------------------------------------------------------------- */
 .ff-done-list { list-style: none; display: flex; flex-direction: column; gap: var(--bn-2); }
@@ -508,18 +484,31 @@
    the owner's own ruling — see Fulfillment.tsx's file header) ---------------------------- */
 .ff-owed-list { display: flex; flex-direction: column; gap: var(--bn-5); }
 .ff-owed-card {
+  position: relative;
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
 .ff-owed-pick {
   /* A TEXT RUN, NOT A FLEX ROW: the gap sat before the comma ("Pick 1 , 6 orders"). */
   margin: 0 0 var(--bn-2);
+  color: var(--bn-ink-2);
 }
-.ff-owed-pick-num {
-  font-family: var(--bn-font-display);
-  font-size: var(--bn-fs-2xl);
+.ff-owed-card .card-locations-copy { position: relative; }
+.card-locations-badge {
+  position: absolute;
+  top: var(--bn-3);
+  right: var(--bn-3);
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--bn-r-full);
+  background: var(--bn-surface-2);
   color: var(--bn-ink);
+  font-family: var(--bn-font-display);
+  font-size: var(--ff-fs-base);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
-.ff-owed-pick-for { color: var(--bn-ink-2); }
 .ff-orders-more { margin-top: var(--bn-4); }
 
 /* ---- Browse by box ---------------------------------------------------------------------- */

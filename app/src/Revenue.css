@@ -169,7 +169,7 @@
   flex-wrap: wrap;
   margin-bottom: var(--bn-4);
 }
-.revenue-search { min-width: 220px; max-width: 320px; margin-left: auto; }
+.revenue-search { flex: 1 1 360px; min-width: 0; max-width: 560px; margin-left: auto; }
 @media (max-width: 767px) { .revenue-search { max-width: none; width: 100%; margin-left: 0; } }
 
 .revenue-podium {
@@ -468,3 +468,7 @@
 
 /* A switch held for a read still in flight: drawn, so it takes its own box, and shown to no one. */
 .revenue-period[data-held] { visibility: hidden; }
+
+/* D313: the sort trigger keeps one width whichever key it names. Its widest label is "Alphabetical", so the width is
+   that label's own measure in ch plus the caret and the direction segment, which are both one control tall. */
+.revenue-bar-head .bn-sort { width: calc(14ch + 2 * var(--bn-control-h)); flex: none; }

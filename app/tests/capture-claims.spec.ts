@@ -1874,6 +1874,17 @@ test('the stage panel hugs the portrait frame: no dead side bands', async ({ pag
   }
 })
 
+/* ux-w2 B2 (D211). Asserts that with no box chosen, the Setup panel does not repeat the stage's Camera control
+   or the Shooting group's Box select. The sentence that says why stays. Add divider stays where it is. */
+test('ux-w2 B2: with no box chosen, the Setup panel repeats neither the Camera control nor the Box select', async ({ page }) => {
+  await open(page)
+  const setup = page.getByRole('group', { name: /^setup$/i })
+  await expect(setup, 'the Setup panel is drawn, so the absences below are not vacuous').toBeVisible()
+  await expect(setup.getByRole('button', { name: /^camera$/i }), 'no Camera control in Setup').toHaveCount(0)
+  await expect(setup.getByRole('button', { name: /^box$/i }), 'no Box select in Setup').toHaveCount(0)
+  await expect(setup, 'the sentence that says why is kept').toContainText(/box/i)
+})
+
 /* ux-wave1 B1. With no box picked, Capture is off, and the button alone does not say why. The reason must
    be tied to the disabled button: the button's own aria-describedby must resolve to text that names the
    box. A reason that sits elsewhere on the screen (the Box field's own line, for one) does not count. */

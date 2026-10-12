@@ -1084,7 +1084,7 @@ const UndoFace = memo(
             from the rendered label. A tile with no label names its box alone. */}
         <span className="capture-undo-pos">
           {spansDrawers || undoFigure(target) === null ? (
-            <span className="capture-undo-drawer">{boxTitle(target.boxName, target.box)}</span>
+            <span className="capture-undo-drawer" data-typed>{boxTitle(target.boxName, target.box)}</span>
           ) : null}
           {undoFigure(target)}
         </span>
@@ -4081,7 +4081,8 @@ export function CaptureScreen() {
         icon: 'camera',
         tone: 'plain',
         text: null,
-        fix: { label: 'Camera', icon: 'camera', onPress: camera.retry },
+        // The stage keeps the Camera control (D211); Setup does not repeat it.
+        fix: null,
       })
     } else if (!camera.ready) {
       /* STARTED BUT NOT READY — asked for, and not delivering frames: a device that vanished,
@@ -4106,7 +4107,8 @@ export function CaptureScreen() {
         tone: 'plain',
         // The disabled Capture button above answers to this row, so it says why in a sentence.
         text: 'Pick a box before you capture.',
-        fix: { label: 'Box', icon: 'box', onPress: () => toggleField('box') },
+        // The Shooting group keeps the Box select (D211); Setup keeps only the sentence.
+        fix: null,
       })
     }
     if (gameEntry === null) {
@@ -5083,6 +5085,7 @@ export function CaptureScreen() {
                   <input
                     className="bn-input capture-text capture-note"
                     type="text"
+                    name="capture-note"
                     placeholder={last.game.catalogued ? 'Add a note to this card' : 'What is this card?'}
                     aria-label={`Note on ${last.card.label}`}
                     value={noteDraft}
@@ -5168,7 +5171,7 @@ export function CaptureScreen() {
               <div className="capture-entry">
                 <div className="capture-entrybox bn-input-wrap">
                   <Icon name="search" size={14} />
-                  <input
+                  <input name="capture-box-filter"
                     ref={boxEntryRef}
                     className="capture-filter bn-input"
                     type="text"
@@ -5422,7 +5425,7 @@ export function CaptureScreen() {
                   ? 'Connecting'
                   : dealerIdle
                     ? 'Start dispenser'
-                    : 'Connect dispenser'}
+                    : 'Connect Dispenser'}
             </Button>
             <Slot as="p" className="capture-quiet capture-dealer-said">
               {dealerSaid}
@@ -5754,7 +5757,7 @@ export function CaptureScreen() {
               >
                 <div className="capture-entrybox bn-input-wrap">
                   <Icon name="tag" size={14} />
-                  <input
+                  <input name="set-hint"
                     ref={hintRef}
                     className="capture-filter bn-input"
                     type="text"

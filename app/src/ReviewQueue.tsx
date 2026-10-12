@@ -1626,13 +1626,13 @@ export function ReviewQueue() {
               THE RELOAD BESIDE IT: one re-fetches these two queues, this one asks the
               pipeline to look at every waiting card again. Same icon vocabulary word would
               make them read as one control, so the tooltip keeps the fuller sentence. */}
-          <IconButton icon="wand" label="Re-check every waiting card" onClick={() => setRecheckOpen(true)} disabled={disabled} className="review-recheck-open" />
+          <IconButton icon="wand" label="Re-Check Every Waiting Card" onClick={() => setRecheckOpen(true)} disabled={disabled} className="review-recheck-open" />
           {/* The kit's own reload control (D288), with its internal 'r' hotkey
               OFF: this screen wires RELOAD_KEY into the same switch every other key rides,
               because a second listener would fire the read twice. */}
-          <ReloadButton onReload={reload} busy={disabled} label="Reload the queue" hotkey={false} className="review-reload" />
+          <ReloadButton onReload={reload} busy={disabled} label="Reload the Queue" hotkey={false} className="review-reload" />
           {/* D291: past runs, and every other Runs capability, behind one link. */}
-          <IconButton icon="history" label="Past runs" onClick={() => openRuns(false)} className="review-runs-open" />
+          <IconButton icon="history" label="Past Runs" onClick={() => openRuns(false)} className="review-runs-open" />
           {/* HELD WHILE THE QUEUES LOAD (D313): hidden at its own size, so the answer fills it and
               the buttons beside it stay put. */}
           {everyone.length === 0 && !(loading && rows === null) ? null : (
@@ -1833,7 +1833,7 @@ function RefusalNotice({ refusal, onReload, onDismiss, disabled }: { refusal: Re
             one primary action beside Dismiss. words="only-primary" (rule 4). */}
         {stale ? (
           <Button size="sm" icon="refresh" kbd={RELOAD_KEY_LABEL} onClick={onReload} disabled={disabled} words="only-primary">
-            Reload the queue
+            Reload the Queue
           </Button>
         ) : null}
         <IconButton icon="x" label="Dismiss" size="sm" onClick={onDismiss} />
@@ -2549,7 +2549,7 @@ export function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoos
 
       {more > 0 ? (
         <Button variant="ghost" block onClick={() => setRevealed((n) => n + CATALOG_REVEAL_STEP)} disabled={busy}>
-          Show {Math.min(more, CATALOG_REVEAL_STEP)} more
+          Show {Math.min(more, CATALOG_REVEAL_STEP)} More
         </Button>
       ) : null}
 
@@ -2870,7 +2870,7 @@ function Waiting({
           Up next
           <Pill>{rows.length}</Pill>
         </span>
-        <IconButton icon="x" label="Close the queue" size="sm" onClick={onClose} className="review-rail-close" />
+        <IconButton icon="x" label="Close the Queue" size="sm" onClick={onClose} className="review-rail-close" />
       </div>
 
       {done === 0 && tally.skipped === 0 && receipts.length === 0 ? null : (
@@ -3046,7 +3046,7 @@ function QueueRefresh({
       open={open}
       onClose={onClose}
       dismissible={!busy}
-      title="Re-check every waiting card"
+      title="Re-Check Every Waiting Card"
       className="review-recheck"
       footer={
         !applyable ? null : (

@@ -6987,8 +6987,8 @@ COMPONENTS = [
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D36", "D41", "D56", "D58", "D65", "D67", "D81", "D92", "D117",
                             "D118", "D121", "D128", "D131", "D132", "D142", "D144", "D145", "D153",
-                            "D164", "D170", "D172", "D183", "D196", "D218", "D259", "D260", "D264",
-                            "D271", "D299", "D313", "D316"]},
+                            "D164", "D170", "D172", "D183", "D196", "D211", "D218", "D259", "D260",
+                            "D264", "D271", "D299", "D313", "D316"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -8032,8 +8032,8 @@ COMPONENTS = [
                                                "data starts; a fill older than that is listed "
                                                "separately as having no market data at all, "
                                                "never plotted.",
-                                       "governed_by": ["D50", "D278", "D196", "D212", "D218", "D219",
-                                                       "D227"],
+                                       "governed_by": ["D50", "D196", "D212", "D218", "D219",
+                                                       "D227", "D278", "D313"],
                                        "note": "No harness test -- a Playwright spec would be "
                                                "the honest coverage and none exists yet, named "
                                                "rather than silently absent."},
@@ -9172,6 +9172,27 @@ COMPONENTS = [
                     "the view's word count and largest prose blocks, for `make text-density` "
                     "only. `injectRepeatedSentence` is the mutation hook, and trips all four."),
                 "governed_by": ["D284", "D269"],
+            },
+            "tests/copy-checks.spec.ts": {
+                "does": ("ONE sweep, TWO copy checks over every nav route and the Fulfiller's: "
+                    "voice (no I, my, me or mine on screen) and casing (Title Case on labels "
+                    "and headings), the two DESIGN.md copy rules. Each keeps a pending list "
+                    "(`copy-voice-allow.json`, `copy-casing-allow.json`) that only shrinks."),
+                "governed_by": ["D173", "D284", "D196"],
+            },
+            "tests/copyRules.ts": {
+                "does": ("The word rules the copy checks read: which words are first person, "
+                    "which short words Title Case keeps lower, and which text is exempt."),
+                "governed_by": ["D173"],
+            },
+            "tests/copySource.ts": {
+                "does": ("Reads the reason labels and Review questions straight from source, so "
+                    "the voice check covers labels no fixture puts on screen."),
+                "governed_by": ["D173"],
+            },
+            "tests/unit/copy-rules.unit.ts": {
+                "does": "Unit cases for `copyRules.ts`: each rule, true and false, in isolation.",
+                "governed_by": ["D173"],
             },
             "tests/text-checks.spec.ts": {
                 "does": ("ONE sweep, THREE checks (D284): every route is opened once through "

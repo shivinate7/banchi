@@ -131,6 +131,9 @@ function timeScale(fromMs: number, toMs: number, w: number): (ms: number) => num
   return (ms: number) => ((ms - fromMs) / span) * w
 }
 
+const GUTTER_L = 52
+const GUTTER_B = 20
+
 function ProductChart({ range, fills, w = 640, h = 160 }: { range: ProductHistoryRange; fills: readonly Fill[]; w?: number; h?: number }) {
   const parsed = useMemo(() => {
     const starts = range.points.map((p) => (p.at ? new Date(p.at).getTime() : null))
@@ -153,13 +156,15 @@ function ProductChart({ range, fills, w = 640, h = 160 }: { range: ProductHistor
     const span = hi - lo || 1
     const x = timeScale(fromMs, toMs, w)
     const y = (price: number) => h - ((price - lo) / span) * (h - 8) - 4
-    return { fromMs, toMs, x, y, relevant }
+    return { fromMs, toMs, x, y, relevant, lo, hi }
   }, [range, fills, w, h])
 
   if (parsed === null) {
     return <div className="producthistory-chart-empty">No priced buckets in this range.</div>
   }
-  const { x, y, relevant } = parsed
+  const { x, y, relevant, lo, hi, fromMs, toMs } = parsed
+  const priceTicks = [lo, (lo + hi) / 2, hi]
+  const dateTicks = [fromMs, (fromMs + toMs) / 2, toMs]
 
   const marketByIndex = range.points.map((p) => (p.market === null ? null : Number(p.market)))
   const runs = sparkSegments(marketByIndex, w, h) // index-spaced runs, re-mapped to time x below
@@ -184,10 +189,26 @@ function ProductChart({ range, fills, w = 640, h = 160 }: { range: ProductHistor
   return (
     <svg
       className="producthistory-chart"
-      viewBox={`0 0 ${w} ${h}`}
+      viewBox={`${-GUTTER_L} 0 ${w + GUTTER_L} ${h + GUTTER_B}`}
       role="img"
       aria-label={`${RANGE_LABEL[range.range] ?? range.range} market buckets, with the owner's own sales marked`}
     >
+      {/* THREE PRICE TICKS AND THREE DATE TICKS (B7), faint guides, in reserved gutters: the viewBox
+          holds them from the first paint, so nothing moves on load (D313). */}
+      {priceTicks.map((v, i) => (
+        <g key={`pt-${i}`}>
+          <line className="producthistory-guide" x1={0} x2={w} y1={y(v)} y2={y(v)} />
+          <text className="producthistory-tick producthistory-tick-price" x={-6} y={y(v)} textAnchor="end" dominantBaseline="middle">{money(v)}</text>
+        </g>
+      ))}
+      {dateTicks.map((ms, i) => (
+        <g key={`dt-${i}`}>
+          <line className="producthistory-guide" x1={x(ms)} x2={x(ms)} y1={0} y2={h} />
+          <text className="producthistory-tick" x={x(ms)} y={h + 14} textAnchor={i === 0 ? 'start' : i === 2 ? 'end' : 'middle'}>
+            {dayDate(new Date(ms).toISOString().slice(0, 10))}
+          </text>
+        </g>
+      ))}
       {/* THE SPREAD, CARRIED PER BUCKET — a thin vertical tick from low to high, never
           collapsed into one number across the whole series (D278's own rule, restated for a
           per-bucket reading rather than a whole-series bound). */}
@@ -522,7 +543,7 @@ function RealizedSection({ sku }: { readonly sku: string }) {
   if (!payload.configured) {
     return (
       <section className="producthistory-realized">
-        <h3>What you got</h3>
+        <h3>What You Got</h3>
         <p className="producthistory-note">Start Banchi with an OrderWand sales export to compare your sales with the market.</p>
       </section>
     )
@@ -537,7 +558,7 @@ function RealizedSection({ sku }: { readonly sku: string }) {
   ].filter(Boolean)
   return (
     <section className="producthistory-realized">
-      <h3>What you got</h3>
+      <h3>What You Got</h3>
       {payload.rows.length === 0 ? (
         <p className="producthistory-note">
           No sale of this exact condition and finish is in {payload.file}.
@@ -656,7 +677,7 @@ export function ProductHistory() {
   return (
     <Page
       className="producthistory"
-      title="Product history"
+      title="Product History"
       icon="history"
       toolbar={
         <SearchField
@@ -670,7 +691,7 @@ export function ProductHistory() {
             // gave, kept rather than lost when the field became a name search too.
             if (/^\d+$/.test(text.trim())) pick(text.trim())
           }}
-          submitLabel="Look up"
+          submitLabel="Look Up"
         />
       }
       empty={showEmpty ? <EmptyState icon="search" title="Enter a SKU to see its history." /> : undefined}

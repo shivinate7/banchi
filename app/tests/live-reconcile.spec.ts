@@ -391,11 +391,11 @@ test('the fetch press keeps its place and size while it runs', async ({ page }) 
   await open(page)
   /* THE SHEET SLIDES IN; a box measured mid-slide is the slide, not the press. */
   await settleMotion(page)
-  const press = panel(page).getByRole('button', { name: 'Fetch my live listings' })
+  const press = panel(page).getByRole('button', { name: 'Fetch your live listings', exact: true })
   const before = await press.boundingBox()
   await press.click()
   await expect(press).toHaveAttribute('data-busy', 'true')
-  await expect(press).toHaveText('Fetch my live listings')
+  await expect(press).toHaveText('Fetch your live listings')
   const during = await press.boundingBox()
   for (const side of ['x', 'y', 'width', 'height'] as const) {
     expect(Math.abs((during?.[side] ?? 0) - (before?.[side] ?? 0)), side).toBeLessThanOrEqual(0.5)

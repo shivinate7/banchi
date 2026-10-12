@@ -132,7 +132,7 @@ export function PricesAsOf({
           </Button>
         ) : null}
         <Button size="sm" icon="refresh" variant={failed ? 'quiet' : 'default'} busy={running} onClick={() => onPress(false)}>
-          Refresh now
+          Refresh Now
         </Button>
       </div>
       {/* THE STEPS LINE AND THE BAR ARE DRAWN ONLY WHILE A RUN GOES OR HAS FAILED: the press that starts one

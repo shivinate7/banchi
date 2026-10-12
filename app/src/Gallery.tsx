@@ -567,7 +567,7 @@ function OverlaySpecimens() {
           <Section title="The hint">
             <label className="bn-field">
               <span className="bn-field-label">Set</span>
-              <input className="bn-input" defaultValue="ME01" data-autofocus="" />
+              <input name="bn-input" className="bn-input" defaultValue="ME01" data-autofocus="" />
             </label>
           </Section>
           {/* A CONFIRM OPENED FROM INSIDE AN OPEN SHEET — the second scrimmed layer a static
@@ -975,7 +975,7 @@ export function Gallery() {
             <div className="kit-grid">
               <Spec label="the vocabulary">
                 <div className="kit-row kit-row-wrap">
-                  <IconButton icon="sold" label="Mark sold" />
+                  <IconButton icon="sold" label="Mark Sold" />
                   <IconButton icon="undo" label="Undo" />
                   <IconButton icon="archive" label="Retire" />
                   <IconButton icon="pencil" label="Edit" />
@@ -1013,7 +1013,7 @@ export function Gallery() {
                 note="`href` (plus `target`/`rel`) renders an `<a>` with the same face, hit area, tooltip and accessible name — an icon-only control that opens another route keeps the browser's own middle-click, right-click and copy-link, which a `window.open` in an `onClick` cannot give."
               >
                 <div className="kit-row kit-row-wrap">
-                  <IconButton icon="external" label="Cards to pull" href="#/fulfillment" target="_blank" rel="noreferrer" />
+                  <IconButton icon="external" label="Cards to Pull" href="#/fulfillment" target="_blank" rel="noreferrer" />
                 </div>
               </Spec>
             </div>
@@ -1138,7 +1138,7 @@ export function Gallery() {
               <Spec label="input, with hint">
                 <label className="bn-field">
                   <span className="bn-field-label">Box name</span>
-                  <input className="bn-input" defaultValue="RB Epics" />
+                  <input name="section-note" className="bn-input" defaultValue="RB Epics" />
                   <span className="bn-field-hint">Names are unique; case is folded.</span>
                 </label>
               </Spec>
@@ -1147,7 +1147,7 @@ export function Gallery() {
                     field that is not one: Capture's section note is the real case. */}
                 <span className="bn-input-wrap">
                   <Icon name="list" size={16} />
-                  <input className="bn-input" placeholder="A note for this section" aria-label="Section note" />
+                  <input name="section-note" className="bn-input" placeholder="A note for this section" aria-label="Section note" />
                   <Kbd>N</Kbd>
                 </span>
               </Spec>
@@ -1161,15 +1161,15 @@ export function Gallery() {
               <Spec label="large, mono, disabled">
                 <label className="bn-field">
                   <span className="bn-field-label">Card name</span>
-                  <input className="bn-input bn-input-lg" placeholder="Type the name of the card" />
+                  <input name="bn-input" className="bn-input bn-input-lg" placeholder="Type the name of the card" />
                 </label>
                 <label className="bn-field">
                   <span className="bn-field-label">Run</span>
-                  <input className="bn-input bn-input-mono" defaultValue="2026-09-02-box6-01" />
+                  <input name="bn-input" className="bn-input bn-input-mono" defaultValue="2026-09-02-box6-01" />
                 </label>
                 <label className="bn-field">
                   <span className="bn-field-label">Disabled</span>
-                  <input className="bn-input" defaultValue="Not editable" disabled />
+                  <input name="bn-input" className="bn-input" defaultValue="Not editable" disabled />
                 </label>
               </Spec>
               <Spec label="checks">

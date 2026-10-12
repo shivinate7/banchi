@@ -37,7 +37,7 @@
  * the same manual-wins-until-toggled behaviour, just kept inside the component that draws it.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 
 import { ReadingAge } from './CardLocations'
 import { collectorNumber } from './cardNumber'
@@ -307,6 +307,20 @@ export function factGroupsOf(
 
 /* -------------------------------------------------------------------------- the hero head */
 
+/** A side figure with a text box that opens on hover and on keyboard focus (Escape closes it). The box is
+ *  `visibility`-toggled in CSS, so it holds its room and moves nothing (D313). */
+function FigureChip({ tip, children }: { readonly tip: string; readonly children: ReactNode }) {
+  const id = useId()
+  return (
+    <span className="browse-hero-chip" tabIndex={0} aria-describedby={id} onKeyDown={(e) => e.key === 'Escape' && e.currentTarget.blur()}>
+      {children}
+      <span id={id} role="tooltip" className="browse-hero-chip-tip">
+        {tip}
+      </span>
+    </span>
+  )
+}
+
 /** THE BAND'S FIGURES, HANDED IN BY WHICHEVER SCREEN HOLDS THE CARD'S SEARCH GROUP (the card-detail
  *  spec, "The band"). They are facts about the card and its copies, so they sit with the card and
  *  not over the copies list. `Inventory.tsx` and `Orders.tsx` both build one and pass it through
@@ -556,7 +570,7 @@ export function CardHeroHead({
     <div className="browse-hero-head">
       <div className="browse-hero-text">
         <div className="browse-hero-titlerow">
-          <h2 className={name === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>{name ?? 'Not identified yet'}</h2>
+          <h2 className={name === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>{name ?? 'Not Identified Yet'}</h2>
           {/* THE RE-SORT BUTTON sits beside Actions, the same IconButton at the same size, so the row's
               height is the same with it or without it (D118). Shown only while the order is stale;
               the staleness sentence is its tooltip and accessible name. */}
@@ -616,16 +630,16 @@ export function CardHeroHead({
           ) : null
         ) : (
           <p className="browse-hero-side">
-            <span>
+            <FigureChip tip="You have captured this many copies of this card, sold ones included.">
               Captured<b>{figures.group.copies.length}</b>
-            </span>
-            <span>
+            </FigureChip>
+            <FigureChip tip="You have this many sold copies tucked out of the list below.">
               Hidden<b>{figures.hidden}</b>
-            </span>
+            </FigureChip>
             {figures.group.sku === null ? null : (
-              <span>
+              <FigureChip tip="You have sent this many copies to TCGplayer in an import file.">
                 Sent<b>{figures.group.listed.pushed}</b>
-              </span>
+              </FigureChip>
             )}
           </p>
         )}

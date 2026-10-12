@@ -19,7 +19,6 @@ const EMPTY_W = 960
 const SCREENS = [
   { name: 'Shipping', block: '.shipping-empty' },
   { name: 'Orders', block: '.orders-empty' },
-  { name: 'Review', block: '.review-done' },
 ] as const
 
 const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
@@ -84,6 +83,21 @@ for (const theme of ['light', 'dark'] as const) {
           await page.screenshot({ path: `/tmp/empty-${name}-${width}-${theme}.png` })
         })
       }
+
+      /* ux-w2 B13 (identify-engine-pick.md 10.4, owner ruling). The Review empty card spans the stat strip, so it is
+         measured against the band, not against a fixed cap: same width, same left edge, within 1px. */
+      test('Review empty card spans the stat strip, on one left edge', async ({ page }) => {
+        await page.goto('/#/review')
+        await page.locator('.review-done').waitFor()
+        await page.locator('.review-band').waitFor()
+        await settleAnimations(page)
+        const band = await page.locator('.review-band').boundingBox()
+        const card = await page.locator('.review-done').boundingBox()
+        expect(band, 'the stat strip is drawn').not.toBeNull()
+        expect(card, 'the empty card is drawn').not.toBeNull()
+        expect(Math.abs(card!.width - band!.width), `${Math.round(card!.width)}px card, ${Math.round(band!.width)}px strip`).toBeLessThanOrEqual(1)
+        expect(Math.abs(card!.x - band!.x), 'one left edge').toBeLessThanOrEqual(1)
+      })
 
       test('Shipping loaded lanes reach the frame edge', async ({ page }) => {
         await page.goto('/#/shipping')

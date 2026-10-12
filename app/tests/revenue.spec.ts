@@ -208,6 +208,24 @@ test('a failed read draws the failure notice', async ({ page }) => {
   await expect(page.getByText('Could not read your orders')).toBeVisible()
 })
 
+/* ux-w2 B19 (sales-screen.md, signed off). Red on main until the build lands. The sort field and its direction live in ONE menu: one button that
+   opens a menu, not a segmented group of sort fields. The Singles, Sealed and All toggles stay as they are. */
+test('ux-w2 B19: the sort row is one menu button, not a segmented group, and Singles, Sealed and All stay', async ({ page }) => {
+  await stub(page, generalOrders())
+  await open(page, '?period=all')
+  await expect(page.locator('main.revenue')).toBeVisible()
+
+  await expect(page.getByRole('group', { name: /^sort$/i }), 'no segmented group carries the sort fields').toHaveCount(0)
+  const trigger = page.getByRole('button', { name: /sort/i })
+  await expect(trigger, 'one button names the sort').toHaveCount(1)
+  await trigger.click()
+  await expect(page.getByRole('menu').or(page.getByRole('listbox')), 'the sort button opens one menu').toBeVisible()
+
+  for (const name of [/^singles$/i, /^sealed$/i, /^all$/i]) {
+    await expect(page.getByRole('button', { name }).first(), `the ${name} toggle stays`).toBeVisible()
+  }
+})
+
 test('gross-descending is the default sort, and its column carries aria-sort', async ({ page }) => {
   await stub(page, generalOrders())
   await open(page, '?period=all')
@@ -339,7 +357,7 @@ test('a drill-down opens a product row into the orders behind it, and closes aga
   await open(page, '?period=all')
 
   const row = page.locator('.revenue-table tbody tr', { hasText: 'Charizard ex' })
-  const toggle = row.getByRole('button', { name: /orders behind Charizard ex/ })
+  const toggle = row.getByRole('button', { name: /Orders Behind Charizard ex/ })
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
   await toggle.click()
@@ -506,7 +524,7 @@ test('no PAGE horizontal scroll at 390 with the Today column active — it scrol
   await setViewport(page, { width: 390, height: 900 })
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  await page.getByRole('button', { name: "Compare to today's market" }).click()
+  await page.getByRole('button', { name: "Compare to Today's Market", exact: true }).click()
   await expect(page.locator('.revenue-table thead th', { hasText: 'Today' })).toBeVisible()
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(0)
@@ -634,7 +652,7 @@ test('market comparison is a press, never a mount, and draws a sign and a word (
   expect(calls()).toBe(0)
   await expect(page.locator('.revenue-table thead th', { hasText: 'Today' })).toHaveCount(0)
 
-  await page.getByRole('button', { name: "Compare to today's market" }).click()
+  await page.getByRole('button', { name: "Compare to Today's Market", exact: true }).click()
   expect(calls()).toBeGreaterThan(0)
 
   await expect(page.locator('.revenue-table thead th', { hasText: 'Today' })).toBeVisible()
@@ -649,7 +667,7 @@ test('a name with no price draws no figure, never a zero, and the coverage is st
   stubPrices(page, {}) // neither the archive nor readings has priced anything
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  await page.getByRole('button', { name: "Compare to today's market" }).click()
+  await page.getByRole('button', { name: "Compare to Today's Market", exact: true }).click()
   await expect(page.locator('.revenue-market-none').first()).toHaveText('no reading')
   await expect(page.locator('.revenue-market-none')).toHaveCount(3)
   await expect(page.locator('.revenue-market-note')).toContainText('0 of 3 names have a price today, 3 do not')
@@ -664,7 +682,7 @@ test('the archive answers first, and a name only readings has priced still draws
   })
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  await page.getByRole('button', { name: "Compare to today's market" }).click()
+  await page.getByRole('button', { name: "Compare to Today's Market", exact: true }).click()
   await expect(page.locator('.revenue-market-note')).toContainText('2 of 3 names have a price today, 1 do not')
   const charizard = page.locator('.revenue-table tbody tr', { hasText: 'Charizard ex' }).locator('.revenue-market')
   await expect(charizard).toContainText('$18.00')
