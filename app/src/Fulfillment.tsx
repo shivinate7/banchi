@@ -699,6 +699,9 @@ export function Fulfillment() {
 
   /** How many copies to pick, across every card still owed — the "Today" figure. */
   const totalWanted = useMemo(() => owed.reduce((sum, item) => sum + item.wanted, 0), [owed])
+  useEffect(() => {
+    if (orders !== null && !ordersFailed) lastCount = openOrderKeys.length === 0 || owed.length === 0 ? 0 : totalWanted
+  }, [orders, ordersFailed, openOrderKeys, owed, totalWanted])
   /** How many copies the open orders want that the store cannot place at all —
    *  `plan.shortfall`'s own count, the reason the empty state may never claim "nothing waits"
    *  while an order is open and unfillable (the owner's own review finding, UX-001). */
@@ -1034,7 +1037,7 @@ export function Fulfillment() {
       <div className="ff-notice">
         <Icon name="alert" size={26} className="ff-notice-icon" />
         <p className="fulfillment-say">
-          These cards may have changed since they were last checked. Try again.
+          These cards may have changed since they were last checked.
         </p>
         <button className="ff-quiet" type="button" onClick={tryAgain}>
           <Icon name="refresh" size={22} />
@@ -1055,8 +1058,8 @@ export function Fulfillment() {
   /* The loaded Today tile's own elements, hidden: loading and loaded share one box. Hidden from
      assistive tech too, so it never reads as an empty landmark. */
   const todayFrame = (
-    <p className="ff-count" aria-hidden="true" style={{ '--ff-n': 1 } as CSSProperties}>
-      <b className="ff-count-num">0</b> <span className="ff-count-word">Left</span>
+    <p className="ff-count" aria-hidden="true">
+      <span className="ff-skel ff-count-skel" />
     </p>
   )
 
@@ -1071,8 +1074,6 @@ export function Fulfillment() {
 
   let body: ReactNode
   let wide = false
-  /* The list and the card draw the stale notice themselves, below their bar or card, so it never pushes either. */
-  let staleBelowBar = false
 
   if (cards === null && loadFailed) {
     body = (
@@ -1242,11 +1243,8 @@ export function Fulfillment() {
           </div>
           </div>
         </article>
-        {/* Below the card, never above it: a notice that arrives after first paint must not push the card. */}
-        {stale}
       </>
     )
-    staleBelowBar = true
   } else {
     const hunting = query.trim() !== ''
 
@@ -1354,9 +1352,9 @@ export function Fulfillment() {
     let countFigure: ReactNode = null
     if (orders === null) {
       today = null
-      /* Never blank: a read that has not answered, or that failed before it ever did, shows the
-         loading count. A failed re-read keeps `orders`, so the count it last showed stays. */
-      countFigure = ordersFailed && lastCount !== null ? countOf(lastCount) : todayFrame
+      /* Never a made-up number: with no count known yet the slot shows its loading state, and once one
+         is known (a return, a failed re-read) it shows that count at once. */
+      countFigure = lastCount !== null ? countOf(lastCount) : todayFrame
     } else if (openOrderKeys.length === 0) {
       countFigure = countOf(0)
       /* No order is open at all — the ONE state allowed to say "nothing waits" (the owner's
@@ -1398,8 +1396,6 @@ export function Fulfillment() {
         )
     }
 
-    if (orders !== null && !ordersFailed) lastCount = openOrderKeys.length === 0 || owed.length === 0 ? 0 : totalWanted
-    staleBelowBar = true
     const shownOwed = allOwed ? owed : owed.slice(0, SHOWN_OWED)
     const hiddenOwed = owed.length - shownOwed.length
 
@@ -1441,8 +1437,6 @@ export function Fulfillment() {
         </div>
         </div>
 
-        {/* Below the bar, never above it: a sentence that arrives with the orders must not push the search. */}
-        {stale}
         {today}
 
         {hunting ? (
@@ -1698,8 +1692,10 @@ export function Fulfillment() {
     >
       <div className="ff-glow" aria-hidden="true" />
       <div className="ff-column" data-wide={wide ? 'true' : 'false'}>
-        {staleBelowBar ? null : stale}
         {body}
+        {/* ONE RULE: the stale notice is the last thing in the column, in every view, so a notice that
+            arrives after first paint pushes nothing that was already drawn. */}
+        {stale}
       </div>
       {sheet}
       {bigPhoto}
