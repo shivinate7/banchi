@@ -1,0 +1,126 @@
+# Lean server: stock images outside Review
+
+**Status: PROPOSAL. Nothing is built.** No code, route or setting in this file exists. The owner decides which option, if any, to build.
+
+Governed by D301 (stock photos are hotlinked, never mirrored), D89 (a sold card's photo is reclaimed on purpose), D36 (the store decides a card's slot), D43 (each checkout gets its own port), D88 (SQLite is the store of record), D316 (a Capture button starts and stops the dispenser) and D42 (main moves by pull request).
+
+## 1. The idea
+
+The owner wants the server to take less of the Mac. The plan: the photos the rig takes stop being what every screen shows. Stock images (the hotlinked art from the catalog) draw every photo view once a card is verified. The real photograph is a backup, and Review is the only screen that shows it. At the far end, the server itself moves to the cloud and the Mac keeps only the camera and the dispenser.
+
+## 2. Current state
+
+### Where a real photograph lives
+
+- **Write.** `server/capture_server.py:do_capture` calls `store/photos.py:write`. The file is `photos/<2 hex>/<cid>.jpg`, outside `captures/` and gitignored (D172, a card is filed by its name; D183, photos are filed by name). Photos are outside the SQLite transaction (`docs/specs/capture-server.md`, rule 3).
+- **Size.** About 1.8 MB each (D89). The corpus is 4.45 GB (`cli/cmd_cards.py`, the `cards photos` header). In this checkout no `photos/` or `captures/` directory exists, so the measure is 0 bytes. The owner's Mac figure is **unmeasured**.
+- **Serve.** `GET /photo/<box>/<index>` (`do_photo`) reads the file and hashes it for an ETag: about 0.6 ms read plus 0.15 ms hash (its docstring). `GET /photo/by-card/<cid>?v=<capture_id>` (`do_photo_by_card_ex`) answers a repeat view with a 304 and no file read. `?crop=card` runs the card finder (`identify/images.py:preview_cut`). One finder runs at a time (`_finder_lock`), and a busy finder answers the whole frame. The crop cache is 48 MB (`PREVIEW_CACHE_BYTES`).
+- **Lane.** `/photo/` and `/assets/` use `PHOTO_SLOTS = 4`, a pool apart from `REQUEST_SLOTS = 4` (DEBT11, a parked writer holds a request slot). The sweep measured 53 req/s at one slot against 12 unbounded. Photo p50 rose from 5 ms to 136 ms under six looping `/orders` readers.
+- **Reclaim.** `POST /boxes/<box>/photos/reclaim` deletes only sold cards' photos and keeps the digest (D89). No other photo is ever deleted.
+
+### Where stock images come from
+
+- `pipeline/stockimages.py:StockImages` resolves `(game, set_name, number)` to a hotlinked CDN URL or `None`. Pokemon reads `vendor/pokemon-tcg-data/` (26 MB here, no network). Riftbound and One Piece read tcgcsv. The URL rides as `image_url` on `GET /pipeline/sets` and `GET /pipeline/pricing`. The browser loads the bytes from the CDN. The Mac serves no stock byte (D301).
+- One exception: the free reader fetches each stock image once, takes a 768-number fingerprint and drops the bytes (`cli/cmd_match.py`, `banchi match prepare`).
+- `make catalog-mirror` fills a local copy of the hires art, about 16.7 GB (`scripts/catalog-image-mirror.py`). It is a harness input (D15), not a serving path.
+
+### Which screens show which photo today
+
+Counts are references to `photoUrl` or `previewUrl` in `app/src/*.tsx`.
+
+| Screen | Real photo | Stock image |
+|---|---|---|
+| Review (`ReviewQueue`, `ReviewBandSheet`, `RunsComposer`) | yes (5, 2, 3) | no |
+| Capture (`CaptureScreen`) | yes (4), the Recent rail | no |
+| Inventory (`Inventory`, `CardHero`, `CardLocations`, `BoxBrowse`) | yes, cropped previews (2, 3, 2, 4) | Sets view only (`InventorySets`); one variant thumbnail in `BoxBrowse` |
+| Home (`Home`) | yes (2) | no |
+| Pricing (`Pricing`) | yes (4) | yes (6), the main view |
+| Product (`ProductHistory`) | none | none |
+| Orders walk (`OrdersWalkPane`) | fallback only | first choice (`image_url ?? photoUrl`) |
+| Revenue (`Revenue`) | when a copy is on hand | fallback (`stockPhotos[sku]`) |
+| Fulfillment (`Fulfillment`) | yes (6): the pull photo (`previewUrl`) and a full view | no |
+| Codes (`Codes`) | yes | no |
+
+So the stock-first change is already built for Pricing, Sets and the Orders walk. The screens left are Inventory, Card hero, Box browse, Home and Fulfillment.
+
+### Where the server load is
+
+This comes from code and the records. Nothing here is a new measurement.
+
+- **Photo bytes: cheap.** About 0.75 ms per full-frame request, and a 304 skips the read. The lane exists to keep this path fast (DEBT11).
+- **Crop: the one named photo hot spot.** `preview_cut` runs the card finder on a cache miss. It is GIL-bound and runs one at a time. Cost per run: unmeasured.
+- **Free reader sweep.** `identify/sweep.py` reads every `captured` photo with the marqo model in a worker process. It reads real photos from disk and takes no request slot. Capture p99 measured 30.5 ms with it on and 30.6 ms with it off. Idle memory is the watcher only (stdlib and sqlite3). Worker CPU and memory: unmeasured.
+- **Heavy reads.** DEBT11 names `/orders`, `/inventory`, `/boxes`, `/search`, `/pricing`, `/graveyard` and `/pipeline/*` as the GIL-bound reads that wait behind parked writers. A stock image does not change these. They return rows, not photos.
+- **Writes.** One SQLite transaction per capture: 2.4 to 2.9 ms from 1,560 to 50,000 cards (D88).
+- **Client request budget.** Reads in flight are capped at 4, and polls at one per 3 s (`app/tests/request-budget.spec.ts`, `docs/specs/efficiency.md`).
+
+**Finding.** The photo path is already the cheapest part of the server. Stock images in place of real photos save disk and the finder, and little else. The Mac's load comes mostly from the heavy GIL-bound reads, the sweep and the finder. Section 5 measures this before any build.
+
+## 3. Options, smallest to largest
+
+### (a) Stock image first on every non-Review screen; real photo kept and one press away
+
+- **Changes.** Inventory, Card hero, Box browse, Home and Fulfillment draw `image_url` first. They fall back to `photoUrl` when a card has no stock image. Each gets a "my photo" press that loads the real one. The server adds `image_url` to `/inventory` rows, or the app reads it from the Sets path. No storage change.
+- **Gain.** No more `crop=card` requests on those screens, so no finder runs there. Fewer `/photo/` hits. A sold card's crop never loads. Mac load: unmeasured, expected small (section 2).
+- **Cost.** Stock art can be the wrong printing, condition or language. It cannot confirm a physical slot (D38, a photo is sized to confirm a slot). It cannot show wear. A printing with no stock image still needs the real photo. A CDN outage blanks the screen unless the real photo is the fallback.
+- **Decisions touched.** D38: its premise is that the owner's photo confirms where the card is. Stock art cannot. D6 (one photo route serves every view): premise "the pull modal shows the card's own capture photo". D301 stays true, since stock stays hotlinked. D125 (photos crop to card): the crop moves to Review and press-through only.
+- **What a person sees.** Inventory and Home show catalog art with the card's own label. Fulfillment's pull photo is the risk (section 6, Q2). Review and Capture are unchanged.
+
+### (b) Real photos leave the server's hot path: a separate photo store or cold storage
+
+- **Changes.** `store/photos.py` stays the one home, and gains a backend with two places. Hot is local disk for the newest and unreviewed cards. Cold is object storage or an external disk. Verified cards' photos upload to cold on a schedule. Review reads hot, then cold. D89 reclaim keeps its meaning for sold cards.
+- **Gain.** Disk: up to 4.45 GB now, about 176 GB at 100,000 cards (D89's arithmetic), minus reclaim. CPU: none by itself. Pairs with (a).
+- **Cost.** A new moving part: upload, retry, a cold-read delay in Review, an account and a bill. The ETag and 304 path (`do_photo_by_card_ex`) needs a cold-read branch.
+- **Decisions touched.** D89: premise "the retained set is about 9 GB". Cold storage makes keeping every photo cheap, so reclaim could stop. D36 (the store decides a slot): its `photo_sha256` binding needs the bytes, so a re-bind on cold photos reads from the cloud. D172 stays, because the cid is still the key.
+- **What a person sees.** The same as (a). Review is slower on a card whose photo went cold, unless a prefetch runs for the queue.
+
+### (c) Split: cloud API plus a thin local capture agent
+
+- **Changes.** The Mac runs only a capture agent: camera frames, the dispenser link (D316) and an upload queue. The cloud runs the API, the store (SQLite or a hosted DB), pipeline routes, TCGplayer export handling, the sweep and the photo store. The front end talks to the cloud.
+- **Gain.** The Mac sheds the server, the store, the sweep and the finder. What stays: the browser tab, the camera and the Bluetooth link. Mac load drops most here. Measured: no.
+- **Cost.** Auth and TLS (section 4). A hosted bill. A second deploy path. Capture must work with the network down, so the agent needs a local spool and a rule for a card whose upload has not landed. Latency per capture rises from about 30 ms (local p99) to a network round trip.
+- **Decisions touched.** D138 (one process serves the product): premise "one process". D43 (each checkout gets its own port and store) and D13 (one truth on the Mac, as D43 states it): premise "the truth lives in the Mac's main checkout". D88: premise "one file, one lock, local disk". D5 (two personas): the Fulfiller's phone would reach the cloud, not the LAN. D42: the deploy needs its own rule about what may reach production.
+- **What a person sees.** The same screens. Capture shows a "waiting to upload" state. Every screen needs an offline state it does not have today.
+
+### (d) The full cloud server
+
+- **Changes.** (c) plus the capture step: the browser sends frames to the cloud directly, and no local agent exists. Only the dispenser's Web Bluetooth link stays in the tab (D316).
+- **Gain.** The Mac is a browser. No local process to restart.
+- **Cost.** Everything in (c). Capture also needs the network on every card. The feeder paces at 623 ms per card (D88), so a dropped link stalls the line or loses a card. The photos cannot be re-taken.
+- **Decisions touched.** All of (c). Also the "no auth" line in CLAUDE.md, and the rule that nothing about a card lives in `localStorage`. Also D19 (arming is an act), if the arm state moves.
+- **What a person sees.** The same screens, slower on a bad link. Not recommended.
+
+## 4. Hard constraints and risks
+
+- **Identity truth.** D36 makes the photograph the truth about which card is in which slot. `realign` hashes photos. "Never guess an identification" sends doubt to Review with its photo. `banchi match audit` compares the free reader against every filed card's photo. A stock image is the catalog's art for a printing the card was already matched to. It cannot show that the match is right. So Review must keep the real photo. Any cloud move must keep every unverified card's photo readable.
+- **What stays on the Mac in every option.** The camera, the dispenser link (D316) and the capture step up to the shutter. In (a) and (b) the server and store stay on the Mac as well, one store per checkout (D43).
+- **Offline capture.** The owner shoots a box in one sitting. Options (c) and (d) put a network on the critical path of a photo nothing can regenerate. A local spool is the minimum. This is the largest risk in the proposal.
+- **Privacy of real photos.** The photos show the owner's stock. Today they never leave the Mac. In (b) to (d) they sit with a cloud provider. The owner decides what is acceptable, including who can read the bucket.
+- **Code-card opsec.** A live unredeemed code card is a bearer instrument. A code-card photo in cloud storage is a copy of that instrument. The pre-commit hook covers git only. Code-card photos must stay local, or the feature stays dormant (CLAUDE.md, "Code cards"). Any (b) to (d) design needs a per-game rule that excludes them.
+- **Auth.** The front end has no auth. The server's only guard is an Origin allowlist on mutating verbs. Its own comment says it is not authentication (`server/capture_server.py`, the `SAFE_METHODS` block). `GET /photo` is `*` on purpose. That is acceptable on localhost and the LAN. It is not acceptable on the internet. Options (c) and (d) cannot ship without a login, TLS and a per-route read rule. No such design exists.
+- **Threaded server in the cloud.** `CaptureServer` is a `ThreadingHTTPServer` with 4 + 4 slots tuned to one Mac's GIL (DEBT11). A cloud host would need the same bounds or a real WSGI or ASGI stack. The tuning does not transfer.
+- **SQLite.** The store is one local file with a lock and a WAL (D88). A hosted copy needs one writer. Two writers (Mac and cloud) corrupt the truth.
+- **TCGplayer exports and CSVs.** Exports land in `inventory/.exports/<game>/` and imports are written locally (D166, the catalog export belongs to the game). Export download uses the owner's TCGplayer session. Moving that to a cloud host is a credential question, not a code one.
+- **Stock image availability.** DEBT44 records a brand-new set with no vendored row. `no_photo` and `no_url` printings exist. Sealed product resolves through tcgcsv only. Each needs a fallback to the real photo.
+- **Cost.** Unmeasured. Storage for 4.45 GB is small. The variable cost is a hosted API with an always-on database, and egress for Review photos.
+
+## 5. Recommended first step
+
+**Measure, then do (a) on the one screen that costs the most.** This is small and reversible.
+
+1. **Baseline, no code.** Read the `slow request:` lines (`scripts/status.py` greps them) and `photo_slots_in_use` over one working week. Record Activity Monitor CPU and memory for the server, the sweep worker and the browser tab. Do this during one capture sitting and one Inventory session. These are **unmeasured today**. They answer whether photos are the load at all.
+2. **Count the finder.** Add one counter of `preview_cut` cache misses and their wall time to `/status`. This is the smallest piece of code in the proposal. It names the one photo hot spot.
+3. **Build (a) for Inventory previews only** (`Inventory.tsx`, `BoxBrowse.tsx`). Put it behind a setting the owner can disable, with the real photo one press away. Leave Fulfillment, Home and Card hero alone until the owner rules on Q2.
+
+**Proof it helped.** Compare the baseline week against the week after. Compare finder misses per Inventory session, `/photo/` requests per session, the `slow request:` count, and server CPU in the same sitting. **If the finder count and CPU do not move, stop.** Photos were not the load. The next lever is then the heavy reads in DEBT11 (a third bound, or a writer that yields its slot), not a cloud move.
+
+**Undo.** Disable the setting. No data moves and nothing is deleted.
+
+## 6. Open questions for the owner
+
+1. **What is the Mac load you feel?** Options: (i) capture sittings run slow, (ii) browsing Inventory or Review is slow, (iii) fan or battery use with the server idle, (iv) disk space. Recommend naming one. Items (i) and (iii) point at the sweep and the heavy reads. Only (iv) points at photo storage.
+2. **Should Fulfillment keep the real photo for a pull?** Options: (i) real photo always (today), (ii) stock first with "my photo" one press away, (iii) stock only. Recommend (i). The Fulfiller confirms the card in hand, and D38's premise holds there.
+3. **Keep every real photo after the card is verified?** Options: (i) keep all on the Mac (today). (ii) Keep all, and move verified ones to cold storage ((b)). (iii) Reclaim verified ones as sold ones are (D89). Recommend (i) until the disk is a measured problem. Option (iii) cannot be undone. It drops D36's re-bind for those cards.
+4. **Is a cloud server wanted, or only a lighter Mac?** Options: (i) a lighter Mac only ((a), (b)). (ii) A cloud API with a local capture agent ((c)). (iii) The full cloud ((d)). Recommend (i). Option (c) needs auth, an offline spool and a hosting bill. None of these exist.
+5. **May real photos leave the Mac at all?** Options: (i) never, (ii) only verified cards of non-code games, (iii) all. Recommend (i) until Q4 picks (c).
+6. **Stock image fallback when none exists.** Options: (i) real photo, (ii) a labeled placeholder. Recommend (i).

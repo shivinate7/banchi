@@ -5407,6 +5407,14 @@ COMPONENTS = [
         "governed_by": ["D16"],
     },
     {
+        "path": "docs/specs/lean-server.md",
+        "status": "tbd",
+        "does": "PROPOSAL, nothing built: how to make the server lighter on the Mac by showing "
+                "stock images outside Review, from the smallest change to a full cloud server, "
+                "with measured and unmeasured load, constraints, a first step and open questions.",
+        "governed_by": ["D301", "D89", "D36", "D43", "D88", "D316", "D42"],
+    },
+    {
         "path": "fixtures/",
         "status": "built",
         "does": "real TCGplayer exports for three product lines — Pokemon (SV09), Riftbound "
