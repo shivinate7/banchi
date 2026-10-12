@@ -3588,7 +3588,7 @@ for (const width of [1440, 820]) {
 
     test('picking a section selects exactly its on-hand cards and scrolls them into view', async ({ page }) => {
       await openClaims(page)
-      await choose(page, /Section 2.*59 cards/)
+      await choose(page, /Section 2.*59 cards/i)
       const picker = page.locator('.bn-set-picker')
       await expect(picker.locator('.bn-set-picker-count')).toHaveText('59 of 88 picked')
       const boxes = picker.locator('.bn-set-picker-card input')
@@ -3602,7 +3602,7 @@ for (const width of [1440, 820]) {
 
     test("applying with a section picked writes only that section's positions", async ({ page }) => {
       const wire = await openClaims(page)
-      await choose(page, /Section 2.*59 cards/)
+      await choose(page, /Section 2.*59 cards/i)
       await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
       await page.getByRole('textbox', { name: 'Note' }).fill('wb1 r1')
       await page.getByRole('button', { name: /^Apply to/ }).click()
@@ -3612,7 +3612,7 @@ for (const width of [1440, 820]) {
 
     test("whole box keeps today's behavior: no indices key", async ({ page }) => {
       const wire = await openClaims(page)
-      await choose(page, /Section 2.*59 cards/)
+      await choose(page, /Section 2.*59 cards/i)
       await choose(page, /^Whole box/i)
       await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
       await page.getByRole('textbox', { name: 'Note' }).fill('all')
@@ -3630,7 +3630,7 @@ for (const width of [1440, 820]) {
         control: await control.boundingBox(),
         scroll: await sheet.evaluate((el) => el.scrollTop),
       }
-      await choose(page, /Section 2.*59 cards/)
+      await choose(page, /Section 2.*59 cards/i)
       await expect(page.locator('.bn-set-picker-count')).toHaveText('59 of 88 picked')
       const after = {
         control: await control.boundingBox(),
@@ -4260,7 +4260,7 @@ test('the control that reclaims does not exist until the free count has answered
   await page.route(/\/boxes\/\d+\/photos$/, async () => {
     /* deliberately never fulfilled */
   })
-  await page.getByRole('button', { name: /Reclaim the photographs of 1 sold card in ME01 commons/ }).click()
+  await page.getByRole('button', { name: /Reclaim the photographs of 1 sold card in ME01 commons/i }).click()
   await expect(page.locator('.boxops-confirm')).toContainText('No undo')
   await expect(page.getByRole('button', { name: /permanently$/ })).toHaveCount(0)
   expect(wire.filter((sent) => sent.path.endsWith('/photos/reclaim'))).toHaveLength(0)
@@ -4271,7 +4271,7 @@ test('the reclaim names the count and the bytes, sends confirm, and both presses
 }) => {
   const wire = await open(page)
   await openBoxOps(page)
-  await page.getByRole('button', { name: /Reclaim the photographs of 1 sold card in ME01 commons/ }).click()
+  await page.getByRole('button', { name: /Reclaim the photographs of 1 sold card in ME01 commons/i }).click()
 
   const panel = page.locator('.boxops-confirm')
   /* THE NUMBER AND THE SIZE, BEFORE THE PRESS. `3_612_000` bytes is `3.4 MB` (1024 units); the sentence
@@ -4495,7 +4495,7 @@ test('the control that releases does not exist until the free plan has answered'
   await page.route(/\/boxes\/\d+\/listings$/, async () => {
     /* deliberately never fulfilled */
   })
-  await page.getByRole('button', { name: /Release the listing hold on 3 cards/ }).click()
+  await page.getByRole('button', { name: /Release the listing hold on 3 cards/i }).click()
 
   /* ABSENT, NOT DISABLED — docs/DESIGN.md's rule for the run panel's spend button, for the
      same reason: a disabled button is one attribute away from pressable, and that attribute
@@ -4511,7 +4511,7 @@ test('the plan names what each SKU gives up, what it keeps, and which box holds 
 }) => {
   await open(page, HELD_BOXES)
   await openBoxOps(page)
-  await page.getByRole('button', { name: /Release the listing hold on 3 cards/ }).click()
+  await page.getByRole('button', { name: /Release the listing hold on 3 cards/i }).click()
 
   const panel = page.locator('.boxops-confirm')
   await expect(panel).toContainText("you've checked TCGplayer and it holds none of them")
@@ -4530,7 +4530,7 @@ test('the plan names what each SKU gives up, what it keeps, and which box holds 
 test('the release sends confirm, and only after the plan is on screen', async ({ page }) => {
   const wire = await open(page, HELD_BOXES)
   await openBoxOps(page)
-  await page.getByRole('button', { name: /Release the listing hold on 3 cards/ }).click()
+  await page.getByRole('button', { name: /Release the listing hold on 3 cards/i }).click()
 
   const fire = page.getByRole('button', { name: 'TCGplayer holds none of these — release' })
   await expect(fire).toBeVisible()
@@ -4554,7 +4554,7 @@ test('the receipt repeats that the box is still held rather than implying succes
 }) => {
   await open(page, HELD_BOXES)
   await openBoxOps(page)
-  await page.getByRole('button', { name: /Release the listing hold on 3 cards/ }).click()
+  await page.getByRole('button', { name: /Release the listing hold on 3 cards/i }).click()
   await page.getByRole('button', { name: 'TCGplayer holds none of these — release' }).click()
 
   const receipt = page.locator('.boxops-receipt')

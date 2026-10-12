@@ -2683,7 +2683,7 @@ test('the reason a row adds nothing is a heading, composed by the SERVER, verbat
   const heads = page.locator('.pricing-group-head')
   await expect(heads).toHaveCount(2)
   await expect(heads.nth(0).locator('.pricing-group-why')).toHaveText(pending)
-  await expect(heads.nth(1).locator('.pricing-group-why')).toHaveText('nothing to add this run')
+  await expect(heads.nth(1).locator('.pricing-group-why')).toHaveText(/^Nothing to add this run\.$/i)
   await expect(page.locator('.pricing-row .pricing-why')).toHaveCount(0)
 
   /* THE FALSE SENTENCE BY NAME, so a client that starts composing again is caught even if it
