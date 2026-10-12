@@ -972,7 +972,12 @@ export function Fulfillment() {
     const el = sheetNode.current
     const root = el?.closest<HTMLElement>('main')
     if (el == null || root == null) return
-    const measure = () => root.style.setProperty('--ff-sheet-h', `${el.offsetHeight}px`)
+    /* A sheet hidden under the big photo collapses to nothing (`content-visibility: hidden`); that is not its size, so
+       it is not measured. The observer fires again when the photo closes and the sheet is back. */
+    const measure = () => {
+      if (root.dataset.zoom === 'true') return
+      root.style.setProperty('--ff-sheet-h', `${el.offsetHeight}px`)
+    }
     measure()
     const watch = new ResizeObserver(measure)
     watch.observe(el)

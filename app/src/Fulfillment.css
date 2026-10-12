@@ -47,7 +47,8 @@
      children of it, and a transformed ancestor would pin them to the page, not the screen. */
 }
 :root[data-theme='dark'] .fulfillment { --ff-fill: var(--bn-accent-hover); }
-/* The sheet is capped at `--ff-sheet-max` (below), and the page clears the whole of it. */
+/* The page clears the sheet's measured height, `--ff-sheet-h` (set in Fulfillment.tsx); the cap `--ff-sheet-max` is the
+   fallback until it is measured. */
 .fulfillment { --ff-sheet-max: min(50vh, 420px); --ff-sheet-max: min(50dvh, 420px); }
 /* THE STALE BANNER'S ROOM IS ALWAYS KEPT (R19). The banner is `--ff-notice-h` tall at most (padding plus three
    lines of text), floating `--bn-5` off the bottom; the page keeps that room whether the banner shows or not, so
