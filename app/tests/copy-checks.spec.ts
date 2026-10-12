@@ -529,7 +529,7 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   // Case-insensitive on purpose: the copy sweep is the casing guard; these specs check behaviour.
   await expect(page.locator('.review-band-count', { hasText: /matched free/i }).getByRole('button'), 'the matched tile is a button').toHaveCount(1)
   await expect(page.locator('.review-band-count', { hasText: /waiting for a paid look/i }).getByRole('button'), 'the paid tile is a button').toHaveCount(1)
-  await expect(page.locator('.review-band-count', { hasText: /not yet looked at/i }).getByRole('button'), 'the unread tile is a button').toHaveCount(1)
+  await expect(page.locator('.review-band-count', { hasText: /not looked at yet/i }).getByRole('button'), 'the unread tile is a button').toHaveCount(1)
   read('#/review', await page.evaluate(scanCopy))
   await page.locator('.review-band-count', { hasText: /matched free/i }).getByRole('button').click()
   await expect(page.getByRole('dialog'), 'the matched sheet opens').toBeVisible()

@@ -2812,7 +2812,7 @@ test.describe('the Review band sheets', () => {
         await seed(page, { fates, why, sitting })
         await openReview(page)
         await loaded(page)
-        await openCount(page, /waiting for a paid look$/)
+        await openCount(page, /waiting for a paid look$/i)
         await expect(sheet(page)).toHaveAccessibleName(/^64 waiting for a paid look$/i)
         const groups = sheet(page).getByRole('group')
         await expect(groups).toHaveCount(3)
@@ -2836,7 +2836,7 @@ test.describe('the Review band sheets', () => {
         await seed(page)
         await openReview(page)
         await loaded(page)
-        await openCount(page, /waiting for a paid look$/)
+        await openCount(page, /waiting for a paid look$/i)
         const lookalike = sheet(page).getByRole('group', { name: 'A look-alike with no photo of its own' })
         await expect(lookalike).toBeVisible()
         await expect(lookalike, 'no pointer line when there is no free fix').not.toContainText(/Name the|Shoot the card|Correct the set|Prepare matching/)
@@ -2851,7 +2851,7 @@ test.describe('the Review band sheets', () => {
         const wire = await seed(page)
         await openReview(page)
         await loaded(page)
-        await openCount(page, /waiting for a paid look$/)
+        await openCount(page, /waiting for a paid look$/i)
         await expect(sheet(page).getByRole('listitem')).toHaveCount(2)
         wire.fates['3/6'] = 'paid'
         wire.why['3/6'] = { code: 'match_too_weak' }
@@ -2880,14 +2880,14 @@ test.describe('the Review band sheets', () => {
         const wire = await seed(page)
         await openReview(page)
         await loaded(page)
-        await expect(band(page).getByRole('button', { name: /need a set named|needs a set named/ }), 'no line at 0').toHaveCount(0)
+        await expect(band(page).getByRole('button', { name: /need a set named|needs a set named/i }), 'no line at 0').toHaveCount(0)
         wire.fates['3/10'] = 'unhinted'
         wire.fates['3/9'] = 'unhinted'
-        const line = band(page).locator('.review-band-health').getByRole('button', { name: /^2 need a set named$/ })
+        const line = band(page).locator('.review-band-health').getByRole('button', { name: /^2 need a set named$/i })
         await expect(line).toBeVisible({ timeout: 8_000 }) // keep: waits one 3s poll tick
         await line.focus()
         await page.keyboard.press('Enter')
-        await expect(sheet(page)).toHaveAccessibleName(/^2 need a set named$/)
+        await expect(sheet(page)).toHaveAccessibleName(/^2 need a set named$/i)
         await page.keyboard.press('Escape')
         await expect(sheet(page)).toHaveCount(0)
         await expect(line).toBeFocused()
@@ -2901,7 +2901,7 @@ test.describe('the Review band sheets', () => {
         })
         await openReview(page)
         await loaded(page)
-        const named = band(page).locator('.review-band-health').getByRole('button', { name: /^3 need a set named$/ })
+        const named = band(page).locator('.review-band-health').getByRole('button', { name: /^3 need a set named$/i })
         await expect(named).toBeVisible()
         await named.click()
         const groups = sheet(page).getByRole('group')
@@ -2951,7 +2951,7 @@ test.describe('the Review band sheets', () => {
       await seed(page, { fates, why, sitting })
       await openReview(page)
       await loaded(page)
-      await openCount(page, /waiting for a paid look$/)
+      await openCount(page, /waiting for a paid look$/i)
       for (const [code, title] of table) {
         await expect(sheet(page).getByRole('group', { name: title }), `${code ?? 'no code'} reads as "${title}"`).toBeVisible()
       }
@@ -2971,7 +2971,7 @@ test.describe('the Review band sheets', () => {
         await seed(page, { on, fates: { '3/1': 'paid' }, sitting: ['3/1'], why: { '3/1': { code: null } } })
         await openReview(page)
         await loaded(page)
-        await openCount(page, /waiting for a paid look$/)
+        await openCount(page, /waiting for a paid look$/i)
         const group = sheet(page).getByRole('group', { name: 'No reason kept' })
         await expect(group, `reader ${on ? 'on' : 'off'}`).toContainText(sentence)
         await page.keyboard.press('Escape')
