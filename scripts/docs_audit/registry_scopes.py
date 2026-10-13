@@ -95,6 +95,16 @@ def _checks_registry() -> Optional[Tuple[List[dict], dict]]:
     return [dict(entry) for entry in entries], dict(needs)
 
 
+def workflow_shards(workflow: str) -> Set[str]:
+    """The shards `check.yml` runs: the matrix targets, and any job that runs one as a real
+    `run:` key. A commented line is not a run."""
+    live = "\n".join(ln for ln in workflow.splitlines() if not ln.lstrip().startswith("#"))
+    matrix = re.search(r"target:\s*\[([^\]]*)\]", live)
+    listed = {t.strip() for t in matrix.group(1).split(",")} if matrix else set()
+    # a shard that runs as a job of its own (`ci-static`, so `design-check` can wait on it alone)
+    return listed | set(re.findall(r"^\s*run: make (ci-check-[\w-]+)\s*$", live, flags=re.M))
+
+
 def _check_registry() -> Row:
     """scripts/checks.py, the one list `make check`, `make ci-check` and the CI shards run.
 
@@ -180,10 +190,7 @@ def _check_registry() -> Row:
                 "does not pass `PART={0}`, so T7 slice {0} runs in no shard."
             ).format(name.rsplit("-", 1)[1])))
     workflow = read(CHECK_WORKFLOW) if exists(CHECK_WORKFLOW) else ""
-    matrix = re.search(r"target:\s*\[([^\]]*)\]", workflow)
-    listed = {t.strip() for t in matrix.group(1).split(",")} if matrix else set()
-    # a shard that runs as a job of its own (`ci-static`, so `design-check` can wait on it alone)
-    listed |= set(re.findall(r"run: make (ci-check-[\w-]+)\s*$", workflow, flags=re.M))
+    listed = workflow_shards(workflow)
     if listed != set(CI_SHARD_RULES):
         findings.append(Finding(rel(CHECK_WORKFLOW), (
             "the `ci-check` job's matrix lists {0}, and the shards are {1}.\n"

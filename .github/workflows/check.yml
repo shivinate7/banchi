@@ -144,7 +144,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # SIX SHARDS IN PARALLEL, MEASURED AT 140 TO 297s EACH (`timeout-minutes` IS OVER 2x THE SLOWEST SHARD), AND ONE JOB NAMED `check` THAT ANSWERS FOR THEM (owner's word,
+  # SIX SHARDS IN PARALLEL, MEASURED AT 140 TO 297s EACH (`timeout-minutes` IS 9 MIN, THE SLOWEST MEASURED SHARD 297s), AND ONE JOB NAMED `check` THAT ANSWERS FOR THEM (owner's word,
   # 2026-09-28; D161, amended). The serial `make ci-check` took 600s on run 36509895299. The
   # shards' recipes together are exactly `ci-check`'s, and `make docs-audit`'s `check registry`
   # row fails when they are not. Each shard installs the same way and keeps D161's order, product
@@ -502,14 +502,14 @@ jobs:
   # took 11.7 minutes then; `--workers=2` fits the runner's real core count. The clause is amended,
   # not repealed — D136's own file records the amendment and the reason. Proof lives at
   # a twenty-dispatch table (at most 1 red run in 20) landing in a decision
-  # entry of its own in a later commit of the same task; this comment is not the ongoing reader. Six shards over two runners'
+  # entry of its own in a later commit of the same task; this comment is not the ongoing reader. Twelve shards over two runners'
   # worth of CPU is the same total runner-minutes as three ever were, spread thinner; wall-clock
   # per shard drops further and the browser comes with the job image.
-  # `fail-fast: false` because a red shard is a claim about its own cases and the other five are
+  # `fail-fast: false` because a red shard is a claim about its own cases and the others are
   # still worth their verdict.
   design-check:
     needs: [already-passed, browser-scope, ci-static]
-    # TWO GATES, EACH SKIPPING ONLY ON ITS OWN EXPLICIT ANSWER. `!cancelled()` replaces the
+    # THREE GATES, EACH SKIPPING ONLY ON ITS OWN EXPLICIT ANSWER. `!cancelled()` replaces the
     # implicit `success()`, so a gate job that FAILED releases the matrix instead of skipping
     # it — a broken lookup or a broken classifier is not a reason to test less (the browser-scope entry in docs/decisions/). Until
     # this line, a failed `already-passed` skipped the matrix; now it runs it.
