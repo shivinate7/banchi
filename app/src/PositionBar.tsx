@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 
 import type { Place, SectionDetail } from './types'
 import {
@@ -100,6 +100,17 @@ export function PositionBar({
   if (marker !== null) lastBox.current = marker
   if (depth?.marker != null) lastSection.current = depth.marker
   const boxAt = marker ?? lastBox.current
+
+  /* THE BAR STANDS ON THE CARD'S OWN CHIP. Chips are flex-grow with a 20px floor, so a box
+     fraction of the strip's width lands on whichever chip happens to be there. With the ruler
+     the stylesheet anchors the bar to `.position-bar-here` and `--pb-in` says how far across
+     that chip the card's cell is: by construction, never by a pixel. `--pb-box` is the old
+     whole-box percent, kept for a browser without anchor positioning. */
+  const own = spans.find((span) => span.current)
+  const inChip =
+    own === undefined || place.slot === null ? null : (place.slot - own.start + 0.5) / (own.end - own.start + 1)
+  const lastIn = useRef(0.5)
+  if (inChip !== null) lastIn.current = inChip
   const sectionAt = depth?.marker ?? lastSection.current
 
   /* THE SECTION RULER NEVER PASSES ITS CONTAINER (the owner's report, 2026-09-25, box WB1 R2:
@@ -200,7 +211,12 @@ export function PositionBar({
         <span
           className="position-bar-marker"
           data-gone={marker === null ? 'true' : undefined}
-          style={{ left: `${boxAt}%` }}
+          style={
+            {
+              '--pb-box': `${boxAt}%`,
+              '--pb-in': sectionDepth ? clamp(inChip ?? lastIn.current, 0, 1) : undefined,
+            } as CSSProperties
+          }
           aria-hidden="true"
         />
       </div>
