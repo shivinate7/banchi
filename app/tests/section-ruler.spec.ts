@@ -1,6 +1,6 @@
 // Protects: The section ruler never passes its container and scrolls the current section into view.
 // Governs: D155
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 import type { GameRegistry } from '../src/types'
 import { sealEveryTest } from './shell'
 import { setViewport } from './phoneSwitch'
@@ -48,34 +48,42 @@ const GAMES: GameRegistry = {
 
 /** A box of `sectionCount` sections, `cardsPerSection` cards each, with the current card at
  *  section 1 (or its last card, for a section smaller than 17 — the owner's own reported case). */
-function buildBox(sectionCount: number, cardsPerSection: number, pinAt?: number) {
+/** A box whose sections differ in size, with the walk's card in `section` at card `card`. */
+type PinnedShape = { sizes: readonly number[]; section: number; card: number }
+
+function buildBox(sectionCount: number, cardsPerSection: number, pinAt?: number, pinned?: PinnedShape) {
+  const sizes = pinned?.sizes ?? Array.from({ length: sectionCount }, () => cardsPerSection)
   const sections_detail = []
   let start = 1
-  for (let s = 1; s <= sectionCount; s += 1) {
-    sections_detail.push({ section: s, start, end: start + cardsPerSection - 1, count: cardsPerSection })
-    start += cardsPerSection
+  for (let s = 1; s <= sizes.length; s += 1) {
+    const count = sizes[s - 1] ?? 0
+    sections_detail.push({ section: s, start, end: start + count - 1, count })
+    start += count
   }
-  const boxTotal = sectionCount * cardsPerSection
-  const at = pinAt ?? Math.min(17, cardsPerSection)
+  const boxTotal = start - 1
+  const pinSection = pinned?.section ?? 1
+  const home = sections_detail[pinSection - 1]!
+  const at = pinned?.card ?? pinAt ?? Math.min(17, cardsPerSection)
+  const slot = home.start + at - 1
   const card = {
     box: 2,
     index: 1,
-    label: `Box 2, Section 1, Card ${at}`,
-    section: 1,
+    label: `Box 2, Section ${pinSection}, Card ${at}`,
+    section: pinSection,
     card: at,
     place: {
       located: true,
-      label: `Box 2, Section 1, Card ${at}`,
+      label: `Box 2, Section ${pinSection}, Card ${at}`,
       box: 2,
       index: 1,
-      slot: at,
-      section: 1,
+      slot,
+      section: pinSection,
       card: at,
       box_name: 'WB1 R2',
-      section_start: 1,
-      section_end: cardsPerSection,
+      section_start: home.start,
+      section_end: home.end,
       box_total: boxTotal,
-      fraction: (at - 1) / boxTotal,
+      fraction: (slot - 1) / boxTotal,
       neighbors: null,
       section_gaps: 0,
     },
@@ -126,8 +134,14 @@ function buildBox(sectionCount: number, cardsPerSection: number, pinAt?: number)
   return { card, boxes }
 }
 
-async function open(page: Page, sectionCount: number, cardsPerSection: number, pinAt?: number) {
-  const { card, boxes } = buildBox(sectionCount, cardsPerSection, pinAt)
+async function open(
+  page: Page,
+  sectionCount: number,
+  cardsPerSection: number,
+  pinAt?: number,
+  pinned?: PinnedShape,
+) {
+  const { card, boxes } = buildBox(sectionCount, cardsPerSection, pinAt, pinned)
   const cards = { '2/1': card }
 
   await page.route(/\/search\?/, (route) =>
@@ -335,3 +349,92 @@ test('the tick number under or next to the pin is hidden, and the chip sits mid-
   const chip = (await ruler.locator('.position-bar-chip').boundingBox())!
   expect(Math.abs(chip.y + chip.height / 2 - (track.y + track.height / 2)), 'chip centred on the track').toBeLessThan(1.5)
 })
+
+/* THE PLACE BAR (the owner's screenshot, dark theme, about 820px: WB1 R3, "Section 12 · Card 18
+ * of 58", thirteen chips with 12 selected). The box strip draws one chip per section, and a
+ * vertical accent bar (`.position-bar-marker`) is drawn over it. In the screenshot the bar sits
+ * across chip 11's number, so the chip reads "1|1". `PositionBar.tsx` puts that bar at the
+ * card's box fraction (`place.fraction`), and the card's own section is the chip `.position-bar-here`.
+ * So the bar's meaning is: it stands on the card's own section chip. */
+const OWNER_SHAPE: PinnedShape = {
+  sizes: [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 58, 3],
+  section: 12,
+  card: 18,
+}
+
+type Box = { left: number; right: number; top: number; bottom: number }
+type StripGeometry = {
+  marker: Box
+  here: Box | null
+  labels: (Box & { text: string; inStrip: boolean })[]
+}
+
+/** Every rectangle is read in the viewport's own frame, so the bar and each chip's number are
+ *  compared at the same scroll position. A number's box is its TEXT's box (a Range over the
+ *  number), not the chip's, because the chip is wider than its digits. */
+async function stripGeometry(track: Locator): Promise<StripGeometry> {
+  return track.evaluate((el) => {
+    const rect = (r: DOMRect) => ({ left: r.left, right: r.right, top: r.top, bottom: r.bottom })
+    const strip = rect(el.getBoundingClientRect())
+    const marker = el.querySelector(':scope > .position-bar-marker')
+    const here = el.querySelector('.position-bar-here')
+    const labels = Array.from(el.querySelectorAll('.position-bar-segment-num')).map((node) => {
+      const range = document.createRange()
+      range.selectNodeContents(node)
+      const box = rect(range.getBoundingClientRect())
+      return {
+        text: node.textContent ?? '',
+        ...box,
+        inStrip: box.left >= strip.left && box.right <= strip.right,
+      }
+    })
+    return {
+      marker: rect(marker!.getBoundingClientRect()),
+      here: here === null ? null : rect(here.getBoundingClientRect()),
+      labels,
+    }
+  })
+}
+
+/* 830 and 880 are measured bands where this fixture's bar crosses a chip number (a width sweep:
+ * 790 and 800 cross "8", 830 and 840 cross "9", 880 crosses "10"). 820 exactly does not, so the
+ * owner's "about 820" panel sits in one of those bands. */
+for (const width of [1440, 820, 830, 880]) {
+  test(`the box strip's place bar crosses no chip number, 13 sections with the card in section 12, ${width}`, async ({ page }) => {
+    await setViewport(page, { width, height: 900 })
+    await open(page, OWNER_SHAPE.sizes.length, 0, undefined, OWNER_SHAPE)
+    const row = page.locator('.card-locations-row.is-current')
+    await row.scrollIntoViewIfNeeded()
+    const track = row.locator('.position-bar-owner[data-depth] > .position-bar-track')
+    await expect(track.locator('.position-bar-segment')).toHaveCount(13)
+    await expect(track.locator('.position-bar-here')).toBeInViewport({ ratio: 1 })
+
+    const geo = await stripGeometry(track)
+    const crossing = geo.labels
+      .filter(
+        (l) =>
+          l.inStrip &&
+          l.left < geo.marker.right &&
+          l.right > geo.marker.left &&
+          l.top < geo.marker.bottom &&
+          l.bottom > geo.marker.top,
+      )
+      .map((l) => l.text)
+    expect(crossing, "the place bar crosses no chip's number").toEqual([])
+  })
+
+  test(`the box strip's place bar stands on the card's own section chip, 13 sections with the card in section 12, ${width}`, async ({ page }) => {
+    await setViewport(page, { width, height: 900 })
+    await open(page, OWNER_SHAPE.sizes.length, 0, undefined, OWNER_SHAPE)
+    const row = page.locator('.card-locations-row.is-current')
+    await row.scrollIntoViewIfNeeded()
+    const track = row.locator('.position-bar-owner[data-depth] > .position-bar-track')
+    await expect(track.locator('.position-bar-here')).toBeInViewport({ ratio: 1 })
+
+    const geo = await stripGeometry(track)
+    expect(geo.here, "the card's own section chip is drawn").not.toBeNull()
+    const centre = (geo.marker.left + geo.marker.right) / 2
+    expect(centre, "the bar's centre is not left of the card's own chip").toBeGreaterThanOrEqual(geo.here!.left)
+    expect(centre, "the bar's centre is not right of the card's own chip").toBeLessThanOrEqual(geo.here!.right)
+  })
+}
