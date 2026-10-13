@@ -105,7 +105,7 @@
 name: check
 
 on:
-  # A draft runs nothing heavy: `ready_for_review` starts the full run when the person marks it ready.
+  # A draft runs no job at all (each job's `if` skips it); `ready_for_review` starts the full run when the person marks it ready.
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   # Main too, and not only pull requests. A merge can break what neither side broke alone —
@@ -317,7 +317,7 @@ jobs:
   # it can move to claude-settings' `actions/all-jobs-passed` once that is merged.
   check:
     needs: [ci-check, ci-static, design-check, already-passed, browser-scope, records]
-    if: always()
+    if: ${{ always() && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -329,11 +329,7 @@ jobs:
           SCOPE_RUN: ${{ needs.browser-scope.outputs.run }}
           ALREADY_PASSED: ${{ needs.already-passed.outputs.skip }}
           RECORDS: ${{ needs.records.result }}
-          DRAFT: ${{ github.event.pull_request.draft }}
         run: |
-          # A draft skips the heavy jobs, so this check FAILS on one: a skipped required check counts as
-          # passing, and a dropped `ready_for_review` event would leave a ready PR mergeable on it.
-          if [ "${DRAFT}" = "true" ]; then echo "::error::draft: mark ready to run the checks"; exit 1; fi
           echo "shards: ${SHARDS}; browser matrix: ${BROWSER} (scope run=${SCOPE_RUN}, already-passed skip=${ALREADY_PASSED})"
           [ "${SHARDS}" = "success" ] || { echo "a shard did not succeed"; exit 1; }
           [ "${STATIC}" = "success" ] || { echo "the static checks did not succeed"; exit 1; }
@@ -351,6 +347,7 @@ jobs:
   # lands on — the two things the script compares. No venv, no node, no browser: python3 and a
   # full-depth clone, because the window is the base's last sixty first-parent commits.
   revert-guard:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -373,6 +370,7 @@ jobs:
   # and fails unless it succeeded, on the owner's ruling. The ruleset still names `check` and
   # `revert-guard`; `zizmor` stays non-blocking.
   records:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -396,6 +394,7 @@ jobs:
   # its base, so that diff is what the PR lands) and the lint step runs only on a difference.
   # A parent the shallow clone cannot read answers "changed", so the job fails toward linting.
   zizmor:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -425,7 +424,7 @@ jobs:
   # empty output as "run the matrix". `actions: read` is what listing artifacts through the
   # API needs; nothing here writes.
   already-passed:
-    if: github.event_name == 'push'
+    if: ${{ github.event_name == 'push' && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -639,7 +638,7 @@ jobs:
   # still writes it exactly as before this landed.
   design-check-passed:
     needs: [design-check, browser-scope]
-    if: github.event_name != 'push' && needs.browser-scope.outputs.partial != 'true'
+    if: ${{ !github.event.pull_request.draft && github.event_name != 'push' && needs.browser-scope.outputs.partial != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -668,7 +667,7 @@ jobs:
   # job checks nothing out and reads its verdict from `needs`. A skipped job is not a failure.
   nightly-alarm:
     needs: [ci-check, ci-static, revert-guard, zizmor, design-check, records]
-    if: ${{ always() && (github.event_name == 'schedule' || inputs.report_failure) && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
+    if: ${{ always() && !github.event.pull_request.draft && (github.event_name == 'schedule' || inputs.report_failure) && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
