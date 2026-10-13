@@ -1472,7 +1472,7 @@ screenshot:
 # three. app/design-check-reporter.ts carries the rest of the argument.
 #
 # `ARGS` REACHES THE LOCK AND `PW_ARGS` REACHES PLAYWRIGHT, and the two are kept apart by the
-# `--` on each side (D136). `.github/workflows/check.yml` runs this suite as six shards with
+# `--` on each side (D136). `.github/workflows/check.yml` runs this suite as twelve shards with
 # `--workers=2`, each handed its spec files by `scripts/browser-scope.py shard`, which packs
 # whole files by measured time rather than splitting the cases. More workers on one box is
 # more suite around a test, and docs/debts/ section 8 measured a one-in-thirteen red whose

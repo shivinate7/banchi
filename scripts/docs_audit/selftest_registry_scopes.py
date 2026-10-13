@@ -23,7 +23,7 @@ from .dispatch import UNDISPATCHED, check_dispatch
 from .env_map import _consumer_block, _map_sections
 from .hygiene import ROSTER_MARK, ROUTE_HASH, _balanced, expected_rosters
 from . import registry_scopes
-from .registry_scopes import INVOKERS, UNIT_COMMAND, check_audit_invocation, check_check_registry, fleet_scripts
+from .registry_scopes import workflow_shards, INVOKERS, UNIT_COMMAND, check_audit_invocation, check_check_registry, fleet_scripts
 
 
 def run(ok) -> None:
@@ -38,6 +38,10 @@ def run(ok) -> None:
        "the exact unit command is not a fleet, and a bare `playwright test` is", "")
     ok(fleet_scripts({"sneaky": UNIT_COMMAND + " && playwright test"}) == ["sneaky"],
        "a fleet chained after the unit command is still a fleet", "")
+    ok(workflow_shards("matrix:\n  target: [a, b]\n    run: make ci-check-static\n") == {"a", "b", "ci-check-static"},
+       "a real `run:` line counts as a shard", "")
+    ok(workflow_shards("matrix:\n  target: [a]\n    # run: make ci-check-static\n") == {"a"},
+       "a commented `run:` line is not a shard", "")
     report = Report()
     check_audit_invocation(report)
     by_label = {row.check: row.findings for row in report.checks}
