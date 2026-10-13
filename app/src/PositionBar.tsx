@@ -103,14 +103,22 @@ export function PositionBar({
 
   /* THE BAR STANDS ON THE CARD'S OWN CHIP. Chips are flex-grow with a 20px floor, so a box
      fraction of the strip's width lands on whichever chip happens to be there. With the ruler
-     the stylesheet anchors the bar to `.position-bar-here` and `--pb-in` says how far across
-     that chip the card's cell is: by construction, never by a pixel. `--pb-box` is the old
-     whole-box percent, kept for a browser without anchor positioning. */
+     the bar is drawn INSIDE `.position-bar-here`, at `--pb-in`: how far across that chip the
+     card's cell is. By construction, in every browser. */
   const own = spans.find((span) => span.current)
   const inChip =
     own === undefined || place.slot === null ? null : (place.slot - own.start + 0.5) / (own.end - own.start + 1)
   const lastIn = useRef(0.5)
   if (inChip !== null) lastIn.current = inChip
+  const inOwnChip = sectionDepth && own !== undefined
+  const boxMarker = (
+    <span
+      className="position-bar-marker"
+      data-gone={marker === null ? 'true' : undefined}
+      style={inOwnChip ? ({ '--pb-in': clamp(inChip ?? lastIn.current, 0, 1) } as CSSProperties) : { left: `${boxAt}%` }}
+      aria-hidden="true"
+    />
+  )
   const sectionAt = depth?.marker ?? lastSection.current
 
   /* THE SECTION RULER NEVER PASSES ITS CONTAINER (the owner's report, 2026-09-25, box WB1 R2:
@@ -203,22 +211,13 @@ export function PositionBar({
                   {span.section}
                 </span>
               ) : null}
+              {/* MOUNTED EVEN WITH NOWHERE TO STAND (D118): the mark eases out on the render that
+                  sells the card instead of being deleted between two frames. */}
+              {inOwnChip && span === own ? boxMarker : null}
             </span>
           ))
         )}
-        {/* MOUNTED EVEN WITH NOWHERE TO STAND (D118): the mark eases out on the render that sells
-            the card instead of being deleted between two frames. */}
-        <span
-          className="position-bar-marker"
-          data-gone={marker === null ? 'true' : undefined}
-          style={
-            {
-              '--pb-box': `${boxAt}%`,
-              '--pb-in': sectionDepth ? clamp(inChip ?? lastIn.current, 0, 1) : undefined,
-            } as CSSProperties
-          }
-          aria-hidden="true"
-        />
+        {inOwnChip ? null : boxMarker}
       </div>
 
       {/* THE FULFILLER'S STRIP SAYS WHICH END IS CARD 1 TOO (the owner's orientation: the far back),
