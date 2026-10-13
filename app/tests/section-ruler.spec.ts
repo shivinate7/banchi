@@ -439,3 +439,31 @@ for (const width of [1440, 820, 830, 880]) {
     expect(centre, "the bar's centre is not right of the card's own chip").toBeLessThanOrEqual(geo.here!.right)
   })
 }
+
+/* THE BAR OVER ITS OWN CHIP'S NUMBER. Card 29 of 58 is the middle of section 12's cells, the
+ * place the bar sits nearest the chip's centre and so over the number "12". */
+const CENTRE_SHAPE: PinnedShape = { ...OWNER_SHAPE, card: 29 }
+
+for (const width of [1440, 820]) {
+  test(`the place bar crosses no chip number with the card near its chip's centre, 13 sections, ${width}`, async ({ page }) => {
+    await setViewport(page, { width, height: 900 })
+    await open(page, CENTRE_SHAPE.sizes.length, 0, undefined, CENTRE_SHAPE)
+    const row = page.locator('.card-locations-row.is-current')
+    await row.scrollIntoViewIfNeeded()
+    const track = row.locator('.position-bar-owner[data-depth] > .position-bar-track')
+    await expect(track.locator('.position-bar-here')).toBeInViewport({ ratio: 1 })
+
+    const geo = await stripGeometry(track)
+    const crossing = geo.labels
+      .filter(
+        (l) =>
+          l.inStrip &&
+          l.left < geo.marker.right &&
+          l.right > geo.marker.left &&
+          l.top < geo.marker.bottom &&
+          l.bottom > geo.marker.top,
+      )
+      .map((l) => l.text)
+    expect(crossing, "the place bar crosses no chip's number").toEqual([])
+  })
+}
