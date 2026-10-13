@@ -408,7 +408,7 @@ const PLACE_CASES = [
   [830, 'dark'],
   [880, 'dark'],
 ] as const
-const CENTRE_CASES = [
+const CENTER_CASES = [
   [1440, 'light'],
   [820, 'light'],
   [1440, 'dark'],
@@ -469,21 +469,21 @@ for (const [width, scheme] of PLACE_CASES) {
 
     const geo = await stripGeometry(track)
     expectVisibleOnOwnChip(geo)
-    const centre = (geo.marker.left + geo.marker.right) / 2
-    expect(centre, "the bar's centre is not left of the card's own chip").toBeGreaterThanOrEqual(geo.here!.left)
-    expect(centre, "the bar's centre is not right of the card's own chip").toBeLessThanOrEqual(geo.here!.right)
+    const center = (geo.marker.left + geo.marker.right) / 2
+    expect(center, "the bar's center is not left of the card's own chip").toBeGreaterThanOrEqual(geo.here!.left)
+    expect(center, "the bar's center is not right of the card's own chip").toBeLessThanOrEqual(geo.here!.right)
   })
 }
 
 /* THE BAR OVER ITS OWN CHIP'S NUMBER. Card 29 of 58 is the middle of section 12's cells, the
- * place the bar sits nearest the chip's centre and so over the number "12". */
-const CENTRE_SHAPE: PinnedShape = { ...OWNER_SHAPE, card: 29 }
+ * place the bar sits nearest the chip's center and so over the number "12". */
+const CENTER_SHAPE: PinnedShape = { ...OWNER_SHAPE, card: 29 }
 
-for (const [width, scheme] of CENTRE_CASES) {
-  test(`the place bar crosses no chip number with the card near its chip's centre, 13 sections, ${width}, ${scheme}`, async ({ page }) => {
+for (const [width, scheme] of CENTER_CASES) {
+  test(`the place bar crosses no chip number with the card near its chip's center, 13 sections, ${width}, ${scheme}`, async ({ page }) => {
     await setViewport(page, { width, height: 900 })
     await page.emulateMedia({ colorScheme: scheme })
-    await open(page, CENTRE_SHAPE.sizes.length, 0, undefined, CENTRE_SHAPE)
+    await open(page, CENTER_SHAPE.sizes.length, 0, undefined, CENTER_SHAPE)
     const row = page.locator('.card-locations-row.is-current')
     await row.scrollIntoViewIfNeeded()
     const track = row.locator('.position-bar-owner[data-depth] > .position-bar-track')
