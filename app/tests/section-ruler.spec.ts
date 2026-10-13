@@ -366,7 +366,7 @@ type Box = { left: number; right: number; top: number; bottom: number }
 type StripGeometry = {
   marker: Box
   here: Box | null
-  labels: (Box & { text: string; inStrip: boolean })[]
+  labels: (Box & { text: string; inStrip: boolean; own: boolean })[]
 }
 
 /** Every rectangle is read in the viewport's own frame, so the bar and each chip's number are
@@ -376,7 +376,8 @@ async function stripGeometry(track: Locator): Promise<StripGeometry> {
   return track.evaluate((el) => {
     const rect = (r: DOMRect) => ({ left: r.left, right: r.right, top: r.top, bottom: r.bottom })
     const strip = rect(el.getBoundingClientRect())
-    const marker = el.querySelector(':scope > .position-bar-marker')
+    // The bar may sit on the track or inside the card's own chip; either way it is this strip's bar.
+    const marker = el.querySelector('.position-bar-marker')
     const here = el.querySelector('.position-bar-here')
     const labels = Array.from(el.querySelectorAll('.position-bar-segment-num')).map((node) => {
       const range = document.createRange()
@@ -386,6 +387,8 @@ async function stripGeometry(track: Locator): Promise<StripGeometry> {
         text: node.textContent ?? '',
         ...box,
         inStrip: box.left >= strip.left && box.right <= strip.right,
+        // The card's own chip may carry the bar; only the OTHER chips' numbers must stay clear of it.
+        own: node.closest('.position-bar-segment')?.classList.contains('position-bar-here') ?? false,
       }
     })
     return {
@@ -414,6 +417,7 @@ for (const width of [1440, 820, 830, 880]) {
       .filter(
         (l) =>
           l.inStrip &&
+          !l.own &&
           l.left < geo.marker.right &&
           l.right > geo.marker.left &&
           l.top < geo.marker.bottom &&
