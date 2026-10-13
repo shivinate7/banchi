@@ -397,12 +397,45 @@ async function stripGeometry(track: Locator): Promise<StripGeometry> {
   })
 }
 
+/* Each case is a width and a colour scheme. The dark run is the owner's screenshot's theme. */
+const PLACE_CASES = [
+  [1440, 'light'],
+  [820, 'light'],
+  [830, 'light'],
+  [880, 'light'],
+  [1440, 'dark'],
+  [820, 'dark'],
+  [830, 'dark'],
+  [880, 'dark'],
+] as const
+const CENTRE_CASES = [
+  [1440, 'light'],
+  [820, 'light'],
+  [1440, 'dark'],
+  [820, 'dark'],
+] as const
+
+/** The bar is a mark a reader can see: at least 2px each way, and inside its own chip's box.
+ *  A zero-height bar draws nothing, so the overlap check alone cannot tell it from a good one. */
+function expectVisibleOnOwnChip(geo: StripGeometry) {
+  expect(geo.here, "the card's own section chip is drawn").not.toBeNull()
+  const here = geo.here!
+  const m = geo.marker
+  expect(m.right - m.left, 'the place bar is at least 2px wide').toBeGreaterThanOrEqual(2)
+  expect(m.bottom - m.top, 'the place bar is at least 2px tall').toBeGreaterThanOrEqual(2)
+  expect(m.left, "the place bar starts inside its own chip").toBeGreaterThanOrEqual(here.left)
+  expect(m.right, "the place bar ends inside its own chip").toBeLessThanOrEqual(here.right)
+  expect(m.top, "the place bar starts inside its own chip").toBeGreaterThanOrEqual(here.top)
+  expect(m.bottom, "the place bar ends inside its own chip").toBeLessThanOrEqual(here.bottom)
+}
+
 /* 830 and 880 are measured bands where this fixture's bar crosses a chip number (a width sweep:
  * 790 and 800 cross "8", 830 and 840 cross "9", 880 crosses "10"). 820 exactly does not, so the
  * owner's "about 820" panel sits in one of those bands. */
-for (const width of [1440, 820, 830, 880]) {
-  test(`the box strip's place bar crosses no chip number, 13 sections with the card in section 12, ${width}`, async ({ page }) => {
+for (const [width, scheme] of PLACE_CASES) {
+  test(`the box strip's place bar crosses no chip number, 13 sections with the card in section 12, ${width}, ${scheme}`, async ({ page }) => {
     await setViewport(page, { width, height: 900 })
+    await page.emulateMedia({ colorScheme: scheme })
     await open(page, OWNER_SHAPE.sizes.length, 0, undefined, OWNER_SHAPE)
     const row = page.locator('.card-locations-row.is-current')
     await row.scrollIntoViewIfNeeded()
@@ -411,6 +444,7 @@ for (const width of [1440, 820, 830, 880]) {
     await expect(track.locator('.position-bar-here')).toBeInViewport({ ratio: 1 })
 
     const geo = await stripGeometry(track)
+    expectVisibleOnOwnChip(geo)
     const crossing = geo.labels
       .filter(
         (l) =>
@@ -424,8 +458,9 @@ for (const width of [1440, 820, 830, 880]) {
     expect(crossing, "the place bar crosses no chip's number").toEqual([])
   })
 
-  test(`the box strip's place bar stands on the card's own section chip, 13 sections with the card in section 12, ${width}`, async ({ page }) => {
+  test(`the box strip's place bar stands on the card's own section chip, 13 sections with the card in section 12, ${width}, ${scheme}`, async ({ page }) => {
     await setViewport(page, { width, height: 900 })
+    await page.emulateMedia({ colorScheme: scheme })
     await open(page, OWNER_SHAPE.sizes.length, 0, undefined, OWNER_SHAPE)
     const row = page.locator('.card-locations-row.is-current')
     await row.scrollIntoViewIfNeeded()
@@ -433,7 +468,7 @@ for (const width of [1440, 820, 830, 880]) {
     await expect(track.locator('.position-bar-here')).toBeInViewport({ ratio: 1 })
 
     const geo = await stripGeometry(track)
-    expect(geo.here, "the card's own section chip is drawn").not.toBeNull()
+    expectVisibleOnOwnChip(geo)
     const centre = (geo.marker.left + geo.marker.right) / 2
     expect(centre, "the bar's centre is not left of the card's own chip").toBeGreaterThanOrEqual(geo.here!.left)
     expect(centre, "the bar's centre is not right of the card's own chip").toBeLessThanOrEqual(geo.here!.right)
@@ -444,9 +479,10 @@ for (const width of [1440, 820, 830, 880]) {
  * place the bar sits nearest the chip's centre and so over the number "12". */
 const CENTRE_SHAPE: PinnedShape = { ...OWNER_SHAPE, card: 29 }
 
-for (const width of [1440, 820]) {
-  test(`the place bar crosses no chip number with the card near its chip's centre, 13 sections, ${width}`, async ({ page }) => {
+for (const [width, scheme] of CENTRE_CASES) {
+  test(`the place bar crosses no chip number with the card near its chip's centre, 13 sections, ${width}, ${scheme}`, async ({ page }) => {
     await setViewport(page, { width, height: 900 })
+    await page.emulateMedia({ colorScheme: scheme })
     await open(page, CENTRE_SHAPE.sizes.length, 0, undefined, CENTRE_SHAPE)
     const row = page.locator('.card-locations-row.is-current')
     await row.scrollIntoViewIfNeeded()
@@ -454,6 +490,7 @@ for (const width of [1440, 820]) {
     await expect(track.locator('.position-bar-here')).toBeInViewport({ ratio: 1 })
 
     const geo = await stripGeometry(track)
+    expectVisibleOnOwnChip(geo)
     const crossing = geo.labels
       .filter(
         (l) =>
