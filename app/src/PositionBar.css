@@ -159,14 +159,10 @@
   transform: translateX(-50%);
 }
 /* THE BAR STANDS ON THE CARD'S OWN CHIP: it is drawn inside the chip, at the card's cell within
-   that section (`--pb-in`), so uneven chip widths cannot move it to another chip. */
+   that section (`--pb-in`), so uneven chip widths cannot move it to another chip. Its height and
+   width are the marker's own (top/bottom -2px, `--pb-marker`): the track's overflow clips the overhang. */
 .position-bar-owner[data-depth] .position-bar-here > .position-bar-marker {
   left: calc(var(--pb-in, 0.5) * 100%);
-  /* A SHORT TICK IN THE CHIP'S BOTTOM BAND, below the number: the band is what is left of the
-     chip's height under the digits' own size, less one smallest spacing step of air, so a fallback font's taller digits do not reach the bar and the chip does not grow. */
-  top: auto;
-  bottom: 0;
-  height: calc((var(--pb-track) - var(--bn-fs-2xs) * var(--bn-lh-snug)) / 2 - var(--bn-0-5));
 }
 /* A 7px head on an 8px strip IS the strip, so the demoted box mark is a plain tick. */
 .position-bar-owner[data-depth] .position-bar-marker::after { display: none; }
