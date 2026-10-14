@@ -551,7 +551,6 @@ def _sku_snapshot(sku: str, reading: Reading) -> Optional[Dict[str, Tuple[int, i
         int((other.get("taken_off") or {}).get(sku, 0))
         for name, other in receipts
         if not other.get("failure")
-        and not other.get("taken_back_at")
         and sku not in (other.get("take_lapsed") or [])
         and _press_order(name, other) >= since
     )
