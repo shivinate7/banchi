@@ -12,9 +12,9 @@ import { DEALING_RAIL_TILES, SAVE_WAIT_MS } from '../src/dealer'
  *  1. DEALING, 300 captures, monthly and on demand (BANCHI_LONG_SITTING=1): the rail
  *     (`footer.capture-undo`) stays live but draws only the newest DEALING_RAIL_TILES tiles, first
  *     tile the latest card, the Last capture panel (`aside.capture-last`) shows each new photo, no
- *     task over 50 ms late in the sitting, and after Stop the rail catches up to all of them. That
+ *     growth in blocked time, and after Stop the rail catches up to all of them. That
  *     one catch-up render may be long and is not barred. This run is what catches growth. The
- *     owner's longest sitting is 555 cards. No per-PR case deals cards, by the owner's word.
+ *     owner's longest sitting is 555 cards. No per-PR case in this file deals cards, by the owner's word.
  *  2. HAND FEED, 60 captures with the shutter: the old bar, so hand feeding cannot regress.
  * Photos are distinct 1920x1080 JPEGs, so image decode is in the measurement. The dealer is the
  * fake Bluetooth device of `dispenser.spec.ts` (shared in `dispenserRig.ts`). Nothing reaches a
