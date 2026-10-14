@@ -637,7 +637,7 @@ def check_history_blocked_route(checks: Checks) -> None:
 
 
 def check_blocked_batch_is_refused_not_read(checks: Checks) -> None:
-    """A 403 on every history range refuses the SKU, and a refused SKU is never also a reading.
+    """A 403 on every history range refuses the SKU, and a SKU with no range read is never a reading.
 
     THE FIRST CAUSE OF THE OVERNIGHT "0 of 529". Every range answers 403, so `fetch_json`
     raises `Blocked` and `readings_for_rows` records each SKU as refused. It then still builds
@@ -645,28 +645,61 @@ def check_blocked_batch_is_refused_not_read(checks: Checks) -> None:
     no ranges. The note counts that SKU as `no_history` as well as `unreadable`. A refused SKU
     is named once, as refused.
 
-    `urllib.request.urlopen` is patched to raise the 403 in-process, so `fetch_json`'s real
+    THE PARTIAL CASE KEEPS ITS READING. When `month` answers and `annual` is refused, the SKU
+    is still read, so its `Reading` keeps the `month` series.
+
+    `urllib.request.urlopen` answers the history hops in-process, so `fetch_json`'s real
     `Blocked` path runs. `product_ids` skips the catalogue walk, so no catalogue slug is needed.
     """
     checks.note("")
-    checks.note("BLOCKED BATCH — a 403 on every range refuses the SKU, and never also reads it")
+    checks.note("BLOCKED BATCH — a 403 refuses a range, and a SKU with no range read is never a reading")
     sku = "9189317"
     row = _riftbound_row(sku)
-    real_urlopen = urllib.request.urlopen
+    entry = {
+        "count": 1,
+        "result": [{
+            "skuId": sku, "variant": "Foil", "condition": "Near Mint Foil", "language": "English",
+            "totalQuantitySold": "5", "totalTransactionCount": "5",
+            "buckets": [{
+                "bucketStartDate": "2026-08-03", "marketPrice": "23.14", "quantitySold": "5",
+                "transactionCount": "5", "lowSalePrice": "22.00", "highSalePrice": "24.00",
+            }],
+        }],
+    }
 
-    def blocked_urlopen(request, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
-        raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", {}, io.BytesIO(b""))
+    def answering(month, annual):
+        """A `urlopen` that answers each range with its payload, or refuses it with a 403 when None."""
 
-    urllib.request.urlopen = blocked_urlopen
-    try:
-        market = pricehistory.Market(cache_dir=None, courtesy_delay=0.0)
-        readings, refusals = market.readings_for_rows([row], product_ids={sku: 4242})
-    finally:
-        urllib.request.urlopen = real_urlopen
+        def urlopen(request, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+            payload = month if "range=month" in request.full_url else annual
+            if payload is None:
+                raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", {}, io.BytesIO(b""))
+            return io.BytesIO(json.dumps(payload).encode("utf-8"))
+
+        return urlopen
+
+    def read(month, annual):
+        real_urlopen = urllib.request.urlopen
+        urllib.request.urlopen = answering(month, annual)
+        try:
+            market = pricehistory.Market(cache_dir=None, courtesy_delay=0.0)
+            return market.readings_for_rows([row], product_ids={sku: 4242})
+        finally:
+            urllib.request.urlopen = real_urlopen
+
+    readings, refusals = read(None, None)
     checks.ok(sku in refusals, "a 403 on every range REFUSES the SKU", repr(refusals))
     checks.ok(
         sku not in readings,
         "...and the refused SKU is not ALSO a reading with no ranges, which counts as no history",
+        repr({key: reading.series for key, reading in readings.items()}),
+    )
+
+    readings, _refusals = read(entry, None)
+    kept = readings.get(sku)
+    checks.ok(
+        kept is not None and set(kept.series) == {"month"},
+        "month read and annual refused: the SKU keeps its Reading with the month series",
         repr({key: reading.series for key, reading in readings.items()}),
     )
 

@@ -1068,7 +1068,7 @@ def check_trends_facts_need_no_month_series(checks: Checks) -> None:
     The endpoint leaves a SKU out of a range it has no sales in, so `Reading.series` can hold
     `annual` alone. `_trends_for_entries` then indexes `series[DEFAULT_RANGES[0]]` with no
     guard. The facts raise, `files.log_cause` writes `trends facts: KeyError: 'month'`, and the
-    SKU loses its facts. The Sep-30 cache holds 664 such SKUs, so this fires with no 403 at all.
+    SKU loses its facts. Real history holds such SKUs, so this fires with no 403 at all.
 
     THE WIRE SHAPE IS REAL: `month` answers `result: null`, which `parse_history` reads as
     "no history" and not as an error, and `annual` lists the SKU. The catalogue hops are seeded
@@ -1093,20 +1093,13 @@ def check_trends_facts_need_no_month_series(checks: Checks) -> None:
         }],
     }
 
-    class Body(io.BytesIO):
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_exc):
-            return False
-
     def history_urlopen(request, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
         url = request.full_url
         if "infinite-api" not in url:
             # An unseeded catalogue hop. Refused without a socket, so a miss reads as a miss.
             raise urllib.error.URLError(f"harness: no socket for {url}")
         payload = {"count": 0, "result": None} if "range=month" in url else annual
-        return Body(json.dumps(payload).encode("utf-8"))
+        return io.BytesIO(json.dumps(payload).encode("utf-8"))
 
     with isolated_home():
         directory = pipeline_routes.market_cache_dir()
@@ -1133,6 +1126,7 @@ def check_trends_facts_need_no_month_series(checks: Checks) -> None:
                 )
         finally:
             urllib.request.urlopen = real_urlopen
+        saved = pricerefresh.read_trends().get(sku) or {}
 
     failures = [repr(exc) for what, exc in causes if what == "trends facts"]
     checks.equal(
@@ -1143,6 +1137,11 @@ def check_trends_facts_need_no_month_series(checks: Checks) -> None:
     checks.equal(
         [entry.get("range") for entry in strip], ["annual"],
         "...and its annual strip is still returned",
+    )
+    checks.ok(
+        "facts" not in saved,
+        "...and the saved entry carries NO facts for a SKU the month range does not list",
+        repr(sorted(saved)),
     )
 
 
