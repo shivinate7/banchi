@@ -21,6 +21,7 @@ import ast
 import contextlib
 import http.server
 import json
+import io
 import os
 import re
 import subprocess
@@ -28,11 +29,14 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.request
 from contextlib import contextmanager
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 from urllib.parse import parse_qs
 
 import envfile
@@ -41,6 +45,8 @@ from harness.tests.t7.common import (
     DUNSPARCE_REVERSE_SKU,
     DUNSPARCE_SKU,
     ARTICUNO_SKU,
+    REPO_ROOT,
+    RIFTBOUND_EXPORT,
     QuietHandler,
     _live_export_bytes,
     _spawn_server,
@@ -1056,6 +1062,90 @@ def check_refresh_reaches_store_backed_runs(checks: Checks) -> None:
         )
 
 
+def check_trends_facts_need_no_month_series(checks: Checks) -> None:
+    """A SKU the `month` range does not list is a read, not a `KeyError` (the second cause).
+
+    The endpoint leaves a SKU out of a range it has no sales in, so `Reading.series` can hold
+    `annual` alone. `_trends_for_entries` then indexes `series[DEFAULT_RANGES[0]]` with no
+    guard. The facts raise, `files.log_cause` writes `trends facts: KeyError: 'month'`, and the
+    SKU loses its facts. The Sep-30 cache holds 664 such SKUs, so this fires with no 403 at all.
+
+    THE WIRE SHAPE IS REAL: `month` answers `result: null`, which `parse_history` reads as
+    "no history" and not as an error, and `annual` lists the SKU. The catalogue hops are seeded
+    into the cache, as `check_history_blocked_route` does. The history hops are not, and
+    `urllib.request.urlopen` answers them in-process, so `fetch_json` runs for real.
+    """
+    checks.note("")
+    checks.note("MONTH MISSING, ANNUAL PRESENT — the facts read, with no `KeyError`")
+    sku = "9189317"
+    row = next(r for r in tcgcsv.read_export(RIFTBOUND_EXPORT).rows if r.get(tcgcsv.SKU_COLUMN) == sku)
+    annual = {
+        "count": 1,
+        "result": [{
+            "skuId": sku, "variant": "Foil", "condition": "Near Mint Foil", "language": "English",
+            "totalQuantitySold": "5", "totalTransactionCount": "5",
+            "buckets": [
+                {"bucketStartDate": "2026-08-03", "marketPrice": "23.14", "quantitySold": "5",
+                 "transactionCount": "5", "lowSalePrice": "22.00", "highSalePrice": "24.00"},
+                {"bucketStartDate": "2026-08-10", "marketPrice": "23.50", "quantitySold": "1",
+                 "transactionCount": "1", "lowSalePrice": "23.50", "highSalePrice": "23.50"},
+            ],
+        }],
+    }
+
+    class Body(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+    def history_urlopen(request, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+        url = request.full_url
+        if "infinite-api" not in url:
+            # An unseeded catalogue hop. Refused without a socket, so a miss reads as a miss.
+            raise urllib.error.URLError(f"harness: no socket for {url}")
+        payload = {"count": 0, "result": None} if "range=month" in url else annual
+        return Body(json.dumps(payload).encode("utf-8"))
+
+    with isolated_home():
+        directory = pipeline_routes.market_cache_dir()
+        at = time.time()
+        catalogue = (REPO_ROOT / "fixtures" / "tcgcsv_riftbound_unleashed_products.json").read_text("utf-8")
+        for slug, payload in (
+            ("tcgcsv/categories", {"results": [{"categoryId": 89,
+                                                "name": "Riftbound League of Legends Trading Card Game"}]}),
+            ("tcgcsv/89/groups", {"results": [{"groupId": 24560, "name": "Unleashed"}]}),
+            ("tcgcsv/89/24560/products", json.loads(catalogue)),
+        ):
+            path = directory / f"{slug}.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({"fetched_at": at, "payload": payload}), "utf-8")
+
+        causes: list = []
+        real_urlopen = urllib.request.urlopen
+        urllib.request.urlopen = history_urlopen
+        try:
+            with mock.patch.object(files, "log_cause", lambda what, exc: causes.append((what, exc))):
+                answer = pipeline_routes._trends_for_entries(
+                    {sku: {"row": row, "name": "Vilemaw"}}, [sku], {},
+                    missing="{sku} is not in this run", skip_at_cap=False,
+                )
+        finally:
+            urllib.request.urlopen = real_urlopen
+
+    failures = [repr(exc) for what, exc in causes if what == "trends facts"]
+    checks.equal(
+        failures, [],
+        "a SKU with no month series is read, and its facts raise nothing: no 'trends facts' failure is logged",
+    )
+    strip = ((answer.get("skus") or {}).get(sku) or {}).get("ranges") or []
+    checks.equal(
+        [entry.get("range") for entry in strip], ["annual"],
+        "...and its annual strip is still returned",
+    )
+
+
 CHECKS = (
     check_refresh_reaches_store_backed_runs,
     check_held_lock_is_a_recorded_skip,
@@ -1075,4 +1165,5 @@ CHECKS = (
     check_series_window,
     check_saved_file_and_routes,
     check_live_read_rejoins,
+    check_trends_facts_need_no_month_series,
 )

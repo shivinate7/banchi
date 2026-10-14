@@ -636,6 +636,41 @@ def check_history_blocked_route(checks: Checks) -> None:
                     os.environ[env_name] = value
 
 
+def check_blocked_batch_is_refused_not_read(checks: Checks) -> None:
+    """A 403 on every history range refuses the SKU, and a refused SKU is never also a reading.
+
+    THE FIRST CAUSE OF THE OVERNIGHT "0 of 529". Every range answers 403, so `fetch_json`
+    raises `Blocked` and `readings_for_rows` records each SKU as refused. It then still builds
+    a `Reading` for that SKU with an empty `series`, and `_trends_for_entries` emits it with
+    no ranges. The note counts that SKU as `no_history` as well as `unreadable`. A refused SKU
+    is named once, as refused.
+
+    `urllib.request.urlopen` is patched to raise the 403 in-process, so `fetch_json`'s real
+    `Blocked` path runs. `product_ids` skips the catalogue walk, so no catalogue slug is needed.
+    """
+    checks.note("")
+    checks.note("BLOCKED BATCH — a 403 on every range refuses the SKU, and never also reads it")
+    sku = "9189317"
+    row = _riftbound_row(sku)
+    real_urlopen = urllib.request.urlopen
+
+    def blocked_urlopen(request, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+        raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", {}, io.BytesIO(b""))
+
+    urllib.request.urlopen = blocked_urlopen
+    try:
+        market = pricehistory.Market(cache_dir=None, courtesy_delay=0.0)
+        readings, refusals = market.readings_for_rows([row], product_ids={sku: 4242})
+    finally:
+        urllib.request.urlopen = real_urlopen
+    checks.ok(sku in refusals, "a 403 on every range REFUSES the SKU", repr(refusals))
+    checks.ok(
+        sku not in readings,
+        "...and the refused SKU is not ALSO a reading with no ranges, which counts as no history",
+        repr({key: reading.series for key, reading in readings.items()}),
+    )
+
+
 def check_price_history(checks: Checks) -> None:
     """`pipeline/pricehistory.py` — the sku -> productId walk, and the readings over it.
 
@@ -1762,6 +1797,7 @@ CHECKS = (
     check_price_history,
     check_history_route,
     check_history_blocked_route,
+    check_blocked_batch_is_refused_not_read,
     check_product_sheet_unsent_sku,
     check_archive_preview_is_free,
     check_archive_write_never_deletes,
