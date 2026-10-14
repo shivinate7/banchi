@@ -462,8 +462,8 @@ def _live_reading(sku: str, listing, parts) -> Tuple[int, Optional[datetime]]:
     A sale does not touch it. So a figure above the check's, dated after it, is a newer reading,
     dated by the store. A figure below it may be no reading, and the check's figure stands,
     dated by that check. The cost is a real drop after the check: it reads as found, which holds
-    copies out and never sends one twice. A store date not after the check, and a SKU no check
-    recorded, keep the store's own figure and date.
+    copies out and never sends one twice. A store date not after the check is kept as the date.
+    A SKU no check recorded keeps the store's own figure and date.
     """
     mine = [
         (store_clock.parse(record.get("checked_at")), (record["check"].get("reading") or {}).get(sku))
@@ -476,11 +476,12 @@ def _live_reading(sku: str, listing, parts) -> Tuple[int, Optional[datetime]]:
     at, seen = max(mine, key=lambda item: item[0])
     if (live, listing.live_as_of) == (int(seen["live"]), seen["as_of"]):
         return live, at
-    # A STORE DATE NOT AFTER THE CHECK is a stamp put back (an undo restores one verbatim): the
-    # store's own figure and date stand, and the wait gate judges them.
+    figure = max(live, int(seen["live"]))
+    # A STORE DATE NOT AFTER THE CHECK is a stamp put back (an undo restores one verbatim): it
+    # stands, and the wait gate judges it.
     if read is None or read <= at or live > int(seen["live"]):
-        return live, read
-    return int(seen["live"]), at
+        return figure, read
+    return figure, at
 
 
 def _sku_snapshot(sku: str, reading: Reading) -> Optional[Dict[str, Tuple[int, int]]]:
