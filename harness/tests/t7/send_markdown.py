@@ -1386,10 +1386,7 @@ def check_send_press(checks: Checks) -> None:
         checks.equal(early["ran"], False, "a check inside the lag does not run")
 
         # THE LAG PASSES (the receipt's clock moved back), and TCGplayer shows one short.
-        directory = send_routes.sends_dir() / sent["stamp"]
-        record = send_routes._read(directory)
-        record["check_after"] = "2000-01-01T00:00:00+00:00"
-        send_routes._write(directory, record)
+        _age_receipt(sent["stamp"])
         checks.ok(send_routes.do_sends()["due"], "once the lag has passed, the check is due")
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})
         checked = send_routes.do_live_check({})
@@ -2006,10 +2003,20 @@ def _short_timeout(seconds: float):
 
 
 def _age_receipt(stamp: str) -> None:
-    """Move a receipt's wait into the past: the lag has passed for it."""
+    """Move a receipt's wait into the past: the lag has passed for it.
+
+    The publish is aged too, when there is one: `reconcile --live` keeps the stored figure of a
+    SKU published inside the last lag (`cmd_reprice.published_recently`). That guard dates a
+    receipt by `published_at`, or by `unknown.at` for a send whose outcome is unknown, so both
+    are aged. A receipt with neither is never read by the guard.
+    """
     directory = send_routes.sends_dir() / stamp
     record = send_routes._read(directory)
     record["check_after"] = "2000-01-01T00:00:00+00:00"
+    if record.get("published_at"):
+        record["published_at"] = "2000-01-01T00:00:00+00:00"
+    if (record.get("unknown") or {}).get("at"):
+        record["unknown"]["at"] = "2000-01-01T00:00:00+00:00"
     send_routes._write(directory, record)
 
 
@@ -2138,10 +2145,6 @@ def _press_and_age(checks: Checks, portal, cards, live: Dict[str, int]) -> str:
     portal["live"] = _live_export_bytes(live)
     stamp = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]["stamp"]
     _age_receipt(stamp)
-    directory = send_routes.sends_dir() / stamp
-    record = send_routes._read(directory)
-    record["published_at"] = "2000-01-01T00:00:00+00:00"
-    send_routes._write(directory, record)
     return stamp
 
 
