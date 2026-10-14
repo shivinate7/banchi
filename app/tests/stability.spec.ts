@@ -256,7 +256,7 @@ const L1_CARDS = {
   '5/1': card({ box: 5, index: 1, section: 1, card: 1, name: 'Zacian', state: 'identified', sku: '9000005', boxTotal: 1 }),
 }
 
-async function l1Inventory(page: Page, stock: string | null = null): Promise<void> {
+async function l1Inventory(page: Page): Promise<void> {
   const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   /* NO CARD IS QUEUED: the shell's seed queues box 2's first card, and a queue notice is content the
      other cards do not have. */
@@ -277,7 +277,6 @@ async function l1Inventory(page: Page, stock: string | null = null): Promise<voi
         const copies = held.map(([key, c]) => ({ key, state: c.state, state_at: c.state_at, has_photo: true, place: c.place }))
         return {
           sku,
-          image_url: stock,
           names: [...new Set(held.map(([, c]) => c.name))],
           number: '090',
           printed_total: '132',
@@ -1444,13 +1443,10 @@ test('ticking: the Capture head\'s matched counter shifts nothing as its number 
   expect(sumOf(shifts), describeShifts(shifts)).toBe(0)
 })
 
-/* IMAGE SHIFT, PER SITE (D313). An `<img>` with no size of its own draws nothing until its bytes
- * land, so whatever sits after it moves when they do. The app draws its photographs from the store's
- * `/photo/` and `/assets/` lane and from the catalogue's hotlinked stock host. This probe HOLDS
- * those answers until it releases them, so the photograph is still pending at the first read, and then
- * releases a card-shaped image (63:88). The 63x88 helper answers before the first read, so it is a false
- * green here and is never used. Movement is read in document coordinates, so scroll anchoring cannot
- * hide it. */
+/* IMAGE SHIFT, PER SITE. An `<img>` with no size of its own draws nothing until its bytes land, so
+ * whatever sits after it moves when they do. This probe holds every photograph answer until it
+ * releases one card-shaped image. Movement is read in document coordinates, so scroll anchoring
+ * cannot hide it. */
 const CARD_SHAPED =
   '<svg xmlns="http://www.w3.org/2000/svg" width="630" height="880" viewBox="0 0 630 880"><rect width="630" height="880" fill="#6b6b75"/></svg>'
 
@@ -1509,38 +1505,28 @@ function movedPx(before: FrameRead, after: FrameRead): number {
 /** One photograph site: how to reach the state that draws it, and which `<img>` it is. */
 type ImageSite = { site: string; open: (page: Page) => Promise<void>; img: string; at?: number }
 
-/** The box's first card (Volcanion) is the one the panel opens on, so its copies and photograph draw
- *  without a press. The shell's card fixture has no `photo_reclaimed_at`, which reads as reclaimed, so
- *  a photograph site re-answers the box with the field set to null (a later route wins). `reclaimed`
- *  keeps the fixture's own answer, the stock-photo case. */
-async function openInventoryBox(page: Page, opts: { reclaimed: boolean; stock?: string }): Promise<void> {
-  await l1Inventory(page, opts.stock ?? null)
-  if (!opts.reclaimed) {
-    await page.route(/\/inventory\/(\d+)$/, (route) => {
-      const box = Number(/\/inventory\/(\d+)$/.exec(route.request().url())?.[1])
-      const cards = Object.fromEntries(
-        Object.entries(L1_CARDS).filter(([, c]) => c.box === box).map(([key, c]) => [key, { ...c, photo_reclaimed_at: null }]),
-      )
-      return json(route, { version: 2, cards, listings: {} })
-    })
-  }
+/** The box's first card is the one the panel opens on. The shell's card fixture has no
+ *  `photo_reclaimed_at`, which reads as reclaimed, so this re-answers the box with the field null. */
+async function openInventoryBox(page: Page): Promise<void> {
+  await l1Inventory(page)
+  await page.route(/\/inventory\/(\d+)$/, (route) => {
+    const box = Number(/\/inventory\/(\d+)$/.exec(route.request().url())?.[1])
+    const cards = Object.fromEntries(
+      Object.entries(L1_CARDS).filter(([, c]) => c.box === box).map(([key, c]) => [key, { ...c, photo_reclaimed_at: null }]),
+    )
+    return json(route, { version: 2, cards, listings: {} })
+  })
   await page.goto(screen('inventory'))
   await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
   await expect(page.locator('.card-locations').first()).toBeVisible()
 }
 
-async function openHome(page: Page): Promise<void> {
-  await page.goto('/#/')
-  await expect(page.locator('.home-deck').first()).toBeVisible()
-}
-
-/** The catalogue's stock photograph, on the one row the populated pricing answer carries. */
+/** The catalogue's hotlinked stock photograph. */
 const STOCK_PHOTO = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
 
-/** One priced row, with its stock image (or `null`, the answer a real row gives when it has none). The
- *  populated seed leaves `image_url` undefined, which the screen reads as a stock image with no source. */
-async function openPricing(page: Page, imageUrl: string | null = null): Promise<void> {
-  const row = { ...pricingRow('8608859', 'Articuno', '22.03', '21.98', { box: 2, index: 1, label: 'Box 2, Section 1, Card 1', cid: 'a'.repeat(64), capture_id: 'cap-2-1' }), image_url: imageUrl }
+/** One priced row. The populated seed leaves `image_url` undefined, so this row carries `null`. */
+async function openPricing(page: Page): Promise<void> {
+  const row = { ...pricingRow('8608859', 'Articuno', '22.03', '21.98', { box: 2, index: 1, label: 'Box 2, Section 1, Card 1', cid: 'a'.repeat(64), capture_id: 'cap-2-1' }), image_url: null }
   await page.route(/\/pipeline\/pricing(\?|$)/, (route) =>
     route.fulfill({
       status: 200,
@@ -1552,50 +1538,98 @@ async function openPricing(page: Page, imageUrl: string | null = null): Promise<
   await expect(page.locator('.pricing-row').first()).toBeVisible()
 }
 
-async function openReview(page: Page): Promise<void> {
-  await l1Review(page)
-  await page.goto(screen('review'))
-  await expect(page.locator('.review-candidates').first()).toBeVisible()
+/** Opens the priced row's photo sheet, which draws `SheetPhoto`. */
+async function openPricingSheet(page: Page): Promise<void> {
+  await openPricing(page)
+  await page.locator('.pricing-thumb').first().click()
+  await expect(page.locator('.pricing-photo img').first()).toBeAttached()
 }
 
-/** The Inventory sets view with one set card that carries the catalogue's stock photograph. */
-async function openSets(page: Page): Promise<void> {
-  /* The picker's market figure per tile (`GET /pipeline/price-now?sku=`). An empty answer is legal, as in inventory-sets.spec.ts. */
-  await page.route(/\/pipeline\/price-now/, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ prices: {} }) }),
+/** The Sales podium: one sold line whose catalogue photograph is the stock image. */
+async function openRevenue(page: Page): Promise<void> {
+  const sold = {
+    key: 'TCGplayer:ORD-1', source: 'TCGplayer', number: 'ORD-1', placed_at: '2026-09-10T10:00:00+00:00', status: 'Shipped',
+    first_seen: '2026-09-10T10:05:00+00:00', changed_at: null, buyer: 'Ada', wanted: 1, recorded: 1, open: false, terminal: true, progress: [],
+    lines: [{ sku: '9100001', quantity: 1, name: 'Charizard ex', number: '006', printing: 'Holo', condition: 'Near Mint', rarity: 'Rare', unit_price: '12.50', kind: null }],
+  }
+  await pricedShelf(page)
+  await page.route(/\/orders$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ summary: '1 order', orders: [sold], resolution: { orders: [], counts: { resolved: 0, short: 0, no_copies_on_hand: 0, sku_unknown: 0, sku_unseen: 0, not_a_single: 0 } } }) }),
   )
-  await page.route(/\/pipeline\/sets(\?|$)/, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        at: '2026-09-26T00:00:00+00:00',
-        groups: [
-          {
-            game: 'riftbound',
-            set_name: 'Vendetta',
-            cards: [{ sku: '705996-normal', cid: 'cid-ahri-normal', box: 5, name: 'Ahri, Inquisitive', number_display: 'SP3/006', qty: 1, image_url: STOCK_PHOTO, printing: null }],
-          },
-        ],
-        no_set: [],
-      }),
-    }),
+  await page.route(/\/skus\/photos\?/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ photos: {}, stock_photos: { '9100001': STOCK_PHOTO } }) }),
   )
-  await page.goto('/#/inventory?view=sets')
-  await expect(page.locator('.sets-card-img').first()).toBeAttached()
+  await page.goto(screen('revenue'))
+  await expect(page.locator('.revenue-podium .revenue-tile').first()).toBeVisible()
+}
+
+/** The Orders walk with its populated seed, then the card photograph opened full size. */
+async function openOrdersZoom(page: Page): Promise<void> {
+  await l1Inventory(page)
+  await POPULATED_ROUTE_SEEDS[`#/${'orders'}`]?.(page)
+  /* The populated copy has no photograph, so the card draws its absent note. This answer marks the first copy as photographed. */
+  const plan = JSON.stringify(severalOrdersWalkPlan()).replace('"has_photo":false', '"has_photo":true').replace('"cid":null', `"cid":"${'a'.repeat(64)}"`)
+  await page.route(/\/orders\/walk-plan$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: plan }))
+  await page.goto(screen('orders'))
+  await expect(page.locator('.orders-walk-pick-count').first()).toBeVisible()
+  await expect(page.locator('.orders-cardcol').first()).not.toHaveAttribute('inert')
+  await page.locator('.orders-cardcol .browse-photo-frame').first().click()
+  await expect(page.locator('.inv-lightbox img').first()).toBeAttached()
+}
+
+/** Three single-candidate entries of one reason and grade, so the queue offers to answer them as a group. */
+async function openReviewGroup(page: Page): Promise<void> {
+  const entries = [1, 2, 3].map((i) => ({
+    position: `Box 2, Section 1, Card ${i}`, box: 2, index: i, label: `Box 2, Section 1, Card ${i}`, photo: `photos/2/${i}.jpg`,
+    read: { name: 'Snorlax', number: '014/132', printed_total: '132', set_hint: 'ME01' }, confidence: 'high', reason: 'set_ambiguous',
+    candidates: [{ sku: `86080${i}`, name: 'Snorlax', set: 'ME01', number: '014/132', condition: 'Near Mint', market: '4.00' }],
+    first_seen: '2026-09-01T12:00:00+00:00', market: '4.00', cleared_by_human: false,
+  }))
+  await page.route(/\/queues$/, (route) => json(route, { review: entries, parked: [] }))
+  await page.goto(screen('review'))
+  await expect(page.locator('.review-candidates').first()).toBeVisible()
+  await page.getByRole('button', { name: /Answer all 3 together/i }).click()
+  await expect(page.locator('.review-group-photo').first()).toBeAttached()
+}
+
+/** The Fulfiller's list with the populated orders, and its first copy marked as photographed. */
+async function openFulfiller(page: Page): Promise<void> {
+  await seedPopulatedOrders(page)
+  const plan = JSON.stringify(severalOrdersWalkPlan()).replace('"has_photo":false', '"has_photo":true').replace('"cid":null', `"cid":"${'a'.repeat(64)}"`)
+  await page.route(/\/orders\/walk-plan$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: plan }))
+  await page.goto(screen('fulfillment'))
+  await expect(page.locator('.ff-column').first()).toBeVisible()
+}
+
+/** The Fulfiller's first card chosen, so its photograph is drawn. */
+async function openFulfillerCard(page: Page): Promise<void> {
+  await openFulfiller(page)
+  /* The boxes arrive shut, and the card's row is inside one. They are waited for first, so the loop never runs before they draw. */
+  await expect(page.locator('.ff-box-head').first()).toBeVisible()
+  const heads = page.locator('.ff-box-head[aria-expanded="false"]')
+  for (let guard = 0; guard < 40; guard += 1) {
+    if ((await heads.count()) === 0) break
+    await heads.first().click()
+  }
+  await page.getByRole('button', { name: 'Volcanion' }).first().click()
+  await expect(page.locator('.fulfillment-photo').first()).toBeAttached()
+}
+
+/** The Fulfiller's chosen photograph, opened full size from its button. */
+async function openFulfillerZoom(page: Page): Promise<void> {
+  await openFulfillerCard(page)
+  await page.locator('.ff-photo-btn').first().click()
+  await expect(page.locator('.ff-zoom-img').first()).toBeAttached()
 }
 
 const IMAGE_SITES: readonly ImageSite[] = [
-  { site: 'CardHero.tsx:892 PhotoPanel', open: (p) => openInventoryBox(p, { reclaimed: false }), img: '.browse-photo' },
-  { site: 'BoxBrowse.tsx:2926 lightbox', open: async (p) => { await openInventoryBox(p, { reclaimed: false }); await p.locator('.browse-photo-frame').click() }, img: '.inv-lightbox img' },
-  { site: 'Inventory.tsx:1427 retire photo', open: async (p) => { await openInventoryBox(p, { reclaimed: false }); await p.getByRole('button', { name: 'Retire' }).first().click() }, img: '.inventory-confirm-photo' },
-  { site: 'CardHero.tsx:811 reclaimed stock', open: (p) => openInventoryBox(p, { reclaimed: true, stock: STOCK_PHOTO }), img: '.browse-stock img' },
-  { site: 'Pricing.tsx:778 thumb', open: (p) => openPricing(p), img: '.pricing-thumb img.bn-crop' },
-  { site: 'Pricing.tsx:768 stock thumb', open: (p) => openPricing(p, STOCK_PHOTO), img: '.pricing-stock-img' },
-  { site: 'ReviewQueue.tsx:2682 review photo', open: openReview, img: '.review-photo' },
-  { site: 'Home.tsx:731 deck photo (back card)', open: openHome, img: '.home-deck-photo' },
-  { site: 'Home.tsx:731 deck photo (2nd card)', open: openHome, img: '.home-deck-photo', at: 1 },
-  { site: 'InventorySets.tsx:73 set card', open: openSets, img: '.sets-card-img' },
+  { site: 'CardLocations.tsx:876 Fulfiller copy photo', open: openFulfiller, img: '.card-locations-photo' },
+  { site: 'Fulfillment.tsx:1186 chosen photo', open: openFulfillerCard, img: '.fulfillment-photo' },
+  { site: 'Fulfillment.tsx:1675 zoom photo', open: openFulfillerZoom, img: '.ff-zoom-img' },
+  { site: 'ReviewQueue.tsx:2019 GroupConfirm photo', open: openReviewGroup, img: '.review-group-photo' },
+  { site: 'kit/data.tsx:434 CardThumb (Sales podium)', open: openRevenue, img: '.revenue-podium .bn-thumb-img' },
+  { site: 'Pricing.tsx:3816 SheetPhoto', open: openPricingSheet, img: '.pricing-photo img' },
+  { site: 'Orders.tsx:2813 lightbox', open: openOrdersZoom, img: '.inv-lightbox img' },
 ]
 
 for (const one of IMAGE_SITES) {
@@ -1608,8 +1642,7 @@ for (const one of IMAGE_SITES) {
       await one.open(page)
       await page.locator(one.img).nth(at).scrollIntoViewIfNeeded()
       await expect.poll(() => photos.length, { message: `${one.site}: no photograph request was held` }).toBeGreaterThan(0)
-      /* THIS SITE'S OWN PHOTOGRAPH IS THE ONE THAT WAITS. Every other photograph the page asked for is
-         answered first and settles, so a move after the first read can only come from this image. */
+      /* THIS SITE'S OWN PHOTOGRAPH IS THE ONE THAT WAITS. Every other photograph is answered first and settles. */
       const own = await page.locator(one.img).nth(at).evaluate((e) => (e as HTMLImageElement).src)
       const ownRequest = photos.find((h) => h.url === own)
       expect(ownRequest, `${one.site}: its own photograph (${own}) was not one of the held requests`).toBeDefined()
@@ -1633,15 +1666,14 @@ for (const one of IMAGE_SITES) {
   }
 }
 
-/* POSITIVE CONTROL FOR THE IMAGE PROBE. A block inserted above a pending photograph is a real layout move, and the probe's own
-   frame measure (`movedPx`, the instrument every image row reads) must see it. The browser's layout-shift entries are logged
-   as a cross-check only: in one run they counted nothing for the same move, so they are not asserted here. */
+/* POSITIVE CONTROL FOR THE IMAGE PROBE. A 200px block above a pending photograph must move the frame
+ * measure the rows read. The browser's layout-shift entries are logged as a cross-check only. */
 test('image probe control: a block above a pending photograph moves the measured frame', async ({ page }) => {
   test.setTimeout(120_000)
   const photos = await holdPhotos(page)
   await watchShifts(page)
   await setViewport(page, { width: 1440, height: 1000 })
-  await openInventoryBox(page, { reclaimed: false })
+  await openInventoryBox(page)
   await page.getByRole('button', { name: 'Retire' }).first().click()
   const img = page.locator('.inventory-confirm-photo')
   await img.scrollIntoViewIfNeeded()
@@ -1651,7 +1683,6 @@ test('image probe control: a block above a pending photograph moves the measured
   const before = await readFrame(page, '.inventory-confirm-photo', 0)
   const own = await img.evaluate((e) => (e as HTMLImageElement).src)
   expect(before.loaded).toBe(false)
-  /* POSITIVE CONTROL: a 200px block inserted above the photo is a real layout move, so the probe and the browser's own entries must both see it. */
   const from = await markNow(page)
   await page.evaluate(() => {
     const spacer = document.createElement('div')
@@ -1668,3 +1699,4 @@ test('image probe control: a block above a pending photograph moves the measured
   console.log(`PROBECHECK control-spacer moved=${movedPx(before, after)} h=${Math.round(before.h)}->${Math.round(after.h)} cls=${describeShifts(cls)} clsSum=${sumOf(cls)}`)
   expect(movedPx(before, after), 'the frame measure saw no move from a 200px block above the photograph').toBeGreaterThan(0)
 })
+
