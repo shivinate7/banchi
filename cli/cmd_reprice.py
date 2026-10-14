@@ -144,20 +144,6 @@ def published_recently(now: Optional[datetime] = None, window_s: int = PUBLISH_L
             when = when.replace(tzinfo=timezone.utc)
         if (moment - when).total_seconds() > window_s:
             continue
-        # A SEND'S OWN WAIT ENDS THE GUARD. `check_after` is when the live check may judge the
-        # send (`server/send_routes._wait_until`: the lag plus a margin), so past it the export
-        # has caught up by the send's own rule. Two clocks for one fact let the check judge a
-        # send while the reconcile still refused to take its reading. A receipt with no
-        # `check_after` (a markdown's `push.json`) keeps the window alone.
-        try:
-            waited = datetime.fromisoformat(str(record["check_after"]))
-        except (KeyError, ValueError):
-            waited = None
-        if waited is not None:
-            if waited.tzinfo is None:
-                waited = waited.replace(tzinfo=timezone.utc)
-            if waited <= moment:
-                continue
         # A SEND NAMES ITS OWN FILE (a game's import can be `import-<game>.csv`); a markdown's
         # is always `import.csv`.
         named = [str(name) for name in (record.get("files") or [IMPORT])]
