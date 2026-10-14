@@ -8,7 +8,7 @@ import { card, sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
 import { afterPaint, settleMotion } from './motionSettled'
 import { routesFromNav } from './routes'
-import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, line, order, seedPopulatedOrders, severalOrders, severalOrdersWalkPlan } from './routeFixtures'
+import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, line, order, pricingRow, seedPopulatedOrders, severalOrders, severalOrdersWalkPlan } from './routeFixtures'
 import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
 import { setViewport } from './phoneSwitch'
 import { stubMatched } from './routeFixtures'
@@ -256,7 +256,7 @@ const L1_CARDS = {
   '5/1': card({ box: 5, index: 1, section: 1, card: 1, name: 'Zacian', state: 'identified', sku: '9000005', boxTotal: 1 }),
 }
 
-async function l1Inventory(page: Page): Promise<void> {
+async function l1Inventory(page: Page, stock: string | null = null): Promise<void> {
   const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   /* NO CARD IS QUEUED: the shell's seed queues box 2's first card, and a queue notice is content the
      other cards do not have. */
@@ -277,6 +277,7 @@ async function l1Inventory(page: Page): Promise<void> {
         const copies = held.map(([key, c]) => ({ key, state: c.state, state_at: c.state_at, has_photo: true, place: c.place }))
         return {
           sku,
+          image_url: stock,
           names: [...new Set(held.map(([, c]) => c.name))],
           number: '090',
           printed_total: '132',
@@ -1443,3 +1444,227 @@ test('ticking: the Capture head\'s matched counter shifts nothing as its number 
   expect(sumOf(shifts), describeShifts(shifts)).toBe(0)
 })
 
+/* IMAGE SHIFT, PER SITE (D313). An `<img>` with no size of its own draws nothing until its bytes
+ * land, so whatever sits after it moves when they do. The app draws its photographs from the store's
+ * `/photo/` and `/assets/` lane and from the catalogue's hotlinked stock host. This probe HOLDS
+ * those answers until it releases them, so the photograph is still pending at the first read, and then
+ * releases a card-shaped image (63:88). The 63x88 helper answers before the first read, so it is a false
+ * green here and is never used. Movement is read in document coordinates, so scroll anchoring cannot
+ * hide it. */
+const CARD_SHAPED =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="630" height="880" viewBox="0 0 630 880"><rect width="630" height="880" fill="#6b6b75"/></svg>'
+
+/** Every photograph answer the page asks for, held open until the probe answers it. Only `image`
+ *  requests are held, so no script or read waits here. */
+async function holdPhotos(page: Page): Promise<Held[]> {
+  const held: Held[] = []
+  await page.route(
+    (url) => /\.(png|jpe?g|webp|gif|svg)$|\/(photo|assets)\//.test(url.pathname) || url.hostname === 'tcgplayer-cdn.tcgplayer.com',
+    async (route) => {
+      if (route.request().resourceType() !== 'image') return route.fallback()
+      held.push({ url: route.request().url(), route })
+    },
+  )
+  return held
+}
+
+type Held = { url: string; route: Route }
+
+/** Answers one held photograph with the card-shaped image. */
+const answer = (held: Held): Promise<void> => held.route.fulfill({ status: 200, contentType: 'image/svg+xml', body: CARD_SHAPED })
+
+type FrameRead = { found: boolean; loaded: boolean; h: number; tops: (number | null)[] }
+
+/** The image's box, and the top (document coordinates) of every visible element after it in the
+ *  document that is neither its ancestor nor inside it. The element list is taken once, on the first read. */
+function readFrame(page: Page, selector: string, at: number): Promise<FrameRead> {
+  return page.evaluate(([sel, index]) => {
+    const w = window as unknown as { __imageSiteAfter?: Element[] }
+    const img = document.querySelectorAll<HTMLImageElement>(sel).item(index)
+    if (img === null) return { found: false, loaded: false, h: 0, tops: [] }
+    if (w.__imageSiteAfter === undefined) {
+      w.__imageSiteAfter = Array.from(document.body.querySelectorAll('*')).filter(
+        (el) => !img.contains(el) && !el.contains(img) && (img.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+      )
+    }
+    const tops = w.__imageSiteAfter.map((el) => {
+      if (!el.isConnected || getComputedStyle(el).position === 'fixed') return null
+      const r = el.getBoundingClientRect()
+      return r.height > 0 ? r.top + window.scrollY : null
+    })
+    return { found: true, loaded: img.complete && img.naturalWidth > 0, h: img.getBoundingClientRect().height, tops }
+  }, [selector, at] as const)
+}
+
+/** The largest move, in px, of any element that was after the image and is still on the page. */
+function movedPx(before: FrameRead, after: FrameRead): number {
+  let moved = 0
+  before.tops.forEach((top, i) => {
+    const next = after.tops[i]
+    if (top !== null && next !== undefined && next !== null) moved = Math.max(moved, Math.abs(next - top))
+  })
+  return Math.round(moved)
+}
+
+/** One photograph site: how to reach the state that draws it, and which `<img>` it is. */
+type ImageSite = { site: string; open: (page: Page) => Promise<void>; img: string; at?: number }
+
+/** The box's first card (Volcanion) is the one the panel opens on, so its copies and photograph draw
+ *  without a press. The shell's card fixture has no `photo_reclaimed_at`, which reads as reclaimed, so
+ *  a photograph site re-answers the box with the field set to null (a later route wins). `reclaimed`
+ *  keeps the fixture's own answer, the stock-photo case. */
+async function openInventoryBox(page: Page, opts: { reclaimed: boolean; stock?: string }): Promise<void> {
+  await l1Inventory(page, opts.stock ?? null)
+  if (!opts.reclaimed) {
+    await page.route(/\/inventory\/(\d+)$/, (route) => {
+      const box = Number(/\/inventory\/(\d+)$/.exec(route.request().url())?.[1])
+      const cards = Object.fromEntries(
+        Object.entries(L1_CARDS).filter(([, c]) => c.box === box).map(([key, c]) => [key, { ...c, photo_reclaimed_at: null }]),
+      )
+      return json(route, { version: 2, cards, listings: {} })
+    })
+  }
+  await page.goto(screen('inventory'))
+  await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
+  await expect(page.locator('.card-locations').first()).toBeVisible()
+}
+
+async function openHome(page: Page): Promise<void> {
+  await page.goto('/#/')
+  await expect(page.locator('.home-deck').first()).toBeVisible()
+}
+
+/** The catalogue's stock photograph, on the one row the populated pricing answer carries. */
+const STOCK_PHOTO = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
+
+/** One priced row, with its stock image (or `null`, the answer a real row gives when it has none). The
+ *  populated seed leaves `image_url` undefined, which the screen reads as a stock image with no source. */
+async function openPricing(page: Page, imageUrl: string | null = null): Promise<void> {
+  const row = { ...pricingRow('8608859', 'Articuno', '22.03', '21.98', { box: 2, index: 1, label: 'Box 2, Section 1, Card 1', cid: 'a'.repeat(64), capture_id: 'cap-2-1' }), image_url: imageUrl }
+  await page.route(/\/pipeline\/pricing(\?|$)/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ runs: [], roster: [], skus: [row], written_at: {}, skipped: [], asked: [], threshold: '0.49', floor: '0.49' }),
+    }),
+  )
+  await page.goto(screen('pricing'))
+  await expect(page.locator('.pricing-row').first()).toBeVisible()
+}
+
+async function openReview(page: Page): Promise<void> {
+  await l1Review(page)
+  await page.goto(screen('review'))
+  await expect(page.locator('.review-candidates').first()).toBeVisible()
+}
+
+/** The Inventory sets view with one set card that carries the catalogue's stock photograph. */
+async function openSets(page: Page): Promise<void> {
+  /* The picker's market figure per tile (`GET /pipeline/price-now?sku=`). An empty answer is legal, as in inventory-sets.spec.ts. */
+  await page.route(/\/pipeline\/price-now/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ prices: {} }) }),
+  )
+  await page.route(/\/pipeline\/sets(\?|$)/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        at: '2026-09-26T00:00:00+00:00',
+        groups: [
+          {
+            game: 'riftbound',
+            set_name: 'Vendetta',
+            cards: [{ sku: '705996-normal', cid: 'cid-ahri-normal', box: 5, name: 'Ahri, Inquisitive', number_display: 'SP3/006', qty: 1, image_url: STOCK_PHOTO, printing: null }],
+          },
+        ],
+        no_set: [],
+      }),
+    }),
+  )
+  await page.goto('/#/inventory?view=sets')
+  await expect(page.locator('.sets-card-img').first()).toBeAttached()
+}
+
+const IMAGE_SITES: readonly ImageSite[] = [
+  { site: 'CardHero.tsx:892 PhotoPanel', open: (p) => openInventoryBox(p, { reclaimed: false }), img: '.browse-photo' },
+  { site: 'BoxBrowse.tsx:2926 lightbox', open: async (p) => { await openInventoryBox(p, { reclaimed: false }); await p.locator('.browse-photo-frame').click() }, img: '.inv-lightbox img' },
+  { site: 'Inventory.tsx:1427 retire photo', open: async (p) => { await openInventoryBox(p, { reclaimed: false }); await p.getByRole('button', { name: 'Retire' }).first().click() }, img: '.inventory-confirm-photo' },
+  { site: 'CardHero.tsx:811 reclaimed stock', open: (p) => openInventoryBox(p, { reclaimed: true, stock: STOCK_PHOTO }), img: '.browse-stock img' },
+  { site: 'Pricing.tsx:778 thumb', open: (p) => openPricing(p), img: '.pricing-thumb img.bn-crop' },
+  { site: 'Pricing.tsx:768 stock thumb', open: (p) => openPricing(p, STOCK_PHOTO), img: '.pricing-stock-img' },
+  { site: 'ReviewQueue.tsx:2682 review photo', open: openReview, img: '.review-photo' },
+  { site: 'Home.tsx:731 deck photo (back card)', open: openHome, img: '.home-deck-photo' },
+  { site: 'Home.tsx:731 deck photo (2nd card)', open: openHome, img: '.home-deck-photo', at: 1 },
+  { site: 'InventorySets.tsx:73 set card', open: openSets, img: '.sets-card-img' },
+]
+
+for (const one of IMAGE_SITES) {
+  for (const width of [1440, 820]) {
+    test(`image: ${one.site} holds its frame while its photograph loads, at ${width}`, async ({ page }) => {
+      test.setTimeout(120_000)
+      const at = one.at ?? 0
+      const photos = await holdPhotos(page)
+      await setViewport(page, { width, height: 1000 })
+      await one.open(page)
+      await page.locator(one.img).nth(at).scrollIntoViewIfNeeded()
+      await expect.poll(() => photos.length, { message: `${one.site}: no photograph request was held` }).toBeGreaterThan(0)
+      /* THIS SITE'S OWN PHOTOGRAPH IS THE ONE THAT WAITS. Every other photograph the page asked for is
+         answered first and settles, so a move after the first read can only come from this image. */
+      const own = await page.locator(one.img).nth(at).evaluate((e) => (e as HTMLImageElement).src)
+      const ownRequest = photos.find((h) => h.url === own)
+      expect(ownRequest, `${one.site}: its own photograph (${own}) was not one of the held requests`).toBeDefined()
+      for (const h of photos) if (h !== ownRequest) await answer(h)
+      await expect.poll(() => page.evaluate((src) => Array.from(document.images).every((i) => i.src === src || i.complete), own), { message: `${one.site}: the other photographs never settled` }).toBe(true)
+      await settleFonts(page)
+      await settleMotion(page)
+      await afterPaint(page)
+      const before = await readFrame(page, one.img, at)
+      expect(before.found, `${one.site}: the image is not on the page`).toBe(true)
+      expect(before.loaded, `${one.site}: the photograph loaded before the first read, so nothing was held`).toBe(false)
+      await answer(ownRequest!)
+      await expect.poll(async () => (await readFrame(page, one.img, at)).loaded, { message: `${one.site}: the photograph never loaded` }).toBe(true)
+      await settleMotion(page)
+      await afterPaint(page)
+      const after = await readFrame(page, one.img, at)
+      const moved = movedPx(before, after)
+      console.log(`IMGSHIFT ${one.site} ${width} moved=${moved} h=${Math.round(before.h)}->${Math.round(after.h)}`)
+      expect(moved, `${one.site} moved content ${moved}px when its photograph loaded`).toBeLessThan(1)
+    })
+  }
+}
+
+/* POSITIVE CONTROL FOR THE IMAGE PROBE. A block inserted above a pending photograph is a real layout move, and the probe's own
+   frame measure (`movedPx`, the instrument every image row reads) must see it. The browser's layout-shift entries are logged
+   as a cross-check only: in one run they counted nothing for the same move, so they are not asserted here. */
+test('image probe control: a block above a pending photograph moves the measured frame', async ({ page }) => {
+  test.setTimeout(120_000)
+  const photos = await holdPhotos(page)
+  await watchShifts(page)
+  await setViewport(page, { width: 1440, height: 1000 })
+  await openInventoryBox(page, { reclaimed: false })
+  await page.getByRole('button', { name: 'Retire' }).first().click()
+  const img = page.locator('.inventory-confirm-photo')
+  await img.scrollIntoViewIfNeeded()
+  await expect.poll(() => photos.length).toBeGreaterThan(0)
+  await settleMotion(page)
+  await afterPaint(page)
+  const before = await readFrame(page, '.inventory-confirm-photo', 0)
+  const own = await img.evaluate((e) => (e as HTMLImageElement).src)
+  expect(before.loaded).toBe(false)
+  /* POSITIVE CONTROL: a 200px block inserted above the photo is a real layout move, so the probe and the browser's own entries must both see it. */
+  const from = await markNow(page)
+  await page.evaluate(() => {
+    const spacer = document.createElement('div')
+    spacer.style.height = '200px'
+    document.querySelector('.inventory-confirm-photo')?.parentElement?.before(spacer)
+  })
+  await afterPaint(page)
+  await answer(photos.find((h) => h.url === own)!)
+  await expect.poll(async () => (await readFrame(page, '.inventory-confirm-photo', 0)).loaded).toBe(true)
+  await settleMotion(page)
+  await afterPaint(page)
+  const after = await readFrame(page, '.inventory-confirm-photo', 0)
+  const cls = (await readShifts(page)).shifts.filter((s) => s.at >= from)
+  console.log(`PROBECHECK control-spacer moved=${movedPx(before, after)} h=${Math.round(before.h)}->${Math.round(after.h)} cls=${describeShifts(cls)} clsSum=${sumOf(cls)}`)
+  expect(movedPx(before, after), 'the frame measure saw no move from a 200px block above the photograph').toBeGreaterThan(0)
+})
