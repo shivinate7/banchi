@@ -16,7 +16,7 @@ records the answers and the decisions they amend.
 | Q5 | Does the cost check run when the Identify sheet opens? | Yes. Open, then spend: two presses. |
 | Q6 | What does the Runs screen become? | Decide after the moves land. The route and its name stay. |
 | Q7 | Where does a manual "Check what is live" press live? | On Pricing's send card and on the Live tab, which replaces the Mark-down sheet. |
-| Q8 | What happens to copies in a file that was written and never sent? | Pricing names them, with "Take them back". Amended 2026-09-24: "Take them back" is offered only after a live check has run past the wait for that receipt. |
+| Q8 | What happens to copies in a file that was written and never sent? | Pricing names them, with "Take them back". The offer is the send check's snapshot (R-S1 to R-S3, under R15), never a frozen answer. Only the newest receipt that sent a SKU offers it. |
 
 ### The premise that no longer holds
 
@@ -156,6 +156,14 @@ While the last send is incomplete, its warning sits below the Send button. Send 
 ### The Send lock lifts on three things (R15)
 
 The Send lock lifts when the check finds every copy. It also lifts when the person takes the missing copies back, or on a "Send Anyway" press on the warning. A download alone does not release it. Built in #838.
+
+The check is a snapshot, not a stored answer. Three rulings govern it (`send_routes._judge`):
+
+- **R-S1.** Per SKU in a send, missing = max(0, min(copies sent, copies on the shelf unsold less open-order copies) - live now). It is judged only after the post-send wait, on a live reading dated after that wait. No answer is frozen. A mistake must hold copies out and never send one twice. Take Back moves the figure read inside its own store write, not the screen's.
+- **R-S2.** Open orders count as sold (`Ledger.open_quantity`). A shortfall is held, with no Take Back, while the order sync is older than the live reading. The sync time is `Ledger.latest_ingest`, the newest order change, because the ledger keeps no sync time; an empty ledger holds nothing.
+- **R-S3.** Banchi checks a short send again on its own after each wait period, as it does for a written file (`send_routes.RECHECKED`).
+
+The stored `check` stays the double-send ledger (`send_routes._credits`).
 
 ### The other decisions this touches
 

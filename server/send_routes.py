@@ -76,7 +76,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from http import HTTPStatus
 from pathlib import Path
-from typing import Callable, Dict, Iterator, List, NoReturn, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterator, List, NoReturn, Optional, Sequence, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -363,6 +363,11 @@ def _found_all(record: dict) -> bool:
     return int(check.get("found", 0)) >= int(check.get("expected", 0)) and _prices_live(record) is not False
 
 
+#: The states the live check reads again once per lag (`_next_check`): a file not yet found, and a
+#: send that came up short, whose copies may simply show late.
+RECHECKED = ("written", "short")
+
+
 def state_of(record: dict, now: Optional[datetime] = None) -> str:
     """One word for where a send stands. The screen draws one sentence per word.
 
@@ -406,10 +411,11 @@ def state_of(record: dict, now: Optional[datetime] = None) -> str:
 
 def _next_check(record: dict, now: Optional[datetime] = None) -> Optional[datetime]:
     """When the live check should next read this receipt, or None for "whenever asked"."""
-    if state_of(record, now) == "written":
+    if state_of(record, now) in RECHECKED:
         # A DOWNLOADED FILE IS READ AT MOST ONCE PER LAG. The owner may not have uploaded it
         # yet, and a check on every visit would open a socket to TCGplayer each time. The
         # second read, one wait after the first, is the one that can offer the copies back.
+        # A SHORT SEND IS READ AGAIN ON THE SAME CLOCK (R-S3): TCGplayer may show the copy late.
         last = store_clock.parse(record.get("checked_at"))
         if last is not None:
             return last + _lag()
@@ -418,26 +424,111 @@ def _next_check(record: dict, now: Optional[datetime] = None) -> Optional[dateti
 
 def _due(record: dict, now: datetime) -> bool:
     """Is this receipt one the live check should read now?"""
-    if state_of(record, now) not in ("waiting", "unknown", "written"):
+    if state_of(record, now) not in ("waiting", "unknown", *RECHECKED):
         return False
     moment = _next_check(record, now)
     return moment is None or moment <= now
 
 
-def _takeable(record: dict) -> Dict[str, int]:
-    """SKU -> the copies "Take them back" would return now. Empty until a check past the wait.
+#: One request's reading of the snapshot: the receipts (newest first), the store as read, and a cache
+#: of each SKU's figure, so a screen of twenty sends works each SKU out once.
+Reading = Tuple[Sequence[Tuple[str, dict]], Any, Dict[str, Optional[Dict[str, Tuple[int, int]]]]]
 
-    ONLY WHAT THE CHECK DID NOT FIND. A copy the check found is live at TCGplayer, and putting
-    it back on the list would send it twice.
+
+def _reading(store=None) -> Reading:
+    return _receipts(), Store().read() if store is None else store, {}
+
+
+def _sku_snapshot(sku: str, reading: Reading) -> Optional[Dict[str, Tuple[int, int]]]:
+    """THE SNAPSHOT SEND CHECK, one SKU (R-S1, R-S2): stamp -> (copies found, copies to take
+    back) for every receipt that sent it and has been checked past its wait. THE ONE HOME of the
+    figure: `_judge` reads it for the screen, and for the Take Back press inside its store write.
+    None when it cannot judge, and the stored figures stand.
+
+    missing = max(0, min(copies sent, copies on the shelf unsold less the open orders' copies)
+    - live now), over the copies of every receipt still counted out (a taken-back or failed one
+    is not). The copies found fill the receipts in the ledger's own order (`_tier`, then press
+    order), so the newest absorbs the shortfall. Only that receipt offers it, and no more than
+    its own copies: two receipts offering the same missing copy would put it on the list twice.
+
+    NOT JUDGED while the reading is no basis. `Listing.live_as_of` must be later than every
+    receipt's wait (a SKU with no date was only ever read at zero: `observe_live` stamps a
+    changed figure and nothing else, so its reading is the check's own). A shortfall is also held
+    while the newest order the ledger holds is older than that reading (`Ledger.latest_ingest`),
+    since TCGplayer may have sold the copy on an order not yet synced. An empty ledger has no
+    sync to be older, so it holds nothing.
     """
-    if record.get("taken_back_at") or not _take_back_ready(record):
-        return {}
-    out: Dict[str, int] = {}
-    for row in (record.get("check") or {}).get("missing") or []:
-        gone = int(row.get("sent", 0)) - int(row.get("found", 0))
-        if gone > 0:
-            out[str(row.get("sku"))] = gone
+    receipts, store, cache = reading
+    if sku in cache:
+        return cache[sku]
+    cache[sku] = None
+    carriers = [
+        (stamp, record)
+        for stamp, record in receipts
+        if not record.get("failure")
+        and not record.get("taken_back_at")
+        and int((record.get("copies") or {}).get(sku, 0)) > 0
+    ]
+    parts = [
+        (stamp, record)
+        for stamp, record in carriers
+        if record.get("check") is not None and _take_back_ready(record)
+    ]
+    listing = store.inventory.listings.get(sku)
+    # A RECEIPT STILL INSIDE ITS WAIT HOLDS THE SKU: `reconcile --live` keeps the stored figure
+    # of a SKU published in the last lag (D273), so the store's reading may be older than the
+    # one the export gave.
+    if not parts or len(parts) != len(carriers) or listing is None:
+        return None
+    waits = [wait for wait in (_wait_until(record) for _, record in parts) if wait is not None]
+    read = store_clock.parse(listing.live_as_of)
+    if read is not None and waits and read <= max(waits):
+        return None
+    sent = {stamp: int(record["copies"][sku]) for stamp, record in parts}
+    shelf = len(store.inventory.copies_on_hand(sku)) - store.ledger.open_quantity(sku)
+    missing = max(0, min(sum(sent.values()), shelf) - int(listing.live))
+    sync = store_clock.parse(store.ledger.latest_ingest())
+    read = read or max(store_clock.parse(record.get("checked_at")) for _, record in parts)
+    if missing and sync is not None and sync < read:
+        return None
+    parts.sort(key=lambda item: (_tier(item[1]), _press_order(*item)))
+    left = sum(sent.values()) - missing
+    out: Dict[str, Tuple[int, int]] = {}
+    for stamp, _ in parts:
+        out[stamp] = (min(sent[stamp], left), 0)
+        left -= out[stamp][0]
+    newest = parts[-1][0]
+    out[newest] = (out[newest][0], min(sent[newest], missing))
+    cache[sku] = out
     return out
+
+
+def _judge(stamp: str, record: dict, reading: Reading) -> Tuple[dict, Dict[str, int]]:
+    """This receipt as the store reads NOW: the record with the snapshot (`_sku_snapshot`) as its
+    `check`, and SKU -> the copies "Take them back" would return. The stored `check` stays the
+    double-send ledger (`_credits`) and answers for any SKU the snapshot cannot judge. Both are
+    the stored record and {} when no check has run past the wait, or the copies are taken back."""
+    if record.get("taken_back_at") or record.get("check") is None or not _take_back_ready(record):
+        return record, {}
+    rows: List[dict] = []
+    offer: Dict[str, int] = {}
+    found_total = expected = 0
+    for sku, count in sorted((record.get("copies") or {}).items()):
+        sent = int(count)
+        if sent <= 0:
+            continue
+        judged = (_sku_snapshot(sku, reading) or {}).get(stamp)
+        found = _credited(record, sku, sent) if judged is None else judged[0]
+        if judged is not None and judged[1]:
+            offer[sku] = judged[1]
+        found_total += found
+        expected += sent
+        if found < sent:
+            rows.append(
+                {"sku": sku, "name": (record.get("names") or {}).get(sku, ""), "sent": sent, "found": found}
+            )
+    check = dict(record["check"], found=found_total, expected=expected, missing=rows)
+    return dict(record, check=check), offer
 
 
 def _maybe_staged(record: dict) -> bool:
@@ -483,13 +574,20 @@ def _warning(record: dict) -> Optional[str]:
     return None
 
 
-def _summary(stamp: str, record: dict, now: datetime, held: frozenset = frozenset()) -> dict:
+def _summary(
+    stamp: str,
+    record: dict,
+    now: datetime,
+    held: frozenset = frozenset(),
+    reading: Optional[Reading] = None,
+) -> dict:
+    """One receipt as the screen reads it. A caller listing many passes one `reading`."""
+    record, offer = _judge(stamp, record, _reading() if reading is None else reading)
     state = state_of(record, now)
     pushed = record.get("pushed") or {}
     rows = pushed.get("rows") if pushed.get("rows") is not None else len(record.get("copies") or {})
     accepted = pushed.get("accepted")
     wait = _wait_until(record)
-    offer = _takeable(record)
     waiting_to_take = state in ("unknown", "written") and not _take_back_ready(record)
     take_after = _take_back_after(record)
     return {
@@ -1567,7 +1665,8 @@ def do_sends() -> dict:
     listed = receipts[:SENDS_SHOWN] + [
         (stamp, record) for stamp, record in receipts[SENDS_SHOWN:] if _warning(record)
     ]
-    shown = [_summary(stamp, record, now, held) for stamp, record in listed]
+    reading = (receipts, Store().read(), {})
+    shown = [_summary(stamp, record, now, held, reading) for stamp, record in listed]
     unconfirmed = [
         (stamp, record)
         for stamp, record in receipts
@@ -1576,7 +1675,7 @@ def do_sends() -> dict:
     pending = [
         _next_check(record, now)
         for _, record in receipts
-        if state_of(record, now) in ("waiting", "unknown", "written")
+        if state_of(record, now) in ("waiting", "unknown", *RECHECKED)
     ]
     pending += _markdown_waits()
     unreadable = _unreadable_claims()
@@ -1681,7 +1780,7 @@ def do_take_back(stamp: str, payload: dict) -> dict:
     """
     directory = _open_send(stamp)
     record = _read(directory)
-    offer = _takeable(record)
+    _, offer = _judge(stamp, record, _reading())
     if not offer:
         if not record.get("taken_back_at") and not _take_back_ready(record):
             wait = _take_back_after(record)
@@ -1694,7 +1793,7 @@ def do_take_back(stamp: str, payload: dict) -> dict:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "not_takeable",
-            "Every copy of this send was found at TCGplayer, or was already taken back. "
+            "No copy of this send is known to be missing, or it was already taken back. "
             "Nothing changed.",
         )
     if not bool(payload.get("confirm")):
@@ -1708,7 +1807,9 @@ def do_take_back(stamp: str, payload: dict) -> dict:
     # it came from, and the receipt is read again inside it. The second press finds it taken.
     with Store().write() as writable:
         record = _read(directory)
-        offer = _takeable(record)
+        # THE FIGURE IS READ AGAIN INSIDE THE WRITE: a reading that landed since the screen's
+        # own moves only what is missing now, never the copies the screen showed.
+        _, offer = _judge(stamp, record, _reading(writable))
         if offer:
             moved = _bump_back(writable, offer)
             writable.send_claims.release(stamp, "taken_back")
