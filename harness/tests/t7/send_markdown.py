@@ -2598,6 +2598,81 @@ def check_send_snapshot_release_not_reading(checks: Checks) -> None:
         )
 
 
+def check_send_snapshot_adopted_reading(checks: Checks) -> None:
+    """F-A: a newer reading the store adopts from outside `.live/` is the reading.
+
+    The check read one of two copies live, so one is offered back. Later `reconcile --live` runs
+    on an export file kept elsewhere, which reads both copies live. `observe_live` adopts it: the
+    store holds a newer reading than the check's. The send must read checked, with nothing to
+    take back. The snapshot takes only a figure from a file in `.live/` as a reading, so it still
+    reads the check's one, and offers one back.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT F-A — a newer adopted reading from outside .live/ is the reading")
+    with send_portal() as portal, synced_home():
+        stamp = _press_and_age(
+            checks,
+            portal,
+            [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0},
+        )
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+        send_routes.do_live_check({})
+        checks.equal(
+            _banner_send(stamp)["takeable"],
+            1,
+            "PRECONDITION: the check read one of two live, so one is offered back",
+        )
+        manual = files.home() / "manual-export.csv"
+        manual.write_bytes(_live_export_bytes({ARTICUNO_SKU: 2}))
+        send_routes._reconcile(manual, "reconciled")
+        summary = _banner_send(stamp)
+        checks.equal(
+            (summary["state"], summary["takeable"]),
+            ("checked", 0),
+            "F-A: the store adopted a newer reading of two live, so both copies landed and "
+            "nothing is offered back",
+        )
+
+
+def check_send_snapshot_window_reading(checks: Checks) -> None:
+    """F-B: a SKU in the publish window keeps its stored figure, and that figure is no reading.
+
+    A markdown published this SKU minutes ago (its `push.json` is in the window). The send's
+    two copies landed: TCGplayer shows two live. `reconcile --live` keeps the SKU's stored
+    figure, because the export is not read-your-writes after a publish, so the store still reads
+    zero. The check must not date that stored figure as a fresh reading. The send must not offer
+    its copies back on the stale zero.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT F-B — a SKU in the publish window: its stored figure is no reading")
+    with send_portal() as portal, synced_home():
+        stamp = _press_and_age(
+            checks,
+            portal,
+            [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0},
+        )
+        # A markdown for this SKU published now: its push.json is what the publish window reads.
+        markdown = _markdown_dir(files.home(), "20261014-235900")
+        files.write_json(markdown / "push.json", {"published_at": clock.iso(clock.now())})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
+        send_routes.do_live_check({})
+        listing_live = Store().read().inventory.listings[ARTICUNO_SKU].live
+        checks.equal(
+            int(listing_live),
+            0,
+            "PRECONDITION: the reconcile kept the stored figure of the SKU in the window",
+        )
+        summary = _banner_send(stamp)
+        checks.equal(
+            summary["takeable"],
+            0,
+            "F-B: the window kept the stored zero, which is no reading, so the send's copies "
+            "are not offered back on it",
+        )
+
+
 def check_send_hazards(checks: Checks) -> None:
     """The adversarial review's failures, each against the stand-in portal's own mode.
 
@@ -6516,6 +6591,8 @@ CHECKS = (
     check_send_snapshot_take_off,
     check_send_snapshot_empty_ledger,
     check_send_snapshot_release_not_reading,
+    check_send_snapshot_adopted_reading,
+    check_send_snapshot_window_reading,
     check_send_hazards,
     check_send_review_r3,
     check_send_review_r4,
