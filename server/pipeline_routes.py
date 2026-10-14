@@ -7445,8 +7445,14 @@ def _trends_for_entries(
     # that were READ are saved: a refused SKU never replaces a good saved strip.
     extras: Dict[str, dict] = {}
     for sku, reading in readings.items():
+        # `entry_facts` reads 7- and 30-day windows, which only the daily `month` range holds
+        # (annual is weekly buckets, so the same windows would answer weeks under a day label).
+        # A SKU the month range does not list keeps its strip and carries no facts.
+        daily = reading.series.get("month")
+        if daily is None:
+            continue
         try:
-            extras[sku] = pricerefresh.entry_facts(reading.series[pricehistory.DEFAULT_RANGES[0]])
+            extras[sku] = pricerefresh.entry_facts(daily)
         except Exception as exc:  # noqa: BLE001 - facts are extra: the strip is saved without them, never lost for them
             files.log_cause('trends facts', exc)
     try:

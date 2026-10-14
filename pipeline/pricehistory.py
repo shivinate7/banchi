@@ -1394,6 +1394,8 @@ class Market:
                     found = answers.get(sku)
                     if found is not None:
                         series[range_] = found
+                if not series and sku in refusals:
+                    continue  # refused and nothing read: named once, as refused, never also an empty reading
                 readings[sku] = Reading(sku=sku, product_id=product_id, series=series)
         return readings, refusals
 
