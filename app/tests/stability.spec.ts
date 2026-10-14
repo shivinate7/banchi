@@ -1448,7 +1448,7 @@ test('ticking: the Capture head\'s matched counter shifts nothing as its number 
  * releases one card-shaped image. Movement is read in document coordinates, so scroll anchoring
  * cannot hide it. */
 const CARD_SHAPED =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="630" height="880" viewBox="0 0 630 880"><rect width="630" height="880" fill="#6b6b75"/></svg>'
+  '<svg xmlns="http://www.w3.org/2000/svg" width="540" height="960" viewBox="0 0 540 960"><rect width="540" height="960" fill="#6b6b75"/></svg>'
 
 /** Every photograph answer the page asks for, held open until the probe answers it. Only `image`
  *  requests are held, so no script or read waits here. */
