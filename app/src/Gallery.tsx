@@ -1266,7 +1266,7 @@ export function Gallery() {
                 <Notice
                   tone="warn"
                   title="Your last send is not all there yet"
-                  action={<><Button>Take 6 copies back</Button><Button variant="quiet">Send anyway</Button></>}
+                  action={<><Button>Take 6 Copies Back</Button><Button variant="quiet">Send Anyway</Button></>}
                 >
                   Six copies are still on the way.
                 </Notice>
