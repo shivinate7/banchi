@@ -367,9 +367,9 @@ def run_live(args, say) -> int:
 # and published copies for them. A GHOST is a card whose box has no row. This report lists
 # what TCGplayer holds beyond what is really on hand, per SKU the ghosts carry.
 #
-# A NEGATIVE `Add to Quantity` LOWERS A LIVE QUANTITY (D100, measured 2026-09-29), but the
-# import writer's `_check` still refuses negatives (owner's decision). So this writes a plain
-# worklist, never an import file.
+# A NEGATIVE `Add to Quantity` LOWERS A LIVE QUANTITY (D100). `_check` passes one only with a
+# `take_off` mapping of its exact size, and a session sends phantom take-offs on the owner's
+# yes per SKU (D100's phantom ruling). So this writes a plain worklist, never an import file.
 WORKLIST_HEADER = (
     "SKU", "Product Name", "Condition", "Live", "Real", "Excess", "Sold Since Export",
 )
