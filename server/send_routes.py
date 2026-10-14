@@ -445,9 +445,15 @@ def _sku_snapshot(sku: str, reading: Reading) -> Optional[Dict[str, Tuple[int, i
     figure: `_judge` reads it for the screen, and for the Take Back press inside its store write.
     None when it cannot judge, and the stored figures stand.
 
-    missing = max(0, min(copies sent, copies on the shelf unsold less the open orders' copies)
-    - live now), over the copies of every receipt still counted out (a taken-back or failed one
-    is not). The copies found fill the receipts in the ledger's own order (`_tier`, then press
+    outstanding = min(sent and still on the shelf, shelf unsold) - open-order copies, and
+    missing = max(0, outstanding - live now), per SKU across every receipt still counted out (a
+    taken-back or failed one is not). "Sent and still on the shelf" is what the receipts sent,
+    plus the copies live when the oldest of them was pressed (`_baseline`: they are TCGplayer's
+    too, and a send that did not land must not read as found because of them), less every copy
+    marked sold (a copy cannot sell unlisted). It is built from the receipts and never from the
+    listing's `pushed`, which is not drawn down when a send lands and cannot see the baseline,
+    so no card that was captured and never sent is counted: the shelf only caps it from above.
+    The copies found fill the receipts in the ledger's own order (`_tier`, then press
     order), so the newest absorbs the shortfall. Only that receipt offers it, and no more than
     its own copies: two receipts offering the same missing copy would put it on the list twice.
 
@@ -485,14 +491,18 @@ def _sku_snapshot(sku: str, reading: Reading) -> Optional[Dict[str, Tuple[int, i
     if read is not None and waits and read <= max(waits):
         return None
     sent = {stamp: int(record["copies"][sku]) for stamp, record in parts}
-    shelf = len(store.inventory.copies_on_hand(sku)) - store.ledger.open_quantity(sku)
-    missing = max(0, min(sum(sent.values()), shelf) - int(listing.live))
+    inventory = store.inventory
+    baseline = _baseline(min(parts, key=lambda item: _press_order(*item))[1]).get(sku, 0)
+    sold = len(inventory.positions_for_sku(sku)) - len(inventory.copies_not_sold(sku))
+    out_there = max(0, baseline + sum(sent.values()) - sold)
+    outstanding = min(out_there, len(inventory.copies_on_hand(sku))) - store.ledger.open_quantity(sku)
+    missing = max(0, outstanding - int(listing.live))
     sync = store_clock.parse(store.ledger.latest_ingest())
     read = read or max(store_clock.parse(record.get("checked_at")) for _, record in parts)
     if missing and sync is not None and sync < read:
         return None
     parts.sort(key=lambda item: (_tier(item[1]), _press_order(*item)))
-    left = sum(sent.values()) - missing
+    left = max(0, sum(sent.values()) - missing)
     out: Dict[str, Tuple[int, int]] = {}
     for stamp, _ in parts:
         out[stamp] = (min(sent[stamp], left), 0)
