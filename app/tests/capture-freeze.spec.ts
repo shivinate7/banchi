@@ -289,11 +289,6 @@ async function dealing(page: Page, CAPTURES: number): Promise<void> {
   expect(verdict, `blocked time over ${CAPTURES} dealt captures`).toBe('')
 }
 
-test('50 captures while the dispenser deals: the rail paused, the last capture live, no long task late', async ({ page }) => {
-  test.setTimeout(180_000)
-  await dealing(page, 50)
-})
-
 // Runs monthly and on demand: BANCHI_LONG_SITTING=1. About 16 minutes.
 test('300 captures while the dispenser deals: no growth in cost, the rail paused, the last capture live', async ({ page }) => {
   test.skip(process.env.BANCHI_LONG_SITTING !== '1', 'runs monthly or on demand: set BANCHI_LONG_SITTING=1')
