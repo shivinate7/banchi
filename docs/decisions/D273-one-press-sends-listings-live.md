@@ -16,7 +16,7 @@ records the answers and the decisions they amend.
 | Q5 | Does the cost check run when the Identify sheet opens? | Yes. Open, then spend: two presses. |
 | Q6 | What does the Runs screen become? | Decide after the moves land. The route and its name stay. |
 | Q7 | Where does a manual "Check what is live" press live? | On Pricing's send card and on the Live tab, which replaces the Mark-down sheet. |
-| Q8 | What happens to copies in a file that was written and never sent? | Pricing names them, with "Take them back". The offer is the send check's snapshot (R-S1 to R-S3, under R15), never a frozen answer. Only the newest receipt that sent a SKU offers it. |
+| Q8 | What happens to copies in a file that was written and never sent? | Pricing names them, with "Take them back". The offer is the send check's snapshot (R-S1 to R-S3, under R15), never a frozen answer. Only the receipt that absorbs the shortfall offers it: the last in the ledger's order (a published send, then an unconfirmed one, then a download; the newest press within a kind). |
 
 ### The premise that no longer holds
 
@@ -159,9 +159,9 @@ The Send lock lifts when the check finds every copy. It also lifts when the pers
 
 The check is a snapshot, not a stored answer. Three rulings govern it (`send_routes._judge`):
 
-- **R-S1.** Per SKU across the sends still counted out, outstanding = min(copies sent and still on the shelf, copies on the shelf unsold) less open-order copies, and missing = max(0, outstanding - live now). Copies sent and still on the shelf = what the receipts sent, plus the copies live when the oldest was pressed, less the copies marked sold; a card captured and never sent is never counted. It is judged only after the post-send wait, on a live reading dated after that wait. No answer is frozen. A mistake must hold copies out and never send one twice. Take Back moves the figure read inside its own store write, not the screen's.
-- **R-S2.** Open orders count as sold (`Ledger.open_quantity`). A shortfall is held, with no Take Back, while the order sync is older than the live reading. The sync time is `Ledger.latest_ingest`, the newest order change, because the ledger keeps no sync time; an empty ledger holds nothing.
-- **R-S3.** Banchi checks a short send again on its own after each wait period, as it does for a written file (`send_routes.RECHECKED`).
+- **R-S1.** Per SKU across the sends still counted out, outstanding = min(copies sent and still on the shelf, copies on the shelf unsold) less open-order copies, and missing = max(0, outstanding - live now). Copies sent and still on the shelf = what the receipts sent, plus the copies live when the oldest was pressed, less the copies sold since that press and the copies a take-off removed (settled or outstanding, not lapsed); a card captured and never sent is never counted. It is judged only after the post-send wait, on a live reading later than every wait. A reading is a figure from a live read: the store's figure and date as the live check recorded them (an unchanged figure is dated by that check), or a newer live export; a D34 release stamps a date and is no reading. No answer is frozen. A mistake must hold copies out and never send one twice. Take Back moves the figure read inside its own store write, not the screen's.
+- **R-S2.** Open orders count as sold (`Ledger.open_quantity`). A shortfall is held, with no Take Back, while the order sync is older than the live reading or unknown. The sync time is `Ledger.latest_ingest`, the newest order change, because the ledger keeps no sync time; an empty ledger is an unknown sync and holds. A held answer is named as held when Take Back is pressed.
+- **R-S3.** Banchi checks a short send again on its own after each wait period, as it does for a written file (`send_routes.RECHECKED`), and stops after three re-reads that find nothing new (`send_routes.RECHECK_LIMIT`). The manual check still reads it.
 
 The stored `check` stays the double-send ledger (`send_routes._credits`).
 

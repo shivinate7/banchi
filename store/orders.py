@@ -1246,7 +1246,7 @@ class Ledger:
 
     def open_quantity(self, sku) -> int:
         """Copies of this SKU that open orders still owe: the sale TCGplayer has made that a
-        card in a box does not yet show (`server/send_routes._snapshot` subtracts it from the
+        card in a box does not yet show (`server/send_routes._sku_snapshot` subtracts it from the
         shelf). A terminal status owes nothing, a stood-down line owes nothing, and a pulled
         copy is already sold (`outstanding` counts it off), so no copy is counted twice."""
         wanted = str(sku).strip()
