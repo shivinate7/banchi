@@ -2673,6 +2673,67 @@ def check_send_snapshot_window_reading(checks: Checks) -> None:
         )
 
 
+def check_send_snapshot_take_back_take_off(checks: Checks) -> None:
+    """A take-off on a receipt the owner took back still removed its copies from TCGplayer.
+
+    SKU X has five unsold copies on the shelf. R0 sends three; the check finds all three. R1 is
+    a mixed send: one Y, and a take-off of the three X. Its check finds Y missing, the owner takes
+    R1 back for Y, and the X take-off stands: TCGplayer no longer holds those three. R2 sends two
+    more X. Live is two. The three taken off are not out there, so R2 reads checked with nothing to
+    take back. A take-back of R1 for Y does not undo R1's take-off of X.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT — a take-off stands on a receipt the owner took back")
+    with send_portal() as portal, synced_home():
+        # R0: three X sent and found.
+        r0 = _press_and_age(
+            checks,
+            portal,
+            [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None), (3, 3, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0},
+        )
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(r0)["state"], "checked", "PRECONDITION: R0's three copies were found")
+        # R1: a mixed send, one Y and a take-off of the three X. The press is real; the take-off
+        # is what its emit would have written as a negative X row (`taken_off`), recorded here.
+        r1 = _press_and_age(checks, portal, [(5, 1, "Dunsparce", "120", "normal")], {ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})
+        directory = send_routes.sends_dir() / r1
+        record = send_routes._read(directory)
+        record["taken_off"] = {ARTICUNO_SKU: 3}
+        send_routes._write(directory, record)
+        # TCGplayer shows the Y not live, and the three X gone: the take-off settles, and R1 is
+        # checked short of its Y.
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_live_check({})
+        checks.equal(
+            _banner_send(r1)["takeable"],
+            1,
+            "PRECONDITION: R1's Y is missing, so one Y is offered back",
+        )
+        checks.equal(
+            send_routes.do_take_back(r1, {"confirm": True})["moved"],
+            1,
+            "PRECONDITION: the owner takes R1 back for its Y",
+        )
+        # R2: two more X, sent after the take-off settled. Live is two at its check.
+        r2 = _press_and_age(
+            checks,
+            portal,
+            [(4, 1, "Articuno", "161", None), (4, 2, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0},
+        )
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0})
+        send_routes.do_live_check({})
+        summary = _banner_send(r2)
+        checks.equal(
+            (summary["state"], summary["takeable"]),
+            ("checked", 0),
+            "R2 READS CHECKED WITH NOTHING TO TAKE BACK: R1's take-off of three X stands after "
+            "R1 was taken back, so only R2's two are out there, and live shows two",
+        )
+
+
 def check_send_hazards(checks: Checks) -> None:
     """The adversarial review's failures, each against the stand-in portal's own mode.
 
@@ -6593,6 +6654,7 @@ CHECKS = (
     check_send_snapshot_release_not_reading,
     check_send_snapshot_adopted_reading,
     check_send_snapshot_window_reading,
+    check_send_snapshot_take_back_take_off,
     check_send_hazards,
     check_send_review_r3,
     check_send_review_r4,
