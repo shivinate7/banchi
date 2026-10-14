@@ -237,9 +237,6 @@
   --bn-t-highlight: 700ms;   /* a cell that just changed, flashing once */
   --bn-t-instant: 0.01ms;    /* the reduced-motion floor: long enough to fire the end events */
   --bn-disabled: 0.45;       /* the one opacity a disabled pressable wears */
-  /* the rig's stored photograph, width over height (2160x3840). An <img> of one takes its box from
-     this before its bytes land, so what follows it never moves when they do. */
-  --bn-photo-ratio: 0.5625;
 
 
   /* ---- stage: a dark ground in BOTH themes (viewfinder, photo heroes) ---------- */

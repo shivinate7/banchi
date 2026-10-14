@@ -151,7 +151,6 @@ MOTION                          --bn-t-fast 120ms · --bn-t 200ms · --bn-t-slow
 --bn-t-flash 200ms · --bn-t-draw 480ms · --bn-t-pulse 1.8s · --bn-t-spin 0.7s
 --bn-t-shimmer 1.4s · --bn-t-highlight 700ms · --bn-t-instant 0.01ms (the reduced-motion floor)
 --bn-disabled 0.45              the one opacity a disabled pressable wears
---bn-photo-ratio 0.5625         a stored photograph's width over height (2160x3840); its <img> boxes by it
 
 NOT PAINT                       (two colours the reader never sees as colour, named so they
                                  are not hex literals in a stylesheet)
