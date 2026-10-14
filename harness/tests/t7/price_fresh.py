@@ -1071,7 +1071,7 @@ def check_trends_facts_need_no_month_series(checks: Checks) -> None:
     SKU loses its facts. Real history holds such SKUs, so this fires with no 403 at all.
 
     THE WIRE SHAPE IS REAL: `month` answers `result: null`, which `parse_history` reads as
-    "no history" and not as an error, and `annual` lists the SKU. The catalogue hops are seeded
+    "no history" and not as an error, and `annual` lists the SKU. The catalog hops are seeded
     into the cache, as `check_history_blocked_route` does. The history hops are not, and
     `urllib.request.urlopen` answers them in-process, so `fetch_json` runs for real.
     """
@@ -1096,7 +1096,7 @@ def check_trends_facts_need_no_month_series(checks: Checks) -> None:
     def history_urlopen(request, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
         url = request.full_url
         if "infinite-api" not in url:
-            # An unseeded catalogue hop. Refused without a socket, so a miss reads as a miss.
+            # An unseeded catalog hop. Refused without a socket, so a miss reads as a miss.
             raise urllib.error.URLError(f"harness: no socket for {url}")
         payload = {"count": 0, "result": None} if "range=month" in url else annual
         return io.BytesIO(json.dumps(payload).encode("utf-8"))
@@ -1104,12 +1104,12 @@ def check_trends_facts_need_no_month_series(checks: Checks) -> None:
     with isolated_home():
         directory = pipeline_routes.market_cache_dir()
         at = time.time()
-        catalogue = (REPO_ROOT / "fixtures" / "tcgcsv_riftbound_unleashed_products.json").read_text("utf-8")
+        catalog = (REPO_ROOT / "fixtures" / "tcgcsv_riftbound_unleashed_products.json").read_text("utf-8")
         for slug, payload in (
             ("tcgcsv/categories", {"results": [{"categoryId": 89,
                                                 "name": "Riftbound League of Legends Trading Card Game"}]}),
             ("tcgcsv/89/groups", {"results": [{"groupId": 24560, "name": "Unleashed"}]}),
-            ("tcgcsv/89/24560/products", json.loads(catalogue)),
+            ("tcgcsv/89/24560/products", json.loads(catalog)),
         ):
             path = directory / f"{slug}.json"
             path.parent.mkdir(parents=True, exist_ok=True)

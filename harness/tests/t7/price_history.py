@@ -649,7 +649,7 @@ def check_blocked_batch_is_refused_not_read(checks: Checks) -> None:
     is still read, so its `Reading` keeps the `month` series.
 
     `urllib.request.urlopen` answers the history hops in-process, so `fetch_json`'s real
-    `Blocked` path runs. `product_ids` skips the catalogue walk, so no catalogue slug is needed.
+    `Blocked` path runs. `product_ids` skips the catalog walk, so no catalog slug is needed.
     """
     checks.note("")
     checks.note("BLOCKED BATCH — a 403 refuses a range, and a SKU with no range read is never a reading")
