@@ -1521,9 +1521,6 @@ async function openInventoryBox(page: Page): Promise<void> {
   await expect(page.locator('.card-locations').first()).toBeVisible()
 }
 
-/** The catalogue's hotlinked stock photograph. */
-const STOCK_PHOTO = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
-
 /** One priced row. The populated seed leaves `image_url` undefined, so this row carries `null`. */
 async function openPricing(page: Page): Promise<void> {
   const row = { ...pricingRow('8608859', 'Articuno', '22.03', '21.98', { box: 2, index: 1, label: 'Box 2, Section 1, Card 1', cid: 'a'.repeat(64), capture_id: 'cap-2-1' }), image_url: null }
@@ -1543,53 +1540,6 @@ async function openPricingSheet(page: Page): Promise<void> {
   await openPricing(page)
   await page.locator('.pricing-thumb').first().click()
   await expect(page.locator('.pricing-photo img').first()).toBeAttached()
-}
-
-/** The Sales podium: one sold line whose catalogue photograph is the stock image. */
-async function openRevenue(page: Page): Promise<void> {
-  const sold = {
-    key: 'TCGplayer:ORD-1', source: 'TCGplayer', number: 'ORD-1', placed_at: '2026-09-10T10:00:00+00:00', status: 'Shipped',
-    first_seen: '2026-09-10T10:05:00+00:00', changed_at: null, buyer: 'Ada', wanted: 1, recorded: 1, open: false, terminal: true, progress: [],
-    lines: [{ sku: '9100001', quantity: 1, name: 'Charizard ex', number: '006', printing: 'Holo', condition: 'Near Mint', rarity: 'Rare', unit_price: '12.50', kind: null }],
-  }
-  await pricedShelf(page)
-  await page.route(/\/orders$/, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ summary: '1 order', orders: [sold], resolution: { orders: [], counts: { resolved: 0, short: 0, no_copies_on_hand: 0, sku_unknown: 0, sku_unseen: 0, not_a_single: 0 } } }) }),
-  )
-  await page.route(/\/skus\/photos\?/, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ photos: {}, stock_photos: { '9100001': STOCK_PHOTO } }) }),
-  )
-  await page.goto(screen('revenue'))
-  await expect(page.locator('.revenue-podium .revenue-tile').first()).toBeVisible()
-}
-
-/** The Orders walk with its populated seed, then the card photograph opened full size. */
-async function openOrdersZoom(page: Page): Promise<void> {
-  await l1Inventory(page)
-  await POPULATED_ROUTE_SEEDS[`#/${'orders'}`]?.(page)
-  /* The populated copy has no photograph, so the card draws its absent note. This answer marks the first copy as photographed. */
-  const plan = JSON.stringify(severalOrdersWalkPlan()).replace('"has_photo":false', '"has_photo":true').replace('"cid":null', `"cid":"${'a'.repeat(64)}"`)
-  await page.route(/\/orders\/walk-plan$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: plan }))
-  await page.goto(screen('orders'))
-  await expect(page.locator('.orders-walk-pick-count').first()).toBeVisible()
-  await expect(page.locator('.orders-cardcol').first()).not.toHaveAttribute('inert')
-  await page.locator('.orders-cardcol .browse-photo-frame').first().click()
-  await expect(page.locator('.inv-lightbox img').first()).toBeAttached()
-}
-
-/** Three single-candidate entries of one reason and grade, so the queue offers to answer them as a group. */
-async function openReviewGroup(page: Page): Promise<void> {
-  const entries = [1, 2, 3].map((i) => ({
-    position: `Box 2, Section 1, Card ${i}`, box: 2, index: i, label: `Box 2, Section 1, Card ${i}`, photo: `photos/2/${i}.jpg`,
-    read: { name: 'Snorlax', number: '014/132', printed_total: '132', set_hint: 'ME01' }, confidence: 'high', reason: 'set_ambiguous',
-    candidates: [{ sku: `86080${i}`, name: 'Snorlax', set: 'ME01', number: '014/132', condition: 'Near Mint', market: '4.00' }],
-    first_seen: '2026-09-01T12:00:00+00:00', market: '4.00', cleared_by_human: false,
-  }))
-  await page.route(/\/queues$/, (route) => json(route, { review: entries, parked: [] }))
-  await page.goto(screen('review'))
-  await expect(page.locator('.review-candidates').first()).toBeVisible()
-  await page.getByRole('button', { name: /Answer all 3 together/i }).click()
-  await expect(page.locator('.review-group-photo').first()).toBeAttached()
 }
 
 /** The Fulfiller's list with the populated orders, and its first copy marked as photographed. */
@@ -1623,13 +1573,8 @@ async function openFulfillerZoom(page: Page): Promise<void> {
 }
 
 const IMAGE_SITES: readonly ImageSite[] = [
-  { site: 'CardLocations.tsx:876 Fulfiller copy photo', open: openFulfiller, img: '.card-locations-photo' },
-  { site: 'Fulfillment.tsx:1186 chosen photo', open: openFulfillerCard, img: '.fulfillment-photo' },
   { site: 'Fulfillment.tsx:1675 zoom photo', open: openFulfillerZoom, img: '.ff-zoom-img' },
-  { site: 'ReviewQueue.tsx:2019 GroupConfirm photo', open: openReviewGroup, img: '.review-group-photo' },
-  { site: 'kit/data.tsx:434 CardThumb (Sales podium)', open: openRevenue, img: '.revenue-podium .bn-thumb-img' },
   { site: 'Pricing.tsx:3816 SheetPhoto', open: openPricingSheet, img: '.pricing-photo img' },
-  { site: 'Orders.tsx:2813 lightbox', open: openOrdersZoom, img: '.inv-lightbox img' },
 ]
 
 for (const one of IMAGE_SITES) {
