@@ -19,7 +19,7 @@ from .core import EXPECTED_EMPTY, Finding, MECHANICAL, Report, Row, _sibling, ex
 from .dispatch import check_subject_counts
 from .harness_criteria import _CRITERION_BAR, _harness_claim_findings
 from .hygiene import _prose_blanked
-from .registry_scopes import CHECK_WORKFLOW, _SCOPE_STEP_RE, _repo_literals, browser_gate_findings
+from .registry_scopes import CHECK_WORKFLOW, _SCOPE_STEP_RE, _repo_literals, _yaml_job_block, browser_gate_findings
 from .screens import _S9_BRACKET
 
 
@@ -81,7 +81,12 @@ def run(ok) -> None:
     _unwired = _mutant(_SCOPE_STEP_RE.sub("python3 scripts/other.py classify", _workflow), "unwired classifier")
     ok(any("consulted by nothing" in m for _, m in browser_gate_findings(_unwired)),
        "a workflow that never runs the classifier is reported as gating nothing")
-    _recording = _mutant(_workflow.replace("if: github.event_name != 'push'", "if: always()"), "recording guard")
+    # Anchored on the `if:` line of the `design-check-passed` job, found by the reader's own
+    # job helper, so a reworded condition does not break the mutation.
+    _passed = _yaml_job_block(_workflow, "design-check-passed") or ""
+    _recording = _mutant(
+        _workflow.replace(_passed, re.sub(r"^([ \t]*if:).*$", r"\1 always()", _passed, count=1, flags=re.M), 1),
+        "recording guard")
     ok(any("skipped matrix" in m for _, m in browser_gate_findings(_recording)),
        "a pass record written for a skipped matrix is refused")
     _module = _sibling("browser-scope.py")
