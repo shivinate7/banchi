@@ -2066,6 +2066,66 @@ def check_send_sold_since(checks: Checks) -> None:
             )
 
 
+def _banner_send(stamp: str) -> dict:
+    """One send's row as `#/pricing`'s SendCard reads it, from `do_sends`."""
+    return next(row for row in send_routes.do_sends()["sends"] if row["stamp"] == stamp)
+
+
+def check_send_sold_after_check(checks: Checks) -> None:
+    """A copy sold after a check that missed it still confirms the send, never offered back.
+
+    THE FROZEN RESULT. The first check past the wait can run while TCGplayer still shows the
+    pre-send figure, and then it judges the send `short`. `send_routes._due` admits only
+    waiting, unknown and written receipts, so a `short` one is never checked again. A sale
+    that follows is never credited (`_sold_since` runs only inside `_credits`, for due
+    receipts), and the banner and "Take them back" keep the stored figure.
+
+    A SALE PROVES A COPY LANDED. The live figure is not the only witness. `live_before` is set
+    one above every later live read, as it is for a SKU that already had a copy listed. The
+    rise measured from the live figure alone comes to one less than the sale, so a fix that
+    only re-checks `short` receipts and trusts that rise fails here. The copy that did not
+    sell stays offered back, as it is today.
+
+    Both orders are driven the way the screen drives them: the first check past the wait,
+    then the owner's manual "Check what is live" (`force`) after a sale.
+    """
+    checks.note("")
+    checks.note("SEND CHECK — a copy sold after a check that missed it still confirms the send")
+
+    cards = [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None)]
+    for label, sold_first in (("sold after the check", False), ("sold before the check", True)):
+        with send_portal() as portal, isolated_home():
+            run_dir, _ = seam_run(checks, cards)
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+            stamp = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]["stamp"]
+            directory = send_routes.sends_dir() / stamp
+            record = send_routes._read(directory)
+            record["live_before"] = {ARTICUNO_SKU: 1}
+            send_routes._write(directory, record)
+            _age_receipt(stamp)
+            if sold_first:
+                capture_server.do_mark_sold(3, 1, {})
+            send_routes.do_live_check({})
+            if not sold_first:
+                before_sale = _banner_send(stamp)
+                checks.equal(
+                    (before_sale["check"]["found"], before_sale["takeable"]),
+                    (0, 2),
+                    f"PRECONDITION ({label}): the first check misses both copies, so both "
+                    "are offered back",
+                )
+                capture_server.do_mark_sold(3, 1, {})
+                send_routes.do_live_check({"force": True})
+            summary = _banner_send(stamp)
+            checks.equal(
+                (summary["check"]["found"], summary["check"]["expected"], summary["takeable"]),
+                (1, 2, 1),
+                f"A SALE PROVES A COPY LANDED ({label}): the copy sold is found although the "
+                "live figure still shows it gone, and only the copy that did not sell is "
+                "offered back, so a good copy is never sent twice",
+            )
+
+
 def check_send_hazards(checks: Checks) -> None:
     """The adversarial review's failures, each against the stand-in portal's own mode.
 
@@ -5991,6 +6051,7 @@ CHECKS = (
     check_send_hold_takes_off,
     check_send_take_outstanding,
     check_send_sold_since,
+    check_send_sold_after_check,
     check_send_hazards,
     check_send_review_r3,
     check_send_review_r4,
