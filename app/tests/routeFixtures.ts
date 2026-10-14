@@ -882,7 +882,7 @@ export async function seedPopulatedReview(page: Page): Promise<void> {
 const NAME_A = 'a'.repeat(64)
 const NAME_B = 'b'.repeat(64)
 
-function pricingRow(
+export function pricingRow(
   sku: string,
   name: string,
   market: string,

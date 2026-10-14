@@ -435,7 +435,7 @@
 
 .pricing-photo { display: flex; flex-direction: column; gap: var(--bn-3); }
 .pricing-photo-frame { border-radius: var(--bn-r-lg); overflow: hidden; background: var(--bn-surface-2); }
-.pricing-photo-frame img { display: block; width: 100%; height: auto; }
+.pricing-photo-frame img { display: block; width: 100%; height: auto; aspect-ratio: auto 9 / 16; }
 .pricing-photo-caption { display: flex; justify-content: space-between; gap: var(--bn-2); margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
 
 /* ---- 720 and narrower desks: Lowest and the trend leave the row (the product view has both) -- */

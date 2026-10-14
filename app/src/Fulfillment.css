@@ -1334,11 +1334,12 @@
   animation: bn-fade var(--bn-t) var(--bn-ease-out) backwards;
 }
 .ff-zoom-img {
-  max-width: 100%;
-  max-height: calc(100vh - 120px);
-  max-height: calc(100dvh - 120px);
-  width: auto;
+  /* THE BOX IS THE PHOTOGRAPH'S OWN SHAPE FROM FIRST PAINT: the largest one that fits the screen
+   * under the hint, so the hint does not move when the bytes land. */
+  width: min(100%, calc((100vh - 120px) * 9 / 16));
+  width: min(100%, calc((100dvh - 120px) * 9 / 16));
   height: auto;
+  aspect-ratio: auto 9 / 16;
   object-fit: contain;
   /* A pinch here enlarges the photograph, which is what he pinched for. */
   touch-action: pinch-zoom;

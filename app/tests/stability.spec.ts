@@ -8,7 +8,7 @@ import { card, sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
 import { afterPaint, settleMotion } from './motionSettled'
 import { routesFromNav } from './routes'
-import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, line, order, seedPopulatedOrders, severalOrders, severalOrdersWalkPlan } from './routeFixtures'
+import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, line, order, pricingRow, seedPopulatedOrders, severalOrders, severalOrdersWalkPlan } from './routeFixtures'
 import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
 import { setViewport } from './phoneSwitch'
 import { stubMatched } from './routeFixtures'
@@ -1441,5 +1441,239 @@ test('ticking: the Capture head\'s matched counter shifts nothing as its number 
   }
   const shifts = (await readShifts(page)).shifts.filter((s) => s.at >= mark)
   expect(sumOf(shifts), describeShifts(shifts)).toBe(0)
+})
+
+/* IMAGE SHIFT, PER SITE. An `<img>` with no size of its own draws nothing until its bytes land, so
+ * whatever sits after it moves when they do. This probe holds every photograph answer until it
+ * releases one card-shaped image. Movement is read in document coordinates, so scroll anchoring
+ * cannot hide it. */
+const CARD_SHAPED =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="540" height="960" viewBox="0 0 540 960"><rect width="540" height="960" fill="#6b6b75"/></svg>'
+
+/** Every photograph answer the page asks for, held open until the probe answers it. Only `image`
+ *  requests are held, so no script or read waits here. */
+async function holdPhotos(page: Page): Promise<Held[]> {
+  const held: Held[] = []
+  await page.route(
+    (url) => /\.(png|jpe?g|webp|gif|svg)$|\/(photo|assets)\//.test(url.pathname) || url.hostname === 'tcgplayer-cdn.tcgplayer.com',
+    async (route) => {
+      if (route.request().resourceType() !== 'image') return route.fallback()
+      held.push({ url: route.request().url(), route })
+    },
+  )
+  return held
+}
+
+type Held = { url: string; route: Route }
+
+/** Answers one held photograph with the card-shaped image. */
+const answer = (held: Held): Promise<void> => held.route.fulfill({ status: 200, contentType: 'image/svg+xml', body: CARD_SHAPED })
+
+type FrameRead = { found: boolean; loaded: boolean; h: number; tops: (number | null)[] }
+
+/** The image's box, and the top (document coordinates) of every visible element after it in the
+ *  document that is neither its ancestor nor inside it. The element list is taken once, on the first read. */
+function readFrame(page: Page, selector: string, at: number): Promise<FrameRead> {
+  return page.evaluate(([sel, index]) => {
+    const w = window as unknown as { __imageSiteAfter?: Element[] }
+    const img = document.querySelectorAll<HTMLImageElement>(sel).item(index)
+    if (img === null) return { found: false, loaded: false, h: 0, tops: [] }
+    if (w.__imageSiteAfter === undefined) {
+      w.__imageSiteAfter = Array.from(document.body.querySelectorAll('*')).filter(
+        (el) => !img.contains(el) && !el.contains(img) && (img.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+      )
+    }
+    const tops = w.__imageSiteAfter.map((el) => {
+      if (!el.isConnected || getComputedStyle(el).position === 'fixed') return null
+      const r = el.getBoundingClientRect()
+      return r.height > 0 ? r.top + window.scrollY : null
+    })
+    return { found: true, loaded: img.complete && img.naturalWidth > 0, h: img.getBoundingClientRect().height, tops }
+  }, [selector, at] as const)
+}
+
+/** The largest move, in px, of any element that was after the image and is still on the page. */
+function movedPx(before: FrameRead, after: FrameRead): number {
+  let moved = 0
+  before.tops.forEach((top, i) => {
+    const next = after.tops[i]
+    if (top !== null && next !== undefined && next !== null) moved = Math.max(moved, Math.abs(next - top))
+  })
+  return Math.round(moved)
+}
+
+/** One photograph site: how to reach the state that draws it, and which `<img>` it is. */
+type ImageSite = { site: string; open: (page: Page) => Promise<void>; img: string; at?: number }
+
+/** The box's first card is the one the panel opens on. The shell's card fixture has no
+ *  `photo_reclaimed_at`, which reads as reclaimed, so this re-answers the box with the field null. */
+async function openInventoryBox(page: Page): Promise<void> {
+  await l1Inventory(page)
+  await page.route(/\/inventory\/(\d+)$/, (route) => {
+    const box = Number(/\/inventory\/(\d+)$/.exec(route.request().url())?.[1])
+    const cards = Object.fromEntries(
+      Object.entries(L1_CARDS).filter(([, c]) => c.box === box).map(([key, c]) => [key, { ...c, photo_reclaimed_at: null }]),
+    )
+    return json(route, { version: 2, cards, listings: {} })
+  })
+  await page.goto(screen('inventory'))
+  await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
+  await expect(page.locator('.card-locations').first()).toBeVisible()
+}
+
+/** One priced row. The populated seed leaves `image_url` undefined, so this row carries `null`. */
+async function openPricing(page: Page): Promise<void> {
+  const row = { ...pricingRow('8608859', 'Articuno', '22.03', '21.98', { box: 2, index: 1, label: 'Box 2, Section 1, Card 1', cid: 'a'.repeat(64), capture_id: 'cap-2-1' }), image_url: null }
+  await page.route(/\/pipeline\/pricing(\?|$)/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ runs: [], roster: [], skus: [row], written_at: {}, skipped: [], asked: [], threshold: '0.49', floor: '0.49' }),
+    }),
+  )
+  await page.goto(screen('pricing'))
+  await expect(page.locator('.pricing-row').first()).toBeVisible()
+}
+
+/** Opens the priced row's photo sheet, which draws `SheetPhoto`. */
+async function openPricingSheet(page: Page): Promise<void> {
+  await openPricing(page)
+  await page.locator('.pricing-thumb').first().click()
+  await expect(page.locator('.pricing-photo img').first()).toBeAttached()
+}
+
+/** The Fulfiller's list with the populated orders, and its first copy marked as photographed. */
+async function openFulfiller(page: Page): Promise<void> {
+  await seedPopulatedOrders(page)
+  const plan = JSON.stringify(severalOrdersWalkPlan()).replace('"has_photo":false', '"has_photo":true').replace('"cid":null', `"cid":"${'a'.repeat(64)}"`)
+  await page.route(/\/orders\/walk-plan$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: plan }))
+  await page.goto(screen('fulfillment'))
+  await expect(page.locator('.ff-column').first()).toBeVisible()
+}
+
+/** The Fulfiller's first card chosen, so its photograph is drawn. */
+async function openFulfillerCard(page: Page): Promise<void> {
+  await openFulfiller(page)
+  /* The boxes arrive shut, and the card's row is inside one. They are waited for first, so the loop never runs before they draw. */
+  await expect(page.locator('.ff-box-head').first()).toBeVisible()
+  const heads = page.locator('.ff-box-head[aria-expanded="false"]')
+  for (let guard = 0; guard < 40; guard += 1) {
+    if ((await heads.count()) === 0) break
+    await heads.first().click()
+  }
+  await page.getByRole('button', { name: 'Volcanion' }).first().click()
+  await expect(page.locator('.fulfillment-photo').first()).toBeAttached()
+}
+
+/** The Fulfiller's chosen photograph, opened full size from its button. */
+async function openFulfillerZoom(page: Page): Promise<void> {
+  await openFulfillerCard(page)
+  await page.locator('.ff-photo-btn').first().click()
+  await expect(page.locator('.ff-zoom-img').first()).toBeAttached()
+}
+
+const IMAGE_SITES: readonly ImageSite[] = [
+  { site: 'Fulfillment .ff-zoom-img', open: openFulfillerZoom, img: '.ff-zoom-img' },
+  { site: 'Pricing SheetPhoto', open: openPricingSheet, img: '.pricing-photo img' },
+]
+
+for (const one of IMAGE_SITES) {
+  for (const width of [1440, 820]) {
+    test(`image: ${one.site} holds its frame while its photograph loads, at ${width}`, async ({ page }) => {
+      test.setTimeout(120_000)
+      const at = one.at ?? 0
+      const photos = await holdPhotos(page)
+      await setViewport(page, { width, height: 1000 })
+      await one.open(page)
+      await page.locator(one.img).nth(at).scrollIntoViewIfNeeded()
+      await expect.poll(() => photos.length, { message: `${one.site}: no photograph request was held` }).toBeGreaterThan(0)
+      /* THIS SITE'S OWN PHOTOGRAPH IS THE ONE THAT WAITS. Every other photograph is answered first and settles. */
+      const own = await page.locator(one.img).nth(at).evaluate((e) => (e as HTMLImageElement).src)
+      const ownRequest = photos.find((h) => h.url === own)
+      expect(ownRequest, `${one.site}: its own photograph (${own}) was not one of the held requests`).toBeDefined()
+      for (const h of photos) if (h !== ownRequest) await answer(h)
+      await expect.poll(() => page.evaluate((src) => Array.from(document.images).every((i) => i.src === src || i.complete), own), { message: `${one.site}: the other photographs never settled` }).toBe(true)
+      await settleFonts(page)
+      await settleMotion(page)
+      await afterPaint(page)
+      const before = await readFrame(page, one.img, at)
+      expect(before.found, `${one.site}: the image is not on the page`).toBe(true)
+      expect(before.loaded, `${one.site}: the photograph loaded before the first read, so nothing was held`).toBe(false)
+      await answer(ownRequest!)
+      await expect.poll(async () => (await readFrame(page, one.img, at)).loaded, { message: `${one.site}: the photograph never loaded` }).toBe(true)
+      await settleMotion(page)
+      await afterPaint(page)
+      const after = await readFrame(page, one.img, at)
+      const moved = movedPx(before, after)
+      expect(moved, `${one.site} moved content ${moved}px when its photograph loaded`).toBeLessThan(1)
+    })
+  }
+}
+
+/* THE PHOTOGRAPH'S OWN SHAPE. A 2:3 photograph (360x540) must end in a box of its own ratio once it loads, so a fixed
+ * `9 / 16` box stretches it. The box is read after load and held to 1% of the photograph's natural ratio. */
+const TALL_PHOTO =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="360" height="540" viewBox="0 0 360 540"><rect width="360" height="540" fill="#6b6b75"/></svg>'
+
+for (const one of IMAGE_SITES) {
+  for (const width of [1440, 820]) {
+    test(`image: ${one.site} keeps its own shape once its photograph loads, at ${width}`, async ({ page }) => {
+      test.setTimeout(120_000)
+      const at = one.at ?? 0
+      const photos = await holdPhotos(page)
+      await setViewport(page, { width, height: 1000 })
+      await one.open(page)
+      await page.locator(one.img).nth(at).scrollIntoViewIfNeeded()
+      await expect.poll(() => photos.length, { message: `${one.site}: no photograph request was held` }).toBeGreaterThan(0)
+      const own = await page.locator(one.img).nth(at).evaluate((e) => (e as HTMLImageElement).src)
+      const ownRequest = photos.find((h) => h.url === own)
+      expect(ownRequest, `${one.site}: its own photograph (${own}) was not one of the held requests`).toBeDefined()
+      for (const h of photos) if (h !== ownRequest) await answer(h)
+      await settleFonts(page)
+      await settleMotion(page)
+      await ownRequest!.route.fulfill({ status: 200, contentType: 'image/svg+xml', body: TALL_PHOTO })
+      await expect.poll(async () => (await readFrame(page, one.img, at)).loaded, { message: `${one.site}: the 2:3 photograph never loaded` }).toBe(true)
+      await settleMotion(page)
+      await afterPaint(page)
+      const shape = await page.locator(one.img).nth(at).evaluate((e) => {
+        const img = e as HTMLImageElement
+        const r = img.getBoundingClientRect()
+        return { box: r.width / r.height, photo: img.naturalWidth / img.naturalHeight }
+      })
+      expect(
+        Math.abs(shape.box - shape.photo) / shape.photo,
+        `${one.site}: box ratio ${shape.box.toFixed(3)} against a photograph of ${shape.photo.toFixed(3)}`,
+      ).toBeLessThan(0.01)
+    })
+  }
+}
+
+/* POSITIVE CONTROL FOR THE IMAGE PROBE. A 200px block above a pending photograph must move the frame measure the rows read. */
+test('image probe control: a block above a pending photograph moves the measured frame', async ({ page }) => {
+  test.setTimeout(120_000)
+  const photos = await holdPhotos(page)
+  await setViewport(page, { width: 1440, height: 1000 })
+  await openInventoryBox(page)
+  await page.getByRole('button', { name: 'Retire' }).first().click()
+  const img = page.locator('.inventory-confirm-photo')
+  await img.scrollIntoViewIfNeeded()
+  await expect.poll(() => photos.length).toBeGreaterThan(0)
+  await settleMotion(page)
+  await afterPaint(page)
+  const before = await readFrame(page, '.inventory-confirm-photo', 0)
+  const own = await img.evaluate((e) => (e as HTMLImageElement).src)
+  expect(before.loaded).toBe(false)
+  await page.evaluate(() => {
+    const spacer = document.createElement('div')
+    spacer.style.height = '200px'
+    document.querySelector('.inventory-confirm-photo')?.parentElement?.before(spacer)
+  })
+  await afterPaint(page)
+  await answer(photos.find((h) => h.url === own)!)
+  await expect.poll(async () => (await readFrame(page, '.inventory-confirm-photo', 0)).loaded).toBe(true)
+  await settleMotion(page)
+  await afterPaint(page)
+  const after = await readFrame(page, '.inventory-confirm-photo', 0)
+  expect(movedPx(before, after), 'the frame measure saw no move from a 200px block above the photograph').toBeGreaterThan(0)
 })
 
