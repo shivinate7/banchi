@@ -1573,8 +1573,8 @@ async function openFulfillerZoom(page: Page): Promise<void> {
 }
 
 const IMAGE_SITES: readonly ImageSite[] = [
-  { site: 'Fulfillment.tsx:1675 zoom photo', open: openFulfillerZoom, img: '.ff-zoom-img' },
-  { site: 'Pricing.tsx:3816 SheetPhoto', open: openPricingSheet, img: '.pricing-photo img' },
+  { site: 'Fulfillment .ff-zoom-img', open: openFulfillerZoom, img: '.ff-zoom-img' },
+  { site: 'Pricing SheetPhoto', open: openPricingSheet, img: '.pricing-photo img' },
 ]
 
 for (const one of IMAGE_SITES) {
@@ -1605,18 +1605,53 @@ for (const one of IMAGE_SITES) {
       await afterPaint(page)
       const after = await readFrame(page, one.img, at)
       const moved = movedPx(before, after)
-      console.log(`IMGSHIFT ${one.site} ${width} moved=${moved} h=${Math.round(before.h)}->${Math.round(after.h)}`)
       expect(moved, `${one.site} moved content ${moved}px when its photograph loaded`).toBeLessThan(1)
     })
   }
 }
 
-/* POSITIVE CONTROL FOR THE IMAGE PROBE. A 200px block above a pending photograph must move the frame
- * measure the rows read. The browser's layout-shift entries are logged as a cross-check only. */
+/* THE PHOTOGRAPH'S OWN SHAPE. A 2:3 photograph (360x540) must end in a box of its own ratio once it loads, so a fixed
+ * `9 / 16` box stretches it. The box is read after load and held to 1% of the photograph's natural ratio. */
+const TALL_PHOTO =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="360" height="540" viewBox="0 0 360 540"><rect width="360" height="540" fill="#6b6b75"/></svg>'
+
+for (const one of IMAGE_SITES) {
+  for (const width of [1440, 820]) {
+    test(`image: ${one.site} keeps its own shape once its photograph loads, at ${width}`, async ({ page }) => {
+      test.setTimeout(120_000)
+      const at = one.at ?? 0
+      const photos = await holdPhotos(page)
+      await setViewport(page, { width, height: 1000 })
+      await one.open(page)
+      await page.locator(one.img).nth(at).scrollIntoViewIfNeeded()
+      await expect.poll(() => photos.length, { message: `${one.site}: no photograph request was held` }).toBeGreaterThan(0)
+      const own = await page.locator(one.img).nth(at).evaluate((e) => (e as HTMLImageElement).src)
+      const ownRequest = photos.find((h) => h.url === own)
+      expect(ownRequest, `${one.site}: its own photograph (${own}) was not one of the held requests`).toBeDefined()
+      for (const h of photos) if (h !== ownRequest) await answer(h)
+      await settleFonts(page)
+      await settleMotion(page)
+      await ownRequest!.route.fulfill({ status: 200, contentType: 'image/svg+xml', body: TALL_PHOTO })
+      await expect.poll(async () => (await readFrame(page, one.img, at)).loaded, { message: `${one.site}: the 2:3 photograph never loaded` }).toBe(true)
+      await settleMotion(page)
+      await afterPaint(page)
+      const shape = await page.locator(one.img).nth(at).evaluate((e) => {
+        const img = e as HTMLImageElement
+        const r = img.getBoundingClientRect()
+        return { box: r.width / r.height, photo: img.naturalWidth / img.naturalHeight }
+      })
+      expect(
+        Math.abs(shape.box - shape.photo) / shape.photo,
+        `${one.site}: box ratio ${shape.box.toFixed(3)} against a photograph of ${shape.photo.toFixed(3)}`,
+      ).toBeLessThan(0.01)
+    })
+  }
+}
+
+/* POSITIVE CONTROL FOR THE IMAGE PROBE. A 200px block above a pending photograph must move the frame measure the rows read. */
 test('image probe control: a block above a pending photograph moves the measured frame', async ({ page }) => {
   test.setTimeout(120_000)
   const photos = await holdPhotos(page)
-  await watchShifts(page)
   await setViewport(page, { width: 1440, height: 1000 })
   await openInventoryBox(page)
   await page.getByRole('button', { name: 'Retire' }).first().click()
@@ -1628,7 +1663,6 @@ test('image probe control: a block above a pending photograph moves the measured
   const before = await readFrame(page, '.inventory-confirm-photo', 0)
   const own = await img.evaluate((e) => (e as HTMLImageElement).src)
   expect(before.loaded).toBe(false)
-  const from = await markNow(page)
   await page.evaluate(() => {
     const spacer = document.createElement('div')
     spacer.style.height = '200px'
@@ -1640,8 +1674,6 @@ test('image probe control: a block above a pending photograph moves the measured
   await settleMotion(page)
   await afterPaint(page)
   const after = await readFrame(page, '.inventory-confirm-photo', 0)
-  const cls = (await readShifts(page)).shifts.filter((s) => s.at >= from)
-  console.log(`PROBECHECK control-spacer moved=${movedPx(before, after)} h=${Math.round(before.h)}->${Math.round(after.h)} cls=${describeShifts(cls)} clsSum=${sumOf(cls)}`)
   expect(movedPx(before, after), 'the frame measure saw no move from a 200px block above the photograph').toBeGreaterThan(0)
 })
 
