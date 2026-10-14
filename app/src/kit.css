@@ -1087,7 +1087,7 @@ span.bn-slot { display: inline-block; }
 .bn-notice-title { font-weight: 600; }
 .bn-notice { flex-wrap: wrap; }
 .bn-notice-text { display: flex; flex-direction: column; gap: var(--bn-0-5); flex: 1 1 16rem; min-width: 0; }
-.bn-notice-action { flex: none; align-self: center; }
+.bn-notice-action { display: flex; align-items: center; gap: var(--bn-2); flex: none; align-self: center; }
 .bn-notice-code { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow-wrap: anywhere; }
 
 /* "WHAT THE SERVER SAID" (D269): the machine's own words, one press away and never in

@@ -1262,6 +1262,15 @@ export function Gallery() {
                   The queue changed after this screen read it. Reload to see it as it is now.
                 </Notice>
               </Spec>
+              <Spec name="notice-actions" label="warn, with two actions">
+                <Notice
+                  tone="warn"
+                  title="Your last send is not all there yet"
+                  action={<><Button>Take 6 copies back</Button><Button variant="quiet">Send anyway</Button></>}
+                >
+                  Six copies are still on the way.
+                </Notice>
+              </Spec>
               <Spec label="ok">
                 <Notice tone="ok" title="Reconciled">
                   405 SKUs read a live count for the first time.
