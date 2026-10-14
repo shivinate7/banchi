@@ -33,6 +33,7 @@ from cli import cmd_reprice, resolve, runs
 from pipeline import corpus, reprice, sendguard, tcgcsv
 from server import capture_server, pipeline_routes, send_routes, tcg_export, tcg_import
 from store import clock, db, files, master, sendclaims
+from store import orders as order_store
 from store.session import Store
 from harness.tests.t7.common import (
     ARTICUNO_SKU,
@@ -2123,6 +2124,225 @@ def check_send_sold_after_check(checks: Checks) -> None:
                 f"A SALE PROVES A COPY LANDED ({label}): the copy sold is found although the "
                 "live figure still shows it gone, and only the copy that did not sell is "
                 "offered back, so a good copy is never sent twice",
+            )
+
+
+def _press_and_age(checks: Checks, portal, cards, live: Dict[str, int]) -> str:
+    """Send `cards` through the real route with TCGplayer showing `live`; return the stamp."""
+    run_dir, _ = seam_run(checks, cards)
+    portal["live"] = _live_export_bytes(live)
+    stamp = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]["stamp"]
+    _age_receipt(stamp)
+    return stamp
+
+
+def _open_order(sku: str, quantity: int, number: str, placed_at: str = "2026-10-06T23:00:00+00:00") -> None:
+    """An open order for `sku`, written through the ledger's own `ingest`, as a sync writes it."""
+    with Store().write() as snapshot:
+        snapshot.ledger.ingest(
+            [
+                order_store.OrderRecord(
+                    source="TCGplayer",
+                    number=number,
+                    status="Pending",
+                    placed_at=placed_at,
+                    lines=[order_store.OrderLine(sku=sku, quantity=quantity)],
+                )
+            ]
+        )
+
+
+def check_send_snapshot_lagging_then_newer(checks: Checks) -> None:
+    """Snapshot case 1: a lagging reading, then a newer one that shows the copies.
+
+    The first check past the wait reads TCGplayer's old figure and judges both copies missing.
+    A newer reading, dated after the wait, shows both live. The send is then `checked`, nothing
+    is offered back, and no claim holds the next send.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT 1 — a lagging reading, then a newer one that shows the copies")
+    cards = [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None)]
+    with send_portal() as portal, isolated_home():
+        stamp = _press_and_age(checks, portal, cards, {ARTICUNO_SKU: 0})
+        send_routes.do_live_check({})
+        lagging = _banner_send(stamp)
+        checks.equal(
+            (lagging["state"], lagging["takeable"]),
+            ("short", 2),
+            "PRECONDITION: the lagging reading judges both copies missing",
+        )
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
+        send_routes.do_live_check({"force": True})
+        newer = _banner_send(stamp)
+        checks.equal(
+            (newer["state"], newer["takeable"]),
+            ("checked", 0),
+            "A NEWER READING THAT SHOWS THE COPIES settles the send: checked, nothing to take back",
+        )
+        checks.ok(not newer["held"], "SEND UNLOCKS: no claim holds the send after the newer reading")
+
+
+def check_send_snapshot_open_order(checks: Checks) -> None:
+    """Snapshot case 2: an open order takes the copy, though the card is not yet marked sold.
+
+    TCGplayer has sold the copy and an open order names it. The shelf still counts the card as
+    unsold, but the order has taken it: shelf unsold (1) minus open-order copies (1) leaves
+    nothing missing. Take Back must not offer it.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT 2 — an open order on a checked send, the card not yet marked sold")
+    with send_portal() as portal, isolated_home():
+        stamp = _press_and_age(checks, portal, [(3, 1, "Articuno", "161", None)], {ARTICUNO_SKU: 0})
+        _open_order(ARTICUNO_SKU, 1, "O-SNAPSHOT-2")
+        send_routes.do_live_check({})
+        summary = _banner_send(stamp)
+        checks.equal(
+            (summary["state"], summary["takeable"]),
+            ("checked", 0),
+            "AN OPEN ORDER HAS TAKEN THE COPY: it is sold, so nothing is missing and nothing "
+            "goes back",
+        )
+
+
+def check_send_snapshot_reading_before_wait(checks: Checks) -> None:
+    """Snapshot case 3: the store's reading of the SKU is dated before the send's wait.
+
+    The check judged both copies missing past the wait. The reading the snapshot reads is the
+    store's own (`live_as_of`), and here it is dated before that wait, so it cannot show what
+    the copies look like after it. Take Back must hold.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT 3 — the store's reading is dated before the wait")
+    with send_portal() as portal, isolated_home():
+        stamp = _press_and_age(
+            checks,
+            portal,
+            [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0},
+        )
+        send_routes.do_live_check({})
+        checks.equal(
+            _banner_send(stamp)["takeable"],
+            2,
+            "PRECONDITION: the check past the wait offers both copies back",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.listings[ARTICUNO_SKU].live_as_of = "2000-01-01T00:00:00+00:00"
+        checks.equal(
+            _banner_send(stamp)["takeable"],
+            0,
+            "A READING DATED BEFORE THE WAIT IS NO BASIS: nothing is offered back on it",
+        )
+
+
+def check_send_snapshot_rise_before_press(checks: Checks) -> None:
+    """Snapshot case 4: the live count rises between the screen's read and the Take Back press.
+
+    The screen read two copies to take back. Before the press, TCGplayer shows one of them
+    live, and the store takes that reading as `reconcile --live` does. The press must move only
+    the fresh figure: one copy, not the two the screen showed.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT 4 — the live count rises between the read and the press")
+    with send_portal() as portal, isolated_home():
+        stamp = _press_and_age(
+            checks,
+            portal,
+            [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0},
+        )
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(stamp)["takeable"], 2, "PRECONDITION: the screen reads two to take back")
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+        _name, path = send_routes._fetch_live("moved")
+        send_routes._reconcile(path, "moved")
+        moved = send_routes.do_take_back(stamp, {"confirm": True})["moved"]
+        checks.equal(
+            moved,
+            1,
+            "ONLY THE FRESH FIGURE MOVES: one copy is live now, so one goes back, not the two "
+            "the screen showed",
+        )
+
+
+def check_send_snapshot_shared_sku(checks: Checks) -> None:
+    """Snapshot case 5: one SKU in two sends. Take Back is offered on the newest receipt only.
+
+    The first send (one copy) is checked past its wait and judged missing. The second send (two
+    copies, a different row, since an identical row is refused as a double send) is then
+    checked. The offer must sit on the newest receipt that carries the SKU, and the copies moved
+    must not exceed the snapshot: three copies sent, none live, so three missing.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT 5 — one SKU in two sends, offered on the newest only")
+    with send_portal() as portal, isolated_home():
+        first = _press_and_age(checks, portal, [(3, 1, "Articuno", "161", None)], {ARTICUNO_SKU: 0})
+        send_routes.do_live_check({})
+        second = _press_and_age(
+            checks,
+            portal,
+            [(3, 2, "Articuno", "161", None), (3, 3, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0},
+        )
+        send_routes.do_live_check({})
+        older, newer = _banner_send(first), _banner_send(second)
+        checks.equal(
+            older["takeable"],
+            0,
+            "NEWEST RECEIPT ONLY: the older send that carries the SKU offers nothing",
+        )
+        checks.ok(
+            1 <= newer["takeable"] <= 3 and older["takeable"] + newer["takeable"] <= 3,
+            f"THE COPIES MOVED ARE AT MOST THE SNAPSHOT (3 missing): newest offers "
+            f"{newer['takeable']}, older {older['takeable']}",
+        )
+
+
+def check_send_snapshot_order_sync_older(checks: Checks) -> None:
+    """Snapshot case 6: the order sync is older than the live reading, so the check holds.
+
+    The last order sync ran before the reading. TCGplayer may have sold the copy on an order
+    the store has not yet synced, so the copy is not offered back until a sync is newer than
+    the reading. The sync here is an order for another SKU, dated before the reading.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT 6 — the order sync is older than the live reading")
+    with send_portal() as portal, isolated_home():
+        stamp = _press_and_age(checks, portal, [(3, 1, "Articuno", "161", None)], {ARTICUNO_SKU: 0})
+        with _patched(order_store, "now", lambda: "2026-10-06T23:00:00.000+00:00"):
+            _open_order("9999999", 1, "O-SNAPSHOT-6-OTHER")
+        send_routes.do_live_check({})
+        summary = _banner_send(stamp)
+        checks.equal(
+            summary["takeable"],
+            0,
+            "ORDER SYNC OLDER THAN THE READING: the check holds, and no Take Back is offered",
+        )
+
+
+def check_send_snapshot_short_rechecked(checks: Checks) -> None:
+    """Snapshot case 7 (R-S3): a short send is re-checked after the next wait, with no press.
+
+    The first check judges the copy missing. The copy lands late. After the next wait the
+    screen's timer finds a check due, and the check runs with no press from the owner. It finds
+    the copy, and the send is `checked`.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT 7 — a short send is re-checked after the next wait, no press")
+    real_now = clock.now
+    with send_portal() as portal, isolated_home():
+        stamp = _press_and_age(checks, portal, [(3, 1, "Articuno", "161", None)], {ARTICUNO_SKU: 0})
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(stamp)["state"], "short", "PRECONDITION: the first check judges it short")
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+        with _patched(clock, "now", lambda: real_now() + timedelta(days=1)):
+            checks.ok(send_routes.do_sends()["due"], "THE TIMER FINDS A CHECK DUE after the next wait")
+            ran = send_routes.do_live_check({})
+            checks.ok(ran["ran"], "THE CHECK RUNS with no press from the owner")
+            checks.equal(
+                _banner_send(stamp)["state"],
+                "checked",
+                "A SHORT SEND IS RE-CHECKED: the copy that landed late is found",
             )
 
 
@@ -6052,6 +6272,13 @@ CHECKS = (
     check_send_take_outstanding,
     check_send_sold_since,
     check_send_sold_after_check,
+    check_send_snapshot_lagging_then_newer,
+    check_send_snapshot_open_order,
+    check_send_snapshot_reading_before_wait,
+    check_send_snapshot_rise_before_press,
+    check_send_snapshot_shared_sku,
+    check_send_snapshot_order_sync_older,
+    check_send_snapshot_short_rechecked,
     check_send_hazards,
     check_send_review_r3,
     check_send_review_r4,
