@@ -2128,11 +2128,20 @@ def check_send_sold_after_check(checks: Checks) -> None:
 
 
 def _press_and_age(checks: Checks, portal, cards, live: Dict[str, int]) -> str:
-    """Send `cards` through the real route with TCGplayer showing `live`; return the stamp."""
+    """Send `cards` through the real route with TCGplayer showing `live`; return the stamp.
+
+    The wait is aged, and so is the publish: `reconcile --live` keeps the stored figure of a
+    SKU published inside the last lag (`cmd_reprice.published_recently`), so a case that reads
+    the store past the wait must age `published_at` too, or the reading is refused as recent.
+    """
     run_dir, _ = seam_run(checks, cards)
     portal["live"] = _live_export_bytes(live)
     stamp = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]["stamp"]
     _age_receipt(stamp)
+    directory = send_routes.sends_dir() / stamp
+    record = send_routes._read(directory)
+    record["published_at"] = "2000-01-01T00:00:00+00:00"
+    send_routes._write(directory, record)
     return stamp
 
 
@@ -2278,10 +2287,13 @@ def check_send_snapshot_shared_sku(checks: Checks) -> None:
     with send_portal() as portal, isolated_home():
         first = _press_and_age(checks, portal, [(3, 1, "Articuno", "161", None)], {ARTICUNO_SKU: 0})
         send_routes.do_live_check({})
+        # A DIFFERENT BOX FOR THE SECOND RUN. Box 3 already holds the first run's cards, and its
+        # registry entry is stamped in the second the second run starts; `box_disowns_run` then
+        # refuses the run by the wall clock. Box 4 holds only this run's cards, so it cannot.
         second = _press_and_age(
             checks,
             portal,
-            [(3, 2, "Articuno", "161", None), (3, 3, "Articuno", "161", None)],
+            [(4, 1, "Articuno", "161", None), (4, 2, "Articuno", "161", None)],
             {ARTICUNO_SKU: 0},
         )
         send_routes.do_live_check({})
@@ -2344,6 +2356,43 @@ def check_send_snapshot_short_rechecked(checks: Checks) -> None:
                 "checked",
                 "A SHORT SEND IS RE-CHECKED: the copy that landed late is found",
             )
+
+
+def check_send_one_rise(checks: Checks) -> None:
+    """One live rise confirms one receipt only, never both sends that carry the same copies.
+
+    Its own check. It used to sit inside check_send_hazards, which is where the reader would not
+    look for a rise. A seam run's join does not set a SKU on its captured cards, so the shelf's
+    SKUs are written through the store, as the box map case writes them.
+    """
+    checks.note("")
+    checks.note("SEND CHECK — one live rise confirms one receipt only")
+    with _case(checks, "S3: one live rise confirms one receipt only"), \
+            send_portal() as portal, isolated_home():
+        # THE SHELF MATCHES THE COPIES THE TWO RECEIPTS SENT: 3 + 3 unsold Articuno on the shelf.
+        # The snapshot reads the shelf, so an empty one would say nothing is missing at all.
+        seam_run(checks, [(4, index, "Articuno", "161", None) for index in range(1, 7)])
+        with Store().write() as snapshot:
+            for index in range(1, 7):
+                snapshot.inventory.cards[master.position_key(4, index)].sku = ARTICUNO_SKU
+        base = {
+            "kind": "send", "copies": {ARTICUNO_SKU: 3}, "copies_total": 3,
+            "names": {ARTICUNO_SKU: "Articuno"}, "live_before": {ARTICUNO_SKU: 0},
+            "sold_before": {ARTICUNO_SKU: 0}, "pushed": {"upload_id": "u", "rows": 1, "accepted": 1},
+            "published_at": "2026-09-24T10:00:00+00:00", "check_after": "2000-01-01T00:00:00+00:00",
+            "phase": "done",
+        }
+        for stamp in ("20260924-100000-eeeeee", "20260924-100500-ffffff"):
+            send_routes._write(send_routes.sends_dir() / stamp, dict(base, stamp=stamp))
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({})
+        states = {s["stamp"]: (s["state"], (s["check"] or {}).get("found")) for s in send_routes.do_sends()["sends"]}
+        checks.equal(
+            states,
+            {"20260924-100000-eeeeee": ("checked", 3), "20260924-100500-ffffff": ("short", 0)},
+            "ONE RISE OF THREE confirms the older send's three, and never both sends",
+        )
+
 
 
 def check_send_hazards(checks: Checks) -> None:
@@ -2711,27 +2760,6 @@ def check_send_hazards(checks: Checks) -> None:
             except ValueError:
                 refused = True
             checks.ok(refused, f"AN EXPORT WITH NO `{missing}` COLUMN is refused, never read as zero")
-
-    # -------------------------------------- S3: one live rise confirms one receipt only
-    with _case(checks, "S3: one live rise confirms one receipt only"), \
-            send_portal() as portal, isolated_home():
-        base = {
-            "kind": "send", "copies": {ARTICUNO_SKU: 3}, "copies_total": 3,
-            "names": {ARTICUNO_SKU: "Articuno"}, "live_before": {ARTICUNO_SKU: 0},
-            "sold_before": {ARTICUNO_SKU: 0}, "pushed": {"upload_id": "u", "rows": 1, "accepted": 1},
-            "published_at": "2026-09-24T10:00:00+00:00", "check_after": "2000-01-01T00:00:00+00:00",
-            "phase": "done",
-        }
-        for stamp in ("20260924-100000-eeeeee", "20260924-100500-ffffff"):
-            send_routes._write(send_routes.sends_dir() / stamp, dict(base, stamp=stamp))
-        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
-        send_routes.do_live_check({})
-        states = {s["stamp"]: (s["state"], (s["check"] or {}).get("found")) for s in send_routes.do_sends()["sends"]}
-        checks.equal(
-            states,
-            {"20260924-100000-eeeeee": ("checked", 3), "20260924-100500-ffffff": ("short", 0)},
-            "ONE RISE OF THREE confirms the older send's three, and never both sends",
-        )
 
     # ----------------------------------------- S3: the first check fires past the lag
     with _case(checks, "S3: the first check fires past the lag"), \
@@ -6279,6 +6307,7 @@ CHECKS = (
     check_send_snapshot_shared_sku,
     check_send_snapshot_order_sync_older,
     check_send_snapshot_short_rechecked,
+    check_send_one_rise,
     check_send_hazards,
     check_send_review_r3,
     check_send_review_r4,
