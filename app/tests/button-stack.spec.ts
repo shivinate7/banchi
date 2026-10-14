@@ -183,3 +183,21 @@ test('same-role buttons stacked in one sector share a width', async ({ page }) =
     `${wrong.length} sector(s) have unequal same-role button widths:\n\n${wrong.join('\n\n')}`,
   ).toHaveLength(0)
 })
+
+/* Two actions in one Notice sit --bn-2 apart: `.bn-notice-action` lays its children out like
+   `.bn-row`, so the gap is the kit's row gap and never a pixel copied into the rule. */
+test('two actions in one notice are a row gap apart', async ({ page }) => {
+  await page.goto('/#/gallery')
+  await settleFonts(page)
+  const buttons = page.locator('[data-specimen="notice-actions"] .bn-notice-action .bn-btn')
+  await expect(buttons).toHaveCount(2)
+  const gap = await page.evaluate(() => {
+    const probe = Object.assign(document.createElement('div'), { style: 'width:var(--bn-2);position:absolute' })
+    document.body.append(probe)
+    const w = probe.getBoundingClientRect().width
+    probe.remove()
+    return w
+  })
+  const [a, b] = await Promise.all([buttons.nth(0).boundingBox(), buttons.nth(1).boundingBox()])
+  expect(a && b ? b.x - (a.x + a.width) : NaN).toBeCloseTo(gap, 0)
+})
