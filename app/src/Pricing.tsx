@@ -2699,7 +2699,11 @@ export function Pricing() {
      press, from the same figures the line said. Each link shows the rows its tile counts, so it
      clears every other filter first (D86: a missing price is unknown). "Price Them" picks the
      Market price band "No market price", the filter that already names those rows. */
-  const typedPrices = rows.filter((row) => typeof answerFor(row) === 'string').length
+  const typedPrices = rows.filter((row) => {
+    /* A HELD 'unlisted' ANSWER IS A STRING AND A HOLD, not a typed price: the held tile counts it. */
+    const answer = answerFor(row)
+    return typeof answer === 'string' && !isWithheld(answer)
+  }).length
   const showRows = (picks: typeof facetPicks, held: boolean) => {
     setQuery('')
     setFilterHeld(held)
