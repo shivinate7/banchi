@@ -509,8 +509,8 @@ def _sku_snapshot(sku: str, reading: Reading) -> Optional[Snapshot]:
     figures stand.
 
     outstanding = min(sent and still on the shelf, shelf unsold) - open-order copies, and
-    gap = max(0, outstanding - live now), per SKU across every receipt still counted out (a
-    taken-back or failed one is not). THE GAP SPLITS (R-S4): `missing = min(gap, never_seen)`,
+    gap = max(0, outstanding - live now), per SKU across every receipt that still counts copies
+    out (`_kept`: a failed one counts none, and a taken-back one counts the copies it kept). THE GAP SPLITS (R-S4): `missing = min(gap, never_seen)`,
     where never_seen is the copies no check credited (`_credited`), and the rest is `removed`:
     copies seen live that left with no sale and no open order, the owner's hand removal. Only
     `missing` is offered back; `removed` counts as found and is held on the listing. "Sent and still on the shelf" is what the receipts sent,
@@ -1954,8 +1954,9 @@ def do_unhold(sku: str, payload: dict) -> dict:
     A copy a send check saw live that later left TCGplayer with no sale and no open order is
     held (R-S4). This press is the way back: it lowers `pushed` by the held copies, the same
     undo as Take Back (`_bump_back`), so the next worklist offers them, and clears the listing's
-    held count. It also writes the copies on the newest receipt that still counts the SKU out
-    (`unheld`), so the next live check does not hold them again. It takes nothing off TCGplayer.
+    held count. It also writes the copies on the newest receipt that still counts the SKU out and
+    whose press is not running (`unheld`), so the next live check does not hold them again. With no
+    such receipt it refuses and changes nothing. It takes nothing off TCGplayer.
     """
     # THE LIVE CHECK'S OWN LOCK (`_CHECK`): the check writes the held count, and an Unhold racing it
     # must neither read a count the check is about to move nor lower `pushed` twice.
@@ -1986,12 +1987,21 @@ def _unhold(sku: str, payload: dict) -> dict:
             )
         # THE RECEIPT FIRST, THEN THE STORE (as Take Back): a crash between leaves copies still
         # counted out and the count cleared at the next check, which never sends one twice.
+        # NEVER A RECEIPT WHOSE PRESS IS STILL RUNNING (`_press_running`): that press writes its
+        # whole record back from memory, which would erase `unheld` and hold the copies again
+        # (review F1). Every other writer of a receipt re-reads it under this lock or the store's.
         for stamp, record in _receipts():
-            if not record.get("failure") and _kept(record, sku) > 0:
+            if not record.get("failure") and not _press_running(record) and _kept(record, sku) > 0:
                 unheld = dict(record.get("unheld") or {})
                 unheld[sku] = int(unheld.get(sku, 0)) + count
                 _write(sends_dir() / stamp, dict(record, unheld=unheld))
                 break
+        else:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT,
+                "send_in_progress",
+                "A send of this card is still going out. Unhold it once that send is done. Nothing changed.",
+            )
         moved = _bump_back(writable, {sku: count})
         entry.held_copies = 0
     return {"sku": sku, "moved": moved, "unheld": count, "pushed": int(entry.pushed)}
@@ -2044,15 +2054,18 @@ def do_dismiss(stamp: str, payload: dict) -> dict:
     owner dismisses it. This changes nothing but the receipt's own `dismissed_at`.
     """
     directory = _open_send(stamp)
-    record = _read(directory)
-    if _warning(record) is None:
-        raise PipelineRefusal(
-            HTTPStatus.CONFLICT,
-            "nothing_to_dismiss",
-            "This send carries no warning to dismiss. Nothing changed.",
-        )
-    record["dismissed_at"] = store_clock.iso(store_clock.now())
-    _write(directory, record)
+    # READ AGAIN INSIDE THE STORE'S WRITE, as Take Back and Unhold write it: a stale record
+    # written back would erase their `taken_back` or `unheld`.
+    with Store().write():
+        record = _read(directory)
+        if _warning(record) is None:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT,
+                "nothing_to_dismiss",
+                "This send carries no warning to dismiss. Nothing changed.",
+            )
+        record["dismissed_at"] = store_clock.iso(store_clock.now())
+        _write(directory, record)
     return {"send": _summary(stamp, record, store_clock.now(), _held_stamps())}
 
 
