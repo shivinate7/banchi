@@ -619,8 +619,7 @@ CONTAINER       widths measured against a COLUMN rather than the window, so they
                 Gallery — the specimen grids go to one column
   bn-page 879   Gallery — the section index becomes a strip over the specimens
   bn-page 999   Orders — walk mode folds the header, the filters and the card into one line each
-  bn-page 1099  Pricing — each send tile's note holds two lines, so a note that wraps moves nothing
-  bn-page 1279  Pricing — the send bar's two quiet doors sit behind More while three tiles share its line
+  tally   719   Pricing — a send tile drops its caption, its mark and its filler words (container: the tile row)
 
 COLUMN-BLIND    a sheet allowed to ask the VIEWPORT a question at or above 1024, with why.
   Fulfillment.css   `persona: 'fulfiller'` draws no shell (D5), so the viewport IS its column

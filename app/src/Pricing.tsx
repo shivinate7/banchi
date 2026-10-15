@@ -2705,14 +2705,18 @@ export function Pricing() {
       pending={barLoading}
       icon={needsPrice > 0 ? 'alert' : 'check'}
       tone={needsPrice > 0 ? 'warn' : 'ok'}
-      title={needsPrice > 0 ? `${needsPrice} still need a price` : 'Every card is priced'}
+      title={needsPrice > 0 ? <>{needsPrice} <span className="bn-tile-more">still </span>need a price</> : 'Every card is priced'}
     >
       {needsPrice > 0 ? (
         <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => setFacetPicks({ ...facetPicks, band: ['none'] })}>
           Price Them
         </Button>
       ) : null}
-      {progress.byHand > 0 ? `${progress.byHand} typed by hand.` : needsPrice > 0 ? null : 'No typed prices to check.'}
+      {progress.byHand > 0 ? (
+        <span className="bn-tile-text">{`${progress.byHand} typed by hand.`}</span>
+      ) : needsPrice > 0 ? null : (
+        <span className="bn-tile-text">No typed prices to check.</span>
+      )}
     </Tile>
   )
   const tally = (
@@ -2721,13 +2725,13 @@ export function Pricing() {
       <Tile data-tile="held" pending={barLoading} icon="lock" tone="info" title={`${progress.held} held back`}>
         {progress.held > 0 ? (
           <>
-            Not in this send.
+            <span className="bn-tile-text">Not in this send.</span>
             <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => setFilterHeld(true)}>
               Show Held
             </Button>
           </>
         ) : (
-          'Nothing is held.'
+          <span className="bn-tile-text">Nothing is held.</span>
         )}
       </Tile>
       <Tile
@@ -2737,7 +2741,16 @@ export function Pricing() {
         tone={progress.outCopies > 0 ? 'accent' : 'idle'}
         title={progress.outCopies > 0 ? `${progress.outCopies} ready to go` : 'Nothing ready yet'}
       >
-        {progress.closed > 0 ? `${progress.outCopies > 0 ? 'Joins ' : ''}${progress.closed} already in your store.` : 'Goes out when you press Send.'}
+        {/* THE PRESS COUNTS SKUS (`progress.outRows`, the same value `SendCard` gets), and the title counts the
+            copies on them: the unit is named here and stays when the rest of the note gives way. */}
+        {progress.outCopies > 0 ? <span className="bn-tile-unit">{`Copies on ${progress.outRows} ${progress.outRows === 1 ? 'SKU' : 'SKUs'}.`}</span> : null}
+        <span className="bn-tile-text">
+          {progress.closed > 0
+            ? `${progress.outCopies > 0 ? 'Joins ' : ''}${progress.closed} already in your store.`
+            : progress.outCopies > 0
+              ? ''
+              : 'Goes out when you press Send.'}
+        </span>
       </Tile>
     </div>
   )

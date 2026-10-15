@@ -970,7 +970,8 @@ span.bn-slot { display: inline-block; }
   align-items: center;
   gap: 0 var(--bn-1-5);
   margin: 0;
-  min-height: calc(var(--bn-lh-base) * 1em);
+  /* TWO LINES OF ROOM: a caption that wraps once the worklist lands is no taller than the pending tile (D313). */
+  min-height: calc(var(--bn-lh-base) * 2em);
   font-size: var(--bn-fs-sm);
   line-height: var(--bn-lh-base);
   color: var(--bn-ink-2);

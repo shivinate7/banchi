@@ -42,26 +42,26 @@
   font-weight: 600;
   color: var(--bn-ink);
 }
-/* THE THREE STATUS TILES share a row and wrap whole: a tile never narrows past a title's worth. */
+/* THE THREE STATUS TILES take what the press leaves. The press keeps its own width, never narrower than its label,
+   and its two quiet doors stay drawn above a phone (Q4): the tiles give way, not the press. */
 .pricing-tally {
-  flex: 1 1 28rem;
+  flex: 1 1 20rem;
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--bn-2);
+  container-name: pricing-tally;
+  container-type: inline-size;
 }
-/* THE PRESS KEEPS ITS OWN WIDTH, never narrower than its label. */
 .pricing-bar:has(.pricing-tally) .send-card { flex: 0 0 auto; }
-/* WITH THREE TILES BESIDE IT THE PRESS KEEPS ITS TWO QUIET DOORS BEHIND MORE until the column is wide enough
-   for all of it on one line, so the bar is one tile high and does not change height with the press's words. */
-@container bn-page (max-width: 1279px) {
-  .pricing-bar:has(.pricing-tally) .send-more-press { display: inline-flex; flex: none; }
-  .pricing-bar:has(.pricing-tally) .send-act:not([data-more='open']) .send-door { display: none; }
-}
-/* A COLUMN TOO NARROW FOR A NOTE ON ONE LINE HOLDS TWO LINES FOR IT, so a note that wraps once the worklist
-   lands is no taller than the room the pending tile held (D313). */
-@container bn-page (max-width: 1099px) {
-  .pricing-tally .bn-tile-note { min-height: calc(var(--bn-lh-base) * 2em); }
+/* A ROW OF TILES UNDER 720PX DROPS EACH CAPTION, keeping its action and the unit of the ready count, and drops the
+   mark and the filler words of a title, so the three tiles, the press and its two doors stay one row. The caption
+   stays in the page for a reader of its text. A note holds one line of room then, for the action. */
+@container pricing-tally (max-width: 719px) {
+  .bn-tile { grid-template-columns: minmax(0, 1fr); padding: var(--bn-2); }
+  .bn-tile-mark, .bn-tile-more { display: none; }
+  .bn-tile-note { min-height: calc(var(--bn-lh-base) * 1em); }
+  .bn-tile-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 /* THE CARD TAKES WHAT THE SAYS LINE LEAVES (basis 0), so a notice under the press never decides whether
    the line wraps above it: the press holds its place whatever the status says (D313). */
