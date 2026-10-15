@@ -100,10 +100,9 @@ pending"), named `[data-tile]` for the checks.
   is unknown, not low).
 - The tiles are drawn while the worklist is in flight, pending, beside the card's own press (off,
   nothing to send). The bar is the height it will be, so the list lands under it (D313).
-- The press keeps its width and its two quiet doors wrap under it, so from a 900px column up the
-  card is the tallest part of the bar and the tiles' notes may wrap inside that height. Below 900px
-  the doors sit behind More (Q4), and each note holds two lines, so the bar moves nothing when a
-  note wraps.
+- Doors: below a 1280px column the two quiet doors (Download, Refresh) sit behind More, so the bar
+  stays one tile high whatever the press says. Below 1100px each note holds two lines, so a note
+  that wraps moves nothing.
 - A phone draws no tiles. The bar stays one line above the tab bar (Q4).
 - "Price Them" lists every row with no market price, including one the owner already answered.
   The tile counts only rows with no answer. A narrower filter is not built.

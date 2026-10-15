@@ -982,6 +982,7 @@ span.bn-slot { display: inline-block; }
   display: inline;
   min-height: 0;
   padding: 0;
+  border: 0;
   background: transparent;
   font-size: inherit;
   font-weight: 600;
