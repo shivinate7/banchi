@@ -932,6 +932,73 @@ span.bn-slot { display: inline-block; }
 .bn-stat-press .bn-stat-label { transition: color var(--bn-t-fast) var(--bn-ease); }
 .bn-stat-go { flex: none; color: var(--bn-ink-4); }
 
+/* ---- status tile (`Tile`) ------------------------------------------------------------------ */
+/* A mark, a title and a note. The tone paints the surface and the mark; warn and accent also draw an inset edge.
+   Title and note each hold one line of room (D313), so a pending tile and a loaded one are the same height. */
+.bn-tile {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  column-gap: var(--bn-2);
+  row-gap: var(--bn-0-5);
+  align-items: center;
+  min-width: 0;
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+}
+.bn-tile-mark {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: 50%;
+  background: var(--bn-ok-tint);
+  color: var(--bn-ok);
+}
+.bn-tile-title {
+  margin: 0;
+  min-height: calc(var(--bn-lh-base) * 1em);
+  font-size: var(--bn-fs-md);
+  font-weight: 700;
+  line-height: var(--bn-lh-base);
+  color: var(--bn-ink);
+}
+.bn-tile-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--bn-1-5);
+  margin: 0;
+  min-height: calc(var(--bn-lh-base) * 1em);
+  font-size: var(--bn-fs-sm);
+  line-height: var(--bn-lh-base);
+  color: var(--bn-ink-2);
+}
+/* THE ACTION IS A `Button` WORN AS A LINK IN THE NOTE'S OWN LINE, so a note that gains or loses it
+   keeps its height (D313). */
+.bn-tile .bn-btn.bn-tile-act {
+  --btn-h: auto;
+  display: inline;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  font-size: inherit;
+  font-weight: 600;
+  line-height: inherit;
+  color: var(--bn-accent);
+}
+.bn-tile .bn-btn.bn-tile-act:hover { background: transparent; text-decoration: underline; }
+.bn-tile[data-tone='warn'] { background: var(--bn-warn-tint); box-shadow: inset 0 0 0 1.5px var(--bn-warn); }
+.bn-tile[data-tone='warn'] .bn-tile-mark { background: var(--bn-warn); color: var(--bn-surface); }
+.bn-tile[data-tone='accent'] { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 1.5px var(--bn-accent); }
+.bn-tile[data-tone='accent'] .bn-tile-mark { background: var(--bn-accent); color: var(--bn-on-accent); }
+.bn-tile[data-tone='info'] .bn-tile-mark,
+.bn-tile[data-tone='idle'] .bn-tile-mark { background: var(--bn-surface); color: var(--bn-ink-2); box-shadow: inset 0 0 0 1.5px var(--bn-field-edge); }
+.bn-tile[data-tone='idle'] .bn-tile-title,
+.bn-tile[data-tone='idle'] .bn-tile-note { color: var(--bn-ink-3); }
+.bn-tile-line { display: block; inline-size: 60%; block-size: 1em; }
+
 /* TWO SMALLER SIZES (S9): the tile shipped one ratio, 22:12, and two call sites hand-rolled
    their own — Orders' figure at 14:11 and Inventory's box count at 11:11 (bare, no visual
    split between value and unit at all). Both are additive: the base rule above is untouched,

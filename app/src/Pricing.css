@@ -42,6 +42,22 @@
   font-weight: 600;
   color: var(--bn-ink);
 }
+/* THE THREE STATUS TILES share a row and wrap whole: a tile never narrows past a title's worth. */
+.pricing-tally {
+  flex: 1 1 28rem;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--bn-2);
+}
+/* THE PRESS KEEPS ITS OWN WIDTH, and its two quiet doors wrap under it, so the card is the tallest thing in the
+   bar from a column of 900px up and the tiles' notes may wrap inside that height (D313). */
+.pricing-bar:has(.pricing-tally) .send-card { flex: 0 1 15rem; }
+/* WHERE THE DOORS FOLD BEHIND MORE (below 899px) THE CARD IS ONE LINE AND THE TILES SET THE HEIGHT, so each note holds
+   two lines for the wrap that comes once the worklist lands. */
+@container bn-page (max-width: 899px) {
+  .pricing-tally .bn-tile-note { min-height: calc(var(--bn-lh-base) * 2em); }
+}
 /* THE CARD TAKES WHAT THE SAYS LINE LEAVES (basis 0), so a notice under the press never decides whether
    the line wraps above it: the press holds its place whatever the status says (D313). */
 .pricing-bar .send-card { flex: 1 1 0; min-width: 0; }
@@ -495,8 +511,8 @@
     border-bottom: 0;
     box-shadow: var(--bn-shadow-2);
   }
-  .pricing-bar-says { display: none; }
-  .pricing-bar .send-card { flex: 1 1 auto; }
+  .pricing-bar-says, .pricing-tally { display: none; }
+  .pricing-bar .send-card, .pricing-bar:has(.pricing-tally) .send-card { flex: 1 1 auto; }
   .pricing-body { padding-bottom: calc(var(--pricing-bar-h, 0px) + var(--bn-4)); }
   /* FINDING #9 (the Opus review round, re-fixed in the delta review): at 390 the fixed
      `.pricing-bar` sits above the phone tab bar, and a toast's own default `bottom` put its

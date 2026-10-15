@@ -8,7 +8,7 @@ import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import {
   Button, Chip, ConfirmSheet, EmptyState, Icon, IconButton, Kbd, Loading, Lockup, Logo, Modal, Money, Notice, Page, PageUndo, Pill, Popover, Refusal, ReloadButton, Retry, Slot,
-  KeyHint, Meter, Section, SectionPicker, Segmented, Select, Sheet, Stat, StatusSlot, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
+  KeyHint, Meter, Section, SectionPicker, Segmented, Select, Sheet, Stat, StatusSlot, Tile, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
   type ButtonSize, type ButtonVariant, type IconName, type PillTone,
 } from './kit'
 import { MARKS } from './kit/markPalettes'
@@ -319,7 +319,7 @@ function SlotSpecimen() {
         </Slot>
         <span>The line below the slot holds still.</span>
       </div>
-      <Button size="sm" variant="ghost" onClick={() => setOn((v) => !v)}>
+      <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => setOn((v) => !v)}>
         {on ? 'Empty the slot' : 'Fill the slot'}
       </Button>
       <span>
@@ -441,7 +441,7 @@ function ScaffoldSpecimens() {
           <Button size="sm" onClick={() => setSaid('long')} data-kit-answer="long">
             Press for a long answer
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => setSaid('none')}>
+          <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => setSaid('none')}>
             Clear
           </Button>
         </div>
@@ -1399,6 +1399,19 @@ export function Gallery() {
               {/* S9: the tile shipped one ratio, 22:12. `-sm` reads Orders' own 14:11
                   (`.orders-index-figure`); `-xs` reads Inventory's own 11:11, un-bolded
                   (`.browse-boxcell-count` beside `.browse-boxcell-meta`). */}
+              {/* The status tile: one tone per state, and a pending tile that holds the same room. */}
+              <Spec name="tile-tones" label="tile, each tone and pending" wide>
+                <div className="kit-row kit-row-wrap">
+                  <Tile icon="check" title="Every card is priced">No typed prices to check.</Tile>
+                  <Tile icon="alert" title="12 still need a price" tone="warn">
+                    <Button size="sm" variant="ghost" className="bn-tile-act">Price Them</Button>
+                  </Tile>
+                  <Tile icon="lock" title="19 held back" tone="info">Not in this send.</Tile>
+                  <Tile icon="send" title="3 ready to go" tone="accent">Joins 541 already in your store.</Tile>
+                  <Tile icon="send" title="Nothing ready yet" tone="idle">541 already in your store.</Tile>
+                  <Tile icon="send" title="" pending />
+                </div>
+              </Spec>
               <Spec name="stat-sizes" label="stat, sm and xs">
                 <div className="kit-row kit-row-wrap">
                   <Stat value="16" label="answered" />

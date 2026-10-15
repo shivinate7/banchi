@@ -1099,6 +1099,56 @@ export function Stat({
   )
 }
 
+/* ---- Tile ------------------------------------------------------------------------------------ */
+export type TileTone = 'ok' | 'warn' | 'accent' | 'info' | 'idle'
+
+/** A status tile: a mark, a one-line title and a one-line note, in a tone. It reads where a thing
+ *  stands and offers at most one action (a `Button` inside `children`). `pending` holds the tile's
+ *  room with skeleton lines and says nothing (D313). Any `data-*` attribute reaches the tile
+ *  unchanged, so a screen can name its tiles. */
+export function Tile({
+  icon,
+  title,
+  tone = 'ok',
+  pending,
+  children,
+  className,
+  ...dataProps
+}: {
+  readonly icon: IconName
+  readonly title: ReactNode
+  readonly tone?: TileTone
+  readonly pending?: boolean
+  /** The note under the title. */
+  readonly children?: ReactNode
+  readonly className?: string
+  readonly [dataAttr: `data-${string}`]: string | undefined
+}) {
+  return (
+    <div className={['bn-tile', className].filter(Boolean).join(' ')} data-tone={pending ? 'idle' : tone} aria-busy={pending ? 'true' : undefined} {...dataProps}>
+      <span className="bn-tile-mark" aria-hidden="true">
+        <Icon name={icon} size={16} />
+      </span>
+      {pending ? (
+        <>
+          <p className="bn-tile-title">
+            <span className="bn-skeleton bn-tile-line" aria-hidden="true" />
+          </p>
+          <div className="bn-tile-note">
+            <span className="bn-skeleton bn-tile-line" aria-hidden="true" />
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="bn-tile-title">{title}</p>
+          {/* A SPACE BETWEEN THE TWO, so the tile's text reads as sentences to a reader of its text. */}{' '}
+          <div className="bn-tile-note">{children}</div>
+        </>
+      )}
+    </div>
+  )
+}
+
 /* ---- Logo --------------------------------------------------------------------------------------- */
 export { Lockup } from './Lockup'
 export type { LogoVariant }

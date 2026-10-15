@@ -83,3 +83,27 @@ built. It waits on a read of the owner's store.
 Value is counted in copies, drawer first; nothing on hand is dropped.
 
 A typed price at the cut-off is not a drift; order is taken once per load.
+
+### The slim bar's three tiles
+
+The owner picked the Preflight design for the Unsent tab's bar. Three tiles replace the one line
+of figures, left of the press. Each tile is the kit's `Tile` (`#/gallery`, "tile, each tone and
+pending"), named `[data-tile]` for the checks.
+
+| Tile | Title | Note | Tone |
+|---|---|---|---|
+| `priced` | "Every card is priced", or "N still need a price" | "N typed by hand." when above 0, else "No typed prices to check." With rows owing a price, "Price Them" picks the Market price band "No market price", the filter that already names those rows. | `ok`, or `warn` (amber) while any row owes a price |
+| `held` | "N held back" | "Not in this send." and "Show Held", which turns on the Held filter. With none held, "Nothing is held." | `info` |
+| `ready` | "N ready to go" | "Joins M already in your store.", M being the rows at the cap. With none ready: "Nothing ready yet", "M already in your store." | `accent` while N is above 0, else `idle` |
+
+- The counts are the figures the old line gave. No row moves between tiles (D86, a missing price
+  is unknown, not low).
+- The tiles are drawn while the worklist is in flight, pending, beside the card's own press (off,
+  nothing to send). The bar is the height it will be, so the list lands under it (D313).
+- The press keeps its width and its two quiet doors wrap under it, so from a 900px column up the
+  card is the tallest part of the bar and the tiles' notes may wrap inside that height. Below 900px
+  the doors sit behind More (Q4), and each note holds two lines, so the bar moves nothing when a
+  note wraps.
+- A phone draws no tiles. The bar stays one line above the tab bar (Q4).
+- "Price Them" lists every row with no market price, including one the owner already answered.
+  The tile counts only rows with no answer. A narrower filter is not built.
