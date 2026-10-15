@@ -319,7 +319,7 @@ function SlotSpecimen() {
         </Slot>
         <span>The line below the slot holds still.</span>
       </div>
-      <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => setOn((v) => !v)}>
+      <Button size="sm" variant="ghost" onClick={() => setOn((v) => !v)}>
         {on ? 'Empty the slot' : 'Fill the slot'}
       </Button>
       <span>
@@ -441,7 +441,7 @@ function ScaffoldSpecimens() {
           <Button size="sm" onClick={() => setSaid('long')} data-kit-answer="long">
             Press for a long answer
           </Button>
-          <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => setSaid('none')}>
+          <Button size="sm" variant="ghost" onClick={() => setSaid('none')}>
             Clear
           </Button>
         </div>
@@ -1402,13 +1402,13 @@ export function Gallery() {
               {/* The status tile: one tone per state, and a pending tile that holds the same room. */}
               <Spec name="tile-tones" label="tile, each tone and pending" wide>
                 <div className="kit-row kit-row-wrap">
-                  <Tile icon="check" title="Every card is priced">No typed prices to check.</Tile>
-                  <Tile icon="alert" title="12 still need a price" tone="warn">
+                  <Tile icon="check" title="Every card is priced">None typed.</Tile>
+                  <Tile icon="alert" title="12 need a price" tone="warn">
                     <Button size="sm" variant="ghost" className="bn-tile-act">Price Them</Button>
                   </Tile>
                   <Tile icon="lock" title="19 held back" tone="info">Not in this send.</Tile>
-                  <Tile icon="send" title="3 ready to go" tone="accent">Joins 541 already in your store.</Tile>
-                  <Tile icon="send" title="Nothing ready yet" tone="idle">541 already in your store.</Tile>
+                  <Tile icon="send" title="3 ready to go" tone="accent">Copies on 3 SKUs. Joins 541 listings in your store.</Tile>
+                  <Tile icon="send" title="Nothing ready yet" tone="idle">541 listings in your store.</Tile>
                   <Tile icon="send" title="" pending />
                 </div>
               </Spec>

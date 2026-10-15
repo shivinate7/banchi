@@ -87,25 +87,24 @@ A typed price at the cut-off is not a drift; order is taken once per load.
 ### The slim bar's three tiles
 
 The owner picked the Preflight design for the Unsent tab's bar. Three tiles replace the one line
-of figures, left of the press. Each tile is the kit's `Tile` (`#/gallery`, "tile, each tone and
+of figures, above the press. Each tile is the kit's `Tile` (`#/gallery`, "tile, each tone and
 pending"), named `[data-tile]` for the checks.
 
 | Tile | Title | Note | Tone |
 |---|---|---|---|
-| `priced` | "Every card is priced", or "N still need a price" | "N typed by hand." when above 0, else "No typed prices to check." With rows owing a price, "Price Them" picks the Market price band "No market price", the filter that already names those rows. | `ok`, or `warn` (amber) while any row owes a price |
-| `held` | "N held back" | "Not in this send." and "Show Held", which turns on the Held filter. With none held, "Nothing is held." | `info` |
-| `ready` | "N ready to go" | "Joins M already in your store.", M being the rows at the cap. With none ready: "Nothing ready yet", "M already in your store." | `accent` while N is above 0, else `idle` |
+| `priced` | "Every card is priced", or "N need a price" | "N typed." counts rows with a typed price; "N typed quantity." counts quantities typed on rows; "None typed." when neither. With rows owing a price, "Price Them" shows the Market price band "No market price", the filter that already names those rows. | `ok`, or `warn` (amber) while any row owes a price |
+| `held` | "N held back" | "Not in this send." and "Show Held", which turns on the Held filter. With none held, "None held." | `info` |
+| `ready` | "N ready to go" (copies) | "Copies on M SKUs." (the SKUs the press counts), then "Joins K listings in your store." (the rows at the cap). With none ready: "Nothing ready yet", and no caption unless listings stand. | `accent` while N is above 0, else `idle` |
 
 - The counts are the figures the old line gave. No row moves between tiles (D86, a missing price
   is unknown, not low).
+- Each link clears the search and every other filter first, so it shows the rows its tile counts.
 - The tiles are drawn while the worklist is in flight, pending, above the card's own press (off,
-  nothing to send). The bar is the height it will be, so the list lands under it (D313). Each note
-  holds two lines of room for the same reason.
+  nothing to send). The bar is the height it will be, so the list lands under it (D313). Every
+  tile holds three lines of caption room whatever its text, so no state changes its height.
 - Two rows: tiles above, the press and doors below. The bar is taller, by the owner's choice. The
   tiles wrap only where the column is too narrow for three side by side. The doors stay drawn above
   a phone.
-- The ready tile counts copies, as its title says ("9 ready to go"), and names the SKUs the press
-  counts ("Copies on 3 SKUs.").
 - A phone draws no tiles. The bar stays one line above the tab bar (Q4).
 - "Price Them" lists every row with no market price, including one the owner already answered.
   The tile counts only rows with no answer. A narrower filter is not built.
