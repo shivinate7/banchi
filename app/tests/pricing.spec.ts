@@ -4284,6 +4284,8 @@ test('the screen is on its own route, on the kit page, and draws the run it was 
   await expect(page.locator('.pricing-row')).toHaveCount(1)
   /* THE SLIM BAR IS THE VERDICT (D277, Q4): what is ready, in one sentence, beside the press. */
   await expect(page.locator('[data-tile="ready"]')).toContainText(/\b3 ready to go/)
+  /* THE PRICED TILE SAYS NOTHING OWES A PRICE: the rest of the bar, beside the ready figure. */
+  await expect(page.locator('[data-tile="priced"]')).toContainText(/\bEvery card is priced/)
   /* THE RULE AND THE CUT-OFF ARE ONE LINE (Q5), and the figure is stated once. */
   const line = page.locator('.pricing-rule-line')
   await expect(line).toContainText('New cards list at market')
@@ -6271,3 +6273,68 @@ for (const width of [1440, 820]) {
     }
   })
 }
+
+test('send tiles: at 820 the bar keeps its height from first paint, and a ready copy does not move it (D313)', async ({ page }) => {
+  await setViewport(page, { width: 820, height: 900 })
+  /* THE READY SCENE WITH THE NOTE AT ITS LONGEST: "Copies on 1 SKU." and "Joins 541 already in your
+     store." wrap to three lines in the ready tile at this width. It starts at ready 0 (the note is
+     the one line), and one typed price takes it to ready 3. */
+  const listed = Array.from({ length: 541 }, (_, i) =>
+    sku({
+      sku: String(10000 + i),
+      name: `Listed ${i + 1}`,
+      at_cap: true,
+      add_to_quantity: 0,
+      nothing_to_add: 'Every copy in this run is already listed or has left the box.',
+    }),
+  )
+  await open(page, { pricingDelayMs: 5000, skus: [unpricedRow(1), ...listed], decisions: NO_PRICE_DECISIONS })
+  await expect(page.locator('[data-tile]')).toHaveCount(3)
+  await expect(page.locator('.pricing-row')).toHaveCount(0)
+  const pending = await page.locator('.pricing-bar').boundingBox()
+  expect(pending, 'the send bar is drawn at first paint').not.toBeNull()
+
+  await expect(page.locator('.pricing-row').first()).toBeVisible()
+  await settleMotion(page)
+  const loaded = await page.locator('.pricing-bar').boundingBox()
+  expect(
+    Math.abs(loaded!.height - pending!.height),
+    `the bar moved from ${pending!.height}px to ${loaded!.height}px when the worklist landed`,
+  ).toBeLessThanOrEqual(1)
+
+  /* THE PRICE FIELD OF THE ONE UNPRICED ROW: the 541 listed rows carry fields too, and they are not the edit. */
+  await page.getByLabel('Price for Unpriced 1').focus()
+  await page.keyboard.type('12.00')
+  await page.keyboard.press('Enter')
+  await expect(tile(page, 'ready')).toContainText(/\b3 ready to go/)
+  await settleMotion(page)
+  const edited = await page.locator('.pricing-bar').boundingBox()
+  expect(
+    Math.abs(edited!.height - pending!.height),
+    `the bar moved from ${pending!.height}px to ${edited!.height}px when a copy became ready`,
+  ).toBeLessThanOrEqual(1)
+})
+
+test('send tiles: a price typed on a row is counted by the priced tile\'s typed figure', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { skus: [pricedRow(1)], decisions: NO_PRICE_DECISIONS })
+  await expect(tile(page, 'priced')).not.toContainText(/\b[1-9]\d* typed/)
+
+  await field(page).focus()
+  await page.keyboard.type('12.00')
+  await page.keyboard.press('Enter')
+
+  await expect(tile(page, 'priced')).toContainText(/\b1 typed/)
+})
+
+test('send tiles: a copy count typed on a row alone is not counted as a typed price', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { skus: [pricedRow(1)], decisions: NO_PRICE_DECISIONS })
+  const qty = page.getByLabel('How many of the 3 copies of Priced 1 go in this file')
+
+  await qty.fill('2')
+
+  /* THE DECK FOLLOWS THE COPY COUNT, so the figure is applied before the caption is read. */
+  await expect(tile(page, 'ready')).toContainText(/\b2 ready to go/)
+  await expect(tile(page, 'priced')).not.toContainText(/\b[1-9]\d* typed/)
+})
