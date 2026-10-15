@@ -2785,7 +2785,7 @@ export function Pricing() {
                 Send to TCGplayer
               </Button>
               <IconButton icon="more" label="More Send Options" className="send-more-press" disabled />
-              <Button variant="quiet" icon="download" className="send-door" disabled>
+              <Button variant="quiet" icon="download" className="send-door" words="word-only-control" disabled>
                 Download
               </Button>
               <Button variant="quiet" icon="refresh" className="send-door" disabled>
