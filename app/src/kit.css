@@ -820,7 +820,7 @@ span.bn-slot { display: inline-block; }
   align-items: center;
   gap: var(--bn-3);
   min-height: 48px;
-  padding: var(--bn-2) var(--bn-3);
+  padding: var(--bn-1-5) var(--bn-3);
   border-radius: var(--bn-r);
   background: var(--bn-surface-2);
   text-align: left;
@@ -959,12 +959,12 @@ span.bn-slot { display: inline-block; }
   background: var(--bn-ok-tint);
   color: var(--bn-ok);
 }
-.bn-tile-title {
+.bn-tile-lead {
   margin: 0;
-  min-height: calc(var(--bn-lh-base) * 1em);
+  min-height: calc(var(--bn-lh-snug) * 1em);
   font-size: var(--bn-fs-md);
   font-weight: 700;
-  line-height: var(--bn-lh-base);
+  line-height: var(--bn-lh-snug);
   color: var(--bn-ink);
 }
 .bn-tile-note {
@@ -1010,7 +1010,7 @@ span.bn-slot { display: inline-block; }
 .bn-tile[data-tone='accent'] .bn-tile-mark { background: var(--bn-accent); color: var(--bn-on-accent); }
 .bn-tile[data-tone='info'] .bn-tile-mark,
 .bn-tile[data-tone='idle'] .bn-tile-mark { background: var(--bn-surface); color: var(--bn-ink-2); box-shadow: inset 0 0 0 1.5px var(--bn-field-edge); }
-.bn-tile[data-tone='idle'] .bn-tile-title,
+.bn-tile[data-tone='idle'] .bn-tile-lead,
 .bn-tile[data-tone='idle'] .bn-tile-note { color: var(--bn-ink-3); }
 .bn-tile-line { display: block; inline-size: 60%; block-size: 1em; }
 

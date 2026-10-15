@@ -2776,12 +2776,27 @@ export function Pricing() {
     !liveTab && (barLoading || loaded.length > 0) ? (
       <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send to TCGplayer" aria-busy={barLoading ? 'true' : undefined}>
         {tally}
-        {/* NOTHING IN THE PENDING BAR CAN BE PRESSED: a disabled fieldset turns off every press and door in the
-            card (the card itself is unchanged), so none posts a send over a worklist that has not arrived. */}
-        <fieldset className="pricing-send" disabled={barLoading}>
+        {barLoading ? (
+          /* THE PENDING BAR DRAWS THE CARD'S OWN CLASSES AND NOTHING ELSE: the same press and doors, off, so the bar is the
+             height it will be, and no read starts for a card that has no worklist yet (the mount stays inside its budget). */
+          <div className="send-card">
+            <div className="send-act">
+              <Button variant="primary" size="lg" icon="send" className="pricing-emit send-press" disabled>
+                Send to TCGplayer
+              </Button>
+              <IconButton icon="more" label="More Send Options" className="send-more-press" disabled />
+              <Button variant="quiet" icon="download" className="send-door" disabled>
+                Download
+              </Button>
+              <Button variant="quiet" icon="refresh" className="send-door" disabled>
+                Refresh
+              </Button>
+            </div>
+          </div>
+        ) : (
           <SendCard
             runs={loaded}
-            copies={barLoading ? 0 : progress.outCopies}
+            copies={progress.outCopies}
             skus={progress.outRows}
             priceChanges={priceChanges}
             liveMoves={liveMoves}
@@ -2790,7 +2805,7 @@ export function Pricing() {
             quantities={quantitiesAsked}
             onSent={afterSend}
           />
-        </fieldset>
+        )}
       </aside>
     ) : liveTab && stamp !== null && readStale ? (
       <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send these prices">

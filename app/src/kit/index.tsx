@@ -1135,7 +1135,7 @@ export function Tile({
       </span>
       {pending ? (
         <>
-          <p className="bn-tile-title">
+          <p className="bn-tile-lead">
             <span className="bn-skeleton bn-tile-line" aria-hidden="true" />
           </p>
           <div className="bn-tile-note" data-room={room}>
@@ -1146,7 +1146,7 @@ export function Tile({
         </>
       ) : (
         <>
-          <p className="bn-tile-title">{title}</p>
+          <p className="bn-tile-lead">{title}</p>
           {/* A SPACE BETWEEN THE TWO, so the tile's text reads as sentences to a reader of its text. */}{' '}
           <div className="bn-tile-note" data-room={room}>
             <span className="bn-tile-say">{children}</span>

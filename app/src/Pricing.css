@@ -42,8 +42,6 @@
   font-weight: 600;
   color: var(--bn-ink);
 }
-/* THE FIELDSET ONLY CARRIES `disabled` TO THE CARD'S PRESSES: it draws no box of its own, so the card stays the bar's flex item. */
-.pricing-send { display: contents; border: 0; padding: 0; margin: 0; min-width: 0; }
 /* TWO ROWS (the owner's ruling): the three tiles take the first row whole, the press and its two doors the second.
    The tiles wrap only where the column is too narrow for three side by side. */
 .pricing-tally {
