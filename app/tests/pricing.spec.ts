@@ -3624,7 +3624,7 @@ test('a figure typed on a row rides the send keyed by that SKU, the deck counts 
      sentence says a card is at a figure typed by hand — which is the account the operator reads
      before deciding to press. */
   await expect(page.locator('[data-tile="ready"]')).toContainText(new RegExp(`\\b${copiesBefore - 1} ready to go`))
-  await expect(page.locator('[data-tile="priced"]')).toContainText(/\b1 typed/)
+  await expect(page.locator('[data-tile="priced"]')).toContainText(/\b1 typed quantity\./)
 
   await sendPress(page).click()
   await expect.poll(() => sendPosts(wire).length).toBe(1)
@@ -3664,7 +3664,7 @@ test('a figure past what can go is clamped on the way out, 0 takes the row out o
   /* ZERO IS A REAL ANSWER and the row leaves the count of rows that would go, without a hold. */
   await leblanc.fill('0')
   await expect(page.locator('[data-tile="ready"]')).toContainText(new RegExp(`\\b${copiesBefore - 3} ready to go`))
-  await expect(page.locator('[data-tile="priced"]')).toContainText(/\b1 typed/)
+  await expect(page.locator('[data-tile="priced"]')).toContainText(/\b1 typed quantity\./)
 
   /* ESCAPE PUTS ONE ROW BACK, the way it puts a price field back. */
   await leblanc.focus()
@@ -6339,4 +6339,66 @@ test('send tiles: a copy count typed on a row alone is not counted as a typed pr
   await expect(tile(page, 'ready')).toContainText(/\b2 ready to go/)
   await expect(tile(page, 'priced')).toContainText(/\b1 typed quantity\./)
   await expect(tile(page, 'priced')).not.toContainText(/\b[1-9]\d* typed\./)
+})
+
+test('send tiles: a row held as unlisted is not counted in the typed figure', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, {
+    skus: [pricedRow(1), sku({ sku: '5', name: 'Void Assault', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
+    decisions: {
+      rule: 'match',
+      basis: 'market',
+      threshold: '0.49',
+      sub_threshold: { flat: '0.49' },
+      overrides: { '201': '12.00' },
+      no_market_data: { '5': 'unlisted' },
+    },
+  })
+  /* THE HELD ROW IS A HOLD, and the one typed price is the only typed price: the figure is 1. */
+  await expect(tile(page, 'held')).toContainText(/\b1 held back/)
+  await expect(tile(page, 'priced')).toContainText(/\b1 typed\./)
+})
+
+/* THE SEARCH AND A FACET ARE NARROWED FIRST, so the press under test has something to clear.
+   Articuno (Pokemon, priced) is the only row the search finds, and Riftbound is the facet, so the
+   list is empty until the press runs. */
+test('send tiles: Show Held after a search and a game facet clears both, and shows every held row', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const sleeper = heldRow(1)
+  const riftHeld = sku({ sku: '302', name: 'Sleeper Two', game: 'riftbound' })
+  await open(page, {
+    skus: [sku({ sku: '1', name: 'Articuno' }), sleeper, riftHeld, pricedRow(2)],
+    decisions: { rule: 'match', basis: 'market', overrides: holding([sleeper, riftHeld]) },
+  })
+  await page.getByRole('searchbox', { name: 'Search This List' }).fill('articuno')
+  await pickFilter(page, 'Game', /Riftbound/)
+  await expect(page.getByText('Nothing matches')).toBeVisible()
+
+  await tile(page, 'held').locator('a, button', { hasText: /^Show Held$/ }).click()
+
+  await expect(page.getByRole('searchbox', { name: 'Search This List' })).toHaveValue('')
+  const names = await page.locator('.pricing-name').allTextContents()
+  expect(names.sort()).toEqual(['Sleeper 1', 'Sleeper Two'])
+})
+
+test('send tiles: Price Them after a search and a game facet clears both, and shows every unpriced row', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, {
+    skus: [
+      sku({ sku: '1', name: 'Articuno' }),
+      pricedRow(2),
+      sku({ sku: '302', name: 'Poro Snax', game: 'riftbound', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } }),
+      sku({ sku: '5', name: 'Void Assault', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } }),
+    ],
+    decisions: NO_PRICE_DECISIONS,
+  })
+  await page.getByRole('searchbox', { name: 'Search This List' }).fill('articuno')
+  await pickFilter(page, 'Game', /Riftbound/)
+  await expect(page.getByText('Nothing matches')).toBeVisible()
+
+  await tile(page, 'priced').locator('a, button', { hasText: /^Price Them$/ }).click()
+
+  await expect(page.getByRole('searchbox', { name: 'Search This List' })).toHaveValue('')
+  const names = await page.locator('.pricing-name').allTextContents()
+  expect(names.sort()).toEqual(['Poro Snax', 'Void Assault'])
 })
