@@ -3023,10 +3023,9 @@ def check_send_auto_hold_never_resent(checks: Checks) -> None:
             "PRECONDITION: six copies on the shelf, all of them counted out, none free",
         )
         for stamp in (r0, r1):
-            try:
+            # the held drop is not missing, so a press on either send has nothing to take back
+            with contextlib.suppress(pipeline_routes.PipelineRefusal):
                 send_routes.do_take_back(stamp, {"confirm": True})
-            except pipeline_routes.PipelineRefusal:
-                pass  # the held drop is not missing, so a press on either send has nothing to take back
         run_dir, _ = seam_run(checks, _articuno_cards([6]), live={ARTICUNO_SKU: 3})
         try:
             sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
