@@ -100,8 +100,10 @@ pending"), named `[data-tile]` for the checks.
   is unknown, not low).
 - Each link clears the search and every other filter first, so it shows the rows its tile counts.
 - The tiles are drawn while the worklist is in flight, pending, above the card's own press (off,
-  nothing to send). The bar is the height it will be, so the list lands under it (D313). Every
-  tile holds three lines of caption room whatever its text, so no state changes its height.
+  nothing to send). The bar is the height it will be, so the list lands under it (D313). Each
+  tile's caption holds the room of its longest caption at the tile's width, in every state: two
+  lines where that caption wraps to two, three where it wraps to three. Four-digit counts stand in
+  for the real ones, so a count past four digits can add a line.
 - Two rows: tiles above, the press and doors below. The bar is taller, by the owner's choice. The
   tiles wrap only where the column is too narrow for three side by side. The doors stay drawn above
   a phone.

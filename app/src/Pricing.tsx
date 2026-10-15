@@ -2699,6 +2699,9 @@ export function Pricing() {
      press, from the same figures the line said. Each link shows the rows its tile counts, so it
      clears every other filter first (D86: a missing price is unknown). "Price Them" picks the
      Market price band "No market price", the filter that already names those rows. */
+  /* EACH TILE'S ROOM IS ITS LONGEST NOTE (D313), written before any count is known, so a count stands in.
+     ponytail: four wide digits; a count past four digits can wrap a note one line past its room. */
+  const ROOM_COUNT = '8888'
   const typedPrices = rows.filter((row) => {
     /* A HELD 'unlisted' ANSWER IS A STRING AND A HOLD, not a typed price: the held tile counts it. */
     const answer = answerFor(row)
@@ -2716,12 +2719,13 @@ export function Pricing() {
       icon={needsPrice > 0 ? 'alert' : 'check'}
       tone={needsPrice > 0 ? 'warn' : 'ok'}
       title={needsPrice > 0 ? `${needsPrice} need a price` : 'Every card is priced'}
+      room={`Price Them ${ROOM_COUNT} typed. ${ROOM_COUNT} typed quantities.`}
     >
       {needsPrice > 0 ? (
         <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => showRows({ band: ['none'] }, false)}>
           Price Them
         </Button>
-      ) : null}
+      ) : null}{' '}
       {[
         typedPrices > 0 ? `${typedPrices} typed.` : null,
         progress.byHand > 0 ? `${progress.byHand} typed ${progress.byHand === 1 ? 'quantity' : 'quantities'}.` : null,
@@ -2733,10 +2737,10 @@ export function Pricing() {
   const tally = (
     <div className="pricing-tally">
       {pricedTile}
-      <Tile data-tile="held" pending={barLoading} icon="lock" tone="info" title={`${progress.held} held back`}>
+      <Tile data-tile="held" pending={barLoading} icon="lock" tone="info" title={`${progress.held} held back`} room="Not in this send. Show Held">
         {progress.held > 0 ? (
           <>
-            Not in this send.
+            Not in this send.{' '}
             <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => showRows({}, true)}>
               Show Held
             </Button>
@@ -2751,6 +2755,7 @@ export function Pricing() {
         icon="send"
         tone={progress.outCopies > 0 ? 'accent' : 'idle'}
         title={progress.outCopies > 0 ? `${progress.outCopies} ready to go` : 'Nothing ready yet'}
+        room={`Copies on ${ROOM_COUNT} SKUs. Joins ${ROOM_COUNT} listings in your store.`}
       >
         {/* THE PRESS COUNTS SKUS (`progress.outRows`, the value `SendCard` gets) and the title counts the copies
             on them, so the unit is named; the cap rows are listings. */}

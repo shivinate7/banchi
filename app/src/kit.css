@@ -934,13 +934,15 @@ span.bn-slot { display: inline-block; }
 
 /* ---- status tile (`Tile`) ------------------------------------------------------------------ */
 /* A mark, a title and a note. The tone paints the surface and the mark; warn and accent also draw an inset edge.
-   Title and note each hold one line of room (D313), so a pending tile and a loaded one are the same height. */
+   The title holds one line of room and the note holds its `room` (D313), so a pending tile and a loaded one are the same height. */
 .bn-tile {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr);
   column-gap: var(--bn-2);
   row-gap: var(--bn-0-5);
-  align-items: center;
+  /* TOP-ALIGNED: a tile stretched to its row's tallest neighbour keeps its mark and text at the top. */
+  align-items: start;
+  align-content: start;
   min-width: 0;
   padding: var(--bn-2) var(--bn-3);
   border-radius: var(--bn-r);
@@ -948,6 +950,7 @@ span.bn-slot { display: inline-block; }
 }
 .bn-tile-mark {
   grid-row: span 2;
+  align-self: start;
   display: grid;
   place-items: center;
   inline-size: 24px;
@@ -965,19 +968,20 @@ span.bn-slot { display: inline-block; }
   color: var(--bn-ink);
 }
 .bn-tile-note {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  align-content: flex-start;
-  gap: 0 var(--bn-1-5);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   margin: 0;
-  /* THREE LINES OF ROOM IN EVERY TILE, WHATEVER ITS TEXT: the longest caption (a sentence, then a second one) wraps
-     to three at the narrowest tile, so a pending tile, a loaded one and a changed one are one height (D313). */
-  min-height: calc(var(--bn-lh-base) * 3em);
+  min-height: calc(var(--bn-lh-base) * 1em);
   font-size: var(--bn-fs-sm);
   line-height: var(--bn-lh-base);
   color: var(--bn-ink-2);
 }
+/* THE NOTE HOLDS ITS LONGEST TEXT'S ROOM BY CONSTRUCTION (D313): `data-room`, the longest note the tile can carry,
+   is laid out unseen in the same cell as the note, so the cell is as tall as that text wraps at this tile's width,
+   in every state. Generated content stays out of the tile's text. */
+.bn-tile-note::before { content: attr(data-room); visibility: hidden; }
+.bn-tile-note::before, .bn-tile-say { grid-area: 1 / 1; }
+.bn-tile-say { display: block; min-width: 0; }
 /* THE ACTION IS A `Button` WORN AS A LINK IN THE NOTE'S OWN LINE, so a note that gains or loses it
    keeps its height (D313). */
 .bn-tile .bn-btn.bn-tile-act {
