@@ -3191,17 +3191,19 @@ def check_send_auto_hold_unhold_sends_once(checks: Checks) -> None:
 
 
 def _publishing_receipt(sku: str) -> str:
-    """The newest receipt, one copy of `sku` counted out, in phase `publishing`.
+    """The newest receipt, one copy of `sku` counted out, from a press still running.
 
-    It is a checked receipt (the snapshot judges only when every receipt that counts the SKU out
-    has a check past its wait), and its holder is absent, so no press is running for it. Its
-    shape is `_newer_receipt`'s, with the phase its press left it in.
+    Its shape is `_newer_receipt`'s, with the phase its press is in. It is checked, so the
+    snapshot can judge it (it judges only when every receipt that counts the SKU out has a check
+    past its wait). Its holder is a live process this test did not start, so `_press_running`
+    reads it as running. Its copy is a real card on the shelf, which the case captures.
     """
     stamp = _newer_receipt(sku, 1, found=1, reading=0)
     directory = send_routes.sends_dir() / stamp
     record = send_routes._read(directory)
     record["phase"] = "publishing"
     record["publish_started_at"] = record["at"]
+    record["holder"] = {"pid": os.getppid()}
     # `_newer_receipt` dates the press in the same second as the press before it, and a press's
     # order is its second, then `pressed_ns`. Stamp this press the moment it is written, so it is
     # the newest receipt, as a press in flight is.
@@ -3211,24 +3213,30 @@ def _publishing_receipt(sku: str) -> str:
 
 
 def check_send_auto_hold_unhold_survives_press_rewrite(checks: Checks) -> None:
-    """(o) AN UNHOLD IS NOT UNDONE BY A PRESS THAT WRITES ITS OWN RECEIPT BACK (review F1).
+    """(o) AN UNHOLD THAT A RUNNING PRESS WOULD OVERWRITE DOES NOT HOLD THE COPY AGAIN (review F1).
 
-    A same-SKU press is publishing. Its receipt is the newest that still counts the SKU out, and
-    the press holds the record it read before the unhold. Unhold writes `unheld` onto that
-    receipt. The press then writes its own record back, and a forced check runs. The copy must
-    stay unheld: `held_copies` is still zero, and `pushed` is not lowered a second time.
+    The shelf holds a sixth captured copy, so the newest receipt's copy is a real card. That
+    receipt, B, belongs to a press still running: it writes its whole record back from memory.
+    The press reads its record before the unhold, the unhold lands on the next receipt that counts
+    the SKU out, and then the press writes its record back. Live then reads one, and the forced
+    check must not hold the copy again: `held_copies` is still zero, and `pushed` is not lowered
+    a second time.
     """
     checks.note("")
-    checks.note("SEND AUTO-HOLD (o) — a press rewriting its receipt does not undo an unhold (F1)")
-    with _case(checks, "(o) auto-hold: a press's rewrite keeps the unhold"), send_portal() as portal, synced_home():
+    checks.note("SEND AUTO-HOLD (o) — an unhold a running press would overwrite holds nothing (F1)")
+    with _case(checks, "(o) auto-hold: a running press's rewrite keeps the unhold"), send_portal() as portal, synced_home():
         _held_sku_fixture(checks, portal)
         checks.equal(_held(ARTICUNO_SKU), 1, "PRECONDITION: one copy is held")
+        seam_run(checks, [(4, 1, "Articuno", "161", None)], join=False)
+        with Store().write() as snapshot:
+            snapshot.inventory.cards[master.position_key(4, 1)].sku = ARTICUNO_SKU
         stamp = _publishing_receipt(ARTICUNO_SKU)
         directory = send_routes.sends_dir() / stamp
         press_record = send_routes._read(directory)  # the press's in-memory record, read before the unhold
         unhold = send_routes.do_unhold(ARTICUNO_SKU, {"confirm": True})
         checks.equal(unhold["unheld"], 1, "PRECONDITION: unhold puts the one copy back on the list")
-        send_routes._write(directory, press_record)  # the press writes its own record back
+        send_routes._write(directory, press_record)  # the running press writes its own record back
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
         send_routes.do_live_check({"force": True})
         checks.equal(_held(ARTICUNO_SKU), 0, "(o) THE PRESS'S REWRITE DOES NOT HOLD THE UNHELD COPY AGAIN")
         checks.equal(
