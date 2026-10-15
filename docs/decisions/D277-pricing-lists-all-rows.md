@@ -98,11 +98,14 @@ pending"), named `[data-tile]` for the checks.
 
 - The counts are the figures the old line gave. No row moves between tiles (D86, a missing price
   is unknown, not low).
-- The tiles are drawn while the worklist is in flight, pending, beside the card's own press (off,
-  nothing to send). The bar is the height it will be, so the list lands under it (D313).
-- Doors: below a 1280px column the two quiet doors (Download, Refresh) sit behind More, so the bar
-  stays one tile high whatever the press says. Below 1100px each note holds two lines, so a note
-  that wraps moves nothing.
+- The tiles are drawn while the worklist is in flight, pending, above the card's own press (off,
+  nothing to send). The bar is the height it will be, so the list lands under it (D313). Each note
+  holds two lines of room for the same reason.
+- Two rows: tiles above, the press and doors below. The bar is taller, by the owner's choice. The
+  tiles wrap only where the column is too narrow for three side by side. The doors stay drawn above
+  a phone.
+- The ready tile counts copies, as its title says ("9 ready to go"), and names the SKUs the press
+  counts ("Copies on 3 SKUs.").
 - A phone draws no tiles. The bar stays one line above the tab bar (Q4).
 - "Price Them" lists every row with no market price, including one the owner already answered.
   The tile counts only rows with no answer. A narrower filter is not built.

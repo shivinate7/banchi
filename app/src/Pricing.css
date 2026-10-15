@@ -42,27 +42,19 @@
   font-weight: 600;
   color: var(--bn-ink);
 }
-/* THE THREE STATUS TILES take what the press leaves. The press keeps its own width, never narrower than its label,
-   and its two quiet doors stay drawn above a phone (Q4): the tiles give way, not the press. */
+/* TWO ROWS (the owner's ruling): the three tiles take the first row whole, the press and its two doors the second.
+   The tiles wrap only where the column is too narrow for three side by side. */
 .pricing-tally {
-  flex: 1 1 20rem;
+  flex: 1 1 100%;
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
   gap: var(--bn-2);
-  container-name: pricing-tally;
-  container-type: inline-size;
 }
-.pricing-bar:has(.pricing-tally) .send-card { flex: 0 0 auto; }
-/* A ROW OF TILES UNDER 720PX DROPS EACH CAPTION, keeping its action and the unit of the ready count, and drops the
-   mark and the filler words of a title, so the three tiles, the press and its two doors stay one row. The caption
-   stays in the page for a reader of its text. A note holds one line of room then, for the action. */
-@container pricing-tally (max-width: 719px) {
-  .bn-tile { grid-template-columns: minmax(0, 1fr); padding: var(--bn-2); }
-  .bn-tile-mark, .bn-tile-more { display: none; }
-  .bn-tile-note { min-height: calc(var(--bn-lh-base) * 1em); }
-  .bn-tile-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-}
+.pricing-bar:has(.pricing-tally) .send-card { flex: 1 1 100%; }
+/* THE DOORS ARE DRAWN ABOVE A PHONE (Q4): the row under the tiles has the room, so More is for the phone alone. */
+.pricing-bar:has(.pricing-tally) .send-more-press { display: none; }
+.pricing-bar:has(.pricing-tally) .send-act:not([data-more='open']) .send-door { display: inline-flex; }
 /* THE CARD TAKES WHAT THE SAYS LINE LEAVES (basis 0), so a notice under the press never decides whether
    the line wraps above it: the press holds its place whatever the status says (D313). */
 .pricing-bar .send-card { flex: 1 1 0; min-width: 0; }
@@ -517,6 +509,8 @@
     box-shadow: var(--bn-shadow-2);
   }
   .pricing-bar-says, .pricing-tally { display: none; }
+  .pricing-bar:has(.pricing-tally) .send-more-press { display: inline-flex; }
+  .pricing-bar:has(.pricing-tally) .send-act:not([data-more='open']) .send-door { display: none; }
   .pricing-bar .send-card, .pricing-bar:has(.pricing-tally) .send-card { flex: 1 1 auto; }
   .pricing-body { padding-bottom: calc(var(--pricing-bar-h, 0px) + var(--bn-4)); }
   /* FINDING #9 (the Opus review round, re-fixed in the delta review): at 390 the fixed
