@@ -3049,7 +3049,8 @@ def check_send_auto_hold_never_resent(checks: Checks) -> None:
 
 
 def _held_sku_fixture(checks: Checks, portal) -> str:
-    """The Sep-shape state for (j), (l), (m) and (n): five found, four sold, live reads zero.
+    """The state the (j), (l), (m), (n) and (o) cases start from: five copies sent and found, four
+    sold, and live reads zero.
 
     One copy is held and still on the shelf, and the listing's `pushed` is five. Returns the
     stamp of the send that carried the five copies.
@@ -3071,8 +3072,8 @@ def _pushed(sku: str) -> int:
 def check_send_auto_hold_worklist_row(checks: Checks) -> None:
     """(j) A SKU WITH HELD COPIES KEEPS ITS WORKLIST ROW AFTER ITS RUN CLOSES.
 
-    The held copy is on the shelf and only Unhold can put it back, so the owner has to reach the
-    press from the worklist. Today a closed run has no row, and the press is out of reach.
+    The held copy is on the shelf and only Unhold can put it back. So while the SKU's held count is
+    above zero, the worklist carries its row, with that count, and the owner reaches Unhold there.
     """
     checks.note("")
     checks.note("SEND AUTO-HOLD (j) — the worklist carries a held SKU whose run is closed")
@@ -3187,6 +3188,54 @@ def check_send_auto_hold_unhold_sends_once(checks: Checks) -> None:
         except pipeline_routes.PipelineRefusal:
             copies = 0  # the room is taken: the send refuses, which is the point
         checks.equal(copies, 0, "(n) NEVER TWICE: a second send of that card sends nothing")
+
+
+def _publishing_receipt(sku: str) -> str:
+    """The newest receipt, one copy of `sku` counted out, in phase `publishing`.
+
+    It is a checked receipt (the snapshot judges only when every receipt that counts the SKU out
+    has a check past its wait), and its holder is absent, so no press is running for it. Its
+    shape is `_newer_receipt`'s, with the phase its press left it in.
+    """
+    stamp = _newer_receipt(sku, 1, found=1, reading=0)
+    directory = send_routes.sends_dir() / stamp
+    record = send_routes._read(directory)
+    record["phase"] = "publishing"
+    record["publish_started_at"] = record["at"]
+    # `_newer_receipt` dates the press in the same second as the press before it, and a press's
+    # order is its second, then `pressed_ns`. Stamp this press the moment it is written, so it is
+    # the newest receipt, as a press in flight is.
+    record["pressed_ns"] = time.time_ns()
+    send_routes._write(directory, record)
+    return stamp
+
+
+def check_send_auto_hold_unhold_survives_press_rewrite(checks: Checks) -> None:
+    """(o) AN UNHOLD IS NOT UNDONE BY A PRESS THAT WRITES ITS OWN RECEIPT BACK (review F1).
+
+    A same-SKU press is publishing. Its receipt is the newest that still counts the SKU out, and
+    the press holds the record it read before the unhold. Unhold writes `unheld` onto that
+    receipt. The press then writes its own record back, and a forced check runs. The copy must
+    stay unheld: `held_copies` is still zero, and `pushed` is not lowered a second time.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (o) — a press rewriting its receipt does not undo an unhold (F1)")
+    with _case(checks, "(o) auto-hold: a press's rewrite keeps the unhold"), send_portal() as portal, synced_home():
+        _held_sku_fixture(checks, portal)
+        checks.equal(_held(ARTICUNO_SKU), 1, "PRECONDITION: one copy is held")
+        stamp = _publishing_receipt(ARTICUNO_SKU)
+        directory = send_routes.sends_dir() / stamp
+        press_record = send_routes._read(directory)  # the press's in-memory record, read before the unhold
+        unhold = send_routes.do_unhold(ARTICUNO_SKU, {"confirm": True})
+        checks.equal(unhold["unheld"], 1, "PRECONDITION: unhold puts the one copy back on the list")
+        send_routes._write(directory, press_record)  # the press writes its own record back
+        send_routes.do_live_check({"force": True})
+        checks.equal(_held(ARTICUNO_SKU), 0, "(o) THE PRESS'S REWRITE DOES NOT HOLD THE UNHELD COPY AGAIN")
+        checks.equal(
+            _pushed(ARTICUNO_SKU),
+            int(unhold["pushed"]),
+            "(o) pushed is not lowered a second time after the rewrite",
+        )
 
 
 def check_send_hazards(checks: Checks) -> None:
@@ -7124,6 +7173,7 @@ CHECKS = (
     check_send_auto_hold_rehold_restores,
     check_send_auto_hold_unhold_not_held_again,
     check_send_auto_hold_unhold_sends_once,
+    check_send_auto_hold_unhold_survives_press_rewrite,
     check_send_hazards,
     check_send_review_r3,
     check_send_review_r4,
