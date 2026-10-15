@@ -3587,6 +3587,17 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
             # exactly as `_run_owes` wrote it — Home counts "runs to price" off it, and a
             # run that is priced and merely under-sent is not one of those.
             row["open"] = bool(row["open"] or held > 0)
+        # OPEN WHILE ONE OF ITS SKUS HOLDS COPIES THE OWNER REMOVED BY HAND (D273, R-S4): the
+        # row is the only place Unhold can be pressed, so a closed run must not take it away.
+        listings = snapshot.inventory.listings
+        for run, parsed in tables:
+            if any(
+                getattr(listings.get(str(one.get("sku"))), "held_copies", 0) > 0
+                for one in parsed.get("skus") or []
+            ):
+                for row in roster:
+                    if row["run"] == run.name:
+                        row["open"] = True
 
     # AN EXPLICIT ASK WINS OVER THE FILTER, whether or not the run is open: naming a run has
     # already answered the question `open` exists to ask, and an answered run has to stay

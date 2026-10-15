@@ -487,6 +487,19 @@ def _live_reading(sku: str, listing, parts) -> Tuple[int, Optional[datetime]]:
     return live, read
 
 
+def _kept(record: dict, sku: str) -> int:
+    """The copies of `sku` this receipt still counts out: what it sent. A receipt taken back keeps
+    the copies the take back did not return, which a check saw live (R-S4, so Take Back never
+    clears a hold). A taken-back receipt with no check, or no record of what went back, keeps none."""
+    sent = int((record.get("copies") or {}).get(sku, 0))
+    if not record.get("taken_back_at"):
+        return sent
+    back = record.get("taken_back")
+    if record.get("check") is None or not isinstance(back, dict):
+        return 0
+    return max(0, sent - int(back.get(sku, 0)))
+
+
 def _sku_snapshot(sku: str, reading: Reading) -> Optional[Snapshot]:
     """THE SNAPSHOT SEND CHECK, one SKU (R-S1, R-S2, R-S4): `Snapshot.by_stamp` is stamp -> (copies
     found, copies to take back) for every receipt that sent it and has been checked past its wait,
@@ -527,9 +540,7 @@ def _sku_snapshot(sku: str, reading: Reading) -> Optional[Snapshot]:
     carriers = [
         (stamp, record)
         for stamp, record in receipts
-        if not record.get("failure")
-        and not record.get("taken_back_at")
-        and int((record.get("copies") or {}).get(sku, 0)) > 0
+        if not record.get("failure") and _kept(record, sku) > 0
     ]
     parts = [
         (stamp, record)
@@ -546,7 +557,7 @@ def _sku_snapshot(sku: str, reading: Reading) -> Optional[Snapshot]:
     live, read = _live_reading(sku, listing, parts)
     if read is None or (waits and read <= max(waits)):
         return None
-    sent = {stamp: int(record["copies"][sku]) for stamp, record in parts}
+    sent = {stamp: _kept(record, sku) for stamp, record in parts}
     inventory = store.inventory
     oldest_stamp, oldest = min(parts, key=lambda item: _press_order(*item))
     # SALES SINCE THE OLDEST COUNTED-OUT PRESS, not every sale ever: a copy sold before it is
@@ -587,8 +598,11 @@ def _sku_snapshot(sku: str, reading: Reading) -> Optional[Snapshot]:
     for stamp, _ in parts:
         out[stamp] = (min(sent[stamp], left), 0)
         left -= out[stamp][0]
-    newest = parts[-1][0]
-    out[newest] = (out[newest][0], min(sent[newest], missing))
+    # ONLY A RECEIPT NOT TAKEN BACK OFFERS COPIES: a taken-back one counts what it kept, and no more.
+    live_parts = [stamp for stamp, record in parts if not record.get("taken_back_at")]
+    if live_parts:
+        newest = live_parts[-1]
+        out[newest] = (out[newest][0], min(sent[newest], missing))
     cache[sku] = Snapshot(out, removed)
     return cache[sku]
 
@@ -1943,6 +1957,13 @@ def do_unhold(sku: str, payload: dict) -> dict:
     held count. It also writes the copies on the newest receipt that still counts the SKU out
     (`unheld`), so the next live check does not hold them again. It takes nothing off TCGplayer.
     """
+    # THE LIVE CHECK'S OWN LOCK (`_CHECK`): the check writes the held count, and an Unhold racing it
+    # must neither read a count the check is about to move nor lower `pushed` twice.
+    with _CHECK:
+        return _unhold(sku, payload)
+
+
+def _unhold(sku: str, payload: dict) -> dict:
     listing = Store().read().inventory.listings.get(sku)
     if listing is None or int(listing.held_copies) <= 0:
         raise PipelineRefusal(
@@ -1966,11 +1987,7 @@ def do_unhold(sku: str, payload: dict) -> dict:
         # THE RECEIPT FIRST, THEN THE STORE (as Take Back): a crash between leaves copies still
         # counted out and the count cleared at the next check, which never sends one twice.
         for stamp, record in _receipts():
-            if (
-                not record.get("failure")
-                and not record.get("taken_back_at")
-                and int((record.get("copies") or {}).get(sku, 0)) > 0
-            ):
+            if not record.get("failure") and _kept(record, sku) > 0:
                 unheld = dict(record.get("unheld") or {})
                 unheld[sku] = int(unheld.get(sku, 0)) + count
                 _write(sends_dir() / stamp, dict(record, unheld=unheld))
@@ -1989,6 +2006,11 @@ def do_rehold(sku: str, payload: dict) -> dict:
     changes nothing. Otherwise it raises `pushed` by the copies, sets the held count and takes
     them off the receipt's `unheld`, so the next live check judges them held as before.
     """
+    with _CHECK:  # the live check's own lock, as `do_unhold`
+        return _rehold(sku, payload)
+
+
+def _rehold(sku: str, payload: dict) -> dict:
     copies = int(payload.get("copies") or 0)
     if not bool(payload.get("confirm")) or copies <= 0:
         raise PipelineRefusal(HTTPStatus.BAD_REQUEST, "confirm_required", "Name the copies and confirm to hold them again.")
@@ -2337,27 +2359,21 @@ def _lower_takes(gone: Dict[str, int], live_now: Dict[str, int]) -> None:
 
 
 def _hold_removed(skus) -> None:
-    """Write each SKU's hand-removed copies to its listing (R-H1, R-S4), one store write.
+    """Write each SKU's hand-removed copies to its listing (R-H1, R-S4), one store write that also
+    judges them, so no Unhold lands between the judgement and the write.
 
     The count is what `_sku_snapshot` judges `removed` NOW, read after this check's receipts are
     written, so a drop since the last check is held and a copy that came back is released. A SKU
-    the snapshot cannot judge keeps the count it has; one whose receipts are all taken back is
-    not judged, so Take Back never clears it (only `do_unhold` does).
+    the snapshot cannot judge keeps the count it has. A taken-back receipt still counts the copies
+    it kept (`_kept`), so Take Back never clears a hold (only `do_unhold` does).
     """
-    reading = _reading()
-    held: Dict[str, int] = {}
-    for sku in sorted(skus):
-        judged = _sku_snapshot(sku, reading)
-        listing = reading[1].inventory.listings.get(sku)
-        if judged is not None and listing is not None and int(listing.held_copies) != judged.removed:
-            held[sku] = judged.removed
-    if not held:
-        return
     with Store().write() as writable:
-        for sku, count in held.items():
+        reading = _reading(writable)
+        for sku in sorted(skus):
+            judged = _sku_snapshot(sku, reading)
             listing = writable.inventory.listings.get(sku)
-            if listing is not None:
-                listing.held_copies = count
+            if judged is not None and listing is not None and int(listing.held_copies) != judged.removed:
+                listing.held_copies = judged.removed
 
 
 def _live_check(force: bool) -> dict:
