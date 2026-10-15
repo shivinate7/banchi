@@ -967,11 +967,13 @@ span.bn-slot { display: inline-block; }
 .bn-tile-note {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: baseline;
+  align-content: flex-start;
   gap: 0 var(--bn-1-5);
   margin: 0;
-  /* TWO LINES OF ROOM: a caption that wraps once the worklist lands is no taller than the pending tile (D313). */
-  min-height: calc(var(--bn-lh-base) * 2em);
+  /* THREE LINES OF ROOM IN EVERY TILE, WHATEVER ITS TEXT: the longest caption (a sentence, then a second one) wraps
+     to three at the narrowest tile, so a pending tile, a loaded one and a changed one are one height (D313). */
+  min-height: calc(var(--bn-lh-base) * 3em);
   font-size: var(--bn-fs-sm);
   line-height: var(--bn-lh-base);
   color: var(--bn-ink-2);
@@ -991,6 +993,8 @@ span.bn-slot { display: inline-block; }
   color: var(--bn-accent);
 }
 .bn-tile .bn-btn.bn-tile-act:hover { background: transparent; text-decoration: underline; }
+/* THE WORDS STAY SMALL AND THE HIT AREA IS 40PX (D117): an invisible box around them takes the press. */
+.bn-tile .bn-btn.bn-tile-act::after { content: ''; position: absolute; inset: -12px -8px; }
 .bn-tile[data-tone='warn'] { background: var(--bn-warn-tint); box-shadow: inset 0 0 0 1.5px var(--bn-warn); }
 .bn-tile[data-tone='warn'] .bn-tile-mark { background: var(--bn-warn); color: var(--bn-surface); }
 .bn-tile[data-tone='accent'] { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 1.5px var(--bn-accent); }

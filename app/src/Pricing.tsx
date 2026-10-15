@@ -2696,27 +2696,34 @@ export function Pricing() {
   const barLoading = !liveTab && loading && table === null
 
   /* THE SEND BAR'S THREE TILES (the owner's Preflight pick): where pricing stands before the one
-     press. The same figures the line said (numbers stay, only the words around them shrink): what
-     owes a price, what is held back, what would go. "Price Them" picks the Market price band
-     "No market price", the filter that already names those rows (D86: a missing price is unknown). */
+     press, from the same figures the line said. Each link shows the rows its tile counts, so it
+     clears every other filter first (D86: a missing price is unknown). "Price Them" picks the
+     Market price band "No market price", the filter that already names those rows. */
+  const typedPrices = rows.filter((row) => typeof answerFor(row) === 'string').length
+  const showRows = (picks: typeof facetPicks, held: boolean) => {
+    setQuery('')
+    setFilterHeld(held)
+    setFacetPicks(picks)
+  }
   const pricedTile = (
     <Tile
       data-tile="priced"
       pending={barLoading}
       icon={needsPrice > 0 ? 'alert' : 'check'}
       tone={needsPrice > 0 ? 'warn' : 'ok'}
-      title={needsPrice > 0 ? <>{needsPrice} <span className="bn-tile-more">still </span>need a price</> : 'Every card is priced'}
+      title={needsPrice > 0 ? `${needsPrice} need a price` : 'Every card is priced'}
     >
       {needsPrice > 0 ? (
-        <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => setFacetPicks({ ...facetPicks, band: ['none'] })}>
+        <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => showRows({ band: ['none'] }, false)}>
           Price Them
         </Button>
       ) : null}
-      {progress.byHand > 0 ? (
-        <span className="bn-tile-text">{`${progress.byHand} typed by hand.`}</span>
-      ) : needsPrice > 0 ? null : (
-        <span className="bn-tile-text">No typed prices to check.</span>
-      )}
+      {[
+        typedPrices > 0 ? `${typedPrices} typed.` : null,
+        progress.byHand > 0 ? `${progress.byHand} typed ${progress.byHand === 1 ? 'quantity' : 'quantities'}.` : null,
+      ]
+        .filter((part): part is string => part !== null)
+        .join(' ') || (needsPrice > 0 ? null : 'None typed.')}
     </Tile>
   )
   const tally = (
@@ -2725,13 +2732,13 @@ export function Pricing() {
       <Tile data-tile="held" pending={barLoading} icon="lock" tone="info" title={`${progress.held} held back`}>
         {progress.held > 0 ? (
           <>
-            <span className="bn-tile-text">Not in this send.</span>
-            <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => setFilterHeld(true)}>
+            Not in this send.
+            <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => showRows({}, true)}>
               Show Held
             </Button>
           </>
         ) : (
-          <span className="bn-tile-text">Nothing is held.</span>
+          'None held.'
         )}
       </Tile>
       <Tile
@@ -2741,16 +2748,14 @@ export function Pricing() {
         tone={progress.outCopies > 0 ? 'accent' : 'idle'}
         title={progress.outCopies > 0 ? `${progress.outCopies} ready to go` : 'Nothing ready yet'}
       >
-        {/* THE PRESS COUNTS SKUS (`progress.outRows`, the same value `SendCard` gets), and the title counts the
-            copies on them: the unit is named here and stays when the rest of the note gives way. */}
-        {progress.outCopies > 0 ? <span className="bn-tile-unit">{`Copies on ${progress.outRows} ${progress.outRows === 1 ? 'SKU' : 'SKUs'}.`}</span> : null}
-        <span className="bn-tile-text">
-          {progress.closed > 0
-            ? `${progress.outCopies > 0 ? 'Joins ' : ''}${progress.closed} already in your store.`
-            : progress.outCopies > 0
-              ? ''
-              : 'Goes out when you press Send.'}
-        </span>
+        {/* THE PRESS COUNTS SKUS (`progress.outRows`, the value `SendCard` gets) and the title counts the copies
+            on them, so the unit is named; the cap rows are listings. */}
+        {[
+          progress.outCopies > 0 ? `Copies on ${progress.outRows} ${progress.outRows === 1 ? 'SKU' : 'SKUs'}.` : null,
+          progress.closed > 0 ? `${progress.outCopies > 0 ? 'Joins ' : ''}${progress.closed} listings in your store.` : null,
+        ]
+          .filter((part): part is string => part !== null)
+          .join(' ')}
       </Tile>
     </div>
   )
