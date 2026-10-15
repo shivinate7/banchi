@@ -2993,10 +2993,14 @@ def check_send_auto_hold_take_back_keeps_count(checks: Checks) -> None:
 def check_send_auto_hold_never_resent(checks: Checks) -> None:
     """(i) A HELD COPY NEVER GOES OUT IN A SEND UNTIL IT IS UNHELD.
 
-    The shape of (d): six copies out, three live, three held. The shelf also holds three cards
-    never listed. Take Back on either send must refuse (nothing is missing), and a send of one
-    more card must not go out, because the held copies still count as out. On a build that
-    reads the drop as missing, Take Back moves a copy and the send re-sends into the room it opens.
+    The shelf holds six copies of the SKU and no others: five pushed in R0, and card 6, whose
+    copy the newer receipt counts as pushed. Three of the six are live and three are held, so the
+    held copies are the only copies on the shelf that are not live, and no card is free. A send
+    of card 6 must send nothing, because the held copies still count as out. Take Back on either
+    send must refuse (nothing is missing).
+
+    The control then adds card 7, the one never-listed copy that is free, and its send must send
+    one. Without it, a send that refuses for some other reason would read as the zero above.
     """
     checks.note("")
     checks.note("SEND AUTO-HOLD (i) — a held copy never goes out in a send until unheld")
@@ -3006,20 +3010,24 @@ def check_send_auto_hold_never_resent(checks: Checks) -> None:
         send_routes.do_live_check({})
         checks.equal(_banner_send(r0)["check"]["found"], 5, "PRECONDITION: R0's five copies found")
         # join=False: a join would read the export's Total Quantity (zero) as a live reading.
-        seam_run(checks, _articuno_cards([6, 7, 8, 9]), join=False)
+        seam_run(checks, _articuno_cards([6]), join=False)
         with Store().write() as snapshot:
-            for index in (6, 7, 8, 9):
-                snapshot.inventory.cards[master.position_key(3, index)].sku = ARTICUNO_SKU
+            snapshot.inventory.cards[master.position_key(3, 6)].sku = ARTICUNO_SKU
         r1 = _newer_receipt(ARTICUNO_SKU, 1, found=1, reading=3)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
         send_routes.do_live_check({"force": True})
         checks.equal(_held(ARTICUNO_SKU), 3, "PRECONDITION: three copies are held")
+        checks.equal(
+            len(Store().read().inventory.copies_on_hand(ARTICUNO_SKU)),
+            6,
+            "PRECONDITION: six copies on the shelf, all of them counted out, none free",
+        )
         for stamp in (r0, r1):
             try:
                 send_routes.do_take_back(stamp, {"confirm": True})
             except pipeline_routes.PipelineRefusal:
                 pass  # the held drop is not missing, so a press on either send has nothing to take back
-        run_dir, _ = seam_run(checks, _articuno_cards([7]), live={ARTICUNO_SKU: 3})
+        run_dir, _ = seam_run(checks, _articuno_cards([6]), live={ARTICUNO_SKU: 3})
         try:
             sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
             copies = int(sent.get("copies") or 0)  # the summary's own count of what this send carries
@@ -3028,7 +3036,15 @@ def check_send_auto_hold_never_resent(checks: Checks) -> None:
         checks.equal(
             copies,
             0,
-            "(i) NO HELD COPY GOES OUT: a send of one more card sends nothing while the held copies count as out",
+            "(i) NO HELD COPY GOES OUT: a send of card 6 sends nothing while the held copies count as out",
+        )
+        # CONTROL: one never-listed copy is free, so its send goes out. A refusal here fails the case.
+        run_dir, _ = seam_run(checks, _articuno_cards([7]), live={ARTICUNO_SKU: 3})
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        checks.equal(
+            int(sent.get("copies") or 0),
+            1,
+            "(i) CONTROL: a never-listed card of the same SKU still goes out",
         )
 
 
