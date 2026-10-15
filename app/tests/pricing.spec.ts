@@ -4326,7 +4326,7 @@ test('the rows that need the owner come first, each with its reason, and the res
   await expect(flags.nth(0)).toHaveText('100% over market')
   await expect(page.locator('.pricing-group').nth(1).locator('.pricing-flag')).toHaveCount(0)
   /* THE BAR NAMES WHAT STAYS BACK (Q3). */
-  await expect(page.locator('[data-tile="priced"]')).toContainText(/\b1 still need a price/)
+  await expect(page.locator('[data-tile="priced"]')).toContainText(/\b1 need a price/)
   /* AND ITS COPIES ARE NOT READY (the delta review, R3-1): four rows of three copies go, the
      unpriced row's three do not. The bar and the press both say twelve, which is what the file
      will carry. */
@@ -4848,7 +4848,7 @@ test('with nothing ready, the send press is disabled', async ({ page }) => {
     skus: [sku({ sku: '5', name: 'Unpriced', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
     decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: {} },
   })
-  await expect(page.locator('[data-tile="priced"]')).toContainText(/\b1 still need a price/)
+  await expect(page.locator('[data-tile="priced"]')).toContainText(/\b1 need a price/)
   await expect(page.locator('.send-press')).toBeDisabled()
 })
 
@@ -6144,7 +6144,7 @@ const NO_PRICE_DECISIONS = { rule: 'match', basis: 'market', threshold: '0.49', 
 
 test('send tiles: three tiles on the Unsent tab carry 3 ready, 19 held and 541 already in the store', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
-  /* "Joins M already in your store" takes M from the bar's own "N sent" figure, which is the
+  /* "Joins M listings in your store" takes M from the bar's own "N sent" figure, which is the
      count of rows at the cap (`Pricing.tsx`, `progress.closed`). 541 rows at the cap make 541. */
   const capped = Array.from({ length: 541 }, (_, i) =>
     sku({
@@ -6162,7 +6162,7 @@ test('send tiles: three tiles on the Unsent tab carry 3 ready, 19 held and 541 a
   })
 
   await expect(tile(page, 'ready')).toContainText(/\b3 ready to go/)
-  await expect(tile(page, 'ready')).toContainText(/\bJoins 541 already in your store/)
+  await expect(tile(page, 'ready')).toContainText(/\bJoins 541 listings in your store/)
   await expect(tile(page, 'held')).toContainText(/\b19 held back/)
   await expect(tile(page, 'held')).toContainText('Not in this send.')
   await expect(tile(page, 'priced')).toContainText('Every card is priced')
@@ -6175,7 +6175,7 @@ test('send tiles: the priced tile turns amber and offers Price Them while rows s
   await open(page, { skus: Array.from({ length: 12 }, (_, i) => unpricedRow(i + 1)), decisions: NO_PRICE_DECISIONS })
 
   const priced = tile(page, 'priced')
-  await expect(priced).toContainText(/\b12 still need a price/)
+  await expect(priced).toContainText(/\b12 need a price/)
   await expect(priced).toHaveAttribute('data-tone', 'warn')
   await expect(priced.locator('a, button', { hasText: /^Price Them$/ })).toBeVisible()
   await expect(tile(page, 'ready')).not.toContainText(/[1-9]\d* ready to go/)
@@ -6318,13 +6318,13 @@ test('send tiles: at 820 the bar keeps its height from first paint, and a ready 
 test('send tiles: a price typed on a row is counted by the priced tile\'s typed figure', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   await open(page, { skus: [pricedRow(1)], decisions: NO_PRICE_DECISIONS })
-  await expect(tile(page, 'priced')).not.toContainText(/\b[1-9]\d* typed/)
+  await expect(tile(page, 'priced')).not.toContainText(/\b[1-9]\d* typed\./)
 
   await field(page).focus()
   await page.keyboard.type('12.00')
   await page.keyboard.press('Enter')
 
-  await expect(tile(page, 'priced')).toContainText(/\b1 typed/)
+  await expect(tile(page, 'priced')).toContainText(/\b1 typed\./)
 })
 
 test('send tiles: a copy count typed on a row alone is not counted as a typed price', async ({ page }) => {
@@ -6334,7 +6334,9 @@ test('send tiles: a copy count typed on a row alone is not counted as a typed pr
 
   await qty.fill('2')
 
-  /* THE DECK FOLLOWS THE COPY COUNT, so the figure is applied before the caption is read. */
+  /* THE DECK FOLLOWS THE COPY COUNT, so the figure is applied before the caption is read. The
+     caption names the copy count as a copy count ("typed quantity"), never as a typed price. */
   await expect(tile(page, 'ready')).toContainText(/\b2 ready to go/)
-  await expect(tile(page, 'priced')).not.toContainText(/\b[1-9]\d* typed/)
+  await expect(tile(page, 'priced')).toContainText(/\b1 typed quantity\./)
+  await expect(tile(page, 'priced')).not.toContainText(/\b[1-9]\d* typed\./)
 })
