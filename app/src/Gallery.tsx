@@ -657,6 +657,9 @@ function useActiveSection(): string | null {
   return active
 }
 
+/** The longest note the tile demo carries, so every demo tile, pending too, holds one room. */
+const TILE_ROOM = 'Copies on 3 SKUs. Joins 541 listings in your store.'
+
 // -------------------------------------------------------------------------------- page
 
 export function Gallery() {
@@ -1399,17 +1402,17 @@ export function Gallery() {
               {/* S9: the tile shipped one ratio, 22:12. `-sm` reads Orders' own 14:11
                   (`.orders-index-figure`); `-xs` reads Inventory's own 11:11, un-bolded
                   (`.browse-boxcell-count` beside `.browse-boxcell-meta`). */}
-              {/* The status tile: one tone per state, and a pending tile that holds the same room. */}
+              {/* The status tile: one tone per state, and a pending tile that holds the same room (`room`, the longest note here). */}
               <Spec name="tile-tones" label="tile, each tone and pending" wide>
                 <div className="kit-row kit-row-wrap">
-                  <Tile icon="check" title="Every card is priced">None typed.</Tile>
-                  <Tile icon="alert" title="12 need a price" tone="warn">
+                  <Tile icon="check" title="Every card is priced" room={TILE_ROOM}>None typed.</Tile>
+                  <Tile icon="alert" title="12 need a price" tone="warn" room={TILE_ROOM}>
                     <Button size="sm" variant="ghost" className="bn-tile-act">Price Them</Button>
                   </Tile>
-                  <Tile icon="lock" title="19 held back" tone="info">Not in this send.</Tile>
-                  <Tile icon="send" title="3 ready to go" tone="accent">Copies on 3 SKUs. Joins 541 listings in your store.</Tile>
-                  <Tile icon="send" title="Nothing ready yet" tone="idle">541 listings in your store.</Tile>
-                  <Tile icon="send" title="" pending />
+                  <Tile icon="lock" title="19 held back" tone="info" room={TILE_ROOM}>Not in this send.</Tile>
+                  <Tile icon="send" title="3 ready to go" tone="accent" room={TILE_ROOM}>Copies on 3 SKUs. Joins 541 listings in your store.</Tile>
+                  <Tile icon="send" title="Nothing ready yet" tone="idle" room={TILE_ROOM}>541 listings in your store.</Tile>
+                  <Tile icon="send" title="" pending room={TILE_ROOM} />
                 </div>
               </Spec>
               <Spec name="stat-sizes" label="stat, sm and xs">

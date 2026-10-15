@@ -979,7 +979,12 @@ span.bn-slot { display: inline-block; }
 /* THE NOTE HOLDS ITS LONGEST TEXT'S ROOM BY CONSTRUCTION (D313): `data-room`, the longest note the tile can carry,
    is laid out unseen in the same cell as the note, so the cell is as tall as that text wraps at this tile's width,
    in every state. Generated content stays out of the tile's text. */
-.bn-tile-note::before { content: attr(data-room); visibility: hidden; }
+.bn-tile-note::before {
+  content: attr(data-room);
+  visibility: hidden;
+  /* AT THE ACTION'S WEIGHT, so the room is never narrower than a note that carries one. */
+  font-weight: 600;
+}
 .bn-tile-note::before, .bn-tile-say { grid-area: 1 / 1; }
 .bn-tile-say { display: block; min-width: 0; }
 /* THE ACTION IS A `Button` WORN AS A LINK IN THE NOTE'S OWN LINE, so a note that gains or loses it
