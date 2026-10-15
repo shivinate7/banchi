@@ -2734,6 +2734,304 @@ def check_send_snapshot_take_back_take_off(checks: Checks) -> None:
         )
 
 
+# ------------------------------------------------------------------ auto-hold (R-H1, R-H2)
+#
+# A copy seen live at a send check, which later drops from live with no sale and no open order,
+# is the owner's hand removal. Banchi holds it: never missing, never offered back, never re-sent
+# until the owner unholds it. THE CONTRACT THE BUILDER MEETS, named here once:
+#   - the listing's held count is the store field `HELD_FIELD` on each SKU's `Listing`;
+#   - the unhold press is `send_routes.do_unhold(sku, {"confirm": True})`, route
+#     `POST /pipeline/held/<sku>/unhold`, shaped like `do_take_back`.
+# Every case reads the count through `_held`, which is the only place the field name appears.
+
+HELD_FIELD = "held_copies"
+
+
+def _held(sku: str) -> int:
+    """The listing's held count. A store with no such field holds none, so a case that expects a
+    hold fails on its assertion, never on a crash."""
+    listing = Store().read().inventory.listings.get(sku)
+    count = getattr(listing, HELD_FIELD, None)
+    return 0 if count is None else int(count)
+
+
+def _articuno_cards(indexes) -> list:
+    return [(3, index, "Articuno", "161", None) for index in indexes]
+
+
+def check_send_auto_hold_removed_after_sales(checks: Checks) -> None:
+    """(a) THE SEP 27 SHAPE: five copies sent and found, four sold, then TCGplayer reads zero.
+
+    The fifth copy left TCGplayer by the owner's hand. It is held: the card reads five of five
+    found, nothing is offered back, and the listing holds one copy.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (a) — five found, four sold, live reads zero: one copy held")
+    with _case(checks, "(a) auto-hold: the Sep 27 shape"), send_portal() as portal, synced_home():
+        stamp = _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 5})
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(stamp)["check"]["found"], 5, "PRECONDITION: all five copies found")
+        for index in range(1, 5):
+            capture_server.do_mark_sold(3, index, {})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        send_routes.do_live_check({"force": True})
+        summary = _banner_send(stamp)
+        checks.equal(_held(ARTICUNO_SKU), 1, "(a) THE LIVE CHECK HOLDS THE COPY THE OWNER REMOVED")
+        checks.equal(summary["takeable"], 0, "(a) A HELD COPY IS NEVER OFFERED BACK")
+        checks.equal(
+            (summary["check"]["found"], summary["check"]["expected"]),
+            (5, 5),
+            "(a) THE CARD READS 5 OF 5 FOUND: the held copy counts as found",
+        )
+
+
+def check_send_auto_hold_partial(checks: Checks) -> None:
+    """(b) Five sent, three found, none sold, then TCGplayer reads zero.
+
+    Two copies were never seen live: they are missing, and Take Back offers them. The three seen
+    live and then dropped are held, not missing.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (b) — five sent, three found, live reads zero: two offered, three held")
+    with _case(checks, "(b) auto-hold: missing and held split"), send_portal() as portal, synced_home():
+        stamp = _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(stamp)["check"]["found"], 3, "PRECONDITION: three copies found")
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        send_routes.do_live_check({"force": True})
+        summary = _banner_send(stamp)
+        checks.equal(summary["takeable"], 2, "(b) THE TWO NEVER SEEN LIVE ARE OFFERED BACK")
+        checks.equal(_held(ARTICUNO_SKU), 3, "(b) THE THREE SEEN LIVE AND THEN DROPPED ARE HELD")
+
+
+def check_send_auto_hold_later_read(checks: Checks) -> None:
+    """(c) A check reads five; a later live read shows three, and nothing is sold.
+
+    Two copies left TCGplayer by the owner's hand, after the check that found them. The later
+    reading is the store's; the older check's figure of five does not overrule it.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (c) — a check reads five, a later read shows three: two held")
+    with _case(checks, "(c) auto-hold: a later reading below the check's"), send_portal() as portal, synced_home():
+        stamp = _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 5})
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(stamp)["check"]["found"], 5, "PRECONDITION: all five copies found")
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({"force": True})
+        summary = _banner_send(stamp)
+        checks.equal(_held(ARTICUNO_SKU), 2, "(c) THE LATER DROP IS HELD: two copies")
+        checks.equal(
+            (summary["takeable"], summary["check"]["found"]),
+            (0, 5),
+            "(c) NOT MISSING: nothing offered back, and the card still reads five of five",
+        )
+
+
+def check_send_auto_hold_newer_receipt_reading(checks: Checks) -> None:
+    """(d) A NEWER RECEIPT RECORDS THE LOW READING.
+
+    R0 sends five copies, all found at its check (reading five). R1 sends one more copy, found
+    at its own check, which records a reading of three. Then the store reads three. Six copies
+    are out and three are live, and no copy was never seen, so the gap of three is held. R1's
+    copy is not offered back as missing.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (d) — a newer receipt records the low reading: held, not missing")
+    with _case(checks, "(d) auto-hold: a newer receipt's low reading"), send_portal() as portal, synced_home():
+        r0 = _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 5})
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(r0)["check"]["found"], 5, "PRECONDITION: R0's five copies found")
+        # join=False: a join would read the export's Total Quantity (zero) as a live reading.
+        seam_run(checks, _articuno_cards([6]), join=False)
+        with Store().write() as snapshot:
+            snapshot.inventory.cards[master.position_key(3, 6)].sku = ARTICUNO_SKU
+        r1 = _newer_receipt(ARTICUNO_SKU, 1, found=1, reading=3)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({"force": True})
+        checks.equal(_held(ARTICUNO_SKU), 3, "(d) THE DROP IS HELD: three of six out are live, none never seen")
+        # Summed over both sends: a build that reads the drop as missing may put it on either one.
+        offered = _banner_send(r0)["takeable"] + _banner_send(r1)["takeable"]
+        checks.equal(offered, 0, "(d) A HELD DROP IS NOT MISSING: nothing offered back on either send")
+
+
+def _newer_receipt(sku: str, copies: int, *, found: int, reading: int) -> str:
+    """A checked receipt written as the store would hold it, dated after every receipt so far.
+
+    Its check records `reading` for `sku`, the figure the newest check of the SKU takes. Only
+    the case that needs a newer check uses it, so it stands in for a real press and check. The
+    press also raises `pushed` by its copies, as a real press does.
+    """
+    stamp = send_routes._new_stamp()
+    stamped = clock.iso(clock.now())
+    with Store().write() as snapshot:
+        snapshot.inventory.listings[sku].bump(master.PUSHED, copies)
+    send_routes._write(
+        send_routes.sends_dir() / stamp,
+        {
+            "kind": "send", "stamp": stamp, "at": stamped, "copies": {sku: copies},
+            "copies_total": copies, "names": {sku: "Articuno"}, "live_before": {sku: 0},
+            "sold_before": {sku: 0}, "pushed": {"upload_id": "u", "rows": copies, "accepted": copies},
+            "published_at": "2000-01-01T00:00:00+00:00", "check_after": "2000-01-01T00:00:00+00:00",
+            "phase": "done", "checked_at": stamped, "first_checked_at": stamped,
+            "check": {
+                "export": "newer", "found": found, "expected": copies, "missing": [],
+                "found_by_sku": {sku: found}, "reading": {sku: {"live": reading, "as_of": stamped}},
+            },
+        },
+    )
+    return stamp
+
+
+def check_send_auto_hold_order_sync_older(checks: Checks) -> None:
+    """(e) THE ORDER SYNC IS OLDER THAN THE READING: no hold and no offer, until a newer sync.
+
+    TCGplayer may have sold the copy on an order the ledger has not synced, so a drop cannot yet
+    be told from a sale. Once a newer sync lands, the same drop is judged, and is held.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (e) — the order sync is older than the reading: no hold until it is newer")
+    with _case(checks, "(e) auto-hold: an order sync older than the reading"), send_portal() as portal, isolated_home():
+        with _patched(order_store, "now", lambda: "2000-01-01T00:00:00.000+00:00"):
+            _open_order("9999999", 1, "O-AUTOHOLD-E-OLD")
+        stamp = _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 5})
+        send_routes.do_live_check({})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        send_routes.do_live_check({"force": True})
+        summary = _banner_send(stamp)
+        checks.equal(_held(ARTICUNO_SKU), 0, "(e) NO HOLD WHILE THE SYNC IS OLDER THAN THE READING")
+        checks.equal(
+            (summary["takeable"], summary["check"]["found"]),
+            (0, 5),
+            "(e) NO OFFER: the card still reads five of five",
+        )
+        with _patched(order_store, "now", lambda: "2099-01-01T00:00:00.000+00:00"):
+            _open_order("9999999", 1, "O-AUTOHOLD-E-NEW")
+        send_routes.do_live_check({"force": True})
+        checks.equal(_held(ARTICUNO_SKU), 5, "(e) ONCE A NEWER SYNC LANDS, THE SAME DROP IS HELD")
+
+
+def check_send_auto_hold_open_order_covers(checks: Checks) -> None:
+    """(f) AN OPEN ORDER COVERS THE DROP: nothing is held. Without that order, the drop is held.
+
+    The paired half is the red proof: a case that only asserts "no hold" passes on a build that
+    never holds at all.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (f) — an open order covers the drop: held zero; without it, one")
+    for label, with_order in (("with an open order", True), ("without one", False)):
+        with _case(checks, f"(f) auto-hold: the drop {label}"), send_portal() as portal, synced_home():
+            stamp = _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 5})
+            send_routes.do_live_check({})
+            if with_order:
+                _open_order(ARTICUNO_SKU, 1, "O-AUTOHOLD-F")
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 4})
+            send_routes.do_live_check({"force": True})
+            summary = _banner_send(stamp)
+            checks.equal(
+                _held(ARTICUNO_SKU),
+                0 if with_order else 1,
+                f"(f) THE DROP {label.upper()} IS HELD: {'nothing' if with_order else 'one copy'}",
+            )
+            checks.equal(summary["takeable"], 0, f"(f) NOTHING OFFERED BACK {label.upper()}")
+
+
+def check_send_auto_hold_unhold(checks: Checks) -> None:
+    """(g) UNHOLD: the held copies go back on the list. `pushed` falls by the held count and the
+    held count clears. The next emit reads that lower `pushed`, so it offers those copies again.
+
+    The offer is asserted through `pushed`, the figure `cli/resolve.py` reads, and not through a
+    live emit. A build with no unhold press fails here, on the press's own assertion.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (g) — unhold clears the held count and lowers pushed by it")
+    with _case(checks, "(g) auto-hold: unhold"), send_portal() as portal, synced_home():
+        _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 5})
+        send_routes.do_live_check({})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({"force": True})
+        checks.equal(_held(ARTICUNO_SKU), 2, "PRECONDITION: two copies are held")
+        pushed_before = int(Store().read().inventory.listings[ARTICUNO_SKU].pushed)
+        if getattr(send_routes, "do_unhold", None) is None:
+            checks.ok(False, "(g) THE UNHOLD PRESS EXISTS: send_routes.do_unhold is missing")
+        else:
+            send_routes.do_unhold(ARTICUNO_SKU, {"confirm": True})
+        checks.equal(_held(ARTICUNO_SKU), 0, "(g) UNHOLD CLEARS THE HELD COUNT")
+        checks.equal(
+            int(Store().read().inventory.listings[ARTICUNO_SKU].pushed),
+            pushed_before - 2,
+            "(g) UNHOLD LOWERS PUSHED BY THE HELD COUNT, so those copies are offered again",
+        )
+
+
+def check_send_auto_hold_take_back_keeps_count(checks: Checks) -> None:
+    """(h) TAKE BACK ON THE RECEIPT KEEPS THE LISTING'S HELD COUNT.
+
+    The two copies never seen go back. The three held stay held: the count is the listing's, and
+    a take back on the receipt does not clear it.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (h) — take back on the receipt keeps the held count")
+    with _case(checks, "(h) auto-hold: take back keeps the count"), send_portal() as portal, synced_home():
+        stamp = _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        send_routes.do_live_check({"force": True})
+        checks.equal(_held(ARTICUNO_SKU), 3, "PRECONDITION: three copies are held")
+        moved = send_routes.do_take_back(stamp, {"confirm": True})["moved"]
+        checks.equal(moved, 2, "PRECONDITION: the two never-seen copies go back")
+        checks.equal(_held(ARTICUNO_SKU), 3, "(h) TAKE BACK LEAVES THE HELD COUNT STANDING")
+
+
+def check_send_auto_hold_never_resent(checks: Checks) -> None:
+    """(i) A HELD COPY NEVER GOES OUT IN A SEND UNTIL IT IS UNHELD.
+
+    The shape of (d): six copies out, three live, three held. The shelf also holds three cards
+    never listed. Take Back on either send must refuse (nothing is missing), and a send of one
+    more card must not go out, because the held copies still count as out. On a build that
+    reads the drop as missing, Take Back moves a copy and the send re-sends into the room it opens.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (i) — a held copy never goes out in a send until unheld")
+    with _case(checks, "(i) auto-hold: a held copy is not re-sent"), send_portal() as portal, synced_home():
+        r0 = _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 5})
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(r0)["check"]["found"], 5, "PRECONDITION: R0's five copies found")
+        # join=False: a join would read the export's Total Quantity (zero) as a live reading.
+        seam_run(checks, _articuno_cards([6, 7, 8, 9]), join=False)
+        with Store().write() as snapshot:
+            for index in (6, 7, 8, 9):
+                snapshot.inventory.cards[master.position_key(3, index)].sku = ARTICUNO_SKU
+        r1 = _newer_receipt(ARTICUNO_SKU, 1, found=1, reading=3)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({"force": True})
+        checks.equal(_held(ARTICUNO_SKU), 3, "PRECONDITION: three copies are held")
+        for stamp in (r0, r1):
+            try:
+                send_routes.do_take_back(stamp, {"confirm": True})
+            except pipeline_routes.PipelineRefusal:
+                pass  # the held drop is not missing, so a press on either send has nothing to take back
+        run_dir, _ = seam_run(checks, _articuno_cards([7]), live={ARTICUNO_SKU: 3})
+        try:
+            sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+            copies = int(sent.get("copies") or 0)  # the summary's own count of what this send carries
+        except pipeline_routes.PipelineRefusal:
+            copies = 0  # the room is taken: the send refuses, which is the point
+        checks.equal(
+            copies,
+            0,
+            "(i) NO HELD COPY GOES OUT: a send of one more card sends nothing while the held copies count as out",
+        )
+
+
 def check_send_hazards(checks: Checks) -> None:
     """The adversarial review's failures, each against the stand-in portal's own mode.
 
@@ -6655,6 +6953,15 @@ CHECKS = (
     check_send_snapshot_adopted_reading,
     check_send_snapshot_window_reading,
     check_send_snapshot_take_back_take_off,
+    check_send_auto_hold_removed_after_sales,
+    check_send_auto_hold_partial,
+    check_send_auto_hold_later_read,
+    check_send_auto_hold_newer_receipt_reading,
+    check_send_auto_hold_order_sync_older,
+    check_send_auto_hold_open_order_covers,
+    check_send_auto_hold_unhold,
+    check_send_auto_hold_take_back_keeps_count,
+    check_send_auto_hold_never_resent,
     check_send_hazards,
     check_send_review_r3,
     check_send_review_r4,
