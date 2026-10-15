@@ -2776,17 +2776,21 @@ export function Pricing() {
     !liveTab && (barLoading || loaded.length > 0) ? (
       <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send to TCGplayer" aria-busy={barLoading ? 'true' : undefined}>
         {tally}
-        <SendCard
-          runs={loaded}
-          copies={barLoading ? 0 : progress.outCopies}
-          skus={progress.outRows}
-          priceChanges={priceChanges}
-          liveMoves={liveMoves}
-          settled={!dirty && !saving}
-          saveFailed={saveFailed}
-          quantities={quantitiesAsked}
-          onSent={afterSend}
-        />
+        {/* NOTHING IN THE PENDING BAR CAN BE PRESSED: a disabled fieldset turns off every press and door in the
+            card (the card itself is unchanged), so none posts a send over a worklist that has not arrived. */}
+        <fieldset className="pricing-send" disabled={barLoading}>
+          <SendCard
+            runs={loaded}
+            copies={barLoading ? 0 : progress.outCopies}
+            skus={progress.outRows}
+            priceChanges={priceChanges}
+            liveMoves={liveMoves}
+            settled={!dirty && !saving}
+            saveFailed={saveFailed}
+            quantities={quantitiesAsked}
+            onSent={afterSend}
+          />
+        </fieldset>
       </aside>
     ) : liveTab && stamp !== null && readStale ? (
       <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send these prices">
