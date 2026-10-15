@@ -462,7 +462,7 @@ def _reading(store=None) -> Reading:
 def _live_reading(sku: str, listing, parts) -> Tuple[int, Optional[datetime]]:
     """(live figure, when it was read) for the snapshot: the store's figure now.
 
-    THE STORE'S FIGURE STANDS WHETHER IT IS ABOVE OR BELOW THE CHECK'S (R-H1). A figure above the
+    THE STORE'S FIGURE STANDS WHETHER IT IS ABOVE OR BELOW THE CHECK'S (D273 R-S4). A figure above the
     check's, dated after it, is a newer reading. A figure below it is a real drop after the
     check, and `_sku_snapshot` tells a copy the owner removed (held) from a copy that never
     showed (missing) by the credit ledger, so a drop no longer reads as found. A figure the
@@ -583,7 +583,7 @@ def _sku_snapshot(sku: str, reading: Reading) -> Optional[Snapshot]:
     out_there = max(0, int(_baseline(oldest).get(sku, 0)) + sum(sent.values()) - sold - taken - unheld)
     outstanding = min(out_there, len(inventory.copies_on_hand(sku))) - store.ledger.open_quantity(sku)
     gap = max(0, outstanding - live)
-    # THE LEDGER IS THE PROOF OF "SEEN LIVE" (R-H1): a copy a check credited was live once. A gap
+    # THE LEDGER IS THE PROOF OF "SEEN LIVE" (D273 R-S4): a copy a check credited was live once. A gap
     # beyond the copies never credited is the owner's hand removal: held, never missing.
     never_seen = sum(max(0, sent[stamp] - _credited(record, sku, sent[stamp])) for stamp, record in parts)
     missing = min(gap, never_seen)
@@ -2372,13 +2372,14 @@ def _lower_takes(gone: Dict[str, int], live_now: Dict[str, int]) -> None:
 
 
 def _hold_removed(skus) -> None:
-    """Write each SKU's hand-removed copies to its listing (R-H1, R-S4), one store write that also
+    """Write each SKU's hand-removed copies to its listing (D273 R-S4), one store write that also
     judges them, so no Unhold lands between the judgement and the write.
 
     The count is what `_sku_snapshot` judges `removed` NOW, read after this check's receipts are
     written, so a drop since the last check is held and a copy that came back is released. A SKU
     the snapshot cannot judge keeps the count it has. A taken-back receipt still counts the copies
-    it kept (`_kept`), so Take Back never clears a hold (only `do_unhold` does).
+    it kept (`_kept`), so Take Back never clears a hold. Only `do_unhold` clears it, and a check
+    lowers it to the figure it judges.
     """
     with Store().write() as writable:
         reading = _reading(writable)
@@ -2434,7 +2435,7 @@ def _live_check(force: bool) -> dict:
         found_before = int((record.get("check") or {}).get("found", 0))
         prior = (record.get("check") or {}).get("found_by_sku")
         for sku, sent in copies.items():
-            # A CREDIT NEVER FALLS (R-H1): a copy a check saw live was live once, and a read after
+            # A CREDIT NEVER FALLS (D273 R-S4): a copy a check saw live was live once, and a read after
             # the owner took it down must not turn it into a copy that never showed.
             found = max(credits[stamp].get(sku, 0), min(int(sent), int((prior or {}).get(sku, 0))))
             found_total += found

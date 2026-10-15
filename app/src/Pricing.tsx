@@ -3310,7 +3310,7 @@ function PricingRow({
             <LiveCount live={sku.listing.live} soldHere={sku.listing.sold_here} age={readAge} />
           )}
           {(sku.listing?.held_copies ?? 0) <= 0 ? null : (
-            /* R-H2: the copies the owner took down by hand are held, never missing. The caption is
+            /* D273 R-S4: the copies the owner took down by hand are held, never missing. The caption is
                prose; the control beside it is the way back (Unhold), with its own Undo. */
             <span className="pricing-removed">
               {sku.listing?.held_copies} removed by you
