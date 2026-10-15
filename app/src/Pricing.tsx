@@ -3312,7 +3312,7 @@ function PricingRow({
           {(sku.listing?.held_copies ?? 0) <= 0 ? null : (
             /* R-H2: the copies the owner took down by hand are held, never missing. The caption is
                prose; the control beside it is the way back (Unhold), with its own Undo. */
-            <span className="pricing-held">
+            <span className="pricing-removed">
               {sku.listing?.held_copies} removed by you, held
               <Button size="sm" variant="quiet" busy={unholding} disabled={unholding} onClick={onUnhold}>
                 Unhold
