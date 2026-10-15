@@ -4410,22 +4410,45 @@ test('every control that answers a row is on the row, and the caption shares its
   expect(row).toBe(caption)
 })
 
+/** A box once it has stopped moving: two reads in a row agree. Focusing a field scrolls the page to
+ *  it (85px at 1280x720), and that scroll is not an edit, so a case that compares a position reads
+ *  its `before` after the scroll has ended. */
+async function settledBox(target: Locator): Promise<Awaited<ReturnType<Locator['boundingBox']>>> {
+  let last: string | null = null
+  let box: Awaited<ReturnType<Locator['boundingBox']>> = null
+  await expect
+    .poll(async () => {
+      box = await target.boundingBox()
+      const now = JSON.stringify(box)
+      const same = now === last
+      last = now
+      return same
+    })
+    .toBe(true)
+  return box
+}
+
 test('Undo has a fixed place, and U undoes from anywhere on the screen', async ({ page }) => {
   const wire = await open(page)
   const undo = page.getByRole('button', { name: 'Undo' })
   /* DRAWN BEFORE THE FIRST WRITE, AND DISABLED (UX-135): the first answer moves nothing. */
   await expect(undo).toBeDisabled()
-  const before = await undo.boundingBox()
   await field(page).focus()
+  /* THE FOCUS SCROLL IS NOT THE CLAIM: `before` is read after it, so an edit that moves Undo is
+     the only thing that can fail the comparison below. */
+  const before = await settledBox(undo)
   await page.keyboard.type('12.00')
   await page.keyboard.press('Enter')
   await expect.poll(() => sentAnswers(wire)['8608859']).toBe('12.00')
   await expect(undo).toBeEnabled()
   expect(await undo.boundingBox()).toEqual(before)
-  /* U OUTSIDE ANY FIELD (UX-075): the key the tooltip names works where it says. */
+  /* U OUTSIDE ANY FIELD (UX-075): the key the tooltip names works where it says. The click that
+     leaves the field can scroll the page as well, so U is compared against a position read after it. */
   await page.locator(`${VIEW} h1`).click()
+  const beforeU = await settledBox(undo)
   await page.keyboard.press('u')
   await expect.poll(() => sentAnswers(wire)).toEqual({})
+  expect(await undo.boundingBox()).toEqual(beforeU)
 })
 
 test('finding #2 (the Opus review round) — a hold toast\'s own Undo reverses that hold, never whatever a newer answer put on top', async ({
