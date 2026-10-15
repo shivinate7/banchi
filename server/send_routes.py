@@ -76,7 +76,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, NoReturn, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterator, List, NamedTuple, NoReturn, Optional, Sequence, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -367,7 +367,7 @@ def _found_all(record: dict) -> bool:
 #: is about fifty minutes past the first check: a copy still missing then is not the export's
 #: lag (D273 measured forty seconds), and each read is a fetch from TCGplayer for as long as the
 #: app stays open. Past it, a manual "Check what is live" press settles the store but does not
-#: re-record the send's check: the snapshot takes a higher figure from the store
+#: re-record the send's check: the snapshot takes the store's own figure
 #: (`_live_reading`), so copies that show late still read as found.
 RECHECK_LIMIT = 3
 
@@ -444,7 +444,15 @@ def _due(record: dict, now: datetime) -> bool:
 
 #: One request's reading of the snapshot: the receipts (newest first), the store as read, and a cache
 #: of each SKU's figure, so a screen of twenty sends works each SKU out once.
-Reading = Tuple[Sequence[Tuple[str, dict]], Any, Dict[str, Optional[Dict[str, Tuple[int, int]]]]]
+Reading = Tuple[Sequence[Tuple[str, dict]], Any, Dict[str, Optional["Snapshot"]]]
+
+
+class Snapshot(NamedTuple):
+    """One SKU as the snapshot judges it (`_sku_snapshot`): `by_stamp` is stamp -> (copies found,
+    copies to take back), and `removed` is the copies the owner took off TCGplayer by hand (R-S4)."""
+
+    by_stamp: Dict[str, Tuple[int, int]]
+    removed: int
 
 
 def _reading(store=None) -> Reading:
@@ -452,18 +460,19 @@ def _reading(store=None) -> Reading:
 
 
 def _live_reading(sku: str, listing, parts) -> Tuple[int, Optional[datetime]]:
-    """(live figure, when it was read) for the snapshot: the higher of the store's figure now
-    and the one the newest check recorded (`check.reading`).
+    """(live figure, when it was read) for the snapshot: the store's figure now.
 
-    THE HIGHER ONE, BECAUSE ONLY A READING RAISES `live`. `Listing.observe_live` (a live export,
-    from any file: the check's own, `reconcile --live <file>`, an upload, `join`) moves it either
-    way. Every other writer lowers it, sets the check's own export figure (`_lower_takes`), or
-    puts back a figure and date it had (the undo of a release). `Listing.release` lowers it.
-    A sale does not touch it. So a figure above the check's, dated after it, is a newer reading,
-    dated by the store. A figure below it may be no reading, and the check's figure stands,
-    dated by that check. The cost is a real drop after the check: it reads as found, which holds
-    copies out and never sends one twice. A store date not after the check is kept as the date.
-    A SKU no check recorded keeps the store's own figure and date.
+    THE STORE'S FIGURE STANDS WHETHER IT IS ABOVE OR BELOW THE CHECK'S (R-H1). A figure above the
+    check's, dated after it, is a newer reading. A figure below it is a real drop after the
+    check, and `_sku_snapshot` tells a copy the owner removed (held) from a copy that never
+    showed (missing) by the credit ledger, so a drop no longer reads as found. A figure the
+    store holds that no export gave (`Listing.release` stamps one, an undo puts one back) is
+    taken as a reading too: the missing count is capped by the copies never seen live, so such
+    a figure can hold copies out and never offers one it saw.
+
+    The figure the newest check recorded (`check.reading`), unchanged in the store, is dated by
+    that check (F2): an unchanged reading still counts as read after the wait. A store date not
+    after the check is kept as the date. A SKU no check recorded keeps the store's own date.
     """
     mine = [
         (store_clock.parse(record.get("checked_at")), (record["check"].get("reading") or {}).get(sku))
@@ -471,33 +480,33 @@ def _live_reading(sku: str, listing, parts) -> Tuple[int, Optional[datetime]]:
     ]
     mine = [(at, seen) for at, seen in mine if at is not None and seen]
     live, read = int(listing.live), store_clock.parse(listing.live_as_of)
-    if not mine:
-        return live, read
-    at, seen = max(mine, key=lambda item: item[0])
-    if (live, listing.live_as_of) == (int(seen["live"]), seen["as_of"]):
-        return live, at
-    figure = max(live, int(seen["live"]))
-    # A STORE DATE NOT AFTER THE CHECK is a stamp put back (an undo restores one verbatim): it
-    # stands, and the wait gate judges it.
-    if read is None or read <= at or live > int(seen["live"]):
-        return figure, read
-    return figure, at
+    if mine:
+        at, seen = max(mine, key=lambda item: item[0])
+        if (live, listing.live_as_of) == (int(seen["live"]), seen["as_of"]):
+            return live, at
+    return live, read
 
 
-def _sku_snapshot(sku: str, reading: Reading) -> Optional[Dict[str, Tuple[int, int]]]:
-    """THE SNAPSHOT SEND CHECK, one SKU (R-S1, R-S2): stamp -> (copies found, copies to take
-    back) for every receipt that sent it and has been checked past its wait. THE ONE HOME of the
-    figure: `_judge` reads it for the screen, and for the Take Back press inside its store write.
-    None when it cannot judge, and the stored figures stand.
+def _sku_snapshot(sku: str, reading: Reading) -> Optional[Snapshot]:
+    """THE SNAPSHOT SEND CHECK, one SKU (R-S1, R-S2, R-S4): `Snapshot.by_stamp` is stamp -> (copies
+    found, copies to take back) for every receipt that sent it and has been checked past its wait,
+    and `Snapshot.removed` is the copies held as the owner's hand removal. THE ONE HOME of the
+    figure: `_judge` reads it for the screen, and for the Take Back press inside its store write;
+    `_hold_removed` writes `removed` to the listing. None when it cannot judge, and the stored
+    figures stand.
 
     outstanding = min(sent and still on the shelf, shelf unsold) - open-order copies, and
-    missing = max(0, outstanding - live now), per SKU across every receipt still counted out (a
-    taken-back or failed one is not). "Sent and still on the shelf" is what the receipts sent,
+    gap = max(0, outstanding - live now), per SKU across every receipt still counted out (a
+    taken-back or failed one is not). THE GAP SPLITS (R-S4): `missing = min(gap, never_seen)`,
+    where never_seen is the copies no check credited (`_credited`), and the rest is `removed`:
+    copies seen live that left with no sale and no open order, the owner's hand removal. Only
+    `missing` is offered back; `removed` counts as found and is held on the listing. "Sent and still on the shelf" is what the receipts sent,
     plus the copies live when the oldest of them was pressed (`_baseline`: they are TCGplayer's
     too, and a send that did not land must not read as found because of them), less the copies
     sold since that oldest press (`_sold_since`: a copy sold before it is already out of the
     baseline), less the copies a take-off removed since that press, settled or still
-    outstanding (a lapsed take-off never landed). It is built from the receipts and never from
+    outstanding (a lapsed take-off never landed), less the copies the owner unheld since then.
+    It is built from the receipts and never from
     the listing's `pushed`, which is not drawn down when a send lands and cannot see the
     baseline, so no card that was captured and never sent is counted: the shelf only caps it
     from above. The copies found fill the receipts in the ledger's own order (`_tier`, then
@@ -507,7 +516,7 @@ def _sku_snapshot(sku: str, reading: Reading) -> Optional[Dict[str, Tuple[int, i
 
     NOT JUDGED while the reading is no basis (`_live_reading`). It must be dated, and later than
     every receipt's wait. A SKU no check recorded and the store never dated has no reading. A
-    shortfall is also held while the newest order the ledger holds is older than that reading
+    gap is also not judged while the newest order the ledger holds is older than that reading
     (`Ledger.latest_ingest`), and while the ledger is empty, since TCGplayer may have sold the
     copy on an order not yet synced.
     """
@@ -554,12 +563,23 @@ def _sku_snapshot(sku: str, reading: Reading) -> Optional[Dict[str, Tuple[int, i
         and sku not in (other.get("take_lapsed") or [])
         and _press_order(name, other) >= since
     )
-    out_there = max(0, int(_baseline(oldest).get(sku, 0)) + sum(sent.values()) - sold - taken)
+    # COPIES THE OWNER UNHELD are back on the list: no longer out there, so not removed again.
+    unheld = sum(
+        int((other.get("unheld") or {}).get(sku, 0))
+        for name, other in receipts
+        if not other.get("failure") and _press_order(name, other) >= since
+    )
+    out_there = max(0, int(_baseline(oldest).get(sku, 0)) + sum(sent.values()) - sold - taken - unheld)
     outstanding = min(out_there, len(inventory.copies_on_hand(sku))) - store.ledger.open_quantity(sku)
-    missing = max(0, outstanding - live)
+    gap = max(0, outstanding - live)
+    # THE LEDGER IS THE PROOF OF "SEEN LIVE" (R-H1): a copy a check credited was live once. A gap
+    # beyond the copies never credited is the owner's hand removal: held, never missing.
+    never_seen = sum(max(0, sent[stamp] - _credited(record, sku, sent[stamp])) for stamp, record in parts)
+    missing = min(gap, never_seen)
+    removed = gap - missing
     sync = store_clock.parse(store.ledger.latest_ingest())
     # NO SYNC ON RECORD IS NO SYNC KNOWN: an order TCGplayer took may not have reached the ledger.
-    if missing and (sync is None or sync < read):
+    if gap and (sync is None or sync < read):
         return None
     parts.sort(key=lambda item: (_tier(item[1]), _press_order(*item)))
     left = max(0, sum(sent.values()) - missing)
@@ -569,8 +589,8 @@ def _sku_snapshot(sku: str, reading: Reading) -> Optional[Dict[str, Tuple[int, i
         left -= out[stamp][0]
     newest = parts[-1][0]
     out[newest] = (out[newest][0], min(sent[newest], missing))
-    cache[sku] = out
-    return out
+    cache[sku] = Snapshot(out, removed)
+    return cache[sku]
 
 
 def _judge(stamp: str, record: dict, reading: Reading) -> Tuple[dict, Dict[str, int], bool]:
@@ -590,7 +610,8 @@ def _judge(stamp: str, record: dict, reading: Reading) -> Tuple[dict, Dict[str, 
         sent = int(count)
         if sent <= 0:
             continue
-        judged = (_sku_snapshot(sku, reading) or {}).get(stamp)
+        snapshot = _sku_snapshot(sku, reading)
+        judged = None if snapshot is None else snapshot.by_stamp.get(stamp)
         found = _credited(record, sku, sent) if judged is None else judged[0]
         held = held or (judged is None and found < sent)
         if judged is not None and judged[1]:
@@ -1913,6 +1934,52 @@ def do_take_back(stamp: str, payload: dict) -> dict:
     return {"send": _summary(stamp, record, store_clock.now(), _held_stamps()), "moved": moved}
 
 
+def do_unhold(sku: str, payload: dict) -> dict:
+    """`POST /pipeline/held/<sku>/unhold` — the copies the owner removed by hand go back on the list.
+
+    A copy a send check saw live that later left TCGplayer with no sale and no open order is
+    held (R-S4). This press is the way back: it lowers `pushed` by the held copies, the same
+    undo as Take Back (`_bump_back`), so the next worklist offers them, and clears the listing's
+    held count. It also writes the copies on the newest receipt that still counts the SKU out
+    (`unheld`), so the next live check does not hold them again. It takes nothing off TCGplayer.
+    """
+    listing = Store().read().inventory.listings.get(sku)
+    if listing is None or int(listing.held_copies) <= 0:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "nothing_held",
+            "No copy of this card is held. Nothing changed.",
+        )
+    if not bool(payload.get("confirm")):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "confirm_required",
+            "Unholding puts the copies back on the list, so the next send offers them. Confirm it first.",
+        )
+    with Store().write() as writable:
+        entry = writable.inventory.listings.get(sku)
+        count = 0 if entry is None else int(entry.held_copies)
+        if count <= 0:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT, "nothing_held", "These copies were already unheld. Nothing changed."
+            )
+        # THE RECEIPT FIRST, THEN THE STORE (as Take Back): a crash between leaves copies still
+        # counted out and the count cleared at the next check, which never sends one twice.
+        for stamp, record in _receipts():
+            if (
+                not record.get("failure")
+                and not record.get("taken_back_at")
+                and int((record.get("copies") or {}).get(sku, 0)) > 0
+            ):
+                unheld = dict(record.get("unheld") or {})
+                unheld[sku] = int(unheld.get(sku, 0)) + count
+                _write(sends_dir() / stamp, dict(record, unheld=unheld))
+                break
+        moved = _bump_back(writable, {sku: count})
+        entry.held_copies = 0
+    return {"sku": sku, "moved": moved, "unheld": count}
+
+
 def do_dismiss(stamp: str, payload: dict) -> dict:
     """`POST /pipeline/sends/<stamp>/dismiss` — the owner has read a taken-back receipt's warning.
 
@@ -2237,6 +2304,30 @@ def _lower_takes(gone: Dict[str, int], live_now: Dict[str, int]) -> None:
             listing.set(master.LIVE, live_now.get(sku, 0))
 
 
+def _hold_removed(skus) -> None:
+    """Write each SKU's hand-removed copies to its listing (R-H1, R-S4), one store write.
+
+    The count is what `_sku_snapshot` judges `removed` NOW, read after this check's receipts are
+    written, so a drop since the last check is held and a copy that came back is released. A SKU
+    the snapshot cannot judge keeps the count it has; one whose receipts are all taken back is
+    not judged, so Take Back never clears it (only `do_unhold` does).
+    """
+    reading = _reading()
+    held: Dict[str, int] = {}
+    for sku in sorted(skus):
+        judged = _sku_snapshot(sku, reading)
+        listing = reading[1].inventory.listings.get(sku)
+        if judged is not None and listing is not None and int(listing.held_copies) != judged.removed:
+            held[sku] = judged.removed
+    if not held:
+        return
+    with Store().write() as writable:
+        for sku, count in held.items():
+            listing = writable.inventory.listings.get(sku)
+            if listing is not None:
+                listing.held_copies = count
+
+
 def _live_check(force: bool) -> dict:
     now = store_clock.now()
     receipts = _receipts()
@@ -2277,11 +2368,16 @@ def _live_check(force: bool) -> dict:
         copies = sent_by.get(stamp, {})
         missing = []
         found_total = 0
+        found_of: Dict[str, int] = {}
         was_short = state_of(record, now) == "short"
         found_before = int((record.get("check") or {}).get("found", 0))
+        prior = (record.get("check") or {}).get("found_by_sku")
         for sku, sent in copies.items():
-            found = credits[stamp].get(sku, 0)
+            # A CREDIT NEVER FALLS (R-H1): a copy a check saw live was live once, and a read after
+            # the owner took it down must not turn it into a copy that never showed.
+            found = max(credits[stamp].get(sku, 0), min(int(sent), int((prior or {}).get(sku, 0))))
             found_total += found
+            found_of[sku] = found
             if found < sent:
                 missing.append(
                     {
@@ -2297,7 +2393,7 @@ def _live_check(force: bool) -> dict:
             "expected": sum(int(n) for n in copies.values()),
             "missing": missing,
             # THE LEDGER'S ENTRY FOR THIS RECEIPT: what a later check takes off the rise.
-            "found_by_sku": {sku: int(credits[stamp].get(sku, 0)) for sku in sorted(copies)},
+            "found_by_sku": {sku: int(found_of[sku]) for sku in sorted(copies)},
             # THE STORE'S FIGURE AS THE RECONCILE LEFT IT, per SKU: the snapshot
             # (`_live_reading`) dates it by this check. A SKU the reconcile kept is not here.
             "reading": {
@@ -2336,6 +2432,7 @@ def _live_check(force: bool) -> dict:
         checked.append(_summary(stamp, record, now, _held_stamps()))
     for stamp in markdowns:
         _resolve_markdown(stamp, path, now)
+    _hold_removed({sku for copies in sent_by.values() for sku in copies})
 
     return {"ran": True, "export": name, "checked": checked, "console": console}
 

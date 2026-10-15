@@ -1220,6 +1220,13 @@ class Listing:
     # week, and it is the non-held SKU's counterpart to `pipeline/corpus.py:stamp_answers`,
     # which dates an answer only for a card this store holds.
     priced_at: Optional[str] = None
+    # COPIES THE OWNER REMOVED FROM TCGPLAYER BY HAND, per copy (D273, R-S4). A copy a send check
+    # saw live that later dropped from live, with no sale and no open order, is held here: never
+    # missing, never offered back, never re-sent until `server/send_routes.do_unhold` clears it.
+    # NOT A STAGE (`LISTING_STAGES`): `pushed` stays high while copies are held, so the cap still
+    # counts them as out. The live check (`server/send_routes._live_check`) writes it; the
+    # absent key of a row written before this field reads as zero.
+    held_copies: int = 0
 
     @classmethod
     def from_record(cls, record: dict) -> "Listing":

@@ -1917,12 +1917,11 @@ COMPONENTS = [
                                   "or `hold_sku`, or write the `Card` field directly where "
                                   "neither writer can build the fixture's exact state.",
                           "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D22",
-                                          "D23", "D24", "D26", "D28", "D58", "D34", "D36", "D55",
-                                          "D56", "D59", "D63", "D67", "D83", "D87", "D88",
-                                          "D89", "D100", "D115", "D118", "D132", "D145",
-                                          "D164", "D167", "D172", "D173", "D183", "D192", "D213",
-                                          "D253", "D258", "D259", "D264", "D294",
-                                          "D299", "D300"],
+                                          "D23", "D24", "D26", "D28", "D34", "D36", "D55", "D56",
+                                          "D58", "D59", "D63", "D67", "D83", "D87", "D88", "D89",
+                                          "D100", "D115", "D118", "D132", "D145", "D164", "D167",
+                                          "D172", "D173", "D183", "D192", "D213", "D253", "D258",
+                                          "D259", "D264", "D273", "D294", "D299", "D300"],
                                           "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
