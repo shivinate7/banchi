@@ -3623,8 +3623,8 @@ test('a figure typed on a row rides the send keyed by that SKU, the deck counts 
   /* THE DECK FOLLOWS THE FIELD, before anything is pressed: one fewer copy would go, and the
      sentence says a card is at a figure typed by hand — which is the account the operator reads
      before deciding to press. */
-  await expect(page.locator('[data-tile="ready"]')).toContainText(`${copiesBefore - 1} ready to go`)
-  await expect(page.locator('[data-tile="priced"]')).toContainText('1 typed')
+  await expect(page.locator('[data-tile="ready"]')).toContainText(new RegExp(`\\b${copiesBefore - 1} ready to go`))
+  await expect(page.locator('[data-tile="priced"]')).toContainText(/\b1 typed/)
 
   await sendPress(page).click()
   await expect.poll(() => sendPosts(wire).length).toBe(1)
@@ -3663,14 +3663,14 @@ test('a figure past what can go is clamped on the way out, 0 takes the row out o
 
   /* ZERO IS A REAL ANSWER and the row leaves the count of rows that would go, without a hold. */
   await leblanc.fill('0')
-  await expect(page.locator('[data-tile="ready"]')).toContainText(`${copiesBefore - 3} ready to go`)
-  await expect(page.locator('[data-tile="priced"]')).toContainText('1 typed')
+  await expect(page.locator('[data-tile="ready"]')).toContainText(new RegExp(`\\b${copiesBefore - 3} ready to go`))
+  await expect(page.locator('[data-tile="priced"]')).toContainText(/\b1 typed/)
 
   /* ESCAPE PUTS ONE ROW BACK, the way it puts a price field back. */
   await leblanc.focus()
   await leblanc.press('Escape')
   await expect(leblanc).toHaveValue('')
-  await expect(page.locator('[data-tile="ready"]')).toContainText(`${copiesBefore} ready to go`)
+  await expect(page.locator('[data-tile="ready"]')).toContainText(new RegExp(`\\b${copiesBefore} ready to go`))
   await expect(dunsparce).toHaveValue('')
 })
 
@@ -4283,7 +4283,7 @@ test('the screen is on its own route, on the kit page, and draws the run it was 
   await expect(page.locator(`${VIEW} h1`)).toHaveText('Pricing')
   await expect(page.locator('.pricing-row')).toHaveCount(1)
   /* THE SLIM BAR IS THE VERDICT (D277, Q4): what is ready, in one sentence, beside the press. */
-  await expect(page.locator('[data-tile="ready"]')).toContainText('3 ready to go')
+  await expect(page.locator('[data-tile="ready"]')).toContainText(/\b3 ready to go/)
   /* THE RULE AND THE CUT-OFF ARE ONE LINE (Q5), and the figure is stated once. */
   const line = page.locator('.pricing-rule-line')
   await expect(line).toContainText('New cards list at market')
@@ -4324,11 +4324,11 @@ test('the rows that need the owner come first, each with its reason, and the res
   await expect(flags.nth(0)).toHaveText('100% over market')
   await expect(page.locator('.pricing-group').nth(1).locator('.pricing-flag')).toHaveCount(0)
   /* THE BAR NAMES WHAT STAYS BACK (Q3). */
-  await expect(page.locator('[data-tile="priced"]')).toContainText('1 still need a price')
+  await expect(page.locator('[data-tile="priced"]')).toContainText(/\b1 still need a price/)
   /* AND ITS COPIES ARE NOT READY (the delta review, R3-1): four rows of three copies go, the
      unpriced row's three do not. The bar and the press both say twelve, which is what the file
      will carry. */
-  await expect(page.locator('[data-tile="ready"]')).toContainText('12 ready to go')
+  await expect(page.locator('[data-tile="ready"]')).toContainText(/\b12 ready to go/)
   await expect(sendPress(page)).toHaveText(/^Send all 4 SKUs to TCGplayer$/i)
 })
 
@@ -4385,7 +4385,7 @@ test('Held shows only the held rows, and its count is the bar’s count', async 
     skus: [sku({ sku: '1', name: 'Articuno' }), sku({ sku: '2', name: 'Dunsparce' })],
     decisions: { rule: 'match', basis: 'market', overrides: { '2': { withheld: 'bullish' } } },
   })
-  await expect(page.locator('[data-tile="held"]')).toContainText('1 held back')
+  await expect(page.locator('[data-tile="held"]')).toContainText(/\b1 held back/)
   const held = page.getByRole('button', { name: 'Held 1' })
   await held.click()
   await expect(held).toHaveAttribute('aria-pressed', 'true')
@@ -4823,7 +4823,7 @@ test('with nothing ready, the send press is disabled', async ({ page }) => {
     skus: [sku({ sku: '5', name: 'Unpriced', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
     decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: {} },
   })
-  await expect(page.locator('[data-tile="priced"]')).toContainText('1 still need a price')
+  await expect(page.locator('[data-tile="priced"]')).toContainText(/\b1 still need a price/)
   await expect(page.locator('.send-press')).toBeDisabled()
 })
 
@@ -5029,7 +5029,7 @@ test('F3: the held count on the button and in the bar are one number, a sent row
     decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608459': { withheld: 'keeping' }, '8608460': { withheld: 'bullish' } } },
   })
   await expect(page.getByRole('button', { name: 'Held 2' })).toBeVisible()
-  await expect(page.locator('[data-tile="held"]')).toContainText('2 held back')
+  await expect(page.locator('[data-tile="held"]')).toContainText(/\b2 held back/)
 })
 
 test('every pricing row waits min(i, cap) * the one shared stagger', async ({ page }) => {
@@ -6136,9 +6136,9 @@ test('send tiles: three tiles on the Unsent tab carry 3 ready, 19 held and 541 a
     decisions: { rule: 'match', basis: 'market', overrides: holding(held) },
   })
 
-  await expect(tile(page, 'ready')).toContainText('3 ready to go')
-  await expect(tile(page, 'ready')).toContainText('Joins 541 already in your store')
-  await expect(tile(page, 'held')).toContainText('19 held back')
+  await expect(tile(page, 'ready')).toContainText(/\b3 ready to go/)
+  await expect(tile(page, 'ready')).toContainText(/\bJoins 541 already in your store/)
+  await expect(tile(page, 'held')).toContainText(/\b19 held back/)
   await expect(tile(page, 'held')).toContainText('Not in this send.')
   await expect(tile(page, 'priced')).toContainText('Every card is priced')
   await expect(tile(page, 'priced')).not.toHaveAttribute('data-tone', 'warn')
@@ -6150,7 +6150,7 @@ test('send tiles: the priced tile turns amber and offers Price Them while rows s
   await open(page, { skus: Array.from({ length: 12 }, (_, i) => unpricedRow(i + 1)), decisions: NO_PRICE_DECISIONS })
 
   const priced = tile(page, 'priced')
-  await expect(priced).toContainText('12 still need a price')
+  await expect(priced).toContainText(/\b12 still need a price/)
   await expect(priced).toHaveAttribute('data-tone', 'warn')
   await expect(priced.locator('a, button', { hasText: /^Price Them$/ })).toBeVisible()
   await expect(tile(page, 'ready')).not.toContainText(/[1-9]\d* ready to go/)
@@ -6191,7 +6191,7 @@ test('send tiles: the held tile opens the Held filter, and the list keeps only t
     skus: [sku({ sku: '1', name: 'Articuno' }), sleeper],
     decisions: { rule: 'match', basis: 'market', overrides: holding([sleeper]) },
   })
-  await expect(tile(page, 'held')).toContainText('1 held back')
+  await expect(tile(page, 'held')).toContainText(/\b1 held back/)
 
   await tile(page, 'held').locator('a, button').first().click()
 
