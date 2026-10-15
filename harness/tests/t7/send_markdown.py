@@ -3104,7 +3104,14 @@ def check_send_auto_hold_two_receipts_take_back(checks: Checks) -> None:
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
         send_routes.do_live_check({})
         checks.equal(_banner_send(r0)["check"]["found"], 2, "PRECONDITION: R0's two copies found")
-        r1 = _press_and_age(checks, portal, _articuno_cards([3, 4, 5, 6, 7]), {ARTICUNO_SKU: 2})
+        # A DIFFERENT BOX FOR THE SECOND RUN, as in the shared-SKU case: box 3 holds R0's cards and
+        # its registry entry is stamped in the second R1 starts, so `box_disowns_run` refuses R1.
+        r1 = _press_and_age(
+            checks,
+            portal,
+            [(4, index, "Articuno", "161", None) for index in range(1, 6)],
+            {ARTICUNO_SKU: 2},
+        )
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 5})
         send_routes.do_live_check({"force": True})
         checks.equal(_banner_send(r1)["check"]["found"], 3, "PRECONDITION: R1's five copies, three found")
