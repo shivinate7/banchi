@@ -6402,3 +6402,16 @@ test('send tiles: Price Them after a search and a game facet clears both, and sh
   const names = await page.locator('.pricing-name').allTextContents()
   expect(names.sort()).toEqual(['Poro Snax', 'Void Assault'])
 })
+
+test('send tiles: while the worklist loads, Download and the press cannot be pressed, and no refusal line appears', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const wire = await open(page, { pricingDelayMs: 5000, skus: [pricedRow(1)], decisions: NO_PRICE_DECISIONS })
+  /* THE WORKLIST IS STILL IN FLIGHT: the bar is drawn, and no row is. */
+  await expect(page.locator('[data-tile]')).toHaveCount(3)
+  await expect(page.locator('.pricing-row')).toHaveCount(0)
+
+  await expect(page.locator('.send-door', { hasText: /^Download$/ }), 'Download is off while the worklist loads').toBeDisabled()
+  await expect(page.locator('.send-press'), 'the press is off while the worklist loads').toBeDisabled()
+  expect(sendPosts(wire), 'no send is posted while the worklist loads').toHaveLength(0)
+  await expect(page.getByText('did not take the send'), 'no refusal line while the worklist loads').toHaveCount(0)
+})
