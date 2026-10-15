@@ -1,4 +1,4 @@
-## DEBT-unhold-receipt-before-store — an Unhold whose store write fails leaves copies off the list with no control
+## DEBT87 — an Unhold whose store write fails leaves copies off the list with no control
 
 **`send_routes._unhold` writes the receipt before the store, so a failed store write splits the two records.** The receipt keeps `unheld`. The listing keeps `held_copies` and `pushed`, and neither is lowered.
 
