@@ -722,9 +722,10 @@ def _receipts() -> List[Tuple[str, dict]]:
     return out
 
 
-def _held_stamps() -> frozenset:
+def _held_stamps(store=None) -> frozenset:
     """The stamps whose claim is still live: a send in flight, or one whose outcome is unknown."""
-    return frozenset(claim.stamp for claim in Store().read().send_claims.live(strict=False))
+    store = Store().read() if store is None else store
+    return frozenset(claim.stamp for claim in store.send_claims.live(strict=False))
 
 
 def _release(stamp: str, by: str) -> None:
@@ -1733,13 +1734,14 @@ def do_sends() -> dict:
     """
     now = store_clock.now()
     receipts = _receipts()
-    held = _held_stamps()
+    store = Store().read()  # ONE READ per call: the held stamps and the snapshot both use it
+    held = _held_stamps(store)
     # A RECEIPT STILL CARRYING A WARNING IS LISTED WHATEVER ITS AGE: the warning goes when the
     # owner dismisses it, never because twenty newer sends pushed it off the list.
     listed = receipts[:SENDS_SHOWN] + [
         (stamp, record) for stamp, record in receipts[SENDS_SHOWN:] if _warning(record)
     ]
-    reading = (receipts, Store().read(), {})
+    reading = (receipts, store, {})
     shown = [_summary(stamp, record, now, held, reading) for stamp, record in listed]
     unconfirmed = [
         (stamp, record)
