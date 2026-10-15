@@ -6093,3 +6093,158 @@ test('ux-wave1: the Send button does not move when the last-send warning arrives
   const later = await send.boundingBox()
   expect(Math.abs((later?.y ?? -1e9) - (first?.y ?? 1e9)), `Send top moved from ${first?.y}px to ${later?.y}px when the warning landed`).toBeLessThanOrEqual(1)
 })
+
+/* ---- THE SEND BAR'S STATUS TILES (the owner's Preflight pick) ------------------------------------
+ * The bar says where pricing stands in three tiles, not one line of prose. The hooks this block
+ * reads, named so the build and this file agree:
+ *   [data-tile="priced" | "held" | "ready"]  one tile each, inside the send bar, on the Unsent tab
+ *   [data-tone="warn"]                        on the priced tile, while rows still need a price
+ * The actions are found by their words: "Price Them" on the priced tile, and the held tile's one
+ * control, which opens the existing Held filter (the `Held N` chip). Counts are read off each
+ * tile's own text. */
+const tile = (page: Page, which: 'priced' | 'held' | 'ready') => page.locator(`[data-tile="${which}"]`)
+const pricedRow = (n: number) => sku({ sku: String(200 + n), name: `Priced ${n}` })
+const unpricedRow = (n: number) =>
+  sku({
+    sku: String(100 + n),
+    name: `Unpriced ${n}`,
+    bucket: 'no_market_data',
+    snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null },
+  })
+const heldRow = (n: number) => sku({ sku: String(300 + n), name: `Sleeper ${n}` })
+/** The answer that holds each given row, the same `withheld` answer the Held cases above write. */
+const holding = (rows: PricingSku[]) => Object.fromEntries(rows.map((row) => [row.sku, { withheld: 'bullish' }]))
+/** No market price on any row and no answer, so nothing is ready and nothing is held. */
+const NO_PRICE_DECISIONS = { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: {} }
+
+test('send tiles: three tiles on the Unsent tab carry 3 ready, 19 held and 541 already in the store', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  /* "Joins M already in your store" takes M from the bar's own "N sent" figure, which is the
+     count of rows at the cap (`Pricing.tsx`, `progress.closed`). 541 rows at the cap make 541. */
+  const capped = Array.from({ length: 541 }, (_, i) =>
+    sku({
+      sku: String(10000 + i),
+      name: `Listed ${i + 1}`,
+      at_cap: true,
+      add_to_quantity: 0,
+      nothing_to_add: 'Every copy in this run is already listed or has left the box.',
+    }),
+  )
+  const held = Array.from({ length: 19 }, (_, i) => heldRow(i + 1))
+  await open(page, {
+    skus: [sku({ sku: '1', name: 'Ready Card' }), ...held, ...capped],
+    decisions: { rule: 'match', basis: 'market', overrides: holding(held) },
+  })
+
+  await expect(tile(page, 'ready')).toContainText('3 ready to go')
+  await expect(tile(page, 'ready')).toContainText('Joins 541 already in your store')
+  await expect(tile(page, 'held')).toContainText('19 held back')
+  await expect(tile(page, 'held')).toContainText('Not in this send.')
+  await expect(tile(page, 'priced')).toContainText('Every card is priced')
+  await expect(tile(page, 'priced')).not.toHaveAttribute('data-tone', 'warn')
+  await expect(tile(page, 'priced').locator('a, button', { hasText: /^Price Them$/ })).toHaveCount(0)
+})
+
+test('send tiles: the priced tile turns amber and offers Price Them while rows still need a price', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { skus: Array.from({ length: 12 }, (_, i) => unpricedRow(i + 1)), decisions: NO_PRICE_DECISIONS })
+
+  const priced = tile(page, 'priced')
+  await expect(priced).toContainText('12 still need a price')
+  await expect(priced).toHaveAttribute('data-tone', 'warn')
+  await expect(priced.locator('a, button', { hasText: /^Price Them$/ })).toBeVisible()
+  await expect(tile(page, 'ready')).not.toContainText(/[1-9]\d* ready to go/)
+
+  /* AMBER IS THE WARN TOKEN, read off the tile's paint whatever property carries it: the mock
+     tints the background and draws the edge in `--bn-warn`. Both are resolved in this page's
+     theme, so the case reads the right pair in light and in dark. */
+  const paint = await priced.evaluate((el) => {
+    const style = getComputedStyle(el)
+    return [style.backgroundColor, style.borderTopColor, style.boxShadow].join(' ')
+  })
+  const amber = [await tokenColor(page, '--bn-warn'), await tokenColor(page, '--bn-warn-tint')]
+  expect(
+    amber.some((color) => paint.includes(color)),
+    `the priced tile carries no warn token: ${paint}`,
+  ).toBe(true)
+})
+
+test('send tiles: Price Them filters the list to the rows that owe a price', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, {
+    skus: [pricedRow(1), pricedRow(2), unpricedRow(1), unpricedRow(2), unpricedRow(3)],
+    decisions: NO_PRICE_DECISIONS,
+  })
+  await expect(page.locator('.pricing-row')).toHaveCount(5)
+
+  await tile(page, 'priced').locator('a, button', { hasText: /^Price Them$/ }).click()
+
+  await expect(page.locator('.pricing-row')).toHaveCount(3)
+  const names = await page.locator('.pricing-name').allTextContents()
+  expect(names.sort()).toEqual(['Unpriced 1', 'Unpriced 2', 'Unpriced 3'])
+})
+
+test('send tiles: the held tile opens the Held filter, and the list keeps only the held rows', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const sleeper = heldRow(1)
+  await open(page, {
+    skus: [sku({ sku: '1', name: 'Articuno' }), sleeper],
+    decisions: { rule: 'match', basis: 'market', overrides: holding([sleeper]) },
+  })
+  await expect(tile(page, 'held')).toContainText('1 held back')
+
+  await tile(page, 'held').locator('a, button').first().click()
+
+  await expect(page.getByRole('button', { name: 'Held 1' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.pricing-name')).toHaveText(['Sleeper 1'])
+})
+
+test('send tiles: the bar holds its height from first paint to the loaded worklist (D313)', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const sleeper = heldRow(1)
+  await open(page, {
+    pricingDelayMs: 5000,
+    skus: [pricedRow(1), sleeper],
+    decisions: { rule: 'match', basis: 'market', overrides: holding([sleeper]) },
+  })
+  /* THE WORKLIST IS STILL IN FLIGHT: the three tiles are drawn, and no row is yet. The order is
+     the point. A build that drew the tiles only once the rows arrived would pass the count and
+     fail the row check. */
+  await expect(page.locator('[data-tile]'), 'three tiles are drawn at first paint').toHaveCount(3)
+  await expect(page.locator('.pricing-row'), 'no row is drawn at first paint').toHaveCount(0)
+  const first = await page.locator('.pricing-bar').boundingBox()
+  expect(first, 'the send bar is drawn at first paint').not.toBeNull()
+
+  await expect(page.locator('.pricing-row').first()).toBeVisible()
+  await settleMotion(page)
+  const loaded = await page.locator('.pricing-bar').boundingBox()
+  expect(loaded, 'the send bar is still drawn once loaded').not.toBeNull()
+  expect(
+    Math.abs(loaded!.height - first!.height),
+    `the bar moved from ${first!.height}px to ${loaded!.height}px when the worklist landed`,
+  ).toBeLessThanOrEqual(1)
+})
+
+for (const width of [1440, 820]) {
+  test(`send tiles: at ${width} the bar ends above the list, and no tile covers a row`, async ({ page }) => {
+    await setViewport(page, { width, height: 900 })
+    const sleeper = heldRow(1)
+    await open(page, {
+      skus: [pricedRow(1), pricedRow(2), unpricedRow(1), sleeper],
+      decisions: { rule: 'match', basis: 'market', overrides: holding([sleeper]) },
+    })
+    const bar = await page.locator('.pricing-bar').boundingBox()
+    const list = await page.locator('.pricing-group').first().boundingBox()
+    const row = await page.locator('.pricing-row').first().boundingBox()
+    expect(bar, 'the send bar is drawn').not.toBeNull()
+    expect(list, 'the list is drawn').not.toBeNull()
+    expect(row, 'a row is drawn').not.toBeNull()
+    expect(bar!.y + bar!.height, 'the bar ends above the list').toBeLessThanOrEqual(list!.y)
+    expect(row!.y + row!.height, 'the first row is in view below the bar').toBeLessThanOrEqual(900)
+    for (const which of ['priced', 'held', 'ready'] as const) {
+      const box = await tile(page, which).boundingBox()
+      expect(box, `the ${which} tile is drawn`).not.toBeNull()
+      expect(box!.y + box!.height, `the ${which} tile ends above the list`).toBeLessThanOrEqual(list!.y)
+    }
+  })
+}
