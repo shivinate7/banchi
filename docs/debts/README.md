@@ -80,4 +80,5 @@ DEBT83 Off-screen rail tiles still cost a little per capture
 DEBT84 The public demo's first screen is heavier than its budget
 DEBT85 The read-budget check proves some routes on their miss path only
 DEBT86 Capabilities written twice that have not drifted yet
+DEBT87 an Unhold whose store write fails leaves copies off the list with no control
 ```

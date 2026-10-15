@@ -36,6 +36,8 @@ import {
   type Failure,
   failureTone,
   refusalToast,
+  unholdCopies,
+  reholdCopies,
 } from './server'
 import type {
   DecisionsDocument,
@@ -2115,6 +2117,40 @@ export function Pricing() {
     [answerFor, write, writeMany, openHold],
   )
 
+  /* COPIES THE OWNER REMOVED FROM TCGPLAYER BY HAND (D273, R-S4). Unhold puts them back on the
+   * list; its toast's Undo holds them again, and the server refuses that once a send has gone. */
+  const [unholding, setUnholding] = useState<string | null>(null)
+  const unhold = useCallback(
+    async (sku: PricingSku) => {
+      setUnholding(sku.sku)
+      try {
+        const done = await unholdCopies(sku.sku)
+        reload()
+        toast({
+          kind: 'receipt',
+          title: `Unheld ${done.unheld} ${done.unheld === 1 ? 'copy' : 'copies'} of ${sku.name}`,
+          body: 'They go out with the next send.',
+          ttlMs: 8000,
+          action: {
+            label: 'Undo',
+            onPress: () =>
+              void reholdCopies(sku.sku, done.unheld, done.pushed)
+                .then(() => {
+                  reload()
+                  toast({ kind: 'ok', title: `Held ${sku.name} again` })
+                })
+                .catch((err: unknown) => toast({ ...refusalToast(err, `Could not hold ${sku.name} again`) })),
+          },
+        })
+      } catch (err) {
+        toast({ ...refusalToast(err, `Could not unhold ${sku.name}`) })
+      } finally {
+        setUnholding(null)
+      }
+    },
+    [reload],
+  )
+
   const closeHold = useCallback(() => {
     const at = holdFor
     setHoldFor(null)
@@ -2982,6 +3018,8 @@ export function Pricing() {
                     }}
                     onPhoto={() => openPhoto(sku)}
                     onHold={() => toggleHold(sku)}
+                    onUnhold={() => void unhold(sku)}
+                    unholding={unholding === sku.sku}
                     onKey={(event) => onKey(event, sku)}
                     onCommit={(value) => commit(sku, value)}
                     onFirstKey={() => {
@@ -3143,6 +3181,8 @@ function PricingRow({
   onHover,
   onPhoto,
   onHold,
+  onUnhold,
+  unholding,
   onKey,
   onCommit,
   onFirstKey,
@@ -3170,6 +3210,9 @@ function PricingRow({
   onHover: (on: boolean) => void
   onPhoto: () => void
   onHold: () => void
+  /** Put the copies the owner removed by hand back on the list. */
+  onUnhold: () => void
+  unholding: boolean
   onKey: (event: ReactKeyboardEvent<HTMLInputElement>) => void
   onCommit: (value: string) => void
   onFirstKey: () => boolean
@@ -3265,6 +3308,16 @@ function PricingRow({
           )}
           {sku.listing === null || (sku.listing.live ?? 0) === 0 ? null : (
             <LiveCount live={sku.listing.live} soldHere={sku.listing.sold_here} age={readAge} />
+          )}
+          {(sku.listing?.held_copies ?? 0) <= 0 ? null : (
+            /* D273 R-S4: the copies the owner took down by hand are held, never missing. The caption is
+               prose; the control beside it is the way back (Unhold), with its own Undo. */
+            <span className="pricing-removed">
+              {sku.listing?.held_copies} removed by you
+              <Button size="sm" variant="quiet" busy={unholding} disabled={unholding} onClick={onUnhold}>
+                Unhold
+              </Button>
+            </span>
           )}
           {why === null ? null : <span className="pricing-why">“{why}”</span>}
         </span>
