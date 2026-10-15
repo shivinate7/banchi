@@ -2734,7 +2734,7 @@ def check_send_snapshot_take_back_take_off(checks: Checks) -> None:
         )
 
 
-# ------------------------------------------------------------------ auto-hold (R-H1, R-H2)
+# ------------------------------------------------------------------ auto-hold (D273 R-S4)
 #
 # A copy seen live at a send check, which later drops from live with no sale and no open order,
 # is the owner's hand removal. Banchi holds it: never missing, never offered back, never re-sent
