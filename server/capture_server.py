@@ -112,6 +112,8 @@
     GET    /pipeline/sends                 every send's receipt, what is written and not
                                            confirmed, and whether the live check is due
     POST   /pipeline/sends/<stamp>/take-back   a written file's copies back on the list
+    POST   /pipeline/held/<sku>/unhold     copies the owner removed by hand go back on the list
+    POST   /pipeline/held/<sku>/hold       the way back from unhold: hold those copies again
     POST   /pipeline/sends/<stamp>/dismiss     the owner has read a taken-back receipt's
                                                warning, so the card stops drawing it
     POST   /pipeline/sends/unreadable/<key>/release   free a live send claim the store cannot
@@ -749,6 +751,7 @@ _MARKDOWN_SEND_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/send$"
 # THE SHAPE IS `send_routes.STAMP_SHAPE`, never a copy of it: a copy typed here missed the random
 # tail every press has written since round 2, and matched no new receipt.
 _SEND_TAKE_BACK_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/take-back$")
+_HELD_RE = re.compile(r"^/pipeline/held/([A-Za-z0-9._-]+)/(unhold|hold)$")
 _SEND_DISMISS_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/dismiss$")
 _SEND_UNREADABLE_RE = re.compile(r"^/pipeline/sends/unreadable/([A-Za-z0-9._-]+)/(release|restore)$")
 _SEND_FILE_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/file$")
@@ -17114,6 +17117,12 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, send_routes.do_take_back(match.group(1), self._body())
                 )
+            match = _HELD_RE.match(path)
+            if match:
+                # The copies the owner removed from TCGplayer by hand (D273, R-S4): `unhold` puts
+                # them back on the list; `hold` is the way back from that press.
+                handler = send_routes.do_unhold if match.group(2) == "unhold" else send_routes.do_rehold
+                return self._json(HTTPStatus.OK, handler(match.group(1), self._body()))
             match = _SEND_UNREADABLE_RE.match(path)
             if match:
                 # DEBT59: free a live send claim the store cannot read, and the way back.

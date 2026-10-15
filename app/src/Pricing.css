@@ -228,6 +228,7 @@
    what the line has left, up to its own cap, so a note never adds a line where the facts fit. */
 .pricing-where > .pricing-why { flex: 1 1 0; min-width: 6ch; }
 .pricing-copies { font-weight: 600; color: var(--bn-ink-2); }
+.pricing-held { display: inline-flex; align-items: center; gap: var(--bn-2); color: var(--bn-ink-2); }
 .pricing-live { color: var(--bn-ink-2); }
 .pricing-live[data-none='true'] { color: var(--bn-ink-3); }
 .pricing-why { font-style: italic; color: var(--bn-ink-2); max-width: 24ch; overflow: hidden; text-overflow: ellipsis; }

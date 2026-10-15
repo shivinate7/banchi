@@ -2955,6 +2955,25 @@ export async function takeBackSend(stamp: string): Promise<{ send: SendSummary; 
   })) as { send: SendSummary; moved: number }
 }
 
+/** Copies the owner removed from TCGplayer by hand go back on the list (`POST /pipeline/held/<sku>/unhold`).
+ *  The answer carries what `reholdCopies` needs to take it back. */
+export async function unholdCopies(sku: string): Promise<{ sku: string; moved: number; unheld: number; pushed: number }> {
+  return (await request(`/pipeline/held/${encodeURIComponent(sku)}/unhold`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as { sku: string; moved: number; unheld: number; pushed: number }
+}
+
+/** The way back from `unholdCopies`: hold those copies again. Refused once a send has gone since. */
+export async function reholdCopies(sku: string, copies: number, pushed: number): Promise<{ sku: string; held: number }> {
+  return (await request(`/pipeline/held/${encodeURIComponent(sku)}/hold`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true, copies, pushed }),
+  })) as { sku: string; held: number }
+}
+
 /** Free a live send record the server cannot read, by key (DEBT59). `restoreUnreadableClaim` undoes it. */
 export async function releaseUnreadableClaim(key: string): Promise<{ released: UnreadableClaim; status: SendsStatus }> {
   return (await request(`/pipeline/sends/unreadable/${encodeURIComponent(key)}/release`, {

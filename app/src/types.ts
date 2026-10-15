@@ -2518,7 +2518,7 @@ export type PricingSku = {
    *
    *  NEVER READ IT BARE. `cardState.ts:forSale` takes the pair and `soldSince` takes this
    *  one; both coerce, and the `?` here is what makes the compiler say so. */
-  listing: { pushed: number; staged: number; live: number; sold_here?: number } | null
+  listing: { pushed: number; staged: number; live: number; sold_here?: number; held_copies?: number } | null
   /** What TCGplayer holds now, off the NEWEST live export on disk, or null when none was
    *  ever fetched (round 7, R6-1). Every send and every check writes one, so this is minutes
    *  old where `snap.now` is the join's. A price change and a move of live copies are named

@@ -3833,6 +3833,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
                     "staged": int(entry.staged),
                     "live": int(entry.live),
                     "sold_here": int(entry.sold_here),
+                    "held_copies": int(entry.held_copies),
                 }
         row["over_cap"] = claimed > row["add_to_quantity"]
         # A MERGED ROW THAT CAN ADD MUST NOT CARRY ONE RUN'S REASON FOR ADDING NOTHING.

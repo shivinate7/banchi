@@ -1977,7 +1977,39 @@ def do_unhold(sku: str, payload: dict) -> dict:
                 break
         moved = _bump_back(writable, {sku: count})
         entry.held_copies = 0
-    return {"sku": sku, "moved": moved, "unheld": count}
+    return {"sku": sku, "moved": moved, "unheld": count, "pushed": int(entry.pushed)}
+
+
+def do_rehold(sku: str, payload: dict) -> dict:
+    """`POST /pipeline/held/<sku>/hold` — the way back from Unhold: the copies it put on the list
+    are held again.
+
+    It is offered with the figure `do_unhold` answered (`copies`, and `pushed` after the unhold).
+    A send since then raised `pushed`: those copies may have gone, so the press refuses and
+    changes nothing. Otherwise it raises `pushed` by the copies, sets the held count and takes
+    them off the receipt's `unheld`, so the next live check judges them held as before.
+    """
+    copies = int(payload.get("copies") or 0)
+    if not bool(payload.get("confirm")) or copies <= 0:
+        raise PipelineRefusal(HTTPStatus.BAD_REQUEST, "confirm_required", "Name the copies and confirm to hold them again.")
+    with Store().write() as writable:
+        entry = writable.inventory.listings.get(sku)
+        if entry is None or int(entry.pushed) != int(payload.get("pushed", -1)):
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT,
+                "send_since",
+                "A send went out since, so these copies may have gone. Nothing changed.",
+            )
+        for stamp, record in _receipts():
+            if int((record.get("unheld") or {}).get(sku, 0)) >= copies:
+                unheld = dict(record["unheld"], **{sku: int(record["unheld"][sku]) - copies})
+                _write(sends_dir() / stamp, dict(record, unheld=unheld))
+                break
+        else:
+            raise PipelineRefusal(HTTPStatus.CONFLICT, "not_unheld", "No unhold of these copies is on record. Nothing changed.")
+        entry.bump(master.PUSHED, copies)
+        entry.held_copies = int(entry.held_copies) + copies
+    return {"sku": sku, "held": copies}
 
 
 def do_dismiss(stamp: str, payload: dict) -> dict:
