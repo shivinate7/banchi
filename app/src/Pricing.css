@@ -42,6 +42,19 @@
   font-weight: 600;
   color: var(--bn-ink);
 }
+/* TWO ROWS (the owner's ruling): the three tiles take the first row whole, the press and its two doors the second.
+   The tiles wrap only where the column is too narrow for three side by side. */
+.pricing-tally {
+  flex: 1 1 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--bn-2);
+}
+.pricing-bar:has(.pricing-tally) .send-card { flex: 1 1 100%; }
+/* THE DOORS ARE DRAWN ABOVE A PHONE (Q4): the row under the tiles has the room, so More is for the phone alone. */
+.pricing-bar:has(.pricing-tally) .send-more-press { display: none; }
+.pricing-bar:has(.pricing-tally) .send-act:not([data-more='open']) .send-door { display: inline-flex; }
 /* THE CARD TAKES WHAT THE SAYS LINE LEAVES (basis 0), so a notice under the press never decides whether
    the line wraps above it: the press holds its place whatever the status says (D313). */
 .pricing-bar .send-card { flex: 1 1 0; min-width: 0; }
@@ -495,8 +508,10 @@
     border-bottom: 0;
     box-shadow: var(--bn-shadow-2);
   }
-  .pricing-bar-says { display: none; }
-  .pricing-bar .send-card { flex: 1 1 auto; }
+  .pricing-bar-says, .pricing-tally { display: none; }
+  .pricing-bar:has(.pricing-tally) .send-more-press { display: inline-flex; }
+  .pricing-bar:has(.pricing-tally) .send-act:not([data-more='open']) .send-door { display: none; }
+  .pricing-bar .send-card, .pricing-bar:has(.pricing-tally) .send-card { flex: 1 1 auto; }
   .pricing-body { padding-bottom: calc(var(--pricing-bar-h, 0px) + var(--bn-4)); }
   /* FINDING #9 (the Opus review round, re-fixed in the delta review): at 390 the fixed
      `.pricing-bar` sits above the phone tab bar, and a toast's own default `bottom` put its

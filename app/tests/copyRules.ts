@@ -179,6 +179,20 @@ export function statProblems(text: string, press: boolean): string[] {
   return press ? casingProblems(text) : []
 }
 
+/** A tile's lead, graded as a sentence: the first word is capitalized and no later word is Title Case (`Every Card Is Priced`
+ *  fails; `Every card is priced` passes). A word in capitals (`SKU`) or with a capital inside (`TCGplayer`) is a name, not read. */
+export function sentenceProblems(text: string): string[] {
+  const problems: string[] = []
+  const words = text.trim().split(/\s+/).filter((word) => word !== '')
+  words.forEach((word, index) => {
+    const core = word.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '')
+    if (core === '') return
+    if (index === 0 && /^\p{Ll}/u.test(core)) problems.push(`"${core}" should be capitalized`)
+    if (index > 0 && /^\p{Lu}\p{Ll}+$/u.test(core)) problems.push(`"${core}" should be lowercase in a sentence`)
+  })
+  return problems
+}
+
 /** A spoken name's value clause: a trailing comma clause that starts with a number (`Filters, 1 on`). The clause says the
  *  control's state, not a label word, so it is not graded, the way a screen reader's count clause is not drawn (`.bn-sr`). */
 export function stripValueClause(text: string): string {

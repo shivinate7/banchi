@@ -91,6 +91,7 @@ import {
   Icon,
   IconButton,
   Kbd,
+  Loading,
   Location,
   Money,
   Notice,
@@ -107,6 +108,7 @@ import {
   SettingsOp,
   Sheet,
   SortHeader,
+  Tile,
   countFacets,
   filterRows,
   matchQuery,
@@ -2690,32 +2692,120 @@ export function Pricing() {
     barObserver.current = observer
   }, [])
 
-  /* F5 verbiage cut: the reviewer's own "Status" word would drop the multi-way split this
-     line is the only place to see broken out, which the data rule refuses (numbers stay,
-     only the words around them shrink). */
-  const summary = [
-    `${progress.outCopies} ready`,
-    needsPrice > 0 ? `${needsPrice} need a price` : null,
-    progress.byHand > 0 ? `${progress.byHand} typed` : null,
-    progress.held > 0 ? `${progress.held} held` : null,
-    progress.closed > 0 ? `${progress.closed} sent` : null,
-  ].filter((part): part is string => part !== null)
+  /* THE WORKLIST IS STILL IN FLIGHT on the Unsent tab. */
+  const barLoading = !liveTab && loading && table === null
 
+  /* THE SEND BAR'S THREE TILES (the owner's Preflight pick): where pricing stands before the one
+     press, from the same figures the line said. Each link shows the rows its tile counts, so it
+     clears every other filter first (D86: a missing price is unknown). "Price Them" picks the
+     Market price band "No market price", the filter that already names those rows. */
+  /* EACH TILE'S ROOM IS ITS LONGEST NOTE (D313), written before any count is known, so a count stands in.
+     ponytail: four wide digits; a count past four digits can wrap a note one line past its room. */
+  const ROOM_COUNT = '8888'
+  const typedPrices = rows.filter((row) => {
+    /* A HELD 'unlisted' ANSWER IS A STRING AND A HOLD, not a typed price: the held tile counts it. */
+    const answer = answerFor(row)
+    return typeof answer === 'string' && !isWithheld(answer)
+  }).length
+  const showRows = (picks: typeof facetPicks, held: boolean) => {
+    setQuery('')
+    setFilterHeld(held)
+    setFacetPicks(picks)
+  }
+  const pricedTile = (
+    <Tile
+      data-tile="priced"
+      pending={barLoading}
+      icon={needsPrice > 0 ? 'alert' : 'check'}
+      tone={needsPrice > 0 ? 'warn' : 'ok'}
+      title={needsPrice > 0 ? `${needsPrice} need a price` : 'Every card is priced'}
+      room={`Price Them ${ROOM_COUNT} typed. ${ROOM_COUNT} typed quantities.`}
+    >
+      {needsPrice > 0 ? (
+        <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => showRows({ band: ['none'] }, false)}>
+          Price Them
+        </Button>
+      ) : null}{' '}
+      {[
+        typedPrices > 0 ? `${typedPrices} typed.` : null,
+        progress.byHand > 0 ? `${progress.byHand} typed ${progress.byHand === 1 ? 'quantity' : 'quantities'}.` : null,
+      ]
+        .filter((part): part is string => part !== null)
+        .join(' ') || (needsPrice > 0 ? null : 'None typed.')}
+    </Tile>
+  )
+  const tally = (
+    <div className="pricing-tally">
+      {pricedTile}
+      <Tile data-tile="held" pending={barLoading} icon="lock" tone="info" title={`${progress.held} held back`} room="Not in this send. Show Held">
+        {progress.held > 0 ? (
+          <>
+            Not in this send.{' '}
+            <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => showRows({}, true)}>
+              Show Held
+            </Button>
+          </>
+        ) : (
+          'None held.'
+        )}
+      </Tile>
+      <Tile
+        data-tile="ready"
+        pending={barLoading}
+        icon="send"
+        tone={progress.outCopies > 0 ? 'accent' : 'idle'}
+        title={progress.outCopies > 0 ? `${progress.outCopies} ready to go` : 'Nothing ready yet'}
+        room={`Copies on ${ROOM_COUNT} SKUs. Joins ${ROOM_COUNT} listings in your store.`}
+      >
+        {/* THE PRESS COUNTS SKUS (`progress.outRows`, the value `SendCard` gets) and the title counts the copies
+            on them, so the unit is named; the cap rows are listings. */}
+        {[
+          progress.outCopies > 0 ? `Copies on ${progress.outRows} ${progress.outRows === 1 ? 'SKU' : 'SKUs'}.` : null,
+          progress.closed > 0 ? `${progress.outCopies > 0 ? 'Joins ' : ''}${progress.closed} listings in your store.` : null,
+        ]
+          .filter((part): part is string => part !== null)
+          .join(' ')}
+      </Tile>
+    </div>
+  )
+
+  /* THE FIRST PAINT HOLDS THE BAR'S ROOM (D313): while the worklist is in flight the tiles are drawn
+     pending and the press is the card's own, off with nothing to send, so the bar is the height it
+     will be and the list lands under it, not over it. */
   const bar =
-    !liveTab && loaded.length > 0 ? (
-      <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send to TCGplayer">
-        <p className="pricing-bar-says">{summary.join(', ')}</p>
-        <SendCard
-          runs={loaded}
-          copies={progress.outCopies}
-          skus={progress.outRows}
-          priceChanges={priceChanges}
-          liveMoves={liveMoves}
-          settled={!dirty && !saving}
-          saveFailed={saveFailed}
-          quantities={quantitiesAsked}
-          onSent={afterSend}
-        />
+    !liveTab && (barLoading || loaded.length > 0) ? (
+      <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send to TCGplayer" aria-busy={barLoading ? 'true' : undefined}>
+        {tally}
+        {barLoading ? (
+          /* THE PENDING BAR DRAWS THE CARD'S OWN CLASSES AND NOTHING ELSE: the same press and doors, off, so the bar is the
+             height it will be, and no read starts for a card that has no worklist yet (the mount stays inside its budget). */
+          <div className="send-card">
+            <div className="send-act">
+              <Button variant="primary" size="lg" icon="send" className="pricing-emit send-press" disabled>
+                Send to TCGplayer
+              </Button>
+              <IconButton icon="more" label="More Send Options" className="send-more-press" disabled />
+              <Button variant="quiet" icon="download" className="send-door" words="word-only-control" disabled>
+                Download
+              </Button>
+              <Button variant="quiet" icon="refresh" className="send-door" disabled>
+                Refresh
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <SendCard
+            runs={loaded}
+            copies={progress.outCopies}
+            skus={progress.outRows}
+            priceChanges={priceChanges}
+            liveMoves={liveMoves}
+            settled={!dirty && !saving}
+            saveFailed={saveFailed}
+            quantities={quantitiesAsked}
+            onSent={afterSend}
+          />
+        )}
       </aside>
     ) : liveTab && stamp !== null && readStale ? (
       <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send these prices">
@@ -2901,11 +2991,14 @@ export function Pricing() {
       toolbar={toolbar}
       toolbarLabel="Which rows"
       status={hasStatus ? status : undefined}
-      loading={loading && table === null}
+      loading={loading && table === null && !barLoading}
       empty={showList ? undefined : empty}
     >
       <div className="pricing-body" data-live={liveTab ? 'true' : undefined}>
         {bar}
+        {/* THE LIST'S OWN LOADING SHAPE SITS UNDER THE BAR, which `Page` would otherwise draw alone. */}
+        {barLoading ? <Loading /> : (
+        <>
         {/* ONE BLOCK SAYS HOW FRESH EVERYTHING IS: the time, the press, and under them the price moves and
             how the daily and trends reads ended. The Live tab has no refresh, so it draws the moves alone. */}
         {(() => {
@@ -3033,6 +3126,8 @@ export function Pricing() {
             ))}
           </div>
           </>
+        )}
+        </>
         )}
       </div>
       </Page>
