@@ -820,7 +820,7 @@ span.bn-slot { display: inline-block; }
   align-items: center;
   gap: var(--bn-3);
   min-height: 48px;
-  padding: var(--bn-1-5) var(--bn-3);
+  padding: var(--bn-2) var(--bn-3);
   border-radius: var(--bn-r);
   background: var(--bn-surface-2);
   text-align: left;
@@ -944,7 +944,7 @@ span.bn-slot { display: inline-block; }
   align-items: start;
   align-content: start;
   min-width: 0;
-  padding: var(--bn-2) var(--bn-3);
+  padding: var(--bn-1-5) var(--bn-3);
   border-radius: var(--bn-r);
   background: var(--bn-surface-2);
 }
