@@ -12,7 +12,7 @@ import { card, sealEveryTest } from './shell'
 import { POPULATED_ROUTE_SEEDS, line, order, payloadOf } from './routeFixtures'
 import { sweepEveryRoute } from './routeSweep'
 import { setViewport } from './phoneSwitch'
-import { casingProblems, fieldLabelProblems, isSentence, isSpokenSentences, labelsOf, spokenNameProblems, statProblems, stripTyped, voiceHits } from './copyRules'
+import { casingProblems, fieldLabelProblems, isSentence, isSpokenSentences, labelsOf, sentenceProblems, spokenNameProblems, statProblems, stripTyped, voiceHits } from './copyRules'
 
 /* ONE SWEEP, TWO CHECKS (D284, the shape `text-checks.spec.ts` set). Each screen is opened ONCE by
  * `routeSweep.ts:sweepEveryRoute`, the same owner routes and the same populated store the text checks
@@ -158,6 +158,9 @@ function scanCopy(): CopyScan {
     if (tag === 'dt') return 'stat label'
     if (el.matches('[class*="title"]')) return 'title'
     if (el.matches('[class*="chip"]')) return 'chip'
+    // A TILE'S LEAD IS ITS TITLE, a `<p>` the kit draws (`kit/index.tsx` Tile). Its class is `bn-tile-lead`, which holds no word
+    // `title`, so the selector above does not reach it. It is graded as a sentence (`copyRules.ts:sentenceProblems`).
+    if (el.matches('.bn-tile-lead')) return 'tile lead'
     return null
   }
 
@@ -208,7 +211,7 @@ function scanCopy(): CopyScan {
   // THE ICON LINK. An icon control drawn as a link (`IconButton` with an `href`, such as the Fulfiller's
   // `Cards to pull` on Orders) is an `<a>`, not a button, so the list below must name it too.
   const candidates = document.querySelectorAll(
-    'a.bn-nav-link, a[aria-label], th, [role="tab"], [role="radio"], button, [role="button"], h1, h2, h3, dt, label, [class*="title"], [class*="chip"]',
+    'a.bn-nav-link, a[aria-label], th, [role="tab"], [role="radio"], button, [role="button"], h1, h2, h3, dt, label, [class*="title"], [class*="chip"], .bn-tile-lead',
   )
   for (const el of Array.from(candidates)) {
     const role = roleOf(el)
@@ -279,6 +282,14 @@ function paintSentenceDefect(): void {
   const icon = document.createElement('button')
   icon.setAttribute('aria-label', 'Order: High to low. Press to reverse.')
   document.querySelector('.bn-view')?.append(visible, icon)
+}
+
+/** Runs INSIDE the page. Paints a tile lead in Title Case (the mutation for the tile-lead rule). It must go red. */
+function paintLeadDefect(): void {
+  const lead = document.createElement('p')
+  lead.className = 'bn-tile-lead'
+  lead.textContent = 'Every Card Is Priced'
+  document.querySelector('.bn-view')?.appendChild(lead)
 }
 
 /** Runs INSIDE the page. Paints a button that holds a typed box name and one lower-case word (the mutation for the
@@ -654,6 +665,7 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
           spoken ? spokenNameProblems(checked)
           : one.role === 'stat label' ? statProblems(checked, one.press)
           : one.role === 'field label' ? fieldLabelProblems(checked, one.control)
+          : one.role === 'tile lead' ? sentenceProblems(checked)
           : casingProblems(checked)
         if (problems.length === 0) continue
         // A FINDING IS KEYED BY ITS TEXT, not its role: a control's label often shows twice (its tip and its
@@ -682,6 +694,7 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
     if (process.env.COPY_CASING_MUTATE === route) await page.evaluate(paintCasingDefect)
     if (process.env.COPY_TYPED_MUTATE === route) await page.evaluate(paintTypedDefect)
     if (process.env.COPY_SENTENCE_MUTATE === route) await page.evaluate(paintSentenceDefect)
+    if (process.env.COPY_LEAD_MUTATE === route) await page.evaluate(paintLeadDefect)
     read(route, await page.evaluate(scanCopy))
   })
 
