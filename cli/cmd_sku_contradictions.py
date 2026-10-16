@@ -1,4 +1,4 @@
-"""`pkmnscan cards contradictions` — RETIRED into `pkmnscan cards identity`
+"""`banchi cards contradictions` — RETIRED into `banchi cards identity`
 (`docs/specs/identity-follows-sku.md` §5.5, lane 2).
 
 D242's own test compared two CARDS' stored numbers for one SKU. After lane 2's `bind_sku`
@@ -6,7 +6,7 @@ becomes the one writer of a card's identity (`store/master.py`, lane 1), every c
 one SKU carries that SKU's OWN number by construction — "After the change both read zero
 forever. A guard that cannot see its subject proves nothing" (§5.5). The merged report reads
 the SKU table directly instead: `pipeline/identity_binding.py`'s name half and number half,
-run by `./pkmnscan cards identity`.
+run by `./banchi cards identity`.
 
 `run` below is now a one-line pointer, on the owner's own ruling ("Merge them", §12 ruling
 6). `_read_only` and `_by_sku` stay — `_by_sku`'s own shape (`NumberRecord` per card) is
@@ -52,11 +52,11 @@ def _by_sku(conn: sqlite3.Connection) -> Dict[str, List[NumberRecord]]:
 
 
 def run(args, say) -> int:
-    """RETIRED (§5.5, ruling 6: "Merge them"). `./pkmnscan cards identity` carries this
+    """RETIRED (§5.5, ruling 6: "Merge them"). `./banchi cards identity` carries this
     check's replacement — the number half of its name/number contradiction report, read off
     the SKU table rather than off two cards' stored numbers. Exits 0: an operator who typed
     the old command is told where to go, not refused."""
-    say("`cards contradictions` is retired — run `./pkmnscan cards identity` instead. "
+    say("`cards contradictions` is retired — run `./banchi cards identity` instead. "
         "docs/specs/identity-follows-sku.md §5.5: the same question, answered off the SKU "
         "table, merged with `cards sku-names` into one report.")
     return 0

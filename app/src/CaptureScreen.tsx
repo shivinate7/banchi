@@ -397,7 +397,7 @@ function handOrder(
  *  more — the field still works — and the code is kept on the end of anything unnamed
  *  because `docs/DESIGN.md` shows reason codes beside names, so what you saw stays greppable.
  *  **THAT RULE IS OLDER THAN THIS COMMENT AND IT SURVIVED A SESSION WRITING OVER IT**: the
- *  build that widened this map first wrote `set PKMNSCAN_TCG_USER_AGENT in .env` into two of
+ *  build that widened this map first wrote `set BANCHI_TCG_USER_AGENT in .env` into two of
  *  these clauses, which is the remedy for the person at the keyboard and noise to the person
  *  holding a card over a stand. It says what is wrong; where the knob is lives one layer down.
  *
@@ -1084,7 +1084,7 @@ const UndoFace = memo(
             from the rendered label. A tile with no label names its box alone. */}
         <span className="capture-undo-pos">
           {spansDrawers || undoFigure(target) === null ? (
-            <span className="capture-undo-drawer">{boxTitle(target.boxName, target.box)}</span>
+            <span className="capture-undo-drawer" data-typed>{boxTitle(target.boxName, target.box)}</span>
           ) : null}
           {undoFigure(target)}
         </span>
@@ -2212,9 +2212,9 @@ export function CaptureScreen() {
   const hintRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (openField === 'box') boxEntryRef.current?.focus()
+    if (openField === 'box') boxEntryRef.current?.focus({ preventScroll: true })
     else if (openField === 'set') {
-      hintRef.current?.focus()
+      hintRef.current?.focus({ preventScroll: true })
       /* THE VOCABULARY FOLLOWS THE FIELD BEING OPEN, not the row being tapped. `H` opens it
          from the key handler and never touches the row's `onToggle`, so hanging the load off
          the tap left the list empty for every operator who uses the keyboard — which on this
@@ -4081,7 +4081,8 @@ export function CaptureScreen() {
         icon: 'camera',
         tone: 'plain',
         text: null,
-        fix: { label: 'Camera', icon: 'camera', onPress: camera.retry },
+        // The stage keeps the Camera control (D211); Setup does not repeat it.
+        fix: null,
       })
     } else if (!camera.ready) {
       /* STARTED BUT NOT READY — asked for, and not delivering frames: a device that vanished,
@@ -4104,8 +4105,10 @@ export function CaptureScreen() {
         key: 'box',
         icon: 'box',
         tone: 'plain',
-        text: null,
-        fix: { label: 'Box', icon: 'box', onPress: () => toggleField('box') },
+        // The disabled Capture button above answers to this row, so it says why in a sentence.
+        text: 'Pick a box before you capture.',
+        // The Shooting group keeps the Box select (D211); Setup keeps only the sentence.
+        fix: null,
       })
     }
     if (gameEntry === null) {
@@ -5082,6 +5085,7 @@ export function CaptureScreen() {
                   <input
                     className="bn-input capture-text capture-note"
                     type="text"
+                    name="capture-note"
                     placeholder={last.game.catalogued ? 'Add a note to this card' : 'What is this card?'}
                     aria-label={`Note on ${last.card.label}`}
                     value={noteDraft}
@@ -5167,7 +5171,7 @@ export function CaptureScreen() {
               <div className="capture-entry">
                 <div className="capture-entrybox bn-input-wrap">
                   <Icon name="search" size={14} />
-                  <input
+                  <input name="capture-box-filter"
                     ref={boxEntryRef}
                     className="capture-filter bn-input"
                     type="text"
@@ -5384,7 +5388,9 @@ export function CaptureScreen() {
               onClick={() => void doCapture()}
               disabled={shutterDisabled}
               aria-describedby={
-                blockers.length === 1 && blockers[0]?.key === 'camera' ? 'capture-shutter-why' : undefined
+                blockers.length === 1 && blockers[0]?.key === 'camera'
+                  ? 'capture-shutter-why'
+                  : blockers.filter((blocker) => blocker.text !== null).map((blocker) => `capture-block-${blocker.key}`).join(' ') || undefined
               }
               busy={busy}
               /* In motion mode the C key is genuinely disarmed, so the keycap goes; the
@@ -5419,7 +5425,7 @@ export function CaptureScreen() {
                   ? 'Connecting'
                   : dealerIdle
                     ? 'Start dispenser'
-                    : 'Connect dispenser'}
+                    : 'Connect Dispenser'}
             </Button>
             <Slot as="p" className="capture-quiet capture-dealer-said">
               {dealerSaid}
@@ -5446,7 +5452,7 @@ export function CaptureScreen() {
                       {blocker.text === null ? null : (
                         <>
                           <Icon name={blocker.icon} size={14} />
-                          <span className="capture-block-say">{blocker.text}</span>
+                          <span id={`capture-block-${blocker.key}`} className="capture-block-say">{blocker.text}</span>
                         </>
                       )}
                       {blocker.fix === null ? null : (
@@ -5727,7 +5733,7 @@ export function CaptureScreen() {
           {openField === 'set' ? (
             <OpenField
               k="H"
-              label="Set hint"
+              label="Set Hint"
               icon="tag"
               /* THE FIELD'S OWN MODALITY, AND IT IS NOT ALWAYS "OPTIONAL". On a game whose
                  export cannot be fetched without one, this field is required in every sense
@@ -5751,12 +5757,12 @@ export function CaptureScreen() {
               >
                 <div className="capture-entrybox bn-input-wrap">
                   <Icon name="tag" size={14} />
-                  <input
+                  <input name="set-hint"
                     ref={hintRef}
                     className="capture-filter bn-input"
                     type="text"
                     placeholder="sv09"
-                    aria-label="Set hint"
+                    aria-label="Set Hint"
                     list="capture-set-names"
                     value={setHint}
                     onChange={(event) => setSetHint(event.target.value)}
@@ -5789,7 +5795,7 @@ export function CaptureScreen() {
           ) : (
             <Row
               k="H"
-              label="Set hint"
+              label="Set Hint"
               icon="tag"
               right={
                 setHint.trim() === '' ? (

@@ -2,8 +2,8 @@
 
 **Status: BUILT.** D213 (the set is a stored fact) is the governing entry. Five parts are
 built. They are the name-to-printing chooser, the set and rarity columns, the matcher, the
-Near Mint filter and the uncapped candidate list. `./pkmnscan cards variants` is retired.
-`./pkmnscan cards identity --write` fills the set through `bind_sku`
+Near Mint filter and the uncapped candidate list. `./banchi cards variants` is retired.
+`./banchi cards identity --write` fills the set through `bind_sku`
 (`docs/specs/identity-follows-sku.md`).
 
 A search by name on `#/inventory` reaches every printing of the card. `#/review` narrows to the
@@ -67,4 +67,4 @@ set, so the real choice is a third as wide as the list that was drawn.
   a digit.
 
 A queue entry that predates the ranking keeps its old, unranked suggestions until
-`pkmnscan queue refresh --write` runs over it (D167's mechanism).
+`banchi queue refresh --write` runs over it (D167's mechanism).

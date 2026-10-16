@@ -19,7 +19,7 @@ from typing import Any, Optional, Sequence
 # The store's root. Defaults to the repo, overridable so the inventory and its photos can
 # live on a different disk from the code — the same knob D15 gives the image mirror, for
 # the same reason: where bulk state lands is the operator's call, not the repo's.
-HOME_ENV = "PKMNSCAN_HOME"
+HOME_ENV = "BANCHI_HOME"
 
 INVENTORY_DIRNAME = "inventory"
 # The pricing corpus (D86). `prices` and not `pricing`, because `runs/<n>/pricing.json` is
@@ -146,7 +146,7 @@ def prices_path() -> Path:
     THREE FILES IN THIS REPO ARE ABOUT PRICE AND THEY ARE NOT THE SAME FILE. `runs/<n>/
     pricing.json` is the TABLE a join wrote — what the export said about the cards in one run,
     and it is derived, rewritten on every join, and read-only to a person. `runs/<n>/
-    decisions.json` was the per-run ANSWER file and is legacy: `pkmnscan prices adopt` folds
+    decisions.json` was the per-run ANSWER file and is legacy: `banchi prices adopt` folds
     it in and retires it, and the per-lot override is `policy.per_run` in THIS file.
     This is the ANSWER, once, for every card the operator has ever priced.
 

@@ -23,7 +23,7 @@ import type {
 import { useCardCrop } from './cardCrop'
 import { Button, cropStyle, Icon, Kbd, Loading, Page, Skeleton, SkeletonText, type IconName } from './kit'
 import { boxTitle } from './kit/data'
-import { dayMonth, weekdayDate } from './dates'
+import { absoluteDate, clockTime, dayMonth, weekdayDate } from './dates'
 import { pricingTileNote, runsOwingPrice, sendCounts, standing, type Standing } from './standing'
 import { photographed, ribbon, sittings, type Ribbon } from './storeHistory'
 import { StagePill, stageOf, whenLabel } from './RunsStage'
@@ -188,10 +188,10 @@ function deckFromCards(cards: Record<string, InventoryCard> | null): DeckCard[] 
 
 function greeting(): string {
   const hour = new Date().getHours()
-  if (hour < 5) return 'Still up'
-  if (hour < 12) return 'Good morning'
-  if (hour < 18) return 'Good afternoon'
-  return 'Good evening'
+  if (hour < 5) return 'Still Up'
+  if (hour < 12) return 'Good Morning'
+  if (hour < 18) return 'Good Afternoon'
+  return 'Good Evening'
 }
 
 /** A BOX IS SHOWN BY ITS NAME, EVERYWHERE (the owner's ruling, 2026-09-23) — never a bare
@@ -464,6 +464,13 @@ function Ribbon({ plot, live }: { readonly plot: Ribbon; readonly live: boolean 
   )
 }
 
+/** The cards a run holds, as the wire says: the join's count, else the selection that ran (`scope.cards`, null for a whole box). Null where the
+ *  run has neither (a whole box not yet joined), so the row says nothing rather than a guess. */
+function runCards(run: RunSummary): number | null {
+  const n = run.counts.cards_in ?? run.scope?.cards ?? run.photographed
+  return typeof n === 'number' ? n : null
+}
+
 export function Home() {
   const [restDeck] = useState(deckPlayed)
   useEffect(markDeckPlayed, [])
@@ -651,7 +658,10 @@ export function Home() {
       path: '/pricing',
       icon: 'tag',
       label: 'Pricing',
-      figure: runsToPrice === null ? '—' : String(runsToPrice),
+      /* THE HEADLINE IS THE COUNT THE NOTE LEADS WITH (B10): with no run owing a price the note
+         names the ready copies, so the figure is that count. */
+      figure:
+        runsToPrice === null ? '—' : runsToPrice === 0 && readyCopies !== null && readyCopies > 0 ? readyCopies.toLocaleString() : String(runsToPrice),
       note:
         runsToPrice === null
           ? pricing.state === 'failed'
@@ -735,7 +745,7 @@ export function Home() {
                       </span>
                       {depth === 1 && one.card !== null ? (
                         <>
-                          <div className="home-deck-name">{one.card.name ?? 'Not identified yet'}</div>
+                          <div className="home-deck-name">{one.card.name ?? 'Not Identified Yet'}</div>
                           <div className="home-deck-meta">
                             {[one.card.number_display ?? one.card.number, finishOf(one.card)]
                               .filter((part): part is string => typeof part === 'string' && part !== '')
@@ -757,7 +767,9 @@ export function Home() {
                   // between its parts is CSS now (`.home-deck-card-no > span::before`).
                   <span className="home-deck-card-no">
                     {placeWordsOf(frontCard.place.label).map((part, at) => (
-                      <span key={at}>{part}</span>
+                      <span key={at} data-typed={at === 0 ? true : undefined}>
+                        {part}
+                      </span>
                     ))}
                   </span>
                 ) : (
@@ -843,7 +855,7 @@ export function Home() {
                       <Icon name="box" size={16} />
                     </span>
                     <span className="home-box-text">
-                      <span className="home-box-name" title={name}>
+                      <span className="home-box-name" title={name} data-typed>
                         {name}
                       </span>
                       <span className="home-box-meta">
@@ -884,6 +896,7 @@ export function Home() {
                 // and this panel went on drawing `Box 1` for a drawer that is not on the shelf —
                 // which is `runScope.ts`'s own founding defect (D56), repeated one screen over.
                 const boxLabel = runBoxLabel(run) ?? 'Run'
+                const cards = runCards(run)
                 return (
                   /* The run's directory name rides a tooltip only (D196), as the Runs sheet's does:
                      the box label and the age already tell two runs apart. */
@@ -898,6 +911,19 @@ export function Home() {
                         {boxLabel.split(' · ').map((part, at) => (
                           <span key={at}>{part}</span>
                         ))}
+                      </span>
+                      {/* DATE, CLOCK TIME AND THE CARDS READ, AND NOTHING ELSE (R3, D196). The number is
+                          the join's `cards_in`; a run not yet joined shows no number. */}
+                      <span className="home-run-meta">
+                        {/* The spaces keep the three facts apart for a reader that skips the CSS seam. */}
+                        <span>{absoluteDate(run.updated_at ?? run.created_at)}</span>{' '}
+                        <span>{clockTime(run.updated_at ?? run.created_at)}</span>
+                        {cards === null ? null : (
+                          <>
+                            {' '}
+                            <span>{count(cards, 'card')}</span>
+                          </>
+                        )}
                       </span>
                     </span>
                     <span className="home-run-when">{whenLabel(run.updated_at ?? run.created_at)}</span>

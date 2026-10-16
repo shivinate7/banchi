@@ -375,7 +375,7 @@ test('arming motion is visible, and the machine fires on a settled card', async 
     events: Array<{ t: number; event: string; frame: string }>
     keyframes: Array<{ t: number; frame: string }>
   }
-  expect(trace.kind).toBe('pkmnscan-motion-trace')
+  expect(trace.kind).toBe('banchi-motion-trace')
   /* THE VERSION IS LOAD-BEARING, not decoration: a v1 row is [t, d, luma] and a v2 row is
      [t, d, dBase, luma], so a scorer that read the third column as brightness would read a
      v2 trace as a rig with no light in it. `scripts/score-trace.py` branches on this. */

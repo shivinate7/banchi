@@ -40,7 +40,7 @@ import { describeFailure, search } from './server'
  *  KEPT at 200ms on that measurement: the server is not the reason a fast typist would notice
  *  lag, so a shorter wait would only ask the server more often for no gain in how quickly a
  *  result appears on screen. `Store.write()` still waits up to 30 seconds for the file lock,
- *  so a search issued while `./pkmnscan identify` is running can be slow for reasons no
+ *  so a search issued while `./banchi identify` is running can be slow for reasons no
  *  debounce setting reaches either way. */
 export const SEARCH_DEBOUNCE_MS = 200
 

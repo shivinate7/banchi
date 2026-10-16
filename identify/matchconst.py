@@ -19,7 +19,7 @@ MODEL_SHA256 = "79bc0fec967bdbb695a082344a5c2b4dc8ca47f34e72bf32c90f2e99e455a003
 MODEL_BYTES = 371_700_983
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-HOME_ENV = "PKMNSCAN_HOME"
+HOME_ENV = "BANCHI_HOME"
 INVENTORY_DIRNAME = "inventory"
 
 

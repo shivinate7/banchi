@@ -16,7 +16,7 @@ records the answers and the decisions they amend.
 | Q5 | Does the cost check run when the Identify sheet opens? | Yes. Open, then spend: two presses. |
 | Q6 | What does the Runs screen become? | Decide after the moves land. The route and its name stay. |
 | Q7 | Where does a manual "Check what is live" press live? | On Pricing's send card and on the Live tab, which replaces the Mark-down sheet. |
-| Q8 | What happens to copies in a file that was written and never sent? | Pricing names them, with "Take them back". Amended 2026-09-24: "Take them back" is offered only after a live check has run past the wait for that receipt. |
+| Q8 | What happens to copies in a file that was written and never sent? | Pricing names them, with "Take them back". The offer is the send check's snapshot (R-S1 to R-S4, under R15), never a frozen answer. A copy the owner removed by hand after a check saw it is held, not offered back (R-S4). Only the receipt that absorbs the shortfall offers it: the last in the ledger's order (a published send, then an unconfirmed one, then a download; the newest press within a kind). |
 
 ### The premise that no longer holds
 
@@ -148,6 +148,24 @@ deleted to lower a price, and the quantity is not a variable.
   from beside Send. "Split in two files" moves under "Download the file instead". Where the caps
   live now is not ruled.
 - The screen shape is the entry with slug `pricing-is-one-list-and-one-send`.
+
+### The last send's warning sits below Send (R14)
+
+While the last send is incomplete, its warning sits below the Send button. Send is disabled, with a line that says why. Send never moves (D313). Ruled and built in #838.
+
+### The Send lock lifts on three things (R15)
+
+The Send lock lifts when the check finds every copy. It also lifts when the person takes the missing copies back, or on a "Send Anyway" press on the warning. A download alone does not release it. Built in #838.
+
+The check is a snapshot, not a stored answer. Four rulings govern it (`send_routes._judge`):
+
+- **R-S1.** Per SKU across the sends still counted out, outstanding = min(copies sent and still on the shelf, copies on the shelf unsold) less open-order copies, and gap = max(0, outstanding - live now); missing = min(gap, the copies no check credited), and the rest of the gap is a hand removal (R-S4). Copies sent and still on the shelf = what the receipts sent, plus the copies live when the oldest was pressed, less the copies sold since that press and the copies a take-off removed (settled or outstanding, not lapsed) and the copies the owner unheld; a card captured and never sent is never counted. It is judged only after the post-send wait, on a live reading later than every wait. The live figure is the store's own (`send_routes._live_reading`), dated by the store, or by the newest check when the store still holds the figure that check recorded. A live export from any file moves `live` either way. The other writers lower it (a D34 release), put back a figure and date it had (the undo of a release), or set the export's figure (a settled take-off); a sale never touches it. A figure that fell after the check is a drop, held by R-S4 and never read as missing, because a copy a check credited was live once. A store date not after the check is kept as the date, and the wait gate judges it. A SKU that `reconcile --live` kept inside the publish window is not recorded by the check, so a kept figure is never dated as fresh. No answer is frozen. A mistake must hold copies out and never send one twice. Take Back moves the figure read inside its own store write, not the screen's.
+- **R-S2.** Open orders count as sold (`Ledger.open_quantity`). A gap is held, with no Take Back and no hold, while the order sync is older than the live reading or unknown. The sync time is `Ledger.latest_ingest`, the newest order change, because the ledger keeps no sync time; an empty ledger is an unknown sync and holds. A held answer is named as held when Take Back is pressed.
+- **R-S3.** Banchi checks a short send again on its own after each wait period, as it does for a written file (`send_routes._polled`), and stops after three re-reads that find nothing new (`send_routes.RECHECK_LIMIT`). Past that, the manual check settles the store but does not re-record the send's check; the snapshot takes the store's own figure, so copies that show late still read as found.
+
+- **R-S4.** A copy a check credited (it was seen live) that later drops from live, with no sale and no open order, is the owner's hand removal. Banchi holds it per copy on the listing (`Listing.held_copies`, written by the live check, `send_routes._hold_removed`). It is never missing, never offered back, and never sent again until the owner unholds it on Pricing (`send_routes.do_unhold`). The send card counts held copies as found. A copy no check ever saw live stays missing. A credit never falls on a re-read, because the credit is the proof of "seen live". Take Back on a receipt keeps the held count: a taken-back receipt still counts the copies it kept (`send_routes._kept`). A run is open on the worklist while one of its SKUs holds copies, so the Unhold row stays reachable. Unhold and Rehold take the live check's lock, and the check judges the count inside its own store write. Unhold lowers `pushed` by the held copies, as Take Back does, records them on the newest receipt that counts the SKU out and whose press is not running (`unheld`) so the next check does not hold them again (a running press writes its whole receipt back, so with no other receipt Unhold refuses), and has a way back (`send_routes.do_rehold`) that a later send refuses. A hold takes nothing else off TCGplayer, and it is not the whole-SKU withhold of D100. `pushed` stays high while copies are held, so the cap, and the unexplained list of `reconcile --live`, count them as out. That is a named limit. The count stands until a check judges a different one or the owner unholds it.
+
+The stored `check` stays the double-send ledger (`send_routes._credits`).
 
 ### The other decisions this touches
 

@@ -26,7 +26,7 @@ and it used to lose everything if it was killed partway. Each route's answer now
 keyed by a digest of the store's own content (`snapshot_key`). A re-run over the SAME store
 skips every route already there; a DIFFERENT store starts over, because its key differs.
 
-    PKMNSCAN_HOME=demo ./scripts/demo-record.py
+    BANCHI_HOME=demo ./scripts/demo-record.py
 
 Spawns its own capture server on its own port and stops it again, so it neither needs nor
 disturbs `make up` — which on the main checkout is the owner's live server over their real
@@ -239,8 +239,8 @@ class Server:
 
     def __enter__(self) -> "Server":
         env = dict(os.environ)
-        env["PKMNSCAN_HOME"] = str(self.home)
-        env["PKMNSCAN_PORT"] = str(self.port)
+        env["BANCHI_HOME"] = str(self.home)
+        env["BANCHI_PORT"] = str(self.port)
         # THE RECORDER NEVER COMES BACK (D301). `server/pipeline_routes.py:
         # warm_stock_images` fires its background threads and returns at once for a LIVE
         # server on purpose — a real user's first request after a restart must never wait
@@ -248,8 +248,8 @@ class Server:
         # got into the published bundle forever, so a cold `url_for()` here is not "slow
         # once", it is permanently missing. This variable makes that one call join its own
         # threads before the server starts accepting requests.
-        env["PKMNSCAN_STOCK_IMAGES_SYNC"] = "1"
-        env["PKMNSCAN_AUTO_SETUP"] = "off"  # the demo store never downloads the free reader
+        env["BANCHI_STOCK_IMAGES_SYNC"] = "1"
+        env["BANCHI_AUTO_SETUP"] = "off"  # the demo store never downloads the free reader
         script = str(REPO_ROOT / "server" / "capture_server.py")
         argv = [sys.executable, script]
         if self.offline:
@@ -381,8 +381,8 @@ def parameter_space(home: Path) -> Dict[str, object]:
     without this file being touched. A hand-kept list is the same defect the route census
     exists to catch, one lane over.
     """
-    os.environ["PKMNSCAN_HOME"] = str(home)
-    from store import Store  # imported late: it reads PKMNSCAN_HOME at call time
+    os.environ["BANCHI_HOME"] = str(home)
+    from store import Store  # imported late: it reads BANCHI_HOME at call time
 
     snapshot = Store().read()
     boxes = sorted({str(int(b.box)) for b in snapshot.inventory.boxes.values()})
@@ -730,7 +730,7 @@ def sweep_coverage(server: Server, space: Dict[str, object], recorded: Dict[str,
     # `#/revenue`'s thumbnails (D298): `getSkuPhotos` asks `/skus/photos` on arrival, and
     # `demoServer.ts:skuPhotos` merges these per-SKU answers. Without them a static host has
     # no answer and every sales row draws no photograph. The stock image URLs ride in the
-    # answer, which is why `PKMNSCAN_STOCK_IMAGES_SYNC` is set above.
+    # answer, which is why `BANCHI_STOCK_IMAGES_SYNC` is set above.
     for sku in space["skus"]:  # type: ignore[union-attr]
         take("/skus/photos?sku=%s" % urllib.parse.quote(sku))
 
@@ -981,8 +981,8 @@ def card_photos(home: Path) -> List[tuple]:
     seed writes it that way, `demo-seed.py:relative_photo`) or absolute (a real capture), so
     the next move of the layout cannot strand this again.
     """
-    os.environ["PKMNSCAN_HOME"] = str(home)
-    from store import Store  # imported late: it reads PKMNSCAN_HOME at call time
+    os.environ["BANCHI_HOME"] = str(home)
+    from store import Store  # imported late: it reads BANCHI_HOME at call time
 
     out = []
     for card in Store().read().inventory.cards.values():
@@ -1080,7 +1080,7 @@ def self_test() -> int:
             (where / "photos").mkdir(parents=True, exist_ok=True)
             shutil.copyfile(clean, where / "photos" / "clean.jpg")
             shutil.copyfile(marked, where / "photos" / "marked.jpg")
-            os.environ["PKMNSCAN_HOME"] = str(where)
+            os.environ["BANCHI_HOME"] = str(where)
             rows = [(1, "photos/clean.jpg", "c" * 64)]
             if marked_too:
                 rows.append((2, "photos/marked.jpg", "d" * 64))
@@ -1121,7 +1121,7 @@ def self_test() -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--home", default=os.environ.get("PKMNSCAN_HOME", "demo"))
+    parser.add_argument("--home", default=os.environ.get("BANCHI_HOME", "demo"))
     parser.add_argument(
         "--self-test", action="store_true",
         help="prove the QR refusal on a throwaway store, and exit",

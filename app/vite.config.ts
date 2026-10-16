@@ -47,12 +47,12 @@ export default defineConfig({
     host: true,
     // `host: true` makes Vite LISTEN on every interface; it does not make it ACCEPT every
     // name. Vite refuses a request whose Host header it does not recognise — DNS-rebinding
-    // protection — so reaching this app at `pkmnscan.lan` returned "Blocked request. This
+    // protection — so reaching this app at `banchi.lan` returned "Blocked request. This
     // host is not allowed." while the bare IP worked fine. Found by opening the real
     // hostname rather than the address, which is the only test that could have caught it.
     //
     // TWO LOCAL SUFFIXES, NOT `true`. `true` switches the protection off for every name;
-    // a leading dot allows a domain and its subdomains, so this admits `pkmnscan.lan` and
+    // a leading dot allows a domain and its subdomains, so this admits `banchi.lan` and
     // `MacBook-Pro-2.local` and still refuses an arbitrary public hostname pointed at this
     // machine. Both suffixes are non-routable on the public internet, which is what makes
     // the narrowing meaningful rather than decorative. Localhost and bare IPs are allowed

@@ -30,10 +30,8 @@ lives on the sidecar, which this file never reads.
 `--reidentify-stale` is that targeted re-read: only entries that are both WEAK (confidence
 `low`, or currently sitting in a queue) and UNCLEARED. Everything else stands.
 
-A HUMAN-CLEARED IDENTIFICATION IS PERMANENT. Once someone has looked at the photo and picked
-the row, no re-run, prompt change, or re-identification pass overwrites it. If a later run
-happens to read that photo and disagrees, `disagreements()` reports it — cheap evidence that
-either the prompt improved or a clearing was a mistake — but the human answer stands.
+A HUMAN-CLEARED IDENTIFICATION IS PERMANENT (D317). If a later run
+reads that photo and disagrees, `disagreements()` reports it, but the human answer stands.
 
 NOTHING SETS `cleared_by_human` ON THE CACHE. The review screen shipped 2026-08-13 and its
 answer route sets the flag on the queue entry, not here — deliberately: marking a model
@@ -93,6 +91,9 @@ class CacheEntry:
     # The card's own name (`cid`), recorded by the background reader. A move or a renumber changes
     # the position key and never the cid, so the row can be matched back to its card.
     cid: Optional[str] = None
+    # The game the card was read under. Absent on every entry written before this field: such an
+    # entry is judged by its shape alone (`cli/cmd_identify.cached_refusal`).
+    game: Optional[str] = None
 
     @property
     def confidence(self) -> Optional[str]:
@@ -107,7 +108,9 @@ def _parse_entry(key: str, record: dict) -> Optional[CacheEntry]:
     """One paid answer from its stored record, or None for a shape that will not
     construct — re-reading such a card is cheap, and the rule is the same for a JSON
     record and a database row."""
-    if str(key).startswith("_"):
+    if str(key).startswith("_") or not isinstance(record, dict):
+        return None
+    if not isinstance(record.get("identification"), dict):
         return None
     known = {k: v for k, v in record.items() if k in CacheEntry.__annotations__}
     try:
@@ -231,6 +234,7 @@ class Cache:
         engine: str = ENGINE_HAIKU,
         second_look: Optional[dict] = None,
         cid: Optional[str] = None,
+        game: Optional[str] = None,
     ) -> Optional[dict]:
         """Store an answer. Refuses to overwrite a cleared one; reports a disagreement.
 
@@ -259,6 +263,7 @@ class Cache:
             engine=engine,
             second_look=second_look,
             cid=cid,
+            game=game,
         )
         return None
 

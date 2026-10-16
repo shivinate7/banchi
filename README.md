@@ -17,8 +17,8 @@ You need `make`, `git`, and the Python and Node.js versions that CI pins in
 [`check.yml`](.github/workflows/check.yml).
 
 ```sh
-git clone https://github.com/shivinate7/banchi.git pkmnscan
-cd pkmnscan
+git clone https://github.com/shivinate7/banchi.git banchi
+cd banchi
 make hooks                  # arm the git hooks, once per clone
 make venv                   # Python packages into .venv
 npm --prefix app ci         # front-end packages
@@ -31,7 +31,7 @@ make up                     # serve the app; open the link it prints
 ## Usage
 
 `make up` serves the app. There is no login: it is for your own desk and network. `?` in the app lists the keyboard shortcuts (`SHORTCUTS` in
-[`app/src/keys.ts`](app/src/keys.ts)).
+[`app/src/App.tsx`](app/src/App.tsx)).
 
 <!-- gen:routes -->
 | Screen | Route | Note |
@@ -45,26 +45,26 @@ make up                     # serve the app; open the link it prints
 | Sales | `#/revenue` |  |
 | Inventory | `#/inventory` |  |
 | Codes | `#/codes` |  |
-| Cards to pull | `#/fulfillment` | Off-nav |
+| Cards to Pull | `#/fulfillment` | Off-nav |
 | Kit | `#/gallery` | Off-nav |
-| Product history | `#/product` | Off-nav |
+| Product History | `#/product` | Off-nav |
 | Runs | `#/runs` | Off-nav |
 <!-- /gen -->
 
 Each screen's spec is in [`docs/specs/`](docs/specs/). Every step also runs from the terminal.
-`./pkmnscan --help` lists the commands, and `<command> --help` lists its flags.
-A command that writes shows a preview first; add `--write` to apply it. The command list in
+`./banchi --help` lists the commands, and `<command> --help` lists its flags.
+The command list in
 [`CLAUDE.md`](CLAUDE.md) says which commands write.
 
 ```sh
-./pkmnscan identify --dry-run <capture-dir>   # check everything, spend nothing
-./pkmnscan identify <capture-dir>             # COSTS MONEY
-./pkmnscan join     <run-dir>
-./pkmnscan emit     <run-dir> [<run-dir> ...] # one import CSV across runs
+./banchi identify --dry-run <capture-dir>   # check everything, spend nothing
+./banchi identify <capture-dir>             # COSTS MONEY
+./banchi join     <run-dir>
+./banchi emit     <run-dir> [<run-dir> ...] # one import CSV across runs
 ```
 
 **If you delete `inventory/`, you lose every answer you paid for.** Git does not track it.
-`PKMNSCAN_HOME` moves it.
+`BANCHI_HOME` moves it.
 
 ## Configuration
 
@@ -86,8 +86,7 @@ make check            # the whole suite; `make explain` lists it
 Main moves by pull request only (D42, main moves by pull request). `make docs-audit` checks
 this file against the code: paths, make targets, commands, route table and decision ids.
 
-The name Banchi belongs to the app. The checkout, CLI, packages, store and routes keep
-`pkmnscan` (D94, Banchi is the product's name).
+Naming follows D94 (Banchi names everything).
 
 ## More
 

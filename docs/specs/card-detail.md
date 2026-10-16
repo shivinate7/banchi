@@ -36,7 +36,7 @@ The panel has two parts.
 - The old header spent rows on the name, the number line and a chip row. The figures sat beside the photo, under a
   "Copies" heading, and read as facts about the list. The figures are facts about the card, so they go in the band
   with the card.
-- Two lead figures answer the two questions the owner opens the panel with: "how many do I hold" and "how many are
+- Two lead figures answer the two questions the owner opens the panel with: how many they hold, and how many are
   for sale". The side facts are history and are quieter.
 - The meter replaces the headroom sentence ("Room for 2 more live"). The eye reads it as a count against a ceiling,
   and its end names the ceiling.
@@ -44,6 +44,8 @@ The panel has two parts.
 ### A copy row
 
 The copies list has no heading (owner's ruling). The re-sort chip shows only while the order is stale. It is an icon button in the band's title row, beside Actions, at the same size. The row keeps its height, so no copy row moves when it appears (D118). The staleness sentence is its tooltip and accessible name.
+
+The card panel draws its known copy as a real row while the card's search loads, and the answer then replaces it. If the search returns no row for the card, that row stays and the warning sits in the figures slot.
 
 The row keeps every fact that the built row has:
 

@@ -1,4 +1,5 @@
 import { byteSize } from './kit/dataRules'
+import { titleCase } from './CardHero'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 
 import type {
@@ -391,7 +392,7 @@ export function BoxOps({
   const emptyPick = narrowed !== null && narrowed.length === 0
   const picker =
     pool.length === 0 ? null : <CardPicker
-        whole="Whole box"
+        whole="Whole Box"
         sections={pool}
         picked={narrowed}
         onChange={(next) => {
@@ -409,10 +410,10 @@ export function BoxOps({
       ? 'whole'
       : (sectionPools.find((section) => sameIndices(narrowed, section.cards.map((card) => card.index)))?.key ?? null)
   const sectionOptions: PickOption<string>[] = [
-    { value: 'whole', label: `Whole box, ${count(everyIndex.length, 'card', 'cards')}` },
+    { value: 'whole', label: `Whole Box, ${count(everyIndex.length, 'Card', 'Cards')}` },
     ...sectionPools.map((section) => ({
       value: section.key,
-      label: `${section.title}, ${count(section.cards.length, 'card', 'cards')}`,
+      label: `${section.title}, ${count(section.cards.length, 'Card', 'Cards')}`,
     })),
   ]
   /* The one deliberate scroll: the picker's own list, never the sheet (D313). */
@@ -714,20 +715,29 @@ export function BoxOps({
             </SettingsGroup>
           </>
         ) : editing === 'claims' ? (
-          <SettingsEditor title="Set claims" onBack={closeEdit}>
+          <SettingsEditor title="Set Claims" onBack={closeEdit}>
             {sectionPools.length > 1 ? (
               <Select
                 label="Section"
                 value={sectionValue}
                 options={sectionOptions}
                 onChange={pickSection}
-                placeholder="Some cards"
+                placeholder="Some Cards"
               />
             ) : null}
             {picker}
             {refused === null ? null : <Notice tone="warn" title={refused} />}
             <ClaimEditor
               scope={scope}
+              scopeLabel={
+                selection.length > 0 ? (
+                  `the ${count(selection.length, 'Selected Card', 'Selected Cards')}`
+                ) : (
+                  <>
+                    All {count(record.cards, 'Card', 'Cards')} (<span data-typed>{record.name ?? UNNAMED_BOX}</span>)
+                  </>
+                )
+              }
               game={null}
               busy={busy}
               onApply={(patch) => void applyClaims(patch)}
@@ -1033,6 +1043,7 @@ export type ClaimPatch = {
 
 export function ClaimEditor({
   scope,
+  scopeLabel,
   game,
   busy,
   onApply,
@@ -1040,6 +1051,8 @@ export function ClaimEditor({
 }: {
   /** What the apply will reach, as a sentence. Drawn on the button as well as above the fields. */
   scope: string
+  /** The same scope as a label, in Title Case, for the apply button. Falls back to `scope`. */
+  scopeLabel?: ReactNode
   /** The game whose vocabulary the chips are drawn from before the operator changes it. Null
    *  falls back to the registry's own default. */
   game: string | null
@@ -1138,14 +1151,14 @@ export function ClaimEditor({
         <Select
           label="Game"
           value={entries === null ? null : key}
-          placeholder={entries === null ? 'reading the registry…' : 'Choose a game'}
+          placeholder={entries === null ? 'Loading Games…' : 'Choose a Game'}
           options={(entries ?? []).map((candidate) => ({ value: candidate.key, label: candidate.display }))}
           onChange={setPickedGame}
         />
       </ClaimRow>
 
-      <ClaimRow field="setHint" label="Set hint" armed={isArmed('setHint')} onArm={arm} says="leave empty to clear it">
-        <PlainInput value={setHint} onChange={setSetHint} placeholder="ME01" label="Set hint" mono />
+      <ClaimRow field="setHint" label="Set Hint" armed={isArmed('setHint')} onArm={arm} says="leave empty to clear it">
+        <PlainInput value={setHint} onChange={setSetHint} placeholder="ME01" label="Set Hint" mono />
       </ClaimRow>
 
       <ClaimRow
@@ -1178,7 +1191,7 @@ export function ClaimEditor({
                   }
                 >
                   {on ? <Icon name="check" size={12} /> : null}
-                  {name}
+                  {titleCase(name)}
                 </button>
               )
             })}
@@ -1257,7 +1270,7 @@ export function ClaimEditor({
           Cancel
         </Button>
         <Button variant="primary" busy={busy} onClick={submit}>
-          Apply to {scope}
+          Apply to {scopeLabel ?? scope}
         </Button>
       </div>
     </div>

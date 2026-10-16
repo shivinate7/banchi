@@ -16,7 +16,7 @@ gives: this script starts and stops supervisors, writes pidfiles and swaps direc
 checkout it runs in may have the owner's live server in it. A copy has its own `.serve/`, its
 own ports and nothing anybody is using.
 
-THE PORT IS PINNED WITH `PKMNSCAN_PORT`, TO A FREE SOCKET THE OS HANDS OUT. The first time this
+THE PORT IS PINNED WITH `BANCHI_PORT`, TO A FREE SOCKET THE OS HANDS OUT. The first time this
 script ran, the derivation asked whether the directory was a LINKED WORKTREE. A
 `shutil.copytree` of this repo is not one, so the copy called itself the main checkout and
 claimed :8000, the owner's live capture server over their real store. Measured: `up` in the copy
@@ -184,10 +184,10 @@ def make_primary_checkout(tree: Path) -> None:
     build, and `scripts/serve.py` for the re-exec, which is the arm that matters most.
     Tracking the rest would add `fixtures/` to a git index for nothing.
 
-    `PKMNSCAN_MAIN=off` throughout: this repo's own pre-commit and ref hooks may be armed
+    `BANCHI_MAIN=off` throughout: this repo's own pre-commit and ref hooks may be armed
     through the ambient config, and the fixture's seed commits are not the thing under test.
     """
-    env = dict(os.environ, PKMNSCAN_MAIN="off")
+    env = dict(os.environ, BANCHI_MAIN="off")
 
     def run(*argv: str) -> None:
         subprocess.run(["git", *argv], cwd=str(tree), env=env,  # noqa: S603, S607
@@ -245,7 +245,7 @@ def give_origin(tree: Path) -> None:
     fast-forward actually changes a watched file. A sync that moved only untracked history
     would prove the ref moved and nothing about the tree the rig serves.
     """
-    env = dict(os.environ, PKMNSCAN_MAIN="off")
+    env = dict(os.environ, BANCHI_MAIN="off")
 
     def run(where: Path, *argv: str) -> subprocess.CompletedProcess:
         return subprocess.run(["git", *argv], cwd=str(where), env=env,  # noqa: S603, S607
@@ -277,7 +277,7 @@ def give_origin(tree: Path) -> None:
 
 def git_switch(tree: Path, branch: str) -> None:
     subprocess.run(["git", "switch", "-q", branch], cwd=str(tree),  # noqa: S603, S607
-                   env=dict(os.environ, PKMNSCAN_MAIN="off"),
+                   env=dict(os.environ, BANCHI_MAIN="off"),
                    capture_output=True, text=True, check=False)
 
 
@@ -292,8 +292,8 @@ def free_port() -> int:
 
 def serve_env(tree: Path, env: Optional[dict] = None) -> dict:
     child_env = dict(os.environ)
-    child_env["PKMNSCAN_HOME"] = str(tree / "home")
-    child_env["PKMNSCAN_PORT"] = str(PORTS[tree])
+    child_env["BANCHI_HOME"] = str(tree / "home")
+    child_env["BANCHI_PORT"] = str(PORTS[tree])
     child_env["PATH"] = f"{tree.parent / 'bin'}{os.pathsep}{child_env.get('PATH', '')}"
     child_env.update(env or {})
     return child_env
@@ -729,7 +729,7 @@ def main() -> int:
             "and nothing is listening — a cold start on a branch serves nothing at all",
         )
         check(
-            "PKMNSCAN_SERVE_MAIN=off" in done.stdout,
+            "BANCHI_SERVE_MAIN=off" in done.stdout,
             "the refusal prints its escape hatch, as every refusal in this repo does",
         )
 
@@ -781,14 +781,14 @@ def main() -> int:
 
         # THE HATCH IS REAL, and it has to be: serving a branch against the real camera and the
         # real store is a thing the owner may legitimately want, and no other command does it.
-        serve(tree3, "up", env={"PKMNSCAN_SERVE_MAIN": "off"})
+        serve(tree3, "up", env={"BANCHI_SERVE_MAIN": "off"})
         try:
             check(
                 wait_until(lambda: get(port3, "/status")[0] == 200, seconds=60),
-                "PKMNSCAN_SERVE_MAIN=off serves the branch anyway",
+                "BANCHI_SERVE_MAIN=off serves the branch anyway",
             )
         finally:
-            serve(tree3, "down", "--confirm", env={"PKMNSCAN_SERVE_MAIN": "off"})
+            serve(tree3, "down", "--confirm", env={"BANCHI_SERVE_MAIN": "off"})
             wait_until(lambda: get(port3, "/status")[0] == 0, seconds=60)
 
     # ------------------------------------- AND THE REFUSAL IS THE FALLBACK, NOT THE ANSWER
@@ -887,7 +887,7 @@ def main() -> int:
         linked = where4 / "linked"
         subprocess.run(  # noqa: S603, S607
             ["git", "worktree", "add", "-q", "-b", "wt", str(linked), "feature"],
-            cwd=str(tree4), env=dict(os.environ, PKMNSCAN_MAIN="off"),
+            cwd=str(tree4), env=dict(os.environ, BANCHI_MAIN="off"),
             capture_output=True, text=True, check=False,
         )
         import importlib.util
@@ -913,7 +913,7 @@ def main() -> int:
             "the primary checkout on a branch names the branch",
         )
         subprocess.run(["git", "pack-refs", "--all"], cwd=str(tree4),  # noqa: S603, S607
-                       env=dict(os.environ, PKMNSCAN_MAIN="off"),
+                       env=dict(os.environ, BANCHI_MAIN="off"),
                        capture_output=True, check=False)
         check(
             not (tree4 / ".git" / "refs" / "heads" / "main").exists(),
@@ -926,7 +926,7 @@ def main() -> int:
             "would go quiet the first time `git gc` ran on the rig",
         )
         subprocess.run(["git", "switch", "-q", "--detach", "main"],  # noqa: S603, S607
-                       cwd=str(tree4), env=dict(os.environ, PKMNSCAN_MAIN="off"),
+                       cwd=str(tree4), env=dict(os.environ, BANCHI_MAIN="off"),
                        capture_output=True, check=False)
         detached = under_test.off_main(tree4)
         check(
@@ -940,7 +940,7 @@ def main() -> int:
         # why the gate went unnoticed by every other arm.
         foreign = where4 / "foreign"
         foreign.mkdir()
-        fenv = dict(os.environ, PKMNSCAN_MAIN="off")
+        fenv = dict(os.environ, BANCHI_MAIN="off")
         for argv in (["init", "-q", "-b", "master"],
                      ["config", "user.email", "selftest@example.com"],
                      ["config", "user.name", "selftest"],

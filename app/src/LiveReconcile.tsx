@@ -146,7 +146,7 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
               }}
             >
               {/* THE PRESS KEEPS ITS WORDS WHILE IT RUNS (D118): the spinner, and a status line. */}
-              Fetch my live listings
+              Fetch your live listings
             </Button>
             <span className="bn-sr" role="status">
               {fetching ? 'Asking TCGplayer…' : ''}
@@ -155,7 +155,7 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
 
           <div className="livecheck-pick">
             <DropZone
-              title="Drop the My Pricing export here"
+              title="Drop the “My Pricing” export here"
               hint="or click to choose the .csv"
               fileName={fileName}
               disabled={busy}

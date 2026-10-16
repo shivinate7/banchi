@@ -134,7 +134,7 @@ def python_answers(tree: Path) -> dict:
     """Load the COPY of `server/ports.py` and read its no-argument answers.
 
     The copy's `REPO_ROOT` is the copy's own tree, as it is for a server started there.
-    `PKMNSCAN_PORT` is set aside for the call: it is an override, and this reads the
+    `BANCHI_PORT` is set aside for the call: it is an override, and this reads the
     derivation under it.
     """
     spec = importlib.util.spec_from_file_location(
@@ -273,7 +273,7 @@ def screenshot_refuses(tmp: Path, kind: str) -> bool:
 
 
 def main() -> int:
-    with tempfile.TemporaryDirectory(prefix="pkmnscan-ports.") as tmp:
+    with tempfile.TemporaryDirectory(prefix="banchi-ports.") as tmp:
         roots = []
         for index in range(CASES):
             path = Path(tmp) / f"tree-{index:02d}"

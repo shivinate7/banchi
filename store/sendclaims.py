@@ -8,7 +8,7 @@ DECIDES IT, and a second press over the same cards is refused by name — by the
 stamp, its time and the cards the two share.
 
 WHY A TABLE AND NOT A LOCK IN THE SERVER. The capture server runs four request slots, so two
-presses can run at once, and a hand `pkmnscan emit` is a second process the server cannot see.
+presses can run at once, and a hand `banchi emit` is a second process the server cannot see.
 The only thing both can see is the store, and the only moment that cannot race is the store
 write that decides what is being sent (`cli/cmd_emit.py`). A lock in memory is also what a
 restart forgets; a row survives it, and that is the point of the second job below.

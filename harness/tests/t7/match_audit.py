@@ -1,4 +1,4 @@
-"""T7 group: `pkmnscan match audit [--write]` re-runs the free reader over filed cards.
+"""T7 group: `banchi match audit [--write]` re-runs the free reader over filed cards.
 
 Part of `harness/tests/t7_store_and_seams.py`. Incident: a paid read misfiled a card and it sold.
 Owner's ruling: a card still in stock whose confident free pick disagrees with its filed card goes

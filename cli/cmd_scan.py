@@ -1,4 +1,4 @@
-"""`pkmnscan scan` — read the codes off a directory of code-card photographs.
+"""`banchi scan` — read the codes off a directory of code-card photographs.
 
 FREE, LOCAL, DETERMINISTIC, AND RE-RUNNABLE. It makes no model call and no network call of
 any kind, so unlike `identify` it has no money gate, no confirmation and no dry-run cost.

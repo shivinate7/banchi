@@ -46,6 +46,12 @@ export function absoluteDate(at: Date | string | number | null | undefined): str
   return when === null ? '—' : ABSOLUTE.format(when)
 }
 
+/** A `yyyy-mm-dd` day as `absoluteDate` prints it. Read at local noon, so a zone west of UTC does not
+ *  slide the day back (a bare date parses as UTC midnight). THE one home of that read. */
+export function dayDate(day: string | null | undefined): string {
+  return day ? absoluteDate(`${day}T12:00:00`) : '—'
+}
+
 /** `just now`, `5 minutes ago`, `2 hours ago`, `yesterday`, `3 days ago`; a week or more, or a
  *  moment in the future, reads as `absoluteDate`. `—` where there is no date. THE one relative
  *  format. `now` is a parameter so a spec can pin it. */
@@ -65,6 +71,18 @@ export function relativeDate(at: Date | string | number | null | undefined, now:
   }
   const days = Math.floor(elapsed / DAY)
   return days === 1 ? 'yesterday' : `${days} days ago`
+}
+
+/** `at 9:06 AM`, with the day when it was not today: `at 9:06 AM yesterday`, `at 9:06 AM 3 days ago`.
+ *  THE one "at <time>[ <day>]" phrase. */
+export function atClockTime(at: Date | string | number | null | undefined, now: Date = new Date()): string {
+  const when = toDate(at)
+  if (when === null) return `at ${clockTime(at)}`
+  const day = localDay(when)
+  if (day === localDay(now)) return `at ${clockTime(when)}`
+  const eve = new Date(now)
+  eve.setDate(eve.getDate() - 1)
+  return `at ${clockTime(when)} ${day === localDay(eve) ? 'yesterday' : relativeDate(when, now)}`
 }
 
 /** `YYYY-MM-DD` in the runtime's zone: the shape `<input type="date">` and a day key use. THE one

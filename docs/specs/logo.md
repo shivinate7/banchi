@@ -48,7 +48,7 @@ Units are the 100 x 100 icon viewBox. A tag says how well a value is known.
 | Ground lightness pair | L 0.255 to 0.148 | LOCKED | the one candidate that moved it lost |
 | Ground chroma ratio | 0.23 to 0.39 | RANGED | the two ends were called the same |
 | Flat, inverted and warm grounds | **eliminated** | LOCKED | flat reads muddy. The sheen cancels an inversion. Warm was rejected at four chromas |
-| Prism | **bluesteel, lilacish, mint** | LOCKED | the owner: "bluesteel, lilic, and mint are good" |
+| Prism | **bluesteel, lilacish, mint** | LOCKED | the owner approved these three |
 | Chrome gradient colors | `#FFFFFF #B8C8D8 #F2F8FF #8FA4B8` | **HELD** | never swept |
 | Turbulence base frequency | `0.035 0.09` | **HELD** | never swept. It sets the scale of the marbling |
 | Turbulence octaves | 4 | **HELD** | never swept |
@@ -158,7 +158,7 @@ The bracket gradients:
 
 - **The three cool marks take ground B (0.39).** Ground A is not rejected. It is an unchosen
   option, and its hexes are in section 3.
-- **Orange joins the warm family and takes true black.** It is the owner's color for Riftbound's Epic gem. Its prism is the yellow-gold ramp turned toward red, and its bracket is `amber`: paler than the prism and warmer than pale gold, so the L still reads against black and the mark stays one object, not a gold mark with an orange card.
+- **Orange joins the warm family and takes true black.** It is the owner's color for Riftbound's Epic gem. Its prism is the yellow-gold ramp turned toward red, and its bracket is `amber`. It is paler than the prism and warmer than pale gold. So the L still reads against black, and the mark stays one object, not a gold mark with an orange card.
 - **The gold family takes true black.** The tonal rule gives gold an espresso brown, and true
   black is what makes a gold foil read as lit.
 - **`rose` names two palettes**: a four-stop bracket gradient and a five-stop prism. Neither is
@@ -182,7 +182,7 @@ display cut is correct at none of them.
 With no taper the bracket is a stroked path (7,091 bytes) and not a 642-point polygon (25,101).
 
 **The forced choice was between three candidates. C won:** stroke 4.2, flat prism gradient. The
-owner asked for whatever is most faithful to "all prisms light beside dark are so nice". A visible
+owner asked for whatever is most faithful to the look of all prisms, light beside dark. A visible
 bracket and a glowing card are what read at size. Candidate A (marbled) loses the glow to mush.
 Candidate B (stroke 3.4) loses the bracket first as the size drops. B is one number away and was
 not eliminated.

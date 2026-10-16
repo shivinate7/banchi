@@ -1,4 +1,4 @@
-"""`pkmnscan rescue <run>` — the cards of a stranded run, re-addressed to where they are now.
+"""`banchi rescue <run>` — the cards of a stranded run, re-addressed to where they are now.
 
 THE ONE-TIME REPAIR FOR A RUN D36 REFUSES, AND IT IS `realign`'s MECHANISM WITH ONE
 RESTRICTION LIFTED. `cli/resolve.py:realign` re-binds a run's records to the slots their
@@ -249,9 +249,9 @@ def run(args, say) -> int:
 
     source = runs.open_run(args.run_dir)
     # THE REPLAY BRANCH (D188). `realign` and this whole command
-    # exist to repair a FROZEN snapshot's stale positions (D36), and only `pkmnscan identify`
+    # exist to repair a FROZEN snapshot's stale positions (D36), and only `banchi identify`
     # ever writes one — every identify run, single-drawer or store-wide (D180), ends by writing
-    # `identifications.json` unconditionally. `pkmnscan join` with no run directory
+    # `identifications.json` unconditionally. `banchi join` with no run directory
     # (`cli/cmd_join.py`'s store-backed path) creates a run directory too, but purely to hold
     # ITS OWN report and pricing table — it reads the store directly at press time and never
     # freezes a payload, so there is no `identifications.json` here and nothing for a digest
@@ -261,8 +261,8 @@ def run(args, say) -> int:
         refuse_json("no_identifications")
         raise runs.RunError(
             f"REFUSING: {source.name} has no {runs.IDENTIFICATIONS} — it looks like a "
-            f"store-backed join's own output directory (`pkmnscan join` with no run "
-            f"directory), not a run `pkmnscan identify` wrote. A store-backed join reads the "
+            f"store-backed join's own output directory (`banchi join` with no run "
+            f"directory), not a run `banchi identify` wrote. A store-backed join reads the "
             f"store directly at press time, so it can never go stale the way an `identify` "
             f"run's frozen positions can; there is nothing here for `rescue` to re-bind.\n"
             f"Nothing was read past the manifest, and nothing was written."
@@ -280,7 +280,7 @@ def run(args, say) -> int:
         refuse_json("not_stranded")
         raise runs.RunError(
             f"REFUSING: {source.name} is not stranded — the store still reads its drawer as "
-            f"its own, so `pkmnscan join {source.directory}` works and this command has "
+            f"its own, so `banchi join {source.directory}` works and this command has "
             f"nothing to repair.\n"
             f"Rescuing a healthy run would put a second run over the same positions in "
             f"runs/, which is the shape D86 measured a capped send over.\n"
@@ -394,7 +394,7 @@ def run(args, say) -> int:
             report["already_rescued"] = other.name
             say(f"already rescued: {other.name} holds exactly these {len(moved)} card(s).")
             say("Nothing written — this command is re-runnable and had nothing to add.")
-            say(f"Next:  ./pkmnscan join {other.directory}")
+            say(f"Next:  ./banchi join {other.directory}")
             if as_json:
                 say(_report_line(report))
             return 0
@@ -468,8 +468,8 @@ def run(args, say) -> int:
         say(f"                carried this run's export for {', '.join(sorted(exports))}")
     say(f"                {source.name} is unchanged")
     say("")
-    say(f"Next:  ./pkmnscan join {rescued.directory}")
-    say(f"       ./pkmnscan emit {rescued.directory}")
+    say(f"Next:  ./banchi join {rescued.directory}")
+    say(f"       ./banchi emit {rescued.directory}")
     if as_json:
         report["new_run"] = rescued.name
         say(_report_line(report))

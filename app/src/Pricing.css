@@ -35,14 +35,29 @@
   box-shadow: var(--bn-shadow-1);
 }
 .pricing-bar-says {
-  flex: 1 1 16rem;
+  flex: 0 0 auto;
   min-width: 0;
   margin: 0;
   font-size: var(--bn-fs-md);
   font-weight: 600;
   color: var(--bn-ink);
 }
-.pricing-bar .send-card { flex: 0 1 auto; min-width: 0; }
+/* TWO ROWS (the owner's ruling): the three tiles take the first row whole, the press and its two doors the second.
+   The tiles wrap only where the column is too narrow for three side by side. */
+.pricing-tally {
+  flex: 1 1 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--bn-2);
+}
+.pricing-bar:has(.pricing-tally) .send-card { flex: 1 1 100%; }
+/* THE DOORS ARE DRAWN ABOVE A PHONE (Q4): the row under the tiles has the room, so More is for the phone alone. */
+.pricing-bar:has(.pricing-tally) .send-more-press { display: none; }
+.pricing-bar:has(.pricing-tally) .send-act:not([data-more='open']) .send-door { display: inline-flex; }
+/* THE CARD TAKES WHAT THE SAYS LINE LEAVES (basis 0), so a notice under the press never decides whether
+   the line wraps above it: the press holds its place whatever the status says (D313). */
+.pricing-bar .send-card { flex: 1 1 0; min-width: 0; }
 
 /* ---- the rule line (Q5) -------------------------------------------------------------------- */
 .pricing-rule-line {
@@ -127,10 +142,8 @@
   border-bottom: 1px solid var(--bn-line);
   background: var(--bn-surface-2);
 }
-.pricing-caption .pricing-col-market,
-.pricing-caption .pricing-col-low,
-.pricing-caption .pricing-col-range,
-.pricing-caption .pricing-col-qty { text-align: right; }
+.pricing-caption .pricing-col-trend,
+.pricing-caption .pricing-col-qty { text-align: center; }
 
 .pricing-group { display: flex; flex-direction: column; }
 .pricing-group-head {
@@ -203,17 +216,16 @@
    `--bn-ink-3`, never the non-text `--bn-ink-4`. */
 .pricing-meta {
   display: flex;
-  flex-wrap: nowrap;
-  overflow: hidden;
+  /* WRAPS RATHER THAN CLIPS: a long set or rarity ("Secret Rare") once ran past the column and was cut. A "·" drawn
+     after an item would be stranded at a line end when the next item wraps, so the facts are separated by the gap alone. */
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--bn-0-5) var(--bn-1-5);
+  gap: var(--bn-0-5) var(--bn-3);
   min-width: 0;
   font-size: var(--bn-fs-sm);
   color: var(--bn-ink-3);
 }
 .pricing-meta > * { flex: none; white-space: nowrap; }
-/* A separator is drawn by CSS, never typed (D218). */
-.pricing-meta > *:not(:last-child)::after { content: '·'; margin-left: var(--bn-1-5); color: var(--bn-ink-3); }
 .pricing-number { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); }
 /* THE SINGLE BOX/SECTION/CARD LOCATION IS GONE FROM THIS LINE (the owner's review, 2026-09-26:
    "why would I need to see one location for only one copy of a card when I'm handling pricing
@@ -229,11 +241,12 @@
    what the line has left, up to its own cap, so a note never adds a line where the facts fit. */
 .pricing-where > .pricing-why { flex: 1 1 0; min-width: 6ch; }
 .pricing-copies { font-weight: 600; color: var(--bn-ink-2); }
+.pricing-removed { display: inline-flex; align-items: center; gap: var(--bn-2); color: var(--bn-ink-2); }
 .pricing-live { color: var(--bn-ink-2); }
 .pricing-live[data-none='true'] { color: var(--bn-ink-3); }
 .pricing-why { font-style: italic; color: var(--bn-ink-2); max-width: 24ch; overflow: hidden; text-overflow: ellipsis; }
 
-.pricing-ref { position: relative; text-align: right; font-size: var(--bn-fs-md); color: var(--bn-ink); white-space: nowrap; }
+.pricing-ref { position: relative; text-align: center; font-size: var(--bn-fs-md); color: var(--bn-ink); white-space: nowrap; }
 .pricing-ref[data-empty='true'] { color: var(--bn-ink-3); }
 .pricing-ref-label { display: none; }
 /* THE AGE OF A FIGURE, UNDER IT, IN THE WARN TONE. Its line is always there, drawn or not (D313). */
@@ -436,7 +449,7 @@
 
 .pricing-photo { display: flex; flex-direction: column; gap: var(--bn-3); }
 .pricing-photo-frame { border-radius: var(--bn-r-lg); overflow: hidden; background: var(--bn-surface-2); }
-.pricing-photo-frame img { display: block; width: 100%; height: auto; }
+.pricing-photo-frame img { display: block; width: 100%; height: auto; aspect-ratio: auto 9 / 16; }
 .pricing-photo-caption { display: flex; justify-content: space-between; gap: var(--bn-2); margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
 
 /* ---- 720 and narrower desks: Lowest and the trend leave the row (the product view has both) -- */
@@ -495,8 +508,10 @@
     border-bottom: 0;
     box-shadow: var(--bn-shadow-2);
   }
-  .pricing-bar-says { display: none; }
-  .pricing-bar .send-card { flex: 1 1 auto; }
+  .pricing-bar-says, .pricing-tally { display: none; }
+  .pricing-bar:has(.pricing-tally) .send-more-press { display: inline-flex; }
+  .pricing-bar:has(.pricing-tally) .send-act:not([data-more='open']) .send-door { display: none; }
+  .pricing-bar .send-card, .pricing-bar:has(.pricing-tally) .send-card { flex: 1 1 auto; }
   .pricing-body { padding-bottom: calc(var(--pricing-bar-h, 0px) + var(--bn-4)); }
   /* FINDING #9 (the Opus review round, re-fixed in the delta review): at 390 the fixed
      `.pricing-bar` sits above the phone tab bar, and a toast's own default `bottom` put its

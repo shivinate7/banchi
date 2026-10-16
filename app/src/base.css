@@ -107,6 +107,8 @@ input[type='checkbox'], input[type='radio'], input[type='file'], input[type='ran
 label:has(> input[type='checkbox']),
 label:has(> input[type='radio']),
 label:has(> input[type='file']) { cursor: pointer; }
+/* Touch floor: a tap acts at once, with no double-tap-zoom wait, and flashes the accent. */
+button, a { touch-action: manipulation; -webkit-tap-highlight-color: var(--bn-accent-tint-2); }
 button:disabled, select:disabled, textarea:disabled, input:disabled,
 [aria-disabled='true'] { cursor: not-allowed; }
 
@@ -237,7 +239,7 @@ summary::-webkit-details-marker { display: none; }
 }
 
 /* EVERY TOGGLE SHOWS FOCUS THE SAME WAY (UX-100). A chip or any other pressed-state control
-   can carry an outline of its own as decoration (Shipping's dashed "Needs a look" lane), and an
+   can carry an outline of its own as decoration (Shipping's "Needs a look" lane), and an
    author outline at one class outranks the `:focus-visible` ring above by source order. Two
    selectors of weight, so the ring wins over a one-class decoration without `!important`. */
 .bn-chip:focus-visible,

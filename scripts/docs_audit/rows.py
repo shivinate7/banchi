@@ -72,7 +72,7 @@ from .paths_commands import (
     check_line_anchors,
     check_make_targets,
     check_paths,
-    check_pkmnscan_commands,
+    check_banchi_commands,
     code_files,
     load_allowlist,
 )
@@ -89,8 +89,10 @@ from .records import (
     check_debt_index,
     check_debts_headings,
     check_decision_ids,
+    check_decision_slug_length,
     check_decision_structure,
     check_id_claims,
+    check_no_owner_quotes,
     check_numbered_record_growth,
 )
 from .registry_scopes import (
@@ -109,7 +111,7 @@ from .spelling import check_shell_substitution
 from .sleeps import check_fixed_sleeps
 from .capability_homes import check_capability_homes
 from .stability import check_font_stability, check_layout_transitions, check_scrollbar_gutter, check_state_layout
-from .status_reach import check_closed_vocabularies, check_status_sources, check_tested_by_reach
+from .status_reach import check_closed_vocabularies, check_paid_read_model, check_status_sources, check_tested_by_reach
 from .strings import check_no_mechanism_on_screen, check_typed_interpunct, check_views_opsec
 
 # ------------------------------------------------------------------------------ main
@@ -178,13 +180,15 @@ ROWS: Tuple[AuditRow, ...] = (
     AuditRow("line anchors", 1, check_line_anchors, ("docs", "staged_code")),
     AuditRow("make targets", 1, check_make_targets, ("docs",)),
     AuditRow("commands roster", 1, check_commands_roster, ()),
-    AuditRow("pkmnscan commands", 1, check_pkmnscan_commands, ("docs", "all_docs")),
+    AuditRow("banchi commands", 1, check_banchi_commands, ("docs", "all_docs")),
     AuditRow("harness tests", 1, check_harness_tests, ("docs", "allowed")),
     AuditRow("pass criteria", 2, check_pass_criteria, ()),
     AuditRow("criteria evidence", 2, check_criteria_evidence, ()),
     AuditRow("evidence freshness", 3, check_evidence_freshness, ("staged_only",)),
     AuditRow("decision ids", 1, check_decision_ids, ("docs",)),
     AuditRow("decision structure", 1, check_decision_structure, ()),
+    AuditRow("no owner quotes", 1, check_no_owner_quotes, ()),
+    AuditRow("decision slug length", 1, check_decision_slug_length, ()),
     AuditRow("id claims", 1, check_id_claims, ()),
     AuditRow("numbered record growth", 1, check_numbered_record_growth, ("staged_only",)),
     AuditRow("claim vocabulary", 1, check_claim_vocabulary, ()),
@@ -223,6 +227,7 @@ ROWS: Tuple[AuditRow, ...] = (
     AuditRow("hint reasons", 1, check_hint_reasons, ()),
     AuditRow("tested_by reach", 2, check_tested_by_reach, ()),
     AuditRow("status sources", 2, check_status_sources, ()),
+    AuditRow("paid-read model", 1, check_paid_read_model, ()),
     AuditRow("design tokens", 1, check_design_tokens, ()),
     AuditRow("raw color", 1, check_raw_color, ()),
     AuditRow("raw motion", 1, check_raw_motion, ()),

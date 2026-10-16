@@ -11,7 +11,7 @@ which is gitignored. What is committed is only this script's scrubbed OUTPUT, un
 `demo-assets/mirror/`: the recorded bundle and the QR-cleared photographs. CI cannot read the
 owner's Mac, so it installs that committed output and builds the page (`--install`).
 
-    python3 scripts/demo-mirror.py --source ~/Developer/pkmnscan   # snapshot, then build
+    python3 scripts/demo-mirror.py --source ~/Developer/banchi   # snapshot, then build
     python3 scripts/demo-mirror.py                                  # build from the snapshot
     python3 scripts/demo-mirror.py --install                        # CI: committed -> app/
 
@@ -213,7 +213,7 @@ def build(home: Path, jobs: int) -> None:
     if (SNAPSHOT / MARKET_CACHE_DEST).is_dir():
         shutil.copytree(SNAPSHOT / MARKET_CACHE_DEST, home / MARKET_CACHE_DEST)
 
-    os.environ["PKMNSCAN_HOME"] = str(home)
+    os.environ["BANCHI_HOME"] = str(home)
     from store import Store, photos
 
     with Store().write() as snap:
@@ -288,7 +288,7 @@ def drop_stale_positions(bundle: Path, home: Path) -> int:
     re-bound — only the CAPTION is re-rendered. A run whose box was later fully emptied (or
     renumbered) still carries the old position, and `Pricing.tsx`/`Fulfillment.tsx` build an
     `<img src={photoUrl(box, index)}>` for it unconditionally. On a LIVE store this is a real,
-    pre-existing gap `pkmnscan rescue` exists to close by hand — but nobody can run `rescue`
+    pre-existing gap `banchi rescue` exists to close by hand — but nobody can run `rescue`
     against a frozen demo bundle, so a stale position here is a 404 a reviewer sees FOREVER.
 
     MEASURED, 2026-09-27: `2026-09-01-box5-01`'s pricing table names 98 positions in box 5,
@@ -298,7 +298,7 @@ def drop_stale_positions(bundle: Path, home: Path) -> int:
     NEVER TOUCHES A LIVE STORE — this runs once, here, over the recorded bundle.json a demo
     build is about to publish, never over `server/pipeline_routes.py`'s own live response.
     """
-    from store import Store  # imported late: needs PKMNSCAN_HOME, already set by build()
+    from store import Store  # imported late: needs BANCHI_HOME, already set by build()
 
     existing = {
         (int(card.box), int(card.index)) for card in Store().read().inventory.cards.values()

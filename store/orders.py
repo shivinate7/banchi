@@ -1244,6 +1244,27 @@ class Ledger:
             out, key=lambda r: (r.placed_at is None, r.placed_at or "", r.key)
         )
 
+    def open_quantity(self, sku) -> int:
+        """Copies of this SKU that open orders still owe: the sale TCGplayer has made that a
+        card in a box does not yet show (`server/send_routes._sku_snapshot` subtracts it from the
+        shelf). A terminal status owes nothing, a stood-down line owes nothing, and a pulled
+        copy is already sold (`outstanding` counts it off), so no copy is counted twice."""
+        wanted = str(sku).strip()
+        return sum(
+            self.outstanding(key, wanted)
+            for key, record in self.orders.items()
+            if not is_terminal_status(record.status)
+            and record.line_for(wanted) is not None
+            and not self.recorded(key, wanted).closed
+        )
+
+    def latest_ingest(self) -> Optional[str]:
+        """When the newest order the feed taught this ledger was added or changed, or None for
+        an empty ledger. THE ONLY SYNC TIME THE LEDGER KEEPS: a sync that learns nothing
+        stamps nothing (the header: there is no `last_synced_at`), so this can read older than
+        the last sync. A reader that holds copies out until it moves errs on the safe side."""
+        return max((record.changed_at for record in self.orders.values() if record.changed_at), default=None)
+
     @property
     def summary(self) -> str:
         owing = len(self.unfulfilled())

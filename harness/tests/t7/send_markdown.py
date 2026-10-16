@@ -33,6 +33,7 @@ from cli import cmd_reprice, resolve, runs
 from pipeline import corpus, reprice, sendguard, tcgcsv
 from server import capture_server, pipeline_routes, send_routes, tcg_export, tcg_import
 from store import clock, db, files, master, sendclaims
+from store import orders as order_store
 from store.session import Store
 from harness.tests.t7.common import (
     ARTICUNO_SKU,
@@ -122,7 +123,7 @@ def check_markdown(checks: Checks) -> None:
     def rows_of(path):
         return list(tcgcsv.read_export(path).rows)
 
-    with isolated_home() as home:
+    with synced_home() as home:
         run_dir, _ = seam_run(checks, cards)
         book = corpus.Corpus.read()
         book.sub_threshold = "floor"
@@ -429,7 +430,7 @@ def check_markdown_floor(checks: Checks) -> None:
         tcgcsv.write_csv(path, source.header, rows)
         return Path(path)
 
-    with isolated_home() as home:
+    with synced_home() as home:
         run_dir, _ = seam_run(checks, cards)
         book = corpus.Corpus.read()
         # THE OWNER'S OWN FIGURE, WHICH IS WHAT MAKES THIS A REGRESSION TEST RATHER THAN A
@@ -590,7 +591,7 @@ def check_markdown_lens(checks: Checks) -> None:
         tcgcsv.write_csv(path, source.header, rows)
         return Path(path)
 
-    with isolated_home() as home:
+    with synced_home() as home:
         run_dir, _ = seam_run(checks, cards)
         book = corpus.Corpus.read()
         book.sub_threshold = "floor"
@@ -902,7 +903,7 @@ def check_markdown_push(checks: Checks) -> None:
     checks.note("")
     checks.note("MARKDOWN PUSH — the gates that fire before anything reaches TCGplayer")
 
-    with isolated_home() as home:
+    with synced_home() as home:
         directory = home / "inventory" / "markdowns" / "20260906-120000"
         directory.mkdir(parents=True)
 
@@ -1032,7 +1033,7 @@ def check_markdown_push(checks: Checks) -> None:
 def send_portal():
     """A loopback TCGplayer: the live export GET and the five pricing POSTs, and a record of
     every call. NOTHING HERE CAN REACH THE REAL PORTAL: `tcg_import._url` and
-    `tcg_export.live_endpoint` both follow `PKMNSCAN_TCG_EXPORT_URL`, which is set to this
+    `tcg_export.live_endpoint` both follow `BANCHI_TCG_EXPORT_URL`, which is set to this
     socket, and `envfile` is made hermetic so a real `.env` cannot supply a real cookie.
 
     THE MODES, EACH A WAY THE REAL PORTAL CAN ANSWER THAT A SEND MUST SURVIVE:
@@ -1177,20 +1178,20 @@ def send_portal():
             self._answer(200, json.dumps(answer).encode("utf-8"))
 
     keys = (
-        "PKMNSCAN_TCG_EXPORT_URL",
+        "BANCHI_TCG_EXPORT_URL",
         "TCGPLAYER_STORE_COOKIE",
-        "PKMNSCAN_TCG_USER_AGENT",
+        "BANCHI_TCG_USER_AGENT",
         envfile.FROM_FILE_ENV,
     )
     previous = {name: os.environ.get(name) for name in keys}
     portal = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Portal)
     portal.daemon_threads = True
     thread = _spawn_server(portal)
-    os.environ["PKMNSCAN_TCG_EXPORT_URL"] = (
+    os.environ["BANCHI_TCG_EXPORT_URL"] = (
         f"http://127.0.0.1:{portal.server_address[1]}/admin/pricing/downloadexportcsv"
     )
     os.environ["TCGPLAYER_STORE_COOKIE"] = "TCGAuthTicket_Production=t7-send-not-a-real-session"
-    os.environ.pop("PKMNSCAN_TCG_USER_AGENT", None)
+    os.environ.pop("BANCHI_TCG_USER_AGENT", None)
     env_before = (envfile.ENV_FILE, set(envfile._from_file), envfile._loaded)
     envfile.ENV_FILE = Path(tempfile.gettempdir()) / "t7-send-no-such.env"
     envfile._from_file.clear()
@@ -1252,7 +1253,7 @@ def check_send_guard(checks: Checks) -> None:
 
     live = Path(tempfile.mkdtemp()) / "live.csv"
 
-    with isolated_home():
+    with synced_home():
         run_dir, _ = seam_run(checks, cards)
         command(checks, "emit", str(run_dir.directory))
         checks.equal(
@@ -1264,7 +1265,7 @@ def check_send_guard(checks: Checks) -> None:
 
     for held_live, goes in ((3, None), (2, "1")):
         live.write_bytes(_live_export_bytes({ARTICUNO_SKU: held_live, DUNSPARCE_SKU: 0}))
-        with isolated_home():
+        with synced_home():
             run_dir, _ = seam_run(checks, cards)
             said = command(checks, "emit", str(run_dir.directory), "--live-guard", str(live))
             checks.equal(
@@ -1294,7 +1295,7 @@ def check_send_guard(checks: Checks) -> None:
             )
 
     # A GUARD FILE THAT CANNOT BE READ REFUSES THE WRITE. It never fails open to no guard.
-    with isolated_home():
+    with synced_home():
         run_dir, _ = seam_run(checks, cards)
         from cli import __main__ as entry
 
@@ -1343,7 +1344,7 @@ def check_send_press(checks: Checks) -> None:
         return 0 if listing is None else listing.pushed
 
     # ------------------------------------------------ the happy path, and the check after it
-    with send_portal() as portal, isolated_home():
+    with send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
 
@@ -1385,10 +1386,7 @@ def check_send_press(checks: Checks) -> None:
         checks.equal(early["ran"], False, "a check inside the lag does not run")
 
         # THE LAG PASSES (the receipt's clock moved back), and TCGplayer shows one short.
-        directory = send_routes.sends_dir() / sent["stamp"]
-        record = send_routes._read(directory)
-        record["check_after"] = "2000-01-01T00:00:00+00:00"
-        send_routes._write(directory, record)
+        _age_receipt(sent["stamp"])
         checks.ok(send_routes.do_sends()["due"], "once the lag has passed, the check is due")
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})
         checked = send_routes.do_live_check({})
@@ -1422,7 +1420,7 @@ def check_send_press(checks: Checks) -> None:
         )
 
     # ----------------------------------------- the double-send trim, end to end through the press
-    with send_portal() as portal, isolated_home():
+    with send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         # TCGplayer holds two Articuno the store never recorded (a hand upload).
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0})
@@ -1434,7 +1432,7 @@ def check_send_press(checks: Checks) -> None:
         )
 
     # --------------------------------------------------------- the live read cannot run
-    with send_portal() as portal, isolated_home():
+    with send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["signed_out"] = True
         checks.equal(
@@ -1458,7 +1456,7 @@ def check_send_press(checks: Checks) -> None:
     # the publish, which is rolled back. An UNCLEAR publish is `check_send_hazards`' case: its
     # copies are held, never put back (the 2026-09-24 review, S1-b).
     for failing, rolled in (("initializeexportcsv", []), ("movetolive", ["u-1"])):
-        with send_portal() as portal, isolated_home():
+        with send_portal() as portal, synced_home():
             run_dir, _ = seam_run(checks, cards)
             portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
             portal["fail" if failing == "initializeexportcsv" else "refuse"] = {failing}
@@ -1477,7 +1475,7 @@ def check_send_press(checks: Checks) -> None:
             checks.equal(receipt["state"], "failed", "and the receipt says the press failed")
 
     # --------------------------------------------------- the download door, and take-back
-    with send_portal() as portal, isolated_home():
+    with send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
         answer = send_routes.do_send({"runs": [run_dir.name], "download": True})
@@ -1545,7 +1543,7 @@ def check_send_press(checks: Checks) -> None:
         )
 
     # ------------------------------------------------ the same bytes are never pushed twice
-    with isolated_home():
+    with synced_home():
         directory = send_routes.sends_dir() / "20260923-120000"
         send_routes._write(
             directory,
@@ -1559,7 +1557,7 @@ def check_send_press(checks: Checks) -> None:
 
     # ------------------------------------------------------------ the mark-down's one press
     for failing in (None, "movetolive"):
-        with send_portal() as portal, isolated_home() as home:
+        with send_portal() as portal, synced_home() as home:
             directory = _markdown_dir(home, "20260923-130000")
             portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
             if failing:
@@ -1621,6 +1619,362 @@ def check_send_press(checks: Checks) -> None:
     )
 
 
+def check_send_hold_takes_off(checks: Checks) -> None:
+    """The press takes a held SKU's live copies off: one negative row, sized by the press's own
+    fresh live read, and the store changes only when the live check confirms.
+
+    THE OWNER'S RULING (D100's open question), AS THE REVIEW OF PR #768 REDESIGNED IT. The size
+    is the fresh read's live quantity for the held SKU, never the store's. Nothing in the store
+    moves at write time, so a take-off that fails, is only downloaded, or is never confirmed
+    heals on the next press. `_summary` carries the count as `taken_off` for `SendCard`.
+    `_already_pushed` still refuses a real double send, including a take-off pressed twice.
+    """
+    checks.note("")
+    checks.note("SEND PRESS — a held SKU's live copies come off, and the store waits for the check")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+
+    def hold(sku, reason):
+        book = corpus.Corpus.read()
+        if reason is None:
+            book.answers.pop(sku, None)
+        else:
+            book.answers[sku] = corpus.Answer(value={"withheld": reason})
+        book.write()
+
+    def counts():
+        listing = Store().read().inventory.listings.get(ARTICUNO_SKU)
+        return (0, 0) if listing is None else (listing.pushed, listing.live)
+
+    def rows(portal):
+        return {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]}
+
+    def press(run_dir, **extra):
+        """The press's answer, or None with the refusal's code on a failure line."""
+        try:
+            return send_routes.do_send({"runs": [run_dir.name], "confirm": True, **extra})
+        except pipeline_routes.PipelineRefusal as caught:
+            return {"refused": caught.code}
+
+    def settled(portal):
+        """A run whose three copies are sent AND confirmed live: the starting point."""
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        _age_receipt(sent["stamp"])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({})
+        return run_dir
+
+    # ------------------------------------------------ the take, and the store waiting
+    with send_portal() as portal, synced_home():
+        run_dir = settled(portal)
+        start = counts()
+        hold(ARTICUNO_SKU, "bullish")
+        portal["rows"].clear()
+        answer = press(run_dir)
+        checks.equal(
+            rows(portal),
+            {ARTICUNO_SKU: "-3"},
+            f"THE PORTAL RECEIVED ONE NEGATIVE ROW, the fresh read's three. Press: {answer.get('refused', 'sent')}",
+        )
+        checks.equal(
+            (answer.get("send") or {}).get("taken_off"),
+            3,
+            "and the receipt names how many copies come off (`taken_off`, read by SendCard)",
+        )
+        checks.equal(
+            counts(),
+            start,
+            "THE STORE CHANGED NOTHING AT WRITE TIME: `pushed` and `live` wait for the check",
+        )
+        sent = (answer.get("send") or {}).get("stamp")
+        if sent:
+            _age_receipt(sent)
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+            send_routes.do_live_check({})
+            checks.equal(
+                counts(),
+                (0, 0),
+                "THE LIVE CHECK THAT FINDS THEM GONE is what lowers `pushed` and `live`",
+            )
+
+    # ------------------------------------------------ a failed take-off leaves the store alone
+    with send_portal() as portal, synced_home():
+        run_dir = settled(portal)
+        start = counts()
+        hold(ARTICUNO_SKU, "keeping")
+        portal["refuse"] = {"uploadexportcsv"}
+        failed = press(run_dir)
+        checks.ok("refused" in failed, "TCGplayer turns the take-off away, and the press fails")
+        checks.equal(
+            counts(),
+            start,
+            "`_fail` LEAVES THE STORE UNCHANGED: a take-off that never landed took nothing, and "
+            "must not put copies back on top of what is still counted",
+        )
+        portal["refuse"] = set()
+        portal["rows"].clear()
+        press(run_dir)
+        checks.equal(
+            rows(portal),
+            {ARTICUNO_SKU: "-3"},
+            "THE NEXT PRESS HEALS IT: it re-reads live and takes off what is still there",
+        )
+
+    # ------------------------------------------------ a download's take-off is outstanding
+    with send_portal() as portal, synced_home():
+        run_dir = settled(portal)
+        start = counts()
+        hold(ARTICUNO_SKU, "next_batch")
+        press(run_dir, download=True)
+        checks.equal(counts(), start, "a downloaded take-off changes nothing in the store")
+        portal["rows"].clear()
+        press(run_dir)
+        checks.ok(
+            ARTICUNO_SKU not in rows(portal),
+            "A DOWNLOADED FILE IS A TAKE-OFF OUTSTANDING: the next press writes no second row "
+            "for the SKU until a newer live read settles or lapses the first",
+        )
+
+    # ------------------------------------------------ an unknown answer leaves the store alone
+    with send_portal() as portal, synced_home():
+        run_dir = settled(portal)
+        start = counts()
+        hold(ARTICUNO_SKU, "keeping")
+        portal["published_then_5xx"] = True
+        press(run_dir)
+        checks.equal(
+            counts(),
+            start,
+            "A TAKE-OFF TCGPLAYER ANSWERED 500 TO is unknown, and the store stays as it was",
+        )
+
+    # ------------------------------------------------ a take-off pressed twice is refused
+    with send_portal() as portal, synced_home():
+        run_dir = settled(portal)
+        hold(ARTICUNO_SKU, "keeping")
+        press(run_dir)
+        portal["rows"].clear()
+        again = press(run_dir)
+        checks.ok(
+            "refused" in again and not portal["rows"],
+            "THE SAME TAKE-OFF TWICE INSIDE THE UPLOAD WINDOW IS A DOUBLE SEND: refused, "
+            f"nothing reaches TCGplayer. Got: {again.get('refused', 'sent')}",
+        )
+
+    # ------------------------------------------------ `_already_pushed` on take-off receipts
+    def receipt(stamp, age_s, **fields):
+        now = clock.now()
+        at = clock.iso(now - timedelta(seconds=age_s))
+        send_routes._write(
+            send_routes.sends_dir() / stamp,
+            {
+                "kind": "send", "taken_back_at": None, "at": at,
+                "pushed": {"upload_id": "u", "pushed_at": at},
+                **fields,
+            },
+        )
+
+    with synced_home():
+        receipt("20260924-110000", 120, digest="d-take", copies={}, taken_off={ARTICUNO_SKU: 3})
+        receipt("20260924-110100", 60, digest="d-take-2", copies={}, taken_off={ARTICUNO_SKU: 3})
+        checks.equal(
+            send_routes._already_pushed("d-take"),
+            "20260924-110000",
+            "A TAKE-OFF RECEIPT WITH NO COPIES IS STILL A PUSH: a later take-off of the same "
+            "SKU does not excuse the same bytes pressed again inside the window",
+        )
+    with synced_home():
+        receipt("20260924-110000", 120, digest="d-sent", copies={ARTICUNO_SKU: 2})
+        receipt("20260924-110100", 60, digest="d-part", copies={}, taken_off={ARTICUNO_SKU: 1})
+        checks.equal(
+            send_routes._already_pushed("d-sent"),
+            "20260924-110000",
+            "A PARTIAL TAKE (1 of 2) DOES NOT CLEAR THE SEND: one copy is still pending at "
+            "TCGplayer, so the same two bytes again would double it",
+        )
+
+
+def check_send_take_outstanding(checks: Checks) -> None:
+    """At most ONE outstanding take-off per SKU (the re-review of PR #768).
+
+    A take-off is outstanding from the moment its file is written (a press or a download) until
+    a live read newer than it settles it: the copies are gone (settled once, from that take), or
+    they are still live after the check window (never landed, and only then may a new take be
+    sized). While one is outstanding a press writes no take-off row for that SKU and says so in
+    a sentence that names the card and says "outstanding". The press also works on the
+    store-wide worklist, so a held SKU in none of the selected runs is still taken off.
+    """
+    checks.note("")
+    checks.note("SEND PRESS — one outstanding take-off per SKU")
+
+    def hold(sku, reason="keeping"):
+        book = corpus.Corpus.read()
+        if reason is None:
+            book.answers.pop(sku, None)
+        else:
+            book.answers[sku] = corpus.Answer(value={"withheld": reason})
+        book.write()
+
+    def counts():
+        listing = Store().read().inventory.listings.get(ARTICUNO_SKU)
+        return (0, 0) if listing is None else (listing.pushed, listing.live)
+
+    def rows(portal):
+        return {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]}
+
+    def press(runs_, **extra):
+        """`(answer, text)`: the press's answer and every sentence it said, or its refusal."""
+        names = [run.name for run in runs_]
+        try:
+            answer = send_routes.do_send({"runs": names, "confirm": True, **extra})
+            return answer, str(answer.get("console") or "")
+        except pipeline_routes.PipelineRefusal as caught:
+            return {"refused": caught.code}, f"{caught.code} {caught}"
+
+    def long_ago(stamp):
+        """Age a receipt past the check wait AND the upload window, so the digest guard that
+        stops the same bytes twice in a row is not what these cases measure."""
+        if not stamp:
+            return
+        _age_receipt(stamp)
+        directory = send_routes.sends_dir() / stamp
+        record = send_routes._read(directory)
+        old = "2000-01-01T00:00:00+00:00"
+        record["at"] = old
+        if record.get("pushed"):
+            record["pushed"]["pushed_at"] = old
+        send_routes._write(directory, record)
+
+    def stamp_of(answer):
+        return (answer.get("send") or {}).get("stamp")
+
+    def says_outstanding(text):
+        return "outstanding" in text and "Articuno" in text
+
+    def settled(portal, count=3, live=3):
+        run_dir, _ = seam_run(checks, [(3, i, "Articuno", "161", None) for i in range(1, count + 1)])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        _age_receipt(sent["stamp"])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: live})
+        send_routes.do_live_check({})
+        return run_dir
+
+    # ------------------------------------------------ A: never landed, then landed: settle once
+    with send_portal() as portal, synced_home():
+        run_dir = settled(portal, count=5, live=3)
+        start, _ = counts()
+        hold(ARTICUNO_SKU)
+        first, _ = press([run_dir])
+        long_ago(stamp_of(first))
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({})  # still live past the window: it never landed
+        portal["rows"].clear()
+        second, _ = press([run_dir])
+        checks.equal(
+            rows(portal),
+            {ARTICUNO_SKU: "-3"},
+            "A TAKE THAT NEVER LANDED (still live past the window) MAY BE SIZED AGAIN",
+        )
+        long_ago(stamp_of(second))
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        send_routes.do_live_check({})
+        send_routes.do_live_check({})
+        checks.equal(
+            counts()[0],
+            start - 3,
+            "THE COPIES THAT WENT ARE SETTLED EXACTLY ONCE: `pushed` falls by three, not six",
+        )
+        settled_by = [
+            stamp
+            for stamp, record in send_routes._receipts()
+            if ARTICUNO_SKU in (record.get("take_settled") or [])
+        ]
+        checks.equal(len(settled_by), 1, "and exactly one receipt carries the settlement")
+
+    # ------------------------------------------------ B: a download not uploaded blocks a second
+    with send_portal() as portal, synced_home():
+        run_dir = settled(portal)
+        hold(ARTICUNO_SKU)
+        send_routes.do_send({"runs": [run_dir.name], "download": True})
+        portal["rows"].clear()
+        answer, text = press([run_dir])
+        checks.ok(
+            ARTICUNO_SKU not in rows(portal),
+            "A DOWNLOADED TAKE-OFF IS OUTSTANDING until a newer read settles it: the next "
+            "press writes no second take-off file for that SKU",
+        )
+        checks.ok(says_outstanding(text), f"and says so, naming the card. Got: {text[-300:]!r}")
+
+    # ------------------------------------------------ C: a sale between two presses
+    with send_portal() as portal, synced_home():
+        run_dir = settled(portal)
+        hold(ARTICUNO_SKU)
+        press([run_dir])
+        capture_server.do_mark_sold(3, 3, {})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
+        portal["rows"].clear()
+        answer, text = press([run_dir])
+        checks.ok(
+            ARTICUNO_SKU not in rows(portal),
+            "A COPY SOLD BETWEEN TWO PRESSES INSIDE THE WINDOW does not size a second take-off "
+            "while the first is outstanding",
+        )
+        checks.ok(says_outstanding(text), f"and the press says why. Got: {text[-300:]!r}")
+
+    # ------------------------------------------------ a failed store write leaves the take outstanding
+    with send_portal() as portal, synced_home():
+        run_dir = settled(portal, count=5, live=3)
+        start, _ = counts()
+        hold(ARTICUNO_SKU)
+        sent, _ = press([run_dir])
+        long_ago(stamp_of(sent))
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        real = send_routes._lower_takes
+
+        def broken(gone, live_now):
+            raise OSError("the store would not write")
+
+        send_routes._lower_takes = broken
+        try:
+            send_routes.do_live_check({})
+        except OSError:
+            pass
+        finally:
+            send_routes._lower_takes = real
+        checks.ok(
+            not any(
+                ARTICUNO_SKU in (record.get("take_settled") or [])
+                for _, record in send_routes._receipts()
+            ),
+            "A STORE WRITE THAT FAILED LEAVES THE TAKE OUTSTANDING: no receipt says it settled, "
+            "so the next check settles it",
+        )
+        send_routes.do_live_check({})
+        checks.equal(
+            counts()[0],
+            start - 3,
+            "and the next check lowers `pushed` once, by three",
+        )
+
+    # ------------------------------------------------ G: a held SKU in none of the selected runs
+    with send_portal() as portal, synced_home():
+        settled(portal)
+        other, _ = seam_run(checks, [(4, 1, "Dunsparce", "120", "normal")])
+        hold(ARTICUNO_SKU)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})
+        portal["rows"].clear()
+        press([other])
+        checks.equal(
+            rows(portal).get(ARTICUNO_SKU),
+            "-3",
+            "THE PRESS WORKS ON THE STORE-WIDE WORKLIST: a held SKU in none of the selected "
+            "runs is still taken off",
+        )
+
+
 def _press_thread(fn, answers, index):
     """Run one press on its own thread and keep what it answered, or the code it refused."""
 
@@ -1649,10 +2003,20 @@ def _short_timeout(seconds: float):
 
 
 def _age_receipt(stamp: str) -> None:
-    """Move a receipt's wait into the past: the lag has passed for it."""
+    """Move a receipt's wait into the past: the lag has passed for it.
+
+    The publish is aged too, when there is one: `reconcile --live` keeps the stored figure of a
+    SKU published inside the last lag (`cmd_reprice.published_recently`). That guard dates a
+    receipt by `published_at`, or by `unknown.at` for a send whose outcome is unknown, so both
+    are aged. A receipt with neither is never read by the guard.
+    """
     directory = send_routes.sends_dir() / stamp
     record = send_routes._read(directory)
     record["check_after"] = "2000-01-01T00:00:00+00:00"
+    if record.get("published_at"):
+        record["published_at"] = "2000-01-01T00:00:00+00:00"
+    if (record.get("unknown") or {}).get("at"):
+        record["unknown"]["at"] = "2000-01-01T00:00:00+00:00"
     send_routes._write(directory, record)
 
 
@@ -1684,7 +2048,7 @@ def check_send_sold_since(checks: Checks) -> None:
 
     cards = [(3, 1, "Articuno", "161", None)]
     for label, drop_sold_before in (("sold_before", False), ("state_at", True)):
-        with send_portal() as portal, isolated_home():
+        with send_portal() as portal, synced_home():
             run_dir, _ = seam_run(checks, cards)
             portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
             sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
@@ -1708,6 +2072,1177 @@ def check_send_sold_since(checks: Checks) -> None:
                 "reason it is not live, and counting it as missing would hold a good send "
                 "for a re-send",
             )
+
+
+def _banner_send(stamp: str) -> dict:
+    """One send's row as `#/pricing`'s SendCard reads it, from `do_sends`."""
+    return next(row for row in send_routes.do_sends()["sends"] if row["stamp"] == stamp)
+
+
+def check_send_sold_after_check(checks: Checks) -> None:
+    """A copy sold after a check that missed it still confirms the send, never offered back.
+
+    THE FROZEN RESULT. The first check past the wait can run while TCGplayer still shows the
+    pre-send figure, and then it judges the send `short`. `send_routes._due` admits only
+    waiting, unknown and written receipts, so a `short` one is never checked again. A sale
+    that follows is never credited (`_sold_since` runs only inside `_credits`, for due
+    receipts), and the banner and "Take them back" keep the stored figure.
+
+    A SALE PROVES A COPY LANDED. The live figure is not the only witness. `live_before` is set
+    one above every later live read, as it is for a SKU that already had a copy listed. The
+    rise measured from the live figure alone comes to one less than the sale, so a fix that
+    only re-checks `short` receipts and trusts that rise fails here. The copy that did not
+    sell stays offered back, as it is today.
+
+    Both orders are driven the way the screen drives them: the first check past the wait,
+    then the owner's manual "Check what is live" (`force`) after a sale.
+    """
+    checks.note("")
+    checks.note("SEND CHECK — a copy sold after a check that missed it still confirms the send")
+
+    cards = [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None)]
+    for label, sold_first in (("sold after the check", False), ("sold before the check", True)):
+        with send_portal() as portal, synced_home():
+            run_dir, _ = seam_run(checks, cards)
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+            stamp = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]["stamp"]
+            directory = send_routes.sends_dir() / stamp
+            record = send_routes._read(directory)
+            record["live_before"] = {ARTICUNO_SKU: 1}
+            send_routes._write(directory, record)
+            _age_receipt(stamp)
+            if sold_first:
+                capture_server.do_mark_sold(3, 1, {})
+            send_routes.do_live_check({})
+            if not sold_first:
+                before_sale = _banner_send(stamp)
+                checks.equal(
+                    (before_sale["check"]["found"], before_sale["takeable"]),
+                    (0, 2),
+                    f"PRECONDITION ({label}): the first check misses both copies, so both "
+                    "are offered back",
+                )
+                capture_server.do_mark_sold(3, 1, {})
+                send_routes.do_live_check({"force": True})
+            summary = _banner_send(stamp)
+            checks.equal(
+                (summary["check"]["found"], summary["check"]["expected"], summary["takeable"]),
+                (1, 2, 1),
+                f"A SALE PROVES A COPY LANDED ({label}): the copy sold is found although the "
+                "live figure still shows it gone, and only the copy that did not sell is "
+                "offered back, so a good copy is never sent twice",
+            )
+
+
+def _press_and_age(checks: Checks, portal, cards, live: Dict[str, int]) -> str:
+    """Send `cards` through the real route with TCGplayer showing `live`; return the stamp.
+
+    The wait is aged, and so is the publish: `reconcile --live` keeps the stored figure of a
+    SKU published inside the last lag (`cmd_reprice.published_recently`), so a case that reads
+    the store past the wait must age `published_at` too, or the reading is refused as recent.
+    """
+    run_dir, _ = seam_run(checks, cards)
+    portal["live"] = _live_export_bytes(live)
+    stamp = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]["stamp"]
+    _age_receipt(stamp)
+    return stamp
+
+
+def _open_order(sku: str, quantity: int, number: str, placed_at: str = "2026-10-06T23:00:00+00:00") -> None:
+    """An open order for `sku`, written through the ledger's own `ingest`, as a sync writes it."""
+    with Store().write() as snapshot:
+        snapshot.ledger.ingest(
+            [
+                order_store.OrderRecord(
+                    source="TCGplayer",
+                    number=number,
+                    status="Pending",
+                    placed_at=placed_at,
+                    lines=[order_store.OrderLine(sku=sku, quantity=quantity)],
+                )
+            ]
+        )
+
+
+def check_send_snapshot_lagging_then_newer(checks: Checks) -> None:
+    """Snapshot case 1: a lagging reading, then a newer one that shows the copies.
+
+    The first check past the wait reads TCGplayer's old figure and judges both copies missing.
+    A newer reading, dated after the wait, shows both live. The send is then `checked`, nothing
+    is offered back, and no claim holds the next send.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT 1 — a lagging reading, then a newer one that shows the copies")
+    cards = [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None)]
+    with send_portal() as portal, synced_home():
+        stamp = _press_and_age(checks, portal, cards, {ARTICUNO_SKU: 0})
+        send_routes.do_live_check({})
+        lagging = _banner_send(stamp)
+        checks.equal(
+            (lagging["state"], lagging["takeable"]),
+            ("short", 2),
+            "PRECONDITION: the lagging reading judges both copies missing",
+        )
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
+        send_routes.do_live_check({"force": True})
+        newer = _banner_send(stamp)
+        checks.equal(
+            (newer["state"], newer["takeable"]),
+            ("checked", 0),
+            "A NEWER READING THAT SHOWS THE COPIES settles the send: checked, nothing to take back",
+        )
+        checks.ok(not newer["held"], "SEND UNLOCKS: no claim holds the send after the newer reading")
+
+
+def check_send_snapshot_open_order(checks: Checks) -> None:
+    """Snapshot case 2: an open order takes the copy, though the card is not yet marked sold.
+
+    TCGplayer has sold the copy and an open order names it. The shelf still counts the card as
+    unsold, but the order has taken it: shelf unsold (1) minus open-order copies (1) leaves
+    nothing missing. Take Back must not offer it.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT 2 — an open order on a checked send, the card not yet marked sold")
+    with send_portal() as portal, synced_home():
+        stamp = _press_and_age(checks, portal, [(3, 1, "Articuno", "161", None)], {ARTICUNO_SKU: 0})
+        _open_order(ARTICUNO_SKU, 1, "O-SNAPSHOT-2")
+        send_routes.do_live_check({})
+        summary = _banner_send(stamp)
+        checks.equal(
+            (summary["state"], summary["takeable"]),
+            ("checked", 0),
+            "AN OPEN ORDER HAS TAKEN THE COPY: it is sold, so nothing is missing and nothing "
+            "goes back",
+        )
+
+
+def check_send_snapshot_reading_before_wait(checks: Checks) -> None:
+    """Snapshot case 3: the store's reading of the SKU is dated before the send's wait.
+
+    The check judged both copies missing past the wait. The reading the snapshot reads is the
+    store's own (`live_as_of`), and here it is dated before that wait, so it cannot show what
+    the copies look like after it. Take Back must hold.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT 3 — the store's reading is dated before the wait")
+    with send_portal() as portal, synced_home():
+        stamp = _press_and_age(
+            checks,
+            portal,
+            [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0},
+        )
+        send_routes.do_live_check({})
+        checks.equal(
+            _banner_send(stamp)["takeable"],
+            2,
+            "PRECONDITION: the check past the wait offers both copies back",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.listings[ARTICUNO_SKU].live_as_of = "2000-01-01T00:00:00+00:00"
+        checks.equal(
+            _banner_send(stamp)["takeable"],
+            0,
+            "A READING DATED BEFORE THE WAIT IS NO BASIS: nothing is offered back on it",
+        )
+
+
+def check_send_snapshot_rise_before_press(checks: Checks) -> None:
+    """Snapshot case 4: the live count rises between the screen's read and the Take Back press.
+
+    The screen read two copies to take back. Before the press, TCGplayer shows one of them
+    live, and the store takes that reading as `reconcile --live` does. The press must move only
+    the fresh figure: one copy, not the two the screen showed.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT 4 — the live count rises between the read and the press")
+    with send_portal() as portal, synced_home():
+        stamp = _press_and_age(
+            checks,
+            portal,
+            [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0},
+        )
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(stamp)["takeable"], 2, "PRECONDITION: the screen reads two to take back")
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+        _name, path = send_routes._fetch_live("moved")
+        send_routes._reconcile(path, "moved")
+        moved = send_routes.do_take_back(stamp, {"confirm": True})["moved"]
+        checks.equal(
+            moved,
+            1,
+            "ONLY THE FRESH FIGURE MOVES: one copy is live now, so one goes back, not the two "
+            "the screen showed",
+        )
+
+
+def check_send_snapshot_shared_sku(checks: Checks) -> None:
+    """Snapshot case 5: one SKU in two sends. Take Back is offered on the newest receipt only.
+
+    The first send (one copy) is checked past its wait and judged missing. The second send (two
+    copies, a different row, since an identical row is refused as a double send) is then
+    checked. The offer must sit on the newest receipt that carries the SKU, and the copies moved
+    must not exceed the snapshot: three copies sent, none live, so three missing.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT 5 — one SKU in two sends, offered on the newest only")
+    with send_portal() as portal, synced_home():
+        first = _press_and_age(checks, portal, [(3, 1, "Articuno", "161", None)], {ARTICUNO_SKU: 0})
+        send_routes.do_live_check({})
+        # A DIFFERENT BOX FOR THE SECOND RUN. Box 3 already holds the first run's cards, and its
+        # registry entry is stamped in the second the second run starts; `box_disowns_run` then
+        # refuses the run by the wall clock. Box 4 holds only this run's cards, so it cannot.
+        second = _press_and_age(
+            checks,
+            portal,
+            [(4, 1, "Articuno", "161", None), (4, 2, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0},
+        )
+        send_routes.do_live_check({})
+        older, newer = _banner_send(first), _banner_send(second)
+        checks.equal(
+            older["takeable"],
+            0,
+            "NEWEST RECEIPT ONLY: the older send that carries the SKU offers nothing",
+        )
+        checks.ok(
+            1 <= newer["takeable"] <= 3 and older["takeable"] + newer["takeable"] <= 3,
+            f"THE COPIES MOVED ARE AT MOST THE SNAPSHOT (3 missing): newest offers "
+            f"{newer['takeable']}, older {older['takeable']}",
+        )
+
+
+def check_send_snapshot_order_sync_older(checks: Checks) -> None:
+    """Snapshot case 6: the order sync is older than the live reading, so the check holds.
+
+    The last order sync ran before the reading. TCGplayer may have sold the copy on an order
+    the store has not yet synced, so the copy is not offered back until a sync is newer than
+    the reading. The sync here is an order for another SKU, dated before the reading.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT 6 — the order sync is older than the live reading")
+    with send_portal() as portal, isolated_home():
+        stamp = _press_and_age(checks, portal, [(3, 1, "Articuno", "161", None)], {ARTICUNO_SKU: 0})
+        with _patched(order_store, "now", lambda: "2026-10-06T23:00:00.000+00:00"):
+            _open_order("9999999", 1, "O-SNAPSHOT-6-OTHER")
+        send_routes.do_live_check({})
+        summary = _banner_send(stamp)
+        checks.equal(
+            summary["takeable"],
+            0,
+            "ORDER SYNC OLDER THAN THE READING: the check holds, and no Take Back is offered",
+        )
+
+
+def check_send_snapshot_short_rechecked(checks: Checks) -> None:
+    """Snapshot case 7 (R-S3): a short send is re-checked after the next wait, with no press.
+
+    The first check judges the copy missing. The copy lands late. After the next wait the
+    screen's timer finds a check due, and the check runs with no press from the owner. It finds
+    the copy, and the send is `checked`.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT 7 — a short send is re-checked after the next wait, no press")
+    real_now = clock.now
+    with send_portal() as portal, synced_home():
+        stamp = _press_and_age(checks, portal, [(3, 1, "Articuno", "161", None)], {ARTICUNO_SKU: 0})
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(stamp)["state"], "short", "PRECONDITION: the first check judges it short")
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+        with _patched(clock, "now", lambda: real_now() + timedelta(days=1)):
+            checks.ok(send_routes.do_sends()["due"], "THE TIMER FINDS A CHECK DUE after the next wait")
+            ran = send_routes.do_live_check({})
+            checks.ok(ran["ran"], "THE CHECK RUNS with no press from the owner")
+            checks.equal(
+                _banner_send(stamp)["state"],
+                "checked",
+                "A SHORT SEND IS RE-CHECKED: the copy that landed late is found",
+            )
+
+
+def check_send_one_rise(checks: Checks) -> None:
+    """One live rise confirms one receipt only, never both sends that carry the same copies.
+
+    Its own check. It used to sit inside check_send_hazards, which is where the reader would not
+    look for a rise. A seam run's join does not set a SKU on its captured cards, so the shelf's
+    SKUs are written through the store, as the box map case writes them.
+    """
+    checks.note("")
+    checks.note("SEND CHECK — one live rise confirms one receipt only")
+    with _case(checks, "S3: one live rise confirms one receipt only"), \
+            send_portal() as portal, synced_home():
+        # THE SHELF MATCHES THE COPIES THE TWO RECEIPTS SENT: 3 + 3 unsold Articuno on the shelf.
+        # The snapshot reads the shelf, so an empty one would say nothing is missing at all.
+        seam_run(checks, [(4, index, "Articuno", "161", None) for index in range(1, 7)])
+        with Store().write() as snapshot:
+            for index in range(1, 7):
+                snapshot.inventory.cards[master.position_key(4, index)].sku = ARTICUNO_SKU
+        base = {
+            "kind": "send", "copies": {ARTICUNO_SKU: 3}, "copies_total": 3,
+            "names": {ARTICUNO_SKU: "Articuno"}, "live_before": {ARTICUNO_SKU: 0},
+            "sold_before": {ARTICUNO_SKU: 0}, "pushed": {"upload_id": "u", "rows": 1, "accepted": 1},
+            "published_at": "2026-09-24T10:00:00+00:00", "check_after": "2000-01-01T00:00:00+00:00",
+            "phase": "done",
+        }
+        for stamp in ("20260924-100000-eeeeee", "20260924-100500-ffffff"):
+            send_routes._write(send_routes.sends_dir() / stamp, dict(base, stamp=stamp))
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({})
+        states = {s["stamp"]: (s["state"], (s["check"] or {}).get("found")) for s in send_routes.do_sends()["sends"]}
+        checks.equal(
+            states,
+            {"20260924-100000-eeeeee": ("checked", 3), "20260924-100500-ffffff": ("short", 0)},
+            "ONE RISE OF THREE confirms the older send's three, and never both sends",
+        )
+
+
+
+def _seed_sync() -> None:
+    """A synced order ledger whose sync is later than every reading in the snapshot cases.
+
+    The snapshot holds a shortfall while the newest sync is older than the reading
+    (`Ledger.latest_ingest`), and while no sync is known at all. These cases are about the
+    copies, not the sync, so the seed is an order for an unrelated SKU stamped after the reading.
+    It changes no copy. Only the empty-ledger case leaves the ledger empty.
+    """
+    with _patched(order_store, "now", lambda: "2099-01-01T00:00:00.000+00:00"):
+        _open_order("9999999", 1, "O-SEED-SYNC")
+
+
+@contextmanager
+def synced_home():
+    """`isolated_home()` with a synced order ledger. The snapshot holds a shortfall while no
+    sync is known (F3-ii), and the send cases below are about the copies, not the sync. The
+    one case that needs an empty ledger uses `isolated_home()` itself."""
+    with isolated_home() as home:
+        _seed_sync()
+        yield home
+
+
+def check_send_snapshot_sold_before_send(checks: Checks) -> None:
+    """F1: copies of a SKU sold before a send do not hide that send's copies.
+
+    Two copies were sold earlier, and no receipt carries them (they were sold outside a send).
+    A send of two more lands nothing. The all-time sold count (two) must not be taken off this
+    send's copies: the two it sent read as missing, and a short send offers them back.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT F1 — copies sold before a send do not hide the send's copies")
+    with send_portal() as portal, synced_home():
+        seam_run(checks, [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None)])
+        with Store().write() as snapshot:
+            for index in (1, 2):
+                snapshot.inventory.cards[master.position_key(3, index)].sku = ARTICUNO_SKU
+        capture_server.do_mark_sold(3, 1, {})
+        capture_server.do_mark_sold(3, 2, {})
+        stamp = _press_and_age(
+            checks,
+            portal,
+            [(4, 1, "Articuno", "161", None), (4, 2, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0},
+        )
+        send_routes.do_live_check({})
+        summary = _banner_send(stamp)
+        checks.equal(
+            (summary["state"], summary["takeable"]),
+            ("short", 2),
+            "F1: two copies sold before the send are not taken off its count, so the two it "
+            "sent that did not land read short with two to take back",
+        )
+
+
+def check_send_snapshot_unchanged_reading(checks: Checks) -> None:
+    """F2: an unchanged reading still counts as read after the wait.
+
+    The listing was read at zero, and dated then (before the send). Two copies are sent and
+    nothing lands. The check after the wait reads zero again: the stored figure does not change,
+    so its date stays before the wait. The check has read the SKU, and the snapshot must date
+    that read by `checked_at`, so the two copies read as missing and both come back.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT F2 — an unchanged reading counts as read after the wait")
+    real_now = clock.now
+    with send_portal() as portal, synced_home():
+        # Two readings before the send: 1 (dated), then 0 (adopted, so the figure is dated).
+        for live in ({ARTICUNO_SKU: 1}, {ARTICUNO_SKU: 0}):
+            portal["live"] = _live_export_bytes(live)
+            _name, path = send_routes._fetch_live("read")
+            send_routes._reconcile(path, "read")
+        run_dir, _ = seam_run(checks, [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None)])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        stamp = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]["stamp"]
+        # The publish guard only: the wait stays real, twenty minutes ahead of the send's clock.
+        directory = send_routes.sends_dir() / stamp
+        record = send_routes._read(directory)
+        record["published_at"] = "2000-01-01T00:00:00+00:00"
+        send_routes._write(directory, record)
+        with _patched(clock, "now", lambda: real_now() + timedelta(minutes=20)):
+            send_routes.do_live_check({})
+            summary = _banner_send(stamp)
+        checks.equal(
+            (summary["state"], summary["takeable"]),
+            ("short", 2),
+            "F2: the check read zero, unchanged, after the wait, so the two copies that did "
+            "not land are offered back",
+        )
+
+
+def check_send_snapshot_take_off(checks: Checks) -> None:
+    """F3-i: taken-off copies are not missing.
+
+    A three-copy send was found (live 3, checked). A held-SKU take-off of those three then
+    settles: TCGplayer shows zero, as the take-off meant. The old send must stay checked with
+    nothing to take back, because the copies went off by a take-off, not by a miss.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT F3-i — taken-off copies are not missing")
+    with send_portal() as portal, synced_home():
+        stamp = _press_and_age(
+            checks,
+            portal,
+            [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None), (3, 3, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0},
+        )
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(stamp)["state"], "checked", "PRECONDITION: the three copies were found")
+        # The take-off: a later receipt that took three of the SKU off TCGplayer (`taken_off`).
+        take_stamp = send_routes._new_stamp()
+        send_routes._write(
+            send_routes.sends_dir() / take_stamp,
+            {
+                "kind": "send", "stamp": take_stamp, "at": clock.iso(clock.now()),
+                "copies": {}, "copies_total": 0, "taken_off": {ARTICUNO_SKU: 3},
+                "live_seen": {ARTICUNO_SKU: 3}, "names": {ARTICUNO_SKU: "Articuno"},
+                "pushed": {"upload_id": "u", "rows": 1, "accepted": 1},
+                "published_at": "2000-01-01T00:00:00+00:00",
+                "check_after": "2000-01-01T00:00:00+00:00", "phase": "done",
+            },
+        )
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        send_routes.do_live_check({})
+        summary = _banner_send(stamp)
+        checks.equal(
+            (summary["state"], summary["takeable"]),
+            ("checked", 0),
+            "F3-i: the take-off settled to zero, and the three copies it took off are not "
+            "missing, so nothing goes back",
+        )
+
+
+def check_send_snapshot_empty_ledger(checks: Checks) -> None:
+    """F3-ii: with no order sync on record, a shortfall holds.
+
+    The send was checked with both copies live. Then one copy goes (live 2 to 1) on a checked
+    send. The order ledger is empty, so the sync time is unknown and TCGplayer may have sold the
+    copy on an order Banchi has not synced. Take Back must not be offered.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT F3-ii — an empty order ledger holds a shortfall")
+    with send_portal() as portal, isolated_home():
+        stamp = _press_and_age(
+            checks,
+            portal,
+            [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0},
+        )
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(stamp)["state"], "checked", "PRECONDITION: both copies found")
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+        send_routes.do_live_check({"force": True})
+        summary = _banner_send(stamp)
+        checks.equal(
+            summary["takeable"],
+            0,
+            "F3-ii: the live figure fell to one on a checked send, with no order sync known, so "
+            "the shortfall holds and no Take Back is offered",
+        )
+
+
+def check_send_snapshot_release_not_reading(checks: Checks) -> None:
+    """F3-iii: `Listing.release` (a D34 correction) is not a reading.
+
+    The check read one of two copies live, so one is missing and offered back. A D34 release
+    then gives up a live copy and stamps `live_as_of` now, with no reading behind it. The gate
+    must not take that stamp as a read: the offer stays what the check read.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT F3-iii — a D34 release stamps live_as_of, and is not a reading")
+    with send_portal() as portal, synced_home():
+        stamp = _press_and_age(
+            checks,
+            portal,
+            [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0},
+        )
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+        send_routes.do_live_check({})
+        checks.equal(
+            _banner_send(stamp)["takeable"],
+            1,
+            "PRECONDITION: the check read one live, so one is offered back",
+        )
+        with Store().write() as snapshot:
+            listing = snapshot.inventory.listings[ARTICUNO_SKU]
+            listing.pushed = 0
+            listing.staged = 0
+            gave = listing.release(1)
+        checks.equal(gave, {"live": 1}, "PRECONDITION: the release gave up the live copy")
+        summary = _banner_send(stamp)
+        checks.equal(
+            summary["takeable"],
+            1,
+            "F3-iii: the release is not a reading, so the offer stays the one the check read",
+        )
+
+
+def check_send_snapshot_adopted_reading(checks: Checks) -> None:
+    """F-A: a newer reading the store adopts from outside `.live/` is the reading.
+
+    The check read one of two copies live, so one is offered back. Later `reconcile --live` runs
+    on an export file kept elsewhere, which reads both copies live. `observe_live` adopts it: the
+    store holds a newer reading than the check's. The send must read checked, with nothing to
+    take back. The snapshot takes only a figure from a file in `.live/` as a reading, so it still
+    reads the check's one, and offers one back.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT F-A — a newer adopted reading from outside .live/ is the reading")
+    with send_portal() as portal, synced_home():
+        stamp = _press_and_age(
+            checks,
+            portal,
+            [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0},
+        )
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+        send_routes.do_live_check({})
+        checks.equal(
+            _banner_send(stamp)["takeable"],
+            1,
+            "PRECONDITION: the check read one of two live, so one is offered back",
+        )
+        manual = files.home() / "manual-export.csv"
+        manual.write_bytes(_live_export_bytes({ARTICUNO_SKU: 2}))
+        send_routes._reconcile(manual, "reconciled")
+        summary = _banner_send(stamp)
+        checks.equal(
+            (summary["state"], summary["takeable"]),
+            ("checked", 0),
+            "F-A: the store adopted a newer reading of two live, so both copies landed and "
+            "nothing is offered back",
+        )
+
+
+def check_send_snapshot_window_reading(checks: Checks) -> None:
+    """F-B: a SKU in the publish window keeps its stored figure, and that figure is no reading.
+
+    A markdown published this SKU minutes ago (its `push.json` is in the window). The send's
+    two copies landed: TCGplayer shows two live. `reconcile --live` keeps the SKU's stored
+    figure, because the export is not read-your-writes after a publish, so the store still reads
+    zero. The check must not date that stored figure as a fresh reading. The send must not offer
+    its copies back on the stale zero.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT F-B — a SKU in the publish window: its stored figure is no reading")
+    with send_portal() as portal, synced_home():
+        stamp = _press_and_age(
+            checks,
+            portal,
+            [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0},
+        )
+        # A markdown for this SKU published now: its push.json is what the publish window reads.
+        markdown = _markdown_dir(files.home(), "20261014-235900")
+        files.write_json(markdown / "push.json", {"published_at": clock.iso(clock.now())})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
+        send_routes.do_live_check({})
+        listing_live = Store().read().inventory.listings[ARTICUNO_SKU].live
+        checks.equal(
+            int(listing_live),
+            0,
+            "PRECONDITION: the reconcile kept the stored figure of the SKU in the window",
+        )
+        summary = _banner_send(stamp)
+        checks.equal(
+            summary["takeable"],
+            0,
+            "F-B: the window kept the stored zero, which is no reading, so the send's copies "
+            "are not offered back on it",
+        )
+
+
+def check_send_snapshot_take_back_take_off(checks: Checks) -> None:
+    """A take-off on a receipt the owner took back still removed its copies from TCGplayer.
+
+    SKU X has five unsold copies on the shelf. R0 sends three; the check finds all three. R1 is
+    a mixed send: one Y, and a take-off of the three X. Its check finds Y missing, the owner takes
+    R1 back for Y, and the X take-off stands: TCGplayer no longer holds those three. R2 sends two
+    more X. Live is two. The three taken off are not out there, so R2 reads checked with nothing to
+    take back. A take-back of R1 for Y does not undo R1's take-off of X.
+    """
+    checks.note("")
+    checks.note("SEND SNAPSHOT — a take-off stands on a receipt the owner took back")
+    with send_portal() as portal, synced_home():
+        # R0: three X sent and found.
+        r0 = _press_and_age(
+            checks,
+            portal,
+            [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None), (3, 3, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0},
+        )
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(r0)["state"], "checked", "PRECONDITION: R0's three copies were found")
+        # R1: a mixed send, one Y and a take-off of the three X. The press is real; the take-off
+        # is what its emit would have written as a negative X row (`taken_off`), recorded here.
+        r1 = _press_and_age(checks, portal, [(5, 1, "Dunsparce", "120", "normal")], {ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})
+        directory = send_routes.sends_dir() / r1
+        record = send_routes._read(directory)
+        record["taken_off"] = {ARTICUNO_SKU: 3}
+        send_routes._write(directory, record)
+        # TCGplayer shows the Y not live, and the three X gone: the take-off settles, and R1 is
+        # checked short of its Y.
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_live_check({})
+        checks.equal(
+            _banner_send(r1)["takeable"],
+            1,
+            "PRECONDITION: R1's Y is missing, so one Y is offered back",
+        )
+        checks.equal(
+            send_routes.do_take_back(r1, {"confirm": True})["moved"],
+            1,
+            "PRECONDITION: the owner takes R1 back for its Y",
+        )
+        # R2: two more X, sent after the take-off settled. Live is two at its check.
+        r2 = _press_and_age(
+            checks,
+            portal,
+            [(4, 1, "Articuno", "161", None), (4, 2, "Articuno", "161", None)],
+            {ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0},
+        )
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0})
+        send_routes.do_live_check({})
+        summary = _banner_send(r2)
+        checks.equal(
+            (summary["state"], summary["takeable"]),
+            ("checked", 0),
+            "R2 READS CHECKED WITH NOTHING TO TAKE BACK: R1's take-off of three X stands after "
+            "R1 was taken back, so only R2's two are out there, and live shows two",
+        )
+
+
+# ------------------------------------------------------------------ auto-hold (D273 R-S4)
+#
+# A copy seen live at a send check, which later drops from live with no sale and no open order,
+# is the owner's hand removal. Banchi holds it: never missing, never offered back, never re-sent
+# until the owner unholds it. THE CONTRACT THE BUILDER MEETS, named here once:
+#   - the listing's held count is the store field `HELD_FIELD` on each SKU's `Listing`;
+#   - the unhold press is `send_routes.do_unhold(sku, {"confirm": True})`, route
+#     `POST /pipeline/held/<sku>/unhold`, shaped like `do_take_back`.
+# Every case reads the count through `_held`, which is the only place the field name appears.
+
+HELD_FIELD = "held_copies"
+
+
+def _held(sku: str) -> int:
+    """The listing's held count. A store with no such field holds none, so a case that expects a
+    hold fails on its assertion, never on a crash."""
+    listing = Store().read().inventory.listings.get(sku)
+    count = getattr(listing, HELD_FIELD, None)
+    return 0 if count is None else int(count)
+
+
+def _articuno_cards(indexes) -> list:
+    return [(3, index, "Articuno", "161", None) for index in indexes]
+
+
+def check_send_auto_hold_removed_after_sales(checks: Checks) -> None:
+    """(a) FIVE FOUND, FOUR SOLD, LIVE READS ZERO: five copies sent and found, four sold, then TCGplayer reads zero.
+
+    The fifth copy left TCGplayer by the owner's hand. It is held: the card reads five of five
+    found, nothing is offered back, and the listing holds one copy.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (a) — five found, four sold, live reads zero: one copy held")
+    with _case(checks, "(a) auto-hold: five found, four sold, live reads zero"), send_portal() as portal, synced_home():
+        stamp = _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 5})
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(stamp)["check"]["found"], 5, "PRECONDITION: all five copies found")
+        for index in range(1, 5):
+            capture_server.do_mark_sold(3, index, {})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        send_routes.do_live_check({"force": True})
+        summary = _banner_send(stamp)
+        checks.equal(_held(ARTICUNO_SKU), 1, "(a) THE LIVE CHECK HOLDS THE COPY THE OWNER REMOVED")
+        checks.equal(summary["takeable"], 0, "(a) A HELD COPY IS NEVER OFFERED BACK")
+        checks.equal(
+            (summary["check"]["found"], summary["check"]["expected"]),
+            (5, 5),
+            "(a) THE CARD READS 5 OF 5 FOUND: the held copy counts as found",
+        )
+
+
+def check_send_auto_hold_partial(checks: Checks) -> None:
+    """(b) Five sent, three found, none sold, then TCGplayer reads zero.
+
+    Two copies were never seen live: they are missing, and Take Back offers them. The three seen
+    live and then dropped are held, not missing.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (b) — five sent, three found, live reads zero: two offered, three held")
+    with _case(checks, "(b) auto-hold: missing and held split"), send_portal() as portal, synced_home():
+        stamp = _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(stamp)["check"]["found"], 3, "PRECONDITION: three copies found")
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        send_routes.do_live_check({"force": True})
+        summary = _banner_send(stamp)
+        checks.equal(summary["takeable"], 2, "(b) THE TWO NEVER SEEN LIVE ARE OFFERED BACK")
+        checks.equal(_held(ARTICUNO_SKU), 3, "(b) THE THREE SEEN LIVE AND THEN DROPPED ARE HELD")
+
+
+def check_send_auto_hold_later_read(checks: Checks) -> None:
+    """(c) A check reads five; a later live read shows three, and nothing is sold.
+
+    Two copies left TCGplayer by the owner's hand, after the check that found them. The later
+    reading is the store's; the older check's figure of five does not overrule it.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (c) — a check reads five, a later read shows three: two held")
+    with _case(checks, "(c) auto-hold: a later reading below the check's"), send_portal() as portal, synced_home():
+        stamp = _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 5})
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(stamp)["check"]["found"], 5, "PRECONDITION: all five copies found")
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({"force": True})
+        summary = _banner_send(stamp)
+        checks.equal(_held(ARTICUNO_SKU), 2, "(c) THE LATER DROP IS HELD: two copies")
+        checks.equal(
+            (summary["takeable"], summary["check"]["found"]),
+            (0, 5),
+            "(c) NOT MISSING: nothing offered back, and the card still reads five of five",
+        )
+
+
+def check_send_auto_hold_newer_receipt_reading(checks: Checks) -> None:
+    """(d) A NEWER RECEIPT RECORDS THE LOW READING.
+
+    R0 sends five copies, all found at its check (reading five). R1 sends one more copy, found
+    at its own check, which records a reading of three. Then the store reads three. Six copies
+    are out and three are live, and no copy was never seen, so the gap of three is held. R1's
+    copy is not offered back as missing.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (d) — a newer receipt records the low reading: held, not missing")
+    with _case(checks, "(d) auto-hold: a newer receipt's low reading"), send_portal() as portal, synced_home():
+        r0 = _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 5})
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(r0)["check"]["found"], 5, "PRECONDITION: R0's five copies found")
+        # join=False: a join would read the export's Total Quantity (zero) as a live reading.
+        seam_run(checks, _articuno_cards([6]), join=False)
+        with Store().write() as snapshot:
+            snapshot.inventory.cards[master.position_key(3, 6)].sku = ARTICUNO_SKU
+        r1 = _newer_receipt(ARTICUNO_SKU, 1, found=1, reading=3)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({"force": True})
+        checks.equal(_held(ARTICUNO_SKU), 3, "(d) THE DROP IS HELD: three of six out are live, none never seen")
+        # Summed over both sends: a build that reads the drop as missing may put it on either one.
+        offered = _banner_send(r0)["takeable"] + _banner_send(r1)["takeable"]
+        checks.equal(offered, 0, "(d) A HELD DROP IS NOT MISSING: nothing offered back on either send")
+
+
+def _newer_receipt(sku: str, copies: int, *, found: int, reading: int) -> str:
+    """A checked receipt written as the store would hold it, dated after every receipt so far.
+
+    Its check records `reading` for `sku`, the figure the newest check of the SKU takes. Only
+    the case that needs a newer check uses it, so it stands in for a real press and check. The
+    press also raises `pushed` by its copies, as a real press does.
+    """
+    stamp = send_routes._new_stamp()
+    stamped = clock.iso(clock.now())
+    with Store().write() as snapshot:
+        snapshot.inventory.listings[sku].bump(master.PUSHED, copies)
+    send_routes._write(
+        send_routes.sends_dir() / stamp,
+        {
+            "kind": "send", "stamp": stamp, "at": stamped, "copies": {sku: copies},
+            "copies_total": copies, "names": {sku: "Articuno"}, "live_before": {sku: 0},
+            "sold_before": {sku: 0}, "pushed": {"upload_id": "u", "rows": copies, "accepted": copies},
+            "published_at": "2000-01-01T00:00:00+00:00", "check_after": "2000-01-01T00:00:00+00:00",
+            "phase": "done", "checked_at": stamped, "first_checked_at": stamped,
+            "check": {
+                "export": "newer", "found": found, "expected": copies, "missing": [],
+                "found_by_sku": {sku: found}, "reading": {sku: {"live": reading, "as_of": stamped}},
+            },
+        },
+    )
+    return stamp
+
+
+def check_send_auto_hold_order_sync_older(checks: Checks) -> None:
+    """(e) THE ORDER SYNC IS OLDER THAN THE READING: no hold and no offer, until a newer sync.
+
+    TCGplayer may have sold the copy on an order the ledger has not synced, so a drop cannot yet
+    be told from a sale. Once a newer sync lands, the same drop is judged, and is held.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (e) — the order sync is older than the reading: no hold until it is newer")
+    with _case(checks, "(e) auto-hold: an order sync older than the reading"), send_portal() as portal, isolated_home():
+        with _patched(order_store, "now", lambda: "2000-01-01T00:00:00.000+00:00"):
+            _open_order("9999999", 1, "O-AUTOHOLD-E-OLD")
+        stamp = _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 5})
+        send_routes.do_live_check({})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        send_routes.do_live_check({"force": True})
+        summary = _banner_send(stamp)
+        checks.equal(_held(ARTICUNO_SKU), 0, "(e) NO HOLD WHILE THE SYNC IS OLDER THAN THE READING")
+        checks.equal(
+            (summary["takeable"], summary["check"]["found"]),
+            (0, 5),
+            "(e) NO OFFER: the card still reads five of five",
+        )
+        with _patched(order_store, "now", lambda: "2099-01-01T00:00:00.000+00:00"):
+            _open_order("9999999", 1, "O-AUTOHOLD-E-NEW")
+        send_routes.do_live_check({"force": True})
+        checks.equal(_held(ARTICUNO_SKU), 5, "(e) ONCE A NEWER SYNC LANDS, THE SAME DROP IS HELD")
+
+
+def check_send_auto_hold_open_order_covers(checks: Checks) -> None:
+    """(f) AN OPEN ORDER COVERS THE DROP: nothing is held. Without that order, the drop is held.
+
+    The paired half is the red proof: a case that only asserts "no hold" passes on a build that
+    never holds at all.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (f) — an open order covers the drop: held zero; without it, one")
+    for label, with_order in (("with an open order", True), ("without one", False)):
+        with _case(checks, f"(f) auto-hold: the drop {label}"), send_portal() as portal, synced_home():
+            stamp = _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 5})
+            send_routes.do_live_check({})
+            if with_order:
+                _open_order(ARTICUNO_SKU, 1, "O-AUTOHOLD-F")
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 4})
+            send_routes.do_live_check({"force": True})
+            summary = _banner_send(stamp)
+            checks.equal(
+                _held(ARTICUNO_SKU),
+                0 if with_order else 1,
+                f"(f) THE DROP {label.upper()} IS HELD: {'nothing' if with_order else 'one copy'}",
+            )
+            checks.equal(summary["takeable"], 0, f"(f) NOTHING OFFERED BACK {label.upper()}")
+
+
+def check_send_auto_hold_unhold(checks: Checks) -> None:
+    """(g) UNHOLD: the held copies go back on the list. `pushed` falls by the held count and the
+    held count clears. The next emit reads that lower `pushed`, so it offers those copies again.
+
+    The offer is asserted through `pushed`, the figure `cli/resolve.py` reads, and not through a
+    live emit. A build with no unhold press fails here, on the press's own assertion.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (g) — unhold clears the held count and lowers pushed by it")
+    with _case(checks, "(g) auto-hold: unhold"), send_portal() as portal, synced_home():
+        _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 5})
+        send_routes.do_live_check({})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({"force": True})
+        checks.equal(_held(ARTICUNO_SKU), 2, "PRECONDITION: two copies are held")
+        pushed_before = int(Store().read().inventory.listings[ARTICUNO_SKU].pushed)
+        if getattr(send_routes, "do_unhold", None) is None:
+            checks.ok(False, "(g) THE UNHOLD PRESS EXISTS: send_routes.do_unhold is missing")
+        else:
+            send_routes.do_unhold(ARTICUNO_SKU, {"confirm": True})
+        checks.equal(_held(ARTICUNO_SKU), 0, "(g) UNHOLD CLEARS THE HELD COUNT")
+        checks.equal(
+            int(Store().read().inventory.listings[ARTICUNO_SKU].pushed),
+            pushed_before - 2,
+            "(g) UNHOLD LOWERS PUSHED BY THE HELD COUNT, so those copies are offered again",
+        )
+
+
+def check_send_auto_hold_take_back_keeps_count(checks: Checks) -> None:
+    """(h) TAKE BACK ON THE RECEIPT KEEPS THE LISTING'S HELD COUNT.
+
+    The two copies never seen go back. The three held stay held: the count is the listing's, and
+    a take back on the receipt does not clear it.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (h) — take back on the receipt keeps the held count")
+    with _case(checks, "(h) auto-hold: take back keeps the count"), send_portal() as portal, synced_home():
+        stamp = _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+        send_routes.do_live_check({"force": True})
+        checks.equal(_held(ARTICUNO_SKU), 3, "PRECONDITION: three copies are held")
+        moved = send_routes.do_take_back(stamp, {"confirm": True})["moved"]
+        checks.equal(moved, 2, "PRECONDITION: the two never-seen copies go back")
+        checks.equal(_held(ARTICUNO_SKU), 3, "(h) TAKE BACK LEAVES THE HELD COUNT STANDING")
+
+
+def check_send_auto_hold_never_resent(checks: Checks) -> None:
+    """(i) A HELD COPY NEVER GOES OUT IN A SEND UNTIL IT IS UNHELD.
+
+    The shelf holds six copies of the SKU and no others: five pushed in R0, and card 6, whose
+    copy the newer receipt counts as pushed. Three of the six are live and three are held, so the
+    held copies are the only copies on the shelf that are not live, and no card is free. A send
+    of card 6 must send nothing, because the held copies still count as out. Take Back on either
+    send must refuse (nothing is missing).
+
+    The control then adds card 7, the one never-listed copy that is free, and its send must send
+    one. Without it, a send that refuses for some other reason would read as the zero above.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (i) — a held copy never goes out in a send until unheld")
+    with _case(checks, "(i) auto-hold: a held copy is not re-sent"), send_portal() as portal, synced_home():
+        r0 = _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 5})
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(r0)["check"]["found"], 5, "PRECONDITION: R0's five copies found")
+        # join=False: a join would read the export's Total Quantity (zero) as a live reading.
+        seam_run(checks, _articuno_cards([6]), join=False)
+        with Store().write() as snapshot:
+            snapshot.inventory.cards[master.position_key(3, 6)].sku = ARTICUNO_SKU
+        r1 = _newer_receipt(ARTICUNO_SKU, 1, found=1, reading=3)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({"force": True})
+        checks.equal(_held(ARTICUNO_SKU), 3, "PRECONDITION: three copies are held")
+        checks.equal(
+            len(Store().read().inventory.copies_on_hand(ARTICUNO_SKU)),
+            6,
+            "PRECONDITION: six copies on the shelf, all of them counted out, none free",
+        )
+        for stamp in (r0, r1):
+            # the held drop is not missing, so a press on either send has nothing to take back
+            with contextlib.suppress(pipeline_routes.PipelineRefusal):
+                send_routes.do_take_back(stamp, {"confirm": True})
+        run_dir, _ = seam_run(checks, _articuno_cards([6]), live={ARTICUNO_SKU: 3})
+        try:
+            sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+            copies = int(sent.get("copies") or 0)  # the summary's own count of what this send carries
+        except pipeline_routes.PipelineRefusal:
+            copies = 0  # the room is taken: the send refuses, which is the point
+        checks.equal(
+            copies,
+            0,
+            "(i) NO HELD COPY GOES OUT: a send of card 6 sends nothing while the held copies count as out",
+        )
+        # CONTROL: one never-listed copy is free, so its send goes out. A refusal here fails the case.
+        run_dir, _ = seam_run(checks, _articuno_cards([7]), live={ARTICUNO_SKU: 3})
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        checks.equal(
+            int(sent.get("copies") or 0),
+            1,
+            "(i) CONTROL: a never-listed card of the same SKU still goes out",
+        )
+
+
+def _held_sku_fixture(checks: Checks, portal) -> str:
+    """The state the (j), (l), (m), (n) and (o) cases start from: five copies sent and found, four
+    sold, and live reads zero.
+
+    One copy is held and still on the shelf, and the listing's `pushed` is five. Returns the
+    stamp of the send that carried the five copies.
+    """
+    stamp = _press_and_age(checks, portal, _articuno_cards(range(1, 6)), {ARTICUNO_SKU: 0})
+    portal["live"] = _live_export_bytes({ARTICUNO_SKU: 5})
+    send_routes.do_live_check({})
+    for index in range(1, 5):
+        capture_server.do_mark_sold(3, index, {})
+    portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0})
+    send_routes.do_live_check({"force": True})
+    return stamp
+
+
+def _pushed(sku: str) -> int:
+    return int(Store().read().inventory.listings[sku].pushed)
+
+
+def check_send_auto_hold_worklist_row(checks: Checks) -> None:
+    """(j) A SKU WITH HELD COPIES KEEPS ITS WORKLIST ROW AFTER ITS RUN CLOSES.
+
+    The held copy is on the shelf and only Unhold can put it back. So while the SKU's held count is
+    above zero, the worklist carries its row, with that count, and the owner reaches Unhold there.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (j) — the worklist carries a held SKU whose run is closed")
+    with _case(checks, "(j) auto-hold: a held SKU has a worklist row"), send_portal() as portal, synced_home():
+        _held_sku_fixture(checks, portal)
+        checks.equal(_held(ARTICUNO_SKU), 1, "PRECONDITION: one copy is held")
+        row = next(
+            (r for r in pipeline_routes.do_pipeline_worklist([])["skus"] if r["sku"] == ARTICUNO_SKU),
+            None,
+        )
+        checks.ok(row is not None, "(j) THE WORKLIST CARRIES THE HELD SKU'S ROW, though its run is closed")
+        listing = (row or {}).get("listing") or {}
+        held = (row or {}).get("held_copies", listing.get("held_copies"))
+        checks.equal(held, 1, "(j) THE ROW CARRIES held_copies 1, so the owner can unhold it")
+
+
+def check_send_auto_hold_two_receipts_take_back(checks: Checks) -> None:
+    """(k) TAKE BACK ON THE LATER RECEIPT KEEPS THE HELD COUNT, WITH TWO RECEIPTS OUT.
+
+    R0 sends two and finds two. R1 sends five and finds three. Live then drops to two, so three
+    copies that TCGplayer showed are gone by the owner's hand: three are held. Take Back on R1
+    moves its two missing copies back, and the next check still reads three held (R-S4: Take Back
+    keeps the held count). R0's copies are not touched.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (k) — two receipts, take back on the later one keeps the held count")
+    with _case(checks, "(k) auto-hold: two receipts, take back keeps the count"), send_portal() as portal, synced_home():
+        r0 = _press_and_age(checks, portal, _articuno_cards([1, 2]), {ARTICUNO_SKU: 0})
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
+        send_routes.do_live_check({})
+        checks.equal(_banner_send(r0)["check"]["found"], 2, "PRECONDITION: R0's two copies found")
+        # A DIFFERENT BOX FOR THE SECOND RUN, as in the shared-SKU case: box 3 holds R0's cards and
+        # its registry entry is stamped in the second R1 starts, so `box_disowns_run` refuses R1.
+        r1 = _press_and_age(
+            checks,
+            portal,
+            [(4, index, "Articuno", "161", None) for index in range(1, 6)],
+            {ARTICUNO_SKU: 2},
+        )
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 5})
+        send_routes.do_live_check({"force": True})
+        checks.equal(_banner_send(r1)["check"]["found"], 3, "PRECONDITION: R1's five copies, three found")
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
+        send_routes.do_live_check({"force": True})
+        checks.equal(_held(ARTICUNO_SKU), 3, "PRECONDITION: three copies are held")
+        moved = send_routes.do_take_back(r1, {"confirm": True})["moved"]
+        checks.equal(moved, 2, "PRECONDITION: R1's two missing copies go back, and no more")
+        send_routes.do_live_check({"force": True})
+        checks.equal(_held(ARTICUNO_SKU), 3, "(k) TAKE BACK LEAVES THE HELD COUNT AT THREE")
+
+
+def check_send_auto_hold_rehold_restores(checks: Checks) -> None:
+    """(l) REHOLD AFTER UNHOLD PUTS THE HELD COUNT AND `pushed` BACK AS THEY WERE.
+
+    Unhold lowers `pushed` by the held copy and clears the count. Rehold, with the figure Unhold
+    answered, raises `pushed` by the same copies and sets the count again.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (l) — rehold after unhold restores the held count and pushed")
+    with _case(checks, "(l) auto-hold: rehold after unhold"), send_portal() as portal, synced_home():
+        _held_sku_fixture(checks, portal)
+        checks.equal(_held(ARTICUNO_SKU), 1, "PRECONDITION: one copy is held")
+        pushed_held = _pushed(ARTICUNO_SKU)
+        unhold = send_routes.do_unhold(ARTICUNO_SKU, {"confirm": True})
+        checks.equal(_held(ARTICUNO_SKU), 0, "PRECONDITION: unhold clears the held count")
+        checks.equal(_pushed(ARTICUNO_SKU), pushed_held - 1, "PRECONDITION: unhold lowers pushed by one")
+        send_routes.do_rehold(
+            ARTICUNO_SKU,
+            {"confirm": True, "copies": unhold["unheld"], "pushed": unhold["pushed"]},
+        )
+        checks.equal(_held(ARTICUNO_SKU), 1, "(l) REHOLD RESTORES THE HELD COUNT")
+        checks.equal(_pushed(ARTICUNO_SKU), pushed_held, "(l) REHOLD RESTORES pushed")
+
+
+def check_send_auto_hold_unhold_not_held_again(checks: Checks) -> None:
+    """(m) AFTER UNHOLD, THE NEXT LIVE CHECK DOES NOT HOLD THOSE COPIES AGAIN.
+
+    The copy is back on the list, and TCGplayer still reads zero. A check that reads the same
+    zero must not count the unheld copy as removed a second time (R-S4: the unheld copies are
+    not judged removed).
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (m) — after unhold, the next check does not hold the copy again")
+    with _case(checks, "(m) auto-hold: the next check after unhold"), send_portal() as portal, synced_home():
+        _held_sku_fixture(checks, portal)
+        send_routes.do_unhold(ARTICUNO_SKU, {"confirm": True})
+        send_routes.do_live_check({"force": True})
+        checks.equal(_held(ARTICUNO_SKU), 0, "(m) THE NEXT CHECK DOES NOT HOLD THE UNHELD COPY AGAIN")
+        send_routes.do_live_check({"force": True})
+        checks.equal(_held(ARTICUNO_SKU), 0, "(m) A SECOND CHECK STILL HOLDS NOTHING")
+
+
+def check_send_auto_hold_unhold_sends_once(checks: Checks) -> None:
+    """(n) AFTER UNHOLD, THE UNHELD COPY GOES OUT ONCE, AND NEVER TWICE.
+
+    The first send that carries the card sends one copy and lifts `pushed` back by one. A second
+    send of the same card, with TCGplayer still at zero, sends nothing.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (n) — the unheld copy goes out once, never twice")
+    with _case(checks, "(n) auto-hold: unheld copy sends once"), send_portal() as portal, synced_home():
+        _held_sku_fixture(checks, portal)
+        send_routes.do_unhold(ARTICUNO_SKU, {"confirm": True})
+        run_dir, _ = seam_run(checks, _articuno_cards([5]), live={ARTICUNO_SKU: 0})
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        checks.equal(int(sent.get("copies") or 0), 1, "(n) THE UNHELD COPY GOES OUT ONCE")
+        checks.equal(_pushed(ARTICUNO_SKU), 5, "(n) THE SEND RAISES pushed BACK TO FIVE")
+        run_dir, _ = seam_run(checks, _articuno_cards([5]), live={ARTICUNO_SKU: 0})
+        try:
+            again = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+            copies = int(again.get("copies") or 0)
+        except pipeline_routes.PipelineRefusal:
+            copies = 0  # the room is taken: the send refuses, which is the point
+        checks.equal(copies, 0, "(n) NEVER TWICE: a second send of that card sends nothing")
+
+
+def _publishing_receipt(sku: str) -> str:
+    """The newest receipt, one copy of `sku` counted out, from a press still running.
+
+    Its shape is `_newer_receipt`'s, with the phase its press is in. It is checked, so the
+    snapshot can judge it (it judges only when every receipt that counts the SKU out has a check
+    past its wait). Its holder is a live process this test did not start, so `_press_running`
+    reads it as running. Its copy is a real card on the shelf, which the case captures.
+    """
+    stamp = _newer_receipt(sku, 1, found=1, reading=0)
+    directory = send_routes.sends_dir() / stamp
+    record = send_routes._read(directory)
+    record["phase"] = "publishing"
+    record["publish_started_at"] = record["at"]
+    record["holder"] = {"pid": os.getppid()}
+    # `_newer_receipt` dates the press in the same second as the press before it, and a press's
+    # order is its second, then `pressed_ns`. Stamp this press the moment it is written, so it is
+    # the newest receipt, as a press in flight is.
+    record["pressed_ns"] = time.time_ns()
+    send_routes._write(directory, record)
+    return stamp
+
+
+def check_send_auto_hold_unhold_survives_press_rewrite(checks: Checks) -> None:
+    """(o) AN UNHOLD THAT A RUNNING PRESS WOULD OVERWRITE DOES NOT HOLD THE COPY AGAIN (review F1).
+
+    The shelf holds a sixth captured copy, so the newest receipt's copy is a real card. That
+    receipt, B, belongs to a press still running: it writes its whole record back from memory.
+    The press reads its record before the unhold, the unhold lands on the next receipt that counts
+    the SKU out, and then the press writes its record back. Live then reads one, and the forced
+    check must not hold the copy again: `held_copies` is still zero, and `pushed` is not lowered
+    a second time.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (o) — an unhold a running press would overwrite holds nothing (F1)")
+    with _case(checks, "(o) auto-hold: a running press's rewrite keeps the unhold"), send_portal() as portal, synced_home():
+        _held_sku_fixture(checks, portal)
+        checks.equal(_held(ARTICUNO_SKU), 1, "PRECONDITION: one copy is held")
+        seam_run(checks, [(4, 1, "Articuno", "161", None)], join=False)
+        with Store().write() as snapshot:
+            snapshot.inventory.cards[master.position_key(4, 1)].sku = ARTICUNO_SKU
+        stamp = _publishing_receipt(ARTICUNO_SKU)
+        directory = send_routes.sends_dir() / stamp
+        press_record = send_routes._read(directory)  # the press's in-memory record, read before the unhold
+        unhold = send_routes.do_unhold(ARTICUNO_SKU, {"confirm": True})
+        checks.equal(unhold["unheld"], 1, "PRECONDITION: unhold puts the one copy back on the list")
+        send_routes._write(directory, press_record)  # the running press writes its own record back
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+        send_routes.do_live_check({"force": True})
+        checks.equal(_held(ARTICUNO_SKU), 0, "(o) THE PRESS'S REWRITE DOES NOT HOLD THE UNHELD COPY AGAIN")
+        checks.equal(
+            _pushed(ARTICUNO_SKU),
+            int(unhold["pushed"]),
+            "(o) pushed is not lowered a second time after the rewrite",
+        )
 
 
 def check_send_hazards(checks: Checks) -> None:
@@ -1734,7 +3269,7 @@ def check_send_hazards(checks: Checks) -> None:
         return send_routes.do_sends()["sends"][0]
 
     # ------------------------------------------------------- S1-a: two presses at once
-    with _case(checks, "S1-a: two presses at once"), send_portal() as portal, isolated_home():
+    with _case(checks, "S1-a: two presses at once"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         portal["gate"] = threading.Barrier(2)
@@ -1774,7 +3309,7 @@ def check_send_hazards(checks: Checks) -> None:
 
     # --------------------------------- S1-a: the store claim holds across processes too
     with _case(checks, "S1-a: the store claim holds across processes too"), \
-            send_portal() as portal, isolated_home():
+            send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         with Store().write() as writable:
@@ -1794,7 +3329,7 @@ def check_send_hazards(checks: Checks) -> None:
         checks.equal(pushed(ARTICUNO_SKU), 0, "and no copy is counted sent")
 
     # ------------------------------------ S1-a: a stamp is unique within one second
-    with _case(checks, "S1-a: a stamp is unique within one second"), isolated_home():
+    with _case(checks, "S1-a: a stamp is unique within one second"), synced_home():
         first, second = send_routes._new_stamp(), send_routes._new_stamp()
         checks.ok(
             first != second
@@ -1805,7 +3340,7 @@ def check_send_hazards(checks: Checks) -> None:
 
     # ---------------- S1-a: a dropped connection sees the press still running, not a retry
     with _case(checks, "S1-a: a dropped connection sees the press still running, not a retry"), \
-            send_portal() as portal, isolated_home():
+            send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         release = threading.Event()
@@ -1840,7 +3375,7 @@ def check_send_hazards(checks: Checks) -> None:
         checks.equal(newest()["state"], "waiting", "and its receipt moves on to the wait")
 
     # --------------------------------------------- S1-a: a holder that died is unknown
-    with _case(checks, "S1-a: a holder that died is unknown"), isolated_home():
+    with _case(checks, "S1-a: a holder that died is unknown"), synced_home():
         gone = subprocess.Popen(["true"])
         gone.wait()
         stamp = "20260924-120000-bbbbbb"
@@ -1862,7 +3397,7 @@ def check_send_hazards(checks: Checks) -> None:
 
     # --------------------- S1-b: TCGplayer published, then answered 500 (unclear publish)
     with _case(checks, "S1-b: TCGplayer published, then answered 500 (unclear publish)"), \
-            send_portal() as portal, isolated_home():
+            send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         portal["published_then_5xx"] = True
@@ -1920,7 +3455,7 @@ def check_send_hazards(checks: Checks) -> None:
 
     # --------------- S1-b / S1-c: a clear publish refusal whose rollback is ALSO refused
     with _case(checks, "S1-b / S1-c: a clear publish refusal whose rollback is ALSO refused"), \
-            send_portal() as portal, isolated_home():
+            send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         portal["refuse"] = {"movetolive"}
@@ -1951,7 +3486,7 @@ def check_send_hazards(checks: Checks) -> None:
 
     # ---------------------- a push chunk refused whose rollback is refused: unknown too
     with _case(checks, "a push chunk refused whose rollback is refused: unknown too"), \
-            send_portal() as portal, isolated_home():
+            send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         portal["fail"] = {"uploadexportcsv", "rollbackexportcsv"}
@@ -1965,7 +3500,7 @@ def check_send_hazards(checks: Checks) -> None:
 
     # ----------------------------------------------------------- S2: the slow modes
     with _case(checks, "S2: the slow modes"), \
-            send_portal() as portal, isolated_home(), _short_timeout(0.4):
+            send_portal() as portal, synced_home(), _short_timeout(0.4):
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         portal["slow"] = {"GET": 1.2}
@@ -1985,7 +3520,7 @@ def check_send_hazards(checks: Checks) -> None:
             code = type(caught).__name__
         checks.equal(code, "tcg_unreachable", "every timeout on the transport is `tcg_unreachable`")
 
-        with send_portal() as portal, isolated_home(), _short_timeout(0.4):
+        with send_portal() as portal, synced_home(), _short_timeout(0.4):
             run_dir, _ = seam_run(checks, cards)
             portal["live"] = _live_export_bytes(empty)
             portal["slow"] = {"uploadexportcsv": 1.2}
@@ -2001,7 +3536,7 @@ def check_send_hazards(checks: Checks) -> None:
             checks.equal(portal["rolled"], ["u-1"], "and the upload is rolled back")
             checks.equal(pushed(ARTICUNO_SKU), 0, "and, the rollback confirmed, the copies are back")
 
-        with send_portal() as portal, isolated_home(), _short_timeout(0.4):
+        with send_portal() as portal, synced_home(), _short_timeout(0.4):
             run_dir, _ = seam_run(checks, cards)
             portal["live"] = _live_export_bytes(empty)
             portal["slow"] = {"movetolive": 1.2}
@@ -2013,7 +3548,7 @@ def check_send_hazards(checks: Checks) -> None:
             checks.equal(pushed(ARTICUNO_SKU), 3, "and the copies are held, not taken back")
 
     # ------------------------------------------------------- S2: the partial accept
-    with _case(checks, "S2: the partial accept"), send_portal() as portal, isolated_home():
+    with _case(checks, "S2: the partial accept"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         portal["turn_away"] = 1
@@ -2040,7 +3575,7 @@ def check_send_hazards(checks: Checks) -> None:
         )
 
     # ---------------------------------------------------- S3: the same bytes, windowed
-    with _case(checks, "S3: the same bytes, windowed"), isolated_home():
+    with _case(checks, "S3: the same bytes, windowed"), synced_home():
         now = clock.now()
         # ROUND-1 STAMPS, WITHOUT THE RANDOM TAIL: the old shape still reads, and it is the
         # shape the round-1 build could see, so this case goes red on that build for the
@@ -2076,30 +3611,9 @@ def check_send_hazards(checks: Checks) -> None:
                 refused = True
             checks.ok(refused, f"AN EXPORT WITH NO `{missing}` COLUMN is refused, never read as zero")
 
-    # -------------------------------------- S3: one live rise confirms one receipt only
-    with _case(checks, "S3: one live rise confirms one receipt only"), \
-            send_portal() as portal, isolated_home():
-        base = {
-            "kind": "send", "copies": {ARTICUNO_SKU: 3}, "copies_total": 3,
-            "names": {ARTICUNO_SKU: "Articuno"}, "live_before": {ARTICUNO_SKU: 0},
-            "sold_before": {ARTICUNO_SKU: 0}, "pushed": {"upload_id": "u", "rows": 1, "accepted": 1},
-            "published_at": "2026-09-24T10:00:00+00:00", "check_after": "2000-01-01T00:00:00+00:00",
-            "phase": "done",
-        }
-        for stamp in ("20260924-100000-eeeeee", "20260924-100500-ffffff"):
-            send_routes._write(send_routes.sends_dir() / stamp, dict(base, stamp=stamp))
-        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
-        send_routes.do_live_check({})
-        states = {s["stamp"]: (s["state"], (s["check"] or {}).get("found")) for s in send_routes.do_sends()["sends"]}
-        checks.equal(
-            states,
-            {"20260924-100000-eeeeee": ("checked", 3), "20260924-100500-ffffff": ("short", 0)},
-            "ONE RISE OF THREE confirms the older send's three, and never both sends",
-        )
-
     # ----------------------------------------- S3: the first check fires past the lag
     with _case(checks, "S3: the first check fires past the lag"), \
-            send_portal() as portal, isolated_home():
+            send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
@@ -2114,7 +3628,7 @@ def check_send_hazards(checks: Checks) -> None:
         def markdown(home):
             return _markdown_dir(home, "20260924-130000")
 
-        with send_portal() as portal, isolated_home() as home:
+        with send_portal() as portal, synced_home() as home:
             directory = markdown(home)
             portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
             portal["gate"] = threading.Barrier(2)
@@ -2143,7 +3657,7 @@ def check_send_hazards(checks: Checks) -> None:
                 "and the price file is pushed and published once",
             )
 
-        with send_portal() as portal, isolated_home() as home:
+        with send_portal() as portal, synced_home() as home:
             directory = markdown(home)
             portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
             portal["published_then_5xx"] = True
@@ -2266,7 +3780,7 @@ def check_send_review_r3(checks: Checks) -> None:
 
     # --------------------------- F1: the emit step times out after the receipt is written
     with _case(checks, "F1: a timed-out step after the receipt"), send_portal() as portal, \
-            isolated_home():
+            synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
 
@@ -2306,7 +3820,7 @@ def check_send_review_r3(checks: Checks) -> None:
             )
 
     # --------------------------- F1: any other error before "sending"
-    with _case(checks, "F1: an error before sending"), send_portal() as portal, isolated_home():
+    with _case(checks, "F1: an error before sending"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
 
@@ -2327,7 +3841,7 @@ def check_send_review_r3(checks: Checks) -> None:
 
     # --------------------------- F1: a timeout before anything was counted leaves nothing
     with _case(checks, "F1: a timeout before the count"), send_portal() as portal, \
-            isolated_home():
+            synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
 
@@ -2350,7 +3864,7 @@ def check_send_review_r3(checks: Checks) -> None:
     # ------------- F2: a mark-down press that died leaves a claim the check resolves
     for died_at, pushed_first in (("the live read", False), ("the publish", True)):
         label = f"F2: a mark-down press that died at {died_at}"
-        with _case(checks, label), send_portal() as portal, isolated_home() as home:
+        with _case(checks, label), send_portal() as portal, synced_home() as home:
             directory = _markdown_dir(home, "20260924-130000")
             if pushed_first:
                 pipeline_routes._write_push(
@@ -2399,7 +3913,7 @@ def check_send_review_r3(checks: Checks) -> None:
 
     # ------------------------- F2: an error inside a mark-down press is held, not stuck
     with _case(checks, "F2: an error inside a mark-down press"), send_portal() as portal, \
-            isolated_home() as home:
+            synced_home() as home:
         directory = _markdown_dir(home, "20260924-140000")
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
 
@@ -2423,7 +3937,7 @@ def check_send_review_r3(checks: Checks) -> None:
 
     # ------------------- F4: the server dies after emit counted, before the baseline
     with _case(checks, "F4: a death before the baseline"), send_portal() as portal, \
-            isolated_home():
+            synced_home():
         run_dir, _ = seam_run(checks, cards)
         # TCGplayer already holds two Articuno the store never recorded, so the guard sends one.
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0})
@@ -2458,7 +3972,7 @@ def check_send_review_r3(checks: Checks) -> None:
 
     # ------------------------------------------ F5: a press that sends nothing claims nothing
     with _case(checks, "F5: a press that sends nothing"), send_portal() as portal, \
-            isolated_home():
+            synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         send_routes.do_send({"runs": [run_dir.name], "confirm": True})
@@ -2472,7 +3986,7 @@ def check_send_review_r3(checks: Checks) -> None:
         )
 
     # ------------- F5b: one unreadable live claim must not kill the Sends list (DEBT59)
-    with _case(checks, "F5b: an unreadable live claim"), send_portal() as portal, isolated_home():
+    with _case(checks, "F5b: an unreadable live claim"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
@@ -2502,7 +4016,7 @@ def check_send_review_r3(checks: Checks) -> None:
         checks.ok(refused, "F5b: and a path that guards a send still refuses over that claim")
 
     # ------------- F5d: an unreadable live claim blocks the press until a person releases it (DEBT59)
-    with _case(checks, "F5d: release an unreadable claim"), send_portal() as portal, isolated_home():
+    with _case(checks, "F5d: release an unreadable claim"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         conn = db.connect(Store().directory)
@@ -2576,7 +4090,7 @@ def check_send_review_r3(checks: Checks) -> None:
         checks.ok(sent["stamp"], "F5d: RELEASE FREES THE PRESS: it sends")
 
     # ------------- F5e: a READABLE live claim cannot be released from here (DEBT59)
-    with _case(checks, "F5e: a readable claim is not releasable by key"), isolated_home():
+    with _case(checks, "F5e: a readable claim is not releasable by key"), synced_home():
         with Store().write() as writable:
             writable.send_claims.claim("20260901-101500", sendclaims.KIND_LISTING, {"S1": 1}, pid=os.getpid())
         checks.equal(
@@ -2620,7 +4134,7 @@ def check_send_review_r3(checks: Checks) -> None:
         )
 
     # --------------- F6: a hand emit between a press's plan and its save refuses the press
-    with _case(checks, "F6: the stale half of the claim"), isolated_home():
+    with _case(checks, "F6: the stale half of the claim"), synced_home():
         run_dir, _ = seam_run(checks, cards)
         from cli import __main__ as entry
         from cli import cmd_emit
@@ -2680,7 +4194,7 @@ def check_send_review_r3(checks: Checks) -> None:
 
     # --------- the orchestrator's call: a downloaded file takes back after a second check
     with _case(checks, "a downloaded file: take back after a second check"), \
-            send_portal() as portal, isolated_home():
+            send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         stamp = send_routes.do_send({"runs": [run_dir.name], "download": True})["send"]["stamp"]
@@ -2774,7 +4288,7 @@ def check_send_review_r4(checks: Checks) -> None:
 
     # ------------- H1-A: a download nobody uploaded never takes a live send's credit
     with _case(checks, "H1-A: a download and a send, one check"), send_portal() as portal, \
-            isolated_home():
+            synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         download = send_routes.do_send(one_articuno(run_dir, download=True))["send"]["stamp"]
@@ -2829,7 +4343,7 @@ def check_send_review_r4(checks: Checks) -> None:
 
     # ------------- H1-B: two checks never credit one copy twice
     with _case(checks, "H1-B: two sends, two checks, one copy live"), send_portal() as portal, \
-            isolated_home():
+            synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         first = send_routes.do_send(one_articuno(run_dir, confirm=True))["send"]["stamp"]
@@ -2866,7 +4380,7 @@ def check_send_review_r4(checks: Checks) -> None:
 
     # ------------- H3: a listing send carries the price a mark-down just set
     with _case(checks, "H3: a listing send after a mark-down"), send_portal() as portal, \
-            isolated_home() as home:
+            synced_home() as home:
         run_dir, _ = seam_run(checks, cards)
         priced = home / "live-priced.csv"
         priced.write_bytes(_live_export_priced({ARTICUNO_SKU: 1, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "25.00"}))
@@ -2891,7 +4405,7 @@ def check_send_review_r4(checks: Checks) -> None:
         )
 
     # ------------- H4: two Take back presses at once take the copies back once
-    with _case(checks, "H4: two take-backs at once"), send_portal() as portal, isolated_home():
+    with _case(checks, "H4: two take-backs at once"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         stamp = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]["stamp"]
@@ -2928,7 +4442,7 @@ def check_send_review_r4(checks: Checks) -> None:
 
     # ------------- H2: a taken-back receipt keeps its warning until it is dismissed
     with _case(checks, "H2: the warning a take-back keeps"), send_portal() as portal, \
-            isolated_home():
+            synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes(empty)
         download = send_routes.do_send(one_articuno(run_dir, download=True))
@@ -2987,7 +4501,7 @@ def check_send_review_r4(checks: Checks) -> None:
         )
 
     # ------------- the screen's routes read the stamp a press now writes
-    with _case(checks, "the take-back and file routes read a round-2 stamp"), isolated_home():
+    with _case(checks, "the take-back and file routes read a round-2 stamp"), synced_home():
         stamp = "20260924-120000-abcdef"
         directory = send_routes.sends_dir() / stamp
         send_routes._write(
@@ -3049,7 +4563,7 @@ def check_send_review_r5(checks: Checks) -> None:
         }
 
     # ------------- M1: one press lists the new copy and reprices the live card
-    with _case(checks, "M1: a mixed send"), send_portal() as portal, isolated_home():
+    with _case(checks, "M1: a mixed send"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
         send_routes.do_send(
@@ -3124,7 +4638,7 @@ def check_send_review_r5(checks: Checks) -> None:
         )
 
     # ------------- M2: a price-only press; a rule price and an unchanged price send nothing
-    with _case(checks, "M2: prices only"), send_portal() as portal, isolated_home():
+    with _case(checks, "M2: prices only"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
         send_routes.do_send({"runs": [run_dir.name], "confirm": True})
@@ -3162,7 +4676,7 @@ def check_send_review_r5(checks: Checks) -> None:
         )
 
     # ------------- M3: a price change never races a mark-down over the same card
-    with _case(checks, "M3: a mark-down holds the card"), send_portal() as portal, isolated_home():
+    with _case(checks, "M3: a mark-down holds the card"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
         send_routes.do_send(
@@ -3206,7 +4720,7 @@ def check_send_review_r5(checks: Checks) -> None:
         )
 
     # ------------- two presses in one second are ordered by when they were pressed
-    with _case(checks, "two presses in one second"), isolated_home():
+    with _case(checks, "two presses in one second"), synced_home():
         older, newer = "20260924-120000-ffffff", "20260924-120000-000000"
         for stamp, ns in ((older, 1_000), (newer, 2_000)):
             send_routes._write(
@@ -3285,7 +4799,7 @@ def check_send_review_r6(checks: Checks) -> None:
         portal["rows"].clear()
 
     # ------------- P1 (S1): a named price under the store's floor is refused, by name
-    with _case(checks, "P1: under the floor"), send_portal() as portal, isolated_home():
+    with _case(checks, "P1: under the floor"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         articuno_live(run_dir, portal)
         typed(ARTICUNO_SKU, "0.05")
@@ -3302,7 +4816,7 @@ def check_send_review_r6(checks: Checks) -> None:
         checks.equal(portal["rows"], [], "P1: and TCGplayer receives no row")
 
     # ------------- P2 (B1): the guard trims a listing to nothing; an unnamed price never rides
-    with _case(checks, "P2: an unnamed price after a trim"), send_portal() as portal, isolated_home():
+    with _case(checks, "P2: an unnamed price after a trim"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_priced({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
         typed(ARTICUNO_SKU, "30.00")
@@ -3318,7 +4832,7 @@ def check_send_review_r6(checks: Checks) -> None:
         checks.equal(portal["rows"], [], "P2: and TCGplayer receives no row")
 
     # ------------- P3 (N1, kept): Qty 0 with a named price moves the price, and no copy
-    with _case(checks, "P3: Qty 0 and a named price"), send_portal() as portal, isolated_home():
+    with _case(checks, "P3: Qty 0 and a named price"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
         send_routes.do_send(
@@ -3338,7 +4852,7 @@ def check_send_review_r6(checks: Checks) -> None:
         )
 
     # ------------- P4 (S2): a press that died mid-push reads as possibly staged
-    with _case(checks, "P4: a hard crash mid-push"), send_portal() as portal, isolated_home():
+    with _case(checks, "P4: a hard crash mid-push"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
         portal["fail"] = {"movetolive", "rollbackexportcsv"}
@@ -3372,7 +4886,7 @@ def check_send_review_r6(checks: Checks) -> None:
         )
 
     # ------------- P5 (S3): an unconfirmed price change holds its card from a mark-down
-    with _case(checks, "P5: a held price change"), send_portal() as portal, isolated_home() as home:
+    with _case(checks, "P5: a held price change"), send_portal() as portal, synced_home() as home:
         run_dir, _ = seam_run(checks, cards)
         articuno_live(run_dir, portal)
         typed(ARTICUNO_SKU, "30.00")
@@ -3403,7 +4917,7 @@ def check_send_review_r6(checks: Checks) -> None:
         )
 
     # ------------- P7 (B1, B2): a price the screen did not name, or whose live price moved
-    with _case(checks, "P7: the live price moved"), send_portal() as portal, isolated_home():
+    with _case(checks, "P7: the live price moved"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         articuno_live(run_dir, portal)
         typed(ARTICUNO_SKU, "25.99")
@@ -3426,7 +4940,7 @@ def check_send_review_r6(checks: Checks) -> None:
         )
 
     # ------------- a named price TCGplayer already shows is left out and named, not refused
-    with _case(checks, "already live"), send_portal() as portal, isolated_home():
+    with _case(checks, "already live"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         articuno_live(run_dir, portal)
         typed(ARTICUNO_SKU, "22.03")
@@ -3440,7 +4954,7 @@ def check_send_review_r6(checks: Checks) -> None:
         )
 
     # ------------- N2: a price row on a card that sold out settles, named
-    with _case(checks, "N2: sold out after the send"), send_portal() as portal, isolated_home():
+    with _case(checks, "N2: sold out after the send"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         articuno_live(run_dir, portal)
         typed(ARTICUNO_SKU, "30.00")
@@ -3459,7 +4973,7 @@ def check_send_review_r6(checks: Checks) -> None:
         )
 
     # ------------- S4: a rollback's answer is not proof
-    with _case(checks, "S4: after a rollback"), send_portal() as portal, isolated_home():
+    with _case(checks, "S4: after a rollback"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
         portal["refuse"] = {"movetolive"}
@@ -3475,7 +4989,7 @@ def check_send_review_r6(checks: Checks) -> None:
         checks.equal(receipt(stamp)["warning"], None, "S4: until the owner dismisses it")
 
     # ------------- B3 and S4: a mark-down's rollback is named for what it is
-    with _case(checks, "B3: a mark-down rolled back"), send_portal() as portal, isolated_home() as home:
+    with _case(checks, "B3: a mark-down rolled back"), send_portal() as portal, synced_home() as home:
         directory = _markdown_dir(home, "20260924-140000", "19.99")
         pipeline_routes._write_push(directory, {"upload_id": "u-9", "rows": 1, "accepted": 1})
         answer = pipeline_routes.do_markdown_rollback(directory.name, {"confirm": True})
@@ -3522,7 +5036,7 @@ def check_send_review_r7(checks: Checks) -> None:
         return None
 
     # ------------- P11 (R6-3): a listing row moves live copies; the button must name the move
-    with _case(checks, "P11: live copies move"), send_portal() as portal, isolated_home():
+    with _case(checks, "P11: live copies move"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
         send_routes.do_send(
@@ -3554,7 +5068,7 @@ def check_send_review_r7(checks: Checks) -> None:
         )
 
     # ------------- R6-1: a refused price carries the live price, and one press sends again
-    with _case(checks, "R6-1: send again at the live price"), send_portal() as portal, isolated_home():
+    with _case(checks, "R6-1: send again at the live price"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
         send_routes.do_send(
@@ -3595,7 +5109,7 @@ def check_send_review_r7(checks: Checks) -> None:
         )
 
     # ------------- R6-1: the worklist names what TCGplayer holds now, off the newest live export
-    with _case(checks, "R6-1: the worklist's live price"), send_portal() as portal, isolated_home():
+    with _case(checks, "R6-1: the worklist's live price"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
         send_routes.do_send(
@@ -3617,7 +5131,7 @@ def check_send_review_r7(checks: Checks) -> None:
 
 def _store_backed_run(checks: Checks, home: Path, cards, only=None, stamp=True) -> "runs.Run":
     """A run made the way the sweep makes one: cards identified IN THE STORE, then
-    `pkmnscan join --keys` (the store-backed join `cli/cmd_match.py` calls through
+    `banchi join --keys` (the store-backed join `cli/cmd_match.py` calls through
     `resolve.load_from_store`). Its directory holds `manifest.json` with `selection.keys` and
     `pricing.json`, and NEVER `identifications.json` (D65, a sweep card reads as a press card)."""
     from cli import __main__ as entry
@@ -3655,7 +5169,7 @@ def _store_backed_run(checks: Checks, home: Path, cards, only=None, stamp=True) 
 def check_send_store_backed_runs(checks: Checks) -> None:
     """A run with no `identifications.json` reads the store's CURRENT cards for its
     `selection.keys`, never a frozen copy (owner's ruling; D65). Each case red on main with
-    `RunError: ... does not exist — run pkmnscan identify first`."""
+    `RunError: ... does not exist — run banchi identify first`."""
     from cli import __main__ as entry
     from cli import cmd_identify
 
@@ -3668,7 +5182,7 @@ def check_send_store_backed_runs(checks: Checks) -> None:
         return {r[tcgcsv.SKU_COLUMN]: r[tcgcsv.QUANTITY_COLUMN] for r in rows}
 
     # 1. EMIT
-    with isolated_home() as home:
+    with synced_home() as home:
         run = _store_backed_run(checks, home, one)
         raised = ""
         with quiet() as said:
@@ -3709,7 +5223,7 @@ def check_send_store_backed_runs(checks: Checks) -> None:
     # 2. SEND over the wire, 3. MIXED SEND with a classic run
     for mixed in (False, True):
         label = "MIXED SEND" if mixed else "SEND"
-        with send_portal() as portal, isolated_home() as home:
+        with send_portal() as portal, synced_home() as home:
             names = []
             if mixed:
                 classic, _ = seam_run(checks, one)
@@ -3784,7 +5298,7 @@ def check_send_store_backed_follows_cards(checks: Checks) -> None:
     wanted = {ARTICUNO_SKU: "1", DUNSPARCE_SKU: "1"}
     # (a) a junk card at 5/1 is removed; the run holds 5/2 and 5/3; a never-held reverse is at 5/4
     for label in ("(a)",):
-        with isolated_home() as home:
+        with synced_home() as home:
             run = _store_backed_run(
                 checks, home, cards_at(dun, art, dun, rev),
                 only=[master.position_key(5, 2), master.position_key(5, 3)],
@@ -3799,7 +5313,7 @@ def check_send_store_backed_follows_cards(checks: Checks) -> None:
 
     # (b) SEND THE REST (owner's ruling on #751): a card the run held is removed; the other
     # card still goes, and the output names the gone card by its last-known name.
-    with isolated_home() as home:
+    with synced_home() as home:
         run = _store_backed_run(
             checks, home, cards_at(art, dun, rev),
             only=[master.position_key(5, 1), master.position_key(5, 2)],
@@ -3808,7 +5322,7 @@ def check_send_store_backed_follows_cards(checks: Checks) -> None:
         code, rows, text = emitted(run)
         checks.equal((code, rows), (0, {DUNSPARCE_SKU: "1"}), f"(b) a run card since removed does not refuse: the rest goes, the gone card's SKU does not: {text[-300:]!r}")
         checks.ok("Articuno" in text, f"(b) and the CLI output names the gone card: {text[-300:]!r}")
-    with isolated_home() as home:  # every card gone: nothing to send, so it still refuses
+    with synced_home() as home:  # every card gone: nothing to send, so it still refuses
         run = _store_backed_run(
             checks, home, cards_at(art, dun, rev),
             only=[master.position_key(5, 1), master.position_key(5, 2)],
@@ -3819,7 +5333,7 @@ def check_send_store_backed_follows_cards(checks: Checks) -> None:
         checks.ok(code not in (0, None) and not rows, f"(b) a run whose every card is gone refuses and sends nothing: exit {code}, rows {rows}")
 
     # (f) a gone card, every held card already sent: "nothing to send" still names the gone card
-    with isolated_home() as home:
+    with synced_home() as home:
         run = _store_backed_run(
             checks, home, cards_at(art, dun, rev),
             only=[master.position_key(5, 1), master.position_key(5, 2)],
@@ -3834,7 +5348,7 @@ def check_send_store_backed_follows_cards(checks: Checks) -> None:
 
     # (g) `join` over a store-backed run names the gone card in its output (the screen's join
     # route answers with this same console)
-    with isolated_home() as home:
+    with synced_home() as home:
         run = _store_backed_run(
             checks, home, cards_at(art, dun, rev),
             only=[master.position_key(5, 1), master.position_key(5, 2)],
@@ -3845,7 +5359,7 @@ def check_send_store_backed_follows_cards(checks: Checks) -> None:
         checks.ok("Articuno" in said.getvalue(), f"(g) `join <store-backed run>` names the gone card: exit {code}, {said.getvalue()[-300:]!r}")
 
     # (a) a later sweep re-reads and re-stamps one card of sweep-01: both runs still follow cards
-    with isolated_home() as home:
+    with synced_home() as home:
         spec = cards_at(art, dun)
         first = _store_backed_run(checks, home, spec)
         _store_backed_run(checks, home, spec, only=[master.position_key(5, 2)])  # re-stamps 5/2
@@ -3856,7 +5370,7 @@ def check_send_store_backed_follows_cards(checks: Checks) -> None:
         checks.ok(DUNSPARCE_SKU not in rows, f"(a) and the re-read card goes out once across both runs: {rows}")
 
     # (b) a `join --keys` run stamps no card, and sends its cards
-    with isolated_home() as home:
+    with synced_home() as home:
         run = _store_backed_run(checks, home, cards_at(art, dun), stamp=False)
         code, rows, text = emitted(run)
         checks.equal((code, rows), (0, wanted), "(b) a join --keys run, stamped on no card, sends its cards: " + text[-200:])
@@ -3864,7 +5378,7 @@ def check_send_store_backed_follows_cards(checks: Checks) -> None:
     # (e) the keys-only backfill is deleted (owner's ruling on #751): a manifest with
     # selection.keys and no `cards` map refuses in a plain sentence that names the run and
     # says it cannot tell which cards it held, even when every card is stamped with the run.
-    with isolated_home() as home:
+    with synced_home() as home:
         run = _store_backed_run(checks, home, cards_at(art, dun))
         old_manifest(run)
         code, rows, text = emitted(runs.open_run(run.directory))
@@ -3882,7 +5396,7 @@ def check_send_skips_gone_card(checks: Checks) -> None:
     checks.note("STORE-BACKED SEND SKIPS A GONE CARD — the receipt names it")
     for every in (False, True):
         label = "SEND, every card gone" if every else "SEND, one card gone"
-        with send_portal() as portal, isolated_home() as home:
+        with send_portal() as portal, synced_home() as home:
             run = _store_backed_run(checks, home, [(6, 1, "Articuno", "161", None), (6, 2, "Dunsparce", "120", "normal")])
             for index in ((2, 1) if every else (1,)):
                 card = Store().read().inventory.cards[master.position_key(6, index)]
@@ -3909,7 +5423,7 @@ def check_send_skips_gone_card(checks: Checks) -> None:
             checks.equal((answer.get("send") or {}).get("gone"), ["Articuno"], f"{label}: the send summary's `gone` names the gone card by its last-known name")
 
     # A MERGED SEND over two store-backed runs, a different gone card in each: both are named.
-    with send_portal() as portal, isolated_home() as home:
+    with send_portal() as portal, synced_home() as home:
         first = _store_backed_run(checks, home, [(6, 1, "Articuno", "161", None), (6, 2, "Dunsparce", "120", "normal")])
         second = _store_backed_run(checks, home, [(7, 1, "Articuno", "161", None), (7, 2, "Dunsparce", "120", "normal")])
         for box, index in ((6, 1), (7, 2)):
@@ -3942,7 +5456,7 @@ def check_send_skips_gone_card(checks: Checks) -> None:
 
     def gone_of(specs_per_run, removals):
         """POST one merged send over `runs_over` runs; return the summary's `gone`."""
-        with send_portal() as portal, isolated_home() as home:
+        with send_portal() as portal, synced_home() as home:
             made = [_store_backed_run(checks, home, specs) for specs in specs_per_run]
             for box, index in removals:
                 card = Store().read().inventory.cards[master.position_key(box, index)]
@@ -4003,7 +5517,7 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
     )
 
     # --- a store at 10 has neither table -------------------------------------------------
-    with isolated_home():
+    with synced_home():
         capture_server.do_capture(capture_payload(1))
         store_path = str(files.inventory_dir() / "store.sqlite")
         conn = sqlite3.connect(store_path, isolation_level=None)
@@ -4035,7 +5549,7 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
         )
 
     # --- a store main already moved to 11 has `skus` and no `send_claims` ----------------
-    with isolated_home():
+    with synced_home():
         capture_server.do_capture(capture_payload(1))
         store_path = str(files.inventory_dir() / "store.sqlite")
         conn = sqlite3.connect(store_path, isolation_level=None)
@@ -4066,7 +5580,7 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
     # The UX branch took 11 for `send_claims` before the merge moved it to 12. Its stamp says
     # 11, and it is not main's 11. It must still get `skus`, the views and
     # `cards.identity_source`, or the first card write fails on the missing column.
-    with isolated_home():
+    with synced_home():
         capture_server.do_capture(capture_payload(1))
         store_path = str(files.inventory_dir() / "store.sqlite")
         conn = sqlite3.connect(store_path, isolation_level=None)
@@ -4142,7 +5656,7 @@ def check_send_review_r8(checks: Checks) -> None:
         portal["rows"].clear()
 
     # ------------- R7-1: a move of live copies under the floor is refused, and is data
-    with _case(checks, "R7-1: a move under the floor"), send_portal() as portal, isolated_home():
+    with _case(checks, "R7-1: a move under the floor"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         two_live(portal, run_dir, "22.03")
         typed(ARTICUNO_SKU, "0.05")
@@ -4159,7 +5673,7 @@ def check_send_review_r8(checks: Checks) -> None:
         checks.equal(portal["rows"], [], "R7-1: and TCGplayer receives no row")
 
     # ------------- R7-3: the button's count of live copies must be TCGplayer's
-    with _case(checks, "R7-3: a move's count"), send_portal() as portal, isolated_home():
+    with _case(checks, "R7-3: a move's count"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         two_live(portal, run_dir, "22.03")
         typed(ARTICUNO_SKU, "19.99")
@@ -4184,7 +5698,7 @@ def check_send_review_r8(checks: Checks) -> None:
         )
 
     # ------------- R7-4: a live row with copies and no price moves, and must be named
-    with _case(checks, "R7-4: a live row with no price"), send_portal() as portal, isolated_home():
+    with _case(checks, "R7-4: a live row with no price"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
         two_live(portal, run_dir, "")
         typed(ARTICUNO_SKU, "19.99")
@@ -4230,7 +5744,7 @@ def check_run_match(checks: Checks) -> None:
         return [name for kind, name in portal["calls"] if kind == "POST" and name == "downloadexportcsv"]
 
     with _case(checks, "Q4: a finished reading matches by itself"), send_portal() as portal, \
-            isolated_home():
+            synced_home():
         run = reading_done(hinted=len(cards))
         checks.equal(
             pipeline_routes._summary(run.directory)["phase"],
@@ -4255,7 +5769,7 @@ def check_run_match(checks: Checks) -> None:
         )
 
     with _case(checks, "Q4: a problem becomes the next step"), send_portal() as portal, \
-            isolated_home():
+            synced_home():
         run = reading_done(hinted=0)
         answer = pipeline_routes.do_run_match(run.name, {})
         problem = answer["summary"]["match_problem"] or {}
@@ -4289,7 +5803,7 @@ def check_run_match(checks: Checks) -> None:
         )
 
     with _case(checks, "Q4: a signed-out session is the next step"), send_portal() as portal, \
-            isolated_home():
+            synced_home():
         run = reading_done(hinted=len(cards))
         portal["signed_out"] = True
         answer = pipeline_routes.do_run_match(run.name, {})
@@ -4432,7 +5946,7 @@ def check_live_markdown_guards(checks: Checks) -> None:
         [True, False, False],
         "A READ IS FRESH FOR A DAY, and one nothing can date is not fresh",
     )
-    with send_portal() as portal, isolated_home() as home:
+    with send_portal() as portal, synced_home() as home:
         stale = _markdown_dir(home, "20260926-100000", at=long_ago)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
         checks.equal(
@@ -4455,7 +5969,7 @@ def check_live_markdown_guards(checks: Checks) -> None:
         )
 
     # AN EARLIER, LOWER ANSWER, THROUGH THE COMMAND: `_apply` reads the corpus's own stamps.
-    with isolated_home() as home:
+    with synced_home() as home:
         fresh_at = master.now()
         directory = _markdown_dir(home, "20260926-100200", at=fresh_at)
         (directory / cmd_reprice.IMPORT).unlink()
@@ -4500,7 +6014,7 @@ def check_live_markdown_guards(checks: Checks) -> None:
     # not raised, and is refused for a reason ("typed before this read") that is false this
     # time. Only naming the SKU as typed THIS VISIT (`typed`, D273's `typedHere`) fixes it,
     # because the caller is the one witness the timestamp cannot be.
-    with isolated_home() as home:
+    with synced_home() as home:
         old_at = "2026-01-01T00:00:00.000+00:00"
         book = corpus.Corpus.read()
         book.answers[ARTICUNO_SKU] = corpus.Answer(value="19.99", at=old_at)
@@ -4551,7 +6065,7 @@ def check_live_markdown_guards(checks: Checks) -> None:
         ("TCGplayer already shows it", _live_export_priced({ARTICUNO_SKU: 1}, {ARTICUNO_SKU: "19.99"}), "nothing_to_send"),
         ("TCGplayer holds no copy", _live_export_bytes({ARTICUNO_SKU: 0}), "nothing_to_send"),
     ):
-        with send_portal() as portal, isolated_home() as home:
+        with send_portal() as portal, synced_home() as home:
             directory = _markdown_dir(home, "20260926-110000")
             portal["live"] = live
             checks.equal(
@@ -4573,7 +6087,7 @@ def check_live_markdown_guards(checks: Checks) -> None:
             )
 
     # --------------------------------------------------------------- the sealed filter
-    with isolated_home() as home:
+    with synced_home() as home:
         directory = _markdown_dir(home, "20260926-120000")
         edits = [{"sku": ARTICUNO_SKU, "price": "19.99"}]
         checks.equal(
@@ -4610,7 +6124,7 @@ def check_publish_lag(checks: Checks) -> None:
     checks.note("")
     checks.note("PUBLISH LAG — the SKUs a reconcile must not settle from the export")
 
-    with isolated_home() as home:
+    with synced_home() as home:
         root = home / "inventory" / "markdowns"
 
         def markdown(stamp, sku, published_at, price="1.00"):
@@ -4705,7 +6219,7 @@ def check_pricing_route(checks: Checks) -> None:
 
     cards = [(3, 1, "Articuno", "161", None)]
 
-    with isolated_home():
+    with synced_home():
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
         thread = _spawn_server(httpd)
@@ -4821,7 +6335,7 @@ def check_corpus_revision(checks: Checks) -> None:
 
     WHY THE GUARD EXISTS. That route replaces `inventory/prices.json` WHOLESALE, which is D86's
     design and is right: the screen round-trips every key it does not understand. It had no
-    concurrency guard because the operator was the only writer, and `pkmnscan reprice` is a
+    concurrency guard because the operator was the only writer, and `banchi reprice` is a
     second one — it re-prices every stale SKU at once, so a `#/pricing` tab holding a snapshot
     from mount would revert an entire sweep on the next keystroke, with no error anywhere, on
     the one file in this product that holds money.
@@ -4838,7 +6352,7 @@ def check_corpus_revision(checks: Checks) -> None:
     `do_pricing_corpus_write` — the same route the guard lives in. But the writer the guard
     exists for never touches that route: D86's amendment names it as a NON-ROUTE writer moving
     `inventory/prices.json` under an open `#/pricing` tab, and that writer is
-    `pkmnscan prices adopt --write` (`cli/cmd_prices.py`'s `folded.write()` ->
+    `banchi prices adopt --write` (`cli/cmd_prices.py`'s `folded.write()` ->
     `pipeline/corpus.py:Corpus.write()` -> `store/files.py:write_json()`). A reprice sweep is
     the same call. Neither imports `server/pipeline_routes.py`.
 
@@ -4869,7 +6383,7 @@ def check_corpus_revision(checks: Checks) -> None:
     checks.note("")
     checks.note("CORPUS REVISION — the stale-write refusal on PUT /pricing")
 
-    with isolated_home():
+    with synced_home():
         corpus.Corpus().write()
         first = pipeline_routes.do_pricing_corpus()
         checks.ok(
@@ -5093,7 +6607,7 @@ def check_pricing_clear(checks: Checks) -> None:
     checks.note("")
     checks.note("PRICING CLEAR — the mass-clear, its three refusals, and the restore")
 
-    with isolated_home():
+    with synced_home():
         # A FIXTURE SHAPED LIKE THE OWNER'S FILE: old typed prices, fresh ones, a hold, an
         # `unknown`-channel seed, and one price carrying no date at all.
         #
@@ -5302,7 +6816,7 @@ def check_pricing_labels(checks: Checks) -> None:
         row = next(s for s in table["skus"] if s["sku"] == ARTICUNO_SKU)
         return {f"{p['box']}/{p['index']}": p["label"] for p in row["positions"]}
 
-    with isolated_home():
+    with synced_home():
         # Two sections over four cards — dividers at 1 and 3 — so a divider has cards on both
         # sides of it and a departure in front of one can be told from a departure behind it.
         capture_server.do_create_box({"box": 3})
@@ -5427,7 +6941,7 @@ def check_box_views_bounded(checks: Checks) -> None:
     checks.note("")
     checks.note("BOX_VIEWS BOUNDED — a caller that already knows which boxes it wants")
 
-    with isolated_home():
+    with synced_home():
         capture_server.do_create_box({"box": 1, "sections": [1]})
         capture_server.do_create_box({"box": 2, "sections": [1]})
         capture_server.do_create_box({"box": 3, "sections": [1]})
@@ -5496,7 +7010,7 @@ def check_withholding(checks: Checks) -> None:
         (3, 2, "Articuno", "161", None),
     ]
 
-    with isolated_home():
+    with synced_home():
         run_dir, _ = seam_run(checks, cards)
         # THE HOLD IS THE CORPUS'S AND OUTLIVES THE RUN (D86).
         book = corpus.Corpus.read()
@@ -5632,7 +7146,41 @@ CHECKS = (
     check_markdown_push,
     check_send_guard,
     check_send_press,
+    check_send_hold_takes_off,
+    check_send_take_outstanding,
     check_send_sold_since,
+    check_send_sold_after_check,
+    check_send_snapshot_lagging_then_newer,
+    check_send_snapshot_open_order,
+    check_send_snapshot_reading_before_wait,
+    check_send_snapshot_rise_before_press,
+    check_send_snapshot_shared_sku,
+    check_send_snapshot_order_sync_older,
+    check_send_snapshot_short_rechecked,
+    check_send_one_rise,
+    check_send_snapshot_sold_before_send,
+    check_send_snapshot_unchanged_reading,
+    check_send_snapshot_take_off,
+    check_send_snapshot_empty_ledger,
+    check_send_snapshot_release_not_reading,
+    check_send_snapshot_adopted_reading,
+    check_send_snapshot_window_reading,
+    check_send_snapshot_take_back_take_off,
+    check_send_auto_hold_removed_after_sales,
+    check_send_auto_hold_partial,
+    check_send_auto_hold_later_read,
+    check_send_auto_hold_newer_receipt_reading,
+    check_send_auto_hold_order_sync_older,
+    check_send_auto_hold_open_order_covers,
+    check_send_auto_hold_unhold,
+    check_send_auto_hold_take_back_keeps_count,
+    check_send_auto_hold_never_resent,
+    check_send_auto_hold_worklist_row,
+    check_send_auto_hold_two_receipts_take_back,
+    check_send_auto_hold_rehold_restores,
+    check_send_auto_hold_unhold_not_held_again,
+    check_send_auto_hold_unhold_sends_once,
+    check_send_auto_hold_unhold_survives_press_rewrite,
     check_send_hazards,
     check_send_review_r3,
     check_send_review_r4,

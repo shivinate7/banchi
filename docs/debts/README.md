@@ -44,7 +44,7 @@ DEBT23 A sale fixture that moves after the press is only wrong sometimes, so no 
 DEBT25 A cited number still resolves when it is the wrong one, and no check can read what a sentence is about
 DEBT26 The Intelligent Mail barcode encoder is written, correct against the Postal Service's own examples, and parked on a branch
 DEBT27 `Fulfillment.tsx`'s store-wide `GET /inventory` browse is argued and left
-DEBT30 The copies panel flash guard is shelved, on the owner's own word
+DEBT30 The copies panel flash guard is shelved by owner ruling
 DEBT31 The path guard never reads code, so a decision cited by path in a comment goes unchecked
 DEBT32 The archive sweep stays a press, and the owner intends to schedule it eventually
 DEBT33 An answered queue entry can never resurface, even when it is wrong
@@ -80,4 +80,13 @@ DEBT83 Off-screen rail tiles still cost a little per capture
 DEBT84 The public demo's first screen is heavier than its budget
 DEBT85 The read-budget check proves some routes on their miss path only
 DEBT86 Capabilities written twice that have not drifted yet
+DEBT87 an Unhold whose store write fails leaves copies off the list with no control
+DEBT88 the sticky send bar's height below an 820 column is unmeasured
+DEBT89 the send bar draws, then disappears, with zero runs or a failed load
+DEBT90 a send notice joins the bar after the worklist lands
+DEBT91 the send press widens when the worklist lands
+DEBT92 the tile lead check fails a proper noun after the first word
+DEBT93 the Show Held and Price Them clears have never gone red
+DEBT94 a five-digit count can wrap a tile note and grow the send bar
+DEBT95 the priced tile counts typed prices on rows the send leaves out
 ```

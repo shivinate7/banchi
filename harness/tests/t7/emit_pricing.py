@@ -66,7 +66,7 @@ def check_emit_claim_decides(checks: Checks) -> None:
     That case guarded a seam: `emit` re-derives the run rather than reading it, and for six
     days it re-derived with rung 3 live over a run joined with the flag — inventing a queued
     position for every bypassed card, finding none of them on disk, and refusing with *"Run
-    `pkmnscan join` first"* at an operator who had (measured on the owner's box 1: 39 of 39).
+    `banchi join` first"* at an operator who had (measured on the owner's box 1: 39 of 39).
     The fix read the flag off the manifest. The amendment deletes the flag, so there is nothing
     left for `emit` to forget; what remains to assert is that the two commands still agree,
     and agree on the CLAIM's row rather than the photograph's.
@@ -597,7 +597,7 @@ def check_threshold_and_file_shape(checks: Checks) -> None:
 
 
 def check_prices_adopt(checks: Checks) -> None:
-    """`pkmnscan prices adopt` folds, RETIRES, and the two commands refuse until it has (D86, amended).
+    """`banchi prices adopt` folds, RETIRES, and the two commands refuse until it has (D86, amended).
 
     THE REFUSAL WAS GATED ON AN EMPTY CORPUS, AND ON THE OWNER'S STORE EIGHT FILES SAT BEHIND
     IT. `join` and `emit` refused a run carrying `decisions.json` only while `inventory/
@@ -872,9 +872,433 @@ def check_prices_adopt(checks: Checks) -> None:
             "corpus — the answer was already there; emit only reads it",
         )
 
+    # -------------------------------------- (7) a multi-SKU fold keeps every legacy answer
+    # THE FOLD IS EXACT: every SKU a legacy file answers lands in the corpus with the value the
+    # file gave it, and the corpus holds no SKU the file did not name. The fixture covers each
+    # branch of `pipeline/corpus.py:adopt` — a price, a hold, a hold with a watch and a note,
+    # and a no-market-data row (channel `unknown`).
+    fold_doc = {
+        "sub_threshold": {"flat": ".5"},
+        "overrides": {
+            DUNSPARCE_SKU: "2.06",
+            DUNSPARCE_REVERSE_SKU: {"withheld": "bullish"},
+            ARTICUNO_SKU: {"withheld": "keeping", "watch_above": "25", "note": "wait for a dip"},
+        },
+        "no_market_data": {"9999301": "0.75"},
+    }
+    fold_want = {
+        DUNSPARCE_SKU: "2.06",
+        DUNSPARCE_REVERSE_SKU: {"withheld": "bullish"},
+        ARTICUNO_SKU: {"withheld": "keeping", "watch_above": "25", "note": "wait for a dip"},
+        "9999301": "0.75",
+    }
+    with isolated_home():
+        legacy_run(fold_doc)
+        command(checks, "prices", "adopt", "--write")
+        book = corpus.Corpus.read()
+        checks.equal(
+            {sku: answer.value for sku, answer in book.answers.items()},
+            fold_want,
+            "EVERY LEGACY SKU IS IN THE CORPUS WITH THE VALUE ITS FILE GAVE IT, and no SKU "
+            "appears that the file did not name — a fold that drops one row is a card that "
+            "silently loses its listing answer",
+        )
+        checks.equal(
+            (book.answers["9999301"].channel, book.answers[DUNSPARCE_SKU].channel),
+            ("unknown", "price"),
+            "and a no-market-data row keeps its own channel, `unknown`, while a price keeps `price`",
+        )
+
+    # --------- (8) one SKU in the corpus and in the file keeps ONE answer, by the stated rule
+    # THE RULE, FROM `pipeline/corpus.py:adopt`'s docstring: WITHOUT `--force` THE CORPUS WINS
+    # (`replace=False` leaves a SKU it already answers alone and reports it as a `Kept`); WITH
+    # `--force` THE FILE WINS, and the corpus's answer is reported as the one that was dropped.
+    # Price against price here: the hold cases above do not test this.
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: "20.00"}})
+        command(checks, "prices", "adopt", "--write")
+        book = corpus.Corpus.read()
+        book.answers[ARTICUNO_SKU] = corpus.Answer(value="18.50")
+        book.write()
+
+        legacy_run({"overrides": {ARTICUNO_SKU: "21.00"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.equal(
+            corpus.Corpus.read().answers[ARTICUNO_SKU].value,
+            "18.50",
+            "WITHOUT `--force`, a SKU in both the corpus and the file keeps the CORPUS'S "
+            "answer — one answer, not two, and the file's 21.00 does not overwrite it",
+        )
+        checks.ok(
+            "kept $18.50 (corpus)" in said and "file said $21.00 " in said,
+            "and the kept row names both figures (rendered as prices: $18.50, $21.00), so the dropped one is visible",
+            said,
+        )
+
+        legacy_run({"overrides": {ARTICUNO_SKU: "22.00"}})
+        said = command(checks, "prices", "adopt", "--write", "--force")
+        checks.equal(
+            corpus.Corpus.read().answers[ARTICUNO_SKU].value,
+            "22.00",
+            "WITH `--force`, the newest file wins where the two differ — still one answer",
+        )
+        checks.ok(
+            "dropped $18.50 (corpus)" in said,
+            "and the corpus answer it replaced is named as dropped",
+            said,
+        )
+
+    # ------------------------- (9) a preview over an existing corpus writes and moves nothing
+    with isolated_home():
+        legacy_run(fold_doc)
+        command(checks, "prices", "adopt", "--write")
+        answered_corpus()
+        corpus_before = files.prices_path().read_bytes()
+        pending, pending_bytes = legacy_run(
+            {"overrides": {"9999001": "7.00", "9999401": "1.10"}}
+        )
+        for extra in ((), ("--force",)):
+            preview = command(checks, "prices", "adopt", *extra)
+            checks.ok(
+                "DRY RUN" in preview,
+                f"`prices adopt {' '.join(extra)}` previews: it says DRY RUN",
+                preview,
+            )
+        checks.equal(
+            (
+                files.prices_path().read_bytes() == corpus_before,
+                (pending.directory / runs.DECISIONS).read_bytes() == pending_bytes,
+                (pending.directory / runs.DECISIONS_ADOPTED).exists(),
+                "9999401" in corpus.Corpus.read().answers,
+            ),
+            (True, True, False, False),
+            "WITHOUT --write NOTHING IS WRITTEN: the corpus is byte-identical, the run file is "
+            "still at its live name, nothing is retired, and a SKU only the file names is not "
+            "added — under the default and under --force alike",
+        )
+
+    # ------------------------------------------ (10) `show --held` lists only held SKUs
+    # `cli/cmd_prices.py:_show` — the cross-run view of holds. A priced SKU must not appear in
+    # it, a plain `show` must not list the holds, and the count line must agree.
+    with isolated_home():
+        book = corpus.Corpus.read()
+        book.answers["9999501"] = corpus.Answer(value="9.99")
+        book.answers["9999502"] = corpus.Answer(value={"withheld": "bullish"})
+        book.answers["9999503"] = corpus.Answer(
+            value={"withheld": "keeping", "watch_above": "5.00", "note": "wait"}
+        )
+        book.answers["9999504"] = corpus.Answer(value="unlisted")
+        book.write()
+        held_text = command(checks, "prices", "show", "--held")
+        plain_text = command(checks, "prices", "show")
+        checks.equal(
+            tuple(sku in held_text for sku in ("9999501", "9999502", "9999503", "9999504")),
+            (False, True, True, True),
+            "`show --held` LISTS THE THREE HELD SKUS AND NOT THE PRICED ONE — a hold list that "
+            "includes a price is a list nobody can act on",
+        )
+        checks.ok(
+            "above $5.00" in held_text and "wait" in held_text and "4 (3 held back)" in held_text,
+            "and it carries each hold's watch and note, and the count agrees: 4 answers, 3 held",
+            held_text,
+        )
+        checks.equal(
+            tuple(sku in plain_text for sku in ("9999502", "9999503", "9999504")),
+            (False, False, False),
+            "without --held, the same SKUs are NOT listed — the flag is what shows them",
+        )
+
+    # ------------------------------------- (11) every money figure the CLI prints has cents
+    # THE CENT RULE, read the way the owner reads it. `corpus._token` compares an answer with
+    # `Decimal.normalize`, and it also RENDERS with it, which strips trailing zeros: the adopt
+    # report named a $18.50 answer as "$18.5" and a $1200.00 answer as "$1200". Every `$`
+    # figure on a CLI line is money, so every one carries exactly two decimals.
+    money_token = re.compile(r"\$-?[0-9][0-9,]*(?:\.[0-9]+)?")
+    two_decimals = re.compile(r"\$-?[0-9][0-9,]*\.[0-9]{2}")
+
+    def bare_money(text):
+        return [tok for tok in money_token.findall(text) if not two_decimals.fullmatch(tok)]
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: "18.50", DUNSPARCE_SKU: "1200.00"}})
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.49", DUNSPARCE_SKU: "1199.99"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.equal(
+            bare_money(said),
+            [],
+            "the first adoption's kept and dropped rows print every price with two decimals — "
+            "a $18.50 answer is `$18.50`, a $1200.00 answer is `$1200.00`, never `$18.5`/`$1200`",
+        )
+        checks.ok(
+            "dropped $18.50 (" in said and "kept $1199.99 (" in said,
+            "and the two figures the owner typed are the two figures the report names",
+            said,
+        )
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.49"}})
+        command(checks, "prices", "adopt", "--write")
+        legacy_run({"overrides": {ARTICUNO_SKU: "18.50"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.equal(
+            bare_money(said),
+            [],
+            "a re-adopt's kept row prints the corpus's figure and the file's with two decimals",
+        )
+        checks.ok(
+            "kept $0.49 (corpus) — file said $18.50" in said,
+            "and the row reads `kept $0.49 (corpus) — file said $18.50`",
+            said,
+        )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.threshold = "0.4"
+        book.answers[ARTICUNO_SKU] = corpus.Answer(
+            value={"withheld": "bullish", "watch_above": "18.5"}
+        )
+        book.write()
+        shown = command(checks, "prices", "show", "--held")
+        checks.equal(
+            bare_money(shown),
+            [],
+            "`prices show` prints the threshold and the watch price with two decimals",
+        )
+        checks.ok(
+            "threshold=$0.40 " in shown and "above $18.50" in shown,
+            "a threshold typed as 0.4 shows as $0.40 and a watch typed as 18.5 as $18.50",
+            shown,
+        )
+
+    # ------------------------- (12) a COMPARE KEY keeps full precision; only PRINTING rounds
+    # `corpus._token` is the key that decides "same answer", and section 7 made it round to two
+    # decimals. Two prices a tenth of a cent apart then count as ONE answer: an adopt hides a
+    # price change, and an override edited from 0.505 to 0.51 keeps its stale `at`. Rounding
+    # belongs at the print site (`pricing.money`) and nowhere else.
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.505"}})
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.51"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.ok(
+            "1 card(s) were answered more than one way" in said,
+            "run files 0.505 then 0.51 are ONE reported change, never folded into one answer",
+            said,
+        )
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.51"}})
+        command(checks, "prices", "adopt", "--write")
+        legacy_run({"overrides": {ARTICUNO_SKU: "0.505"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.ok(
+            "1 differ from the file" in said and f"{ARTICUNO_SKU}  kept $0.51 (corpus)" in said,
+            "a re-adopt without --force, corpus 0.51 against a file's 0.505, counts the row as "
+            "differing and prints the kept line",
+            said,
+        )
+
+    stamped_at = "2026-10-01T00:00:00+00:00"
+    first_at = "2026-01-01T00:00:00+00:00"
+    held_before = corpus.Corpus()
+    held_before.answers[ARTICUNO_SKU] = corpus.Answer(value="0.505", at=first_at)
+    held_after = corpus.Corpus()
+    held_after.answers[ARTICUNO_SKU] = corpus.Answer(value="0.51")
+    stamped = corpus.stamp_answers(held_before, held_after, stamped_at)
+    checks.equal(
+        (stamped, held_after.answers[ARTICUNO_SKU].at),
+        ([ARTICUNO_SKU], stamped_at),
+        "an override edited from 0.505 to 0.51 is a new answer and gets a new `at`",
+    )
+    same_before = corpus.Corpus()
+    same_before.answers[ARTICUNO_SKU] = corpus.Answer(value="0.50", at=first_at)
+    same_after = corpus.Corpus()
+    same_after.answers[ARTICUNO_SKU] = corpus.Answer(value="0.5")
+    checks.equal(
+        (corpus.stamp_answers(same_before, same_after, stamped_at), same_after.answers[ARTICUNO_SKU].at),
+        ([], first_at),
+        "and 0.50 round-tripped as 0.5 is still the same answer and keeps its `at`",
+    )
+
+    # A hold whose `watch_above` is not a number is a value `Decisions.parse` refuses later.
+    # Comparing or printing it must report it as typed, never raise out of a read-only command.
+    bad_hold = {"withheld": "bullish", "watch_above": "abc"}
+
+    def raises(fn):
+        try:
+            fn()
+        except Exception as error:  # noqa: BLE001 — the case is that nothing escapes
+            return f"{type(error).__name__}: {error}"
+        return ""
+
+    for replace in (True, False):
+        base = corpus.Corpus()
+        base.answers[ARTICUNO_SKU] = corpus.Answer(value=bad_hold)
+        checks.equal(
+            raises(lambda base=base, replace=replace: corpus.adopt([("run-a", {"overrides": {ARTICUNO_SKU: "3.45"}})], base, replace=replace)),
+            "",
+            f"`corpus.adopt(replace={replace})` over a hold with watch_above 'abc' does not raise",
+        )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.answers[ARTICUNO_SKU] = corpus.Answer(value=bad_hold)
+        book.write()
+        outcome = {}
+
+        def show_held():
+            outcome["text"] = command(checks, "prices", "show", "--held")
+
+        failure = raises(show_held)
+        checks.ok(
+            not failure and f"{ARTICUNO_SKU}  bullish" in outcome.get("text", ""),
+            "`prices show --held` over a hold with watch_above 'abc' does not raise and still "
+            "prints the hold's line",
+            failure or outcome.get("text", ""),
+        )
+
+    # ------------------- (13) a printed price reads right at a glance; a typed value never crashes
+    # `pricing.money` stripped trailing zeros from a figure finer than a cent, so a value typed
+    # `18.500` printed `$18.5`; a non-finite `watch_above` ('NaN', 'Infinity', 'sNaN') raised a
+    # TypeError out of `prices show --held`; and `cmd_prices._printed` rewrote every `$<digits>`
+    # in a compare key, including one inside a hold's reason text or a `$1,500` figure.
+    for typed, printed in (("18.500", "$18.50"), ("0.400", "$0.40"), ("5.000", "$5.00"), ("0.505", "$0.505")):
+        got = {}
+        failure = raises(lambda got=got, typed=typed: got.update(text=pricing.money(typed)))
+        checks.equal(
+            got.get("text") or failure,
+            printed,
+            f"`pricing.money({typed!r})` prints {printed}: trailing zeros pad to cents, a real "
+            "sub-cent digit is kept",
+        )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.threshold = "0.400"
+        book.answers[ARTICUNO_SKU] = corpus.Answer(value={"withheld": "bullish", "watch_above": "18.500"})
+        book.write()
+        shown = command(checks, "prices", "show", "--held")
+        checks.ok(
+            "threshold=$0.40 " in shown and "above $18.50" in shown,
+            "`prices show` prints a threshold typed 0.400 as $0.40 and a watch typed 18.500 as "
+            "$18.50, two decimals each",
+            shown,
+        )
+
+    for typed in ("NaN", "Infinity", "sNaN"):
+        with isolated_home():
+            book = corpus.Corpus()
+            book.answers[ARTICUNO_SKU] = corpus.Answer(value={"withheld": "bullish", "watch_above": typed})
+            book.write()
+            outcome = {}
+            failure = raises(lambda outcome=outcome: outcome.update(text=command(checks, "prices", "show", "--held")))
+            checks.ok(
+                not failure and f"{ARTICUNO_SKU}  bullish" in outcome.get("text", ""),
+                f"`prices show --held` over a hold with watch_above {typed!r} does not raise and "
+                "still prints the hold's line",
+                failure or outcome.get("text", ""),
+            )
+            legacy_run({"overrides": {ARTICUNO_SKU: "3.45"}})
+            failure = raises(lambda: command(checks, "prices", "adopt"))
+            checks.equal(
+                failure,
+                "",
+                f"`prices adopt` over a corpus hold with watch_above {typed!r} does not raise",
+            )
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: {"withheld": "market $3 looks off."}}})
+        legacy_run({"overrides": {ARTICUNO_SKU: "3.45"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.ok(
+            "dropped held: market $3 looks off. (" in said,
+            "a hold reason that says `$3` prints unchanged in the adopt report, never `$3.00`",
+            said,
+        )
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: {"withheld": "worth $1,500 maybe"}}})
+        legacy_run({"overrides": {ARTICUNO_SKU: "3.45"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.ok(
+            "dropped held: worth $1,500 maybe (" in said,
+            "a hold reason that says `$1,500` prints unchanged, never cut at the comma",
+            said,
+        )
+
+    with isolated_home():
+        legacy_run({"overrides": {ARTICUNO_SKU: {"withheld": "bullish", "watch_above": "1,500"}}})
+        legacy_run({"overrides": {ARTICUNO_SKU: "3.45"}})
+        said = command(checks, "prices", "adopt", "--write")
+        checks.ok(
+            re.search(r"above \$1,500(\.00)?(?![0-9,])", said) is not None and "$1.00,500" not in said,
+            "a watch price of 1,500 prints as $1,500 or $1,500.00, never as a wrong figure",
+            said,
+        )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.sub_threshold = {"flat": "0.5"}
+        book.write()
+        shown = command(checks, "prices", "show")
+        policy_line = next(line for line in shown.splitlines() if line.startswith("policy"))
+        checks.ok(
+            "{" not in policy_line and "'flat'" not in policy_line and "$0.50" in policy_line,
+            "`prices show` prints a flat sub-threshold rule as a sentence with $0.50, not a raw dict",
+            policy_line,
+        )
+
+    with isolated_home():
+        legacy_run({"sub_threshold": {"flat": ".5"}, "overrides": {ARTICUNO_SKU: "3.45"}})
+        said = command(checks, "prices", "adopt")
+        policy_line = next(line for line in said.splitlines() if line.startswith("policy"))
+        checks.ok(
+            "{" not in policy_line and "'flat'" not in policy_line and "$0.50" in policy_line,
+            "`prices adopt` prints a flat sub-threshold rule as a sentence with $0.50, not a raw dict",
+            policy_line,
+        )
+
+    # --- the same figure on the lines `join` and `emit` print: `Disposition.describe` -----------
+    checks.equal(
+        pricing.flat_price("0.5").describe,
+        "flat at $0.50",
+        "`Disposition.describe` for a flat 0.5 reads `flat at $0.50`, never `$0.5`",
+    )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.sub_threshold = {"flat": "0.5"}
+        book.write()
+        run_dir, joined = seam_run(
+            checks, [(3, 1, "Dunsparce", "120", "normal")], market={DUNSPARCE_SKU: "0.12"}
+        )
+        checks.ok(
+            "sub-threshold    flat at $0.50" in joined,
+            "the `sub-threshold` line `join` prints reads `flat at $0.50`",
+            joined,
+        )
+        sent = command(checks, "emit", str(run_dir.directory))
+        pricing_line = next((line for line in sent.splitlines() if line.startswith("pricing")), "")
+        checks.ok(
+            "sub_threshold=flat at $0.50 " in pricing_line,
+            "the `pricing` line `emit` prints names the flat sub-threshold as `flat at $0.50`",
+            pricing_line or sent,
+        )
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.sub_threshold = {"flat": "0.5"}
+        book.write()
+        shown = command(checks, "prices", "show")
+        checks.ok(
+            "sub_threshold=flat at $0.50" in shown,
+            "`prices show` prints the sub-threshold as `flat at $0.50`, the one wording join and "
+            "emit use too",
+            shown,
+        )
+
 
 def check_readings_adopt_cli(checks: Checks) -> None:
-    """`pkmnscan readings adopt` and `readings show`, through the real argparse dispatch
+    """`banchi readings adopt` and `readings show`, through the real argparse dispatch
     (D189).
 
     THE WALK ITSELF IS PROVED BY `make readings-selftest` — an independent reimplementation
@@ -1018,9 +1442,9 @@ def check_readings_writer_after_live_export(checks: Checks) -> None:
     checks.note("READINGS WRITER — a live fetch refreshes the cache with no adopt press")
 
     keys = (
-        "PKMNSCAN_TCG_EXPORT_URL",
+        "BANCHI_TCG_EXPORT_URL",
         "TCGPLAYER_STORE_COOKIE",
-        "PKMNSCAN_TCG_USER_AGENT",
+        "BANCHI_TCG_USER_AGENT",
         envfile.FROM_FILE_ENV,
     )
     previous = {name: os.environ.get(name) for name in keys}
@@ -1043,13 +1467,13 @@ def check_readings_writer_after_live_export(checks: Checks) -> None:
     portal = http.server.HTTPServer(("127.0.0.1", 0), Portal)
     portal_thread = _spawn_server(portal)
 
-    os.environ["PKMNSCAN_TCG_EXPORT_URL"] = (
+    os.environ["BANCHI_TCG_EXPORT_URL"] = (
         f"http://127.0.0.1:{portal.server_address[1]}/admin/pricing/downloadexportcsv"
     )
     os.environ["TCGPLAYER_STORE_COOKIE"] = (
         "TCGAuthTicket_Production=t7-readings-not-a-real-session"
     )
-    os.environ.pop("PKMNSCAN_TCG_USER_AGENT", None)
+    os.environ.pop("BANCHI_TCG_USER_AGENT", None)
 
     # THE SAME HERMETIC DANCE `check_export_fetch` DOES, for the same reason: an unpolluted
     # `envfile._from_file` is what makes `get_live` honour the variables set above rather than
@@ -1267,7 +1691,7 @@ def check_live_reconcile(checks: Checks) -> None:
         checks.ok(
             "DRY RUN" in said,
             "IT PREVIEWS BY DEFAULT. It moves quantities the cap arithmetic reads, over every "
-            "SKU at once — `pkmnscan prices adopt`'s reason, and a settlement nobody watched "
+            "SKU at once — `banchi prices adopt`'s reason, and a settlement nobody watched "
             "is how a wrong number becomes the new floor",
         )
         unchanged = Store().read().inventory.listings
@@ -1281,7 +1705,7 @@ def check_live_reconcile(checks: Checks) -> None:
             "the stranger row is reported by SKU. `seen` is every SKU a CARD carries and is "
             "deliberately wider than the listing ledger: a withheld or sub-threshold card has "
             "a SKU and no listing, and judging against the ledger alone would accuse the "
-            "operator of listing it outside pkmnscan the moment it went live",
+            "operator of listing it outside banchi the moment it went live",
         )
 
         said = command(checks, "reconcile", "--live", str(live_path), "--write")
@@ -2494,7 +2918,7 @@ def check_pipeline_routes(checks: Checks) -> None:
             # `Popen` IS MONKEYPATCHED AND THE REAL ROUTE IS DRIVEN, which is the shape the
             # `_spawn` case below already argues for: a fixture that hands the answer to the
             # assertion cannot see the code stop doing the work. Nothing is submitted and no
-            # money is spent — the patched child never executes `pkmnscan`.
+            # money is spent — the patched child never executes `banchi`.
             spawned: List[list] = []
 
             class _Fake:
@@ -2997,7 +3421,7 @@ def check_pipeline_routes(checks: Checks) -> None:
             # ------------------------------------------------- a real run directory, read
             made = runs.create("box3")
             made.set(capture_dir=str(box_dir), scope={"box": 3, "whole_box": True})
-            (made.directory / "console.log").write_text("$ pkmnscan identify\nphotographs 2\n")
+            (made.directory / "console.log").write_text("$ banchi identify\nphotographs 2\n")
             (made.directory / "import-listed.csv").write_text("TCGplayer Id,Add to Quantity\n1,2\n")
 
             status, body, _ = request(port, "GET", f"/pipeline/runs/{made.directory.name}")
@@ -3782,7 +4206,7 @@ _M_HELD = "held back or answered unlisted"
 
 _M_ASKED0 = "this send asked for none of this card"
 
-_M_SENT = "every copy in this run is already listed or has left the box"
+_M_SENT = "Every copy in this run is already listed or has left the box."
 
 # THE HEADLINES, WRITTEN OUT (R7 F6). The matrix never asks `merge` for the sentence it is
 # checking, so a defect in the sentence builder goes red here.
@@ -3870,7 +4294,9 @@ def _m_cases() -> Dict[str, dict]:
             says=[f"{_M_D} — under the cut-off (Dunsparce)", _M_A],
             never=[f"{_M_A} — {_M_LIVE}", f'"sku": "{_M_A}", "would"', _M_ASKED0], home=send2)
         add("own/held+live", market=_M_MIX, pre=(_M_D,), live={_M_D: 1, _M_R: 0, _M_A: 0}, named=_M_NONE_NAMED,
-            exit=0, files={last: [r_mix]}, says=[_M_A],
+            # THE OWNER'S RULING, "held items have 0 qty live on TCGplayer": the held card the
+            # fresh read shows live gets a take-off row of that size, here minus one.
+            exit=0, files={last: [(_M_D, -1, "2.06"), r_mix]}, says=[_M_A],
             never=[f"{_M_D} — {_M_LIVE}", f'"sku": "{_M_D}", "would"', _M_ASKED0],
             home={"line": "send 1 copy to TCGplayer", "behind": "1 card needs a price", "tile": "run to price, 1 ready",
                   "failed": "send 2 copies to TCGplayer"})
@@ -4433,6 +4859,399 @@ def check_live_listing_per_sku(checks: Checks) -> None:
     checks.equal(moved["listed"], 2, "`do_pipeline_movers` still counts the live SKUs a bad row does not touch")
 
 
+def check_hold_takes_live_off(checks: Checks) -> None:
+    """A SKU held on `#/pricing` with copies live comes off TCGplayer on the next send.
+
+    THE OWNER'S RULING (D100's open question, "a negative `Add to Quantity` lowers a live
+    quantity"), AS THE REVIEW OF PR #768 REDESIGNED IT. The size comes ONLY from a fresh live
+    read taken for this send (`--live-guard`, no older than `reprice.READ_FRESH_S`): that
+    read's live quantity for the held SKU, less copies sold since it. Never from the store's
+    `pushed` or `live`. A held SKU the read does not name takes off 0, no row. The store
+    changes NOTHING at write time, so a take-off that never lands heals: the next send
+    re-reads live and takes off what is still there, and never twice for the same copies.
+
+    THE WORDING THESE ASSERT: the report says "N copies ... off TCGplayer", and a refusal says
+    "live read" and names the card. `tcg_import._check`'s `take_off` is a SKU -> size mapping.
+    """
+    checks.note("")
+    checks.note("HOLD TAKES LIVE COPIES OFF — a negative row sized by a fresh live read")
+
+    from cli import __main__ as entry
+    from server import tcg_import
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+    HOUR = 3600
+
+    def live_file(run_dir, quantities, age_s=0, name="live-read.csv"):
+        path = run_dir.path(name)
+        path.write_bytes(_live_export_bytes(quantities))
+        stamp = time.time() - age_s
+        os.utime(path, (stamp, stamp))
+        return path
+
+    def emit(run_dirs, *flags, guard=None):
+        """Run `emit`; `(code, said, rows)` where rows are the SKU -> quantity THIS press wrote,
+        read from every import file it made or changed (a press that writes nothing leaves the
+        earlier press's file on disk)."""
+        run_dirs = run_dirs if isinstance(run_dirs, (list, tuple)) else [run_dirs]
+
+        def snapshot():
+            return {
+                path: path.read_bytes()
+                for run_dir in run_dirs
+                for path in run_dir.directory.glob("import*.csv")
+            }
+
+        before = snapshot()
+        argv = ["emit", *[str(run_dir.directory) for run_dir in run_dirs], *flags]
+        if guard is not None:
+            argv += ["--live-guard", str(guard)]
+        with quiet() as said:
+            code = entry.main(argv)
+        rows = {}
+        for path, data in snapshot().items():
+            if before.get(path) != data:
+                for row in tcgcsv.read_export(path).rows:
+                    rows[row[tcgcsv.SKU_COLUMN]] = row[tcgcsv.QUANTITY_COLUMN]
+        return code, said.getvalue(), rows
+
+    def hold(sku, reason="keeping"):
+        book = corpus.Corpus.read()
+        if reason is None:
+            book.answers.pop(sku, None)
+        else:
+            book.answers[sku] = corpus.Answer(value={"withheld": reason})
+        book.write()
+
+    def store_counts(sku):
+        listing = Store().read().inventory.listings.get(sku)
+        return (0, 0) if listing is None else (listing.pushed, listing.live)
+
+    def sent_run():
+        """A run whose Articuno copies went out (pushed) and whose Dunsparce did not."""
+        run_dir, _ = seam_run(checks, cards)
+        command(checks, "emit", str(run_dir.directory), "--quantity", f"{DUNSPARCE_SKU}=0")
+        return run_dir
+
+    # ------------------------------------- held, a fresh read of three: -3, store unchanged
+    for reason in ("bullish", "keeping", "next_batch"):
+        with isolated_home():
+            run_dir = sent_run()
+            before = store_counts(ARTICUNO_SKU)
+            hold(ARTICUNO_SKU, reason)
+            guard = live_file(run_dir, {ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})
+            code, said, rows = emit(run_dir, guard=guard)
+            checks.equal(
+                rows.get(ARTICUNO_SKU),
+                "-3",
+                f"A HELD SKU ({reason}) THE FRESH READ SHOWS THREE OF takes three off: one row, -3",
+            )
+            checks.ok(
+                code == 0 and re.search(r"3 copies.*off TCGplayer", said) is not None,
+                f"the report says in a sentence how many come off. Got: {said[-300:]!r}",
+            )
+            checks.equal(
+                store_counts(ARTICUNO_SKU),
+                before,
+                "THE STORE CHANGED NOTHING at write time: `pushed` and `live` drop only when "
+                "the live check confirms the copies are gone",
+            )
+            if reason != "keeping":
+                continue
+            # HEALS: the take-off never landed, live still shows three, so it is taken again,
+            # and once live shows none it is not taken twice.
+            code, said, rows = emit(
+                run_dir, guard=live_file(run_dir, {ARTICUNO_SKU: 3}, name="again.csv")
+            )
+            checks.equal(
+                rows.get(ARTICUNO_SKU),
+                "-3",
+                "A TAKE-OFF THAT NEVER LANDED HEALS: the next send re-reads live and takes "
+                "off what is still there",
+            )
+            code, said, rows = emit(
+                run_dir, guard=live_file(run_dir, {ARTICUNO_SKU: 0}, name="gone.csv")
+            )
+            checks.ok(
+                ARTICUNO_SKU not in rows,
+                "and once TCGplayer shows none there is no row: never twice for the same copies",
+            )
+
+    # ------------------------------------- the size is the read's, never the store's
+    with isolated_home():
+        run_dir = sent_run()
+        hold(ARTICUNO_SKU)
+        code, said, rows = emit(run_dir, guard=live_file(run_dir, {ARTICUNO_SKU: 2}))
+        checks.equal(
+            rows.get(ARTICUNO_SKU),
+            "-2",
+            "THREE WERE SENT AND THE READ SHOWS TWO (one sold): minus two, from the read",
+        )
+        code, said, rows = emit(
+            run_dir, guard=live_file(run_dir, {ARTICUNO_SKU: 5}, name="five.csv")
+        )
+        checks.equal(
+            rows.get(ARTICUNO_SKU),
+            "-5",
+            "THE SIZE IS THE READ'S LIVE QUANTITY, never capped by the store's `pushed` (three)",
+        )
+
+    # ------------------------------------- copies sold since the read come off the size
+    with isolated_home():
+        run_dir = sent_run()
+        hold(ARTICUNO_SKU)
+        guard = live_file(run_dir, {ARTICUNO_SKU: 3}, age_s=50 * 60)
+        capture_server.do_mark_sold(3, 3, {})
+        code, said, rows = emit(run_dir, guard=guard)
+        checks.equal(
+            rows.get(ARTICUNO_SKU),
+            "-2",
+            "ONE COPY SOLD AFTER THE READ: three live less one sold since is minus two",
+        )
+
+    # ------------------------------------- a held SKU the fresh read does not name: no row
+    with isolated_home():
+        run_dir = sent_run()
+        hold(ARTICUNO_SKU)
+        code, said, rows = emit(run_dir, guard=live_file(run_dir, {DUNSPARCE_SKU: 0}))
+        checks.ok(
+            ARTICUNO_SKU not in rows,
+            "A HELD SKU ABSENT FROM THE FRESH READ TAKES OFF 0: no row, whatever the store holds",
+        )
+
+    # ------------------------------------- no fresh read: refused, nothing written
+    for label, age in (("a read older than the freshness rule", 25 * HOUR), ("no read at all", None)):
+        with isolated_home():
+            run_dir = sent_run()
+            files_before = {p: p.read_bytes() for p in run_dir.directory.glob("import*.csv")}
+            before = store_counts(ARTICUNO_SKU)
+            hold(ARTICUNO_SKU)
+            guard = None if age is None else live_file(run_dir, {ARTICUNO_SKU: 3}, age_s=age)
+            code, said, rows = emit(run_dir, guard=guard)
+            checks.ok(
+                code != 0 and ARTICUNO_SKU in said and "live read" in said and not rows,
+                f"{label.upper()}: refused with a sentence naming the card and the live "
+                f"read, and no row written. Got: {said[-300:]!r}",
+            )
+            checks.ok(
+                {p: p.read_bytes() for p in run_dir.directory.glob("import*.csv")} == files_before
+                and store_counts(ARTICUNO_SKU) == before,
+                f"{label}: no file written and the store untouched",
+            )
+
+    # ------------------------------------- held, never sent, nothing live: no row
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        hold(DUNSPARCE_SKU, "bullish")
+        code, said, rows = emit(
+            run_dir, guard=live_file(run_dir, {ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        )
+        checks.equal(
+            rows,
+            {ARTICUNO_SKU: "3"},
+            "A HELD SKU THAT WAS NEVER SENT WRITES NO ROW, negative or otherwise",
+        )
+
+    # ------------------------------------- merged: one SKU in two runs is one row
+    with isolated_home():
+        first, _ = seam_run(checks, [(3, i, "Articuno", "161", None) for i in (1, 2)])
+        second, _ = seam_run(checks, [(4, 1, "Articuno", "161", None)])
+        book = corpus.Corpus.read()
+        book.sub_threshold = "floor"
+        book.write()
+        command(checks, "emit", str(first.directory), str(second.directory))
+        hold(ARTICUNO_SKU)
+        code, said, rows = emit([first, second], guard=live_file(first, {ARTICUNO_SKU: 3}))
+        checks.equal(
+            rows,
+            {ARTICUNO_SKU: "-3"},
+            "TWO RUNS HOLDING THE SAME SKU WRITE ONE ROW, -3: not one per run and not -6",
+        )
+
+    # ------------------------------------- the send flags beside a take
+    for flags in (
+        ("--listed-only",),
+        ("--split-games",),
+        ("--cap", "1"),
+        ("--quantity", f"{DUNSPARCE_SKU}=1"),
+        ("--listed-only", "--cap", "1"),
+    ):
+        with isolated_home():
+            run_dir = sent_run()
+            hold(ARTICUNO_SKU)
+            guard = live_file(run_dir, {ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})
+            code, said, rows = emit(run_dir, *flags, guard=guard)
+            checks.equal(
+                rows.get(ARTICUNO_SKU),
+                "-3",
+                f"`{' '.join(flags)}` DOES NOT DROP OR RESIZE A TAKE-OFF: the held card still "
+                "comes off by the whole read",
+            )
+
+    # ------------------------------------- `_check` compares the magnitude
+    def row(quantity):
+        return {"ProductConditionId": ARTICUNO_SKU, "MyPrice": "5.00", "AddToQuantity": quantity}
+
+    def check_code(quantity, **kwargs):
+        try:
+            tcg_import._check([row(quantity)], **kwargs)
+        except Exception as refusal:  # noqa: BLE001
+            return getattr(refusal, "code", type(refusal).__name__)
+        return None
+
+    checks.equal(
+        check_code("-3", listing=True, take_off={ARTICUNO_SKU: 3}),
+        None,
+        "A NEGATIVE THE SIZE EMIT COMPUTED PASSES the listing door",
+    )
+    checks.equal(
+        check_code("-2", listing=True, take_off={ARTICUNO_SKU: 3}),
+        "tcg_import_moves_quantity",
+        "A NEGATIVE OF THE WRONG MAGNITUDE IS REFUSED, though its SKU is named",
+    )
+    checks.equal(
+        check_code("-4", listing=True, take_off={ARTICUNO_SKU: 3}),
+        "tcg_import_moves_quantity",
+        "and so is a larger one",
+    )
+    checks.equal(
+        check_code("-3", listing=True),
+        "tcg_import_moves_quantity",
+        "A NEGATIVE WITH NO TAKE-OFF NAMED IS STILL REFUSED on the listing door",
+    )
+    checks.equal(
+        check_code("-1"),
+        "tcg_import_moves_quantity",
+        "and a price file refuses any negative",
+    )
+
+    # ------------------------------------- a SKU not held never gets a negative
+    with isolated_home():
+        run_dir = sent_run()
+        code, said, rows = emit(run_dir, guard=live_file(run_dir, {ARTICUNO_SKU: 3}))
+        checks.ok(
+            not any(int(q) < 0 for q in rows.values()),
+            "A SKU NOT HELD NEVER GETS A NEGATIVE, however many copies the read shows",
+        )
+
+
+def check_hold_take_reads(checks: Checks) -> None:
+    """What the CLI does with a held SKU's read (the re-review of PR #768).
+
+    D: a held SKU Banchi never sent, listed by hand and live in a fresh read, is taken off by
+    the read's size. E: a held SKU with no fresh read and `pushed` 0 is never skipped in
+    silence: the output names it and says there is no live read. F: a size comes from a read
+    seconds old, so `--live-guard` older than an hour refuses the take-off (the 24-hour rule
+    is for a mark-down's prices, too long for a size).
+    """
+    checks.note("")
+    checks.note("HOLD TAKE-OFF READS — hand-listed, unread, and too old")
+
+    from cli import __main__ as entry
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+
+    def live_file(run_dir, quantities, age_s=0):
+        path = run_dir.path("live-read.csv")
+        path.write_bytes(_live_export_bytes(quantities))
+        stamp = time.time() - age_s
+        os.utime(path, (stamp, stamp))
+        return path
+
+    def emit(run_dir, guard=None):
+        path = run_dir.path(runs.IMPORT_MERGED)
+        before = path.read_bytes() if path.exists() else None
+        argv = ["emit", str(run_dir.directory)]
+        if guard is not None:
+            argv += ["--live-guard", str(guard)]
+        with quiet() as said:
+            code = entry.main(argv)
+        rows = {}
+        after = path.read_bytes() if path.exists() else None
+        if after is not None and after != before:
+            rows = {r[tcgcsv.SKU_COLUMN]: r[tcgcsv.QUANTITY_COLUMN] for r in tcgcsv.read_export(path).rows}
+        return code, said.getvalue(), rows
+
+    def hold(sku):
+        book = corpus.Corpus.read()
+        book.answers[sku] = corpus.Answer(value={"withheld": "keeping"})
+        book.write()
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        hold(ARTICUNO_SKU)
+        code, said, rows = emit(run_dir, live_file(run_dir, {ARTICUNO_SKU: 2}))
+        checks.equal(
+            rows.get(ARTICUNO_SKU),
+            "-2",
+            "D: A HELD SKU BANCHI NEVER SENT, LIVE 2 IN A FRESH READ, is taken off by two",
+        )
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        hold(ARTICUNO_SKU)
+        code, said, rows = emit(run_dir)
+        checks.ok(
+            "Articuno" in said and "live read" in said,
+            "E: A HELD SKU WITH NO FRESH READ AND `pushed` 0 IS NOT SKIPPED IN SILENCE: the "
+            f"output names it and says there is no live read. Got: {said[-300:]!r}",
+        )
+
+    for label, age, wanted in (("thirty minutes", 1800, "-3"), ("two hours", 7200, None)):
+        with isolated_home():
+            run_dir, _ = seam_run(checks, cards)
+            command(checks, "emit", str(run_dir.directory))
+            hold(ARTICUNO_SKU)
+            code, said, rows = emit(run_dir, live_file(run_dir, {ARTICUNO_SKU: 3}, age_s=age))
+            if wanted:
+                checks.equal(rows.get(ARTICUNO_SKU), wanted, f"F: a read {label} old still sizes a take-off")
+            else:
+                checks.ok(
+                    code != 0 and not rows and "live read" in said,
+                    f"F: A READ {label.upper()} OLD IS REFUSED for a size, nothing written. "
+                    f"Got: {said[-300:]!r}",
+                )
+
+    # ------------------------------------- a held SKU in no selected run (the store-wide worklist)
+    def two_runs():
+        sent_run, _ = seam_run(checks, cards)
+        command(checks, "emit", str(sent_run.directory))
+        other, _ = seam_run(checks, [(4, 1, "Dunsparce", "120", "normal")])
+        hold(ARTICUNO_SKU)
+        return other
+
+    with isolated_home():
+        other = two_runs()
+        guard = live_file(other, {ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})
+        with quiet():
+            entry.main(["emit", str(other.directory), "--split-games", "--live-guard", str(guard)])
+        homes = [
+            path.name
+            for path in other.directory.glob("import*.csv")
+            if any(
+                r[tcgcsv.SKU_COLUMN] == ARTICUNO_SKU and r[tcgcsv.QUANTITY_COLUMN] == "-3"
+                for r in tcgcsv.read_export(path).rows
+            )
+        ]
+        checks.ok(
+            len(homes) == 1 and "pokemon" in homes[0].lower(),
+            f"A HELD SKU IN NO SELECTED RUN IS FILED UNDER ITS OWN GAME in a `--split-games` "
+            f"send: one file, named for the game. Got: {homes}",
+        )
+
+    with isolated_home():
+        sent_run, _ = seam_run(checks, cards)  # never emitted: `pushed` 0
+        other, _ = seam_run(checks, [(4, 1, "Dunsparce", "120", "normal")])
+        hold(ARTICUNO_SKU)
+        code, said, rows = emit(other)
+        checks.ok(
+            ARTICUNO_SKU in said and "live read" in said,
+            "A HELD SKU IN NO SELECTED RUN, NO FRESH READ AND `pushed` 0, IS NAMED in the "
+            f"output. Got: {said[-300:]!r}",
+        )
+
+
 CHECKS = (
     check_pipeline_routes,
     check_emit_claim_decides,
@@ -4451,6 +5270,8 @@ CHECKS = (
     check_worklist_on_hand_unstamped,
     check_cap_flag_refusals,
     check_emit_send_quantity,
+    check_hold_takes_live_off,
+    check_hold_take_reads,
     check_merged_cap_is_the_tightest,
     check_threshold_and_file_shape,
     check_live_reconcile,

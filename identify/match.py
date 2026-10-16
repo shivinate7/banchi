@@ -145,7 +145,7 @@ def index_path() -> Path:
 
 
 def progress_path() -> Path:
-    """Where `pkmnscan match prepare` writes its progress, read by the runs sheet."""
+    """Where `banchi match prepare` writes its progress, read by the runs sheet."""
     return store_files.inventory_dir() / "match-prepare.json"
 
 

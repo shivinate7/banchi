@@ -86,7 +86,7 @@ NAME_DISPUTED = "name_disputed"
 
 # `docs/specs/identity-follows-sku.md` §7.3, lane 2: the migration's own review reason, for
 # a HELD card (`identity_source = read`, a SKU the read disputes on name or on number, §3.1)
-# that is IDENTIFIED rather than sold. `./pkmnscan cards identity --write` opens the entry
+# that is IDENTIFIED rather than sold. `./banchi cards identity --write` opens the entry
 # directly, through `store/queues.py:Queue.upsert` — never through `route()` above, which is
 # the join's own reasoning and has nothing to say about a card the migration is looking at
 # long after the join ran. Label on screen, `app/src/ReviewQueue.tsx`'s own `QUESTIONS` map
@@ -101,10 +101,23 @@ NAME_DISPUTED = "name_disputed"
 # identity_binding.py:held_review_entry`, which loads this name to build the entry.
 LISTING_DISPUTED = "listing_disputed"
 
-# `./pkmnscan match audit --write` opens it directly (`cli/cmd_match.py:audit`), never `route()`,
+# `./banchi match audit --write` opens it directly (`cli/cmd_match.py:audit`), never `route()`,
 # for an in-stock card whose confident free pick disagrees with the card it is filed as. Same
 # shape as `LISTING_DISPUTED`: in `ROUTING_REASONS` as a destination this module owns.
 FREE_READER_DISAGREES = "free_reader_disagrees"
+
+# A card the free reader refused (it still named a top pick) and the paid second look was held
+# for review (`pipeline/join.py:default_router`, the engine-pick spec). Two reasons, never
+# `LOW_CONFIDENCE` over a high read: the readers named different printings, or the paid read
+# was below high.
+READERS_DISAGREE = "readers_disagree"
+SECOND_LOOK_UNSURE = "second_look_unsure"
+
+# A card whose human-cleared cache answer the card's own parser cannot read. `./banchi identify`
+# opens it directly (`cli/cmd_identify.py`), never `route()`: the card is not paid for and the
+# cleared answer is not used, so a person looks at the photograph. Same shape as
+# `FREE_READER_DISAGREES`: in `ROUTING_REASONS` as a destination this module owns.
+CLEARED_ANSWER_UNREADABLE = "cleared_answer_unreadable"
 
 # ROUTING'S OWN REVIEW REASONS, PUBLISHED AS A SET. The ladder's six live in
 # `pipeline/variant.py:LADDER_REASONS`; together the two tuples are the whole vocabulary, and
@@ -126,6 +139,9 @@ ROUTING_REASONS = (
     NO_MARKET_DATA,
     LISTING_DISPUTED,
     FREE_READER_DISAGREES,
+    READERS_DISAGREE,
+    SECOND_LOOK_UNSURE,
+    CLEARED_ANSWER_UNREADABLE,
 )
 
 # Hard failures: no usable answer at all, so no price can be reasoned about. Always main,
@@ -144,6 +160,7 @@ assert set(UNPRICEABLE_REASONS) <= set(ROUTING_REASONS), (
 CONFIDENCE_NONE = "none"
 CONFIDENCE_LOW = "low"
 CONFIDENCE_MEDIUM = "medium"
+CONFIDENCE_HIGH = "high"
 REVIEW_BELOW_CHOICES = (CONFIDENCE_NONE, CONFIDENCE_LOW, CONFIDENCE_MEDIUM)
 
 # Weakest first. A card routes when its confidence is at or below the configured level.

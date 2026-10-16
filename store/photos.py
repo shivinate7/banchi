@@ -107,7 +107,7 @@ def digest_of(cid: Optional[str]) -> Optional[str]:
 
 
 def root(home: Optional[Path] = None) -> Path:
-    """`<home>/photos`. Moves with `PKMNSCAN_HOME`, as the rest of the store does (D43)."""
+    """`<home>/photos`. Moves with `BANCHI_HOME`, as the rest of the store does (D43)."""
     return (Path(home) if home is not None else files.home()) / DIRNAME
 
 
@@ -250,6 +250,48 @@ def write(cid: str, blob: bytes, home: Optional[Path] = None) -> Path:
     return target
 
 
+# The record fields a capture writes to the sidecar, and the name each wears on the wire.
+# `variant` differs from `metadata_finish` because files on disk already use it.
+CLAIM_WIRE_NAMES = {
+    "set_hint": "set_hint",
+    # D3 rung 1's finish claim, and SINCE 2026-08-23 A JSON LIST of the game's finishes —
+    # the second set-valued claim in this map, not the only one. The key does not move: the
+    # sidecar and the request body have called it `variant` since before it had a shape, and
+    # `identify/sidecar.py` reads that spelling off files already on disk.
+    #
+    # A BARE STRING IS STILL READ, and it is what all 682 records written before the
+    # amendment carry: one member, and D3 says nothing writes one any more. There is no
+    # migration, so both shapes travel this wire permanently.
+    "metadata_finish": "variant",
+    "game": "game",
+    # D23's multi-select stack claim: a JSON list of the game's exact `Rarity` cells.
+    # `sidecar_payload`'s truthiness filter means an empty list is never written — absent
+    # is no claim, exactly as `variant` and `set_hint` behave, and now for the same reason
+    # rather than by coincidence: both claims are sets and an empty set is no claim (D3, D23).
+    "rarity_claim": "rarity_claim",
+    # C10's product claim. Same spelling on the wire, in the sidecar and on the record —
+    # unlike `metadata_finish`/`variant` above, which differ only because that key was named
+    # before it had a shape and files on disk already use it. A field on its first day gets
+    # one name everywhere.
+    "product": "product",
+    "note": "note",
+}
+
+
+def claims_payload(box: int, index: int, claims: dict) -> dict:
+    """The sidecar body for `claims` (record field names), in wire spelling.
+
+    A claim the operator did not set is omitted, never written null. `server/capture_server`'s
+    `sidecar_payload` wraps this with its unknown-name refusal; `cli cards photos` calls it
+    to rewrite a sidecar from the store's record.
+    """
+    payload = {"box": int(box), "index": int(index)}
+    for field, value in claims.items():
+        if value:
+            payload[CLAIM_WIRE_NAMES[field]] = value
+    return payload
+
+
 def write_sidecar(cid: str, payload: dict, home: Optional[Path] = None) -> Path:
     target = sidecar_path(cid, home)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -330,10 +372,9 @@ def adopt_sidecar(source: Path, cid: str, home: Optional[Path] = None) -> str:
 
     A sidecar has no recorded digest to check against — it is a few hundred bytes of the
     operator's own claims, rewritten in place by three routes over the life of a card. So it
-    is linked and unlinked without an oracle, and a failure here is reported and never
-    fatal: `identify.sidecar.scan` keys on the PHOTOGRAPH, so a missing sidecar costs the
-    recovery path in that module's own docstring — the position comes from the filename —
-    and never a card.
+    is linked and unlinked without an oracle. It raises OSError when it cannot move; the
+    caller (`cli/cmd_cards.py:_move_sidecar`) then rewrites the sidecar from the store's
+    record, so the card keeps its backup.
     """
     target = sidecar_path(cid, home)
     if target.is_file():

@@ -2290,7 +2290,7 @@ def check_box_names_and_place_labels(checks: Checks) -> None:
         cmd_boxes.run(argparse.Namespace(boxes_action="names", write=False), said.append)
         checks.ok(
             Store().read().inventory.box(4).name is None and any("box 4 -> Box 4" in line for line in said),
-            "`pkmnscan boxes names` with no flag PREVIEWS: it prints the plan and writes nothing",
+            "`banchi boxes names` with no flag PREVIEWS: it prints the plan and writes nothing",
             "\n".join(said),
         )
         said.clear()

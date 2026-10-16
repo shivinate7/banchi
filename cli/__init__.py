@@ -1,9 +1,9 @@
 """The four commands. Wiring only — every rule they enforce lives somewhere testable.
 
-    pkmnscan identify   <capture-dir>                 submit, wait, collect, cache. Costs money.
-    pkmnscan join       <run-dir>                     resolve against the export. Free.
-    pkmnscan emit       <run-dir>                     write import CSVs. Free.
-    pkmnscan reconcile  <run-dir> <staged-export.csv> confirm what TCGplayer actually staged.
+    banchi identify   <capture-dir>                 submit, wait, collect, cache. Costs money.
+    banchi join       <run-dir>                     resolve against the export. Free.
+    banchi emit       <run-dir>                     write import CSVs. Free.
+    banchi reconcile  <run-dir> <staged-export.csv> confirm what TCGplayer actually staged.
 
 FOUR COMMANDS, NOT ONE. A batch takes minutes to hours and the pricing decision needs a
 human, so one blocking command would put a person in the middle of a poll loop. Each is

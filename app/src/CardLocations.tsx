@@ -208,6 +208,9 @@ export type CardLocationsProps = {
    *  its own undo. */
   renderAction?: (copy: SearchCopy) => ReactNode
 
+  /** Fulfiller only: draw each copy's place in the list as a small round ordinal (B23). */
+  numbered?: boolean
+
   /** FOLD THE DEPARTED COPIES AWAY (D132, the owner's default). Hidden, a sold or retired copy
    *  is not drawn — except the copy the walk stands on and a copy sold from THIS screen whose
    *  receipt is still standing, both of which are the row the person is looking at. Shown, the
@@ -338,7 +341,7 @@ export function MarkSoldButton({
   return (
     <IconButton
       icon="sold"
-      label="Mark sold"
+      label="Mark Sold"
       name={name}
       size="xl"
       className="card-locations-sell"
@@ -456,7 +459,7 @@ export function UndoSaleButton({
     UNDONE_AT.delete(saleKey)
     /* The Mark sold that held focus is gone, so focus would drop to the body: a sale hands it to
        the Undo, and a keyboard user can take it back at once. */
-    if (wasFresh) button.current?.focus()
+    if (wasFresh) button.current?.focus({ preventScroll: true })
   }, [saleKey, wasFresh])
   /* THE UNDO LEAVING, BY ANY PATH (a click, `U`, a toast), inside the sale's window: the Mark sold that
      stands here next plays the burst backwards. A LAYOUT cleanup, so it runs before that Mark sold's
@@ -789,6 +792,7 @@ function FulfillerCard({
   sections,
   listedAt,
   renderAction,
+  numbered,
   photoSrc,
   missing,
   setMissing,
@@ -845,7 +849,7 @@ function FulfillerCard({
       </header>
 
       <ul className="card-locations-copies">
-        {group.copies.map((copy) => {
+        {group.copies.map((copy, at) => {
           const sold = isSold(copy, soldKeys)
           /* BY NAME (D172): `_copy_row` puts the card's own `cid` on every `SearchCopy`, so
              this thumbnail is THIS copy, not whatever occupies its slot by the time the
@@ -863,6 +867,7 @@ function FulfillerCard({
           return (
             <li key={copy.key}>
               <article className="card-locations-copy">
+                {numbered ? <span className="card-locations-badge">{at + 1}</span> : null}
                 {noPhoto ? (
                   <p className="card-locations-say">
                     The photo is missing. The card is still in the place below.
@@ -906,7 +911,7 @@ function FulfillerCard({
                     renderAction(copy)
                   ) : sold ? null : (
                     <PullConfirm
-                      label="Mark sold"
+                      label="Mark Sold"
                       onConfirm={() => {
                         if (busyKey !== null) return
                         onSell(copy)

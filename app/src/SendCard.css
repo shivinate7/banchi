@@ -16,6 +16,8 @@
   gap: var(--bn-2);
 }
 
+.send-why { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
+
 .send-press {
   flex: 0 1 auto;
 }
@@ -213,3 +215,8 @@
 .send-moves .send-names[hidden] {
   display: none;
 }
+
+/* The toggle's two labels share one box, so the wider sets the width in both states. */
+.send-toggle { display: inline-grid; }
+.send-toggle > * { grid-area: 1 / 1; }
+.send-toggle > [data-hidden] { visibility: hidden; }

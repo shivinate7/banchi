@@ -66,8 +66,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 from server import ports  # noqa: E402
 
-# The escape hatch, spelled the way `PKMNSCAN_MAIN=off`, `PKMNSCAN_KILL=off`,
-# `PKMNSCAN_REVERT=off`, `PKMNSCAN_SUITE_LOCK=off` and `PKMNSCAN_SERVE_MAIN=off` already are.
+# The escape hatch, spelled the way `BANCHI_MAIN=off`, `BANCHI_KILL=off`,
+# `BANCHI_REVERT=off`, `BANCHI_SUITE_LOCK=off` and `BANCHI_SERVE_MAIN=off` already are.
 #
 # IT TURNS THE MECHANISM OFF RATHER THAN LETTING SOMETHING PAST, which is a departure from every
 # other hatch in this repo and is worth saying. The others stand between a person and an act
@@ -75,7 +75,7 @@ from server import ports  # noqa: E402
 # not "do it anyway" but "stop doing it". That is why it is printed on every REFUSAL as well as
 # on every sync: a refusal is the mechanism announcing itself, and the reader's next question is
 # how to stop being asked.
-SYNC_ENV = "PKMNSCAN_SYNC"
+SYNC_ENV = "BANCHI_SYNC"
 
 # What git leaves in the git dir while an operation is half-done. Any one of these means a
 # person or a script is mid-something, and moving the branch under it is how a rebase becomes
@@ -146,7 +146,7 @@ class Verdict(NamedTuple):
 def _git(root: Path, *argv: str, timeout: float = 30.0) -> Ran:
     """One git command, never raising.
 
-    `PKMNSCAN_MAIN` IS NOT SET HERE AND MUST NOT BE. The fast-forward this file performs is one
+    `BANCHI_MAIN` IS NOT SET HERE AND MUST NOT BE. The fast-forward this file performs is one
     `scripts/githooks/reference-transaction` already permits, so it needs no hatch — and a
     module that quietly passed one would be telling the hook to stand aside for every move it
     makes, including the ones its own predicate was meant to catch. If the hook ever refuses

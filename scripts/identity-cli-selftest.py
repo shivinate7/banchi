@@ -7,7 +7,7 @@ Governs: D18, D137, D253
 
 WHAT THIS PROVES, the lane's own "done when" line (§11's table):
 
-  1. `pkmnscan emit` (the join's commit, D253 comment: "identity is the row's by
+  1. `banchi emit` (the join's commit, D253 comment: "identity is the row's by
      construction") upserts the matched export row into the `skus` table and THEN binds
      through `Inventory.bind_sku` — on a completely fresh store, whose `skus` table starts
      empty, so the only way `bind_sku` can succeed without raising `SkuUnknown` is if the
@@ -18,11 +18,11 @@ WHAT THIS PROVES, the lane's own "done when" line (§11's table):
      only `read_name`/`read_number`/`read_printed_total`/`confidence`/`detected_finish` —
      the bound identity (`name`, `number`, `printed_total`) does not move, because it is the
      SKU table's now, not the read's.
-  3. `pkmnscan join --export <file>` and `pkmnscan reconcile --live <file>` each fill the
+  3. `banchi join --export <file>` and `banchi reconcile --live <file>` each fill the
      `skus` table from EVERY row of the file they read, not only the rows a card matched —
      `cli/cmd_join.py` re-reads the file whole for this reason (its own catalog is D137's
      Near-Mint-and-Sealed narrowing, which this table must not inherit).
-  4. A two-game merged emit (`pkmnscan emit <pokemon-run> <riftbound-run>`, no
+  4. A two-game merged emit (`banchi emit <pokemon-run> <riftbound-run>`, no
      --split-games) resolves each SKU's `number_strategy` and `product_line` off its OWN
      game — a Pokemon card's number splits at the slash, a Riftbound card's stays whole —
      and every card of the merged send binds: `sku`, `identity_source == 'sku'`,
@@ -160,7 +160,7 @@ def _identifications(
 
 
 def _command(*argv: str) -> str:
-    """One `./pkmnscan` subcommand through the real dispatch — `harness/tests/
+    """One `./banchi` subcommand through the real dispatch — `harness/tests/
     t3_join_coverage.py:_command`, minus its `Checks` dependency (a standalone script)."""
     from cli import __main__ as entry
 
@@ -169,7 +169,7 @@ def _command(*argv: str) -> str:
         code = entry.main(list(argv))
     text = buffer.getvalue()
     if code != 0:
-        print(f"  ... `pkmnscan {argv[0]}` exited {code}:\n{text}")
+        print(f"  ... `banchi {argv[0]}` exited {code}:\n{text}")
     return text
 
 
@@ -177,7 +177,7 @@ def _command(*argv: str) -> str:
 
 
 def _case_1_emit_upserts_then_binds() -> None:
-    print("\n-- 1. `pkmnscan emit` upserts the matched row, then binds (§4.1, §4.2) --")
+    print("\n-- 1. `banchi emit` upserts the matched row, then binds (§4.1, §4.2) --")
     with _isolated_home():
         before = Store().read().skus.entries
         ok(DUNSPARCE_SKU not in before,
@@ -314,7 +314,7 @@ def _case_2_reidentify_writes_only_read() -> None:
 
 
 def _case_3_join_export_fills_every_row() -> None:
-    print("\n-- 3. `pkmnscan join --export` fills the table from EVERY row (§3.2 item 3) --")
+    print("\n-- 3. `banchi join --export` fills the table from EVERY row (§3.2 item 3) --")
     with _isolated_home():
         _capture(1)
         run = runs.create("identity-cli-join-fill")
@@ -335,7 +335,7 @@ def _case_3_join_export_fills_every_row() -> None:
 
 
 def _case_3b_reconcile_live_fills_every_row() -> None:
-    print("\n-- 3b. `pkmnscan reconcile --live` fills the table too (§3.2 item 3) --")
+    print("\n-- 3b. `banchi reconcile --live` fills the table too (§3.2 item 3) --")
     with _isolated_home() as home:
         export = tcgcsv.read_export(SOURCE_FIXTURE)
         live_path = Path(home) / "live.csv"
@@ -435,7 +435,7 @@ def _case_5_dispute_withheld_before_write() -> None:
         key = master.position_key(BOX, 1)
 
         # THE PLANT: a re-identification landing BETWEEN join and emit, disagreeing with
-        # the row join already matched — this is `pkmnscan identify` running again over
+        # the row join already matched — this is `banchi identify` running again over
         # the same photograph, the ordinary shape a defensive backstop has to survive.
         with Store().write() as writable:
             writable.inventory.record_identification(

@@ -7,14 +7,13 @@ import {
 import type { HoldingsRange, HoldingsTotal, HoldingsValuePayload, OrderRow } from './types'
 import {
   Button, CardThumb, EmptyState, Icon, IconButton, Money, Notice, Page, Pill,
-  ProductLink, ReloadButton, Segmented, SortHeader, type SortValue,
+  FilterBar, ProductLink, ReloadButton, Segmented, SortControl, SortHeader, type SortValue,
 } from './kit'
 import { moneyGrouped } from './money'
 import { salesOf, sum, type Sale } from './revenueMath'
 import { absoluteDate, localDay, monthOf, saleDate, weekOf } from './dates'
 import { useCardCropWhenSeen } from './cardCrop'
 import { didYouMean, matchQuery } from './kit/match'
-import { SearchField } from './SearchField'
 import { ReadingAge } from './CardLocations'
 import { LensSwitch, MixView } from './MixView'
 import { useViewQuery } from './kit/viewState'
@@ -85,10 +84,17 @@ type SortDir = 'asc' | 'desc'
  *  copies, most recent sale, or the name from the top. Every later click on the same
  *  column just flips it. */
 const DEFAULT_DIR: Record<SortKey, SortDir> = { name: 'asc', copies: 'desc', gross: 'desc', last: 'desc' }
-const SORT_LABEL: Record<SortKey, string> = { name: 'Name', copies: 'Copies', gross: 'Revenue', last: 'Last sold' }
+const SORT_LABEL: Record<SortKey, string> = { name: 'Name', copies: 'Copies', gross: 'Revenue', last: 'Last Sold' }
 /** The podium's own segmented labels — the mock's own wording ("A to Z", "Latest") next to
  *  the same four keys the table's own column headers already sort by. One state, two faces. */
 const SORT_SEGMENT_LABEL: Record<SortKey, string> = { name: 'Alphabetical', copies: 'Copies', gross: 'Revenue', last: 'Latest' }
+/** What each direction means per key, said in the kit's own `SortOption` words. */
+const SORT_WORDS: Record<SortKey, { asc: string; desc: string }> = {
+  gross: { asc: 'Lowest First', desc: 'Highest First' },
+  copies: { asc: 'Fewest First', desc: 'Most First' },
+  last: { asc: 'Oldest First', desc: 'Newest First' },
+  name: { asc: 'A to Z', desc: 'Z to A' },
+}
 const SORT_KEYS: readonly SortKey[] = ['gross', 'copies', 'last', 'name']
 
 type Granularity = 'week' | 'month'
@@ -794,7 +800,7 @@ function SalesView() {
     [inPeriod, activeRange],
   )
 
-  const products = useMemo(() => {
+  const viewRows = useMemo(() => {
     const by = new Map<string, Product>()
     for (const sale of scopeSales) {
       const existing = by.get(sale.sku)
@@ -832,15 +838,17 @@ function SalesView() {
       }
     }
     const rows = Array.from(by.values())
-    const byView = rows.filter((row) => (view === 'all' ? true : isSealed(row.kind, row.condition) === (view === 'sealed')))
-    const filtered = byView.filter((row) =>
+    return rows.filter((row) => (view === 'all' ? true : isSealed(row.kind, row.condition) === (view === 'sealed')))
+  }, [scopeSales, view])
+  const products = useMemo(() => {
+    const filtered = viewRows.filter((row) =>
       matchQuery(query, { text: [row.name, row.setName], skus: [row.sku] }),
     )
     return filtered.slice().sort((a, b) => {
       const base = compareProducts(a, b, sortKey)
       return sortDir === 'asc' ? base : -base
     })
-  }, [scopeSales, query, sortKey, sortDir, view])
+  }, [viewRows, query, sortKey, sortDir])
   const nearName = useMemo(
     () => (query.trim() === '' ? null : didYouMean(query, new Set(scopeSales.map((sale) => sale.name)))),
     [scopeSales, query],
@@ -963,7 +971,7 @@ function SalesView() {
         <ReloadButton
           onReload={() => setHoldingsRange((r) => r)}
           busy={holdingsLoading}
-          label="Refresh what's on the shelf"
+          label="Refresh What's on the Shelf"
           hotkey={false}
         />
       </div>
@@ -988,7 +996,7 @@ function SalesView() {
           <p className="revenue-shelf-note">00 of 00 priced</p>
           <div className="revenue-spark" />
           <p className="revenue-shelf-note">Daily, over the last 00 days</p>
-          <p className="revenue-shelf-note">00 never priced</p>
+          <p className="revenue-shelf-note">00 cards have never had a price</p>
           <p className="revenue-shelf-note">00 sealed</p>
         </div>
       ) : null}
@@ -1010,10 +1018,10 @@ function SalesView() {
           </p>
           {leftOff === 0 ? null : (
             <p className="revenue-shelf-note">
-              {`${leftOff} early ${leftOff === 1 ? 'reading' : 'readings'} left off, too few priced.`}
+              {`${leftOff} early ${leftOff === 1 ? 'reading' : 'readings'} left off because too few of your cards had prices.`}
             </p>
           )}
-          <p className="revenue-shelf-note">{`${holdings.unmarked.names} never priced`}</p>
+          <p className="revenue-shelf-note">{`${holdings.unmarked.names} ${holdings.unmarked.names === 1 ? 'card has' : 'cards have'} never had a price`}</p>
           <p className="revenue-shelf-note">{`${holdings.sealed_excluded.names} sealed`}</p>
         </>
       )}
@@ -1183,7 +1191,7 @@ function SalesView() {
           )}
         </div>
 
-        <h2 className="bn-sr">{granularity === 'week' ? 'By week' : 'By month'}</h2>
+        <h2 className="bn-sr">{granularity === 'week' ? 'By Week' : 'By Month'}</h2>
         <div className="revenue-months" ref={scrollToEnd} key={`${granularity}-${buckets.length}`} role="group" aria-label={granularity === 'week' ? 'Filter by week' : 'Filter by month'}>
           {buckets.map((b, i) => (
             <button
@@ -1232,18 +1240,21 @@ function SalesView() {
           options={PRODUCT_VIEWS}
           onChange={setView}
         />
-        <Segmented
-          label="Sort"
-          value={sortKey}
-          options={SORT_KEYS.map((k) => ({ value: k, label: SORT_SEGMENT_LABEL[k] }))}
-          onChange={(k) => {
-            setSortKey(k)
-            if (k !== sortKey) setSortDir(DEFAULT_DIR[k])
-          }}
+        <FilterBar
+          className="revenue-search"
+          facets={[]}
+          value={{}}
+          onChange={() => {}}
+          count={{ shown: products.length, total: viewRows.length, noun: { one: 'product', many: 'products' } }}
+          search={{ query, onChange: setQuery, placeholder: 'Search' }}
+          beside={
+            <SortControl
+              options={SORT_KEYS.map((k) => ({ key: k, label: SORT_SEGMENT_LABEL[k], first: DEFAULT_DIR[k], ...SORT_WORDS[k] }))}
+              value={sortValue}
+              onChange={(v) => { setSortKey(v.key); setSortDir(v.dir) }}
+            />
+          }
         />
-        <div className="revenue-search">
-          <SearchField value={query} onChange={setQuery} persona="owner" placeholder="Search" />
-        </div>
       </div>
 
       {products.length === 0 ? (
@@ -1368,7 +1379,7 @@ function SalesView() {
                 onClick={refreshReadings}
                 disabled={pricesLoading || products.length === 0}
               >
-                {pricesLoading ? 'Reading…' : "Compare to today's market"}
+                {pricesLoading ? 'Reading…' : "Compare to Today's Market"}
               </Button>
               {prices === null ? null : (
                 <p className="revenue-market-note">
@@ -1409,7 +1420,7 @@ function SalesView() {
                           <td className="revenue-disclosure-col">
                             <IconButton
                               icon={isOpen ? 'chevronDown' : 'chevronRight'}
-                              label={`${isOpen ? 'Hide' : 'Show'} the orders behind ${row.name}`}
+                              label={`${isOpen ? 'Hide' : 'Show'} the Orders Behind ${row.name}`}
                               size="sm"
                               aria-expanded={isOpen}
                               aria-controls={detailId}

@@ -49,6 +49,13 @@ def _say(message: str = "") -> None:
     print(message)
 
 
+def _non_negative_int(text: str) -> int:
+    value = int(text)
+    if value < 0:
+        raise argparse.ArgumentTypeError("must be 0 or more")
+    return value
+
+
 def _pricing_arguments(parser: argparse.ArgumentParser) -> None:
     """Shared by join and emit. emit prefers what the manifest recorded; these are seeds."""
     parser.add_argument(
@@ -81,7 +88,7 @@ def _pricing_arguments(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="pkmnscan",
+        prog="banchi",
         description="Bulk-list Pokemon TCG singles on TCGplayer. Batch script v2.",
         epilog=f"store: ${store_files.HOME_ENV} or the repo root",
     )
@@ -118,7 +125,7 @@ def build_parser() -> argparse.ArgumentParser:
     # is new is that there may be none of them, in which case the selection flags below say
     # which cards — and `--all` says every one in the store.
     #
-    # `nargs="*"` IS WHY `--all` HAS TO EXIST. `./pkmnscan identify "$DIR"` with `$DIR` unset was
+    # `nargs="*"` IS WHY `--all` HAS TO EXIST. `./banchi identify "$DIR"` with `$DIR` unset was
     # an argparse error and is now an empty list, so the one thing this change could quietly do
     # is turn a typo into a paid store-wide submission. It refuses instead and names the flag.
     identify.add_argument(
@@ -421,8 +428,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cards_photos.add_argument(
         "--limit",
-        type=int,
-        help="stop after this many cards. For a first pass over a large corpus.",
+        type=_non_negative_int,
+        help="stop after this many photographs are moved (0 moves none). For a first pass "
+        "over a large corpus.",
     )
     cards_variants = cards_sub.add_parser(
         "variants",
@@ -544,6 +552,7 @@ def build_parser() -> argparse.ArgumentParser:
     emit.add_argument("--send-dir", metavar="DIR", help=argparse.SUPPRESS)
     emit.add_argument("--send-claim", metavar="STAMP", help=argparse.SUPPRESS)
     emit.add_argument("--claim-holder", type=int, metavar="PID", help=argparse.SUPPRESS)
+    emit.add_argument("--take-outstanding", metavar="SKUS", help=argparse.SUPPRESS)
     _pricing_arguments(emit)
 
     # ------------------------------------------------------------------------ reconcile

@@ -220,9 +220,10 @@ it shares their trigger primitive.
 - A Recent tile caption names the box through `boxTitle` and the card's number from the
   rendered label. No `B<n> #<n>` key is drawn or spoken (D259).
 - On desktop and tablet, the viewfinder panel hugs its portrait frame. Its width derives from
-  its height (`--cap-stage-w`) and not from a `1fr` track. The last-capture column hugs its
-  9:16 photo (`--cap-last-w`), and the freed width goes to the rail. On tablet the receipt sits
+  its height (`--cap-stage-w`) and not from a `1fr` track. On desktop, the last-capture column hugs its
+  9:16 photo (`--cap-last-w`), and the freed width goes to the rail. On tablet, the receipt sits
   beside the photo. `capture-width.spec.ts` measures no unpainted band at 1440 and 820.
+- At tablet widths, the Last capture frame's height is a third of the stage height. The ratio is chosen here, and this spec owns it. Empty and loaded states share one frame element. Built in #838.
 - On a phone (390, 375, 430), the panel hugs the frame. It sits beside the last capture in one
   row, so the shutter stays above the tab bar. The receipt scrolls inside its panel.
 - Layout changes never touch capture, the motion trigger or rotation. §5.1's order holds.
@@ -298,7 +299,7 @@ The Cam Link path requires these settings:
   does not blur, and a card proud of the tray keeps its corner.
 - Lock manual focus at tray distance. The tray does not move.
 - Disable auto power off. A sleeping body drops the HDMI signal while the Cam Link stays
-  enumerated. The screen halts the run when the track dies, but the stoppage is avoidable.
+  enumerated. When the track dies, the screen halts the run, but the stoppage is avoidable.
 - Glare on the number corner is unrecoverable at any resolution. The number corner under
   raking light is unmeasured.
 

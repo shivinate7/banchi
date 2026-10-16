@@ -10,8 +10,8 @@ and `agent-a591036a4885f7533` both derived dev port 5218. A design-check in one 
 other's Vite and passed.
 
 A hash has no memory of who already holds a slot. This file is that memory. `claim` records
-this checkout's slot in one machine-wide file, `~/.pkmnscan/port-slots.json`
-(`PKMNSCAN_SLOT_REGISTRY` overrides). `server/ports.py:slot_for` and `app/devPort.ts:slotFor`
+this checkout's slot in one machine-wide file, `~/.banchi/port-slots.json`
+(`BANCHI_SLOT_REGISTRY` overrides). `server/ports.py:slot_for` and `app/devPort.ts:slotFor`
 READ it before the hash. Nothing else writes it.
 
 HOW A SLOT IS CHOSEN, under one `flock`:
@@ -549,12 +549,12 @@ def cmd_selftest(_args: argparse.Namespace) -> int:
               "proven. Run `npm --prefix app ci`.")
         return 1
     failures: list = []
-    base = Path(tempfile.mkdtemp(prefix="pkmnscan-slots.")).resolve()
+    base = Path(tempfile.mkdtemp(prefix="banchi-slots.")).resolve()
     registry = base / "registry" / "port-slots.json"
     saved = os.environ.get(ports.SLOT_REGISTRY_ENV)
     os.environ[ports.SLOT_REGISTRY_ENV] = str(registry)
     env = {k: v for k, v in os.environ.items()
-           if k not in ("CI", "PKMNSCAN_CHECKOUT_IDENTITY", ports.PORT_ENV)}
+           if k not in ("CI", "BANCHI_CHECKOUT_IDENTITY", ports.PORT_ENV)}
     foreign = None
     try:
         # 0. THE FILE THE BROWSER PANE READS names the claimed port, on its own registry.

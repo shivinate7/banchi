@@ -54,6 +54,11 @@ on:
   # So a republish can be forced without an empty commit — after changing a Pages setting,
   # or to confirm a fix without waiting for the next real push.
   workflow_dispatch:
+    inputs:
+      report_failure:
+        description: Open or update the demo-failure issue if this run fails (a push to main always does)
+        type: boolean
+        default: false
 
 # Read the repo and nothing else. The deploy job alone adds Pages and the token it mints.
 permissions:
@@ -295,3 +300,35 @@ jobs:
         # does move, v5 is the Node 24 move plus a removed file-permissions error message;
         # no input changed, and this step passes none of the seven either major accepts.
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+
+  # THE DEMO ALARM. `demo` is not a required check, so a red build or deploy on main showed
+  # nowhere. This opens one issue titled as below and comments on it for every repeat. Runs on
+  # a push to main (this workflow's only push trigger) or a dispatch that asks for it, and only
+  # on `failure`: a run the concurrency block cancelled for a newer push is not a failure.
+  # `issues: write` is the whole grant. To prove it red, dispatch from a branch: the
+  # `github-pages` environment rejects the deploy there, so `deploy` fails.
+  alarm:
+    needs: [build, deploy]
+    if: ${{ always() && (github.event_name == 'push' || inputs.report_failure) && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the demo-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEEDS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          title="Demo publish failing"
+          failed="$(jq -r 'to_entries[] | select(.value.result == "failure") | "- \(.key)"' <<<"$NEEDS")"
+          body="$(printf 'Failed jobs at %s:\n\n%s\n\nRun: %s' "${SHA:0:12}" "$failed" "$RUN_URL")"
+          open="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" \
+            --json number,title --jq "[.[] | select(.title == \"$title\")][0].number // empty")"
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi

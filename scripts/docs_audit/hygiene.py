@@ -67,7 +67,7 @@ def check_doc_hygiene(report: Report, docs: List[Path]) -> None:
           this plan, and do not register" and ended mid-clause. Green for eight days.
 
       two level-1 headings  a research spec once was two documents in one file, the
-          second titled "PKMNSCAN UI: final design recommendation". A reader's table of
+          second titled "BANCHI UI: final design recommendation". A reader's table of
           contents, this project's own heading parsers, and the status line that governs a
           file all assume one title.
 
@@ -467,17 +467,17 @@ def check_readme_blocks(report: Report) -> None:
             findings.append(Finding("README.md", "has no generated block; the `routes` block is gone."))
         if mod.render(text) != text:
             findings.append(Finding("README.md", "a generated block is stale. Run `python3 scripts/readme_gen.py --write`."))
-    # Every `--flag` on a `./pkmnscan <command>` line in README is an `add_argument` flag of that
-    # command's parser in cli/__main__.py (read by AST, as `pkmnscan commands` reads COMMANDS).
+    # Every `--flag` on a `./banchi <command>` line in README is an `add_argument` flag of that
+    # command's parser in cli/__main__.py (read by AST, as `banchi commands` reads COMMANDS).
     # A parser the AST cannot follow is a question, never ok and never a finding.
     flags, opaque = _cli_flags()
     questions: List[Finding] = []
-    for sub, rest in re.findall(r"^\./pkmnscan\s+(\w+)(.*)$", read(ROOT / "README.md"), re.M):
+    for sub, rest in re.findall(r"^\./banchi\s+(\w+)(.*)$", read(ROOT / "README.md"), re.M):
         for flag in re.findall(r"--[\w-]+", rest.split("#")[0]):
             if sub in opaque or sub not in flags:
-                questions.append(Finding("README.md", f"`./pkmnscan {sub}` flags unknown: its parser is not readable by AST ({flag})."))
+                questions.append(Finding("README.md", f"`./banchi {sub}` flags unknown: its parser is not readable by AST ({flag})."))
             elif flag not in flags[sub] | flags[""]:
-                findings.append(Finding("README.md", f"`./pkmnscan {sub}` shows `{flag}`, which no `add_argument` of it declares."))
+                findings.append(Finding("README.md", f"`./banchi {sub}` shows `{flag}`, which no `add_argument` of it declares."))
     if questions:
         report.add("readme flags", ADVISORY, questions)
     report.add("readme blocks", MECHANICAL, findings, f"{blocks} generated block(s) match their source; its flags are declared by the CLI", scanned=blocks)

@@ -761,7 +761,7 @@ def check_shipping_routes(checks: Checks) -> None:
         )
 
     # ----------------------------------------- T3: the order transport, with no socket at all
-    env_keys = ("PKMNSCAN_TCG_ORDERS_URL",)
+    env_keys = ("BANCHI_TCG_ORDERS_URL",)
     previous = {name: os.environ.get(name) for name in env_keys}
     seen = []
 
@@ -780,7 +780,7 @@ def check_shipping_routes(checks: Checks) -> None:
 
     real_opener = urllib.request.build_opener
     try:
-        os.environ["PKMNSCAN_TCG_ORDERS_URL"] = "http://127.0.0.1:1"
+        os.environ["BANCHI_TCG_ORDERS_URL"] = "http://127.0.0.1:1"
 
         projected = order_transport.project_order(
             {
@@ -789,7 +789,7 @@ def check_shipping_routes(checks: Checks) -> None:
                 "status": "Processing",
                 "buyerName": "Buyer001 Placeholder",
                 "shippingAddress": {"line1": "101 Example St", "city": "Springfield"},
-                "sellerName": "pkmnscan",
+                "sellerName": "banchi",
                 "paymentType": "Visa",
                 "transaction": {"total": "88.80"},
                 "trackingNumbers": ["1Z999"],

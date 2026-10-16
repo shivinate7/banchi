@@ -1,6 +1,6 @@
 """Route a price-history archive refusal to the standing review queue.
 
-WHY THIS EXISTS. `pkmnscan archive sweep` (`cli/cmd_pricearchive.py`, `pipeline/pricearchive.py`)
+WHY THIS EXISTS. `banchi archive sweep` (`cli/cmd_pricearchive.py`, `pipeline/pricearchive.py`)
 reads every SKU this store has sold or holds against a live catalogue mirror. A SKU it
 cannot resolve is an unfixed identification sitting in the `cards` table — `CLAUDE.md`'s
 hard rule already names the remedy: "Never guess an identification, a variant, or a price.

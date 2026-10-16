@@ -6,7 +6,7 @@ every card physically is.
 Code cards are a feature of this product, not a second track (D248, turn end never runs the harness, and code cards
 share one rules file). The feature is DORMANT. See "Code cards (dormant feature)" below.
 D14 (two tracks, one rig) still stands in structure. `codes/` is its own package. `docs/map.py`
-carries a `TRACKS` tuple. `scripts/decision-context.py` prints a track banner. Repeal needs the
+carries a `TRACKS` list. `scripts/decision-context.py` prints a track banner. Repeal needs the
 owner's word.
 
 Codex reads this file, not a copy (D135, Codex reads the same rules). `AGENTS.md`,
@@ -14,18 +14,16 @@ Codex reads this file, not a copy (D135, Codex reads the same rules). `AGENTS.md
 `.agents/skills` links to `.claude/skills`. `.codex/hooks.json` mirrors `.claude/settings.json`.
 The `agent links` and `codex hooks` rows of `make docs-audit` check both.
 
-## The name is the app's, and nothing beneath it (D94, Banchi is the product's name)
+## Banchi names everything (D94, Banchi names everything)
 
-**Banchi** names the web app under `app/`. Everything beneath it keeps its old name. That
-covers the checkout (`~/Developer/pkmnscan`), the CLI `./pkmnscan`, the Python packages
-(`server/ store/ pipeline/ identify/ geometry/ codes/ cli/`) and `inventory/store.sqlite`.
-It also covers `PKMNSCAN_HOME`, every wire route, `PKMNSCAN_MAIN=off`, the harness, the
-fixtures, `docs/` and `make`. Renaming any of these is a defect.
+**Banchi** names the app, the GitHub repository `shivinate7/banchi`, the checkout, the CLI `./banchi`,
+the env vars `BANCHI_*`, `~/.banchi` and the launchd labels `com.banchi.*`. The old name was
+`pkmnscan`. A new `pkmnscan` outside `fixtures/` is a defect. `inventory/store.sqlite` keeps its
+name. Fixtures are never modified.
 
-- The GitHub repository is `shivinate7/banchi`. The local directory stays `pkmnscan`. The two disagree on purpose.
 - GitHub Pages follows the repository name. `.github/workflows/demo.yml` derives `DEMO_BASE` from it.
-- The front-end rename reaches `app/index.html`, the brand block in `app/src/App.tsx`, the document
-  title, `banchi.*` keys and on-screen copy. It reaches nothing on the wire.
+- `~/.pkmnscan` moves to `~/.banchi` once, in `server/ports.machine_dir`. Each launchd `--remove` also (`server/ports.remove_old_agent`)
+  removes the old `com.pkmnscan.*` plist.
 - No gate is current. Gate A, B and C passed, and their run records are deleted. History lives in
   version control.
 
@@ -39,14 +37,14 @@ make map            # docs/map.py rendered. ARGS=<package|path|D<n>|--stale|--de
                     #   ARGS="D<n> --full" prints that entry verbatim.
 make explain        # what `make check` runs, and what each row is worth. ARGS=<target>.
 make serve-scope    # first path gate, read by `make serve-selftest`. ARGS=list | "classify --base <rev>".
-                    #   PKMNSCAN_SERVE_SCOPE=all runs it anyway (run-everything, not a hatch).
+                    #   BANCHI_SERVE_SCOPE=all runs it anyway (run-everything, not a hatch).
 make guard-scope    # second path gate, read by each gated self-test. ARGS=list | classify.
 make orient         # ARGS=<file.tsx> [--name <C>]: which component draws it. Run before briefing a screen.
 make map-fix        # adds a file's cited decision ids to docs/map.py. Previews. ARGS=--write.
 make offenders-prune # deletes stale offender-list entries only. Previews. ARGS=--write.
 make harness        # all ten verification tests, T1-T9 and T11. No T10.
 make up             # the server, detached, one process. ARGS=--restart bounces it. `make down` stops it.
-                    #   Refuses on a primary checkout off main. PKMNSCAN_SERVE_MAIN=off overrides.
+                    #   Refuses on a primary checkout off main. BANCHI_SERVE_MAIN=off overrides.
 make reap           # stop what THIS session started, nothing else. Previews. ARGS="--confirm",
                     #   "port:N --confirm", "match:X --confirm" or "pid:N --confirm". A subagent's bare
                     #   --confirm stops only its own session's pids (D305, the reaper stops only its own).
@@ -64,14 +62,14 @@ make dev            # Vite with hot reload. Runs beside `make up`.
 make server         # Python capture server alone. Blocks.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev`.
 make design-check   # DESIGN.md's Fulfillment floors in a browser. Machine-wide lock, refuses
-                    #   rather than queues. ARGS=--wait queues. PKMNSCAN_SUITE_LOCK=off overrides.
+                    #   rather than queues. ARGS=--wait queues. BANCHI_SUITE_LOCK=off overrides.
                     #   PW_ARGS=<flags> reaches Playwright. After the run, read `.serve/design-check.json`
                     #   once. Never poll it, never pipe it through `tail`. Not in `make check`.
 make design-check-quiet  # the same run, no progress stream, same lock.
-make long-sitting   # the 300-capture case alone, about 16 min (PKMNSCAN_LONG_SITTING=1). CI: monthly and on dispatch.
+make long-sitting   # the 300-capture case alone, about 16 min (BANCHI_LONG_SITTING=1). CI: monthly and on dispatch.
 make text-density   # on-demand cut table of screen prose, never a gate. Not in `make check`.
 make demo           # seed a demo store and record the wire. Read `docs/specs/demo.md` first.
-make demo-seed      # the store alone. Refuses with PKMNSCAN_HOME unset.
+make demo-seed      # the store alone. Refuses with BANCHI_HOME unset.
 make demo-record    # the bundle alone, on a throwaway server and port.
 make demo-mirror SOURCE=<checkout>  # owner's Mac only: scrub, crop, commit `demo-assets/mirror/`.
 make demo-mirror-agent  # owner's Mac, main tree only: a daily launchd job that refreshes the mirror
@@ -82,20 +80,20 @@ make price-refresh-agent  # owner's Mac, main tree only: a daily launchd job tha
 make demo-static    # demo-mirror-install, then a static build to dist-demo/.
 make demo-preview   # serve dist-demo/ as a static host would.
 make check          # the whole suite, product first, guard self-tests last. `make explain` lists it.
-make ci-check       # the same list as `check`, from `scripts/checks.py`. CI runs it as four shards, `revert-guard` apart.
-make css-var-check  # a `var(--x)` with no fallback and no definition. PKMNSCAN_CSS_VARS=off skips it.
-make token-literal-check  # a CSS literal equal to a design token, ratcheted per file. PKMNSCAN_TOKEN_LITERALS=off skips it.
+make ci-check       # the same list as `check`, from `scripts/checks.py`. CI runs it as six shards, `revert-guard` apart.
+make css-var-check  # a `var(--x)` with no fallback and no definition. BANCHI_CSS_VARS=off skips it.
+make token-literal-check  # a CSS literal equal to a design token, ratcheted per file. BANCHI_TOKEN_LITERALS=off skips it.
 make catalog-refresh  # re-clone pokemon-tcg-data into vendor/. Writes. ARGS=--dry-run.
 make catalog-index  # build catalog.sqlite. Gitignored generator.
 make catalog-index-selftest  # that builder on a fixture. Not in `make check`.
-make catalog-mirror # dry run only. ARGS=--dry-run samples over HTTP HEAD.
-./pkmnscan scan     <capture-dir>   # code cards only: read QRs into the ledger. Free.
-./pkmnscan identify <capture-dir>   # free read first, then the paid second look for the rest. Costs money. --dry-run first.
+make catalog-mirror # fills the image mirror (about 16.7 GB). ARGS=--dry-run samples over HTTP HEAD.
+./banchi scan     <capture-dir>   # code cards only: read QRs into the ledger. Free.
+./banchi identify <capture-dir>   # free read first, then the paid second look for the rest. Costs money. --dry-run first.
                                    #   --engine haiku is the paid read alone.
                                    #   Selection-based: --state, --box, --keys, --game/--section/--since.
-./pkmnscan rescue   <run-dir>       # re-address a stranded run by digest. Previews. --write.
-./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable. --dry-run.
-./pkmnscan emit     <run-dir> [<run-dir> ...]  # ONE import.csv across runs and games.
+./banchi rescue   <run-dir>       # re-address a stranded run by digest. Previews. --write.
+./banchi join     <run-dir>       # resolve against the export. Free, re-runnable. --dry-run.
+./banchi emit     <run-dir> [<run-dir> ...]  # ONE import.csv across runs and games.
                                    #   No standing cap: every unsent copy goes out unless a send bounds it.
                                    #   --cap N holds a SKU to N copies LIVE. It refuses while a sent copy is
                                    #   pending, so run reconcile --live first. --quantity SKU=N sends N copies.
@@ -103,30 +101,30 @@ make catalog-mirror # dry run only. ARGS=--dry-run samples over HTTP HEAD.
                                    #   import-listed.csv and import-subthreshold.csv. --split-games writes one file per game.
                                    #   --live-guard FILE trims rows so TCGplayer never holds more copies than
                                    #   are here. --reprice-live F adds a price-only row per live card F names.
-./pkmnscan match    audit [--write]  # the free reader over every filed card with a photo. Free. Lists disagreements;
+./banchi match    audit [--write]  # the free reader over every filed card with a photo. Free. Lists disagreements;
                                    # --write queues the in-stock ones for Review (`free_reader_disagrees`), sold ones only listed.
-./pkmnscan match    status | prepare [--model-only | --fingerprints-only]  # the free reader's setup. Prepare
+./banchi match    status | prepare [--model-only | --fingerprints-only]  # the free reader's setup. Prepare
                                    # downloads the pinned model file and reads each stock photo once (D301, stock photos
                                    # are hotlinked, never mirrored; this is its one exception). It starts by itself at
                                    # `serve` start and whenever the store holds a card from an unread set (never with the
                                    # runtime missing); the runs sheet's Prepare press is a manual refresh. Env
-                                   # `PKMNSCAN_AUTO_SETUP=on` forces auto-start; unset, it is refused when `CI` or
-                                   # `PKMNSCAN_HARNESS` is set (`make harness` sets it) and in a linked worktree. `match --sweep` is the background reader's watcher (off until the
+                                   # `BANCHI_AUTO_SETUP=on` forces auto-start; unset, it is refused when `CI` or
+                                   # `BANCHI_HARNESS` is set (`make harness` sets it) and in a linked worktree. `match --sweep` is the background reader's watcher (off until the
                                    # Capture screen's Rig switch is on; never spends; reads even mid-feed).
                                    # `identify --engine marqo-b`
                                    # reads free first, then sends each card it cannot accept to Haiku, held for review.
-./pkmnscan cards    name | audit [--verbose] | photos [--write] [--limit N] | identity [--write]
+./banchi cards    name | audit [--verbose] | photos [--write] [--limit N] | identity [--write]
                                    # stable card names. `make cid-audit` runs the audit.
-./pkmnscan prices   adopt [--write] | show [--held]  # the price corpus. Adopt folds legacy decisions.json in.
-./pkmnscan readings adopt [--write] | show           # the market-reading table. --write fully replaces both tables.
-./pkmnscan skus     adopt [--write]                  # the store-owned SKU table. Never a full replace.
-./pkmnscan archive  sweep [--write] | show [--sku ID]  # price-history archive. Previews with no network.
-./pkmnscan queue    refresh [--export <file.csv>] [--write]  # re-resolve every open queue entry.
-./pkmnscan reconcile <run-dir> <staged-export.csv>   # one import against one Export From Staged.
-./pkmnscan reconcile --live <my-pricing.csv> [--write]  # the whole store against one live export.
-./pkmnscan reconcile --phantoms <my-pricing.csv> [--out F]  # SKUs live beyond what is on hand. Read-only.
-./pkmnscan reprice  list <my-pricing.csv> [--days N] [--percent P] [--write]  # unsold listings, proposed re-price.
-./pkmnscan reprice  apply <worklist.csv> [--corpus-revision <digest>] [--write]  # `#/pricing` modal.
+./banchi prices   adopt [--write] | show [--held]  # the price corpus. Adopt folds legacy decisions.json in.
+./banchi readings adopt [--write] | show           # the market-reading table. --write fully replaces both tables, and refuses over no source or a malformed pricing.json.
+./banchi skus     adopt [--write]                  # the store-owned SKU table. Never a full replace.
+./banchi archive  sweep [--write] | show [--sku ID]  # price-history archive. Previews with no network.
+./banchi queue    refresh [--export <file.csv>] [--write]  # re-resolve every open queue entry.
+./banchi reconcile <run-dir> <staged-export.csv>   # one import against one Export From Staged.
+./banchi reconcile --live <my-pricing.csv> [--write]  # the whole store against one live export.
+./banchi reconcile --phantoms <my-pricing.csv> [--out F]  # SKUs live beyond what is on hand. Read-only.
+./banchi reprice  list <my-pricing.csv> [--days N] [--percent P] [--write]  # unsold listings, proposed re-price.
+./banchi reprice  apply <worklist.csv> [--corpus-revision <digest>] [--write]  # `#/pricing` modal.
 ```
 
 ## The front end
@@ -197,7 +195,7 @@ Fulfiller's. The shell has these parts:
 
 - A sidebar that folds to a rail (⌘.), a top bar and bottom tab bar on phones.
 - A command palette (⌘K, the only way to `#/gallery`), `,` then a letter to jump, ⌘←/⌘→ to step the workflow ring.
-- A keyboard sheet on `?`. A new key binding is not done until it is in `SHORTCUTS` (`app/src/keys.ts`).
+- A keyboard sheet on `?`. A new key binding is not done until it is in `SHORTCUTS` (`app/src/App.tsx`).
 - An error boundary per route. The Fulfiller's `plain` variant offers one button and no error text.
 - A toast stack, an offline banner and the document title.
 
@@ -238,18 +236,18 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **A run's slot numbers are not the truth. The photograph is** (D36, the store says which slot).
   `cli/resolve.py:realign` re-binds records. It refuses on ambiguity and on a reallocated box.
 - Only two columns are ever written: `Add to Quantity`, `TCG Marketplace Price`. `TCGplayer Id` is never modified.
-- **Batch API, not sequential calls.** Model: `claude-haiku-4-5-20251001`.
+- **Batch API, not sequential calls.** Model: `claude-haiku-5-5`.
 - **Every checkout has its own store and ports** (D43, the port follows the store). An empty inventory in a
-  worktree is correct. A linked checkout claims a port slot once in `~/.pkmnscan/port-slots.json`
+  worktree is correct. A linked checkout claims a port slot once in `~/.banchi/port-slots.json`
   (`scripts/port-slots.py`). A test run refuses a reused dev server that does not name this checkout
   (`app/checkoutIdentity.ts`, D261, a checkout claims its port slot). `make port-agreement` keeps `app/devPort.ts` and `server/ports.py` in step.
 - **Real CSV libraries only.** PapaParse (JS), `csv` (Python). Never `split(",")`.
 - **Not a Claude artifact.** No `window.storage`, no `facingMode: "environment"`, nothing about a card in `localStorage`.
-  **Eleven keys are stored on the device**, each a fact about this machine and not a card. `app/src/useCamera.ts`
+  **Ten keys are stored on the device**, each a fact about this machine and not a card. `app/src/useCamera.ts`
   holds `banchi.capture.deviceId` and `banchi.capture.rotation`. `app/src/deviceMemory.ts` holds `banchi.theme` (a `THEMES` id: light, dark, abyssal-bloom or carnival-midway),
   `banchi.rail`, `banchi.orders.fetch-filter`, `banchi.inventory.hide-sold`, `banchi.box-recency`,
-  `banchi.capture.setup` (six values as one document, D142, the setup outlives the browser), `banchi.capture.sections` (kept until the sitting
-  ends, D164, the undo stack is the sitting) and `banchi.runs.spend-notice` (a notice, never a cap, D180, a press names the cards). `app/src/Orders.tsx` holds
+  `banchi.capture.setup` (six values as one document, D142, the setup outlives the browser) and `banchi.capture.sections` (kept until the sitting
+  ends, D164, the undo stack is the sitting). `app/src/Orders.tsx` holds
   `banchi.orders.last-check`.
   `app/eslint.config.js` bans `localStorage` outside `useCamera.ts` and `deviceMemory.ts`.
 
@@ -270,7 +268,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   A covering export under 900s old is reused. `refresh: true` forces a new one.
 - **The pricing answer is one file, keyed by SKU** (D86, one file for the store): `pipeline/corpus.py` over
   `inventory/prices.json`. `policy.threshold` is also the floor. `sub_threshold` defaults to $0.49 (D9, threshold and floor).
-  `pkmnscan prices adopt` migrates legacy run files. `join` and `emit` refuse over an unadopted one.
+  `banchi prices adopt` migrates legacy run files. `join` and `emit` refuse over an unadopted one.
 - **The store of record is one SQLite file** (D88, SQLite and one transaction per write). `inventory.json` is
   legacy and read by nothing.
 - **A sold card's photograph is reclaimed on purpose** (D89, reclaimed on purpose): `POST /boxes/<box>/photos/reclaim` deletes sold
@@ -315,7 +313,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **Check whether a task is yours before you hand it to the owner.** Grep the routes, the Commands block and
   `docs/map.py` first. **NOT MECHANIZED:** a machine cannot read a sentence to a person and decide whether
   this repo can already do it.
-- **No date in repo prose.** History is git's. Rewrite a claim in place, and keep only what is true now.
+- **No history date in repo prose.** D308 (no dates in repo prose) allows a deadline date. History is git's. Rewrite a claim in place, and keep only what is true now.
   Old dates go when their file is next rewritten. Never in a sweep. A decision file is a rule, not a log. A change rewrites it.
   Old records are deleted, not archived. See D308 (no dates in repo prose).
   **NOT MECHANIZED:** a machine cannot tell a date from a version number, a port or a test fixture without intent.
@@ -323,11 +321,11 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   screenshot or commit. `scripts/githooks/pre-commit` enforces it, armed by `make hooks`.
 - **Seven shell mistakes are refused before they run** by `scripts/guard-shell.py --hook` on Bash and Write/Edit (D135, Codex reads the same rules).
   Claude Code sets `GUARD_SHELL_SKIP=checkout,stash,reset` (`--skip` is an alias), because the shared layer's guard owns those three there. Codex runs all seven.
-  Each clause fails open on its own bugs. A tool call that sets a real `PKMNSCAN_*=off` is refused as owner-only, with no switch named, unless it is a recovery lever (`PKMNSCAN_KILL`, `PKMNSCAN_SUITE_LOCK`, `PKMNSCAN_SERVE_MAIN`, `PKMNSCAN_SYNC`). Only the owner's terminal and CI set the rest (D042 (main moves by pull request) and D179 (shell mistakes are refused by resolving)). Each has an owner-held escape hatch, never printed to an agent: `PKMNSCAN_CHECKOUT`, `PKMNSCAN_TREE`,
-  `PKMNSCAN_WAIT`, `PKMNSCAN_PUSH`, `PKMNSCAN_STASH`, `PKMNSCAN_RESET`, `PKMNSCAN_NARRATE`
+  Each clause fails open on its own bugs. A tool call that sets a real `BANCHI_*=off` is refused as owner-only, with no switch named, unless it is a recovery lever (`BANCHI_KILL`, `BANCHI_SUITE_LOCK`, `BANCHI_SERVE_MAIN`, `BANCHI_SYNC`). Only the owner's terminal and CI set the rest (D042 (main moves by pull request) and D179 (shell mistakes are refused by resolving)). Each has an owner-held escape hatch, never printed to an agent: `BANCHI_CHECKOUT`, `BANCHI_TREE`,
+  `BANCHI_WAIT`, `BANCHI_PUSH`, `BANCHI_STASH`, `BANCHI_RESET`, `BANCHI_NARRATE`
   (D235, the heartbeat is refused a pipe). The narrate clause names its subjects, a short per-incident roster
   that the self-test reconciles. The other six resolve what a command would do. `make guard-shell-selftest` proves each one in a throwaway repo.
-  A hatch counts only as a real assignment (env prefix, `export` or `env`), never a mention. Every `PKMNSCAN_*=off` a command sets is logged, and `make status` shows the last 24 hours. A hatch set in the environment is not logged, and `make status` lists it under `hatches` (D179, shell mistakes are refused by resolving them).
+  A hatch counts only as a real assignment (env prefix, `export` or `env`), never a mention. Every `BANCHI_*=off` a command sets is logged, and `make status` shows the last 24 hours. A hatch set in the environment is not logged, and `make status` lists it under `hatches` (D179, shell mistakes are refused by resolving them).
 - **A citation names a symbol, never a line.** Write a decision id, a section or `module.symbol` (no `.py`).
   A method is "`module.Class`'s `method`". A CSS rule is its selector.
   The `line anchors` row of `make docs-audit` refuses `path:N`, `file.ext:N`, `~N` and a bare `:N` after a cited file.
@@ -343,8 +341,8 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   GitHub branch protection also requires `check` and `revert-guard`, with 0 reviews and `strict: false`.
   It catches the remote half. The local hook is the only cover for a local fast-forward.
   `scripts/githooks/reference-transaction` and `scripts/githooks/pre-push` refuse, armed by `make hooks`.
-  `PKMNSCAN_MAIN=off` is the hatch. The primary checkout syncs itself (D176, the primary checkout syncs):
-  `scripts/primary_sync.py`, `PKMNSCAN_SYNC=off`, `make sync-selftest`.
+  `BANCHI_MAIN=off` is the hatch. The primary checkout syncs itself (D176, the primary checkout syncs):
+  `scripts/primary_sync.py`, `BANCHI_SYNC=off`, `make sync-selftest`.
 
 ## Working agreement
 
@@ -372,7 +370,7 @@ Use bold labels in one quoted block, never a code fence. Start with the point. N
   before the brief. It prints which component draws it.
 - **Never ask an agent to rebuild a state it has left.** Capture a "before" image before the edit, or not at all.
   Wanting a "before" image afterwards is the orchestrator's job, in a separate clean checkout. It is never the
-  working agent's, and never in a shared tree. `PKMNSCAN_STASH` refuses a bare stash. **NOT MECHANIZED:** a machine cannot tell that a sentence requires undoing work.
+  working agent's, and never in a shared tree. `BANCHI_STASH` refuses a bare stash. **NOT MECHANIZED:** a machine cannot tell that a sentence requires undoing work.
 - **State a fence by intent and name the exception.** Example: "Do not change which cards a walk holds. Rendering
   changes inside `WalkView` are in scope." **NOT MECHANIZED:** a machine cannot tell a fence around
   behavior from one around files.

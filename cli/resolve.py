@@ -957,7 +957,7 @@ def _committed_keys(
     copies were marked as the ones TCGplayer already holds and the older backstock — which
     no run is joining — was left uncommitted and therefore unreachable. **52 of the run's 119
     matched SKUs offered zero copies and 59 real cards were stranded**, every one of them
-    reported as *"every copy in this run is already listed or has left the box"*. The
+    reported as *"Every copy in this run is already listed or has left the box."*. The
     operator read that sentence and said it was *"just not true/possible"*. 52 of the 59 are
     this defect; the other 7 are the stuck claim `_copies_out` could not age, which is
     D150's Staged case, out of scope by the owner's choice, — `_copies_out` aged them the next day
@@ -1967,7 +1967,7 @@ def refuse_reallocated(payload: dict, inventory: master.Inventory, run: runs.Run
         raise DisownedRun(
             f"REFUSING: {sentence}. This run describes a drawer that no longer exists and "
             f"cannot be joined.\n"
-            f"Re-identify the box as it is now (`pkmnscan identify`, or Identify on #/runs) "
+            f"Re-identify the box as it is now (`banchi identify`, or Identify on #/runs) "
             f"if that is what you want joined; this run's directory is a record of the old "
             f"drawer and is left as it is.\n"
             f"Nothing was joined, nothing was written, and no queue was touched.",
@@ -2199,7 +2199,7 @@ def store_payload(keys: Sequence[str], inventory: master.Inventory) -> Dict[str,
                 else "succeeded"
             ),
             "error": (
-                "this card has not been identified yet — run `pkmnscan identify` first"
+                "this card has not been identified yet — run `banchi identify` first"
                 if not identified
                 else "this card is bound to a SKU but carries no recorded reading to "
                      "compare it against — re-identify it to refresh the evidence"

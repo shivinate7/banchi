@@ -4,7 +4,7 @@ asks the merged report to run.
 
 READ-ONLY AND STORE-AGNOSTIC ON PURPOSE. Every function here takes plain data — a
 `store.master.Card`, a `store.skus.SkuRow`, a list of raw event dicts — and returns an
-answer, never a write. `./pkmnscan cards identity` (`cli/cmd_cards.py`) and
+answer, never a write. `./banchi cards identity` (`cli/cmd_cards.py`) and
 `scripts/identity-replay.py` are the two callers: one reads a live `Store().write()`
 snapshot and then performs the binds this module recommends, the other reads a read-only
 copy and asserts against what this module recommends without writing anything. Splitting the
@@ -566,7 +566,7 @@ def held_review_entry(card: Card, row: SkuRow, plan: "MigrationPlan") -> "QueueE
     them in at module scope here would risk the cycle `store/`'s D63 rule exists to name;
     neither module imports this one, so the risk is theoretical, but the cost of a local
     import is one line and the cost of getting that judgement call wrong is a broken
-    `./pkmnscan cards identity --write`.
+    `./banchi cards identity --write`.
     """
     from pipeline.join import Position, place_text
     from pipeline.routing import LISTING_DISPUTED

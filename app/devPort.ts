@@ -107,17 +107,17 @@ function isPrimaryCheckout(root: string): boolean {
   }
 }
 
-// THE CLAIMED SLOTS, `server/ports.py:read_claims`'s twin. `PKMNSCAN_SLOT_REGISTRY`
+// THE CLAIMED SLOTS, `server/ports.py:read_claims`'s twin. `BANCHI_SLOT_REGISTRY`
 // overrides where the file is. A missing, unreadable or malformed file reads as "nothing
 // claimed", and so does an entry that is not a whole slot inside the band. This file only
 // ever READS the registry.
-export const SLOT_REGISTRY_ENV = 'PKMNSCAN_SLOT_REGISTRY'
+export const SLOT_REGISTRY_ENV = 'BANCHI_SLOT_REGISTRY'
 
 function slotRegistry(): string | null {
   const override = (process.env[SLOT_REGISTRY_ENV] ?? '').trim()
   if (override) return override
   try {
-    return join(homedir(), '.pkmnscan', 'port-slots.json')
+    return join(homedir(), '.banchi', 'port-slots.json')
   } catch {
     return null
   }

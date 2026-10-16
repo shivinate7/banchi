@@ -81,7 +81,7 @@ broken roster then fails locally, not only in the audit.
 
 **IT FAILS OPEN, IN EVERY DIRECTION**, mirroring `serve-scope.py` exactly. No merge-base
 runs it. An unreadable diff runs it. An EMPTY diff runs it. An unscoped target name runs
-it. Any exception raised while deriving a subject runs it. `PKMNSCAN_GUARD_SCOPE=all` runs
+it. Any exception raised while deriving a subject runs it. `BANCHI_GUARD_SCOPE=all` runs
 every target at once. It adds checks, so it is not a hatch. Every skip prints that it exists.
 
 **WHAT THIS DOES NOT COVER.** A guard script reached only through a path this reader
@@ -118,7 +118,7 @@ imported there. They are each top-level directory a `ROOT / "x"` chain names. Th
 import closure of each `app/src/*.ts` such a chain names (`standing.ts`, `storeHistory.ts`). The `vendor/` tree, `requirements.txt`
 and `app/package-lock.json` are declared beside that, because no harness source spells them.
 The Makefile counts only through the `harness` recipe. A main push and the nightly run set
-`PKMNSCAN_GUARD_SCOPE=all` in `check.yml`, so they never skip. A comment-only edit never skips
+`BANCHI_GUARD_SCOPE=all` in `check.yml`, so they never skip. A comment-only edit never skips
 the harness: it reads docstrings as text.
 Second, a non-spec file under `app/tests/` selects the specs whose import closure holds it
 (`browser-scope.py:build_reverse_map`). One no spec imports still selects every spec.
@@ -130,6 +130,6 @@ Fourth, `serve-selftest` and `audit-self-test` skip a Python subject whose AST, 
 stripped, is equal on both sides (`browser-scope.py:ast_equal`). A parse error, a module that
 reads `__doc__`, a file the self-test names (it may patch it by exact text: `serve.py`,
 `sigil-check.py`) and anything under `harness/` for `audit-self-test` run. The harness subjects
-also follow bare string constants (`pkmnscan`) and the `scripts/*.py` files it names to the data
+also follow bare string constants (`banchi`) and the `scripts/*.py` files it names to the data
 they read (`demo-assets/`, not its `mirror/`), plus `app/tsconfig.json`.
 The measured saving is unmeasured until the first CI runs after merge.

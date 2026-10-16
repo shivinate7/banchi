@@ -8,7 +8,7 @@ demo cannot fetch a history when it is built. The owner's ruling (2026-09-24): t
 recorded once, here, into committed fixtures, and refreshed only when the owner chooses. CI
 never calls this. The seed and the recorder read what it writes.
 
-    PKMNSCAN_TCG_USER_AGENT="<your browser's User-Agent>" make demo-histories
+    BANCHI_TCG_USER_AGENT="<your browser's User-Agent>" make demo-histories
 
 WHAT IT RECORDS. For every card in `demo-assets/cards.json` that a committed export can place,
 every range the demo draws (`pipeline/pricehistory.py:RANGES`). One file per product and range,

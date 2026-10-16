@@ -325,6 +325,17 @@ test('the confirm press moves nothing outside the panel it lands in', async ({ p
   const rightCard = page.getByRole('button', { name: 'The listing is right' })
   await rightCard.scrollIntoViewIfNeeded()
 
+  /* THE "BEFORE" SAMPLE WAITS FOR THE CARD'S OWN SEARCH TO LAND. `open()` returns once the hero
+   * name is drawn, but the figures column (`.browse-hero-side[data-pending]`, ghost bars) and
+   * the copies list (`.inventory-copies .bn-loading`) stand in skeleton until `/search` answers
+   * (`Inventory.tsx`'s `bandPending`). Landing swaps both for the real, shorter figures and the
+   * page loses its height (MEASURED 1419 -> 1391 locally), with no press involved. A "before"
+   * taken inside that window and an "after" taken outside it differ by the fetch, not the press,
+   * and the page being scrolled to its bottom turns the shrink into a clamp that moves every
+   * element. `settled` cannot close it: two reads 75ms apart agree while the skeleton stands. */
+  await expect(page.locator('.browse-hero-side[data-pending]')).toHaveCount(0)
+  await expect(page.locator('.inventory-copies .bn-loading')).toHaveCount(0)
+
   const before = await settled(page)
   const height = await page.evaluate(() => document.documentElement.scrollHeight)
   const at = await page.evaluate(() => window.scrollY)
@@ -456,7 +467,7 @@ test('a refusal gives an amber toast', async ({ page }) => {
 
 /* A NAMED 500 IS A FAULT TOO: `failureTone` reads the status as well as the code, the same
  * 5xx rule `failureKind` uses, so a code the client has never heard of still goes red. */
-for (const code of ['pkmnscan_missing', 'spawn_failed', 'a_code_nobody_listed']) {
+for (const code of ['banchi_missing', 'spawn_failed', 'a_code_nobody_listed']) {
   test(`a named 500 (${code}) gives a red toast`, async ({ page }) => {
     await open(page)
     await page.route(/\/inventory\/2\/1\/confirm$/, (route) =>

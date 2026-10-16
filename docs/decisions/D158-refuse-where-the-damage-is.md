@@ -1,14 +1,13 @@
 ## D158 — Refuse where the damage is
 
-**The primary checkout is where the damage lands, so the refusal is on serving there and not on the git command.** An earlier design, written after `/Users/shivinate/Developer/pkmnscan` — the primary checkout, the one D138 keeps
+**The primary checkout is where the damage lands, so the refusal is on serving there and not on the git command.** An earlier design, written after `/Users/shivinate/Developer/banchi` — the primary checkout, the one D138 keeps
 a supervisor alive out of over the owner's real store — was found standing on
 `claude/env-key-rotation` with three live sessions in it. It shipped warnings at three moments
 and ruled that **a warning is the ceiling**.
 
 **It happened again the next night**, on `claude/debts-citation-repair`: a branch already merged
 as pull request #282, already behind `origin/main`, with **four live sessions in the tree**. Told
-about it, the owner said: *"i literally thought we had a guard in place that ENSURES our primary
-checkout IS ALWAYS MAIN"*. That sentence is the reopening, and what it reopens is the ceiling —
+about it, the owner expected a guard that ensures the primary checkout is always main. That is the reopening, and what it reopens is the ceiling —
 not the readers.
 
 ### The guard goes at the damage, not at the git command
@@ -49,7 +48,7 @@ worktree moves, which the primary/linked test disposes of); that reason was weak
 one is stronger.
 
 **A louder `post-checkout` is a bandaid, and the owner's standing instruction names the class.**
-*"Always ensure you take the best practices to resolve things, never the band aid routes."* The
+The owner's standing instruction: resolve things by best practice, never by band-aid routes. The
 warning already existed, already fired, and was already missed twice. Volume is not a mechanism.
 
 ### What is built: one refusal and two readers
@@ -90,8 +89,8 @@ speakers there.
 
 ### It has an escape hatch, and that is a departure from the entry it is modelled on
 
-`PKMNSCAN_SERVE_MAIN=off`, printed in every refusal, as `PKMNSCAN_MAIN=off`, `PKMNSCAN_KILL=off`,
-`PKMNSCAN_REVERT=off` and `PKMNSCAN_SUITE_LOCK=off` all are.
+`BANCHI_SERVE_MAIN=off`, printed in every refusal, as `BANCHI_MAIN=off`, `BANCHI_KILL=off`,
+`BANCHI_REVERT=off` and `BANCHI_SUITE_LOCK=off` all are.
 D140 — the merge's own stale-half guard, landed the same night — deliberately has none, on
 the ground that what it refuses
 costs `git merge origin/main` — seconds, and the right thing to have done anyway.

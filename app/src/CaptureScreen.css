@@ -1481,10 +1481,17 @@
 @media (min-width: 768px) and (max-width: 1279px) {
   /* The photo is 9:16 and height-bound, so beside the run card it left bands either side.
      The receipt sits BESIDE it (as on the phone) and the empty frame fills the panel. */
-  .capture-last-viewport { flex-direction: row; align-items: flex-start; --said-h: 0px; }
+  /* WHY THE PANEL STARVED: the stage spans both rows at a fixed height, so a tall Setup block left this
+     row almost nothing, and a size-contained viewport has no height of its own. Here the viewport is
+     sized by its content, and the content is the one frame both states draw (`.capture-frame-last`):
+     one height, `--cap-last-photo-h`, for the photo (its width follows from 9:16) and the empty frame (it fills
+     the panel). The stage already shares its height with this row, so the photo takes a third of it. The receipt has no height of its own (it
+     scrolls inside the row the frame sets), so empty and loaded are one box (D313). */
+  .capture-last-viewport { flex-direction: row; align-items: flex-start; --said-h: 0px; container-type: inline-size; --cap-last-photo-h: calc(var(--cap-stage-h) / 3); }
   .capture-last[data-has-last='true'] .capture-last-viewport { --said-h: 0px; }
-  .capture-last-viewport .capture-said { flex: 1 1 0; min-width: 0; max-height: 100%; overflow-y: auto; }
-  .capture-frame-last:has(.capture-frame-note-last) { flex: 1 1 auto; width: auto; height: 100%; aspect-ratio: auto; }
+  .capture-last-viewport .capture-said { flex: 2 1 0; min-width: 0; align-self: stretch; contain: size; overflow-y: auto; }
+  .capture-frame-last { flex: none; width: auto; height: var(--cap-last-photo-h); }
+  .capture-frame-last:has(.capture-frame-note-last) { flex: 1 1 auto; aspect-ratio: auto; }
 }
 
 @media (max-width: 1023px) and (min-width: 768px) {

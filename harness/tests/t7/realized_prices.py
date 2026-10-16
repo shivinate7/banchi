@@ -107,14 +107,14 @@ def check_realized_prices(checks: Checks) -> None:
 
         with Store().write() as snapshot:
             snapshot.archive.upsert({f"SKU1:{b.range}:{b.start}": b for b in buckets})
-        os.environ["PKMNSCAN_SALES_EXPORT"] = path
+        os.environ["BANCHI_SALES_EXPORT"] = path
         real = pipeline_routes.productview.row_for_sku
         pipeline_routes.productview.row_for_sku = lambda snap, sku: {"Condition": "Near Mint Foil"}
         try:
             payload = pipeline_routes.do_product_realized("SKU1")
         finally:
             pipeline_routes.productview.row_for_sku = real
-            del os.environ["PKMNSCAN_SALES_EXPORT"]
+            del os.environ["BANCHI_SALES_EXPORT"]
         checks.ok(payload["product_id"] == int(PID) and payload["realized_avg"] == "3.00"
             and payload["file"] == "synthetic-sales.csv", "the route answers by the archive's product id")
         checks.ok(not any(s_ in json.dumps(payload) for s_ in SENTINELS), "no dropped column survives to the route payload")

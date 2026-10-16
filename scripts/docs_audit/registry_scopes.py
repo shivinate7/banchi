@@ -69,7 +69,7 @@ SHARDLESS = ("revert-guard",)
 
 # The parallel shards `.github/workflows/check.yml` runs in place of one `make ci-check`.
 # A registry entry's `shard` names one of these (without the `ci-check-` prefix), or is None.
-CI_SHARD_RULES = ("ci-check-product", "ci-check-static", "ci-check-guards-1", "ci-check-guards-2")
+CI_SHARD_RULES = ("ci-check-product", "ci-check-product-2", "ci-check-product-3", "ci-check-static", "ci-check-guards-1", "ci-check-guards-2")
 CHECK_WORKFLOW = ROOT / ".github" / "workflows" / "check.yml"
 
 
@@ -93,6 +93,16 @@ def _checks_registry() -> Optional[Tuple[List[dict], dict]]:
     if not isinstance(entries, (list, tuple)) or not isinstance(needs, dict):
         return None
     return [dict(entry) for entry in entries], dict(needs)
+
+
+def workflow_shards(workflow: str) -> Set[str]:
+    """The shards `check.yml` runs: the matrix targets, and any job that runs one as a real
+    `run:` key. A commented line is not a run."""
+    live = "\n".join(ln for ln in workflow.splitlines() if not ln.lstrip().startswith("#"))
+    matrix = re.search(r"target:\s*\[([^\]]*)\]", live)
+    listed = {t.strip() for t in matrix.group(1).split(",")} if matrix else set()
+    # a shard that runs as a job of its own (`ci-static`, so `design-check` can wait on it alone)
+    return listed | set(re.findall(r"^\s*run: make (ci-check-[\w-]+)\s*$", live, flags=re.M))
 
 
 def _check_registry() -> Row:
@@ -155,9 +165,32 @@ def _check_registry() -> Row:
             findings.append(Finding(rel(CHECKS_REGISTRY), (
                 "no entry runs in shard `{0}`, so `ci-check-{0}` fails on an empty list."
             ).format(shard)))
+    # Each shard is a Makefile rule, or the matrix job fails on the runner and nowhere else.
+    for rule in CI_SHARD_RULES:
+        if rule not in rules:
+            findings.append(Finding("Makefile", (
+                "has no `{0}` rule, and `check.yml` runs it as a shard."
+            ).format(rule)))
+    # The harness slices: harness/run.py's PARTS and the `harness-K` entries must agree, or a
+    # slice of T7 runs in no shard (or twice).
+    run_py = read(ROOT / "harness" / "run.py") if exists(ROOT / "harness" / "run.py") else ""
+    parts = re.search(r"^PARTS = (\d+)$", run_py, flags=re.M)
+    want = {"harness-{0}".format(k) for k in range(1, int(parts.group(1)) + 1)} if parts else None
+    have = {str(e.get("target")) for e in entries if re.fullmatch(r"harness-\d+", str(e.get("target")))}
+    if want is None or have != want:
+        findings.append(Finding(rel(CHECKS_REGISTRY), (
+            "the `harness-K` entries are {0} and harness/run.py's PARTS wants {1}.\n"
+            "  A missing slice drops its T7 checks from every shard."
+        ).format(sorted(have), sorted(want) if want else "a `PARTS = N` line")))
+    # Each `harness-K` rule hands the shared recipe its own K, or slice K runs in no shard.
+    for name in sorted(want or ()):
+        body = _make_recipe(makefile_text, name) or []
+        if not any("PART={0}".format(name.rsplit("-", 1)[1]) in line for line in body):
+            findings.append(Finding("Makefile - {0}".format(name), (
+                "does not pass `PART={0}`, so T7 slice {0} runs in no shard."
+            ).format(name.rsplit("-", 1)[1])))
     workflow = read(CHECK_WORKFLOW) if exists(CHECK_WORKFLOW) else ""
-    matrix = re.search(r"target:\s*\[([^\]]*)\]", workflow)
-    listed = {t.strip() for t in matrix.group(1).split(",")} if matrix else set()
+    listed = workflow_shards(workflow)
     if listed != set(CI_SHARD_RULES):
         findings.append(Finding(rel(CHECK_WORKFLOW), (
             "the `ci-check` job's matrix lists {0}, and the shards are {1}.\n"

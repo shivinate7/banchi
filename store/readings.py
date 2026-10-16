@@ -5,7 +5,7 @@ WHAT USED TO BE A LIVE RECOMPUTATION IS NOW TWO TABLES A PRESS FILLS. Before thi
 `inventory/.live`, parsing JSON and CSV on every request to answer one question: `sku -> the
 newest market price this machine has read for it`. That walk — the two-source arbitration,
 newest wins by a clock rather than by precedence — has not changed and has not moved out of
-this package; it moved to `pipeline/readings.py:collect`, run once by `pkmnscan readings
+this package; it moved to `pipeline/readings.py:collect`, run once by `banchi readings
 adopt --write` rather than once per request. This module is the READ half: the table that
 walk fills, and what `server/pipeline_routes.py:_readings()` now does is a plain `SELECT`
 against it.

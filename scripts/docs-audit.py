@@ -42,12 +42,12 @@ having been run.
     scripts/docs-audit.py --staged     audit the staged set (what the pre-commit hook runs)
     scripts/docs-audit.py --self-test  prove the extractors work before trusting a report
 
-Escape hatch: PKMNSCAN_DOCS=off, honored by the hook. Deliberate, visible in your shell, and unlike editing this file it
+Escape hatch: BANCHI_DOCS=off, honored by the hook. Deliberate, visible in your shell, and unlike editing this file it
 does not change what the check means.
 
 One more environment variable, and it is the opposite of an escape hatch:
 
-    PKMNSCAN_EXPORTS   colon-separated paths to extra TCGplayer Filtered CSV exports,
+    BANCHI_EXPORTS   colon-separated paths to extra TCGplayer Filtered CSV exports,
                        absolute or repo-relative. The game-registry rows read the committed
                        fixtures always; this adds files the repo cannot carry — a
                        full-catalog export, a Riftbound one — so their coverage questions

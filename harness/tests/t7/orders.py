@@ -128,8 +128,8 @@ def check_committed_copies_are_the_oldest(checks: Checks) -> None:
     and the copies photographed an hour ago were marked as the ones TCGplayer already holds.
     The older backstock stayed uncommitted — and no run is joining box 3, so nobody could
     list it either. **52 of run `2026-09-11-box1-01`'s 119 matched SKUs offered zero copies
-    and 59 real cards were stranded**, under the sentence *"every copy in this run is already
-    listed or has left the box"*. The operator's words were that this is *"just not
+    and 59 real cards were stranded**, under the sentence *"Every copy in this run is already
+    listed or has left the box."* The operator's words were that this is *"just not
     true/possible"*.
 
     SO THE FIXTURE INVERTS THE TWO ORDERS DELIBERATELY: the LOWER-numbered box is the NEWER
@@ -4566,13 +4566,13 @@ def check_order_fetch_route(checks: Checks) -> None:
     cookie = "TCGAuthTicket_Production=t7-fetch-not-a-session; other=1"
     dotenv = Path(tempfile.gettempdir()) / "t7-order-fetch.env"
     dotenv.write_text(
-        f"TCGPLAYER_STORE_COOKIE={cookie}\nPKMNSCAN_TCG_SELLER_KEY=a2ffc195\n",
+        f"TCGPLAYER_STORE_COOKIE={cookie}\nBANCHI_TCG_SELLER_KEY=a2ffc195\n",
         encoding="utf-8",
     )
     env_keys = (
-        "PKMNSCAN_TCG_ORDERS_URL",
+        "BANCHI_TCG_ORDERS_URL",
         "TCGPLAYER_STORE_COOKIE",
-        "PKMNSCAN_TCG_SELLER_KEY",
+        "BANCHI_TCG_SELLER_KEY",
         envfile.FROM_FILE_ENV,  # check_export_fetch's `keys` says why this is in the ritual
     )
     previous = {name: os.environ.get(name) for name in env_keys}
@@ -4640,9 +4640,9 @@ def check_order_fetch_route(checks: Checks) -> None:
     canned = _Canned()
     real_opener = urllib.request.build_opener
     try:
-        for name in ("TCGPLAYER_STORE_COOKIE", "PKMNSCAN_TCG_SELLER_KEY"):
+        for name in ("TCGPLAYER_STORE_COOKIE", "BANCHI_TCG_SELLER_KEY"):
             os.environ.pop(name, None)
-        os.environ["PKMNSCAN_TCG_ORDERS_URL"] = "http://127.0.0.1:1"
+        os.environ["BANCHI_TCG_ORDERS_URL"] = "http://127.0.0.1:1"
         checks.equal(
             envfile.get_live("TCGPLAYER_STORE_COOKIE"),
             cookie,

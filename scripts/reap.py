@@ -6,7 +6,7 @@ had itself launched killed a process belonging to somebody else:
 
   1. `pkill -f "capture_server.py"` — meant for a scratch server the session had started in a
      worktree. `pkill -f` matches on the WHOLE MACHINE, so it also matched
-     `/Users/shivinate/Developer/pkmnscan/server/capture_server.py`: the owner's live capture
+     `/Users/shivinate/Developer/banchi/server/capture_server.py`: the owner's live capture
      server on :8000 over their real 1,625-card store, the process D138 exists to keep alive.
      The supervisor restored it 25s later and D88 meant the store survived, but any request in
      flight was severed mid-write.
@@ -56,8 +56,8 @@ leader-only `killpg`).
 IT IS REPO-AGNOSTIC AND IMPORTS ONLY `guard-shell.py`'s hatch reader (absent: the hatch is not read), for `janitor.py`'s reason: a hook can
 point it at any checkout, and an import from this one would break there.
 
-THE ESCAPE HATCH IS `PKMNSCAN_KILL=off` AND IT IS PRINTED IN EVERY REFUSAL, per the house rule
-`PKMNSCAN_MAIN=off` set. A guard that is routinely bypassed is worse than none — CLAUDE.md says
+THE ESCAPE HATCH IS `BANCHI_KILL=off` AND IT IS PRINTED IN EVERY REFUSAL, per the house rule
+`BANCHI_MAIN=off` set. A guard that is routinely bypassed is worse than none — CLAUDE.md says
 as much about inline lint disables — so the hatch is sized to be reached for rarely: everything
 provably yours is allowed without it, which is most of what a session ever wants to kill.
 
@@ -188,7 +188,7 @@ def checkout_root(start: str) -> str:
     are not repositories at all. **Measured from `/Users/shivinate` on 2026-09-10**: the fallback
     adopted the home directory as "this checkout", and `pgrep -f capture_server.py` — the exact
     command of incident 1 — resolved the owner's live `:8000` server to **OURS**, because
-    `~/Developer/pkmnscan/server/capture_server.py` is under `~`.
+    `~/Developer/banchi/server/capture_server.py` is under `~`.
 
     So a root has to be a place work is DONE, not a place work is KEPT. With no such root the
     answer is not a wider guess, it is that this file has nothing to reason with, and `_under`
@@ -1061,7 +1061,7 @@ def hook(payload: dict) -> int:
     command = str(payload.get("tool_input", {}).get("command", "") or "")
     if not command:
         return 0
-    if os.environ.get("PKMNSCAN_KILL") == "off" or _hatch_set_by("PKMNSCAN_KILL", command):
+    if os.environ.get("BANCHI_KILL") == "off" or _hatch_set_by("BANCHI_KILL", command):
         return 0
 
     intent = read_command(command)
@@ -1131,7 +1131,7 @@ def hook(payload: dict) -> int:
                      "severing a")
         lines.append("  write in flight:  make down ARGS=--confirm   (in that checkout)")
     lines.append("")
-    lines.append("  PKMNSCAN_KILL=off runs the command anyway.")
+    lines.append("  BANCHI_KILL=off runs the command anyway.")
     print("\n".join(lines), file=sys.stderr)
     sys.stderr.flush()
     if refusal_log:

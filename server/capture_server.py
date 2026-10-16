@@ -112,6 +112,8 @@
     GET    /pipeline/sends                 every send's receipt, what is written and not
                                            confirmed, and whether the live check is due
     POST   /pipeline/sends/<stamp>/take-back   a written file's copies back on the list
+    POST   /pipeline/held/<sku>/unhold     copies the owner removed by hand go back on the list
+    POST   /pipeline/held/<sku>/hold       the way back from unhold: hold those copies again
     POST   /pipeline/sends/<stamp>/dismiss     the owner has read a taken-back receipt's
                                                warning, so the card stops drawing it
     POST   /pipeline/sends/unreadable/<key>/release   free a live send claim the store cannot
@@ -401,13 +403,13 @@ STARTED_AT = time.time()
 # On every response as well as in `GET /status`, so the app notices a restart on traffic it was
 # making anyway rather than on a poll of its own. Must be listed in `Access-Control-Expose-Headers`
 # or it is present on the wire and unreadable from JavaScript — see `_cors_headers`.
-BOOT_HEADER = "X-Pkmnscan-Boot"
+BOOT_HEADER = "X-Banchi-Boot"
 
 # DERIVED PER CHECKOUT, NOT A CONSTANT (D77). It was `8000` here while `store/files.py:home()`
 # already defaulted to the checkout the code runs from — so every worktree served a DIFFERENT
 # store on the SAME port, and whichever process won the bind answered everyone. The main tree
 # still answers 8000 and every doc that says so stays true; a linked worktree gets its own.
-# `server/ports.py` carries the argument and `PKMNSCAN_PORT` overrides.
+# `server/ports.py` carries the argument and `BANCHI_PORT` overrides.
 PORT = ports.capture_port()
 
 # WHERE THE BUILT APP IS, AND IT IS A PROPERTY OF THE CHECKOUT RATHER THAN OF THE STORE
@@ -521,7 +523,7 @@ ALL_METHODS = ("GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS")
 # prevent, arriving through the one control in this repo that is supposed to stop a page
 # from writing where it should not. Pointing one tree's app at another tree's server is a
 # real thing to want and it is already a deliberate act (`VITE_CAPTURE_SERVER`), so it
-# takes the deliberate answer below: name the origin in `PKMNSCAN_ALLOWED_ORIGINS`.
+# takes the deliberate answer below: name the origin in `BANCHI_ALLOWED_ORIGINS`.
 #
 # COMPUTED ONCE AT IMPORT, unlike `allowed_origins()` below, and the difference is that this
 # has no input that can change while the process runs: `dev_port` reads no environment and
@@ -567,7 +569,7 @@ DEFAULT_ALLOWED_ORIGINS = tuple(
 # and this file is where the next person looks to find out whether adding a knob is safe.
 # `docs/debts/` records the one-directional blind spot; `docs/specs/capture-server.md`
 # documents the variable itself.
-ORIGINS_ENV = "PKMNSCAN_ALLOWED_ORIGINS"
+ORIGINS_ENV = "BANCHI_ALLOWED_ORIGINS"
 
 
 def _normalize_origin(origin: str) -> str:
@@ -749,6 +751,7 @@ _MARKDOWN_SEND_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/send$"
 # THE SHAPE IS `send_routes.STAMP_SHAPE`, never a copy of it: a copy typed here missed the random
 # tail every press has written since round 2, and matched no new receipt.
 _SEND_TAKE_BACK_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/take-back$")
+_HELD_RE = re.compile(r"^/pipeline/held/([A-Za-z0-9._-]+)/(unhold|hold)$")
 _SEND_DISMISS_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/dismiss$")
 _SEND_UNREADABLE_RE = re.compile(r"^/pipeline/sends/unreadable/([A-Za-z0-9._-]+)/(release|restore)$")
 _SEND_FILE_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/file$")
@@ -786,30 +789,8 @@ _SHIPPING_ITEM_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})$")
 # directly. Only `variant` differs from its record field: `metadata_finish` is what the
 # store calls it, `variant` is what the sidecar and the request body have always called it,
 # and renaming either would break a file `identify.sidecar` already reads.
-CLAIM_WIRE_NAMES = {
-    "set_hint": "set_hint",
-    # D3 rung 1's finish claim, and SINCE 2026-08-23 A JSON LIST of the game's finishes —
-    # the second set-valued claim in this map, not the only one. The key does not move: the
-    # sidecar and the request body have called it `variant` since before it had a shape, and
-    # `identify/sidecar.py` reads that spelling off files already on disk.
-    #
-    # A BARE STRING IS STILL READ, and it is what all 682 records written before the
-    # amendment carry: one member, and D3 says nothing writes one any more. There is no
-    # migration, so both shapes travel this wire permanently.
-    "metadata_finish": "variant",
-    "game": "game",
-    # D23's multi-select stack claim: a JSON list of the game's exact `Rarity` cells.
-    # `sidecar_payload`'s truthiness filter means an empty list is never written — absent
-    # is no claim, exactly as `variant` and `set_hint` behave, and now for the same reason
-    # rather than by coincidence: both claims are sets and an empty set is no claim (D3, D23).
-    "rarity_claim": "rarity_claim",
-    # C10's product claim. Same spelling on the wire, in the sidecar and on the record —
-    # unlike `metadata_finish`/`variant` above, which differ only because that key was named
-    # before it had a shape and files on disk already use it. A field on its first day gets
-    # one name everywhere.
-    "product": "product",
-    "note": "note",
-}
+# The map lives in `store/photos.py` (one home, shared with `cli`); re-exported here.
+CLAIM_WIRE_NAMES = photos.CLAIM_WIRE_NAMES
 
 # The claims no client sends, so they are legitimately absent from the map above rather than
 # forgotten. `photo` is derived — the path is not knowable until the index is allocated.
@@ -1471,7 +1452,7 @@ SERVER_EVENTS = (
 
 
 def captures_root() -> Path:
-    """Where card photos live. Moves with `PKMNSCAN_HOME`, as the rest of the store does."""
+    """Where card photos live. Moves with `BANCHI_HOME`, as the rest of the store does."""
     return files.home() / CAPTURES_DIRNAME / CARDS_DIRNAME
 
 
@@ -1488,7 +1469,7 @@ def legacy_photo_path(box: int, index: int) -> Path:
 
     It survives because 4.45 GB moves ONCE and resumably: `store/photos.find` reads this
     address while `meta.photos_relocated` is unset, so a partial move leaves no screen dark,
-    and never reads it again afterwards. `pkmnscan cards photos` is what moves them.
+    and never reads it again afterwards. `banchi cards photos` is what moves them.
     """
     return captures_root() / f"box{int(box)}" / f"{int(index):0{INDEX_PAD}d}{PHOTO_SUFFIX}"
 
@@ -1574,11 +1555,7 @@ def sidecar_payload(box: int, index: int, **claims) -> dict:
             f"sidecar_payload was handed {', '.join(unknown)}, which has no wire name. "
             f"Sidecar claims: {', '.join(CLAIM_WIRE_NAMES)}.",
         )
-    payload = {"box": int(box), "index": int(index)}
-    for field, value in claims.items():
-        if value:
-            payload[CLAIM_WIRE_NAMES[field]] = value
-    return payload
+    return photos.claims_payload(box, index, claims)
 
 
 # ---------------------------------------------------------------------- request decoding
@@ -3275,7 +3252,7 @@ def do_status() -> dict:
     # what lets a resumable move of 4.45 GB be interrupted without a screen going dark, and
     # is exactly the fallback that must not quietly become permanent. So the number of cards
     # still filed at the old address is a COUNT on this route rather than an absence
-    # somewhere, and `./pkmnscan cards photos` is what finishes it.
+    # somewhere, and `./banchi cards photos` is what finishes it.
     #
     # `nophoto:` is the shape a card gets when it has no photograph and no digest anywhere.
     # It is a NAME and never a NULL, deliberately — but a population above zero is still
@@ -3289,7 +3266,7 @@ def do_status() -> dict:
     # answer applies: ask the cheapest thing that can answer.
     #
     # SO THE STAMP IS THE AUTHORITY WHEN IT IS SET, and looking is what it exists to make
-    # unnecessary: `./pkmnscan cards photos` writes it only after a pass that found every
+    # unnecessary: `./banchi cards photos` writes it only after a pass that found every
     # card at its name. When it is UNSET the answer comes from ONE directory walk of the
     # content store rather than 2,535 stats — and that is a transient window by
     # construction, so the cost is paid only while there is something to report.
@@ -3309,7 +3286,7 @@ def do_status() -> dict:
         # THE FIRST ONE RATHER THAN A COUNT, and that is what makes it cheap in both
         # directions: it stops at the first file it finds when there IS a residue, and a
         # relocated store's legacy directories are empty so there is nothing to walk. The
-        # COUNT is `./pkmnscan cards photos`' job, which is a command somebody runs rather
+        # COUNT is `./banchi cards photos`' job, which is a command somebody runs rather
         # than a route something polls.
         #
         # `store/photos.py` OWNS THE PROBE because it owns the layout, and the first draft of
@@ -3325,7 +3302,7 @@ def do_status() -> dict:
         if leftover is not None:
             problems.append(
                 "some photographs are still at the legacy (box, index) address rather than "
-                "at the card's own name. `./pkmnscan cards photos` counts them and `--write` "
+                "at the card's own name. `./banchi cards photos` counts them and `--write` "
                 "moves them — it is resumable, and every file is checked against a digest "
                 "before its old copy is removed. That address is still read until it is "
                 "finished, so nothing is broken meanwhile."
@@ -3456,7 +3433,7 @@ def do_app_file(path: str) -> Tuple[bytes, str, str]:
     NO PHOTOGRAPH AND NO STORE IS REACHABLE FROM HERE, which is what makes serving a
     directory out of this process an ordinary thing rather than an opsec question:
     `app/dist/` is compiled output under the CHECKOUT, and every card, sidecar and code-card
-    image lives under `PKMNSCAN_HOME`, which this function cannot name. `GET /photo` is
+    image lives under `BANCHI_HOME`, which this function cannot name. `GET /photo` is
     still the only way a captured byte leaves this server.
     """
     root = app_dist()
@@ -3805,7 +3782,9 @@ def do_inventory_history() -> dict:
     }
 
 
-def do_inventory_copies(payload: dict) -> dict:
+def do_inventory_copies(
+    payload: dict, images: Optional["stockimages.StockImages"] = None
+) -> dict:
     """`POST /inventory/copies` — every on-hand copy of the requested SKUs, store-wide, in
     `do_inventory`'s own per-card shape (DEBT27, site 1 — `Orders.tsx:indexStore`).
 
@@ -3892,7 +3871,12 @@ def do_inventory_copies(payload: dict) -> dict:
         card = inventory.cards.get(key)
         if card is None:
             continue
-        cards[key] = _decorate_card(asdict(card), places)  # no listing facts: read budget
+        row = _decorate_card(asdict(card), places)  # no listing facts: read budget
+        # THE STOCK IMAGE (D301), for EVERY card (the walk's thumbnails), never only a reclaimed one.
+        row["image_url"] = pipeline_routes.stock_image_url(
+            images, card.game, card.set_name, card.number, display_number=row.get("number_display")
+        )
+        cards[key] = row
 
     # `listings` RIDES ALONG THE SAME WAY `do_inventory_box`'s DOES: narrowed to the SKUs the
     # scan above actually matched, never to `wanted` (the request), so a SKU asked about but
@@ -7381,7 +7365,7 @@ def do_queues() -> dict:
 
     LOCK-FREE, like `do_status` and `do_inventory`. Every write is an atomic replace, so a
     reader sees one whole file (`store/__init__.py`) — and a route the queue screen polls
-    must not serialise itself behind a running `./pkmnscan join`, which holds the lock for
+    must not serialise itself behind a running `./banchi join`, which holds the lock for
     the length of a join.
 
     CLEARED ENTRIES ARE ABSENT, which is what `open_entries` means. They stay in the file:
@@ -7557,7 +7541,7 @@ def _raw_catalog_row(card, sku: str) -> Tuple[dict, str, dict, Optional[Path]]:
     (`tcgcsv.Row`, real TCGplayer column names — `Product Line`, `Set Name`, ...) plus the
     file it came from. The raw shape is what identity-follows-sku.md §3.2's fold
     (`pipeline/skus.py:apply_rows`) needs to upsert this row into the `skus` table through
-    the SAME fold a fetch or `pkmnscan skus adopt` uses — never a row rebuilt by hand from
+    the SAME fold a fetch or `banchi skus adopt` uses — never a row rebuilt by hand from
     the normalized shape, which carries no `Product Line` cell at all (review round,
     identity-follows-sku.md §4.2: "no partial upsert into skus").
 
@@ -8177,7 +8161,7 @@ def _row_for_bind(snapshot, sku: str) -> "SkuRow":  # noqa: F821 - store.skus.Sk
 
     NEVER INVENTS A ROW. A review answer, a group answer and a confirm all bind to a SKU
     the table ALREADY holds — the fetch routes (`do_pipeline_export`, `do_live_export`) and
-    `pkmnscan skus adopt` are what fill it, and §3.2 measures it covering 916 of 916 card
+    `banchi skus adopt` are what fill it, and §3.2 measures it covering 916 of 916 card
     SKUs and 54 of 54 listing-only ones. Building a partial row here from whatever fields a
     queue candidate happens to carry — no `Product Line` cell, ever — would write a
     second-hand fact into a table meant to be TCGplayer's own record, and could silently
@@ -8290,7 +8274,7 @@ def _listing_decoration(card, skus: "Skus") -> Dict[str, object]:  # noqa: F821 
 def _fold_export_row(snapshot, row: dict, source: Optional[Path]) -> None:
     """Fold ONE real export row into the store's `skus` table
     (identity-follows-sku.md §3.2), through `pipeline/skus.py:apply_rows` — the SAME fold a
-    fetch (`do_pipeline_export`, `do_live_export`) or `pkmnscan skus adopt` folds through —
+    fetch (`do_pipeline_export`, `do_live_export`) or `banchi skus adopt` folds through —
     so `bind_sku` immediately below always finds the row it is about to bind, in the same
     transaction that is about to bind it (§4.2's own words: "upsert the chosen row, then
     bind_sku").
@@ -8630,7 +8614,7 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
     `store/queues.py` was built around and had never been written by anything:
     `Queue.upsert` refuses to re-queue a cleared position, `Queue.release` refuses to drop
     one, and `open_entries` hides it. Popping the entry instead would leave the next
-    `./pkmnscan join` free to ask the same question again, which is the one thing that file
+    `./banchi join` free to ask the same question again, which is the one thing that file
     says must never happen. `do_delete_card` pops rather than clears, and the difference is
     principled: there the card, the question and the photograph are all gone.
 
@@ -8770,7 +8754,7 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
         # identity-follows-sku.md §4.2/§4.1, review round: THE ROW MUST ALREADY BE IN THE
         # `skus` TABLE — a review answer never invents a partial one from `chosen`'s
         # abbreviated shape (§4.2: "no partial upsert into skus"; the table already holds
-        # 916 of 916 card SKUs, filled by the fetch routes and `pkmnscan skus adopt`).
+        # 916 of 916 card SKUs, filled by the fetch routes and `banchi skus adopt`).
         # `_row_for_bind` refuses `sku_unknown` with a remedy rather than guessing.
         catalog_game, game_entry = _game_lookup(card)
         number_strategy = game_entry["join_key"]
@@ -9495,7 +9479,7 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
     losing a card gives one up. `pipeline/livecheck.py:compare` was read before this was
     built (the brief's item 2): its buckets are `pushed+staged` against `live+sold`, and
     nothing about a card's own identity moves either number on its own — only a release does.
-    Once it runs, the next `pkmnscan reconcile --live` reads a SKU whose `claim` no longer
+    Once it runs, the next `banchi reconcile --live` reads a SKU whose `claim` no longer
     covers what TCGplayer still shows live as `beyond` (D109's own bucket): "TCGplayer's own
     quantity for a SKU this pipeline never sent — more than it sent", which is the sentence
     that tells the operator exactly what to go and lower.
@@ -12167,7 +12151,22 @@ def do_skus_photos(
     return {"photos": out, "stock_photos": stock, "pending": pending}
 
 
-def do_search(query: str) -> dict:
+def _group_image(images, copies) -> Optional[str]:
+    """`image_url` for one SKU group (D301): only a group holding a reclaimed copy resolves, so an
+    ordinary search never wakes the catalog refresh. Keyed on `set_name`, never the operator's
+    `set_hint`, which narrows a search and does not identify a card."""
+    if not any(card.photo_reclaimed_at for card in copies):
+        return None
+    return pipeline_routes.stock_image_url(
+        images,
+        _agreed(card.game for card in copies),
+        _agreed(card.set_name for card in copies),
+        _agreed(card.number for card in copies),
+        _agreed(_number_display(card) for card in copies),
+    )
+
+
+def do_search(query: str, images: Optional["stockimages.StockImages"] = None) -> dict:
     """Find a card by name, number, SKU or set hint. Grouped by SKU, D7's map made visible.
 
     THE ANSWER IS A SKU AND ITS POSITIONS, WHICH IS THE SHAPE D7 ALREADY DESCRIBES: one
@@ -12402,7 +12401,7 @@ def do_search(query: str) -> dict:
                 # above stays exactly as it was — a screen still needs the fallback
                 # for the card no export has ever priced. `set`/`rarity` are `None`
                 # on every card identified before this pair existed, until
-                # `./pkmnscan cards identity --write` or the next `bind_sku`
+                # `./banchi cards identity --write` or the next `bind_sku`
                 # fills them.
                 "set": _agreed(card.set_name for card in copies),
                 "rarity": _agreed(card.rarity for card in copies),
@@ -12437,6 +12436,8 @@ def do_search(query: str) -> dict:
                 # `bestLiveTier`. The value means nothing on its own; it exists only to be
                 # compared for equality against another group's.
                 "rank": rank,
+                # D301: the hotlinked stock photo, for a card whose own photograph was reclaimed.
+                "image_url": _group_image(images, copies),
             }
         )
 
@@ -12479,6 +12480,7 @@ def do_search(query: str) -> dict:
                 # APPENDED AFTER THE SORT ABOVE, SO ITS OWN RANK NEVER FED IT — worse than
                 # every real rank, matching where it has always landed.
                 "rank": _RANK_SUBSTRING + 1,
+                "image_url": None,
             }
         )
 
@@ -15916,7 +15918,7 @@ def do_order_line_kind(payload: dict) -> dict:
 
 
 class CaptureHandler(BaseHTTPRequestHandler):
-    server_version = "pkmnscan-capture/1"
+    server_version = "banchi-capture/1"
     protocol_version = "HTTP/1.1"
 
     #: AN IDLE KEEP-ALIVE CONNECTION LETS ITS THREAD GO. Without this the server holds one
@@ -15934,7 +15936,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
     #:
     #: FIFTEEN SECONDS, AND IT IS NOT A DEADLINE ON A REQUEST. It is the socket's timeout, so it
     #: bounds each read and write and not the handler's own work: a capture waiting out
-    #: `files.LOCK_TIMEOUT_SECONDS` (30) behind `./pkmnscan identify` performs no socket
+    #: `files.LOCK_TIMEOUT_SECONDS` (30) behind `./banchi identify` performs no socket
     #: operation while it waits and is never cut off mid-refusal. What it bounds is a thread
     #: parked on `readline` for a request that is not coming, which is every connection a closed
     #: tab leaves behind.
@@ -15971,7 +15973,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
         because it looks like the hole. `Origin` is set by the BROWSER and cannot be forged
         by a page — that is the entire reason the header exists — and browsers send it on
         every POST, PUT and DELETE, cross-origin or not. So an absent `Origin` means the
-        request did not come from a page: `curl`, `./pkmnscan`, T7's own socket calls. None
+        request did not come from a page: `curl`, `./banchi`, T7's own socket calls. None
         of those is the threat, because anything that can open a socket from this machine can
         also open `inventory.json` with an editor. What this gate stops is a page the owner
         did not open borrowing his browser to write, and that page cannot omit the header.
@@ -16461,7 +16463,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # `query_required` rather than looking like a request with no `q` at all —
                 # the two are one refusal, and the code says which to send next.
                 query = parse_qs(parsed.query, keep_blank_values=True).get("q") or [""]
-                return self._json(HTTPStatus.OK, do_search(query[0]))
+                return self._json(HTTPStatus.OK, do_search(query[0], images=pipeline_routes.STOCK_IMAGES))
             if path == "/skus/photos":
                 # `#/revenue`'s thumbnail lookup — see `do_skus_photos`'s own header.
                 # `pipeline_routes.STOCK_IMAGES`, the one resolver instance, same as
@@ -16853,7 +16855,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
         truthfully achievable by PRODUCING the response and withholding the body — so this
         runs `do_GET` behind a flag `_send` reads. The alternative, a second table of paths
         with their headers spelled out beside them, is the drift this repo keeps audit rows
-        to prevent: `X-Pkmnscan-Boot`, the CORS block and `Connection: close` are each
+        to prevent: `X-Banchi-Boot`, the CORS block and `Connection: close` are each
         composed in exactly one place, and a hand-rolled HEAD would be a second spelling of
         all three with nothing comparing it against the first.
 
@@ -16974,7 +16976,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # regex here could ever have matched it anyway, but this keeps the same reading
             # order as the exact-string routes above.
             if path == "/inventory/copies":
-                return self._json(HTTPStatus.OK, do_inventory_copies(self._body()))
+                return self._json(HTTPStatus.OK, do_inventory_copies(self._body(), images=pipeline_routes.STOCK_IMAGES))
             # D83's third door: one card, to another box. Matched before the batched form
             # one register down, though the two patterns cannot collide — `_MOVE_RE` needs
             # two digit groups before `/move` and `_MOVE_CARDS_RE` needs exactly one.
@@ -17115,6 +17117,12 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, send_routes.do_take_back(match.group(1), self._body())
                 )
+            match = _HELD_RE.match(path)
+            if match:
+                # The copies the owner removed from TCGplayer by hand (D273, R-S4): `unhold` puts
+                # them back on the list; `hold` is the way back from that press.
+                handler = send_routes.do_unhold if match.group(2) == "unhold" else send_routes.do_rehold
+                return self._json(HTTPStatus.OK, handler(match.group(1), self._body()))
             match = _SEND_UNREADABLE_RE.match(path)
             if match:
                 # DEBT59: free a live send claim the store cannot read, and the way back.
@@ -17628,7 +17636,7 @@ def drain(timeout: float) -> bool:
 
 
 # DERIVED FROM THE LOCK TIMEOUT, NEVER CHOSEN. `files.LOCK_TIMEOUT_SECONDS` is 30, and a
-# capture posted while `./pkmnscan identify` holds the store lock legitimately takes that long
+# capture posted while `./banchi identify` holds the store lock legitimately takes that long
 # before it answers `store_busy`. A shorter drain would convert a true refusal — a request that
 # is behaving correctly and is about to say so — into a killed socket, which is the same
 # argument `app/src/server.ts` makes one process over for having no client timeout below 30s.
@@ -17893,7 +17901,7 @@ def serve(host: str = HOST, port: int = PORT) -> None:
 
     # An IPv6 literal needs brackets in a URL (`http://[::]:8000`) — plain `0.0.0.0` does not.
     display_host = f"[{host}]" if ":" in host else host
-    print(f"pkmnscan capture server on http://{display_host}:{port}")
+    print(f"banchi capture server on http://{display_host}:{port}")
     print(f"  photos    {root}")
     print(f"  store     {files.inventory_dir()}")
     # WHICH CHECKOUT IS SERVING, printed because the two lines above are absolute paths that

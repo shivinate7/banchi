@@ -1,4 +1,4 @@
-"""`pkmnscan boxes names` — give every unnamed box its stored name. Previews by default.
+"""`banchi boxes names` — give every unnamed box its stored name. Previews by default.
 
 THE OWNER'S RULING, 2026-09-23 (D259): a box is shown by its name
 only, and the box number stays inside the store. A new box with no name gets a stored default
@@ -49,6 +49,6 @@ _SUBCOMMANDS = {
 def run(args, say) -> int:
     handler = _SUBCOMMANDS.get(getattr(args, "boxes_action", None))
     if handler is None:
-        say("pkmnscan boxes <names>")
+        say("banchi boxes <names>")
         return 2
     return handler(args, say)

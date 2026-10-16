@@ -148,7 +148,7 @@ EXPECTED_EMPTY: Dict[str, Tuple[str, str]] = {
     # Each of these counts something it read OUT OF THE MARKDOWN, so `--staged` over a
     # code-only commit hands it nothing. Every other doc row counts a CODE-side roster
     # instead and cannot reach zero without a real defect, so none of those is pinned:
-    # `harness tests` at zero means TESTS is empty, `pkmnscan commands` at zero means
+    # `harness tests` at zero means TESTS is empty, `banchi commands` at zero means
     # COMMANDS is, and `decision ids` at zero means the corpus is unreadable.
     "paths": ("staged", "counts the references it resolved out of the staged documents"),
     "line anchors": ("staged", "counts the staged documents it read for a line anchor"),
@@ -260,7 +260,7 @@ class Report:
         return json.dumps({"rows": rows, "exit": exit_code}, indent=2)
 
     def render(self) -> str:
-        lines = ["PKMNSCAN docs audit — docs/decisions/ D16", "=" * 72, ""]
+        lines = ["BANCHI docs audit — docs/decisions/ D16", "=" * 72, ""]
         for row in self.checks:
             check, severity, findings, summary = row.check, row.severity, row.findings, row.summary
             if not findings:

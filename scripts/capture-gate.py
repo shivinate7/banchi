@@ -49,7 +49,7 @@ def run_arm(arm: str, args) -> dict:
             db.set_match_sweep(conn, True)
             conn.close()
             watcher = subprocess.Popen(
-                [str(REPO / "pkmnscan"), "match", "--sweep", "--quiet", "3"], cwd=str(REPO), env=scratch.env
+                [str(REPO / "banchi"), "match", "--sweep", "--quiet", "3"], cwd=str(REPO), env=scratch.env
             )
         time.sleep(1.5)
         photos = photo_list(args.photos, args.captures)

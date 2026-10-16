@@ -53,14 +53,14 @@ date, each one real. They may never be drawn as one continuous series. This entr
 contribution is where that split falls on the READ side, given the archive
 `D219` built.
 
-- A SKU `pkmnscan archive sweep` has already visited answers straight off
+- A SKU `banchi archive sweep` has already visited answers straight off
   `store/pricearchive.py`. No socket opens. `D219` states the archive
   never deletes a row. This is a complete answer, not a stale one, for as long as a press
   has kept the archive current.
 - A SKU the archive has never swept falls through to `pipeline/pricehistory.py:Market` —
   the same live reader `#/pricing`'s own panel already calls (D278). One reader, two callers,
   never a second implementation.
-- Neither path writes. `pkmnscan archive sweep` stays the one press that folds a live read
+- Neither path writes. `banchi archive sweep` stays the one press that folds a live read
   back into the table. That is `D219`'s own ruling, restated rather
   than reopened here.
 

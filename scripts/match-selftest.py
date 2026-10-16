@@ -22,7 +22,7 @@ THREE GROUPS OF CASES, in the order this file was built:
      by its unaccented spelling (`flabebe` finding `Flabébé`) once the candidate step has
      already surfaced the row.
   3. `case_do_search_*` — `capture_server.do_search`, end to end, against a real temporary
-     store (`PKMNSCAN_HOME`). This is the group that reproduces UX-173's own headline
+     store (`BANCHI_HOME`). This is the group that reproduces UX-173's own headline
      defect, "`54/132` finds nothing": `_match_rank` alone was never the bug there (a
      zero-padded number field always contains its own unpadded form as a Python
      substring), the FTS5 CANDIDATE step was — a bare `54/132` or a hyphenated
@@ -56,7 +56,7 @@ green. That is a one-time verification a session performs and reports (BUILD-BRI
 "show it with a .bak copy" instruction); it is not a step this file repeats on every run,
 which is why there is no `.bak` file read here — this script tests the code AS IT STANDS.
 
-STDLIB PLUS THE PROJECT'S OWN PACKAGES ONLY. `PKMNSCAN_HOME` is a fresh temp directory per
+STDLIB PLUS THE PROJECT'S OWN PACKAGES ONLY. `BANCHI_HOME` is a fresh temp directory per
 case (`fresh_home`, the exact idiom `scripts/cid-selftest.py` established), so the real
 store is never opened for reading or for writing.
 """
@@ -107,11 +107,11 @@ def equal(got, want, what: str) -> bool:
 
 
 def fresh_home() -> Path:
-    """A throwaway `PKMNSCAN_HOME`, one per case — `scripts/cid-selftest.py:fresh_home`'s
+    """A throwaway `BANCHI_HOME`, one per case — `scripts/cid-selftest.py:fresh_home`'s
     own idiom, so a leftover from a previous case can never make the next one unreadable."""
-    where = Path(tempfile.mkdtemp(prefix="pkmnscan-match."))
+    where = Path(tempfile.mkdtemp(prefix="banchi-match."))
     MADE.append(where)
-    os.environ["PKMNSCAN_HOME"] = str(where)
+    os.environ["BANCHI_HOME"] = str(where)
     (where / "inventory").mkdir(parents=True, exist_ok=True)
     return where
 

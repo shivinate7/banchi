@@ -489,3 +489,107 @@ test('a reworded owed sentence changes nothing on Home while its code stays', as
   await expect(page.locator('.home-standing')).toContainText('1 card needs a price')
   await expect(page.locator('.home-standing')).not.toContainText('cut-off')
 })
+
+/* ux-wave1 B10. The Pricing tile's headline and its subline must name the same number. A run with
+   nothing owing a price and five copies ready reads "0" over "5 ready" today. The case reads the
+   count the subline names and asks the headline to match it. */
+test('ux-wave1: the Pricing tile headline is the count its subline names', async ({ page }) => {
+  await page.route(/\/orders$/, (route) => json(route, { summary: '', orders: [], resolution: { orders: [], counts: {} } }))
+  await page.route(/\/pipeline\/pricing(\?|$)/, (route) =>
+    json(route, {
+      runs: [],
+      roster: [{ ...runRow({ joined: true, phase: 'emit' }), owes: [], owed: [], open: true, unsent: 5 }],
+      skus: ['7001', '7002', '7003', '7004', '7005'].map((sku) => mixedSku(sku, 'listable', 1)),
+      written_at: {},
+      skipped: [],
+      asked: [],
+      threshold: '0.49',
+      floor: '0.49',
+    }),
+  )
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+  const tile = page.locator('a.home-stage[href="#/pricing"]')
+  await expect(tile).toBeVisible()
+  /* The note reads "reading the worklist" until the worklist lands, so wait for it to settle. */
+  await expect.poll(() => tile.locator('.home-stage-note').innerText(), { message: 'the Pricing note settles' }).not.toMatch(/reading the worklist/)
+  const note = await tile.locator('.home-stage-note').innerText()
+  const named = /(\d[\d,]*)\s+ready/.exec(note)
+  expect(named, `the Pricing tile names a count of ready copies (note reads "${note}")`).not.toBeNull()
+  await expect(tile.locator('.home-stage-figure'), 'the headline matches the count the subline names').toHaveText(named?.[1] ?? '')
+})
+
+/* ux-wave1 R3. Each run row on Home names the date and the clock time the run was last touched and the
+   quantity it holds. The date and the time come from the app's own formatters, so the case does not
+   hard-code a zone. The quantity is read as a number followed by "cards" or "copies".
+
+   THE WIRE FIELDS (server/pipeline_routes.py:_summary). A joined run's count is `counts.cards_in`, which
+   only `cli/cmd_join.py:record_join` writes. Before the join `counts` is empty, and the only card count
+   a run carries is `scope.cards`, which identify writes (null for a whole-box run). The two cases below
+   use those fields and no others. */
+test('ux-wave1: each Home run row shows a date, a time and a quantity', async ({ page }) => {
+  const at = '2026-09-18T14:05:00Z'
+  await page.route(/\/orders$/, (route) => json(route, { summary: '', orders: [], resolution: { orders: [], counts: {} } }))
+  await page.route(/\/pipeline\/runs$/, (route) =>
+    json(route, {
+      runs: [
+        runRow({
+          updated_at: at,
+          created_at: at,
+          joined: true,
+          counts: { cards_in: 12, skus: 9, queued_main: 0, queued_parked: 0, no_market_data: 0, sub_threshold: 0 },
+          scope: { box: 9, whole_box: true, cards: null },
+        }),
+      ],
+    }),
+  )
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+  const row = page.locator('a.home-run').first()
+  await expect(row, 'Home draws the run row').toBeVisible()
+  const text = await row.innerText()
+  /* The browser runs in America/Chicago (playwright.config.ts), so 14:05 UTC on Sep 18 reads 9:05 AM on Sep 18.
+     The expected words are literal: a formatter in this process would follow the machine's zone, not the page's. */
+  expect(text, 'the row names the date').toContain('Sep 18, 2026')
+  expect(text, 'the row names the clock time').toContain('9:05 AM')
+  expect(text, 'the row names the quantity the run holds (counts.cards_in)').toMatch(/\b12\s+(cards?|copies)\b/)
+})
+
+/* ux-wave1 R3, before the join. A run not yet joined has no `counts`, so its card count is the one
+   identify wrote into `scope.cards` (a run over a chosen set of cards, not a whole box). Its row still
+   shows that count. */
+test('ux-wave1: an unjoined Home run row still shows its card count from scope.cards', async ({ page }) => {
+  const at = '2026-09-18T14:05:00Z'
+  await page.route(/\/orders$/, (route) => json(route, { summary: '', orders: [], resolution: { orders: [], counts: {} } }))
+  await page.route(/\/pipeline\/runs$/, (route) =>
+    json(route, {
+      runs: [runRow({ updated_at: at, created_at: at, joined: false, counts: {}, scope: { box: 9, whole_box: false, cards: 7 } })],
+    }),
+  )
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+  const row = page.locator('a.home-run').first()
+  await expect(row, 'Home draws the unjoined run row').toBeVisible()
+  expect(await row.innerText(), 'the unjoined row shows scope.cards').toMatch(/\b7\s+(cards?|copies)\b/)
+})
+
+/* ux-wave1 R3b (owner ruling). A whole-box run that has not been joined shows how many of its cards were
+   photographed. THE SERVER DOES NOT SEND THAT COUNT TODAY. `_summary` (server/pipeline_routes.py) sends
+   `counts` (empty before the join), `scope` (`cards` is null for a whole box) and nothing that holds the
+   identified total. The manifest keeps `submitted` (the keys sent to identify) and `matched` (the read
+   count), and neither is in the summary. The case is written against the field a builder should add:
+   `photographed`, an integer on each run summary, set from the number of cards identify submitted. */
+test('ux-wave1: an unjoined whole-box run row shows how many cards it photographed', async ({ page }) => {
+  const at = '2026-09-18T14:05:00Z'
+  await page.route(/\/orders$/, (route) => json(route, { summary: '', orders: [], resolution: { orders: [], counts: {} } }))
+  await page.route(/\/pipeline\/runs$/, (route) =>
+    json(route, {
+      runs: [runRow({ updated_at: at, created_at: at, joined: false, counts: {}, scope: { box: 9, whole_box: true, cards: null }, photographed: 12 })],
+    }),
+  )
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+  const row = page.locator('a.home-run').first()
+  await expect(row, 'Home draws the whole-box run row').toBeVisible()
+  expect(await row.innerText(), 'the whole-box row shows its photographed count').toMatch(/\b12\s+(cards?|photographed)\b/)
+})

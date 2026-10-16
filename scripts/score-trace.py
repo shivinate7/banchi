@@ -92,8 +92,8 @@ GAMMA_DISPLAY = 2.2
 
 def _load(path: str) -> dict:
     data = json.loads(Path(path).read_text())
-    if data.get("kind") != "pkmnscan-motion-trace":
-        raise SystemExit(f"{path}: not a pkmnscan motion trace")
+    if data.get("kind") != "banchi-motion-trace":
+        raise SystemExit(f"{path}: not a banchi motion trace")
     return data
 
 

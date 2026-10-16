@@ -635,10 +635,10 @@ test('S is the divider and H is the set hint: the remap, both halves', async ({ 
      than as the presence of something else, because that is the half a partial remap
      breaks: `FIELD_KEYS` still carrying `s` would open this and nothing would say so. */
   await page.keyboard.press('s')
-  await expect(page.locator('.capture-open').filter({ hasText: /Set hint/ })).toHaveCount(0)
+  await expect(page.locator('.capture-open').filter({ hasText: /set hint/i })).toHaveCount(0)
 
   await page.keyboard.press('h')
-  await expect(page.locator('.capture-open').filter({ hasText: /Set hint/ })).toBeVisible()
+  await expect(page.locator('.capture-open').filter({ hasText: /set hint/i })).toBeVisible()
 
   /* And the chip says so. The operator never computes a key — they read it off the row, the
      same rule the option alphabet above is asserted by. */
@@ -753,7 +753,8 @@ test('the set hint offers the real set names, and still takes free text', async 
   await open(page)
   await page.keyboard.press('h')
 
-  const hint = page.getByLabel('Set hint')
+  // Case-insensitive on purpose: the copy sweep is the casing guard; these specs check behaviour.
+  const hint = page.getByLabel(/set hint/i)
   await expect(hint).toBeVisible()
 
   /* A DATALIST AND NOT A SELECT, which is what makes this safe on the rig's own screen: it
@@ -779,7 +780,7 @@ test('a set vocabulary that could not be fetched leaves the hint field working',
      control is the plain text input it was before D65 and a capture is unaffected. Asserted
      as the ABSENCE of options plus a working input, because the failure worth forbidding is
      a field that will not open. */
-  const hint = page.getByLabel('Set hint')
+  const hint = page.getByLabel(/set hint/i)
   await expect(hint).toBeVisible()
   await expect(page.locator('#capture-set-names option')).toHaveCount(0)
   await hint.fill('sv09')
@@ -810,7 +811,7 @@ test('an expired session says so where the suggestions would have been', async (
   await expect(page.locator('.capture-open')).toContainText('TCGplayer session has expired')
 
   /* And it is still only a note: the field takes text exactly as before. */
-  const hint = page.getByLabel('Set hint')
+  const hint = page.getByLabel(/set hint/i)
   await hint.fill('sv09')
   await expect(hint).toHaveValue('sv09')
 })
@@ -860,7 +861,7 @@ test('a hint that names no set says so, and the capture screen still takes it', 
   await open(page)
   await page.keyboard.press('h')
 
-  const hint = page.getByLabel('Set hint')
+  const hint = page.getByLabel(/set hint/i)
   await hint.fill('Spiritfoged')
 
   /* THE TYPO THIS EXISTS FOR, and it is a DROPPED MIDDLE LETTER rather than a truncation on
@@ -878,7 +879,7 @@ test('a hint that names no set says so, and the capture screen still takes it', 
   /* And it is visible from the ROW, so a stack captured against a typo does not need the
      field opened to be found. */
   await page.keyboard.press('Escape')
-  const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+  const row = page.locator('.capture-row').filter({ hasText: /set hint/i })
   await expect(row).toContainText('Spiritfoged')
   await expect(row.locator('.capture-sub')).toHaveText(/names no set/i)
 })
@@ -888,7 +889,7 @@ test('a hint that names a set says that instead, and says nothing at rest', asyn
   await open(page)
   await page.keyboard.press('h')
 
-  const hint = page.getByLabel('Set hint')
+  const hint = page.getByLabel(/set hint/i)
   await hint.fill('spiritforged')
 
   /* FOLDED, because `match_sets` folds: the operator types what is on the divider and the
@@ -899,7 +900,7 @@ test('a hint that names a set says that instead, and says nothing at rest', asyn
   /* The ordinary case is drawn as the ordinary case — the row carries the value and no
      annotation, so the mark on a bad hint means something. */
   await page.keyboard.press('Escape')
-  const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+  const row = page.locator('.capture-row').filter({ hasText: /set hint/i })
   await expect(row).toContainText('spiritforged')
   await expect(row.locator('.capture-sub')).toHaveCount(0)
 })
@@ -911,7 +912,7 @@ test('a three-letter set code names its set, and the typo one letter away still 
   await open(page)
   await page.keyboard.press('h')
 
-  const hint = page.getByLabel('Set hint')
+  const hint = page.getByLabel(/set hint/i)
 
   /* `SFD` IS SPIRITFORGED AND NOTHING IN THE STRING SAYS SO. It is not a prefix, not a colon
      code, and had no row in `pipeline/games.py:set_aliases` — before the abbreviation rule it
@@ -939,7 +940,7 @@ test('Enter completes a hint that resolved to one set but is not its name', asyn
   await open(page)
   await page.keyboard.press('h')
 
-  const hint = page.getByLabel('Set hint')
+  const hint = page.getByLabel(/set hint/i)
   await hint.fill('Spirit')
 
   /* A UNIQUE PREFIX RESOLVES THE EXPORT AND IS STILL NOT THE SET'S NAME, which is the form
@@ -948,7 +949,7 @@ test('Enter completes a hint that resolved to one set but is not its name', asyn
   await expect(hintMeta(page)).toHaveText(/enter completes/i)
   await hint.press('Enter')
 
-  const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+  const row = page.locator('.capture-row').filter({ hasText: /set hint/i })
   await expect(row).toContainText('Spiritforged')
 })
 
@@ -959,7 +960,7 @@ test('an ambiguous hint names the sets it could be, and resolves to none of them
   await open(page)
   await page.keyboard.press('h')
 
-  const hint = page.getByLabel('Set hint')
+  const hint = page.getByLabel(/set hint/i)
 
   /* `Origins` AND `Origins: Proving Grounds` ARE THE REAL SHAPE, and the hint that cannot
      choose between them is one letter short of both — `Origins` itself is a set's own name
@@ -973,7 +974,7 @@ test('an ambiguous hint names the sets it could be, and resolves to none of them
 
   /* Enter does not complete what did not resolve. */
   await hint.press('Enter')
-  const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+  const row = page.locator('.capture-row').filter({ hasText: /set hint/i })
   await expect(row).toContainText('Origin')
   await expect(row.locator('.capture-sub')).toHaveText(/names no set/i)
 })
@@ -985,7 +986,7 @@ test('a hint is never accused while there is no list to check it against', async
   /* THE VERDICT IS `unchecked`, WHICH IS NOT `unmatched`. No cookie, no network, the portal
      down — this screen cannot tell, and D65's whole rule is that it degrades to the control
      it was before rather than to an accusation. The row carries the hint and no mark. */
-  const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+  const row = page.locator('.capture-row').filter({ hasText: /set hint/i })
   await expect(row).toContainText('Spiritfoged')
   await expect(row.locator('.capture-sub')).toHaveCount(0)
 
@@ -1111,8 +1112,8 @@ test('the setup survives a reload, and the in-flight capture id is not on the de
   await page.keyboard.press('b')
   await page.getByRole('button', { name: /^Epics/ }).click()
   await page.keyboard.press('h')
-  await page.getByLabel('Set hint').fill('MEG')
-  await page.getByLabel('Set hint').press('Enter')
+  await page.getByLabel(/set hint/i).fill('MEG')
+  await page.getByLabel(/set hint/i).press('Enter')
 
   /* A RELOAD IS WHAT THIS CAN TEST DIRECTLY, and it is a real one: the whole screen is torn
      down and every value comes back through `storedCaptureSetup` on a fresh mount. It is
@@ -1123,7 +1124,7 @@ test('the setup survives a reload, and the in-flight capture id is not on the de
   await expect(finishRow(page)).toBeVisible()
 
   await expect(page.locator('.capture-row').filter({ hasText: /Box/ })).toContainText('Epics')
-  await expect(page.locator('.capture-row').filter({ hasText: /Set hint/ })).toContainText('MEG')
+  await expect(page.locator('.capture-row').filter({ hasText: /set hint/i })).toContainText('MEG')
   expect(await storedSetup(page)).toMatchObject({ box: 3, setHint: 'MEG' })
 
   /* AND `captureId` IS NOWHERE ON THE DEVICE, which is the half a reload cannot show by
@@ -1374,7 +1375,7 @@ test('clearing the setup empties every claim, forgets the key, and can be undone
   await page.getByRole('alertdialog').getByRole('button', { name: 'Clear' }).click()
 
   await expect(page.locator('.capture-box-val')).toContainText('None')
-  await expect(page.locator('.capture-row').filter({ hasText: /Set hint/ })).toContainText('None')
+  await expect(page.locator('.capture-row').filter({ hasText: /set hint/i })).toContainText('None')
   await expect(finishRow(page)).toContainText('None')
 
   /* THE GAME GOES TO THE REGISTRY'S DEFAULT, not to null. A null game draws the blocked
@@ -1397,7 +1398,7 @@ test('clearing the setup empties every claim, forgets the key, and can be undone
   await receipt.getByRole('button', { name: 'Undo' }).click()
 
   await expect(page.locator('.capture-row').filter({ hasText: /Box/ })).toContainText('Epics')
-  await expect(page.locator('.capture-row').filter({ hasText: /Set hint/ })).toContainText('MEG')
+  await expect(page.locator('.capture-row').filter({ hasText: /set hint/i })).toContainText('MEG')
   expect(await storedSetup(page)).toMatchObject({ box: 3, setHint: 'MEG', finish: ['normal'] })
 })
 
@@ -1406,7 +1407,7 @@ test('Clear asks first: cancel and Esc change nothing, confirm and Enter clear',
 }) => {
   await open(page, { box: 3, bid: 23, setHint: 'MEG', finish: ['normal'] }, GAMES, HAND_BOXES)
   const dialog = page.getByRole('alertdialog')
-  const hintRow = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+  const hintRow = page.locator('.capture-row').filter({ hasText: /set hint/i })
 
   // The sentence moved into the confirmation; nothing is written under the button.
   await expect(page.locator('.capture-clear')).not.toContainText('Resets the box')
@@ -1443,7 +1444,7 @@ test('a held Enter that opened the Clear sheet does not confirm it', async ({ pa
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', repeat: true, bubbles: true, cancelable: true })),
   )
   await expect(dialog).toBeVisible()
-  await expect(page.locator('.capture-row').filter({ hasText: /Set hint/ })).toContainText('MEG')
+  await expect(page.locator('.capture-row').filter({ hasText: /set hint/i })).toContainText('MEG')
 })
 
 test('the clear is disabled while there is nothing to clear, rather than absent', async ({
@@ -1500,7 +1501,7 @@ test('a game whose export needs a set hint says so, in all three states of the f
      THE HEAD'S OWN META READS `Needed` NOW, NOT `Needed for this game` (TXT-33, density):
      the closed row a few pixels away already says `Needed`, and the open head's meta had no
      other job than repeating it in more words. */
-  await expect(page.locator('.capture-open').filter({ hasText: /Set hint/ })).toContainText(
+  await expect(page.locator('.capture-open').filter({ hasText: /set hint/i })).toContainText(
     'Needed',
   )
   await expect(hintMeta(page)).toHaveText(/needed/i)
@@ -1518,7 +1519,7 @@ test('a game whose export needs a set hint says so, in all three states of the f
      chevron on top of it. The value now states the requirement directly and carries no
      sub-line for this state at all. */
   await page.keyboard.press('Escape')
-  const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+  const row = page.locator('.capture-row').filter({ hasText: /set hint/i })
   await expect(row).not.toContainText('None')
   await expect(row.locator('.capture-val')).toHaveText('Needed')
   await expect(row.locator('.capture-sub')).toHaveCount(0)
@@ -1551,12 +1552,12 @@ test('a set hint that names no set never clips its sub-line, at every width this
   await open(page, { box: 3, bid: 23 }, NEEDS_HINT, HAND_BOXES)
   await page.keyboard.press('h')
 
-  const hint = page.getByLabel('Set hint')
+  const hint = page.getByLabel(/set hint/i)
   await hint.fill('Spiritfoged')
   await expect(hintMeta(page)).toHaveText(/names no set/i)
 
   await page.keyboard.press('Escape')
-  const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+  const row = page.locator('.capture-row').filter({ hasText: /set hint/i })
   await expect(row).toContainText('Spiritfoged')
   const sub = row.locator('.capture-sub')
   await expect(sub).toHaveText(/names no set/i)
@@ -1627,7 +1628,7 @@ test('the same blank field on a game that needs no hint reads Optional, and is n
   await open(page, { box: 3, bid: 23 }, GAMES, HAND_BOXES)
   await page.keyboard.press('h')
 
-  await expect(page.locator('.capture-open').filter({ hasText: /Set hint/ })).toContainText(
+  await expect(page.locator('.capture-open').filter({ hasText: /set hint/i })).toContainText(
     'Optional',
   )
   await expect(hintMeta(page)).toHaveText(/no hint/i)
@@ -1635,7 +1636,7 @@ test('the same blank field on a game that needs no hint reads Optional, and is n
   await expect(hintNote(page)).not.toContainText('needs one')
 
   await page.keyboard.press('Escape')
-  const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+  const row = page.locator('.capture-row').filter({ hasText: /set hint/i })
   await expect(row.locator('.capture-sub')).toHaveCount(0)
 })
 
@@ -1719,7 +1720,7 @@ test('the shutter keeps one fixed position whatever field opens above it (D118)'
 
   const fields: readonly { key: string; label: string | RegExp }[] = [
     { key: 'b', label: 'Box' },
-    { key: 'h', label: 'Set hint' },
+    { key: 'h', label: /set hint/i },
     { key: 'r', label: 'Rarity' },
     { key: 'f', label: 'Finish' },
     { key: 'g', label: 'Game' },
@@ -1872,4 +1873,33 @@ test('the stage panel hugs the portrait frame: no dead side bands', async ({ pag
       expect(scrollW, `no sideways scroll at ${width}`).toBeLessThanOrEqual(width)
     }
   }
+})
+
+/* ux-w2 B2 (D211). Asserts that with no box chosen, the Setup panel does not repeat the stage's Camera control
+   or the Shooting group's Box select. The sentence that says why stays. Add divider stays where it is. */
+test('ux-w2 B2: with no box chosen, the Setup panel repeats neither the Camera control nor the Box select', async ({ page }) => {
+  await open(page)
+  const setup = page.getByRole('group', { name: /^setup$/i })
+  await expect(setup, 'the Setup panel is drawn, so the absences below are not vacuous').toBeVisible()
+  await expect(setup.getByRole('button', { name: /^camera$/i }), 'no Camera control in Setup').toHaveCount(0)
+  await expect(setup.getByRole('button', { name: /^box$/i }), 'no Box select in Setup').toHaveCount(0)
+  await expect(setup, 'the sentence that says why is kept').toContainText(/box/i)
+})
+
+/* ux-wave1 B1. With no box picked, Capture is off, and the button alone does not say why. The reason must
+   be tied to the disabled button: the button's own aria-describedby must resolve to text that names the
+   box. A reason that sits elsewhere on the screen (the Box field's own line, for one) does not count. */
+test('ux-wave1: with no box chosen, the disabled Capture button is described by a reason that names the box', async ({ page }) => {
+  await open(page)
+  const shutter = page.locator('.capture-shutter')
+  await expect(shutter).toBeVisible()
+  await expect(shutter).toBeDisabled()
+  const described = await shutter.evaluate((btn) =>
+    (btn.getAttribute('aria-describedby') ?? '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent?.trim() ?? ''),
+  )
+  expect(described.length, 'the disabled Capture button has an aria-describedby reason').toBeGreaterThan(0)
+  expect(described.some((text) => /box/i.test(text)), `the described reason names the box (reads ${JSON.stringify(described)})`).toBe(true)
 })

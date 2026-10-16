@@ -36,7 +36,7 @@ say()  { printf '  %-6s %s\n' "$1" "$2"; }
 ok()   { pass=$((pass + 1)); say "ok" "$1"; }
 bad()  { fail=$((fail + 1)); say "FAIL" "$1"; }
 
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/pkmnscan-worktree-provision.XXXXXX")" || { echo "cannot make a temp dir"; exit 1; }
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/banchi-worktree-provision.XXXXXX")" || { echo "cannot make a temp dir"; exit 1; }
 trap 'rm -rf "$tmp"' EXIT
 
 # A stub `npm`, so the SLOW PATH is provable without a network install.
@@ -123,8 +123,8 @@ if grep -q "cloned app/node_modules" "$tmp/out.log"; then
 else
   bad "fast path did not announce the clone"
 fi
-if [ -f "$tmp/wt/app/node_modules/.pkmnscan-lock" ] \
-   && [ "$(cat "$tmp/wt/app/node_modules/.pkmnscan-lock")" = "$(lock_digest "$tmp/wt/app/package-lock.json")" ]; then
+if [ -f "$tmp/wt/app/node_modules/.banchi-lock" ] \
+   && [ "$(cat "$tmp/wt/app/node_modules/.banchi-lock")" = "$(lock_digest "$tmp/wt/app/package-lock.json")" ]; then
   ok "fast path writes a receipt matching the lockfile digest"
 else
   bad "fast path did not write a matching receipt"
@@ -140,7 +140,7 @@ fi
 fresh_fixture differ
 : > "$tmp/npm.log"
 run_provision
-wait_for "$tmp/wt/app/node_modules/.pkmnscan-lock" || true
+wait_for "$tmp/wt/app/node_modules/.banchi-lock" || true
 if [ -f "$tmp/wt/app/node_modules/left-pad.js" ]; then
   ok "slow path installs when the lockfiles differ"
 else
@@ -161,8 +161,8 @@ if [ -f "$tmp/wt/.serve/npm-install.log" ]; then
 else
   bad "slow path left no log under .serve/"
 fi
-if [ -f "$tmp/wt/app/node_modules/.pkmnscan-lock" ] \
-   && [ "$(cat "$tmp/wt/app/node_modules/.pkmnscan-lock")" = "$(lock_digest "$tmp/wt/app/package-lock.json")" ]; then
+if [ -f "$tmp/wt/app/node_modules/.banchi-lock" ] \
+   && [ "$(cat "$tmp/wt/app/node_modules/.banchi-lock")" = "$(lock_digest "$tmp/wt/app/package-lock.json")" ]; then
   ok "slow path writes a receipt once the background install finishes"
 else
   bad "slow path did not write a receipt after installing"
@@ -172,7 +172,7 @@ fi
 
 fresh_fixture same
 run_provision                                  # first pass: provisions
-wait_for "$tmp/wt/app/node_modules/.pkmnscan-lock" || true
+wait_for "$tmp/wt/app/node_modules/.banchi-lock" || true
 : > "$tmp/npm.log"
 before="$(find "$tmp/wt/app/node_modules" -type f | sort)"
 run_provision                                  # second pass: should do nothing
@@ -187,13 +187,13 @@ fi
 
 fresh_fixture same
 run_provision                                  # provisions, receipt for the ORIGINAL lockfile
-wait_for "$tmp/wt/app/node_modules/.pkmnscan-lock" || true
+wait_for "$tmp/wt/app/node_modules/.banchi-lock" || true
 echo '{"name":"a","lockfileVersion":3,"bumped":true}' > "$tmp/wt/app/package-lock.json"
 cp "$tmp/wt/app/package-lock.json" "$tmp/main/app/package-lock.json"    # main moved too
 : > "$tmp/npm.log"
 run_provision
-if [ -f "$tmp/wt/app/node_modules/.pkmnscan-lock" ] \
-   && [ "$(cat "$tmp/wt/app/node_modules/.pkmnscan-lock")" = "$(lock_digest "$tmp/wt/app/package-lock.json")" ]; then
+if [ -f "$tmp/wt/app/node_modules/.banchi-lock" ] \
+   && [ "$(cat "$tmp/wt/app/node_modules/.banchi-lock")" = "$(lock_digest "$tmp/wt/app/package-lock.json")" ]; then
   ok "a lockfile bump after provisioning is caught and re-provisioned"
 else
   bad "a lockfile bump after provisioning went undetected"
@@ -228,7 +228,7 @@ git init -q "$tmp/main"
 echo '{"name":"a","lockfileVersion":3}' > "$tmp/main/app/package-lock.json"
 echo 'module.exports = 1;' > "$tmp/main/app/node_modules/acorn.js"
 echo 'REAL DATA — must survive a self-invocation' > "$tmp/main/app/node_modules/real-marker.txt"
-printf '%064d\n' 0 > "$tmp/main/app/node_modules/.pkmnscan-lock"
+printf '%064d\n' 0 > "$tmp/main/app/node_modules/.banchi-lock"
 install_serve_deps "$tmp/main"
 : > "$tmp/npm.log"
 ( cd "$tmp/main" && PATH="$tmp/bin:$PATH" STUB_LOG="$tmp/npm.log" bash "$SCRIPT" "$tmp/main" \
@@ -270,17 +270,17 @@ fi
 # or a clone would write a receipt in THIS worktree that lies about what got installed.
 
 fresh_fixture same
-printf '%064d\n' 0 > "$tmp/main/app/node_modules/.pkmnscan-lock"     # a receipt for NOTHING main's lockfile is now
+printf '%064d\n' 0 > "$tmp/main/app/node_modules/.banchi-lock"     # a receipt for NOTHING main's lockfile is now
 : > "$tmp/npm.log"
 run_provision
-wait_for "$tmp/wt/app/node_modules/.pkmnscan-lock" || true
+wait_for "$tmp/wt/app/node_modules/.banchi-lock" || true
 if [ -f "$tmp/wt/app/node_modules/left-pad.js" ] && [ ! -f "$tmp/wt/app/node_modules/acorn.js" ]; then
   ok "a stale main install is never cloned — the slow path runs instead"
 else
   bad "a stale main install was cloned anyway (the fast path trusted a stale main)"
 fi
-if [ -f "$tmp/wt/app/node_modules/.pkmnscan-lock" ] \
-   && [ "$(cat "$tmp/wt/app/node_modules/.pkmnscan-lock")" = "$(lock_digest "$tmp/wt/app/package-lock.json")" ]; then
+if [ -f "$tmp/wt/app/node_modules/.banchi-lock" ] \
+   && [ "$(cat "$tmp/wt/app/node_modules/.banchi-lock")" = "$(lock_digest "$tmp/wt/app/package-lock.json")" ]; then
   ok "this worktree still ends up with a receipt matching its OWN lockfile"
 else
   bad "this worktree did not end up with a correct receipt"
@@ -315,7 +315,7 @@ race1=$!
 race2=$!
 wait "$race1" 2>/dev/null
 wait "$race2" 2>/dev/null
-wait_for "$tmp/wt/app/node_modules/.pkmnscan-lock" || true
+wait_for "$tmp/wt/app/node_modules/.banchi-lock" || true
 ran_count="$(grep -c '^ran$' "$tmp/npm.log" 2>/dev/null || echo 0)"
 if [ "$ran_count" -eq 1 ]; then
   ok "two concurrent runs launch only one npm ci"
@@ -351,7 +351,7 @@ child = serve.Child("npm-install", "npm-install.pid", "npm-install.log")
 serve.write_pidfile(child, int(sys.argv[2]), ["npm", "--prefix", sys.argv[3], "ci"], root=Path(sys.argv[1]))
 PY
 run_provision
-wait_for "$tmp/wt/app/node_modules/.pkmnscan-lock" || true
+wait_for "$tmp/wt/app/node_modules/.banchi-lock" || true
 kill "$unrelated_pid" 2>/dev/null
 if [ -f "$tmp/wt/app/node_modules/left-pad.js" ]; then
   ok "a lock naming a live but UNRELATED process (recycled pid) is reclaimed, not trusted"
@@ -380,7 +380,7 @@ chmod +x "$tmp/bin/npm"
 ( cd "$tmp/wt" && PATH="$tmp/bin:$PATH" STUB_LOG="$tmp/npm.log" bash "$SCRIPT" --foreground "$tmp/main" \
     >"$tmp/out-fg.log" 2>&1 )
 if [ -f "$tmp/wt/app/node_modules/left-pad.js" ] \
-   && [ "$(cat "$tmp/wt/app/node_modules/.pkmnscan-lock" 2>/dev/null)" = "$(lock_digest "$tmp/wt/app/package-lock.json")" ] \
+   && [ "$(cat "$tmp/wt/app/node_modules/.banchi-lock" 2>/dev/null)" = "$(lock_digest "$tmp/wt/app/package-lock.json")" ] \
    && [ ! -d "$tmp/wt/.serve/npm-install.lock" ]; then
   ok "--foreground: npm ci finished, receipt written and lock released before return"
 else

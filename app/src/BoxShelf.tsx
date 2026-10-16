@@ -757,10 +757,10 @@ function LiftBar({
   const after = total - lifted.section
   const count = movingCount(source, range.first, range.last)
   const cardMode = lifted.scope === 'cards'
-  const scopes: { value: Scope; label: string }[] = [{ value: 'one', label: 'This section' }]
-  if (after > 0) scopes.push({ value: 'after', label: after === 1 ? 'This and the next' : `This and the ${after} after it` })
-  if (total > 1) scopes.push({ value: 'all', label: 'The whole box' })
-  if (canPickCards) scopes.push({ value: 'cards', label: 'Some cards' })
+  const scopes: { value: Scope; label: string }[] = [{ value: 'one', label: 'This Section' }]
+  if (after > 0) scopes.push({ value: 'after', label: after === 1 ? 'This and the Next' : `This and the ${after} After It` })
+  if (total > 1) scopes.push({ value: 'all', label: 'The Whole Box' })
+  if (canPickCards) scopes.push({ value: 'cards', label: 'Some Cards' })
   const others = destinations.filter((r) => r.box !== source.box)
   const what = cardMode ? chosenName || 'No card picked' : lifted.scope === 'all' ? boxName(source) : name
   const sourceChanged = cardMode && dirtied.has(source.box)
@@ -809,13 +809,15 @@ function LiftBar({
             title={sourceChanged ? 'Already changed in this draft' : undefined}
             onClick={() => onDest(source.box)}
           >
-            Another place in {boxName(source)}
+            <span>
+              Another Place in <span data-typed>{boxName(source)}</span>
+            </span>
             {sourceChanged ? ' (already changed)' : ''}
           </Button>
         ) : null}
         {cardMode ? null : (
           <Button variant={dest === 'new' ? 'primary' : 'default'} aria-pressed={dest === 'new'} icon="plus" onClick={() => onDest('new')}>
-            New box
+            New Box
           </Button>
         )}
         <Button variant="quiet" onClick={onCancel} kbd="Esc">
@@ -934,9 +936,9 @@ function BoxRow({
 }) {
   if (record === null) {
     return (
-      <section className="shelf-box" aria-label="New box">
+      <section className="shelf-box" aria-label="New Box">
         <header className="shelf-box-head">
-          <h2 className="shelf-box-name">New box</h2>
+          <h2 className="shelf-box-name">New Box</h2>
           <span className="shelf-box-count">Empty</span>
         </header>
         <div className="shelf-box-body">{gaps ? <Gap gaps={gaps} id="end" where="into a new box" /> : null}</div>
@@ -976,7 +978,7 @@ function BoxRow({
               click that did not drag answers in the verdict line. The arrow beside it is the picker too. */}
           <IconButton
             icon="grip"
-            label="Drag section"
+            label="Drag Section"
             name={`Drag section ${sectionName(d)} of ${boxName(record)}. Press Enter to choose a box.`}
             className="shelf-grip"
             disabled={busy}
@@ -989,8 +991,8 @@ function BoxRow({
           />
           <IconButton
             icon="arrowRight"
-            label="Move section"
-            name={`Move section ${sectionName(d)} of ${boxName(record)}`}
+            label="Move Section"
+            name={`Move section ${sectionName(d)} of ${boxName(record)}. Press to choose a box.`}
             pressed={lifted != null && lifted.box === record.box && lifted.section === d.section}
             disabled={busy}
             onClick={() => onLift(d.section)}
@@ -1007,7 +1009,7 @@ function BoxRow({
       data-drop={dragging?.target?.box === record.box ? 'true' : undefined}
     >
       <header className="shelf-box-head">
-        <h2 className="shelf-box-name">{boxName(record)}</h2>
+        <h2 className="shelf-box-name" data-typed>{boxName(record)}</h2>
         <span className="shelf-box-count">{cards(record.on_hand)}</span>
       </header>
       <ol className="shelf-box-body">

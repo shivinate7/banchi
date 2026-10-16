@@ -138,7 +138,7 @@ export class MotionTrace {
          column as brightness would read a v2 trace as a rig with no light in it.
          `scripts/score-trace.py` branches on this field. */
       version: 2,
-      kind: 'pkmnscan-motion-trace',
+      kind: 'banchi-motion-trace',
       /* SINCE D144. Absent in every trace recorded before it, which the scorer reads as
          `motion` — the only machine there was. */
       trigger: this.trigger,

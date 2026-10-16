@@ -42,7 +42,7 @@ fail=0
 
 [ -f "$GUARD" ] || { echo "no silent-write-guard.py beside this script"; exit 1; }
 
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/pkmnscan-silent.XXXXXX")" || { echo "cannot make a temp dir"; exit 1; }
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/banchi-silent.XXXXXX")" || { echo "cannot make a temp dir"; exit 1; }
 cleanup() { rm -rf "$tmp"; return 0; }
 trap cleanup EXIT
 
@@ -180,7 +180,7 @@ fi
 # went where is one a session argues with instead of learning from.
 judge "$INCIDENT"
 case "$out" in
-  *"PKMNSCAN_SILENT"*) bad "the refusal names the switch to an agent" ;;
+  *"BANCHI_SILENT"*) bad "the refusal names the switch to an agent" ;;
   *"owner-only: ask the owner"*) ok "the refusal is owner-only and names no switch" ;;
   *) bad "the refusal carries no owner-only line" ;;
 esac
@@ -258,7 +258,7 @@ refuses "\`make merge\`, both halves of D42's operation" \
 refuses "\`gh pr merge\`"                              "gh pr merge 300 --squash >/dev/null 2>&1"
 refuses "a write buried mid-script"                   "git status; git commit -m x 2>/dev/null; echo done"
 refuses "a write behind a \`cd\` and an \`&&\`"         "cd /x && git commit -m x >/dev/null 2>&1 && git push"
-refuses "an env prefix does not launder it"           "PKMNSCAN_MAIN=off git commit -m x >/dev/null 2>&1"
+refuses "an env prefix does not launder it"           "BANCHI_MAIN=off git commit -m x >/dev/null 2>&1"
 refuses "a line continuation does not launder it"     "git commit \\
   -m x \\
   >/dev/null 2>&1"
@@ -349,15 +349,15 @@ case "$out" in *"| tail -40"*) ok "and a git write, which does NOT block, still 
   *) bad "the ordinary advice was lost — a git write does not block and the pipe is right for it" ;; esac
 
 echo ""
-echo "  the escape hatch, in both of PKMNSCAN_KILL's two forms"
+echo "  the escape hatch, in both of BANCHI_KILL's two forms"
 
-allows "inline in the command"  "PKMNSCAN_SILENT=off git commit -m x >/dev/null 2>&1"
-refuses "a mere mention does not lift it" "echo PKMNSCAN_SILENT=off; git commit -m x >/dev/null 2>&1"
+allows "inline in the command"  "BANCHI_SILENT=off git commit -m x >/dev/null 2>&1"
+refuses "a mere mention does not lift it" "echo BANCHI_SILENT=off; git commit -m x >/dev/null 2>&1"
 
 out="$(printf '%s' "git commit -m x >/dev/null 2>&1" \
       | python3 -c 'import json,sys; print(json.dumps({"tool_input":{"command":sys.stdin.read()}}))' \
-      | PKMNSCAN_SILENT=off python3 "$GUARD" --hook 2>&1)"
-if [ $? -eq 0 ]; then ok "in the environment"; else bad "PKMNSCAN_SILENT=off in the environment did not disarm it"; fi
+      | BANCHI_SILENT=off python3 "$GUARD" --hook 2>&1)"
+if [ $? -eq 0 ]; then ok "in the environment"; else bad "BANCHI_SILENT=off in the environment did not disarm it"; fi
 
 echo ""
 echo "  a broken guard fails OPEN (reap.py's asymmetry, honoured)"
@@ -386,17 +386,17 @@ echo "  the refusal log"
 . "$LIBDIR/refusal-log-assert.sh"
 rl="$tmp/refusals.log"
 rl_payload='{"session_id":"sess-1","cwd":"'"$tmp"'","tool_input":{"command":"git commit -m x >/dev/null 2>&1"}}'
-rl_out="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$rl" python3 "$GUARD" --hook 2>&1)"; rl_status=$?
+rl_out="$(printf '%s' "$rl_payload" | BANCHI_REFUSAL_LOG="$rl" python3 "$GUARD" --hook 2>&1)"; rl_status=$?
 [ $rl_status -eq 2 ] && ok "a refused command still exits 2" || bad "the logged refusal exited $rl_status"
 why="$(refusal_line_ok "$rl" "silent-write-guard:silent" "sess-1")" && ok "…and writes one well-formed line" || bad "the refusal log line: $why"
-rl_bad="$(printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" python3 "$GUARD" --hook 2>&1)"; rl_bad_status=$?
+rl_bad="$(printf '%s' "$rl_payload" | BANCHI_REFUSAL_LOG="$tmp/no/such/dir/log" python3 "$GUARD" --hook 2>&1)"; rl_bad_status=$?
 if [ $rl_bad_status -eq 2 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
 else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
 
 echo ""
-echo "  PKMNSCAN_SILENT_WRITE_ONLY: a list of clauses (file, bash-c), for a hook set that has the shared guard"
+echo "  BANCHI_SILENT_WRITE_ONLY: a list of clauses (file, bash-c), for a hook set that has the shared guard"
 
-# judge_env <value> <command>: judge with PKMNSCAN_SILENT_WRITE_ONLY=<value>, or unset when <value> is "-".
+# judge_env <value> <command>: judge with BANCHI_SILENT_WRITE_ONLY=<value>, or unset when <value> is "-".
 # $? is the hook's exit code; the refusal log line lands in $sw_log.
 sw_log="$tmp/sw-refusals.log"
 judge_env() {
@@ -404,9 +404,9 @@ judge_env() {
   payload="$(printf '%s' "$2" | python3 -c 'import json,sys; print(json.dumps({"session_id":"sess-sw","cwd":sys.argv[1],"tool_input":{"command":sys.stdin.read()}}))' "$tmp")"
   : > "$sw_log"
   if [ "$1" = "-" ]; then
-    out="$(printf '%s' "$payload" | env -u PKMNSCAN_SILENT_WRITE_ONLY PKMNSCAN_REFUSAL_LOG="$sw_log" python3 "$GUARD" --hook 2>&1)"
+    out="$(printf '%s' "$payload" | env -u BANCHI_SILENT_WRITE_ONLY BANCHI_REFUSAL_LOG="$sw_log" python3 "$GUARD" --hook 2>&1)"
   else
-    out="$(printf '%s' "$payload" | PKMNSCAN_SILENT_WRITE_ONLY="$1" PKMNSCAN_REFUSAL_LOG="$sw_log" python3 "$GUARD" --hook 2>&1)"
+    out="$(printf '%s' "$payload" | BANCHI_SILENT_WRITE_ONLY="$1" BANCHI_REFUSAL_LOG="$sw_log" python3 "$GUARD" --hook 2>&1)"
   fi
   return $?
 }
@@ -427,7 +427,7 @@ why="$(refusal_line_ok "$sw_log" "silent-write-guard:silent" "sess-sw")" && ok "
 judge_env bogus "git commit -m x >/dev/null 2>&1"
 status=$?
 if [ $status -eq 2 ]; then ok "unknown value: the full check runs (/dev/null refused)"; else bad "unknown value: the full check did not run (exit $status)"; fi
-n="$(printf '%s\n' "$out" | grep -c 'PKMNSCAN_SILENT_WRITE_ONLY')"
+n="$(printf '%s\n' "$out" | grep -c 'BANCHI_SILENT_WRITE_ONLY')"
 if [ "$n" -eq 1 ]; then ok "…and prints one warning line"; else bad "unknown value: expected one warning line, saw $n"; fi
 judge_env bogus "git status"
 if [ $? -eq 0 ]; then ok "unknown value never exits non-zero over configuration"; else bad "unknown value on a clean command exited non-zero"; fi
@@ -451,7 +451,7 @@ if [ $? -eq 0 ]; then ok "file alone: the bash -c /dev/null case is allowed"; el
 judge_env file,bogus "git commit -m x >/dev/null 2>&1"
 status=$?
 if [ $status -eq 2 ]; then ok "file,bogus: the full check runs (/dev/null refused)"; else bad "file,bogus: the full check did not run (exit $status)"; fi
-n="$(printf '%s\n' "$out" | grep -c 'PKMNSCAN_SILENT_WRITE_ONLY')"
+n="$(printf '%s\n' "$out" | grep -c 'BANCHI_SILENT_WRITE_ONLY')"
 if [ "$n" -eq 1 ]; then ok "...and warns once"; else bad "file,bogus: expected one warning line, saw $n"; fi
 judge_env - "$bc_null"
 if [ $? -eq 2 ]; then ok "unset: the full check runs (bash -c /dev/null refused)"; else bad "unset: the full check did not run"; fi

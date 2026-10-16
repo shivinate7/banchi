@@ -25,7 +25,7 @@ now make a move a certain link, not a guess:
 
 D145 measured the cost of the old rule on the owner's store. The owner moved 99 cards from box
 1 to box 3. They fell off their run and lost their pricing surface. Only a hand repair,
-`pkmnscan rescue`, brought them back.
+`banchi rescue`, brought them back.
 
 ### What D145 protected, and what protects it now
 

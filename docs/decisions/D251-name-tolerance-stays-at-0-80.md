@@ -7,7 +7,7 @@ The stored name then takes the catalog's spelling. A name outside it goes to Rev
 both row sets.
 
 **What was measured.** `scripts/d240-tolerance-fit.py --store`, 2026-09-23, on the owner's
-store and the two cached exports. Read-only (`mode=ro&immutable=1`). No `pkmnscan` command.
+store and the two cached exports. Read-only (`mode=ro&immutable=1`). No `banchi` command.
 No network call.
 
 **The labels are real, with one correction.** `cleared_by_human` has two meanings. An answer

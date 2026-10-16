@@ -415,7 +415,7 @@ COMPONENTS = [
                                     "against the file's mtime — and says what it kept, by SKU "
                                     "with both readings (D87 amended). Partitions at the corpus's stored `policy.threshold` (D99).",
                             "governed_by": ["D3", "D7", "D8", "D9", "D11", "D12", "D16", "D25", "D34", "D36", "D86", "D54", "D58", "D59", "D87", "D88", "D99", "D115", "D137", "D170", "D180", "D188", "D189"], "tested_by": ["T4", "T7"]},
-            "cmd_prices.py": {"does": "`pkmnscan prices adopt` folds every run's legacy "
+            "cmd_prices.py": {"does": "`banchi prices adopt` folds every run's legacy "
                                       "decisions.json into the corpus — previews unless given "
                                       "--write, newest-wins, and NAMES the holds a later price "
                                       "replaced rather than counting them — and RETIRES each "
@@ -432,7 +432,7 @@ COMPONENTS = [
             # argument parsing and the preview/--write/show split; the two-source walk itself
             # is `pipeline/readings.py:collect`, proved independently by
             # `make readings-selftest`.
-            "cmd_readings.py": {"does": "`pkmnscan readings adopt` runs `pipeline/readings.py"
+            "cmd_readings.py": {"does": "`banchi readings adopt` runs `pipeline/readings.py"
                                         ":collect` and folds the result into the `readings` "
                                         "table with `Readings.replace()` — a full clear-then"
                                         "-reinsert, on `--write`. Previews by default, on "
@@ -444,7 +444,7 @@ COMPONENTS = [
                                         "the table and writes nothing.",
                                 "governed_by": ["D189", "D86"],
                                 "tested_by": ["T7"]},
-            "cmd_match.py": {"does": "`pkmnscan match status | prepare | audit | --sweep-worker` — the free reader's "
+            "cmd_match.py": {"does": "`banchi match status | prepare | audit | --sweep-worker` — the free reader's "
                                      "setup and the background reader's worker (D2): it reads the "
                                      "queue and exits, writing only `marqo-b` identifications rows. "
                                      "`status` is free. `prepare` downloads the pinned model "
@@ -454,7 +454,7 @@ COMPONENTS = [
                                      "never touches card state, and nothing starts it but the owner's "
                                      "press. `audit [--write]` re-reads filed cards free and queues in-stock disagreements. Progress is `inventory/match-prepare.json`.",
                              "governed_by": ["D2", "D33", "D65", "D88", "D166", "D170", "D301"]},
-            "cmd_boxes.py": {"does": "`pkmnscan boxes names` — the one-time backfill that "
+            "cmd_boxes.py": {"does": "`banchi boxes names` — the one-time backfill that "
                                      "gives every unnamed box the stored name `Box <number>` "
                                      "(`store/master.py:Inventory.box_name_plan`). Previews by "
                                      "default; `--write` plans again inside the store lock and "
@@ -465,7 +465,7 @@ COMPONENTS = [
             # THE BACKFILL PRESS OVER EVERY EXPORT ALREADY ON DISK (identity-follows-sku.md
             # §3.2, lane 0). `store/skus.py`'s never-delete argument means this is a FOLD
             # onto whatever the table already holds, never `readings adopt`'s full replace.
-            "cmd_skus.py": {"does": "`pkmnscan skus adopt` runs `pipeline/skus.py:fill` "
+            "cmd_skus.py": {"does": "`banchi skus adopt` runs `pipeline/skus.py:fill` "
                                     "against an in-memory copy of the table for a preview, "
                                     "or against the real, lock-held snapshot on `--write` — "
                                     "the SAME walk either way, never run twice per "
@@ -474,7 +474,7 @@ COMPONENTS = [
                                     "carries, is deliberately not built unasked.",
                             "governed_by": ["D88", "D189"],
                             "tested_by": []},
-            "cmd_cards.py": {"does": "`pkmnscan cards <name|audit|checks|identity|"
+            "cmd_cards.py": {"does": "`banchi cards <name|audit|checks|identity|"
                                      "contradictions|sku-names|photos|variants>` — the "
                                      "card's stable name (D172) and, since lane 2 of "
                                      "identity-follows-sku.md, its identity. `name` "
@@ -511,8 +511,8 @@ COMPONENTS = [
             # and `_by_sku` stay: `_by_sku`'s own grouping is what proved D242's shape in
             # the first place, kept in case a later session wants it again.
             "cmd_sku_contradictions.py": {
-                "does": "`pkmnscan cards contradictions` — RETIRED. `run` prints a pointer "
-                        "to `pkmnscan cards identity` and exits 0. `_read_only` (read-only, "
+                "does": "`banchi cards contradictions` — RETIRED. `run` prints a pointer "
+                        "to `banchi cards identity` and exits 0. `_read_only` (read-only, "
                         "`store/db.py:open_read_only`, never `db.connect`) and `_by_sku` (every "
                         "card grouped by SKU) stay as helpers; `pipeline/"
                         "sku_number_contradictions.py`'s own resolver is still proved "
@@ -525,8 +525,8 @@ COMPONENTS = [
             # RETIRED INTO `cmd_cards.py:identity` (identity-follows-sku.md §5.5, lane 2,
             # the same ruling as its sibling above).
             "cmd_sku_name_contradictions.py": {
-                "does": "`pkmnscan cards sku-names` — RETIRED. `run` prints a pointer to "
-                        "`pkmnscan cards identity` and exits 0. `pipeline/"
+                "does": "`banchi cards sku-names` — RETIRED. `run` prints a pointer to "
+                        "`banchi cards identity` and exits 0. `pipeline/"
                         "sku_name_contradictions.py`'s own resolver "
                         "(`find_contradictions`) is still proved directly by `scripts/"
                         "sku-name-contradictions-selftest.py`, even though nothing on the "
@@ -534,7 +534,7 @@ COMPONENTS = [
                 "governed_by": ["D23", "D239", "D240", "D242"],
                 "tested_by": [],
             },
-            # THE PRESS `pkmnscan archive sweep` RUNS (D219,
+            # THE PRESS `banchi archive sweep` RUNS (D219,
             # D224, D231, D222).
             # Argument parsing, the network-free preview, the chunked commit-as-you-go
             # write, and the throttle backoff; the walk itself is
@@ -589,11 +589,11 @@ COMPONENTS = [
                                            "PATH GATED and IN `make check` as of D247's "
                                            "seventeenth entry (owner's word, 2026-09-23) "
                                            "— no network, over a throwaway store. Its one "
-                                           "caller, `pkmnscan archive sweep --write` "
+                                           "caller, `banchi archive sweep --write` "
                                            "(`cli/cmd_pricearchive.py`), is the same real, "
                                            "live caller that made `pricearchive-selftest`'s "
                                            "own exemption go stale."},
-            "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
+            "cmd_rescue.py": {"does": "`banchi rescue <run>` re-addresses a STRANDED run's "
                                       "cards to the positions their photographs are at now and "
                                       "derives a SECOND run over the drawer they are actually "
                                       "in, carrying that drawer's `bid` (D145). "
@@ -618,7 +618,7 @@ COMPONENTS = [
                                               "D134", "D145", "D183", "D26",
                                               "D188", "D210"],
                               "tested_by": ["T7"]},
-            "cmd_reprice.py": {"does": "`pkmnscan reprice list` reports which live listings are "
+            "cmd_reprice.py": {"does": "`banchi reprice list` reports which live listings are "
                                         "not selling and writes a WORKLIST with a price already "
                                         "proposed on every row; `reprice apply` reads the "
                                         "operator's edited worklist back and writes the "
@@ -684,11 +684,11 @@ COMPONENTS = [
                                     "CSV row was written. Not match.positions — every terminal "
                                     "copy is committed, and set_state has no terminal guard, so "
                                     "iterating those would resurrect a sold card (D10, D26).",
-                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D86", "D54", "D58",
-                                            "D59", "D88", "D99", "D172", "D174", "D213",
+                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D54", "D58", "D59",
+                                            "D86", "D88", "D99", "D100", "D172", "D174", "D213",
                                             "D243", "D253", "D277"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged; --phantoms lists live copies beyond what is really on hand", "governed_by": ["D7", "D8", "D11", "D86", "D54", "D87", "D273", "D115", "D59", "D100"], "tested_by": ["T7"]},
-            "cmd_queue.py": {"does": "`pkmnscan queue refresh` — re-resolve every OPEN queue "
+            "cmd_queue.py": {"does": "`banchi queue refresh` — re-resolve every OPEN queue "
                                      "entry against a current export, store-wide. Free, "
                                      "re-runnable, previews by default, `--write` applies. "
                                      "`--export` is repeatable and defaults to the exports the "
@@ -832,12 +832,13 @@ COMPONENTS = [
                                     "note": "PROVED BY `make identity-checks-selftest`, "
                                             "PATH GATED and IN `make check` as of D247's "
                                             "nineteenth entry (owner's word, 2026-09-23): "
-                                            "13 arms, including a mutation arm over the "
-                                            "denominator check's dominant-vs-first-seen "
-                                            "choice. Its one caller is the "
-                                            "`cli/cmd_cards.py:checks` CLI subcommand — "
-                                            "`grep -rl identity_checks harness/` names "
-                                            "nothing, so no harness id tests it either."},
+                                            "arms over the four checks, a mutation arm over "
+                                            "the denominator check's dominant-vs-first-seen "
+                                            "choice, and CLI cases through `cmd_cards.run` "
+                                            "(`checks`, `identity`, `photos --limit`). Its "
+                                            "one caller is the `cli/cmd_cards.py:checks` "
+                                            "subcommand — `grep -rl identity_checks "
+                                            "harness/` names nothing."},
             # THE SKU SELF-CONTRADICTION CHECK, KEPT SEPARATE FROM identity_checks.py (a
             # separate, sibling PR) ON THE OWNER'S OWN RULING.
             "sku_number_contradictions.py": {
@@ -864,7 +865,7 @@ COMPONENTS = [
                         "running the ORIGINAL existence-only resolver against a dense-set "
                         "fixture — it wrongly reports SHARED_SKU where the real, "
                         "name-agreement function correctly finds the one misread. Its one "
-                        "caller (`cli/cmd_sku_contradictions.py:run`, `./pkmnscan cards "
+                        "caller (`cli/cmd_sku_contradictions.py:run`, `./banchi cards "
                         "contradictions`) was tested nowhere else.",
             },
             # THE MIRROR: FIXED SKU, DISAGREEING NAME. Kept apart from
@@ -1225,7 +1226,7 @@ COMPONENTS = [
             # THE WALK `server/pipeline_routes.py:_readings()` USED TO RUN ON EVERY REQUEST,
             # MOVED HERE UNCHANGED (D189). `pipeline/` sits below `server/` in this
             # repo's layering, so this is where the two-source arbitration has to live for
-            # `pkmnscan readings adopt` — a CLI command with no server in sight — to reach it.
+            # `banchi readings adopt` — a CLI command with no server in sight — to reach it.
             "readings.py": {"does": "`collect()` — every run's pricing.json and the newest "
                                     "live export, compared on a clock, newest wins. The "
                                     "identical rule `_readings()` always ran, extracted "
@@ -1266,7 +1267,7 @@ COMPONENTS = [
                                 "`pipeline/readings.py:reading_from_export`'s own shape, so "
                                 "a later lane's fetch route can call it on the one file it "
                                 "already has in hand rather than re-walking the whole disk. "
-                                "`fill` is the whole-disk walk `pkmnscan skus adopt` runs. "
+                                "`fill` is the whole-disk walk `banchi skus adopt` runs. "
                                 "Never raises: an unstamped file or one that will not parse "
                                 "costs its own row in `Report.files_skipped`.",
                         "governed_by": ["D63", "D166", "D189"],
@@ -1275,7 +1276,7 @@ COMPONENTS = [
                                 "synthetic ones — a second adopt no-op, an older file "
                                 "refused, a changed fact logged, a source file vanishing "
                                 "from disk changing nothing, an unstamped file skipped."},
-            # THE SWEEP `pkmnscan archive sweep` RUNS (D219,
+            # THE SWEEP `banchi archive sweep` RUNS (D219,
             # D224, D231, D222).
             # Reads `pipeline/pricehistory.py`'s live endpoint for every SKU
             # `rows_from_store` names and hands `store/pricearchive.py` what came back,
@@ -1674,7 +1675,7 @@ COMPONENTS = [
                                         "(D216). `fetch_json` and "
                                         "`Market` take an explicit `user_agent`, defaulting to "
                                         "the unchanged honest string; `server/pipeline_routes.py` "
-                                        "resolves D65's `AGENT_ENV` (`PKMNSCAN_TCG_USER_AGENT`, "
+                                        "resolves D65's `AGENT_ENV` (`BANCHI_TCG_USER_AGENT`, "
                                         "reused rather than a second knob) and passes it in. A "
                                         "403 is now `Blocked`, a sibling of `Unreachable`, and "
                                         "the route answers it as `history_blocked` rather than "
@@ -1718,7 +1719,7 @@ COMPONENTS = [
                                       "library only, because the watcher cannot import the `store` "
                                       "package (about 17 MB). `match.py` takes its names from here.",
                               "governed_by": ["D2", "D43"]},
-            "sweep.py": {"does": "the background reader's watcher (`pkmnscan match --sweep`): a small "
+            "sweep.py": {"does": "the background reader's watcher (`banchi match --sweep`): a small "
                                  "idle process on the standard library and sqlite only. It polls the "
                                  "queue (captured cards with no identifications row, in a served game, "
                                  "never an unhinted Pokemon card, never one already tried) and starts a "
@@ -1851,10 +1852,9 @@ COMPONENTS = [
                 "T7 reaches this package as of 2026-08-13 — the allocator, the lock and "
                 "the atomic replace — and as of 2026-08-22 asserts queues.apply_run "
                 "outright: check_queue_supersede calls it directly rather than watching it "
-                "through a route, which is what earned queues.py its tested_by. cache.py is "
-                "still only read through a session there, with nothing asserting its own "
-                "behavior, so it carries no tested_by: an unenforced claim is the defect "
-                "docs/debts/ names, not a rounding error.",
+                "through a route, which is what earned queues.py its tested_by. cache.py earned "
+                "its own the same way: check_cache_position_key asserts its key and its "
+                "corrupt-record rule directly.",
         "modules": {
             "clock.py": {
                 "does": "the one UTC-second stamp every receipt writes, and the one way to read "
@@ -1917,12 +1917,11 @@ COMPONENTS = [
                                   "or `hold_sku`, or write the `Card` field directly where "
                                   "neither writer can build the fixture's exact state.",
                           "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D22",
-                                          "D23", "D24", "D26", "D28", "D58", "D34", "D36", "D55",
-                                          "D56", "D59", "D63", "D67", "D83", "D87", "D88",
-                                          "D89", "D100", "D115", "D118", "D132", "D145",
-                                          "D164", "D167", "D172", "D173", "D183", "D192", "D213",
-                                          "D253", "D258", "D259", "D264", "D294",
-                                          "D299", "D300"],
+                                          "D23", "D24", "D26", "D28", "D34", "D36", "D55", "D56",
+                                          "D58", "D59", "D63", "D67", "D83", "D87", "D88", "D89",
+                                          "D100", "D115", "D118", "D132", "D145", "D164", "D167",
+                                          "D172", "D173", "D183", "D192", "D213", "D253", "D258",
+                                          "D259", "D264", "D273", "D294", "D299", "D300"],
                                           "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
@@ -1987,7 +1986,8 @@ COMPONENTS = [
                                           "D29", "D36", "D138", "D63", "D69", "D88", "D113",
                                           "D193"],
                           "tested_by": ["T7"]},
-            "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88"]},
+            "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88", "D317"],
+                         "tested_by": ["T7"]},
             # THE ONLY BINDING IN THIS PIPELINE THAT PROTECTS A DOLLAR, and it replaces a BOX
             # number with the cards actually being bought. The box form is wrong in both
             # directions — it refuses two disjoint selections in one drawer (D180's accepted
@@ -2046,7 +2046,7 @@ COMPONENTS = [
             # THE MARKET READING, CACHED (D189). `server/pipeline_routes.py:
             # _readings()` used to walk every run's `pricing.json` and the newest live export
             # on every request; that walk moved to `pipeline/readings.py:collect`, run once by
-            # `pkmnscan readings adopt --write`, and this module is the two tables it fills.
+            # `banchi readings adopt --write`, and this module is the two tables it fills.
             "readings.py": {"does": "the `readings` table (sku -> the newest market reading, "
                                     "one row per SKU) and `readings_sources` beside it (one "
                                     "row per file `collect` read, and how many SKUs it "
@@ -2186,8 +2186,7 @@ COMPONENTS = [
                                   "OUTSIDE `captures/` for `_scopes_root`'s reason: `sidecar.scan` "
                                   "walks recursively and every photograph it finds is a PAID Batch "
                                   "request",
-                          "governed_by": ["D172", "D183", "D26",
-                                          "D43", "D83", "D89"],
+                          "governed_by": ["D3", "D23", "D26", "D43", "D83", "D89", "D172", "D183"],
                           "tested_by": ["T7"]},
         },
     },
@@ -2276,7 +2275,7 @@ COMPONENTS = [
                 "this step reads a decklist — see the D15 "
                 "decision entry. The image mirror piece is documented at "
                 "scripts/catalog-image-mirror.py; its own destination "
-                "(PKMNSCAN_IMAGE_MIRROR, default harness/images/) is outside this directory.",
+                "(BANCHI_IMAGE_MIRROR, default harness/images/) is outside this directory.",
     },
     {
         "path": "scripts/",
@@ -2338,7 +2337,7 @@ COMPONENTS = [
             "githooks/pre-commit": {
                 "does": "the commit gate: fixtures read-only, every staged image outside "
                         "captures/ decoded for a QR and refused on a decode or an unavailable "
-                        "scanner (`PKMNSCAN_QR=off` is the hatch), no "
+                        "scanner (`BANCHI_QR=off` is the hatch), no "
                         "printed code-card layout in the staged diff, no symlink whose target "
                         "leaves the repository (D47 — a tracked absolute link points at "
                         "itself in the tree it names, and checking it out removes the "
@@ -2369,14 +2368,14 @@ COMPONENTS = [
                         "branch's unmerged hooks as the gate for every worktree in the "
                         "clone. It blocks only where armed is behind main AND this tree "
                         "matches main, which is exactly where the `make hooks` it prints is "
-                        "safe to run; the other drift states warn. Bypass PKMNSCAN_HOOKS=off.",
+                        "safe to run; the other drift states warn. Bypass BANCHI_HOOKS=off.",
             },
             "githooks/reference-transaction": {
                 "does": "D42's local half: refuses any move of refs/heads/main from any "
                         "worktree of this clone — commit, fast-forward, merge, rebase, "
                         "reset, `branch -f`, `update-ref`, delete. Allows exactly one thing, "
                         "a move to a commit origin/main already carries, which is what "
-                        "pulling a merged pull request looks like. PKMNSCAN_MAIN=off is the "
+                        "pulling a merged pull request looks like. BANCHI_MAIN=off is the "
                         "visible escape hatch, and every refusal prints it.",
                 # A ref hook rather than a commit hook because the incident that produced it
                 # created no commit: a fast-forward moves a ref and runs no commit hook. D42
@@ -2404,6 +2403,17 @@ COMPONENTS = [
                 # repository.
                 "governed_by": ["D42", "D133"],
                 "note": "Extensionless, unscanned, listed by hand — see the sibling above.",
+            },
+            "githooks/post-checkout": {
+                "does": "provisions a worktree that `git worktree add` just made, by calling "
+                        "scripts/worktree-guard.sh. It runs only when the previous HEAD is all "
+                        "zeros, so a branch switch runs nothing. Covers a worktree made "
+                        "mid-session with `git worktree add`, which SessionStart never sees. "
+                        "A worktree added with --no-checkout, or made by Claude Code itself, "
+                        "gets no run. Fails open.",
+                # It writes, and D18 allows that here: post-checkout cannot stop a commit.
+                "governed_by": ["D18"],
+                "note": "Extensionless, unscanned, listed by hand — see the siblings above.",
             },
             "js-breakpoints.py": {
                 "does": "the pure extraction, IMPORT-GRAPH PAIRING and comparison behind "
@@ -2525,7 +2535,7 @@ COMPONENTS = [
                         "holds, Vite accepts the Host, the capture server answers on the same "
                         "name, and A REAL WRITE IS ACCEPTED FROM THAT ORIGIN. The last row is "
                         "the reason the script exists — reads are ungated and writes are "
-                        "origin-checked (D43), so a `PKMNSCAN_LAN_NAME` missing from `.env` "
+                        "origin-checked (D43), so a `BANCHI_LAN_NAME` missing from `.env` "
                         "leaves every screen rendering and the whole inventory drawing while "
                         "capture, undo, mark-sold and the claim editor all answer 403. Looking "
                         "at the app cannot tell you; only pressing a write can. It presses one "
@@ -2561,7 +2571,7 @@ COMPONENTS = [
                         "the previous bundle byte-identical, the build in flight that answers "
                         "200 throughout, and a PATH with no node on it — the API up, `GET /` "
                         "503, the log naming `make launch-agent`. THE PORT IS PINNED with "
-                        "`PKMNSCAN_PORT` and that is not a shortcut: the first time this ran, a "
+                        "`BANCHI_PORT` and that is not a shortcut: the first time this ran, a "
                         "copied tree claimed :8000 — measured, against the owner's live server. "
                         "A copy with no `.git` now takes a slot (D261), and a "
                         "free socket still cannot collide the way a slot can. "
@@ -2589,7 +2599,7 @@ COMPONENTS = [
                         "tidy up. NOT A REPEAL OF D42: the move is one "
                         "`scripts/githooks/reference-transaction`'s own allow rule 3 has "
                         "always permitted, so this decides WHO RUNS an already-permitted move "
-                        "— and it deliberately does NOT pass `PKMNSCAN_MAIN=off`, so the hook "
+                        "— and it deliberately does NOT pass `BANCHI_MAIN=off`, so the hook "
                         "still judges it. THE FAST-FORWARD TEST IS ITS OWN AND NOT THE HOOK'S: "
                         "rule 3 asks whether the destination is on origin/main and the "
                         "destination IS origin/main, so refs/heads/main must separately be an "
@@ -2600,7 +2610,7 @@ COMPONENTS = [
                         "rebase or merge waits, main held by another worktree names that tree, "
                         "and a detached HEAD no ref contains is left standing. Fails OPEN and "
                         "silent on its own bugs, CLOSED and loud on a fact it cannot read. "
-                        "`PKMNSCAN_SYNC=off` is the hatch, printed on every sync and every "
+                        "`BANCHI_SYNC=off` is the hatch, printed on every sync and every "
                         "refusal — the one hatch here that stops an act rather than "
                         "permitting one.",
                 "governed_by": ["D18", "D42", "D43", "D138", "D158", "D176"],
@@ -2735,7 +2745,7 @@ COMPONENTS = [
             },
             "submission-selftest.py": {
                 "does": "proves the identify claim table by violating it. A throwaway store "
-                        "per case with `PKMNSCAN_HOME` repointed, because the press this guard "
+                        "per case with `BANCHI_HOME` repointed, because the press this guard "
                         "stops costs money and pointing it at the operator's store is the "
                         "incident rather than the test. THE RACE CASE REPRODUCES THE BUG "
                         "BEFORE THE FIX PROVES ANYTHING, which is reap-selftest.sh's rule: two "
@@ -2878,7 +2888,7 @@ COMPONENTS = [
             "identity-cli-selftest.py": {
                 "does": "proves the CLI writers (identity-follows-sku.md §4.2, lane 3b) "
                         "against a real throwaway store and the real CLI dispatch. "
-                        "`pkmnscan join` then `pkmnscan emit` over a store whose skus "
+                        "`banchi join` then `banchi emit` over a store whose skus "
                         "table starts empty: the bind succeeds only because cmd_emit "
                         "upserts the matched export row before calling bind_sku, in the "
                         "same transaction bind_sku's own docstring requires — proof the "
@@ -2889,7 +2899,7 @@ COMPONENTS = [
                         "untouched and writes only read_name/read_number/"
                         "read_printed_total, with read_disputes True on a disputing read, "
                         "False on an agreeing one, None on an unbound card. "
-                        "`pkmnscan join --export` and `pkmnscan reconcile --live` each "
+                        "`banchi join --export` and `banchi reconcile --live` each "
                         "fold EVERY row of the fixture export into the skus table, "
                         "including a SKU no card in the run matched. A two-game merged "
                         "emit (Pokemon plus Riftbound, no --split-games) resolves each "
@@ -2943,7 +2953,7 @@ COMPONENTS = [
                         "PATH GATED, IN `make check` and `make ci-check` as of D247's "
                         "sixteenth entry (owner's word, 2026-09-23) — "
                         "the exemption this note used to state (\"no caller yet reachable "
-                        "from a screen\") went stale under `pkmnscan archive sweep --write` "
+                        "from a screen\") went stale under `banchi archive sweep --write` "
                         "running `pipeline/pricearchive.py` against the owner's real store. "
                         "Also proves the "
                         "sealed-ledger widening and the resume window, mutation-tested: "
@@ -2997,7 +3007,7 @@ COMPONENTS = [
             "price-postings-recovery.py": {
                 "does": "read-only measurement against the owner's real "
                         "inventory/store.sqlite (opened through `store/db.py:open_read_only`, "
-                        "never `store.db.connect`, no `pkmnscan` command run): how much price "
+                        "never `store.db.connect`, no `banchi` command run): how much price "
                         "HISTORY survives before "
                         "`price_postings` existed to record it. Counts `pushed` events and "
                         "how many name a price (always 0 — the payload has no such field). "
@@ -3021,7 +3031,7 @@ COMPONENTS = [
                         "`make check` and "
                         "`make ci-check` as of D247's twenty-second entry (owner's word, "
                         "2026-09-23) — its own caller "
-                        "(`cli/cmd_sku_contradictions.py:run`, `./pkmnscan cards "
+                        "(`cli/cmd_sku_contradictions.py:run`, `./banchi cards "
                         "contradictions`) was tested nowhere else.",
                 "governed_by": ["D23", "D167", "D173", "D234", "D242", "D247"],
             },
@@ -3058,7 +3068,7 @@ COMPONENTS = [
                         "cleared-entry guard, is shown to silently reopen an answered "
                         "entry and lose its first_seen. PATH GATED, IN `make check` and "
                         "`make ci-check` as of D247's seventeenth entry (owner's word, "
-                        "2026-09-23) — this module is called by `pkmnscan archive sweep "
+                        "2026-09-23) — this module is called by `banchi archive sweep "
                         "--write` itself (`cli/cmd_pricearchive.py`), the same real, live "
                         "caller that made `pricearchive-selftest`'s own exemption go "
                         "stale.",
@@ -3066,7 +3076,8 @@ COMPONENTS = [
             },
             "identity-checks-selftest.py": {
                 "does": "proves pipeline/identity_checks.py against literal CardRecord "
-                        "fixtures, no store, no network (D239). One "
+                        "fixtures (D239), and the `identity`, `photos` and `checks` "
+                        "subcommands of cli/cmd_cards.py against a temp store. One "
                         "positive and one negative arm per check, built from the exact "
                         "subjects the cited analysis measured. A case proving the "
                         "denominator and digit-count checks flag a genuine rare print "
@@ -3075,7 +3086,7 @@ COMPONENTS = [
                         "arm: a denominator check comparing against the first-seen value "
                         "instead of the dominant one is shown to blame the wrong card "
                         "before the real function is shown to survive the same fixture. "
-                        "13 assertions. PATH GATED, IN `make check` and `make ci-check` "
+                        "PATH GATED, IN `make check` and `make ci-check` "
                         "as of D247's nineteenth entry (owner's word, 2026-09-23) — the "
                         "sentence that used to sit here (\"already covered by T7's "
                         "harness sweep\") was itself wrong: T7 drives `cli/cmd_cards.py` "
@@ -3199,7 +3210,7 @@ COMPONENTS = [
             },
             "refusal_log.py": {
                 "does": "the one refusal log. Every guard that denies or asks appends one "
-                        "TAB-separated line to `.git/pkmnscan-refusals.log`, beside the hatch "
+                        "TAB-separated line to `.git/banchi-refusals.log`, beside the hatch "
                         "log: time, `guard:rule`, a snippet of at most 80 characters, the "
                         "session id, the checkout. `make status` reads the last 24 hours back "
                         "through `recent`, so a rule can be judged by how often it fires. One "
@@ -3233,7 +3244,7 @@ COMPONENTS = [
                         "short and every exemption is a measured false positive: reads, "
                         "`--dry-run`, `--abort`/`--quit`, a bare `git fetch`, `git merge-tree` "
                         "and `make revert-selftest` all pass. Fails OPEN on its own bugs; "
-                        "`PKMNSCAN_SILENT=off` is the hatch and every refusal prints it.",
+                        "`BANCHI_SILENT=off` is the hatch and every refusal prints it.",
                 # D127 is the guard beside it whose fail-open asymmetry this one honours
                 # unchanged. D42 is the operation it most often protects — a silenced
                 # `make merge` or `git fetch origin main:main` hides that hook's refusal.
@@ -3425,13 +3436,40 @@ COMPONENTS = [
                 "does": "the SessionEnd / WorktreeRemove hook. Stops what a leaving session "
                         "started in a linked worktree and nothing else — the main checkout's "
                         "server is D138's product and is never touched, a tree another session "
-                        "is still standing in is left alone, and the branch and the tree are "
-                        "never touched at all. A supervisor whose tree has just been "
+                        "is still standing in is left alone, and the branch is never touched. "
+                        "On WorktreeRemove it also runs `git worktree remove` without --force, "
+                        "because worktree-create.sh made the tree, then `git branch -d` on its "
+                        "`worktree-*` branch, or `-D` when the branch is already in the local "
+                        "origin/main (no upstream to compare with). A tree with uncommitted work, or one another "
+                        "session stands in (janitor's `IN_USE` exit), stays on disk and the "
+                        "hook exits 1. A supervisor whose tree has just been "
                         "removed is findable only from the process table; that dead-rooted "
                         "read is claude-settings' sweep, which its own SessionEnd hook and "
                         "daily agent run. Fails open on every path.",
                 # D138 is the behaviour it is careful not to break; D18 keeps it off the commit
                 # path, exactly as the SessionStart guard beside it is kept off.
+                "governed_by": ["D18", "D138"],
+            },
+            "worktree-create.sh": {
+                "does": "the WorktreeCreate hook. Makes every Claude Code worktree with a plain "
+                        "`git worktree add` at `.claude/worktrees/<name>` on `worktree-<name>`, "
+                        "cut from a fresh origin/main with --no-track (no shared .git/config write, so parallel "
+                        "Agents do not race on its lock; the branch has no upstream), so githooks/post-checkout provisions it. "
+                        "Claude Code's own creation never fires post-checkout. Prints only the "
+                        "path on stdout; exits non-zero only when git cannot make the tree.",
+                "governed_by": ["D18"],
+            },
+            "worktree-create-selftest.sh": {
+                "does": "`make worktree-create-selftest`: runs worktree-create.sh for four "
+                        "names at once, five rounds, in a throwaway repo with an origin. Every "
+                        "tree and branch must exist and no config.lock may remain. Red on the "
+                        "hook without --no-track.",
+                "governed_by": ["D18"],
+            },
+            "session-teardown-selftest.sh": {
+                "does": "`make session-teardown-selftest`: session-teardown.sh's branch step in "
+                        "a throwaway repo. A worktree-* branch already in the local origin/main "
+                        "is deleted, an unmerged one is kept.",
                 "governed_by": ["D18", "D138"],
             },
             "ignore-check.sh": {"does": "the other half of D47: `git check-ignore` over every path "
@@ -3520,7 +3558,7 @@ COMPONENTS = [
             },
             "port-slots.py": {
                 "does": "the port slot registry's one writer. `claim` records one slot per "
-                        "checkout in `~/.pkmnscan/port-slots.json`, which `server/ports.py` "
+                        "checkout in `~/.banchi/port-slots.json`, which `server/ports.py` "
                         "and `app/devPort.ts` read before the path hash. A claimed slot never "
                         "moves; a new claim starts at the hash slot and steps past a slot "
                         "another checkout claimed or whose port another checkout's server "
@@ -3532,6 +3570,13 @@ COMPONENTS = [
                         "tree's server and that the claim gives each its own slot, and that "
                         "`.claude/launch.json` names the claimed port.",
                 "governed_by": ["D18", "D43", "D122", "D261"],
+            },
+            "ports-machine-selftest.py": {
+                "does": "proves `server/ports.py`'s `machine_dir` (the one-time move of the old "
+                        "machine dir to `~/.banchi`) and `remove_old_agent` (deletes an old "
+                        "launchd plist, never a current one) against a temp HOME. Asserts the "
+                        "real home is untouched. Run by `make port-slots-selftest`.",
+                "governed_by": ["D43", "D94"],
             },
             "set-hint-agreement.py": {
                 "does": "port-agreement.py's shape, one decision over: proves "
@@ -3644,6 +3689,14 @@ COMPONENTS = [
                         "(D280). Shrunk by hand or by "
                         "`make offenders-prune`, which only deletes. Never grown by a tool.",
                 "governed_by": ["D41", "D218", "D280"]},
+            "no-owner-quotes-allow.json": {
+                "does": "the shrinking offender list for `make docs-audit`'s `no owner quotes` row: "
+                        "file -> lane and `marker` -> one marker per occurrence of an owner-quote "
+                        "marker in `docs/`. The row fails on a marker the list does not name, on a "
+                        "stale entry, and on growth over the merge-base with origin/main. Shrunk "
+                        "by a cut pass or by `make offenders-prune`, which only deletes. Never "
+                        "grown by a tool. Its keys are the files that hold a marker, so it cites their ids.",
+                "governed_by": ["D280", "D318", "D100", "D136", "D141", "D287", "D103", "D134", "D145", "D155", "D162", "D164", "D176", "D179", "D213", "D220", "D241", "D242", "D254", "D259", "D260", "D264", "D271", "D272", "D273", "D291", "D293", "D296", "D299", "D300", "D301", "D307"]},
             "ste/ste_lint.py": {
                 "does": "the STE prose check's linter, VENDORED verbatim from $HOME/.claude/"
                         "lint/ste_lint.py (MIT, LICENSE-ste_lint beside it) on 2026-09-19 — a "
@@ -3783,7 +3836,7 @@ COMPONENTS = [
                 # keys are permitted and the promise, made in that entry, that they are named
                 # in the documentation. D94 is why the row says nothing about the PREFIX: the
                 # product is Banchi and everything beneath it keeps its name, so `banchi.*`
-                # and `pkmnscan.*` both stand and a row demanding one of them would be
+                # and `banchi.*` both stand and a row demanding one of them would be
                 # demanding a rename that silently discards what a browser holds under the
                 # old spelling.
                 # D127 JOINS AS A CITED FAILURE, the same shape D70 and D101 already
@@ -3852,7 +3905,7 @@ COMPONENTS = [
                                 "D149", "D155"]},
             "docs_audit/paths_commands.py": {
                 "does": "The rows that read paths, line anchors, `make` targets, the commands roster and "
-                        "`pkmnscan` subcommands out of the markdown.",
+                        "`banchi` subcommands out of the markdown.",
                 "governed_by": ["D60", "D135", "D245", "D248", "D305"]},
             "docs_audit/reasons.py": {
                 "does": "The rows over reason codes and their neighbours: motion params, pricing presets, hint "
@@ -3861,7 +3914,7 @@ COMPONENTS = [
             "docs_audit/records.py": {
                 "does": "The rows over the decision, gate and debt records: decision ids, id claims, numbering "
                         "growth, heading structure and the debts index.",
-                "governed_by": ["D2", "D50", "D60", "D92", "D140", "D149", "D160", "D182"]},
+                "governed_by": ["D2", "D50", "D60", "D92", "D140", "D149", "D160", "D182", "D280"]},
             "docs_audit/registry_scopes.py": {
                 "does": "The rows over the check registry, the commit path, the suite lock, the browser, spec, "
                         "serve and guard scopes, and how callers invoke the audit.",
@@ -3949,7 +4002,7 @@ COMPONENTS = [
             "docs_audit/strings.py": {
                 "does": "The rows over screen strings: mechanism words, the typed interpunct, the offender-list "
                         "ratchet and views opsec.",
-                "governed_by": ["D24", "D41", "D134", "D177", "D196", "D210", "D218", "D280", "D284"]},
+                "governed_by": ["D24", "D41", "D94", "D134", "D177", "D196", "D210", "D218", "D280", "D284"]},
             "catalog-refresh.py": {
                 "does": "build-order step 9, piece 1 (D15): shallow-clone "
                         "PokemonTCG/pokemon-tcg-data, diff it against the committed "
@@ -3997,7 +4050,7 @@ COMPONENTS = [
                         "rate-limited. `--dry-run` HEAD-samples up to 200 images and prints "
                         "the manifest's file count and the byte total extrapolated from the "
                         "sample, writing nothing under the mirror destination "
-                        "(PKMNSCAN_IMAGE_MIRROR, D15's own knob, read the same way "
+                        "(BANCHI_IMAGE_MIRROR, D15's own knob, read the same way "
                         "harness/eval/fixtures.py reads it; default harness/images/). Measured "
                         "2026-09-13: 20,444 files, ~14.18 GB extrapolated. THE BARE FORM HAS "
                         "NEVER BEEN RUN ON THIS CHECKOUT — filling a double-digit-gigabyte "
@@ -4489,7 +4542,7 @@ COMPONENTS = [
                         "its throwaway tree — and three entries beyond it each carry a "
                         "`beyond_carry` sentence. It imports the globbing and the recipe "
                         "narrowing from `browser-scope.py` rather than copying them. "
-                        "`PKMNSCAN_SERVE_SCOPE=all` runs the test regardless.",
+                        "`BANCHI_SERVE_SCOPE=all` runs the test regardless.",
                 "governed_by": ["D18", "D138", "D141"],
                 "note": "THE OWNER RULED THIS ONE IN AND PATH GATING IN GENERAL OUT, "
                         "2026-09-17. `serve-selftest` is 70.1s of `make check`'s 187.5 — 37% "
@@ -4515,7 +4568,7 @@ COMPONENTS = [
                         "`ROSTER` names which targets are gated (`make guard-scope ARGS=list` prints them), on `serve-scope.py`'s "
                         "own precedent of naming its one target by hand. It imports the "
                         "globbing and the recipe narrowing from `browser-scope.py`. "
-                        "`PKMNSCAN_GUARD_SCOPE=all` runs every target regardless.",
+                        "`BANCHI_GUARD_SCOPE=all` runs every target regardless.",
                 "governed_by": ["D18", "D247"],
                 "note": "D247 is the argument: what a "
                         "guard self-test can and cannot catch, why a separate audit found all "
@@ -4610,9 +4663,9 @@ COMPONENTS = [
                         "overtaken in ordinary prose reads as current.",
             },
             "offenders-prune.py": {
-                "does": "`make offenders-prune` — delete the STALE entries from the two "
+                "does": "`make offenders-prune` — delete the STALE entries from the three "
                         "shrinking offender lists (`typed-interpunct-allow.json`, "
-                        "`markdown-spelling-allow.json`), and "
+                        "`markdown-spelling-allow.json`, `no-owner-quotes-allow.json`), and "
                         "re-key a listed file that git's "
                         "rename detection (`git diff -M` from the merge-base with origin/main) "
                         "says moved. Two lists were CUT: `ste-offenders.json` on 2026-09-27 "
@@ -4867,7 +4920,7 @@ COMPONENTS = [
             "suite-lock.py": {
                 "does": "`make design-check`'s doorman, and `make suite-lock-selftest`. ONE "
                         "BROWSER FLEET AT A TIME ON THIS MACHINE: an advisory flock on "
-                        "`~/.pkmnscan/locks/browsers.lock`, taken before the suite runs and "
+                        "`~/.banchi/locks/browsers.lock`, taken before the suite runs and "
                         "released when the process ends. It is the one guard here that may NOT "
                         "live per-checkout — D43 gave every tree its own ports and its own "
                         "store, and the CPU is what it could not copy. Two fleets at once "
@@ -5078,8 +5131,8 @@ COMPONENTS = [
                         "holds, and two run directories in the shape `identify` leaves behind. "
                         "Deterministic from one seeded RNG, so an unchanged tree rebuilds "
                         "byte-identically and CI does not churn the repo. Refuses to run with "
-                        "PKMNSCAN_HOME unset, because that is somebody's real store.",
-                # D13 is the store it writes through; D43 is why PKMNSCAN_HOME is the guard —
+                        "BANCHI_HOME unset, because that is somebody's real store.",
+                # D13 is the store it writes through; D43 is why BANCHI_HOME is the guard —
                 # a checkout's own inventory is the default and seeding over one is the loss
                 # that decision exists to prevent. D86 is the corpus shape and D86 the holds:
                 # a first version wrote a top-level `answers` map that `Corpus.parse` kept as
@@ -5205,7 +5258,7 @@ COMPONENTS = [
                         "candidate exactly as demo-photos.py does (loaded by path and reused, "
                         "not copied). Reads demo-assets/real-facts.json for pinned SKUs, real "
                         "typed prices and real sale facts. Read by demo-seed.py's "
-                        "`add_extra_real_boxes()` ONLY when PKMNSCAN_DEMO_EXTRA_REAL=1 — the "
+                        "`add_extra_real_boxes()` ONLY when BANCHI_DEMO_EXTRA_REAL=1 — the "
                         "default `make demo-seed` never reads this output, so the base build "
                         "stays byte-identical.",
                 # D18: a generator that writes tracked files; not on any hook or gate.
@@ -5237,7 +5290,7 @@ COMPONENTS = [
                         "`capture_server.do_search`, end to end against a throwaway store, "
                         "which is the only way to see the FTS5 candidate-step defect — a "
                         "bare `54/132` or a hyphenated `heimerdinger-inventor` never "
-                        "reaching `_match_rank` at all. `PKMNSCAN_HOME` is repointed to a "
+                        "reaching `_match_rank` at all. `BANCHI_HOME` is repointed to a "
                         "temp directory per case, so the operator's own store is never "
                         "opened. Pure Python plus the project's own packages, no network — "
                         "in `make check`, gated by D18 only because it writes a temp store.",
@@ -5398,9 +5451,9 @@ COMPONENTS = [
                         "is. The main tree keeps :8000 and :5173, and only a tree whose `.git` "
                         "is a DIRECTORY is the main tree; a linked worktree, or a copy with no "
                         "`.git`, gets its own pair from one slot: the slot it claimed in "
-                        "`~/.pkmnscan/port-slots.json` (`scripts/port-slots.py`), else a hash "
+                        "`~/.banchi/port-slots.json` (`scripts/port-slots.py`), else a hash "
                         "of its path. It reads that registry and never writes it. "
-                        "`PKMNSCAN_PORT` overrides and an "
+                        "`BANCHI_PORT` overrides and an "
                         "out-of-range value is ignored rather than obeyed.",
                 # D43 is the decision. D13 is why it matters: one truth on the Mac, and the
                 # store already defaults per-checkout — so a shared port meant one tree's UI
@@ -5579,7 +5632,7 @@ COMPONENTS = [
                         "deliberate hop drops the cookie on a host change. Every anticipated "
                         "failure has its own code: tcg_cookie_missing, tcg_session_expired "
                         "(the redirect AND a login page served as a 200), tcg_blocked (the "
-                        "WAF, naming PKMNSCAN_TCG_USER_AGENT as the remedy), tcg_unavailable, "
+                        "WAF, naming BANCHI_TCG_USER_AGENT as the remedy), tcg_unavailable, "
                         "tcg_unreachable, tcg_not_csv, tcg_export_empty. The cookie is in no "
                         "return value, no message and no run directory, and it is read "
                         "through envfile.get_live rather than envfile.get because a "
@@ -5597,7 +5650,7 @@ COMPONENTS = [
                 "tested_by": ["T7"],
                 "note": "Stdlib only, like the rest of the server: requirements.txt names the "
                         "absence of `requests` on purpose and one more fetch is not a reason "
-                        "to spend it. PKMNSCAN_TCG_EXPORT_URL aims it at a local socket for "
+                        "to spend it. BANCHI_TCG_EXPORT_URL aims it at a local socket for "
                         "T7 and refuses to carry the cookie over plain http anywhere but "
                         "loopback. What T7 CANNOT prove is whether the WAF accepts an "
                         "authenticated request — that is one live fetch by the owner, and "
@@ -5801,8 +5854,8 @@ COMPONENTS = [
                         "projection is proven against T7's fixtures and against nothing off "
                         "the wire. Every refusal stays reachable with no network — the body "
                         "builder and the projections are pure and public for that, and "
-                        "PKMNSCAN_TCG_ORDERS_URL aims it at a loopback socket the way T7 "
-                        "already aims the export. PKMNSCAN_TCG_SELLER_KEY must be in .env or "
+                        "BANCHI_TCG_ORDERS_URL aims it at a loopback socket the way T7 "
+                        "already aims the export. BANCHI_TCG_SELLER_KEY must be in .env or "
                         "a live fetch answers 403.",
             },
             "portal_http.py": {
@@ -5965,9 +6018,9 @@ COMPONENTS = [
                               "governed_by": ["D5", "D13", "D94", "D124"]},
             "public/favicon.svg": {"does": "the tab icon: the Banchi mark at its SMALL optical cut, bluesteel, GENERATED by scripts/build-mark.mjs — the same drawing `kit.Logo` renders below 64px, and a favicon is 16 to 32px. It carries no feTurbulence: section 11 measured the marbling at those sizes and it loses to a flat prism gradient, which is also what removes the question of whether a favicon pipeline would keep the filter. Vite serves app/public/ at the site root, which is why it is addressed as `/favicon.svg`.",
                                    "governed_by": ["D5", "D94", "D102"]},
-            "public/manifest.webmanifest": {"does": "the web app manifest, and it does TWO jobs. It began as an icon manifest — `apple-touch-icon` pointed at an SVG, which iOS does not render, so the app had no home-screen icon at all rather than a degraded one. Since D108 it is also what makes Chrome's `Install page as app` produce a real dock app: `display: standalone`, and `launch_handler: focus-existing` so a second press on the dock icon focuses the open window instead of opening another. EVERY URL IN IT IS RELATIVE, and that is a correctness fix rather than a style: Vite rebases the `<link rel=\"manifest\">` address and copies app/public/ VERBATIM, so a site-absolute `/icon-192.png` is right at `/` and 404s under `make demo-static`'s `/pkmnscan/` base — measured against the published demo, icons and start_url both. ITS ICON LIST IS THE macOS APP ICON SET AND NOTHING ELSE (logo.md section 17): three PNGs, all inset to Apple's 824/1024 grid, because Chrome resizes THESE into the installed app's .icns and one full-bleed entry would pad the dock icon at one size and not the next. `favicon.svg` was removed from it for exactly that reason and is still the tab icon by `<link rel=\"icon\">`. Still NO service worker and no offline story; the page is served by `make up` and there is nothing to cache.",
+            "public/manifest.webmanifest": {"does": "the web app manifest, and it does TWO jobs. It began as an icon manifest — `apple-touch-icon` pointed at an SVG, which iOS does not render, so the app had no home-screen icon at all rather than a degraded one. Since D108 it is also what makes Chrome's `Install page as app` produce a real dock app: `display: standalone`, and `launch_handler: focus-existing` so a second press on the dock icon focuses the open window instead of opening another. EVERY URL IN IT IS RELATIVE, and that is a correctness fix rather than a style: Vite rebases the `<link rel=\"manifest\">` address and copies app/public/ VERBATIM, so a site-absolute `/icon-192.png` is right at `/` and 404s under `make demo-static`'s `/banchi/` base — measured against the published demo, icons and start_url both. ITS ICON LIST IS THE macOS APP ICON SET AND NOTHING ELSE (logo.md section 17): three PNGs, all inset to Apple's 824/1024 grid, because Chrome resizes THESE into the installed app's .icns and one full-bleed entry would pad the dock icon at one size and not the next. `favicon.svg` was removed from it for exactly that reason and is still the tab icon by `<link rel=\"icon\">`. Still NO service worker and no offline story; the page is served by `make up` and there is nothing to cache.",
                                             "governed_by": ["D94", "D102", "D108"]},
-            "public/icon-180.png": {"does": "the apple-touch-icon, and the ONE raster that is NOT inset to the macOS grid (logo.md section 17) — iOS applies its own mask to a full-bleed square, so insetting would put the mark in a box inside a box. The DISPLAY cut because 180px is squarely inside the range section 3 locks for 64px and up — taper and holographic foil, not the favicon's small cut. GENERATED by `node scripts/build-mark.mjs --icons`, which needs Playwright and is deliberately behind a flag: the pre-commit image guard now QR-scans any .png staged outside captures/ (`PKMNSCAN_QR=off` is its hatch) rather than refusing on sight, so a generated icon clears it on a clean decode with no override needed.",
+            "public/icon-180.png": {"does": "the apple-touch-icon, and the ONE raster that is NOT inset to the macOS grid (logo.md section 17) — iOS applies its own mask to a full-bleed square, so insetting would put the mark in a box inside a box. The DISPLAY cut because 180px is squarely inside the range section 3 locks for 64px and up — taper and holographic foil, not the favicon's small cut. GENERATED by `node scripts/build-mark.mjs --icons`, which needs Playwright and is deliberately behind a flag: the pre-commit image guard now QR-scans any .png staged outside captures/ (`BANCHI_QR=off` is its hatch) rather than refusing on sight, so a generated icon clears it on a clean decode with no override needed.",
                                     "governed_by": ["D94", "D102"]},
             "public/icon-192.png": {"does": "the manifest's smallest icon, INSET to Apple's macOS icon grid like the rest of that set (logo.md section 17) — 155 of 192, which is 80.73% against the grid's 80.47%, the rounding. Same drawing and same generator as icon-180.png; what differs is that it is drawn smaller on a transparent canvas, because section 3 locks the tile and nothing may redraw it.",
                                     "governed_by": ["D94", "D102", "D108"]},
@@ -5985,7 +6038,7 @@ COMPONENTS = [
                                    "green, and meaningless. Only a tree whose `.git` is a "
                                    "DIRECTORY keeps 5173; a linked worktree and a copy with "
                                    "no `.git` both take a slot. The slot is the one this "
-                                   "checkout CLAIMED in `~/.pkmnscan/port-slots.json` when "
+                                   "checkout CLAIMED in `~/.banchi/port-slots.json` when "
                                    "there is one, and the path hash when there is not",
                            "governed_by": ["D5", "D13", "D43", "D261"]},
             "checkoutIdentity.ts": {"does": "a reused dev server must name this checkout. "
@@ -5996,7 +6049,7 @@ COMPONENTS = [
                                             "that server names THIS checkout. Two worktrees "
                                             "once shared a port and a design-check passed "
                                             "against the other tree's code. "
-                                            "`PKMNSCAN_CHECKOUT_IDENTITY=off` skips it",
+                                            "`BANCHI_CHECKOUT_IDENTITY=off` skips it",
                                     "governed_by": ["D43", "D261"]},
             "demoSplit.ts": {"does": "the demo build's split of the recorded responses (DEBT84): a "
                                      "Vite plugin loaded only when `VITE_DEMO=1`, writing "
@@ -6614,6 +6667,11 @@ COMPONENTS = [
                                               "D189", "D192", "D193", "D203", "D207", "D213",
                                               "D219", "D225", "D227", "D236", "D252", "D264",
                                               "D261", "D273", "D291", "D298", "D299", "D300", "D301"]},
+            "src/useLeaveWarning.ts": {"does": "ONE HOME OF THE PAGE-UNLOAD GUARD. While typed work is "
+                                               "held that the person has not put anywhere (unsaved "
+                                               "prices on `Pricing.tsx`, a paste on `Orders.tsx`), "
+                                               "leaving the page asks first.",
+                                       "governed_by": ["D168", "D313"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -6765,7 +6823,7 @@ COMPONENTS = [
                                  # D27 and D94 for the two `localStorage` keys this file holds
                                  # and the argument beside them: D27 permits the store only for
                                  # facts about THIS MACHINE, and D94 is what the 2026-09-06
-                                 # rename off the `pkmnscan.` prefix had to be argued against —
+                                 # rename off the `banchi.` prefix had to be argued against —
                                  # the owner overruled it for storage keys specifically, and
                                  # this file carries the whole account of what that cost.
                                  "governed_by": ["D13", "D27", "D94"],
@@ -6928,8 +6986,8 @@ COMPONENTS = [
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D36", "D41", "D56", "D58", "D65", "D67", "D81", "D92", "D117",
                             "D118", "D121", "D128", "D131", "D132", "D142", "D144", "D145", "D153",
-                            "D164", "D170", "D172", "D183", "D196", "D218", "D259", "D260", "D264",
-                            "D271", "D299", "D313", "D316"]},
+                            "D164", "D170", "D172", "D183", "D196", "D211", "D218", "D259", "D260",
+                            "D264", "D271", "D299", "D313", "D316"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -7558,7 +7616,7 @@ COMPONENTS = [
                                  "governed_by": ["D6", "D26", "D28", "D31", "D34", "D67", "D77",
                                                  "D83", "D89", "D97", "D118", "D119", "D134",
                                                  "D172", "D183", "D195", "D218", "D252", "D259",
-                                                 "D313"]},
+                                                 "D301", "D313"]},
             "src/CardHero.css": {"does": "the listing-correction control's own spacing. Everything "
                                          "else it draws with is reused rather than restyled: "
                                          "`kit.css`'s `.bn-panel*` for the panel chrome, "
@@ -7973,8 +8031,8 @@ COMPONENTS = [
                                                "data starts; a fill older than that is listed "
                                                "separately as having no market data at all, "
                                                "never plotted.",
-                                       "governed_by": ["D50", "D278", "D196", "D212", "D218", "D219",
-                                                       "D227"],
+                                       "governed_by": ["D50", "D196", "D212", "D218", "D219",
+                                                       "D227", "D278", "D313"],
                                        "note": "No harness test -- a Playwright spec would be "
                                                "the honest coverage and none exists yet, named "
                                                "rather than silently absent."},
@@ -8199,7 +8257,7 @@ COMPONENTS = [
                                         "only OFFERS to, via a reserved chip; a changed status "
                                         "or hide-unknown toggle retakes immediately. "
                                         "`unnamedBuyerLabel` is the one composer for a nameless "
-                                        "buyer's NAME-slot text (D220 amended, 2026-09-20): "
+                                        "buyer's NAME-slot text (D220 amended): "
                                         "`MM-DD-YY_XXXXX` off the group's own `latest` date and "
                                         "the most recent order's id tail — never a typed dot "
                                         "(D218), never the full id.",
@@ -8340,7 +8398,8 @@ COMPONENTS = [
                                    "governed_by": ["D24", "D57", "D58", "D93", "D97", "D118",
                                                    "D132", "D164", "D171", "D181", "D193", "D195",
                                                    "D212", "D218", "D220", "D252", "D260", "D263",
-                                                   "D277", "D278", "D279", "D296", "D304", "D313"]},
+                                                   "D277", "D278", "D279", "D296", "D301", "D304",
+                                                   "D313"]},
             "src/Shipping.tsx": {"does": "`#/shipping`: NINE LINES THAT POINT THE ROUTE AT THE "
                                          "HUB — `<OrdersHub stage=\'ship\'/>`. The stage itself "
                                          "is src/OrdersShipStage.tsx, which `Orders.tsx` "
@@ -9112,6 +9171,27 @@ COMPONENTS = [
                     "the view's word count and largest prose blocks, for `make text-density` "
                     "only. `injectRepeatedSentence` is the mutation hook, and trips all four."),
                 "governed_by": ["D284", "D269"],
+            },
+            "tests/copy-checks.spec.ts": {
+                "does": ("ONE sweep, TWO copy checks over every nav route and the Fulfiller's: "
+                    "voice (no I, my, me or mine on screen) and casing (Title Case on labels "
+                    "and headings), the two DESIGN.md copy rules. Each keeps a pending list "
+                    "(`copy-voice-allow.json`, `copy-casing-allow.json`) that only shrinks."),
+                "governed_by": ["D173", "D284", "D196"],
+            },
+            "tests/copyRules.ts": {
+                "does": ("The word rules the copy checks read: which words are first person, "
+                    "which short words Title Case keeps lower, and which text is exempt."),
+                "governed_by": ["D173"],
+            },
+            "tests/copySource.ts": {
+                "does": ("Reads the reason labels and Review questions straight from source, so "
+                    "the voice check covers labels no fixture puts on screen."),
+                "governed_by": ["D173"],
+            },
+            "tests/unit/copy-rules.unit.ts": {
+                "does": "Unit cases for `copyRules.ts`: each rule, true and false, in isolation.",
+                "governed_by": ["D173"],
             },
             "tests/text-checks.spec.ts": {
                 "does": ("ONE sweep, THREE checks (D284): every route is opened once through "

@@ -64,7 +64,7 @@ const SCOPE_REASON: Record<string, string> = {
 const SCOPE_CHOICES = [
   { key: 'rule', label: 'What this run implies' },
   { key: 'category', label: 'Every set in the category' },
-  { key: 'sets', label: 'Only the sets I tick' },
+  { key: 'sets', label: 'Only the sets you tick' },
 ] as const
 type ScopeChoice = (typeof SCOPE_CHOICES)[number]['key']
 

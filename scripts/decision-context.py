@@ -267,7 +267,7 @@ def _seen_file(payload: Dict[str, object]) -> Optional[Path]:
     safe = clean("session_id")
     # The session id is shared by the orchestrator and every subagent, so the agent id (empty
     # for the main session) is part of the key: each agent is shown a file once.
-    return Path(tempfile.gettempdir()) / f"pkmnscan-decision-context-{safe}-{clean('agent_id')}" if safe else None
+    return Path(tempfile.gettempdir()) / f"banchi-decision-context-{safe}-{clean('agent_id')}" if safe else None
 
 
 def already_shown(payload: Dict[str, object], relative: str) -> bool:

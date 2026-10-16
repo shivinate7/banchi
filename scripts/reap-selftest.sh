@@ -46,7 +46,7 @@ export CLAUDE_CODE_SESSION_ID="reap-selftest-legacy-caller"
 unset CLAUDE_CODE_CHILD_SESSION
 unset CLAUDE_CODE_HOST_SESSION_ID
 
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/pkmnscan-reap.XXXXXX")" || { echo "cannot make a temp dir"; exit 1; }
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/banchi-reap.XXXXXX")" || { echo "cannot make a temp dir"; exit 1; }
 kids=""
 strays=""                 # temp trees made after `tmp`, so cleanup reaches them too
 
@@ -274,7 +274,7 @@ kill -0 "$stranger" 2>/dev/null \
   && ok "the stranger is still running" || bad "the stranger was killed by the guard itself"
 
 case "$out" in
-  *PKMNSCAN_KILL=off*) ok "the refusal prints its escape hatch" ;;
+  *BANCHI_KILL=off*) ok "the refusal prints its escape hatch" ;;
   *) bad "a refusal with no way past it is one that gets disabled wholesale" ;;
 esac
 case "$out" in
@@ -299,7 +299,7 @@ echo "  -- a second copy of this fixture, running at the same time --"
 # TREE goes on `strays`, because it lives outside `$tmp` and the trap would otherwise leave a
 # `time.sleep(300)` behind. A leftover of exactly that kind is one of the two ways this flake
 # reached a session in the first place.
-rival_tmp="$(mktemp -d "${TMPDIR:-/tmp}/pkmnscan-reap.XXXXXX")" || rival_tmp=""
+rival_tmp="$(mktemp -d "${TMPDIR:-/tmp}/banchi-reap.XXXXXX")" || rival_tmp=""
 if [ -z "$rival_tmp" ]; then
   bad "cannot make a second temp dir — the concurrency arm cannot be posed"
 else
@@ -475,7 +475,7 @@ esac
 # A broad directory that is on the list and is no ancestor of any home directory. `/private/tmp`
 # reaches it whatever `$TMPDIR` is set to, which is why this probe is made under `/tmp` by name
 # rather than beside the rest of the fixture.
-probe="$(mktemp -d /tmp/pkmnscan-reap-probe.XXXXXX)"
+probe="$(mktemp -d /tmp/banchi-reap-probe.XXXXXX)"
 sleeper "$probe/$probe_script"
 probe_pid="$(spawn "$probe/$probe_script" "$probe")"
 kids="$kids $probe_pid"
@@ -521,13 +521,13 @@ esac
 echo
 echo "  -- the escape hatch --"
 
-judge "$tmp/checkout" "PKMNSCAN_KILL=off pkill -f $stranger_script"
+judge "$tmp/checkout" "BANCHI_KILL=off pkill -f $stranger_script"
 [ $? -eq 0 ] && ok "the hatch is honoured in the command itself" || bad "the printed hatch does not work"
-judge "$tmp/checkout" "echo PKMNSCAN_KILL=off; pkill -f $stranger_script"
+judge "$tmp/checkout" "echo BANCHI_KILL=off; pkill -f $stranger_script"
 [ $? -ne 0 ] && ok "a mere mention does not lift the guard" || bad "a mention of the hatch lifted the guard"
 out="$(cd "$tmp/checkout" && printf '{"tool_input":{"command":"pkill -f %s"}}' "$stranger_script" \
-       | PKMNSCAN_KILL=off python3 "$REAP" --hook 2>&1)"
-[ $? -eq 0 ] && ok "and in the environment" || bad "PKMNSCAN_KILL=off in the environment did nothing"
+       | BANCHI_KILL=off python3 "$REAP" --hook 2>&1)"
+[ $? -eq 0 ] && ok "and in the environment" || bad "BANCHI_KILL=off in the environment did nothing"
 
 # -------------------------------------------------------------------------- the reaper
 echo
@@ -869,7 +869,7 @@ kids="$kids $mark_line"
 # returns the moment `fork()` succeeds, before the shell it started has even reached
 # `reap_mark.py`'s own write — so reading the mark on the very next line is a real race, and
 # this is `cleanup()`'s own bounded-retry shape (a fixed, short deadline), not the open-ended
-# poll `PKMNSCAN_WAIT` refuses.
+# poll `BANCHI_WAIT` refuses.
 mark_json="$tmp/checkout/.serve/owners/$mark_line.json"
 for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
   [ -s "$mark_json" ] && break
@@ -1001,10 +1001,10 @@ echo "  the refusal log"
 . "$(dirname "$REAP")/refusal-log-assert.sh"
 rl="$tmp/refusals.log"
 rl_payload='{"session_id":"sess-1","tool_input":{"command":"kill 1"}}'
-rl_out="$(cd "$tmp/checkout" && printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$rl" python3 "$REAP" --hook 2>&1)"; rl_status=$?
+rl_out="$(cd "$tmp/checkout" && printf '%s' "$rl_payload" | BANCHI_REFUSAL_LOG="$rl" python3 "$REAP" --hook 2>&1)"; rl_status=$?
 [ $rl_status -eq 2 ] && ok "a refused kill still exits 2" || bad "the logged refusal exited $rl_status"
 why="$(refusal_line_ok "$rl" "reap:kill" "sess-1")" && ok "…and writes one well-formed line" || bad "the refusal log line: $why"
-rl_bad="$(cd "$tmp/checkout" && printf '%s' "$rl_payload" | PKMNSCAN_REFUSAL_LOG="$tmp/no/such/dir/log" python3 "$REAP" --hook 2>&1)"; rl_bad_status=$?
+rl_bad="$(cd "$tmp/checkout" && printf '%s' "$rl_payload" | BANCHI_REFUSAL_LOG="$tmp/no/such/dir/log" python3 "$REAP" --hook 2>&1)"; rl_bad_status=$?
 if [ $rl_bad_status -eq 2 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
 else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
 

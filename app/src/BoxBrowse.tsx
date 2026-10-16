@@ -59,10 +59,10 @@ import { buriedKeys, DeletedPane, DeletedWalk, useBuried } from './DeletedBoxes'
 import { stateLabel } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
-import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, Popover, boxesMostRecentFirst, countFacets, filterRows, useHeld, type PickGroup, type SortValue } from './kit'
+import { Button, Chip, EmptyState, FilterBar, Icon, IconButton, Loading, Money, Notice, Popover, boxesMostRecentFirst, countFacets, filterRows, useHeld, type PickGroup, type SortValue } from './kit'
 import { boxTitle, UNNAMED_BOX } from './kit/data'
 import type { FilterFacet, FilterValue } from './kit/data'
-import { useFacetParams } from './kit/viewState'
+import { patchViewQuery, useFacetParams } from './kit/viewState'
 import { storedBoxRecency, touchBox } from './deviceMemory'
 import { toast } from './kit/toast'
 import { Dialog as Overlay } from './kit/overlay'
@@ -99,7 +99,7 @@ const EMPTY_GROUPS: SearchGroup[] = []
 /** Strips a trailing parenthetical off a card name — `"Calm Rune (R02a)"` -> `"Calm Rune"` —
  *  so a base printing and its promo/alt-art siblings fold to the same key. This is the ONE
  *  naming convention this store's own data was measured to use for "another printing of the
- *  same card": `pkmnscan cards name`'s corpus and the real Riftbound export both carry the
+ *  same card": `banchi cards name`'s corpus and the real Riftbound export both carry the
  *  parenthetical suffix on exactly the rows that are a variant of the un-suffixed name, never
  *  on an unrelated card that happens to share a word. */
 function baseCardName(name: string): string {
@@ -492,6 +492,9 @@ type BoxBrowseProps = {
    *  that holds the card's search group. Null draws the identity alone. */
   figures?: HeroFigures | null
   figuresPending?: boolean
+  /** The search answered with no group: the figures slot holds its place and says so. */
+  figuresEmpty?: boolean
+  figuresNote?: ReactNode
 
   /** Which card the walk is pointing at, reported on every change and `null` when the filter
    *  leaves nothing to point at. */
@@ -721,7 +724,7 @@ function VariantChooser({
       <ul className="browse-variants-list" role="list">
         {listed.map(({ group, index }) => {
           const photoCopy = group.copies.find((copy) => copy.has_photo)
-          const name = group.names[0] ?? 'Not identified yet'
+          const name = group.names[0] ?? 'Not Identified Yet'
           // THE CATALOGUE'S OWN SET FIRST, `set_hint` ONLY WHEN THERE IS NO OTHER ANSWER
           // (D213) — the fallback D65
           // already established for the case no export has ever priced this game.
@@ -743,7 +746,7 @@ function VariantChooser({
                   )}
                 </span>
                 <span className="browse-variant-text">
-                  <span className={name === 'Not identified yet' ? 'browse-variant-name is-unnamed' : 'browse-variant-name'}>
+                  <span className={name === 'Not Identified Yet' ? 'browse-variant-name is-unnamed' : 'browse-variant-name'}>
                     {name}
                   </span>
                   {subParts.length === 0 ? null : (
@@ -773,6 +776,8 @@ export function BoxBrowse({
   detail,
   figures,
   figuresPending,
+  figuresEmpty,
+  figuresNote,
   actionBar,
   onSelect,
   onBoxes,
@@ -1851,6 +1856,8 @@ export function BoxBrowse({
    * last figures for exactly the `dimPanel` window (D313, class B). */
   const panelFigures = useHeld(figures, dimPanel)
   const panelFiguresPending = useHeld(figuresPending, dimPanel)
+  const panelFiguresEmpty = useHeld(figuresEmpty, dimPanel)
+  const panelFiguresNote = useHeld(figuresNote, dimPanel)
 
   /* What Manage box may narrow a Move or a Claims write to: this box's cards, by section
    * and in box order, off every row of the shelf and not the filtered list. */
@@ -1987,6 +1994,16 @@ export function BoxBrowse({
     if (text !== null) setQuery(text)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  /* The typed text rides in the address (`q`, D285), so a reload restores it. The first run is
+     skipped: the seed above has not yet read the `q` a link carried. */
+  const wroteQuery = useRef(false)
+  useEffect(() => {
+    if (!wroteQuery.current) {
+      wroteQuery.current = true
+      return
+    }
+    patchViewQuery({ q: query.trim() === '' ? null : query })
+  }, [query])
   useEffect(() => {
     if (goTo === undefined || goTo === null) return
     if (askedAt.current === goTo.at) return
@@ -2118,7 +2135,7 @@ export function BoxBrowse({
   const rail = (
     <RailFrame ref={mapRef}>
       {/* THE KIT'S FILTER BAR (FLT-09): the search, the three facets in any order and the one
-          count line. Hide sold stays on the walk's own bar, beside the rows it folds. The rail is narrow, so the facets sit behind one Filters
+          count line. In stock only sits in the Filters menu, its resting state on. The rail is narrow, so the facets sit behind one Filters
           press: a popover beside it on a desk, a sheet on a phone. */}
       <FilterBar
         className="browse-filterbar"
@@ -2155,11 +2172,28 @@ export function BoxBrowse({
           onChange: setSort,
           defaultValue: { key: 'recent', dir: 'desc' },
         }}
+        /* UX-254 (owner's ruling): the words, never the meaning. "In stock only" lives in the
+           filter menu now; checked still folds a departed copy away, on by default
+           (`storedHideSold`), and the count is still what it hides. It is the resting state
+           (`defaultChecked`), so the badge and the count line mark only showing sold cards. */
+        hide={
+          onShelf.length === 0 || onHideSold === undefined
+            ? undefined
+            : {
+                checked: hideSold,
+                onChange: (next) => {
+                  if (next !== hideSold) onHideSold()
+                },
+                label: 'In stock only',
+                count: hiddenBySold,
+                defaultChecked: true,
+              }
+        }
         beside={
           phone ? undefined : (
             <IconButton
               icon="chevronLeft"
-              label="Collapse the box rail"
+              label="Collapse the Box Rail"
               className="browse-rail-toggle"
               onClick={() => setRailCollapsed(true)}
             />
@@ -2235,6 +2269,7 @@ export function BoxBrowse({
                 <span className="browse-boxcell-text">
                   <span
                     className="browse-boxcell-name"
+                    data-typed={typeof cell === 'number' ? '' : undefined}
                     title={typeof cell === 'number' ? boxTitle(record?.name, cell) : shelfLabel(cell)}
                   >
                     {typeof cell === 'number' ? boxTitle(record?.name, cell) : shelfLabel(cell)}
@@ -2254,7 +2289,7 @@ export function BoxBrowse({
                       : record && sort.key === 'value' && typeof cell === 'number'
                         ? valueByBox?.has(cell) ? <Money value={valueByBox.get(cell)} /> : 'no reading'
                         : record
-                          ? `${(onHand ?? 0).toLocaleString()} stored`
+                          ? <span data-value>{(onHand ?? 0).toLocaleString()} stored</span>
                           : cell === 'pooled'
                             ? 'a count, not a location'
                             : cell === 'unplaced'
@@ -2328,7 +2363,7 @@ export function BoxBrowse({
               )
             ) : (
               <button className="browse-quiet" type="button" onClick={toggleAllSections}>
-                <Icon name={anyExpanded ? 'chevronUp' : 'chevronDown'} size={12} />
+                <Icon name={anyExpanded ? 'fold' : 'unfold'} size={12} />
                 {/* THE HEADERS BELOW ALREADY COUNT THE SECTIONS (cut list #11, UX-269). */}
                 {anyExpanded ? 'Collapse' : 'Expand'}
               </button>
@@ -2347,14 +2382,6 @@ export function BoxBrowse({
               </span>
             ) : null}
 
-            {onShelf.length === 0 || onHideSold === undefined ? null : (
-              /* UX-254 (owner's ruling, 2026-09-24: "maybe in stock only should be the toggle
-                 name?"): the words, never the meaning — checked still folds a departed copy
-                 away, on by default (`storedHideSold`), and the count is still what it hides. */
-              <HideToggle checked={hideSold} count={hiddenBySold} className="browse-hidesold" onChange={() => onHideSold()}>
-                In stock only
-              </HideToggle>
-            )}
 
           </div>
 
@@ -2439,7 +2466,7 @@ export function BoxBrowse({
                         <Icon name="chevronRight" size={14} className="browse-sectmark" />
                         <SectionTitle parts={section.parts} />
                         {section.parts.count === null ? null : (
-                          <span className="browse-secttotal" aria-hidden="true">
+                          <span className="browse-secttotal" aria-hidden="true" data-value>
                             {section.parts.count}
                           </span>
                         )}
@@ -2499,7 +2526,7 @@ export function BoxBrowse({
                                       : 'browse-row-name'
                                   }
                                 >
-                                  {nameOf(row.card) ?? 'Not identified yet'}
+                                  {nameOf(row.card) ?? 'Not Identified Yet'}
                                 </span>
                                 {/* A ROW THAT LEFT THE BOX (UX-222): the headstone, the product's one mark
                                     for a card that left (`ICON_MEANINGS`), named by its state. It
@@ -2809,6 +2836,7 @@ export function BoxBrowse({
                       absent: photoAbsent === panelRow.key,
                       onAbsent: () => setPhotoAbsent(panelRow.key),
                       nonce: reshot[panelRow.key] ?? null,
+                      stockImage: panelFigures?.group.copies.some((c) => c.key === panelRow.key) ? (panelFigures.group.image_url ?? null) : null,
                       onZoom: () => setZoomed(true),
                       reshoot: (
                         <ReshootControl
@@ -2826,6 +2854,8 @@ export function BoxBrowse({
                     detail={panelDetail}
                     figures={panelFigures}
                     figuresPending={panelFiguresPending}
+                    figuresEmpty={panelFiguresEmpty}
+                    figuresNote={panelFiguresNote}
                   />
 
                   <CardDetailsSection
@@ -2917,7 +2947,7 @@ function ReshootControl({ row, busy, failure, onPick }: ReshootControlProps) {
   if (row.card.state === 'sold' || row.card.state === 'retired') return null
 
   /* The label stays put while busy; the button's own spinner says the replacement is in flight. */
-  const label = row.card.photo === null ? 'Add a photo' : 'Re-shoot this photo'
+  const label = row.card.photo === null ? 'Add a photo' : 'Re-Shoot This Photo'
 
   return (
     <div className="browse-reshoot">
@@ -3225,13 +3255,13 @@ function CardOps({
       </Popover>
 
       {open !== 'claims' ? null : (
-        <Overlay kind="sheet" label="Correct claims" onClose={() => setOpen(null)} className="browse-claims-sheet">
+        <Overlay kind="sheet" label="Correct Claims" onClose={() => setOpen(null)} className="browse-claims-sheet">
           <header className="inv-sheet-head">
             <div className="inv-sheet-head-text">
               {/* The ADDRESS, not the store key: `1/1` in an eyebrow reads as a page counter. */}
               <span className="bn-eyebrow">{positionLabel(row.card) ?? `store key ${row.key}`}</span>
-              <h2 className="inv-sheet-title">Correct claims</h2>
-              <p className="browse-claims-who">{nameOf(row.card) ?? 'Not identified yet'}</p>
+              <h2 className="inv-sheet-title">Correct Claims</h2>
+              <p className="browse-claims-who">{nameOf(row.card) ?? 'Not Identified Yet'}</p>
             </div>
             <IconButton icon="x" label="Close" onClick={() => setOpen(null)} />
           </header>
@@ -3244,6 +3274,7 @@ function CardOps({
             )}
             <ClaimEditor
               scope="this card"
+              scopeLabel="This Card"
               game={row.card.game}
               busy={busy}
               onApply={(patch) => void correct(patch)}

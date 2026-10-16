@@ -1,16 +1,16 @@
 ## D100 — Never delete to lower a price
 
-**A live listing's price is lowered by re-uploading the same row with a new `TCG Marketplace Price` and `Add to Quantity` of 0. Nothing is deleted at TCGplayer, and nothing has to be.** Built 2026-09-03 on the owner's request: *"I then wanted to build some relationship where I can export my live inventory back out (for cards I have listed and aren't selling) and be able to mass re-edit the prices down (and then reupload it back) <maybe deleting inventory in between from tcgplayer?>"*
+**A live listing's price is lowered by re-uploading the same row with a new `TCG Marketplace Price` and `Add to Quantity` of 0. Nothing is deleted at TCGplayer, and nothing has to be.** Built on the owner's request: export live inventory (cards listed and not selling), mass re-edit the prices down, and re-upload. The owner asked whether inventory must be deleted at TCGplayer in between.
 
-The parenthetical is the question this entry exists to answer, and the answer is measured rather than reasoned.
+That question is what this entry exists to answer, and the answer is measured rather than reasoned.
 
 ### `Add to Quantity` is a delta, and TCGplayer's own export is the proof
 
-**72,701 real export rows carry `Add to Quantity` = `"0"`** — the four untouched fixtures (21,843 rows) and the twelve TCGplayer exports recorded into run directories (50,858 rows), which is the whole of it: 21,843 + 50,858 = 72,701. Not one row anywhere carries anything else. The owner's My Pricing download of 2026-09-01 is one of those twelve and is not a third source; an earlier draft of this paragraph counted it twice and put 40,858 against the run directories, which made the total right and the breakdown unreconcilable. Recounted 2026-09-04.
+**72,701 real export rows carry `Add to Quantity` = `"0"`** — the four untouched fixtures (21,843 rows) and the twelve TCGplayer exports recorded into run directories (50,858 rows). That is the whole of it: 21,843 + 50,858 = 72,701. Not one row carries anything else. The owner's My Pricing download is one of those twelve, not a third source. An earlier draft counted it twice and put 40,858 against the run directories. The total was right, but the breakdown did not reconcile.
 
-**649 of those are rows on which TCGplayer simultaneously reported live copies**, `Total Quantity` between 1 and 10, and every one still carries `Add to Quantity` = 0. That settles it on its own: if the column meant *set the quantity to*, re-uploading an untouched export would delist the entire account, and nobody ships an export that destroys the account it came from. `Total Quantity` is not a writable column at all, so **`Total Quantity` cannot be set from a CSV, but a negative `Add to Quantity` lowers a live quantity (measured 2026-09-29, amendment below).**
+**649 of those are rows on which TCGplayer simultaneously reported live copies**, `Total Quantity` between 1 and 10, and every one still carries `Add to Quantity` = 0. That settles it on its own. If the column meant *set the quantity to*, re-uploading an untouched export would delist the entire account. Nobody ships an export that destroys the account it came from. **`Total Quantity` cannot be set from a CSV, but a negative `Add to Quantity` lowers a live quantity (measured, amendment below).**
 
-**And the price column edits the live listing in place.** Of the 288 live SKUs in the 2026-09-02 export that this pipeline had pushed, **282 carry exactly the price the pipeline last wrote into an import CSV**; the other six sit a cent or two below. One listing per SKU, updated — not a second listing beside the first.
+**And the price column edits the live listing in place.** Of the 288 live SKUs in the export, **282 carry exactly the price the pipeline last wrote into an import CSV**. This pipeline had pushed all 288. The other six sit a cent or two below. One listing per SKU is updated, with no second listing.
 
 ### The dangerous case already happened here, which is why it is designed out rather than avoided
 
@@ -34,7 +34,7 @@ So the failure mode is not exotic and is not hypothetical — **it is one extra 
 
 **The worklist is in full export shape and carries `Add to Quantity` 0, so uploading it by mistake is harmless.** That is the property the shape was chosen for: every file this feature writes is safe to upload, whichever one the operator grabs.
 
-**Both halves preview by default**, which is `pkmnscan prices adopt`'s rule and one more: `apply --write` is the last press before bytes leave for a marketplace, and the file it writes cannot be un-uploaded.
+**Both halves preview by default**, which is `banchi prices adopt`'s rule and one more: `apply --write` is the last press before bytes leave for a marketplace, and the file it writes cannot be un-uploaded.
 
 ### "Not selling" is three terms and one of them is a proxy, and the proxy says so on every report
 
@@ -86,7 +86,7 @@ The markdown is off the operator's own live price, which is `TCG Marketplace Pri
 
 **What would reopen this.** *The first upload*, whose answers belong in the spec's section 6. *A listing age this store can read* — populate `live_as_of` on a first sighting, or record a `first_listed_at` when `emit` pushes, and the third term stops being a proxy and the report's header paragraph goes away. *A reason column in the worklist*, at the cost named above. *An importer that rejects a zero-quantity row*, which would make the whole design unbuildable in this shape and is the one outcome the 649 rows argue hardest against.
 
-### Amended 2026-09-26: a dollar cap on the rule, and no mark-down without a market price
+### Amended: a dollar cap on the rule, and no mark-down without a market price
 
 Two rules change.
 
@@ -94,7 +94,7 @@ Two rules change.
   The rule then takes P% off, but never more than the cap off one copy. `pipeline/reprice.py:plan`
   proposes the rule's price or the asking price less the cap, whichever is higher. The cap lives
   in the read's `asked`, beside the percentage. With no cap in the last read, the sheet offers
-  none. Amended the same day, the owner's word verbatim: "Rule only". The cap limits the rule's
+  none. Amended the same day by owner ruling: rule only. The cap limits the rule's
   proposal and nothing else. `reprice apply` does not check it, and a typed price goes out as
   typed. The store's floor (`policy.threshold`) still holds for every price.
 - **No market price, no mark-down.** `plan` refuses a row with no `TCG Market Price` as
@@ -103,19 +103,21 @@ Two rules change.
 
 Proof: T7 `check_live_markdown_guards`, each rule red under its own mutation.
 
-### Amended 2026-09-26, second: an earlier price goes out only when it is higher
+### Amended, second: an earlier price goes out only when it is higher
 
-The owner's words, verbatim: "if the price i've typed is higher yea". `reprice apply` refuses an
+Owner ruling: a typed price goes out when it is higher. `reprice apply` refuses an
 edit that lowers the price and is exactly an answer the corpus held before the read was taken
 (`earlier_lower`), per row. A price written after the read is stamped later and goes. The read's
 own rule price always goes. Proof: T7 `check_live_markdown_guards`.
 
-### 2026-09-29 amendment: a negative `Add to Quantity` lowers a live quantity, measured
+### Amendment: a negative `Add to Quantity` lowers a live quantity, measured
 
 **This replaced the earlier "no CSV route to lowering a quantity" clause above, in place.** Measured through `server/tcg_import.push_to_staged` and `move_to_live`, with `_check` bypassed once on the owner's word. One row first: Eclipse 9198194, `Add to Quantity` -1, price unchanged. TCGplayer accepted 1 of 1, publish answered 1 Update, and the live export went from 1 to 0 within about 2 minutes (`live-tcgplayer-20260929-024030.csv`). Then 63 rows with negative adds: accepted 63, 63 Updates, no errors, all 63 reached target (live copies 2740 to 2645, `live-tcgplayer-20260929-024057.csv`). `Add to Quantity` is a signed delta. A third push on the owner's word, the same day: 21 SKUs, -34 copies, writing live down to the store's identified count wherever live was higher (upload 17334855, 21 accepted, 21 Updates). The export after it (`live-tcgplayer-20260929-024900.csv`, 2611 live copies) shows 0 store SKUs above their held count. Cause, unmeasured per SKU: cards marked sold or retired in the app never lower TCGplayer, plus likely a double upload (the case above).
 
-**`_check` still refuses a negative, and that stays.** Whether the pipeline may write one is a separate owner decision. The reprice path's `Add to Quantity` 0 rule is untouched. `pkmnscan reconcile --phantoms` remains a worklist tool.
+**The owner decided it: a hold takes live copies off.** When the owner holds a SKU (`bullish`, `keeping`, `next_batch`), the next send writes one row for it with `Add to Quantity` minus the live quantity a fresh live read shows for it, less the copies marked sold since that read. The press fetches that read and works on every held SKU in the store, not only those in the selected runs. `emit` needs `--live-guard` with a file at most an hour old (`TAKE_READ_FRESH_S`). A held SKU with no such read is named in the output and takes off nothing; if Banchi has sent copies of it, the whole emit refuses with a sentence naming the card and writes nothing. Neither `pushed` nor `live` sizes the row, and a held SKU the read does not name takes off 0. At most one take-off is outstanding per SKU: from the moment its file is written (a press or a download) until a live check past the wait settles it. While one is outstanding no new row is written for that SKU, and the output names the card and says it is outstanding. If the check finds the copies gone, `pushed` falls and `live` is set to the read, once per SKU. If they are still live, the take-off never landed, and only then may a new one be sized. A failed press writes nothing that can land, so it never blocks. Nothing in the store changes at write time. The cards stay in their box and are not unsent until the check; unhold sends them again after it. A copy the owner removed from TCGplayer by hand is not a withhold: it takes nothing else off, and it is held per copy on the listing (D273, R-S4). The receipt and the CLI say how many copies come off TCGplayer, and a download says the file takes them off. `server/tcg_import._check` takes a SKU-to-size mapping from `emit` and passes a negative only when its size equals that figure; every other path still refuses one, and only the two writable columns are written. A held SKU in none of the selected runs is written on the live read's own row. **Measured: TCGplayer clamps a take-off at 0.** One row for Rebuttal (SKU 9405578, Near Mint Foil), `Add to Quantity` -5 against `Total Quantity` 2, pushed through `push_to_staged` (with `_check` bypassed once) and `move_to_live` (upload 17529205): the move answered Update with no error, and a fresh live export read `Total Quantity` 0 with the price unchanged at 4.39. A doubled take-off therefore cannot go below zero, so a download uploaded late after a second take-off is harmless and no guard is built for it. The reprice path's `Add to Quantity` 0 rule is untouched. `banchi reconcile --phantoms` remains a worklist tool. It finds only ghost cards, whose box has no row.
 
-### 2026-09-28 amendment: a sale or retirement in the app never lowers TCGplayer
+### Amendment: a sale or retirement in the app never lowers TCGplayer
 
-**The owner ruled on 2026-09-28, in paraphrase: marking a card sold or retired in the app must not lower its TCGplayer quantity.** The phantom-listing finding in the amendment above (sold or retired cards never lower TCGplayer) is therefore accepted behavior. The drift it leaves is corrected by an explicit write-down.
+**Owner ruling: marking a card sold or retired in the app must not lower its TCGplayer quantity.** The phantom-listing finding in the amendment above (sold or retired cards never lower TCGplayer) is therefore accepted behavior. The drift it leaves is corrected by an explicit write-down.
+
+**Owner ruling: a phantom is cleared by a session, not by a screen.** A phantom is a SKU that TCGplayer lists above what is on hand, less what sold since the live read. One kind is a ghost card. Another is a card sent under one SKU and then corrected to another (`sku_corrected` with `released.pushed`), which leaves the old listing live with no card behind it. A session finds phantoms on the owner's request, names each one with its live and on-hand counts, and sends a take-off only on the owner's yes for that SKU. The row is `Add to Quantity` minus the excess, price unchanged, sized from the newest live read and never above it. It goes through `server/tcg_import.push_to_staged` with `listing=True` and a `take_off` mapping of that exact size, then `move_to_live`, and a fresh live read confirms it. No screen control or send-path lane is built for phantoms, because the session identifies them.

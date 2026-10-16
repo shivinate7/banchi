@@ -206,16 +206,22 @@ def _ex(cid, **kw):
 
 @contextmanager
 def _clean_preview_cache():
-    """Run with an empty preview cache and put back the cap and the rule version after."""
+    """Run with an empty preview cache and a fresh model-load state; put back the cap, the rule
+    version and `card_box`'s load state after. A failed load earlier in the process would otherwise
+    keep `final` False for `RETRY_AFTER` and fail a check that has nothing wrong."""
+    from geometry import card_box
     from identify import images
 
     saved = (images.PREVIEW_CACHE_BYTES, images.CROP_RULE_VERSION)
+    saved_box = (card_box._session, card_box._failed_at)
+    card_box._session, card_box._failed_at = None, 0.0
     images._preview_cache.clear()
     images._preview_cache_bytes = 0
     try:
         yield images
     finally:
         images.PREVIEW_CACHE_BYTES, images.CROP_RULE_VERSION = saved
+        card_box._session, card_box._failed_at = saved_box
         images._preview_cache.clear()
         images._preview_cache_bytes = 0
 

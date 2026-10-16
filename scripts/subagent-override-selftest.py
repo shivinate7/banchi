@@ -128,7 +128,7 @@ def run_row(mod, root: Path):
 def main() -> int:
     mod = load_docs_audit()
 
-    tmp = Path(tempfile.mkdtemp(prefix="pkmnscan-subagent-"))
+    tmp = Path(tempfile.mkdtemp(prefix="banchi-subagent-"))
     try:
         work = tmp / "work"
         git(["init", "-q", "-b", "main", str(work)], cwd=tmp)

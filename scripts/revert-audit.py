@@ -36,7 +36,7 @@ THREE MODES, ONE ENGINE:
         THE GUARD. Compute what this branch would land on upstream — the clean merge's tree
         against upstream, or the branch's diff off the merge-base when the merge conflicts —
         and refuse if it reverses something upstream has, in a file the branch's commits never
-        name. Exit 1 on a refusal, 0 otherwise, and `PKMNSCAN_REVERT=off` runs nothing and is
+        name. Exit 1 on a refusal, 0 otherwise, and `BANCHI_REVERT=off` runs nothing and is
         printed in every refusal. This is what `make revert-guard`, the pre-push hook and the
         CI job run.
 
@@ -67,7 +67,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 WINDOW = 60
-ESCAPE = "PKMNSCAN_REVERT"
+ESCAPE = "BANCHI_REVERT"
 
 Hunk = Tuple[Tuple[str, ...], Tuple[str, ...]]  # (old lines, new lines), -U0 so no context
 
@@ -543,7 +543,7 @@ def cmd_selftest(_: argparse.Namespace) -> int:
                 bad(f"{what} — expected to pass, exit {code}", sink.text)
 
     print("revert-guard self-test")
-    tmp = tempfile.mkdtemp(prefix="pkmnscan-revert.")
+    tmp = tempfile.mkdtemp(prefix="banchi-revert.")
     env_backup = os.environ.pop(ESCAPE, None)
     try:
         origin = os.path.join(tmp, "origin.git")

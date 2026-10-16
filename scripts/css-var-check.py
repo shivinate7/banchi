@@ -78,7 +78,7 @@ Writes nothing, ever — a gate, and a gate that writes is refused in this repo 
     make css-var-check                    scan app/src
     python3 scripts/css-var-check.py --self-test   the extractors, against fixtures
 
-Escape hatch: `PKMNSCAN_CSS_VARS=off` skips the scan, printed in the refusal so it is never a
+Escape hatch: `BANCHI_CSS_VARS=off` skips the scan, printed in the refusal so it is never a
 silent workaround.
 """
 
@@ -96,7 +96,7 @@ TS_DIR = "app/src"
 CSS_SUFFIXES = (".css",)
 TS_SUFFIXES = (".ts", ".tsx")
 
-HATCH = "PKMNSCAN_CSS_VARS"
+HATCH = "BANCHI_CSS_VARS"
 
 # ------------------------------------------------------------------------------ patterns
 

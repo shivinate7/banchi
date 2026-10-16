@@ -256,9 +256,13 @@ const WALK_CARD = {
  *  `/orders/walk-plan` request fires from inside this call's own render. `plan` and `orders`
  *  default to this file's own fixtures, so every existing case reads exactly as before; A4's own
  *  case below is the one caller that names both. */
-async function open(page: Page, options: { plan?: WalkPlan; orders?: OrdersPayload } = {}): Promise<Wire[]> {
+async function open(
+  page: Page,
+  options: { plan?: WalkPlan; orders?: OrdersPayload; cards?: Record<string, object> } = {},
+): Promise<Wire[]> {
   const plan = options.plan ?? twoCopyPlan()
   const orders = options.orders ?? oneOpenOrder()
+  const cards = options.cards ?? { '3/21': WALK_CARD }
   const wire: Wire[] = []
 
   await page.route(/\/orders\/pull$/, async (route) => {
@@ -272,7 +276,7 @@ async function open(page: Page, options: { plan?: WalkPlan; orders?: OrdersPaylo
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ cards: { '3/21': WALK_CARD }, listings: {} }),
+      body: JSON.stringify({ cards, listings: {} }),
     })
   })
 
@@ -329,6 +333,51 @@ const CURRENT_PICK = '.orders-cardcol'
 
 sealEveryTest()
 
+/* ux-w2 B16 (order-walk-plan.md section 14). Asserts each figure chip beside the card names carries a
+   text box that explains it. The box opens on hover and on keyboard focus, so a chip is reachable without a pointer. */
+test('ux-w2 B16: each Captured, Hidden and Sent chip opens a text box on hover and on keyboard focus', async ({ page }) => {
+  await open(page)
+  const side = page.locator('.browse-hero-side').first()
+  await expect(side, 'the card figures are drawn').toBeVisible()
+  for (const name of [/^\s*Captured/i, /^\s*Hidden/i, /^\s*Sent/i]) {
+    const chip = side.locator(':scope > *').filter({ hasText: name })
+    await expect(chip, `a chip for ${name} is drawn`).toHaveCount(1)
+    await chip.hover()
+    const box = page.getByRole('tooltip')
+    await expect(box, `hovering the ${name} chip opens its text box`).toBeVisible()
+    await expect(box).toHaveText(/\S/)
+    await page.mouse.move(0, 0)
+    await chip.focus()
+    await expect(chip, `the ${name} chip takes keyboard focus`).toBeFocused()
+    await expect(box, `focusing the ${name} chip opens its text box`).toBeVisible()
+    await page.keyboard.press('Escape')
+  }
+})
+
+/* ux-w2 B17 (order-walk-plan.md section 15 rail). Asserts the walk control is a button whose name starts
+   with a verb, "Start Walk", and a caption beside it gives the buyer count, "10 buyers". */
+/* Two tickable buyers, so the walk control draws (it shows only at two or more). Both buyers take the same on-hand copies. */
+function twoBuyersOpen(): OrdersPayload {
+  const base = oneOpenOrder()
+  const first = base.resolution.orders[0]!
+  const second = { ...first, key: 'TCGplayer:ORD-B1', number: 'ORD-B1', lines: first.lines.map((one) => ({ ...one, order: 'ORD-B1', order_key: 'TCGplayer:ORD-B1' })) }
+  return {
+    ...base,
+    summary: '2 orders',
+    orders: [base.orders[0]!, { ...base.orders[0]!, key: 'TCGplayer:ORD-B1', number: 'ORD-B1', buyer: 'Ben Franklin' }],
+    resolution: { ...base.resolution, orders: [first, second] },
+  }
+}
+
+test('ux-w2 B17: the walk control is a verb-led button with a buyer-count caption', async ({ page }) => {
+  await open(page, { orders: twoBuyersOpen() })
+  const control = page.getByRole('button', { name: /^start walk/i })
+  await expect(control, 'the walk control is a button whose name starts with a verb').toBeVisible()
+  const bar = page.locator('.orders-filterbar')
+  await expect(bar.getByRole('button', { name: /^start walk/i }), 'the verb button sits in the filter bar').toHaveCount(1)
+  await expect(bar, 'the caption gives the buyer count').toContainText(/\b\d+\s+buyers?\b/i)
+})
+
 /* -------------------------------------------------------------------------------------- 1 */
 
 test('only the newest pull in the walk offers Undo — the older one reads Sold', async ({ page }) => {
@@ -342,13 +391,13 @@ test('only the newest pull in the walk offers Undo — the older one reads Sold'
      fit the one reserved width, so a press never moves the place beside it. */
   const slotWidth = () => rows.nth(0).locator('.card-locations-action').evaluate((el) => Math.round(el.getBoundingClientRect().width))
   const atRest = await slotWidth()
-  await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
 
   // The copy just sold is the only one recorded so far, so it is the newest — and undoable.
   await expect(rows.nth(0).getByRole('button', { name: 'Undo' })).toBeVisible()
 
-  await rows.nth(1).getByRole('button', { name: 'Mark sold' }).click()
+  await rows.nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(2)
 
   /* THE SECOND PULL IS NOW THE NEWEST, WITH NO CLOCK INVOLVED — this assertion is true the
@@ -371,7 +420,7 @@ test('a pull press causes no layout shift in the half second after it', async ({
   await afterPaint(page)
 
   const from = await markNow(page)
-  await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
   await expect(rows.nth(0).getByRole('button', { name: 'Undo' })).toBeVisible()
   await page.waitForTimeout(600) // keep: shifts are read over the 500ms window after the press
@@ -390,11 +439,11 @@ test('a newer pull is what ends the older one’s Undo, not any span of time', a
   const wire = await open(page)
   const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
 
-  await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
   await expect(rows.nth(0).getByRole('button', { name: 'Undo' })).toBeVisible()
 
-  await rows.nth(1).getByRole('button', { name: 'Mark sold' }).click()
+  await rows.nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(2)
 
   await expect(rows.nth(0).getByRole('button', { name: 'Undo' })).toHaveCount(0)
@@ -411,7 +460,7 @@ test('the newest pull stays undoable well past the old twenty-second window', as
   const wire = await open(page)
   const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
 
-  await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
   await expect(rows.nth(0).getByRole('button', { name: 'Undo' })).toBeVisible()
 
@@ -427,9 +476,9 @@ test('undoing the newest pull returns it to Mark sold, and the older copy stays 
   const wire = await open(page)
   const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
 
-  await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
-  await rows.nth(1).getByRole('button', { name: 'Mark sold' }).click()
+  await rows.nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(2)
 
   await rows.nth(1).getByRole('button', { name: 'Undo' }).click()
@@ -438,7 +487,7 @@ test('undoing the newest pull returns it to Mark sold, and the older copy stays 
   expect(undoBody?.undo).toBe(true)
   expect(undoBody?.targets).toEqual([{ box: 5, index: 22, capture_id: 'cap-b' }])
 
-  await expect(rows.nth(1).getByRole('button', { name: 'Mark sold' })).toBeVisible()
+  await expect(rows.nth(1).getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
 
   /* THE OLDER RECEIPT REGAINS "NEWEST" ONCE IT IS THE ONLY ONE LEFT — a rank, and ranks are
      recomputed each time the set of receipts changes, exactly as a stack's own top does when
@@ -554,10 +603,10 @@ function twoStopTwoSkuPlan(): WalkPlan {
   ])
 }
 
-test('a walk row draws no copies, a press shows its card in the pane, and Mark sold there sends that row\'s own take', async ({
-  page,
-}) => {
-  const SKU_B = '9191487'
+const SKU_B = '9191487'
+
+/** The two-line order `twoStopTwoSkuPlan()` walks: Volcanion (`SKU`) and Tricksy Tentacles (`SKU_B`). */
+function twoSkuOrders(): OrdersPayload {
   const lineB = line({
     sku: SKU_B,
     wanted: 1,
@@ -577,22 +626,25 @@ test('a walk row draws no copies, a press shows its card in the pane, and Mark s
       }),
     ],
   })
-  const wire = await open(page, {
-    plan: twoStopTwoSkuPlan(),
-    orders: payloadOf(
-      [
-        order({
-          wanted: 2,
-          lines: [line().line, lineB.line],
-          progress: [
-            ...order().progress,
-            { sku: SKU_B, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
-          ],
-        }),
-      ],
-      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [line(), lineB] }],
-    ),
-  })
+  return payloadOf(
+    [
+      order({
+        wanted: 2,
+        lines: [line().line, lineB.line],
+        progress: [
+          ...order().progress,
+          { sku: SKU_B, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
+        ],
+      }),
+    ],
+    [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [line(), lineB] }],
+  )
+}
+
+test('a walk row draws no copies, a press shows its card in the pane, and Mark sold there sends that row\'s own take', async ({
+  page,
+}) => {
+  const wire = await open(page, { plan: twoStopTwoSkuPlan(), orders: twoSkuOrders() })
 
   // THE RAIL LINE IS ONE LINE A CARD: the copies, with box, section, neighbours and ruler, are the pane's
   // (`CardLocations`, reused whole), for the card the walk stands on.
@@ -608,11 +660,106 @@ test('a walk row draws no copies, a press shows its card in the pane, and Mark s
   await page.locator('.orders-walk-press', { hasText: 'Tricksy Tentacles' }).click()
   await expect(paneRows).toHaveCount(1)
   await expect(paneRows.first()).toContainText('WB1 R2')
-  await paneRows.first().getByRole('button', { name: 'Mark sold' }).click()
+  await paneRows.first().getByRole('button', { name: /^Mark Sold/ }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
   const sent = wire.find((one) => one.path.endsWith('/orders/pull'))
   expect(sent?.body).toMatchObject({
     sku: SKU_B,
     targets: [{ box: 5, index: 40, capture_id: 'cap-b' }],
   })
+})
+
+/* -------------------------------------------------------------------------------------- 8 */
+
+/* The strip above the card detail (`OrdersWalkPane.tsx:WalkStrip`) draws each card's STOCK image
+ * (`docs/specs/stock-images.md`) in place of the owner's cropped photograph, and falls back
+ * to that photograph on a join miss (`image_url: null`) or a load failure, the way
+ * `Pricing.tsx:PricingThumb` does. The big photo below it stays the owner's own. The image rides
+ * on `POST /inventory/copies`' per-card entry, the same `rawCards` the strip already reads.
+ *
+ * TWO STOPS, TWO SKUs: the strip draws only with two or more cards. The takes want 3 and 2, so
+ * the count badges are told apart from a bare "1". The image is told from the photograph by its
+ * `src`: a photograph is always served from `/photo/`. */
+const STOCK_A = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
+const STOCK_B = 'https://tcgplayer-cdn.tcgplayer.com/product/705997_200w.jpg'
+const STOCK_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88"><rect width="63" height="88" fill="#ccc"/></svg>'
+
+function stripPlan(): WalkPlan {
+  const plan = twoStopTwoSkuPlan()
+  return walkPlanOf(plan.stops.map((stop, at) => ({ ...stop, takes: stop.takes.map((take) => ({ ...take, wanted: at === 0 ? 3 : 2 })) })))
+}
+
+function stripCards(imageA: string | null, imageB: string | null): Record<string, object> {
+  return {
+    '3/21': { ...WALK_CARD, image_url: imageA },
+    '5/40': {
+      ...WALK_CARD,
+      box: 5,
+      index: 40,
+      label: 'WB1 R2, Section 4, Card 30',
+      section: 4,
+      card: 30,
+      photo: 'photos/5/40.jpg',
+      capture_id: 'cap-b',
+      name: 'Tricksy Tentacles',
+      number: '008',
+      number_display: '008',
+      sku: SKU_B,
+      image_url: imageB,
+    },
+  }
+}
+
+async function stubStock(page: Page, url: string, status = 200): Promise<{ hits: () => number }> {
+  let hits = 0
+  await page.route(url, (route) => {
+    hits += 1
+    return status === 200
+      ? route.fulfill({ status, contentType: 'image/svg+xml', body: STOCK_SVG })
+      : route.fulfill({ status, contentType: 'text/plain', body: 'gone' })
+  })
+  return { hits: () => hits }
+}
+
+const STRIP_CARD = '.orders-strip-card'
+
+test('the strip draws each card\'s stock image, keeps its count badge, and leaves the big photo the owner\'s own', async ({ page }) => {
+  await stubStock(page, STOCK_A)
+  await stubStock(page, STOCK_B)
+  await open(page, { plan: stripPlan(), orders: twoSkuOrders(), cards: stripCards(STOCK_A, STOCK_B) })
+
+  const thumbs = page.locator(STRIP_CARD)
+  await expect(thumbs).toHaveCount(2)
+  await expect(thumbs.nth(0).locator('img')).toHaveAttribute('src', STOCK_A)
+  await expect(thumbs.nth(1).locator('img')).toHaveAttribute('src', STOCK_B)
+  await expect(thumbs.nth(0).locator('.orders-strip-count')).toHaveText('3')
+  await expect(thumbs.nth(1).locator('.orders-strip-count')).toHaveText('2')
+  // The big photo below the strip is the owner's own, though its card carries a stock image too.
+  await expect(page.locator('img.browse-photo')).toHaveAttribute('src', /\/photo\//)
+})
+
+test('a join miss draws the owner\'s own photograph in the strip, and the count badge stays', async ({ page }) => {
+  await open(page, { plan: stripPlan(), orders: twoSkuOrders(), cards: stripCards(null, null) })
+
+  const thumbs = page.locator(STRIP_CARD)
+  await expect(thumbs).toHaveCount(2)
+  await expect(thumbs.nth(0).locator('img')).toHaveAttribute('src', /\/photo\//)
+  await expect(thumbs.nth(1).locator('img')).toHaveAttribute('src', /\/photo\//)
+  await expect(thumbs.nth(0).locator('.orders-strip-count')).toHaveText('3')
+  await expect(thumbs.nth(1).locator('.orders-strip-count')).toHaveText('2')
+})
+
+test('a stock image that fails to load falls back to the owner\'s photograph, and the other thumbnail keeps its own', async ({ page }) => {
+  const gone = await stubStock(page, STOCK_A, 404)
+  await stubStock(page, STOCK_B)
+  await open(page, { plan: stripPlan(), orders: twoSkuOrders(), cards: stripCards(STOCK_A, STOCK_B) })
+
+  const thumbs = page.locator(STRIP_CARD)
+  await expect(thumbs).toHaveCount(2)
+  // The strip asked for the stock image (a 404 is only a failure once it was requested), then gave up on it.
+  await expect.poll(gone.hits).toBeGreaterThan(0)
+  await expect(thumbs.nth(0).locator('img')).toHaveAttribute('src', /\/photo\//)
+  await expect(thumbs.nth(1).locator('img')).toHaveAttribute('src', STOCK_B)
+  await expect(thumbs.nth(0).locator('.orders-strip-count')).toHaveText('3')
+  await expect(thumbs.nth(1).locator('.orders-strip-count')).toHaveText('2')
 })

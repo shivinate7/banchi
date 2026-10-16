@@ -12,7 +12,7 @@ front door never did, and nothing compared them.
 So the composition is data. The `check registry` row in `scripts/docs-audit.py` reads the
 entries' shape, and the `commit path` row reads them against the pre-commit hook.
 
-**THIS FILE DRIVES `make check`, `make ci-check` AND THE FOUR CI SHARDS.** Each `shard` field
+**THIS FILE DRIVES `make check`, `make ci-check` AND THE CI SHARDS.** Each `shard` field
 names the CI shard that runs the entry (`None`: a standalone CI job runs it, `revert-guard`).
 `scripts/checks.py --targets [shard]` prints the targets in registry order; the Makefile runs
 them as one `make` call each, so the suite runs in a known order and stops at the first
@@ -68,10 +68,10 @@ NEEDS = {
 # pairing, because an entry claiming both would be describing nothing.
 CHECKS = (
     {
-        "target": "harness",
+        "target": "harness-1",
         "shard": "product",
-        "runs": "$(PYTHON) harness/run.py",
-        "asserts": "Every verification test in harness/run.py's TESTS list. RECOUNT FROM THERE "
+        "runs": "$(PYTHON) harness/run.py --part 1",
+        "asserts": "Slice 1 of harness/run.py's PARTS of the TESTS list (only part 1 writes the T1 result file; each part runs the T7 checks whose name hashes to it). RECOUNT FROM THERE "
                    "— this entry deliberately carries no number, because a count published "
                    "beside a list is the drift this whole file exists about.",
         "needs": ("venv",),
@@ -81,6 +81,34 @@ CHECKS = (
         "why_off_commit_path": "It writes, and it needs the venv. D18 keeps a writing thing off "
                                "the path that decides whether a commit proceeds; the Stop hook "
                                "runs it at turn end instead.",
+        "gates": True,
+        "governed_by": ("D18",),
+    },
+    {
+        "target": "harness-2",
+        "shard": "product-2",
+        "runs": "$(PYTHON) harness/run.py --part 2",
+        "asserts": "Slice 2 of harness/run.py's PARTS of the TESTS list (only part 1 writes the T1 result file; each part runs the T7 checks whose name hashes to it). RECOUNT FROM THERE "
+                   "— this entry deliberately carries no number, because a count published "
+                   "beside a list is the drift this whole file exists about.",
+        "needs": ("venv",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "It needs the venv, and the commit hook runs a bare python3.",
+        "gates": True,
+        "governed_by": ("D18",),
+    },
+    {
+        "target": "harness-3",
+        "shard": "product-3",
+        "runs": "$(PYTHON) harness/run.py --part 3",
+        "asserts": "Slice 3 of harness/run.py's PARTS of the TESTS list (only part 1 writes the T1 result file; each part runs the T7 checks whose name hashes to it). RECOUNT FROM THERE "
+                   "— this entry deliberately carries no number, because a count published "
+                   "beside a list is the drift this whole file exists about.",
+        "needs": ("venv",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "It needs the venv, and the commit hook runs a bare python3.",
         "gates": True,
         "governed_by": ("D18",),
     },
@@ -575,7 +603,7 @@ CHECKS = (
                    "nothing would pass every outcome assertion here.",
         "needs": ("python3",),
         "writes": "one sqlite store per case and two short-lived processes, all under "
-                  "`mktemp -d`. `PKMNSCAN_HOME` is repointed for every case, so the "
+                  "`mktemp -d`. `BANCHI_HOME` is repointed for every case, so the "
                   "operator's own store is never opened.",
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes a temp store and it signals processes. Same "
@@ -603,7 +631,7 @@ CHECKS = (
                    "assertion cannot see work that no longer happens.",
         "needs": ("python3",),
         "writes": "one sqlite store and one photograph tree per case, all under `mktemp -d`, "
-                  "plus one short-lived process. `PKMNSCAN_HOME` is repointed for every case, "
+                  "plus one short-lived process. `BANCHI_HOME` is repointed for every case, "
                   "so the operator's own store and their 4.45 GB of photographs are never "
                   "opened.",
         "commit_path": False,
@@ -632,7 +660,7 @@ CHECKS = (
                    "`RecordingMarket`, no network.",
         "needs": ("python3",),
         "writes": "one sqlite store, one cached-export CSV tree and one price-history "
-                  "archive per case, all under `mktemp -d`. `PKMNSCAN_HOME` is repointed "
+                  "archive per case, all under `mktemp -d`. `BANCHI_HOME` is repointed "
                   "for every case, so the operator's own store and their real "
                   "`inventory/.exports/` are never opened.",
         "commit_path": False,
@@ -659,7 +687,7 @@ CHECKS = (
                    "lose its first_seen.",
         "needs": ("python3",),
         "writes": "one sqlite store and one review queue per case, all under `mktemp -d`. "
-                  "`PKMNSCAN_HOME` is repointed for every case, so the operator's own store "
+                  "`BANCHI_HOME` is repointed for every case, so the operator's own store "
                   "is never opened.",
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
@@ -701,17 +729,17 @@ CHECKS = (
         "shard": "guards-1",
         "runs": "python3 scripts/identity-checks-selftest.py",
         "asserts": "pipeline/identity_checks.py's four stored-data checks against literal "
-                   "CardRecord fixtures, no store, no network (D239). One positive and one "
+                   "CardRecord fixtures (D239), and cli/cmd_cards.py's `identity`, `photos` "
+                   "and `checks` subcommands against a temp store, no network. One positive and one "
                    "negative arm per check, built from the exact subjects the cited "
                    "decision entry measured (`102/166` in a 298-card Origins, `0934` in a "
                    "132-card ME01, `Shadbow Temple` beside `Shadow Temple`, a "
                    "152-character rules-text name). A mutation arm: a denominator check "
                    "comparing against the first-seen value instead of the dominant one is "
                    "shown to blame the wrong card before the real function is shown to "
-                   "survive the same fixture. This module's one caller "
-                   "(`cli/cmd_cards.py:checks`) is exercised nowhere else — "
-                   "harness/tests/t7_store_and_seams.py drives cli/cmd_cards.py through "
-                   "cards_action='variants' and 'identity' alone, never 'checks'.",
+                   "survive the same fixture. CLI cases: `cards photos --limit N` moves at most N, "
+                   "stamps nothing on a limited pass and `--limit 0` moves none; "
+                   "`cards checks` is reached here and nowhere else.",
         "needs": ("python3",),
         "writes": "nothing — every fixture is a literal CardRecord, never a store on disk.",
         "commit_path": False,
@@ -739,7 +767,7 @@ CHECKS = (
         "needs": ("python3",),
         "writes": "one sqlite store per case under `mktemp -d`, plus (for the mutation arm "
                   "only) one throwaway copy of the `store/` package tree with `db.py` "
-                  "rewritten in it. `PKMNSCAN_HOME` is repointed for every case, so the "
+                  "rewritten in it. `BANCHI_HOME` is repointed for every case, so the "
                   "operator's own store is never opened.",
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes a temp store and, for the mutation arm, a "
@@ -764,7 +792,7 @@ CHECKS = (
                    "route (D60), a real, screen-reachable caller.",
         "needs": ("python3",),
         "writes": "one sqlite store and one price-history archive per case, all under "
-                  "`mktemp -d`. `PKMNSCAN_HOME` is repointed for every case, so the "
+                  "`mktemp -d`. `BANCHI_HOME` is repointed for every case, so the "
                   "operator's own store is never opened.",
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
@@ -783,7 +811,7 @@ CHECKS = (
                    "arm: a naive first-side-wins resolver picks a wrong, silent winner on "
                    "the SHARED_SKU fixture; the real function reports both sides and picks "
                    "none. This module's one caller "
-                   "(`cli/cmd_sku_contradictions.py:run`, `./pkmnscan cards "
+                   "(`cli/cmd_sku_contradictions.py:run`, `./banchi cards "
                    "contradictions`) is exercised nowhere else.",
         "needs": ("python3",),
         "writes": "nothing — every fixture is a literal NumberRecord, never a store on "
@@ -812,9 +840,11 @@ CHECKS = (
                    "unchanged files (idempotent, no duplicate rows), a new run landing "
                    "between two adopts, and a run directory deleted between two adopts (its "
                    "SKU drops out of the table — a cache refresh, never an accumulating "
-                   "ledger).",
+                   "ledger), and `readings adopt --write` refusing (exit non-zero, table kept) "
+                   "over no source, over a malformed pricing.json alone, and over one "
+                   "malformed run among good ones.",
         "needs": ("python3",),
-        "writes": "one sqlite store per case, under `mktemp -d`. `PKMNSCAN_HOME` is "
+        "writes": "one sqlite store per case, under `mktemp -d`. `BANCHI_HOME` is "
                   "repointed for the whole run, so the operator's own store is never opened.",
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
@@ -843,7 +873,7 @@ CHECKS = (
                    "opening to 11 with every other table's row count unchanged; and a "
                    "timed fill of the real fixtures/riftbound_export_untouched.csv.",
         "needs": ("python3",),
-        "writes": "one sqlite store per case, under `mktemp -d`. `PKMNSCAN_HOME` is "
+        "writes": "one sqlite store per case, under `mktemp -d`. `BANCHI_HOME` is "
                   "repointed for the whole run, so the operator's own store is never opened.",
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
@@ -966,8 +996,8 @@ CHECKS = (
                    "cli/cmd_reconcile.py, docs/specs/identity-follows-sku.md §4.2 lane 3b), "
                    "over a real throwaway store and the real CLI dispatch "
                    "(cli.__main__.main) for the wiring, and a bare in-memory Inventory/Skus "
-                   "pair for record_identification's narrowed write. `pkmnscan join` then "
-                   "`pkmnscan emit` over a fresh store whose skus table starts empty: the "
+                   "pair for record_identification's narrowed write. `banchi join` then "
+                   "`banchi emit` over a fresh store whose skus table starts empty: the "
                    "bind succeeds only because cmd_emit upserts the matched row before "
                    "calling bind_sku, in the same transaction bind_sku's own docstring "
                    "requires. The bound card's identity (name/number/printed_total/rarity/"
@@ -977,8 +1007,8 @@ CHECKS = (
                    "directly) leaves the bound identity untouched and writes only read_name/"
                    "read_number/read_printed_total, with read_disputes computed against the "
                    "SKU row's own raw payload — True on a disputing read, False on an "
-                   "agreeing one, None on an unbound card. `pkmnscan join --export` and "
-                   "`pkmnscan reconcile --live` each fold EVERY row of the fixture export "
+                   "agreeing one, None on an unbound card. `banchi join --export` and "
+                   "`banchi reconcile --live` each fold EVERY row of the fixture export "
                    "into the skus table, including a SKU no card in the run matched — never "
                    "only pipeline/join.py:Catalog's D137-narrowed or matched rows. A "
                    "two-game merged emit (Pokemon plus Riftbound, no --split-games) resolves "
@@ -991,7 +1021,7 @@ CHECKS = (
                    "routing.NAME_DISPUTED, with JoinReport.ok's own closure invariant "
                    "(cards_in vs cards_out) kept rather than tripped.",
         "needs": ("python3",),
-        "writes": "one sqlite store per case, under `mktemp -d`. `PKMNSCAN_HOME` is "
+        "writes": "one sqlite store per case, under `mktemp -d`. `BANCHI_HOME` is "
                   "repointed for the whole run, so the operator's own store is never opened.",
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
@@ -1015,6 +1045,35 @@ CHECKS = (
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes, and it signals processes. It drives a "
                                "tool that can delete a worktree.",
+        "gates": True,
+        "governed_by": ("D18", "D138"),
+    },
+    {
+        "target": "worktree-create-selftest",
+        "shard": "guards-1",
+        "runs": "bash scripts/worktree-create-selftest.sh",
+        "asserts": "scripts/worktree-create.sh run for four names at once, five rounds, in a "
+                   "throwaway repo with an origin: every creation exits 0 and prints its path, "
+                   "21 trees and 20 branches exist, and no .git/config.lock is left. Red on the "
+                   "hook without --no-track, where parallel creations hit the config lock.",
+        "needs": ("python3", "bash", "git"),
+        "writes": "a bare origin, a clone and twenty linked worktrees, all under `mktemp -d`.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp repo and twenty worktrees.",
+        "gates": True,
+        "governed_by": ("D18",),
+    },
+    {
+        "target": "session-teardown-selftest",
+        "shard": "guards-1",
+        "runs": "bash scripts/session-teardown-selftest.sh",
+        "asserts": "scripts/session-teardown.sh's branch-delete step in a throwaway repo: a "
+                   "worktree-* branch already in the local origin/main is deleted, and an "
+                   "unmerged one is kept.",
+        "needs": ("python3", "bash", "git"),
+        "writes": "a bare origin, a clone and linked worktrees, all under `mktemp -d`.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp repo and removes worktrees.",
         "gates": True,
         "governed_by": ("D18", "D138"),
     },
@@ -1054,7 +1113,7 @@ CHECKS = (
                    "2>/dev/null`, `git merge --abort 2>/dev/null`, `git merge-tree`, "
                    "`make revert-selftest`, and a quoted `>/dev/null` inside a commit message. "
                    "The refusal's own text is scored too — a refusal that does not print "
-                   "`PKMNSCAN_SILENT=off` fails here.",
+                   "`BANCHI_SILENT=off` fails here.",
         "needs": ("python3", "bash", "git"),
         "writes": "a git repository, a pre-commit hook and two commits, all under `mktemp -d`. "
                   "It starts no long-lived process and signals nothing.",
@@ -1120,7 +1179,7 @@ CHECKS = (
                    "have to take on trust.",
         "needs": ("python3",),
         "writes": "a lock directory and lock files under `mktemp -d`, reached through "
-                  "PKMNSCAN_LOCK_DIR so the real lock is never touched — a self-test that "
+                  "BANCHI_LOCK_DIR so the real lock is never touched — a self-test that "
                   "took the real one would refuse a suite running in another checkout.",
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes, and it spawns processes and kills them. It "
@@ -1138,7 +1197,7 @@ CHECKS = (
                    "screen (`Inventory.tsx`) reaches its own spec and every `routesFromNav(` "
                    "spec but not an unrelated one, an unknown `app/` path and a path carrying "
                    "whitespace both select every spec rather than a guess, and "
-                   "`PKMNSCAN_BROWSER_SCOPE=all` does too.",
+                   "`BANCHI_BROWSER_SCOPE=all` does too.",
         "needs": ("python3",),
         "writes": "",
         "commit_path": False,
@@ -1163,7 +1222,7 @@ CHECKS = (
         "needs": ("python3",),
         "writes": "two throwaway checkouts, their `.serve/` directories and the supervisors "
                   "and capture servers running under them, all inside `mktemp -d`. The "
-                  "capture port is PINNED with `PKMNSCAN_PORT` to a free socket rather than "
+                  "capture port is PINNED with `BANCHI_PORT` to a free socket rather than "
                   "derived: a copy with no `.git` takes a slot from its path "
                   "(D261), and a slot can collide with another worktree's "
                   "where a free socket cannot.",
@@ -1291,7 +1350,7 @@ CHECKS = (
                    "and the roster name each other in both directions, that a fresh import "
                    "added to a fixture is picked up with no edit to this file, that a "
                    "sub-chain (`ROOT / \"scripts\"` alone) never surfaces as a false subject, "
-                   "and the fail-open cases: an unscoped target, `PKMNSCAN_GUARD_SCOPE=all`, "
+                   "and the fail-open cases: an unscoped target, `BANCHI_GUARD_SCOPE=all`, "
                    "and a nonexistent head commit all RUN.",
         "needs": ("python3", "git"),
         "writes": "two throwaway fixture files under `tempfile.TemporaryDirectory()`, to "
@@ -1362,7 +1421,7 @@ CHECKS = (
                    "slot, and a damaged registry reads as nothing claimed on both sides.",
         "needs": ("python3", "node", "app deps"),
         "writes": "two throwaway trees and a slot registry under `mktemp -d`, reached through "
-                  "PKMNSCAN_SLOT_REGISTRY so the real registry is never touched.",
+                  "BANCHI_SLOT_REGISTRY so the real registry is never touched.",
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes, starts a Vite and a Playwright run, binds "
                                "ports and stops the processes it started.",
@@ -1387,7 +1446,7 @@ CHECKS = (
                    "`heimerdinger-inventor` never reaching `_match_rank` at all, because "
                    "no token the index holds starts with either spelling.",
         "needs": ("python3",),
-        "writes": "one sqlite store per do_search case, under `mktemp -d`. `PKMNSCAN_HOME` "
+        "writes": "one sqlite store per do_search case, under `mktemp -d`. `BANCHI_HOME` "
                   "is repointed for every case, so the operator's own store is never "
                   "opened.",
         "commit_path": False,
@@ -1563,8 +1622,8 @@ def wrap(text: str, indent: int, width: int = WIDTH) -> List[str]:
 def table() -> str:
     longest = max(len(entry["target"]) for entry in CHECKS)
     lines = [
-        "PKMNSCAN — what `make check` runs" + f"{len(CHECKS)} checks".rjust(
-            WIDTH - len("PKMNSCAN — what `make check` runs")
+        "BANCHI — what `make check` runs" + f"{len(CHECKS)} checks".rjust(
+            WIDTH - len("BANCHI — what `make check` runs")
         ),
         "=" * WIDTH,
         "",

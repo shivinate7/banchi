@@ -1,4 +1,4 @@
-"""`pkmnscan readings` — the cached market-reading table: fold the two sources in, or look at it.
+"""`banchi readings` — the cached market-reading table: fold the two sources in, or look at it.
 
 WHY THERE IS A COMMAND AT ALL. `server/pipeline_routes.py:_readings()` used to walk every
 run's `pricing.json` and the newest live export on EVERY `GET /pipeline/value`, comparing the
@@ -9,7 +9,7 @@ that walk now fills once; `_readings()` is a plain `SELECT` against it.
 
 `adopt` DOES THE WALK AND WRITES THE TABLE. IT PREVIEWS BY DEFAULT.
 
-Modelled on `pkmnscan prices adopt` (`cli/cmd_prices.py`), and DELIBERATELY SIMPLER than it in
+Modelled on `banchi prices adopt` (`cli/cmd_prices.py`), and DELIBERATELY SIMPLER than it in
 one respect: `prices adopt` previews because folding a run's `decisions.json` into the shared
 corpus is a REAL DECISION — newest-wins can silently replace a deliberate price hold with a
 figure nobody meant to compare it to (D86). Nothing here is a decision. `readings` holds no
@@ -30,12 +30,14 @@ from typing import Dict
 
 from pipeline import readings as readings_walk
 from store import files
-from store.readings import Reading
+from store.readings import KIND_LIVE, Reading
 from store.session import Store
 
 
 def _adopt(args, say) -> int:
-    found, sources = readings_walk.collect()
+    bad: list = []
+    skipped: list = []
+    found, sources = readings_walk.collect(bad, skipped)
 
     try:
         before: Dict[str, Reading] = dict(Store().read().readings.entries)
@@ -68,6 +70,24 @@ def _adopt(args, say) -> int:
             say(f"  {sku}")
         if len(dropped) > 20:
             say(f"  ... and {len(dropped) - 20} more")
+
+    if skipped:
+        # lost = rows the table holds from a live export that nothing offers now
+        lost = sum(1 for sku in dropped if before[sku].kind == KIND_LIVE)
+        for name in skipped:
+            say(f"skipped live export {name}: it could not be read; {lost} sku(s) from an "
+                f"earlier live export are lost")
+
+    if args.write and (bad or not found):
+        say("")
+        for path in bad:
+            say(f"refused: {path} could not be read; adopting would drop its SKUs")
+        if bad:
+            say("to proceed, move or delete that run's pricing.json under the runs folder "
+                "(inside BANCHI_HOME), then run adopt again")
+        if not found:
+            say("refused: no reading found; adopting would blank the table")
+        return 1
 
     if not args.write:
         say("")

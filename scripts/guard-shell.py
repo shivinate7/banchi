@@ -161,23 +161,23 @@ class Clause(NamedTuple):
 
 
 CLAUSES = (
-    Clause("checkout", "PKMNSCAN_CHECKOUT",
+    Clause("checkout", "BANCHI_CHECKOUT",
            "never `git checkout <path>` or `git restore <path>` over a modified file"),
-    Clause("tree", "PKMNSCAN_TREE",
+    Clause("tree", "BANCHI_TREE",
            "never write outside the checkout this session is standing in, and never `cd` "
            "into another one"),
-    Clause("wait", "PKMNSCAN_WAIT",
+    Clause("wait", "BANCHI_WAIT",
            "never poll in a loop — background the work and take its notification"),
-    Clause("push", "PKMNSCAN_PUSH",
+    Clause("push", "BANCHI_PUSH",
            "never `git push <remote> HEAD` / `<remote> <branch>` when the tracked upstream "
            "is a different, non-default branch"),
-    Clause("stash", "PKMNSCAN_STASH",
+    Clause("stash", "BANCHI_STASH",
            "never a bare `git stash`, `git stash pop`, or `git stash drop`/`clear` with no "
            "explicit entry — the stack is shared across every worktree"),
-    Clause("reset", "PKMNSCAN_RESET",
+    Clause("reset", "BANCHI_RESET",
            "never `git reset --hard`/`--merge`/`--keep` over a tree that still holds "
            "uncommitted tracked changes"),
-    Clause("narrate", "PKMNSCAN_NARRATE",
+    Clause("narrate", "BANCHI_NARRATE",
            "never hide the heartbeat of a command that waits for minutes — let its output "
            "reach the session as it happens"),
 )
@@ -201,7 +201,7 @@ SKIPPED: Set[str] = set()
 
 
 def _off(clause: str, command: str) -> bool:
-    """Whether this clause is skipped, or its hatch is set, in either of `PKMNSCAN_KILL`'s forms."""
+    """Whether this clause is skipped, or its hatch is set, in either of `BANCHI_KILL`'s forms."""
     if clause in SKIPPED:
         return True
     name = HATCH[clause]
@@ -210,16 +210,16 @@ def _off(clause: str, command: str) -> bool:
 
 # ---------------------------------------------------------------------- the hatch log
 #
-# EVERY `PKMNSCAN_<NAME>=off` A COMMAND SETS IS LOGGED (D179), because a hatch that lifts a
+# EVERY `BANCHI_<NAME>=off` A COMMAND SETS IS LOGGED (D179), because a hatch that lifts a
 # guard prints nothing while it does. One line per name, tab-separated: time, hatch, checkout,
 # branch, the first 120 characters of the command. The file lives in git's common dir, so every
 # worktree of this clone writes one log; `scripts/status.py` reads it back through
 # `recent_hatch_uses`. LOG ONLY: no verdict reads it, and any error here is swallowed.
 
-HATCH_LOG = "pkmnscan-hatches.log"
+HATCH_LOG = "banchi-hatches.log"
 # `$V=off` (a variable naming the switch) counts as a setting too: the name is unknowable here.
-_HATCH_TOKEN = re.compile(r"^(?:(PKMNSCAN_[A-Z0-9_]+)|\$\{?[A-Za-z_][A-Za-z0-9_]*\}?)=\$?off$")
-UNRESOLVED = "PKMNSCAN_(unresolved)"
+_HATCH_TOKEN = re.compile(r"^(?:(BANCHI_[A-Z0-9_]+)|\$\{?[A-Za-z_][A-Za-z0-9_]*\}?)=\$?off$")
+UNRESOLVED = "BANCHI_(unresolved)"
 
 # Words that run or carry another command, so the assignment after them reaches that command's
 # environment: the wrappers shell_parse already knows, plus the ones that SET one.
@@ -1703,14 +1703,14 @@ def clause_narrate(reading: "shell_parse.Reading") -> Verdict:
 
 #: THE RECOVERY LEVERS: the hatches an agent may still set, because each one frees a stuck
 #: session (a wedged process, a held lock, a main that will not sync). Every other
-#: `PKMNSCAN_*=off` is the owner's to set, from the owner's terminal, never from a tool call.
-RECOVERY_LEVERS = frozenset({"PKMNSCAN_KILL", "PKMNSCAN_SUITE_LOCK", "PKMNSCAN_SERVE_MAIN",
-                             "PKMNSCAN_SYNC"})
+#: `BANCHI_*=off` is the owner's to set, from the owner's terminal, never from a tool call.
+RECOVERY_LEVERS = frozenset({"BANCHI_KILL", "BANCHI_SUITE_LOCK", "BANCHI_SERVE_MAIN",
+                             "BANCHI_SYNC"})
 OWNER_ONLY = "owner-only: ask the owner to run this command"
 
 
 def clause_owner_only(command: str) -> Verdict:
-    """Refuse a REAL `PKMNSCAN_*=off` in an agent's command, naming no switch (owner's word).
+    """Refuse a REAL `BANCHI_*=off` in an agent's command, naming no switch (owner's word).
 
     Read by `_hatches_set`, so a mention is not a setting. A tool call is the only thing this
     sees: the owner's terminal, CI and the self-tests (subprocesses, not tool calls) pass.

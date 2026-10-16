@@ -37,7 +37,7 @@
  * the same manual-wins-until-toggled behaviour, just kept inside the component that draws it.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 
 import { ReadingAge } from './CardLocations'
 import { collectorNumber } from './cardNumber'
@@ -81,12 +81,19 @@ export function numberCell(card: InventoryCard): string {
   return collectorNumber(card) ?? 'none'
 }
 
-/** An enum value drawn as a word: `reverse_holofoil` → `Reverse Holofoil`. */
-export function titleCase(raw: string): string {
-  return raw
-    .split(/[_\s]+/)
-    .filter((word) => word !== '')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+/** Chicago keeps these lowercase between the first and last word. */
+export const SMALL_WORDS: ReadonlySet<string> = new Set([
+  'a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'so', 'yet',
+  'as', 'at', 'by', 'in', 'of', 'on', 'to', 'up', 'via', 'per', 'unless', 'with',
+  'vs', 'about', 'under', 'over', 'into', 'onto', 'from', 'upon', 'near', 'past', 'off', 'out', 'down',
+])
+
+/** THE ONE HOME FOR TITLE CASE. An enum value drawn as a word: `reverse_holofoil` → `Reverse Holofoil`.
+ *  With `chicago`, the small words stay lowercase unless first or last: `waiting for a paid look` → `Waiting for a Paid Look`. */
+export function titleCase(raw: string, chicago = false): string {
+  const words = raw.split(/[_\s]+/).filter((word) => word !== '')
+  return words
+    .map((word, i) => (chicago && i > 0 && i < words.length - 1 && SMALL_WORDS.has(word) ? word : word.charAt(0).toUpperCase() + word.slice(1)))
     .join(' ')
 }
 
@@ -110,7 +117,7 @@ function isCode(text: string): boolean {
 
 /** A set-valued claim, rendered — a bare string reads as a one-member set. */
 export function claimText(claim: string | string[] | null, word: (member: string) => string = (member) => member): string {
-  const members = claimList(claim).map(word)
+  const members = claimList(claim).map((member) => word(member))
   return members.length === 0 ? 'none recorded' : members.join(', ')
 }
 
@@ -274,7 +281,7 @@ export function factGroupsOf(
         ...(listedAs !== null ? [listedAs] : []),
         ...(readAs !== null ? [readAs] : []),
         { label: 'Game', value: gameWord(card) ?? 'not recorded' },
-        { label: 'Set hint', value: card.set_hint ?? 'none', kind: 'mono' },
+        { label: 'Set Hint', value: card.set_hint ?? 'none', kind: 'mono' },
         /* THE COPIES HEADER'S SKU AND CONDITION LINE IS GONE: these two are its facts, said here. */
         ...(card.sku === null || card.sku.trim() === '' ? [] : [{ label: 'SKU', value: card.sku.trim(), kind: 'mono' as const }]),
         ...(card.sku === null || listings[card.sku.trim()]?.condition == null
@@ -285,8 +292,8 @@ export function factGroupsOf(
     {
       title: 'Claims',
       facts: [
-        { label: 'Finish', value: claimText(card.metadata_finish, titleCase) },
-        { label: 'Rarity', value: claimText(card.rarity_claim, titleCase) },
+        { label: 'Finish', value: claimText(card.metadata_finish, (member) => titleCase(member, true)) },
+        { label: 'Rarity', value: claimText(card.rarity_claim) },
         { label: 'Note', value: card.note ?? 'none' },
       ],
     },
@@ -306,6 +313,20 @@ export function factGroupsOf(
 }
 
 /* -------------------------------------------------------------------------- the hero head */
+
+/** A side figure with a text box that opens on hover and on keyboard focus (Escape closes it). The box is
+ *  `visibility`-toggled in CSS, so it holds its room and moves nothing (D313). */
+function FigureChip({ tip, children }: { readonly tip: string; readonly children: ReactNode }) {
+  const id = useId()
+  return (
+    <span className="browse-hero-chip" tabIndex={0} aria-describedby={id} onKeyDown={(e) => e.key === 'Escape' && e.currentTarget.blur()}>
+      {children}
+      <span id={id} role="tooltip" className="browse-hero-chip-tip">
+        {tip}
+      </span>
+    </span>
+  )
+}
 
 /** THE BAND'S FIGURES, HANDED IN BY WHICHEVER SCREEN HOLDS THE CARD'S SEARCH GROUP (the card-detail
  *  spec, "The band"). They are facts about the card and its copies, so they sit with the card and
@@ -453,11 +474,11 @@ function HeroLead({ figures, market }: { readonly figures: HeroFigures; readonly
 
 /** STAND-IN TEXT: the text sets the box (the browser's own font, so the size is right on any
  *  platform) and is hidden, and the kit's `Skeleton` is laid over it for the bar and its shimmer. */
-function Ghost({ children, className }: { readonly children: ReactNode; readonly className?: string }) {
+function Ghost({ children, className, quiet = false }: { readonly children: ReactNode; readonly className?: string; readonly quiet?: boolean }) {
   return (
     <span className={['bn-ghost', className].filter(Boolean).join(' ')}>
       {children}
-      <Skeleton className="bn-ghost-bar" />
+      {quiet ? null : <Skeleton className="bn-ghost-bar" />}
     </span>
   )
 }
@@ -470,39 +491,40 @@ function Ghost({ children, className }: { readonly children: ReactNode; readonly
  *  own font, so the two states agree on any platform rather than by a tuned number. Stored, Live
  *  and Market for a card with a SKU, Stored alone for one without (D119, no SKU, no listing
  *  figures). */
-function HeroLeadPending({ listing }: { readonly listing: boolean }) {
+function HeroLeadPending({ listing, empty = false, note = null }: { readonly listing: boolean; readonly empty?: boolean; readonly note?: ReactNode }) {
   const label = (text: string) => (
     <span className="browse-hero-fig-label">
       <span className="bn-label">{text}</span>
     </span>
   )
   return (
-    <div className="browse-hero-lead" aria-hidden="true" data-pending="true">
-      <div className="browse-hero-fig">
+    <div className="browse-hero-lead" aria-hidden={empty ? undefined : true} data-pending={empty ? undefined : 'true'} data-empty={empty ? 'true' : undefined}>
+      {empty && note !== null ? <div className="browse-hero-empty">{note}</div> : null}
+      <div className="browse-hero-fig" aria-hidden="true">
         {label('Stored')}
         <span className="browse-hero-fig-value">
-          <Ghost>00</Ghost>
+          <Ghost quiet={empty}>00</Ghost>
         </span>
       </div>
       {listing ? (
         <>
-          <div className="browse-hero-fig browse-hero-fig-live">
+          <div className="browse-hero-fig browse-hero-fig-live" aria-hidden="true">
             {label('Live')}
             <span className="browse-hero-fig-value">
-              <Ghost>00</Ghost>
+              <Ghost quiet={empty}>00</Ghost>
             </span>
             <span className="bn-meter">
               <span className="bn-meter-cells">
                 <span />
               </span>
-              <Ghost className="bn-meter-end">Cap 0</Ghost>
+              <Ghost quiet={empty} className="bn-meter-end">Cap 0</Ghost>
             </span>
           </div>
-          <div className="browse-hero-fig">
+          <div className="browse-hero-fig" aria-hidden="true">
             {label('Market')}
             <span className="browse-hero-fig-value">
               <span className="bn-datalink">
-                <Ghost>$0.00</Ghost>
+                <Ghost quiet={empty}>$0.00</Ghost>
               </span>
             </span>
           </div>
@@ -525,6 +547,8 @@ export function CardHeroHead({
   actions,
   figures,
   figuresPending = false,
+  figuresEmpty = false,
+  figuresNote = null,
   market = null,
 }: {
   readonly card: InventoryCard
@@ -537,6 +561,10 @@ export function CardHeroHead({
   readonly figures?: HeroFigures | null
   /** The copies search has not answered: hold the figures column at its final width. */
   readonly figuresPending?: boolean
+  /** The copies search answered with no group for this card: the figures column keeps its place and says so. */
+  readonly figuresEmpty?: boolean
+  /** What the empty figures slot says: the search's own warning, drawn in the slot the figures would fill. */
+  readonly figuresNote?: ReactNode
   /** The Market figure's price (`useMarketPrice`). */
   readonly market?: number | null
 }) {
@@ -549,7 +577,7 @@ export function CardHeroHead({
     <div className="browse-hero-head">
       <div className="browse-hero-text">
         <div className="browse-hero-titlerow">
-          <h2 className={name === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>{name ?? 'Not identified yet'}</h2>
+          <h2 className={name === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>{name ?? 'Not Identified Yet'}</h2>
           {/* THE RE-SORT BUTTON sits beside Actions, the same IconButton at the same size, so the row's
               height is the same with it or without it (D118). Shown only while the order is stale;
               the staleness sentence is its tooltip and accessible name. */}
@@ -574,13 +602,13 @@ export function CardHeroHead({
           </span>
           {preChips}
           {claimList(card.metadata_finish).map((finish) => (
-            <Pill key={`f-${finish}`} icon="sparkles" outline title={titleCase(finish)}>
-              {titleCase(finish)}
+            <Pill key={`f-${finish}`} icon="sparkles" outline title={titleCase(finish, true)}>
+              {titleCase(finish, true)}
             </Pill>
           ))}
           {claimList(card.rarity_claim).map((rarity) => (
-            <Pill key={`r-${rarity}`} outline title={titleCase(rarity)}>
-              {titleCase(rarity)}
+            <Pill key={`r-${rarity}`} outline title={rarity}>
+              {rarity}
             </Pill>
           ))}
           {/* THE CARD'S STATE ONLY WHEN IT IS THE EXCEPTION (UX-221) — `BoxBrowse.tsx`'s own
@@ -592,16 +620,16 @@ export function CardHeroHead({
         {/* THE SIDE FACTS: history, quieter than the lead figures and equal to each other. Hidden
             is drawn at 0 too, so a sale that folds a copy away adds no line (D118). */}
         {figures == null ? (
-          figuresPending ? (
-            <div className="browse-hero-side" aria-hidden="true" data-pending="true">
-              <Ghost>
+          figuresPending || figuresEmpty ? (
+            <div className="browse-hero-side" aria-hidden="true" data-pending={figuresPending ? 'true' : undefined} data-empty={figuresPending ? undefined : 'true'}>
+              <Ghost quiet={figuresEmpty}>
                 Captured<b>0</b>
               </Ghost>
-              <Ghost>
+              <Ghost quiet={figuresEmpty}>
                 Hidden<b>0</b>
               </Ghost>
               {card.sku === null ? null : (
-                <Ghost>
+                <Ghost quiet={figuresEmpty}>
                   Sent<b>0</b>
                 </Ghost>
               )}
@@ -609,24 +637,24 @@ export function CardHeroHead({
           ) : null
         ) : (
           <p className="browse-hero-side">
-            <span>
+            <FigureChip tip="You have captured this many copies of this card, sold ones included.">
               Captured<b>{figures.group.copies.length}</b>
-            </span>
-            <span>
+            </FigureChip>
+            <FigureChip tip="You have this many sold copies tucked out of the list below.">
               Hidden<b>{figures.hidden}</b>
-            </span>
+            </FigureChip>
             {figures.group.sku === null ? null : (
-              <span>
+              <FigureChip tip="You have sent this many copies to TCGplayer in an import file.">
                 Sent<b>{figures.group.listed.pushed}</b>
-              </span>
+              </FigureChip>
             )}
           </p>
         )}
       </div>
       {figures != null ? (
         <HeroLead figures={figures} market={market} />
-      ) : figuresPending ? (
-        <HeroLeadPending listing={card.sku !== null} />
+      ) : figuresPending || figuresEmpty ? (
+        <HeroLeadPending listing={card.sku !== null} empty={figuresEmpty && !figuresPending} note={figuresNote} />
       ) : null}
     </div>
   )
@@ -651,13 +679,15 @@ export type CardPaneProps = {
   /** The band's figures. Omitted, the band draws the identity alone. */
   readonly figures?: HeroFigures | null
   readonly figuresPending?: boolean
+  readonly figuresEmpty?: boolean
+  readonly figuresNote?: ReactNode
   readonly photo: Omit<PhotoPanelProps, 'row'>
   /** The copies list beside the photo — `Inventory.tsx`'s `CopiesPanel`, handed down because
    *  the caller already knows which card is selected. */
   readonly detail?: ReactNode
 }
 
-export function CardPane({ row, game, dimmed = false, preChips, postChips, queued, actions, figures, figuresPending, photo, detail }: CardPaneProps) {
+export function CardPane({ row, game, dimmed = false, preChips, postChips, queued, actions, figures, figuresPending, figuresEmpty, figuresNote, photo, detail }: CardPaneProps) {
   const market = useMarketPrice(row.card)
   return (
     <section
@@ -666,7 +696,7 @@ export function CardPane({ row, game, dimmed = false, preChips, postChips, queue
       data-dimmed={dimmed ? 'true' : undefined}
       inert={dimmed}
     >
-      <CardHeroHead card={row.card} game={game} preChips={preChips} postChips={postChips} actions={actions} figures={figures} figuresPending={figuresPending} market={market} />
+      <CardHeroHead card={row.card} game={game} preChips={preChips} postChips={postChips} actions={actions} figures={figures} figuresPending={figuresPending} figuresEmpty={figuresEmpty} figuresNote={figuresNote} market={market} />
       {queued}
       {/* NO `detail`, NO COPIES COLUMN: `#/orders`' walk draws where each copy is in its own column, so
           its card pane is the head, the band and the photograph alone (same components, switched off
@@ -759,6 +789,8 @@ export type PhotoPanelProps = {
   absent: boolean
   onAbsent: () => void
   nonce: string | null
+  /** The catalogue's stock photo (D301), drawn only where the card's own photograph was reclaimed. */
+  stockImage?: string | null
   onZoom: () => void
   reshoot: ReactNode
   /** The box registry, so a moved card can say which box it went to by name. */
@@ -768,11 +800,41 @@ export type PhotoPanelProps = {
   gone?: string
 }
 
+/** A sold card's photograph, reclaimed on purpose (D89). With a stock image (D301) it draws that
+ *  in the same `.bn-photo` box, labeled so it is never taken for the owner's copy; with none, or
+ *  when the image fails to load, today's reclaimed box. */
+function ReclaimedPhoto({ row, stockImage }: { row: Row; stockImage: string | null }) {
+  const [failed, setFailed] = useState(false)
+  if (stockImage !== null && !failed) {
+    return (
+      <div className="bn-photo browse-stock">
+        <img src={stockImage} alt="" loading="lazy" onError={() => setFailed(true)} />
+        <span className="browse-stock-label">Stock photo, not your copy</span>
+      </div>
+    )
+  }
+  return (
+    <div className="bn-photo browse-absent">
+      <Icon name="check" size={28} />
+      <p>Photograph reclaimed after the sale — deleted on purpose, record kept.</p>
+      <span className="browse-machine bn-facts">
+        <span>reclaimed {row.card.photo_reclaimed_at}</span>
+        {row.card.photo_sha256 ? (
+          <>
+            {' '}
+            <span>sha256 {row.card.photo_sha256.slice(0, 16)}…</span>
+          </>
+        ) : null}
+      </span>
+    </div>
+  )
+}
+
 /** Three ways a photo can be missing — never stored, reclaimed on purpose after the sale
  *  (D89), or claimed and not on disk — each a card-shaped placeholder. `reshoot` is optional
  *  by the caller's own choice: `#/orders` passes `null`, since re-shooting a card mid-walk is
  *  an Inventory-only correction. */
-export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoot, boxes = [], gone }: PhotoPanelProps) {
+export function PhotoPanel({ row, label, absent, onAbsent, nonce, stockImage = null, onZoom, reshoot, boxes = [], gone }: PhotoPanelProps) {
   /* D218: `label` is the server's `Position.label`, and this panel only ever speaks it —
      the paragraph below and the photo's own `alt` are plain text and an accessible name,
      where there is no CSS to draw the ` · ' with, so `sayPlace` reads it as a sentence
@@ -797,21 +859,7 @@ export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoo
   }
 
   if (row.card.photo_reclaimed_at !== null) {
-    return (
-      <div className="bn-photo browse-absent">
-        <Icon name="check" size={28} />
-        <p>Photograph reclaimed after the sale — deleted on purpose, record kept.</p>
-        <span className="browse-machine bn-facts">
-          <span>reclaimed {row.card.photo_reclaimed_at}</span>
-          {row.card.photo_sha256 ? (
-            <>
-              {' '}
-              <span>sha256 {row.card.photo_sha256.slice(0, 16)}…</span>
-            </>
-          ) : null}
-        </span>
-      </div>
-    )
+    return <ReclaimedPhoto key={stockImage ?? ''} row={row} stockImage={stockImage} />
   }
 
   const src = photoSrc(row, nonce)

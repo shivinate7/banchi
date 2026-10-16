@@ -7,7 +7,7 @@
 /** How a range is captioned. The endpoint's own range names are drawn beside these, small. */
 export const RANGE_LABEL: Record<string, string> = {
   month: 'Daily',
-  quarter: '3-day',
+  quarter: '3-Day',
   semiannual: 'Weekly',
   annual: 'Weekly',
 }

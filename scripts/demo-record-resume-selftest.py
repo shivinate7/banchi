@@ -320,7 +320,7 @@ def _work_area_scrubs_before_it_writes_to_disk() -> None:
         home = root / "home"
         _write_store(home, b"snapshot-scrub")
 
-        secret_root = Path("/Users/some-owner/Developer/pkmnscan")
+        secret_root = Path("/Users/some-owner/Developer/banchi")
         pairs = [(str(secret_root), "/machine")]
 
         class LeakyServer(FakeServer):

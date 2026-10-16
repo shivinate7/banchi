@@ -374,7 +374,7 @@ def run(ok) -> None:
         written(
             "CliInvocation.tsx",
             "export function CliInvocation() {\n"
-            "  return <span title=\"Run `pkmnscan rescue` to rebind it.\">stranded</span>\n"
+            "  return <span title=\"Run `banchi rescue` to rebind it.\">stranded</span>\n"
             "}\n",
         )
         written(
@@ -445,5 +445,5 @@ def run(ok) -> None:
             ok("PullConfirm.tsx" in hit_files,
                "the pull-confirm screen is NOT exempt, for the same reason")
             ok("CliInvocation.tsx" in hit_files,
-               "a backticked `pkmnscan …` invocation is caught — `Pricing.tsx:4468`'s own "
+               "a backticked `banchi …` invocation is caught — `Pricing.tsx:4468`'s own "
                "defect before D210, and the row had no key for it")

@@ -6,6 +6,7 @@ import { NO_FREE_FIELDS, matchState, runRow, stubMatchState } from './routeFixtu
 import { HAIKU_NAME_TOOLTIP, MATCHER_NAME_TOOLTIP } from '../src/engines'
 import type { MatchState } from '../src/types'
 import { expectOneStagger } from './staggerCheck'
+import { afterPaint, settleMotion } from './motionSettled'
 import { boxTitle } from '../src/kit/dataRules'
 
 /* THE PIPELINE IS REACHABLE FROM A SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
@@ -13,7 +14,7 @@ import { boxTitle } from '../src/kit/dataRules'
  * `CLAUDE.md`'s hard rule — "A ROUTE IS NOT A FEATURE. Nothing is built until it is reachable
  * from a screen" — was written after three tested routes turned out to have no control
  * anywhere. The pipeline was the larger instance of the same thing and nobody had counted it:
- * `./pkmnscan identify | join | emit | reconcile` has existed since step 4, has been through a
+ * `./banchi identify | join | emit | reconcile` has existed since step 4, has been through a
  * real 53-card run and a real 544-card run, and until now could only be reached by somebody
  * typing at a terminal. `docs/GATES.md` records what that cost — "the owner had no visibility
  * into emitted import files; their names exist only in CLI output the owner never sees when
@@ -643,12 +644,47 @@ async function pickBox(page: Page, box = 9) {
      more: a selection can begin from a STATE, from the cards handed over, or from a previous
      run. Choosing the start first is idempotent — `Segmented` re-presses without toggling —
      so every existing caller of this helper keeps meaning what it meant. */
+  /* THE PRESS WAITS FOR THE SHEET TO FINISH ARRIVING. A case that pressed `Identify` and went
+     straight to this helper (the two Prepare cases, which have no quote to wait for) pressed
+     `Boxes` while `bn-dialog-in` was still running. Playwright's stability check read the rect
+     before the starved page painted its first frame, so the mouse went down on the button and came
+     up with the dialog still moving: CI's trace has focus on `Boxes` and `aria-pressed` false
+     through to the 15s timeout. The cases that open through `openComposer` never met it, because
+     they wait out the first quote. */
+  await expect(page.locator('.runs-composer')).toBeVisible()
+  await settleMotion(page)
   const drawers = page.locator('.runs-starts').getByRole('button', { name: 'Boxes' })
   await drawers.click()
+  /* THE PRESS IS THE ASSERTION: a lost press fails here, by name, and not 15s later on a box chip. */
+  await expect(drawers).toHaveAttribute('aria-pressed', 'true')
   const label = boxTitle(BOX_NAMES[box] ?? null, box)
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   await page.locator('.runs-boxes').getByRole('button', { name: new RegExp(`^${escaped}\\b`) }).click()
 }
+
+/** A press held through the dialog's entry still takes. The entry once moved and scaled the panel,
+ *  so the pointer-up landed on its parent and no `click` fired: `Boxes` stayed unpressed. */
+test('Boxes takes a press held 200ms while the dialog is still entering', async ({ page }) => {
+  await open(page, { runs: [runRow({})] })
+  await openComposer(page)
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.runs-composer')).toBeHidden()
+  await page.locator('.runs-actions').getByRole('button', { name: /^Identify/ }).click()
+  /* THE FIRST FRAME THE BUTTON EXISTS IN, polled on rAF: any slower and the entry is over before
+     the press starts, and the case passes on code it should fail. */
+  const at = await (await page.waitForFunction(() => {
+    const b = [...document.querySelectorAll('.runs-starts button')].find((e) => e.textContent?.trim() === 'Boxes')
+    if (!b || b.getAttribute('aria-pressed') !== 'false') return null
+    const r = b.getBoundingClientRect()
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+  }, undefined, { polling: 'raf' })).jsonValue()
+  const boxes = page.locator('.runs-starts').getByRole('button', { name: 'Boxes' })
+  await page.mouse.move(at!.x, at!.y)
+  await page.mouse.down()
+  await page.waitForTimeout(200) // keep: the held press under test
+  await page.mouse.up()
+  await expect(boxes).toHaveAttribute('aria-pressed', 'true')
+})
 
 /** Forward from the boxes stage to the reading stage. */
 async function toReading(page: Page, reader: 'paid' | 'free' = 'paid') {
@@ -1665,7 +1701,7 @@ test('a drawer is untickable, and the last one out leaves nothing to price', asy
 
 test('a box the send could not start is named, not swallowed', async ({ page }) => {
   await open(page, {
-    failed: [{ code: 'spawn_failed', message: 'Could not start `pkmnscan identify`' }],
+    failed: [{ code: 'spawn_failed', message: 'Could not start `banchi identify`' }],
   })
   await openComposer(page)
   await pickBox(page, 9)
@@ -1683,6 +1719,68 @@ test('a box the send could not start is named, not swallowed', async ({ page }) 
   const note = page.locator('.runs-composer')
   await expect(note).toContainText('did not start')
   await expect(note).toContainText('spawn_failed')
+})
+
+// ------------------------------------------------------ no spend notice, no threshold setting
+
+const SPEND_KEY = 'banchi.runs.spend-notice'
+
+/** Records every localStorage key read or written, so "never touched" is asserted, not inferred. */
+async function watchStorage(page: Page, seed?: Record<string, string>) {
+  await page.addInitScript((seeded) => {
+    const touched: string[] = []
+    ;(window as unknown as { __touched: string[] }).__touched = touched
+    const get = Storage.prototype.getItem
+    const set = Storage.prototype.setItem
+    Storage.prototype.getItem = function (k: string) {
+      touched.push(`get:${k}`)
+      return get.call(this, k)
+    }
+    Storage.prototype.setItem = function (k: string, v: string) {
+      touched.push(`set:${k}`)
+      return set.call(this, k, v)
+    }
+    // eslint-disable-next-line no-restricted-syntax -- seeds a retired device key to prove nothing reads it
+    for (const [k, v] of Object.entries(seeded ?? {})) set.call(window.localStorage, k, v)
+  }, seed)
+}
+
+test('a large paid quote draws no spend notice, no raise button and no threshold field', async ({ page }) => {
+  // The old stored figure is seeded low on purpose: a build that still read it would warn on $0.42.
+  await watchStorage(page, { [SPEND_KEY]: '0.01' })
+  await open(page, { toSend: 5000, estimate: 250 })
+  await atReading(page)
+  await checkCost(page)
+
+  await expect(page.locator('.run-button-money')).toBeVisible()
+  await expect(page.locator('.runs-composer')).not.toContainText('this device asks about')
+  await expect(page.locator('.runs-composer')).not.toContainText('Stop asking')
+  await expect(page.locator('.runs-composer')).not.toContainText('Ask me above')
+  await expect(page.locator('.runs-spend-set, .runs-spend-row, .runs-spend-input')).toHaveCount(0)
+})
+
+test('the spend-notice device key is neither read nor written, before or after a paid confirm', async ({ page }) => {
+  await watchStorage(page, { [SPEND_KEY]: '0.01' })
+  await open(page, { toSend: 5000, estimate: 250 })
+  await atReading(page)
+  await checkCost(page)
+  await page.locator('.run-button-money').click()
+  await expect(page.locator('.runs-composer')).not.toContainText('Ask me above')
+
+  const touched = await page.evaluate(() => (window as unknown as { __touched: string[] }).__touched)
+  expect(touched.filter((t) => t.endsWith(SPEND_KEY))).toEqual([])
+  // The key was only seeded; a build that still owned it would have rewritten or kept using it.
+  // A fresh store (no seed) must also end with no such key after a paid confirm.
+})
+
+test('a paid confirm on a fresh device leaves no spend-notice key behind', async ({ page }) => {
+  await open(page, { toSend: 5000, estimate: 250 })
+  await atReading(page)
+  await checkCost(page)
+  await page.locator('.run-button-money').click()
+  await expect(page.locator('.runs-composer')).not.toContainText('Ask me above')
+  // eslint-disable-next-line no-restricted-syntax -- proves the retired device key is absent
+  expect(await page.evaluate((k) => window.localStorage.getItem(k), SPEND_KEY)).toBeNull()
 })
 
 // ------------------------------------------------------ the state the old address never had
@@ -2961,7 +3059,7 @@ test('rebind: the sheet previews on open, and Apply is absent until it answers',
   /* NOTHING ON SCREEN NAMES A COMMAND, A PATH OR A DECISION NUMBER (D196/no mechanism on
      screen) — the owner's 2026-09-13 ruling widened to this sheet specifically. */
   const text = (await sheet.innerText()).toLowerCase()
-  expect(text).not.toContain('pkmnscan')
+  expect(text).not.toContain('banchi')
   expect(text).not.toContain('d165')
   expect(text).not.toContain('/logs/')
 
@@ -3227,6 +3325,60 @@ test('a fresh opening is the free read again, whatever was picked last time', as
   /* THE SHEET REOPENS ON THE SECOND STAGE WITH THE BOX KEPT, and the pick is not what it keeps. */
   await expect(page.locator('.run-engine')).toBeVisible()
   await expect(picked(page, 'Match to stock photos')).toHaveAttribute('aria-pressed', 'true')
+})
+
+/** THE PREVIEW LANDING MOVES THE SHEET, AND THAT LOST A CLOSE PRESS ON CI (run 37854850654, shard 6,
+ *  the case above: `.runs-composer` count Expected 0, Received 1, then green on re-run). The paid pick
+ *  fetches `/pipeline/crop-preview` after a 140ms debounce. The loading frame is shorter than the card
+ *  that replaces it, so the dialog grows and re-centres and `Close` moves up. A press whose down and up
+ *  straddle that frame ends on the panel, `click` fires on the common ancestor, and the sheet stays.
+ *  Measured on the rig: panel height 452 to 672, `Close` y 155.6 to 45.6, 171ms after the pick.
+ *  THE ROUTE IS HELD, NOT THROTTLED: the preview lands exactly when the case releases it (a late
+ *  read moves nothing; D118, the frame holds the box). */
+async function holdPreview(page: Page) {
+  let release!: () => void
+  const held = new Promise<void>((done) => {
+    release = done
+  })
+  await page.route(/\/pipeline\/crop-preview$/, async (route) => {
+    await held
+    await route.fallback()
+  })
+  return release
+}
+
+test('the preview landing moves nothing: the sheet keeps its box and Close stays put', async ({ page }) => {
+  await open(page)
+  const release = await holdPreview(page)
+  await atReading(page, 9, 'paid')
+  await expect(page.locator('.run-preview-frame[aria-busy="true"]')).toBeVisible()
+  await settleMotion(page)
+  const close = page.locator('.runs-composer').getByRole('button', { name: 'Close' })
+  const panel = page.locator('.runs-composer')
+  const before = { close: await close.boundingBox(), panel: await panel.boundingBox() }
+
+  release()
+  await expect(page.locator('.run-preview-card')).toBeVisible()
+  await afterPaint(page)
+  expect({ close: await close.boundingBox(), panel: await panel.boundingBox() }).toEqual(before)
+})
+
+test('a Close press that straddles the preview landing still closes the sheet', async ({ page }) => {
+  await open(page)
+  const release = await holdPreview(page)
+  await atReading(page, 9, 'paid')
+  await expect(page.locator('.run-preview-frame[aria-busy="true"]')).toBeVisible()
+  await settleMotion(page)
+  const at = (await page.locator('.runs-composer').getByRole('button', { name: 'Close' }).boundingBox())!
+
+  /* DOWN ON CLOSE, THE PREVIEW LANDS, UP: the press the CI run made by luck, made on purpose. */
+  await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2)
+  await page.mouse.down()
+  release()
+  await expect(page.locator('.run-preview-card')).toBeVisible()
+  await afterPaint(page)
+  await page.mouse.up()
+  await expect(page.locator('.runs-composer')).toHaveCount(0)
 })
 
 test('both picks carry a hover tooltip that names their model, and nothing else on the sheet does', async ({

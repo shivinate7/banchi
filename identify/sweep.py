@@ -1,4 +1,4 @@
-"""The background reader's watcher: `pkmnscan match --sweep` (`docs/specs/identify-engine-pick.md`, section 8).
+"""The background reader's watcher: `banchi match --sweep` (`docs/specs/identify-engine-pick.md`, section 8).
 
 THE OWNER'S RULING: the free read may run in the background, and always, if its idle memory is
 barely any. So it is two processes.

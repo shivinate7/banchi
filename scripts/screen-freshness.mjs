@@ -287,6 +287,7 @@ const RECORDED = {
     'liveCheck',                                  // press, its way back, and the check after it
     'matchRun',                                   // flow interview Q4: the match runs by itself
     'dismissSendWarning',                         // the round-3 review's H2: a taken-back warning read
+    'unholdCopies', 'reholdCopies',               // D273 R-S4: Unhold of hand-removed copies, and its Undo
     'confirmIdentity', 'undoConfirmIdentity', // identity-follows-sku.md §8.1, the confirm
                                                // press beside D252's correction — its own
                                                // pair, same shape: `ListingCorrection` folds
@@ -2009,7 +2010,7 @@ function selfTest() {
       }`],
   ]
 
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pkmnscan-freshness.'))
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'banchi-freshness.'))
   try {
     console.log('\na stale write is flagged, and each idiom is recognised as ITSELF')
     cases.forEach(([label, expected, body], index) => {

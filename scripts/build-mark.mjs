@@ -300,7 +300,7 @@ console.log(`  display bracket ${display.body.length} bytes · small bracket ${s
 //
 // BEHIND A FLAG because it needs Playwright and because committing what it writes needs the
 // owner's word: the pre-commit image guard refuses any .png outside captures/ and has no
-// PKMNSCAN_*=off hatch, so `--no-verify` is the only way past it and it disarms every other
+// BANCHI_*=off hatch, so `--no-verify` is the only way past it and it disarms every other
 // guard at the same time. Stage nothing but the images and say so in the message.
 //
 // TWO SETS, AND THE DIFFERENCE IS APPLE'S ICON GRID (logo.md section 17). A macOS app icon does

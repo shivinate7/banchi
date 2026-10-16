@@ -149,7 +149,7 @@ def compare(
 
     `seen` is every SKU the store has ever attached to a card, which is WIDER than `listings`:
     a card can carry a SKU that was never pushed — withheld, sub-threshold, or simply never
-    emitted. Without it, every such card's SKU would be reported as "listed outside pkmnscan"
+    emitted. Without it, every such card's SKU would be reported as "listed outside banchi"
     the moment it appeared in the export, which is the false accusation this parameter exists
     to prevent.
     """
@@ -180,7 +180,7 @@ def compare(
         )
         if sku not in known:
             # NOT AN ERROR AND NOT THIS PIPELINE'S BUSINESS. Sealed product, a single listed
-            # by hand, anything from before pkmnscan. Reported at zero quantity too would be
+            # by hand, anything from before banchi. Reported at zero quantity too would be
             # noise, so only a live one is worth a line.
             if live > 0:
                 report.unknown.append(row)

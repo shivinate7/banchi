@@ -2,7 +2,7 @@
 
 THE BOX STOPPED BEING THE UNIT OF WORK HERE. `server/pipeline_routes.py:_resolve_scope`
 refused any request that did not name a positive integer `box` — *"A run is always scoped to
-one box"* — and `pkmnscan identify` took exactly one directory. So "identify everything that
+one box"* — and `banchi identify` took exactly one directory. So "identify everything that
 still needs it" was not a thing an operator could ask for, and a pile spanning two drawers was
 two presses whatever the cards were.
 
@@ -36,7 +36,7 @@ reader, and a `keys` selection reads only its own sidecars.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
@@ -239,7 +239,7 @@ class Selection:
     def flags(self) -> List[str]:
         """This selection as the argv a child gets. The CLI's spelling of the same object.
 
-        THE ROUTE SPAWNS `pkmnscan identify` AND NO LONGER BUILDS IT A DIRECTORY, which is the
+        THE ROUTE SPAWNS `banchi identify` AND NO LONGER BUILDS IT A DIRECTORY, which is the
         deletion this module exists for. `_scope_dir` symlinked the chosen photographs into
         `.scopes/box3-<n>-<stamp>` so that a subset could be expressed as the one thing
         `identify` accepted — a path. Measured on the owner's checkout: 264 such directories,
@@ -476,6 +476,16 @@ def parse(payload: Dict[str, Any]) -> Selection:
             "`scopes` is not a selection term. A send is one selection over cards, not a cart "
             "of boxes — name the drawers' cards with `keys`, or the whole lot with `state`.",
         )
+
+    # A null term is refused, never read as absent: an all-null payload would otherwise select
+    # every photograph, and a press must not pay for cards it did not name. "Any" is the key left out.
+    for term in (f.name for f in fields(Selection)):
+        if term in payload and payload[term] is None:
+            raise SelectionError(
+                "selection_invalid",
+                f"The {term} term is null. A null term does not mean any. Leave the key out "
+                "to leave that term unconstrained.",
+            )
 
     raw_paths = payload.get("paths")
     paths: Tuple[str, ...] = ()

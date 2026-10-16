@@ -1,10 +1,9 @@
 # Sales: the gross-revenue screen
 
-**Status: BUILT.** `#/revenue` is a nav row on purpose. It was tried off-nav and reversed on the
-owner's word. D214 (sales shows gross, never profit) records why it is its own route and why it is
-gross-only. D217 (sales sorts, filters and deep links) records the sort, filter, cross-filter,
-drill-down and URL work. `docs/specs/sales-plan.md` holds what was built beside it, and
-`docs/specs/sales-findings.md` holds the open findings.
+**Status: BUILT.** `#/revenue` is a nav row on purpose. It was tried off-nav and the owner reversed that. D214 (sales shows gross, never profit) records
+why it is its own route and why it is gross-only. D217 (sales sorts, filters and deep links) records
+the sort, filter, cross-filter, drill-down and URL work. `docs/specs/sales-plan.md` holds the build
+record, and `docs/specs/sales-findings.md` holds the open findings.
 
 ## What it answers
 
@@ -93,12 +92,12 @@ entry.
 
 ## Mix: a view inside Sales (`#/revenue?lens=mix`)
 
-**Status: BUILT.** The owner approved a Mix view inside Sales, not a new route. D214
-(sales shows gross, never profit) keeps its rules: Mix is a lens on the same retrospective job, and
-it adds no profit, fee or cost figure. D31 (one owner-side view of stored cards) stays whole: Mix
-draws counts and sums and never a card walk. `ROUTES` gains no row, so the route census and
-README's route table do not move. A `Segmented` control, `Sales | Mix`, sits under the page
-heading and writes `lens` (Sales keeps `view` for singles, sealed and all).
+**Status: BUILT.** Mix is a view inside Sales, not a new route (owner ruling). D214 (sales shows
+gross, never profit) keeps its rules: Mix is a lens on the same retrospective job, and it adds no
+profit, fee or cost figure. D31 (one owner-side view of stored cards) stays whole: Mix draws counts
+and sums and never a card walk. `ROUTES` gains no row, so the route census and README's route table
+do not move. A `Segmented` control, `Sales | Mix`, sits under the page heading and writes `lens`.
+Sales keeps `view` for singles, sealed and all.
 
 **The job.** A pivot over what the owner captured, holds and sold, to decide what to capture next.
 Filters on any dimension. Rows and columns split by any dimension. A choice of measures.
@@ -144,8 +143,8 @@ counts as neither held nor sold, so the route leaves it out.
 
 `GET /stock/mix` returns `{asOf, cards: [...]}`. It lives in one home, `pipeline/stockmix.py`.
 `server/capture_server.py` calls it and nothing else does. It returns card rows only. It reads no
-order and carries no revenue, because the refund rule lives in `salesOf` (D225) and a server sum
-would be a second home for it.
+order and carries no revenue, because the refund rule lives in `salesOf` (D225).
+A server sum would be a second home for it.
 
 - Each card carries small fields only: `game`, `set`, `rarity`, `finish`, `state`, `box`,
   `capturedWeek`, `soldWeek` (null if not sold), `sku` (null if unlisted, the join key to
@@ -184,8 +183,9 @@ pills.
 - **Measures**: one multi-select `FilterFacet` over the eight measures. A column split allows one
   measure at a time, so the facet becomes single-pick (`multiple: false`). A pick that would break
   this rule rewrites the facet's picks and never leaves two.
-- **Sort**: `SortControl`. Its keys are `Row name` and the measures drawn. Its direction segment
-  is the kit's own. A sort key that leaves the drawn measures falls back to `Row name`.
+- **Sort**: the sort field and the direction live in one menu, `SortControl` (B19, built).
+  Its keys are `Row name` and the measures drawn. The menu keeps a fixed trigger width (D313). Sort menu
+  only: the other toggles on the row stay. A sort key that leaves the drawn measures falls back to `Row name`.
 - The controls wrap into rows under the heading at 1440 and 820. Each is 40px or more tall
   (`--bn-control-h`).
 - **A pivot cell is not a link.** Drill-down to Inventory (D31, D293), saved layouts and CSV

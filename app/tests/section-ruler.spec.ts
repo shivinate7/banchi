@@ -1,6 +1,6 @@
 // Protects: The section ruler never passes its container and scrolls the current section into view.
 // Governs: D155
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 import type { GameRegistry } from '../src/types'
 import { sealEveryTest } from './shell'
 import { setViewport } from './phoneSwitch'
@@ -48,34 +48,42 @@ const GAMES: GameRegistry = {
 
 /** A box of `sectionCount` sections, `cardsPerSection` cards each, with the current card at
  *  section 1 (or its last card, for a section smaller than 17 — the owner's own reported case). */
-function buildBox(sectionCount: number, cardsPerSection: number, pinAt?: number) {
+/** A box whose sections differ in size, with the walk's card in `section` at card `card`. */
+type PinnedShape = { sizes: readonly number[]; section: number; card: number }
+
+function buildBox(sectionCount: number, cardsPerSection: number, pinAt?: number, pinned?: PinnedShape) {
+  const sizes = pinned?.sizes ?? Array.from({ length: sectionCount }, () => cardsPerSection)
   const sections_detail = []
   let start = 1
-  for (let s = 1; s <= sectionCount; s += 1) {
-    sections_detail.push({ section: s, start, end: start + cardsPerSection - 1, count: cardsPerSection })
-    start += cardsPerSection
+  for (let s = 1; s <= sizes.length; s += 1) {
+    const count = sizes[s - 1] ?? 0
+    sections_detail.push({ section: s, start, end: start + count - 1, count })
+    start += count
   }
-  const boxTotal = sectionCount * cardsPerSection
-  const at = pinAt ?? Math.min(17, cardsPerSection)
+  const boxTotal = start - 1
+  const pinSection = pinned?.section ?? 1
+  const home = sections_detail[pinSection - 1]!
+  const at = pinned?.card ?? pinAt ?? Math.min(17, cardsPerSection)
+  const slot = home.start + at - 1
   const card = {
     box: 2,
     index: 1,
-    label: `Box 2, Section 1, Card ${at}`,
-    section: 1,
+    label: `Box 2, Section ${pinSection}, Card ${at}`,
+    section: pinSection,
     card: at,
     place: {
       located: true,
-      label: `Box 2, Section 1, Card ${at}`,
+      label: `Box 2, Section ${pinSection}, Card ${at}`,
       box: 2,
       index: 1,
-      slot: at,
-      section: 1,
+      slot,
+      section: pinSection,
       card: at,
       box_name: 'WB1 R2',
-      section_start: 1,
-      section_end: cardsPerSection,
+      section_start: home.start,
+      section_end: home.end,
       box_total: boxTotal,
-      fraction: (at - 1) / boxTotal,
+      fraction: (slot - 1) / boxTotal,
       neighbors: null,
       section_gaps: 0,
     },
@@ -126,8 +134,14 @@ function buildBox(sectionCount: number, cardsPerSection: number, pinAt?: number)
   return { card, boxes }
 }
 
-async function open(page: Page, sectionCount: number, cardsPerSection: number, pinAt?: number) {
-  const { card, boxes } = buildBox(sectionCount, cardsPerSection, pinAt)
+async function open(
+  page: Page,
+  sectionCount: number,
+  cardsPerSection: number,
+  pinAt?: number,
+  pinned?: PinnedShape,
+) {
+  const { card, boxes } = buildBox(sectionCount, cardsPerSection, pinAt, pinned)
   const cards = { '2/1': card }
 
   await page.route(/\/search\?/, (route) =>
@@ -335,3 +349,186 @@ test('the tick number under or next to the pin is hidden, and the chip sits mid-
   const chip = (await ruler.locator('.position-bar-chip').boundingBox())!
   expect(Math.abs(chip.y + chip.height / 2 - (track.y + track.height / 2)), 'chip centred on the track').toBeLessThan(1.5)
 })
+
+/* THE PLACE BAR (the owner's screenshot, dark theme, about 820px: WB1 R3, "Section 12 · Card 18
+ * of 58", thirteen chips with 12 selected). The box strip draws one chip per section, and a
+ * vertical accent bar (`.position-bar-marker`) is drawn over it. In the screenshot the bar sits
+ * across chip 11's number, so the chip reads "1|1". The card's own section is the chip
+ * `.position-bar-here`, and `PositionBar.tsx` draws the bar inside that chip, at the card's cell.
+ * So the bar's meaning is: it stands on the card's own section chip. The owner's ruling on the
+ * tick: the bar keeps its original size (full strip height, 2px wide), and only its section
+ * changes. So it may cross its OWN chip's number, but never another chip's number. */
+const OWNER_SHAPE: PinnedShape = {
+  sizes: [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 58, 3],
+  section: 12,
+  card: 18,
+}
+
+type Box = { left: number; right: number; top: number; bottom: number }
+type StripGeometry = {
+  track: Box
+  marker: Box
+  here: Box | null
+  labels: (Box & { text: string; inStrip: boolean; own: boolean })[]
+}
+
+/** Every rectangle is read in the viewport's own frame, so the bar and each chip's number are
+ *  compared at the same scroll position. A number's box is its TEXT's box (a Range over the
+ *  number), not the chip's, because the chip is wider than its digits. `own` is the number that
+ *  sits on the card's own chip. */
+async function stripGeometry(track: Locator): Promise<StripGeometry> {
+  return track.evaluate((el) => {
+    const rect = (r: DOMRect) => ({ left: r.left, right: r.right, top: r.top, bottom: r.bottom })
+    const strip = rect(el.getBoundingClientRect())
+    // The bar may sit on the track or inside the card's own chip; either way it is this strip's bar.
+    const marker = el.querySelector('.position-bar-marker')
+    const here = el.querySelector('.position-bar-here')
+    const labels = Array.from(el.querySelectorAll('.position-bar-segment-num')).map((node) => {
+      const range = document.createRange()
+      range.selectNodeContents(node)
+      const box = rect(range.getBoundingClientRect())
+      return {
+        text: node.textContent ?? '',
+        ...box,
+        inStrip: box.left >= strip.left && box.right <= strip.right,
+        own: node.closest('.position-bar-here') !== null,
+      }
+    })
+    return {
+      track: strip,
+      marker: rect(marker!.getBoundingClientRect()),
+      here: here === null ? null : rect(here.getBoundingClientRect()),
+      labels,
+    }
+  })
+}
+
+/* Each case is a width and a colour scheme. The dark run is the owner's screenshot's theme. */
+const PLACE_CASES = [
+  [1440, 'light'],
+  [820, 'light'],
+  [830, 'light'],
+  [880, 'light'],
+  [1440, 'dark'],
+  [820, 'dark'],
+  [830, 'dark'],
+  [880, 'dark'],
+] as const
+const CENTER_CASES = [
+  [1440, 'light'],
+  [820, 'light'],
+  [1440, 'dark'],
+  [820, 'dark'],
+] as const
+
+/** The bar stands within its own chip, horizontally. Vertically it is not checked: the original
+ *  bar runs past the chip's top and bottom edges (see `expectOriginalSize`). */
+function expectStandsOnOwnChip(geo: StripGeometry) {
+  expect(geo.here, "the card's own section chip is drawn").not.toBeNull()
+  const here = geo.here!
+  const m = geo.marker
+  expect(m.left, "the place bar starts inside its own chip").toBeGreaterThanOrEqual(here.left)
+  expect(m.right, "the place bar ends inside its own chip").toBeLessThanOrEqual(here.right)
+}
+
+/** The other chips' numbers the bar crosses. The card's own chip's number is not one of them: the
+ *  bar may stand over it. */
+function crossedOtherNumbers(geo: StripGeometry): string[] {
+  const m = geo.marker
+  return geo.labels
+    .filter(
+      (l) =>
+        l.inStrip &&
+        !l.own &&
+        l.left < m.right &&
+        l.right > m.left &&
+        l.top < m.bottom &&
+        l.bottom > m.top,
+    )
+    .map((l) => l.text)
+}
+
+/** THE BAR'S SIZE IS THE ORIGINAL BAR'S (the owner's ruling on the tick: keep the bar exactly as
+ *  it looked, from `git show 69e51240^:app/src/PositionBar.css`). That bar is `top: -2px;
+ *  bottom: -2px; width: var(--pb-marker)` (2px) inside a box-strip track that is `--pb-track`
+ *  (22px) under `[data-depth]`. The track's `overflow-y: hidden` clips the 2px overhang at each
+ *  end, so what the reader sees is the track's full height. The test reads what is drawn. */
+function expectOriginalSize(geo: StripGeometry) {
+  const t = geo.track
+  const m = geo.marker
+  const drawn = Math.min(m.bottom, t.bottom) - Math.max(m.top, t.top)
+  expect(drawn, 'the place bar is drawn the full strip height, as the original bar was').toBeCloseTo(
+    t.bottom - t.top,
+    0,
+  )
+  expect(m.right - m.left, 'the place bar is the original 2px wide').toBeCloseTo(2, 0)
+}
+
+/* 830 and 880 are widths the earlier sweep flagged, when the bar sat at the box's fraction and
+ * could cross a neighbour's number. The bar now stands in its own chip, so they stay as regression
+ * cases. */
+for (const [width, scheme] of PLACE_CASES) {
+  test(`the box strip's place bar crosses no other chip's number, 13 sections with the card in section 12, ${width}, ${scheme}`, async ({ page }) => {
+    await setViewport(page, { width, height: 900 })
+    await page.emulateMedia({ colorScheme: scheme })
+    await open(page, OWNER_SHAPE.sizes.length, 0, undefined, OWNER_SHAPE)
+    const row = page.locator('.card-locations-row.is-current')
+    await row.scrollIntoViewIfNeeded()
+    const track = row.locator('.position-bar-owner[data-depth] > .position-bar-track')
+    await expect(track.locator('.position-bar-segment')).toHaveCount(13)
+    await expect(track.locator('.position-bar-here')).toBeInViewport({ ratio: 1 })
+
+    const geo = await stripGeometry(track)
+    expectStandsOnOwnChip(geo)
+    expect(crossedOtherNumbers(geo), "the place bar crosses no other chip's number").toEqual([])
+  })
+
+  test(`the box strip's place bar stands on the card's own section chip, 13 sections with the card in section 12, ${width}, ${scheme}`, async ({ page }) => {
+    await setViewport(page, { width, height: 900 })
+    await page.emulateMedia({ colorScheme: scheme })
+    await open(page, OWNER_SHAPE.sizes.length, 0, undefined, OWNER_SHAPE)
+    const row = page.locator('.card-locations-row.is-current')
+    await row.scrollIntoViewIfNeeded()
+    const track = row.locator('.position-bar-owner[data-depth] > .position-bar-track')
+    await expect(track.locator('.position-bar-here')).toBeInViewport({ ratio: 1 })
+
+    const geo = await stripGeometry(track)
+    expectStandsOnOwnChip(geo)
+    const center = (geo.marker.left + geo.marker.right) / 2
+    expect(center, "the bar's center is not left of the card's own chip").toBeGreaterThanOrEqual(geo.here!.left)
+    expect(center, "the bar's center is not right of the card's own chip").toBeLessThanOrEqual(geo.here!.right)
+  })
+
+  test(`the box strip's place bar is drawn the original full strip height and 2px wide, 13 sections with the card in section 12, ${width}, ${scheme}`, async ({ page }) => {
+    await setViewport(page, { width, height: 900 })
+    await page.emulateMedia({ colorScheme: scheme })
+    await open(page, OWNER_SHAPE.sizes.length, 0, undefined, OWNER_SHAPE)
+    const row = page.locator('.card-locations-row.is-current')
+    await row.scrollIntoViewIfNeeded()
+    const track = row.locator('.position-bar-owner[data-depth] > .position-bar-track')
+    await expect(track.locator('.position-bar-here')).toBeInViewport({ ratio: 1 })
+
+    expectOriginalSize(await stripGeometry(track))
+  })
+}
+
+/* THE BAR NEAR ITS OWN CHIP'S CENTER. Card 29 of 58 is the middle of section 12's cells, the place
+ * the bar sits nearest the chip's center and so over its own number "12". That is allowed. The bar
+ * must still stand on its own chip and cross no other chip's number. */
+const CENTER_SHAPE: PinnedShape = { ...OWNER_SHAPE, card: 29 }
+
+for (const [width, scheme] of CENTER_CASES) {
+  test(`the place bar crosses no other chip's number with the card near its chip's center, 13 sections, ${width}, ${scheme}`, async ({ page }) => {
+    await setViewport(page, { width, height: 900 })
+    await page.emulateMedia({ colorScheme: scheme })
+    await open(page, CENTER_SHAPE.sizes.length, 0, undefined, CENTER_SHAPE)
+    const row = page.locator('.card-locations-row.is-current')
+    await row.scrollIntoViewIfNeeded()
+    const track = row.locator('.position-bar-owner[data-depth] > .position-bar-track')
+    await expect(track.locator('.position-bar-here')).toBeInViewport({ ratio: 1 })
+
+    const geo = await stripGeometry(track)
+    expectStandsOnOwnChip(geo)
+    expect(crossedOtherNumbers(geo), "the place bar crosses no other chip's number").toEqual([])
+  })
+}

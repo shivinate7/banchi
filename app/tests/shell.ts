@@ -119,7 +119,7 @@ const escaped = new WeakMap<Page, string[]>()
  *  semantics have moved once already (`*` stopped crossing `/` in 1.53).
  *
  *  THE HOST IS A WILDCARD BECAUSE `server.ts` FOLLOWS THE ADDRESS BAR — it composes its base
- *  from `location.hostname`, so the same page opened at `pkmnscan.lan` asks a different host on
+ *  from `location.hostname`, so the same page opened at `banchi.lan` asks a different host on
  *  the same port. The PORT is what identifies the capture server, and `devPort.ts` derives it
  *  from this checkout alone (D43). */
 const CAPTURE_ORIGIN = new RegExp(`^[a-z+.-]+://[^/]+:${CAPTURE_PORT}(/|$)`)
@@ -221,7 +221,7 @@ const CARDS = {
  *  guard built as a block-list of guessed endpoint names let a real TCGplayer import through.
  *
  *  THE PORT IS THE WHOLE TEST, for the reason `CAPTURE_ORIGIN` above gives: `server.ts`
- *  composes its base from `location.hostname`, so the same page opened at `pkmnscan.lan` asks
+ *  composes its base from `location.hostname`, so the same page opened at `banchi.lan` asks
  *  a different host on the same two ports, and both are still this Mac. A hostname allow-list
  *  would have to guess at that set; the ports are derived from this checkout (D43).
  *
@@ -917,3 +917,87 @@ export async function settleAnimations(page: Page): Promise<void> {
     }
   })
 }
+
+/** The owner's ruling for the Pricing header: Item's label stays on the column's left edge; every other
+ *  label is centered over its column cell. Values are not asserted here. A column the screen drops
+ *  (Range 7d at 820, Qty with no copies) is skipped. */
+export const HEAD_CENTER_PX = 1
+const CENTERED = ['market', 'low', 'range', 'trend', 'qty', 'price'] as const
+
+export async function headOffsets(page: Page): Promise<{ column: string; off: number }[]> {
+  return page.locator('.pricing-caption').evaluate((caption, columns) => {
+    const row = document.querySelector('.pricing-row')!
+    const labelBox = (head: Element) => {
+      const label = head.querySelector('.bn-sortth-label') ?? head
+      const range = document.createRange()
+      range.selectNodeContents(label)
+      return range.getBoundingClientRect()
+    }
+    const out: { column: string; off: number }[] = []
+    for (const column of columns) {
+      const cls = `.pricing-col-${column}`
+      const head = caption.querySelector(cls)
+      const cell = row.querySelector(cls)
+      if (head === null || cell === null || head.getBoundingClientRect().width === 0) continue
+      const label = labelBox(head)
+      const box = cell.getBoundingClientRect()
+      out.push({ column, off: (label.left + label.right) / 2 - (box.left + box.right) / 2 })
+    }
+    const item = caption.querySelector('[role=columnheader]:not([class])')!
+    const id = row.querySelector('.pricing-id')!
+    out.push({ column: 'item (left edge)', off: labelBox(item).left - id.getBoundingClientRect().left })
+    return out
+  }, [...CENTERED])
+}
+
+/** The owner's ruling for Pricing row values: Market, Lowest and Range 7d values are centered in their cell;
+ *  Trend, Qty and Price values keep the place they had (`gaps` reports it as the space left and right of the
+ *  shown content inside the cell, so a guard can pin it). The shown content leaves out the age line and hidden
+ *  parts. Item is not measured. One entry per row and column; a column the screen drops is skipped. */
+export const VALUE_CENTER_PX = 1
+export async function valueMeasures(page: Page): Promise<{ column: string; off: number; left: number; right: number }[]> {
+  return page.locator('.pricing-row').evaluateAll((rows) => {
+    const out: { column: string; off: number; left: number; right: number }[] = []
+    rows.forEach((row, at) => {
+      for (const column of ['market', 'low', 'range', 'trend', 'qty', 'price']) {
+        const cell = row.querySelector(`.pricing-col-${column}`)
+        if (cell === null || cell.getBoundingClientRect().width === 0) continue
+        const box = cell.getBoundingClientRect()
+        const edges: number[] = []
+        const walk = (node: Node) => {
+          if (node instanceof Element && (node.classList.contains('pricing-ref-age') || getComputedStyle(node).display === 'none')) return
+          if (node instanceof HTMLInputElement) {
+            const r = node.getBoundingClientRect()
+            if (r.width > 0) edges.push(r.left, r.right)
+            return
+          }
+          if (node.nodeType === Node.TEXT_NODE) {
+            if ((node.textContent ?? '').trim() === '') return
+            const range = document.createRange()
+            range.selectNodeContents(node)
+            const r = range.getBoundingClientRect()
+            if (r.width > 0) edges.push(r.left, r.right)
+            return
+          }
+          if (node instanceof SVGElement && node.getBoundingClientRect().width > 0) {
+            const r = node.getBoundingClientRect()
+            edges.push(r.left, r.right)
+            return
+          }
+          node.childNodes.forEach(walk)
+        }
+        walk(cell)
+        if (edges.length === 0) continue
+        const left = Math.min(...edges) - box.left
+        const right = box.right - Math.max(...edges)
+        out.push({ column: `${column}#${at}`, off: (left - right) / 2, left, right })
+      }
+    })
+    return out
+  })
+}
+
+/** Where Trend, Qty and Price values sit today, as the space left of the shown content in the cell. Right gaps
+ *  are pinned for Trend and Qty, whose content ends flush with the cell. */
+export const KEPT_LEFT_PX: Record<string, number> = { trend: 8, qty: 4, price: 13 }
+export const KEPT_RIGHT_ZERO = ['trend', 'qty']

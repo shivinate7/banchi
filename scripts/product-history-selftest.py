@@ -59,7 +59,7 @@ def ok(condition: bool, label: str, detail: str = "") -> None:
 
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="product-history-selftest-"))
-    os.environ["PKMNSCAN_HOME"] = str(tmp)
+    os.environ["BANCHI_HOME"] = str(tmp)
     (tmp / "inventory").mkdir(parents=True, exist_ok=True)
 
     from pipeline.pricehistory import Bucket as HistoryBucket  # noqa: E402

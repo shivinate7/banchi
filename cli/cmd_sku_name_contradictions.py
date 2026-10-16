@@ -1,4 +1,4 @@
-"""`pkmnscan cards sku-names` — RETIRED into `pkmnscan cards identity`
+"""`banchi cards sku-names` — RETIRED into `banchi cards identity`
 (`docs/specs/identity-follows-sku.md` §5.5, lane 2).
 
 D242's sibling compared a card's own stored `name` against its SKU's product name in the
@@ -6,7 +6,7 @@ newest cached export. After lane 2's `bind_sku` becomes the one writer of a card
 (`store/master.py`, lane 1), a bound card's `name` IS its SKU's product name by
 construction, so this class also reads zero forever — the exact argument §5.5 makes for its
 own twin. The merged report reads the SKU table directly instead: `pipeline/
-identity_binding.py`'s name half, run by `./pkmnscan cards identity`.
+identity_binding.py`'s name half, run by `./banchi cards identity`.
 
 `run` below is now a one-line pointer, on the owner's own ruling ("Merge them", §12 ruling
 6). `pipeline/sku_name_contradictions.py`'s own resolver (`find_contradictions`) is still
@@ -20,11 +20,11 @@ from __future__ import annotations
 
 
 def run(args, say) -> int:
-    """RETIRED (§5.5, ruling 6: "Merge them"). `./pkmnscan cards identity` carries this
+    """RETIRED (§5.5, ruling 6: "Merge them"). `./banchi cards identity` carries this
     check's replacement — the name half of its name/number contradiction report, read off
     the SKU table rather than off a re-fetched export. Exits 0: an operator who typed the
     old command is told where to go, not refused."""
-    say("`cards sku-names` is retired — run `./pkmnscan cards identity` instead. "
+    say("`cards sku-names` is retired — run `./banchi cards identity` instead. "
         "docs/specs/identity-follows-sku.md §5.5: the same question, answered off the SKU "
         "table, merged with `cards contradictions` into one report.")
     return 0

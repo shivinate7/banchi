@@ -17,7 +17,7 @@ own SKU-table readers, which never touch a live file — the SKU table this stor
 is the whole subject).
 
 THE SIX CHECKS, §7.4's own words, each an assertion over the SAME `pipeline/identity_binding.
-plan_migration` call `./pkmnscan cards identity --write` makes — this script imports that
+plan_migration` call `./banchi cards identity --write` makes — this script imports that
 module rather than re-deriving the classifier, so a replay pass and a real press can never
 silently classify one card two different ways.
 
@@ -66,7 +66,7 @@ def _number_display(card: Card) -> str:
 
 
 def _simulate(card: Card, plan: "ib.CardPlan") -> Card:
-    """The card exactly as `./pkmnscan cards identity --write` would leave it — §7.3's own
+    """The card exactly as `./banchi cards identity --write` would leave it — §7.3's own
     per-class rules, applied in memory. Never touches the input `card`."""
     simulated = copy.deepcopy(card)
     simulated.read_name = plan.read_name

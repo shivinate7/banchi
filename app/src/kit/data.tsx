@@ -343,7 +343,7 @@ export function CardLine({
 
   const title =
     name === null ? (
-      <span className="bn-cardline-name is-unknown">Not identified yet</span>
+      <span className="bn-cardline-name is-unknown">Not Identified Yet</span>
     ) : sku ? (
       <ProductLink sku={sku} name={name} className="bn-cardline-name">
         {name}
@@ -384,9 +384,12 @@ export function CardThumb({
   focus,
   className,
   pending = false,
+  fallbackSrc = null,
 }: {
   /** The photograph's URL, or null when there is none. */
   readonly src: string | null
+  /** Drawn in place of `src` once `src` has failed to load, before the no-photo state. */
+  readonly fallbackSrc?: string | null
   /** What the photograph shows, usually the card's name. */
   readonly alt: string
   readonly size?: CardThumbSize
@@ -398,8 +401,9 @@ export function CardThumb({
    *  no-photo state. Ignored once `src` is set. */
   readonly pending?: boolean
 }) {
-  const [failed, setFailed] = useState<string | null>(null)
-  if (pending && src === null) {
+  const [failedSrcs, setFailedSrcs] = useState<readonly string[]>([])
+  const shown = src !== null && failedSrcs.includes(src) && fallbackSrc !== null ? fallbackSrc : src
+  if (pending && shown === null) {
     return (
       <span
         className={['bn-thumb', `bn-thumb-${size}`, className ?? ''].filter(Boolean).join(' ')}
@@ -408,7 +412,7 @@ export function CardThumb({
       />
     )
   }
-  const missing = src === null || failed === src
+  const missing = shown === null || failedSrcs.includes(shown)
   const style = missing ? undefined : cropStyle(crop, focus)
   return (
     <span
@@ -430,12 +434,12 @@ export function CardThumb({
         <img
           className={style === undefined ? 'bn-thumb-img' : 'bn-thumb-img bn-crop'}
           data-cropped={style === undefined ? undefined : 'true'}
-          src={src}
+          src={shown}
           alt={alt}
           loading="lazy"
           decoding="async"
           style={style}
-          onError={() => setFailed(src)}
+          onError={() => setFailedSrcs((all) => [...all, shown])}
         />
       )}
     </span>
@@ -1171,8 +1175,8 @@ export function SortControl<K extends string>({
   readonly className?: string
 }) {
   const current = options.find((option) => option.key === value.key)
-  const asc = current?.asc ?? 'Low to high'
-  const desc = current?.desc ?? 'High to low'
+  const asc = current?.asc ?? 'Low to High'
+  const desc = current?.desc ?? 'High to Low'
   return (
     <span className={['bn-sort', className].filter(Boolean).join(' ')}>
       <Select

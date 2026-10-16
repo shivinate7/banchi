@@ -166,6 +166,20 @@ function duplicatedCondition(candidates: CandidateRow[]): string | null {
   return null
 }
 
+/* THE REASON THE SCREEN SHOWS. An entry written before the two second-look reasons existed
+ * says `low_confidence` over a high read plus the free reader's pick, which is the readers
+ * disagreeing. Said so rather than "Low confidence read" over a High chip. */
+function shownReason(entry: QueueEntryWire): string {
+  const pick = entry.read.matcher_pick
+  if (entry.reason !== 'low_confidence' || text(entry.confidence) !== 'high' || !pick) return entry.reason
+  /* An old entry whose pick names the very card the paid read named is unsure, not a disagreement
+   * (a refresh frees it). */
+  const key = (n: string | null | undefined) => (n ?? '').split('/')[0]!.trim().replace(/^0+(?=\d)/, '').toLowerCase()
+  const same = key(pick.number) !== '' && key(pick.number) === key(entry.read.number) &&
+    (text(pick.name) ?? '').toLowerCase() === (text(entry.read.name) ?? '').toLowerCase()
+  return same ? 'second_look_unsure' : 'readers_disagree'
+}
+
 /* One sentence per reason. A claim is drawn as a word; its pipeline spelling is kept on the
  * segment so the title still greps against the run report. */
 function sentence(entry: QueueEntryWire): Segment[] {
@@ -188,7 +202,7 @@ function sentence(entry: QueueEntryWire): Segment[] {
   const claimed = claimMembers(entry.read.rarity_claim)
   const only = soleCondition(entry.candidates)
 
-  switch (entry.reason) {
+  switch (shownReason(entry)) {
     case 'no_catalog_row':
       return number === null
         ? [say('TCGplayer has no listing for this card.')]
@@ -242,6 +256,33 @@ function sentence(entry: QueueEntryWire): Segment[] {
       const confidence = text(entry.confidence) ?? 'low'
       return [...head, ...middle, say(', with '), claim(confidence, confidence.replace(/[_-]+/g, ' ')), say(' confidence, which is not enough to list it on.')]
     }
+
+    case 'readers_disagree': {
+      const pick = entry.read.matcher_pick
+      const pickName = pick ? text(pick.name) : null
+      const pickNumber = pick ? text(pick.number) : null
+      const key = (n: string | null | undefined) => (n ?? '').split('/')[0]!.trim().replace(/^0+(?=\d)/, '')
+      const resolved = pickNumber !== null && entry.candidates.some((c) => key(c.number) === key(pickNumber))
+      const paid: Segment[] = [
+        say('The paid read says '),
+        ...(name === null ? [say('a card it could not name')] : [cardName(name)]),
+        ...(number === null ? [] : [say(' '), value(number)]),
+      ]
+      if (pickName === null && pickNumber === null) return [...paid, say(', and the free reader names no other card.')]
+      const free: Segment[] = [
+        say(', and the free reader says '),
+        ...(pickName === null ? [] : [cardName(pickName)]),
+        ...(pickNumber === null ? [] : [say(pickName === null ? '' : ' '), value(pickNumber)]),
+      ]
+      return [
+        ...paid,
+        ...free,
+        say(resolved ? '. Pick the card that is right.' : '. The free reader\'s card is not in the catalog, so only the paid read is offered. Search to pick another.'),
+      ]
+    }
+
+    case 'second_look_unsure':
+      return [say('The free reader could not settle this card, and the paid read is '), claim(text(entry.confidence) ?? 'low', humanize(text(entry.confidence) ?? 'low')), say(' confidence, so it is held for you.')]
 
     case 'no_position':
       return [say('This card has no box or index recorded — this screen can\'t say where it is.')]
@@ -347,6 +388,11 @@ const QUESTIONS: Readonly<Record<string, string>> = {
   listing_disputed: 'Is the listing the right card?',
   /* `pipeline/routing.py:FREE_READER_DISAGREES`: `match audit --write` found a confident free read of the photograph that names another card than the one it is filed as. */
   free_reader_disagrees: 'Is this the card it is filed as?',
+  /* `pipeline/routing.py:READERS_DISAGREE` and `SECOND_LOOK_UNSURE`. */
+  readers_disagree: 'Which reader is right?',
+  second_look_unsure: 'Is this the card?',
+  /* `pipeline/routing.py:CLEARED_ANSWER_UNREADABLE`: a saved answer for this card cannot be used. */
+  cleared_answer_unreadable: 'Which card is this?',
 }
 
 const RETIRED_HEADLINE = 'This question was retired.'
@@ -1580,13 +1626,13 @@ export function ReviewQueue() {
               THE RELOAD BESIDE IT: one re-fetches these two queues, this one asks the
               pipeline to look at every waiting card again. Same icon vocabulary word would
               make them read as one control, so the tooltip keeps the fuller sentence. */}
-          <IconButton icon="wand" label="Re-check every waiting card" onClick={() => setRecheckOpen(true)} disabled={disabled} className="review-recheck-open" />
+          <IconButton icon="wand" label="Re-Check Every Waiting Card" onClick={() => setRecheckOpen(true)} disabled={disabled} className="review-recheck-open" />
           {/* The kit's own reload control (D288), with its internal 'r' hotkey
               OFF: this screen wires RELOAD_KEY into the same switch every other key rides,
               because a second listener would fire the read twice. */}
-          <ReloadButton onReload={reload} busy={disabled} label="Reload the queue" hotkey={false} className="review-reload" />
+          <ReloadButton onReload={reload} busy={disabled} label="Reload the Queue" hotkey={false} className="review-reload" />
           {/* D291: past runs, and every other Runs capability, behind one link. */}
-          <IconButton icon="history" label="Past runs" onClick={() => openRuns(false)} className="review-runs-open" />
+          <IconButton icon="history" label="Past Runs" onClick={() => openRuns(false)} className="review-runs-open" />
           {/* HELD WHILE THE QUEUES LOAD (D313): hidden at its own size, so the answer fills it and
               the buttons beside it stay put. */}
           {everyone.length === 0 && !(loading && rows === null) ? null : (
@@ -1787,7 +1833,7 @@ function RefusalNotice({ refusal, onReload, onDismiss, disabled }: { refusal: Re
             one primary action beside Dismiss. words="only-primary" (rule 4). */}
         {stale ? (
           <Button size="sm" icon="refresh" kbd={RELOAD_KEY_LABEL} onClick={onReload} disabled={disabled} words="only-primary">
-            Reload the queue
+            Reload the Queue
           </Button>
         ) : null}
         <IconButton icon="x" label="Dismiss" size="sm" onClick={onDismiss} />
@@ -1866,10 +1912,10 @@ function Done({
         actions={
           <>
             <Button variant="primary" size="lg" icon="tag" iconRight="arrowRight" onClick={() => (window.location.hash = '#/pricing')}>
-              Price the answers
+              Price the Answers
             </Button>
             <Button size="lg" icon="play" onClick={onOpenRuns}>
-              Run another box
+              Run Another Box
             </Button>
           </>
         }
@@ -2110,7 +2156,7 @@ function Card({
         <div className="review-question">
           <h2 className="review-question-title" data-retired={retired ? 'true' : undefined}>
             {retired ? <Icon name="history" size={20} className="review-question-mark" /> : null}
-            {questionFor(entry.reason)}
+            {questionFor(shownReason(entry))}
           </h2>
           {/* F5 verbiage cut: `name_disputed` shares its headline with `rarity_claim_mismatch`
               ("Mismatch?"), and its own reason label ("The read name matches no listing") only
@@ -2120,7 +2166,7 @@ function Card({
               disagree. Every other reason keeps its label here. */}
           {entry.reason === 'name_disputed' && row.shadow === undefined ? null : (
             <p className="review-question-sub">
-              {entry.reason === 'name_disputed' ? null : reasonLabel(entry.reason)}
+              {entry.reason === 'name_disputed' ? null : reasonLabel(shownReason(entry))}
               {row.shadow === undefined ? null : <Pill tone="warn">also {row.shadow}</Pill>}
             </p>
           )}
@@ -2226,7 +2272,7 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
       chips.push(
         <span key="sorted" className="review-chip review-chip-sorted" title={`Finish at capture: ${claims.sorted.join(' or ')}`}>
           <Icon name="hand" size={12} />
-          <span className="review-chip-key">Sorted as</span>
+          <span className="review-chip-key">Sorted As</span>
           <span className="review-chip-value">{claims.sorted.map(humanize).join(' or ')}</span>
         </span>,
       )
@@ -2245,12 +2291,12 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
     chips.push(
       <span key="hint" className="review-chip review-chip-sorted" title="The set hint recorded at capture">
         <Icon name="tag" size={12} />
-        <span className="review-chip-key">Set hint</span>
+        <span className="review-chip-key">Set Hint</span>
         <span className="review-chip-value review-chip-value-mono">{claims.hint}</span>
       </span>,
     )
   }
-  if (entry.reason === 'low_confidence') {
+  if (['low_confidence', 'readers_disagree', 'second_look_unsure'].includes(entry.reason)) {
     const confidence = text(entry.confidence) ?? 'low'
     chips.push(
       <span key="conf" className="review-chip review-chip-warn" title={`Confidence: ${confidence}`}>
@@ -2345,7 +2391,7 @@ export function CandidateButton({
             <span className="review-candidate-meta">
               <span className="review-candidate-condition">{candidate.condition}</span>
               <span>{candidate.set}</span>
-              <span>{candidate.number}</span>
+              <span className="review-candidate-number">{candidate.number}</span>
             </span>
           </>
         )}
@@ -2469,7 +2515,7 @@ export function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoos
             if (!busy) onSearch()
           }}
           submitLabel="Search"
-          label="Search this export"
+          label="Search This Export"
           placeholder="Name, collector number, or SKU"
           busy={busy}
         />
@@ -2503,7 +2549,7 @@ export function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoos
 
       {more > 0 ? (
         <Button variant="ghost" block onClick={() => setRevealed((n) => n + CATALOG_REVEAL_STEP)} disabled={busy}>
-          Show {Math.min(more, CATALOG_REVEAL_STEP)} more
+          Show {Math.min(more, CATALOG_REVEAL_STEP)} More
         </Button>
       ) : null}
 
@@ -2525,9 +2571,9 @@ function Facts({ row }: { row: Row }) {
     { label: 'Number', value: collectorNumber(entry.read) ?? 'none', mono: true },
     { label: 'Market', value: priceText(entry.market), mono: true },
     { label: 'Confidence', value: humanize(text(entry.confidence) ?? 'none recorded') },
-    { label: 'Set hint', value: text(entry.read.set_hint) ?? 'none', mono: true },
+    { label: 'Set Hint', value: text(entry.read.set_hint) ?? 'none', mono: true },
     {
-      label: 'Sorted as',
+      label: 'Sorted As',
       value: (() => {
         const members = claimMembers(entry.read.metadata_finish)
         if (members === null) return 'no claim'
@@ -2541,7 +2587,7 @@ function Facts({ row }: { row: Row }) {
       })(),
       mono: true,
     },
-    { label: 'Photo read', value: text(entry.read.detected_finish) ?? 'none', mono: true },
+    { label: 'Photo Read', value: text(entry.read.detected_finish) ?? 'none', mono: true },
     ...(entry.read.matcher_pick
       ? [
           {
@@ -2824,7 +2870,7 @@ function Waiting({
           Up next
           <Pill>{rows.length}</Pill>
         </span>
-        <IconButton icon="x" label="Close the queue" size="sm" onClick={onClose} className="review-rail-close" />
+        <IconButton icon="x" label="Close the Queue" size="sm" onClick={onClose} className="review-rail-close" />
       </div>
 
       {done === 0 && tally.skipped === 0 && receipts.length === 0 ? null : (
@@ -2878,7 +2924,7 @@ function Waiting({
                   <PositionLabel label={row.entry.label} flow="run" />
                 </span>
                 <span className="review-row-reason" title={row.entry.reason}>
-                  {reasonLabel(row.entry.reason)}
+                  {reasonLabel(shownReason(row.entry))}
                 </span>
                 {/* No `parked` pill: every row under the rule below is parked, and the rule
                     says so once rather than on each of them. */}
@@ -3000,7 +3046,7 @@ function QueueRefresh({
       open={open}
       onClose={onClose}
       dismissible={!busy}
-      title="Re-check every waiting card"
+      title="Re-Check Every Waiting Card"
       className="review-recheck"
       footer={
         !applyable ? null : (

@@ -245,7 +245,7 @@ test('the toast dismiss glyph clears 4.5:1 against the toast ground, in both the
  * "external" label="Cards to pull" href="#/fulfillment" target="_blank" rel="noreferrer"`. */
 test('the anchor form renders an <a> with the given href, target and rel', async ({ page }) => {
   const section = page.locator('[data-kit-section="icon-button"]')
-  const link = section.getByRole('link', { name: 'Cards to pull' })
+  const link = section.getByRole('link', { name: 'Cards to Pull', exact: true })
   await expect(link).toBeVisible()
   expect(await link.evaluate((el) => el.tagName)).toBe('A')
   await expect(link).toHaveAttribute('href', '#/fulfillment')
@@ -255,7 +255,7 @@ test('the anchor form renders an <a> with the given href, target and rel', async
 
 test('keyboard Enter follows the anchor form, the way a native link does', async ({ page }) => {
   const section = page.locator('[data-kit-section="icon-button"]')
-  const link = section.getByRole('link', { name: 'Cards to pull' })
+  const link = section.getByRole('link', { name: 'Cards to Pull', exact: true })
   await link.focus()
   await expect(link).toBeFocused()
   const [popup] = await Promise.all([
@@ -269,7 +269,7 @@ test('keyboard Enter follows the anchor form, the way a native link does', async
 
 test('the anchor form draws the same face, hit area and tooltip as the button form', async ({ page }) => {
   const section = page.locator('[data-kit-section="icon-button"]')
-  const link = section.getByRole('link', { name: 'Cards to pull' })
+  const link = section.getByRole('link', { name: 'Cards to Pull', exact: true })
   const btn = section.getByRole('button', { name: 'Retire' })
   // Both are `size="md"` (the default): same FACE_PX box.
   const linkBox = await link.evaluate((el) => { const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) } })
@@ -282,8 +282,8 @@ test('the anchor form draws the same face, hit area and tooltip as the button fo
   await expect(tip).toHaveCSS('opacity', '0')
   await link.hover()
   await expect(tip).toHaveCSS('opacity', '1')
-  await expect(tip).toHaveText('Cards to pull')
-  await expect(link).toHaveAccessibleName('Cards to pull')
+  await expect(tip).toHaveText('Cards to Pull')
+  await expect(link).toHaveAccessibleName('Cards to Pull')
   await page.mouse.move(0, 0)
   // The `::before` hit area reaches 40px past the drawn face on the anchor too.
   const box = await link.boundingBox()
@@ -354,3 +354,28 @@ test('every glyph in an xl button: one box size, one glyph size, centre between 
   const off = rows.filter((r) => r.ex > GLYPH_TOL_PX || r.ey > GLYPH_TOL_PX)
   expect(off.map((r) => `${r.n}: ${r.ex.toFixed(2)}px x, ${r.ey.toFixed(2)}px y outside`), 'glyphs sitting off their button centre').toEqual([])
 })
+
+/* A PANEL'S ENTRY MAY FADE AND MAY NOT MOVE (the kit's `bn-dialog-in`, `bn-sheet-in`).
+ *
+ * A control that moves between pointer-down and pointer-up gets no `click` (the up lands on its
+ * parent), so a press held ~200ms during a moving entry was lost. This samples a control's box as
+ * soon as the panel is drawn, then once the motion is done; a keyframe that translates or scales
+ * the panel moves the control between the two and goes red. */
+for (const [kind, opener, panel, control] of [
+  ['dialog', 'modal', '.bn-dialog', 'Done'],
+  ['sheet', 'sheet', '.bn-sheet', 'Save'],
+] as const) {
+  test(`a ${kind}'s controls hold still while it enters`, async ({ page }) => {
+    await page.locator(`[data-kit-open="${opener}"]`).click()
+    const btn = page.locator(panel).getByRole('button', { name: control, exact: true })
+    await btn.waitFor({ state: 'attached' })
+    const during = await btn.boundingBox()
+    await settleMotion(page)
+    const after = await btn.boundingBox()
+    expect(during, `${kind} control drawn`).not.toBeNull()
+    expect(after, `${kind} control settled`).not.toBeNull()
+    expect(Math.abs(during!.x - after!.x), `${kind} control x`).toBeLessThanOrEqual(0.5)
+    expect(Math.abs(during!.y - after!.y), `${kind} control y`).toBeLessThanOrEqual(0.5)
+    expect(Math.abs(during!.width - after!.width), `${kind} control width`).toBeLessThanOrEqual(0.5)
+  })
+}

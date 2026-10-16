@@ -732,7 +732,7 @@ def hooks() -> List[str]:
 
 
 def hatch_uses(where: Path) -> List[str]:
-    """Every `PKMNSCAN_*=off` a command set in the last 24 hours, from the log the shell
+    """Every `BANCHI_*=off` a command set in the last 24 hours, from the log the shell
     guard keeps in this clone's git common dir (D179). Nothing when there is none."""
     guard, why = sidecar("scripts/guard-shell.py", "guard_shell")
     if guard is None:
@@ -769,11 +769,11 @@ def guards() -> List[str]:
     **A GUARD SWITCHED OFF IS INVISIBLE BY CONSTRUCTION.** Every hatch in this repo is
     printed by the refusal it lifts — which means that when it is SET, no refusal happens,
     nothing prints, and the guard is gone with no trace in any output a session reads.
-    `PKMNSCAN_DOCS=off` exported in a shell profile, a launchd plist or a wrapper kills one
+    `BANCHI_DOCS=off` exported in a shell profile, a launchd plist or a wrapper kills one
     of the only two checks on the commit path in every session from then on.
 
     So the thing that cannot report itself is reported here, where a cold session
-    starts. `env | grep PKMNSCAN` is the one-line version of the first half and nobody runs
+    starts. `env | grep BANCHI` is the one-line version of the first half and nobody runs
     it unprompted.
 
     GATES NOTHING. This script's job is saying what state you are actually in.
@@ -781,7 +781,7 @@ def guards() -> List[str]:
     lines: List[str] = []
     names = sorted(
         name for name in os.environ
-        if name.startswith("PKMNSCAN_") and os.environ[name].strip().lower() == "off"
+        if name.startswith("BANCHI_") and os.environ[name].strip().lower() == "off"
     )
     if names:
         lines.append(field("hatches", f"{len(names)} SET: " + ", ".join(names)))
@@ -791,9 +791,9 @@ def guards() -> List[str]:
     else:
         lines.append(field("hatches", "none set — every guard in this shell is armed"))
 
-    redirect = os.environ.get("PKMNSCAN_REFUSAL_LOG")
+    redirect = os.environ.get("BANCHI_REFUSAL_LOG")
     if redirect:
-        lines.append(field("hatches", f"PKMNSCAN_REFUSAL_LOG={redirect} — every refusal is "
+        lines.append(field("hatches", f"BANCHI_REFUSAL_LOG={redirect} — every refusal is "
                                       "logged there, and not to this clone's log"))
     lines += hatch_uses(ROOT)
     lines += refusals(ROOT)
@@ -833,7 +833,7 @@ def serving_branch() -> List[str]:
     origin — six commits on 2026-09-11. `repo()` prints the ahead/behind counts; this line says
     only that the branch is not main.
     """
-    module, problem = sidecar("server/ports.py", "_pkmnscan_ports")
+    module, problem = sidecar("server/ports.py", "_banchi_ports")
     if problem:
         return []  # ports_and_store() reports this; one absent file is one problem
     if module.is_linked_worktree(module.REPO_ROOT):
@@ -903,7 +903,7 @@ def serving() -> List[str]:
     Read-only, like everything else here: `serve.report()` opens nothing for writing, signals
     nothing and starts nothing.
     """
-    module, problem = sidecar("scripts/serve.py", "_pkmnscan_serve")
+    module, problem = sidecar("scripts/serve.py", "_banchi_serve")
     if problem:
         return [field("Serving", problem)]
     try:
@@ -1002,7 +1002,7 @@ def ports_and_store() -> List[str]:
     numbers nobody has memorised. `make status` is what CLAUDE.md tells a cold session to run
     first, which makes it the right place to say which tree it has landed in.
     """
-    module, problem = sidecar("server/ports.py", "_pkmnscan_ports")
+    module, problem = sidecar("server/ports.py", "_banchi_ports")
     if problem:
         return [field("Ports", problem)]
 
@@ -1132,7 +1132,7 @@ def render() -> str:
     gists = load_gists()
 
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-    header = "PKMNSCAN — status"
+    header = "BANCHI — status"
     lines = [f"{header}{stamp:>{WIDTH - len(header)}}", "=" * WIDTH, "", "WHERE YOU ARE"]
     lines += where_you_are(mapdata)
     nxt = do_this_next(mapdata, gists)

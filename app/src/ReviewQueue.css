@@ -127,6 +127,7 @@
   background: var(--bn-surface-2);
 }
 .review-band-count:not(.bn-stat-pressable) { padding-inline: var(--bn-1); } /* the plain figure lines up with the pressable ones */
+.review-band-zero .bn-stat-value { color: var(--bn-ink-3); } /* a zero count is plain and quiet (B14) */
 .review-band-counts {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -597,6 +598,7 @@
 .review-candidate-main { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
 .review-candidate-name { font-size: var(--bn-fs-lg); font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
 .review-candidate-meta { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-candidate-number { font-family: var(--bn-font-mono); }
 .review-candidate-meta > span + span::before { content: '·'; margin: 0 var(--bn-1); color: var(--bn-ink-4); }
 .review-candidate-tags { display: flex; gap: var(--bn-1); }
 .review-tag {
@@ -1026,6 +1028,7 @@
 
 /* ---- the reward at zero, and the lone panels --------------------------------------- */
 .review-lone { margin-bottom: var(--bn-6); }
+.review-done.bn-empty-frame { max-width: none; margin-inline: 0; } /* spans the band's width (B13); the content stays centered */
 .review-done {
   position: relative;
   margin-top: var(--bn-6);

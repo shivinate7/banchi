@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The one refusal log: every guard that denies or asks appends one line here.
 
-`.git/pkmnscan-refusals.log` sits beside the hatch log (`pkmnscan-hatches.log`) in git's common
+`.git/banchi-refusals.log` sits beside the hatch log (`banchi-hatches.log`) in git's common
 dir, so every worktree of a clone writes one file. One line per refusal, TAB-separated:
 
     ISO time, guard:rule, snippet (<= 80 chars, one line), session id, checkout
@@ -26,8 +26,8 @@ from collections import Counter
 from datetime import datetime
 from typing import Dict, Optional
 
-LOG = "pkmnscan-refusals.log"
-ENV_PATH = "PKMNSCAN_REFUSAL_LOG"        # a file path; the self-tests point it at a fixture
+LOG = "banchi-refusals.log"
+ENV_PATH = "BANCHI_REFUSAL_LOG"        # a file path; the self-tests point it at a fixture
 STAMP = "%Y-%m-%dT%H:%M:%S%z"
 SNIPPET_MAX = 80
 MAX_BYTES = 256 * 1024                   # the log rotates to `<log>.1` past this size

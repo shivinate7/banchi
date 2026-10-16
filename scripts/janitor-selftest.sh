@@ -26,7 +26,7 @@ fail=0
 
 [ -f "$JANITOR" ] || { echo "no janitor.py beside this script"; exit 1; }
 
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/pkmnscan-janitor.XXXXXX")" || { echo "cannot make a temp dir"; exit 1; }
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/banchi-janitor.XXXXXX")" || { echo "cannot make a temp dir"; exit 1; }
 kids=""
 cleanup() {
   for k in $kids; do kill "$k" 2>/dev/null; done
@@ -135,9 +135,11 @@ td_mine="$(python3 "$JANITOR" --teardown "$tmp/td/.claude/worktrees/leaving" \
 said "THE LEAVING SESSION'S OWN RECORD DOES NOT STOP ITS OWN TEARDOWN" \
      "servers stopped" "$td_mine"
 td_other="$(python3 "$JANITOR" --teardown "$tmp/td/.claude/worktrees/leaving" \
-            --sessions "$tmp/td-other" 2>&1)"
+            --sessions "$tmp/td-other" 2>&1; echo "rc=$?")"
 said "AND A RECORD THAT IS NO RELATION STILL DOES — the exclusion is the chain, not everybody" \
      "still here" "$td_other"
+said "AND SAYS SO IN ITS EXIT, so session-teardown.sh leaves that tree on disk" \
+     "rc=3" "$td_other"
 
 # ------------------------------------------------------------- THE LIVENESS FAIL-LIVE ARMS
 # A false "dead" deletes a tree somebody is working in, and no real process raises EPERM or

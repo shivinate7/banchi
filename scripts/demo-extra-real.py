@@ -6,7 +6,7 @@ RUN ONCE, BY HAND, AGAINST A READ-ONLY COPY of the owner's store. Writes
 in the exact shape `demo-photos.py` already writes for the default 132-card set — but under
 its OWN path, so nothing here can collide with, resize, or renumber that already-committed
 set or the specs pinned to its count. `scripts/demo-seed.py`'s `add_extra_real_boxes()` is the
-only reader, and only when `PKMNSCAN_DEMO_EXTRA_REAL=1` is set.
+only reader, and only when `BANCHI_DEMO_EXTRA_REAL=1` is set.
 
 Reuses `demo-photos.py`'s QR clearance and crop (loaded by path — the filename's hyphen
 blocks a plain `import`), so a candidate photograph is refused on exactly the same positive
@@ -73,7 +73,7 @@ def main() -> int:
     if base_manifest.is_file():
         already_curated = {e["sku"] for e in json.loads(base_manifest.read_text())}
 
-    os.environ["PKMNSCAN_HOME"] = str(source)
+    os.environ["BANCHI_HOME"] = str(source)
     from store import Store
     from store import photos as store_photos
 

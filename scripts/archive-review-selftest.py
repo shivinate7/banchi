@@ -27,7 +27,7 @@ WHAT THIS PROVES:
 PATH GATED, THE SEVENTEENTH (D247, owner's word 2026-09-23, on the same ground as
 `pricearchive-selftest`'s sixteenth entry): `make archive-review-selftest`, wired into
 `make check` and `make ci-check` through `scripts/guard-scope.py`. This file is no longer
-the exception it was when written — `cli/archive_review.py` is called by `pkmnscan archive
+the exception it was when written — `cli/archive_review.py` is called by `banchi archive
 sweep --write` itself (`cli/cmd_pricearchive.py`), the same real, live caller that made
 `pricearchive-selftest`'s own exemption go stale. Once it's done, it only needs to be tested
 when touched.

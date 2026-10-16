@@ -1,7 +1,7 @@
 """A scratch capture server over a scratch store, for the background reader's two measurements.
 
 `scripts/sweep-memory.py` and `scripts/capture-gate.py` both need the same fixture: a temporary
-`PKMNSCAN_HOME`, the model file and the fingerprint index placed in it, and a capture server on a
+`BANCHI_HOME`, the model file and the fingerprint index placed in it, and a capture server on a
 free high port that is never 8000, 5173 or this checkout's own slot. Nothing here touches the
 owner's store. The photographs are read from a list the caller names and posted to the scratch
 server over HTTP, so they land only in the temporary store, which `Scratch.close` deletes.
@@ -70,9 +70,9 @@ class Scratch:
         # THE SERVER ONLY ANSWERS WRITES TO ITS OWN APP'S ORIGINS, so the scratch port is named.
         self.env = {
             **os.environ,
-            "PKMNSCAN_HOME": str(self.home),
+            "BANCHI_HOME": str(self.home),
             "PYTHONUNBUFFERED": "1",
-            "PKMNSCAN_ALLOWED_ORIGINS": f"http://127.0.0.1:{self.port}",
+            "BANCHI_ALLOWED_ORIGINS": f"http://127.0.0.1:{self.port}",
         }
         self.server: Optional[subprocess.Popen] = None
         self.box: Optional[int] = None

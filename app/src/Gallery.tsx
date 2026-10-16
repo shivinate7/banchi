@@ -8,7 +8,7 @@ import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import {
   Button, Chip, ConfirmSheet, EmptyState, Icon, IconButton, Kbd, Loading, Lockup, Logo, Modal, Money, Notice, Page, PageUndo, Pill, Popover, Refusal, ReloadButton, Retry, Slot,
-  KeyHint, Meter, Section, SectionPicker, Segmented, Select, Sheet, Stat, StatusSlot, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
+  KeyHint, Meter, Section, SectionPicker, Segmented, Select, Sheet, Stat, StatusSlot, Tile, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
   type ButtonSize, type ButtonVariant, type IconName, type PillTone,
 } from './kit'
 import { MARKS } from './kit/markPalettes'
@@ -567,7 +567,7 @@ function OverlaySpecimens() {
           <Section title="The hint">
             <label className="bn-field">
               <span className="bn-field-label">Set</span>
-              <input className="bn-input" defaultValue="ME01" data-autofocus="" />
+              <input name="bn-input" className="bn-input" defaultValue="ME01" data-autofocus="" />
             </label>
           </Section>
           {/* A CONFIRM OPENED FROM INSIDE AN OPEN SHEET — the second scrimmed layer a static
@@ -656,6 +656,9 @@ function useActiveSection(): string | null {
   }, [])
   return active
 }
+
+/** The longest note the tile demo carries, so every demo tile, pending too, holds one room. */
+const TILE_ROOM = 'Copies on 3 SKUs. Joins 541 listings in your store.'
 
 // -------------------------------------------------------------------------------- page
 
@@ -975,7 +978,7 @@ export function Gallery() {
             <div className="kit-grid">
               <Spec label="the vocabulary">
                 <div className="kit-row kit-row-wrap">
-                  <IconButton icon="sold" label="Mark sold" />
+                  <IconButton icon="sold" label="Mark Sold" />
                   <IconButton icon="undo" label="Undo" />
                   <IconButton icon="archive" label="Retire" />
                   <IconButton icon="pencil" label="Edit" />
@@ -1013,7 +1016,7 @@ export function Gallery() {
                 note="`href` (plus `target`/`rel`) renders an `<a>` with the same face, hit area, tooltip and accessible name — an icon-only control that opens another route keeps the browser's own middle-click, right-click and copy-link, which a `window.open` in an `onClick` cannot give."
               >
                 <div className="kit-row kit-row-wrap">
-                  <IconButton icon="external" label="Cards to pull" href="#/fulfillment" target="_blank" rel="noreferrer" />
+                  <IconButton icon="external" label="Cards to Pull" href="#/fulfillment" target="_blank" rel="noreferrer" />
                 </div>
               </Spec>
             </div>
@@ -1138,7 +1141,7 @@ export function Gallery() {
               <Spec label="input, with hint">
                 <label className="bn-field">
                   <span className="bn-field-label">Box name</span>
-                  <input className="bn-input" defaultValue="RB Epics" />
+                  <input name="section-note" className="bn-input" defaultValue="RB Epics" />
                   <span className="bn-field-hint">Names are unique; case is folded.</span>
                 </label>
               </Spec>
@@ -1147,7 +1150,7 @@ export function Gallery() {
                     field that is not one: Capture's section note is the real case. */}
                 <span className="bn-input-wrap">
                   <Icon name="list" size={16} />
-                  <input className="bn-input" placeholder="A note for this section" aria-label="Section note" />
+                  <input name="section-note" className="bn-input" placeholder="A note for this section" aria-label="Section note" />
                   <Kbd>N</Kbd>
                 </span>
               </Spec>
@@ -1161,15 +1164,15 @@ export function Gallery() {
               <Spec label="large, mono, disabled">
                 <label className="bn-field">
                   <span className="bn-field-label">Card name</span>
-                  <input className="bn-input bn-input-lg" placeholder="Type the name of the card" />
+                  <input name="bn-input" className="bn-input bn-input-lg" placeholder="Type the name of the card" />
                 </label>
                 <label className="bn-field">
                   <span className="bn-field-label">Run</span>
-                  <input className="bn-input bn-input-mono" defaultValue="2026-09-02-box6-01" />
+                  <input name="bn-input" className="bn-input bn-input-mono" defaultValue="2026-09-02-box6-01" />
                 </label>
                 <label className="bn-field">
                   <span className="bn-field-label">Disabled</span>
-                  <input className="bn-input" defaultValue="Not editable" disabled />
+                  <input name="bn-input" className="bn-input" defaultValue="Not editable" disabled />
                 </label>
               </Spec>
               <Spec label="checks">
@@ -1260,6 +1263,15 @@ export function Gallery() {
               <Spec name="notice-said" label="danger, with what the server said">
                 <Notice tone="danger" title="The answer was refused" code="sku_not_a_candidate" detail="POST /review/2/14/answer">
                   The queue changed after this screen read it. Reload to see it as it is now.
+                </Notice>
+              </Spec>
+              <Spec name="notice-actions" label="warn, with two actions">
+                <Notice
+                  tone="warn"
+                  title="Your last send is not all there yet"
+                  action={<><Button>Take 6 Copies Back</Button><Button variant="quiet">Send Anyway</Button></>}
+                >
+                  Six copies are still on the way.
                 </Notice>
               </Spec>
               <Spec label="ok">
@@ -1390,6 +1402,19 @@ export function Gallery() {
               {/* S9: the tile shipped one ratio, 22:12. `-sm` reads Orders' own 14:11
                   (`.orders-index-figure`); `-xs` reads Inventory's own 11:11, un-bolded
                   (`.browse-boxcell-count` beside `.browse-boxcell-meta`). */}
+              {/* The status tile: one tone per state, and a pending tile that holds the same room (`room`, the longest note here). */}
+              <Spec name="tile-tones" label="tile, each tone and pending" wide>
+                <div className="kit-row kit-row-wrap">
+                  <Tile icon="check" title="Every card is priced" room={TILE_ROOM}>None typed.</Tile>
+                  <Tile icon="alert" title="12 need a price" tone="warn" room={TILE_ROOM}>
+                    <Button size="sm" variant="ghost" className="bn-tile-act">Price Them</Button>
+                  </Tile>
+                  <Tile icon="lock" title="19 held back" tone="info" room={TILE_ROOM}>Not in this send.</Tile>
+                  <Tile icon="send" title="3 ready to go" tone="accent" room={TILE_ROOM}>Copies on 3 SKUs. Joins 541 listings in your store.</Tile>
+                  <Tile icon="send" title="Nothing ready yet" tone="idle" room={TILE_ROOM}>541 listings in your store.</Tile>
+                  <Tile icon="send" title="" pending room={TILE_ROOM} />
+                </div>
+              </Spec>
               <Spec name="stat-sizes" label="stat, sm and xs">
                 <div className="kit-row kit-row-wrap">
                   <Stat value="16" label="answered" />

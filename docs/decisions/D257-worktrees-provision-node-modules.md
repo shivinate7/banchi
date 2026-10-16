@@ -93,7 +93,7 @@ check.
 **THE STALENESS QUESTION IS NOT ASKED TWICE.** `scripts/serve.py` already answers one
 question: does the installed tree match `app/package-lock.json`? That is
 `npm_install_owed()`. It reads the receipt `make up`'s own supervisor writes on every
-successful build — `NPM_RECEIPT`, `app/node_modules/.pkmnscan-lock`, a bare sha256 digest.
+successful build — `NPM_RECEIPT`, `app/node_modules/.banchi-lock`, a bare sha256 digest.
 `scripts/worktree-provision.sh` imports `serve` directly, with
 `sys.path.insert(0, "scripts")` first. The module sets up its own `sys.path` for `store`
 and `server` before this script ever touches it. No packaging is needed. This script asks

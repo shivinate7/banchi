@@ -6,7 +6,7 @@ goes wider. `week`, `year`, `all` and `latest` all answer HTTP 400. A bucket tha
 of that window cannot be asked for again. Not from any range. Not at any later date.
 `store/pricearchive.py`'s `price_history` table is the local, permanent copy this repo did
 not have before this entry. `pipeline/pricearchive.py` walks the endpoint for every SKU this
-store has sold or holds. `pkmnscan archive sweep --write` is the press that runs it. Both are
+store has sold or holds. `banchi archive sweep --write` is the press that runs it. Both are
 new. `pipeline/pricehistory.py`'s own fetching and parsing are untouched.
 
 ### Why the key carries `range` and not `width_days`
@@ -72,7 +72,7 @@ a real export row. This module invents no second resolution path against the cat
 
 ### What was proved, and how
 
-`scripts/pricearchive-selftest.py` runs against a throwaway store. `PKMNSCAN_HOME` points at
+`scripts/pricearchive-selftest.py` runs against a throwaway store. `BANCHI_HOME` points at
 a temp directory, destroyed after. A stand-in for `Market` carries no network underneath, per
 `CLAUDE.md`'s "no network call in a test" rule. It asserts the one test this entry exists for.
 The test proves the defect this entry guards against: archiving the same calendar day from
@@ -89,9 +89,9 @@ a schedule and the schedule is deferred, by the owner's own word
 sweep firing on its own reverses D224's own statement. D224 says this reader cannot fire by
 itself. That reversal needs its own argument, which nobody has made yet.
 
-### Amended 2026-09-28: a stored summary for Holdings
+### Amended: a stored summary for Holdings
 
-Owner's ruling, 2026-09-28. Holdings value took 8 to 11 s on the live server, because it
+Owner's ruling. Holdings value took 8 to 11 s on the live server, because it
 loaded all 159,341 archive rows through `PriceArchive._index` (89% of the route). The fix is a
 table, not a cache, by D189's argument, and no RAM is held while Banchi idles.
 `price_history_summary` holds one row per `(sku, range)`, with that range's `(start, market,
@@ -100,4 +100,4 @@ width_days)` points ascending. `PriceArchive.upsert` merges into it in the same
 `price_history`. `PriceArchive.summary_for_sku` is the indexed read `pipeline/holdings.py` uses.
 Measured, 162k rows and 2,500 on-hand SKUs: 2288 ms to 242 ms, response byte-identical. The
 never-delete rule is unchanged: the merge only adds or replaces a start.
-The one-time build holds the store lock for about 1.4 s and the first open takes about 3.35 s on a 162k-row archive, so captures queue behind it and do not fail (30 s lock timeout); the build stays inside the lock by design.
+The one-time build holds the store lock for about 1.4 s. The first open takes about 3.35 s on a 162k-row archive. So captures queue behind it and do not fail (30 s lock timeout), and the build stays inside the lock by design.

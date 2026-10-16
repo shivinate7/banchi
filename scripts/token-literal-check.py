@@ -95,7 +95,7 @@ a finding, refused rather than silently kept.
     make token-literal-check                          scan app/src
     python3 scripts/token-literal-check.py --self-test the extractors, against fixtures
 
-Escape hatch: `PKMNSCAN_TOKEN_LITERALS=off` skips the scan, printed in the refusal so it is
+Escape hatch: `BANCHI_TOKEN_LITERALS=off` skips the scan, printed in the refusal so it is
 never a silent workaround.
 """
 
@@ -120,7 +120,7 @@ ALLOW_FILE = ROOT / "scripts" / "token-literal-allow.json"
 EXCLUDED_CSS = {TOKENS_FILE}
 EXCLUDED_TS = {"app/src/kit/markPalettes.ts"}
 
-HATCH = "PKMNSCAN_TOKEN_LITERALS"
+HATCH = "BANCHI_TOKEN_LITERALS"
 
 # ------------------------------------------------------------------------- token families
 

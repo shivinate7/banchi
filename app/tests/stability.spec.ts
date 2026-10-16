@@ -8,7 +8,7 @@ import { card, sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
 import { afterPaint, settleMotion } from './motionSettled'
 import { routesFromNav } from './routes'
-import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, line, order, seedPopulatedOrders, severalOrders, severalOrdersWalkPlan } from './routeFixtures'
+import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, line, order, pricingRow, seedPopulatedOrders, severalOrders, severalOrdersWalkPlan } from './routeFixtures'
 import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
 import { setViewport } from './phoneSwitch'
 import { stubMatched } from './routeFixtures'
@@ -320,6 +320,50 @@ for (const width of [1440, 820]) {
   })
 }
 
+/* THE CARD PANEL HOLDS ITS LOADED SIZE WHILE ITS OWN SEARCH IS OUT (D313). Opening a card draws the
+   panel at once; `/search` answers later. Until then the figures column (`.browse-hero-side[data-pending]`,
+   ghost bars) stands in skeleton, and the copies list draws the card's own known copy as a real row
+   (inert, `aria-busy`), with no skeleton. The real figures are shorter than the ghosts, so the card, its head and its text column shrank when the answer landed
+   (MEASURED 28px locally, 50px in CI). THE ANSWER HERE IS A SEARCH WITH NO GROUP, the shape that
+   draws no figures column and no lead at all. One row per skeleton: the boxes the skeleton sits in are
+   sampled while it shows, `/search` is released, and the same boxes are sampled again. The group answer
+   here holds ONE copy, so it must move nothing; a longer list may grow, and is not asserted. */
+const SKELETON_ROWS = [
+  { name: 'figures', pending: '.browse-hero-side[data-pending]', parts: ['.browse-card', '.browse-hero-head', '.browse-hero-text', '.browse-hero-side', '.browse-hero-lead', '.browse-hero-fig'] },
+  { name: 'copies', pending: '.inventory-copies [aria-busy="true"] .card-locations-row', parts: ['.browse-card', '.inventory-copies'] },
+] as const
+/* The second answer is the shape real cards get: a group with its copies, from `l1Inventory`'s own stub. */
+for (const width of [1440, 820]) for (const one of SKELETON_ROWS) for (const answer of ['no group', 'a group with copies'] as const) {
+  test(`held frame: the card panel's ${one.name} skeleton holds the size the answer fills, answered with ${answer}, at ${width}`, async ({ page }) => {
+    await l1Inventory(page)
+    let release!: () => void
+    const held = new Promise<void>((r) => { release = r })
+    await page.route(/\/search\?/, async (route) => { await held
+      if (answer === 'a group with copies') return route.fallback()
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ query: '', groups: [] }) })
+    })
+    await setViewport(page, { width, height: 1000 })
+    await page.goto(screen('inventory'))
+    await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
+    await expect(page.locator('.browse-hero-name').first()).toBeVisible()
+    await expect(page.locator(one.pending).first(), 'the skeleton is not showing, so there is nothing to hold').toBeVisible()
+    await settleFonts(page)
+    await settleMotion(page)
+    await afterPaint(page)
+    const read = () => page.evaluate((sels) => ({
+      height: document.documentElement.scrollHeight,
+      boxes: sels.map((s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return r ? `${s} ${Math.round(r.width)}x${Math.round(r.height)}` : `${s} absent` }),
+    }), [...one.parts])
+    const before = await read()
+    release()
+    await expect(page.locator(one.pending), 'the answer never replaced the skeleton').toHaveCount(0)
+    await settleMotion(page)
+    await afterPaint(page)
+    const after = await read()
+    expect(after, 'the card panel changed size when its search answered').toEqual(before)
+  })
+}
+
 /* THE DELETED BOXES SHELF: entering it is one swap with no read behind it, and leaving it for a box
    holds the frame like any other box press. The shelf's records are the same shape as a box's, so
    any move is the frame. */
@@ -376,7 +420,7 @@ for (const width of [1440, 820]) {
   })
 }
 
-/* ORDERS: THE WALK OPENS OVER A READ. `Walk 3` asks the plan for three buyers' orders, so the walk
+/* ORDERS: THE WALK OPENS OVER A READ. The `Start Walk` control (three buyers) asks the plan for three buyers' orders, so the walk
    holds the buyer it showed until the answer lands, then swaps once. The answer for several buyers
    is taller than the answer for one, which is content and is why only the read-out window and the
    cluster count are asked of it. */
@@ -402,7 +446,7 @@ for (const width of [1440, 820]) {
     await setViewport(page, { width, height: 1000 })
     await page.goto(screen('orders'))
     await expect(page.locator('.orders-walk-list')).toBeVisible()
-    const r = await heldPress(page, gate, () => page.getByRole('button', { name: 'Walk 3' }).click())
+    const r = await heldPress(page, gate, () => page.getByRole('button', { name: /^start walk/i }).click())
     /* A TIGHTER BUDGET: the walk list is short here, so a head swapped over the old rows moves them
        by a few hundredths at most. Nothing else on this screen moves in the window. */
     expectHeld(r, 0.001)
@@ -535,7 +579,10 @@ async function boxes(page: Page, selectors: readonly string[]): Promise<Record<s
 test('L3 S8: the In stock only count holds one box at 9, 99 and 1,234', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   await page.goto(screen('inventory'))
-  const count = '.browse-hidesold .bn-hidetoggle-count'
+  /* The toggle is in the rail's Filters popover; the figure is read with it open. */
+  await page.locator('.browse-filterbar .bn-filterbar-trigger:visible').click()
+  await settleMotion(page)
+  const count = '.bn-filterbar-popover .bn-hidetoggle-count'
   await expect(page.locator(count)).toBeVisible()
   await settleFonts(page)
   const seen = await boxPerVariant(page, count, ['9', '99', '1,234'], count)
@@ -1083,14 +1130,19 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
         mine.set_hint = HINT
         await page.goto('about:blank')
         await page.goto(screen('inventory'))
+        /* The page starts at the top, and the box click's own scroll-into-view is pinned back to the top, so
+           the header is read at rest. Whether a press scrolls the page is owned by the case below
+           ("with the control clipped at the bottom edge"), which measures scrollY itself. */
+        await page.evaluate(() => window.scrollTo(0, 0))
         await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
         await expect(page.locator('.card-locations').first()).toBeVisible()
+        await page.evaluate(() => window.scrollTo(0, 0))
         await settleFonts(page)
         await settleMotion(page)
         await afterPaint(page)
         const before = await read()
         if (!(await oneRow())) bad.push('before: the facts row is not one pill tall')
-        await page.getByRole('button', { name: /Mark sold/ }).first().click()
+        await page.getByRole('button', { name: /Mark Sold/ }).first().click()
         await expect(page.locator('.browse-hero-sub')).toContainText('Sold')
         await settleMotion(page)
         await afterPaint(page)
@@ -1104,6 +1156,121 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
         if (!(await oneRow())) bad.push('undo: the facts row is not one pill tall')
       }
       expect(bad, 'these moved the card header').toEqual([])
+    } finally {
+      Object.assign(mine, kept)
+    }
+  })
+}
+
+/* A SCROLLED PAGE HOLDS ITS SCROLL THROUGH A SALE AND ITS UNDO (D313). The person scrolls down until
+   the Mark sold control is in view, then presses it. The control is in view, so the press needs no
+   scroll of its own: any change in scrollY, or in the header's boxes, is the page moving. The
+   sale case above used to read the page at whatever scroll the box click left it at; this case owns
+   the scroll check. */
+for (const width of [1440, 820]) for (const wide of [false, true]) {
+  test(`held frame: marking a copy sold and undoing it, with the control clipped at the bottom edge, moves neither the scroll nor the card header, ${wide ? 'wide face, ' : ''}at ${width}`, async ({ page }) => {
+    test.setTimeout(120_000)
+    if (wide) {
+      await page.route(/\.(woff2?|ttf)(\?|$)/, (route) => route.abort())
+      await page.addInitScript(() => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const st = document.createElement('style')
+          st.textContent = '*{font-family:Verdana,sans-serif !important}'
+          document.head.append(st)
+        })
+      })
+    }
+    await l1Inventory(page)
+    /* The sidebar open narrows the header, which is where the chip wraps; seeded before first paint. */
+    await page.addInitScript((value) => {
+      try {
+        /* eslint-disable-next-line no-restricted-syntax -- seeding the shell's own device key, as `page-edge.spec.ts:withRail` does. */
+        window.localStorage.setItem('banchi.rail', value)
+      } catch {
+        /* unreadable storage reads as never chosen */
+      }
+    }, 'wide')
+    const mine = L1_CARDS['2/1'] as Record<string, unknown>
+    const kept = { ...mine }
+    Object.assign(mine, { state: 'identified', set_hint: HINT, metadata_finish: 'foil', rarity_claim: ['Common'], game: 'riftbound', number: '047', printed_total: '221' })
+    try {
+      const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+      await page.route(/\/inventory\/2\/1\/sold$/, (route) => {
+        const undo = (route.request().postDataJSON() as { undo?: boolean } | null)?.undo === true
+        mine.state = undo ? 'identified' : 'sold'
+        return json(route, { position: '2/1', box: 2, index: 1, undone: undo, state: mine.state, previous_state: undo ? 'sold' : 'identified', restores_to: undo ? null : 'identified', listing: null, card: null })
+      })
+      await setViewport(page, { width, height: 1000 })
+      await page.goto(screen('inventory'))
+      await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
+      await expect(page.locator('.card-locations').first()).toBeVisible()
+      await settleFonts(page)
+      await settleMotion(page)
+      await afterPaint(page)
+      /* Wave 2 capitalised the label ("Mark Sold"), so the name is matched without case. */
+      const sell = page.getByRole('button', { name: /Mark sold/i }).first()
+      /* The control sits at page y `at`. The window is made short enough that only its top 24px show at scroll 0. */
+      await page.evaluate(() => window.scrollTo(0, 0))
+      /* The control is briefly unplaced (top 0) while the card settles, so wait for a real position before sizing. */
+      let at = 0
+      await expect.poll(async () => { at = await sell.evaluate((el) => el.getBoundingClientRect().top + window.scrollY); return at }, { message: 'the control never got a position' }).toBeGreaterThan(100)
+      const h = Math.round(at) + 24
+      await setViewport(page, { width, height: h })
+      await page.evaluate(() => window.scrollTo(0, 0))
+      await settleMotion(page)
+      await afterPaint(page)
+      expect(await page.evaluate(() => window.scrollY), 'the page scrolled before the press').toBe(0)
+      const clipped = () => sell.evaluate((el) => Math.round(el.getBoundingClientRect().top))
+      await expect.poll(clipped, { message: 'the control never settled at the bottom edge' }).toBeGreaterThan(h - 40)
+      expect(await clipped(), 'the control is not clipped at the bottom edge').toBeLessThan(h)
+      /* The visible center of a control, and whether the element at that point is the control itself. */
+      const center = (el: Element) => {
+        const b = el.getBoundingClientRect()
+        const x = b.left + b.width / 2
+        const y = (Math.max(b.top, 0) + Math.min(b.bottom, window.innerHeight)) / 2
+        return { x, y, hit: el.contains(document.elementFromPoint(x, y)) }
+      }
+      /* The press waits until the control is the element under its visible center, then a real mouse click lands there. */
+      const press = async (btn: typeof sell, what: string) => {
+        await expect.poll(async () => (await btn.evaluate(center)).hit, { message: `${what} is covered at the bottom edge, so a press would land on something else` }).toBe(true)
+        const p = await btn.evaluate(center)
+        await page.mouse.click(p.x, p.y)
+      }
+      const read = () =>
+        page.evaluate((sels) => ({
+          y: Math.round(window.scrollY),
+          boxes: sels.map((s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return r ? [s, Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)] : [s] }),
+        }), [...HERO_PARTS])
+      const oneRow = () =>
+        page.evaluate(() => {
+          const sub = document.querySelector('.browse-hero-sub')?.getBoundingClientRect().height ?? 0
+          const pill = document.querySelector('.browse-hero-sub .bn-pill')?.getBoundingClientRect().height ?? -1
+          return Math.abs(sub - pill) < 1
+        })
+      const before = await read()
+      const bad: string[] = []
+      if (!(await oneRow())) bad.push('before: the facts row is not one pill tall')
+      const subText = () => page.locator('.browse-hero-sub').innerText()
+      await press(sell, 'Mark sold')
+      /* A press that does not register fails the case by name, before any move is read: a missed press is never a pass. */
+      const sold = await expect.poll(subText, { timeout: 5000 }).toContain('Sold').then(() => true).catch(() => false)
+      expect(sold, 'the sale did not register: the Mark sold press never showed Sold').toBe(true)
+      await settleMotion(page)
+      await afterPaint(page)
+      const afterSale = await read()
+      if (JSON.stringify(afterSale) !== JSON.stringify(before)) bad.push(`sale ${JSON.stringify(afterSale)}`)
+      if (!(await oneRow())) bad.push('sale: the facts row is not one pill tall')
+      /* The Undo holds focus after a sale (the card hands it there, for a keyboard user), so Enter presses it. A
+         mouse press at the bottom edge can land on the receipt toast, which carries the same Undo action. */
+      await page.keyboard.press('Enter')
+      const undone = await expect.poll(subText, { timeout: 5000 }).not.toContain('Sold').then(() => true).catch(() => false)
+      expect(undone, 'the undo did not register: Sold stayed on the card header').toBe(true)
+      await settleMotion(page)
+      await afterPaint(page)
+      const afterUndo = await read()
+      if (JSON.stringify(afterUndo) !== JSON.stringify(before)) bad.push(`undo ${JSON.stringify(afterUndo)}`)
+      if (!(await oneRow())) bad.push('undo: the facts row is not one pill tall')
+      expect(bad, `these moved the page or the card header (before ${JSON.stringify(before)})`).toEqual([])
     } finally {
       Object.assign(mine, kept)
     }
@@ -1164,7 +1331,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
     const before = await read()
     const was = await pickFigure.textContent()
     const bad: string[] = []
-    await page.getByRole('button', { name: /Mark sold/ }).first().click()
+    await page.getByRole('button', { name: /Mark Sold/ }).first().click()
     await expect(pickFigure).not.toHaveText(was ?? '')
     await settleMotion(page)
     if ((await read()) !== before) bad.push('sale')
@@ -1244,7 +1411,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
     await settleMotion(page)
     const before = await boxes()
     const bad: string[] = []
-    await page.getByRole('button', { name: /Mark sold/ }).first().click()
+    await page.getByRole('button', { name: /Mark Sold/ }).first().click()
     await expect(page.locator('.orders-strip-card.is-done').first()).toBeVisible()
     await settleMotion(page)
     if ((await boxes()) !== before) bad.push('sale')
@@ -1275,3 +1442,238 @@ test('ticking: the Capture head\'s matched counter shifts nothing as its number 
   const shifts = (await readShifts(page)).shifts.filter((s) => s.at >= mark)
   expect(sumOf(shifts), describeShifts(shifts)).toBe(0)
 })
+
+/* IMAGE SHIFT, PER SITE. An `<img>` with no size of its own draws nothing until its bytes land, so
+ * whatever sits after it moves when they do. This probe holds every photograph answer until it
+ * releases one card-shaped image. Movement is read in document coordinates, so scroll anchoring
+ * cannot hide it. */
+const CARD_SHAPED =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="540" height="960" viewBox="0 0 540 960"><rect width="540" height="960" fill="#6b6b75"/></svg>'
+
+/** Every photograph answer the page asks for, held open until the probe answers it. Only `image`
+ *  requests are held, so no script or read waits here. */
+async function holdPhotos(page: Page): Promise<Held[]> {
+  const held: Held[] = []
+  await page.route(
+    (url) => /\.(png|jpe?g|webp|gif|svg)$|\/(photo|assets)\//.test(url.pathname) || url.hostname === 'tcgplayer-cdn.tcgplayer.com',
+    async (route) => {
+      if (route.request().resourceType() !== 'image') return route.fallback()
+      held.push({ url: route.request().url(), route })
+    },
+  )
+  return held
+}
+
+type Held = { url: string; route: Route }
+
+/** Answers one held photograph with the card-shaped image. */
+const answer = (held: Held): Promise<void> => held.route.fulfill({ status: 200, contentType: 'image/svg+xml', body: CARD_SHAPED })
+
+type FrameRead = { found: boolean; loaded: boolean; h: number; tops: (number | null)[] }
+
+/** The image's box, and the top (document coordinates) of every visible element after it in the
+ *  document that is neither its ancestor nor inside it. The element list is taken once, on the first read. */
+function readFrame(page: Page, selector: string, at: number): Promise<FrameRead> {
+  return page.evaluate(([sel, index]) => {
+    const w = window as unknown as { __imageSiteAfter?: Element[] }
+    const img = document.querySelectorAll<HTMLImageElement>(sel).item(index)
+    if (img === null) return { found: false, loaded: false, h: 0, tops: [] }
+    if (w.__imageSiteAfter === undefined) {
+      w.__imageSiteAfter = Array.from(document.body.querySelectorAll('*')).filter(
+        (el) => !img.contains(el) && !el.contains(img) && (img.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+      )
+    }
+    const tops = w.__imageSiteAfter.map((el) => {
+      if (!el.isConnected || getComputedStyle(el).position === 'fixed') return null
+      const r = el.getBoundingClientRect()
+      return r.height > 0 ? r.top + window.scrollY : null
+    })
+    return { found: true, loaded: img.complete && img.naturalWidth > 0, h: img.getBoundingClientRect().height, tops }
+  }, [selector, at] as const)
+}
+
+/** The largest move, in px, of any element that was after the image and is still on the page. */
+function movedPx(before: FrameRead, after: FrameRead): number {
+  let moved = 0
+  before.tops.forEach((top, i) => {
+    const next = after.tops[i]
+    if (top !== null && next !== undefined && next !== null) moved = Math.max(moved, Math.abs(next - top))
+  })
+  return Math.round(moved)
+}
+
+/** One photograph site: how to reach the state that draws it, and which `<img>` it is. */
+type ImageSite = { site: string; open: (page: Page) => Promise<void>; img: string; at?: number }
+
+/** The box's first card is the one the panel opens on. The shell's card fixture has no
+ *  `photo_reclaimed_at`, which reads as reclaimed, so this re-answers the box with the field null. */
+async function openInventoryBox(page: Page): Promise<void> {
+  await l1Inventory(page)
+  await page.route(/\/inventory\/(\d+)$/, (route) => {
+    const box = Number(/\/inventory\/(\d+)$/.exec(route.request().url())?.[1])
+    const cards = Object.fromEntries(
+      Object.entries(L1_CARDS).filter(([, c]) => c.box === box).map(([key, c]) => [key, { ...c, photo_reclaimed_at: null }]),
+    )
+    return json(route, { version: 2, cards, listings: {} })
+  })
+  await page.goto(screen('inventory'))
+  await page.locator('.browse-boxcell', { hasText: 'SV commons' }).click()
+  await expect(page.locator('.card-locations').first()).toBeVisible()
+}
+
+/** One priced row. The populated seed leaves `image_url` undefined, so this row carries `null`. */
+async function openPricing(page: Page): Promise<void> {
+  const row = { ...pricingRow('8608859', 'Articuno', '22.03', '21.98', { box: 2, index: 1, label: 'Box 2, Section 1, Card 1', cid: 'a'.repeat(64), capture_id: 'cap-2-1' }), image_url: null }
+  await page.route(/\/pipeline\/pricing(\?|$)/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ runs: [], roster: [], skus: [row], written_at: {}, skipped: [], asked: [], threshold: '0.49', floor: '0.49' }),
+    }),
+  )
+  await page.goto(screen('pricing'))
+  await expect(page.locator('.pricing-row').first()).toBeVisible()
+}
+
+/** Opens the priced row's photo sheet, which draws `SheetPhoto`. */
+async function openPricingSheet(page: Page): Promise<void> {
+  await openPricing(page)
+  await page.locator('.pricing-thumb').first().click()
+  await expect(page.locator('.pricing-photo img').first()).toBeAttached()
+}
+
+/** The Fulfiller's list with the populated orders, and its first copy marked as photographed. */
+async function openFulfiller(page: Page): Promise<void> {
+  await seedPopulatedOrders(page)
+  const plan = JSON.stringify(severalOrdersWalkPlan()).replace('"has_photo":false', '"has_photo":true').replace('"cid":null', `"cid":"${'a'.repeat(64)}"`)
+  await page.route(/\/orders\/walk-plan$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: plan }))
+  await page.goto(screen('fulfillment'))
+  await expect(page.locator('.ff-column').first()).toBeVisible()
+}
+
+/** The Fulfiller's first card chosen, so its photograph is drawn. */
+async function openFulfillerCard(page: Page): Promise<void> {
+  await openFulfiller(page)
+  /* The boxes arrive shut, and the card's row is inside one. They are waited for first, so the loop never runs before they draw. */
+  await expect(page.locator('.ff-box-head').first()).toBeVisible()
+  const heads = page.locator('.ff-box-head[aria-expanded="false"]')
+  for (let guard = 0; guard < 40; guard += 1) {
+    if ((await heads.count()) === 0) break
+    await heads.first().click()
+  }
+  await page.getByRole('button', { name: 'Volcanion' }).first().click()
+  await expect(page.locator('.fulfillment-photo').first()).toBeAttached()
+}
+
+/** The Fulfiller's chosen photograph, opened full size from its button. */
+async function openFulfillerZoom(page: Page): Promise<void> {
+  await openFulfillerCard(page)
+  await page.locator('.ff-photo-btn').first().click()
+  await expect(page.locator('.ff-zoom-img').first()).toBeAttached()
+}
+
+const IMAGE_SITES: readonly ImageSite[] = [
+  { site: 'Fulfillment .ff-zoom-img', open: openFulfillerZoom, img: '.ff-zoom-img' },
+  { site: 'Pricing SheetPhoto', open: openPricingSheet, img: '.pricing-photo img' },
+]
+
+for (const one of IMAGE_SITES) {
+  for (const width of [1440, 820]) {
+    test(`image: ${one.site} holds its frame while its photograph loads, at ${width}`, async ({ page }) => {
+      test.setTimeout(120_000)
+      const at = one.at ?? 0
+      const photos = await holdPhotos(page)
+      await setViewport(page, { width, height: 1000 })
+      await one.open(page)
+      await page.locator(one.img).nth(at).scrollIntoViewIfNeeded()
+      await expect.poll(() => photos.length, { message: `${one.site}: no photograph request was held` }).toBeGreaterThan(0)
+      /* THIS SITE'S OWN PHOTOGRAPH IS THE ONE THAT WAITS. Every other photograph is answered first and settles. */
+      const own = await page.locator(one.img).nth(at).evaluate((e) => (e as HTMLImageElement).src)
+      const ownRequest = photos.find((h) => h.url === own)
+      expect(ownRequest, `${one.site}: its own photograph (${own}) was not one of the held requests`).toBeDefined()
+      for (const h of photos) if (h !== ownRequest) await answer(h)
+      await expect.poll(() => page.evaluate((src) => Array.from(document.images).every((i) => i.src === src || i.complete), own), { message: `${one.site}: the other photographs never settled` }).toBe(true)
+      await settleFonts(page)
+      await settleMotion(page)
+      await afterPaint(page)
+      const before = await readFrame(page, one.img, at)
+      expect(before.found, `${one.site}: the image is not on the page`).toBe(true)
+      expect(before.loaded, `${one.site}: the photograph loaded before the first read, so nothing was held`).toBe(false)
+      await answer(ownRequest!)
+      await expect.poll(async () => (await readFrame(page, one.img, at)).loaded, { message: `${one.site}: the photograph never loaded` }).toBe(true)
+      await settleMotion(page)
+      await afterPaint(page)
+      const after = await readFrame(page, one.img, at)
+      const moved = movedPx(before, after)
+      expect(moved, `${one.site} moved content ${moved}px when its photograph loaded`).toBeLessThan(1)
+    })
+  }
+}
+
+/* THE PHOTOGRAPH'S OWN SHAPE. A 2:3 photograph (360x540) must end in a box of its own ratio once it loads, so a fixed
+ * `9 / 16` box stretches it. The box is read after load and held to 1% of the photograph's natural ratio. */
+const TALL_PHOTO =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="360" height="540" viewBox="0 0 360 540"><rect width="360" height="540" fill="#6b6b75"/></svg>'
+
+for (const one of IMAGE_SITES) {
+  for (const width of [1440, 820]) {
+    test(`image: ${one.site} keeps its own shape once its photograph loads, at ${width}`, async ({ page }) => {
+      test.setTimeout(120_000)
+      const at = one.at ?? 0
+      const photos = await holdPhotos(page)
+      await setViewport(page, { width, height: 1000 })
+      await one.open(page)
+      await page.locator(one.img).nth(at).scrollIntoViewIfNeeded()
+      await expect.poll(() => photos.length, { message: `${one.site}: no photograph request was held` }).toBeGreaterThan(0)
+      const own = await page.locator(one.img).nth(at).evaluate((e) => (e as HTMLImageElement).src)
+      const ownRequest = photos.find((h) => h.url === own)
+      expect(ownRequest, `${one.site}: its own photograph (${own}) was not one of the held requests`).toBeDefined()
+      for (const h of photos) if (h !== ownRequest) await answer(h)
+      await settleFonts(page)
+      await settleMotion(page)
+      await ownRequest!.route.fulfill({ status: 200, contentType: 'image/svg+xml', body: TALL_PHOTO })
+      await expect.poll(async () => (await readFrame(page, one.img, at)).loaded, { message: `${one.site}: the 2:3 photograph never loaded` }).toBe(true)
+      await settleMotion(page)
+      await afterPaint(page)
+      const shape = await page.locator(one.img).nth(at).evaluate((e) => {
+        const img = e as HTMLImageElement
+        const r = img.getBoundingClientRect()
+        return { box: r.width / r.height, photo: img.naturalWidth / img.naturalHeight }
+      })
+      expect(
+        Math.abs(shape.box - shape.photo) / shape.photo,
+        `${one.site}: box ratio ${shape.box.toFixed(3)} against a photograph of ${shape.photo.toFixed(3)}`,
+      ).toBeLessThan(0.01)
+    })
+  }
+}
+
+/* POSITIVE CONTROL FOR THE IMAGE PROBE. A 200px block above a pending photograph must move the frame measure the rows read. */
+test('image probe control: a block above a pending photograph moves the measured frame', async ({ page }) => {
+  test.setTimeout(120_000)
+  const photos = await holdPhotos(page)
+  await setViewport(page, { width: 1440, height: 1000 })
+  await openInventoryBox(page)
+  await page.getByRole('button', { name: 'Retire' }).first().click()
+  const img = page.locator('.inventory-confirm-photo')
+  await img.scrollIntoViewIfNeeded()
+  await expect.poll(() => photos.length).toBeGreaterThan(0)
+  await settleMotion(page)
+  await afterPaint(page)
+  const before = await readFrame(page, '.inventory-confirm-photo', 0)
+  const own = await img.evaluate((e) => (e as HTMLImageElement).src)
+  expect(before.loaded).toBe(false)
+  await page.evaluate(() => {
+    const spacer = document.createElement('div')
+    spacer.style.height = '200px'
+    document.querySelector('.inventory-confirm-photo')?.parentElement?.before(spacer)
+  })
+  await afterPaint(page)
+  await answer(photos.find((h) => h.url === own)!)
+  await expect.poll(async () => (await readFrame(page, '.inventory-confirm-photo', 0)).loaded).toBe(true)
+  await settleMotion(page)
+  await afterPaint(page)
+  const after = await readFrame(page, '.inventory-confirm-photo', 0)
+  expect(movedPx(before, after), 'the frame measure saw no move from a 200px block above the photograph').toBeGreaterThan(0)
+})
+

@@ -22,8 +22,8 @@ import envfile
 # Read through `envfile.get_live`, never `get`: the session expires, the refusal tells the operator
 # to replace the value, and `get` caches per process and could not pick the new one up.
 COOKIE_ENV = "TCGPLAYER_STORE_COOKIE"
-AGENT_ENV = "PKMNSCAN_TCG_USER_AGENT"
-DEFAULT_AGENT = "pkmnscan/1 (+local; python-urllib)"
+AGENT_ENV = "BANCHI_TCG_USER_AGENT"
+DEFAULT_AGENT = "banchi/1 (+local; python-urllib)"
 
 # What an expired session looks like on either host: a redirect to the portal's logon page.
 LOGON_MARKER = "account/logon"

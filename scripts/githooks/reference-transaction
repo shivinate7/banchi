@@ -24,7 +24,7 @@
 #      is not on origin until something pushes it — and pushing to main is what the pre-push
 #      hook beside this one refuses.
 #   3a. Packing (`pack-refs`, `gc`): dropping a loose main whose value is unchanged. main does not move. See the block at the deletion test.
-#   4. PKMNSCAN_MAIN=off, the visible escape hatch, spelled the way PKMNSCAN_DOCS=off
+#   4. BANCHI_MAIN=off, the visible escape hatch, spelled the way BANCHI_DOCS=off
 #      already is in this repo.
 #
 # THE `old` COLUMN IS NOT EVIDENCE AND THIS HOOK IGNORES IT. That is the single most important
@@ -69,7 +69,7 @@ rlog() {
 # unknown one from a future version) exits 0 with no output.
 [ "${1:-}" = "prepared" ] || exit 0
 
-[ "${PKMNSCAN_MAIN:-}" = "off" ] && exit 0
+[ "${BANCHI_MAIN:-}" = "off" ] && exit 0
 
 lines="$(cat 2>/dev/null)" || exit 0
 case "$lines" in

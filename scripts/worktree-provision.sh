@@ -121,7 +121,7 @@ fi
 # THE STALENESS QUESTION IS NOT REASKED HERE. `scripts/serve.py:npm_install_owed` already
 # answers "does the installed tree match app/package-lock.json", against the receipt
 # `make up`'s own supervisor writes on every successful build (`NPM_RECEIPT`,
-# `app/node_modules/.pkmnscan-lock`, a bare digest). Reusing it rather than a second marker
+# `app/node_modules/.banchi-lock`, a bare digest). Reusing it rather than a second marker
 # means this step and the supervisor can never disagree about what "current" means, and a
 # worktree that later runs `make up` finds its own provisioning already credited rather than
 # reinstalled a second time. `npm` missing from this venv, a broken serve.py import, or any

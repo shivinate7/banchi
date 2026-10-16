@@ -23,7 +23,7 @@ row — the guard is trusted only once it has been seen to fail on the defect it
 PATH GATED, THE SIXTEENTH (D247, owner's word 2026-09-23): `make pricearchive-selftest`,
 wired into `make check` and `make ci-check` through `scripts/guard-scope.py`, exactly like
 `cid-selftest` right beside it in both recipes. This file is no longer the exception it was
-when written — `pkmnscan archive sweep --write` runs `pipeline/pricearchive.py` against the
+when written — `banchi archive sweep --write` runs `pipeline/pricearchive.py` against the
 owner's real store, D231, and the sentence that used to sit here ("no caller yet reachable
 from a screen") had gone stale under it. The owner's own words for the fix: "once it's
 done, it only needs to be tested when touched" — never on every commit, only when this
@@ -1328,7 +1328,7 @@ def main() -> int:
             "https://infinite-api.tcgplayer.com/price/history/652771/detailed?range=month "
             "answered HTTP 403. That is either an authorization change at the host or its "
             "own defenses declining this client by its request signature — set "
-            "PKMNSCAN_TCG_USER_AGENT in .env to the User-Agent your browser sends and try "
+            "BANCHI_TCG_USER_AGENT in .env to the User-Agent your browser sends and try "
             "again."
         )
         refusals_in = {"652771": blocked_message, "other": "not in the script"}
@@ -1349,7 +1349,7 @@ def main() -> int:
         rewritten, blocked_count2 = archive_walk.classify_refusals(
             refusals_in, had_earlier_success=True
         )
-        ok("PKMNSCAN_TCG_USER_AGENT" not in rewritten["652771"],
+        ok("BANCHI_TCG_USER_AGENT" not in rewritten["652771"],
            "after an earlier success this pass, the rewritten message never repeats the "
            "remedy this pass has already disproved", rewritten)
         ok("throttle" in rewritten["652771"].lower(),

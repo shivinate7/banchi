@@ -24,9 +24,9 @@
  * NO PIPELINE WORD REACHES THE SCREEN (D196): not emit, not staged, not reconcile. */
 
 import { count } from './kit/dataRules'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Button, Icon, IconButton, Money, Notice, Refusal, Retry } from './kit'
-import { clockTime } from './dates'
+import { atClockTime, clockTime } from './dates'
 import { describeFailure, dismissSendWarning, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, takeBackSend } from './server'
 import type { Failure } from './server'
 import type { EmptySend, LiveMove, PriceChange, RefusedPrice, SendSummary, SendTrim } from './types'
@@ -48,12 +48,13 @@ function carried(copies: number, prices: number): string {
  *  (the filter note, moved onto the act). Copies stay in the bar's own line beside it. */
 function pressCarries(skus: number, copies: number, prices: number): string {
   const parts = [
-    copies > 0 || prices === 0 ? (skus === 1 ? '1 SKU' : `all ${skus} SKUs`) : null,
-    prices > 0 ? count(prices, 'price change', 'price changes') : null,
+    copies > 0 || prices === 0 ? (skus === 1 ? '1 SKU' : `All ${skus} SKUs`) : null,
+    prices > 0 ? count(prices, 'Price Change', 'Price Changes') : null,
   ].filter((part): part is string => part !== null)
   return parts.join(' and ')
 }
-const DAY_MS = 24 * 60 * 60 * 1000
+/** A checked send stays on the card this long; its day is named when the check was not today (`atClockTime`). */
+const STANDS_MS = 24 * 60 * 60 * 1000
 
 /** The failures a second press can fix. Everything else is a refusal: pressing again gets the
  *  same answer, so the card offers no retry for it. */
@@ -120,6 +121,21 @@ function NotSent({ gone }: { readonly gone?: readonly string[] }) {
   )
 }
 
+/** A HOLD TAKES ITS LIVE COPIES OFF: how many came off TCGplayer, said once and only when some did. */
+function TookOff({ taken, download }: { readonly taken?: number; readonly download: boolean }) {
+  if (taken === undefined || taken <= 0) return null
+  return (
+    <Notice
+      tone="info"
+      compact
+      className="send-took-off"
+      title={download ? `This file takes ${count(taken, 'copy', 'copies')} off TCGplayer.` : `${count(taken, 'copy', 'copies')} came off TCGplayer.`}
+    >
+      The cards stay in their box, held.
+    </Notice>
+  )
+}
+
 function TrimList({ trimmed }: { readonly trimmed: readonly SendTrim[] }) {
   if (trimmed.length === 0) return null
   const held = trimmed.reduce((total, trim) => total + (trim.would - trim.goes), 0)
@@ -145,14 +161,14 @@ function TrimList({ trimmed }: { readonly trimmed: readonly SendTrim[] }) {
 function MovesPhrase({ moves }: { readonly moves: readonly { copies: number; price: string }[] }) {
   const copies = moves.reduce((total, move) => total + move.copies, 0)
   const prices = new Set(moves.map((move) => Number(move.price)))
-  const head = `${count(copies, 'live copy moves', 'live copies move')} to `
+  const head = `${count(copies, 'Live Copy Moves', 'Live Copies Move')} to `
   return prices.size === 1 ? (
     <>
       {head}
       <Money value={Number(moves[0]?.price)} />
     </>
   ) : (
-    <>{`${head}new prices`}</>
+    <>{`${head}New Prices`}</>
   )
 }
 
@@ -223,10 +239,16 @@ function ResendPrices({
 function MovesList({ moves }: { readonly moves: readonly LiveMove[] }) {
   const [open, setOpen] = useState(false)
   if (new Set(moves.map((move) => Number(move.price))).size < 2) return null
+  const total = count(moves.reduce((sum, move) => sum + move.copies, 0), 'Live Copy', 'Live Copies')
   return (
     <Notice tone="info" compact className="send-moves" title="Live copies this press moves to their new price.">
       <Button variant="quiet" icon={open ? 'chevronUp' : 'chevronDown'} onClick={() => setOpen((on) => !on)} aria-expanded={open} words="word-only-control">
-        {`${open ? 'Hide' : 'Show'} ${count(moves.reduce((sum, move) => sum + move.copies, 0), 'live copy', 'live copies')}`}
+        {/* THE LABEL HOLDS THE WIDER OF ITS TWO STATES: "Show" and "Hide" differ in width, so a panel title beside it could wrap
+            in one state and not the other, and the bar would change height as the list opened. The other state is a hidden span. */}
+        <span className="send-toggle">
+          <span aria-hidden={open ? undefined : 'true'} data-hidden={open ? undefined : 'true'}>{`Hide ${total}`}</span>
+          <span aria-hidden={open ? 'true' : undefined} data-hidden={open ? 'true' : undefined}>{`Show ${total}`}</span>
+        </span>
       </Button>
       <ul className="send-names" hidden={!open}>
         {moves.map((move) => (
@@ -392,17 +414,25 @@ function SendStanding({
   send,
   takeBack,
   takingBack,
+  sendAnyway,
 }: {
   readonly send: SendSummary
   readonly takeBack: (stamp: string) => void
   readonly takingBack: boolean
+  /** The warning's own way past the lock (R15): held by the page for this send, never stored. */
+  readonly sendAnyway?: (stamp: string) => void
 }) {
   const copies = carried(send.copies, send.prices)
   const safeAfter = send.take_back_after ? `You can take them back after ${clockTime(send.take_back_after)}, once Banchi has checked.` : null
   const action =
     send.takeable > 0 ? (
-      <Button size="sm" busy={takingBack} disabled={takingBack} onClick={() => takeBack(send.stamp)}>
-        {`Take ${count(send.takeable, 'copy', 'copies')} back`}
+      <Button
+        size="sm"
+        busy={takingBack}
+        disabled={takingBack}
+        onClick={() => takeBack(send.stamp)}
+      >
+        {`Take ${count(send.takeable, 'Copy', 'Copies')} Back`}
       </Button>
     ) : undefined
   switch (send.state) {
@@ -450,21 +480,36 @@ function SendStanding({
     case 'checked':
       if (send.check === null) return null
       return (
-        <Notice tone="ok" compact className="send-standing" title={`Live and checked at ${clockTime(send.checked_at)}.`}>
-          {foundLine(send)} at TCGplayer.
+        <Notice tone="ok" compact className="send-standing" title="Your last send is live.">
+          {foundLine(send)} at TCGplayer {atClockTime(send.checked_at)}.
           <StagedWarning send={send} />
         </Notice>
       )
     case 'short':
-      if (send.check === null) return null
       return (
         <Notice
           tone="warn"
           compact
           className="send-standing send-short-check"
-          title={`${foundLine(send)} at TCGplayer at ${clockTime(send.checked_at)}.`}
-          action={action}
+          title="Your last send is not all there yet."
+          action={
+            <>
+              {action}
+              {sendAnyway === undefined ? null : (
+                <Button variant="quiet" size="sm" onClick={() => sendAnyway(send.stamp)}>
+                  Send Anyway
+                </Button>
+              )}
+            </>
+          }
         >
+          {send.check === null ? (
+            'Banchi has not finished checking what TCGplayer holds.'
+          ) : (
+            <>
+              {foundLine(send)} at TCGplayer {atClockTime(send.checked_at)}.
+            </>
+          )}
           <StagedWarning send={send} />
           <MissingList send={send} />
           <PriceMisses send={send} />
@@ -523,6 +568,8 @@ export function SendCard({
   readonly onSent: () => void
 }) {
   const live = useLiveCheck()
+  const whyId = useId()
+  const [passed, setPassed] = useState<readonly string[]>([])
   const [phase, setPhase] = useState<'idle' | 'waiting' | 'sending' | 'downloading'>('idle')
   const [intent, setIntent] = useState<'send' | 'download'>('send')
   const [failure, setFailure] = useState<Failure | null>(null)
@@ -638,10 +685,18 @@ export function SendCard({
       ? null
       : latest.state === 'waiting' || latest.state === 'short'
         ? latest
-        : latest.state === 'checked' && Number.isFinite(settledAt) && Date.now() - settledAt < DAY_MS
+        : latest.state === 'checked' && Number.isFinite(settledAt) && Date.now() - settledAt < STANDS_MS
           ? latest
           : null
   const running = open.some((send) => send.state === 'sending')
+  /* AN INCOMPLETE LAST SEND HOLDS THE PRESS (R14): Send stays off until the owner has seen what is
+     missing, and the line beside it says why. */
+  /* THE LOCK IS THE INCOMPLETE SEND ITSELF, NOT THE NEWEST RECEIPT (R15): a download writes a newer
+     receipt and must not lift it. It lifts when the status finds every copy or the copies are taken back
+     (the send's state changes), or when the owner presses Send Anyway on it (held in this page only). */
+  const lastSend = (live.status?.sends ?? []).find((send) => send.kind === 'send') ?? null
+  const blocking = lastSend !== null && lastSend.state === 'short' && !passed.includes(lastSend.stamp) ? lastSend : null
+  const incomplete = blocking !== null
   const busy = phase !== 'idle' || running
   /* NOTHING READY, NOTHING TO PRESS (R4 F5): with no copy and no price change the press could
      only be refused, so it is disabled until a copy is ready. */
@@ -748,17 +803,23 @@ export function SendCard({
           icon="send"
           className="pricing-emit send-press"
           busy={phase === 'sending' || phase === 'waiting' || running}
-          disabled={busy || empty}
+          disabled={busy || empty || incomplete}
+          aria-describedby={incomplete ? whyId : undefined}
           onClick={() => press('send')}
         >
           {label}
         </Button>
+        {incomplete ? (
+          <span id={whyId} className="send-why">
+            Deal with your last send first.
+          </span>
+        ) : null}
         <span className="bn-sr" role="status">
           {doing}
         </span>
         <IconButton
           icon="more"
-          label="More send options"
+          label="More Send Options"
           className="send-more-press"
           aria-expanded={moreOpen}
           onClick={() => setMoreOpen((open) => !open)}
@@ -805,6 +866,8 @@ export function SendCard({
         </div>
       )}
 
+      {sent !== null && sent.kind === 'download' ? <TookOff taken={sent.taken_off} download /> : null}
+
       <MovesList moves={liveMoves} />
 
       {offered.length > 0 ? (
@@ -828,8 +891,11 @@ export function SendCard({
       )}
 
       {open.map((send) => (
-        <SendStanding key={send.stamp} send={send} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} />
+        <SendStanding key={send.stamp} send={send} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} sendAnyway={(stamp) => setPassed((was) => [...was, stamp])} />
       ))}
+      {blocking === null || open.some((send) => send.stamp === blocking.stamp) || standing?.stamp === blocking.stamp ? null : (
+        <SendStanding send={blocking} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} sendAnyway={(stamp) => setPassed((was) => [...was, stamp])} />
+      )}
 
       {(live.status?.unreadable ?? []).map((row) => (
         <Notice
@@ -872,11 +938,12 @@ export function SendCard({
 
       {standing === null ? null : (
         <>
-          <SendStanding send={standing} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} />
+          <SendStanding send={standing} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} sendAnyway={(stamp) => setPassed((was) => [...was, stamp])} />
           {/* WHAT THE GUARD HELD BACK, ANSWERED TO THE PRESS THAT MADE IT. It is read once,
               right after this visit's own send; a later visit does not carry it in the bar. */}
           {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TrimList trimmed={standing.trimmed} /> : null}
           {sent !== null && sent.stamp === standing.stamp ? <NotSent gone={standing.gone} /> : null}
+          {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TookOff taken={standing.taken_off} download={false} /> : null}
           {sent !== null && sent.stamp === standing.stamp ? <PricesLeft send={standing} /> : null}
         </>
       )}

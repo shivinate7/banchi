@@ -22,12 +22,12 @@ that have not sold here inside a window and have been listed longer than the win
 reports what each would be re-priced to. With `--write` it produces a **worklist**: the same
 rows, in export shape, with a price already proposed on every one.
 
-The operator edits the worklist or does not. `pkmnscan reprice apply` reads it back and writes
+The operator edits the worklist or does not. `banchi reprice apply` reads it back and writes
 **`import.csv`**, the file for TCGplayer's My Pricing.
 
 ```
-./pkmnscan reprice list  <my-pricing.csv> [--days N] [--percent P] [--write]
-./pkmnscan reprice apply <worklist.csv> [--corpus-revision <digest>] [--write]
+./banchi reprice list  <my-pricing.csv> [--days N] [--percent P] [--write]
+./banchi reprice apply <worklist.csv> [--corpus-revision <digest>] [--write]
 ```
 
 Both halves preview by default. `--write` also leaves a `survey.json` that holds every live
@@ -139,7 +139,7 @@ sales-velocity figure in this product, and this feature does not invent one.**
 
 The windows select by age and by sales. A window longer than the store's age selects nothing.
 That is a fact about the store and not about the feature. The counts of live, held and sold
-SKUs move with every export, so none is recorded here. Run `pkmnscan reprice list` on a
+SKUs move with every export, so none is recorded here. Run `banchi reprice list` on a
 current export to measure them.
 
 ## 5. The four files, and why the worklist is not the upload
@@ -433,7 +433,7 @@ list below pin that.
 TCGplayer, because nothing here writes there. But the job now rewrites run tables. So what the
 screen proposes can move overnight.
 
-D104 now says this, by the owner's word: the daily job also fetches the catalog export per game
+D104 now says this, by the owner's word. The daily job also fetches the catalog export per game
 and re-joins every open run. Everything else in D104 stands. The guard stands: nothing here
 writes at TCGplayer, a failed step is named, and a typed answer never moves.
 
@@ -659,10 +659,14 @@ lowest first, then the default order.
   (`askingAtSort`), so a typed price does not re-rank rows (D181, the order is taken once).
 - **Order.** A sort orders within each group. Rows that need the owner stay on top (D277). A row
   with no value for the column goes last in both directions.
+- **Left-box rows sit lower (7b-29).** A row whose copies have all left the box
+  (`on_hand` 0) sorts below the rows with a copy on hand. That applies in the default order, inside each group. The Live tab's `on_hand`
+  is `Inventory.copies_on_hand`'s count. A header sort ignores this.
 - **One column at a time.** The sort lives in the URL and survives a reload (D285, filter sort and
   search live in the URL).
 - **One control.** The header is the kit's `SortHeader` in `app/src/kit/filters.tsx`, extended.
   Pricing has no second header.
+- **Header labels.** Item stays left. Every other header label (Market, Lowest, Range 7d, Trend, Qty, Price) is centered over its column. Row values keep their alignment, except Market, Lowest and Range 7d. Those values are centered in their cell (7b-30, 7b-31; decimal alignment given up on purpose). The hover box hugs the label and the chevron sits outside it (7b-28).
 - **Centering.** Row values center on the row's own center. Tokens set it, never pixel literals.
 - **Proof.** `app/tests/pricing.spec.ts`, cases `7b-21` to `7b-27`: "a row with a hold note
   centers Market, Lowest, Range 7d and Qty on the row's own center", "header cycles highest first,

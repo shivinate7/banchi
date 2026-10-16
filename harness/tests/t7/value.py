@@ -140,7 +140,7 @@ def check_value_table(checks: Checks) -> None:
 
         # `_readings()` IS A SELECT NOW (D189): the run tables and the live
         # export just written to disk answer nothing until a `readings adopt --write` folds
-        # them into the `readings` table, exactly as `pkmnscan readings adopt --write` does.
+        # them into the `readings` table, exactly as `banchi readings adopt --write` does.
         # `pipeline.readings.collect()` is the identical two-source walk the old live
         # `_readings()` ran inline; only WHEN it runs moved.
         with Store().write() as snapshot:

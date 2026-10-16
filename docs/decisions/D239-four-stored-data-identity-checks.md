@@ -7,7 +7,7 @@ own evidence, never the catalog echo. The checks themselves are unchanged.
 
 **What this builds.** The four checks the analysis named. Each is
 mechanizable from stored data, with no catalogue and no network. The owner took all four.
-`pipeline/identity_checks.py` holds the pure logic. `pkmnscan cards checks` is the one
+`pipeline/identity_checks.py` holds the pure logic. `banchi cards checks` is the one
 reachable place a human runs them, read-only, beside `cards name` and `cards audit`.
 
 1. **A name too long to be a card name.** `flag_long_names`, threshold 60 characters.
@@ -54,7 +54,7 @@ own full name (`Grandmaster at Arms`/`Jax, Grandmaster at Arms`). That second sh
 one the analysis names as `Draven, Glorious Executioner`, "resolved
 fine."
 
-### Measured against the owner's real store, read-only, 2026-09-20
+### Measured against the owner's real store, read-only
 
 | check | flags | subjects (unique names/sets) |
 |---|---|---|

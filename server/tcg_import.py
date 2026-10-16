@@ -40,7 +40,7 @@ is the one still only read. `docs/specs/stale-listings.md` §6 carries what thos
 
 WHAT THAT RUN ALSO MEASURED, and it is not about this module: `Export From Live` is NOT
 read-your-writes. Forty seconds after a confirmed publish it still served the pre-publish price
-while the grid served the new one — so `pkmnscan reconcile --live`, which writes `live` off that
+while the grid served the new one — so `banchi reconcile --live`, which writes `live` off that
 export (D87), records the old price if it runs straight after a publish. Nothing guards it.
 
 JQUERY'S DEEP FORM ENCODING IS THE WIRE FORMAT, AND IT IS NOT JSON. `$.post` with a nested
@@ -55,7 +55,7 @@ import json
 import os
 import sys
 import urllib.parse
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -171,7 +171,7 @@ class StagedUpload:
 def _url(path: str) -> str:
     """The absolute URL, with the export module's override honoured.
 
-    THE OVERRIDE IS SHARED ON PURPOSE. `PKMNSCAN_TCG_EXPORT_URL` exists so a test can point
+    THE OVERRIDE IS SHARED ON PURPOSE. `BANCHI_TCG_EXPORT_URL` exists so a test can point
     the cookie at a loopback server, and a knob that redirected reads but not writes would
     send a real price change to the real portal during exactly the test that was trying to
     avoid it.
@@ -287,7 +287,9 @@ def rows_from_csv(text: str) -> List[dict]:
     return rows
 
 
-def _check(rows: Sequence[dict], *, listing: bool = False) -> None:
+def _check(
+    rows: Sequence[dict], *, listing: bool = False, take_off: Optional[Mapping[str, int]] = None
+) -> None:
     """Refuse a file their validator would refuse, before a transaction exists.
 
     THE CHECKS ARE THEIRS, NOT THIS REPO'S OPINION. `MyPrice` between 0.01 and 200000 and
@@ -304,6 +306,10 @@ def _check(rows: Sequence[dict], *, listing: bool = False) -> None:
     mixed"). Every guard on the rows that add copies stays whole, and the check past the wait
     compares a price-only row's price with TCGplayer's. Nothing sends through this door before
     the owner's first test.
+
+    `take_off` MAPS EACH SKU WHOSE ROW MAY BE NEGATIVE TO THE SIZE `emit` COMPUTED (D100, the
+    owner's ruling: a hold takes its live copies off). A negative passes only when its size
+    equals that figure, so a row edited after `emit` wrote it is still refused.
     """
     if not rows:
         raise FetchRefusal("tcg_import_empty", "That file has no rows, so there is nothing to push.")
@@ -337,6 +343,8 @@ def _check(rows: Sequence[dict], *, listing: bool = False) -> None:
                 f"SKU {sku} carries an Add to Quantity that is not an integer. Nothing was sent.",
             ) from None
         if listing:
+            if quantity < 0 and (take_off or {}).get(sku) == -quantity:
+                continue
             if quantity < 0:
                 # A LISTING ROW ADDS COPIES OR CHANGES A PRICE, AND NEVER TAKES ONE AWAY. A
                 # negative figure is a file this repo did not write.
@@ -362,7 +370,11 @@ def _check(rows: Sequence[dict], *, listing: bool = False) -> None:
 
 
 def push_to_staged(
-    rows: Sequence[dict], filename: str = "import.csv", *, listing: bool = False
+    rows: Sequence[dict],
+    filename: str = "import.csv",
+    *,
+    listing: bool = False,
+    take_off: Optional[Mapping[str, int]] = None,
 ) -> StagedUpload:
     """Initialize, upload every chunk, finalize. Rolls back if any chunk or the finalize fails.
 
@@ -371,7 +383,7 @@ def push_to_staged(
     `move_to_live`, a second call. Since `D273` one PRESS makes
     both calls, and they stay two calls so a failed publish can still roll this upload back.
     """
-    _check(rows, listing=listing)
+    _check(rows, listing=listing, take_off=take_off)
 
     try:
         opened = _post(INITIALIZE, {"filename": filename, "type": TYPE_PRICING})

@@ -1099,6 +1099,64 @@ export function Stat({
   )
 }
 
+/* ---- Tile ------------------------------------------------------------------------------------ */
+export type TileTone = 'ok' | 'warn' | 'accent' | 'info' | 'idle'
+
+/** A status tile: a mark, a one-line title and a note, in a tone. It reads where a thing stands and
+ *  offers at most one action (a `Button` inside `children`). `room` is the longest note the tile can
+ *  carry: the note holds that text's height at the tile's width, so no state moves it, and `pending`
+ *  holds the same room with skeleton lines and says nothing (D313). Any `data-*` attribute reaches
+ *  the tile unchanged, so a screen can name its tiles. */
+export function Tile({
+  icon,
+  title,
+  tone = 'ok',
+  pending,
+  room,
+  children,
+  className,
+  ...dataProps
+}: {
+  readonly icon: IconName
+  readonly title: ReactNode
+  readonly tone?: TileTone
+  readonly pending?: boolean
+  /** The longest note this tile can carry, as plain text. It is never drawn; it sizes the note. */
+  readonly room?: string
+  /** The note under the title. */
+  readonly children?: ReactNode
+  readonly className?: string
+  readonly [dataAttr: `data-${string}`]: string | undefined
+}) {
+  return (
+    <div className={['bn-tile', className].filter(Boolean).join(' ')} data-tone={pending ? 'idle' : tone} aria-busy={pending ? 'true' : undefined} {...dataProps}>
+      <span className="bn-tile-mark" aria-hidden="true">
+        <Icon name={icon} size={16} />
+      </span>
+      {pending ? (
+        <>
+          <p className="bn-tile-lead">
+            <span className="bn-skeleton bn-tile-line" aria-hidden="true" />
+          </p>
+          <div className="bn-tile-note" data-room={room}>
+            <span className="bn-tile-say">
+              <span className="bn-skeleton bn-tile-line" aria-hidden="true" />
+            </span>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="bn-tile-lead">{title}</p>
+          {/* A SPACE BETWEEN THE TWO, so the tile's text reads as sentences to a reader of its text. */}{' '}
+          <div className="bn-tile-note" data-room={room}>
+            <span className="bn-tile-say">{children}</span>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 /* ---- Logo --------------------------------------------------------------------------------------- */
 export { Lockup } from './Lockup'
 export type { LogoVariant }
@@ -1360,6 +1418,12 @@ export function stampTheme(theme: Theme): void {
   else root.setAttribute('data-theme', 'dark')
   if (entry && 'palette' in entry) root.setAttribute('data-palette', entry.palette)
   else root.removeAttribute('data-palette')
+}
+
+/** Point every theme-color meta at the page background, so the browser chrome follows the in-app theme. */
+export function syncThemeColor(): void {
+  const bg = getComputedStyle(document.body).backgroundColor
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', bg))
 }
 
 /** The theme the attributes on <html> show right now. */

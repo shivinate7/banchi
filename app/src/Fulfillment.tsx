@@ -502,6 +502,10 @@ function CardRow({ card, onOpen }: { card: Sellable; onOpen: (card: Sellable) =>
   )
 }
 
+/** The last count the orders read gave, kept across a leave and return so a failed read keeps it (R18).
+ *  One number for this device's sitting; it names no card and is never stored. */
+let lastCount: number | null = null
+
 export function Fulfillment() {
   const [cards, setCards] = useState<Sellable[] | null>(null)
   const [unplaced, setUnplaced] = useState(0)
@@ -582,6 +586,7 @@ export function Fulfillment() {
       .catch(() => {
         if (!livePage) return
         setLoadFailed(true)
+        setFailures((n) => n + 1)
       })
     return () => {
       livePage = false
@@ -614,6 +619,7 @@ export function Fulfillment() {
       } catch {
         if (!livePage) return
         setOrdersFailed(true)
+        setFailures((n) => n + 1)
       }
     })()
     return () => {
@@ -695,6 +701,9 @@ export function Fulfillment() {
 
   /** How many copies to pick, across every card still owed — the "Today" figure. */
   const totalWanted = useMemo(() => owed.reduce((sum, item) => sum + item.wanted, 0), [owed])
+  useEffect(() => {
+    if (orders !== null && !ordersFailed) lastCount = openOrderKeys.length === 0 || owed.length === 0 ? 0 : totalWanted
+  }, [orders, ordersFailed, openOrderKeys, owed, totalWanted])
   /** How many copies the open orders want that the store cannot place at all —
    *  `plan.shortfall`'s own count, the reason the empty state may never claim "nothing waits"
    *  while an order is open and unfillable (the owner's own review finding, UX-001). */
@@ -954,6 +963,32 @@ export function Fulfillment() {
     reread()
   }
 
+  /* R19: the stale notice floats and stays until it is dismissed or its cause clears; a new failure shows it again. */
+  /* The page keeps room for the receipt sheet's REAL height, not its cap: a cap-sized room beside the banner's
+     leaves too little screen between the sticky bar and the layers at the bottom. Falls back to the cap in CSS. */
+  const sheetNode = useRef<HTMLDivElement>(null)
+  const hasSheet = sales.length > 0
+  useEffect(() => {
+    const el = sheetNode.current
+    const root = el?.closest<HTMLElement>('main')
+    if (el == null || root == null) return
+    /* A sheet hidden under the big photo collapses to nothing (`content-visibility: hidden`); that is not its size, so
+       it is not measured. The observer fires again when the photo closes and the sheet is back. */
+    const measure = () => {
+      if (root.dataset.zoom === 'true') return
+      root.style.setProperty('--ff-sheet-h', `${el.offsetHeight}px`)
+    }
+    measure()
+    const watch = new ResizeObserver(measure)
+    watch.observe(el)
+    return () => {
+      watch.disconnect()
+      root.style.removeProperty('--ff-sheet-h')
+    }
+  }, [hasSheet])
+  const [failures, setFailures] = useState(0)
+  const [dismissedAt, setDismissedAt] = useState(-1)
+  const staleDismissed = dismissedAt === failures
   const tryAgain = () => {
     setLoadFailed(false)
     setOrdersFailed(false)
@@ -973,7 +1008,7 @@ export function Fulfillment() {
   const done = sales.slice(1)
   const sheet =
     newest === null ? null : (
-      <div className="ff-sheet" role="status" aria-live="polite">
+      <div className="ff-sheet" role="status" aria-live="polite" ref={sheetNode}>
         <div className="fulfillment-panel ff-receipt" key={newest.card.key}>
           <span className="ff-receipt-icon" data-tone={newest.canUndo ? 'ok' : 'note'}>
             {newest.canUndo ? <CheckMark /> : <Icon name="info" size={24} />}
@@ -1026,15 +1061,18 @@ export function Fulfillment() {
 
   /* ---- the list may have moved under him -------------------------------------------- */
   const stale =
-    (loadFailed || ordersFailed) && cards !== null ? (
-      <div className="ff-notice">
+    (loadFailed || ordersFailed) && cards !== null && !staleDismissed ? (
+      <div className="ff-notice" role="status">
         <Icon name="alert" size={26} className="ff-notice-icon" />
         <p className="fulfillment-say">
-          These cards may have changed since they were last checked. Try again.
+          These cards may have changed since they were last checked.
         </p>
         <button className="ff-quiet" type="button" onClick={tryAgain}>
           <Icon name="refresh" size={22} />
           Try again
+        </button>
+        <button className="ff-notice-x" type="button" aria-label="Dismiss" onClick={() => setDismissedAt(failures)}>
+          <Icon name="x" size={22} />
         </button>
       </div>
     ) : null
@@ -1043,7 +1081,7 @@ export function Fulfillment() {
     <header className="ff-head">
       <Logo size={44} className="ff-mark" />
       <div className="ff-head-text">
-        <h1 className="fulfillment-title ff-title">Cards to pull</h1>
+        <h1 className="fulfillment-title ff-title">Cards to Pull</h1>
       </div>
     </header>
   )
@@ -1051,15 +1089,19 @@ export function Fulfillment() {
   /* The loaded Today tile's own elements, hidden: loading and loaded share one box. Hidden from
      assistive tech too, so it never reads as an empty landmark. */
   const todayFrame = (
-    <section className="ff-today ff-today-wait" aria-hidden="true">
-      <div className="ff-today-text">
-        <p className="ff-today-figure">
-          <b className="ff-today-num">0</b>{' '}
-          <span className="ff-today-words">pick</span>
-        </p>
-      </div>
-    </section>
+    <p className="ff-count" aria-hidden="true">
+      <span className="ff-skel ff-count-skel" />
+    </p>
   )
+
+  const countOf = (n: number): ReactNode => {
+    const said = n.toLocaleString()
+    return (
+      <p className="ff-count" style={{ '--ff-n': said.length } as CSSProperties}>
+        <b className="ff-count-num">{said}</b> <span className="ff-count-word">Left</span>
+      </p>
+    )
+  }
 
   let body: ReactNode
   let wide = false
@@ -1084,10 +1126,15 @@ export function Fulfillment() {
     body = (
       <>
         {header}
+        {/* The same bar the list draws, with the real search, so nothing moves when the cards land. */}
+        <div className="ff-bar">
+          <div className="ff-count-track">{lastCount !== null ? countOf(lastCount) : todayFrame}</div>
+          <div className="ff-search" data-clear="false">
+            <SearchField value={query} onChange={setQuery} persona="fulfiller" placeholder="Card name or number" />
+          </div>
+        </div>
         <div className="ff-loading" aria-busy="true">
           <p className="fulfillment-say ff-loading-say">Getting the cards.</p>
-          {todayFrame}
-          <span className="ff-skel ff-skel-search" />
           <span className="ff-skel ff-skel-row" />
           <span className="ff-skel ff-skel-row" />
           <span className="ff-skel ff-skel-row" />
@@ -1333,9 +1380,14 @@ export function Fulfillment() {
 
     /* ---- today: what the orders still owe, and whether it can all be found ------------- */
     let today: ReactNode
+    let countFigure: ReactNode = null
     if (orders === null) {
-      today = ordersFailed ? null : todayFrame
+      today = null
+      /* Never a made-up number: with no count known yet the slot shows its loading state, and once one
+         is known (a return, a failed re-read) it shows that count at once. */
+      countFigure = lastCount !== null ? countOf(lastCount) : todayFrame
     } else if (openOrderKeys.length === 0) {
+      countFigure = countOf(0)
       /* No order is open at all — the ONE state allowed to say "nothing waits" (the owner's
          own review finding, UX-001: a green "nothing waits" while orders are open and unread
          is the defect this screen had). */
@@ -1348,6 +1400,7 @@ export function Fulfillment() {
         </p>
       )
     } else if (owed.length === 0) {
+      countFigure = countOf(0)
       /* Orders are open, but not one copy any of them wants is on hand — never drawn as
          "nothing waits", which would read as caught up rather than stuck. */
       today = (
@@ -1362,22 +1415,16 @@ export function Fulfillment() {
         </p>
       )
     } else {
-      today = (
-        <section className="ff-today" aria-label="Today">
-          <div className="ff-today-text">
-            <p className="ff-today-figure">
-              <b className="ff-today-num">{totalWanted.toLocaleString()}</b>{' '}
-              <span className="ff-today-words">pick</span>
-            </p>
-            {shortfallCount === 0 ? null : (
-              <p className="fulfillment-say ff-today-warn">
-                <Icon name="alert" size={18} className="ff-today-warn-icon" />
-                {shortfallCount.toLocaleString()} unlocated
-              </p>
-            )}
-          </div>
-        </section>
-      )
+      /* B23: the count lives in the sticky bar with the search (`countFigure`); only the
+         unlocated warning stays here, in the page. */
+      countFigure = countOf(totalWanted)
+      today =
+        shortfallCount === 0 ? null : (
+          <p className="fulfillment-say ff-today-warn">
+            <Icon name="alert" size={18} className="ff-today-warn-icon" />
+            {shortfallCount.toLocaleString()} unlocated
+          </p>
+        )
     }
 
     const shownOwed = allOwed ? owed : owed.slice(0, SHOWN_OWED)
@@ -1387,8 +1434,10 @@ export function Fulfillment() {
       <>
         {header}
 
-        {today}
-
+        <div className="ff-bar">
+        {/* The track is always drawn, so the search sits in the same box whether the count is
+            loading, absent, hidden by a search, or five digits long. */}
+        <div className="ff-count-track">{hunting ? null : countFigure}</div>
         <div className="ff-search" data-clear={hunting ? 'true' : 'false'}>
           {/* No autoFocus: a software keyboard would cover the first thing he reads.
               F5 verbiage cut (row 191) deleted the worked-example placeholder ("For example,
@@ -1417,6 +1466,9 @@ export function Fulfillment() {
             </button>
           ) : null}
         </div>
+        </div>
+
+        {today}
 
         {hunting ? (
           <section className="fulfillment-results ff-results" aria-live="polite">
@@ -1471,33 +1523,15 @@ export function Fulfillment() {
             )}
 
             {orders === null && !ordersFailed ? (
-              /* The Pick list lands above the boxes when the orders read ends. The boxes show at
-                 once, so a frame in the list's own shape (its heading, one card) holds its place. */
+              /* The list lands above the boxes when the orders read ends. The boxes show at
+                 once, so a frame in the list's own shape (one card) holds its place. */
               <section className="ff-owed ff-owed-wait" aria-hidden="true">
-                <h2 className="ff-h2">
-                  <span className="ff-h2-icon">
-                    <Icon name="cart" size={18} />
-                  </span>
-                  Pick
-                </h2>
                 <div className="ff-found ff-owed-list">
                   <span className="ff-skel ff-skel-owed" />
                 </div>
               </section>
             ) : owed.length === 0 ? null : (
-              <section className="ff-owed" aria-label="Pick">
-                <h2 className="ff-h2">
-                  <span className="ff-h2-icon">
-                    <Icon name="cart" size={18} />
-                  </span>
-                  {/* F5 verbiage cut (row 192): the CSV's own word, "Queue", is a pipeline
-                      noun this screen's own banned-word list refuses (D196) — wrong for this
-                      element. "Pick" reads with the cart icon and matches the per-card
-                      heading's own vocabulary (row 193) instead. The section's own
-                      `aria-label` is kept in step with this visible heading, per the review's
-                      finding that it had drifted to the pre-cut three-word text. */}
-                  Pick
-                </h2>
+              <section className="ff-owed" aria-label="Cards to Pull">
                 <div className="ff-found ff-owed-list">
                   {shownOwed.map((item, at) => {
                     const group = owedGroup(item)
@@ -1507,18 +1541,16 @@ export function Fulfillment() {
                         key={item.key}
                         style={{ '--i': at } as CSSProperties}
                       >
-                        <p className="fulfillment-say ff-owed-pick">
-                          <b className="ff-owed-pick-num">Pick {item.wanted}</b>
-                          {item.refs.length < 2 ? null : (
-                            <span className="ff-owed-pick-for">
-                              , {count(item.refs.length, 'order', 'orders')}
-                            </span>
-                          )}
-                        </p>
+                        {item.refs.length < 2 ? null : (
+                          <p className="fulfillment-say ff-owed-pick">
+                            For {count(item.refs.length, 'order', 'orders')}
+                          </p>
+                        )}
                         <CardLocations
                           group={group}
                           persona="fulfiller"
                           preserveOrder
+                          numbered
                           onSell={(copy) => doSellCopy(group, copy)}
                           busyKey={busyKey}
                           soldKeys={soldSet}
@@ -1560,7 +1592,7 @@ export function Fulfillment() {
                   <span className="ff-h2-icon">
                     <Icon name="box" size={18} />
                   </span>
-                  Or look through a box
+                  Or Look Through a Box
                 </h2>
                 <p className="fulfillment-say ff-browse-lede">
                   {count(cards.length, 'card is', 'cards are')} in {count(boxes.length, 'box', 'boxes')}
@@ -1586,9 +1618,9 @@ export function Fulfillment() {
                           {/* THE BOX BY ITS NAME ALONE (D259): no number tile and no
                               "Box N", which is the store's key and not a label on the drawer. */}
                           <span className="ff-box-text">
-                            <span className="fulfillment-say ff-box-name">{group.name ?? 'Unnamed box'}</span>
+                            <span className="fulfillment-say ff-box-name" data-typed>{group.name ?? 'Unnamed Box'}</span>
                             <span className="fulfillment-say ff-box-count">
-                              {count(group.cards.length, 'card', 'cards')}
+                              {count(group.cards.length, 'Card', 'Cards')}
                             </span>
                           </span>
                           <Icon name="chevronDown" size={26} className="ff-box-chev" />
@@ -1691,9 +1723,11 @@ export function Fulfillment() {
     >
       <div className="ff-glow" aria-hidden="true" />
       <div className="ff-column" data-wide={wide ? 'true' : 'false'}>
-        {stale}
         {body}
       </div>
+      {/* The stale notice floats over the screen (R19), outside the column, whose entry animation
+          is a transform: a fixed banner inside it would land against a moving parent. */}
+      {stale}
       {sheet}
       {bigPhoto}
       {keysSheet}

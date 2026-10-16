@@ -57,7 +57,7 @@ from pipeline.namefold import DASHES as _DASHES  # noqa: F401
 from pipeline.namefold import fold_name_typography
 
 # CLAUDE.md pins the model. Batch API only — see identify/batch.py.
-MODEL = "claude-haiku-4-5-20251001"
+MODEL = "claude-haiku-5-5"
 
 # One small JSON object. Structured outputs make the shape a guarantee, so this only has
 # to cover the object itself.

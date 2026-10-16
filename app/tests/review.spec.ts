@@ -885,7 +885,7 @@ async function openWide(page: Page): Promise<Sent[]> {
   return open(page, WIDE_ROWS, [], WIDE_CATALOG_ROWS)
 }
 
-test('nine rows are keyed, and the rest wait behind "Show N more"', async ({ page }) => {
+test('nine rows are keyed, and the rest wait behind "Show N More"', async ({ page }) => {
   await openWide(page)
 
   const rows = page.locator('.review-catalog .review-candidate')
@@ -895,9 +895,9 @@ test('nine rows are keyed, and the rest wait behind "Show N more"', async ({ pag
   // five Commons never offered — the whole point of the widen this amendment builds.
   await expect(rows.first()).toContainText('Calm Rune')
 
-  const more = page.getByRole('button', { name: /Show \d+ more/ })
+  const more = page.getByRole('button', { name: /Show \d+ More/ })
   await expect(more).toBeVisible()
-  await expect(more).toHaveText('Show 7 more')
+  await expect(more).toHaveText('Show 7 More')
 
   await more.click()
   await expect(rows).toHaveCount(16)
@@ -907,9 +907,9 @@ test('nine rows are keyed, and the rest wait behind "Show N more"', async ({ pag
   await expect(rows.nth(9).locator('.review-key-blank')).toBeVisible()
 })
 
-test('"Show N more" reveals rows already on the wire, never a second fetch', async ({ page }) => {
+test('"Show N More" reveals rows already on the wire, never a second fetch', async ({ page }) => {
   const sent = await openWide(page)
-  await page.getByRole('button', { name: /Show \d+ more/ }).click()
+  await page.getByRole('button', { name: /Show \d+ More/ }).click()
   await expect(page.locator('.review-catalog .review-candidate')).toHaveCount(16)
 
   // One GET on arrival, none from the press — the wire already carried all 16.
@@ -992,11 +992,11 @@ async function settled(page: Page, tries = 40): Promise<Record<string, Placed>> 
   return last
 }
 
-test('"Show N more" adds rows below and moves nothing outside the card panel (D118)', async ({
+test('"Show N More" adds rows below and moves nothing outside the card panel (D118)', async ({
   page,
 }) => {
   await openWide(page)
-  const more = page.getByRole('button', { name: /Show \d+ more/ })
+  const more = page.getByRole('button', { name: /Show \d+ More/ })
   await expect(more).toBeVisible()
   // `confirm-identity.spec.ts`'s own precedent: scrolled into view BEFORE the "before"
   // sample, so the click's own actionability scroll is not read as something the PRESS
@@ -1238,6 +1238,73 @@ test('a second-look card shows the free reader pick in its details, and not its 
   await expect(fact.locator('dt')).toHaveText('Free reader')
   await expect(fact.locator('dd')).toHaveText('Pikachu 058')
   await expect(page.locator('.review-card')).not.toContainText('margin_too_small')
+})
+
+test('the queue never says "Low confidence read" over a High confidence read', async ({ page }) => {
+  await open(page, SECOND_LOOK)
+  const card = page.locator('.review-card')
+  await expect(card.locator('.review-chip', { hasText: 'Confidence' })).toContainText('High')
+  await expect(card).not.toContainText('Low confidence read')
+  await expect(page.locator('.review-sentence')).not.toContainText('with high confidence, which is not enough')
+  await expect(page.locator('body')).not.toContainText('Low confidence read')
+})
+
+/* WHEN THE READERS DISAGREE the entry's candidates hold BOTH printings, so one numbered press
+   answers "which reader is right". The free pick's row is the second choice here. */
+const DISAGREE_ENTRY: Entry = {
+  ...entry(62, 'readers_disagree', '1.20', [
+    { ...candidate(0, '1.20'), name: 'Dunsparce', set: 'SV09', number: '120/159', sku: '8608459' },
+    { ...candidate(1, '0.65'), name: 'Dudunsparce ex', set: 'SV09', number: '121/159', sku: '8608469' },
+  ]),
+  read: {
+    name: 'Dunsparce', number: '120/159', set: 'SV09',
+    matcher_pick: { name: 'Dudunsparce ex', number: '121', set: 'SV09: Journey Together', reason: 'margin_too_small' },
+  },
+}
+
+test('a disagree card shows both readers as numbered choices, and 2 answers with the free pick', async ({ page }) => {
+  const sent = await open(page, [DISAGREE_ENTRY])
+  const rows = page.locator('.review-candidates .review-candidate')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(0).locator('.review-key')).toHaveText('1')
+  await expect(rows.nth(1).locator('.review-key')).toHaveText('2')
+  await expect(rows.nth(1)).toContainText('Dudunsparce ex')
+  const family = (selector: string) => rows.nth(1).locator(selector).first().evaluate((el) => getComputedStyle(el).fontFamily)
+  expect(await family('.review-candidate-name')).not.toContain('JetBrains')
+  expect(await family('.review-candidate-meta span:last-child')).toContain('JetBrains')
+
+  await page.keyboard.press('2')
+  await expect.poll(() => sent.filter((s) => s.method === 'POST').length).toBe(1)
+  expect((sent.find((s) => s.method === 'POST')!.body as { sku: string }).sku).toBe('8608469')
+})
+
+test('an old low_confidence entry whose pick AGREES is never shown as the readers disagreeing', async ({ page }) => {
+  const agreeing: Entry = {
+    ...entry(63, 'low_confidence', '1.20', [
+      { ...candidate(0, '1.20'), name: 'Raichu', set: 'Base Set', number: '014/102', sku: '9100002' },
+    ]),
+    read: {
+      name: 'Raichu', number: '014/102', set: 'Base Set',
+      matcher_pick: { name: 'Raichu', number: '014/102', set: 'Base Set', reason: 'margin_too_small' },
+    },
+  }
+  await open(page, [agreeing])
+  const card = page.locator('.review-card')
+  await expect(card).not.toContainText('name different cards')
+  await expect(card).not.toContainText('not in the catalog')
+  await expect(card).not.toContainText('Low confidence read')
+})
+
+test('a free pick that resolves to no catalog row is said so, and Search stays', async ({ page }) => {
+  const gone: Entry = {
+    ...DISAGREE_ENTRY,
+    candidates: [DISAGREE_ENTRY.candidates[0]!],
+    read: { ...DISAGREE_ENTRY.read, matcher_pick: { name: 'Raichu', number: '999', set: 'Nowhere', reason: 'margin_too_small' } },
+  }
+  await open(page, [gone])
+  // Case-insensitive on purpose: the copy sweep is the casing guard; these specs check behaviour.
+  await expect(page.locator('.review-sentence')).toContainText(/not in the catalog|no catalog row|could not find/i)
+  await expect(page.getByRole('button', { name: /^Search/ }).first()).toBeVisible()
 })
 
 test('a card the free reader never saw draws no Free reader fact', async ({ page }) => {
@@ -1697,7 +1764,7 @@ test('the press names the waiting count and this store’s own past cost per car
   )
   await paidWait(page, keysOf(12))
   await open(page)
-  await expect(press(page)).toHaveText('Read the 12 left, about $0.04')
+  await expect(press(page)).toHaveText(/^Read the 12 left, about \$0\.04$/i)
   /* D221: the dollar figure is the mono face's own span, never typed into the label. */
   await expect(press(page).locator('.bn-money')).toHaveText('$0.04')
 })
@@ -1707,7 +1774,7 @@ test('a store with no recorded spend draws the press with no figure rather than 
   await runsReads(page, [runRow({ usage: {} })], keysOf(1))
   await paidWait(page, keysOf(1))
   await open(page)
-  await expect(press(page)).toHaveText('Read the 1 left')
+  await expect(press(page)).toHaveText(/^Read the 1 left$/i)
 })
 
 /* A REFUSED COUNT IS SAID, NOT SWALLOWED. The server refuses `/pipeline/waiting` over a claim it
@@ -1754,7 +1821,7 @@ test('the press spends exactly the cards it named, with no pre-check', async ({ 
   await paidWait(page, keysOf(12))
   const spends = await spendRoute(page, { cards: 11 })
   await open(page)
-  await expect(press(page)).toContainText('Read the 12 left')
+  await expect(press(page)).toContainText(/Read the 12 left/i)
 
   answer(keysOf(30))
   await waiting(page, 30)
@@ -1777,7 +1844,7 @@ test('the press sends only the paid-look keys, never the unread ones', async ({ 
   await paidWait(page, ['9/4', '9/5'])
   const spends = await spendRoute(page, { cards: 2 })
   await open(page)
-  await expect(press(page)).toContainText('Read the 2 left')
+  await expect(press(page)).toContainText(/Read the 2 left/i)
   await press(page).click()
   await expect.poll(() => spends.length).toBe(1)
   expect(spends[0]?.body.keys, 'only the cards the sweep named as waiting for a paid look').toEqual(['9/4', '9/5'])
@@ -2226,7 +2293,7 @@ test.describe('the Review summary band', () => {
   const band = (page: Page): Locator => page.locator('.review-band')
   const count = (page: Page, label: string): Locator => band(page).locator('.review-band-count').filter({ hasText: new RegExp(label, 'i') })
   const health = (page: Page): Locator => band(page).locator('.review-band-health')
-  const press = (page: Page): Locator => band(page).getByRole('button', { name: /^Read the \d+ left/ })
+  const press = (page: Page): Locator => band(page).getByRole('button', { name: /^Read the \d+ left/i })
 
   /** Capture's "Review" button shows once a box with cards is picked: the Box field, `3`, Enter. */
   async function pickBox(page: Page): Promise<void> {
@@ -2277,7 +2344,7 @@ test.describe('the Review summary band', () => {
         await openReview(page)
         await expect(count(page, 'matched free')).toHaveText(/3\s+matched free/i)
         await expect(count(page, 'waiting for a paid look')).toHaveText(/2\s+waiting for a paid look/i)
-        await expect(count(page, 'not yet looked at')).toHaveText(/2\s+not yet looked at/i)
+        await expect(count(page, 'not (?:yet )?looked at(?: yet)?')).toHaveText(/2\s+not (?:yet )?looked at(?: yet)?/i)
         await expect(count(page, 'waiting for you')).toHaveText(/2\s+waiting for you/i)
         expect(wire.asked.at(-1), 'the band reads the sitting\'s keys, the same a Capture counter sends').toEqual(SITTING)
         /* the Capture counter, same keys, same stub: the two numbers must agree */
@@ -2292,7 +2359,7 @@ test.describe('the Review summary band', () => {
         await setViewport(page, size)
         await openReview(page)
         const go = press(page)
-        await expect(go).toHaveText(/^\s*Read the 2 left, about \$0\.06\s*$/)
+        await expect(go).toHaveText(/^\s*Read the 2 left, about \$0\.06\s*$/i)
         await go.click()
         await expect(page.getByRole('dialog')).toHaveCount(0)
         await expect.poll(() => wire.spends.length).toBe(1)
@@ -2384,7 +2451,7 @@ test.describe('the Review summary band', () => {
       await openReview(page)
       await expect(count(page, 'matched free')).toHaveText(/4\s+matched free/i)
       await expect(count(page, 'waiting for a paid look')).toHaveText(/3\s+waiting for a paid look/i)
-      await expect(count(page, 'not yet looked at')).toHaveText(/3\s+not yet looked at/i)
+      await expect(count(page, 'not (?:yet )?looked at(?: yet)?')).toHaveText(/3\s+not (?:yet )?looked at(?: yet)?/i)
       expect(new Set(wire.asked.at(-1)), 'the keys are the unidentified captured cards').toEqual(new Set(EVERY_OPEN.filter((key) => FATES[key] !== 'review')))
     })
 
@@ -2422,7 +2489,7 @@ test.describe('the Review summary band', () => {
         wire.fates['3/5'] = 'done'
       }
       await openReview(page)
-      await expect(press(page)).toContainText('Read the 2 left')
+      await expect(press(page)).toContainText(/Read the 2 left/i)
       await press(page).click()
       await expect.poll(() => wire.spends.length).toBe(1)
       const reads = wire.asked.length
@@ -2686,8 +2753,8 @@ test.describe('the Review band sheets', () => {
         let release: () => void = () => undefined
         await seed(page, { hold: new Promise<void>((done) => (release = done)) })
         await openReview(page)
-        const names = [/^3 matched free$/, /^2 waiting for a paid look$/, /^2 not yet looked at$/]
-        const labels = ['matched free', 'waiting for a paid look', 'not yet looked at']
+        const names = [/^3 matched free$/i, /^2 waiting for a paid look$/i, /^2 not (?:yet )?looked at(?: yet)?$/i]
+        const labels = ['matched free', 'waiting for a paid look', 'not (?:yet )?looked at(?: yet)?']
         const before = await Promise.all(labels.map((label) => count(page, label).boundingBox()))
         for (const label of labels) {
           await expect(count(page, label).getByRole('button'), `${label} is a button while the band loads`).toBeDisabled()
@@ -2719,12 +2786,12 @@ test.describe('the Review band sheets', () => {
         await openReview(page)
         await loaded(page)
         for (const key of ['Enter', 'Space']) {
-          const button = countButton(page, /waiting for a paid look$/)
+          const button = countButton(page, /waiting for a paid look$/i)
           await expect(button).toBeVisible()
           await button.focus()
           await page.keyboard.press(key)
           await expect(sheet(page)).toBeVisible()
-          await expect(sheet(page)).toHaveAccessibleName(/^2 waiting for a paid look$/)
+          await expect(sheet(page)).toHaveAccessibleName(/^2 waiting for a paid look$/i)
           await expect(button).toHaveAttribute('aria-expanded', 'true')
           await page.keyboard.press('Escape')
           await expect(sheet(page)).toHaveCount(0)
@@ -2745,17 +2812,17 @@ test.describe('the Review band sheets', () => {
         await seed(page, { fates, why, sitting })
         await openReview(page)
         await loaded(page)
-        await openCount(page, /waiting for a paid look$/)
-        await expect(sheet(page)).toHaveAccessibleName(/^64 waiting for a paid look$/)
+        await openCount(page, /waiting for a paid look$/i)
+        await expect(sheet(page)).toHaveAccessibleName(/^64 waiting for a paid look$/i)
         const groups = sheet(page).getByRole('group')
         await expect(groups).toHaveCount(3)
         await expect(groups.nth(0)).toHaveAccessibleName('Two printings too close to call')
         await expect(groups.nth(1)).toHaveAccessibleName('A weak match')
         await expect(groups.nth(2)).toHaveAccessibleName('A look-alike with no photo of its own')
         await expect(groups.nth(0).getByRole('listitem')).toHaveCount(50)
-        await groups.nth(0).getByRole('button', { name: 'Show 50 more' }).click()
+        await groups.nth(0).getByRole('button', { name: 'Show 50 More', exact: true }).click()
         await expect(groups.nth(0).getByRole('listitem')).toHaveCount(60)
-        await expect(groups.nth(0).getByRole('button', { name: /Show .* more/ })).toHaveCount(0)
+        await expect(groups.nth(0).getByRole('button', { name: /Show .* more/i })).toHaveCount(0)
         const first = groups.nth(0).getByRole('listitem').first()
         await expect(first).toContainText('Band box')
         await expect(first).toContainText(/\b1\b/)
@@ -2769,7 +2836,7 @@ test.describe('the Review band sheets', () => {
         await seed(page)
         await openReview(page)
         await loaded(page)
-        await openCount(page, /waiting for a paid look$/)
+        await openCount(page, /waiting for a paid look$/i)
         const lookalike = sheet(page).getByRole('group', { name: 'A look-alike with no photo of its own' })
         await expect(lookalike).toBeVisible()
         await expect(lookalike, 'no pointer line when there is no free fix').not.toContainText(/Name the|Shoot the card|Correct the set|Prepare matching/)
@@ -2784,7 +2851,7 @@ test.describe('the Review band sheets', () => {
         const wire = await seed(page)
         await openReview(page)
         await loaded(page)
-        await openCount(page, /waiting for a paid look$/)
+        await openCount(page, /waiting for a paid look$/i)
         await expect(sheet(page).getByRole('listitem')).toHaveCount(2)
         wire.fates['3/6'] = 'paid'
         wire.why['3/6'] = { code: 'match_too_weak' }
@@ -2813,14 +2880,14 @@ test.describe('the Review band sheets', () => {
         const wire = await seed(page)
         await openReview(page)
         await loaded(page)
-        await expect(band(page).getByRole('button', { name: /need a set named|needs a set named/ }), 'no line at 0').toHaveCount(0)
+        await expect(band(page).getByRole('button', { name: /need a set named|needs a set named/i }), 'no line at 0').toHaveCount(0)
         wire.fates['3/10'] = 'unhinted'
         wire.fates['3/9'] = 'unhinted'
-        const line = band(page).locator('.review-band-health').getByRole('button', { name: /^2 need a set named$/ })
+        const line = band(page).locator('.review-band-health').getByRole('button', { name: /^2 need a set named$/i })
         await expect(line).toBeVisible({ timeout: 8_000 }) // keep: waits one 3s poll tick
         await line.focus()
         await page.keyboard.press('Enter')
-        await expect(sheet(page)).toHaveAccessibleName(/^2 need a set named$/)
+        await expect(sheet(page)).toHaveAccessibleName(/^2 need a set named$/i)
         await page.keyboard.press('Escape')
         await expect(sheet(page)).toHaveCount(0)
         await expect(line).toBeFocused()
@@ -2834,7 +2901,7 @@ test.describe('the Review band sheets', () => {
         })
         await openReview(page)
         await loaded(page)
-        const named = band(page).locator('.review-band-health').getByRole('button', { name: /^3 need a set named$/ })
+        const named = band(page).locator('.review-band-health').getByRole('button', { name: /^3 need a set named$/i })
         await expect(named).toBeVisible()
         await named.click()
         const groups = sheet(page).getByRole('group')
@@ -2884,7 +2951,7 @@ test.describe('the Review band sheets', () => {
       await seed(page, { fates, why, sitting })
       await openReview(page)
       await loaded(page)
-      await openCount(page, /waiting for a paid look$/)
+      await openCount(page, /waiting for a paid look$/i)
       for (const [code, title] of table) {
         await expect(sheet(page).getByRole('group', { name: title }), `${code ?? 'no code'} reads as "${title}"`).toBeVisible()
       }
@@ -2904,7 +2971,7 @@ test.describe('the Review band sheets', () => {
         await seed(page, { on, fates: { '3/1': 'paid' }, sitting: ['3/1'], why: { '3/1': { code: null } } })
         await openReview(page)
         await loaded(page)
-        await openCount(page, /waiting for a paid look$/)
+        await openCount(page, /waiting for a paid look$/i)
         const group = sheet(page).getByRole('group', { name: 'No reason kept' })
         await expect(group, `reader ${on ? 'on' : 'off'}`).toContainText(sentence)
         await page.keyboard.press('Escape')
@@ -2918,7 +2985,7 @@ test.describe('the Review band sheets', () => {
         route.fulfill(json({ model_present: false, model_ok: false, model_bytes: 0, index_present: false, ready: false })),
       )
       await openReview(page)
-      await expect(count(page, 'not yet looked at')).toHaveText(/2\s+not yet looked at/i)
+      await expect(count(page, 'not (?:yet )?looked at(?: yet)?')).toHaveText(/2\s+not (?:yet )?looked at(?: yet)?/i)
       await expect(band(page).locator('.review-band-health')).toHaveText(/needs setup/i)
       const before = wire.asked.length
       for (let step = 0; step < 10; step += 1) {
@@ -2929,30 +2996,66 @@ test.describe('the Review band sheets', () => {
     })
   })
 
-  test.describe('17. empty sheets', () => {
+  /* ux-w2 B13 (identify-engine-pick.md 10.4). Asserts the "All caught up" card spans the band's width, edge for edge. */
+  test('ux-w2 B13: the empty "All caught up" card spans the band\'s width, left and right edges equal', async ({ page }) => {
+    await setViewport(page, { width: 1440, height: 900 })
+    await seed(page, { fates: {}, sitting: [] })
+    await openReview(page)
+    const done = page.locator('.review-done')
+    await expect(done).toBeVisible()
+    const band = await page.locator('.review-band').boundingBox()
+    const card = await done.boundingBox()
+    expect(band, 'the band is drawn').not.toBeNull()
+    expect(card, 'the empty card is drawn').not.toBeNull()
+    expect(Math.abs(card!.x - band!.x), 'left edges match within 1px').toBeLessThanOrEqual(1)
+    expect(Math.abs(card!.x + card!.width - (band!.x + band!.width)), 'right edges match within 1px').toBeLessThanOrEqual(1)
+  })
+
+  /* ux-w2 B14 (identify-engine-pick.md 10.4). Asserts a zero count is a plain figure: no button role,
+     no chevron. A live count keeps both. The tile holds the same box either way (D313). */
+  test('ux-w2 B14: a zero count is a plain figure with no button and no chevron, and holds the box of a live count', async ({ page }) => {
+    await setViewport(page, { width: 1440, height: 900 })
+    await seed(page, { fates: { '3/1': 'matched', '3/4': 'paid' } })
+    await openReview(page)
+    await loaded(page)
+    const zero = count(page, 'not (?:yet )?looked at(?: yet)?')
+    await expect(zero, 'the zero tile is drawn').toContainText('0')
+    await expect(zero.getByRole('button'), 'a zero count has no button role').toHaveCount(0)
+    await expect(zero.getByRole('link'), 'a zero count has no link role').toHaveCount(0)
+    await expect(zero.locator('.bn-stat-go'), 'a zero count has no chevron').toHaveCount(0)
+    const live = count(page, 'matched free')
+    await expect(live.getByRole('button'), 'a live count keeps its button').toHaveCount(1)
+    await expect(live.locator('.bn-stat-go'), 'a live count keeps its chevron').toHaveCount(1)
+
+    const zeroBox = await zero.boundingBox()
+    await seed(page)
+    await page.reload()
+    await expect(page.locator('main.review')).toBeVisible()
+    await loaded(page)
+    const liveTile = await count(page, 'not (?:yet )?looked at(?: yet)?').boundingBox()
+    expect(zeroBox, 'the zero tile is measured').not.toBeNull()
+    expect(liveTile, 'the live tile is measured').not.toBeNull()
+    expect(Math.abs(zeroBox!.width - liveTile!.width), 'the tile keeps its width either way').toBeLessThanOrEqual(1)
+    expect(Math.abs(zeroBox!.height - liveTile!.height), 'the tile keeps its height either way').toBeLessThanOrEqual(1)
+  })
+
+  /* ux-w2 B14 re-point (identify-engine-pick.md 10.4, signed off). A zero count is a plain figure and opens nothing:
+     no button, no sheet, and no "Back to Capture" sentence, because the at-zero empty states are retired with it. */
+  test.describe('17. zero counts open nothing', () => {
     for (const size of SIZES) {
       for (const scheme of ['light', 'dark'] as const) {
-        test(`the three count sheets answer a zero count with a sentence and Back to Capture at ${size.width}, ${scheme}`, async ({ page }) => {
+        test(`a zero count is a plain figure that opens no sheet at ${size.width}, ${scheme}`, async ({ page }) => {
           await page.emulateMedia({ colorScheme: scheme })
           await setViewport(page, size)
           await seed(page, { fates: { '3/1': 'done' }, sitting: ['3/1'] })
           await openReview(page)
           await loaded(page)
-          const cases: [RegExp, string][] = [
-            [/^0 waiting for a paid look$/, 'No card is waiting for a paid look.'],
-            [/^0 not yet looked at$/, 'The free reader has looked at every card.'],
-            [/^0 matched free$/, 'The free reader has not matched a card yet.'],
-          ]
-          for (const [name, sentence] of cases) {
-            await openCount(page, name)
-            await expect(sheet(page)).toContainText(sentence)
-            await expect(sheet(page).getByRole('button', { name: 'Back to Capture' })).toBeVisible()
-            const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
-            expect(overflow, 'no horizontal scroll').toBeLessThanOrEqual(0)
-            const inside = await sheet(page).evaluate((el) => el.scrollWidth <= el.clientWidth + 1)
-            expect(inside, 'the sheet does not scroll sideways').toBe(true)
-            await page.keyboard.press('Escape')
-            await expect(sheet(page)).toHaveCount(0)
+          for (const label of ['waiting for a paid look', 'not (?:yet )?looked at(?: yet)?', 'matched free']) {
+            const tile = count(page, label)
+            await expect(tile, `the ${label} tile reads zero`).toContainText('0')
+            await expect(tile.getByRole('button'), `a zero ${label} count has no button`).toHaveCount(0)
+            await tile.click({ force: true })
+            await expect(sheet(page), `a zero ${label} count opens no sheet`).toHaveCount(0)
           }
         })
       }
