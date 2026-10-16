@@ -1,4 +1,4 @@
-## DEBT-tile-lead-proper-noun — the tile lead check fails a proper noun after the first word
+## DEBT92 — the tile lead check fails a proper noun after the first word
 
 **The sentence check on a tile's lead fails a capital after the first word.** `sentenceProblems` in `app/tests/copyRules.ts` grades `.bn-tile-lead` as a sentence. A proper noun later in the lead, such as "Sent to Pokemon", reads as a casing error.
 

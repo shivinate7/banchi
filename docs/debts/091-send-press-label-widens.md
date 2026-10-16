@@ -1,4 +1,4 @@
-## DEBT-send-press-label-widens — the send press widens when the worklist lands
+## DEBT91 — the send press widens when the worklist lands
 
 **The send press's label grows when the worklist lands.** The pending bar's press reads "Send to TCGplayer". The loaded press reads "Send All N SKUs to TCGplayer", and it is longer with price changes or live moves. `.send-press` is `flex: 0 1 auto`.
 

@@ -1,4 +1,4 @@
-## DEBT-tile-room-four-digit-count — a five-digit count can wrap a tile note and grow the send bar
+## DEBT94 — a five-digit count can wrap a tile note and grow the send bar
 
 **The send bar's tile rooms are sized for four wide digits.** `Pricing.tsx:ROOM_COUNT` is `'8888'`, and each tile's room is written before any count is known. A count of five digits can wrap a note one line past its room.
 

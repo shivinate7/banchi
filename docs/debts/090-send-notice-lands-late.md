@@ -1,4 +1,4 @@
-## DEBT-send-notice-lands-late — a send notice joins the bar after the worklist lands
+## DEBT90 — a send notice joins the bar after the worklist lands
 
 **A send notice can join the send bar after it first draws.** The pending bar in `Pricing.tsx` draws no notice. `SendCard` and its first `GET /pipeline/sends` start only when the worklist lands. A notice stands for a day after a checked send (`STANDS_MS`), and for any open, short or unreadable receipt.
 

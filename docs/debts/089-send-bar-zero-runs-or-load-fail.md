@@ -1,4 +1,4 @@
-## DEBT-send-bar-zero-runs-or-load-fail — the send bar draws, then disappears, with zero runs or a failed load
+## DEBT89 — the send bar draws, then disappears, with zero runs or a failed load
 
 **With zero runs, or a failed worklist load, the pending send bar draws and then disappears.** `Pricing.tsx` renders the bar only while `barLoading || loaded.length > 0` holds. Once the load ends with nothing loaded, the bar leaves the layout.
 

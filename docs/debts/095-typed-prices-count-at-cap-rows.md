@@ -1,4 +1,4 @@
-## DEBT-typed-prices-count-at-cap-rows — the priced tile counts typed prices on rows the send leaves out
+## DEBT95 — the priced tile counts typed prices on rows the send leaves out
 
 **`typedPrices` counts a stored string answer on an at-cap row, and the send does not.** `Pricing.tsx:typedPrices` tests the answer alone and never reads `at_cap`. `progress.byHand` skips at-cap rows with `continue`. `needsPrice` skips them through the early return in `standing.rowShare`.
 

@@ -81,4 +81,12 @@ DEBT84 The public demo's first screen is heavier than its budget
 DEBT85 The read-budget check proves some routes on their miss path only
 DEBT86 Capabilities written twice that have not drifted yet
 DEBT87 an Unhold whose store write fails leaves copies off the list with no control
+DEBT88 the sticky send bar's height below an 820 column is unmeasured
+DEBT89 the send bar draws, then disappears, with zero runs or a failed load
+DEBT90 a send notice joins the bar after the worklist lands
+DEBT91 the send press widens when the worklist lands
+DEBT92 the tile lead check fails a proper noun after the first word
+DEBT93 the Show Held and Price Them clears have never gone red
+DEBT94 a five-digit count can wrap a tile note and grow the send bar
+DEBT95 the priced tile counts typed prices on rows the send leaves out
 ```
