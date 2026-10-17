@@ -47,7 +47,9 @@ Returns:
 - `dateGraded`, `lastUpdated`, `source`.
 - `population`: the count at this slab's grade.
 - `profile`: `category`, `year`, `set`, `subject`, `number`, `variation`, `graderList`,
-  `totalPopulation`, `totalGems`, `gemRate`, and per-grader population.
+  `totalPopulation`, `totalGems`, `gemRate`, and the pop report.
+- The pop report is `profile.graders.<grader>.grades`: a count at every grade, half grades and
+  `auth` included. `qualifierGrades` holds the qualified counts.
 
 ### 3.2 `httpprofile` — the whole card, every grade
 
@@ -55,7 +57,8 @@ Input: `{profileId}`. One call per physical card.
 
 Returns:
 
-- `sales`: up to 60 recent sales across grades. Each has `id`, `itemId`, `title`, `seller`,
+- `sales`: the card's whole sales history, across graders and grades. One PSA card returned
+  1,792 sales. Each has `id`, `itemId`, `title`, `seller`,
   `image`, `thumbnail`, `platform`, `listingType`, `price`, `date`, `url`, `grader`, `grade`,
   `memberVerified`, `cardId`.
 - `graders[].grades[]`, the grade ladder. Each row has `grade`, `label`, `clValue`,
@@ -113,7 +116,17 @@ Base: `https://firestore.googleapis.com/v1/projects/cardladder-71d53/databases/(
 
 One row per slab: the card, the grade, the cert, and the two values with their sources. The
 values are `clValue` from the grade ladder and `estimatedValue` from 3.4. The row also shows
-the last sale with its date and platform, and the population at the grade.
+the newest sales at the slab's grade, with date and platform, and the population at the grade.
+
+The newest sale comes from the sales list in 3.2, sorted by date. It never comes from
+`lastSalePrice` in 3.4, because that field can trail by a sale. The row shows the last five
+sales at the grade, so that one outlier does not read as the price.
+
+**Why the two values differ.** On one PSA 10 card, `clValue` equalled the newest sale at the
+grade. `estimatedValue` and its `lastSalePrice` equalled the sale before it. The last six sales
+spread across about half the newest price. So `clValue` is the fresher value, and it moves with
+each single sale. `estimatedValue` trails it. The screen shows both, as D-my-slabs-card-ladder
+(My Slabs reads Card Ladder with the owner's own login) requires.
 
 A slab with no sale at its grade shows "no sales". It never shows Card Ladder's index-on-cost
 number. The detail opens the sales list, the grade ladder and the sales speed per window. Each
@@ -136,7 +149,8 @@ The store gets three tables (D88, SQLite and one transaction per write):
 - `slabs`: cert, grader, `profileId`, identity, subgrades, and the date the owner added it.
 - `slab_snapshots`: one row per slab per day. It holds both values and their confidence, the
   last sale, the population at grade, the gem rate and the sales speed per window.
-- `slab_sales`: each sale seen, keyed by the sale `id`, so the history grows past 60.
+- `slab_sales`: each sale seen, keyed by the sale `id`. A sale Card Ladder later drops stays
+  here.
 
 ## Build plan
 
@@ -156,5 +170,6 @@ Kind: build. Platform: macOS, over the capture server.
 - Whether Card Ladder enforces an app check on these callables later. Today none is sent, and
   each call answers 200.
 - How long a refresh token lives before Card Ladder signs the owner out.
-- Why `clValue` and `estimatedValue` disagree for some slabs. For one Riftbound slab they
-  differ by more than a third.
+- Why `estimatedValue` trails the newest sale, and by how long. One PSA 10 card showed it in
+  its sales list. A Riftbound card's two last-sale fields also differ, but its sales list is
+  unchecked. The cause is unmeasured.
