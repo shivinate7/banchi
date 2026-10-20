@@ -70,6 +70,7 @@ from pipeline.pricehistory import (
     EXTENDED_NUMBER,
     PriceHistoryError,
     Market,
+    NotResolvable,
     ProductIndex,
     Unreachable,
     extended,
@@ -83,9 +84,10 @@ TCGCSV_TTL_SECONDS = 3600.0
 
 # How long a pair whose fetch FAILED (the catalogue was unreachable) is left alone before
 # `warm` tries it again. Short, because a failure is not an answer: it is never stored as an
-# index, so it cannot hold a final "no photo" for the ttl. Longer than
+# index, so it cannot hold a final "no photo" for the ttl. Not shorter than
 # `pricehistory.OFFLINE_WAIT_SECONDS`, so `Market` is willing again by the time this lapses.
-FETCH_RETRY_SECONDS = 60.0
+# The app re-asks a pending photo for about 31 s, and the retry must land inside that.
+FETCH_RETRY_SECONDS = 20.0
 
 VENDOR_ROOT = Path(__file__).resolve().parent.parent / "vendor" / "pokemon-tcg-data"
 
@@ -339,8 +341,11 @@ class StockImages:
 
         `None` means the catalogue could not be reached (`Unreachable`, `Blocked`): no
         answer at all. An empty index is a real answer: the catalogue replied and has no
-        such set (`NotResolvable`) or a payload this walk cannot read.
+        such set (`NotResolvable`) or a payload this walk cannot read. A `NotResolvable`
+        built on a groups list that `Market` served STALE after a failed refresh is no answer
+        either: the set may be newer than the list.
         """
+        category_id = None
         try:
             with self._market_lock:
                 product_line = str(game_registry.get(game)["product_line"])
@@ -358,6 +363,12 @@ class StockImages:
                 )
         except (Unreachable, Blocked):
             return None
+        except NotResolvable:
+            if category_id is not None and self._market.serving_stale(f"tcgcsv/{category_id}/groups"):
+                return None
+            return _ImageIndex(
+                by_number={}, products=ProductIndex(by_number={}, by_name={}), urls_by_product_id={}
+            )
         except (PriceHistoryError, KeyError):
             return _ImageIndex(
                 by_number={}, products=ProductIndex(by_number={}, by_name={}), urls_by_product_id={}

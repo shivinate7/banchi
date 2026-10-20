@@ -959,12 +959,25 @@ def index_by_name(rows: Iterable[Dict], key: str = "name") -> Dict[str, object]:
 # -------------------------------------------------------------------------- the network
 
 
-# Pauses between the up to three attempts `fetch_json` makes. Request threads share four
-# slots (`REQUEST_SLOTS`), so the added wait stays under 3 seconds in all.
+# Pauses between the up to three attempts `fetch_json` makes. A whole call, pauses and
+# attempts together, never runs past `REQUEST_TIMEOUT_SECONDS`: it is the one attempt this
+# retry replaced, and request threads share four slots (`REQUEST_SLOTS`). Three attempts
+# of `ATTEMPT_TIMEOUT_SECONDS` plus these pauses come to 29 s, so a normal retry fits.
 RETRY_PAUSES = (0.5, 1.5)
 
-# How long `Market` fails fast after an `Offline` before it asks the network again.
-OFFLINE_WAIT_SECONDS = 45.0
+# One attempt's own timeout. Short enough that all three fit in `REQUEST_TIMEOUT_SECONDS`.
+ATTEMPT_TIMEOUT_SECONDS = 9.0
+
+# How long `Market` fails fast after `fetch_json` gave up on a down or overloaded host (an
+# `Offline`, HTTP 429 or 5xx) before it asks again. The app re-asks for a pending photo
+# for about 31 s, so one retried fetch must land inside that: this wait plus the stock
+# images' own (`stockimages.FETCH_RETRY_SECONDS`) leaves room for it.
+OFFLINE_WAIT_SECONDS = 12.0
+
+
+def _monotonic() -> float:
+    """Looked up at call time by `fetch_json`, so a test can replace the clock."""
+    return time.monotonic()
 
 
 def _sleep(seconds: float) -> None:
@@ -973,7 +986,7 @@ def _sleep(seconds: float) -> None:
 
 
 def fetch_json(
-    url: str, timeout: float = REQUEST_TIMEOUT_SECONDS, user_agent: str = USER_AGENT
+    url: str, timeout: float = ATTEMPT_TIMEOUT_SECONDS, user_agent: str = USER_AGENT
 ) -> Dict:
     """GET a URL and parse JSON. THE ONLY IMPURE FUNCTION IN THIS MODULE.
 
@@ -991,13 +1004,22 @@ def fetch_json(
     does not like, which is a refusal that reads as an authentication requirement and is not.
     A 403 IS `Blocked` INSTEAD, NEVER `Unreachable` — see that class for why the two must not
     share a name, and D216 for what is now answering it.
+
+    A RETRY IS MADE ONLY IF IT FITS THE OLD SINGLE-ATTEMPT BUDGET: the time spent, plus the
+    pause, plus the next attempt's timeout, must stay within `REQUEST_TIMEOUT_SECONDS`.
+    A call whose first attempt ran long is therefore not retried.
     """
     lines: List[str] = []
+    started = _monotonic()
     for attempt in range(len(RETRY_PAUSES) + 1):
         try:
             return _fetch_once(url, timeout, user_agent, lines.append)
         except PriceHistoryError as exc:
-            if attempt < len(RETRY_PAUSES) and _worth_retrying(exc):
+            if (
+                attempt < len(RETRY_PAUSES)
+                and _worth_retrying(exc)
+                and _monotonic() - started + RETRY_PAUSES[attempt] + timeout <= REQUEST_TIMEOUT_SECONDS
+            ):
                 _sleep(RETRY_PAUSES[attempt])
                 continue
             # One stderr line per final failure, never one per attempt.
@@ -1008,7 +1030,8 @@ def fetch_json(
 
 def _worth_retrying(exc: PriceHistoryError) -> bool:
     """A connection that never opened (`Offline`), HTTP 429 and HTTP 5xx. Never a 403, another
-    4xx, an unreadable body or a read failure after connect: a second ask gets the same answer."""
+    4xx, an unreadable body or a read failure after connect: a second ask gets the same answer.
+    `Market` reads the same line to tell a host that is down from one product's answer."""
     if isinstance(exc, Offline):
         return True
     cause = exc.__cause__
@@ -1136,8 +1159,14 @@ class Market:
         # has just learned the socket cannot be reached does not sleep the courtesy delay or
         # try again before answering the identical failure — see `Offline` for the
         # measurement this answers. Past the wait it is cleared and the network is asked again.
-        self._offline: Optional[Offline] = None
+        # Also set when `fetch_json` gave up on HTTP 429 or 5xx (`_worth_retrying`), so the
+        # type is `Unreachable`: the same host answers the next product the same way.
+        self._offline: Optional[Unreachable] = None
         self._offline_at = 0.0
+        # `slug -> when a refresh failed and the stale list was served instead`. It lifts
+        # `_attempted`'s latch once `OFFLINE_WAIT_SECONDS` has passed, so a stale catalogue
+        # list is asked for again after an outage and not only after a restart.
+        self._stale_since: Dict[str, float] = {}
 
     # ------------------------------------------------------------------------ caching
 
@@ -1194,8 +1223,10 @@ class Market:
 
         The attempt is recorded BEFORE the fetch, so with a stale list in hand a failing host
         costs one request per instance, not one per card, and the stale list is served rather
-        than an error. After an `Offline`, a `get` inside `OFFLINE_WAIT_SECONDS` raises it (or
-        serves the stale list) without a request; the first one past the wait fetches again.
+        than an error. After an `Offline`, or a 429 or 5xx that `fetch_json` retried and lost, a
+        `get` inside `OFFLINE_WAIT_SECONDS` raises it (or serves the stale list) without a
+        request; the first one past the wait fetches again, a stale list's `_attempted` latch
+        included.
         A payload with fewer results than the stale list held (an empty one
         included) is never stored: the cache keeps the old list.
         """
@@ -1203,7 +1234,7 @@ class Market:
         if payload is not None:
             return payload
         stale = self._cached(slug, float("inf")) if catalog else None
-        if stale is not None and slug in self._attempted:
+        if stale is not None and slug in self._attempted and not self._stale_retry_due(slug):
             return stale
         if self._offline is not None and self._now() - self._offline_at >= OFFLINE_WAIT_SECONDS:
             self._offline = None  # the wait is over: the next fetch asks the network again
@@ -1213,6 +1244,7 @@ class Market:
             # way, so there is nothing to wait politely before, and no reason to spend the
             # syscall finding that out again.
             if stale is not None:
+                self._stale_since.setdefault(slug, self._now())
                 return stale
             raise self._offline
         if self.requests and self._courtesy_delay:
@@ -1222,15 +1254,26 @@ class Market:
         try:
             payload = self._fetch(url)
         except PriceHistoryError as exc:
-            if isinstance(exc, Offline):
+            if _worth_retrying(exc):
                 self._offline, self._offline_at = exc, self._now()
             if stale is not None:
+                self._stale_since[slug] = self._now()
                 return stale
             raise
+        self._stale_since.pop(slug, None)
         if stale is not None and len(payload.get("results") or ()) < len(stale.get("results") or ()):
             return stale
         self._store(slug, payload)
         return payload
+
+    def _stale_retry_due(self, slug: str) -> bool:
+        since = self._stale_since.get(slug)
+        return since is not None and self._now() - since >= OFFLINE_WAIT_SECONDS
+
+    def serving_stale(self, slug: str) -> bool:
+        """True while `slug`'s last refresh FAILED and `get` answered with the stale list. An
+        answer built on it, a set it lacks, says nothing about the catalogue."""
+        return slug in self._stale_since
 
     # -------------------------------------------------------------------- the catalog
 
