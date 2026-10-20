@@ -283,3 +283,7 @@ serves. It shrinks on its own as branches are cut and merged.
 **It does not decide that the tree should be put back.** It decides that the tree the rig is
 served out of is put back **when that can be done losing nothing**, which is a narrower claim, and
 every case where it cannot is a refusal above with an arm under it.
+
+**A second restart inside one release can skip the wait.** `Supervisor.released` stays set while
+`pending` or `app_pending` is not empty. A syntax-error retry, or a second batch of changes on the
+release tick, restarts with no idle check. The harm is one extra drained restart.
