@@ -123,6 +123,23 @@ re-read `serve.py` but not the module it decides with would be running half of o
   It is its own half, and **it never changes the merge's exit status** — a rig that would not sync
   because somebody has uncommitted work in it is a message, not a failed merge.
 
+### The restart that follows a sync waits for an idle owner
+
+The owner ruled that a main move never restarts the server or rebuilds the app while they work.
+
+- **Idle is 5 minutes after the last change** (`serve.IDLE_SECONDS`). A change is a request that changes
+  state, or a price-refresh tick. A read, a poll or a read-only POST (`capture_server.READ_ONLY_POSTS`) is not.
+  The mark is `store.files.mark_activity`, the mtime of `.serve/activity`.
+- **The wait has a cap of 2 hours** (`serve.HOLD_CAP_SECONDS`). A wedged server (DEBT11, a parked writer
+  still holds a request slot) still gets its fix.
+- **The app rebuild waits with the restart**, through one predicate, `Supervisor._held`. Screen and
+  server change at the same moment.
+- **A session that has cleared the restart with the owner fires it now** with `make restart-now`.
+- **A missing or unreadable activity file counts as idle.** The recovery does not depend on the state it
+  recovers.
+- **Never held:** a crash respawn, `stop()`, and `make up ARGS=--restart`. The D158 check stays first in
+  `_restart_for`. `make status` shows a waiting restart.
+
 ### What it must never do, each one a refusal with a self-test arm
 
 - **A linked worktree is never the subject.** The test is `server/ports.py:is_linked_worktree`,
