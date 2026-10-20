@@ -128,13 +128,16 @@ re-read `serve.py` but not the module it decides with would be running half of o
 The owner ruled that a main move never restarts the server or rebuilds the app while they work.
 
 - **Idle is 5 minutes after the last change** (`serve.IDLE_SECONDS`). A change is a request that changes
-  state, or a price-refresh tick. A read, a poll or a read-only POST (`capture_server.READ_ONLY_POSTS`) is not.
+  state, or a price-refresh tick. A read, a poll or a POST that is not the owner's change
+  (`capture_server.NOT_A_CHANGE_POSTS`: reads, and timer work such as the live-check settle) is not.
   The mark is `store.files.mark_activity`, the mtime of `.serve/activity`.
 - **The wait has a cap of 2 hours** (`serve.HOLD_CAP_SECONDS`). A wedged server (DEBT11, a parked writer
   still holds a request slot) still gets its fix.
 - **The app rebuild waits with the restart**, through one predicate, `Supervisor._held`. Screen and
   server change at the same moment.
-- **A session that has cleared the restart with the owner fires it now** with `make restart-now`.
+- **A session that has cleared the restart with the owner fires it now** with `make restart-now`. It reaches the
+  primary checkout's supervisor from any tree, writes only while a restart or build waits, and one release (idle,
+  cap or skip) lets the restart and the build go together.
 - **A missing or unreadable activity file counts as idle.** The recovery does not depend on the state it
   recovers.
 - **Never held:** a crash respawn, `stop()`, and `make up ARGS=--restart`. The D158 check stays first in

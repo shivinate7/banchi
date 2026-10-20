@@ -1410,6 +1410,9 @@ class Supervisor:
             os.getpid(), [sys.executable, __file__], self.root,
         )
         log(f"supervisor up (pid {os.getpid()}) in {self.root}")
+        for name in (SKIP_FILE, WAITING_FILE):  # leftovers of a supervisor that died
+            with contextlib.suppress(OSError):
+                (state_dir(self.root) / name).unlink()
         self.start()
         if self.watch:
             log(f"watching {', '.join(WATCH_DIRS)} for changes")
@@ -1504,14 +1507,21 @@ class Supervisor:
 
         ONE PREDICATE FOR BOTH WATCHERS, so the screen and the server change at the same moment.
         A missing or unreadable activity file counts as idle: the hold must not depend on the
-        state it guards. The skip file and the cap are measured from the first hold. The skip file
-        is spent once nothing else is waiting, so a restart and a build released together both go.
+        state it guards. The cap is measured from the first hold. ONE HOLD, ONE RELEASE: whatever
+        fires it (idle, cap or skip) sets `released`, so the build goes with the restart and does
+        not start a second wait. `released` ends when nothing is pending (`_end_hold`).
         """
         state = state_dir(self.root)
         now = time.time()
         reason = None
-        if os.path.exists(state / SKIP_FILE) or self.released:  # os.path: an unreadable folder is "no"
-            reason = "skip"
+        if self.released:
+            return False
+        try:
+            armed = os.path.getmtime(state / SKIP_FILE)
+        except OSError:
+            armed = None  # also an unreadable folder
+        if armed is not None and (self.held_since is None or armed >= self.held_since):
+            reason = "skip"  # an older file was armed before this hold began: it is not for it
         else:
             try:
                 age = now - store_files.activity_path(self.root).stat().st_mtime
@@ -1529,12 +1539,12 @@ class Supervisor:
                 with contextlib.suppress(OSError):
                     (state / WAITING_FILE).write_text(f"{now}\n", "utf-8")
             return True
-        if self.held_since is not None or (reason == "skip" and not self.released):
+        if self.held_since is not None or reason == "skip":
             log(f"restart going ahead — {reason}")
         if reason == "skip":
-            self.released = True
             with contextlib.suppress(OSError):
                 (state / SKIP_FILE).unlink()
+        self.released = True
         self._end_hold(keep_released=True)
         return False
 
@@ -2109,15 +2119,35 @@ def do_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def restart_target(root: Path = REPO_ROOT) -> Path:
+    """The checkout whose supervisor serves the owner's :8000: the primary tree, from any tree.
+
+    `primary_sync.primary_checkout` is the one home for that question. A linked worktree has its
+    own `.serve/`, and a skip file written there reaches no supervisor.
+    """
+    return primary_sync.primary_checkout(root) or root
+
+
+def restart_now(root: Path) -> bool:
+    """Write the skip file, but only while a restart or build waits; True when it was written.
+
+    A skip armed while nothing waits would skip a LATER hold the owner never cleared.
+    """
+    if read_waiting_since(root) is None:
+        return False
+    state_dir(root).mkdir(parents=True, exist_ok=True)
+    (state_dir(root) / SKIP_FILE).write_text("", "utf-8")
+    return True
+
+
 def do_restart_now(_args: argparse.Namespace) -> int:
-    """End a held restart and app build now. Run it only after the owner agreed (D176)."""
-    state = state_dir()
-    state.mkdir(parents=True, exist_ok=True)
-    (state / SKIP_FILE).write_text("", "utf-8")
-    if read_waiting_since() is None:
-        print("nothing is waiting; the next held restart or build will go ahead at once.")
+    """End a held restart and app build now. ONLY AFTER THE OWNER SAID YES (D176)."""
+    root = restart_target()
+    if restart_now(root):
+        print(f"the held restart and build in {root} will go ahead within a second or two.")
     else:
-        print("the held restart and build will go ahead within a second or two.")
+        print(f"nothing is waiting in {root}; nothing was changed.")
+    print("Run this only after the owner agreed to the restart.")
     return 0
 
 

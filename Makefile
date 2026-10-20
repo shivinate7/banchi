@@ -1383,7 +1383,8 @@ up:
 	@$(PYTHON) scripts/serve.py up $(ARGS)
 
 # End a held auto-restart and app build now (D176). The supervisor waits for the owner to be idle
-# for five minutes, up to two hours; a session that has cleared it with the owner runs this.
+# for five minutes, up to two hours. RUN IT ONLY AFTER THE OWNER SAID YES. From a linked worktree it
+# reaches the primary checkout's supervisor, and it does nothing while nothing waits.
 restart-now:
 	@$(PYTHON) scripts/serve.py restart-now
 
