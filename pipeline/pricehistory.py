@@ -318,9 +318,10 @@ class Offline(Unreachable):
     `fetch_json`'s own two `try` blocks, which is where that distinction is actually drawn).
 
     `Market.get` uses this distinction: once ONE `Offline` has been seen, every socket
-    attempt after it will fail the identical way, for the identical reason, so `Market`
-    treats the network as down for the rest of THIS instance's life rather than
-    re-attempting (and re-sleeping the courtesy delay) once per product.
+    attempt right after it will fail the identical way, so `Market` treats the network as
+    down for `OFFLINE_WAIT_SECONDS` rather than re-attempting (and re-sleeping the courtesy
+    delay) once per product. After the wait the next `get` asks the network again, because
+    one `Market` can outlive the outage (the server holds one for the whole process).
 
     MEASURED, 2026-09-27, on a real demo-mirror recording. 387 SKUs over a run,
     `readings_for_rows` batched by product (D277) but resolved 325 distinct
@@ -958,6 +959,19 @@ def index_by_name(rows: Iterable[Dict], key: str = "name") -> Dict[str, object]:
 # -------------------------------------------------------------------------- the network
 
 
+# Pauses between the up to three attempts `fetch_json` makes. Request threads share four
+# slots (`REQUEST_SLOTS`), so the added wait stays under 3 seconds in all.
+RETRY_PAUSES = (0.5, 1.5)
+
+# How long `Market` fails fast after an `Offline` before it asks the network again.
+OFFLINE_WAIT_SECONDS = 45.0
+
+
+def _sleep(seconds: float) -> None:
+    """Looked up at call time by `fetch_json`, so a test can replace the pause."""
+    time.sleep(seconds)
+
+
 def fetch_json(
     url: str, timeout: float = REQUEST_TIMEOUT_SECONDS, user_agent: str = USER_AGENT
 ) -> Dict:
@@ -978,6 +992,33 @@ def fetch_json(
     A 403 IS `Blocked` INSTEAD, NEVER `Unreachable` — see that class for why the two must not
     share a name, and D216 for what is now answering it.
     """
+    lines: List[str] = []
+    for attempt in range(len(RETRY_PAUSES) + 1):
+        try:
+            return _fetch_once(url, timeout, user_agent, lines.append)
+        except PriceHistoryError as exc:
+            if attempt < len(RETRY_PAUSES) and _worth_retrying(exc):
+                _sleep(RETRY_PAUSES[attempt])
+                continue
+            # One stderr line per final failure, never one per attempt.
+            print(lines[-1], file=sys.stderr, flush=True)
+            raise
+    raise AssertionError("unreachable")  # the loop above always returns or raises
+
+
+def _worth_retrying(exc: PriceHistoryError) -> bool:
+    """A connection that never opened (`Offline`), HTTP 429 and HTTP 5xx. Never a 403, another
+    4xx, an unreadable body or a read failure after connect: a second ask gets the same answer."""
+    if isinstance(exc, Offline):
+        return True
+    cause = exc.__cause__
+    return isinstance(cause, urllib.error.HTTPError) and (cause.code == 429 or cause.code >= 500)
+
+
+def _fetch_once(
+    url: str, timeout: float, user_agent: str, log: Callable[[str], None]
+) -> Dict:
+    """One attempt of `fetch_json`. Raises; `log` receives the stderr line for the failure."""
     request = urllib.request.Request(url, headers={"User-Agent": user_agent})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -994,18 +1035,18 @@ def fetch_json(
             try:
                 body = response.read()
             except (urllib.error.URLError, OSError, TimeoutError) as exc:
-                print(f"price service {url}: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+                log(f"price service {url}: {type(exc).__name__}: {exc}")
                 raise Unreachable("The price service could not be reached. Check the connection, then try again.") from exc
     except urllib.error.HTTPError as exc:
         if exc.code == 403:
             # NEVER THE VALUE, ONLY THE NAME OF THE KNOB — D171's rule that a refusal must
             # name its remedy, and CLAUDE.md's rule that no message here ever carries the
             # user agent string itself.
-            print(f"price service {url}: HTTP 403; set {AGENT_ENV} in the settings file", file=sys.stderr, flush=True)
+            log(f"price service {url}: HTTP 403; set {AGENT_ENV} in the settings file")
             raise Blocked(
                 "The price service answered 'forbidden'. Either what it allows changed, or it is declining this app's browser signature. Set the browser signature in the Mac's settings file (the .env file in the app's folder) to match your browser, then try again."
             ) from exc
-        print(f"price service {url}: HTTP {exc.code} {exc.reason}", file=sys.stderr, flush=True)
+        log(f"price service {url}: HTTP {exc.code} {exc.reason}")
         raise Unreachable(f"The price service answered '{http.client.responses.get(exc.code, 'an error').lower()}'. Try again in a moment.") from exc
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         # `Offline`, NOT THE PLAIN `Unreachable` ABOVE — raised only here, from `urlopen`
@@ -1013,12 +1054,12 @@ def fetch_json(
         # failure, or a timeout reaching the socket in the first place. Every socket
         # attempt after this one is heading for the identical failure. See `Offline`'s own
         # docstring for what a caller does with that distinction.
-        print(f"price service {url}: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        log(f"price service {url}: {type(exc).__name__}: {exc}")
         raise Offline("The price service could not be reached. Check the connection, then try again.") from exc
     try:
         return json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        print(f"price service {url}: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        log(f"price service {url}: {type(exc).__name__}: {exc}")
         raise Unreachable("The price service sent back something that could not be read. Try again in a moment.") from exc
 
 
@@ -1090,12 +1131,13 @@ class Market:
         # Slugs fetched over the network this instance's life: a miss refetches a catalogue
         # list once, never once per card.
         self._attempted: set = set()
-        # SET ONCE, BY THE FIRST `Offline` (never a plain `Unreachable` — see that class's
-        # docstring), and read by every `get()` after it for the rest of THIS instance's
-        # life. A batch that has already learned the socket cannot be reached does not
-        # sleep the courtesy delay or try again before answering the identical failure —
-        # see `get`'s own paragraph for the measurement this answers.
+        # SET BY AN `Offline` (never a plain `Unreachable` — see that class's docstring) and
+        # read by every `get()` for `OFFLINE_WAIT_SECONDS` after `_offline_at`. A batch that
+        # has just learned the socket cannot be reached does not sleep the courtesy delay or
+        # try again before answering the identical failure — see `Offline` for the
+        # measurement this answers. Past the wait it is cleared and the network is asked again.
         self._offline: Optional[Offline] = None
+        self._offline_at = 0.0
 
     # ------------------------------------------------------------------------ caching
 
@@ -1152,7 +1194,9 @@ class Market:
 
         The attempt is recorded BEFORE the fetch, so with a stale list in hand a failing host
         costs one request per instance, not one per card, and the stale list is served rather
-        than an error. A payload with fewer results than the stale list held (an empty one
+        than an error. After an `Offline`, a `get` inside `OFFLINE_WAIT_SECONDS` raises it (or
+        serves the stale list) without a request; the first one past the wait fetches again.
+        A payload with fewer results than the stale list held (an empty one
         included) is never stored: the cache keeps the old list.
         """
         payload = self._cached(slug, ttl)
@@ -1161,11 +1205,13 @@ class Market:
         stale = self._cached(slug, float("inf")) if catalog else None
         if stale is not None and slug in self._attempted:
             return stale
+        if self._offline is not None and self._now() - self._offline_at >= OFFLINE_WAIT_SECONDS:
+            self._offline = None  # the wait is over: the next fetch asks the network again
         if self._offline is not None:
-            # FAIL FAST, NEVER RE-ATTEMPT. The socket has already failed once with no
-            # response at all this instance's life — a second, distinct URL over the same
-            # dead network fails the identical way, so there is nothing to wait politely
-            # before, and no reason to spend the syscall finding that out again.
+            # FAIL FAST INSIDE THE WAIT. The socket failed with no response at all moments
+            # ago — a second, distinct URL over the same dead network fails the identical
+            # way, so there is nothing to wait politely before, and no reason to spend the
+            # syscall finding that out again.
             if stale is not None:
                 return stale
             raise self._offline
@@ -1177,7 +1223,7 @@ class Market:
             payload = self._fetch(url)
         except PriceHistoryError as exc:
             if isinstance(exc, Offline):
-                self._offline = exc
+                self._offline, self._offline_at = exc, self._now()
             if stale is not None:
                 return stale
             raise
