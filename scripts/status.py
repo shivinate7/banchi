@@ -950,6 +950,15 @@ def serving() -> List[str]:
     # is a dependency that shifted rather than a half-written screen.
     out.extend(app_build_lines(data))
 
+    # A HELD AUTO-RESTART (D176): the code on disk is ahead of what runs, and the supervisor is
+    # waiting for the owner to stop changing things. `make restart-now` ends the wait.
+    waiting = data.get("restart_waiting_since")
+    if isinstance(waiting, (int, float)):
+        ago = data.get("last_change_age")
+        seen = f" (last change {int(ago)}s ago)" if isinstance(ago, (int, float)) else ""
+        out.append(field("restart", f"waiting since {time.strftime('%H:%M', time.localtime(waiting))}{seen}"))
+        out.append(cont("`make restart-now` ends the wait; ask the owner first."))
+
     if data.get("agent_installed"):
         out.append(field("launch agent", f"plist installed — {data.get('agent_label')}"))
     for name in data.get("lan_names") or []:

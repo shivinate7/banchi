@@ -44,6 +44,7 @@ make map-fix        # adds a file's cited decision ids to docs/map.py. Previews.
 make offenders-prune # deletes stale offender-list entries only. Previews. ARGS=--write.
 make harness        # all ten verification tests, T1-T9 and T11. No T10.
 make up             # the server, detached, one process. ARGS=--restart bounces it. `make down` stops it.
+make restart-now    # ends a held auto-restart and app build at once (D176 (the primary checkout syncs): they wait for 5 idle minutes, 2 hours at most). Ask the owner first.
                     #   Refuses on a primary checkout off main. BANCHI_SERVE_MAIN=off overrides.
 make reap           # stop what THIS session started, nothing else. Previews. ARGS="--confirm",
                     #   "port:N --confirm", "match:X --confirm" or "pid:N --confirm". A subagent's bare

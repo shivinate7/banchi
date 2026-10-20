@@ -110,6 +110,15 @@ READY_SECONDS = 10.0
 # failure and in the other is a supervisor that has stopped supervising.
 BUILD_TIMEOUT_SECONDS = 300.0
 
+# THE AUTO-RESTART AND THE APP BUILD WAIT FOR AN IDLE OWNER (D176). A restart drains in-flight
+# requests and then drops the open tab's screen, so it goes ahead only once the owner's last change
+# (`store_files.mark_activity`) is this old. A wedged server (DEBT11) still gets its fix: a hold
+# longer than the cap ends it anyway, and `restart-now` ends it at once.
+IDLE_SECONDS = 300
+HOLD_CAP_SECONDS = 2 * 60 * 60
+SKIP_FILE = "restart-now"
+WAITING_FILE = "waiting"
+
 RESTART_BACKOFF = (1, 2, 4, 8, 15, 30)
 
 # After this many fast failures, stop respawning and KEEP WATCHING. See `_note_exit`.
@@ -680,6 +689,21 @@ def clear_busy(root: Path = REPO_ROOT) -> None:
         (state_dir(root) / "busy").unlink()
 
 
+def read_waiting_since(root: Path = REPO_ROOT) -> Optional[float]:
+    try:
+        return float((state_dir(root) / WAITING_FILE).read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def activity_age(root: Path = REPO_ROOT) -> Optional[float]:
+    """Seconds since the owner's last change, or None when no change is on record."""
+    try:
+        return max(0.0, time.time() - store_files.activity_path(root).stat().st_mtime)
+    except OSError:
+        return None
+
+
 def read_build_verdict(root: Path = REPO_ROOT) -> dict:
     try:
         loaded = json.loads((state_dir(root) / APP_BUILD_VERDICT).read_text("utf-8"))
@@ -1009,6 +1033,10 @@ def report(root: Path = REPO_ROOT) -> dict:
         # read from the same function the supervisor decides on rather than re-derived.
         "off_main": off_main(root),
         "state_dir": str(state_dir(root)),
+        # The held restart (D176): when the supervisor began waiting for an idle owner, and how
+        # old the owner's last change is. None when nothing waits.
+        "restart_waiting_since": read_waiting_since(root) if sup else None,
+        "last_change_age": activity_age(root),
         # PRESENCE, LABELLED AS SUCH — not "running under launchd". `launchctl print` is slow
         # and its output is not stable enough to parse in a status tool, and a status line that
         # guesses is worse than one that says less.
@@ -1179,6 +1207,8 @@ class Supervisor:
         self.app_quiet_since = 0.0
         self.pending: set[str] = set()
         self.quiet_since = 0.0
+        self.held_since: Optional[float] = None
+        self.released = False
         self.fast_failures = 0
         self.giving_up = False
         self.restarts = 0
@@ -1394,6 +1424,8 @@ class Supervisor:
                         self._recover()
                     self._check_files()
                     self._check_app()
+                    if not (self.pending or self.app_pending):
+                        self._end_hold()
         except KeyboardInterrupt:
             self.stop()
         return 0
@@ -1467,6 +1499,52 @@ class Supervisor:
 
     # -- the watcher -------------------------------------------------------
 
+    def _held(self) -> bool:
+        """True while a restart or app build should wait for the owner to stop changing things.
+
+        ONE PREDICATE FOR BOTH WATCHERS, so the screen and the server change at the same moment.
+        A missing or unreadable activity file counts as idle: the hold must not depend on the
+        state it guards. The skip file and the cap are measured from the first hold. The skip file
+        is spent once nothing else is waiting, so a restart and a build released together both go.
+        """
+        state = state_dir(self.root)
+        now = time.time()
+        reason = None
+        if os.path.exists(state / SKIP_FILE) or self.released:  # os.path: an unreadable folder is "no"
+            reason = "skip"
+        else:
+            try:
+                age = now - store_files.activity_path(self.root).stat().st_mtime
+            except OSError:
+                age = None
+            if age is None or age >= IDLE_SECONDS:
+                reason = "idle"
+            elif self.held_since is not None and now - self.held_since >= HOLD_CAP_SECONDS:
+                reason = "cap"
+        if reason is None:
+            if self.held_since is None:
+                self.held_since = now
+                log(f"restart waiting since {time.strftime('%H:%M', time.localtime(now))}"
+                    f" — last change {int(age)}s ago")
+                with contextlib.suppress(OSError):
+                    (state / WAITING_FILE).write_text(f"{now}\n", "utf-8")
+            return True
+        if self.held_since is not None or (reason == "skip" and not self.released):
+            log(f"restart going ahead — {reason}")
+        if reason == "skip":
+            self.released = True
+            with contextlib.suppress(OSError):
+                (state / SKIP_FILE).unlink()
+        self._end_hold(keep_released=True)
+        return False
+
+    def _end_hold(self, keep_released: bool = False) -> None:
+        self.held_since = None
+        if not keep_released:
+            self.released = False
+        with contextlib.suppress(OSError):
+            (state_dir(self.root) / WAITING_FILE).unlink()
+
     def _check_files(self) -> None:
         current = fingerprint(self.root)
         if current != self.fingerprint:
@@ -1476,6 +1554,8 @@ class Supervisor:
             mark_busy("source-change", self.root)
             return
         if self.pending and time.monotonic() - self.quiet_since >= QUIET_SECONDS:
+            if self._held():
+                return
             changed = sorted(self.pending)
             self.pending.clear()
             mark_busy("restart", self.root)
@@ -1506,6 +1586,8 @@ class Supervisor:
             mark_busy("app-change", self.root)
             return
         if self.app_pending and time.monotonic() - self.app_quiet_since >= QUIET_SECONDS:
+            if self._held():
+                return
             self.app_pending = False
             # THE APP HALF NEEDS ITS OWN ARM, because the two watch sets are independent by
             # design (D138) and a branch that differs only under `app/src` reaches this method
@@ -2027,6 +2109,18 @@ def do_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def do_restart_now(_args: argparse.Namespace) -> int:
+    """End a held restart and app build now. Run it only after the owner agreed (D176)."""
+    state = state_dir()
+    state.mkdir(parents=True, exist_ok=True)
+    (state / SKIP_FILE).write_text("", "utf-8")
+    if read_waiting_since() is None:
+        print("nothing is waiting; the next held restart or build will go ahead at once.")
+    else:
+        print("the held restart and build will go ahead within a second or two.")
+    return 0
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Run the banchi servers.")
     sub = parser.add_subparsers(dest="verb")
@@ -2054,6 +2148,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     rep = sub.add_parser("report", help="read-only state, for `make status`")
     rep.add_argument("--json", action="store_true")
     rep.set_defaults(func=do_report)
+
+    now = sub.add_parser("restart-now", help="let a held auto-restart and build go ahead now")
+    now.set_defaults(func=do_restart_now)
 
     guard = sub.add_parser("guard-foreground",
                            help="refuse a foreground server while the supervisor is up")

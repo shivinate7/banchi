@@ -7758,6 +7758,7 @@ def _refresh_worker(history: Optional[str]) -> None:
     def progress(step: str, done: int, total: int) -> None:
         with _REFRESH_LOCK:
             _REFRESH.update(step=step, done=done, total=total)
+        files.mark_activity()  # a running refresh is a change: the supervisor holds a restart over it
 
     state = "failed"
     skipped = False
