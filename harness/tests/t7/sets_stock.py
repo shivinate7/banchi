@@ -6,6 +6,7 @@ the order `CHECK_ORDER` runs them.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import tempfile
 import time
@@ -941,6 +942,244 @@ def check_stock_images_retry_after_failed_fetch(checks: Checks) -> None:
     story(pricehistory.Unreachable)
 
 
+# The checks below share one scripted Riftbound catalogue and one fake clock. The wait a
+# failed pair earns is the builder's, so every offset brackets it: 1 s sits inside any short
+# wait, 600 s sits over it and far inside the ttl.
+_RIFTBOUND_LINE = "Riftbound League of Legends Trading Card Game"
+_PAIR = ("riftbound", "Unleashed")
+_NUMBER = "118/219"
+_PHOTO = "https://tcgplayer-cdn.tcgplayer.com/product/685007_200w.jpg"
+_OTHER_PHOTO = "https://tcgplayer-cdn.tcgplayer.com/product/111_200w.jpg"
+_INSIDE_WAIT = 1.0
+_AFTER_WAIT = 600.0
+
+
+class _Catalogue:
+    """A scripted tcgcsv for Riftbound, handed to `Market` as its fetcher. `sets` maps a set
+    name to `(groupId, number, productId, photo)`. `listed` names the sets the groups list
+    holds. While `failure` is an exception class, every ask raises it. `calls` holds every URL
+    asked, so a case counts requests instead of guessing at them."""
+
+    def __init__(self, sets, failure=None) -> None:
+        self.sets = sets
+        self.listed = list(sets)
+        self.failure = failure
+        self.calls: List[str] = []
+
+    def __call__(self, url: str):
+        self.calls.append(url)
+        if self.failure is not None:
+            raise self.failure("simulated: Errno 8 reaching tcgcsv.com")
+        if url.endswith("/categories"):
+            return {"results": [{"name": _RIFTBOUND_LINE, "categoryId": 89}]}
+        if url.endswith("/89/groups"):
+            return {"results": [{"name": name, "groupId": self.sets[name][0]} for name in self.listed]}
+        for group_id, number, product_id, photo in self.sets.values():
+            if url.endswith(f"/89/{group_id}/products"):
+                return {"results": [{
+                    "imageUrl": photo,
+                    "extendedData": [{"name": "Number", "value": number}],
+                    "productId": product_id,
+                }]}
+        raise AssertionError(f"unexpected fetch: {url}")
+
+
+@contextlib.contextmanager
+def _stock_on_a_clock(catalogue, cache_dir=None):
+    """`(clock, images)`: a `StockImages` whose `time` and whose `Market` read one fake clock.
+    `Market` gets `courtesy_delay=0.0`, so no case sleeps."""
+    clock = _FakeTime()
+    real_time = stockimages.time
+    stockimages.time = clock
+    try:
+        yield clock, stockimages.StockImages(
+            market=pricehistory.Market(
+                cache_dir=cache_dir, fetcher=catalogue, courtesy_delay=0.0, now=clock.time
+            )
+        )
+    finally:
+        stockimages.time = real_time
+
+
+def _warm(images, *pairs) -> None:
+    for thread in images.warm(list(pairs)):
+        thread.join(timeout=5)
+
+
+def check_stock_images_stale_groups_list_is_a_failure(checks: Checks) -> None:
+    """A set released after the groups list was pulled. The list on disk is over a day old and
+    lacks it, the catalogue is unreachable, and `Market.get` serves the stale list. `group_id`
+    then finds no such set and raises `NotResolvable`, which `_fetch_tcgcsv` stored as a final
+    empty index: the pair stopped asking for the full ttl though the catalogue never answered.
+
+    It is a FAILURE: the pair stays pending, and once the catalogue is back and the wait has
+    passed the new set resolves. `Market` must refetch the list then, though it already
+    fetched that slug once in its life. Each failure type runs it, `Offline` and a plain
+    `Unreachable`."""
+    checks.note("")
+    checks.note("STOCK IMAGES STALE GROUPS — a new set behind a stale list is retried, not a final 'no photo'")
+
+    def story(failure) -> None:
+        label = failure.__name__
+        with tempfile.TemporaryDirectory() as tmp:
+            catalogue = _Catalogue({
+                "Origins": (24000, "001/100", 111, _OTHER_PHOTO),
+                "Unleashed": (24999, _NUMBER, 685007, _PHOTO),
+            })
+            catalogue.listed = ["Origins"]
+            with _stock_on_a_clock(catalogue, tmp) as (clock, images):
+                seed = pricehistory.Market(
+                    cache_dir=tmp, fetcher=catalogue, courtesy_delay=0.0, now=clock.time
+                )
+                seed.groups(seed.category_id(_RIFTBOUND_LINE))
+                clock.now += pricehistory.GROUPS_TTL_SECONDS + 3600.0
+                catalogue.listed = ["Origins", "Unleashed"]
+                catalogue.failure = failure
+
+                _warm(images, _PAIR)
+                checks.equal(
+                    images.url_for(*_PAIR, _NUMBER), None,
+                    f"{label}: with the catalogue unreachable and a stale list, url_for answers None",
+                )
+                checks.ok(
+                    images.group_pending(*_PAIR),
+                    f"{label}: and the group is still pending, never a stored final 'no photo'",
+                )
+
+                catalogue.failure = None
+                clock.now += _AFTER_WAIT
+                _warm(images, _PAIR)
+                for _ in range(100):
+                    if not images.group_pending(*_PAIR):
+                        break
+                    time.sleep(0.05)
+                checks.equal(
+                    images.url_for(*_PAIR, _NUMBER), _PHOTO,
+                    f"{label}: once the wait has passed and the catalogue is back, the new set resolves",
+                )
+
+    story(pricehistory.Offline)
+    story(pricehistory.Unreachable)
+
+
+def check_stock_images_failed_pair_is_not_refetched_inside_the_wait(checks: Checks) -> None:
+    """The back-off itself, counted in requests. A plain `Unreachable` is never latched by
+    `Market`, so only `StockImages`' own wait stands between a second `warm` and a second
+    request. A `_backing_off` that always answers False turns this red."""
+    checks.note("")
+    checks.note("STOCK IMAGES BACK-OFF — a failed pair is left alone for the wait, then asked again")
+
+    catalogue = _Catalogue({"Unleashed": (24999, _NUMBER, 685007, _PHOTO)}, failure=pricehistory.Unreachable)
+    with _stock_on_a_clock(catalogue) as (clock, images):
+        _warm(images, _PAIR)
+        first = len(catalogue.calls)
+        checks.ok(first >= 1, "the first warm asks the catalogue", f"asked {first} times")
+
+        clock.now += _INSIDE_WAIT
+        _warm(images, _PAIR)
+        _warm(images, _PAIR)
+        checks.equal(len(catalogue.calls), first, "inside the wait a second and a third warm make no request")
+
+        clock.now += _AFTER_WAIT
+        _warm(images, _PAIR)
+        second = len(catalogue.calls)
+        checks.ok(second > first, "after the wait a warm asks again", f"asked {second} times in all, {first} before")
+
+        _warm(images, _PAIR)
+        checks.equal(len(catalogue.calls), second, "and that second failure earns a wait of its own")
+
+
+def check_stock_images_failed_refresh_keeps_the_good_index(checks: Checks) -> None:
+    """A pair that resolved once and then ages past the ttl is refreshed in the background. If
+    that refresh fails the last good index keeps answering: the photo does not flicker away,
+    and the group is not pending again. Each failure type runs it."""
+    checks.note("")
+    checks.note("STOCK IMAGES BAD REFRESH — the last good photo keeps answering")
+
+    for failure in (pricehistory.Unreachable, pricehistory.Offline):
+        label = failure.__name__
+        catalogue = _Catalogue({"Unleashed": (24999, _NUMBER, 685007, _PHOTO)})
+        with _stock_on_a_clock(catalogue) as (clock, images):
+            _warm(images, _PAIR)
+            checks.equal(images.url_for(*_PAIR, _NUMBER), _PHOTO, f"{label}: with the catalogue up the photo lands")
+
+            clock.now += stockimages.TCGCSV_TTL_SECONDS + 1.0
+            catalogue.failure = failure
+            asked = len(catalogue.calls)
+            _warm(images, _PAIR)
+            checks.ok(len(catalogue.calls) > asked, f"{label}: the expired pair is refreshed, and the refresh fails")
+            checks.equal(
+                images.url_for(*_PAIR, _NUMBER), _PHOTO,
+                f"{label}: a failed refresh keeps serving the last good photo",
+            )
+            checks.ok(
+                not images.group_pending(*_PAIR),
+                f"{label}: and the group does not go back to pending",
+            )
+
+
+def check_stock_images_warm_until_known_skips_a_backing_off_pair(checks: Checks) -> None:
+    """`_warm_until_known` is the walk a SOLD order line's unknown set starts, one background
+    thread over every candidate split of its name. It passes over a pair that is backing off
+    and goes on to the next, and a pair with no cache entry after a failed fetch is not a
+    `KeyError`."""
+    checks.note("")
+    checks.note("STOCK IMAGES WARM UNTIL KNOWN — passes over a backing-off pair, never raises on a cold failure")
+
+    catalogue = _Catalogue(
+        {
+            "Unleashed": (24999, _NUMBER, 685007, _PHOTO),
+            "Origins": (24000, "001/100", 111, _OTHER_PHOTO),
+        },
+        failure=pricehistory.Unreachable,
+    )
+    with _stock_on_a_clock(catalogue) as (clock, images):
+        _warm(images, _PAIR)
+        catalogue.failure = None
+        clock.now += _INSIDE_WAIT
+        images._warm_until_known("riftbound", ["Unleashed", "Origins"])
+        checks.ok(
+            images.group_pending("riftbound", "Unleashed"),
+            "the backing-off pair is passed over: not fetched, still pending",
+        )
+        checks.equal(
+            images.url_for("riftbound", "Origins", "001/100"), _OTHER_PHOTO,
+            "and the next candidate is still fetched",
+        )
+
+    # A fresh instance with nothing cached: the failure comes before any set is known, so the
+    # pair ends with no cache entry at all.
+    cold = _Catalogue({"Unleashed": (24999, _NUMBER, 685007, _PHOTO)}, failure=pricehistory.Unreachable)
+    with _stock_on_a_clock(cold) as (_, images):
+        try:
+            images._warm_until_known("riftbound", ["Unleashed"])
+            raised = None
+        except Exception as exc:  # noqa: BLE001 - the exception IS what this asserts
+            raised = exc
+        checks.ok(raised is None, "a cold pair whose fetch fails does not raise", f"raised {raised!r}")
+        checks.ok(images.group_pending("riftbound", "Unleashed"), "and it is still pending, not a stored miss")
+
+
+def check_stock_images_waits_fit_the_client_window(checks: Checks) -> None:
+    """The client re-asks a pending SKU for 1+2+4+8+8+8 = 31 s (`SKU_PHOTO_BACKOFF_MS` in the
+    app's `server.ts`) and then answers final. A retry must land well inside that, or the last
+    ask comes before it and the tile stays blank until the next page load. The `Market` wait
+    is no longer than the pair's, so `Market` is willing again when the pair retries."""
+    checks.note("")
+    checks.note("STOCK IMAGES WAITS — a retry lands inside the client's 31 s of re-asks")
+
+    checks.ok(
+        stockimages.FETCH_RETRY_SECONDS <= 20.0,
+        "FETCH_RETRY_SECONDS is 20s or less",
+        f"is {stockimages.FETCH_RETRY_SECONDS:.0f}s",
+    )
+    checks.ok(
+        stockimages.FETCH_RETRY_SECONDS >= pricehistory.OFFLINE_WAIT_SECONDS,
+        "FETCH_RETRY_SECONDS is at least OFFLINE_WAIT_SECONDS",
+        f"{stockimages.FETCH_RETRY_SECONDS:.0f}s against {pricehistory.OFFLINE_WAIT_SECONDS:.0f}s",
+    )
+
+
 
 # STOCK MIX, `GET /stock/mix` (docs/specs/sales-screen.md, Mix, checks 1 to 7). One home, `pipeline/stockmix.py`.
 # BUILDER CONTRACT, wire names read here: top level `asOf`, `cards`; per card `game set rarity finish state box
@@ -1418,6 +1657,11 @@ CHECKS = (
     check_stock_images_pokemon_warm_refusal,
     check_skus_photos_pending,
     check_stock_images_retry_after_failed_fetch,
+    check_stock_images_stale_groups_list_is_a_failure,
+    check_stock_images_failed_pair_is_not_refetched_inside_the_wait,
+    check_stock_images_failed_refresh_keeps_the_good_index,
+    check_stock_images_warm_until_known_skips_a_backing_off_pair,
+    check_stock_images_waits_fit_the_client_window,
     check_search_group_stock_image,
     check_search_group_stock_image_guards,
     check_mix_leaves_out_retired_and_moved,

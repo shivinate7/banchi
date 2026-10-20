@@ -37,6 +37,15 @@ retries a 403 (`Blocked`), another 4xx, an unreadable body, or a read failure af
 The `_retry_*` cases script `urlopen` and patch `pricehistory._sleep`, a module attribute that
 `fetch_json` must look up at CALL time (never bind it as a default argument). No case sleeps
 for real: `time.sleep` itself is refused for the length of each case.
+
+BUDGET. One `fetch_json` call, attempts and pauses together, takes no longer than the one
+attempt it replaced (`REQUEST_TIMEOUT_SECONDS`). It reads the clock `pricehistory._monotonic`
+and a retry is made only when the time spent, plus the pause, plus the attempt's timeout
+still fits. The `_net` cases replace that clock, `_sleep` and `urlopen` with one fake clock.
+After `fetch_json` gives up on HTTP 5xx or 429, `Market` fails fast for the same
+`OFFLINE_WAIT_SECONDS` an `Offline` earns, so 60 gets cost one burst of 3 attempts. A 404 is
+one product's answer and never fails the rest fast. The client re-asks for about 31 s
+(`SKU_PHOTO_BACKOFF_MS` in the app's `server.ts`), so the wait stays inside that window.
 """
 
 from __future__ import annotations
@@ -46,6 +55,7 @@ import io
 import json
 import socket
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -350,6 +360,203 @@ def _retry_wait_is_capped() -> None:
        "pauses %r total %.2fs" % (pauses, sum(pauses)))
 
 
+URL = "https://example.test/x"
+PAYLOAD = {"results": [{"productId": 1}]}
+
+
+def _refuse_sleep(seconds):
+    raise AssertionError("slept for real (%r s); pause through pricehistory._sleep" % (seconds,))
+
+
+class _Net:
+    """The REAL `fetch_json` over a scripted `urlopen`, on ONE fake clock (`clock[0]`, seconds).
+    `answer(net, timeout)` runs once per attempt: it advances the clock by what the attempt
+    took, then raises or returns a response. A pause (`pricehistory._sleep`) advances the same
+    clock. `net.timeouts` holds the timeout each attempt was handed, `net.up` flips a
+    `_host` from answering an error to answering `PAYLOAD`."""
+
+    def __init__(self, answer) -> None:
+        self.answer = answer
+        self.timeouts = []
+        self.pauses = []
+        self.clock = [0.0]
+        self.up = False
+
+    def urlopen(self, _request, data=None, timeout=None):
+        self.timeouts.append(timeout)
+        return self.answer(self, timeout)
+
+    def pause(self, seconds) -> None:
+        self.pauses.append(seconds)
+        self.clock[0] += seconds
+
+
+@contextlib.contextmanager
+def _net(answer):
+    """`create=True` on the clock lets a case run against code that has no `_monotonic` yet:
+    it then fails on its count, not on a missing name."""
+    net = _Net(answer)
+    with mock.patch.object(urllib.request, "urlopen", net.urlopen), \
+            mock.patch.object(pricehistory, "_sleep", net.pause, create=True), \
+            mock.patch.object(pricehistory, "_monotonic", lambda: net.clock[0], create=True), \
+            mock.patch.object(time, "sleep", _refuse_sleep):
+        yield net
+
+
+def _took(seconds, make_exc):
+    def answer(net, _timeout):
+        net.clock[0] += seconds
+        raise make_exc()
+    return answer
+
+
+def _hangs(net, timeout):
+    """Every attempt runs to the timeout it was given, then the connect times out."""
+    net.clock[0] += float("inf") if timeout is None else timeout
+    raise socket.timeout("simulated: timed out before the socket opened")
+
+
+def _host(code):
+    """A host answering HTTP `code` until `net.up`, then `PAYLOAD`. Each answer takes 10 ms."""
+    def answer(net, _timeout):
+        net.clock[0] += 0.01
+        if net.up:
+            return _Body(json.dumps(PAYLOAD).encode("utf-8"))
+        raise urllib.error.HTTPError(URL, code, "simulated", {}, io.BytesIO(b""))
+    return answer
+
+
+def _outcome(call):
+    try:
+        return call()
+    except Exception as exc:  # noqa: BLE001 - the exception IS what each case inspects
+        return exc
+
+
+def _retry_time_is_bounded() -> None:
+    budget = pricehistory.REQUEST_TIMEOUT_SECONDS
+    with _net(_hangs) as net:
+        outcome = _outcome(lambda: pricehistory.fetch_json(URL))
+    ok(isinstance(outcome, pricehistory.Offline), "budget: attempts that all hang still end in Offline",
+       "got %r" % (outcome,))
+    ok(net.clock[0] <= budget, "budget: when every attempt runs to its timeout the call takes %.0fs or less" % budget,
+       "took %.1fs: %d attempts with timeouts %r and pauses %r"
+       % (net.clock[0], len(net.timeouts), net.timeouts, net.pauses))
+
+    with _net(_took(30.0, lambda: socket.timeout("simulated: timed out"))) as net:
+        _outcome(lambda: pricehistory.fetch_json(URL))
+    ok(len(net.timeouts) == 1 and not net.pauses, "budget: a first attempt that took 30s is not retried",
+       "made %d attempts, paused %r" % (len(net.timeouts), net.pauses))
+
+    with _net(_took(0.01, lambda: urllib.error.URLError("simulated: refused"))) as net:
+        outcome = _outcome(lambda: pricehistory.fetch_json(URL))
+    ok(len(net.timeouts) == 3 and isinstance(outcome, pricehistory.Offline),
+       "budget: failures that come back in 10 ms are still retried, 3 attempts in all",
+       "made %d attempts, got %r" % (len(net.timeouts), outcome))
+
+
+def _exhausted_retries_fail_fast_for_the_wait() -> None:
+    def burst(code) -> None:
+        market_clock = [1_000_000.0]
+        with _net(_host(code)) as net:
+            market = pricehistory.Market(cache_dir=None, courtesy_delay=0.0, now=lambda: market_clock[0])
+
+            def ask(slug):
+                try:
+                    return market.get("https://example.test/" + slug, slug, 3600.0)
+                except pricehistory.Unreachable as exc:
+                    return exc
+
+            failures = [ask("slug-%d" % i) for i in range(60)]
+            ok(all(isinstance(f, pricehistory.Unreachable) for f in failures),
+               "HTTP %d: all 60 gets still raise Unreachable" % code)
+            ok(len(net.timeouts) == 3 and len(net.pauses) == 2,
+               "HTTP %d: 60 gets cost ONE burst, 3 attempts and 2 pauses, not that much per get" % code,
+               "made %d attempts and %d pauses (%.1fs)" % (len(net.timeouts), len(net.pauses), sum(net.pauses)))
+
+            market_clock[0] += INSIDE_WAIT
+            ask("slug-inside")
+            ok(len(net.timeouts) == 3, "HTTP %d: a get inside the wait makes no request" % code,
+               "made %d attempts" % len(net.timeouts))
+
+            net.up = True
+            market_clock[0] += AFTER_WAIT
+            answer = ask("slug-after")
+            ok(answer == PAYLOAD, "HTTP %d: after the wait a get asks the host again and answers" % code,
+               "got %r" % (answer,))
+            ok(len(net.timeouts) == 4, "HTTP %d: ...with exactly one new request" % code,
+               "made %d attempts" % len(net.timeouts))
+
+    for code in (503, 429):
+        burst(code)
+
+    with _net(_host(404)) as net:
+        market = pricehistory.Market(cache_dir=None, courtesy_delay=0.0)
+        for i in range(5):
+            with contextlib.suppress(pricehistory.Unreachable):
+                market.get("https://example.test/%d" % i, "slug-%d" % i, 3600.0)
+    ok(len(net.timeouts) == 5 and not net.pauses,
+       "HTTP 404: one product's answer, so each of 5 gets asks for itself, no retry and no fail-fast",
+       "made %d attempts, paused %r" % (len(net.timeouts), net.pauses))
+
+
+def _stale_catalogue_list_is_refetched_after_the_wait() -> None:
+    """A groups list on disk older than a day lacks a set released since. The host fails, so
+    `get` serves the stale list (one request, not one per card). Past the wait it must ask
+    again, though `_attempted` already holds the slug: that latch bounds requests inside a
+    wait, not for the rest of the instance's life."""
+    slug, url = "tcgcsv/89/groups", "https://example.test/89/groups"
+    old = {"results": [{"name": "Origins", "groupId": 1}]}
+    new = {"results": [{"name": "Origins", "groupId": 1}, {"name": "Unleashed", "groupId": 2}]}
+    def story(failure) -> None:
+        label = failure.__name__
+        clock = [1_000_000.0]
+        calls = []
+        host = {"payload": old, "failure": None}
+
+        def fetcher(asked):
+            calls.append(asked)
+            if host["failure"] is not None:
+                raise host["failure"]("simulated: the host is down")
+            return host["payload"]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            def market():
+                return pricehistory.Market(cache_dir=tmp, fetcher=fetcher, courtesy_delay=0.0, now=lambda: clock[0])
+
+            market().get(url, slug, pricehistory.GROUPS_TTL_SECONDS, catalog=True)
+            clock[0] += pricehistory.GROUPS_TTL_SECONDS + 3600.0
+            host.update(payload=new, failure=failure)
+            fresh = market()
+            served = fresh.get(url, slug, pricehistory.GROUPS_TTL_SECONDS, catalog=True)
+            ok(served == old, "%s: a failed refresh serves the stale list" % label)
+            seen = len(calls)
+
+            clock[0] += INSIDE_WAIT
+            served = fresh.get(url, slug, pricehistory.GROUPS_TTL_SECONDS, catalog=True)
+            ok(served == old and len(calls) == seen, "%s: inside the wait no new request is made" % label,
+               "made %d new requests" % (len(calls) - seen))
+
+            host["failure"] = None
+            clock[0] += AFTER_WAIT
+            served = fresh.get(url, slug, pricehistory.GROUPS_TTL_SECONDS, catalog=True)
+            ok(served == new, "%s: after the wait the list is fetched again and holds the new set" % label,
+               "still served the stale list %.0fs after the failure" % AFTER_WAIT)
+            ok(len(calls) == seen + 1, "%s: ...with exactly one new request" % label,
+               "made %d new requests" % (len(calls) - seen))
+
+    story(pricehistory.Unreachable)
+    story(pricehistory.Offline)
+
+
+def _offline_wait_fits_the_client_window() -> None:
+    """The client re-asks for 1+2+4+8+8+8 = 31 s (`SKU_PHOTO_BACKOFF_MS`). A wait longer than
+    half of that leaves the client no second ask that a retried fetch could answer."""
+    ok(pricehistory.OFFLINE_WAIT_SECONDS <= 15.0,
+       "OFFLINE_WAIT_SECONDS is 15s or less, inside the client's 31s of re-asks",
+       "is %.0fs" % pricehistory.OFFLINE_WAIT_SECONDS)
+
+
 def main() -> int:
     _offline_only_fetches_once()
     _offline_is_retried_after_the_wait()
@@ -359,6 +566,10 @@ def main() -> int:
     _retry_http_status()
     _retry_never_for()
     _retry_wait_is_capped()
+    _retry_time_is_bounded()
+    _exhausted_retries_fail_fast_for_the_wait()
+    _stale_catalogue_list_is_refetched_after_the_wait()
+    _offline_wait_fits_the_client_window()
     print(f"\n{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0
 
