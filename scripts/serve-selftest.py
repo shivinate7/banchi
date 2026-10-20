@@ -29,7 +29,9 @@ commit. Same placement and same reason as `audit-self-test`, `githooks-selftest`
 `janitor-selftest` and `verdict-selftest`.
 """
 
+import argparse
 import contextlib
+import io
 import json
 import os
 import shutil
@@ -454,6 +456,25 @@ def swapped(owner, **names):
             setattr(owner, name, value)
 
 
+_ABSENT = object()
+
+
+@contextlib.contextmanager
+def swapped_or_absent(owner, **names):
+    """As `swapped`, for a name that may not exist yet: it is removed again on the way out."""
+    saved = {name: getattr(owner, name, _ABSENT) for name in names}
+    for name, value in names.items():
+        setattr(owner, name, value)
+    try:
+        yield
+    finally:
+        for name, value in saved.items():
+            if value is _ABSENT:
+                delattr(owner, name)
+            else:
+                setattr(owner, name, value)
+
+
 def run(step) -> str:
     """Run one step of a case. A raise is a failed case, not a dead script."""
     try:
@@ -697,11 +718,179 @@ def check_child_marks_activity() -> None:
             serve(tree, "down", "--confirm")
 
 
+def check_cap_releases_build() -> None:
+    print("\n  the two-hour cap fires the restart and the app build on one release (D176)")
+    clock = FakeClock(NOW)
+    builds: list = []
+    with tempfile.TemporaryDirectory() as tmp, swapped(
+        serve_module,
+        time=clock,
+        off_main=lambda root: None,
+        app_stale=lambda root: True,
+        build_app=lambda root: builds.append(str(root)) or True,
+    ):
+        sup, restarts = idle_supervisor(Path(tmp) / "cap-release", clock)
+        sup.pending = {"scripts/serve.py"}
+        sup.app_pending = True
+        sup.app_quiet_since = clock.now - 10
+        touch_activity(sup.root, clock.now)
+        error = run(sup._check_files) + run(sup._check_app)
+        check(
+            restarts == [] and builds == [] and sup.app_pending,
+            "a change holds the restart and the app build together at the start" + error,
+        )
+
+        clock.now = NOW + serve_module.HOLD_CAP_SECONDS
+        touch_activity(sup.root, clock.now)  # still changing: only the cap can release it
+        error = run(sup._check_files)
+        check(restarts == [["scripts/serve.py"]], "the cap fires the restart" + error)
+        error = run(sup._check_app)
+        check(
+            builds != [] and not sup.app_pending,
+            "the app build goes on that same release, not a second two-hour hold" + error,
+        )
+
+
+def check_dispatch_marks_before_handler() -> None:
+    """A state change marks activity before its handler runs, not only after it returns (D176).
+
+    The body is withheld until the mark has landed. A mark that waits for the handler to finish
+    cannot land in that window, because the handler is still reading the body.
+    """
+    print("\n  a state change marks activity before its handler runs, as well as after (D176)")
+    with tempfile.TemporaryDirectory() as tmp:
+        tree = build_tree(Path(tmp))
+        port = PORTS[tree]
+        serve(tree, "up")
+        try:
+            up = wait_until(lambda: get(port, "/status")[0] == 200)
+            check(up, "the capture server comes up")
+            body = json.dumps({"name": "Mid-write probe"}).encode("utf-8")
+            before = activity_mtime(tree)
+            with socket.create_connection(("127.0.0.1", port), timeout=10) as wire:
+                wire.sendall(
+                    (f"POST /boxes HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n"
+                     "Content-Type: application/json\r\n"
+                     f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n").encode("ascii")
+                )
+                marked = wait_until(
+                    lambda: activity_mtime(tree) not in (None, before), seconds=5,
+                )
+                check(
+                    marked,
+                    "a POST whose body has not arrived has already marked activity",
+                )
+                wire.sendall(body)
+                reply = b""
+                with contextlib.suppress(OSError):
+                    for chunk in iter(lambda: wire.recv(4096), b""):
+                        reply += chunk
+            status = reply.split(b" ", 2)
+            check(
+                len(status) > 1 and status[1].startswith(b"2"),
+                "and the POST completes once its body arrives",
+            )
+        finally:
+            serve(tree, "down", "--confirm")
+
+
+def check_stale_skip_file() -> None:
+    print("\n  a skip file armed before this hold began does not release it (D176)")
+    clock = FakeClock(NOW)
+    with tempfile.TemporaryDirectory() as tmp, swapped(serve_module, time=clock):
+        sup, restarts = idle_supervisor(Path(tmp) / "stale-skip", clock)
+        skip = sup.root / ".serve" / "restart-now"
+        skip.write_text("", "utf-8")
+        os.utime(skip, (NOW - 200, NOW - 200))  # armed before the hold below began
+        sup.held_since = NOW - 100
+        touch_activity(sup.root, clock.now - 10)  # a change 10 s old: the hold must stand
+        sup.pending = {"scripts/serve.py"}
+        error = run(sup._check_files)
+        check(
+            restarts == [] and "scripts/serve.py" in sup.pending,
+            "a skip file older than the hold does not fire it, and the change stays pending"
+            + error,
+        )
+
+        skip.write_text("", "utf-8")  # armed again, inside the hold: this one counts
+        os.utime(skip, (NOW - 5, NOW - 5))
+        error = run(sup._check_files)
+        check(
+            restarts == [["scripts/serve.py"]] and not skip.exists(),
+            "a skip file armed during the hold fires it, and is removed once it has" + error,
+        )
+
+
+def check_restart_now_lever() -> None:
+    """The lever the owner runs. Its target and its state folder are swapped for a sandbox, so
+    the case cannot reach the owner's primary checkout whatever this file does."""
+    print("\n  the restart-now lever writes its skip file only while a restart waits (D176)")
+    with tempfile.TemporaryDirectory() as tmp:
+        primary = Path(tmp) / "primary"
+        state = primary / ".serve"
+        skip = state / serve_module.SKIP_FILE
+
+        def lever() -> None:
+            with swapped_or_absent(
+                serve_module,
+                restart_target=lambda root=None: primary,
+                state_dir=lambda root=None: state,
+            ), contextlib.redirect_stdout(io.StringIO()):
+                serve_module.do_restart_now(argparse.Namespace())
+
+        error = run(lever)
+        check(
+            not skip.exists(),
+            "nothing waits: the lever writes no skip file, so no later hold is released by it"
+            + error,
+        )
+
+        state.mkdir(parents=True, exist_ok=True)
+        (state / serve_module.WAITING_FILE).write_text(f"{NOW}\n", "utf-8")
+        skip.unlink(missing_ok=True)
+        error = run(lever)
+        check(skip.exists(), "a restart waits: the lever writes the skip file" + error)
+
+
+def check_restart_target_from_linked_worktree() -> None:
+    print("\n  restart_target from a linked worktree names the primary checkout (D176)")
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    env["BANCHI_MAIN"] = "off"
+
+    def git(where: Path, *argv: str) -> None:
+        subprocess.run(  # noqa: S603
+            ["git", "-c", "user.email=selftest@example.com", "-c", "user.name=selftest",
+             "-c", "commit.gpgsign=false", *argv],
+            cwd=str(where), env=env, capture_output=True, text=True, check=False,
+        )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        primary = Path(tmp) / "primary"
+        linked = Path(tmp) / "linked"
+        primary.mkdir()
+        git(primary, "init", "-q", "-b", "main")
+        git(primary, "commit", "-q", "--no-verify", "--allow-empty", "-m", "main")
+        git(primary, "worktree", "add", "-q", "-b", "linked-branch", str(linked))
+
+        answer: list = []
+        error = run(lambda: answer.append(serve_module.restart_target(linked)))
+        check(
+            bool(answer) and Path(answer[0]).resolve() == primary.resolve(),
+            "from a linked worktree the target is the primary checkout, whose supervisor "
+            "serves :8000, not the linked tree's own `.serve/`" + error,
+        )
+
+
 def main() -> int:
     print("supervisor self-test — the build job, against a throwaway tree (D138)")
     check_port_split()
     check_idle_restart()
     check_child_marks_activity()
+    check_cap_releases_build()
+    check_dispatch_marks_before_handler()
+    check_stale_skip_file()
+    check_restart_now_lever()
+    check_restart_target_from_linked_worktree()
     with tempfile.TemporaryDirectory() as tmp:
         where = Path(tmp)
         tree = build_tree(where)
