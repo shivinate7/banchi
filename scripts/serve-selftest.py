@@ -420,6 +420,8 @@ def check_port_split() -> None:
 # `.serve/restart-now`; and the Supervisor's own `pending`, `quiet_since`, `app_pending`,
 # `app_quiet_since`, `_check_files`, `_check_app`, `_restart_for` and `_reap`. The predicate must
 # read the clock through serve.py's module-level `time` name, which the cases replace.
+# A linked worktree is told apart by `ports.is_linked_worktree(root)`, and the restart lever asks
+# `supervisor_pid(root)` before it arms anything.
 
 NOW = 1_800_000_000.0  # a fixed epoch: no case reads the wall clock
 
@@ -831,10 +833,12 @@ def check_restart_now_lever() -> None:
         skip = state / serve_module.SKIP_FILE
 
         def lever() -> None:
+            # A restart waits only under a live supervisor (D176), so this case runs under one.
             with swapped_or_absent(
                 serve_module,
                 restart_target=lambda root=None: primary,
                 state_dir=lambda root=None: state,
+                supervisor_pid=lambda root=None: 4242,
             ), contextlib.redirect_stdout(io.StringIO()):
                 serve_module.do_restart_now(argparse.Namespace())
 
@@ -850,6 +854,100 @@ def check_restart_now_lever() -> None:
         skip.unlink(missing_ok=True)
         error = run(lever)
         check(skip.exists(), "a restart waits: the lever writes the skip file" + error)
+
+
+def linked_supervisor(base: Path, clock: FakeClock):
+    """As `idle_supervisor`, in a linked worktree: its `.git` is a file, as `git worktree add` writes it."""
+    sup, restarts = idle_supervisor(base, clock)
+    (sup.root / ".git").write_text(f"gitdir: {base / 'gitdir'}\n", "utf-8")
+    return sup, restarts
+
+
+def check_linked_worktree_never_holds() -> None:
+    print("\n  a linked worktree never holds: its own activity does not hold its restart (D176)")
+    clock = FakeClock(NOW)
+    builds: list = []
+    with tempfile.TemporaryDirectory() as tmp, swapped(
+        serve_module,
+        time=clock,
+        off_main=lambda root: None,
+        app_stale=lambda root: True,
+        build_app=lambda root: builds.append(str(root)) or True,
+    ):
+        where = Path(tmp)
+        held: list = []
+
+        sup, _ = linked_supervisor(where / "held", clock)
+        check(
+            serve_module.ports.is_linked_worktree(sup.root),
+            "the fixture is a linked worktree by `ports.is_linked_worktree`",
+        )
+        touch_activity(sup.root, clock.now - 10)
+        error = run(lambda: held.append(sup._held()))
+        check(
+            held == [False],
+            "a change 10 s old does not hold a linked worktree's restart" + error,
+        )
+
+        sup, restarts = linked_supervisor(where / "restart", clock)
+        touch_activity(sup.root, clock.now - 10)
+        sup.pending = {"scripts/serve.py"}
+        error = run(sup._check_files)
+        check(
+            restarts == [["scripts/serve.py"]],
+            "a linked worktree's change 10 s old restarts at once, not after the idle window"
+            + error,
+        )
+
+        sup, _ = linked_supervisor(where / "build", clock)
+        touch_activity(sup.root, clock.now - 10)
+        sup.app_pending = True
+        sup.app_quiet_since = clock.now - 10
+        error = run(sup._check_app)
+        check(
+            builds != [] and not sup.app_pending,
+            "a linked worktree's app change 10 s old builds at once, not after the idle window"
+            + error,
+        )
+
+        sup, _ = idle_supervisor(where / "primary", clock)
+        touch_activity(sup.root, clock.now - 10)
+        held.clear()
+        error = run(lambda: held.append(sup._held()))
+        check(
+            held == [True],
+            "control: the same 10 s change in a tree with no `.git` file still holds" + error,
+        )
+
+
+def check_restart_now_needs_live_supervisor() -> None:
+    print("\n  restart-now arms nothing with no live supervisor, stale waiting file or not (D176)")
+    with tempfile.TemporaryDirectory() as tmp:
+        tree = Path(tmp) / "tree"
+        state = tree / ".serve"
+        state.mkdir(parents=True)
+        (state / serve_module.WAITING_FILE).write_text(f"{NOW - 3600}\n", "utf-8")
+        skip = state / serve_module.SKIP_FILE
+
+        answer: list = []
+        error = run(lambda: answer.append(serve_module.restart_now(tree)))
+        check(
+            answer == [False] and not skip.exists(),
+            "no supervisor is alive: restart_now answers False and writes no skip file" + error,
+        )
+
+        out = io.StringIO()
+
+        def lever() -> None:
+            with swapped(serve_module, restart_target=lambda root=None: tree), \
+                    contextlib.redirect_stdout(out):
+                serve_module.do_restart_now(argparse.Namespace())
+
+        error = run(lever)
+        check(
+            "nothing is waiting" in out.getvalue() and not skip.exists(),
+            "the lever reports nothing waiting, and writes no skip file" + error,
+        )
 
 
 def check_restart_target_from_linked_worktree() -> None:
@@ -890,6 +988,8 @@ def main() -> int:
     check_dispatch_marks_before_handler()
     check_stale_skip_file()
     check_restart_now_lever()
+    check_linked_worktree_never_holds()
+    check_restart_now_needs_live_supervisor()
     check_restart_target_from_linked_worktree()
     with tempfile.TemporaryDirectory() as tmp:
         where = Path(tmp)
