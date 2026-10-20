@@ -840,6 +840,107 @@ def check_skus_photos_pending(checks: Checks) -> None:
         checks.equal(warm["stock_photos"].get("sealed-sku"), "https://img/etb.jpg", "and answers the URL")
 
 
+class _FakeTime:
+    """The real `time` module with its clock held still, for `stockimages.time` in one case.
+    `StockImages` reads its clock as `time.time()` with no injection point; `monotonic` follows
+    the same clock so a builder who reads either one stays under test."""
+
+    def __init__(self) -> None:
+        self.now = 1_000_000.0
+
+    def time(self) -> float:
+        return self.now
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def __getattr__(self, name):
+        return getattr(time, name)
+
+
+def check_stock_images_retry_after_failed_fetch(checks: Checks) -> None:
+    """The Sales screen showed no Riftbound stock photos after ONE DNS failure at server start
+    (`tcgcsv.com`, Errno 8). `STOCK_IMAGES` is one `Market` and one `StockImages` for the whole
+    process, and two things made the failure permanent: the `Market` latched `Offline` forever,
+    and `StockImages` cached the failed fetch as an EMPTY index for the full ttl, which
+    `group_pending` then reported as a final "no photo" so the client stopped asking.
+
+    Each failure type runs the same story on a fake clock, no real network, no sleep. `Offline`
+    walks through both causes. A plain `Unreachable` is never latched by `Market`, so it
+    isolates the `StockImages` half: a fix to `Market` alone leaves that variant red."""
+    checks.note("")
+    checks.note("STOCK IMAGES RETRY — a failed catalogue fetch is not a final 'no photo' (Sales, Riftbound)")
+
+    game, set_name, number = "riftbound", "Unleashed", "118/219"
+    photo = "https://tcgplayer-cdn.tcgplayer.com/product/685007_200w.jpg"
+    # The short wait is the builder's. This offset must sit over it and, to mean "not served
+    # for the full ttl", well under the ttl.
+    after_wait = 600.0
+    checks.ok(
+        after_wait < stockimages.TCGCSV_TTL_SECONDS / 2,
+        "the probed offset is far inside the ttl, so a fresh answer after it is a retry, not an expiry",
+    )
+
+    def story(failure) -> None:
+        label = failure.__name__
+        clock = _FakeTime()
+        network_up = [False]
+
+        def fetcher(url: str):
+            if not network_up[0]:
+                raise failure("simulated: Errno 8 reaching tcgcsv.com")
+            if url.endswith("/categories"):
+                return {"results": [
+                    {"name": "Riftbound League of Legends Trading Card Game", "categoryId": 89},
+                ]}
+            if url.endswith("/89/groups"):
+                return {"results": [{"name": set_name, "groupId": 24999}]}
+            if url.endswith("/89/24999/products"):
+                return {"results": [{
+                    "imageUrl": photo,
+                    "extendedData": [{"name": "Number", "value": number}],
+                    "productId": 685007,
+                }]}
+            raise AssertionError(f"unexpected fetch: {url}")
+
+        real_time = stockimages.time
+        stockimages.time = clock
+        try:
+            images = stockimages.StockImages(
+                market=pricehistory.Market(
+                    cache_dir=None, fetcher=fetcher, courtesy_delay=0.0, now=clock.time
+                )
+            )
+            for thread in images.warm([(game, set_name)]):
+                thread.join(timeout=5)
+            checks.equal(
+                images.url_for(game, set_name, number), None,
+                f"{label}: with the catalogue unreachable url_for answers None",
+            )
+            checks.ok(
+                images.group_pending(game, set_name),
+                f"{label}: and the group is still pending, never a final 'no photo' the client stops asking after",
+            )
+
+            network_up[0] = True
+            clock.now += after_wait
+            for thread in images.warm([(game, set_name)]):
+                thread.join(timeout=5)
+            for _ in range(100):
+                if not images.group_pending(game, set_name):
+                    break
+                time.sleep(0.05)
+            checks.equal(
+                images.url_for(game, set_name, number), photo,
+                f"{label}: once the wait has passed and the catalogue is back, a warm lands the real photo",
+            )
+        finally:
+            stockimages.time = real_time
+
+    story(pricehistory.Offline)
+    story(pricehistory.Unreachable)
+
+
 
 # STOCK MIX, `GET /stock/mix` (docs/specs/sales-screen.md, Mix, checks 1 to 7). One home, `pipeline/stockmix.py`.
 # BUILDER CONTRACT, wire names read here: top level `asOf`, `cards`; per card `game set rarity finish state box
@@ -1316,6 +1417,7 @@ CHECKS = (
     check_sales_stock_photo_fallback,
     check_stock_images_pokemon_warm_refusal,
     check_skus_photos_pending,
+    check_stock_images_retry_after_failed_fetch,
     check_search_group_stock_image,
     check_search_group_stock_image_guards,
     check_mix_leaves_out_retired_and_moved,

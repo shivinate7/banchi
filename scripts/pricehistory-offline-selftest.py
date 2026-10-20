@@ -12,8 +12,11 @@ network guard — `cProfile` isolated `time.sleep` (95.85s of it, 613 calls) as 
 socket connects, ever — `Offline`, never the plain `Unreachable` a bad HTTP status raises)
 was retried, and re-slept-for, once per distinct (product, range) pair.
 
-Fixed: the first `Offline` `Market` ever sees is remembered for the rest of that instance's
-life, and every `get()` after it raises immediately with no sleep and no fetch attempt. An
+Fixed: the first `Offline` `Market` sees is remembered for a short wait, and every `get()`
+inside that wait raises immediately with no sleep and no fetch attempt. After the wait the
+next `get()` asks the network again (`_offline_is_retried_after_the_wait`): the server's
+`STOCK_IMAGES` holds ONE `Market` for the whole process, so a single DNS failure at start
+(`Errno 8`) must not blind it until the next restart. An
 ordinary `Unreachable` (a host that DID answer, just with a bad status) is NOT sticky —
 the next product may still resolve normally, which is D278's own promise that one card's bad
 day cannot cost every other card in the batch.
@@ -79,6 +82,65 @@ def _offline_only_fetches_once() -> None:
        "called %d times" % len(calls))
     ok(elapsed < 0.5, "no courtesy delay is spent once offline is known",
        "took %.2fs for 50 calls at a 0.05s delay (would be ~2.45s unfixed)" % elapsed)
+
+
+# Offsets on the injected clock. The wait length is the builder's, so these bracket it rather
+# than name it: INSIDE_WAIT must sit under any short wait, AFTER_WAIT over it.
+INSIDE_WAIT = 1.0
+AFTER_WAIT = 600.0
+
+
+def _offline_is_retried_after_the_wait() -> None:
+    """A `Market` that went offline fails fast inside the wait and asks again after it.
+
+    The inside-wait lines are green on the old code on purpose: they pin the behaviour the
+    fix must keep (a batch never sleeps the courtesy delay once per URL). Only the after-wait
+    lines are red there, because the old latch never lets go."""
+    clock = [1_000_000.0]
+    calls = []
+    network_up = [False]
+    payload = {"results": [{"productId": 1}]}
+
+    def fetcher(url):
+        calls.append(url)
+        if not network_up[0]:
+            raise pricehistory.Offline("simulated: Errno 8, no socket ever connects")
+        return payload
+
+    market = pricehistory.Market(
+        cache_dir=None, fetcher=fetcher, courtesy_delay=0.05, now=lambda: clock[0]
+    )
+    try:
+        market.get("https://example.test/first", "slug-first", 3600.0)
+        ok(False, "the first fetch raises Offline", "returned instead of raising")
+    except pricehistory.Offline:
+        ok(True, "the first fetch raises Offline")
+
+    clock[0] += INSIDE_WAIT
+    start = time.time()
+    refusals = 0
+    for i in range(20):
+        try:
+            market.get("https://example.test/%d" % i, "slug-%d" % i, 3600.0)
+        except pricehistory.Offline:
+            refusals += 1
+    elapsed = time.time() - start
+    ok(refusals == 20, "inside the wait every get still raises Offline", "got %d of 20" % refusals)
+    ok(len(calls) == 1, "inside the wait no new request is made",
+       "called %d times, want 1" % len(calls))
+    ok(elapsed < 0.5, "inside the wait no courtesy delay is spent per URL",
+       "took %.2fs for 20 calls at a 0.05s delay (would be ~1.0s if it slept)" % elapsed)
+
+    network_up[0] = True
+    clock[0] += AFTER_WAIT
+    answer, detail = None, ""
+    try:
+        answer = market.get("https://example.test/after", "slug-after", 3600.0)
+    except pricehistory.Offline as exc:
+        detail = "still raised Offline %.0fs after the failure: %s" % (AFTER_WAIT, exc)
+    ok(answer == payload, "after the wait a get asks the network again and answers", detail)
+    ok(len(calls) == 2, "after the wait exactly one new request is made",
+       "called %d times, want 2" % len(calls))
 
 
 def _plain_unreachable_is_not_sticky() -> None:
@@ -155,6 +217,7 @@ def _read_timeout_does_not_latch() -> None:
 
 def main() -> int:
     _offline_only_fetches_once()
+    _offline_is_retried_after_the_wait()
     _plain_unreachable_is_not_sticky()
     _read_timeout_does_not_latch()
     print(f"\n{PASS} passed, {FAIL} failed")
