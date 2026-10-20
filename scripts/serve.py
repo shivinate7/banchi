@@ -1511,11 +1511,11 @@ class Supervisor:
         fires it (idle, cap or skip) sets `released`, so the build goes with the restart and does
         not start a second wait. `released` ends when nothing is pending (`_end_hold`).
         """
+        if self.released or ports.is_linked_worktree(self.root):
+            return False  # the owner's idle rule covers only the primary's server (D176)
         state = state_dir(self.root)
         now = time.time()
         reason = None
-        if self.released:
-            return False
         try:
             armed = os.path.getmtime(state / SKIP_FILE)
         except OSError:
@@ -2131,9 +2131,10 @@ def restart_target(root: Path = REPO_ROOT) -> Path:
 def restart_now(root: Path) -> bool:
     """Write the skip file, but only while a restart or build waits; True when it was written.
 
-    A skip armed while nothing waits would skip a LATER hold the owner never cleared.
+    A skip armed while nothing waits would skip a LATER hold the owner never cleared. A
+    `waiting` file left by a dead supervisor is not a wait.
     """
-    if read_waiting_since(root) is None:
+    if supervisor_pid(root) is None or read_waiting_since(root) is None:
         return False
     state_dir(root).mkdir(parents=True, exist_ok=True)
     (state_dir(root) / SKIP_FILE).write_text("", "utf-8")

@@ -142,6 +142,7 @@ The owner ruled that a main move never restarts the server or rebuilds the app w
   recovers.
 - **Never held:** a crash respawn, `stop()`, and `make up ARGS=--restart`. The D158 check stays first in
   `_restart_for`. `make status` shows a waiting restart.
+- **A linked worktree never holds** (`ports.is_linked_worktree`). The owner's idle rule covers only the primary's server.
 
 ### What it must never do, each one a refusal with a self-test arm
 
