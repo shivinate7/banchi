@@ -954,7 +954,7 @@ _INSIDE_WAIT = 1.0
 _AFTER_WAIT = 600.0
 
 
-class _Catalogue:
+class _Catalog:
     """A scripted tcgcsv for Riftbound, handed to `Market` as its fetcher. `sets` maps a set
     name to `(groupId, number, productId, photo)`. `listed` names the sets the groups list
     holds. While `failure` is an exception class, every ask raises it. `calls` holds every URL
@@ -985,7 +985,7 @@ class _Catalogue:
 
 
 @contextlib.contextmanager
-def _stock_on_a_clock(catalogue, cache_dir=None):
+def _stock_on_a_clock(catalog, cache_dir=None):
     """`(clock, images)`: a `StockImages` whose `time` and whose `Market` read one fake clock.
     `Market` gets `courtesy_delay=0.0`, so no case sleeps."""
     clock = _FakeTime()
@@ -994,7 +994,7 @@ def _stock_on_a_clock(catalogue, cache_dir=None):
     try:
         yield clock, stockimages.StockImages(
             market=pricehistory.Market(
-                cache_dir=cache_dir, fetcher=catalogue, courtesy_delay=0.0, now=clock.time
+                cache_dir=cache_dir, fetcher=catalog, courtesy_delay=0.0, now=clock.time
             )
         )
     finally:
@@ -1022,19 +1022,19 @@ def check_stock_images_stale_groups_list_is_a_failure(checks: Checks) -> None:
     def story(failure) -> None:
         label = failure.__name__
         with tempfile.TemporaryDirectory() as tmp:
-            catalogue = _Catalogue({
+            catalog = _Catalog({
                 "Origins": (24000, "001/100", 111, _OTHER_PHOTO),
                 "Unleashed": (24999, _NUMBER, 685007, _PHOTO),
             })
-            catalogue.listed = ["Origins"]
-            with _stock_on_a_clock(catalogue, tmp) as (clock, images):
+            catalog.listed = ["Origins"]
+            with _stock_on_a_clock(catalog, tmp) as (clock, images):
                 seed = pricehistory.Market(
-                    cache_dir=tmp, fetcher=catalogue, courtesy_delay=0.0, now=clock.time
+                    cache_dir=tmp, fetcher=catalog, courtesy_delay=0.0, now=clock.time
                 )
                 seed.groups(seed.category_id(_RIFTBOUND_LINE))
                 clock.now += pricehistory.GROUPS_TTL_SECONDS + 3600.0
-                catalogue.listed = ["Origins", "Unleashed"]
-                catalogue.failure = failure
+                catalog.listed = ["Origins", "Unleashed"]
+                catalog.failure = failure
 
                 _warm(images, _PAIR)
                 checks.equal(
@@ -1046,7 +1046,7 @@ def check_stock_images_stale_groups_list_is_a_failure(checks: Checks) -> None:
                     f"{label}: and the group is still pending, never a stored final 'no photo'",
                 )
 
-                catalogue.failure = None
+                catalog.failure = None
                 clock.now += _AFTER_WAIT
                 _warm(images, _PAIR)
                 for _ in range(100):
@@ -1069,24 +1069,24 @@ def check_stock_images_failed_pair_is_not_refetched_inside_the_wait(checks: Chec
     checks.note("")
     checks.note("STOCK IMAGES BACK-OFF — a failed pair is left alone for the wait, then asked again")
 
-    catalogue = _Catalogue({"Unleashed": (24999, _NUMBER, 685007, _PHOTO)}, failure=pricehistory.Unreachable)
-    with _stock_on_a_clock(catalogue) as (clock, images):
+    catalog = _Catalog({"Unleashed": (24999, _NUMBER, 685007, _PHOTO)}, failure=pricehistory.Unreachable)
+    with _stock_on_a_clock(catalog) as (clock, images):
         _warm(images, _PAIR)
-        first = len(catalogue.calls)
+        first = len(catalog.calls)
         checks.ok(first >= 1, "the first warm asks the catalogue", f"asked {first} times")
 
         clock.now += _INSIDE_WAIT
         _warm(images, _PAIR)
         _warm(images, _PAIR)
-        checks.equal(len(catalogue.calls), first, "inside the wait a second and a third warm make no request")
+        checks.equal(len(catalog.calls), first, "inside the wait a second and a third warm make no request")
 
         clock.now += _AFTER_WAIT
         _warm(images, _PAIR)
-        second = len(catalogue.calls)
+        second = len(catalog.calls)
         checks.ok(second > first, "after the wait a warm asks again", f"asked {second} times in all, {first} before")
 
         _warm(images, _PAIR)
-        checks.equal(len(catalogue.calls), second, "and that second failure earns a wait of its own")
+        checks.equal(len(catalog.calls), second, "and that second failure earns a wait of its own")
 
 
 def check_stock_images_failed_refresh_keeps_the_good_index(checks: Checks) -> None:
@@ -1098,16 +1098,16 @@ def check_stock_images_failed_refresh_keeps_the_good_index(checks: Checks) -> No
 
     for failure in (pricehistory.Unreachable, pricehistory.Offline):
         label = failure.__name__
-        catalogue = _Catalogue({"Unleashed": (24999, _NUMBER, 685007, _PHOTO)})
-        with _stock_on_a_clock(catalogue) as (clock, images):
+        catalog = _Catalog({"Unleashed": (24999, _NUMBER, 685007, _PHOTO)})
+        with _stock_on_a_clock(catalog) as (clock, images):
             _warm(images, _PAIR)
             checks.equal(images.url_for(*_PAIR, _NUMBER), _PHOTO, f"{label}: with the catalogue up the photo lands")
 
             clock.now += stockimages.TCGCSV_TTL_SECONDS + 1.0
-            catalogue.failure = failure
-            asked = len(catalogue.calls)
+            catalog.failure = failure
+            asked = len(catalog.calls)
             _warm(images, _PAIR)
-            checks.ok(len(catalogue.calls) > asked, f"{label}: the expired pair is refreshed, and the refresh fails")
+            checks.ok(len(catalog.calls) > asked, f"{label}: the expired pair is refreshed, and the refresh fails")
             checks.equal(
                 images.url_for(*_PAIR, _NUMBER), _PHOTO,
                 f"{label}: a failed refresh keeps serving the last good photo",
@@ -1126,16 +1126,16 @@ def check_stock_images_warm_until_known_skips_a_backing_off_pair(checks: Checks)
     checks.note("")
     checks.note("STOCK IMAGES WARM UNTIL KNOWN — passes over a backing-off pair, never raises on a cold failure")
 
-    catalogue = _Catalogue(
+    catalog = _Catalog(
         {
             "Unleashed": (24999, _NUMBER, 685007, _PHOTO),
             "Origins": (24000, "001/100", 111, _OTHER_PHOTO),
         },
         failure=pricehistory.Unreachable,
     )
-    with _stock_on_a_clock(catalogue) as (clock, images):
+    with _stock_on_a_clock(catalog) as (clock, images):
         _warm(images, _PAIR)
-        catalogue.failure = None
+        catalog.failure = None
         clock.now += _INSIDE_WAIT
         images._warm_until_known("riftbound", ["Unleashed", "Origins"])
         checks.ok(
@@ -1149,7 +1149,7 @@ def check_stock_images_warm_until_known_skips_a_backing_off_pair(checks: Checks)
 
     # A fresh instance with nothing cached: the failure comes before any set is known, so the
     # pair ends with no cache entry at all.
-    cold = _Catalogue({"Unleashed": (24999, _NUMBER, 685007, _PHOTO)}, failure=pricehistory.Unreachable)
+    cold = _Catalog({"Unleashed": (24999, _NUMBER, 685007, _PHOTO)}, failure=pricehistory.Unreachable)
     with _stock_on_a_clock(cold) as (_, images):
         try:
             images._warm_until_known("riftbound", ["Unleashed"])

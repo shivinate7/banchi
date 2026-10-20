@@ -500,7 +500,7 @@ def _exhausted_retries_fail_fast_for_the_wait() -> None:
        "made %d attempts, paused %r" % (len(net.timeouts), net.pauses))
 
 
-def _stale_catalogue_list_is_refetched_after_the_wait() -> None:
+def _stale_catalog_list_is_refetched_after_the_wait() -> None:
     """A groups list on disk older than a day lacks a set released since. The host fails, so
     `get` serves the stale list (one request, not one per card). Past the wait it must ask
     again, though `_attempted` already holds the slug: that latch bounds requests inside a
@@ -568,7 +568,7 @@ def main() -> int:
     _retry_wait_is_capped()
     _retry_time_is_bounded()
     _exhausted_retries_fail_fast_for_the_wait()
-    _stale_catalogue_list_is_refetched_after_the_wait()
+    _stale_catalog_list_is_refetched_after_the_wait()
     _offline_wait_fits_the_client_window()
     print(f"\n{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0
