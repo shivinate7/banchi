@@ -231,7 +231,7 @@ The store gets three tables (D88, SQLite and one transaction per write):
 
 `store/slabs.py` holds them. The rules the build chose:
 
-- A slab added again keeps its first added date.
+- A slab added again keeps its first added date, profile, identity and subgrades.
 - A second snapshot on one day replaces that day's row.
 - A sale that two slabs read is one row, linked to both.
 - Money is stored as text. Step 3 converts Card Ladder's numbers at the route.
@@ -250,6 +250,9 @@ Kind: build. Platform: macOS, over the capture server.
    Card Ladder's.
 2. The three store tables and their writes.
 3. Routes for add, list, detail and sweep, with client functions in `app/src/server.ts`.
+   A failed read writes no snapshot: a same-day snapshot replaces every field, so a failed call
+   stored as empty would erase a good value. The store replaces a re-read sale whole, so the
+   route merges the new read into the stored sale first, and fields only 3.3 returns are kept. Card Ladder's numbers become text money at the route.
 4. The `#/slabs` screen, built on `<Page>` (D275, every screen inherits the page scaffold),
    from section 4. It waits on the kit lane in 4.7. The client's login errors name a Google host;
    the screen shows them as a sentence with no host name (D196, no user-visible string names a decision).
