@@ -225,7 +225,8 @@ The store gets three tables (D88, SQLite and one transaction per write):
 
 - `slabs`: cert, grader, `profileId`, identity, subgrades, and the date the owner added it.
 - `slab_snapshots`: one row per slab per day. It holds both values and their confidence, the
-  last sale, the population at grade, the gem rate and the sales speed per window.
+  last sale, the population at grade, the gem rate, the sales speed per window and the grade
+  ladder from that read. The detail shows the newest snapshot's ladder.
 - `slab_sales`: each sale seen, keyed by the sale `id`. A sale Card Ladder later drops stays
   here.
 
@@ -252,6 +253,8 @@ Kind: build. Platform: macOS, over the capture server.
    Card Ladder's.
 2. The three store tables and their writes.
 3. Routes for add, list, detail and sweep, with client functions in `app/src/server.ts`.
+   Add, list and detail are built: `POST /slabs`, `GET /slabs`, `GET /slabs/<grader>/<cert>`,
+   with one Card Ladder client per server process. The sweep route waits for the owner's word.
    A failed read writes no snapshot: a same-day snapshot replaces every field, so a failed call
    stored as empty would erase a good value. The store replaces a re-read sale whole, so the
    route merges the new read into the stored sale first, and fields only 3.3 returns are kept. Card Ladder's numbers become text money at the route. The store refuses a sale date that is
