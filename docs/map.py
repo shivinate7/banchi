@@ -5442,6 +5442,15 @@ COMPONENTS = [
         "governed_by": ["D16"],
     },
     {
+        "path": "docs/specs/home-assistant.md",
+        "status": "tbd",
+        "does": "PROPOSAL, nothing built: the home tier. The always-on HA Green, its 2 TB drive, "
+                "the UniFi network and a possible Mac Studio, set against the problems banchi has "
+                "from living on one Mac. Six roles: storage tier, fetch tier and cache, scheduler, "
+                "standby read copy, front door, Studio. Owner rulings, open questions, what not to do.",
+        "governed_by": ["D88", "D89", "D104", "D166", "D91", "D301", "D176", "D42"],
+    },
+    {
         "path": "fixtures/",
         "status": "built",
         "does": "real TCGplayer exports for three product lines — Pokemon (SV09), Riftbound "
