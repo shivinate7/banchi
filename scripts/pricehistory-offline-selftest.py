@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""`pipeline/pricehistory.py` retries each network call through one home, and pauses a host only
-after a run of failures. Proved against a scripted `urlopen` and one fake clock: no network, and
-no sleep spent for real.
+"""`pipeline/pricehistory.py` retries each network call through one home, and a host that lost a
+run of calls gets one attempt per call. Proved against a scripted `urlopen` and one fake clock:
+no network, and no sleep spent for real.
 
-Protects: The price-history market stops asking a host or a URL that is down, and never drops a healthy product because another product had a bad answer.
+Protects: The price-history market sends one attempt per call to a host that keeps failing, never refuses a call unsent, and never drops a healthy product because another product had a bad answer.
 Governs: D278
 
 WHAT THIS PROVES. Measured on a real demo-mirror recording: `GET /pipeline/runs/<name>/trends`
@@ -11,14 +11,14 @@ over 387 SKUs took 102.2s under the recorder's offline network guard — `cProfi
 `time.sleep` (95.85s of it, 613 calls) as the cause. A request that CANNOT succeed (no socket
 connects, `Offline`) was retried, and re-slept for, once per distinct (product, range) pair.
 
-Fixed: a host that fails `PAUSE_AFTER_FAILURES` times in a row, each on a different URL, is refused
-for `OFFLINE_WAIT_SECONDS`. Each refused call raises `Unreachable` with no request and no courtesy
-delay. One failure pauses nothing. A URL that just lost its retries is not asked again for
-`OFFLINE_WAIT_SECONDS` (`_a_lost_url_is_not_asked_again_inside_the_wait`), so repeats on one URL
-cost one call's retries and pause no host. The host pause is per host and the URL wait is per URL.
-Both are shared by every `Market` in the process: a dead host blinds no other host, and a `Market`
-built after the failures is refused too (`_a_pause_is_shared_by_every_market`). The host is asked
-again after the wait (`_paused_host_is_asked_again_after_the_wait`).
+Fixed (owner ruling: a call is never refused unsent): a host that loses `PAUSE_AFTER_FAILURES`
+calls in a row is degraded. Each later call to it makes exactly ONE attempt, with no retry and no
+pause, and still raises `Unreachable` if that attempt fails. Any success resets the count
+(`_a_degraded_host_that_answers_is_reset`), and nothing waits on a clock. One failure degrades
+nothing. A lost URL is asked again in full (`_a_lost_url_is_asked_again_and_never_refused`). The count
+is per host and shared by every `Market` in the process: a dead host degrades no other host, and a
+`Market` built after the failures is asked once too (`_a_degraded_host_is_shared_by_every_market`).
+Whether a repeat of ONE URL counts toward the degrade is not ruled, so no case here pins it.
 
 A READ TIMEOUT IS NOT A CONNECT FAILURE. `fetch_json` draws the line where its docstring says: a
 connection that opened and then stalled reading the body is a plain, non-sticky `Unreachable`
@@ -40,14 +40,13 @@ it replaced (`REQUEST_TIMEOUT_SECONDS`). A retry is made only when the time spen
 plus the attempt's timeout still fits, so a `Retry-After` that does not fit is not taken and the
 call gives up. The `_net` cases replace that clock, `_sleep` and `urlopen` with one fake clock,
 and hand the same clock to every `Market` as `now`. After `PAUSE_AFTER_FAILURES` failures in a
-row, `fetch_json` refuses that host for `OFFLINE_WAIT_SECONDS` with no request: 60 gets on one
-503 host cost three products of three attempts each, then nothing. A 404 is one product's answer
-and never pauses the rest. The client re-asks for about 31 s (`SKU_PHOTO_BACKOFF_MS` in the app's
-`server.ts`), so the wait stays inside that window.
+row, `fetch_json` asks that host once per call: 60 gets on one 503 host cost three products of
+three attempts each, then one attempt per get. A 404 is one product's answer and never degrades
+the rest.
 
-The pause state is module-level: the host pause is keyed by host (`urlsplit(url).netloc`), the URL
-wait by full URL. The runner clears both before every case with `_clear_host_pauses`. `_fetch` and
-`_net` clear them too, so one scenario never inherits another scenario's failures.
+The failure count is module-level, keyed by host (`urlsplit(url).netloc`). The runner clears it
+before every case with `_clear_host_pauses`. `_fetch` and `_net` clear it too, so one scenario
+never inherits another scenario's failures.
 """
 
 from __future__ import annotations
@@ -131,8 +130,9 @@ def _contract_names() -> None:
 
 def _offline_only_fetches_once() -> None:
     """A host that never connects, through the REAL fetch_json. The first PAUSE_AFTER distinct URLs
-    each lose their retries, then the host is paused: the other gets make no request. The courtesy
-    delay is recorded rather than refused, so a paused get that still sleeps shows up as a count."""
+    each lose their retries, then the host is degraded: every later get makes ONE attempt, none is
+    refused unsent, and none takes a retry pause. The courtesy delay is recorded rather than refused
+    and is not asserted: whether a degraded get still pays it is the owner's to rule."""
     urls = [_u(HOST_A, "offline-%d" % i) for i in range(50)]
     courtesy = []
     with _net(_by_url(lambda url: "down")) as net, contextlib.redirect_stderr(io.StringIO()), \
@@ -144,21 +144,22 @@ def _offline_only_fetches_once() -> None:
                 market.get(url, "slug-%d" % i, 3600.0)
             except pricehistory.Unreachable:
                 refusals += 1
+    expected = PAUSE_AFTER * ATTEMPTS_PER_CALL + (len(urls) - PAUSE_AFTER)
     ok(refusals == 50, "every call still raises Unreachable", "got %d of 50" % refusals)
-    ok(len(net.urls) == PAUSE_AFTER * ATTEMPTS_PER_CALL,
-       "the gets after the pause make no request: %d attempts in all, not a burst per URL"
-       % (PAUSE_AFTER * ATTEMPTS_PER_CALL),
+    ok(len(net.urls) == expected,
+       "the gets after the third failure make one attempt each: %d attempts in all, none refused unsent"
+       % expected,
        "made %d attempts" % len(net.urls))
-    ok(len(courtesy) == PAUSE_AFTER - 1,
-       "a paused get spends no courtesy delay: only the %d gets that reached the network sleep"
-       % (PAUSE_AFTER - 1),
-       "slept %d times" % len(courtesy))
+    ok(len(net.pauses) == PAUSE_AFTER * len(pricehistory.RETRY_PAUSES),
+       "a degraded get takes no retry pause: only the first %d gets pause between attempts" % PAUSE_AFTER,
+       "took %d pauses" % len(net.pauses))
 
 
-def _offline_is_retried_after_the_wait() -> None:
+def _offline_host_answers_the_moment_it_is_up() -> None:
     """The Offline form of case 9, through a Market and the real fetch_json. Three distinct URLs
-    that never connect pause the host. A get inside the wait makes no request. After the wait,
-    with the network up, a get asks the host again and answers."""
+    that never connect degrade the host. A get while it is down makes exactly one attempt and
+    raises Unreachable. The moment the network is up, with no time passed, the next get is asked
+    once and answers: nothing waits."""
     up = [False]
     with _net(_by_url(lambda url: None if up[0] else "down")) as net, \
             contextlib.redirect_stderr(io.StringIO()):
@@ -168,17 +169,15 @@ def _offline_is_retried_after_the_wait() -> None:
         ok(len(net.urls) == PAUSE_AFTER * ATTEMPTS_PER_CALL,
            "three distinct URLs that never connect each lose their retries",
            "made %d attempts" % len(net.urls))
-        net.clock[0] += INSIDE_WAIT
         before = len(net.urls)
         inside = _outcome(lambda: market.get(_u(HOST_A, "inside"), "slug-inside", 3600.0))
-        ok(isinstance(inside, pricehistory.Unreachable) and len(net.urls) == before,
-           "inside the wait a get raises Unreachable with no request",
+        ok(isinstance(inside, pricehistory.Unreachable) and len(net.urls) - before == 1,
+           "a get on the degraded host raises Unreachable after exactly one attempt",
            "made %d attempts, got %r" % (len(net.urls) - before, inside))
         up[0] = True
-        net.clock[0] += AFTER_WAIT
         before = len(net.urls)
         answer = _outcome(lambda: market.get(_u(HOST_A, "after"), "slug-after", 3600.0))
-    ok(answer == PAYLOAD, "after the wait a get asks the network again and answers",
+    ok(answer == PAYLOAD, "with the network up the very next get asks the host and answers",
        "got %r" % (answer,))
     ok(len(net.urls) - before == 1, "...with exactly one new request",
        "made %d" % (len(net.urls) - before))
@@ -443,9 +442,9 @@ def _retry_time_is_bounded() -> None:
        "made %d attempts, got %r" % (len(net.timeouts), outcome))
 
 
-def _third_failure_pauses_the_host() -> None:
+def _third_failure_degrades_the_host() -> None:
     """Two distinct URLs on host A lose their retries. A third is still asked and loses its own.
-    A fourth, distinct, gets no request."""
+    A fourth, distinct, is asked ONCE: no retry, no pause, and never refused unsent."""
     with _net(_by_url(lambda url: 503)) as net, contextlib.redirect_stderr(io.StringIO()):
         for name in ("p0", "p1"):
             _call(_u(HOST_A, name))
@@ -456,57 +455,53 @@ def _third_failure_pauses_the_host() -> None:
         ok(len(net.urls) - before == ATTEMPTS_PER_CALL and _plain_unreachable(third),
            "a third distinct URL on host A is still asked, and loses its retries",
            "made %d attempts, got %r" % (len(net.urls) - before, third))
-        before = len(net.urls)
+        before, slept = len(net.urls), len(net.pauses)
         fourth = _call(_u(HOST_A, "p3"))
-    ok(len(net.urls) == before and isinstance(fourth, pricehistory.Unreachable),
-       "the third failure pauses host A: a fourth distinct URL gets no request",
-       "made %d attempts, got %r" % (len(net.urls) - before, fourth))
+    ok(len(net.urls) - before == 1 and len(net.pauses) == slept and isinstance(fourth, pricehistory.Unreachable),
+       "the third failure degrades host A: a fourth distinct URL is asked exactly once, with no pause",
+       "made %d attempts and %d pauses, got %r" % (len(net.urls) - before, len(net.pauses) - slept, fourth))
 
 
-def _one_url_failing_is_not_a_run() -> None:
-    """Repeats on one URL cost one call's retries, so one URL is never a run: host A stays open
-    to a different URL. The same URL is refused for the wait (`_a_lost_url_is_not_asked_again_inside_the_wait`)."""
+def _one_url_asked_again_is_asked_in_full() -> None:
+    """A URL that lost its retries has no wait: asked again, it gets all its attempts. Three calls
+    on one URL cost three calls' retries. Whether those three failures also degrade host A for a
+    DIFFERENT URL is not asserted: it turns on whether the count is per distinct URL, which the
+    owner has not ruled."""
     same = _u(HOST_A, "same")
     with _net(_by_url(lambda url: 503)) as net, contextlib.redirect_stderr(io.StringIO()):
         for _ in range(PAUSE_AFTER):
             _call(same)
-        ok(len(net.urls) == ATTEMPTS_PER_CALL,
-           "the same URL lost %d times in a row costs one call's retries: %d attempts in all" % (PAUSE_AFTER, ATTEMPTS_PER_CALL),
-           "made %d attempts" % len(net.urls))
-        before = len(net.urls)
-        other = _call(_u(HOST_A, "other"))
-    ok(len(net.urls) - before == ATTEMPTS_PER_CALL and _plain_unreachable(other),
-       "host A is not paused: a different URL is asked after that",
-       "made %d attempts, got %r" % (len(net.urls) - before, other))
+    ok(len(net.urls) == PAUSE_AFTER * ATTEMPTS_PER_CALL,
+       "the same URL lost %d times in a row is asked in full each time: %d attempts in all"
+       % (PAUSE_AFTER, PAUSE_AFTER * ATTEMPTS_PER_CALL),
+       "made %d attempts" % len(net.urls))
 
 
-def _a_lost_url_is_not_asked_again_inside_the_wait() -> None:
-    """A URL that just lost its retries (Offline, or HTTP 503) is not asked again for
-    OFFLINE_WAIT_SECONDS. Ten `category_id` calls inside the wait cost one call's retries. Real
-    `fetch_json`, no `fetcher=`: `categories()` is not `catalog=True`, so no `_attempted` latch
-    can hide the count. Pinned process-wide, like the host pause: a `Market` built inside the wait
-    is refused too. Matters because `server/pipeline_routes.py` builds a `Market` per request, so a
-    per-`Market` wait would re-pay the retries on every request."""
+def _a_lost_url_is_asked_again_and_never_refused() -> None:
+    """A URL that just lost its retries (Offline, or HTTP 503) is asked again by the next call: no
+    call is refused unsent, however many times the same URL is lost. Ten `category_id` calls each
+    send at least one request, and the first sends all its attempts. How many the later ones send
+    (one, once the host is degraded, or all) turns on whether repeats of one URL count toward
+    the degrade, which the owner has not ruled, so only the floor is pinned. Real `fetch_json`, no
+    `fetcher=`: `categories()` is not `catalog=True`, so no `_attempted` latch can hide the count.
+    Process-wide: a `Market` built after the failures is asked too, because `server/pipeline_routes.py`
+    builds one per request."""
     for label, policy in (("Offline", lambda url: "down"), ("HTTP 503", lambda url: 503)):
         _fresh_hosts()
         with _net(_by_url(policy)) as net, contextlib.redirect_stderr(io.StringIO()):
             market = pricehistory.Market(cache_dir=None, courtesy_delay=0.0, now=lambda: net.clock[0])
-            outcomes = [_outcome(lambda market=market: market.category_id("Pokemon")) for _ in range(10)]
-            ok(net.clock[0] < pricehistory.OFFLINE_WAIT_SECONDS,
-               "%s: the ten calls all fall inside OFFLINE_WAIT_SECONDS" % label,
-               "clock at %.1fs" % net.clock[0])
-            ok(all(isinstance(o, pricehistory.Unreachable) for o in outcomes),
-               "%s: all ten calls still raise Unreachable" % label, "got %r" % (outcomes,))
-            ok(len(net.urls) == ATTEMPTS_PER_CALL,
-               "%s: ten calls inside the wait cost one call's retries: %d requests, not %d"
-               % (label, ATTEMPTS_PER_CALL, 10 * ATTEMPTS_PER_CALL),
-               "made %d requests" % len(net.urls))
-            net.clock[0] += AFTER_WAIT
-            before = len(net.urls)
-            _outcome(lambda market=market: market.category_id("Pokemon"))
-            ok(len(net.urls) - before == ATTEMPTS_PER_CALL,
-               "%s: after the wait the URL is asked again: %d new requests" % (label, ATTEMPTS_PER_CALL),
-               "made %d new requests" % (len(net.urls) - before))
+            outcomes, costs = [], []
+            for _ in range(10):
+                before = len(net.urls)
+                outcomes.append(_outcome(lambda market=market: market.category_id("Pokemon")))
+                costs.append(len(net.urls) - before)
+        ok(all(isinstance(o, pricehistory.Unreachable) for o in outcomes),
+           "%s: all ten calls still raise Unreachable" % label, "got %r" % (outcomes,))
+        ok(costs[0] == ATTEMPTS_PER_CALL,
+           "%s: the first call sends all %d attempts" % (label, ATTEMPTS_PER_CALL), "attempts per call %r" % (costs,))
+        ok(min(costs) >= 1,
+           "%s: no call of the ten is refused unsent: each sends at least one request" % label,
+           "attempts per call %r" % (costs,))
 
     _fresh_hosts()
     with _net(_by_url(lambda url: "down")) as net, contextlib.redirect_stderr(io.StringIO()):
@@ -514,10 +509,10 @@ def _a_lost_url_is_not_asked_again_inside_the_wait() -> None:
         _outcome(lambda: first.category_id("Pokemon"))
         before = len(net.urls)
         second = pricehistory.Market(cache_dir=None, courtesy_delay=0.0, now=lambda: net.clock[0])
-        refused = _outcome(lambda: second.category_id("Pokemon"))
-    ok(len(net.urls) == before and isinstance(refused, pricehistory.Unreachable),
-       "a fresh Market inside the wait makes no request: the URL wait is process-wide",
-       "made %d requests, got %r" % (len(net.urls) - before, refused))
+        asked = _outcome(lambda: second.category_id("Pokemon"))
+    ok(len(net.urls) - before >= 1 and isinstance(asked, pricehistory.Unreachable),
+       "a fresh Market after a lost URL still sends a request",
+       "made %d requests, got %r" % (len(net.urls) - before, asked))
 
     with _net(_by_url(lambda url: "down")) as net, contextlib.redirect_stderr(io.StringIO()):
         market = pricehistory.Market(cache_dir=None, courtesy_delay=0.0, now=lambda: net.clock[0])
@@ -526,14 +521,14 @@ def _a_lost_url_is_not_asked_again_inside_the_wait() -> None:
         before = len(net.urls)
         _outcome(lambda: market.category_id("Pokemon"))
     ok(len(net.urls) - before == ATTEMPTS_PER_CALL,
-       "clearing the host state lifts a URL's wait too: the next call asks again",
+       "clearing the host state resets the count: the next call retries in full",
        "made %d requests" % (len(net.urls) - before))
 
 
 def _a_success_resets_the_count() -> None:
     """Fail, fail, succeed, then fail, fail, fail. The success clears the count, so the third
-    failure after it is the sixth URL: that one is asked and loses, and the seventh gets no
-    request. Without the reset the pause would come at the fourth URL."""
+    failure after it is the sixth URL: that one is asked and loses, and the seventh is asked once.
+    Without the reset the host would degrade at the fourth URL."""
     plan = {"a1": 503, "a2": 503, "a3": None, "a4": 503, "a5": 503, "a6": 503, "a7": 503}
     names = ("a1", "a2", "a3", "a4", "a5", "a6", "a7")
     outcomes, cost = {}, {}
@@ -546,13 +541,13 @@ def _a_success_resets_the_count() -> None:
     ok(all(cost[n] == ATTEMPTS_PER_CALL for n in ("a1", "a2", "a4", "a5", "a6")),
        "a1, a2, a4, a5 and a6 are each asked: the success reset the count",
        "attempts per URL %r" % (cost,))
-    ok(cost["a7"] == 0, "a7 gets no request: host A paused on the third failure after the success",
+    ok(cost["a7"] == 1, "a7 is asked exactly once: host A degraded on the third failure after the success",
        "made %d attempts" % cost["a7"])
 
 
 def _a_plain_error_neither_counts_nor_resets() -> None:
     """Two lost calls, a plain 500 or 404, then a lost call. The 500 or 404 must neither count
-    nor reset: the third failure in a row is the 4th URL, so the 5th gets no request."""
+    nor reset: the third failure in a row is the 4th URL, so the 5th is asked once."""
     for mid in (500, 404):
         _fresh_hosts()
         plan = {"b1": 503, "b2": 503, "b3": mid, "b4": 503, "b5": 503}
@@ -565,8 +560,8 @@ def _a_plain_error_neither_counts_nor_resets() -> None:
             before = len(net.urls)
             _call(_u(HOST_A, "b5"))
             asked_b5 = len(net.urls) - before
-        ok(asked_b4 == ATTEMPTS_PER_CALL and asked_b5 == 0,
-           "HTTP %d between two 503s neither counts nor resets: the 4th URL is the third failure, the 5th gets no request" % mid,
+        ok(asked_b4 == ATTEMPTS_PER_CALL and asked_b5 == 1,
+           "HTTP %d between two 503s neither counts nor resets: the 4th URL is the third failure, the 5th is asked once" % mid,
            "attempts for b4 %d, for b5 %d" % (asked_b4, asked_b5))
 
 
@@ -600,46 +595,47 @@ def _a_plain_error_on_one_url_is_asked_again_each_call() -> None:
            "made %d requests" % len(net.urls))
 
 
-def _a_pause_is_shared_by_every_market() -> None:
+def _a_degraded_host_is_shared_by_every_market() -> None:
     with _net(_by_url(lambda url: 503)) as net, contextlib.redirect_stderr(io.StringIO()):
         first = pricehistory.Market(cache_dir=None, courtesy_delay=0.0, now=lambda: net.clock[0])
         for i in range(PAUSE_AFTER):
             _outcome(lambda i=i: first.get(_u(HOST_A, "m%d" % i), "slug-m%d" % i, 3600.0))
         before = len(net.urls)
-        paused = _call(_u(HOST_A, "m-paused"))
-        ok(len(net.urls) == before and isinstance(paused, pricehistory.Unreachable),
-           "host A is paused for the first Market: a fourth URL gets no request",
+        degraded = _call(_u(HOST_A, "m-degraded"))
+        ok(len(net.urls) - before == 1 and isinstance(degraded, pricehistory.Unreachable),
+           "host A is degraded for the first Market: a fourth URL is asked exactly once",
            "made %d attempts" % (len(net.urls) - before))
         second = pricehistory.Market(cache_dir=None, courtesy_delay=0.0, now=lambda: net.clock[0])
         before = len(net.urls)
         fresh = _outcome(lambda: second.get(_u(HOST_A, "m-fresh"), "slug-m-fresh", 3600.0))
-    ok(len(net.urls) == before and isinstance(fresh, pricehistory.Unreachable),
-       "a fresh Market shares the pause: its first get on host A makes no request",
+    ok(len(net.urls) - before == 1 and isinstance(fresh, pricehistory.Unreachable),
+       "a fresh Market shares the count: its first get on host A is asked exactly once",
        "made %d attempts" % (len(net.urls) - before))
 
 
-def _a_paused_host_does_not_pause_another() -> None:
-    with _net(_by_url(lambda url: 503 if _host_of(url) == HOST_A else None)) as net, \
-            contextlib.redirect_stderr(io.StringIO()):
+def _a_degraded_host_does_not_degrade_another() -> None:
+    """Both hosts answer 503 to everything, so a request count tells a degraded host (one attempt)
+    from a healthy one (all of them)."""
+    with _net(_by_url(lambda url: 503)) as net, contextlib.redirect_stderr(io.StringIO()):
         for i in range(PAUSE_AFTER):
             _call(_u(HOST_A, "x%d" % i))
         before = len(net.urls)
-        refused = _call(_u(HOST_A, "x-next"))
-        ok(len(net.urls) == before and isinstance(refused, pricehistory.Unreachable),
-           "host A is paused: its next URL gets no request",
-           "made %d attempts, got %r" % (len(net.urls) - before, refused))
+        once = _call(_u(HOST_A, "x-next"))
+        ok(len(net.urls) - before == 1 and isinstance(once, pricehistory.Unreachable),
+           "host A is degraded: its next URL is asked exactly once",
+           "made %d attempts, got %r" % (len(net.urls) - before, once))
         before = len(net.urls)
-        answered = _call(_u(HOST_B, "y1"))
-    ok(_u(HOST_B, "y1") in net.urls[before:] and answered == PAYLOAD,
-       "host B is still asked while host A is paused, and answers",
-       "got %r, asked %r" % (answered, net.urls[before:]))
+        _call(_u(HOST_B, "y1"))
+    ok(len(net.urls) - before == ATTEMPTS_PER_CALL and all(_host_of(u) == HOST_B for u in net.urls[before:]),
+       "host B is not degraded by host A: its first URL is asked in full, all %d attempts" % ATTEMPTS_PER_CALL,
+       "made %d attempts: %r" % (len(net.urls) - before, net.urls[before:]))
 
 
 def _a_product_that_loses_one_range_is_not_asked_for_the_rest() -> None:
     """A product adds at most one URL to a run: a reading over several ranges stops at the first
     range that loses its retries. Product 111 answers 503 on every range. Product 222, on the same
     host, must still be asked for all four ranges and served. Four ranges, the whole `RANGES`
-    tuple: with the default two, base never pauses the host and the 222 half proves nothing."""
+    tuple: with the default two, base never degrades the host and the 222 half proves nothing."""
     history_222 = {"result": [{
         "skuId": 222001, "variant": "Normal", "condition": "Near Mint", "language": "English",
         "totalQuantitySold": 2, "totalTransactionCount": 2,
@@ -676,12 +672,13 @@ def _a_product_that_loses_one_range_is_not_asked_for_the_rest() -> None:
        "readings %r" % (sorted(readings),))
 
 
-def _exhausted_retries_fail_fast_for_the_wait() -> None:
+def _exhausted_retries_fail_fast_once_degraded() -> None:
     """Sixty gets on one host that answers 503 or 429. The first PAUSE_AFTER distinct products
-    each lose their retries, then host A is paused and the other gets make no request. The counts
-    follow the constants: PAUSE_AFTER lost calls of ATTEMPTS_PER_CALL attempts, each call with
-    len(RETRY_PAUSES) pauses. A 404 is one product's answer and never pauses the rest."""
-    expected_attempts = PAUSE_AFTER * ATTEMPTS_PER_CALL
+    each lose their retries, then host A is degraded and each of the other gets makes ONE attempt
+    with no pause. The counts follow the constants: PAUSE_AFTER lost calls of ATTEMPTS_PER_CALL
+    attempts, each call with len(RETRY_PAUSES) pauses, then one attempt per get. A 404 is one
+    product's answer and never degrades the rest."""
+    expected_attempts = PAUSE_AFTER * ATTEMPTS_PER_CALL + (60 - PAUSE_AFTER)
     expected_pauses = PAUSE_AFTER * len(pricehistory.RETRY_PAUSES)
 
     def burst(code) -> None:
@@ -699,22 +696,22 @@ def _exhausted_retries_fail_fast_for_the_wait() -> None:
             ok(all(isinstance(f, pricehistory.Unreachable) for f in failures),
                "HTTP %d: all 60 gets still raise Unreachable" % code)
             ok(len(net.timeouts) == expected_attempts and len(net.pauses) == expected_pauses,
-               "HTTP %d: 60 gets cost %d attempts and %d pauses, then the host is paused"
-               % (code, expected_attempts, expected_pauses),
+               "HTTP %d: 60 gets cost %d attempts and %d pauses: the first %d retry, the other %d are asked once"
+               % (code, expected_attempts, expected_pauses, PAUSE_AFTER, 60 - PAUSE_AFTER),
                "made %d attempts and %d pauses (%.1fs)" % (len(net.timeouts), len(net.pauses), sum(net.pauses)))
 
-            net.clock[0] += INSIDE_WAIT
-            ask("slug-inside")
-            ok(len(net.timeouts) == expected_attempts, "HTTP %d: a get inside the wait makes no request" % code,
-               "made %d attempts" % len(net.timeouts))
+            before = len(net.timeouts)
+            ask("slug-more")
+            ok(len(net.timeouts) - before == 1, "HTTP %d: one more get on the degraded host is asked exactly once" % code,
+               "made %d attempts" % (len(net.timeouts) - before))
 
             net.up = True
-            net.clock[0] += AFTER_WAIT
+            before = len(net.timeouts)
             answer = ask("slug-after")
-            ok(answer == PAYLOAD, "HTTP %d: after the wait a get asks the host again and answers" % code,
+            ok(answer == PAYLOAD, "HTTP %d: with the host up the very next get asks it and answers" % code,
                "got %r" % (answer,))
-            ok(len(net.timeouts) == expected_attempts + 1, "HTTP %d: ...with exactly one new request" % code,
-               "made %d attempts" % len(net.timeouts))
+            ok(len(net.timeouts) - before == 1, "HTTP %d: ...with exactly one new request" % code,
+               "made %d attempts" % (len(net.timeouts) - before))
 
     for code in (503, 429):
         burst(code)
@@ -730,25 +727,30 @@ def _exhausted_retries_fail_fast_for_the_wait() -> None:
        "made %d attempts, paused %r" % (len(net.timeouts), net.pauses))
 
 
-def _paused_host_is_asked_again_after_the_wait() -> None:
-    """Inside the wait host A gets no request, though it answers 503 to every ask. After the wait,
-    with the host up, the next call is asked and answers."""
+def _a_degraded_host_that_answers_is_reset() -> None:
+    """Host A answers 503 to every ask and is degraded: it gets one attempt, never none. The moment
+    it answers, with no wait, the next call is asked once and succeeds. That success resets the
+    count, so a lost call after it gets all its attempts again."""
     up = [False]
     with _net(_by_url(lambda url: None if up[0] else 503)) as net, contextlib.redirect_stderr(io.StringIO()):
         for i in range(PAUSE_AFTER):
             _call(_u(HOST_A, "w%d" % i))
-        net.clock[0] += INSIDE_WAIT
         before = len(net.urls)
         inside = _call(_u(HOST_A, "w-inside"))
-        ok(len(net.urls) == before and isinstance(inside, pricehistory.Unreachable),
-           "host A is paused inside the wait: no request", "made %d attempts" % (len(net.urls) - before))
+        ok(len(net.urls) - before == 1 and isinstance(inside, pricehistory.Unreachable),
+           "host A is degraded: a get is asked exactly once", "made %d attempts" % (len(net.urls) - before))
         up[0] = True
-        net.clock[0] += AFTER_WAIT
         before = len(net.urls)
         after = _call(_u(HOST_A, "w-after"))
-    ok(after == PAYLOAD and len(net.urls) - before == 1,
-       "after the wait host A is asked again and answers",
-       "got %r after %d attempts" % (after, len(net.urls) - before))
+        ok(after == PAYLOAD and len(net.urls) - before == 1,
+           "once host A answers, the very next get is asked once and gets its answer",
+           "got %r after %d attempts" % (after, len(net.urls) - before))
+        up[0] = False
+        before = len(net.urls)
+        lost = _call(_u(HOST_A, "w-lost"))
+    ok(len(net.urls) - before == ATTEMPTS_PER_CALL and isinstance(lost, pricehistory.Unreachable),
+       "that success reset the count: the next lost call retries in full",
+       "made %d attempts, got %r" % (len(net.urls) - before, lost))
 
 
 def _stale_catalog_list_is_refetched_after_the_wait() -> None:
@@ -911,7 +913,7 @@ def _call(url: str):
 CASES = (
     _contract_names,
     _offline_only_fetches_once,
-    _offline_is_retried_after_the_wait,
+    _offline_host_answers_the_moment_it_is_up,
     _plain_unreachable_is_not_sticky,
     _a_503_on_one_host_does_not_refuse_another,
     _read_timeout_does_not_latch,
@@ -921,18 +923,18 @@ CASES = (
     _retry_wait_is_capped,
     _retry_after_sets_the_pause,
     _retry_time_is_bounded,
-    _third_failure_pauses_the_host,
-    _one_url_failing_is_not_a_run,
-    _a_lost_url_is_not_asked_again_inside_the_wait,
+    _third_failure_degrades_the_host,
+    _one_url_asked_again_is_asked_in_full,
+    _a_lost_url_is_asked_again_and_never_refused,
     _a_success_resets_the_count,
     _a_plain_error_neither_counts_nor_resets,
     _a_plain_500_is_one_request_and_never_counts,
     _a_plain_error_on_one_url_is_asked_again_each_call,
-    _a_pause_is_shared_by_every_market,
-    _a_paused_host_does_not_pause_another,
+    _a_degraded_host_is_shared_by_every_market,
+    _a_degraded_host_does_not_degrade_another,
     _a_product_that_loses_one_range_is_not_asked_for_the_rest,
-    _exhausted_retries_fail_fast_for_the_wait,
-    _paused_host_is_asked_again_after_the_wait,
+    _exhausted_retries_fail_fast_once_degraded,
+    _a_degraded_host_that_answers_is_reset,
     _stale_catalog_list_is_refetched_after_the_wait,
     _offline_wait_fits_the_client_window,
 )
