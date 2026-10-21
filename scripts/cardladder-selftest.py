@@ -16,8 +16,9 @@ this file tests:
     RateLimited              the "Too many requests" answer. Latches: every later call on the
                              same client raises it at once and sends nothing.
     TokenRejected            the token exchange failed. Its text names CARDLADDER_REFRESH_TOKEN.
-    Client(*, refresh_token, transport, clock, sleep)
+    Client(*, refresh_token, transport=None, clock, sleep)
         transport(method, url, headers, body: bytes) -> (status: int, body: bytes)
+        A Client given no transport sends through `net_transport`.
         clock() -> float seconds, sleep(seconds) -> None. Both injected, never `time`.
         .call(name, data) -> dict   POST https://us-central1-cardladder-71d53.cloudfunctions.net/<name>
                                     with JSON {"data": data} and Authorization: Bearer <id_token>.
@@ -47,6 +48,24 @@ this file tests:
         index_from_description(client, description)
                                                 httpIndexFromDescription  {description}
         A grader of bgs or bvg goes out as beckett. psa, sgc, cgc and beckett go out as given.
+    net_transport(method, url, headers, body: bytes) -> (status: int, body: bytes)
+                             The default transport, built on the one retry home (`pipeline/net.py`,
+                             every network call retries through one method). It calls `net.open` AS A MODULE
+                             ATTRIBUTE, looked up at each call (`from pipeline import net`, then
+                             `net.open(...)`): the net cases swap that attribute for a spy, then run the
+                             real `net.open` on its `opener`, `clock` and `sleep` seams. Every call
+                             passes method=<the method>, data=<body>, headers=<headers>,
+                             idempotent=False and follow_redirects=False, each as a keyword. It returns
+                             the status and body of ANY HTTP answer, a 429 or a 5xx included, because
+                             the Client reads the status itself. net.Offline and net.Dropped may leave
+                             it: `Client.send` turns them into a CardLadderError.
+        idempotent=False: a 429 or a 5xx answer is sent once and read as it came. Only a connect that
+        never opened may be sent again (`net.open` decides, and the cases do not pin the count).
+        follow_redirects=False: a 3xx is an answer, not followed, so no header or body goes to a
+        second host.
+        A Google 400 on the token exchange is TokenRejected, and its text says to copy
+        CARDLADDER_REFRESH_TOKEN again. A Google 429 is a CardLadderError that names
+        securetoken.googleapis.com, that is not RateLimited, and that does not latch the client.
 
 Token exchange: POST https://securetoken.googleapis.com/v1/token?key=<public key>, the refresh
 token in the BODY only (form or JSON, with grant_type=refresh_token). The answer is Google's:
@@ -69,10 +88,12 @@ from __future__ import annotations
 import builtins
 import contextlib
 import email.message
+import errno
 import io
 import json
 import logging
 import os
+import re
 import socket
 import sys
 import threading
@@ -80,13 +101,14 @@ import time
 import traceback
 import urllib.error
 import urllib.parse
+import urllib.request
 from pathlib import Path
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from pipeline import pricehistory  # noqa: E402 - the retry home's error classes
+from pipeline import net, pricehistory  # noqa: E402 - the retry home and its error classes
 
 PASS = 0
 FAIL = 0
@@ -874,10 +896,379 @@ def case_send_checks_the_callable(cl) -> None:
     ok(len(w.callable_requests()) == before + 1, "send of an allowed callable URL reaches the transport")
 
 
+# 14 ------------------------------------------------------------------------------------
+# The default transport, built on net.open, the one retry home (every network call retries through one method).
+class _Resp(io.BytesIO):
+    """What urllib's opener returns for a 2xx."""
+
+    status = 200
+    headers = None
+
+
+class NetWorld(World):
+    """A World behind the real `net.open`, for a Client built with no transport.
+
+    `through()` swaps `pipeline.net.open` for a spy that records the keywords the client passed, then
+    runs the REAL `net.open` (its retry rule, its reading of a status) on this world's `opener`,
+    `clock` and `sleep`. Nothing reaches a socket.
+
+    opens       one per net.open call the client made: SimpleNamespace(url, kw), kw as passed.
+    attempts    one per opener call, the urllib Request each time: every attempt net.open made.
+    wire        one per request a host received: host, url, lowercase headers, body. A request
+                refused at connect never gets here. A redirect that was followed does.
+    net_sleeps  the pauses net.open took between attempts.
+    plan        plan(world, k, request) -> None (the World answers), an exception (raised by the
+                opener, before anything is sent) or (status, body[, headers]) (a canned answer).
+                k counts the opener calls so far, this one included.
+    """
+
+    def __init__(self, **kw) -> None:
+        super().__init__(**kw)
+        self.opens: list = []
+        self.attempts: list = []
+        self.wire: list = []
+        self.net_sleeps: list = []
+        self.plan = None
+        self.follow = True
+
+    def net_sleep(self, seconds: float) -> None:
+        self.net_sleeps.append(seconds)
+        self.sleep(seconds)
+
+    def cl_attempts(self) -> int:
+        return sum(1 for r in self.attempts if CF_HOST in r.full_url)
+
+    def opener(self, req, timeout):
+        self.attempts.append(req)
+        return self._serve(req)
+
+    def _serve(self, req):
+        reply = self.plan(self, len(self.attempts), req) if self.plan else None
+        if isinstance(reply, BaseException):
+            raise reply
+        headers = dict(req.header_items())
+        host = urllib.parse.urlsplit(req.full_url).hostname
+        self.wire.append(SimpleNamespace(
+            host=host, url=req.full_url, body=req.data or b"",
+            headers={k.lower(): v for k, v in headers.items()}))
+        if reply is None:
+            if host in (CF_HOST, GOOGLE_HOST):
+                reply = self.transport(req.get_method(), req.full_url, headers, req.data or b"")
+            else:
+                reply = (200, b"{}")  # some other host: it answers anything
+        status, body = reply[0], reply[1]
+        hdrs = email.message.Message()
+        for k, v in (reply[2] if len(reply) > 2 and reply[2] else {}).items():
+            hdrs[k] = v
+        if 300 <= status < 400 and self.follow and hdrs.get("Location"):
+            # What urllib's own redirect handler does, and the guard in net.open's default opener
+            # is not here: ask the new URL with the same headers, and with the body on 307 and 308.
+            keep = status in (307, 308)
+            return self._serve(urllib.request.Request(
+                urllib.parse.urljoin(req.full_url, hdrs["Location"]), data=req.data if keep else None,
+                headers=headers, method=req.get_method() if keep else "GET"))
+        if status >= 300:  # urllib raises for a 4xx, a 5xx and a 3xx it does not follow
+            raise urllib.error.HTTPError(req.full_url, status, "HTTP %d" % status, hdrs, io.BytesIO(body))
+        resp = _Resp(body)
+        resp.status, resp.headers = status, hdrs
+        return resp
+
+    @contextlib.contextmanager
+    def through(self):
+        real = net.open
+
+        def spy(url, **kw):
+            self.opens.append(SimpleNamespace(url=url, kw=dict(kw)))
+            self.follow = kw.get("follow_redirects", True)
+            kw.update(opener=self.opener, clock=self.clock, sleep=self.net_sleep)
+            return real(url, **kw)
+
+        net._clear_hosts()
+        net.open = spy
+        try:
+            yield self
+        finally:
+            net.open = real
+            net._clear_hosts()
+
+    def default_client(self, cl):
+        """A Client with no transport, as production builds it. None, and a failed check, if it
+        cannot be built."""
+        try:
+            return cl.Client(refresh_token=RT, clock=self.clock, sleep=self.sleep)
+        except TypeError as exc:
+            ok(False, "Client(...) with no transport can be built", str(exc))
+            return None
+
+
+def _has_net_transport(cl) -> None:
+    ok(callable(getattr(cl, "net_transport", None)), "the module names its default transport net_transport")
+
+
+def case_net_transport_shape(cl) -> None:
+    """Every Card Ladder call and the token exchange go through net.open as a write that never
+    follows a redirect."""
+    _has_net_transport(cl)
+    w = NetWorld()
+    with w.through():
+        client = w.default_client(cl)
+        if client is None:
+            return
+        results = {name: _outcome(client.call, name, {"k": name}) for name in sorted(SIX)}
+    ok(all(results[n] == {"echo": n, "data": {"k": n}} for n in SIX),
+       "with no transport given, each of the six calls returns its result", repr(results))
+    ok(len(w.opens) == 7 and len(w.attempts) == 7 and len(w.log) == 7,
+       "the token exchange and six calls are seven net.open calls, one attempt each",
+       "%d net.open calls, %d attempts, %d requests" % (len(w.opens), len(w.attempts), len(w.log)))
+    ok(any(GOOGLE_HOST in o.url for o in w.opens) and all(
+        (GOOGLE_HOST in o.url) or o.url.startswith(CF_BASE) for o in w.opens),
+       "the token exchange is one of those net.open calls", [o.url for o in w.opens])
+    ok(w.opens and all(o.kw.get("method") == "POST" for o in w.opens), "every net.open call has method POST")
+    ok(w.opens and all(o.kw.get("idempotent") is False for o in w.opens),
+       "every net.open call has idempotent=False, so net never sends an answered write again",
+       repr([o.kw.get("idempotent", "unset") for o in w.opens]))
+    # With an injected opener this keyword changes nothing the world can see, so the keyword is
+    # the only check there is: the case below shows what a 3xx does when it is True.
+    ok(w.opens and all(o.kw.get("follow_redirects") is False for o in w.opens),
+       "every net.open call has follow_redirects=False",
+       repr([o.kw.get("follow_redirects", "unset") for o in w.opens]))
+
+    # the transport itself: a status and a body for any HTTP answer, never a raise
+    transport = getattr(cl, "net_transport", None)
+    if not callable(transport):
+        return
+    w = NetWorld()
+    with w.through():
+        for status in (200, 429, 503):
+            w.plan = lambda _w, _k, _r, s=status: (s, b"body-%d" % s)
+            got = _outcome(transport, "POST", CF_BASE + "httpprofile", {"Content-Type": "application/json"}, b"{}")
+            ok(got == (status, b"body-%d" % status), "net_transport returns (%d, body) as it came" % status,
+               repr(got))
+    ok(w.opens and w.opens[0].kw.get("data") == b"{}"
+       and dict(w.opens[0].kw.get("headers") or {}).get("Content-Type") == "application/json",
+       "net_transport hands the body and the headers to net.open", repr(w.opens[:1]))
+
+
+def case_net_429_is_sent_once(cl) -> None:
+    _has_net_transport(cl)
+    for label, body, headers in (("429 with the message body", ENVELOPE, None),
+                                 ("429 with an empty body", b"", None),
+                                 ("429 with Retry-After 30", b"", {"Retry-After": "30"})):
+        w = NetWorld()
+        w.plan = lambda wd, _k, req, b=body, h=headers: (429, b, h) if wd.cl_attempts() >= 2 \
+            and CF_HOST in req.full_url else None
+        with w.through():
+            client = w.default_client(cl)
+            if client is None:
+                return
+            client.call("httpprofile", {})
+            mark = len(w.attempts)
+            with printed() as log:
+                err = _raises(cl.RateLimited, client.call, "httpprofile", {})
+            ok(isinstance(err, cl.RateLimited), "%s raises RateLimited" % label, repr(err))
+            ok(len(w.attempts) - mark == 1, "%s: the opener is called once, so there is no retry" % label,
+               "%d attempts" % (len(w.attempts) - mark))
+            ok(not w.net_sleeps, "%s: net.open took no pause" % label, repr(w.net_sleeps))
+            if isinstance(err, BaseException):
+                ok(not _leaks(str(err) + _trace(err) + log.text), "%s: no token in the text" % label)
+            held = len(w.attempts)
+            w.now += 120.0
+            later = [_raises(cl.RateLimited, client.call, n, {}) for n in ("httpprofile", "httpcardestimate")]
+            ok(all(isinstance(e, cl.RateLimited) for e in later) and len(w.attempts) == held,
+               "%s: the stop holds, so a later call raises and the opener is not called again" % label,
+               "%r, %d new attempts" % (later, len(w.attempts) - held))
+
+
+def case_net_503_is_sent_once(cl) -> None:
+    _has_net_transport(cl)
+    for label, body, headers in (("503 with an empty body", b"", None),
+                                 ("503 with a body", b"upstream down", None),
+                                 ("503 with Retry-After 30", b"", {"Retry-After": "30"})):
+        w = NetWorld()
+        w.plan = lambda wd, _k, req, b=body, h=headers: (503, b, h) if wd.cl_attempts() >= 2 \
+            and CF_HOST in req.full_url else None
+        with w.through():
+            client = w.default_client(cl)
+            if client is None:
+                return
+            client.call("httpprofile", {})
+            mark = len(w.attempts)
+            with printed() as log:
+                err = _raises(cl.CardLadderError, client.call, "httpprofile", {})
+            ok(isinstance(err, cl.CardLadderError) and not isinstance(err, cl.RateLimited),
+               "%s is a CardLadderError and not a rate limit" % label, repr(err))
+            ok(len(w.attempts) - mark == 1, "%s: the opener is called once, so there is no retry" % label,
+               "%d attempts" % (len(w.attempts) - mark))
+            ok(not w.net_sleeps, "%s: net.open took no pause" % label, repr(w.net_sleeps))
+            if isinstance(err, BaseException):
+                ok(not _leaks(str(err) + _trace(err) + log.text), "%s: no token in the text" % label)
+            w.plan = None
+            before = len(w.attempts)
+            got = _outcome(client.call, "httpprofile", {"again": 1})
+            ok(got == {"echo": "httpprofile", "data": {"again": 1}} and len(w.attempts) > before,
+               "%s does not latch: the next call is sent" % label, repr(got))
+
+
+def case_net_refused_connect(cl) -> None:
+    """A connect that never opened sent nothing, so net.open may send it again. The case allows
+    one attempt up to net's own limit, and no more."""
+    _has_net_transport(cl)
+    most = len(net.RETRY_PAUSES) + 1
+    for label, host in (("a Card Ladder call", CF_HOST), ("the token exchange", GOOGLE_HOST)):
+        w = NetWorld()
+        refused = {"on": host == GOOGLE_HOST}
+
+        def plan(wd, _k, req, host=host, refused=refused):
+            if refused["on"] and host in req.full_url:
+                auth = dict(req.header_items()).get("Authorization", "")
+                return urllib.error.URLError(
+                    ConnectionRefusedError(errno.ECONNREFUSED, "Connection refused %s %r" % (auth, req.data)))
+            return None
+
+        w.plan = plan
+        with w.through():
+            client = w.default_client(cl)
+            if client is None:
+                return
+            if host == CF_HOST:
+                client.call("httpprofile", {})
+                refused["on"] = True
+            mark, sent = len(w.attempts), len(w.wire)
+            with printed() as log:
+                err = _raises(cl.CardLadderError, client.call, "httpprofile", {"x": 1})
+            made = w.attempts[mark:]
+            ok(isinstance(err, cl.CardLadderError) and not isinstance(err, cl.RateLimited),
+               "a refused connect to %s is a CardLadderError and not a rate limit" % label, repr(err))
+            ok(1 <= len(made) <= most and all(host in r.full_url for r in made),
+               "a refused connect to %s is tried once, or again within net's limit of %d" % (label, most),
+               "%d attempts" % len(made))
+            ok(len(w.wire) == sent, "a refused connect to %s sent nothing" % label)
+            if isinstance(err, BaseException):
+                ok(not _leaks(str(err) + _trace(err) + log.text), "%s: no token in the text" % label)
+            refused["on"] = False
+            got = _outcome(client.call, "httpprofile", {"again": 1})
+            ok(got == {"echo": "httpprofile", "data": {"again": 1}},
+               "a refused connect to %s does not latch: the next call is sent" % label, repr(got))
+
+
+def _limit_wording(cl) -> str:
+    """What the client says when Card Ladder rate-limits it, taken from the client itself."""
+    client = World(answer=_limited_on(2, 429, ENVELOPE)).client(cl)
+    client.call("httpprofile", {})
+    return str(_raises(cl.RateLimited, client.call, "httpprofile", {}))
+
+
+def case_net_token_exchange(cl) -> None:
+    _has_net_transport(cl)
+    google_400 = json.dumps({"error": {"code": 400, "message": "INVALID_REFRESH_TOKEN",
+                                       "status": "INVALID_ARGUMENT"}}).encode()
+    google_429 = json.dumps({"error": {"code": 429, "message": "TOO_MANY_ATTEMPTS_TRY_LATER",
+                                       "status": "RESOURCE_EXHAUSTED"}}).encode()
+
+    def on_google(status, body):
+        return lambda _w, _k, req: (status, body) if GOOGLE_HOST in req.full_url else None
+
+    # Google refuses the token: say so, and say what to do
+    for label, setup in (("answering with Google's own error", lambda w: setattr(w, "plan", on_google(400, google_400))),
+                         ("echoing the request", lambda w: setattr(w, "exchange_mode", "reject"))):
+        w = NetWorld()
+        setup(w)
+        with w.through():
+            client = w.default_client(cl)
+            if client is None:
+                return
+            with printed() as log:
+                err = _raises(cl.TokenRejected, client.call, "httpprofile", {})
+            ok(isinstance(err, cl.TokenRejected), "a Google 400 %s raises TokenRejected" % label, repr(err))
+            text = str(err)
+            ok(re.search(r"copy\s+%s\s+again" % KEY_NAME, text, re.I) is not None,
+               "a Google 400 %s: the text says to copy %s again" % (label, KEY_NAME), text)
+            ok(not _leaks(text + _trace(err) + log.text) if isinstance(err, BaseException) else False,
+               "a Google 400 %s: no token in the text" % label)
+            ok(len(w.attempts) == 1 and not w.net_sleeps and not w.callable_requests(),
+               "a Google 400 %s is sent once, with no retry and no call to Card Ladder" % label,
+               "%d attempts" % len(w.attempts))
+            w.plan, w.exchange_mode = None, "ok"
+            got = _outcome(client.call, "httpprofile", {"again": 1})
+            ok(got == {"echo": "httpprofile", "data": {"again": 1}},
+               "a Google 400 %s does not latch: with a good token the next call is sent" % label, repr(got))
+
+    # Google rate-limits the exchange: it is Google's limit, not Card Ladder's
+    cl_wording = _limit_wording(cl)
+    w = NetWorld()
+    w.plan = on_google(429, google_429)
+    with w.through():
+        client = w.default_client(cl)
+        if client is None:
+            return
+        with printed() as log:
+            err = _raises(cl.CardLadderError, client.call, "httpprofile", {})
+        text = str(err)
+        ok(isinstance(err, cl.CardLadderError) and not isinstance(err, cl.RateLimited),
+           "a Google 429 is a CardLadderError and not RateLimited", repr(err))
+        ok(GOOGLE_HOST in text, "a Google 429 names %s" % GOOGLE_HOST, text)
+        ok(cl_wording and cl_wording not in text and "rate-limited this sweep" not in text,
+           "a Google 429 is not worded as Card Ladder's rate limit", text)
+        ok(not _leaks(text + _trace(err) + log.text) if isinstance(err, BaseException) else False,
+           "a Google 429: no token in the text")
+        ok(len(w.attempts) == 1 and not w.net_sleeps and not w.callable_requests(),
+           "a Google 429 is sent once, with no retry and no call to Card Ladder", "%d attempts" % len(w.attempts))
+        w.plan = None
+        got = _outcome(client.call, "httpprofile", {"again": 1})
+        ok(got == {"echo": "httpprofile", "data": {"again": 1}} and len(w.exchanges) == 1,
+           "a Google 429 does not latch the client: the next call exchanges and is sent", repr(got))
+
+
+def case_net_redirect_not_followed(cl) -> None:
+    """A 3xx is an answer. It is not followed, so nothing goes to a second host: not the
+    Authorization header of a call, and not the refresh token of the exchange."""
+    _has_net_transport(cl)
+    other = "https://other.example.test/landing"
+    for label, host, status, where in (
+            ("a 302 from a Card Ladder call to another host", CF_HOST, 302, other),
+            ("a 307 from a Card Ladder call to another host", CF_HOST, 307, other),
+            ("a 302 from a Card Ladder call to its own host", CF_HOST, 302, CF_BASE + "httpcertlookup"),
+            ("a 307 from the token exchange to another host", GOOGLE_HOST, 307, other)):
+        w = NetWorld()
+        moved = {"mark": 0 if host == GOOGLE_HOST else None}  # the wire length when the redirect starts
+
+        def plan(wd, _k, req, host=host, status=status, where=where, moved=moved):
+            """Answer the first request to `host` once the redirect has started, and no other."""
+            if moved["mark"] is not None and host in req.full_url and len(wd.wire) == moved["mark"]:
+                return status, b"", {"Location": where}
+            return None
+
+        w.plan = plan
+        with w.through():
+            client = w.default_client(cl)
+            if client is None:
+                return
+            if host == CF_HOST:
+                client.call("httpprofile", {})
+            moved["mark"] = mark = len(w.wire)
+            with printed() as log:
+                got = _outcome(client.call, "httpprofile", {"x": 1})
+            sent = w.wire[mark:]
+            ok(isinstance(got, cl.CardLadderError) and not isinstance(got, cl.RateLimited),
+               "%s ends in a CardLadderError, with no result" % label, repr(got))
+            ok(len(sent) == 1 and sent[0].host == host,
+               "%s is not followed: one request, to the host that was asked" % label,
+               repr([(r.host, r.url) for r in sent]))
+            strays = [r for r in w.wire if r.host not in (CF_HOST, GOOGLE_HOST)]
+            ok(not strays, "%s: no request reaches a second host" % label, repr([r.url for r in strays]))
+            ok(not any("authorization" in r.headers or RT.encode() in r.body or ID_MARK.encode() in r.body
+                       for r in w.wire[mark + 1:]),
+               "%s: no Authorization header or refresh token follows it" % label)
+            if isinstance(got, BaseException):
+                ok(not _leaks(str(got) + _trace(got) + log.text), "%s: no token in the text" % label)
+
+
 CASES = [case_allow_list, case_refuse_callable, case_refuse_host, case_spacing,
          case_rate_limit, case_token, case_no_token_in_text, case_read_functions,
          case_threads_keep_the_pace, case_raised_rate_limit, case_raised_transport_paces,
-         case_latch_race, case_send_checks_the_callable, case_bare_http_429]
+         case_latch_race, case_send_checks_the_callable, case_bare_http_429,
+         case_net_transport_shape, case_net_429_is_sent_once, case_net_503_is_sent_once,
+         case_net_refused_connect, case_net_token_exchange, case_net_redirect_not_followed]
 
 
 def main() -> int:
