@@ -15,7 +15,7 @@ Plan: docs/specs/stock-images.md#one-retry-home (python)
 
 **This narrows the `Offline` ruling.** A single HTTP error, or a single lost connection, never pauses anything. Only a run does.
 
-**Measured.** Not yet measured.
+**Measured.** On a stubbed network, 40 products through one `Market` on one host. When one product answers 500, the 39 others are served, with 40 requests and no retry sleep. When all 40 answer 503, the host pauses after the third product, with 9 requests and 6 s of retry sleep.
 
 **Scope now.** The price fetcher (`pipeline/pricehistory.py`) is the first caller. `pipeline/stockimages.py` reaches the home through `Market`. These four files keep their own `urlopen` until a later lane moves them: `identify/match.py`, `server/order_transport.py`, `server/tcg_export.py`, `server/portal_http.py`.
 
