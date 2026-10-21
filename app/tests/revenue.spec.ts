@@ -956,9 +956,9 @@ test('leaving Sales ends the photo asks for a SKU that is still pending', async 
   await expect(page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')).toHaveAttribute('data-pending', 'true')
   await spendFakeTime(page, 15_000)
   await page.evaluate(() => {
-    window.location.hash = '#/nowhere'
+    window.location.hash = '#/mix'
   })
-  await expect(page.locator('main.no-such-view')).toBeVisible()
+  await expect(page.locator('.revenue-podium')).toBeHidden()
   await page.waitForTimeout(100) // keep: an ask already in flight when the screen closed settles on the real clock
   const final = asks
   await spendFakeTime(page, 120_000)
