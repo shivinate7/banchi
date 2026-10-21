@@ -1098,8 +1098,7 @@ def _fetch_once(
         with urllib.request.urlopen(request, timeout=timeout) as response:
             # A SEPARATE `try` FROM THE CONNECT ABOVE. `urlopen` raising means no response
             # ever arrived — the socket itself refused, or DNS never resolved, or the
-            # attempt timed out before a byte came back, and every OTHER request to the
-            # same dead host is heading for the identical failure (`Offline`, below).
+            # attempt timed out before a byte came back (`Offline`, below).
             # `response.read()` raising means a connection WAS made — the read that
             # follows it stalled or the peer reset mid-body, which says nothing about
             # whether the NEXT product's own connection will succeed. That is a plain,
@@ -1125,9 +1124,8 @@ def _fetch_once(
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         # `Offline`, NOT THE PLAIN `Unreachable` ABOVE — raised only here, from `urlopen`
         # itself, which means no HTTP response arrived at all: a refused connection, a DNS
-        # failure, or a timeout reaching the socket in the first place. Every socket
-        # attempt after this one is heading for the identical failure. See `Offline`'s own
-        # docstring for what a caller does with that distinction.
+        # failure, or a timeout reaching the socket in the first place. It is retried, and
+        # counts toward a host's pause (`_record`).
         log(f"price service {url}: {type(exc).__name__}: {exc}")
         raise Offline("The price service could not be reached. Check the connection, then try again.") from exc
     try:
