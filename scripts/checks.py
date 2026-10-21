@@ -1552,6 +1552,18 @@ CHECKS = (
         "governed_by": ("D278",),
     },
     {
+        "target": "cardladder-selftest",
+        "shard": "guards-2",
+        "runs": "$(PYTHON) scripts/cardladder-selftest.py",
+        "asserts": 'The Card Ladder client calls only the six read callables, never `search.cardladder.com`, waits 8 seconds between calls, stops at a rate limit, refreshes its ID token in time and never prints a token, against a fake transport and a fake clock.',
+        "needs": ("python3",),
+        "writes": '',
+        "commit_path": False,
+        "why_off_commit_path": "D18: a self-test that runs on demand in `make check`, never in the git hook. It is fast and path-gated nowhere.",
+        "gates": True,
+        "governed_by": ("D320",),
+    },
+    {
         "target": "repair-born-game-selftest",
         "shard": "guards-2",
         "runs": "$(PYTHON) scripts/repair-born-game-selftest.py",
