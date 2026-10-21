@@ -1486,6 +1486,20 @@ COMPONENTS = [
                                     "`server/capture_server.py` alone.",
                             "governed_by": ["D214", "D225", "D31", "D88"],
                             "tested_by": ["T7"]},
+            "cardladder.py": {"does": "the Card Ladder client for My Slabs: the owner's refresh "
+                                      "token exchanged for a one-hour ID token, then one function "
+                                      "per read point of spec 3.1 to 3.6. Every request, the "
+                                      "exchange included, goes through one send path that "
+                                      "reads the `ALLOWED_CALLABLES` constant, refuses "
+                                      "`search.cardladder.com`, keeps callable sends 8 seconds "
+                                      "apart and latches on a rate-limit answer. Transport, "
+                                      "clock and sleep are injected, so it does no I/O of its "
+                                      "own. No error text holds a token or a response body.",
+                              "governed_by": ["D-my-slabs-card-ladder"],
+                              "note": "The refresh token is the caller's to read from "
+                                      "`CARDLADDER_REFRESH_TOKEN`. The API key in it is Card "
+                                      "Ladder's public web key. No store tables, routes or "
+                                      "screen yet (spec build plan steps 2 to 4)."},
             "stockimages.py": {"does": "`(game, set_name, number) -> a hotlinked stock photo "
                                        "URL, or None` (D301). Riftbound and One "
                                        "Piece resolve through `pricehistory.py:Market`'s own "
