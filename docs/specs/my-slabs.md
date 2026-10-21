@@ -242,7 +242,8 @@ Kind: build. Platform: macOS, over the capture server.
 2. The three store tables and their writes.
 3. Routes for add, list, detail and sweep, with client functions in `app/src/server.ts`.
 4. The `#/slabs` screen, built on `<Page>` (D275, every screen inherits the page scaffold),
-   from section 4. It waits on the kit lane in 4.7.
+   from section 4. It waits on the kit lane in 4.7. The client's login errors name a Google host;
+   the screen shows them as a sentence with no host name (D196, no user-visible string names a decision).
 5. A launchd job for the daily sweep, like `make price-refresh-agent`. A Google error on the
    token exchange stops the sweep too, because the exchange host has no pace of its own.
 6. The three checks that D-my-slabs-card-ladder names.
@@ -256,6 +257,8 @@ Kind: build. Platform: macOS, over the capture server.
 - Whether Card Ladder enforces an app check on these callables later. Today none is sent, and
   each call answers 200.
 - How long a refresh token lives before Card Ladder signs the owner out.
+- Whether a rotated public API key can be told from a bad token. Both answer a Google 4xx, and
+  the client reads no body, so both read "copy it again".
 - Why `estimatedValue` trails the newest sale, and by how long. One PSA 10 card showed it in
   its sales list. A Riftbound card's two last-sale fields also differ, but its sales list is
   unchecked. The cause is unmeasured.
