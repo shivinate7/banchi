@@ -626,7 +626,7 @@ def check_idle_restart() -> None:
                 serve_module,
                 off_main=lambda root: None,
                 app_stale=lambda root: True,
-                build_app=lambda root: builds.append(str(root)) or True,
+                build_app=lambda root, builds=builds: builds.append(str(root)) or True,
             ):
                 error = run(sup._check_app)
             if label == "held":
