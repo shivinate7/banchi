@@ -5,8 +5,8 @@ proved against a fake transport and a fake clock: no network, no real sleep, no 
 Protects: The Card Ladder client calls only the six read callables, never `search.cardladder.com`, waits 8 seconds between calls, stops at a rate limit, refreshes its ID token in time, and never prints a token.
 Governs: D-my-slabs-card-ladder
 
-BUILD PLAN STEP 1 (`docs/specs/my-slabs.md`). `pipeline/cardladder.py` does not exist yet.
-This file is written first and is red until it does. The interface it tests:
+BUILD PLAN STEP 1 (`docs/specs/my-slabs.md`). The interface of `pipeline/cardladder.py` that
+this file tests:
 
     ALLOWED_CALLABLES        frozenset of exactly the six read callables of spec 3.1 to 3.6.
                              The one constant. `Client` reads it, it holds no copy.
@@ -25,6 +25,23 @@ This file is written first and is red until it does. The interface it tests:
         .send(method, url, headers, body) -> (status, body)
                                     The one send path. EVERY request goes through it, the token
                                     exchange included. It refuses the host before the transport.
+        A Client may be shared by threads: callable sends stay 8 seconds apart across them.
+        A transport may raise anything. Whatever it raises, that send still counts for the pace.
+        A `pipeline.pricehistory.Unreachable` whose `__cause__` is an HTTPError 429 is the rate
+        limit (the one retry home's contract): RateLimited, and the latch. A `Blocked` (403) or
+        an Unreachable from another status is a CardLadderError and no latch.
+    Read functions, one per point of spec section 3 (each takes the client first):
+        cert_lookup(client, cert, grader)       httpcertlookup    {cert, grader, includeProfile: true}
+        profile(client, profile_id)             httpprofile       {profileId}
+        profile_sales(client, cert, grader, grade)
+                                                httpprofilesales  {cert, grader, grade}
+        card_estimate(client, profile_id, grader, grade, description, qualifier_type, autograph_grade)
+                                                httpcardestimate  {profileId, grader, grade,
+                                                                   description, qualifierType, autographGrade}
+        sale_profile(client, sale_id)           httpsaleprofile   {saleId}
+        index_from_description(client, description)
+                                                httpIndexFromDescription  {description}
+        A grader of bgs or bvg goes out as beckett. psa, sgc, cgc and beckett go out as given.
 
 Token exchange: POST https://securetoken.googleapis.com/v1/token?key=<public key>, the refresh
 token in the BODY only (form or JSON, with grant_type=refresh_token). The answer is Google's:
@@ -35,15 +52,6 @@ under its age limit), whether the token exchange counts toward the 8 seconds (th
 constrains only sends to the callable host), the public API key value, and Firestore (3.7 is
 not a callable and is not covered).
 
-WIRING THE BUILDER ADDS (the test-author guard refuses Makefile and scripts/checks.py, so the
-orchestrator assigns them; copy the `pricehistory-offline-selftest` pattern in both):
-    Makefile    add `cardladder-selftest` to the .PHONY line, and the target
-                `cardladder-selftest:` running `$(PYTHON) scripts/cardladder-selftest.py`.
-    checks.py   a CHECKS row after `pricehistory-offline-selftest`: target "cardladder-selftest",
-                shard "guards-2", runs "$(PYTHON) scripts/cardladder-selftest.py", needs
-                ("python3",), writes '', commit_path False, gates True, governed_by
-                ("D-my-slabs-card-ladder",), and the same why_off_commit_path text.
-    Also        docs/map.py entry for this file; `make tests-page` to regenerate docs/TESTS.md.
 This file parses on the bare system python3 (3.9).
 
 The fake world refuses the real clock, the real socket and any open of a file named `.env`,
@@ -55,20 +63,25 @@ from __future__ import annotations
 
 import builtins
 import contextlib
+import email.message
 import io
 import json
 import logging
 import os
 import socket
 import sys
+import threading
 import time
 import traceback
+import urllib.error
 import urllib.parse
 from pathlib import Path
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+from pipeline import pricehistory  # noqa: E402 - the retry home's error classes
 
 PASS = 0
 FAIL = 0
@@ -119,10 +132,12 @@ class World:
     `answer(world, n, headers, body)` may return (status, bytes) for the n-th callable
     request, return None for the default 200, or raise. `exchange` is "ok", "reject"
     (400 that echoes the request body) or "raise" (the transport itself fails with the body
-    in its message)."""
+    in its message). `vtime` (a VirtualTime) replaces the plain clock when threads share it."""
 
-    def __init__(self, *, expires_in: str = "3600", answer=None, exchange: str = "ok") -> None:
-        self.now = 1_000_000.0
+    def __init__(self, *, expires_in: str = "3600", answer=None, exchange: str = "ok",
+                 vtime=None) -> None:
+        self.vtime = vtime
+        self._now = 1_000_000.0
         self.slept = 0.0
         self.expires_in = expires_in
         self.answer = answer
@@ -132,12 +147,23 @@ class World:
         self.calls: list = []  # (t, name, token, age) per callable request
         self.card_ladder_sends = 0
 
+    @property
+    def now(self) -> float:
+        return self.vtime.now if self.vtime else self._now
+
+    @now.setter
+    def now(self, value: float) -> None:
+        self._now = value
+
     def clock(self) -> float:
-        return self.now
+        return self.vtime.clock() if self.vtime else self.now
 
     def sleep(self, seconds: float) -> None:
-        self.now += seconds
         self.slept += seconds
+        if self.vtime:
+            self.vtime.sleep(seconds)
+        else:
+            self.now += seconds
 
     def client(self, cardladder):
         return cardladder.Client(
@@ -191,6 +217,53 @@ class World:
                 return reply
         data = json.loads(req.body)["data"]
         return 200, json.dumps({"result": {"echo": name, "data": data}}).encode()
+
+
+class VirtualTime:
+    """A clock for threads. Time moves only when no thread has done anything for QUIET real
+    seconds, and then it jumps to the earliest deadline of a thread parked in `sleep`. A thread
+    that waits on a lock is not parked, so a client that serialises its sends moves on one
+    sleeper at a time, and one that does not lets every thread read the same stale time and
+    wake together. Real waits here are Event and Condition timeouts, never `time.sleep`."""
+
+    QUIET = 0.05
+
+    def __init__(self, start: float) -> None:
+        self.now = start
+        self._cv = threading.Condition()
+        self._deadlines: dict = {}
+        self._activity = 0
+
+    def clock(self) -> float:
+        with self._cv:
+            self._activity += 1
+            return self.now
+
+    def sleep(self, seconds: float) -> None:
+        me = threading.get_ident()
+        with self._cv:
+            self._activity += 1
+            self._deadlines[me] = self.now + seconds
+            self._cv.notify_all()
+            while self.now < self._deadlines[me]:
+                if not self._cv.wait(timeout=20):  # the driver is gone: never hang the suite
+                    break
+            del self._deadlines[me]
+            self._activity += 1
+
+    def run(self, threads: list) -> None:
+        """Drive the clock until every thread has ended (or 10 real seconds have passed)."""
+        gate = threading.Event()
+        for _ in range(200):
+            if not any(t.is_alive() for t in threads):
+                return
+            with self._cv:
+                seen = self._activity
+            gate.wait(self.QUIET)
+            with self._cv:
+                if self._activity == seen and self._deadlines:
+                    self.now = max(self.now, min(self._deadlines.values()))
+                    self._cv.notify_all()
 
 
 def _limited_on(n: int, status: int, body: bytes):
@@ -268,6 +341,14 @@ def _trace(exc: BaseException) -> str:
 def _leaks(text: str) -> list:
     return [name for name, mark in (("refresh token", "RTSENTINEL"), ("ID token", ID_MARK))
             if mark in text]
+
+
+def _outcome(fn, *args):
+    """What `fn(*args)` returns, or the CardLadderError-or-other exception it raises."""
+    try:
+        return fn(*args)
+    except Exception as exc:  # noqa: BLE001 - the case inspects it
+        return exc
 
 
 def _raises(cls, fn, *args):
@@ -532,8 +613,175 @@ def case_no_token_in_text(cl) -> None:
        "leaks the " + " and ".join(_leaks(log.text + shown)))
 
 
+# 8 -------------------------------------------------------------------------------------
+def case_read_functions(cl) -> None:
+    graders = [("psa", "psa"), ("beckett", "beckett"), ("bgs", "beckett"), ("bvg", "beckett"),
+               ("sgc", "sgc"), ("cgc", "cgc")]
+    w = World()
+    client = w.client(cl)
+
+    def sent(fn, *args):
+        """(callable name, data, answer) of the one request `fn(client, *args)` sends."""
+        before = len(w.callable_requests())
+        got = fn(client, *args)
+        req = w.callable_requests()[before:]
+        if len(req) != 1:
+            return None, None, got
+        return req[0].path.rsplit("/", 1)[-1], json.loads(req[0].body)["data"], got
+
+    def check(label, fn, args, name, data):
+        got_name, got_data, got = sent(fn, *args)
+        ok(got_name == name and got_data == data and type(got_data) is dict
+           and got == {"echo": name, "data": data},
+           label, "sent %s %r, wanted %s %r" % (got_name, got_data, name, data))
+
+    for given, sent_as in graders:
+        check("cert_lookup(%s) sends httpcertlookup with %s" % (given, sent_as), cl.cert_lookup,
+              ("12345", given), "httpcertlookup",
+              {"cert": "12345", "grader": sent_as, "includeProfile": True})
+        check("profile_sales(%s) sends httpprofilesales with %s" % (given, sent_as), cl.profile_sales,
+              ("12345", given, "g10"), "httpprofilesales",
+              {"cert": "12345", "grader": sent_as, "grade": "g10"})
+        check("card_estimate(%s) sends httpcardestimate with %s" % (given, sent_as), cl.card_estimate,
+              ("psa-9f", given, "g9_5", "2020 Thing Holo", "QUAL", "AUTO"), "httpcardestimate",
+              {"profileId": "psa-9f", "grader": sent_as, "grade": "g9_5",
+               "description": "2020 Thing Holo", "qualifierType": "QUAL", "autographGrade": "AUTO"})
+    check("profile sends httpprofile with profileId", cl.profile, ("psa-9f",),
+          "httpprofile", {"profileId": "psa-9f"})
+    check("sale_profile sends httpsaleprofile with saleId", cl.sale_profile, ("sale-77",),
+          "httpsaleprofile", {"saleId": "sale-77"})
+    check("index_from_description sends httpIndexFromDescription with description",
+          cl.index_from_description, ("2020 Thing Holo",),
+          "httpIndexFromDescription", {"description": "2020 Thing Holo"})
+    body = w.callable_requests()[0].body
+    ok(json.loads(body)["data"].get("includeProfile") is True, "includeProfile is the JSON true, not 1")
+
+
+# 9 -------------------------------------------------------------------------------------
+def case_threads_keep_the_pace(cl) -> None:
+    vt = VirtualTime(1_000_000.0)
+    w = World(vtime=vt)
+    client = w.client(cl)
+    client.call("httpprofile", {"warm": True})  # the exchange and the first send, no waiting
+    errors: list = []
+
+    def work(i):
+        try:
+            client.call("httpprofile", {"i": i})
+        except BaseException as exc:  # noqa: BLE001 - reported below
+            errors.append(exc)
+
+    threads = [threading.Thread(target=work, args=(i,), daemon=True) for i in range(3)]
+    for t in threads:
+        t.start()
+    vt.run(threads)
+    for t in threads:
+        t.join(5)
+    times = sorted(r.t for r in w.callable_requests())
+    gaps = [b - a for a, b in zip(times, times[1:])]
+    ok(not errors and len(times) == 4, "three threads sharing one Client all get their call sent",
+       "%d sent, errors %r" % (len(times), errors))
+    ok(gaps and min(gaps) >= 8.0 - 1e-6, "no two sends from three threads are less than 8 seconds apart",
+       "gaps %s" % gaps)
+
+
+# 10 ------------------------------------------------------------------------------------
+def _raising(kind, code=None, body=b"", headers=None):
+    """A transport failure the way the one retry home raises it: a pricehistory error whose
+    `__cause__` is the HTTPError. The HTTPError's text holds the Authorization header, as a
+    careless message could. Returns make(request_headers) -> exception."""
+    def make(request_headers):
+        exc = kind("The service answered %s." % code)
+        if code is not None:
+            hdrs = email.message.Message()
+            for k, v in (headers or {}).items():
+                hdrs[k] = v
+            exc.__cause__ = urllib.error.HTTPError(
+                CF_BASE + "httpprofile", code, "HTTP %d %s" % (code, request_headers.get("authorization", "")),
+                hdrs, io.BytesIO(body))
+        return exc
+    return make
+
+
+def _raise_on(n: int, make):
+    def answer(_w, k, headers, _b):
+        if k == n:
+            raise make(headers)
+        return None
+    return answer
+
+
+def case_raised_rate_limit(cl) -> None:
+    unreachable = pricehistory.Unreachable
+    shapes = [
+        ("a 429 with the message body", unreachable, 429, ENVELOPE, None),
+        ("a 429 with an empty body", unreachable, 429, b"", None),
+        ("a 429 with Retry-After 30", unreachable, 429, b"", {"Retry-After": "30"}),
+    ]
+    for label, kind, code, body, headers in shapes:
+        w = World(answer=_raise_on(2, _raising(kind, code, body, headers)))
+        client = w.client(cl)
+        client.call("httpprofile", {})
+        with printed() as log:
+            err = _raises(cl.RateLimited, client.call, "httpprofile", {})
+        ok(isinstance(err, cl.RateLimited), "Unreachable from %s raises RateLimited" % label, repr(err))
+        sent_calls = w.callable_requests()
+        ok(len(sent_calls) == 2 and w.now == sent_calls[-1].t,
+           "%s: sent once, no retry and no wait" % label,
+           "%d sent, clock moved %.1fs" % (len(sent_calls), w.now - sent_calls[-1].t))
+        if isinstance(err, BaseException):
+            ok(not _leaks(str(err) + _trace(err) + log.text), "%s: no token in the text" % label)
+        sent, exchanges = len(w.log), len(w.exchanges)
+        w.now += 120.0
+        later = [_raises(cl.RateLimited, client.call, n, {}) for n in ("httpprofile", "httpcardestimate")]
+        ok(all(isinstance(e, cl.RateLimited) for e in later) and len(w.log) == sent
+           and len(w.exchanges) == exchanges,
+           "%s: the stop holds, so a later call raises and sends nothing" % label,
+           "%r, %d new requests" % (later, len(w.log) - sent))
+
+    # not a rate limit: a 403 refused by name, a 500, a connection that never opened
+    controls = [
+        ("Blocked (403)", _raising(pricehistory.Blocked, 403, b"Forbidden")),
+        ("Unreachable from a 500", _raising(unreachable, 500, b"oops")),
+        ("Unreachable from a 503", _raising(unreachable, 503, b"")),
+        ("Offline", _raising(pricehistory.Offline)),
+    ]
+    for label, make in controls:
+        w = World(answer=_raise_on(2, make))
+        client = w.client(cl)
+        client.call("httpprofile", {})
+        err = _raises(cl.CardLadderError, client.call, "httpprofile", {})
+        ok(isinstance(err, cl.CardLadderError) and not isinstance(err, cl.RateLimited),
+           "%s is a CardLadderError and not a rate limit" % label, repr(err))
+        got = _outcome(client.call, "httpprofile", {"again": 1})
+        ok(got == {"echo": "httpprofile", "data": {"again": 1}} and len(w.callable_requests()) == 3,
+           "%s does not latch: the next call is sent" % label, repr(got))
+
+
+# 11 ------------------------------------------------------------------------------------
+def case_raised_transport_paces(cl) -> None:
+    raisers = [
+        ("a plain OSError", lambda _h: OSError("connection reset")),
+        ("Offline", _raising(pricehistory.Offline)),
+        ("Blocked (403)", _raising(pricehistory.Blocked, 403, b"Forbidden")),
+        ("Unreachable from a 503", _raising(pricehistory.Unreachable, 503, b"")),
+    ]
+    for label, make in raisers:
+        w = World(answer=_raise_on(1, make))
+        client = w.client(cl)
+        err = _raises(cl.CardLadderError, client.call, "httpprofile", {})
+        ok(isinstance(err, cl.CardLadderError), "%s raises a CardLadderError" % label, repr(err))
+        got = _outcome(client.call, "httpprofile", {})
+        gaps = _gaps(w)
+        ok(isinstance(got, dict) and len(gaps) == 1 and gaps[0] >= 8.0 - 1e-6
+           and w.slept >= 8.0 - 1e-6,
+           "after %s the next call waits the full 8 seconds" % label,
+           "gaps %s, slept %.1fs, got %r" % (gaps, w.slept, got))
+
+
 CASES = [case_allow_list, case_refuse_callable, case_refuse_host, case_spacing,
-         case_rate_limit, case_token, case_no_token_in_text]
+         case_rate_limit, case_token, case_no_token_in_text, case_read_functions,
+         case_threads_keep_the_pace, case_raised_rate_limit, case_raised_transport_paces]
 
 
 def main() -> int:
