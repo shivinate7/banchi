@@ -932,8 +932,8 @@ function refuse(route: Route, status: number, code: string) {
   return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify({ error: { code, message: 'Refused.' } }) })
 }
 
-// A busy server and a rate limit may pass; the ask is repeated.
-for (const [status, code] of [[503, 'unavailable'], [429, 'rate_limited']] as const) {
+// A busy server, a locked store, a request timeout and a rate limit may pass; the ask is repeated.
+for (const [status, code] of [[503, 'unavailable'], [429, 'rate_limited'], [423, 'store_busy'], [408, 'request_timeout']] as const) {
   test(`a photo lookup that fails with ${status} is asked again, not left as no photo`, async ({ page }) => {
     test.setTimeout(90_000)
     await page.route(SKU_PHOTO_STOCK, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: SLOT_SVG }))
@@ -1133,6 +1133,35 @@ test('when one photo batch fails, the batches that answered are not asked again'
     .filter(([sku, n]) => n !== (failedSkus.has(sku) ? 2 : 1))
     .map(([sku, n]) => `row ${rankOf(sku)} asked ${n} times`)
   expect(wrong.slice(0, 5), `${wrong.length} SKUs were asked the wrong number of times: each SKU of the failed batch twice, every other SKU once`).toEqual([])
+})
+
+test('under Show all, no two photo calls are ever in flight at once, on the first pass or on any retry', async ({ page }) => {
+  test.setTimeout(120_000)
+  await stub(page, manyOrders(400))
+  let calls = 0
+  let inFlight = 0
+  let peak = 0
+  await page.route(/\/skus\/photos\?/, async (route) => {
+    const skus = skusOfCall(route)
+    calls += 1
+    inFlight += 1
+    peak = Math.max(peak, inFlight)
+    await new Promise((resolve) => setTimeout(resolve, 25)) // keep: real time, so two calls that overlap are both open at once
+    // Closed before the answer goes out, so a client that asks again the moment it hears is never counted as overlapping.
+    inFlight -= 1
+    // Every batch answers pending: each one is asked again, on every retry step.
+    return json(route, { photos: {}, stock_photos: {}, pending: skus })
+  })
+  await open(page)
+  // The first window is answered and nothing is in flight when Show all is pressed, so what is
+  // counted below is the client's own overlap and not a call the press left behind.
+  await expect.poll(() => calls > 0 && inFlight === 0, { intervals: [10, 20], message: 'the first window was never answered' }).toBe(true)
+  await page.getByRole('button', { name: 'Show all 400' }).click()
+  // The first pass over 400 SKUs, then retry steps. Two full retry rounds of the ten batches
+  // (and the first window) is the least that proves a retry was asked at all.
+  await spendFakeTime(page, 600_000, async () => peak > 1 || calls >= 31)
+  expect(peak, `${peak} photo calls were in flight at once; each call must wait for the one before it, retries included`).toBeLessThanOrEqual(1)
+  expect(calls, 'too few photo calls: the retry steps never ran, so no overlap was looked for').toBeGreaterThanOrEqual(31)
 })
 
 
