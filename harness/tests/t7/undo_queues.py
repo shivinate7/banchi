@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import json
 import hashlib
+import re
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -4796,9 +4797,124 @@ def check_reopen_same_session_counts(checks: Checks) -> None:
                 "same session: open_entries sees the reopened entry (stale where() index)",
             )
             checks.equal(len(review), 2, "same session: Queue.__len__ counts the reopened entry")
+            # `Queue.summary` takes the cards, positionally like `owed_entries(cards)`: a count
+            # that cannot see a card's state cannot tell a departed card from a waiting one.
+            # `answers` turns a call with the wrong shape into a named FAIL, not a traceback
+            # that hides every check behind it. No card is captured here, and a position with
+            # no card is kept, so the owed count is the open count.
+            summed = answers(
+                checks,
+                lambda: review.summary(snapshot.inventory.cards),
+                "same session: Queue.summary takes the cards and answers",
+            )
             checks.ok(
-                review.summary.startswith("2 cards in"),
-                f"same session: summary counts the reopened entry, got {review.summary!r}",
+                isinstance(summed, str) and summed.startswith("2 cards in"),
+                f"same session: summary counts the reopened entry, got {summed!r}",
+            )
+
+
+def _queue_counts(text: str) -> dict:
+    """`"2 cards in review, oldest 3 days | 0 cards in parked"` as
+    `{"review": (2, 3), "parked": (0, None)}`: count and oldest age per queue. A part that
+    does not parse is left out, so the check that reads it fails on the sentence it got."""
+    found = {}
+    for part in text.split(" | "):
+        parsed = re.fullmatch(r"(\d+) cards in (\w+)(?:, oldest (\d+) days)?", part)
+        if parsed:
+            age = None if parsed.group(3) is None else int(parsed.group(3))
+            found[parsed.group(2)] = (int(parsed.group(1)), age)
+    return found
+
+
+def check_departed_card_not_counted(checks: Checks) -> None:
+    """UN-8 in the COUNTS: a departed card owes no answer, so no number that says how much
+    Review holds may count it. A retired, sold or moved card keeps its queue entry (D28, the
+    undo needs it), so the entry is still there and only the reads can tell.
+
+    `./banchi join` printed "6 cards in review, oldest 49 days" over a Review that showed 0:
+    `Queue.summary` and `Queue.oldest_days` counted `open_entries`, while `GET /queues` read
+    `owed_entries`. `GET /status` shared the miss through `len(queue)`.
+
+    ONE FIXTURE PER DEPARTURE, so a red names the door that leaked. The departed card's entry
+    is the OLDEST in both queues (49 and 40 days against 3 and 1, 2), or the oldest-days
+    figure would be the same with or without it. Both queues hold one, so a fix that filters
+    only the review side stays red. Every card is captured: a position with no card is kept
+    by design and would make the departure vacuous. Entries are assigned, not `upsert`ed,
+    which stamps `first_seen` with today.
+    """
+    checks.note("")
+    checks.note("QUEUE COUNTS — a departed card owes no answer (UN-8)")
+
+    def stamp(days: int) -> str:
+        return (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+
+    def sentence() -> str:
+        return Store().read().queue_summary
+
+    def leave(key: str, how: str) -> None:
+        box, index = (int(part) for part in key.split("/"))
+        if how == master.RETIRED:
+            capture_server.do_retire(box, index, {"reason": master.RETIRE_REASONS[0]})
+        else:
+            with Store().write() as snapshot:
+                snapshot.inventory.set_state(key, how)
+
+    for how in (master.RETIRED, master.SOLD, master.MOVED):
+        with isolated_home():
+            for _ in range(3):
+                capture_server.do_capture(capture_payload(8))
+            with Store().write() as snapshot:
+                for key, days in (("8/1", 49), ("8/2", 3), ("8/3", 1)):
+                    box, index = (int(part) for part in key.split("/"))
+                    snapshot.review.entries[key] = entry(box, index, first_seen=stamp(days))
+                for key, days in (("8/1", 40), ("8/2", 2)):
+                    box, index = (int(part) for part in key.split("/"))
+                    snapshot.parked.entries[key] = entry(box, index, first_seen=stamp(days))
+            leave("8/1", how)
+
+            checks.equal(
+                Store().read().inventory.cards["8/1"].state,
+                how,
+                f"{how}: the fixture's card has left its box",
+            )
+            checks.equal(
+                sorted(row["position"] for row in capture_server.do_queues()["review"]),
+                ["8/2", "8/3"],
+                f"{how}: Review lists only the two cards still here",
+            )
+            checks.ok(
+                "8/1" in Store().read().review.entries
+                and "8/1" in Store().read().parked.entries,
+                f"{how}: and both entries stay in their files, so an undo needs no second write",
+            )
+            counted = _queue_counts(sentence())
+            checks.equal(
+                {name: counted.get(name, (None, None))[0] for name in ("review", "parked")},
+                {"review": 2, "parked": 1},
+                f"{how}: the run report counts what Review shows, not the departed card",
+            )
+            checks.equal(
+                {name: counted.get(name, (None, None))[1] for name in ("review", "parked")},
+                {"review": 3, "parked": 2},
+                f"{how}: and its oldest age skips the departed card too",
+            )
+            checks.equal(
+                capture_server.do_status()["queues"],
+                {"review": 2, "parked": 1},
+                f"{how}: GET /status counts what Review shows, not the departed card",
+            )
+
+            leave("8/2", how)
+            leave("8/3", how)
+            checks.equal(
+                sentence(),
+                "0 cards in review | 0 cards in parked",
+                f"{how}: with every card gone the report says 0 and names no oldest age",
+            )
+            checks.equal(
+                capture_server.do_status()["queues"],
+                {"review": 0, "parked": 0},
+                f"{how}: and GET /status says 0, as Review does",
             )
 
 
@@ -5020,6 +5136,7 @@ CHECKS = (
     check_queues,
     check_queue_starvation,
     check_reopen_same_session_counts,
+    check_departed_card_not_counted,
     check_store_indexes_reach_existing_store,
     check_listing_release,
     check_queue_supersede,
