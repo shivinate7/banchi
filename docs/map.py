@@ -998,6 +998,13 @@ COMPONENTS = [
                                    "than reimplemented, for a caller D77 names as the standing "
                                    "candidate and that remains unbuilt.",
                            "governed_by": ["D15", "D18", "D77"]},
+            "net.py": {"does": "the one retry home: `net.open` and `net.request` carry every network "
+                               "call. Rule C (no connection, 429, 502, 503, 504, backoff, "
+                               "Retry-After), one host pause shared by every caller, and "
+                               "`idempotent=False` for a write, which retries only a connect "
+                               "failure before send and never reads or sets the host pause.",
+                       "governed_by": ["D319"],
+                       "tested_by": ["T7"]},
             "pricing.py": {"does": "rules, rounding, floor clamp, threshold, no_market_data "
                                    "refusal. THRESHOLD is the DEFAULT and not the answer "
                                    "(D99): the cut-off in force is pipeline/corpus.py's "
