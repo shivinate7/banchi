@@ -252,13 +252,14 @@ STUBS = {
 # at 0 is omitted. A route whose status changes fails, so a hit path never turns into a 404 unseen.
 BUDGET = {
     '/status': {"status": 200, 'sql': 25, 'json_loads': 3, 'store_read': 1},
-    '/inventory': {"status": 200, 'sql': 46, 'json_loads': 161, 'records_in': 5, 'places': 1, 'store_read': 1},
-    '_INVENTORY_BOX_RE': {"status": 200, 'sql': 29, 'json_loads': 51, 'records_in': 2, 'places': 1, 'store_read': 1},
+    '/inventory': {"status": 200, 'sql': 46, 'json_loads': 161, 'places': 1, 'store_read': 1},
+    '_INVENTORY_BOX_RE': {"status": 200, 'sql': 29, 'json_loads': 51, 'records_in': 1, 'places': 1, 'store_read': 1},
     '/inventory/recent': {"status": 200, 'sql': 26, 'json_loads': 15, 'places': 1, 'store_read': 1},
     '/inventory/history': {"status": 200, 'sql': 12, 'store_read': 1},
-    '/queues': {"status": 200, 'sql': 21, 'json_loads': 7, 'records_in': 1, 'places': 1, 'store_read': 1},
-    '/capture/sitting': {"status": 200, 'sql': 208, 'json_loads': 161, 'records_in': 5, 'places': 1, 'store_read': 1},
-    '/boxes': {"status": 200, 'sql': 79, 'json_loads': 161, 'records_in': 5, 'places': 1, 'store_read': 1},
+    # sql 23: `_walk` reads columns and no longer warms the Rows cache, so /queues fetches its own cards (a constant +2).
+    '/queues': {"status": 200, 'sql': 23, 'json_loads': 7, 'places': 1, 'store_read': 1},
+    '/capture/sitting': {"status": 200, 'sql': 208, 'json_loads': 86, 'places': 1, 'store_read': 1},
+    '/boxes': {"status": 200, 'sql': 79, 'json_loads': 5, 'places': 1, 'store_read': 1},
     '/graveyard': {"status": 200, 'sql': 20, 'store_read': 1},
     '/games': {"status": 200},
     '/orders': {"status": 200, 'sql': 186, 'json_loads': 300, 'store_read': 1},
@@ -310,7 +311,7 @@ BUDGET = {
     'POST /inventory/copies': {"status": 200, 'sql': 53, 'json_loads': 28, 'places': 1, 'store_read': 1},
     'POST /pipeline/preflight': {"status": 200, 'sql': 21, 'store_read': 2, 'read_sidecar': 21},
     'POST /pipeline/preflight keys': {"status": 200, 'sql': 34, 'json_loads': 3, 'store_read': 3, 'read_sidecar': 2},
-    'POST /orders/walk-plan': {"status": 200, 'sql': 44, 'json_loads': 104, 'records_in': 2, 'places': 1, 'store_read': 1},
+    'POST /orders/walk-plan': {"status": 200, 'sql': 44, 'json_loads': 30, 'places': 1, 'store_read': 1},
     # Two store opens (the selection's and the claims'), 11 statements each. `read_sidecar` is the WAITING_ANSWER cards' own sidecars and nothing else.
     STATE_ROW: {"status": 200, 'sql': 22, 'store_read': 2, 'read_sidecar': WAITING_ANSWER},
     SINCE_ROW: {"status": 200, 'sql': 22, 'store_read': 2, 'read_sidecar': WAITING_ANSWER},
