@@ -76,7 +76,7 @@ def send(
     A READ RETRIES (rule C). A WRITE PASSES `idempotent=False`: only a connect failure before send is
     retried (a refused connect, a failed name lookup, an unreachable network). `unreachable(caught)` builds the
     host's refusal for a connection that never opened, and `dropped()` for any other failure of the
-    socket.
+    socket, a `net.Dropped` write first: it may have been sent.
     """
     try:
         return net.open(
@@ -89,6 +89,10 @@ def send(
             follow_redirects=False,
             max_bytes=max_bytes,
         )
+    except net.Dropped:
+        # A write that may have been sent (a broken pipe on the body, a TLS failure after the connect)
+        # is never "could not reach": urllib wraps it in the same `URLError` as a refused connect.
+        raise dropped() from None
     except net.NetError as caught:
         cause = caught.__cause__
         if isinstance(cause, urllib.error.URLError):

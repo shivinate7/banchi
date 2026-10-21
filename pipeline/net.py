@@ -9,9 +9,13 @@ sets the pause. A pause that does not fit the budget is not taken, and the call 
 500, a 403 and any other 4xx are an answer, never retried.
 
 A DEGRADED HOST. After `PAUSE_AFTER_FAILURES` lost calls in a row to one host (distinct URLs are not
-required), every call to it makes exactly ONE attempt: no retry, no pause between attempts, and
-`degraded` tells a caller to skip its courtesy delay. A call is never refused unsent. Any success
-resets the count. The count is per host and shared by every caller in the process.
+required), every call to it makes exactly ONE attempt: no retry and no pause between attempts. A
+call is never refused unsent. Any HTTP answer but a 429 or a 5xx (a success, a 3xx, a 400, 403 or
+404) resets the count. A plain 500 neither counts nor resets. The count is per host and shared by
+every caller in the process. A caller keeps its courtesy delay on a degraded host that answers (429,
+502, 503, 504) and skips it only when `unanswered`: no lost call got an HTTP answer (refused,
+unreachable, a timeout). `retry_after` is what is left of the last lost call's `Retry-After`, the
+least gap before the next call.
 
 A WRITE IS `idempotent=False`. It retries only a connect-time failure: a refused connection, a
 failed name lookup, or an unreachable network or host. Anything that may have reached the other end
@@ -56,9 +60,11 @@ OFFLINE_WAIT_SECONDS = 12.0
 # Lost calls in a row to one host before it is degraded to one attempt per call.
 PAUSE_AFTER_FAILURES = 3
 
-# The lost-call count, keyed by `urlsplit(url).netloc`. One lock guards it and is never held across
-# a request.
-_HOSTS: Dict[str, int] = {}
+# Each host's lost calls in a row, keyed by `urlsplit(url).netloc`: `(count, answered, until)`.
+# `answered` is True once a lost call in the run got an HTTP answer. `until` is the `_monotonic()`
+# time a `Retry-After` on the last lost call asks a caller to wait for, or None. One lock guards it
+# and is never held across a request.
+_HOSTS: Dict[str, Tuple[int, bool, Optional[float]]] = {}
 _HOSTS_LOCK = threading.Lock()
 
 
@@ -121,18 +127,41 @@ def _clear_hosts() -> None:
         _HOSTS.clear()
 
 
+def _host(url: str) -> Tuple[int, bool, Optional[float]]:
+    with _HOSTS_LOCK:
+        return _HOSTS.get(urllib.parse.urlsplit(url).netloc, (0, False, None))
+
+
 def degraded(url: str) -> bool:
     """Whether `url`'s host lost `PAUSE_AFTER_FAILURES` calls in a row. A degraded host gets one
-    attempt per call, and a caller skips its courtesy delay."""
-    with _HOSTS_LOCK:
-        return _HOSTS.get(urllib.parse.urlsplit(url).netloc, 0) >= PAUSE_AFTER_FAILURES
+    attempt per call."""
+    return _host(url)[0] >= PAUSE_AFTER_FAILURES
 
 
-def _record(url: str, lost: bool) -> None:
-    """A success resets the host's count. A lost call adds one."""
+def unanswered(url: str) -> bool:
+    """Whether `url`'s host is degraded and none of its lost calls got an HTTP answer: it is down,
+    not busy, so a caller skips its courtesy delay. A host that answers 429 or 5xx keeps it."""
+    count, answered, _ = _host(url)
+    return count >= PAUSE_AFTER_FAILURES and not answered
+
+
+def retry_after(url: str) -> float:
+    """The seconds left of the `Retry-After` on `url`'s host's last lost call, else 0: the least gap
+    a caller leaves before its next call."""
+    until = _host(url)[2]
+    return 0.0 if until is None else max(0.0, until - _monotonic())
+
+
+def _record(url: str, lost: bool, answered: bool = False, hint: Optional[float] = None) -> None:
+    """An answer resets the host. A lost call adds one, notes whether the host answered it, and
+    keeps its `Retry-After`."""
     host = urllib.parse.urlsplit(url).netloc
     with _HOSTS_LOCK:
-        _HOSTS[host] = _HOSTS.get(host, 0) + 1 if lost else 0
+        if not lost:
+            _HOSTS.pop(host, None)
+            return
+        count, before, _ = _HOSTS.get(host, (0, False, None))
+        _HOSTS[host] = (count + 1, before or answered, None if hint is None else _monotonic() + hint)
 
 
 # A write's connect-time failures: nothing was sent. Any other `OSError` under a `URLError` may
@@ -234,8 +263,9 @@ def open(  # noqa: A001 - the module's one verb; callers say `net.open`
             if clock() - started + pause + next_attempt <= REQUEST_TIMEOUT_SECONDS:
                 sleep(pause)
                 continue
-        if idempotent and (retry or (answer is not None and answer[0] < 400)):
-            _record(url, lost=retry)
+        # A 429 or a retried 5xx is lost. Any other answer below 500 resets. A plain 500 does neither.
+        if idempotent and (retry or (answer is not None and answer[0] < 500)):
+            _record(url, lost=retry, answered=answer is not None, hint=hint)
         if failure is not None:
             raise failure
         status, got_headers, body = answer

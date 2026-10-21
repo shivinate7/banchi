@@ -1159,7 +1159,9 @@ class Market:
 
         The attempt is recorded BEFORE the fetch, so with a stale list in hand a failing host
         costs one request per instance, not one per card, and the stale list is served rather
-        than an error. A degraded host gets one attempt and no courtesy delay. A stale list is
+        than an error. A degraded host gets one attempt. The courtesy delay is skipped only on a
+        degraded host that never answered (`net.unanswered`), and a 429's `Retry-After` is the least
+        gap before the next call (`net.retry_after`). A stale list is
         asked for again once `OFFLINE_WAIT_SECONDS` has passed since its refresh failed.
         A payload with fewer results than the stale list held (an empty one
         included) is never stored: the cache keeps the old list.
@@ -1170,8 +1172,8 @@ class Market:
         stale = self._cached(slug, float("inf")) if catalog else None
         if stale is not None and slug in self._attempted and not self._stale_retry_due(slug):
             return stale
-        if self.requests and self._courtesy_delay and not net.degraded(url):
-            time.sleep(self._courtesy_delay)
+        if self.requests and self._courtesy_delay and not net.unanswered(url):
+            time.sleep(max(self._courtesy_delay, net.retry_after(url)))
         self._attempted.add(slug)
         self.requests += 1
         try:
