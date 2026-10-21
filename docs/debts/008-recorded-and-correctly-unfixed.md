@@ -19,6 +19,7 @@ No work proposed. Each item is a gap a green run does not show.
 - **Two queue reads still see departed cards.** `cli/requeue.py` walks `Queue.open_entries`, so a retired, sold or moved card can be requeued. `Queue.__len__` counts open entries, not owed ones (UN-8, a departed card owes no answer), and has no caller today. Every count a screen or a run line shows goes through `Queue.owed_entries`.
 - **A long Retry-After is not capped.** `pricehistory.Market`'s `get` sleeps `net.retry_after(url)` before its next call with no ceiling, so a 429 with `Retry-After: 3600` holds a request slot for an hour. No 429 with Retry-After has been seen from either host. A cap at `net.REQUEST_TIMEOUT_SECONDS` is its own lane.
 - **A fresh Market skips the Retry-After gap on its first call.** Each press builds a new Market, and the gap is gated on `self.requests`. The next press can call a host that asked it to wait.
+- **`numbered record growth` reads a conflicted merge's staged main files as this branch allocating a number.** A merge of main that needs a hand-resolved conflict commits through the hook, which sees main's numbered decision files in the staged diff and refuses. A clean merge passes. Keep conflicts off shared lines, such as a target's own `.PHONY` line.
 - **`net` reads "answered" from a call's last attempt only.** A 503 then two refused connects records as unanswered, so the courtesy delay is skipped although the host answered once.
 
 **Outcome at risk.** A run is read as a promise none of these gives.
