@@ -1133,6 +1133,113 @@ def check_store_of_record(checks: Checks) -> None:
         )
 
 
+def _seed_rows_len() -> None:
+    """Ten cards (five in box 3, five in box 4) and five listings (three Near Mint, two not)."""
+    with Store().write() as snapshot:
+        for box in (3, 4):
+            for at in range(1, 6):
+                snapshot.inventory.allocate_capture(
+                    box, capture_id=f"len-{box}-{at}", cid=fake_cid(f"len-{box}-{at}")
+                )
+        for at in range(5):
+            snapshot.inventory.listing(
+                f"90{at}", condition="Near Mint" if at < 3 else "Lightly Played"
+            )
+
+
+@contextmanager
+def _snapshot_of(kind: str):
+    if kind == "read":
+        yield Store().read()
+    else:
+        with Store().write() as snapshot:
+            yield snapshot
+
+
+# (table, how to reach it, rows stored, one stored key, a filter, rows the filter matches, add a row)
+ROWS_LEN_TABLES = (
+    (
+        "cards", lambda s: s.inventory.cards, 10, "3/1", {"box": 3}, 5,
+        lambda s: s.inventory.allocate_capture(3, capture_id="len-new", cid=fake_cid("len-new")),
+    ),
+    (
+        "listings", lambda s: s.inventory.listings, 5, "900", {"condition": "Near Mint"}, 3,
+        lambda s: s.inventory.listing("905", condition="Near Mint"),
+    ),
+)
+# (step, what it does to the table, objects it leaves built given (stored, matches), complete)
+ROWS_LEN_LOADS = (
+    ("no load", lambda t, key, flt: None, lambda stored, matches: 0, False),
+    ("one get", lambda t, key, flt: t.get(key), lambda stored, matches: 1, False),
+    ("a where", lambda t, key, flt: t.where(**flt), lambda stored, matches: matches, False),
+    (
+        "a get, then a where that returns the same row",
+        lambda t, key, flt: (t.get(key), t.where(**flt)),
+        lambda stored, matches: matches,
+        False,
+    ),
+    (
+        "a where, then a full load",
+        lambda t, key, flt: (t.where(**flt), list(t)),
+        lambda stored, matches: stored,
+        True,
+    ),
+)
+
+
+def check_rows_len_after_partial_load(checks: Checks) -> None:
+    """`len(table)` is the stored row count however much of the table a snapshot has loaded.
+
+    A READ SNAPSHOT OPENS ITS TABLES WITH `track=False`, so `Rows._remember` never fills
+    `_baseline`, and `Rows.__len__` takes every loaded row for a new one and adds it to the
+    source's own count. A caller that loaded one row and then took `len` got N + 1. A write
+    snapshot fills `_baseline` and counts right, so each case runs on both and the read
+    snapshot's answer has to match the write snapshot's.
+
+    `len(table)` IS READ BEFORE ANY ITERATION. `list(table)` loads the whole table, which
+    sets `complete` and makes `__len__` answer `len(_loaded)`, so asking after it would hide
+    the defect. Each case opens its own snapshot, since a load stays in the snapshot that
+    made it. `get`, `[]` and `where` are the calls that build objects; `in`, `select`,
+    `pluck`, `top` and `count_by` build none, so a case made of them proves nothing here.
+    """
+    checks.note("")
+    checks.note("ROWS LEN — store/rows.py: a partial load never changes the count")
+
+    with isolated_home():
+        _seed_rows_len()
+        for kind in ("read", "write"):
+            for name, pick, stored, key, flt, matches, _new in ROWS_LEN_TABLES:
+                for step, load, loaded, complete in ROWS_LEN_LOADS:
+                    with _snapshot_of(kind) as snapshot:
+                        table = pick(snapshot)
+                        load(table, key, flt)
+                        seen = (table.loaded_count, table.complete, len(table))
+                        listed = len(list(table))
+                    checks.equal(
+                        (*seen, listed),
+                        (loaded(stored, matches), complete, stored, stored),
+                        f"{kind} snapshot, {name}: (built, complete, len, rows) after {step}",
+                    )
+
+    # What a fix must keep: in a write session a row born here counts once, a row deleted
+    # here counts not at all, and neither depends on how much was loaded first.
+    for name, pick, stored, key, flt, _matches, new in ROWS_LEN_TABLES:
+        with isolated_home():
+            _seed_rows_len()
+            with Store().write() as snapshot:
+                table = pick(snapshot)
+                table.where(**flt)
+                new(snapshot)
+                added = len(table)
+                del table[key]
+                removed = len(table)
+        checks.equal(
+            (added, removed),
+            (stored + 1, stored),
+            f"write snapshot, {name}: after a where, a new row counts once and a deleted one not at all",
+        )
+
+
 def check_skus_photos_limit(checks: Checks) -> None:
     """`GET /skus/photos` (`do_skus_photos`, D298) answers at most `SKUS_PHOTOS_LIMIT` SKUs
     per call and refuses more with `too_many_skus`, so a hand-typed query string cannot ask
@@ -2153,6 +2260,7 @@ CHECKS = (
     check_open_read_only_wal_present_never_falls_back,
     check_open_read_only_corrupt_main_file,
     check_store_of_record,
+    check_rows_len_after_partial_load,
     check_photo_reclaim,
     check_skus_photos_limit,
     check_server_routes,
