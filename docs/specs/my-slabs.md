@@ -229,6 +229,15 @@ The store gets three tables (D88, SQLite and one transaction per write):
 - `slab_sales`: each sale seen, keyed by the sale `id`. A sale Card Ladder later drops stays
   here.
 
+`store/slabs.py` holds them. The rules the build chose:
+
+- A slab added again keeps its first added date.
+- A second snapshot on one day replaces that day's row.
+- A sale that two slabs read is one row, linked to both.
+- Money is stored as text. Step 3 converts Card Ladder's numbers at the route.
+- Sale dates sort as ISO strings. Card Ladder's date format is unmeasured.
+- A slab with no sale at its grade stores no value, never a number.
+
 ## Build plan
 
 Kind: build. Platform: macOS, over the capture server.
