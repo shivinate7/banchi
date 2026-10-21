@@ -265,7 +265,7 @@ test('the Name column sorts, and a second click is the exact reverse of the firs
 test('the search field narrows the product table by name', async ({ page }) => {
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  await page.getByPlaceholder('Card name, set or SKU…').fill('pikachu')
+  await page.getByPlaceholder('Card, set or SKU…').fill('pikachu')
   expect(await productNames(page)).toEqual(['Pikachu VMAX'])
 })
 
@@ -277,7 +277,7 @@ test('the search field narrows the product table by name', async ({ page }) => {
 test('the search field is the shared matcher, not a substring test (D271)', async ({ page }) => {
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  await page.getByPlaceholder('Card name, set or SKU…').fill('ex charizard')
+  await page.getByPlaceholder('Card, set or SKU…').fill('ex charizard')
   expect(await productNames(page)).toEqual(['Charizard ex'])
 })
 
@@ -303,7 +303,7 @@ test('the search field also finds a row by its set name (F11b)', async ({ page }
     ...generalOrders().slice(3),
   ])
   await open(page, '?period=all')
-  await page.getByPlaceholder('Card name, set or SKU…').fill('vivid voltage')
+  await page.getByPlaceholder('Card, set or SKU…').fill('vivid voltage')
   expect(await productNames(page)).toEqual(['Pikachu VMAX'])
 })
 
@@ -311,7 +311,7 @@ test('the search field also finds a row by its set name (F11b)', async ({ page }
 test('the search field also finds a row by its SKU (F11c)', async ({ page }) => {
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  await page.getByPlaceholder('Card name, set or SKU…').fill('9200002')
+  await page.getByPlaceholder('Card, set or SKU…').fill('9200002')
   expect(await productNames(page)).toEqual(['Pikachu VMAX'])
 })
 
@@ -379,7 +379,7 @@ test('sort, search and the month filter all round-trip through the URL, includin
   await open(page, '?period=all')
 
   await page.getByRole('columnheader', { name: 'Name' }).getByRole('button').click()
-  await page.getByPlaceholder('Card name, set or SKU…').fill('char')
+  await page.getByPlaceholder('Card, set or SKU…').fill('char')
   await page.locator('.revenue-month-col', { hasText: 'Jul 2026' }).click()
 
   await expect(page).toHaveURL(/[?&]sort=name&dir=asc/)
@@ -389,7 +389,7 @@ test('sort, search and the month filter all round-trip through the URL, includin
   await page.reload()
   await expect(page.locator('main.revenue')).toBeVisible()
   await expect(page.getByRole('columnheader', { name: 'Name' })).toHaveAttribute('aria-sort', 'ascending')
-  await expect(page.getByPlaceholder('Card name, set or SKU…')).toHaveValue('char')
+  await expect(page.getByPlaceholder('Card, set or SKU…')).toHaveValue('char')
   await expect(page.locator('.revenue-month-col[aria-pressed="true"]')).toContainText('Jul 2026')
   expect(await productNames(page)).toEqual(['Charizard ex'])
 })
