@@ -1000,9 +1000,13 @@ COMPONENTS = [
                            "governed_by": ["D15", "D18", "D77"]},
             "net.py": {"does": "the one retry home: `net.open` and `net.request` carry every network "
                                "call. Rule C (no connection, 429, 502, 503, 504, backoff, "
-                               "Retry-After), one host pause shared by every caller, and "
-                               "`idempotent=False` for a write, which retries only a connect "
-                               "failure before send and never reads or sets the host pause.",
+                               "Retry-After). A per-host lost-call count, shared by every "
+                               "caller, degrades a host to one attempt per call and never "
+                               "refuses one; any answer but a 429 or a 5xx resets it. "
+                               "`unanswered` and `retry_after` tell a caller when to skip or "
+                               "stretch its courtesy delay. `idempotent=False` is a write: it "
+                               "retries only a connect failure before send, and never counts "
+                               "toward or is limited by a degraded host.",
                        "governed_by": ["D319"],
                        "tested_by": ["T7"]},
             "pricing.py": {"does": "rules, rounding, floor clamp, threshold, no_market_data "

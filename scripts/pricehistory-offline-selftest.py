@@ -129,7 +129,7 @@ def _contract_names() -> None:
        "contract: PAUSE_AFTER_FAILURES is 3, module-level",
        "is %r" % (getattr(pricehistory, "PAUSE_AFTER_FAILURES", None),))
     ok(callable(getattr(pricehistory, "_clear_host_pauses", None)),
-       "contract: _clear_host_pauses() exists and resets the per-host and per-URL state")
+       "contract: _clear_host_pauses() exists and resets the per-host state")
 
 
 def _offline_only_fetches_once() -> None:
