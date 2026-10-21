@@ -181,8 +181,8 @@ Asked one at a time. Each ruling moves into "Owner rulings" above.
    mkcert root `degen` uses for `feed.home.arpa`, Let's Encrypt DNS-01 on a real domain, or a Caddy internal CA.
 5. **Closing the bare port.** Deferred with question 4, as front-door detail. Options: loopback plus
    the Green, a firewall rule, or the proxy on the Mac.
-6. **Who owns the Green-side config.** The `home` repo (HA rules there: ask before an HA restart), or
-   banchi as a local add-on folder.
+6. **Who owns the Green-side config.** Deferred: decided when the first Green piece is built. Options:
+   a banchi add-on folder (the `degen` pattern), or the `home` repo.
 
 ## 7. What not to do
 
