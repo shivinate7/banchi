@@ -6,6 +6,7 @@ the order `CHECK_ORDER` runs them.
 
 from __future__ import annotations
 
+import errno
 import io
 import json
 import http.client
@@ -2239,7 +2240,7 @@ def check_key_rotation(checks: Checks) -> None:
 # ----------------------------------------------------------- D319, every network call retries once
 
 
-_REFUSED = urllib.error.URLError(ConnectionRefusedError(61, "simulated: connection refused"))
+_REFUSED = urllib.error.URLError(ConnectionRefusedError(errno.ECONNREFUSED, "simulated: connection refused"))
 _RETRYABLE = (429, 502, 503, 504)
 
 
@@ -2376,7 +2377,7 @@ def _write_dropped_after_send_is_raised_at_once(net):
     drops = (
         TimeoutError("simulated: no answer after send"),
         http.client.RemoteDisconnected("simulated: closed without a response"),
-        ConnectionResetError(54, "simulated: reset by peer"),
+        ConnectionResetError(errno.ECONNRESET, "simulated: reset by peer"),
     )
     for index, drop in enumerate(drops):
         got, caught, wire = _unsent_write(net, [drop, b"done"], f"w-drop-{index}")
@@ -2650,21 +2651,24 @@ def check_net_write_is_not_resent_after_a_partial_send(checks: Checks) -> None:
     have started the work. urllib wraps that `OSError` in a `URLError`, the same type as a refused
     connect, so only a socket scripted BELOW urllib shows whether the retry home tells them apart
     (`_socket_wire`). A refused connection and a failed name lookup never sent a byte, so a write
-    still retries those."""
+    still retries those, and a refusal is read by its type, not by an errno it may not carry.
+    Every errno here is the `errno` constant: a number typed for one OS is another error on the next."""
     checks.note("")
     checks.note("NET REQUEST — a write is sent once after a partial send (real urllib, scripted socket)")
     net_cases(checks, (
         ("`idempotent=False`: a broken pipe on the body send, after the headers went out, is 1 request and raised, not Offline",
-         lambda net: _write_broken_after_the_headers_is_one_request(net, BrokenPipeError(32, "simulated: broken pipe"))),
+         lambda net: _write_broken_after_the_headers_is_one_request(net, BrokenPipeError(errno.EPIPE, "simulated: broken pipe"))),
         ("`idempotent=False`: a reset on the body send, after the headers went out, is 1 request and raised, not Offline",
          lambda net: _write_broken_after_the_headers_is_one_request(
-             net, ConnectionResetError(54, "simulated: reset by peer"))),
+             net, ConnectionResetError(errno.ECONNRESET, "simulated: reset by peer"))),
         ("`idempotent=False`: a refused connect never sent a byte, so it is still retried (guard)",
          lambda net: _write_that_never_connected_is_still_retried(
-             net, ConnectionRefusedError(61, "simulated: connection refused"))),
+             net, ConnectionRefusedError(errno.ECONNREFUSED, "simulated: connection refused"))),
+        ("`idempotent=False`: a refused connect that carries no errno never sent a byte, so it is still retried",
+         lambda net: _write_that_never_connected_is_still_retried(net, ConnectionRefusedError())),
         ("`idempotent=False`: a failed name lookup never sent a byte, so it is still retried (guard)",
          lambda net: _write_that_never_connected_is_still_retried(
-             net, socket.gaierror(8, "simulated: name lookup failed"))),
+             net, socket.gaierror(socket.EAI_NONAME, "simulated: name lookup failed"))),
     ))
 
 
@@ -2880,7 +2884,7 @@ def _portal_send(url, *, data=None, idempotent=True):
 # Both end as `net.Dropped` for a write, and urllib wraps both in a `URLError`, the same type as a
 # refused connect: the portal door must tell them from it by the retry home's verdict, not the wrapper.
 _WRITES_THAT_DROP = (
-    ("a broken pipe on the body send", lambda: ("body", BrokenPipeError(32, "simulated: broken pipe"))),
+    ("a broken pipe on the body send", lambda: ("body", BrokenPipeError(errno.EPIPE, "simulated: broken pipe"))),
     ("a failed TLS handshake", lambda: ssl.SSLError(1, "[SSL: WRONG_VERSION_NUMBER] simulated: wrong version")),
 )
 
@@ -2904,7 +2908,7 @@ def _portal_send_reports_a_dropped_write_as_dropped(net, step, host):
 
 
 def _reset_after_send(sent):
-    raise ConnectionResetError(54, "simulated: reset by peer")
+    raise ConnectionResetError(errno.ECONNRESET, "simulated: reset by peer")
 
 
 def _tcg_write(step):
@@ -2929,7 +2933,7 @@ def _tcg_export_reports_a_dropped_write_like_any_other_drop(net, step):
 
 
 def _a_write_that_never_connected_is_still_unreachable(net):
-    refusal = ConnectionRefusedError(61, "simulated: connection refused")
+    refusal = ConnectionRefusedError(errno.ECONNREFUSED, "simulated: connection refused")
     with _socket_wire(refusal) as wire:
         got, caught = attempt(lambda: _portal_send("http://w-refused.example.test/x", data=b"x=1", idempotent=False))
     return (

@@ -8,6 +8,7 @@ server on 127.0.0.1.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import http.server
 import json
@@ -270,7 +271,7 @@ def check_model_download(checks: Checks) -> None:
         server.server_close()
 
 
-_REFUSED = urllib.error.URLError(ConnectionRefusedError(61, "simulated: connection refused"))
+_REFUSED = urllib.error.URLError(ConnectionRefusedError(errno.ECONNREFUSED, "simulated: connection refused"))
 
 
 def check_model_download_retries_through_the_one_home(checks: Checks) -> None:

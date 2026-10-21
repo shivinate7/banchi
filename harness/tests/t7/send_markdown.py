@@ -7,6 +7,7 @@ the order `CHECK_ORDER` runs them.
 from __future__ import annotations
 
 import contextlib
+import errno
 import json
 import http.client
 import http.server
@@ -7139,7 +7140,7 @@ def check_withholding(checks: Checks) -> None:
         )
 
 
-_REFUSED = urllib.error.URLError(ConnectionRefusedError(61, "simulated: connection refused"))
+_REFUSED = urllib.error.URLError(ConnectionRefusedError(errno.ECONNREFUSED, "simulated: connection refused"))
 
 
 def check_tcg_import_post_retries_only_what_was_never_sent(checks: Checks) -> None:
@@ -7183,7 +7184,7 @@ def check_tcg_import_post_retries_only_what_was_never_sent(checks: Checks) -> No
     for drop in (
         TimeoutError("simulated: no answer after send"),
         http.client.RemoteDisconnected("simulated: closed without a response"),
-        ConnectionResetError(54, "simulated: reset by peer"),
+        ConnectionResetError(errno.ECONNRESET, "simulated: reset by peer"),
     ):
         got, caught, wire = post([drop, accepted])
         checks.ok(
