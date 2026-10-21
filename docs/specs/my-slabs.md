@@ -266,6 +266,8 @@ Kind: build. Platform: macOS, over the capture server.
 4. The `#/slabs` screen, built on `<Page>` (D275, every screen inherits the page scaffold),
    from section 4. It waits on the kit lane in 4.7. The client's login errors name a Google host;
    the screen shows them as a sentence with no host name (D196, no user-visible string names a decision).
+   The busy refusal says a slab is being added, even when a second remove caused it. So the
+   remove control waits for its answer, and a double press never sends a second remove.
 5. A launchd job for the daily sweep, like `make price-refresh-agent`. A Google error on the
    token exchange stops the sweep too, because the exchange host has no pace of its own.
 6. The three checks that D320 names.
