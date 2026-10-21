@@ -18,6 +18,8 @@ a role would change.
 6. **No rule ties the store to one Mac.** D13's paragraph that the store and photos live on one Mac and
    are read only through its server is deleted as too specific. D13's camera rules stay. Untangling
    decisions that hold more than one rule is a later lane.
+7. **Reclaim moves sold photos to a recycle bin on the drive.** A later cleanup empties the bin. Its
+   timing is open. This is planning only: D89 changes when R1 is built, not before.
 
 ## 1. What the tier is
 
@@ -75,7 +77,8 @@ One writer stays one writer (D88, D138). The Green never writes `store.sqlite`.
 
 - **What.** Litestream streams the store's WAL to the Green over SFTP, as a replica copy. A nightly
   `sqlite3 .backup` is the simpler fallback. Photos and `price_history` exports sync as files. The
-  catalog image mirror lives on the drive. A reclaim moves a sold photo to the drive instead of deleting it.
+  catalog image mirror lives on the drive. A reclaim moves a sold photo to a recycle bin on the drive
+  instead of deleting it (ruling 7). A later cleanup empties the bin.
 - **Solves.** DEBT67, the one-copy store. The `price_history` loss. D89's no-undo reclaim.
 - **Cost.** Small. One replication process on the Mac and one SFTP or SSH target on the Green (the
   `core_ssh` add-on exists). Litestream needs WAL mode and a `busy_timeout`, and the store already uses WAL (D88).
@@ -173,7 +176,7 @@ Asked one at a time. Each ruling moves into "Owner rulings" above.
 
 1. **Where may the store, the photos and the secrets live?** Ruled: ruling 5.
 2. **D13, the Mac holds the one truth.** Ruled: ruling 6.
-3. **D89's reclaim.** Should it move sold photos to the drive instead of deleting them?
+3. **D89's reclaim.** Ruled: ruling 7. Still open: when the cleanup empties the recycle bin.
 4. **Certificates.** A Caddy internal CA, or Let's Encrypt DNS-01 on a real domain.
 5. **Closing the bare port.** Loopback plus the Green, a firewall rule, or the proxy on the Mac.
 6. **Who owns the Green-side config.** The `home` repo (HA rules there: ask before an HA restart), or
