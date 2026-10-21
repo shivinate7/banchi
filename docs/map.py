@@ -1638,9 +1638,9 @@ COMPONENTS = [
                                         "transaction and within-bucket dispersion. It also reads "
                                         "that mirror's current /prices, which are per product per "
                                         "PRINTING and never per SKU.",
-                                "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D86",
-                                                "D55", "D278", "D65", "D277", "D171", "D216",
-                                                "D234", "D240", "D254"],
+                                "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D55",
+                                                "D65", "D86", "D171", "D216", "D234", "D240",
+                                                "D254", "D277", "D278", "D319"],
                                 "tested_by": ["T7"],
                                 "note": "REACHABLE AS OF 2026-08-30 (D278) — this entry read "
                                         "RECORDED RATHER THAN BUILT for one day, and the whole "
@@ -3110,19 +3110,13 @@ COMPONENTS = [
                 "governed_by": ["D216", "D219", "D234"],
             },
             "pricehistory-offline-selftest.py": {
-                "does": "proves `pipeline/pricehistory.py:Market` fails fast once the "
-                        "network is genuinely unreachable, no network, no real sleep. A "
-                        "counting fetcher that always raises the new `Offline` (a subclass "
-                        "of `Unreachable`, never a plain HTTP-status failure) is called "
-                        "exactly ONCE across 50 distinct slugs — every call after the first "
-                        "raises immediately, with no courtesy delay. A sibling arm proves a "
-                        "plain `Unreachable` is NOT sticky: the fetcher is called once per "
-                        "distinct slug, since a bad HTTP status from one product says "
-                        "nothing about the next (D278). Measured 2026-09-27: a real "
-                        "demo-mirror trends request over 387 SKUs went from 102.2s "
-                        "(95.85s of it `time.sleep`, per `cProfile`) to 0.78s. Not wired "
-                        "into `make check`.",
-                "governed_by": ["D18", "D278"],
+                "does": "proves `pipeline/pricehistory.fetch_json`'s one retry rule over a "
+                        "scripted `urlopen` and one fake clock, no network, no real sleep: "
+                        "which failures retry, the time budget and `Retry-After`, and that a "
+                        "host pauses only after `PAUSE_AFTER_FAILURES` lost calls in a row on "
+                        "distinct URLs, shared by every `Market`, with no request or courtesy "
+                        "delay while paused. Not wired into `make check`.",
+                "governed_by": ["D18", "D278", "D319"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "
@@ -4968,7 +4962,7 @@ COMPONENTS = [
                 # D42 joins because hooks() no longer merely reports a config: it encodes where
                 # the hooks must be INSTALLED, and reads NOT ARMED for the working-tree
                 # arrangement that entry started with and then had to retract.
-                "governed_by": ["D16", "D17", "D42", "D43", "D80", "D86", "D88", "D127", "D138", "D158", "D179"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D80", "D86", "D88", "D127", "D138", "D158", "D176", "D179"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "

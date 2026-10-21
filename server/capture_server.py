@@ -493,6 +493,18 @@ JPEG_MAGIC = b"\xff\xd8\xff"
 # this server does not do. It is in `ALL_METHODS` as well because an origin this server
 # knows may never be told less than one it does not.
 SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+# POSTs that are not the owner's change: reads, and timer work an open tab starts on its own (the
+# live-check settle writes receipts). None of them may mark activity.
+NOT_A_CHANGE_POSTS = (
+    "/pipeline/waiting",
+    "/pipeline/preflight",
+    "/pipeline/crop-preview",
+    "/pipeline/live-check",
+    "/orders/fetch",
+    "/orders/picks",
+    "/orders/walk-plan",
+    "/inventory/copies",
+)
 ALL_METHODS = ("GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS")
 
 # The Vite dev server (`make dev`), on both spellings of this machine. Two entries and not
@@ -3159,10 +3171,10 @@ def _card_row(
     return _decorate_card(asdict(card), _Places(inventory), skus, box=box, index=index)
 
 
-def _queue_depth(queue: queues.Queue) -> Tuple[Optional[int], Optional[str]]:
-    """How many cards are still waiting in one queue, or None and a finding. Never raises.
+def _queue_depth(queue: queues.Queue, cards) -> Tuple[Optional[int], Optional[str]]:
+    """How many cards still owe an answer in one queue, or None and a finding. Never raises.
 
-    `len(Queue)` IS A SORT, which is not obvious from the call and is what made this
+    `Queue.owed_entries` IS A SORT, which is not obvious from the call and is what made this
     necessary. It runs `open_entries`, which orders by `QueueEntry.sort_key` — so a `market`
     that is not a number raises `decimal.InvalidOperation`, and a `box` that arrived as a
     JSON string raises `TypeError` on the tuple compare (`Queue.parse` coerces nothing).
@@ -3179,7 +3191,7 @@ def _queue_depth(queue: queues.Queue) -> Tuple[Optional[int], Optional[str]]:
     PER QUEUE, so a corrupt `review.json` does not also hide what is sitting in parked.
     """
     try:
-        return len(queue), None
+        return len(queue.owed_entries(cards)), None
     except (ArithmeticError, TypeError, ValueError) as exc:
         return None, (
             f"the {queue.name} queue holds an entry that cannot be ordered "
@@ -3200,6 +3212,7 @@ def do_status() -> dict:
     snapshot = Store().read()
     inventory = snapshot.inventory
     problems: List[str] = []
+    states = inventory.counts()
 
     body = {
         # WHICH PROCESS IS ANSWERING. `scripts/serve.py` restarts this server when a watched
@@ -3217,10 +3230,13 @@ def do_status() -> dict:
         "captures_root": str(captures_root()),
         "store": str(files.inventory_dir()),
         "store_exists": files.inventory_dir().is_dir(),
-        "cards": len(inventory.cards),
-        "states": inventory.counts(),
-        # OPEN entries, which is what `len(Queue)` returns, what `Queue.summary` prints in
-        # every run report, and what `GET /queues` hands the review screen. This counted
+        # The total is the sum of the per-state GROUP BY, so one query answers both and the
+        # owed-count read (`departed_among`) fits inside this route's read budget.
+        "cards": sum(states.values()),
+        "states": states,
+        # OWED entries (UN-8: open, less every card that has left its box), which is what
+        # `Queue.owed_entries` returns, what `Queue.summary` prints in every run report, and
+        # what `GET /queues` hands the review screen. This counted
         # `entries` — every record in the file, cleared or not — until 7b, and the two were
         # indistinguishable because NOTHING IN THIS REPO HAD EVER SET `cleared_by_human`;
         # `store/queues.py` and `store/cache.py` both say so in their headers.
@@ -3239,7 +3255,7 @@ def do_status() -> dict:
     # from too — so the two wire keys and the finding that explains a null one cannot come to
     # disagree about which file is meant.
     for queue in (snapshot.review, snapshot.parked):
-        depth, finding = _queue_depth(queue)
+        depth, finding = _queue_depth(queue, inventory.cards)
         body["queues"][queue.name] = depth
         if finding:
             problems.append(finding)
@@ -16253,7 +16269,21 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     f"another address, add it to {ORIGINS_ENV} — comma or space separated — "
                     f"and restart nothing: it is read on every request.",
                 )
+            # MARKED BEFORE THE HANDLER AS WELL AS AFTER: a long write that starts once the owner
+            # has been idle for the window is itself a change, and a restart due mid-write drains it.
+            changes = (
+                self.command not in SAFE_METHODS
+                and (urlparse(self.path).path.rstrip("/") or "/") not in NOT_A_CHANGE_POSTS
+            )
+            if changes:
+                files.mark_activity()
             handler()
+            # A REQUEST THAT CHANGES STATE IS THE OWNER'S LAST CHANGE; the supervisor holds an
+            # auto-restart while it is fresh. HERE AND NOT IN THE STORE'S WRITE PATH, because the
+            # background reader, the setup and the sweeps write the store with nobody at the screen.
+            # A request the origin gate refuses marks nothing.
+            if changes:
+                files.mark_activity()
         except BadRequest as exc:
             self._fail(exc.status, exc.code, str(exc))
         except codes_routes.CodesRefusal as exc:

@@ -1907,6 +1907,23 @@ class SqliteSource:
         ).fetchall()
         return [(row[0], tuple(row[1:])) for row in rows]
 
+    def pluck(self, column: str, keys: Sequence[str]) -> Iterable[Tuple[str, Any]]:
+        """`(key, column value)` for the named keys that exist: one indexed `key IN` query per
+        500 keys, under SQLite's bound-variable limit."""
+        if column not in self.columns:
+            raise KeyError(f"{self.table} has no indexed column {column!r}")
+        where, params = self._where({})
+        joiner = " AND " if where else " WHERE "
+        found: list = []
+        for start in range(0, len(keys), 500):
+            chunk = list(keys[start : start + 500])
+            marks = ",".join("?" * len(chunk))
+            found += self.conn.execute(
+                f"SELECT key, {column} FROM {self.table}{where}{joiner}key IN ({marks})",
+                params + chunk,
+            ).fetchall()
+        return [(row[0], row[1]) for row in found]
+
     def high_water(
         self, column: str, equals: Dict[str, Any], unreadable: Sequence[str]
     ) -> Tuple[int, bool]:

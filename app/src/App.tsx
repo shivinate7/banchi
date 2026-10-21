@@ -815,7 +815,7 @@ function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: (
           autoComplete="off"
           spellCheck={false}
           value={query}
-          placeholder="Go to a screen, or a card"
+          placeholder="Pricing, Orders, or a card name…"
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') {
@@ -1023,7 +1023,7 @@ function KeysSheet({ open, onClose, path }: { open: boolean; onClose: () => void
   return (
     <Modal open={open} onClose={onClose} title="Shortcuts" icon="keyboard" className="app-keys">
       <div className="app-keys-search">
-        <SearchField value={query} onChange={setQuery} persona="owner" label="Search" placeholder="Search" autoFocus />
+        <SearchField value={query} onChange={setQuery} persona="owner" label="Search" placeholder="A key or action, like Skip…" autoFocus />
       </div>
       <div className="app-keys-body">
         {groups.length === 0 ? <p className="app-keys-none">No shortcut matches “{query}”.</p> : null}

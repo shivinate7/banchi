@@ -56,7 +56,7 @@ D142 argued the picker should keep the number, and the argument was right. It sa
 
 **Three things are deliberately unchanged.**
 
-**Searching by number still works, and the placeholder still says so:** `Name or number`. Name comes first, since that is what the rows show and what the operator thinks in. The number stays, since D20 makes this one control over both, and a drawer may have no name at all. A placeholder that stopped saying so would hide a working search.
+**Searching by number still works, and the placeholder still says so:** `Box name or number, like 7…`. Name comes first, since that is what the rows show and what the operator thinks in. The number stays, since D20 makes this one control over both, and a drawer may have no name at all. A placeholder that stopped saying so would hide a working search.
 
 **An unnamed box still draws its number, and that is not an exception.** `captureBoxLabel` already puts it in the name's place (D142, D56: a placeholder would draw a fault where there is none). What had to be prevented is the doubling. A suffix beside it reads `Box 6 Box 6`. The test for it is the TRIMMED name, which is what `captureBoxLabel` itself applies. The old test was `option.name === null`. A whitespace-only name slipped past it into exactly that doubling.
 

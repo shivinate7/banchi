@@ -78,6 +78,26 @@ def lock_wait_seconds() -> float:
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+# THE OWNER'S LAST CHANGE, for the supervisor (`scripts/serve.py`): its mtime is the time. The capture
+# server touches it when a request changes state and when the price refresh reports progress; the supervisor
+# holds an auto-restart and an app build while it is fresh. Here because the server and the pipeline
+# both reach `store.files` and the supervisor already imports it: one path, one writer.
+ACTIVITY_PATH = (".serve", "activity")
+
+
+def activity_path(root: Path = REPO_ROOT) -> Path:
+    return root.joinpath(*ACTIVITY_PATH)
+
+
+def mark_activity() -> None:
+    """Say the owner just changed something. Best effort: a failed touch must not fail the request."""
+    path = activity_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    except OSError:
+        pass
+
 
 class StoreError(RuntimeError):
     """The store could not be read or written."""

@@ -66,10 +66,13 @@ from pipeline import games as game_registry
 from pipeline import join
 from pipeline.pricehistory import (
     CATALOG_HOST,
+    Blocked,
     EXTENDED_NUMBER,
     PriceHistoryError,
     Market,
+    NotResolvable,
     ProductIndex,
+    Unreachable,
     extended,
 )
 
@@ -78,6 +81,13 @@ from pipeline.pricehistory import (
 # reason to exist is fresh art on a screen the owner is looking at right now, so it asks
 # tcgcsv again well within one sitting rather than trusting a fetch from days ago forever.
 TCGCSV_TTL_SECONDS = 3600.0
+
+# How long a pair whose fetch FAILED (the catalogue was unreachable) is left alone before
+# `warm` tries it again. Short, because a failure is not an answer: it is never stored as an
+# index, so it cannot hold a final "no photo" for the ttl. Not shorter than
+# `pricehistory.OFFLINE_WAIT_SECONDS`, so a paused host is open again by the time this lapses.
+# The app re-asks a pending photo for about 31 s, and the retry must land inside that.
+FETCH_RETRY_SECONDS = 20.0
 
 VENDOR_ROOT = Path(__file__).resolve().parent.parent / "vendor" / "pokemon-tcg-data"
 
@@ -307,6 +317,10 @@ class StockImages:
         # workers `warm` starts.
         self._cache: Dict[Tuple[str, str], Tuple[float, _ImageIndex]] = {}
         self._pending: Set[Tuple[str, str]] = set()
+        # `(game, set_name) -> when its last fetch FAILED`, guarded by `_lock` with the two
+        # above. A failure never writes `_cache`: a cold pair stays cold (so `group_pending`
+        # stays True) and a stale pair keeps its last good index.
+        self._failed_at: Dict[Tuple[str, str], float] = {}
         self._lock = threading.Lock()
         # `Market` (`pipeline/pricehistory.py`) documents no thread safety of its own —
         # `_memory` and `_indexes` are plain dicts. `warm()` starts one daemon thread PER
@@ -320,11 +334,18 @@ class StockImages:
         # itself never blocks — serializing it here costs nothing `url_for` can feel.
         self._market_lock = threading.Lock()
 
-    def _fetch_tcgcsv(self, game: str, set_name: str) -> _ImageIndex:
+    def _fetch_tcgcsv(self, game: str, set_name: str) -> Optional[_ImageIndex]:
         """The blocking walk: category, group, products. Called ONLY from a background
         thread (`_warm_one`) — never from `url_for`, `url_for_product`, `_tcgcsv_lookup` or
         `_tcgcsv_name_lookup`, which is the whole point of this split.
+
+        `None` means the catalogue could not be reached (`Unreachable`, `Blocked`): no
+        answer at all. An empty index is a real answer: the catalogue replied and has no
+        such set (`NotResolvable`) or a payload this walk cannot read. A `NotResolvable`
+        built on a groups list that `Market` served STALE after a failed refresh is no answer
+        either: the set may be newer than the list.
         """
+        category_id = None
         try:
             with self._market_lock:
                 product_line = str(game_registry.get(game)["product_line"])
@@ -340,6 +361,14 @@ class StockImages:
                     f"tcgcsv/{category_id}/{group_id}/products",
                     self._ttl,
                 )
+        except (Unreachable, Blocked):
+            return None
+        except NotResolvable:
+            if category_id is not None and self._market.serving_stale(f"tcgcsv/{category_id}/groups"):
+                return None
+            return _ImageIndex(
+                by_number={}, products=ProductIndex(by_number={}, by_name={}), urls_by_product_id={}
+            )
         except (PriceHistoryError, KeyError):
             return _ImageIndex(
                 by_number={}, products=ProductIndex(by_number={}, by_name={}), urls_by_product_id={}
@@ -384,15 +413,26 @@ class StockImages:
         a pair stuck `_pending` forever is a pair `warm()` never schedules again (D-demo-
         stock-images: this is what turned one race into a PERMANENT cold cache).
         """
-        index = _ImageIndex(
-            by_number={}, products=ProductIndex(by_number={}, by_name={}), urls_by_product_id={}
-        )
+        key = (game, set_name)
+        index = None
         try:
             index = self._fetch_tcgcsv(game, set_name)
         finally:
             with self._lock:
-                self._cache[(game, set_name)] = (time.time(), index)
-                self._pending.discard((game, set_name))
+                if index is None:
+                    # A failed fetch is remembered for `FETCH_RETRY_SECONDS` and is NOT an
+                    # answer: `_cache` is left as it was, the last good index included.
+                    self._failed_at[key] = time.time()
+                else:
+                    self._cache[key] = (time.time(), index)
+                    self._failed_at.pop(key, None)
+                self._pending.discard(key)
+
+    def _backing_off(self, key: Tuple[str, str]) -> bool:
+        """True while `key`'s last fetch failed less than `FETCH_RETRY_SECONDS` ago.
+        The caller holds `_lock`."""
+        failed = self._failed_at.get(key)
+        return failed is not None and (time.time() - failed) < FETCH_RETRY_SECONDS
 
     def warm(
         self, pairs: Iterable[Tuple[str, str]], *, allow_pokemon: bool = False
@@ -438,7 +478,7 @@ class StockImages:
             with self._lock:
                 entry = self._cache.get(key)
                 fresh = entry is not None and (now - entry[0]) <= self._ttl
-                if fresh or key in self._pending:
+                if fresh or key in self._pending or self._backing_off(key):
                     continue
                 self._pending.add(key)
             thread = threading.Thread(target=self._warm_one, args=(game, set_name), daemon=True)
@@ -526,8 +566,10 @@ class StockImages:
 
     def group_pending(self, game: str, set_name: str) -> bool:
         """True while a catalogue group has never answered: no cache entry yet, so a
-        `None` from a lookup means "ask again", not "no such image". A failed fetch stores an
-        empty entry, so a final miss is never pending. Vendored Pokemon cards never are."""
+        `None` from a lookup means "ask again", not "no such image". A failed fetch stores
+        nothing, so the group stays pending and is fetched again after `FETCH_RETRY_SECONDS`;
+        an answer that holds no such set is a stored empty entry, a final miss. Vendored
+        Pokemon cards never are pending."""
         with self._lock:
             return (game, set_name) not in self._cache
 
@@ -583,10 +625,13 @@ class StockImages:
             with self._lock:
                 if (game, set_name) in self._pending:
                     return
+                if self._backing_off((game, set_name)):
+                    continue
                 self._pending.add((game, set_name))
             self._warm_one(game, set_name)
             with self._lock:
-                if self._cache[(game, set_name)][1].urls_by_product_id:
+                entry = self._cache.get((game, set_name))
+                if entry is not None and entry[1].urls_by_product_id:
                     return
 
     def catalog_products(
