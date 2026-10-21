@@ -1,4 +1,4 @@
-## D-my-slabs-card-ladder — My Slabs reads Card Ladder with the owner's own login
+## D320 — My Slabs reads Card Ladder with the owner's own login
 
 Kind: build
 Plan: docs/specs/my-slabs.md#build-plan (macOS)

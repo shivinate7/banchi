@@ -4,7 +4,7 @@ proved against a fake transport, or the real `pipeline/net.py` over a fake opene
 transport), and a fake clock: no network, no real sleep, no `.env` read.
 
 Protects: The Card Ladder client calls only the six read callables, never `search.cardladder.com`, waits 8 seconds between calls, stops at a rate limit, refreshes its ID token in time, and never prints a token.
-Governs: D-my-slabs-card-ladder
+Governs: D320
 
 BUILD PLAN STEP 1 (`docs/specs/my-slabs.md`). The interface of `pipeline/cardladder.py` that
 this file tests:

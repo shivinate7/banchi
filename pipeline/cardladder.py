@@ -1,4 +1,4 @@
-"""Card Ladder reads with the owner's own login (D-my-slabs-card-ladder, My Slabs spec sections 2, 3, 5).
+"""Card Ladder reads with the owner's own login (D320, My Slabs spec sections 2, 3, 5).
 
 One client, one send path. `Client.send` is where every request goes, the token exchange
 included, so the three bounds the owner set hold in one place:

@@ -165,7 +165,7 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 
 | File | Protects | Governs |
 | --- | --- | --- |
-| `scripts/cardladder-selftest.py` | The Card Ladder client calls only the six read callables, never `search.cardladder.com`, waits 8 seconds between calls, stops at a rate limit, refreshes its ID token in time, and never prints a token. | none |
+| `scripts/cardladder-selftest.py` | The Card Ladder client calls only the six read callables, never `search.cardladder.com`, waits 8 seconds between calls, stops at a rate limit, refreshes its ID token in time, and never prints a token. | D320 |
 | `scripts/catalog-index-selftest.py` | The catalog index builder and reader answer correctly over a small synthetic vendor tree. | D15, D18 |
 | `scripts/cid-selftest.py` | A card keeps its stable name, and the photograph store refuses and saves work correctly on a throwaway store. | D18, D172, D183 |
 | `scripts/holdings-selftest.py` | The holdings reader answers correctly over in-memory inventory, archive and ledger fixtures. | D236, D247 |

@@ -1,6 +1,6 @@
 # My Slabs
 
-**STATUS: SPECIFIED. Nothing is built.** Governed by D-my-slabs-card-ladder (My Slabs reads
+**STATUS: SPECIFIED. Nothing is built.** Governed by D320 (My Slabs reads
 Card Ladder with the owner's own login). The decision carries the argument and the bounds. This
 file carries every point the owner's token can read, what each returns, and the build plan.
 
@@ -246,7 +246,7 @@ Kind: build. Platform: macOS, over the capture server.
    the screen shows them as a sentence with no host name (D196, no user-visible string names a decision).
 5. A launchd job for the daily sweep, like `make price-refresh-agent`. A Google error on the
    token exchange stops the sweep too, because the exchange host has no pace of its own.
-6. The three checks that D-my-slabs-card-ladder names.
+6. The three checks that D320 names.
 
 ## 7. What stays unmeasured
 

@@ -1561,7 +1561,7 @@ CHECKS = (
         "commit_path": False,
         "why_off_commit_path": "D18: a self-test that runs on demand in `make check`, never in the git hook. It is fast and path-gated nowhere.",
         "gates": True,
-        "governed_by": ("D-my-slabs-card-ladder",),
+        "governed_by": ("D320",),
     },
     {
         "target": "repair-born-game-selftest",

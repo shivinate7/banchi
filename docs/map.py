@@ -1506,7 +1506,7 @@ COMPONENTS = [
                                       "apart and latches on a rate-limit answer. Clock and "
                                       "sleep are injected; the transport defaults to "
                                       "`net_transport` on the one retry home. No error text holds a token or a response body.",
-                              "governed_by": ["D-my-slabs-card-ladder", "D319"],
+                              "governed_by": ["D320", "D319"],
                               "note": "The refresh token is the caller's to read from "
                                       "`CARDLADDER_REFRESH_TOKEN`. The API key in it is Card "
                                       "Ladder's public web key. No store tables, routes or "
@@ -3157,7 +3157,7 @@ COMPONENTS = [
                         "once, never retries and latches; the ID token is reused and "
                         "refreshed before it expires; no token appears in any exception, "
                         "traceback, log line or repr.",
-                "governed_by": ["D-my-slabs-card-ladder", "D319"],
+                "governed_by": ["D320", "D319"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "
@@ -4933,7 +4933,7 @@ COMPONENTS = [
                                 "D227", "D280", "D234", "D236", "D239", "D240",
                                 "D242", "D243", "D247", "D252", "D253", "D254",
                                 "D256", "D261", "D271", "D275", "D193", "D269", "D295", "D301",
-                                "D-my-slabs-card-ladder"],
+                                "D320"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
