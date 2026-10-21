@@ -978,26 +978,33 @@ def _clear_host_pauses() -> None:
 
 def _host_state(url: str) -> Dict:
     """The caller holds `_HOSTS_LOCK`."""
-    return _HOSTS.setdefault(urllib.parse.urlsplit(url).netloc, {"failed": set(), "until": 0.0})
+    return _HOSTS.setdefault(urllib.parse.urlsplit(url).netloc, {"failed": set(), "until": 0.0, "lost": {}})
 
 
 def _refuse_if_paused(url: str) -> None:
-    """Raise a fresh `Unreachable` while `url`'s host is paused. Makes no request."""
+    """Raise a fresh `Unreachable` while `url`'s host is paused, or while `url` itself lost its
+    retries less than `OFFLINE_WAIT_SECONDS` ago. Makes no request."""
     with _HOSTS_LOCK:
-        if _host_state(url)["until"] <= _monotonic():
+        state = _host_state(url)
+        now = _monotonic()
+        if state["until"] <= now and state["lost"].get(url, 0.0) <= now:
             return
     raise Unreachable("The price service could not be reached. Try again in a moment.")
 
 
 def _record(url: str, exc: Optional[PriceHistoryError]) -> None:
-    """A success (`exc` None) resets the host's count. A call lost on a retryable kind counts
-    once per distinct URL; the one that completes the run pauses the host, and the count starts
-    again. Any other failure changes nothing."""
+    """A success (`exc` None) resets the host's count and leaves every URL's wait alone. A call
+    lost on a retryable kind starts that URL's own wait and counts once per distinct URL; the one
+    that completes the run pauses the host, and the count starts again. Any other failure changes
+    nothing."""
     with _HOSTS_LOCK:
         state = _host_state(url)
         if exc is None:
             state["failed"].clear()
         elif _worth_retrying(exc):
+            now = _monotonic()
+            state["lost"] = {u: t for u, t in state["lost"].items() if t > now}
+            state["lost"][url] = now + OFFLINE_WAIT_SECONDS
             state["failed"].add(url)
             if len(state["failed"]) >= PAUSE_AFTER_FAILURES:
                 state["failed"].clear()
@@ -1044,7 +1051,7 @@ def fetch_json(
     up to `len(RETRY_PAUSES)` times. A `Retry-After` in seconds sets the pause. A retry is made
     only if the time spent, the pause and the next attempt's timeout fit
     `REQUEST_TIMEOUT_SECONDS`; otherwise the call gives up. Each outcome feeds the host's
-    count (`_record`).
+    count (`_record`). A URL that lost its retries is refused for `OFFLINE_WAIT_SECONDS` too.
     """
     _refuse_if_paused(url)
     lines: List[str] = []
@@ -1510,6 +1517,8 @@ class Market:
                 except PriceHistoryError as exc:
                     for sku in skus:
                         refusals.setdefault(sku, str(exc))
+                    if _worth_retrying(exc):
+                        break  # one product adds at most one URL to a run (D-one-retry-home)
             for sku in skus:
                 series: Dict[str, Series] = {}
                 for range_, answers in per_range.items():
