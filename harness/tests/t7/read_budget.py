@@ -9,9 +9,11 @@ the card, order and queue counts double). Every GET route of `CaptureHandler.do_
 read-only POSTs in `POST_READS`, is called once per size through a real in-process server.
 `COUNTERS` are read per request: SQL statements (sqlite's trace callback on every connection
 `store/db` opens), `json.loads` calls in `store/rows`, `records_in`, `layout_of`,
-`_Places.__init__`, `Store.read`, `Store.write`, `read_sidecar` and `read_export`.
+`_Places.__init__`, `Store.read`, `Store.write`, `read_sidecar` and `read_export`. Two more are read
+only for the routes in `PHOTO_WALK_FREE`: `scan` (calls to `sidecar.scan`) and `walk` (directory
+entries listed under the photograph roots, `captures/` and `photos/`).
 
-Four rules:
+Five rules:
 1. EXACT BUDGET. `BUDGET[route]` holds each counter's value at size S. Over it fails. Under it
    fails with "lower to N" (the `UNSCOPED_WALK_EXPECTED` ratchet in `scripts/docs_audit/core.py`).
 2. GROWTH. `CONSTANT` counters must be equal at S and 2S. `json_loads` and `read_sidecar` may
@@ -23,11 +25,20 @@ Four rules:
    Some routes are budgeted on their miss path only: DEBT85.
 4. INDEX. EXPLAIN QUERY PLAN runs on every SELECT a route made. A `SCAN <table>` not in
    `SCAN_ALLOWED` fails. A stale `SCAN_ALLOWED` entry fails. The list only shrinks.
+5. PHOTO WALK. A route in `PHOTO_WALK_FREE` answers from the store and a few named photographs. It
+   calls `sidecar.scan` zero times and lists zero directory entries under the photograph roots, at
+   S and 2S. INCIDENT: `POST /pipeline/waiting` with `{"state": "captured"}` took up to 132 s on the
+   owner's store, because a state selection fell back to a scan of every photograph (rglob, is_file,
+   one JSON read each) to keep a few cards. `read_sidecar` alone cannot see a walk that reads none.
+
+`check_selection_scan_equivalence` is the builder's guard for that fix: the fast answer must equal the
+full scan plus `narrow`, key for key and in the same order.
 """
 
 from __future__ import annotations
 
 import ast
+import os
 import re
 import sqlite3
 from pathlib import Path
@@ -40,13 +51,14 @@ from harness.tests.t7.common import (
     entry,
     fake_cid,
     isolated_home,
+    photograph,
     request,
     seam_run,
 )
 from identify import sidecar
-from pipeline import tcgcsv
+from pipeline import selection as selection_mod, tcgcsv
 from server import capture_server, pipeline_routes
-from store import db, files, master, orders as order_store, rows
+from store import db, files, master, orders as order_store, photos, rows
 from store.readings import Reading
 from store.session import Store
 from store.skus import SkuRow
@@ -60,6 +72,8 @@ COUNTERS = (
     "store_read", "store_write", "read_sidecar", "read_export",
 )
 CONSTANT = ("sql", "records_in", "layout_of", "places", "store_read", "store_write", "read_export")
+# Counted on every request, budgeted only for `PHOTO_WALK_FREE`: a whole-store selection walks the disk by design.
+WALK_COUNTERS = ("scan", "walk")
 
 # Routes `do_GET` serves that this check does not call, each with the reason. A route listed
 # here is named, never silent; "no budget row" for any other route fails.
@@ -124,6 +138,9 @@ ROUTE_URLS = {
     "/stock/mix": "/stock/mix",
 }
 
+# The one POST read whose answer is a few cards chosen by a card state. Its fixture adds a prep (`_state_prep`).
+STATE_ROW = "POST /pipeline/waiting state"
+
 # Read-only POSTs, named by hand: `do_GET` cannot list them.
 POST_READS = {
     "POST /pipeline/waiting": ("/pipeline/waiting", {}),
@@ -131,7 +148,13 @@ POST_READS = {
     "POST /pipeline/preflight": ("/pipeline/preflight", {}),
     "POST /pipeline/preflight keys": ("/pipeline/preflight", {"keys": ["4/1", "4/2"]}),
     "POST /orders/walk-plan": ("/orders/walk-plan", {"keys": ["tcgplayer:o-1", "tcgplayer:o-2"]}),
+    # What `RunsComposer.selectionOf` sends for the "needed" start. The answer is the captured cards that have a photograph.
+    STATE_ROW: ("/pipeline/waiting", {"state": "captured"}),
 }
+
+# Cards that are captured and photographed in the fixture after `_state_prep`: 4/1, 4/2 and 4/3. It is the whole
+# answer of `STATE_ROW`, and it must be equal at S and 2S or the row could never be flat.
+STATE_ANSWER = 3
 
 # The one route whose fixture adds cards of its own, after every other route has been measured, so
 # their counts do not move: sold, unlisted, retired and moved cards, which is the hit path of
@@ -163,6 +186,25 @@ def _mix_prep(size: int) -> None:
                 card.sku, card.state = f"SKU{n % 12}", master.RETIRED
             else:
                 card.sku, card.state = f"SKU{n % 12}", master.MOVED
+
+
+def _state_prep(checks: Checks, size: int) -> None:
+    """Freezes the answer of `STATE_ROW` at `STATE_ANSWER` cards for every size.
+
+    `seam_run` photographs one more box 9 card for every 50 of the size, and all of them are `captured`, so the cards
+    a state selection keeps (the captured ones with a photograph) would be 6 at S and 9 at 2S: a fix that reads exactly
+    those sidecars would look like growth. The box 9 cards leave `captured` here, as a joined run's cards do. They keep
+    their photographs, so a fix that reads the sidecar of every photographed card still grows, and fails."""
+    with Store().write() as snapshot:
+        for card in snapshot.inventory.cards.values():
+            if card.box == 9:
+                card.state = master.IDENTIFIED
+    inventory = Store().read().inventory
+    answer = [
+        key for key, card in inventory.cards.items()
+        if card.state == master.CAPTURED and photos.find(card.cid, card.box, card.index, relocated=False) is not None
+    ]
+    checks.equal(len(answer), STATE_ANSWER, f"7. the state row's fixture holds {STATE_ANSWER} captured, photographed cards at size {size}")
 
 
 # Routes that would shell out: the child is replaced by a fake that exits 0, so the in-process half
@@ -235,10 +277,16 @@ BUDGET = {
     'POST /pipeline/preflight': {"status": 200, 'sql': 21, 'store_read': 2, 'read_sidecar': 21},
     'POST /pipeline/preflight keys': {"status": 200, 'sql': 34, 'json_loads': 3, 'store_read': 3, 'read_sidecar': 2},
     'POST /orders/walk-plan': {"status": 200, 'sql': 44, 'json_loads': 104, 'records_in': 2, 'places': 1, 'store_read': 1},
+    # Two store opens (the selection's and the claims'), 11 statements each. `read_sidecar` is the STATE_ANSWER cards' own sidecars and nothing else.
+    STATE_ROW: {"status": 200, 'sql': 22, 'store_read': 2, 'read_sidecar': STATE_ANSWER},
 }
 
 # Keyed routes: `read_sidecar` reads only the named cards' own sidecars, so it is constant too.
-SIDECAR_FLAT = ("POST /pipeline/preflight keys",)
+# A state selection is the same shape once it is answered from the store: only the chosen cards' sidecars.
+SIDECAR_FLAT = ("POST /pipeline/preflight keys", STATE_ROW)
+
+# Routes that must not walk the photograph roots: no `sidecar.scan`, no directory entries listed under `captures/` or `photos/`.
+PHOTO_WALK_FREE = (STATE_ROW,)
 
 # (route, counter) -> (value at S, value at 2S): a constant counter that still grows. Only shrinks.
 KNOWN_OVER = {
@@ -306,11 +354,36 @@ class _Proxy:
         return getattr(self.__dict__["_real"], name)
 
 
+class _Listing:
+    """An `os.scandir` iterator that counts each entry it yields, and is a context manager as `os.scandir`'s is."""
+
+    def __init__(self, inner, bump) -> None:
+        self._inner, self._bump = inner, bump
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        entry = next(self._inner)
+        self._bump(1)
+        return entry
+
+    def __enter__(self):
+        self._inner.__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        return self._inner.__exit__(*exc)
+
+    def close(self) -> None:
+        self._inner.close()
+
+
 class _Meter:
     """Patches the seams, counts, and puts them back. One request at a time."""
 
     def __init__(self) -> None:
-        self.counts = dict.fromkeys(COUNTERS, 0)
+        self.counts = dict.fromkeys(COUNTERS + WALK_COUNTERS, 0)
         self.selects: set = set()
         self._undo: list = []
 
@@ -370,7 +443,40 @@ class _Meter:
         self._wrap(Store, "write", "store_write", ctx=True)
         self._wrap(sidecar, "read_sidecar", "read_sidecar")
         self._wrap(tcgcsv, "read_export", "read_export")
+        self._wrap(sidecar, "scan", "scan")
+        self._watch_photo_roots()
         return self
+
+    def _watch_photo_roots(self) -> None:
+        """Counts the entries any directory listing returns under `captures/` and `photos/`. `rglob`, `glob`, `iterdir`
+        and `os.walk` all list through `os.scandir` or `os.listdir` (Python 3.12, which CI pins), so a walk the fix writes
+        for itself is counted as well as the one in `sidecar.scan`. A path built for one card (`is_file`) lists nothing."""
+        roots = (str(files.home() / "captures"), str(photos.root()))
+        real_scandir, real_listdir = os.scandir, os.listdir
+
+        def bump(n: int) -> None:
+            self.counts["walk"] += n
+
+        def watched(args, kwargs) -> bool:
+            target = args[0] if args else kwargs.get("path")
+            try:
+                return os.fspath(target).startswith(roots)
+            except TypeError:  # a descriptor, bytes or no path: not one of ours
+                return False
+
+        def scandir(*args, **kwargs):
+            inner = real_scandir(*args, **kwargs)
+            return _Listing(inner, bump) if watched(args, kwargs) else inner
+
+        def listdir(*args, **kwargs):
+            names = real_listdir(*args, **kwargs)
+            if watched(args, kwargs):
+                bump(len(names))
+            return names
+
+        os.scandir, os.listdir = scandir, listdir
+        self._undo.append(lambda: setattr(os, "scandir", real_scandir))
+        self._undo.append(lambda: setattr(os, "listdir", real_listdir))
 
     def __exit__(self, *exc):
         for undo in reversed(self._undo):
@@ -451,6 +557,8 @@ def measure(checks: Checks, size: int) -> tuple:
             for key, (method, url, body) in calls.items():
                 if key == MIX_ROUTE:
                     _mix_prep(size)
+                if key == STATE_ROW:
+                    _state_prep(checks, size)
                 stub = STUBS.get(key)
                 real = getattr(stub[0], stub[1]) if stub else None
                 if stub:
@@ -554,6 +662,19 @@ def check_server_read_budget(checks: Checks) -> None:
         if route not in small:
             problems.append(f"KNOWN_OVER names {route!r}, which is not a route")
 
+    for route in PHOTO_WALK_FREE:
+        if route not in small:
+            problems.append(f"PHOTO_WALK_FREE names {route!r}, which is not a route")
+            continue
+        for counter, what in (("scan", "calls to sidecar.scan"), ("walk", "directory entries listed under the photograph roots")):
+            now = (small[route][counter], big[route][counter])
+            if any(now):
+                problems.append(
+                    f"{route} makes {what}: {now[0]} at S, {now[1]} at 2S"
+                    + (" (grows with the store)" if now[0] != now[1] else "")
+                    + ". It must answer from the store and the chosen cards' own photographs, never a scan of every photograph"
+                )
+
     for table, routes in sorted(found.items()):
         if table not in SCAN_ALLOWED:
             problems.append(f"SCAN {table} (routes: {sorted(routes)[:4]}) is not in SCAN_ALLOWED")
@@ -648,7 +769,128 @@ def check_markdown_table_on_hand(checks: Checks) -> None:
     checks.equal(got, {"SOLD1": 0, "HELD3": 3, "NEVER": 0}, "7b-29. the table sends on_hand: 0 when every copy sold, n when n are in a box")
 
 
-CHECKS = (check_server_read_budget, check_detail_read_budget, check_markdown_table_on_hand)
+# --------------------------------------------------------------------------- the selection equivalence
+
+OLD, NEW, SINCE = "2026-03-01T10:00:00+00:00", "2026-05-01T10:00:00+00:00", "2026-04-01"
+
+# `(payload, the position keys the full scan keeps, in order)`, for the world `_equivalence_world` builds. Two keys
+# repeat on purpose: `4/1` is the key of two photographs. Why each answer is what it is:
+#   scan order is the `captures/cards` root first (path order), then the `photos` root (digest order, 9 a b c d e f).
+#   7/1 is a legacy-address photograph. 3/1 is card 2/1's photograph, whose sidecar says box 3.
+#   4/1 twice is card 4/4's photograph (its sidecar says 4/1) and card 4/1's own.
+#   Every photograph kept belongs to a card the state and since terms choose: a fix that reads only the chosen cards'
+#   photographs can match this, and one that has to walk the disk to find them cannot (the budget row forbids the walk).
+#   4/7 (card 4/3's sidecar), 4/9 and 6/1 (photographs no card is at) and 5/1, 5/2 (cards with no photograph) are never kept.
+EQUIVALENCE_CASES = (
+    ({"state": "captured"}, ["7/1", "3/1", "4/1", "4/2", "4/1"]),
+    ({"state": "captured", "since": SINCE}, ["7/1", "3/1", "4/1", "4/1"]),
+    ({"since": SINCE}, ["7/1", "3/1", "8/1", "4/1", "4/1"]),
+    ({"state": "captured", "box": [4]}, ["4/1", "4/2", "4/1"]),
+    ({"state": "captured", "box": [3]}, ["3/1"]),
+    ({"state": "captured", "box": [5]}, []),
+    ({"state": "captured", "box": [7]}, ["7/1"]),
+    ({"state": "identified"}, ["8/1"]),
+)
+
+
+def _digest(char: str) -> str:
+    """A photograph name chosen by hand: 64 hex digits sort by their first, so the order the files lie in is set here."""
+    return char * 64
+
+
+def _equivalence_world(relocated: bool) -> None:
+    """The store and the disk the equivalence cases read. Every shape the full scan answers that a store-driven answer could get wrong:
+
+    - content-store photographs whose names sort the opposite way to their positions (order);
+    - 4/3 whose sidecar claims 4/7, a position no card holds, and 4/4 whose sidecar claims 4/1, another captured card's;
+    - 2/1 whose sidecar claims box 3, where a captured card with no photograph, 3/1, sits (the `box` term reads what the sidecar recorded);
+    - 5/1, 5/2 and 3/1: captured cards with no photograph; 8/1: an identified card with one;
+    - 7/1: a captured card whose only photograph is at the legacy `(box, index)` address;
+    - two photographs no card is at: 4/9 in the content store and 6/1 at the legacy address.
+    `relocated` stamps `meta.photos_relocated`, after which `store/photos.find` no longer looks at the legacy address."""
+    import json
+
+    filed = (  # (box, index, digest char, the position the sidecar claims, state, captured_at)
+        (4, 1, "f", (4, 1), master.CAPTURED, NEW),
+        (4, 2, "e", (4, 2), master.CAPTURED, OLD),
+        (4, 3, "d", (4, 7), master.CAPTURED, NEW),
+        (4, 4, "c", (4, 1), master.CAPTURED, NEW),
+        (8, 1, "b", (8, 1), master.IDENTIFIED, NEW),
+        (2, 1, "9", (3, 1), master.CAPTURED, NEW),
+    )
+    bare = ((5, 1), (5, 2), (3, 1), (7, 1))  # captured, NEW, no photograph at the card's own name
+    with Store().write() as snapshot:
+        inv = snapshot.inventory
+        for box, index, char, _, state, at in filed:
+            card, _ = inv.allocate_capture(box, cid=_digest(char))
+            card.state, card.captured_at = state, at
+            if card.index != index:
+                raise AssertionError(f"the equivalence fixture put {box}/{card.index} where it meant {box}/{index}")
+        for box, index in bare:
+            card, _ = inv.allocate_capture(box, cid=fake_cid(f"eq-{box}/{index}"))
+            card.state, card.captured_at = master.CAPTURED, NEW
+            if card.index != index:
+                raise AssertionError(f"the equivalence fixture put {box}/{card.index} where it meant {box}/{index}")
+    for _, _, char, (box, index), _, _ in filed:
+        photos.write(_digest(char), photograph())
+        photos.write_sidecar(_digest(char), photos.claims_payload(box, index, {}))
+    photos.write(_digest("a"), photograph())  # in the content store, and no card is at 4/9
+    photos.write_sidecar(_digest("a"), photos.claims_payload(4, 9, {}))
+    for box, index in ((7, 1), (6, 1)):  # 7/1 is a card, 6/1 is not
+        target = photos.legacy_path(box, index)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(photograph())
+        target.with_suffix(".json").write_text(json.dumps({"box": box, "index": index}), "utf-8")
+    if relocated:
+        conn = db.connect(files.inventory_dir())
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (db.PHOTOS_RELOCATED, NEW))
+            conn.execute("COMMIT")
+        finally:
+            conn.close()
+
+
+def _view(captures, home: Path) -> list:
+    """What the equivalence compares: each capture's position key and its photograph, so a swapped or doubled photograph shows."""
+    return [(capture.key, str(capture.photo.relative_to(home)) if home in capture.photo.parents else str(capture.photo)) for capture in captures]
+
+
+def _full_scan(selection, home: Path) -> list:
+    """The reference: `sidecar.scan` over every photograph under both roots, then `narrow`. Written out here and not read
+    from `selection_mod.resolve`, so it stays the reference after `resolve` is given a faster path."""
+    found: list = []
+    for root in (home / "captures" / "cards", photos.root(home)):
+        if root.is_dir():
+            found += sidecar.scan(root)
+    return _view(selection_mod.narrow(selection, found, inventory=Store().read().inventory), home)
+
+
+def check_selection_scan_equivalence(checks: Checks) -> None:
+    """A state or `since` selection resolves to the same captures, in the same order, as scanning every photograph and
+    narrowing: through `selection_mod.resolve` and through the answer of `POST /pipeline/waiting`. It passes today because
+    `resolve` is that scan. It is the guard on the fast path (`STATE_ROW`): a card dropped, a card added, a photograph at the
+    legacy address missed (the store says relocated or not), or the order changed fails here by case."""
+    checks.note("")
+    checks.note("SELECTION EQUIVALENCE — state and since answers equal the full scan plus narrow")
+    for relocated in (False, True):
+        setting = "relocated" if relocated else "legacy address still read"
+        with isolated_home():
+            home = files.home()  # resolved, as every caller passes it: on macOS the temporary directory's own spelling differs
+            _equivalence_world(relocated)
+            checks.equal(bool(Store().read().inventory.photos_relocated), relocated, f"8. the fixture is {setting}")
+            for payload, want in EQUIVALENCE_CASES:
+                label = f"{payload} ({setting})"
+                selection = selection_mod.parse(dict(payload))
+                reference = _full_scan(selection, home)
+                checks.equal([key for key, _ in reference], want, f"8. the fixture: the full scan keeps these positions for {label}")
+                got, _ = selection_mod.resolve(selection, home, read_inventory=lambda: Store().read().inventory)
+                checks.equal(_view(got, home), reference, f"8. resolve answers {label} as the full scan does")
+                routed = pipeline_routes.do_pipeline_waiting(dict(payload))
+                checks.equal(routed, {"keys": sorted(set(want)), "claimed": 0}, f"8. the waiting route answers {label} with the full scan's cards")
+
+
+CHECKS = (check_server_read_budget, check_detail_read_budget, check_markdown_table_on_hand, check_selection_scan_equivalence)
 
 
 if __name__ == "__main__":  # `python -m harness.tests.t7.read_budget`: print the measured tables
