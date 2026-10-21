@@ -4,7 +4,7 @@
     GET  /slabs                    every slab with its newest snapshot
     GET  /slabs/<grader>/<cert>    one slab: snapshots, sales and the grade ladder
 
-There is no sweep route. The owner ruled it out.
+There is no sweep route. The owner deferred it: it waits for the owner's word.
 
 THIRD OUTBOUND MODULE, AND THE ONLY ONE THAT HOLDS A LOGIN FOR CARD LADDER. The login is
 `CARDLADDER_REFRESH_TOKEN`, read through `envfile.get_live` on every add so a token replaced in the
@@ -12,8 +12,12 @@ settings file works on the next press. No token, response body or host reaches a
 line or a refusal: every sentence below is written here, never relayed from the client.
 
 ONE `pipeline.cardladder.Client` LIVES FOR THE PROCESS, because the 8 second pace and the
-rate-limit stop are the client's. A rate-limit answer stops adds for that day (`TODAY`). The
-client's own stop never clears, so the next day builds a new client.
+rate-limit stop are the client's. ONE ADD RUNS AT A TIME: a second add is refused at once (409),
+because the client's pace would queue it behind 16 seconds or more of another add's reads.
+
+A rate-limit answer stops adds for that day (`TODAY`). The day is a `meta` row of the store, so a
+restart the same day is stopped too and sends nothing. The client's own stop never clears, so a
+limited client is dropped and the next day builds a new one.
 
 AN ADD READS 3.1, 3.2 AND 3.4 OUTSIDE THE STORE LOCK (they are paced and take 16 seconds or
 more), then makes ONE store write: the slab, today's snapshot and the sales. Any refusal writes
@@ -34,6 +38,7 @@ from http import HTTPStatus
 from typing import Any, List, Optional
 
 import envfile
+from store import db, files
 from pipeline import cardladder
 from pipeline.pricing import round_money
 from server.refusal import BadRequest
@@ -54,9 +59,9 @@ _WINDOWS = ("twoWeekData", "oneMonthData", "oneQuarterData", "sixMonthData", "on
 _ISO_DAY = re.compile(r"^(\d{4})-(\d{2})-(\d{2})(?:[T ].*)?$")
 _EPOCH_MS = 1e11  # a number at or above this is milliseconds: as seconds it would be the year 5138
 
-_lock = threading.Lock()
+_inflight = threading.Lock()  # held for the whole of one add, taken without waiting
 _client: Optional[cardladder.Client] = None
-_limited_day: Optional[str] = None
+LIMITED_DAY = "slabs_rate_limited_day"  # the `meta` key: the day Card Ladder last said to slow down
 
 
 class _Unreadable(ValueError):
@@ -80,23 +85,38 @@ def _rate_limited():
             "Card Ladder asked us to slow down. Nothing was saved. Try again tomorrow.")
 
 
+def _limited_day() -> Optional[str]:
+    conn = db.connect(files.inventory_dir())
+    try:
+        row = conn.execute("SELECT value FROM meta WHERE key = ?", (LIMITED_DAY,)).fetchone()
+    finally:
+        conn.close()
+    return row[0] if row else None
+
+
+def _limit(day: str) -> None:
+    conn = db.connect(files.inventory_dir())
+    try:
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (LIMITED_DAY, day))
+    finally:
+        conn.close()
+
+
 def _client_for(token: str, day: str) -> cardladder.Client:
-    global _client, _limited_day
-    with _lock:
-        if _limited_day is not None:
-            if _limited_day >= day:
-                _rate_limited()
-            _client, _limited_day = None, None
-        if _client is None:
-            _client = cardladder.Client(
-                refresh_token=token,
-                transport=lambda *a: (TRANSPORT or cardladder.net_transport)(*a),
-                clock=lambda: CLOCK(),
-                sleep=lambda seconds: SLEEP(seconds),
-            )
-        else:
-            _client.use_refresh_token(token)
-        return _client
+    global _client
+    limited = _limited_day()
+    if limited is not None and limited >= day:
+        _rate_limited()
+    if _client is None:
+        _client = cardladder.Client(
+            refresh_token=token,
+            transport=lambda *a: (TRANSPORT or cardladder.net_transport)(*a),
+            clock=lambda: CLOCK(),
+            sleep=lambda seconds: SLEEP(seconds),
+        )
+    else:
+        _client.use_refresh_token(token)
+    return _client
 
 
 # ---------------------------------------------------------------------------- Card Ladder's numbers
@@ -194,7 +214,16 @@ def _speed(estimate: dict) -> Optional[dict]:
 
 
 def do_slab_add(body: dict) -> dict:
-    global _limited_day
+    if not _inflight.acquire(blocking=False):
+        _refuse(HTTPStatus.CONFLICT, "slab_add_busy", "A slab is being added right now. Wait for it to finish, then try again.")
+    try:
+        return _add(body)
+    finally:
+        _inflight.release()
+
+
+def _add(body: dict) -> dict:
+    global _client
     grader = _grader(body.get("grader"))
     cert = str(body.get("cert") if body.get("cert") is not None else "").strip()
     if not cert:
@@ -217,8 +246,8 @@ def do_slab_add(body: dict) -> dict:
             client, look["profileId"], grader, look["grade"], look.get("label") or "",
             look.get("qualifierType"), look.get("autographGrade"))
     except cardladder.RateLimited:
-        with _lock:
-            _limited_day = day
+        _limit(day)
+        _client = None  # its stop never clears; the next day builds a new one
         _rate_limited()
     except cardladder.TokenRejected:
         _refuse(HTTPStatus.CONFLICT, "cardladder_token_rejected",
@@ -252,6 +281,7 @@ def do_slab_add(body: dict) -> dict:
             speed=_speed(estimate))
         if not has_sale:  # no sale at the grade, no value: whatever Card Ladder sent is not stored
             values = dict.fromkeys(values)
+            ladder = [{**r, "cl_value": None, "cl_confidence": None} if r["grade"] == grade else r for r in ladder or ()] or ladder
         identity = {
             "label": look.get("label"), "grade": grade, "qualifier_type": look.get("qualifierType"),
             "autograph_grade": look.get("autographGrade"), "date_graded": look.get("dateGraded"),

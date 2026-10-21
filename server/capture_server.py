@@ -796,7 +796,7 @@ _SHIPPING_FILE_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/file$")
 # collide however they are ordered.
 _SHIPPING_STAMPS_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/stamps$")
 _SHIPPING_ITEM_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})$")
-# One slab, by grader and cert. Both are percent-decoded by the route. `/slabs/sweep` matches nothing: the owner ruled no sweep route.
+# One slab, by grader and cert. Both are percent-decoded by the route. `/slabs/sweep` matches nothing: the owner deferred the sweep.
 _SLABS_ITEM_RE = re.compile(r"^/slabs/([^/]+)/([^/]+)$")
 
 # ------------------------------------------------------- the capture claims, on the wire
@@ -17071,6 +17071,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # THE MAP'S CONFIRM (D264): the whole edit-mode draft, one store transaction.
             if path == "/boxes/sections/move-batch":
                 return self._json(HTTPStatus.OK, do_move_sections_batch(self._body()))
+            if path == "/slabs":
+                return self._json(HTTPStatus.OK, slabs_routes.do_slab_add(self._body()))
             # THE PIPELINE WRITES, AND THE FIRST OF THEM IS THE ONLY ROUTE IN THIS SERVER
             # THAT CAN COST MONEY. It is named for it, it refuses without an explicit
             # `confirm`, and it refuses a second run over a capture directory a live run is
@@ -17081,8 +17083,6 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # track — so neither is behind D33's money gate. The export carries its own
             # two-step instead, for a different irreversible thing: a code handed to a
             # buyer cannot be un-handed. `server/codes_routes.py` has the argument.
-            if path == "/slabs":
-                return self._json(HTTPStatus.OK, slabs_routes.do_slab_add(self._body()))
             if path == "/codes/scan":
                 status, body = codes_routes.do_codes_scan(self._body(), captures_root())
                 return self._json(status, body)
