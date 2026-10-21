@@ -5,9 +5,9 @@ a fake transport, a fake clock and a throwaway store: no network, no real sleep,
 Protects: A slab added by cert is read, written once per day and listed with every number traced to a Card Ladder read, and a failed or limited read writes nothing.
 Governs: D320, D88, D196, D319
 
-BUILD PLAN STEP 3 (`docs/specs/my-slabs.md`). The OWNER RULED: NO sweep route, no screen for a
-sweep, no launchd job. The spec's build plan still names a sweep in steps 3 to 5 and section 5;
-this file pins the ruling, and that prose needs a rewrite in place.
+BUILD PLAN STEP 3 (`docs/specs/my-slabs.md`). The owner DEFERRED the sweep: it waits for the
+owner's word. Until that word: NO sweep route, no screen for a sweep, no launchd job. The spec's
+build plan names a sweep in steps 3 to 5 and section 5; this file pins the deferral.
 
 ROUTES, in `server/slabs_routes.py`, dispatched by `server/capture_server.py`. A refusal is a
 `server.refusal.BadRequest(status, code, message)`: the dispatcher already catches it.
@@ -76,6 +76,7 @@ import os
 import re
 import socket
 import sys
+import threading
 import time
 import traceback
 import urllib.parse
@@ -582,13 +583,15 @@ def case_refusals(routes):
     same("and no callable was sent", rejected.calls, [])
 
     for failing in ("httpcertlookup", "httpprofile", "httpcardestimate"):
-        limited = new_world(routes)
-        limited.load(card())
-        limited.fail[failing] = (429, LIMIT_BODY)
-        text = refusal(f"a rate limit on {failing}", refused(routes.do_slab_add, {"cert": CERT, "grader": "psa"}),
-                       "cardladder_rate_limited")
-        ok("tomorrow" in text.lower(), "it says to try tomorrow", text)
-        same("and it stopped at the limited call", limited.calls[-1].name if limited.calls else None, failing)
+        with fresh_home():  # a rate limit is kept in the store for the day, so each one gets a store of its own
+            limited = new_world(routes)
+            limited.load(card())
+            limited.fail[failing] = (429, LIMIT_BODY)
+            text = refusal(f"a rate limit on {failing}", refused(routes.do_slab_add, {"cert": CERT, "grader": "psa"}),
+                           "cardladder_rate_limited")
+            ok("tomorrow" in text.lower(), "it says to try tomorrow", text)
+            same("and it stopped at the limited call", limited.calls[-1].name if limited.calls else None, failing)
+            same("and it wrote no slab, snapshot or sale", dump(), EMPTY)
 
     for label, setup in (
         ("Google limits the exchange", lambda x: setattr(x, "google", (429, b"slow down " + RT.encode()))),
@@ -661,14 +664,15 @@ def case_pacing(routes):
     receipt = add(routes, CERT3)
     same("the next day an add goes through", (receipt.get("added"), receipt.get("day")), (True, DAY2))
 
-    tok = new_world(routes)
-    tok.load(card())
-    tok.accepted = {RT_NEW}  # the owner copied a fresh token, but .env still holds the old one
-    refusal("the old token is refused", refused(routes.do_slab_add, {"cert": CERT, "grader": "psa"}),
-            "cardladder_token_rejected")
-    os.environ[KEY] = RT_NEW
-    exc = refused(add, routes)
-    ok(exc is None, "after the token is replaced the next add works, with no restart", repr(exc))
+    with fresh_home():  # a store of its own: the limit above is kept in the store for its day
+        tok = new_world(routes)
+        tok.load(card())
+        tok.accepted = {RT_NEW}  # the owner copied a fresh token, but .env still holds the old one
+        refusal("the old token is refused", refused(routes.do_slab_add, {"cert": CERT, "grader": "psa"}),
+                "cardladder_token_rejected")
+        os.environ[KEY] = RT_NEW
+        exc = refused(add, routes)
+        ok(exc is None, "after the token is replaced the next add works, with no restart", repr(exc))
 
 
 def case_money_and_dates(routes):
@@ -880,9 +884,138 @@ def case_no_job():
     same("no slab sweep script, agent or plist", odd, [])
 
 
+def case_overlap(routes):
+    """15. two adds at once: the second is refused at once and sends and writes nothing; the next add works"""
+    w = new_world(routes)
+    for cert in (CERT, CERT2, CERT3):
+        w.load(card(cert=cert))
+    entered, release = threading.Event(), threading.Event()
+    sent = []
+
+    def held(method, url, headers, body):
+        """The first send waits here: that add is in flight until `release`. Every later send goes on."""
+        sent.append(url)
+        if len(sent) == 1:
+            entered.set()
+            release.wait(10)
+        return w.transport(method, url, headers, body)
+
+    routes.TRANSPORT = held
+    results = {}
+
+    def go(name, cert):
+        try:
+            results[name] = routes.do_slab_add({"cert": cert, "grader": "psa"})
+        except Exception as exc:  # noqa: BLE001 - the case reports the type
+            results[name] = exc
+
+    threads = [threading.Thread(target=go, args=("first", CERT), daemon=True)]
+    threads[0].start()
+    try:
+        if not ok(entered.wait(5), "the first add reaches Card Ladder and is held there"):
+            return
+        before, held_sends = dump(), len(sent)
+        for name, cert in (("another slab", CERT2), ("the same slab", CERT)):
+            thread = threading.Thread(target=go, args=(name, cert), daemon=True)
+            threads.append(thread)
+            thread.start()
+            thread.join(2)
+            if ok(not thread.is_alive(), f"a second add ({name}) is answered at once and not queued behind the first"):
+                refusal(f"a second add ({name})", results.get(name), None, 409)
+        same("the second adds sent no call to Card Ladder", len(sent), held_sends)
+        same("and wrote nothing", dump(), before)
+    finally:
+        release.set()
+        for thread in threads:
+            thread.join(10)
+    first = results.get("first")
+    same("the first add finishes and is added",
+         (first.get("added"), first.get("cert")) if isinstance(first, dict) else repr(first), (True, CERT))
+    same("it wrote its one slab", [x.cert for x in slabs_now().list()], [CERT])
+
+    routes.TRANSPORT = w.transport
+    exc = refused(add, routes, CERT2)
+    ok(exc is None, "after the first add is done, a new add works", repr(exc))
+    same("and the store holds both slabs", sorted(x.cert for x in slabs_now().list()), sorted([CERT, CERT2]))
+
+    w.fail["httpprofile"] = (500, FAIL_BODY)  # a failed add must free the way for the next, too
+    refusal("an add Card Ladder fails", refused(routes.do_slab_add, {"cert": CERT3, "grader": "psa"}))
+    w.fail.clear()
+    exc = refused(add, routes, CERT3)
+    ok(exc is None, "after a failed add, a new add works", repr(exc))
+
+
+def case_no_sale_ladder(routes):
+    """16. a slab with no sale at its grade has no value at its own grade in the ladder, and none in the list"""
+    w = new_world(routes)
+    w.load(card())
+    # No sale at this slab's grade, but Card Ladder still sends a number for its ladder row and its estimate.
+    w.load(card(cert=CERT3, profile_id="psa-nosale", sales=[raw_sale("s-9", "2026-10-05", 20, "psa", "g9")],
+                ladder=60.25, estimate=55.5))
+    add(routes, CERT)
+    add(routes, CERT3)
+    detail, listing = routes.do_slab("psa", CERT3), routes.do_slabs()
+    POOL.append(json.dumps([detail, listing], default=str))
+    rows = {row.get("grade"): row for row in detail.get("ladder", [])}
+    own = rows.get("g10")
+    ok(own is not None and own.get("label") == "PSA 10", "the ladder still has a row at the slab's own grade",
+       repr(detail.get("ladder")))
+    own = own or {}
+    same("that row carries no value", own.get("cl_value"), None)
+    same("and no estimate", {k: v for k, v in own.items() if "estimat" in k.lower() and v is not None}, {})
+    other = rows.get("g9") or {}
+    same("another grade's row keeps its value and confidence", (other.get("cl_value"), other.get("cl_confidence")),
+         ("44.00", 3))
+    listed = {x["cert"]: x for x in listing.get("slabs", [])}.get(CERT3, {})
+    snap = listed.get("snapshot") or {}
+    same("the list row carries no value either", {k: snap.get(k, "missing") for k in ("cl_value", "estimated_value")},
+         {"cl_value": None, "estimated_value": None})
+    for label, answer in (("detail", detail), ("list row", listed)):
+        text = json.dumps(answer, default=str)
+        ok("60.25" not in text and "55.50" not in text, f"the {label} holds neither number Card Ladder sent", text[:300])
+    with_sale = {row.get("grade"): row for row in routes.do_slab("psa", CERT).get("ladder", [])}.get("g10") or {}
+    same("a slab with a sale keeps the value at its own grade", with_sale.get("cl_value"), "238.50")
+
+
+def case_latch_restart(routes):
+    """17. a rate limit stops adds for that day, also after the server restarts"""
+    w = new_world(routes)
+    w.load(card(cert=CERT3))
+    w.fail["httpprofile"] = (429, LIMIT_BODY)
+    refusal("the first add is limited", refused(routes.do_slab_add, {"cert": CERT3, "grader": "psa"}),
+            "cardladder_rate_limited")
+    base = dump()
+
+    w = new_world(routes)  # a restart on the same day: a new process over the same store, and Card Ladder would now answer
+    w.load(card(cert=CERT3))
+    text = refusal("an add the same day after a restart", refused(routes.do_slab_add, {"cert": CERT3, "grader": "psa"}),
+                   "cardladder_rate_limited", 429)
+    ok("tomorrow" in text.lower(), "it says to try tomorrow", text)
+    same("it sent nothing at all, not even a sign-in", w.log, [])
+    same("and wrote nothing", dump(), base)
+
+    w.day = DAY2
+    receipt = refused(add, routes, CERT3)
+    ok(receipt is None, "the next day an add goes through", repr(receipt))
+    same("and it wrote the slab", [x.cert for x in slabs_now().list()], [CERT3])
+
+    w = new_world(routes)  # another restart, on the new day: the old stop does not come back
+    w.day = DAY2
+    w.load(card(cert=CERT3))
+    receipt = refused(add, routes, CERT3)
+    ok(receipt is None, "a restart on the new day is not stopped by the old day's limit", repr(receipt))
+
+    with fresh_home():  # the stop belongs to the store and not to the process
+        w = new_world(routes)
+        w.load(card(cert=CERT3))
+        receipt = refused(add, routes, CERT3)
+        ok(receipt is None, "a different store holds no stop", repr(receipt))
+
+
 ROUTE_CASES = (
     case_seams, case_add, case_grader_forms, case_refusals, case_failed_read, case_pacing,
     case_money_and_dates, case_sale_merge, case_two_slabs, case_list, case_detail, case_http,
+    case_overlap, case_no_sale_ladder, case_latch_restart,
 )
 
 
