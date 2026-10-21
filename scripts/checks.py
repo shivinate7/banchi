@@ -1576,6 +1576,18 @@ CHECKS = (
         "governed_by": ("D320", "D88"),
     },
     {
+        "target": "slabs-routes-selftest",
+        "shard": "guards-2",
+        "runs": "$(PYTHON) scripts/slabs-routes-selftest.py",
+        "asserts": 'The My Slabs routes add a slab by cert through the real Card Ladder client, write its slab, snapshot and sales once, refuse and write nothing on any failed or limited read, keep the pacing and the rate-limit stop across requests, show a slab with no sale as no sales and have no sweep, against a fake transport and a throwaway store.',
+        "needs": ("python3",),
+        "writes": 'a throwaway store under a temporary directory it creates and removes.',
+        "commit_path": False,
+        "why_off_commit_path": "D18: a self-test that runs on demand in `make check`, never in the git hook. It writes a temp store.",
+        "gates": True,
+        "governed_by": ("D320", "D88", "D196"),
+    },
+    {
         "target": "repair-born-game-selftest",
         "shard": "guards-2",
         "runs": "$(PYTHON) scripts/repair-born-game-selftest.py",

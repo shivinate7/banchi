@@ -3179,6 +3179,19 @@ COMPONENTS = [
                         "back in order; a store stamped 14 gains the tables on its next open.",
                 "governed_by": ["D320", "D88", "D63"],
             },
+            "slabs-routes-selftest.py": {
+                "does": "proves `server/slabs_routes.py`, the My Slabs routes, against the real Card "
+                        "Ladder client on a fake transport, a fake clock and a throwaway store: add "
+                        "reads three callables and writes the slab, the day's snapshot and the sales "
+                        "once, an update replaces the day's row, any failed or limited read writes "
+                        "nothing, one client keeps the 8 second pace and the rate-limit stop across "
+                        "requests, Card Ladder's numbers become text money and its dates one ISO "
+                        "shape, a re-read sale keeps the fields only an earlier read gave, a slab "
+                        "with no sale at its grade says no sales, the routes are dispatched, no "
+                        "refusal names a decision, a path or a host, no token reaches an answer or a "
+                        "log, and there is no sweep route, client function or launchd job.",
+                "governed_by": ["D320", "D88", "D196", "D319"],
+            },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "
                         "server/pipeline_routes.py:do_product_history against a throwaway "
@@ -4953,7 +4966,7 @@ COMPONENTS = [
                                 "D227", "D280", "D234", "D236", "D239", "D240",
                                 "D242", "D243", "D247", "D252", "D253", "D254",
                                 "D256", "D261", "D271", "D275", "D193", "D269", "D295", "D301",
-                                "D320"],
+                                "D320", "D196"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
