@@ -1879,8 +1879,9 @@ def do_pipeline_waiting(payload: dict) -> dict:
     after this answer cannot grow the spend, because the spend names its cards.
 
     CHEAP ON PURPOSE, AND NOT THE PREFLIGHT. This is `_selection_captures` (the sidecars the
-    selection needs, and the store where a term needs it)
-    and `_send_keys`, the same two reads the spend route makes before it spawns. It decodes no photograph, spawns nothing and writes nothing.
+    selection needs, and the store where a term needs it) and `_send_keys`, the same two reads
+    the spend route makes before it spawns. It decodes no photograph, spawns nothing and
+    writes nothing.
     """
     send = _resolve_send(payload)
     try:

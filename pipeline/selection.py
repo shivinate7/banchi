@@ -874,11 +874,18 @@ def refuse_empty(selection: Selection, scanned: int, home: Optional[Path] = None
     IT NAMES THE TERMS AND HOW MANY PHOTOGRAPHS WERE READ, because those separate the three things
     an empty answer can mean — a mistyped box, a drawer whose cards are all identified already,
     and a capture root that is not there. `box_has_no_captures` could only ever say the first.
+
+    "NO PHOTOS" IS DECIDED BY THE DEFAULT ROOTS, NEVER BY `scanned`. A `keys`, `state` or
+    `since` press reads only its chosen cards' photographs, so `scanned` is 0 whenever it
+    chooses none, however many the store holds. Two directory looks answer it with no walk.
     """
     missing = None if home is None or selection.paths else home.joinpath(*CAPTURES)
+    content_root = None if home is None else photos.root(home)
     why = (
         f" No photos found. The capture folder {missing} does not exist."
-        if missing is not None and not missing.is_dir() and not scanned
+        if missing is not None
+        and not missing.is_dir()
+        and not (content_root.is_dir() and next(content_root.iterdir(), None) is not None)
         else ""
     )
     raise SelectionError(
