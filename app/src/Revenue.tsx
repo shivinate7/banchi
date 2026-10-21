@@ -860,13 +860,13 @@ function SalesView() {
     const skus = (boardExpanded ? products : products.slice(0, BOARD_SIZE)).map((p) => p.sku).filter((sku) => !askedSkus.has(sku))
     if (skus.length === 0) return
     skus.forEach((sku) => askedSkus.add(sku))
-    const stop = getSkuPhotosSettled(skus, (found) => {
-      skus.forEach((sku) => found.pending.includes(sku) || finals.add(sku))
+    const stop = getSkuPhotosSettled(skus, (found, covered) => {
+      covered.forEach((sku) => found.pending.includes(sku) || finals.add(sku))
       setPhotos((prev) => ({ ...prev, ...found.photos }))
       setStockPhotos((prev) => ({ ...prev, ...found.stockPhotos }))
       setPendingSkus((prev) => {
         const next = new Set(prev)
-        skus.forEach((sku) => next.delete(sku))
+        covered.forEach((sku) => next.delete(sku))
         found.pending.forEach((sku) => next.add(sku))
         return next
       })

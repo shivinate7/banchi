@@ -3619,7 +3619,10 @@ export type SkuPhotos = {
   readonly pending: readonly string[]
 }
 
-const SKU_PHOTO_BATCH = 100
+/** One ask names at most this many SKUs: the server's own `SKUS_PHOTOS_LIMIT`
+ *  (`server/capture_server.py`) refuses a call over it, and no constant crosses the language gap,
+ *  so the two are kept equal by hand. */
+const SKU_PHOTO_BATCH = 40
 
 /** `sku -> its photo`, for exactly the SKUs asked. A SKU with no photograph of either kind
  *  is simply ABSENT from both fields — never a guess (`GET /skus/photos?sku=<s>&sku=<s>`,
@@ -3650,33 +3653,47 @@ export async function getSkuPhotos(skus: string[]): Promise<SkuPhotos> {
 /** Waits between re-asks, in order; the last one repeats for as long as the caller stays. */
 export const SKU_PHOTO_BACKOFF_MS = [1000, 2000, 4000, 8000] as const
 
-/** `getSkuPhotos`, settled: calls `onAnswer` with each ask's answer, and re-asks only the
- *  SKUs still pending, on `SKU_PHOTO_BACKOFF_MS`, until none is pending or the returned stop
- *  function runs. A failed ask is asked again the same way, never taken as "no photo": the
- *  catalogue loads in the background and the capture server may be busy, and the owner's
- *  open screen is the reason to keep asking. One steady, batched ask per wait, so the load
- *  stays flat however many rows are shown. The one client path for a SKU's photo, so no
- *  screen keeps its own retry. */
-export function getSkuPhotosSettled(skus: string[], onAnswer: (answer: SkuPhotos) => void): () => void {
+/** `getSkuPhotos`, settled: asks in batches of `SKU_PHOTO_BATCH`, one batch after another, and
+ *  calls `onAnswer(answer, covered)` as each batch answers, so its rows draw without waiting
+ *  for the others. `covered` is the SKUs that answer speaks for: the ones in `answer.pending`
+ *  are still out, the rest are final. A batch with SKUs still pending, and a batch that failed,
+ *  are re-asked ALONE (only their own SKUs), on `SKU_PHOTO_BACKOFF_MS`, until the returned stop
+ *  function runs. A failure is never taken as "no photo", except a 4xx other than 429: no
+ *  retry changes a refusal, so its SKUs settle as final with no photo. The catalogue loads in
+ *  the background and the capture server may be busy, and the owner's open screen is the
+ *  reason to keep asking. One steady ask per wait, so the load stays flat however many rows
+ *  are shown. The one client path for a SKU's photo, so no screen keeps its own retry. */
+export function getSkuPhotosSettled(skus: string[], onAnswer: (answer: SkuPhotos, covered: string[]) => void): () => void {
   let stopped = false
-  let timer: number | undefined
+  const timers = new Set<number>()
+  const none: SkuPhotos = { photos: {}, stockPhotos: {}, pending: [] }
   const again = (wanted: string[], round: number) => {
-    timer = window.setTimeout(() => ask(wanted, round + 1), SKU_PHOTO_BACKOFF_MS[Math.min(round, SKU_PHOTO_BACKOFF_MS.length - 1)])
+    const timer = window.setTimeout(() => {
+      timers.delete(timer)
+      void ask(wanted, round + 1)
+    }, SKU_PHOTO_BACKOFF_MS[Math.min(round, SKU_PHOTO_BACKOFF_MS.length - 1)])
+    timers.add(timer)
   }
-  const ask = (wanted: string[], round: number) =>
+  const ask = (wanted: string[], round: number): Promise<void> =>
     getSkuPhotos(wanted)
       .then((found) => {
         if (stopped) return
-        onAnswer(found)
+        onAnswer(found, wanted)
         if (found.pending.length > 0) again([...found.pending], round)
       })
-      .catch(() => {
-        if (!stopped) again(wanted, round)
+      .catch((error: unknown) => {
+        if (stopped) return
+        const status = error instanceof ServerError ? error.status : 0
+        if (status >= 400 && status < 500 && status !== 429) onAnswer(none, wanted)
+        else again(wanted, round)
       })
-  void ask(skus, 0)
+  void (async () => {
+    for (let at = 0; at < skus.length && !stopped; at += SKU_PHOTO_BATCH) await ask(skus.slice(at, at + SKU_PHOTO_BATCH), 0)
+  })()
   return () => {
     stopped = true
-    window.clearTimeout(timer)
+    timers.forEach((timer) => window.clearTimeout(timer))
+    timers.clear()
   }
 }
 

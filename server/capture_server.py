@@ -12059,12 +12059,10 @@ def _copy_row(places: _Places, card: master.Card) -> dict:
     }
 
 
-#: Round 2 review finding: the client's own `PHOTO_LOOKUP_CAP` (`Revenue.tsx`) bounded the
-#: request it SENDS, but nothing bounded what this route would ANSWER for — a hand-typed
-#: query string could ask for any number of SKUs in one call. No shared constant reaches
-#: across the TS/Python boundary here (`ORDER_NAMES_LIMIT`'s own precedent has the same
-#: gap, one bound per side), so this is `Revenue.tsx:PHOTO_LOOKUP_CAP`'s value, kept in
-#: step by hand.
+#: One `/skus/photos` call answers for at most this many SKUs; a hand-typed query string could
+#: otherwise name any number. No shared constant reaches across the TS/Python boundary here
+#: (`ORDER_NAMES_LIMIT`'s own precedent has the same gap, one bound per side), so this is
+#: `server.ts`'s `SKU_PHOTO_BATCH` value, kept in step by hand.
 SKUS_PHOTOS_LIMIT = 40
 
 
