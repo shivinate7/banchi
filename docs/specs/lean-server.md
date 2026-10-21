@@ -130,3 +130,41 @@ This comes from code and the records. Nothing here is a new measurement.
    **Ruled: (iii), all, as the owner's word.** One conflict stays open: CLAUDE.md "Code cards" says code-card photos must stay local, and a live code is a bearer instrument. The feature is dormant. Until the owner repeals that line by name, no code-card photo leaves the Mac, and any upload design excludes them.
 6. **Stock image fallback when none exists.** Options: (i) real photo, (ii) a labeled placeholder. Recommend (i).
    **Ruled: (i), the real photo.**
+7. **What to build first?** Options: (i) a baseline and the slow reads (`/boxes`, `/search`, `/pipeline/waiting`, `/capture/sitting`), (ii) Fulfillment stock art (Q2), (iii) the home-device plan, (iv) the baseline alone. Recommend (i).
+   **Ruled: (ii) and (iii), as two lanes.** Fulfillment stock art is its own code lane and branch. The home-device plan is section 7 of this spec. The slow reads wait for the owner's next word.
+
+## 7. Home-device plan (option (e))
+
+Plan only. Nothing here is built.
+
+### What the device must keep
+
+- **One process, one store, one writer** (D138, D88). The store and every photo move together. The Mac's server stops before the device's starts. Two live stores never exist.
+- **The camera and the dispenser stay in a browser** (`app/src/useCamera.ts`, `app/src/dealer.ts`, D316). Chrome gives the camera and Web Bluetooth only to a secure page: `http://localhost` or HTTPS. `http://banchi.lan:8000` is not secure, so a capture tab pointed at the device loses both. `useCamera.ts` already names this failure (`INSECURE_CONTEXT_MESSAGE`).
+- **Writes are Origin-checked** (`server/capture_server.py`, `DEFAULT_ALLOWED_ORIGINS`). Each new address the browser uses needs one entry in `BANCHI_ALLOWED_ORIGINS`.
+- **The background jobs move too.** Start at login, the daily price refresh and the demo mirror are launchd agents today (`make launch-agent`, `make price-refresh-agent`, `make demo-mirror-agent`). The free reader needs its model runtime on the device.
+
+### Where the capture tab runs: three ways
+
+| Way | How the browser reaches the camera and dispenser | Gain | Cost |
+|---|---|---|---|
+| **A. Capture at the device** | The Cam Link and dispenser plug into the device. Chrome on the device opens `http://localhost`. | No change to the secure-page rule, the Origin list or the code. | The device needs a screen, a keyboard and Chrome, at the capture desk. |
+| **B. A local tunnel from the capture machine** | The Mac forwards its own `localhost:8000` to the device (for example `ssh -L`). Chrome sees `localhost`. | Capture stays at the Mac. No certificate. | A tunnel must be up for every sitting, and a dropped tunnel stops capture mid-box. |
+| **C. HTTPS on the device** | The device serves HTTPS under a name with a trusted certificate. | Any machine at home opens one secure address. | A certificate to issue and renew, and TLS added to a server that has none. New surface. |
+
+**Recommend A on a Mac mini.** It keeps every launchd agent, the threaded server tuning (DEBT11) and the camera stack the same. Only the store moves. A Linux board needs systemd units in place of every launchd agent, and an unproven model runtime for the free reader.
+
+### How the store moves
+
+1. Stop the Mac's server (`make down`, by the owner).
+2. Copy `inventory/` (store, photos, exports) and `~/.banchi` to the device. Size: unmeasured.
+3. Start the device's server. Check `make status` and one capture.
+4. Remove the Mac's start-at-login agent (`make launch-agent ARGS=--remove`), so the Mac never starts a second store.
+
+**Undo.** Copy back and swap the agents again. Nothing is deleted on either side until the owner says so.
+
+### Open for the owner
+
+- **Which device.** Recommend a Mac mini, with way A.
+- **Where capture happens.** At the device (A), or at the Mac through a tunnel (B).
+- **Measure first.** Store and photo size, so the copy and the device's disk are known.
