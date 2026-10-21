@@ -153,16 +153,15 @@ spread across about half the newest price. So `clValue` moves with each single s
 
 The value is not trusted when any of these holds:
 
-- Confidence is 2 or less. Confidence runs 1 to 5. The cutoff is the planner's pick, not yet
-  confirmed by the owner.
+- Confidence is 2 or less. Confidence runs 1 to 5. The owner ruled this cutoff.
 - The value is more than 2 times the highest of the last five sales at the grade.
-  **PROPOSED, AWAITS THE OWNER'S WORD.** Evidence below.
+  The owner ruled this ratio. Evidence below.
 - The value is exactly $100 with $0 profit. That is the collection placeholder, not a price.
 
 An untrusted value is replaced by the median of the last five sales at the grade. A slab with no
 sale at its grade shows "no sales" and no value.
 
-**The recent-sales check, proposed ratio.** Measured once, over the prototype's data: 414 slabs
+**The recent-sales check, its evidence.** Measured once, over the prototype's data: 414 slabs
 with confidence 3 or more and at least one sale at the grade. This used the ladder's `clValue`,
 not `estimatedValue`; the ratio needs a second look once 3.4 is read for every slab.
 
