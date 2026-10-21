@@ -29,7 +29,12 @@ this file tests:
         A transport may raise anything. Whatever it raises, that send still counts for the pace.
         A `pipeline.pricehistory.Unreachable` whose `__cause__` is an HTTPError 429 is the rate
         limit (the one retry home's contract): RateLimited, and the latch. A `Blocked` (403) or
-        an Unreachable from another status is a CardLadderError and no latch.
+        an Unreachable from another status is a CardLadderError and no latch. A bare
+        urllib.error.HTTPError 429, not wrapped, is the same rate limit.
+        The latch holds across threads: once one call is answered 429, no thread sends again,
+        one already waiting for its turn in the pace included.
+        `send` of a cloudfunctions URL whose callable is off the list raises Refused, sends
+        nothing and does not stamp the pace.
     Read functions, one per point of spec section 3 (each takes the client first):
         cert_lookup(client, cert, grader)       httpcertlookup    {cert, grader, includeProfile: true}
         profile(client, profile_id)             httpprofile       {profileId}
@@ -711,51 +716,80 @@ def _raise_on(n: int, make):
     return answer
 
 
+def _bare_http(code, body=b"", headers=None):
+    """A transport that raises the HTTPError itself, not wrapped. Like `_raising`, its text
+    holds the Authorization header."""
+    def make(request_headers):
+        hdrs = email.message.Message()
+        for k, v in (headers or {}).items():
+            hdrs[k] = v
+        return urllib.error.HTTPError(
+            CF_BASE + "httpprofile", code, "HTTP %d %s" % (code, request_headers.get("authorization", "")),
+            hdrs, io.BytesIO(body))
+    return make
+
+
+def _latches_on(cl, label, make) -> None:
+    """The second callable request raises what `make` builds: RateLimited, no retry, no wait,
+    no token in the text, and every later call raises and sends nothing."""
+    w = World(answer=_raise_on(2, make))
+    client = w.client(cl)
+    client.call("httpprofile", {})
+    with printed() as log:
+        err = _raises(cl.RateLimited, client.call, "httpprofile", {})
+    ok(isinstance(err, cl.RateLimited), "%s raises RateLimited" % label, repr(err))
+    sent_calls = w.callable_requests()
+    ok(len(sent_calls) == 2 and w.now == sent_calls[-1].t,
+       "%s: sent once, no retry and no wait" % label,
+       "%d sent, clock moved %.1fs" % (len(sent_calls), w.now - sent_calls[-1].t))
+    if isinstance(err, BaseException):
+        ok(not _leaks(str(err) + _trace(err) + log.text), "%s: no token in the text" % label)
+    sent, exchanges = len(w.log), len(w.exchanges)
+    w.now += 120.0
+    later = [_raises(cl.RateLimited, client.call, n, {}) for n in ("httpprofile", "httpcardestimate")]
+    ok(all(isinstance(e, cl.RateLimited) for e in later) and len(w.log) == sent
+       and len(w.exchanges) == exchanges,
+       "%s: the stop holds, so a later call raises and sends nothing" % label,
+       "%r, %d new requests" % (later, len(w.log) - sent))
+
+
+def _no_latch_on(cl, label, make) -> None:
+    """The second callable request raises what `make` builds: a CardLadderError that is not a
+    rate limit, and the next call is sent."""
+    w = World(answer=_raise_on(2, make))
+    client = w.client(cl)
+    client.call("httpprofile", {})
+    err = _raises(cl.CardLadderError, client.call, "httpprofile", {})
+    ok(isinstance(err, cl.CardLadderError) and not isinstance(err, cl.RateLimited),
+       "%s is a CardLadderError and not a rate limit" % label, repr(err))
+    got = _outcome(client.call, "httpprofile", {"again": 1})
+    ok(got == {"echo": "httpprofile", "data": {"again": 1}} and len(w.callable_requests()) == 3,
+       "%s does not latch: the next call is sent" % label, repr(got))
+
+
 def case_raised_rate_limit(cl) -> None:
     unreachable = pricehistory.Unreachable
-    shapes = [
-        ("a 429 with the message body", unreachable, 429, ENVELOPE, None),
-        ("a 429 with an empty body", unreachable, 429, b"", None),
-        ("a 429 with Retry-After 30", unreachable, 429, b"", {"Retry-After": "30"}),
-    ]
-    for label, kind, code, body, headers in shapes:
-        w = World(answer=_raise_on(2, _raising(kind, code, body, headers)))
-        client = w.client(cl)
-        client.call("httpprofile", {})
-        with printed() as log:
-            err = _raises(cl.RateLimited, client.call, "httpprofile", {})
-        ok(isinstance(err, cl.RateLimited), "Unreachable from %s raises RateLimited" % label, repr(err))
-        sent_calls = w.callable_requests()
-        ok(len(sent_calls) == 2 and w.now == sent_calls[-1].t,
-           "%s: sent once, no retry and no wait" % label,
-           "%d sent, clock moved %.1fs" % (len(sent_calls), w.now - sent_calls[-1].t))
-        if isinstance(err, BaseException):
-            ok(not _leaks(str(err) + _trace(err) + log.text), "%s: no token in the text" % label)
-        sent, exchanges = len(w.log), len(w.exchanges)
-        w.now += 120.0
-        later = [_raises(cl.RateLimited, client.call, n, {}) for n in ("httpprofile", "httpcardestimate")]
-        ok(all(isinstance(e, cl.RateLimited) for e in later) and len(w.log) == sent
-           and len(w.exchanges) == exchanges,
-           "%s: the stop holds, so a later call raises and sends nothing" % label,
-           "%r, %d new requests" % (later, len(w.log) - sent))
+    for label, body, headers in (("a 429 with the message body", ENVELOPE, None),
+                                 ("a 429 with an empty body", b"", None),
+                                 ("a 429 with Retry-After 30", b"", {"Retry-After": "30"})):
+        _latches_on(cl, "Unreachable from " + label, _raising(unreachable, 429, body, headers))
 
     # not a rate limit: a 403 refused by name, a 500, a connection that never opened
-    controls = [
-        ("Blocked (403)", _raising(pricehistory.Blocked, 403, b"Forbidden")),
-        ("Unreachable from a 500", _raising(unreachable, 500, b"oops")),
-        ("Unreachable from a 503", _raising(unreachable, 503, b"")),
-        ("Offline", _raising(pricehistory.Offline)),
-    ]
-    for label, make in controls:
-        w = World(answer=_raise_on(2, make))
-        client = w.client(cl)
-        client.call("httpprofile", {})
-        err = _raises(cl.CardLadderError, client.call, "httpprofile", {})
-        ok(isinstance(err, cl.CardLadderError) and not isinstance(err, cl.RateLimited),
-           "%s is a CardLadderError and not a rate limit" % label, repr(err))
-        got = _outcome(client.call, "httpprofile", {"again": 1})
-        ok(got == {"echo": "httpprofile", "data": {"again": 1}} and len(w.callable_requests()) == 3,
-           "%s does not latch: the next call is sent" % label, repr(got))
+    for label, make in (("Blocked (403)", _raising(pricehistory.Blocked, 403, b"Forbidden")),
+                        ("Unreachable from a 500", _raising(unreachable, 500, b"oops")),
+                        ("Unreachable from a 503", _raising(unreachable, 503, b"")),
+                        ("Offline", _raising(pricehistory.Offline))):
+        _no_latch_on(cl, label, make)
+
+
+def case_bare_http_429(cl) -> None:
+    """A transport that does not wrap: urllib's own HTTPError."""
+    for label, body, headers in (("a bare HTTPError 429 with the message body", ENVELOPE, None),
+                                 ("a bare HTTPError 429 with an empty body", b"", None),
+                                 ("a bare HTTPError 429 with Retry-After 30", b"", {"Retry-After": "30"})):
+        _latches_on(cl, label, _bare_http(429, body, headers))
+    for code in (403, 500):
+        _no_latch_on(cl, "a bare HTTPError %d" % code, _bare_http(code, b"nope"))
 
 
 # 11 ------------------------------------------------------------------------------------
@@ -779,9 +813,71 @@ def case_raised_transport_paces(cl) -> None:
            "gaps %s, slept %.1fs, got %r" % (gaps, w.slept, got))
 
 
+# 12 ------------------------------------------------------------------------------------
+def case_latch_race(cl) -> None:
+    """The first thread's call is slow and ends in a 429. The other two threads are by then
+    in the pace wait, past any check made before it. Neither may send after the answer."""
+    vt = VirtualTime(1_000_000.0)
+    seen: dict = {}
+
+    def slow_429(world, n, headers, _body):
+        if n != 2:
+            return None
+        world.vtime.sleep(3.0)  # the answer takes 3 seconds; the pace wait of the others is 8
+        seen["at"] = world.vtime.now
+        raise _raising(pricehistory.Unreachable, 429, ENVELOPE)(headers)
+
+    w = World(vtime=vt, answer=slow_429)
+    client = w.client(cl)
+    client.call("httpprofile", {"warm": True})
+    outcomes: list = []
+
+    def work(i):
+        outcomes.append(_outcome(client.call, "httpprofile", {"i": i}))
+
+    threads = [threading.Thread(target=work, args=(i,), daemon=True) for i in range(3)]
+    for t in threads:
+        t.start()
+    vt.run(threads)
+    for t in threads:
+        t.join(5)
+    late = [r for r in w.callable_requests() if r.t > seen.get("at", float("inf"))]
+    ok("at" in seen, "the slow call reached its 429 answer")
+    ok(not late, "no thread sends a request after the 429 answer, the ones in the pace wait included",
+       "%d sent after it, at %s" % (len(late), [r.t - seen.get("at", 0) for r in late]))
+    ok(len(outcomes) == 3 and all(isinstance(o, cl.RateLimited) for o in outcomes),
+       "all three threads end in RateLimited", repr(outcomes))
+
+
+# 13 ------------------------------------------------------------------------------------
+def case_send_checks_the_callable(cl) -> None:
+    w = World()
+    client = w.client(cl)
+    client.call("httpprofile", {})
+    w.now += 20.0  # past the pace, so the next real send needs no wait
+    slept = w.slept
+    sent = len(w.log)
+    urls = [CF_BASE + name for name in OUT_OF_BOUNDS]
+    urls += [CF_BASE + "httpnotreal", CF_BASE.upper().replace("HTTPS", "https") + "httpbuildcollectioncard",
+             CF_BASE + "httpbuildcollectioncard?x=1"]
+    errs = [_raises(cl.Refused, client.send, "POST", u, {"Authorization": "Bearer x"}, b"{}") for u in urls]
+    ok(all(isinstance(e, cl.Refused) for e in errs), "send of a write or unknown callable URL raises Refused",
+       "got %r" % errs)
+    ok(len(w.log) == sent, "send of those URLs reaches no transport", "%d sent" % (len(w.log) - sent))
+    client.call("httpprofile", {"after": 1})
+    ok(w.slept == slept, "the refused sends did not stamp the pace: the next real call waits nothing",
+       "the next call slept %.1fs" % (w.slept - slept))
+
+    # a read callable through send is not refused
+    before = len(w.callable_requests())
+    client.send("POST", CF_BASE + "httpprofile", {"Authorization": "Bearer x"}, b"{}")
+    ok(len(w.callable_requests()) == before + 1, "send of an allowed callable URL reaches the transport")
+
+
 CASES = [case_allow_list, case_refuse_callable, case_refuse_host, case_spacing,
          case_rate_limit, case_token, case_no_token_in_text, case_read_functions,
-         case_threads_keep_the_pace, case_raised_rate_limit, case_raised_transport_paces]
+         case_threads_keep_the_pace, case_raised_rate_limit, case_raised_transport_paces,
+         case_latch_race, case_send_checks_the_callable, case_bare_http_429]
 
 
 def main() -> int:
