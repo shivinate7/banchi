@@ -137,6 +137,7 @@ class Snapshot:
             self.slabs.slabs,
             self.slabs.snapshots,
             self.slabs.sales,
+            self.slabs.links,
         ]
 
 
@@ -195,6 +196,7 @@ class Store:
                 slabs=bound(Slabs.SLABS, "slabs"),
                 snapshots=bound(Slabs.SNAPSHOTS, "slab_snapshots"),
                 sales=bound(Slabs.SALES, "slab_sales"),
+                links=bound(Slabs.LINKS, "slab_sale_links"),
             ),
             # NOT `bound()` — nothing to load, only to append to, exactly like
             # `snapshot.inventory.events` beside it. A read-only `Store.read()` snapshot gets

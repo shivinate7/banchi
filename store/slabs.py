@@ -9,6 +9,8 @@ at all.
 - `slab_snapshots`: one row per slab per day. A second write that day REPLACES the row whole.
 - `slab_sales`: one row per Card Ladder sale id however many slabs and reads see it, and NEVER
   deleted: a sale Card Ladder later drops stays here. The row names every slab that read it.
+- `slab_sale_links`: one row per (slab, sale), indexed on the slab key, so `sales_for` fetches
+  that slab's sales by key and never scans `slab_sales`.
 
 NO GUESSED VALUE. A value Card Ladder did not give is `None`, stored as NULL: never 0, never "",
 never filled from the other value. Money is text, kept exactly as given.
@@ -29,6 +31,7 @@ GRADERS = {"psa": "psa", "beckett": "beckett", "bgs": "beckett", "bvg": "beckett
 
 
 def _grader(grader: Any) -> str:
+    # Not `pipeline/cardladder.py`'s: `store/` may not import `pipeline/` (D63), and this raises ValueError.
     try:
         return GRADERS[str(grader).lower()]
     except KeyError:
@@ -96,11 +99,21 @@ def _parse_sale(key: str, record: dict) -> Optional[_SaleRow]:
     return _SaleRow(record["id"], record.get("date"), record["data"], tuple(record.get("slabs") or ()))
 
 
+class Link(NamedTuple):
+    slab: str
+    sale: str
+
+
+def _parse_link(key: str, record: dict) -> Optional[Link]:
+    return Link(record["slab"], record["sale"])
+
+
 @dataclass
 class Slabs:
     slabs: "Rows" = field(default_factory=lambda: Rows(Slabs.SLABS))
     snapshots: "Rows" = field(default_factory=lambda: Rows(Slabs.SNAPSHOTS))
     sales: "Rows" = field(default_factory=lambda: Rows(Slabs.SALES))
+    links: "Rows" = field(default_factory=lambda: Rows(Slabs.LINKS))
 
     SLABS = TableSpec(
         "slabs",
@@ -134,7 +147,17 @@ class Slabs:
         column_names=("date",),
     )
 
+    LINKS = TableSpec(
+        "slab_sale_links",
+        parse=_parse_link,
+        dump=lambda r: r._asdict(),
+        columns=lambda r: {"slab": r.slab},
+        column_names=("slab",),
+    )
+
     def __post_init__(self) -> None:
+        if not isinstance(self.links, Rows):
+            self.links = Rows(Slabs.LINKS, objects=dict(self.links))
         if not isinstance(self.slabs, Rows):
             self.slabs = Rows(Slabs.SLABS, objects=dict(self.slabs))
         if not isinstance(self.snapshots, Rows):
@@ -166,15 +189,18 @@ class Slabs:
         return snapshot
 
     def record_sales(self, cert, grader, sales) -> None:
-        """Keyed by sale id alone. All sales or none: one without an `id` raises first."""
+        """Keyed by sale id alone. All sales or none: one without an `id` or a text `date` raises first."""
         slab = _slab_key(cert, grader)
         sales = list(sales)
         if any(not sale.get("id") for sale in sales):
             raise ValueError("A Card Ladder sale has no id.")
+        if any(not isinstance(sale.get("date"), str) for sale in sales):
+            raise ValueError("A Card Ladder sale has no text date.")
         for sale in sales:
             key = str(sale["id"])
             seen = self.sales[key].slabs if key in self.sales else ()
             self.sales[key] = _SaleRow(key, sale.get("date"), sale, seen if slab in seen else seen + (slab,))
+            self.links["%s|%s" % (slab, key)] = Link(slab, key)
 
     # -------------------------------------------------------------------------- reading
 
@@ -189,9 +215,6 @@ class Slabs:
         return sorted(rows, key=lambda row: row.day)
 
     def sales_for(self, cert, grader) -> List[Sale]:
-        # ponytail: a sale names its slabs in the payload, so this reads every sale row.
-        # Fine at one owner's slabs; add a slab-to-sale link table if the sales grow past it.
-        slab = _slab_key(cert, grader)
-        rows = [row for row in self.sales.values() if slab in row.slabs]
+        rows = [self.sales[link.sale] for link in self.links.where(slab=_slab_key(cert, grader))]
         rows.sort(key=lambda row: (row.date or "", row.id), reverse=True)
         return [Sale(row.id, row.date, row.data) for row in rows]

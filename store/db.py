@@ -164,8 +164,8 @@ MATCH_SWEEP = "match_sweep"
 # to backfill: an archive with no summary would read as empty to Holdings.
 #
 # FIFTEEN, FOR D320 (My Slabs, `docs/specs/my-slabs.md` section 6). `_add_slabs` adds `slabs`,
-# `slab_snapshots` and `slab_sales` (`store/slabs.py`). Purely additive, `_add_readings`'s case
-# exactly: three tables nothing older has, so there is nothing to backfill, and an empty set
+# `slab_snapshots`, `slab_sales` and `slab_sale_links` (`store/slabs.py`). Purely additive, `_add_readings`'s case
+# exactly: four tables nothing older has, so there is nothing to backfill, and an empty set
 # is the correct state for an upgraded store because no slab was ever read before.
 # NO VERSION FOR `cards_run` AND `events_event`. `_add_run_event_indexes` creates them
 # (`cards.select(run=...)`, `events_named`) in `_upgrade` on every upgrade and in
@@ -263,6 +263,7 @@ TABLES: Dict[str, Tuple[str, ...]] = {
         "estimated_confidence", "last_sale_price",
     ),
     "slab_sales": ("date",),
+    "slab_sale_links": ("slab",),
 }
 
 # Columns stored as REAL. `ord`, the order key (D294), is a fraction, and TEXT affinity would
@@ -304,6 +305,8 @@ _INDEXES = (
     ("price_history_summary", "sku"),
     # D320: `Slabs.snapshots_for` filters on the slab's cert.
     ("slab_snapshots", "cert"),
+    # D320: `Slabs.sales_for` reads one slab's links by key, never a scan of `slab_sales`.
+    ("slab_sale_links", "slab"),
 )
 
 # D172'S TWO INDEXES, DELIBERATELY NOT IN `_INDEXES` BECAUSE NEITHER IS A PLAIN ONE.
@@ -1069,12 +1072,13 @@ def _add_readings(conn: sqlite3.Connection) -> None:
 
 
 def _add_slabs(conn: sqlite3.Connection) -> None:
-    """Schema 15: `slabs`, `slab_snapshots` and `slab_sales` (D320).
+    """Schema 15: `slabs`, `slab_snapshots`, `slab_sales` and `slab_sale_links` (D320).
 
-    `_add_readings`'s case: three tables nothing older has, so nothing to backfill."""
-    for table in ("slabs", "slab_snapshots", "slab_sales"):
+    `_add_readings`'s case: four tables nothing older has, so nothing to backfill."""
+    for table in ("slabs", "slab_snapshots", "slab_sales", "slab_sale_links"):
         conn.execute(_ddl(table, TABLES[table]))
     conn.execute("CREATE INDEX IF NOT EXISTS slab_snapshots_cert ON slab_snapshots(cert)")
+    conn.execute("CREATE INDEX IF NOT EXISTS slab_sale_links_slab ON slab_sale_links(slab)")
 
 
 def _add_captured_at_index(conn: sqlite3.Connection) -> None:
