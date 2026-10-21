@@ -3,6 +3,25 @@
 **Status: PROPOSAL. Nothing here is built.** Each candidate needs the owner's word first. No decision
 is reopened by this file. It cites decisions to show what a candidate would touch.
 
+## Owner rulings
+
+1. **Alerts are not the goal.** C1 to C3 below framed HA as an alert channel. That framing is set
+   aside. Home automations (lights, buttons, phone panels) are not the goal either.
+2. **The goal is infrastructure.** The always-on HA Green, its 2 TB USB drive, the UniFi network and a
+   possible Mac Studio become banchi's second tier, beside the Mac. The spec is to be rewritten around
+   the problems banchi has from living on one computer, from every aspect.
+3. **The Green tier takes four roles**, to be designed:
+   - **Storage tier.** Continuous store copies, photos, the catalog image mirror, and archived sold photos.
+   - **Front door.** A `.home.arpa` name, TLS and a login proxy, plus WireGuard for remote access.
+   - **Scheduler and waker.** HA wakes the Mac for the daily jobs.
+   - **Standby read copy.** A read-only, age-labelled copy that serves reads while the Mac is off.
+4. **Also to explore:** the Green does the server's internet fetching and holds caches.
+
+The front door and the standby copy change D13 (the Mac holds the one truth). Proposals for them
+must cite D13 and wait for the owner's word on that entry.
+
+## Background
+
 The owner runs Home Assistant (HA) on a HA Green. This file records what three of the owner's
 repos do with HA and over-the-air (OTA) updates. It then says which of those patterns would help
 banchi, and which would not.
@@ -122,8 +141,9 @@ Banchi facts that shape all of them:
 - Banchi is a Mac app with a camera, a Bluetooth link and a local store. HA is on a different box
   that can restart. A restart takes a couple of minutes, per the `home` records. So every call to HA
   must be best-effort and short. It must never sit inside a write path or a request slot.
-- The server has no auth and binds to the Mac (CLAUDE.md "No auth"). Do not open it to the LAN.
-  Push outbound from the Mac. Do not let HA poll in.
+- The server has no auth (CLAUDE.md "No auth"). It listens on every interface
+  (`capture_server.HOST`), so the Fulfiller's phone can reach it (D5, D13). Nothing on the network
+  keeps HA out. "Do not let HA poll in" is a rule, not a boundary.
 - The front end talks to the capture server and nothing else, save the dispenser link (D316, a
   Capture button starts and stops the dispenser). The browser must never call HA.
 - A new alert must be shown to fire before it is trusted. The `home` disk alert is still unproven.
@@ -179,6 +199,8 @@ Banchi facts that shape all of them:
 - **Cost and risk.** Medium.
   - The watcher must be its own process. An alert that lives in the server cannot report that the
     server died.
+  - `/status` has no unsent-copy count and no per-agent last success, and it returns file paths
+    (`capture_server.do_status`). The digest needs new fields, and the paths must not reach HA.
   - `/status` is on the cheap lock-free lane (`PHOTO_LANE_EXACT`), so one read per minute is safe.
     Do not read `/inventory`.
   - A Mac that sleeps or is off looks dead. HA needs a quiet-hours or "Mac asleep" rule. Without
@@ -209,7 +231,7 @@ Banchi facts that shape all of them:
   Web Bluetooth). To send it, the browser would post to the capture server, which would store a new
   fact. D316 says "Nothing is stored" about dealing. A phone-visible "dealing" flag could also
   invite a remote start, which is not wanted.
-- **Touches.** D316, a Capture button starts and stops the dispenser. D19, arming is an act.
+- **Touches.** D316, a Capture button starts and stops the dispenser.
 - **Recommendation.** Do not build until C2 and C3 have run for a while and the owner names a need.
 
 ### C6. Rig firmware updates through HA (ESPHome)
@@ -269,7 +291,7 @@ Banchi facts that shape all of them:
 - **Do not host banchi as an HA add-on (the degen pattern).** Banchi needs the Mac camera, Chrome
   Web Bluetooth and a local store. An add-on has none of these. `degen` can move because it is a
   server and a client.
-- **Do not let HA poll the capture server, or open it to the LAN.** The server has no auth. A burst
+- **Do not let HA poll the capture server.** The server has no auth and already listens on the LAN. A burst
   of clients can wedge it (`REQUEST_SLOTS`, `PHOTO_SLOTS`). Push outbound instead.
 - **Do not let HA or any remote trigger update, restart or stop banchi.** The primary checkout
   syncs from `origin/main` already (D176). A remote restart can bounce the server mid-sitting.
