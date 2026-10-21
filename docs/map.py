@@ -1503,10 +1503,10 @@ COMPONENTS = [
                                       "exchange included, goes through one send path that "
                                       "reads the `ALLOWED_CALLABLES` constant, refuses "
                                       "`search.cardladder.com`, keeps callable sends 8 seconds "
-                                      "apart and latches on a rate-limit answer. Transport, "
-                                      "clock and sleep are injected, so it does no I/O of its "
-                                      "own. No error text holds a token or a response body.",
-                              "governed_by": ["D-my-slabs-card-ladder"],
+                                      "apart and latches on a rate-limit answer. Clock and "
+                                      "sleep are injected; the transport defaults to "
+                                      "`net_transport` on the one retry home. No error text holds a token or a response body.",
+                              "governed_by": ["D-my-slabs-card-ladder", "D319"],
                               "note": "The refresh token is the caller's to read from "
                                       "`CARDLADDER_REFRESH_TOKEN`. The API key in it is Card "
                                       "Ladder's public web key. No store tables, routes or "
@@ -3157,7 +3157,7 @@ COMPONENTS = [
                         "once, never retries and latches; the ID token is reused and "
                         "refreshed before it expires; no token appears in any exception, "
                         "traceback, log line or repr.",
-                "governed_by": ["D-my-slabs-card-ladder"],
+                "governed_by": ["D-my-slabs-card-ladder", "D319"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "

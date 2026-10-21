@@ -20,6 +20,8 @@ import threading
 import urllib.error
 import urllib.parse
 
+from pipeline import net
+
 # Card Ladder's public web config (a Firebase web key, not a secret).
 API_KEY = "AIzaSyBqbxgaaGlpeb1F6HRvEW319OcuCsbkAHM"
 TOKEN_URL = "https://securetoken.googleapis.com/v1/token?key=" + API_KEY
@@ -57,10 +59,21 @@ class TokenRejected(CardLadderError):
     """The refresh-token exchange failed."""
 
 
+def net_transport(method, url, headers, body):
+    """The default transport: any HTTP answer comes back as (status, body), so the Client reads it.
+
+    A write (`idempotent=False`) is sent again only when the connect never opened, and a 3xx is an
+    answer, so no header or token goes to a second host. `net.Offline` and `net.Dropped` leave it.
+    """
+    status, _headers, answer = net.open(
+        url, method=method, data=body, headers=headers, idempotent=False, follow_redirects=False)
+    return status, answer
+
+
 class Client:
-    def __init__(self, *, refresh_token, transport, clock, sleep):
+    def __init__(self, *, refresh_token, transport=None, clock, sleep):
         self._refresh_token = refresh_token
-        self._transport = transport  # (method, url, headers, body: bytes) -> (status, body: bytes)
+        self._transport = transport or net_transport  # (method, url, headers, body: bytes) -> (status, body: bytes)
         self._clock = clock
         self._sleep = sleep
         self._id_token = None
@@ -109,6 +122,9 @@ class Client:
             {"grant_type": "refresh_token", "refresh_token": self._refresh_token}).encode()
         status, answer = self.send(
             "POST", TOKEN_URL, {"Content-Type": "application/x-www-form-urlencoded"}, body)
+        if status == 429:  # Google's limit on the exchange, not Card Ladder's: no latch
+            raise CardLadderError(
+                "Google (securetoken.googleapis.com) is limiting login exchanges. Try again later.")
         if status != 200:
             raise TokenRejected(
                 "Card Ladder refused the login (%d). Copy %s again." % (status, KEY_NAME))
