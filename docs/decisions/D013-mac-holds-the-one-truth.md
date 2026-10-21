@@ -1,4 +1,4 @@
-## D13 — Mac holds the one truth
+## D13 — The camera path: Cam Link, quarter turn, device picker
 
 **The camera path fixes three rules.** The rig is a Sony RX100 VII or A7C over HDMI into an Elgato Cam Link 4K.
 - The Cam Link presents a plain UVC webcam, distinguishable only by label and id. So the device picker is required and `facingMode: "environment"` is never used.

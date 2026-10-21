@@ -175,7 +175,7 @@ One writer stays one writer (D88, D138). The Green never writes `store.sqlite`.
 Asked one at a time. Each ruling moves into "Owner rulings" above.
 
 1. **Where may the store, the photos and the secrets live?** Ruled: ruling 5.
-2. **D13, the Mac holds the one truth.** Ruled: ruling 6.
+2. **D13, once "the Mac holds the one truth", now the camera path.** Ruled: ruling 6.
 3. **D89's reclaim.** Ruled: ruling 7. Still open: when the cleanup empties the recycle bin.
 4. **Certificates.** Deferred by the owner until more of the plan has landed. Options then: reuse the
    mkcert root `degen` uses for `feed.home.arpa`, Let's Encrypt DNS-01 on a real domain, or a Caddy internal CA.
