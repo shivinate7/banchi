@@ -324,7 +324,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Dict, FrozenSet, Iterable, List, Optional, Sequence, Set, Tuple
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 # `make server` runs this by path, so sys.path[0] is server/ and the project packages are
 # not importable without this. Same idiom and same reason as harness/run.py.
@@ -377,6 +377,10 @@ from server import send_routes  # noqa: E402
 # no socket and holds no key, but it does hold a buyer's ADDRESS in memory for half an hour,
 # which is its own boundary worth keeping in one file rather than inlined here.
 from server import shipping_routes  # noqa: E402
+# My Slabs (D320): the THIRD outbound module, reading Card Ladder with the owner's own login. Below the
+# line for the same reason as the two above: one host, one credential read at call time, and no token
+# or response body in any answer.
+from server import slabs_routes  # noqa: E402
 # The order transport, and it is the SECOND outbound call this process makes (D63/D69). Below
 # the line and beside the two above for the reason the paragraph gives: it reads the
 # TCGplayer session cookie out of `.env` and opens a socket to
@@ -792,6 +796,8 @@ _SHIPPING_FILE_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/file$")
 # collide however they are ordered.
 _SHIPPING_STAMPS_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/stamps$")
 _SHIPPING_ITEM_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})$")
+# One slab, by grader and cert. Both are percent-decoded by the route. `/slabs/sweep` matches nothing: the owner ruled no sweep route.
+_SLABS_ITEM_RE = re.compile(r"^/slabs/([^/]+)/([^/]+)$")
 
 # ------------------------------------------------------- the capture claims, on the wire
 #
@@ -16484,6 +16490,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # pass so no two of them are offered the same physical card.
             if path == "/orders":
                 return self._json(HTTPStatus.OK, do_orders())
+            if path == "/slabs":
+                return self._json(HTTPStatus.OK, slabs_routes.do_slabs())
+            match = _SLABS_ITEM_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK, slabs_routes.do_slab(unquote(match.group(1)), unquote(match.group(2)))
+                )
             if path == "/codes":
                 return self._json(HTTPStatus.OK, codes_routes.do_codes())
             if path == "/codes/lots":
@@ -17068,6 +17081,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # track — so neither is behind D33's money gate. The export carries its own
             # two-step instead, for a different irreversible thing: a code handed to a
             # buyer cannot be un-handed. `server/codes_routes.py` has the argument.
+            if path == "/slabs":
+                return self._json(HTTPStatus.OK, slabs_routes.do_slab_add(self._body()))
             if path == "/codes/scan":
                 status, body = codes_routes.do_codes_scan(self._body(), captures_root())
                 return self._json(status, body)

@@ -64,6 +64,9 @@ class SlabSnapshot(NamedTuple):
     population: Optional[int]
     gem_rate: Optional[float]
     speed: Optional[dict]
+    # The card's grade ladder as that day's read gave it. Payload only, no column; a row stored
+    # before this field reads None.
+    ladder: Optional[list] = None
 
 
 class Sale(NamedTuple):
@@ -179,11 +182,12 @@ class Slabs:
     def record_snapshot(
         self, cert, grader, day, *, cl_value, cl_confidence, estimated_value,
         estimated_confidence, last_sale_price, last_sale_date, population, gem_rate, speed,
+        ladder=None,
     ) -> SlabSnapshot:
         """One row per slab per day; a second write that day replaces every field."""
         snapshot = SlabSnapshot(
             str(cert), _grader(grader), day, cl_value, cl_confidence, estimated_value,
-            estimated_confidence, last_sale_price, last_sale_date, population, gem_rate, speed,
+            estimated_confidence, last_sale_price, last_sale_date, population, gem_rate, speed, ladder,
         )
         self.snapshots["%s:%s" % (_slab_key(cert, grader), day)] = snapshot
         return snapshot

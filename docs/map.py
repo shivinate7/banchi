@@ -5637,7 +5637,7 @@ COMPONENTS = [
                                 "D189", "D191", "D192", "D193", "D196", "D203", "D212",
                                 "D213", "D219", "D231", "D225", "D227", "D251", "D252",
                                 "D258", "D259", "D262", "D264", "D294", "D261", "D271", "D273",
-                                "D298", "D299", "D301"],
+                                "D298", "D299", "D301", "D320"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -5871,6 +5871,21 @@ COMPONENTS = [
                         "PROVE is that Pirate Ship's importer accepts the file this renders — "
                         "that is on the far side of a seam no committed fixture can hold, and "
                         "it is one upload by the owner.",
+            },
+            "slabs_routes.py": {
+                "does": "the My Slabs routes: POST /slabs adds a slab by cert (Card Ladder reads "
+                        "3.1, 3.2 and 3.4 outside the store lock, then ONE write of the slab, "
+                        "today's snapshot and the sales), GET /slabs lists every slab with its "
+                        "newest snapshot, GET /slabs/<grader>/<cert> reads one. One "
+                        "`pipeline.cardladder.Client` lives for the process, so the 8 second pace "
+                        "and the day's rate-limit stop hold across requests. Card Ladder's "
+                        "numbers become text money and its dates one ISO day; a sale that was "
+                        "read before keeps the fields only an earlier read gave; a slab with no "
+                        "sale at its grade stores no value. Every refusal sentence is written "
+                        "here and names no decision, path or host. There is no sweep route: "
+                        "the owner ruled it out.",
+                "governed_by": ["D320", "D88", "D196", "D319"],
+                "note": "PROVED BY `make slabs-routes-selftest`.",
             },
             "order_transport.py": {
                 "does": "the order transport (D69): this account's own orders off "
@@ -6848,7 +6863,7 @@ COMPONENTS = [
                                              "D142", "D145", "D147", "D156", "D166", "D168", "D172",
                                              "D174", "D180", "D183", "D193", "D196", "D212", "D213",
                                              "D225", "D227", "D236", "D252", "D260", "D264", "D271",
-                                             "D273", "D277", "D278", "D294", "D299", "D301"]},
+                                             "D273", "D277", "D278", "D294", "D299", "D301", "D320"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D91), whether the "
