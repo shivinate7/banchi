@@ -888,7 +888,64 @@ test('a pending tile holds the box it has with a photo (D313)', async ({ page })
   expect(after?.height).toBeCloseTo(before?.height ?? 0, 0)
 })
 
-test('a SKU pending past the cap ends on no photo found', async ({ page }) => {
+/** Moves the fake clock forward in 5 s pieces until `ms` is spent or `done` holds. A re-ask
+ *  timer is armed only after the previous answer lands, so each piece is followed by a short
+ *  real wait; a tight fastForward loop outruns the fetch. No step or interval of the product
+ *  is assumed, so a longer wait between asks only costs more pieces. */
+async function spendFakeTime(page: Page, ms: number, done: () => Promise<boolean> = async () => false): Promise<void> {
+  for (let spent = 0; spent < ms && !(await done()); spent += 5000) {
+    await page.clock.fastForward(5000)
+    await page.waitForTimeout(40) // keep: the stubbed answer lands on the real clock, outside the fake one
+  }
+}
+
+const SKU_PHOTO_STOCK = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
+
+test('a photo answer that lands after 31 seconds still draws on the open screen', async ({ page }) => {
+  test.setTimeout(90_000)
+  await page.route(SKU_PHOTO_STOCK, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: SLOT_SVG }))
+  await stub(page, generalOrders())
+  let slow = true
+  await page.route(/\/skus\/photos\?/, (route) =>
+    json(route, slow ? { photos: {}, stock_photos: {}, pending: ['9100001'] } : { photos: {}, stock_photos: { '9100001': SKU_PHOTO_STOCK }, pending: [] }),
+  )
+  await open(page)
+  const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
+  await expect(thumb).toHaveAttribute('data-pending', 'true')
+  // Two minutes of fake time with the catalogue still loading: well past the 31 s the client used
+  // to give. Each 5 s piece fires at most one due timer, so the old waits take about 45 s of pieces.
+  await spendFakeTime(page, 120_000)
+  await expect(thumb, 'the row gave up on its photo while the screen was open').toHaveAttribute('data-pending', 'true')
+  await expect(thumb).not.toHaveAttribute('data-missing', 'true')
+  slow = false
+  await spendFakeTime(page, 300_000, async () => (await thumb.locator('img').count()) > 0)
+  await expect(thumb.locator('img'), 'the late answer never reached the row').toHaveAttribute('src', SKU_PHOTO_STOCK)
+})
+
+test('a failed photo lookup is asked again, not left as no photo', async ({ page }) => {
+  test.setTimeout(90_000)
+  await page.route(SKU_PHOTO_STOCK, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: SLOT_SVG }))
+  await stub(page, generalOrders())
+  let asks = 0
+  await page.route(/\/skus\/photos\?/, (route) => {
+    asks += 1
+    if (asks === 1) {
+      return route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'unavailable', message: 'The server is busy.' } }),
+      })
+    }
+    return json(route, { photos: {}, stock_photos: { '9100001': SKU_PHOTO_STOCK }, pending: [] })
+  })
+  await open(page)
+  const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
+  await spendFakeTime(page, 300_000, async () => (await thumb.locator('img').count()) > 0)
+  expect(asks, 'the failed lookup was final: it was never asked again').toBeGreaterThan(1)
+  await expect(thumb.locator('img')).toHaveAttribute('src', SKU_PHOTO_STOCK)
+})
+
+test('leaving Sales ends the photo asks for a SKU that is still pending', async ({ page }) => {
   await stub(page, generalOrders())
   let asks = 0
   await page.route(/\/skus\/photos\?/, (route) => {
@@ -896,19 +953,57 @@ test('a SKU pending past the cap ends on no photo found', async ({ page }) => {
     return json(route, { photos: {}, stock_photos: {}, pending: ['9100001'] })
   })
   await open(page)
-  const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
-  await expect(thumb).toHaveAttribute('data-pending', 'true')
-  // Each re-ask timer is set only after the previous answer lands, so wait for the ask
-  // before moving the clock. A tight fastForward loop outruns the fetch and strands the cap.
-  for (let i = 1; i <= 6; i += 1) {
-    await expect.poll(() => asks).toBe(i)
-    await page.clock.fastForward(9000)
-  }
-  await expect(thumb).toHaveAttribute('data-missing', 'true')
-  await expect(thumb).toContainText('No photo found')
+  await expect(page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')).toHaveAttribute('data-pending', 'true')
+  await spendFakeTime(page, 15_000)
+  await page.evaluate(() => {
+    window.location.hash = '#/nowhere'
+  })
+  await expect(page.locator('main.no-such-view')).toBeVisible()
+  await page.waitForTimeout(100) // keep: an ask already in flight when the screen closed settles on the real clock
   const final = asks
-  await page.clock.fastForward(60000)
+  await spendFakeTime(page, 120_000)
   expect(asks).toBe(final)
+})
+
+/** `count` one-line September orders, each its own SKU and each worth $1 less than the one
+ *  before, so gross-descending puts SKU `n` at rank `n` — the board's own row number. */
+function skuOf(rank: number): string {
+  return `95${String(rank).padStart(5, '0')}`
+}
+function stockOf(rank: number): string {
+  return `https://tcgplayer-cdn.tcgplayer.com/product/${skuOf(rank)}_200w.jpg`
+}
+function manyOrders(count: number): OrderRow[] {
+  return Array.from({ length: count }, (_, i) =>
+    orderRow({
+      number: `ORD-${3000 + i}`,
+      placed_at: '2026-09-05T10:00:00+00:00',
+      status: 'Shipped',
+      lines: [line({ sku: skuOf(i + 1), name: `Printing ${String(i + 1).padStart(2, '0')}`, unit_price: (100 - i).toFixed(2) })],
+    }),
+  )
+}
+
+test('under Show all, a row past the 40th asks for its photo and draws it', async ({ page }) => {
+  await page.route(/tcgplayer-cdn\.tcgplayer\.com\/product\//, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/svg+xml', body: SLOT_SVG }),
+  )
+  await stub(page, manyOrders(45))
+  const asked = new Set<string>()
+  await page.route(/\/skus\/photos\?/, (route) => {
+    const skus = new URL(route.request().url()).searchParams.getAll('sku')
+    skus.forEach((sku) => asked.add(sku))
+    const stock = Object.fromEntries(skus.map((sku) => [sku, `https://tcgplayer-cdn.tcgplayer.com/product/${sku}_200w.jpg`]))
+    return json(route, { photos: {}, stock_photos: stock, pending: [] })
+  })
+  await open(page)
+  await page.getByRole('button', { name: 'Show all 45' }).click()
+  for (const rank of [41, 45]) {
+    const row = page.locator('.revenue-board li').filter({ has: page.locator('.revenue-board-rk', { hasText: new RegExp(`^${rank}$`) }) })
+    await row.scrollIntoViewIfNeeded()
+    await expect.poll(() => asked.has(skuOf(rank)), { message: `row ${rank}'s SKU was never asked about` }).toBe(true)
+    await expect(row.locator('.bn-thumb img'), `row ${rank} did not draw its photo`).toHaveAttribute('src', stockOf(rank))
+  }
 })
 
 
