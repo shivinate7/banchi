@@ -165,6 +165,6 @@ Plan only. Nothing here is built.
 
 ### Open for the owner
 
-- **Which device.** Recommend a Mac mini, with way A.
+- **Which device.** Recommend a Mac mini, with way A. **Ruled: decide later.** The plan is parked.
 - **Where capture happens.** At the device (A), or at the Mac through a tunnel (B).
 - **Measure first.** Store and photo size, so the copy and the device's disk are known.
