@@ -175,7 +175,7 @@ export function FilterSpecimens() {
             facets={facets}
             value={filters}
             onChange={setFilters}
-            search={{ query, onChange: setQuery, placeholder: 'Card name, number or SKU' }}
+            search={{ query, onChange: setQuery, placeholder: 'Card name, number or SKU…' }}
             sort={{ options: SORTS, value: sort, onChange: setSort }}
             hide={{ checked: hideSold, onChange: setHideSold, label: 'Hide sold', count: soldHere, defaultChecked: true }}
             count={{ shown: shown.length, total: FILTER_ROWS.length }}
