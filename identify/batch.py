@@ -430,7 +430,9 @@ def run_batch(
     for chunk in _chunks(sendable):
         requests = [build_request(item) for item in chunk]
         try:
-            batch = client.messages.batches.create(requests=requests)
+            # PAID, SO NEVER AUTO-RETRIED (D319, owner ruling): a second create could start a second
+            # batch for the same cards. retrieve and results are reads and keep the SDK default.
+            batch = client.with_options(max_retries=0).messages.batches.create(requests=requests)
         except Exception as exc:
             raise BatchError(f"batch create failed: {exc}") from exc
 

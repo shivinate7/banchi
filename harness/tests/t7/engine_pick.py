@@ -8,16 +8,20 @@ server on 127.0.0.1.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import http.server
 import json
 import math
 import threading
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
+from unittest import mock
 
 from harness.tests import Checks
-from harness.tests.t7.common import REPO_ROOT, isolated_home, quiet
+from harness.tests.t7.common import REPO_ROOT, attempt, isolated_home, quiet, scripted_wire
 from identify import batch, images as identify_images, match, prompt
 from pipeline import join, routing, tcgcsv
 from store import cache as cache_mod
@@ -265,6 +269,117 @@ def check_model_download(checks: Checks) -> None:
         match.MODEL_BYTES, match.MODEL_SHA256 = saved
         server.shutdown()
         server.server_close()
+
+
+_REFUSED = urllib.error.URLError(ConnectionRefusedError(errno.ECONNREFUSED, "simulated: connection refused"))
+
+
+def check_model_download_retries_through_the_one_home(checks: Checks) -> None:
+    """D319 (one retry home): `match.download_model` retries a failed connect or a 503.
+
+    It used to make one request and give up, so one dropped connection cost the owner the
+    Prepare press. Rule C now decides: no connection, 429, 502, 503 and 504 are retried; a plain
+    500 is one request. The wire is scripted below `urlopen` (`harness/tests/t7/common.py`), so no
+    socket is opened. The pin is swapped for a 4,096-byte file's size and hash for the length of
+    the check, as in `check_model_download`. No `opener=` is passed: the home owns the request."""
+    checks.note("")
+    checks.note("MODEL DOWNLOAD — a 503 or a refused connection, then the file (scripted wire)")
+    body = bytes(range(256)) * 16
+    length = {"Content-Length": str(len(body))}
+    saved = match.MODEL_BYTES, match.MODEL_SHA256
+    match.MODEL_BYTES = len(body)
+    match.MODEL_SHA256 = hashlib.sha256(body).hexdigest()
+    try:
+        with isolated_home() as home:
+            def download(steps, name):
+                dest = Path(home) / name / "model.onnx"
+                with scripted_wire(*steps) as wire:
+                    got, caught = attempt(
+                        lambda: match.download_model(dest, f"https://models.example.test/{name}.onnx")
+                    )
+                return got, caught, wire, dest
+
+            for name, first in (("after-503", 503), ("after-refused", _REFUSED)):
+                got, caught, wire, dest = download([first, (200, body, length)], name)
+                checks.ok(
+                    got == dest and dest.exists() and dest.read_bytes() == body and len(wire.requests) == 2
+                    and not dest.with_name(dest.name + ".part").exists(),
+                    f"{name.replace('-', ' ')}: the file is fetched on the second request and kept whole",
+                    f"got {got!r} {caught!r} after {len(wire.requests)} requests",
+                )
+            got, caught, wire, dest = download([500, (200, body, length)], "plain-500")
+            checks.ok(
+                isinstance(caught, match.ModelDownloadError) and len(wire.requests) == 1 and not dest.exists(),
+                "a plain 500 is one request, refused with a named error, and leaves no file",
+                f"got {got!r} {caught!r} after {len(wire.requests)} requests",
+            )
+    finally:
+        match.MODEL_BYTES, match.MODEL_SHA256 = saved
+
+
+def check_fetch_bytes_retries_through_the_one_home(checks: Checks) -> None:
+    """D319 (one retry home): `match.fetch_bytes` keeps its pacing and loses its own retry loop.
+
+    It used to retry EVERY failure up to six times, a plain 500 included, with its own pauses. Rule C
+    now decides, through the one home: a 503 or a refused connection is retried, a plain 500 is one
+    request, and the loop gives up after the home's three. What stays here is the global gap between
+    request starts (`gate`, `clock`) and the answer for a file the CDN does not hold: 403, 404 and 410
+    are `(None, "http_<code>")` at once, because the file is not there (`no_photo`).
+
+    The wire is scripted below `urlopen`. No `opener=` or `attempts=` is passed."""
+    checks.note("")
+    checks.note("FETCH BYTES — rule C through the one home, the gap kept (scripted wire)")
+
+    def read(steps, host, **kwargs):
+        with scripted_wire(*steps) as wire:
+            got, caught = attempt(lambda: match.fetch_bytes(f"https://{host}.example.test/a.jpg", **kwargs))
+        return got, caught, wire
+
+    got, caught, wire = read([503, b"image"], "a")
+    checks.ok(
+        got == (b"image", None) and len(wire.requests) == 2,
+        "a 503 then an answer is read: (bytes, None) after 2 requests",
+        f"got {got!r} {caught!r} after {len(wire.requests)} requests",
+    )
+    got, caught, wire = read([_REFUSED, _REFUSED, b"image"], "b")
+    checks.ok(
+        got == (b"image", None) and len(wire.requests) == 3,
+        "two refused connections then an answer is read after 3 requests",
+        f"got {got!r} {caught!r} after {len(wire.requests)} requests",
+    )
+    got, caught, wire = read([500, b"image"], "c")
+    checks.ok(
+        caught is None and got[0] is None and got[1] and len(wire.requests) == 1 and not wire.pauses,
+        "a plain 500 is ONE request, with no pause, and a named cause: it is no longer retried",
+        f"got {got!r} {caught!r} after {len(wire.requests)} requests, pauses {wire.pauses}",
+    )
+    got, caught, wire = read([503], "d")
+    checks.ok(
+        caught is None and got[0] is None and 1 < len(wire.requests) <= 3,
+        "a 503 that never clears is asked 3 times at most (the home's limit, not six)",
+        f"got {got!r} {caught!r} after {len(wire.requests)} requests",
+    )
+    for code in (403, 404, 410):
+        got, caught, wire = read([code, b"image"], f"e{code}")
+        checks.ok(
+            got == (None, f"http_{code}") and len(wire.requests) == 1 and not wire.pauses,
+            f"HTTP {code} is an answer, not a failure: (None, 'http_{code}') after 1 request",
+            f"got {got!r} {caught!r} after {len(wire.requests)} requests, pauses {wire.pauses}",
+        )
+
+    gate, clock = threading.Lock(), [0.0]
+    with scripted_wire(b"one", b"two") as wire, mock.patch.object(time, "time", lambda: 1000.0):
+        first, caught_first = attempt(
+            lambda: match.fetch_bytes("https://paced.example.test/1.jpg", gate=gate, clock=clock)
+        )
+        second, caught_second = attempt(
+            lambda: match.fetch_bytes("https://paced.example.test/2.jpg", gate=gate, clock=clock)
+        )
+    checks.ok(
+        first == (b"one", None) and second == (b"two", None) and len(wire.pauses) == 1 and 0 < wire.pauses[0] <= 1.0,
+        "the global gap still paces request starts: the second read on the same gate and clock waits once, a gap long",
+        f"got {first!r} {caught_first!r} then {second!r} {caught_second!r}, pauses {wire.pauses}",
+    )
 
 
 # ------------------------------------------------------------------------ cmd_identify
@@ -1634,6 +1749,8 @@ def check_match_route_lane(checks: Checks) -> None:
 CHECKS = (
     check_matcher_accept_rule,
     check_model_download,
+    check_model_download_retries_through_the_one_home,
+    check_fetch_bytes_retries_through_the_one_home,
     check_identify_free_first,
     check_second_look_routing,
     check_second_look_agreement,
