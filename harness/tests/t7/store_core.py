@@ -1134,12 +1134,12 @@ def check_store_of_record(checks: Checks) -> None:
 
 
 def check_skus_photos_limit(checks: Checks) -> None:
-    """Round 2 review finding: `GET /skus/photos` (`do_skus_photos`, D298)
-    had no server-side bound of its own — only `Revenue.tsx:PHOTO_LOOKUP_CAP` bounded what
-    the client SENDS, and a hand-typed query string could ask for any number of SKUs.
-    `SKUS_PHOTOS_LIMIT` is that same value, kept in step by hand (no shared constant
-    reaches across the TS/Python boundary here, `ORDER_NAMES_LIMIT`'s own precedent has
-    the same gap).
+    """`GET /skus/photos` (`do_skus_photos`, D298) answers at most `SKUS_PHOTOS_LIMIT` SKUs
+    per call and refuses more with `too_many_skus`, so a hand-typed query string cannot ask
+    for any number. The client asks in batches of at most that many: `server.ts`'s
+    `getSkuPhotos` holds the batch size. No shared constant reaches across the TS/Python
+    boundary (`ORDER_NAMES_LIMIT` has the same gap), so the two values are kept in step by
+    hand, and `revenue.spec.ts` asserts the client stays under the limit.
     """
     checks.note("")
     checks.note("SKU PHOTO LOOKUP CAP — GET /skus/photos (D298, round 2 review)")

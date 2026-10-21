@@ -308,7 +308,7 @@ const isServerFault = (status: number | undefined): boolean => status !== undefi
 
 function failureKind(code: string, status: number): 'refusal' | 'retry' {
   if (RETRY_CODES.has(code)) return 'retry'
-  if (isServerFault(status) || status === 429 || status === 423) return 'retry'
+  if (isServerFault(status) || status === 408 || status === 429 || status === 423) return 'retry'
   return 'refusal'
 }
 
@@ -3619,6 +3619,11 @@ export type SkuPhotos = {
   readonly pending: readonly string[]
 }
 
+/** One ask names at most this many SKUs: the server's own `SKUS_PHOTOS_LIMIT`
+ *  (`server/capture_server.py`) refuses a call over it, and no constant crosses the language gap,
+ *  so the two are kept equal by hand. */
+const SKU_PHOTO_BATCH = 40
+
 /** `sku -> its photo`, for exactly the SKUs asked. A SKU with no photograph of either kind
  *  is simply ABSENT from both fields — never a guess (`GET /skus/photos?sku=<s>&sku=<s>`,
  *  D298, amended F2). `#/revenue`'s own reason: a sold card's own photograph is usually
@@ -3627,40 +3632,75 @@ export type SkuPhotos = {
  *  Sets and Pricing already read. A plain read, costs nothing, so this screen calls it on
  *  arrival rather than gating it behind a press. */
 export async function getSkuPhotos(skus: string[]): Promise<SkuPhotos> {
-  if (skus.length === 0) return { photos: {}, stockPhotos: {}, pending: [] }
-  const query = skus.map((sku) => `sku=${encodeURIComponent(sku)}`).join('&')
-  const body = (await request(`/skus/photos?${query}`, NO_CACHE)) as {
-    photos: Record<string, SkuPhotoEntry>
-    stock_photos: Record<string, string>
-    pending?: string[]
+  const out: SkuPhotos = { photos: {}, stockPhotos: {}, pending: [] }
+  const pending: string[] = []
+  // In turns of SKU_PHOTO_BATCH, one after another: a long list stays under the request-line
+  // limit and never lands on the server as a burst.
+  for (let at = 0; at < skus.length; at += SKU_PHOTO_BATCH) {
+    const query = skus.slice(at, at + SKU_PHOTO_BATCH).map((sku) => `sku=${encodeURIComponent(sku)}`).join('&')
+    const body = (await request(`/skus/photos?${query}`, NO_CACHE)) as {
+      photos: Record<string, SkuPhotoEntry>
+      stock_photos: Record<string, string>
+      pending?: string[]
+    }
+    Object.assign(out.photos, body.photos)
+    Object.assign(out.stockPhotos, body.stock_photos)
+    pending.push(...(body.pending ?? []))
   }
-  return { photos: body.photos, stockPhotos: body.stock_photos, pending: body.pending ?? [] }
+  return { ...out, pending }
 }
 
-/** Waits between re-asks for pending SKUs. Its length is the cap: after the last wait the SKU
- *  is answered final, no photo. */
-export const SKU_PHOTO_BACKOFF_MS = [1000, 2000, 4000, 8000, 8000, 8000] as const
+/** Waits between re-asks, in order; the last one repeats for as long as the caller stays. */
+export const SKU_PHOTO_BACKOFF_MS = [1000, 2000, 4000, 8000] as const
 
-/** `getSkuPhotos`, settled: calls `onAnswer` with each ask's answer, and re-asks only the
- *  SKUs still pending, on `SKU_PHOTO_BACKOFF_MS`. The last `onAnswer` has `pending: []`.
- *  Returns a stop function. The one client path for a SKU's photo, so no screen keeps its
- *  own retry. */
-export function getSkuPhotosSettled(skus: string[], onAnswer: (answer: SkuPhotos) => void): () => void {
+/** The tail of every photo ask this page has queued. Each ask waits for the one before it, from
+ *  whichever caller asked, so the server never holds two photo calls from this page. */
+let skuPhotoLine: Promise<unknown> = Promise.resolve()
+
+/** `getSkuPhotos`, settled: asks in batches of `SKU_PHOTO_BATCH` and calls
+ *  `onAnswer(answer, covered)` as each batch answers, so its rows draw without waiting for the
+ *  others. `covered` is the SKUs that answer speaks for: the ones in `answer.pending` are still
+ *  out, the rest are final. A batch with SKUs still pending, and a batch that failed, are
+ *  re-asked alone (only their own SKUs): one timer per poll, on `SKU_PHOTO_BACKOFF_MS`, then each
+ *  such batch one after another, until the returned stop function runs. A failure is never taken
+ *  as "no photo", except a 4xx that `failureKind` calls a refusal: no retry changes it, so its
+ *  SKUs settle as final with no photo. The catalogue loads in the background and the capture
+ *  server may be busy, and the owner's open screen is the reason to keep asking. Every ask, the
+ *  first pass and each retry, waits its turn on one line that every caller shares, so at most
+ *  one photo call is in flight however many rows are shown. The one client path for a SKU's
+ *  photo, so no screen keeps its own retry. */
+export function getSkuPhotosSettled(skus: string[], onAnswer: (answer: SkuPhotos, covered: string[]) => void): () => void {
   let stopped = false
   let timer: number | undefined
-  const ask = (wanted: string[], round: number) =>
-    getSkuPhotos(wanted)
-      .then((found) => {
+  const none: SkuPhotos = { photos: {}, stockPhotos: {}, pending: [] }
+  // One call, in line. A turn that comes up after the stop asks nothing.
+  const inLine = (wanted: string[]): Promise<SkuPhotos | null> => {
+    const turn = skuPhotoLine.then(() => (stopped ? null : getSkuPhotos(wanted)))
+    skuPhotoLine = turn.catch(() => undefined)
+    return turn
+  }
+  const poll = async (batches: string[][], round: number): Promise<void> => {
+    const left: string[][] = []
+    for (const wanted of batches) {
+      try {
+        const found = await inLine(wanted)
+        if (stopped || found === null) return
+        onAnswer(found, wanted)
+        if (found.pending.length > 0) left.push([...found.pending])
+      } catch (error: unknown) {
         if (stopped) return
-        const more = found.pending.length > 0 && round < SKU_PHOTO_BACKOFF_MS.length
-        onAnswer(more ? found : { ...found, pending: [] })
-        if (more) timer = window.setTimeout(() => ask([...found.pending], round + 1), SKU_PHOTO_BACKOFF_MS[round])
-      })
-      .catch(() => {
-        // A failed lookup is a final "no photo", as it always was.
-        if (!stopped) onAnswer({ photos: {}, stockPhotos: {}, pending: [] })
-      })
-  void ask(skus, 0)
+        const refused =
+          error instanceof ServerError && error.status >= 400 && error.status < 500 && failureKind(error.code, error.status) === 'refusal'
+        if (refused) onAnswer(none, wanted)
+        else left.push(wanted)
+      }
+    }
+    if (left.length === 0 || stopped) return
+    timer = window.setTimeout(() => void poll(left, round + 1), SKU_PHOTO_BACKOFF_MS[Math.min(round, SKU_PHOTO_BACKOFF_MS.length - 1)])
+  }
+  const batches: string[][] = []
+  for (let at = 0; at < skus.length; at += SKU_PHOTO_BATCH) batches.push(skus.slice(at, at + SKU_PHOTO_BATCH))
+  void poll(batches, 0)
   return () => {
     stopped = true
     window.clearTimeout(timer)

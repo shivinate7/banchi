@@ -107,9 +107,6 @@ const GRANULARITY_THRESHOLD_DAYS = 60
 /** How many printings the podium and board draw before "Show all" — the podium's own top 3
  *  plus seven bar rows, the mock's own count. */
 const BOARD_SIZE = 10
-/** How many printings' thumbnails this screen asks the server about at once — bounded so a
- *  long "Show all" list cannot turn into hundreds of lookups in one press. */
-const PHOTO_LOOKUP_CAP = 40
 
 /** The condition string carries the finish (CLAUDE.md: "the grade stays on every row"). A
  *  foil printing is one whose condition names it — never a guess off the card's own name. */
@@ -855,21 +852,21 @@ function SalesView() {
   )
 
   // THE THUMBNAIL PRESS, ON ARRIVAL, NOT GATED. Asks only about the SKUs this screen is
-  // about to draw (the podium and board window, bounded by `PHOTO_LOOKUP_CAP`), and never
+  // about to draw (the board window, or every row under Show all; batched by `getSkuPhotos`), and never
   // asks about a SKU twice.
   useEffect(() => {
     const askedSkus = asked.current
     const finals = finalSkus.current
-    const skus = products.slice(0, PHOTO_LOOKUP_CAP).map((p) => p.sku).filter((sku) => !askedSkus.has(sku))
+    const skus = (boardExpanded ? products : products.slice(0, BOARD_SIZE)).map((p) => p.sku).filter((sku) => !askedSkus.has(sku))
     if (skus.length === 0) return
     skus.forEach((sku) => askedSkus.add(sku))
-    const stop = getSkuPhotosSettled(skus, (found) => {
-      skus.forEach((sku) => found.pending.includes(sku) || finals.add(sku))
+    const stop = getSkuPhotosSettled(skus, (found, covered) => {
+      covered.forEach((sku) => found.pending.includes(sku) || finals.add(sku))
       setPhotos((prev) => ({ ...prev, ...found.photos }))
       setStockPhotos((prev) => ({ ...prev, ...found.stockPhotos }))
       setPendingSkus((prev) => {
         const next = new Set(prev)
-        skus.forEach((sku) => next.delete(sku))
+        covered.forEach((sku) => next.delete(sku))
         found.pending.forEach((sku) => next.add(sku))
         return next
       })
@@ -881,7 +878,7 @@ function SalesView() {
       // with it must be asked again, not remembered as asked.
       skus.forEach((sku) => finals.has(sku) || askedSkus.delete(sku))
     }
-  }, [products])
+  }, [products, boardExpanded])
 
   const sortValue: SortValue<SortKey> = { key: sortKey, dir: sortDir }
 

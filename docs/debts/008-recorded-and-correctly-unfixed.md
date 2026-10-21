@@ -21,5 +21,7 @@ No work proposed. Each item is a gap a green run does not show.
 - **`numbered record growth` reads a conflicted merge's staged main files as this branch allocating a number.** A merge of main that needs a hand-resolved conflict commits through the hook, which sees main's numbered decision files in the staged diff and refuses. A clean merge passes. Keep conflicts off shared lines, such as a target's own `.PHONY` line.
 - **`net` reads "answered" from a call's last attempt only.** A 503 then two refused connects records as unanswered, so the courtesy delay is skipped although the host answered once.
 - **A write that follows a redirect is retried whole on a refused hop.** With `follow_redirects=True`, a write redirected to a closed port is sent again from the start. No write does this today: `server/portal_http.py` sends every TCGplayer write with `follow_redirects=False`. A new write caller must do the same.
+- **A Sales photo ask in flight is not aborted when the board changes.** `server.ts`'s `getSkuPhotosSettled` stops its timer on unmount, but a call already sent finishes, and the next mount's asks wait behind it on the one shared line. The server's `photo_busy` 503 bounds the wait.
+- **The Sales photo retry timer is outside `usePoll`** (D207, all polling goes through usePoll). It is a plain timer with no hidden-tab pause, so a stuck SKU is asked once per 8 s until Sales closes. It was outside `usePoll` before this change too.
 
 **Outcome at risk.** A run is read as a promise none of these gives.
