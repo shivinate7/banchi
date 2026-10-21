@@ -13,7 +13,7 @@ read-only POSTs in `POST_READS`, is called once per size through a real in-proce
 only for the routes in `PHOTO_WALK_FREE`: `scan` (calls to `sidecar.scan`) and `walk` (directory
 entries listed under the photograph roots, `captures/` and `photos/`).
 
-Five rules:
+Six rules:
 1. EXACT BUDGET. `BUDGET[route]` holds each counter's value at size S. Over it fails. Under it
    fails with "lower to N" (the `UNSCOPED_WALK_EXPECTED` ratchet in `scripts/docs_audit/core.py`).
 2. GROWTH. `CONSTANT` counters must be equal at S and 2S. `json_loads` and `read_sidecar` may
@@ -32,6 +32,14 @@ Five rules:
    one JSON read each) to keep a few cards. `read_sidecar` alone cannot see a walk that reads none.
    The rows are the three selections the store can answer alone: `state`, `since`, and `state` with `box`.
 
+6. JSON FLAT. A route in `JSON_FLAT` parses the same number of rows at S and 2S, so its work follows the rows it
+   answers and never the store. INCIDENT: `GET /boxes` took up to 35 s, `GET /search` up to 28 s and
+   `GET /capture/sitting` up to 72 s on the owner's store, because `_Places` walked each box it touched through
+   `Inventory.records_in`, which parses a whole `Card` per record, to read an index, a name, a state, a game and an
+   order that are all indexed columns. `check_box_walk_json_flat` holds the rule on a fixture of its own. The shared
+   fixture cannot: the sitting and the search hits there grow with the store, and a card already parsed as a hit hides
+   its box from the walk. Here each answer is three rows at every size, in boxes that grow.
+
 Two checks hold the answer of those selections to the full scan (`sidecar.scan` over every photograph,
 then `narrow`):
 - `check_selection_scan_equivalence`: the answer equals the scan key for key, in the same order, for a
@@ -41,6 +49,10 @@ then `narrow`):
   card's own photograph always is.
 - `check_selection_reads_under_the_given_home`: `resolve` finds the chosen cards' photographs under the `home` it is
   given when that is not `files.home()`, for a state and for a keys selection, and reads only those.
+
+One check holds the answers of the three `JSON_FLAT` reads to what they were before the walk read columns:
+- `check_box_walk_equivalence`: the box rows, the positions with their neighbours, and the order the sitting and the
+  search answer in, for a small world that holds every shape the walk reads (`PIN_WORLD`). `PINS` was taken from the head.
 """
 
 from __future__ import annotations
@@ -1061,6 +1073,275 @@ def check_selection_reads_under_the_given_home(checks: Checks) -> None:
             )
 
 
+# --------------------------------------------------------------------------- the box walk, parsed rows
+
+# `{route: url}`: the three reads that reach `_Places` for every card they answer. `/boxes` answers a row per box,
+# `/capture/sitting` a row per card of the sitting, and `/search` a copy per card of the group the query finds.
+FIND_NAME = "Quillfeather"
+FIND_SKU = "SKUFIND"
+JSON_FLAT = {
+    "/boxes": "/boxes",
+    "/capture/sitting": "/capture/sitting",
+    "/search": f"/search?q={FIND_NAME}",
+}
+# Each answer holds this many rows at every size: the three boxes, the three cards stamped now, the three copies of FIND_SKU.
+JSON_FLAT_ANSWER = 3
+
+
+def _walk_world(size: int) -> int:
+    """The store the JSON FLAT rule reads: `size` cards in `BOXES`, all stamped `LONG_AGO` and named, then `JSON_FLAT_ANSWER`
+    more half way along, one per box. Those alone are stamped now (so the sitting is exactly them), and alone carry
+    `FIND_NAME` and `FIND_SKU` (so the search group is exactly them). Their boxes hold `size / 3` records each and grow with
+    `size`. Returns how many records the store holds."""
+    with Store().write() as snapshot:
+        inv = snapshot.inventory
+        for n in range(size):
+            card, _ = inv.allocate_capture(BOXES[n % len(BOXES)], cid=fake_cid(f"bw-{n}"))
+            card.name, card.captured_at = f"Filler {n}", LONG_AGO
+            if n == size // 2:
+                for box in BOXES:
+                    found, _ = inv.allocate_capture(box, cid=fake_cid(f"bw-find-{box}"))
+                    found.name, found.sku = FIND_NAME, FIND_SKU
+    return len(Store().read().inventory.cards)
+
+
+def _answer_rows(route: str, body: bytes) -> int:
+    """How many rows the route's answer holds: boxes, sitting cards, or copies across every group."""
+    import json
+
+    answer = json.loads(body)
+    if route == "/boxes":
+        return len(answer["boxes"])
+    if route == "/capture/sitting":
+        return len(answer["cards"])
+    return sum(len(group["copies"]) for group in answer["groups"])
+
+
+def _walk_read(size: int) -> tuple:
+    """`(cards in the store, {route: (status, rows answered, json_loads)})` for the `JSON_FLAT` reads at one store size."""
+    out: dict = {}
+    with isolated_home():
+        held = _walk_world(size)
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = _spawn_server(httpd)
+        try:
+            for route, url in JSON_FLAT.items():
+                with _Meter() as meter:
+                    status, body, _ = request(port, "GET", url, origin=capture_server.DEFAULT_ALLOWED_ORIGINS[0])
+                out[route] = (status, _answer_rows(route, body) if status == 200 else None, meter.counts["json_loads"])
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+    return held, out
+
+
+def check_box_walk_json_flat(checks: Checks) -> None:
+    """Rule 6. Each `JSON_FLAT` read answers `JSON_FLAT_ANSWER` rows at S and at 2S, and parses the same number of rows both times.
+    A fixture that answered nothing, or a different number of rows, could not tell a flat read from a broken one: that
+    fails by route and size before the counts are compared. A meter that sees no parse at all fails as well, so a store
+    that moved off `rows.json` cannot turn every count into a quiet 0 == 0."""
+    checks.note("")
+    checks.note("BOX WALK JSON FLAT — rows parsed per request, at S and 2S")
+    problems: list = []
+    (held_small, small), (held_big, big) = _walk_read(SIZES[0]), _walk_read(SIZES[1])
+    if held_big <= held_small:
+        problems.append(f"the fixture's boxes do not grow: {held_small} records at S, {held_big} at 2S")
+    for route in JSON_FLAT:
+        for label, got in (("S", small[route]), ("2S", big[route])):
+            if got[0] != 200:
+                problems.append(f"{route} answered {got[0]} at {label}")
+            elif got[1] != JSON_FLAT_ANSWER:
+                problems.append(f"{route} answers {got[1]} rows at {label}, the fixture holds it at {JSON_FLAT_ANSWER}")
+            elif not got[2]:
+                problems.append(f"{route} parsed no row at {label}: the meter no longer sees the store's parse")
+        if small[route][2] != big[route][2]:
+            problems.append(f"{route} json_loads grows with the store: {small[route][2]} at S, {big[route][2]} at 2S")
+    for problem in problems:
+        checks.ok(False, problem)
+    checks.ok(not problems, f"11. {len(JSON_FLAT)} reads parse the same rows at S and 2S, and answer {JSON_FLAT_ANSWER} rows each")
+
+
+# --------------------------------------------------------------------------- the box walk, answers
+
+# What the three reads answered before `_Places` stopped parsing a `Card` per record, pinned on the head. Every fact the
+# walk reads is here: a name set, empty and absent, a sold, a retired and a moved record, a pooled game and an unregistered
+# one, a card placed mid-box, a box of more than nine records, declared sections, a named section, and a box nothing is
+# left in. The card is `(name, state, game, order, sku)` and the cards of a box are indexes 1, 2, 3 ... in this order.
+_CAP, _SOLD, _GONE, _MOVED = master.CAPTURED, master.SOLD, master.RETIRED, master.MOVED
+PIN_FIND = "Pikachu"
+PIN_WORLD = {
+    1: (
+        (PIN_FIND, _CAP, None, None, "SKUPK"),
+        (None, _CAP, None, None, None),
+        ("", _CAP, None, None, None),
+        (PIN_FIND, _SOLD, None, None, "SKUPK"),
+        ("Cy", _CAP, None, None, None),
+        (PIN_FIND, _CAP, "pokemon_code", None, "SKUPK"),
+        ("Eve", _GONE, None, None, None),
+        ("Flo", _MOVED, None, None, None),
+        (None, _CAP, None, None, None),
+        (None, _CAP, None, None, None),
+        ("Gus", _CAP, "no_such_game", None, None),
+        (PIN_FIND, _CAP, None, None, "SKUPK"),
+    ),
+    2: (
+        (None, _CAP, None, None, None),
+        (PIN_FIND, _CAP, None, None, "SKUPK"),
+        ("Ivy", _SOLD, None, None, None),
+        (None, _CAP, None, None, None),
+        (PIN_FIND, _CAP, None, None, None),
+        ("Jo", _CAP, None, 2.5, None),
+    ),
+    3: (
+        (None, _CAP, None, None, None),
+        (PIN_FIND, _CAP, None, None, "SKUPK"),
+        (None, _CAP, None, None, None),
+        (None, _GONE, None, None, None),
+    ),
+    4: (
+        ("Zed", _SOLD, None, None, None),
+        (None, _GONE, None, None, None),
+    ),
+}
+PIN_BOX_NAMES = {1: "Alpha", 2: "Shelf"}
+PIN_SECTIONS = {1: [1, 5, 9], 3: [1, 3]}
+PIN_SECTION_NAMES = {1: {2: "Bulk"}}
+
+
+def _pin_world() -> None:
+    """`PIN_WORLD` in the store. Each card is stamped a second after the last, all within the sitting, so the sitting's
+    order is the order they were made in. Nothing a pin reads comes from a clock."""
+    from datetime import datetime, timedelta, timezone
+
+    first = datetime.now(timezone.utc) - timedelta(minutes=10)
+    with Store().write() as snapshot:
+        inv = snapshot.inventory
+        made = 0
+        for box, cards in PIN_WORLD.items():
+            inv.ensure_box(box, name=PIN_BOX_NAMES.get(box))
+            for name, state, game, order, sku in cards:
+                card, _ = inv.allocate_capture(box, cid=fake_cid(f"pin-{box}-{made}"))
+                card.name, card.state, card.game, card.order, card.sku = name, state, game, order, sku
+                card.captured_at = (first + timedelta(seconds=made)).isoformat()
+                made += 1
+        for box, layout in PIN_SECTIONS.items():
+            inv.set_sections(box, layout)
+        for box, names in PIN_SECTION_NAMES.items():
+            inv.set_section_names(box, names)
+
+
+def _pin_place(place: dict) -> tuple:
+    """The `place` block as the walk shapes it: the numbers, the section bounds and the neighbours' index, slot, name and run."""
+    near = place["neighbors"]
+
+    def side(one):
+        return None if one is None else (one["index"], one["slot"], one["name"], one["unread"])
+
+    return (
+        place["located"], place["label"], place.get("order"), place["slot"], place["section"], place["card"],
+        place["section_start"], place["section_end"], place["box_total"], place["fraction"], place["section_gaps"],
+        None if near is None else (side(near["prev"]), side(near["next"])),
+    )
+
+
+def _pin_boxes() -> list:
+    return [
+        (
+            row["box"], row["name"], row["cards"], row["on_hand"], row["sold"], row["retired"], row["moved"],
+            row["fill"], row["next_index"], [tuple(span[k] for k in ("section", "start", "end", "count", "name")) for span in row["sections_detail"]],
+        )
+        for row in capture_server.do_boxes()["boxes"]
+    ]
+
+
+def _pin_sitting() -> list:
+    return [
+        (row["key"], row["state"], row["label"], row["section"], row["card"], _pin_place(row["place"]))
+        for row in capture_server.do_capture_sitting()["cards"]
+    ]
+
+
+def _pin_search() -> list:
+    return [
+        (group["sku"], group["on_hand"], [(copy["key"], copy["state"], _pin_place(copy["place"])) for copy in group["copies"]])
+        for group in capture_server.do_search(PIN_FIND)["groups"]
+    ]
+
+
+def _pins() -> dict:
+    """`{route: pins}` for `PIN_WORLD`: the box rows, the sitting rows in the order served, and the search groups with each copy.
+    A read that raises answers the raise, so a rewrite that breaks one route fails that route and not the whole run."""
+    out: dict = {}
+    for route, read in (("boxes", _pin_boxes), ("sitting", _pin_sitting), ("search", _pin_search)):
+        try:
+            out[route] = read()
+        except Exception as exc:  # noqa: BLE001
+            out[route] = [f"raised {type(exc).__name__}: {exc}"]
+    return out
+
+
+# `_pins()` on the head, one row each. Boxes: `(box, name, cards, on_hand, sold, retired, moved, fill, next_index, [(section, start, end, count, name)])`.
+# Sitting: `(key, state, label, section, card, place)`. Search: `(sku, on_hand, [(key, state, place)])`. Place: `(located, label, order, slot,
+# section, card, section_start, section_end, box_total, fraction, section_gaps, (prev, next))`, a neighbour `(index, slot, name, unread)`.
+PINS = {
+    "boxes": [
+        (1, 'Alpha', 12, 8, 1, 1, 1, 12, 13, [(1, 1, 3, 3, None), (2, 4, 4, 1, 'Bulk'), (3, 5, 8, 4, None)]),
+        (2, 'Shelf', 6, 5, 1, 0, 0, 6, 7, [(1, 1, 5, 5, None)]),
+        (3, 'Box 3', 4, 3, 0, 1, 0, 4, 5, [(1, 1, 2, 2, None), (2, 3, 3, 1, None)]),
+        (4, 'Box 4', 2, 0, 1, 1, 0, 2, 3, [(1, 1, None, 0, None)]),
+    ],
+    "sitting": [
+        ('1/1', 'captured', 'Alpha, Section 1, Card 1', 1, 1, (True, 'Alpha, Section 1, Card 1', 1, 1, 1, 1, 1, 3, 8, 0.0, 0, (None, (2, 2, None, 2)))),
+        ('1/2', 'captured', 'Alpha, Section 1, Card 2', 1, 2, (True, 'Alpha, Section 1, Card 2', 2, 2, 1, 2, 1, 3, 8, 0.125, 0, ((1, 1, 'Pikachu', 0), (3, 3, None, 1)))),
+        ('1/3', 'captured', 'Alpha, Section 1, Card 3', 1, 3, (True, 'Alpha, Section 1, Card 3', 3, 3, 1, 3, 1, 3, 8, 0.25, 0, ((2, 2, None, 1), (5, 4, 'Cy', 0)))),
+        ('1/4', 'sold', 'Alpha, Section 1, Card 4', 1, None, (True, 'Alpha, Section 1, Card 4', 4, None, 1, None, 1, 3, 8, None, 0, ((3, 3, None, 2), (5, 4, 'Cy', 0)))),
+        ('1/5', 'captured', 'Alpha, Section 2, Card 1', 2, 1, (True, 'Alpha, Section 2, Card 1', 5, 4, 2, 1, 4, 4, 8, 0.375, 0, ((3, 3, None, 2), (9, 5, None, 2)))),
+        ('1/6', 'captured', 'Pokémon code cards \u00b7 pooled', None, None, (False, None, None, None, None, None, None, None, 0, None, None, None)),
+        ('1/7', 'retired', 'Alpha, Section 2, Card 2', 2, None, (True, 'Alpha, Section 2, Card 2', 7, None, 2, None, 4, 4, 8, None, 0, ((5, 4, 'Cy', 0), (9, 5, None, 2)))),
+        ('1/9', 'captured', 'Alpha, Section 3, Card 1', 3, 1, (True, 'Alpha, Section 3, Card 1', 9, 5, 3, 1, 5, 8, 8, 0.5, 0, ((5, 4, 'Cy', 0), (10, 6, None, 1)))),
+        ('1/10', 'captured', 'Alpha, Section 3, Card 2', 3, 2, (True, 'Alpha, Section 3, Card 2', 10, 6, 3, 2, 5, 8, 8, 0.625, 0, ((9, 5, None, 1), (11, 7, 'Gus', 0)))),
+        ('1/11', 'captured', 'Alpha, Section 3, Card 3', 3, 3, (True, 'Alpha, Section 3, Card 3', 11, 7, 3, 3, 5, 8, 8, 0.75, 0, ((10, 6, None, 2), (12, 8, 'Pikachu', 0)))),
+        ('1/12', 'captured', 'Alpha, Section 3, Card 4', 3, 4, (True, 'Alpha, Section 3, Card 4', 12, 8, 3, 4, 5, 8, 8, 0.875, 0, ((11, 7, 'Gus', 0), None))),
+        ('2/1', 'captured', 'Shelf, Section 1, Card 1', 1, 1, (True, 'Shelf, Section 1, Card 1', 1, 1, 1, 1, 1, 5, 5, 0.0, 1, (None, (2, 2, 'Pikachu', 0)))),
+        ('2/2', 'captured', 'Shelf, Section 1, Card 2', 1, 2, (True, 'Shelf, Section 1, Card 2', 2, 2, 1, 2, 1, 5, 5, 0.2, 1, ((1, 1, None, 1), (6, 3, 'Jo', 0)))),
+        ('2/3', 'sold', 'Shelf, Section 1, Card 4', 1, None, (True, 'Shelf, Section 1, Card 4', 3, None, 1, None, 1, 5, 5, None, 1, ((6, 3, 'Jo', 0), (4, 4, None, 1)))),
+        ('2/4', 'captured', 'Shelf, Section 1, Card 4', 1, 4, (True, 'Shelf, Section 1, Card 4', 4, 4, 1, 4, 1, 5, 5, 0.6, 1, ((6, 3, 'Jo', 0), (5, 5, 'Pikachu', 0)))),
+        ('2/5', 'captured', 'Shelf, Section 1, Card 5', 1, 5, (True, 'Shelf, Section 1, Card 5', 5, 5, 1, 5, 1, 5, 5, 0.8, 1, ((4, 4, None, 1), None))),
+        ('2/6', 'captured', 'Shelf, Section 1, Card 3', 1, 3, (True, 'Shelf, Section 1, Card 3', 2.5, 3, 1, 3, 1, 5, 5, 0.4, 1, ((2, 2, 'Pikachu', 0), (4, 4, None, 1)))),
+        ('3/1', 'captured', 'Box 3, Section 1, Card 1', 1, 1, (True, 'Box 3, Section 1, Card 1', 1, 1, 1, 1, 1, 2, 3, 0.0, 0, (None, (2, 2, 'Pikachu', 0)))),
+        ('3/2', 'captured', 'Box 3, Section 1, Card 2', 1, 2, (True, 'Box 3, Section 1, Card 2', 2, 2, 1, 2, 1, 2, 3, 0.3333333333333333, 0, ((1, 1, None, 1), (3, 3, None, 1)))),
+        ('3/3', 'captured', 'Box 3, Section 2, Card 1', 2, 1, (True, 'Box 3, Section 2, Card 1', 3, 3, 2, 1, 3, 3, 3, 0.6666666666666666, 0, ((2, 2, 'Pikachu', 0), None))),
+        ('3/4', 'retired', 'Box 3, Section 2, Card 2', 2, None, (True, 'Box 3, Section 2, Card 2', 4, None, 2, None, 3, 3, 3, None, 0, ((3, 3, None, 1), None))),
+        ('4/1', 'sold', 'Box 4, Section 1, Card 1', 1, None, (True, 'Box 4, Section 1, Card 1', 1, None, 1, None, 1, None, 0, None, 2, (None, None))),
+        ('4/2', 'retired', 'Box 4, Section 1, Card 1', 1, None, (True, 'Box 4, Section 1, Card 1', 2, None, 1, None, 1, None, 0, None, 1, (None, None))),
+    ],
+    "search": [
+        ('SKUPK', 5, [('1/1', 'captured', (True, 'Alpha, Section 1, Card 1', 1, 1, 1, 1, 1, 3, 8, 0.0, 0, (None, (2, 2, None, 2)))), ('1/4', 'sold', (True, 'Alpha, Section 1, Card 4', 4, None, 1, None, 1, 3, 8, None, 0, ((3, 3, None, 2), (5, 4, 'Cy', 0)))), ('1/6', 'captured', (False, None, None, None, None, None, None, None, 0, None, None, None)), ('1/12', 'captured', (True, 'Alpha, Section 3, Card 4', 12, 8, 3, 4, 5, 8, 8, 0.875, 0, ((11, 7, 'Gus', 0), None))), ('2/2', 'captured', (True, 'Shelf, Section 1, Card 2', 2, 2, 1, 2, 1, 5, 5, 0.2, 1, ((1, 1, None, 1), (6, 3, 'Jo', 0)))), ('3/2', 'captured', (True, 'Box 3, Section 1, Card 2', 2, 2, 1, 2, 1, 2, 3, 0.3333333333333333, 0, ((1, 1, None, 1), (3, 3, None, 1))))]),
+        (None, 1, [('2/5', 'captured', (True, 'Shelf, Section 1, Card 5', 5, 5, 1, 5, 1, 5, 5, 0.8, 1, ((4, 4, None, 1), None)))]),
+    ],
+}
+
+
+def check_box_walk_equivalence(checks: Checks) -> None:
+    """The three reads answer `PINS` for `PIN_WORLD`: the same box rows, the same positions and neighbours, the same order.
+    A row that moved, a position number, a name, a state, a neighbour or a run of unread cards that changed fails by route,
+    and the first rows that differ are printed beside what was pinned."""
+    checks.note("")
+    checks.note("BOX WALK EQUIVALENCE — the box rows and positions the three reads answer")
+    with isolated_home():
+        _pin_world()
+        got = _pins()
+    checks.equal(sorted(got), sorted(PINS), "12. every read the world answers has its pins")
+    for route, rows_ in got.items():
+        want = PINS.get(route, [])
+        diffs = [f"row {i}: answered {a!r}, pinned {b!r}" for i, (a, b) in enumerate(zip(rows_, want)) if a != b]
+        if len(rows_) != len(want):
+            diffs.append(f"{len(rows_)} rows answered, {len(want)} pinned")
+        checks.ok(not diffs, f"12. {route} answers the rows and positions it answered before", "\n".join(diffs[:4]))
+
+
 CHECKS = (
     check_server_read_budget,
     check_detail_read_budget,
@@ -1068,6 +1349,8 @@ CHECKS = (
     check_selection_scan_equivalence,
     check_selection_drops_strays,
     check_selection_reads_under_the_given_home,
+    check_box_walk_json_flat,
+    check_box_walk_equivalence,
 )
 
 
