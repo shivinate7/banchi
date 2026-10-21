@@ -19,5 +19,6 @@ No work proposed. Each item is a gap a green run does not show.
 - **Two queue reads still see departed cards.** `cli/requeue.py` walks `Queue.open_entries`, so a retired, sold or moved card can be requeued. `Queue.__len__` counts open entries, not owed ones (UN-8, a departed card owes no answer), and has no caller today. Every count a screen or a run line shows goes through `Queue.owed_entries`.
 - **A fresh Market skips the Retry-After gap on its first call.** Each press builds a new Market, and the gap is gated on `self.requests`. The next press can call a host that asked it to wait.
 - **`net` reads "answered" from a call's last attempt only.** A 503 then two refused connects records as unanswered, so the courtesy delay is skipped although the host answered once.
+- **A write that follows a redirect is retried whole on a refused hop.** With `follow_redirects=True`, a write redirected to a closed port is sent again from the start. No write does this today: `server/portal_http.py` sends every TCGplayer write with `follow_redirects=False`. A new write caller must do the same.
 
 **Outcome at risk.** A run is read as a promise none of these gives.
