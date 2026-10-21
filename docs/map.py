@@ -3159,6 +3159,16 @@ COMPONENTS = [
                         "traceback, log line or repr.",
                 "governed_by": ["D320", "D319"],
             },
+            "slabs-store-selftest.py": {
+                "does": "proves `store/slabs.py`, the My Slabs tables, against a throwaway "
+                        "store: a slab is one row per cert and grader with the grader in Card "
+                        "Ladder's name; a snapshot is one row per slab per day and a second "
+                        "write that day replaces it; a sale is keyed by its id, kept when a "
+                        "later read drops it and shared by every slab that read it; each write "
+                        "is one transaction; a missing value stays empty, never 0; reads come "
+                        "back in order; a store stamped 14 gains the tables on its next open.",
+                "governed_by": ["D320", "D88", "D63"],
+            },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "
                         "server/pipeline_routes.py:do_product_history against a throwaway "

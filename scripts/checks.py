@@ -1564,6 +1564,18 @@ CHECKS = (
         "governed_by": ("D320",),
     },
     {
+        "target": "slabs-store-selftest",
+        "shard": "guards-2",
+        "runs": "$(PYTHON) scripts/slabs-store-selftest.py",
+        "asserts": 'The My Slabs tables store a slab, its daily snapshot and its sales once each, write whole or not at all, keep a missing value empty, read back in order and reach an existing store on upgrade, against a throwaway store.',
+        "needs": ("python3",),
+        "writes": 'a throwaway store under a temporary directory it creates and removes.',
+        "commit_path": False,
+        "why_off_commit_path": "D18: a self-test that runs on demand in `make check`, never in the git hook. It writes a temp store.",
+        "gates": True,
+        "governed_by": ("D320", "D88"),
+    },
+    {
         "target": "repair-born-game-selftest",
         "shard": "guards-2",
         "runs": "$(PYTHON) scripts/repair-born-game-selftest.py",
