@@ -414,7 +414,7 @@ function ScaffoldSpecimens() {
       </Spec>
       <Spec name="toolbar" label="toolbar: folds as one unit" wide>
         <Toolbar label="Specimen filters">
-          <SearchField persona="owner" value={find} onChange={setFind} placeholder="Find a card" label="Find a card" controlHeight="bar" />
+          <SearchField persona="owner" value={find} onChange={setFind} placeholder="Card name, number or SKU…" label="Find a card" controlHeight="bar" />
           <Chip pressed>Unsold</Chip>
           <Chip>Sold</Chip>
           <Segmented
@@ -1150,7 +1150,7 @@ export function Gallery() {
                     field that is not one: Capture's section note is the real case. */}
                 <span className="bn-input-wrap">
                   <Icon name="list" size={16} />
-                  <input name="section-note" className="bn-input" placeholder="A note for this section" aria-label="Section note" />
+                  <input name="section-note" className="bn-input" placeholder="Section note, like Bulk commons…" aria-label="Section note" />
                   <Kbd>N</Kbd>
                 </span>
               </Spec>
@@ -1164,7 +1164,7 @@ export function Gallery() {
               <Spec label="large, mono, disabled">
                 <label className="bn-field">
                   <span className="bn-field-label">Card name</span>
-                  <input name="bn-input" className="bn-input bn-input-lg" placeholder="Type the name of the card" />
+                  <input name="bn-input" className="bn-input bn-input-lg" placeholder="Card name, like Pikachu…" />
                 </label>
                 <label className="bn-field">
                   <span className="bn-field-label">Run</span>

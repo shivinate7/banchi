@@ -746,7 +746,7 @@ function PickPanel<T extends string>({
             className="bn-pick-entry-input"
             type="text"
             value={narrow}
-            placeholder="Type to narrow"
+            placeholder="Part of a name…"
             aria-label={`Narrow ${label}`}
             aria-controls={`${id}-list`}
             aria-activedescendant={activeId}

@@ -685,7 +685,7 @@ export function ProductHistory() {
           onChange={searchState.setQuery}
           persona="owner"
           label="Find a Product"
-          placeholder="Card name, number or SKU"
+          placeholder="Card name, number or SKU…"
           onSubmit={(text) => {
             // A full SKU jumps straight there — the fast path the old "TCGplayer SKU" field
             // gave, kept rather than lost when the field became a name search too.

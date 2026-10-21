@@ -860,7 +860,7 @@ export function BoxOps({
                   }
                   value={sectionNames[detail.section] ?? ''}
                   onChange={(next) => setSectionNames((held) => ({ ...held, [detail.section]: next }))}
-                  placeholder="unnamed"
+                  placeholder="Section name, like Holos…"
                   autoFocus={detail.section === 1}
                 />
               ))}
