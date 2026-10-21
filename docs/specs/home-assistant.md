@@ -1,8 +1,8 @@
 # The home tier: the HA Green, its 2 TB drive, the network and a Mac Studio
 
 **Status: PROPOSAL. Nothing here is built.** Each role needs the owner's word before a build. The
-file cites decisions to show what a role touches. It reopens none by itself. Section 6 lists the ones
-a role would change.
+file cites decisions to show what a role touches. Ruling 6 removed D13's one-Mac paragraph. Section 6
+lists the other decisions a role would change.
 
 ## Owner rulings
 
