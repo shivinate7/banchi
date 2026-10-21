@@ -754,7 +754,7 @@ export function Codes() {
           inputMode="numeric"
           value={value}
           onChange={(e) => onChange(e.target.value.replace(/[^0-9]/g, ''))}
-          placeholder="Box number"
+          placeholder="Box number, like 7…"
           autoFocus={autoFocus}
         />
       </label>
@@ -1228,7 +1228,7 @@ export function Codes() {
                   value={filterValue}
                   onChange={onFilterChange}
                   count={{ shown: rows.length, total: ledger.total, noun: { one: 'code', many: 'codes' } }}
-                  search={{ query: filter, onChange: setFilter, placeholder: 'Find a code, product, set or order', label: 'Find a Code' }}
+                  search={{ query: filter, onChange: setFilter, placeholder: 'Find a code, product, set or order…', label: 'Find a Code' }}
                   beside={
                     <IconButton
                       size="sm"

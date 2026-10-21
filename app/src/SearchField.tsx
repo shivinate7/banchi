@@ -72,7 +72,7 @@ export function SearchField({
   onChange,
   persona,
   autoFocus,
-  placeholder = 'Card name, number or SKU',
+  placeholder = 'Card name, number or SKU…',
   label,
   debounceMs = 0,
   onSubmit,
@@ -83,6 +83,9 @@ export function SearchField({
 }: SearchFieldProps) {
   const id = useId()
   const hintId = useId()
+
+  /* The placeholder's words without its trailing ellipsis, so the empty-press sentence reads whole. */
+  const hintWords = placeholder.replace(/…$/, '')
 
   /* True from an empty press until the next keystroke. The hint is a reply to a press, so
    * typing is what takes it away. */
@@ -259,7 +262,7 @@ export function SearchField({
           from the first paint and a press never moves what is below the field (D118). */}
       {onSubmit === undefined ? null : (
         <p className="search-field-hint" id={hintId} role="status" aria-live="polite">
-          {askedEmpty ? (emptyHint ?? `Type a ${placeholder.charAt(0).toLowerCase()}${placeholder.slice(1)} first.`) : ''}
+          {askedEmpty ? (emptyHint ?? `Type a ${hintWords.charAt(0).toLowerCase()}${hintWords.slice(1)} first.`) : ''}
         </p>
       )}
     </div>

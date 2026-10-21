@@ -5086,7 +5086,7 @@ export function CaptureScreen() {
                     className="bn-input capture-text capture-note"
                     type="text"
                     name="capture-note"
-                    placeholder={last.game.catalogued ? 'Add a note to this card' : 'What is this card?'}
+                    placeholder={last.game.catalogued ? 'Add a note, like water damage…' : 'Card name, like Pikachu ex…'}
                     aria-label={`Note on ${last.card.label}`}
                     value={noteDraft}
                     onChange={(event) => setNoteDraft(event.target.value)}
@@ -5190,7 +5190,7 @@ export function CaptureScreen() {
                        heuristic for a box it cannot tell apart from a real search field. The
                        control is unchanged; only the word that looked like one is gone. */
                     aria-label="Type a box's name or number, or type a new one"
-                    placeholder="Name or number"
+                    placeholder="Box name or number, like 7…"
                     value={boxEntry}
                     disabled={boxBusy}
                     onChange={(event) => {

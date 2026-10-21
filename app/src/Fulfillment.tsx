@@ -1130,7 +1130,7 @@ export function Fulfillment() {
         <div className="ff-bar">
           <div className="ff-count-track">{lastCount !== null ? countOf(lastCount) : todayFrame}</div>
           <div className="ff-search" data-clear="false">
-            <SearchField value={query} onChange={setQuery} persona="fulfiller" placeholder="Card name or number" />
+            <SearchField value={query} onChange={setQuery} persona="fulfiller" placeholder="Card name or number…" />
           </div>
         </div>
         <div className="ff-loading" aria-busy="true">
@@ -1449,7 +1449,7 @@ export function Fulfillment() {
             value={query}
             onChange={setQuery}
             persona="fulfiller"
-            placeholder="Card name or number"
+            placeholder="Card name or number…"
           />
           {hunting ? (
             <button
