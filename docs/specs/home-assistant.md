@@ -15,6 +15,9 @@ a role would change.
 4. **Also in scope:** the Green does the server's internet fetching and holds caches.
 5. **The Green is trusted as the Mac is.** The owner's HA setup sits inside an encrypted setup as secure
    as the Mac. The store, the photos and the secrets (the TCGplayer cookie, the Anthropic key) may live on it.
+6. **No rule ties the store to one Mac.** D13's paragraph that the store and photos live on one Mac and
+   are read only through its server is deleted as too specific. D13's camera rules stay. Untangling
+   decisions that hold more than one rule is a later lane.
 
 ## 1. What the tier is
 
@@ -47,10 +50,10 @@ Each row names the role in section 4 that answers it. "None" means no role here 
 | Fetching | The catalog image mirror is 16.7 GB, by hand only. | D15, `make catalog-mirror` | R2 |
 | Fetching | A Haiku batch is polled by a child of the server for up to an hour. | `identify.batch` | R2 |
 | Availability | The daily price refresh and demo mirror run at set times. Nothing handles a missed run. | `scripts/launchagent.py` | R3 |
-| Availability | When the Mac is off, the Fulfiller cannot see the pack list or where a card is. | D13, D152 | R4 |
-| Access | The server has no auth and listens on every interface. A LAN client that sends no Origin can write or delete. | `capture_server.HOST`, D5, D13 | R5 |
+| Availability | When the Mac is off, the Fulfiller cannot see the pack list or where a card is. | D152 | R4 |
+| Access | The server has no auth and listens on every interface. A LAN client that sends no Origin can write or delete. | `capture_server.HOST`, D5 | R5 |
 | Access | Plain http on a LAN name is not a secure context. The Fulfiller's phone loses `crypto.randomUUID` and any camera use. | `useCamera`, `server.ts` | R5 |
-| Access | No way in from outside the house. D13 says remote access is a tunnel, and none exists. | D13 | R5 |
+| Access | No way in from outside the house. | None found | R5 |
 | Load | Slow reads are GIL-bound inside the server (`/orders`, `/inventory`, `/boxes`, `/search`, `/pricing`). | DEBT11, lean-server spec | None. Lean-server spec, PR #852. |
 | Ops | Dev and prod share the Mac. Test fleets wedged the live server, and branch code reached :8000 twice. | DEBT11, DEBT16, D158 | R6 |
 
@@ -102,7 +105,7 @@ One writer stays one writer (D88, D138). The Green never writes `store.sqlite`.
 - **Risk.** The TCGplayer cookie and the Anthropic key live on the Green (ruling 5). The cookie expires
   and is pasted by hand (`order_session_expired`), so the paste must reach the Green.
 - **Touches.** D104 (live fetch is a guarded constant), D166 (export reuse), D91 (unattended orders
-  fetch needs its own entry), D301 (stock photos are hotlinked), D13.
+  fetch needs its own entry), D301 (stock photos are hotlinked).
 
 ### R3. Scheduler and waker
 
@@ -126,7 +129,7 @@ One writer stays one writer (D88, D138). The Green never writes `store.sqlite`.
 - **Cost.** Medium.
 - **Risk.** A stale answer about a card that just sold. The age label and "read only" must be on screen
   (D196 keeps mechanism words off screen, so the label is a sentence).
-- **Touches.** D13 (a second place that answers about the store), D5, D27.
+- **Touches.** D5 (two personas), D27, ruling 6.
 
 ### R5. Front door
 
@@ -145,7 +148,7 @@ One writer stays one writer (D88, D138). The Green never writes `store.sqlite`.
 - **Certificate choice.** A Caddy internal CA needs its root installed on each device. Let's Encrypt
   DNS-01 needs a real domain with a DNS API, and gives a publicly trusted certificate (Q4).
 - **Cost.** Medium. A certificate to renew, a proxy to keep up, and a bind change on the Mac.
-- **Touches.** D13, D5, D138, D27, the `BANCHI_ALLOWED_ORIGINS` list.
+- **Touches.** D5, D138, D27, the `BANCHI_ALLOWED_ORIGINS` list.
 
 ### R6. The Mac Studio, later
 
@@ -169,8 +172,7 @@ One writer stays one writer (D88, D138). The Green never writes `store.sqlite`.
 Asked one at a time. Each ruling moves into "Owner rulings" above.
 
 1. **Where may the store, the photos and the secrets live?** Ruled: ruling 5.
-2. **D13, the Mac holds the one truth.** R4 adds a second place that answers about the store, and R5
-   changes how the store is reached. Does D13 bend to "one writer, many readers"?
+2. **D13, the Mac holds the one truth.** Ruled: ruling 6.
 3. **D89's reclaim.** Should it move sold photos to the drive instead of deleting them?
 4. **Certificates.** A Caddy internal CA, or Let's Encrypt DNS-01 on a real domain.
 5. **Closing the bare port.** Loopback plus the Green, a firewall rule, or the proxy on the Mac.
