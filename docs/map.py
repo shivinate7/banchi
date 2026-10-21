@@ -3123,9 +3123,9 @@ COMPONENTS = [
                 "does": "proves `pipeline/pricehistory.fetch_json`'s one retry rule over a "
                         "scripted `urlopen` and one fake clock, no network, no real sleep: "
                         "which failures retry, the time budget and `Retry-After`, and that a "
-                        "host pauses only after `PAUSE_AFTER_FAILURES` lost calls in a row on "
-                        "distinct URLs, shared by every `Market`, with no request or courtesy "
-                        "delay while paused. Not wired into `make check`.",
+                        "host that lost `PAUSE_AFTER_FAILURES` calls in a row gets one attempt "
+                        "per call, shared by every `Market`, never refused unsent and with no "
+                        "retry pause. Not wired into `make check`.",
                 "governed_by": ["D18", "D278", "D319"],
             },
             "product-history-selftest.py": {
