@@ -1,6 +1,6 @@
 # The home tier: the HA Green, its 2 TB drive, the network and a Mac Studio
 
-**Status: PROPOSAL. Nothing here is built.** Each role needs the owner's word before a build. The
+**Status: PARKED by the owner. Nothing here is built.** Each role needs the owner's word before it is built. The
 file cites decisions to show what a role touches. Ruling 6 removed D13's one-Mac paragraph. Section 6
 lists the other decisions a role would change.
 
