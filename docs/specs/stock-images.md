@@ -116,7 +116,7 @@ the route threading: `do_pipeline_sets` carries `image_url` only when handed a r
 Riftbound and One Piece fetch through `Market`, and `Market` fetches through the one retry method
 (D319, every network call retries through one method). A failed walk stores nothing, so
 the pair stays pending and is asked again after `FETCH_RETRY_SECONDS`. The method is
-`pipeline/pricehistory.fetch_json`. A host pauses only after a run of `PAUSE_AFTER_FAILURES` failures.
+`pipeline/pricehistory.fetch_json`. A host that lost `PAUSE_AFTER_FAILURES` calls in a row gets one attempt per call, and no call is refused unsent.
 
 ## Not built
 

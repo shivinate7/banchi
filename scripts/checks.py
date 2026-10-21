@@ -1543,7 +1543,7 @@ CHECKS = (
         "target": "pricehistory-offline-selftest",
         "shard": "guards-2",
         "runs": "$(PYTHON) scripts/pricehistory-offline-selftest.py",
-        "asserts": 'The price-history fetch retries a retryable failure, pauses a host only after three different URLs lose their retries, refuses a lost URL for the wait, and stops the later ranges of a product after one is lost, against a counting fetcher and a fake clock.',
+        "asserts": 'The price-history fetch retries a retryable failure, gives a host that lost three calls in a row one attempt per call, never refuses a call unsent, and stops the later ranges of a product after one is lost, against a counting fetcher and a fake clock.',
         "needs": ("python3",),
         "writes": '',
         "commit_path": False,

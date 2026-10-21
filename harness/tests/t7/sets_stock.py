@@ -872,7 +872,7 @@ def check_stock_images_retry_after_failed_fetch(checks: Checks) -> None:
     would stop asking.
 
     Each failure type runs the same story on a fake clock, no real network, no sleep. The fetcher
-    is scripted, so `Market`'s own per-URL wait is not in play: the wait under test is
+    is scripted, so the retry home's host state is not in play: the wait under test is
     `StockImages`'. Both `Offline` and a plain `Unreachable` run the story."""
     checks.note("")
     checks.note("STOCK IMAGES RETRY — a failed catalogue fetch is not a final 'no photo' (Sales, Riftbound)")
@@ -1068,8 +1068,8 @@ def check_stock_images_stale_groups_list_is_a_failure(checks: Checks) -> None:
 
 
 def check_stock_images_failed_pair_is_not_refetched_inside_the_wait(checks: Checks) -> None:
-    """The back-off itself, counted in requests. The fetcher is scripted, so `Market`'s own
-    per-URL wait is not in play: only `StockImages`' wait (`FETCH_RETRY_SECONDS`) stands between
+    """The back-off itself, counted in requests. The fetcher is scripted, so the retry home's
+    host state is not in play: only `StockImages`' wait (`FETCH_RETRY_SECONDS`) stands between
     a second `warm` and a second request. A `_backing_off` that always answers False turns this red."""
     checks.note("")
     checks.note("STOCK IMAGES BACK-OFF — a failed pair is left alone for the wait, then asked again")

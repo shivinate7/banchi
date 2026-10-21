@@ -7,7 +7,9 @@ the order `CHECK_ORDER` runs them.
 from __future__ import annotations
 
 import contextlib
+import errno
 import json
+import http.client
 import http.server
 import os
 import shutil
@@ -44,12 +46,14 @@ from harness.tests.t7.common import (
     SEAM_SKUS,
     _live_export_bytes,
     _spawn_server,
+    attempt,
     capture_payload,
     command,
     error_code,
     isolated_home,
     quiet,
     request,
+    scripted_wire,
     seam_run,
     write_export,
 )
@@ -7136,6 +7140,61 @@ def check_withholding(checks: Checks) -> None:
         )
 
 
+_REFUSED = urllib.error.URLError(ConnectionRefusedError(errno.ECONNREFUSED, "simulated: connection refused"))
+
+
+def check_tcg_import_post_retries_only_what_was_never_sent(checks: Checks) -> None:
+    """D319 (one retry home), owner ruling: a TCGplayer WRITE retries only if it was never sent.
+
+    `tcg_import._post` changes the operator's listings, so a second request after one that may have
+    reached TCGplayer could list the same cards twice. A connect failure before send (urllib raises
+    `URLError`, no response) is the one thing it retries. A 5xx, a 429, a timeout and a dropped
+    connection are each ONE request. The refusal is as before: a status the portal answered is
+    `tcg_write_refused` carrying that status, and `send_routes` tells a turned-away 4xx from a 5xx
+    that may have done the work by it; a drop is `tcg_unreachable`.
+
+    The wire is scripted below `urlopen`, and the portal URL is a `.test` name: nothing is sent."""
+    checks.note("")
+    checks.note("TCG IMPORT WRITE — only a connect failure before send is retried (scripted wire)")
+    os.environ[tcg_export.COOKIE_ENV] = "session=fixture"
+    os.environ[tcg_export.URL_ENV] = "https://portal.example.test/admin/pricing/downloadexportcsv"
+    accepted = (200, b'{"ok": true}', {"Content-Type": "application/json"})
+
+    def post(steps):
+        with scripted_wire(*steps) as wire:
+            got, caught = attempt(lambda: tcg_import._post("/admin/pricing/stagedupload", {"a": "b"}))
+        return got, caught, wire
+
+    got, caught, wire = post([_REFUSED, accepted])
+    sent = [(r["method"], r["data"]) for r in wire.requests]
+    checks.ok(
+        got == {"ok": True} and len(sent) == 2 and sent[0] == sent[1] and sent[0][0] == "POST",
+        "a connect failure before send is retried: the second request carries the same body and is answered",
+        f"got {got!r} {caught!r}, sent {[(m, bool(d)) for m, d in sent]}",
+    )
+    for status in (503, 429, 502, 504, 500):
+        got, caught, wire = post([status, accepted])
+        checks.ok(
+            isinstance(caught, tcg_export.FetchRefusal) and caught.code == "tcg_write_refused"
+            and caught.status == status and len(wire.requests) == 1 and not wire.pauses,
+            f"HTTP {status} is ONE request, no pause, and `tcg_write_refused` carrying {status}",
+            f"got {got!r} {caught!r} status {getattr(caught, 'status', None)}, "
+            f"{len(wire.requests)} requests, pauses {wire.pauses}",
+        )
+    for drop in (
+        TimeoutError("simulated: no answer after send"),
+        http.client.RemoteDisconnected("simulated: closed without a response"),
+        ConnectionResetError(errno.ECONNRESET, "simulated: reset by peer"),
+    ):
+        got, caught, wire = post([drop, accepted])
+        checks.ok(
+            isinstance(caught, tcg_export.FetchRefusal) and caught.code == "tcg_unreachable"
+            and len(wire.requests) == 1 and not wire.pauses,
+            f"{type(drop).__name__} after send is ONE request, no pause, and `tcg_unreachable`",
+            f"got {got!r} {caught!r}, {len(wire.requests)} requests, pauses {wire.pauses}",
+        )
+
+
 CHECKS = (
     check_markdown,
     check_send_store_backed_runs,
@@ -7198,4 +7257,5 @@ CHECKS = (
     check_pricing_clear,
     check_pricing_labels,
     check_box_views_bounded,
+    check_tcg_import_post_retries_only_what_was_never_sent,
 )

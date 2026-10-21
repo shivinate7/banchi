@@ -43,12 +43,14 @@ from harness.tests.t7.common import (
     FIXTURE_EXPORT,
     _refusal_text,
     answers,
+    attempt,
     capture_payload,
     command,
     entry,
     identifications_for,
     isolated_home,
     refusal,
+    scripted_wire,
     seam_run,
     store_tables,
     stored_payloads,
@@ -5112,6 +5114,50 @@ def check_order_fetch_route(checks: Checks) -> None:
         dotenv.unlink(missing_ok=True)
 
 
+def check_order_reads_retry_through_the_one_home(checks: Checks) -> None:
+    """D319 (one retry home): the order service is READ, so `order_transport` retries it.
+
+    `POST /orders/search` is a read: its body is a filter and nothing at TCGplayer changes, so a
+    resend is safe. It and the detail GET each survive one 503 before the answer, and the resend
+    carries the same body. A plain 500 stays one request, still refused as before.
+
+    The wire is scripted below `urlopen`, and the base URL is a `.test` name: nothing is sent."""
+    checks.note("")
+    checks.note("ORDER READS — a 503 then the answer succeeds (scripted wire)")
+    os.environ[order_transport.COOKIE_ENV] = "session=fixture"
+    os.environ[order_transport.BASE_ENV] = "https://orders.example.test"
+    os.environ[order_transport.SELLER_KEY_ENV] = "a2ffc195"
+    page = (200, b'{"totalOrders": 0, "orders": []}', {"Content-Type": "application/json"})
+
+    with scripted_wire(503, page) as wire:
+        got, caught = attempt(order_transport.search)
+    sent = [(r["method"], r["data"], r["url"].split("?")[0].rsplit("/", 1)[-1]) for r in wire.requests]
+    checks.ok(
+        got == [] and len(sent) == 2 and sent[0] == sent[1] and sent[0][0] == "POST" and sent[0][2] == "search",
+        "`search` (POST /orders/search, a read): a 503 then 200 returns the page, and the resend carries the same body",
+        f"got {got!r} {caught!r}, sent {[(m, bool(d), tail) for m, d, tail in sent]}",
+    )
+
+    with scripted_wire(503, (200, b"{}", {"Content-Type": "application/json"})) as wire:
+        got, caught = attempt(
+            lambda: order_transport._call("https://orders.example.test/orders/X-1", cookie="session=fixture")
+        )
+    checks.ok(
+        caught is None and got[0] == 200 and len(wire.requests) == 2
+        and [r["method"] for r in wire.requests] == ["GET", "GET"],
+        "the detail GET: a 503 then 200 returns the answer after 2 requests",
+        f"got {got!r} {caught!r} after {len(wire.requests)} requests",
+    )
+
+    with scripted_wire(500, page) as wire:
+        got, caught = attempt(order_transport.search)
+    checks.ok(
+        isinstance(caught, order_transport.FetchRefusal) and len(wire.requests) == 1 and not wire.pauses,
+        "a plain 500 is one request with no pause, refused as before",
+        f"got {got!r} {caught!r} after {len(wire.requests)} requests, pauses {wire.pauses}",
+    )
+
+
 CHECKS = (
     check_listing_commands,
     check_committed_copies_are_the_oldest,
@@ -5126,4 +5172,5 @@ CHECKS = (
     check_order_picks_tier,
     check_inventory_copies_route,
     check_order_fetch_route,
+    check_order_reads_retry_through_the_one_home,
 )
