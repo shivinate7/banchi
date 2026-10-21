@@ -102,7 +102,6 @@ problem. That is the trap this paragraph exists to keep somebody out of.
 
 from __future__ import annotations
 
-import http.client
 import json
 import sys
 import urllib.error
@@ -384,9 +383,17 @@ def _session() -> str:
 
 
 def _open(
-    url: str, *, cookie: Optional[str], data: Optional[bytes] = None, content_type: str = ""
+    url: str,
+    *,
+    cookie: Optional[str],
+    data: Optional[bytes] = None,
+    content_type: str = "",
+    idempotent: bool = True,
 ) -> Tuple[int, dict, bytes]:
-    """One request. Returns (status, headers, body) and raises only for a dead socket."""
+    """One request. Returns (status, headers, body) and raises only for a dead socket.
+
+    A READ RETRIES through the one home (D319). `idempotent=False` is for a write that changes the
+    operator's listings: it retries only a connect failure before send."""
     request = urllib.request.Request(url, data=data, method="POST" if data else "GET")
     if content_type:
         request.add_header("Content-Type", content_type)
@@ -403,12 +410,8 @@ def _open(
             "tcg_unreachable",
             f"Could not reach {host}: {caught.reason}.",
         ),
-        # EVERY OTHER WAY THE SOCKET CAN FAIL, AND THE TIMEOUT IS THE ONE THAT MATTERS. On this
-        # repo's Python 3.9 `socket.timeout` is an `OSError` and NOT a `TimeoutError` (the two
-        # were merged in 3.10), and urllib raises it raw from `getresponse()` and from
-        # `read()` — outside the `URLError` it wraps a connect failure in. A dropped connection
-        # (`RemoteDisconnected`, `IncompleteRead`) is the same event from the caller's side: no
-        # answer it can read.
+        # EVERY OTHER WAY THE SOCKET CAN FAIL: a timeout, a dropped connection (`RemoteDisconnected`,
+        # `IncompleteRead`), a reset. No answer it can read.
         #
         # THE MESSAGE SAYS WHAT IS KNOWN AND NO MORE. On a read, nothing was fetched. On a
         # write, the other end may have done the work before it went quiet — so this sentence
@@ -418,8 +421,7 @@ def _open(
             "tcg_unreachable",
             f"{host} did not answer within {TIMEOUT_S}s, or dropped the connection.",
         ),
-        dropped_on=(OSError, http.client.HTTPException),
-        error_body_guard=(OSError, http.client.HTTPException),
+        idempotent=idempotent,
     )
 
 

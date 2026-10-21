@@ -163,6 +163,7 @@ def open(  # noqa: A001 - the module's one verb; callers say `net.open`
     headers: Optional[Mapping[str, str]] = None,
     timeout: float = ATTEMPT_TIMEOUT_SECONDS,
     idempotent: bool = True,
+    host_pause: bool = True,
     follow_redirects: bool = True,
     max_bytes: Optional[int] = None,
     on_chunk: Optional[Callable[[bytes, Mapping], None]] = None,
@@ -173,6 +174,10 @@ def open(  # noqa: A001 - the module's one verb; callers say `net.open`
     """One call, retried by rule C. Returns `(status, headers, body)` for ANY HTTP answer, a 4xx or
     5xx included: the host answered, and the caller reads the status. Raises `Offline` (never
     connected), `Dropped` (connected, then failed) or `Paused` (read the module header).
+
+    `host_pause=False` keeps a call out of the host pause, though it still retries: for a call an
+    operator pressed, which must never be refused for a wait an earlier press set. A write is
+    always out of it.
 
     `follow_redirects=False` hands a 3xx back with its `Location`, and never re-sends a Cookie to a
     redirect. `max_bytes` reads at most that many bytes plus one, so a caller can tell a body was cut.
@@ -191,7 +196,8 @@ def open(  # noqa: A001 - the module's one verb; callers say `net.open`
             opener = urllib.request.build_opener(NoRedirect).open
     clock = clock or _monotonic
     sleep = sleep or _sleep
-    if idempotent:
+    paused = idempotent and host_pause
+    if paused:
         refuse_if_paused(url, clock)
     started = clock()
     attempts = len(RETRY_PAUSES) + 1
@@ -208,7 +214,8 @@ def open(  # noqa: A001 - the module's one verb; callers say `net.open`
             failure.__cause__ = exc
             retry = True
         except (OSError, TimeoutError, http.client.HTTPException) as exc:
-            # Raised raw by the response or the read: the request may have been sent.
+            # Raised raw by the response or the read: the request may have been sent. On Python 3.9
+            # `socket.timeout` is an `OSError` and NOT a `TimeoutError`, so both are named.
             if idempotent:
                 failure = Offline(f"No answer from {urllib.parse.urlsplit(url).netloc}.")
                 retry = True
@@ -224,7 +231,7 @@ def open(  # noqa: A001 - the module's one verb; callers say `net.open`
             if clock() - started + pause + timeout <= budget:
                 sleep(pause)
                 continue
-        if idempotent and (retry or (answer is not None and answer[0] < 400)):
+        if paused and (retry or (answer is not None and answer[0] < 400)):
             _record(url, lost=retry, clock=clock)
         if failure is not None:
             raise failure

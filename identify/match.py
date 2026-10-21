@@ -47,7 +47,6 @@ import io
 import json
 import os
 import subprocess
-import random
 import re
 import sqlite3
 import threading
@@ -60,6 +59,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
 
+from pipeline import net
 from store import files as store_files
 from identify.matchconst import MODEL_BYTES, MODEL_FILENAME, MODEL_SHA256, SERVED_GAMES  # noqa: F401
 from store.cache import ENGINE_MATCHER as ENGINE
@@ -242,7 +242,7 @@ def download_model(
     url: str = MODEL_URL,
     *,
     progress: Callable[[int, int], None] = lambda _done, _total: None,
-    opener: Callable[..., "object"] = urllib.request.urlopen,
+    opener: Optional[Callable[..., "object"]] = None,
 ) -> Path:
     """Fetch the pinned model file. ONLY ON THE OWNER'S PREPARE PRESS: nothing in this module
     calls it, and the CLI reaches it only through `match prepare`.
@@ -255,22 +255,33 @@ def download_model(
     part = target.with_name(target.name + ".part")
     digest = hashlib.sha256()
     done = 0
+
     try:
-        request = urllib.request.Request(url, headers={"User-Agent": "banchi-matcher-model/1"})
-        with opener(request, timeout=60) as response, open(part, "wb") as handle:
-            total = int(response.headers.get("Content-Length") or MODEL_BYTES)
-            for block in iter(lambda: response.read(1 << 20), b""):
+        with open(part, "wb") as handle:
+
+            def keep(block: bytes, headers) -> None:
+                nonlocal done
                 handle.write(block)
                 digest.update(block)
                 done += len(block)
-                progress(done, total)
+                progress(done, int((headers or {}).get("Content-Length") or MODEL_BYTES))
+
+            # The one retry home (D319): a connect failure, a 429 or a 5xx that clears is retried before
+            # the first block. A read that fails midway is not, and the part file is thrown away below.
+            net.request(
+                url, headers={"User-Agent": "banchi-matcher-model/1"}, timeout=60, on_chunk=keep, opener=opener
+            )
             handle.flush()
             os.fsync(handle.fileno())
-    except urllib.error.HTTPError as exc:
+    except net.NetError as exc:
         part.unlink(missing_ok=True)
+        if exc.status is not None:
+            raise ModelDownloadError(
+                f"The model file could not be downloaded: the server answered {exc.status}. "
+                "The release that holds it may not be published yet."
+            ) from exc
         raise ModelDownloadError(
-            f"The model file could not be downloaded: the server answered {exc.code}. "
-            "The release that holds it may not be published yet."
+            f"The model file could not be downloaded: {type(exc.__cause__ or exc).__name__}."
         ) from exc
     except Exception as exc:
         part.unlink(missing_ok=True)
@@ -933,39 +944,30 @@ def preflight(
 def fetch_bytes(
     url: str,
     *,
-    attempts: int = 6,
     gap: float = 0.2,
     gate: Optional[threading.Lock] = None,
     clock: Optional[List[float]] = None,
-    opener: Callable[..., "object"] = urllib.request.urlopen,
 ) -> Tuple[Optional[bytes], Optional[str]]:
     """`(bytes, None)` or `(None, cause)`. One polite read: a global gap between request
-    starts, a retry with backoff, Retry-After honoured. 403, 404 and 410 are an answer, not a
-    failure: the CDN says the file is not there (`no_photo`)."""
-    delay = 1.0
-    cause = "unreadable"
-    headers = {"User-Agent": "banchi-fingerprint-index/1 (owner-run, polite, one read per image)"}
-    for _attempt in range(attempts):
-        if gate is not None and clock is not None:
-            with gate:
-                wait = clock[0] + gap - time.time()
-                if wait > 0:
-                    time.sleep(wait)
-                clock[0] = time.time()
-        try:
-            with opener(urllib.request.Request(url, headers=headers), timeout=30) as response:
-                return response.read(), None
-        except urllib.error.HTTPError as exc:
-            if exc.code in (403, 404, 410):
-                return None, f"http_{exc.code}"
-            retry_after = exc.headers.get("Retry-After") if exc.headers else None
-            time.sleep(float(retry_after) if retry_after and retry_after.isdigit() else delay)
-            cause = f"http_{exc.code}"
-        except Exception as exc:  # network, timeout, TLS: retried, then named
-            time.sleep(delay)
-            cause = type(exc).__name__
-        delay = min(delay * 2, 16) + random.random() * 0.3
-    return None, cause
+    starts, then the one retry home (`pipeline/net.py`, D319) for the backoff and Retry-After.
+    403, 404 and 410 are an answer, not a failure: the CDN says the file is not there (`no_photo`)."""
+    if gate is not None and clock is not None:
+        with gate:
+            wait = clock[0] + gap - time.time()
+            if wait > 0:
+                time.sleep(wait)
+            clock[0] = time.time()
+    try:
+        return net.request(
+            url,
+            headers={"User-Agent": "banchi-fingerprint-index/1 (owner-run, polite, one read per image)"},
+            timeout=30,
+        ), None
+    except net.NetError as exc:
+        if exc.status is not None:  # 403, 404 and 410 are the CDN saying the file is not there
+            return None, f"http_{exc.status}"
+        # network, timeout, TLS or a paused host: named by what failed, as before
+        return None, type(exc.__cause__ or exc).__name__
 
 
 @dataclass
@@ -1118,7 +1120,7 @@ def build_index(
 RECHECK_ROWS_PER_PASS = 20  # one weekly pass asks the oldest this many rows, so a big backlog drains over passes
 # ponytail: `vec.note` doubles as the retry class (an answer from the CDN waits a week, any other cause a day); a column for the next-ask time if a third wait is needed.
 _ANSWERED = ("http_403", "http_404", "http_410")  # the CDN's answer for a missing file: the row waits a week
-_NETWORK = ("URLError", "timeout", "TimeoutError")  # the network is down: the pass ends at once
+_NETWORK = ("URLError", "timeout", "TimeoutError", "Paused")  # the network is down: the pass ends at once
 
 
 def _stamp_now() -> str:
