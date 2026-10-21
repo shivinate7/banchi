@@ -27,10 +27,9 @@ person's pace (the spec's pacing section) and reads only the owner's own slabs.
   Banchi never solves or avoids a bot check, a CAPTCHA or an app check.
 - A rate-limit answer stops the sweep for that day. Banchi never retries around it.
 
-**No guessed price.** A slab with no sale at its grade shows "no sales", never a number. Card
-Ladder fills such a slab with its purchase cost moved by a market index. That number is not a
-price, and Banchi never shows it as one. Where Card Ladder gives two values for one slab, the
-screen shows both, each with its source. Banchi does not pick one.
+**No guessed price.** A slab with no sale at its grade shows "no sales", never a number. The
+slab's value is Card Ladder's estimate, trusted only by the spec's rules (section 4.3). Where
+Card Ladder gives two values for one slab, the screen shows both, each with its source.
 
 **Why.** Card Ladder's own screens read these values for any member, Riftbound included. Parse's
 public Card Ladder API sees only public data and calls Riftbound untracked. The owner's login sees
