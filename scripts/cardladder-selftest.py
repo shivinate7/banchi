@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """`pipeline/cardladder.py` stays inside the bounds the owner set for the Card Ladder login,
-proved against a fake transport and a fake clock: no network, no real sleep, no `.env` read.
+proved against a fake transport, or the real `pipeline/net.py` over a fake opener (for the default
+transport), and a fake clock: no network, no real sleep, no `.env` read.
 
 Protects: The Card Ladder client calls only the six read callables, never `search.cardladder.com`, waits 8 seconds between calls, stops at a rate limit, refreshes its ID token in time, and never prints a token.
 Governs: D-my-slabs-card-ladder
@@ -28,10 +29,11 @@ this file tests:
                                     exchange included. It refuses the host before the transport.
         A Client may be shared by threads: callable sends stay 8 seconds apart across them.
         A transport may raise anything. Whatever it raises, that send still counts for the pace.
-        A `pipeline.pricehistory.Unreachable` whose `__cause__` is an HTTPError 429 is the rate
-        limit (the one retry home's contract): RateLimited, and the latch. A `Blocked` (403) or
-        an Unreachable from another status is a CardLadderError and no latch. A bare
-        urllib.error.HTTPError 429, not wrapped, is the same rate limit.
+        A transport that RETURNS (429, body) is the rate limit: RateLimited, and the latch. The
+        default transport returns a 429 as a status (`net.open` never raises one), so this is the
+        only shape production sends. A transport that RAISES is a CardLadderError and no latch
+        (a `pipeline.pricehistory` error, a bare HTTPError 403 or 500, an OSError). A raised 429
+        is left open: production never raises one, and the cases pin neither outcome.
         The latch holds across threads: once one call is answered 429, no thread sends again,
         one already waiting for its turn in the pace included.
         `send` of a cloudfunctions URL whose callable is off the list raises Refused, sends
@@ -61,11 +63,17 @@ this file tests:
                              it: `Client.send` turns them into a CardLadderError.
         idempotent=False: a 429 or a 5xx answer is sent once and read as it came. Only a connect that
         never opened may be sent again (`net.open` decides, and the cases do not pin the count).
+        A failure after the connect (a reset or a socket.timeout once the request is out, a reset
+        while the answer is read) may have done the work, so it gets exactly ONE attempt: the
+        transport never sends again on `net.Dropped`. The Client turns it into a CardLadderError, with
+        no latch.
         follow_redirects=False: a 3xx is an answer, not followed, so no header or body goes to a
         second host.
-        A Google 400 on the token exchange is TokenRejected, and its text says to copy
-        CARDLADDER_REFRESH_TOKEN again. A Google 429 is a CardLadderError that names
-        securetoken.googleapis.com, that is not RateLimited, and that does not latch the client.
+        A Google 400, 401 or 403 on the token exchange is TokenRejected, and its text says to copy
+        CARDLADDER_REFRESH_TOKEN again. Any other status is not about the token: a Google 429, a 5xx
+        (500, 503) or a 3xx is a CardLadderError that names securetoken.googleapis.com, that is
+        not TokenRejected or RateLimited, that does not say to copy the token again, and that does
+        not latch the client.
 
 Token exchange: POST https://securetoken.googleapis.com/v1/token?key=<public key>, the refresh
 token in the BODY only (form or JSON, with grant_type=refresh_token). The answer is Google's:
@@ -73,8 +81,8 @@ token in the BODY only (form or JSON, with grant_type=refresh_token). The answer
 
 What this file leaves open, on purpose: the refresh margin (any margin that keeps the token
 under its age limit), whether the token exchange counts toward the 8 seconds (this file
-constrains only sends to the callable host), the public API key value, and Firestore (3.7 is
-not a callable and is not covered).
+constrains only sends to the callable host), the public API key value, whether a RAISED 429
+latches (production never raises one), and Firestore (3.7 is not a callable and is not covered).
 
 This file parses on the bare system python3 (3.9).
 
@@ -714,9 +722,11 @@ def case_threads_keep_the_pace(cl) -> None:
 
 # 10 ------------------------------------------------------------------------------------
 def _raising(kind, code=None, body=b"", headers=None):
-    """A transport failure the way the one retry home raises it: a pricehistory error whose
-    `__cause__` is the HTTPError. The HTTPError's text holds the Authorization header, as a
-    careless message could. Returns make(request_headers) -> exception."""
+    """A transport that raises a pricehistory error whose `__cause__` is an HTTPError, the shape
+    of the old retry home. The default transport never raises an HTTP status (`net.open` returns
+    it), but a transport may raise anything, so a non-429 row stays: it must be a CardLadderError
+    and no latch. The HTTPError's text holds the Authorization header, as a careless message could.
+    Returns make(request_headers) -> exception."""
     def make(request_headers):
         exc = kind("The service answered %s." % code)
         if code is not None:
@@ -740,7 +750,7 @@ def _raise_on(n: int, make):
 
 def _bare_http(code, body=b"", headers=None):
     """A transport that raises the HTTPError itself, not wrapped. Like `_raising`, its text
-    holds the Authorization header."""
+    holds the Authorization header, and only a non-429 row uses it."""
     def make(request_headers):
         hdrs = email.message.Message()
         for k, v in (headers or {}).items():
@@ -751,10 +761,11 @@ def _bare_http(code, body=b"", headers=None):
     return make
 
 
-def _latches_on(cl, label, make) -> None:
-    """The second callable request raises what `make` builds: RateLimited, no retry, no wait,
-    no token in the text, and every later call raises and sends nothing."""
-    w = World(answer=_raise_on(2, make))
+def _latches_on(cl, label, answer) -> None:
+    """The transport RETURNS a 429 on the second callable request (`answer`, as World takes it):
+    RateLimited, no retry, no wait, no token in the text, and every later call raises and sends
+    nothing."""
+    w = World(answer=answer)
     client = w.client(cl)
     client.call("httpprofile", {})
     with printed() as log:
@@ -790,13 +801,14 @@ def _no_latch_on(cl, label, make) -> None:
 
 
 def case_raised_rate_limit(cl) -> None:
+    """A 429 is a returned status, as `net.open` gives it. A Retry-After header cannot reach the
+    Client (the transport returns a status and a body), so `case_net_429_is_sent_once` has that row."""
     unreachable = pricehistory.Unreachable
-    for label, body, headers in (("a 429 with the message body", ENVELOPE, None),
-                                 ("a 429 with an empty body", b"", None),
-                                 ("a 429 with Retry-After 30", b"", {"Retry-After": "30"})):
-        _latches_on(cl, "Unreachable from " + label, _raising(unreachable, 429, body, headers))
+    for label, body in (("a returned 429 with the message body", ENVELOPE),
+                        ("a returned 429 with an empty body", b"")):
+        _latches_on(cl, label, _limited_on(2, 429, body))
 
-    # not a rate limit: a 403 refused by name, a 500, a connection that never opened
+    # a raised error is not a rate limit: a 403 refused by name, a 500, a connection that never opened
     for label, make in (("Blocked (403)", _raising(pricehistory.Blocked, 403, b"Forbidden")),
                         ("Unreachable from a 500", _raising(unreachable, 500, b"oops")),
                         ("Unreachable from a 503", _raising(unreachable, 503, b"")),
@@ -805,11 +817,12 @@ def case_raised_rate_limit(cl) -> None:
 
 
 def case_bare_http_429(cl) -> None:
-    """A transport that does not wrap: urllib's own HTTPError."""
-    for label, body, headers in (("a bare HTTPError 429 with the message body", ENVELOPE, None),
-                                 ("a bare HTTPError 429 with an empty body", b"", None),
-                                 ("a bare HTTPError 429 with Retry-After 30", b"", {"Retry-After": "30"})):
-        _latches_on(cl, label, _bare_http(429, body, headers))
+    """A 429 whose body is the callable's own message or a bare one, returned as a status, then
+    the urllib HTTPError a transport may raise for any other status (not a rate limit)."""
+    for label, body in (("a returned 429 whose body is Card Ladder's envelope", ENVELOPE),
+                        ("a returned 429 whose body echoes the request header",
+                         ENVELOPE + b" Bearer " + ID_MARK.encode())):
+        _latches_on(cl, label, _limited_on(2, 429, body))
     for code in (403, 500):
         _no_latch_on(cl, "a bare HTTPError %d" % code, _bare_http(code, b"nope"))
 
@@ -837,8 +850,9 @@ def case_raised_transport_paces(cl) -> None:
 
 # 12 ------------------------------------------------------------------------------------
 def case_latch_race(cl) -> None:
-    """The first thread's call is slow and ends in a 429. The other two threads are by then
-    in the pace wait, past any check made before it. Neither may send after the answer."""
+    """The first thread's call is slow and is answered 429 (a returned status). The other two
+    threads are by then in the pace wait, past any check made before it. Neither may send
+    after the answer."""
     vt = VirtualTime(1_000_000.0)
     seen: dict = {}
 
@@ -847,7 +861,7 @@ def case_latch_race(cl) -> None:
             return None
         world.vtime.sleep(3.0)  # the answer takes 3 seconds; the pace wait of the others is 8
         seen["at"] = world.vtime.now
-        raise _raising(pricehistory.Unreachable, 429, ENVELOPE)(headers)
+        return 429, ENVELOPE
 
     w = World(vtime=vt, answer=slow_429)
     client = w.client(cl)
@@ -905,6 +919,13 @@ class _Resp(io.BytesIO):
     headers = None
 
 
+class _BrokenResp(_Resp):
+    """A response whose body read fails: the connect and the status line went through."""
+
+    def read(self, *_a):
+        raise ConnectionResetError(errno.ECONNRESET, "Connection reset by peer")
+
+
 class NetWorld(World):
     """A World behind the real `net.open`, for a Client built with no transport.
 
@@ -920,6 +941,8 @@ class NetWorld(World):
     plan        plan(world, k, request) -> None (the World answers), an exception (raised by the
                 opener, before anything is sent) or (status, body[, headers]) (a canned answer).
                 k counts the opener calls so far, this one included.
+    drop        drop(world, k, request) -> None, an exception (raised by the opener AFTER the request
+                is on the wire) or a response object (returned, so reading its body fails).
     """
 
     def __init__(self, **kw) -> None:
@@ -929,6 +952,7 @@ class NetWorld(World):
         self.wire: list = []
         self.net_sleeps: list = []
         self.plan = None
+        self.drop = None
         self.follow = True
 
     def net_sleep(self, seconds: float) -> None:
@@ -951,6 +975,11 @@ class NetWorld(World):
         self.wire.append(SimpleNamespace(
             host=host, url=req.full_url, body=req.data or b"",
             headers={k.lower(): v for k, v in headers.items()}))
+        lost = self.drop(self, len(self.attempts), req) if self.drop else None
+        if isinstance(lost, BaseException):
+            raise lost
+        if lost is not None:
+            return lost
         if reply is None:
             if host in (CF_HOST, GOOGLE_HOST):
                 reply = self.transport(req.get_method(), req.full_url, headers, req.data or b"")
@@ -1151,6 +1180,54 @@ def case_net_refused_connect(cl) -> None:
                "a refused connect to %s does not latch: the next call is sent" % label, repr(got))
 
 
+def case_net_dropped_after_connect(cl) -> None:
+    """A failure after the request went out may have done the work, so the default transport
+    sends it ONCE. The failure stays armed for every attempt to the host, so a second try shows
+    as a second attempt and a second request on the wire, not as a success that hides it."""
+    _has_net_transport(cl)
+    shapes = (
+        ("a connection reset after the request was sent",
+         lambda: urllib.error.URLError(ConnectionResetError(errno.ECONNRESET, "Connection reset by peer"))),
+        ("a socket.timeout after the request was sent", lambda: socket.timeout("timed out")),
+        ("a reset while the answer is read", lambda: _BrokenResp(b"{}")),
+    )
+    for where, host in (("a Card Ladder call", CF_HOST), ("the token exchange", GOOGLE_HOST)):
+        for what, make in shapes:
+            label = "%s: %s" % (where, what)
+            w = NetWorld()
+            armed = {"on": host == GOOGLE_HOST}
+            w.drop = lambda _w, _k, req, make=make, host=host, armed=armed: \
+                make() if armed["on"] and host in req.full_url else None
+            with w.through():
+                client = w.default_client(cl)
+                if client is None:
+                    return
+                if host == CF_HOST:
+                    client.call("httpprofile", {})
+                    armed["on"] = True
+                mark, sent = len(w.attempts), len(w.wire)
+                with printed() as log:
+                    err = _raises(cl.CardLadderError, client.call, "httpprofile", {"x": 1})
+                made = w.attempts[mark:]
+                ok(isinstance(err, cl.CardLadderError)
+                   and not isinstance(err, (cl.RateLimited, cl.TokenRejected)),
+                   "%s raises a CardLadderError, not a rate limit or a rejected token" % label, repr(err))
+                ok(len(made) == 1 and all(host in r.full_url for r in made),
+                   "%s: the opener is called once, so the write is not sent again" % label,
+                   "%d attempts" % len(made))
+                ok(len(w.wire) - sent == 1, "%s: one request reached the wire" % label,
+                   "%d requests" % (len(w.wire) - sent))
+                ok(not w.net_sleeps, "%s: net.open took no pause" % label, repr(w.net_sleeps))
+                if host == GOOGLE_HOST:
+                    ok(not w.callable_requests(), "%s: nothing is sent to Card Ladder" % label)
+                if isinstance(err, BaseException):
+                    ok(not _leaks(str(err) + _trace(err) + log.text), "%s: no token in the text" % label)
+                armed["on"] = False
+                got = _outcome(client.call, "httpprofile", {"again": 1})
+                ok(got == {"echo": "httpprofile", "data": {"again": 1}},
+                   "%s does not latch: the next call is sent" % label, repr(got))
+
+
 def _limit_wording(cl) -> str:
     """What the client says when Card Ladder rate-limits it, taken from the client itself."""
     client = World(answer=_limited_on(2, 429, ENVELOPE)).client(cl)
@@ -1219,6 +1296,52 @@ def case_net_token_exchange(cl) -> None:
            "a Google 429 does not latch the client: the next call exchanges and is sent", repr(got))
 
 
+def case_net_token_exchange_statuses(cl) -> None:
+    """Only Google refusing the token says to copy it again. Google being down, or redirecting,
+    says nothing about the token: the owner must not be sent to copy a good one."""
+    _has_net_transport(cl)
+    google_error = lambda code, status: json.dumps(  # noqa: E731
+        {"error": {"code": code, "message": "from Google", "status": status}}).encode()
+    refused = ((400, "INVALID_ARGUMENT"), (401, "UNAUTHENTICATED"), (403, "PERMISSION_DENIED"))
+    unrelated = ((500, "INTERNAL"), (503, "UNAVAILABLE"), (302, None))
+
+    for status, name in refused + unrelated:
+        w = NetWorld()
+        # the 5xx answers echo the request, a worst case for a message built from the body
+        w.plan = lambda _w, _k, req, status=status, name=name: (
+            (status, b"", {"Location": "https://other.example.test/landing"}) if status == 302
+            else (status, req.data if status >= 500 else google_error(status, name))
+        ) if GOOGLE_HOST in req.full_url else None
+        label = "a Google %d" % status
+        with w.through():
+            client = w.default_client(cl)
+            if client is None:
+                return
+            with printed() as log:
+                err = _raises(cl.CardLadderError, client.call, "httpprofile", {})
+            text = str(err)
+            copy_again = re.search(r"copy\b.*\bagain", text, re.I | re.S) is not None
+            if (status, name) in refused:
+                ok(isinstance(err, cl.TokenRejected), "%s raises TokenRejected" % label, repr(err))
+                ok(re.search(r"copy\s+%s\s+again" % KEY_NAME, text, re.I) is not None,
+                   "%s: the text says to copy %s again" % (label, KEY_NAME), text)
+            else:
+                ok(isinstance(err, cl.CardLadderError)
+                   and not isinstance(err, (cl.TokenRejected, cl.RateLimited)),
+                   "%s is a CardLadderError, not a rejected token or a rate limit" % label, repr(err))
+                ok(GOOGLE_HOST in text, "%s: the text names %s" % (label, GOOGLE_HOST), text)
+                ok(not copy_again, "%s: the text does not say to copy the token again" % label, text)
+            ok(not _leaks(text + _trace(err) + log.text) if isinstance(err, BaseException) else False,
+               "%s: no token in the text" % label)
+            ok(len(w.attempts) == 1 and not w.net_sleeps and not w.callable_requests(),
+               "%s is sent once, with no retry and no call to Card Ladder" % label,
+               "%d attempts" % len(w.attempts))
+            w.plan = None
+            got = _outcome(client.call, "httpprofile", {"again": 1})
+            ok(got == {"echo": "httpprofile", "data": {"again": 1}},
+               "%s does not latch: with a good token the next call is sent" % label, repr(got))
+
+
 def case_net_redirect_not_followed(cl) -> None:
     """A 3xx is an answer. It is not followed, so nothing goes to a second host: not the
     Authorization header of a call, and not the refresh token of the exchange."""
@@ -1268,7 +1391,8 @@ CASES = [case_allow_list, case_refuse_callable, case_refuse_host, case_spacing,
          case_threads_keep_the_pace, case_raised_rate_limit, case_raised_transport_paces,
          case_latch_race, case_send_checks_the_callable, case_bare_http_429,
          case_net_transport_shape, case_net_429_is_sent_once, case_net_503_is_sent_once,
-         case_net_refused_connect, case_net_token_exchange, case_net_redirect_not_followed]
+         case_net_refused_connect, case_net_dropped_after_connect, case_net_token_exchange,
+         case_net_token_exchange_statuses, case_net_redirect_not_followed]
 
 
 def main() -> int:
