@@ -38,17 +38,29 @@ this file tests. It follows `store/readings.py` and `store/pricearchive.py`:
     Slabs.record_sales(cert, grader, sales) -> None
         sales: list of Card Ladder sale dicts, each with an `id`. Keyed by that id alone: one row
         per sale however many slabs and reads see it. Never deletes. All sales or none: a sale
-        without an `id` raises and none of the batch is kept.
+        without an `id` raises and none of the batch is kept. A sale whose `date` is not text
+        (an int, a dict, or no `date` key) raises ValueError before the batch writes anything,
+        so no stored row can make `sales_for` raise on its sort.
     Slabs.get(cert, grader) -> Optional[Slab]
     Slabs.list() -> List[Slab]                      same order however the slabs were added
     Slabs.snapshots_for(cert, grader) -> List[SlabSnapshot]   oldest day first; [] if none
     Slabs.sales_for(cert, grader) -> List[Sale]     newest `date` first, ties by `id` descending
-                                                    (`Readings.sources_payload`'s rule); [] if none
+                                                    (`Readings.sources_payload`'s rule); [] if none.
+                                                    Reads only that slab's sales (see below).
     Slab(cert, grader, profile_id, identity, subgrades, added)
     SlabSnapshot(cert, grader, day, cl_value, cl_confidence, estimated_value,
                  estimated_confidence, last_sale_price, last_sale_date, population, gem_rate, speed)
     Sale(id, date, data)    `data` is the Card Ladder sale dict, verbatim. `date` is its `date`.
     A sale belongs to every slab that read it, so two slabs of one card both list a shared sale.
+
+ONE SLAB'S SALES COST ONE SLAB'S SALES (case 6b). The proof is structural, never a timing: while a
+fresh read answers `sales_for`, a trace on its connection logs every statement, and (a) none of
+them may have an EXPLAIN QUERY PLAN row that starts with SCAN (every table is reached through a
+SEARCH on an index or key; a join's alias is a SCAN too, so no table name is matched), and (b) the
+store may parse no more `slab_sales` rows than the slab has sales. A link table from slab to sale id
+with an index on its slab column, or any design with the same property, passes. Two controls
+run the same two detectors over a full read of every sale and must fire, so a detector gone blind
+(a renamed hook, a connection opened before the trace) fails loudly and never reads as green.
 
 Every read below goes through a NEW `Store().read()`, or raw sqlite3 on the file, never the write's
 own snapshot: in-memory rows look written even when a table was left out of `Snapshot.tables`.
@@ -74,6 +86,7 @@ sys.path.insert(0, str(ROOT))
 from harness.tests.home import isolated_home  # noqa: E402
 from store import db  # noqa: E402
 from store.readings import Reading  # noqa: E402
+from store.rows import Rows  # noqa: E402
 from store.session import Store  # noqa: E402
 
 PASS = 0
@@ -355,6 +368,127 @@ def case_shared_sale():
     ok("s-1" in ids(a) and "s-3" in ids(b), "and each keeps the sale only it read", f"{ids(a)} {ids(b)}")
 
 
+def case_grader_separation():
+    """2b. one cert under two graders keeps two sets of snapshots"""
+    cert = "81234567"
+    put(lambda s: (add_psa(s, cert), s.add(cert, "cgc", profile_id="cgc-3003", identity=IDENTITY,
+                                          subgrades=None, added="2026-10-02")))
+    put(lambda s: (s.record_snapshot(cert, "psa", "2026-10-05", **SNAP_A),
+                   s.record_snapshot(cert, "cgc", "2026-10-05", **SNAP_C),
+                   s.record_snapshot(cert, "cgc", "2026-10-06", **SNAP_B)))
+    same("raw: the same cert and day under two graders are two rows", counts()["slab_snapshots"], 3)
+    psa, cgc = slabs_now().snapshots_for(cert, "psa"), slabs_now().snapshots_for(cert, "cgc")
+    same("psa lists its own snapshot and not cgc's", [(x.grader, x.day) for x in psa], [("psa", "2026-10-05")])
+    same("and it holds psa's own values", snap_fields(psa[0] if psa else None), SNAP_A)
+    same("cgc lists its own two snapshots and not psa's", [(x.grader, x.day) for x in cgc],
+         [("cgc", "2026-10-05"), ("cgc", "2026-10-06")])
+    same("and the shared day holds cgc's own values", snap_fields(cgc[0] if cgc else None), SNAP_C)
+
+
+def case_sale_date_text():
+    """3c. a sale whose date is not text is refused before any write"""
+    cert = "81234567"
+    kept = sale("s-1", "2026-10-01")
+    undated = sale("s-3", "2026-10-03")
+    del undated["date"]
+    for kind, bad in (
+        ("an int date", dict(sale("s-3", "2026-10-03"), date=20261003)),
+        ("a dict date", dict(sale("s-3", "2026-10-03"), date={"y": 2026, "m": 10, "d": 3})),
+        ("no date", undated),
+    ):
+        with fresh_home():
+            put(lambda s: (add_psa(s, cert), s.record_sales(cert, "psa", [kept])))
+            refused, inside, left = None, None, None
+            try:
+                with store().write() as snap:
+                    try:  # the good sale comes first: a write that began before the check would keep it
+                        snap.slabs.record_sales(cert, "psa", [sale("s-2", "2026-10-02"), bad])
+                    except Exception as exc:
+                        refused = exc
+                    try:
+                        inside = [x.id for x in snap.slabs.sales_for(cert, "psa")]
+                    except Exception as exc:
+                        inside = exc
+            except Exception as exc:
+                left = exc
+            ok(isinstance(refused, ValueError), f"{kind}: record_sales raises ValueError", repr(refused))
+            same(f"{kind}: no sale of the refused batch is in the write, the good one included", inside, ["s-1"])
+            ok(left is None, f"{kind}: the write itself commits clean", repr(left))
+            same(f"{kind}: raw: only the sale stored before is a row", counts()["slab_sales"], 1)
+            try:
+                later = [x.id for x in slabs_now().sales_for(cert, "psa")]
+            except Exception as exc:
+                later = exc
+            same(f"{kind}: a later read lists its sales without raising", later, ["s-1"])
+
+
+@contextmanager
+def watched():
+    """Trace every statement a connection opened inside this block runs, and list every
+    `slab_sales` row `Rows` parses. Both patches are undone on the way out."""
+    statements, parsed = [], []
+    connect, remember = sqlite3.connect, Rows._remember
+
+    def traced(*args, **kwargs):
+        conn = connect(*args, **kwargs)
+        conn.set_trace_callback(statements.append)
+        return conn
+
+    def counted(self, key, text):
+        if self.spec.name == "slab_sales":
+            parsed.append(key)
+        return remember(self, key, text)
+
+    sqlite3.connect, Rows._remember = traced, counted
+    try:
+        yield statements, parsed
+    finally:
+        sqlite3.connect, Rows._remember = connect, remember
+
+
+def read_with(ask):
+    """`ask(slabs)` on a fresh read: (its answer, plan rows that scan a table, slab_sales rows parsed).
+    The log starts after the read is open, so only what `ask` itself runs is judged."""
+    with watched() as (statements, parsed):
+        slabs = store().read().slabs
+        del statements[:], parsed[:]
+        answer = ask(slabs)
+        ran = list(statements)
+    gc.collect()
+    conn = sqlite3.connect(store().db_path, isolation_level=None)
+    try:
+        plans = [
+            row[3] for sql in ran if sql.lstrip().upper().startswith(("SELECT", "WITH"))
+            for row in conn.execute("EXPLAIN QUERY PLAN " + sql)
+        ]
+    finally:
+        conn.close()
+    return answer, [p for p in plans if p.startswith("SCAN") and "CONSTANT ROW" not in p], len(parsed)
+
+
+def case_sales_read_scope():
+    """6b. reading one slab's sales reads only that slab's sale rows"""
+    a, b, empty = "81234567", "81234568", "81234569"
+    shared = sale("s-3", "2026-10-03")
+    put(lambda s: (add_psa(s, a), add_psa(s, b), add_psa(s, empty)))
+    put(lambda s: s.record_sales(a, "psa", [sale("s-1", "2026-10-01"), sale("s-2", "2026-10-02"), shared]))
+    put(lambda s: s.record_sales(b, "psa", [shared] + [sale(f"s-{n}", f"2026-10-0{n}") for n in (4, 5, 6)]))
+    total = counts()["slab_sales"]
+    same("fixture: six sales, one of them shared by two slabs", total, 6)
+
+    every, scanned, parsed = read_with(lambda slabs: list(slabs.sales.values()))
+    same("control: reading every sale parses all of them, so the parse count sees a read", parsed, total)
+    ok(bool(scanned), "control: reading every sale shows as a scan in the plan, so the plan check sees a read",
+       f"{len(every)} rows, plan rows {scanned}")
+
+    for label, cert, want in (("a slab with three sales", a, 3), ("a slab with four", b, 4), ("a slab with none", empty, 0)):
+        got, scanned, parsed = read_with(lambda slabs, cert=cert: slabs.sales_for(cert, "psa"))
+        same(f"{label}: sales_for lists its own sales", len(got), want)
+        same(f"{label}: no statement it runs scans a table", scanned, [])
+        ok(parsed <= want, f"{label}: it parses no more slab_sales rows than the slab has sales ({want})",
+           f"parsed {parsed} of {total}")
+
+
 def landing(s):
     """One write across all three tables."""
     add_psa(s, "81299999", profile="psa-2002", added="2026-10-10")
@@ -544,8 +678,9 @@ def case_upgrade():
 
 
 CASES = (
-    case_slabs, case_grader_home, case_snapshots, case_sales, case_shared_sale,
-    case_one_transaction, case_no_guessed_value, case_reading_back, case_upgrade,
+    case_slabs, case_grader_home, case_snapshots, case_grader_separation, case_sales,
+    case_shared_sale, case_sale_date_text, case_one_transaction, case_no_guessed_value,
+    case_reading_back, case_sales_read_scope, case_upgrade,
 )
 
 
