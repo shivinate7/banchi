@@ -55,6 +55,7 @@ from store.postings import Postings
 from store.queues import MAIN, PARKED, Queue
 from store.readings import Readings
 from store.rows import Rows
+from store.slabs import Slabs
 from store.sendclaims import SendClaims
 from store.skus import Skus
 from store.submissions import Submissions
@@ -100,6 +101,9 @@ class Snapshot:
     # `Store.write()` from `skus adopt` commits it atomically with everything else D88
     # already protects; nothing else in this lane writes it.
     skus: Skus
+    # THE SLABS THE OWNER TRACKS, their daily snapshots and the sales seen (D320). Bound like
+    # `readings`, so a slab write commits in the one `Store.write()` transaction.
+    slabs: Slabs
 
     def queue(self, name: str) -> Queue:
         return self.review if name == MAIN else self.parked
@@ -130,6 +134,9 @@ class Snapshot:
             self.archive.sources,
             self.archive.summary,
             self.skus.entries,
+            self.slabs.slabs,
+            self.slabs.snapshots,
+            self.slabs.sales,
         ]
 
 
@@ -184,6 +191,11 @@ class Store:
                 summary=bound(PriceArchive.SUMMARY, "price_history_summary"),
             ),
             skus=Skus(entries=bound(Skus.ENTRIES, "skus")),
+            slabs=Slabs(
+                slabs=bound(Slabs.SLABS, "slabs"),
+                snapshots=bound(Slabs.SNAPSHOTS, "slab_snapshots"),
+                sales=bound(Slabs.SALES, "slab_sales"),
+            ),
             # NOT `bound()` — nothing to load, only to append to, exactly like
             # `snapshot.inventory.events` beside it. A read-only `Store.read()` snapshot gets
             # one too, empty and unused: nothing here ever calls `.record()` on it, since

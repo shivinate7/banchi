@@ -1506,7 +1506,7 @@ COMPONENTS = [
                                       "apart and latches on a rate-limit answer. Clock and "
                                       "sleep are injected; the transport defaults to "
                                       "`net_transport` on the one retry home. No error text holds a token or a response body.",
-                              "governed_by": ["D320", "D319"],
+                              "governed_by": ["D320", "D319", "D63"],
                               "note": "The refresh token is the caller's to read from "
                                       "`CARDLADDER_REFRESH_TOKEN`. The API key in it is Card "
                                       "Ladder's public web key. No store tables, routes or "
@@ -2094,6 +2094,16 @@ COMPONENTS = [
                                     "31 assertions, all caught. No harness test exercises it, "
                                     "so `tested_by` is empty rather than a citation nothing "
                                     "backs."},
+            "slabs.py": {"does": "the My Slabs tables and their writes: `slabs` (one row per "
+                                 "cert and grader, the grader in Card Ladder's name), "
+                                 "`slab_snapshots` (one row per slab per day, a second write "
+                                 "that day replaces it) and `slab_sales` (keyed by Card Ladder's "
+                                 "sale id, never deleted, shared by every slab that read it). "
+                                 "A value Card Ladder did not give is NULL, never 0. Also "
+                                 "`GRADERS`, which `pipeline/cardladder.py` imports back "
+                                 "because `store/` may not import `pipeline/`.",
+                         "governed_by": ["D320", "D88", "D63"],
+                         "note": "PROVED BY `make slabs-store-selftest`."},
             # THE PRICE-HISTORY ARCHIVE (D219). Unlike `readings.py`'s
             # `Readings.replace()`, this table is NEVER a full replace — see its own module
             # docstring for why a bucket a later sweep does not mention must survive forever
@@ -2184,7 +2194,7 @@ COMPONENTS = [
                                    "for `#/graveyard`'s read.",
                            "governed_by": ["D13", "D138", "D63", "D88", "D134", "D145", "D174",
                                            "D189", "D191", "D219", "D243",
-                                           "D273"],
+                                           "D273", "D320"],
                            "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
@@ -2202,7 +2212,7 @@ COMPONENTS = [
                               "migration to add one to a store already on disk.",
                       "governed_by": ["D20", "D26", "D58", "D86", "D88", "D134", "D140", "D145",
                                       "D166", "D172", "D174", "D189", "D192", "D213", "D219",
-                                      "D243", "D294", "D273", "D299"],
+                                      "D243", "D294", "D273", "D299", "D320"],
                       "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "

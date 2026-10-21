@@ -162,11 +162,16 @@ MATCH_SWEEP = "match_sweep"
 # `price_history_summary` and BUILDS it once from `price_history`, under the lock, inside the
 # upgrade transaction. It is a derived table, so unlike the additive steps above it has rows
 # to backfill: an archive with no summary would read as empty to Holdings.
+#
+# FIFTEEN, FOR D320 (My Slabs, `docs/specs/my-slabs.md` section 6). `_add_slabs` adds `slabs`,
+# `slab_snapshots` and `slab_sales` (`store/slabs.py`). Purely additive, `_add_readings`'s case
+# exactly: three tables nothing older has, so there is nothing to backfill, and an empty set
+# is the correct state for an upgraded store because no slab was ever read before.
 # NO VERSION FOR `cards_run` AND `events_event`. `_add_run_event_indexes` creates them
 # (`cards.select(run=...)`, `events_named`) in `_upgrade` on every upgrade and in
 # `_ensure_run_event_indexes` on every open at the current version, so a store stamped 14
-# gains them without a bump, which `harness/tests/t7/send_markdown.py` pins at 14.
-SCHEMA_VERSION = 14
+# gains them without a bump, which `harness/tests/t7/send_markdown.py` pins at 15.
+SCHEMA_VERSION = 15
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
 LEGACY_INVENTORY = "inventory.json"
@@ -251,6 +256,13 @@ TABLES: Dict[str, Tuple[str, ...]] = {
         "product_line", "set_name", "product_name", "number", "rarity", "condition",
         "grade", "printing", "first_seen", "last_seen", "source",
     ),
+    # D320: the My Slabs tables, see `store/slabs.py`. `slab_sales` is never cleared.
+    "slabs": ("cert", "grader", "profile_id", "added"),
+    "slab_snapshots": (
+        "cert", "grader", "day", "cl_value", "cl_confidence", "estimated_value",
+        "estimated_confidence", "last_sale_price",
+    ),
+    "slab_sales": ("date",),
 }
 
 # Columns stored as REAL. `ord`, the order key (D294), is a fraction, and TEXT affinity would
@@ -260,7 +272,7 @@ _REAL = {"ord"}
 _INTEGER = {
     "box", "bid", "idx", "pushed", "staged", "live", "cleared_by_human", "pid", "at", "skus",
     "product_id", "width_days", "quantity", "transactions", "requested", "answered", "refused",
-    "first_seen", "last_seen",
+    "first_seen", "last_seen", "cl_confidence", "estimated_confidence",
 }
 
 _INDEXES = (
@@ -290,6 +302,8 @@ _INDEXES = (
     ("price_history", "sku"),
     # `PriceArchive.summary_for_sku`'s lookup (Holdings): one indexed read per on-hand SKU.
     ("price_history_summary", "sku"),
+    # D320: `Slabs.snapshots_for` filters on the slab's cert.
+    ("slab_snapshots", "cert"),
 )
 
 # D172'S TWO INDEXES, DELIBERATELY NOT IN `_INDEXES` BECAUSE NEITHER IS A PLAIN ONE.
@@ -554,6 +568,8 @@ def _upgrade(
                 _open_every_box(conn)        # D299
             if stored < 14:
                 _add_price_history_summary(conn)  # D219, amended 2026-09-28
+            if stored < 15:
+                _add_slabs(conn)             # D320
             _add_run_event_indexes(conn)
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
@@ -1050,6 +1066,15 @@ def _add_readings(conn: sqlite3.Connection) -> None:
     """
     conn.execute(_ddl("readings", TABLES["readings"]))
     conn.execute(_ddl("readings_sources", TABLES["readings_sources"]))
+
+
+def _add_slabs(conn: sqlite3.Connection) -> None:
+    """Schema 15: `slabs`, `slab_snapshots` and `slab_sales` (D320).
+
+    `_add_readings`'s case: three tables nothing older has, so nothing to backfill."""
+    for table in ("slabs", "slab_snapshots", "slab_sales"):
+        conn.execute(_ddl(table, TABLES[table]))
+    conn.execute("CREATE INDEX IF NOT EXISTS slab_snapshots_cert ON slab_snapshots(cert)")
 
 
 def _add_captured_at_index(conn: sqlite3.Connection) -> None:
