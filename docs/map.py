@@ -3124,6 +3124,19 @@ COMPONENTS = [
                         "into `make check`.",
                 "governed_by": ["D18", "D278"],
             },
+            "cardladder-selftest.py": {
+                "does": "proves `pipeline/cardladder.py` stays inside the owner's bounds for "
+                        "the Card Ladder login, against a fake transport and a fake clock: no "
+                        "network, no real sleep, no secrets file read. Seven cases: the allow "
+                        "list is the six read callables and the client reads that one "
+                        "constant; a callable off it is refused before any request; "
+                        "`search.cardladder.com` is refused before the transport; calls sit "
+                        "8 seconds apart, a failed call included; a rate-limit answer raises "
+                        "once, never retries and latches; the ID token is reused and "
+                        "refreshed before it expires; no token appears in any exception, "
+                        "traceback, log line or repr.",
+                "governed_by": ["D-my-slabs-card-ladder"],
+            },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "
                         "server/pipeline_routes.py:do_product_history against a throwaway "
@@ -4897,7 +4910,8 @@ COMPONENTS = [
                                 "D213", "D215", "D219", "D222", "D231", "D224", "D225",
                                 "D227", "D280", "D234", "D236", "D239", "D240",
                                 "D242", "D243", "D247", "D252", "D253", "D254",
-                                "D256", "D261", "D271", "D275", "D193", "D269", "D295", "D301"],
+                                "D256", "D261", "D271", "D275", "D193", "D269", "D295", "D301",
+                                "D-my-slabs-card-ladder"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
