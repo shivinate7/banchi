@@ -48,6 +48,10 @@
                                            SKU — `#/revenue`'s thumbnail lookup (D89's own gap)
     GET    /games                          the per-game registry, as `pipeline/games.py` authors it
     GET    /codes                          the code ledger: counts, tiers, every code (C8)
+    POST   /slabs                          read a slab from Card Ladder by its cert and file it
+    GET    /slabs                          every slab with its newest snapshot
+    GET    /slabs/<grader>/<cert>          one slab: snapshots, sales, the grade ladder
+    DELETE /slabs/<grader>/<cert>          take a slab off the list; its history stays. No Card Ladder call
     GET    /codes/lots                     every lot built so far, newest first
     POST   /codes/lots                     plan a lot, or BUILD one — reserving its codes
     POST   /codes/scan                     decode a box's photographs into the ledger. FREE
@@ -17489,6 +17493,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 return self._json(
                     HTTPStatus.OK, shipping_routes.do_shipping_forget(match.group(1))
+                )
+            match = _SLABS_ITEM_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK, slabs_routes.do_slab_remove(unquote(match.group(1)), unquote(match.group(2)))
                 )
             if app_owns(path):
                 # The app is served here and is read-only (D138). 405 and not 404,

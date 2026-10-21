@@ -4928,6 +4928,14 @@ export type SlabReceipt = {
   message: string
 }
 
+/** `DELETE /slabs/<grader>/<cert>`. `message` names the slab by its label. */
+export type SlabRemoved = {
+  cert: string
+  grader: string
+  label: string
+  message: string
+}
+
 /** One slab in `GET /slabs`. `note` is "no sales" when nothing sold at the slab's grade. */
 export type SlabRow = {
   cert: string

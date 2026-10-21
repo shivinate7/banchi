@@ -1579,7 +1579,7 @@ CHECKS = (
         "target": "slabs-routes-selftest",
         "shard": "guards-2",
         "runs": "$(PYTHON) scripts/slabs-routes-selftest.py",
-        "asserts": 'The My Slabs routes add a slab by cert through the real Card Ladder client, write its slab, snapshot and sales once, refuse and write nothing on any failed or limited read, keep the pacing and the rate-limit stop across requests, show a slab with no sale as no sales and have no sweep, against a fake transport and a throwaway store.',
+        "asserts": 'The My Slabs routes add a slab by cert through the real Card Ladder client, write its slab, snapshot and sales once, refuse and write nothing on any failed or limited read, keep the pacing and the rate-limit stop across requests, show a slab with no sale as no sales, remove a slab and its sale links in one write while its snapshots and sales stay, refuse a remove while an add runs, need no Card Ladder call to remove and have no sweep, against a fake transport and a throwaway store.',
         "needs": ("python3",),
         "writes": 'a throwaway store under a temporary directory it creates and removes.',
         "commit_path": False,

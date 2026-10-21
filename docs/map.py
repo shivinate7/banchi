@@ -2099,6 +2099,7 @@ COMPONENTS = [
                                  "`slab_snapshots` (one row per slab per day, a second write "
                                  "that day replaces it) and `slab_sales` (keyed by Card Ladder's "
                                  "sale id, never deleted, shared by every slab that read it). "
+                                 "`Slabs.remove` drops a slab row and its sale links only. "
                                  "A value Card Ladder did not give is NULL, never 0. Also "
                                  "`GRADERS`, which `pipeline/cardladder.py` imports back "
                                  "because `store/` may not import `pipeline/`.",
@@ -3187,7 +3188,9 @@ COMPONENTS = [
                         "nothing, one client keeps the 8 second pace and the rate-limit stop across "
                         "requests, Card Ladder's numbers become text money and its dates one ISO "
                         "shape, a re-read sale keeps the fields only an earlier read gave, a slab "
-                        "with no sale at its grade says no sales, the routes are dispatched, no "
+                        "with no sale at its grade says no sales, a remove drops the slab and its "
+                        "sale links but keeps its snapshots and sales, needs no Card Ladder call and "
+                        "is refused while an add runs, the routes are dispatched, no "
                         "refusal names a decision, a path or a host, no token reaches an answer or a "
                         "log, and there is no sweep route, client function or launchd job.",
                 "governed_by": ["D320", "D88", "D196", "D319"],
@@ -5876,7 +5879,9 @@ COMPONENTS = [
                 "does": "the My Slabs routes: POST /slabs adds a slab by cert (Card Ladder reads "
                         "3.1, 3.2 and 3.4 outside the store lock, then ONE write of the slab, "
                         "today's snapshot and the sales), GET /slabs lists every slab with its "
-                        "newest snapshot, GET /slabs/<grader>/<cert> reads one. One "
+                        "newest snapshot, GET /slabs/<grader>/<cert> reads one, DELETE on that path "
+                        "removes the slab and its sale links (no Card Ladder call, refused while an "
+                        "add runs). One "
                         "`pipeline.cardladder.Client` lives for the process, so the 8 second pace "
                         "and the day's rate-limit stop hold across requests. Card Ladder's "
                         "numbers become text money and its dates one ISO day; a sale that was "

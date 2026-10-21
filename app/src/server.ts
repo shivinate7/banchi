@@ -104,6 +104,7 @@ import type {
   SlabDetail,
   SlabList,
   SlabReceipt,
+  SlabRemoved,
   TrendsPayload,
   OrderFillReason,
   OrderFillResult,
@@ -4589,4 +4590,11 @@ export async function getSlabs(): Promise<SlabList> {
 /** One slab: its snapshots, its sales and its grade ladder. The cert is text and keeps its zeros. */
 export async function getSlabDetail(grader: string, cert: string): Promise<SlabDetail> {
   return (await request(`/slabs/${encodeURIComponent(grader)}/${encodeURIComponent(cert)}`, NO_CACHE)) as SlabDetail
+}
+
+/** Take a slab off the list. Calls no one; the snapshots and sales stay, and adding the slab again brings them back. */
+export async function removeSlab(grader: string, cert: string): Promise<SlabRemoved> {
+  return (await request(`/slabs/${encodeURIComponent(grader)}/${encodeURIComponent(cert)}`, {
+    method: 'DELETE',
+  })) as SlabRemoved
 }

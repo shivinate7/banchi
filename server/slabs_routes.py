@@ -3,6 +3,7 @@
     POST /slabs                    read a slab from Card Ladder and write it, today's snapshot and its sales
     GET  /slabs                    every slab with its newest snapshot
     GET  /slabs/<grader>/<cert>    one slab: snapshots, sales and the grade ladder
+    DELETE /slabs/<grader>/<cert>  take a slab off the list; its snapshots and sales stay, so adding it again brings them back
 
 There is no sweep route. The owner deferred it: it waits for the owner's word.
 
@@ -310,6 +311,26 @@ def _add(body: dict) -> dict:
 def _unreadable():
     _refuse(HTTPStatus.BAD_GATEWAY, "cardladder_unreadable",
             "Card Ladder sent an answer this app could not read. Nothing was saved. Try again later.")
+
+
+# ---------------------------------------------------------------------------- remove
+
+
+def do_slab_remove(grader: str, cert: str) -> dict:
+    """No Card Ladder call and no login, so it works on a rate-limited day. Refused while an add runs:
+    that add's final write would put the slab back. The lock is checked before the lookup."""
+    if not _inflight.acquire(blocking=False):
+        _refuse(HTTPStatus.CONFLICT, "slab_add_busy", "A slab is being added right now. Wait for it to finish, then try again.")
+    try:
+        grader = _grader(grader)
+        with Store().write() as snap:
+            slab = snap.slabs.remove(cert, grader)
+        if slab is None:
+            _refuse(HTTPStatus.NOT_FOUND, "slab_unknown", "That slab is not in the list, so there is nothing to remove.")
+        label = (slab.identity or {}).get("label") or f"slab {slab.cert}"
+        return {"cert": slab.cert, "grader": slab.grader, "label": label, "message": f"Removed {label}."}
+    finally:
+        _inflight.release()
 
 
 # ---------------------------------------------------------------------------- list and detail
