@@ -493,6 +493,18 @@ JPEG_MAGIC = b"\xff\xd8\xff"
 # this server does not do. It is in `ALL_METHODS` as well because an origin this server
 # knows may never be told less than one it does not.
 SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+# POSTs that are not the owner's change: reads, and timer work an open tab starts on its own (the
+# live-check settle writes receipts). None of them may mark activity.
+NOT_A_CHANGE_POSTS = (
+    "/pipeline/waiting",
+    "/pipeline/preflight",
+    "/pipeline/crop-preview",
+    "/pipeline/live-check",
+    "/orders/fetch",
+    "/orders/picks",
+    "/orders/walk-plan",
+    "/inventory/copies",
+)
 ALL_METHODS = ("GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS")
 
 # The Vite dev server (`make dev`), on both spellings of this machine. Two entries and not
@@ -16253,7 +16265,21 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     f"another address, add it to {ORIGINS_ENV} — comma or space separated — "
                     f"and restart nothing: it is read on every request.",
                 )
+            # MARKED BEFORE THE HANDLER AS WELL AS AFTER: a long write that starts once the owner
+            # has been idle for the window is itself a change, and a restart due mid-write drains it.
+            changes = (
+                self.command not in SAFE_METHODS
+                and (urlparse(self.path).path.rstrip("/") or "/") not in NOT_A_CHANGE_POSTS
+            )
+            if changes:
+                files.mark_activity()
             handler()
+            # A REQUEST THAT CHANGES STATE IS THE OWNER'S LAST CHANGE; the supervisor holds an
+            # auto-restart while it is fresh. HERE AND NOT IN THE STORE'S WRITE PATH, because the
+            # background reader, the setup and the sweeps write the store with nobody at the screen.
+            # A request the origin gate refuses marks nothing.
+            if changes:
+                files.mark_activity()
         except BadRequest as exc:
             self._fail(exc.status, exc.code, str(exc))
         except codes_routes.CodesRefusal as exc:
