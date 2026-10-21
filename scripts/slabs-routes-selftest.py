@@ -7,7 +7,8 @@ Governs: D320, D88, D196, D319
 
 BUILD PLAN STEP 3 (`docs/specs/my-slabs.md`). The owner DEFERRED the sweep: it waits for the
 owner's word. Until that word: NO sweep route, no screen for a sweep, no launchd job. The spec's
-build plan names a sweep in steps 3 to 5 and section 5; this file pins the deferral.
+build plan names a sweep in steps 3 to 5 and section 5; this file pins the deferral. The owner
+RULED a remove route that keeps history (cases 18 to 22).
 
 ROUTES, in `server/slabs_routes.py`, dispatched by `server/capture_server.py`. A refusal is a
 `server.refusal.BadRequest(status, code, message)`: the dispatcher already catches it.
@@ -15,6 +16,7 @@ ROUTES, in `server/slabs_routes.py`, dispatched by `server/capture_server.py`. A
     POST /slabs                    do_slab_add(body) -> receipt
     GET  /slabs                    do_slabs() -> {"slabs": [row, ...]}
     GET  /slabs/<grader>/<cert>    do_slab(grader, cert) -> detail     (URL-decoded; any grader form)
+    DELETE /slabs/<grader>/<cert>  do_slab_remove(grader, cert) -> removal receipt  (same decoding)
 
 SEAMS: module attributes of `server.slabs_routes`, read at CALL time (never a default argument,
 never a copy bound at import). The route builds the real `pipeline.cardladder.Client` from them:
@@ -43,12 +45,32 @@ WIRE (text money, ISO dates, `null` for a value Card Ladder did not give):
                  first, "sales": newest first (each the stored sale: "id", "date", "price", "url",
                  ...), "ladder": [{"grade", "label", "cl_value", "cl_confidence"}] in Card
                  Ladder's order, "note"}; sales are the slab's grader and grade only.
-    refusal codes   grader_unknown 400, cert_required 400, cert_not_found 404, slab_unknown 404,
-                    cardladder_token_missing, cardladder_token_rejected, cardladder_rate_limited,
-                    sale_date_unreadable, and any other Card Ladder failure under a code of its own.
+    removal     {"cert", "grader" (Card Ladder's name), "label", "message"}; `message` is a plain
+                sentence that names the slab by its label. Extra keys are allowed.
+    refusal codes   grader_unknown 400, cert_required 400, cert_not_found 404, slab_unknown 404
+                    (add never gives it; detail and remove do), cardladder_token_missing,
+                    cardladder_token_rejected, cardladder_rate_limited, sale_date_unreadable, and any
+                    other Card Ladder failure under a code of its own.
     client      `addSlab({cert, grader}): Promise<SlabReceipt>`, `getSlabs(): Promise<SlabList>`,
-                `getSlabDetail(grader, cert): Promise<SlabDetail>` in `app/src/server.ts`, with
-                those four wire types in `app/src/types.ts` (`tsc` ties the names to the file).
+                `getSlabDetail(grader, cert): Promise<SlabDetail>`,
+                `removeSlab(grader, cert): Promise<SlabRemoved>` in `app/src/server.ts`, with those
+                five wire types in `app/src/types.ts` (`tsc` ties the names to the file).
+
+THE REMOVE (cases 18 to 22; the owner's ruling, build plan step 3). It takes the slab row and its
+sale links out in ONE store write. Its snapshots and its sales stay, so adding the slab again is
+the way back: the old snapshots return, the sales the new read lists are linked again, and a sale
+the new read omits stays in the store, unlinked. A sale another slab also read stays linked to
+that slab. It reads no one: no Card Ladder call, no sign-in, no login needed, and it works on a day
+Card Ladder asked us to slow down. An unknown slab is 404 `slab_unknown` in one plain sentence and
+writes nothing; an unknown grader is 400 `grader_unknown`. The path parts are matched exactly:
+`%`, `_`, a quote, a zero-padded cert or another grader's name finds no slab.
+A REMOVE WHILE ANY ADD IS IN FLIGHT IS REFUSED AT ONCE WITH 409 (the add's one lock), BEFORE the
+slab is looked up, so the same answer comes for a stored slab, the one being re-read and an unknown
+one. The add's final write would otherwise put the removed slab back. The 409 sends nothing and
+writes nothing, and the next remove works once the add is done. A refused or failed remove frees
+the way for the next add.
+NOT PINNED, left to the owner (Input Needed in the report): the `added` date and the receipt's
+`added` flag of a slab added again after a remove, and what a sale row's own list of slabs says.
 
 WHAT EACH ADD DOES: 3.1, 3.2, 3.4 and no other callable (spec 5: three calls a slab), the reads
 OUTSIDE the store lock (they are paced and take 16 seconds or more), then ONE store write: the
@@ -67,6 +89,7 @@ from __future__ import annotations
 
 import calendar
 import contextlib
+import gc
 import importlib
 import importlib.util
 import io
@@ -75,6 +98,7 @@ import logging
 import os
 import re
 import socket
+import sqlite3
 import sys
 import threading
 import time
@@ -420,6 +444,50 @@ def date_shape(text) -> str:
     return re.sub(r"\d", "9", text) if isinstance(text, str) else repr(type(text))
 
 
+def one_sentence(label: str, text: str) -> None:
+    ok(len(re.findall(r"[.!?](?=\s|$)", text.strip())) == 1, f"{label}: one sentence", repr(text))
+
+
+def remover(routes):
+    """The remove handler, or None after one FAIL: a case that cannot call it has nothing else to
+    say, and its later checks (a row still there, a list unchanged) would pass without a remove."""
+    handler = getattr(routes, "do_slab_remove", None)
+    return handler if ok(callable(handler), "server.slabs_routes has do_slab_remove") else None
+
+
+def seed(cert, grader="psa", label=LABEL, ids=("s-1", "s-2")):
+    """A slab in the store with one snapshot and sales, written without a Card Ladder read."""
+    with store().write() as snap:
+        table = snap.slabs
+        table.add(cert, grader, profile_id="p-" + cert, identity={"label": label, "grade": "g10"},
+                  subgrades=None, added=DAY1)
+        table.record_snapshot(
+            cert, grader, DAY1, cl_value="10.00", cl_confidence=4, estimated_value="9.00",
+            estimated_confidence=4, last_sale_price="8.00", last_sale_date=DAY1, population=5,
+            gem_rate=0.5, speed=None)
+        table.record_sales(cert, grader, [{"id": i, "date": DAY1, "price": "8.00"} for i in ids])
+
+
+def break_deletes(table):
+    """Every DELETE on `table` now fails, so a remove that spreads over two writes shows."""
+    gc.collect()
+    conn = sqlite3.connect(store().db_path, isolation_level=None)
+    try:
+        conn.execute(f"CREATE TRIGGER inject_failure BEFORE DELETE ON {table} "
+                     "BEGIN SELECT RAISE(ABORT, 'injected failure'); END")
+    finally:
+        conn.close()
+
+
+def mend():
+    gc.collect()
+    conn = sqlite3.connect(store().db_path, isolation_level=None)
+    try:
+        conn.execute("DROP TRIGGER IF EXISTS inject_failure")
+    finally:
+        conn.close()
+
+
 # ------------------------------------------------------------------------------ cases
 
 
@@ -455,8 +523,8 @@ def case_world_control():
 
 
 def case_seams(routes):
-    """1. the module has the handlers and the four seams, and no sweep"""
-    for name in ("do_slab_add", "do_slabs", "do_slab"):
+    """1. the module has the handlers (add, list, detail, remove) and the four seams, and no sweep"""
+    for name in ("do_slab_add", "do_slabs", "do_slab", "do_slab_remove"):
         ok(callable(getattr(routes, name, None)), f"server.slabs_routes has {name}")
     for name in ("TRANSPORT", "CLOCK", "SLEEP", "TODAY"):
         ok(hasattr(routes, name), f"server.slabs_routes has the seam {name}")
@@ -817,7 +885,7 @@ def case_detail(routes):
 
 
 def case_http(routes):
-    """12. the routes are dispatched: GET /slabs, GET /slabs/<grader>/<cert>, POST /slabs, and nothing for a sweep"""
+    """12. the routes are dispatched: GET /slabs, GET /slabs/<grader>/<cert>, POST /slabs, DELETE /slabs/<grader>/<cert>, and nothing for a sweep"""
     from harness.tests.t7.common import QuietHandler, _spawn_server, request
     from server import capture_server
 
@@ -851,13 +919,51 @@ def case_http(routes):
             status, body = ask(method, "/slabs/sweep", {} if method == "POST" else None)
             same(f"{method} /slabs/sweep: the owner ruled no sweep route", (status, (body.get("error") or {}).get("code")),
                  (404, "no_such_route"))
+
+        # The remove: seeded straight into the store, so no token and no Card Ladder is needed.
+        pikachu = "2022 Pokemon Crown Zenith Pikachu BGS 9.5"
+        seed(CERT)
+        seed("0012345678", "beckett", pikachu)
+        seed(CERT2)
+
+        def listed():
+            return sorted(row["cert"] for row in ask("GET", "/slabs")[1].get("slabs", []))
+
+        def code(body):
+            return (body.get("error") or {}).get("code")
+
+        same("control: three slabs are listed", listed(), sorted([CERT, "0012345678", CERT2]))
+        status, body = ask("DELETE", f"/slabs/psa/{CERT}")
+        same("DELETE /slabs/psa/<cert> answers a receipt naming the slab",
+             (status, {k: body.get(k) for k in ("cert", "grader", "label")}),
+             (200, {"cert": CERT, "grader": "psa", "label": LABEL}))
+        ok(LABEL in str(body.get("message")), "and its message names the slab by its label", str(body.get("message")))
+        plain("the DELETE receipt", str(body.get("message")))
+        same("the list no longer shows it", listed(), sorted(["0012345678", CERT2]))
+        status, body = ask("GET", f"/slabs/psa/{CERT}")
+        same("and its detail is 404 slab_unknown", (status, code(body)), (404, "slab_unknown"))
+        status, body = ask("DELETE", f"/slabs/psa/{CERT}")
+        same("the same DELETE again is 404 slab_unknown", (status, code(body)), (404, "slab_unknown"))
+        status, body = ask("DELETE", "/slabs/BGS/%30012345678")  # the path parts are percent-decoded, any grader form
+        same("DELETE /slabs/BGS/%30012345678 removes the Beckett slab with its zeros",
+             (status, {k: body.get(k) for k in ("cert", "grader", "label")}),
+             (200, {"cert": "0012345678", "grader": "beckett", "label": pikachu}))
+        status, body = ask("DELETE", "/slabs/psa/a%2Fb")
+        same("an encoded slash is part of the cert: 404 slab_unknown", (status, code(body)), (404, "slab_unknown"))
+        status, body = ask("DELETE", "/slabs/pokemon/x")
+        same("a grader nobody has is 400 grader_unknown", (status, code(body)), (400, "grader_unknown"))
+        same("none of that touched the last slab", listed(), [CERT2])
+        for path in ("/slabs", "/slabs/", "/slabs/sweep", "/slabs/psa", "/slabs/psa/" + CERT2 + "/x"):
+            status, body = ask("DELETE", path)
+            same(f"DELETE {path} is no route: nothing is removed in bulk", (status, code(body)), (404, "no_such_route"))
+        same("and the last slab is still listed", listed(), [CERT2])
     finally:
         httpd.shutdown()
         httpd.server_close()
 
 
 def case_client():
-    """13. app/src/server.ts has addSlab, getSlabs and getSlabDetail on the routes above"""
+    """13. app/src/server.ts has addSlab, getSlabs, getSlabDetail and removeSlab on the routes above"""
     try:
         from scripts.docs_audit.code_invariants import _ts_function_body
     except ImportError as exc:
@@ -868,6 +974,8 @@ def case_client():
         ("addSlab", (r"""["'`]/slabs["'`]""", r"""method:\s*["']POST["']""", r"JSON\.stringify", r"\bcert\b", r"\bgrader\b", r"\bSlabReceipt\b")),
         ("getSlabs", (r"""["'`]/slabs["'`]""", r"\bSlabList\b")),
         ("getSlabDetail", (r"/slabs/", r"encodeURIComponent.*encodeURIComponent", r"\bSlabDetail\b")),
+        ("removeSlab", (r"/slabs/\$\{encodeURIComponent\(grader\)\}/\$\{encodeURIComponent\(cert\)\}",
+                        r"""method:\s*["']DELETE["']""", r"\bSlabRemoved\b")),
     ):
         body = _ts_function_body(source, name)
         if not ok(body is not None, f"server.ts exports {name}"):
@@ -1017,10 +1125,244 @@ def case_latch_restart(routes):
         ok(receipt is None, "a different store holds no stop", repr(receipt))
 
 
+def case_remove(routes):
+    """18. remove: the slab and its sale links go, its snapshots and sales stay, a receipt names it, and no one is called"""
+    w = new_world(routes)
+    remove = remover(routes)
+    if remove is None:
+        return
+    w.load(card())
+    w.load(card(cert=CERT2))  # the same card: its two slabs share every sale
+    add(routes, CERT)
+    add(routes, CERT2)
+    w.day = DAY2
+    w.load(card(estimate=130.0, confidence=3))
+    add(routes, CERT)
+    before = dump()
+    s = slabs_now()
+    sale_data = {sid: s.sales[sid].data for sid in s.sales}
+    same("control: two slabs, three snapshots, five shared sales, ten links",
+         tuple(len(before[name]) for name in ("slabs", "snapshots", "sales", "links")), (2, 3, 5, 10))
+
+    sent = len(w.log)
+    receipt = remove("PSA", CERT)  # the grader as typed
+    POOL.append(json.dumps(receipt, default=str))
+    same("the receipt names the slab", {k: receipt.get(k) for k in ("cert", "grader", "label")},
+         {"cert": CERT, "grader": "psa", "label": LABEL})
+    ok(LABEL in str(receipt.get("message")), "and its message is a sentence that names the slab by its label",
+       str(receipt.get("message")))
+    plain("the receipt", str(receipt.get("message")))
+    same("a remove sends nothing to Card Ladder, not even a sign-in", len(w.log), sent)
+
+    after = dump()
+    s = slabs_now()
+    same("the slab is gone from the store", s.get(CERT, "psa"), None)
+    same("the list no longer shows it", [row["cert"] for row in routes.do_slabs()["slabs"]], [CERT2])
+    refusal("its detail", refused(routes.do_slab, "psa", CERT), "slab_unknown", 404)
+    same("its snapshots are all still in the store", after["snapshots"], before["snapshots"])
+    same("and its two days are still there", [(x.day, x.estimated_value) for x in s.snapshots_for(CERT, "psa")],
+         [(DAY1, "123.45"), (DAY2, "130.00")])
+    same("every sale is still in the store, whole", {sid: s.sales[sid].data for sid in s.sales}, sale_data)
+    same("its sale links are gone", s.sales_for(CERT, "psa"), [])
+    same("and only its five links: the other slab keeps its own", count(s.links), 5)
+    same("the other slab of the card still lists every shared sale",
+         [x["id"] for x in routes.do_slab("psa", CERT2)["sales"]], list(AT_GRADE))
+    same("and keeps its row", [x.cert for x in s.list()], [CERT2])
+
+    # Card Ladder says to slow down and the saved login is gone: a remove reads no one, so it still works.
+    w.load(card(cert=CERT3, profile_id="psa-limited"))
+    w.fail["httpprofile"] = (429, LIMIT_BODY)
+    refusal("an add Card Ladder limits", refused(routes.do_slab_add, {"cert": CERT3, "grader": "psa"}),
+            "cardladder_rate_limited")
+    os.environ.pop(KEY, None)
+    sent = len(w.log)
+    receipt = remove("psa", CERT2)
+    POOL.append(json.dumps(receipt, default=str))
+    same("on a day Card Ladder asked us to slow down and with no login saved, a remove still works",
+         (receipt.get("cert"), len(w.log), slabs_now().list()), (CERT2, sent, []))
+
+
+def case_remove_one_write(routes):
+    """19. a remove is one write: a failed delete in either table leaves the slab and its links whole"""
+    remove = remover(routes)
+    if remove is None:
+        return
+    for table in ("slabs", "slab_sale_links"):
+        with fresh_home():
+            seed(CERT)
+            seed(CERT2, ids=("s-1", "s-9"))  # shares s-1 with the first
+            before = dump()
+            break_deletes(table)
+            exc = refused(remove, "psa", CERT)
+            mend()
+            ok(exc is not None, f"a delete that fails in {table} fails the remove", "the remove answered")
+            same(f"and the failure leaves all four tables as they were ({table})", dump(), before)
+            same(f"the slab is still listed ({table})", sorted(r["cert"] for r in routes.do_slabs()["slabs"]),
+                 sorted([CERT, CERT2]))
+            receipt = refused(remove, "psa", CERT)
+            ok(receipt is None, f"once it is mended the same remove works ({table})", repr(receipt))
+            same(f"and takes the first slab and no other ({table})",
+                 [r["cert"] for r in routes.do_slabs()["slabs"]], [CERT2])
+            same(f"the second slab still lists the sale it shared ({table})",
+                 [x["id"] for x in routes.do_slab("psa", CERT2)["sales"]], ["s-9", "s-1"])
+
+
+def case_remove_undo(routes):
+    """20. adding a removed slab again is the way back: its snapshots return and only the new read's sales are linked"""
+    w = new_world(routes)
+    remove = remover(routes)
+    if remove is None:
+        return
+    w.load(card())
+    add(routes)
+    first = routes.do_slab("psa", CERT)
+    remove("psa", CERT)
+    same("the remove took it out of the list", routes.do_slabs(), {"slabs": []})
+
+    w.day = DAY2
+    kept = [sale for sale in default_sales() if sale["id"] != "s-old"]
+    w.load(card(sales=kept + [raw_sale("s-fresh", "2026-10-08", 150)], estimate=130.0, confidence=3))
+    sent = len(w.calls)
+    add(routes)
+    same("the add after a remove reads Card Ladder as any add does", len(w.calls) - sent, 3)
+    detail = routes.do_slab("psa", CERT)
+    POOL.append(json.dumps(detail, default=str))
+    same("the old snapshot is back, and the new read's follows", [x.get("day") for x in detail.get("snapshots", [])],
+         [DAY1, DAY2])
+    same("the old one is the old read, unchanged", detail["snapshots"][0], first["snapshots"][0])
+    same("the sales are the new read's, at the slab's grade and grader",
+         [x.get("id") for x in detail.get("sales", [])], ["s-fresh", "s-new", "s-d", "s-c", "s-mid"])
+    s = slabs_now()
+    ok("s-old" in s.sales, "the sale the new read omits is still in the store")
+    same("with its old price", s.sales["s-old"].data.get("price") if "s-old" in s.sales else None, "41.00")
+    same("and this slab does not list it", [x.id for x in s.sales_for(CERT, "psa")],
+         ["s-fresh", "s-new", "s-d", "s-c", "s-mid"])
+    same("the links are the new read's five, none for the omitted sale", count(s.links), 5)
+    same("and six sales are stored", count(s.sales), 6)
+    same("the list shows the slab again, with the new read", [
+        (r["cert"], (r["snapshot"] or {}).get("day")) for r in routes.do_slabs()["slabs"]], [(CERT, DAY2)])
+
+
+def case_remove_unknown(routes):
+    """21. removing a slab that is not there: 404, one plain sentence, nothing sent, nothing written; path parts match exactly"""
+    w = new_world(routes)
+    remove = remover(routes)
+    if remove is None:
+        return
+    pikachu = "2022 Pokemon Crown Zenith Pikachu BGS 9.5"
+    w.load(card())
+    w.load(card(cert="0012345678", grader="beckett", grade="g9_5", profile_id="beckett-77", label=pikachu,
+                sales=default_sales("beckett", "g9_5")))
+    add(routes, CERT)
+    add(routes, "0012345678", "beckett")
+    survivors = sorted([CERT, "0012345678"])
+    before, sent = dump(), len(w.log)
+
+    for grader, cert, code, status in (
+        ("psa", "00000000", "slab_unknown", 404),            # a cert nobody added (the detail case's)
+        ("pokemon", CERT, "grader_unknown", 400),            # a grader nobody has (the detail case's)
+        ("cgc", CERT, "slab_unknown", 404),                  # a real cert at a grader it was not added under
+        ("beckett", CERT, "slab_unknown", 404),
+        ("psa", "0" + CERT, "slab_unknown", 404),            # a cert is text: a zero-padded one is another cert
+        ("psa", "12345678%", "slab_unknown", 404),           # no wildcard
+        ("psa", "%", "slab_unknown", 404),
+        ("psa", "_" * len(CERT), "slab_unknown", 404),
+        ("psa", "1' OR '1'='1", "slab_unknown", 404),        # bound, never spliced
+        ("psa", "1; DROP TABLE slabs; --", "slab_unknown", 404),
+        ("psa", "../" + CERT, "slab_unknown", 404),
+        ("psa", "a/b", "slab_unknown", 404),
+        ("", CERT, "grader_unknown", 400),
+        ("%", CERT, "grader_unknown", 400),
+    ):
+        text = refusal(f"remove {grader!r} {cert!r}", refused(remove, grader, cert), code, status)
+        if code == "slab_unknown":
+            one_sentence(f"remove {grader!r} {cert!r}", text)
+        same(f"remove {grader!r} {cert!r} wrote nothing", dump(), before)
+    same("none of it sent a call", len(w.log), sent)
+    same("both slabs are still listed", sorted(r["cert"] for r in routes.do_slabs()["slabs"]), survivors)
+
+    receipt = remove("BVG", "0012345678")  # any form of the grader; the zeros are kept
+    POOL.append(json.dumps(receipt, default=str))
+    same("a Beckett slab goes by any form of its grader, and keeps its zeros",
+         {k: receipt.get(k) for k in ("cert", "grader", "label")},
+         {"cert": "0012345678", "grader": "beckett", "label": pikachu})
+    same("and only it went", [r["cert"] for r in routes.do_slabs()["slabs"]], [CERT])
+    after_one = dump()
+    refusal("the same remove sent twice", refused(remove, "bgs", "0012345678"), "slab_unknown", 404)
+    same("answers 404 and writes nothing", dump(), after_one)
+
+    w.load(card(cert=CERT3, profile_id="psa-3"))
+    receipt = refused(add, routes, CERT3)
+    ok(receipt is None, "after refused removes an add still works", repr(receipt))
+
+
+def case_remove_busy(routes):
+    """22. a remove while an add is in flight is refused at once (409), whichever slab it names; it sends and writes nothing"""
+    w = new_world(routes)
+    remove = remover(routes)
+    if remove is None:
+        return
+    for cert in (CERT, CERT2):
+        w.load(card(cert=cert))
+    add(routes, CERT)
+    add(routes, CERT2)
+    entered, release = threading.Event(), threading.Event()
+    sent = []
+
+    def held(method, url, headers, body):
+        """The first callable send waits here: that add is in flight until `release`."""
+        sent.append(url)
+        if urllib.parse.urlsplit(url).hostname == CF_HOST and not entered.is_set():
+            entered.set()
+            release.wait(10)
+        return w.transport(method, url, headers, body)
+
+    routes.TRANSPORT = held
+    results = {}
+
+    def go(name, fn, *args):
+        try:
+            results[name] = fn(*args)
+        except Exception as exc:  # noqa: BLE001 - the case reports the type
+            results[name] = exc
+
+    threads = [threading.Thread(target=go, args=("add", routes.do_slab_add, {"cert": CERT2, "grader": "psa"}),
+                                daemon=True)]
+    threads[0].start()
+    try:
+        if not ok(entered.wait(5), "an add of a stored slab reaches Card Ladder and is held there"):
+            return
+        before, held_sends = dump(), len(sent)
+        for name, cert in (("the slab being re-read", CERT2), ("another stored slab", CERT), ("a slab nobody added", CERT3)):
+            thread = threading.Thread(target=go, args=(name, remove, "psa", cert), daemon=True)
+            threads.append(thread)
+            thread.start()
+            thread.join(2)
+            if ok(not thread.is_alive(), f"a remove of {name} is answered at once and not queued behind the add"):
+                refusal(f"a remove of {name} during an add", results.get(name), None, 409)
+        same("the refused removes sent no call to Card Ladder", len(sent), held_sends)
+        same("and wrote nothing", dump(), before)
+    finally:
+        release.set()
+        for thread in threads:
+            thread.join(10)
+    first = results.get("add")
+    same("the add finishes and updates its slab",
+         (first.get("added"), first.get("cert")) if isinstance(first, dict) else repr(first), (False, CERT2))
+    same("both slabs are still stored", sorted(x.cert for x in slabs_now().list()), sorted([CERT, CERT2]))
+
+    routes.TRANSPORT = w.transport
+    for cert in (CERT2, CERT):
+        exc = refused(remove, "psa", cert)
+        ok(exc is None, f"once the add is done, a remove of {cert} works", repr(exc))
+    same("and the store holds no slab", slabs_now().list(), [])
+
+
 ROUTE_CASES = (
     case_seams, case_add, case_grader_forms, case_refusals, case_failed_read, case_pacing,
     case_money_and_dates, case_sale_merge, case_two_slabs, case_list, case_detail, case_http,
     case_overlap, case_no_sale_ladder, case_latch_restart,
+    case_remove, case_remove_one_write, case_remove_undo, case_remove_unknown, case_remove_busy,
 )
 
 
