@@ -235,6 +235,8 @@ Kind: build. Platform: macOS, over the capture server.
 
 1. `pipeline/cardladder.py`: the token exchange, the call allow list as one constant and the
    pacing. Add one function per read point in section 3.
+   Every call sends through D319's home, `net.request`, with idempotent=False. Step 1 waits for
+   that home to land.
 2. The three store tables and their writes.
 3. Routes for add, list, detail and sweep, with client functions in `app/src/server.ts`.
 4. The `#/slabs` screen, built on `<Page>` (D275, every screen inherits the page scaffold),
