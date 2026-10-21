@@ -147,9 +147,10 @@ def unanswered(url: str) -> bool:
 
 def retry_after(url: str) -> float:
     """The seconds left of the `Retry-After` on `url`'s host's last lost call, else 0: the least gap
-    a caller leaves before its next call."""
+    a caller leaves before its next call, capped at `REQUEST_TIMEOUT_SECONDS` so a long hint never
+    holds a request slot past the budget."""
     until = _host(url)[2]
-    return 0.0 if until is None else max(0.0, until - _monotonic())
+    return 0.0 if until is None else min(float(REQUEST_TIMEOUT_SECONDS), max(0.0, until - _monotonic()))
 
 
 def _record(url: str, lost: bool, answered: bool = False, hint: Optional[float] = None) -> None:
