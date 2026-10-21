@@ -16,6 +16,8 @@ its own.
 from __future__ import annotations
 
 import json
+import threading
+import urllib.error
 import urllib.parse
 
 # Card Ladder's public web config (a Firebase web key, not a secret).
@@ -65,6 +67,7 @@ class Client:
         self._refresh_at = 0.0
         self._last_send = None  # clock time of the last callable send, failed ones included
         self._limited = False
+        self._lock = threading.RLock()  # the token refresh sends through `send`
 
     def send(self, method, url, headers, body):
         """The one send path."""
@@ -74,18 +77,30 @@ class Client:
         if self._limited:
             raise RateLimited("Card Ladder rate-limited this sweep. Try again tomorrow.")
         if host == urllib.parse.urlsplit(CALLABLE_BASE).hostname:
-            if self._last_send is not None:
-                wait = self._last_send + PACE_SECONDS - self._clock()
-                if wait > 0:
-                    self._sleep(wait)
-            self._last_send = self._clock()
+            if urllib.parse.urlsplit(url).path.rsplit("/", 1)[-1] not in ALLOWED_CALLABLES:
+                raise Refused("That Card Ladder callable is not on the allow list.")
+            with self._lock:
+                if self._last_send is not None:
+                    wait = self._last_send + PACE_SECONDS - self._clock()
+                    if wait > 0:
+                        self._sleep(wait)
+                self._last_send = self._clock()
         try:
             return self._transport(method, url, headers, body)
         except Exception as exc:
+            cause = exc.__cause__
+            if isinstance(cause, urllib.error.HTTPError) and cause.code == 429:
+                # The retry home wraps a 429 as `pricehistory.Unreachable` with the HTTPError as cause.
+                self._limited = True
+                raise RateLimited("Card Ladder rate-limited this sweep. Try again tomorrow.") from None
             # The transport's own text can hold the request, so only its type survives.
             raise CardLadderError("The request to %s failed (%s)." % (host, type(exc).__name__)) from None
 
     def _token(self):
+        with self._lock:
+            return self._token_locked()
+
+    def _token_locked(self):
         if self._id_token is not None and self._clock() < self._refresh_at:
             return self._id_token
         body = urllib.parse.urlencode(
