@@ -642,25 +642,7 @@ def narrow(
     if selection.state is not None or selection.since is not None:
         if inventory is None:  # pragma: no cover — a caller that ignored `needs_store`
             raise SelectionError("selection_invalid", "`state` needs the store to resolve.")
-        # ONE COLUMN READ FOR BOTH TERMS. `cards.select` builds no card objects, where
-        # `Inventory.in_state` builds one per row, so asking once for the three columns is the
-        # difference between a column read and an object per card.
-        if selection.state is not None:
-            master.check_state(selection.state)
-        rows = inventory.cards.select(
-            ("box", "idx", "captured_at"),
-            **({"state": selection.state} if selection.state is not None else {}),
-        )
-        wanted = {
-            f"{box}/{idx}"
-            for _, (box, idx, captured_at) in rows
-            if box is not None
-            and idx is not None
-            and (
-                selection.since is None
-                or (isinstance(captured_at, str) and captured_at >= selection.since)
-            )
-        }
+        wanted = {f"{box}/{idx}" for box, idx, _ in _chosen(selection, inventory)}
         # A PHOTOGRAPH THE STORE HAS NO RECORD OF IS DROPPED BY THESE TWO TERMS AND NOTHING
         # ELSE. Both ask a question only a card record can answer, so a capture with no record
         # has no answer — and the honest reading of "the cards in state `captured`" is the ones
@@ -668,6 +650,32 @@ def narrow(
         out = [c for c in out if c.has_position and c.key in wanted]
 
     return out
+
+
+def _chosen(selection: Selection, inventory: master.Inventory) -> List[Tuple[int, int, Optional[str]]]:
+    """`(box, index, cid)` of every card the `state` and `since` terms choose.
+
+    ONE COLUMN READ FOR BOTH TERMS. `cards.select` builds no card objects, where
+    `Inventory.in_state` builds one per row, so asking once for the columns is the difference
+    between a column read and an object per card. `narrow` judges by these positions and
+    `_keyed` finds the photographs by these names, so the two cannot disagree on the cards.
+    """
+    if selection.state is not None:
+        master.check_state(selection.state)
+    rows = inventory.cards.select(
+        ("box", "idx", "cid", "captured_at"),
+        **({"state": selection.state} if selection.state is not None else {}),
+    )
+    return [
+        (box, idx, cid)
+        for _, (box, idx, cid, captured_at) in rows
+        if box is not None
+        and idx is not None
+        and (
+            selection.since is None
+            or (isinstance(captured_at, str) and captured_at >= selection.since)
+        )
+    ]
 
 
 def resolve(
@@ -681,13 +689,19 @@ def resolve(
 ) -> Tuple[List[Any], int]:
     """`(captures, scanned)`: the cards this selection is over, reading only what it needs.
 
-    THE ONE RESOLVER. A selection that names `keys` and no path is answered from the store: each
-    key is a card, a card knows its photograph, and only those sidecars are read, so a press over
-    k cards reads about k sidecars and not every one in the store (4,286 on the owner's, 0.69 s).
+    THE ONE RESOLVER. A selection that names `keys`, or names `state` and/or `since` with no
+    `keys`, `run` or path, is answered from the store: the chosen cards are one column read, a
+    card knows its photograph, and only those sidecars are read, so a press over k cards reads
+    about k sidecars and not every one in the store (4,286 on the owner's, 0.69 s; a `state`
+    selection took 132 s through the scan).
     THE SET IS THE SAME AS THE SCAN'S, and `narrow` still runs over it, so every other term and
-    the key test itself judge what each sidecar RECORDED. The fast path is taken only when every
-    key resolves to a card with a photograph on disk; any other key falls back to the full scan,
-    so a photograph the store has no record of is still found. `scanned` is what was read.
+    the key test itself judge what each sidecar RECORDED. A `keys` selection takes the fast
+    path only when every key resolves to a card with a photograph on disk; any other key falls
+    back to the full scan, so a photograph the store has no record of is still found. A
+    `state`/`since` selection never falls back: it keeps a chosen card's photograph at either
+    address, drops a chosen card that has none, and drops a photograph that belongs to no
+    chosen card even when its sidecar claims a chosen card's position. `scanned` is what was
+    read.
 
     RAISES `FileNotFoundError` (`.filename` is the root) for a root that is not a directory, as
     `sidecar.scan` does.
@@ -723,32 +737,52 @@ def resolve(
 
 
 def _keyed(selection, roots, read_inventory, assume_box, variant_default) -> Optional[List[Any]]:
-    """The captures for a `keys` selection read straight from each card's own photograph, or
-    None where the scan has to answer (no keys, a named path, or a key the store cannot place)."""
-    if not selection.keys or selection.paths:
+    """The captures for a `keys` or a `state`/`since` selection read straight from the chosen
+    cards' own photographs, or None where the scan has to answer (a named path, a `run`, no term
+    that names cards, or a key the store cannot place)."""
+    if selection.paths:
+        return None
+    by_state = not (selection.keys or selection.run) and (
+        selection.state is not None or selection.since is not None
+    )
+    if not selection.keys and not by_state:
         return None
     from identify import sidecar
 
     inventory = read_inventory()
-    found: List[Tuple[int, Path, Path]] = []
-    for key in selection.keys:
-        box, index = (int(part) for part in key.split("/"))
-        card = inventory.cards.get(master.position_key(box, index))
-        photo = (
-            None
-            if card is None
-            else photos.find(
-                card.cid, card.box, card.index, relocated=bool(inventory.photos_relocated)
+    photographs: List[Path] = []
+    if by_state:
+        # EVERY PHOTOGRAPH A CHOSEN CARD HAS, AT EITHER ADDRESS AND WHETHER OR NOT THE STORE SAYS
+        # THE MOVE IS DONE: the scan reads a leftover file at the legacy address, `photos.find`
+        # does not once `photos_relocated` is set. A chosen card with no photograph is absent from
+        # the scan too. The key a capture answers to is its sidecar's, which `narrow` judges.
+        for box, index, cid in _chosen(selection, inventory):
+            for candidate in (photos.path(cid) if photos.is_photo_cid(cid) else None, photos.legacy_path(box, index)):
+                if candidate is not None and candidate.is_file():
+                    photographs.append(candidate)
+    else:
+        for key in selection.keys:
+            box, index = (int(part) for part in key.split("/"))
+            card = inventory.cards.get(master.position_key(box, index))
+            photo = (
+                None
+                if card is None
+                else photos.find(
+                    card.cid, card.box, card.index, relocated=bool(inventory.photos_relocated)
+                )
             )
-        )
-        if photo is None:
-            return None
+            if photo is None:
+                return None
+            photographs.append(photo)
+    found: List[Tuple[int, Path, Path]] = []
+    for photo in photographs:
         for number, root in enumerate(roots):
             if root in photo.parents:
                 found.append((number, root, photo))
                 break
         else:
-            return None
+            if not by_state:
+                return None
     # ROOT ORDER THEN PATH ORDER, the order `sidecar.scan` returns.
     found.sort(key=lambda hit: (hit[0], hit[2]))
     return [
