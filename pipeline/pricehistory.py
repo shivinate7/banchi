@@ -309,8 +309,8 @@ class Offline(Unreachable):
     connection opened: that is a degraded link, a plain `Unreachable` (`net.Offline` and
     `net.Dropped` draw the line).
 
-    A single `Offline`, like a single HTTP error, never pauses anything. Only a run does: a host
-    pauses after `PAUSE_AFTER_FAILURES` lost calls in a row (D319, every network
+    A single `Offline`, like a single HTTP error, degrades nothing. Only a run does: a host that
+    lost `PAUSE_AFTER_FAILURES` calls in a row gets one attempt per call (D319, every network
     call retries through one method).
     """
 
@@ -941,7 +941,7 @@ def index_by_name(rows: Iterable[Dict], key: str = "name") -> Dict[str, object]:
 # -------------------------------------------------------------------------- the network
 
 
-# The retry rule, the host pause and their knobs live in `pipeline/net.py` (D319, every network call
+# The retry rule, the degraded-host rule and their knobs live in `pipeline/net.py` (D319, every network call
 # retries through one method). Re-exported here because callers and the self-test read them by
 # these names.
 RETRY_PAUSES = net.RETRY_PAUSES
@@ -952,17 +952,8 @@ PAUSE_AFTER_FAILURES = net.PAUSE_AFTER_FAILURES
 
 
 def _clear_host_pauses() -> None:
-    """Forget every host's failures and pause."""
+    """Forget every host's failure count."""
     net._clear_hosts()
-
-
-def _refuse_if_paused(url: str) -> None:
-    """Raise a fresh `Unreachable` while `url`'s host is paused, or while `url` itself lost its
-    retries less than `OFFLINE_WAIT_SECONDS` ago. Makes no request."""
-    try:
-        net.refuse_if_paused(url, _monotonic)
-    except net.Paused:
-        raise Unreachable("The price service could not be reached. Try again in a moment.") from None
 
 
 def _monotonic() -> float:
@@ -978,7 +969,7 @@ def _sleep(seconds: float) -> None:
 def _worth_retrying(exc: PriceHistoryError) -> bool:
     """A connection that never opened (`Offline`) and `net.RETRY_STATUSES`. Never a plain 500, a
     403, another 4xx, an unreadable body or a read failure after connect: a second ask gets the
-    same answer. Only these count toward a host's pause."""
+    same answer. Only these count toward a degraded host."""
     return isinstance(exc, Offline) or net.worth_retrying(exc.__cause__)
 
 
@@ -1003,18 +994,16 @@ def fetch_json(
     share a name, and D216 for what is now answering it.
 
     A THIN WRAPPER OVER `net.request` (D319, every network call retries through one method). The
-    retries, the pauses, the budget and the host pause are `pipeline/net.py`'s. This turns its
+    retries, the pauses, the budget and the degraded-host rule are `pipeline/net.py`'s. This turns its
     errors into this module's three and prints one stderr line per final failure, never one per
     attempt. `_monotonic` and `_sleep` are handed in, looked up here at call time.
     """
     try:
         body = net.request(url, headers={"User-Agent": user_agent}, timeout=timeout, clock=_monotonic, sleep=_sleep)
-    except net.Paused:
-        raise Unreachable("The price service could not be reached. Try again in a moment.") from None
     except net.Offline as exc:
         # `Offline`, NOT THE PLAIN `Unreachable` BELOW: no HTTP response arrived at all, a refused
         # connection, a DNS failure, or a timeout reaching the socket in the first place. It is
-        # retried, and counts toward a host's pause.
+        # retried, and counts toward a degraded host.
         print(f"price service {url}: {type(exc.__cause__).__name__}: {exc.__cause__}", file=sys.stderr, flush=True)
         raise Offline("The price service could not be reached. Check the connection, then try again.") from exc.__cause__
     except net.Dropped as exc:
@@ -1170,9 +1159,8 @@ class Market:
 
         The attempt is recorded BEFORE the fetch, so with a stale list in hand a failing host
         costs one request per instance, not one per card, and the stale list is served rather
-        than an error. A paused host (`fetch_json`) is refused before the courtesy delay, with
-        no request, and serves the stale list if there is one. A stale list is asked for again
-        once `OFFLINE_WAIT_SECONDS` has passed since its refresh failed.
+        than an error. A degraded host gets one attempt and no courtesy delay. A stale list is
+        asked for again once `OFFLINE_WAIT_SECONDS` has passed since its refresh failed.
         A payload with fewer results than the stale list held (an empty one
         included) is never stored: the cache keeps the old list.
         """
@@ -1182,14 +1170,7 @@ class Market:
         stale = self._cached(slug, float("inf")) if catalog else None
         if stale is not None and slug in self._attempted and not self._stale_retry_due(slug):
             return stale
-        try:
-            _refuse_if_paused(url)
-        except Unreachable:
-            if stale is not None:
-                self._stale_since.setdefault(slug, self._now())
-                return stale
-            raise
-        if self.requests and self._courtesy_delay:
+        if self.requests and self._courtesy_delay and not net.degraded(url):
             time.sleep(self._courtesy_delay)
         self._attempted.add(slug)
         self.requests += 1

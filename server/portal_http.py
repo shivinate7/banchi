@@ -74,7 +74,7 @@ def send(
     and send the Cookie to wherever the redirect points.
 
     A READ RETRIES (rule C). A WRITE PASSES `idempotent=False`: only a connect failure before send is
-    retried, and a write neither checks nor sets the host pause. `unreachable(caught)` builds the
+    retried (a refused connect, a failed name lookup, an unreachable network). `unreachable(caught)` builds the
     host's refusal for a connection that never opened, and `dropped()` for any other failure of the
     socket.
     """
@@ -86,7 +86,6 @@ def send(
             headers=dict(request.header_items()),
             timeout=timeout,
             idempotent=idempotent,
-            host_pause=False,  # every call here is an operator's press, never refused for an earlier press's wait
             follow_redirects=False,
             max_bytes=max_bytes,
         )

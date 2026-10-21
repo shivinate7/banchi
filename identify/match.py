@@ -966,7 +966,7 @@ def fetch_bytes(
     except net.NetError as exc:
         if exc.status is not None:  # 403, 404 and 410 are the CDN saying the file is not there
             return None, f"http_{exc.status}"
-        # network, timeout, TLS or a paused host: named by what failed, as before
+        # network, timeout or TLS: named by what failed, as before
         return None, type(exc.__cause__ or exc).__name__
 
 
@@ -1120,7 +1120,7 @@ def build_index(
 RECHECK_ROWS_PER_PASS = 20  # one weekly pass asks the oldest this many rows, so a big backlog drains over passes
 # ponytail: `vec.note` doubles as the retry class (an answer from the CDN waits a week, any other cause a day); a column for the next-ask time if a third wait is needed.
 _ANSWERED = ("http_403", "http_404", "http_410")  # the CDN's answer for a missing file: the row waits a week
-_NETWORK = ("URLError", "timeout", "TimeoutError", "Paused")  # the network is down: the pass ends at once
+_NETWORK = ("URLError", "timeout", "TimeoutError")  # the network is down: the pass ends at once
 
 
 def _stamp_now() -> str:

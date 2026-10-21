@@ -8,23 +8,29 @@ retried, up to `len(RETRY_PAUSES) + 1` attempts, inside one time budget. A `Retr
 sets the pause. A pause that does not fit the budget is not taken, and the call gives up. A plain
 500, a 403 and any other 4xx are an answer, never retried.
 
-THE HOST PAUSE. A host pauses for `OFFLINE_WAIT_SECONDS` after `PAUSE_AFTER_FAILURES` lost calls
-in a row, each on a different URL. The count is per host and shared by every caller in the process.
-A paused host is refused with no request (`Paused`).
+A DEGRADED HOST. After `PAUSE_AFTER_FAILURES` lost calls in a row to one host (distinct URLs are not
+required), every call to it makes exactly ONE attempt: no retry, no pause between attempts, and
+`degraded` tells a caller to skip its courtesy delay. A call is never refused unsent. Any success
+resets the count. The count is per host and shared by every caller in the process.
 
-A WRITE IS `idempotent=False`. It retries only a connect failure, which urllib raises as a
-`URLError` before any byte was sent. Anything that may have reached the other end (a status, a
-timeout, a dropped connection) is raised at once with no second request, because a second request
-could do the work twice. A write neither checks nor records the host pause: a paused host must
-never block a rollback or a recovery write.
+A WRITE IS `idempotent=False`. It retries only a connect-time failure: a refused connection, a
+failed name lookup, or an unreachable network or host. Anything that may have reached the other end
+(a status, a timeout, a drop or a reset after the connect, a broken pipe on the body) is raised at
+once with no second request, because a second request could do the work twice. A write neither
+counts toward a degraded host nor is limited by it: a degraded host must never weaken a rollback
+or a recovery write.
+
+A LOGIN NEVER FOLLOWS A REDIRECT. With `follow_redirects=True`, a call that carries a Cookie or an
+Authorization header refuses a redirect to another host, and never sends the header on.
 
 Stdlib only. `pipeline/` imports nothing outside itself.
 """
 
 from __future__ import annotations
 
+import errno
 import http.client
-import sys
+import socket
 import threading
 import time
 import urllib.error
@@ -43,16 +49,16 @@ RETRY_STATUSES = (429, 502, 503, 504)
 ATTEMPT_TIMEOUT_SECONDS = 9.0
 REQUEST_TIMEOUT_SECONDS = 30
 
-# How long a paused host is refused with no request. The app re-asks for a pending photo for
-# about 31 s, so one retried fetch must land inside that.
+# How long a caller's own latch waits before it asks a lost host again (Market's stale-list latch,
+# the stock-image retry). The app re-asks for a pending photo for about 31 s, so it must land inside that.
 OFFLINE_WAIT_SECONDS = 12.0
 
-# Lost calls in a row, each on a different URL, before a host pauses.
+# Lost calls in a row to one host before it is degraded to one attempt per call.
 PAUSE_AFTER_FAILURES = 3
 
-# The pause state, keyed by `urlsplit(url).netloc`. One lock guards it and is never held across a
-# request.
-_HOSTS: Dict[str, Dict] = {}
+# The lost-call count, keyed by `urlsplit(url).netloc`. One lock guards it and is never held across
+# a request.
+_HOSTS: Dict[str, int] = {}
 _HOSTS_LOCK = threading.Lock()
 
 
@@ -75,9 +81,14 @@ class Dropped(NetError):
     ends here may have been done."""
 
 
-class Paused(NetError):
-    """The host lost `PAUSE_AFTER_FAILURES` calls in a row, or this URL lost its retries a moment
-    ago. No request was made."""
+class _NoLoginRedirect(urllib.request.HTTPRedirectHandler):
+    """Follow a redirect, but refuse one that would carry a Cookie or Authorization header to
+    another host: urllib copies every request header to the redirected request."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D102
+        if urllib.parse.urlsplit(newurl).netloc != urllib.parse.urlsplit(req.full_url).netloc:
+            raise NetError("A login header would follow a redirect to another host.")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -110,43 +121,28 @@ def _clear_hosts() -> None:
         _HOSTS.clear()
 
 
-def _host_state(url: str) -> Dict:
-    """The caller holds `_HOSTS_LOCK`."""
-    return _HOSTS.setdefault(urllib.parse.urlsplit(url).netloc, {"failed": set(), "until": 0.0, "lost": {}})
-
-
-def refuse_if_paused(url: str, clock: Callable[[], float] = _monotonic) -> None:
-    """Raise `Paused` while `url`'s host is paused, or while `url` itself lost its retries less than
-    `OFFLINE_WAIT_SECONDS` ago. Makes no request."""
+def degraded(url: str) -> bool:
+    """Whether `url`'s host lost `PAUSE_AFTER_FAILURES` calls in a row. A degraded host gets one
+    attempt per call, and a caller skips its courtesy delay."""
     with _HOSTS_LOCK:
-        state = _host_state(url)
-        now = clock()
-        if state["until"] <= now and state["lost"].get(url, 0.0) <= now:
-            return
-    raise Paused(f"{urllib.parse.urlsplit(url).netloc} is paused after repeated failures.")
+        return _HOSTS.get(urllib.parse.urlsplit(url).netloc, 0) >= PAUSE_AFTER_FAILURES
 
 
-def _record(url: str, lost: bool, clock: Callable[[], float]) -> None:
-    """A success (`lost` False) resets the host's count and leaves every URL's wait alone. A call
-    lost on a retryable kind starts that URL's own wait and counts once per distinct URL; the one
-    that completes the run pauses the host, and the count starts again."""
+def _record(url: str, lost: bool) -> None:
+    """A success resets the host's count. A lost call adds one."""
+    host = urllib.parse.urlsplit(url).netloc
     with _HOSTS_LOCK:
-        state = _host_state(url)
-        if not lost:
-            state["failed"].clear()
-            return
-        now = clock()
-        state["lost"] = {u: t for u, t in state["lost"].items() if t > now}
-        state["lost"][url] = now + OFFLINE_WAIT_SECONDS
-        state["failed"].add(url)
-        if len(state["failed"]) >= PAUSE_AFTER_FAILURES:
-            state["failed"].clear()
-            state["until"] = clock() + OFFLINE_WAIT_SECONDS
-            print(
-                f"net {urllib.parse.urlsplit(url).netloc}: paused "
-                f"{OFFLINE_WAIT_SECONDS:.0f}s after {PAUSE_AFTER_FAILURES} failures",
-                file=sys.stderr, flush=True,
-            )
+        _HOSTS[host] = _HOSTS.get(host, 0) + 1 if lost else 0
+
+
+# A write's connect-time failures: nothing was sent. Any other `OSError` under a `URLError` may
+# have come after the headers went out.
+_UNSENT_ERRNOS = (errno.ECONNREFUSED, errno.ENETUNREACH, errno.EHOSTUNREACH)
+
+
+def _never_sent(exc: urllib.error.URLError) -> bool:
+    reason = exc.reason
+    return isinstance(reason, socket.gaierror) or getattr(reason, "errno", None) in _UNSENT_ERRNOS
 
 
 def _retry_after(headers) -> Optional[float]:
@@ -163,7 +159,6 @@ def open(  # noqa: A001 - the module's one verb; callers say `net.open`
     headers: Optional[Mapping[str, str]] = None,
     timeout: float = ATTEMPT_TIMEOUT_SECONDS,
     idempotent: bool = True,
-    host_pause: bool = True,
     follow_redirects: bool = True,
     max_bytes: Optional[int] = None,
     on_chunk: Optional[Callable[[bytes, Mapping], None]] = None,
@@ -173,14 +168,12 @@ def open(  # noqa: A001 - the module's one verb; callers say `net.open`
 ) -> Tuple[int, Dict, bytes]:
     """One call, retried by rule C. Returns `(status, headers, body)` for ANY HTTP answer, a 4xx or
     5xx included: the host answered, and the caller reads the status. Raises `Offline` (never
-    connected), `Dropped` (connected, then failed) or `Paused` (read the module header).
-
-    `host_pause=False` keeps a call out of the host pause, though it still retries: for a call an
-    operator pressed, which must never be refused for a wait an earlier press set. A write is
-    always out of it.
+    connected) or `Dropped` (connected, then failed). A call is never refused unsent (read the
+    module header for a degraded host and for a write).
 
     `follow_redirects=False` hands a 3xx back with its `Location`, and never re-sends a Cookie to a
-    redirect. `max_bytes` reads at most that many bytes plus one, so a caller can tell a body was cut.
+    redirect. `follow_redirects=True` refuses a redirect to another host when the call carries a
+    Cookie or Authorization header. `max_bytes` reads at most that many bytes plus one, so a caller can tell a body was cut.
     `on_chunk(block, headers)` receives a 2xx body in 1 MiB blocks instead of returning it, for a file
     too large to hold; a retry happens only before the first block.
 
@@ -190,17 +183,19 @@ def open(  # noqa: A001 - the module's one verb; callers say `net.open`
     request = urllib.request.Request(url, data=data, method=method, headers=dict(headers or {}))
     if opener is None:
         if follow_redirects:
+            login = any(name.lower() in ("cookie", "authorization") for name in (headers or {}))
+            guarded = urllib.request.build_opener(_NoLoginRedirect).open if login else None
+
             def opener(req, timeout):  # noqa: F811
+                if guarded is not None:
+                    return guarded(req, timeout=timeout)
                 return urllib.request.urlopen(req, timeout=timeout)
         else:
             opener = urllib.request.build_opener(NoRedirect).open
     clock = clock or _monotonic
     sleep = sleep or _sleep
-    paused = idempotent and host_pause
-    if paused:
-        refuse_if_paused(url, clock)
     started = clock()
-    attempts = len(RETRY_PAUSES) + 1
+    attempts = 1 if idempotent and degraded(url) else len(RETRY_PAUSES) + 1
     # A retry is made only if the time spent, the pause and one normal attempt fit the budget. A caller
     # with a long timeout (a 120 s export) is counted as a normal attempt, so a hang that already ate
     # the budget is not retried, while a quick 503 is.
@@ -214,9 +209,13 @@ def open(  # noqa: A001 - the module's one verb; callers say `net.open`
         except urllib.error.URLError as exc:
             # urllib wraps a failure to complete the request in a URLError, before any answer: the
             # request was never completed, so a second one cannot double it.
-            failure = Offline(f"Could not connect to {urllib.parse.urlsplit(url).netloc}.")
+            if idempotent or _never_sent(exc):
+                failure = Offline(f"Could not connect to {urllib.parse.urlsplit(url).netloc}.")
+                retry = True
+            else:
+                failure = Dropped("The connection failed after the request was sent.")
+                retry = False
             failure.__cause__ = exc
-            retry = True
         except (OSError, TimeoutError, http.client.HTTPException) as exc:
             # Raised raw by the response or the read: the request may have been sent. On Python 3.9
             # `socket.timeout` is an `OSError` and NOT a `TimeoutError`, so both are named.
@@ -235,8 +234,8 @@ def open(  # noqa: A001 - the module's one verb; callers say `net.open`
             if clock() - started + pause + next_attempt <= REQUEST_TIMEOUT_SECONDS:
                 sleep(pause)
                 continue
-        if paused and (retry or (answer is not None and answer[0] < 400)):
-            _record(url, lost=retry, clock=clock)
+        if idempotent and (retry or (answer is not None and answer[0] < 400)):
+            _record(url, lost=retry)
         if failure is not None:
             raise failure
         status, got_headers, body = answer
