@@ -17,8 +17,9 @@ retry pause, and still raises `Unreachable` if that attempt fails. Any success r
 (`_a_degraded_host_that_answers_is_reset`), and so does any other answer that is not a 429 or a 5xx,
 a 403 or 404 for one (`_a_4xx_answer_resets_the_count`). A degraded host that ANSWERS (429, 502, 503,
 504) keeps `Market`'s courtesy delay, and a 429's `Retry-After` is the least gap before the next
-call. Only a host whose lost calls got no HTTP answer at all (refused, unreachable, a timeout)
-skips it. Nothing waits on a real clock. One failure degrades
+call, and that gap never passes `REQUEST_TIMEOUT_SECONDS` (`_a_429_retry_after_never_holds_a_get_past_the_budget`:
+a request slot is not held for an hour). Only a host whose lost calls got no HTTP answer at all
+(refused, unreachable, a timeout) skips it. Nothing waits on a real clock. One failure degrades
 nothing. A lost URL is asked again in full (`_a_lost_url_is_asked_again_and_never_refused`). The count
 is per host and shared by every `Market` in the process: a dead host degrades no other host, and a
 `Market` built after the failures is asked once too (`_a_degraded_host_is_shared_by_every_market`).
@@ -831,6 +832,22 @@ def _a_429_retry_after_is_the_least_gap_when_degraded() -> None:
        "gaps before calls %d to 10: %r" % (PAUSE_AFTER + 1, degraded))
 
 
+def _a_429_retry_after_never_holds_a_get_past_the_budget() -> None:
+    """A 429 asking for an hour must not park the next `Market.get`: it holds one of four request
+    slots while it waits. `Retry-After` is the least gap only up to `REQUEST_TIMEOUT_SECONDS`. The
+    get may sleep that long at most, or send at once, so no sleep and no gap may pass the cap. Two
+    gets, so the second is the one that waits. A `Retry-After` inside the cap is still obeyed by
+    `_a_429_retry_after_is_the_least_gap_when_degraded`."""
+    cap = pricehistory.REQUEST_TIMEOUT_SECONDS
+    gaps, sleeps = _gaps(_host_retry_after(429, "3600"), calls=2)
+    ok(max(sleeps, default=0.0) <= cap,
+       "429 with Retry-After 3600: no get sleeps longer than the %ds request budget" % cap,
+       "slept %r s" % (sleeps,))
+    ok(gaps[0] is None or gaps[0] <= cap + 1e-9,
+       "429 with Retry-After 3600: the next get starts within the %ds request budget of the 429 before it" % cap,
+       "started %s s after it" % (gaps[0],))
+
+
 def _a_degraded_host_that_never_answers_skips_the_courtesy_delay() -> None:
     """The other half: refused and timed-out hosts never gave an HTTP answer, so once degraded they are
     asked once per get with no courtesy delay, an offline sweep stays fast. Only gets 2 to
@@ -1065,6 +1082,7 @@ CASES = (
     _a_degraded_host_that_answers_is_reset,
     _a_degraded_host_that_answers_keeps_the_courtesy_delay,
     _a_429_retry_after_is_the_least_gap_when_degraded,
+    _a_429_retry_after_never_holds_a_get_past_the_budget,
     _a_degraded_host_that_never_answers_skips_the_courtesy_delay,
     _stale_catalog_list_is_refetched_after_the_wait,
     _offline_wait_fits_the_client_window,
