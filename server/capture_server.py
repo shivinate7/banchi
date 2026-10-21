@@ -3159,10 +3159,10 @@ def _card_row(
     return _decorate_card(asdict(card), _Places(inventory), skus, box=box, index=index)
 
 
-def _queue_depth(queue: queues.Queue) -> Tuple[Optional[int], Optional[str]]:
-    """How many cards are still waiting in one queue, or None and a finding. Never raises.
+def _queue_depth(queue: queues.Queue, cards) -> Tuple[Optional[int], Optional[str]]:
+    """How many cards still owe an answer in one queue, or None and a finding. Never raises.
 
-    `len(Queue)` IS A SORT, which is not obvious from the call and is what made this
+    `Queue.owed_entries` IS A SORT, which is not obvious from the call and is what made this
     necessary. It runs `open_entries`, which orders by `QueueEntry.sort_key` — so a `market`
     that is not a number raises `decimal.InvalidOperation`, and a `box` that arrived as a
     JSON string raises `TypeError` on the tuple compare (`Queue.parse` coerces nothing).
@@ -3179,7 +3179,7 @@ def _queue_depth(queue: queues.Queue) -> Tuple[Optional[int], Optional[str]]:
     PER QUEUE, so a corrupt `review.json` does not also hide what is sitting in parked.
     """
     try:
-        return len(queue), None
+        return len(queue.owed_entries(cards)), None
     except (ArithmeticError, TypeError, ValueError) as exc:
         return None, (
             f"the {queue.name} queue holds an entry that cannot be ordered "
@@ -3219,8 +3219,9 @@ def do_status() -> dict:
         "store_exists": files.inventory_dir().is_dir(),
         "cards": len(inventory.cards),
         "states": inventory.counts(),
-        # OPEN entries, which is what `len(Queue)` returns, what `Queue.summary` prints in
-        # every run report, and what `GET /queues` hands the review screen. This counted
+        # OWED entries (UN-8: open, less every card that has left its box), which is what
+        # `Queue.owed_entries` returns, what `Queue.summary` prints in every run report, and
+        # what `GET /queues` hands the review screen. This counted
         # `entries` — every record in the file, cleared or not — until 7b, and the two were
         # indistinguishable because NOTHING IN THIS REPO HAD EVER SET `cleared_by_human`;
         # `store/queues.py` and `store/cache.py` both say so in their headers.
@@ -3239,7 +3240,7 @@ def do_status() -> dict:
     # from too — so the two wire keys and the finding that explains a null one cannot come to
     # disagree about which file is meant.
     for queue in (snapshot.review, snapshot.parked):
-        depth, finding = _queue_depth(queue)
+        depth, finding = _queue_depth(queue, inventory.cards)
         body["queues"][queue.name] = depth
         if finding:
             problems.append(finding)
