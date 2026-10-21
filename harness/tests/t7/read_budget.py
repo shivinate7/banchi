@@ -39,6 +39,8 @@ then `narrow`):
 - `check_selection_drops_strays`: the one place the answer differs from the scan. A photograph whose
   sidecar claims a chosen key but belongs to an unchosen card, or to no card, is not returned. A chosen
   card's own photograph always is.
+- `check_selection_reads_under_the_given_home`: `resolve` finds the chosen cards' photographs under the `home` it is
+  given when that is not `files.home()`, for a state and for a keys selection, and reads only those.
 """
 
 from __future__ import annotations
@@ -863,11 +865,11 @@ def _equivalence_world(relocated: bool) -> None:
         _mark_relocated()
 
 
-def _write_legacy(box: int, index: int, claims: tuple) -> None:
-    """A photograph at the legacy `(box, index)` address, whose sidecar claims the position `claims`."""
+def _write_legacy(box: int, index: int, claims: tuple, home: Path | None = None) -> None:
+    """A photograph at the legacy `(box, index)` address under `home` (the store's own when None), whose sidecar claims the position `claims`."""
     import json
 
-    target = photos.legacy_path(box, index)
+    target = photos.legacy_path(box, index, home)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(photograph())
     target.with_suffix(".json").write_text(json.dumps({"box": claims[0], "index": claims[1]}), "utf-8")
@@ -1001,12 +1003,71 @@ def check_selection_drops_strays(checks: Checks) -> None:
                 checks.equal(routed, {"keys": sorted({key for key, _ in want}), "claimed": 0}, f"9. the waiting route answers {label} with the chosen cards' keys only")
 
 
+# --------------------------------------------------------------------------- the home passthrough
+
+def check_selection_reads_under_the_given_home(checks: Checks) -> None:
+    """`resolve(selection, home)` finds the chosen cards' photographs under `home`, where `home` is not `files.home()`.
+
+    The store (the cards, their names and states) is read through `read_inventory` and sits in the process's own home; the
+    photographs sit only under another directory, `other`, in both layouts (content store and legacy address). A state
+    selection and a keys selection must each return the chosen cards' photographs from `other`, and read only those
+    (`scanned` is the count of photographs read, so a fall-back to scanning `other` would count all three). The last case
+    runs the same two selections with `home` dropped on the way into `_keyed` and requires a different answer, so the
+    fixture can tell the defect from the fix."""
+    import tempfile
+
+    checks.note("")
+    checks.note("HOME PASSTHROUGH — resolve reads the chosen cards' photographs under the home it is given")
+    with isolated_home():
+        own = files.home()
+        with Store().write() as snapshot:
+            inv = snapshot.inventory
+            for box, char, state in ((4, "f", master.CAPTURED), (8, "b", master.IDENTIFIED)):
+                card, _ = inv.allocate_capture(box, cid=_digest(char))
+                card.state, card.captured_at = state, NEW
+            card, _ = inv.allocate_capture(6, cid=fake_cid("home-legacy"))  # captured, its photograph is at the legacy address
+            card.state, card.captured_at = master.CAPTURED, NEW
+        with tempfile.TemporaryDirectory() as tmp:
+            other = Path(tmp).resolve()
+            for box, char in ((4, "f"), (8, "b")):
+                photos.write(_digest(char), photograph(), other)
+                photos.write_sidecar(_digest(char), photos.claims_payload(box, 1, {}), other)
+            _write_legacy(6, 1, (6, 1), other)
+            checks.equal(
+                [p for p in (own / "photos", own / "captures") if p.exists()], [],
+                "10. the fixture: no photograph is under the process's own home, so only `other` can answer",
+            )
+            read_inventory = lambda: Store().read().inventory  # noqa: E731
+            wanted_state = [("4/1", f"photos/{_digest('f')[:2]}/{_digest('f')}.jpg"), ("6/1", "captures/cards/box6/0001.jpg")]
+            wanted_keys = [("8/1", f"photos/{_digest('b')[:2]}/{_digest('b')}.jpg")]
+
+            def answer(payload):
+                got, scanned = selection_mod.resolve(selection_mod.parse(dict(payload)), other, read_inventory=read_inventory)
+                return sorted(_view(got, other)), scanned
+
+            checks.equal(answer({"state": "captured"}), (sorted(wanted_state), 2), "10. a state selection returns the chosen cards' photographs from `other`, and reads only those two")
+            checks.equal(answer({"keys": ["8/1"]}), (wanted_keys, 1), "10. a keys selection returns the chosen card's photograph from `other`, and reads only that one")
+
+            real_keyed = selection_mod._keyed
+            selection_mod._keyed = lambda selection, home, *rest: real_keyed(selection, files.home(), *rest)
+            try:
+                dropped = (answer({"state": "captured"}), answer({"keys": ["8/1"]}))
+            finally:
+                selection_mod._keyed = real_keyed
+            checks.ok(
+                dropped[0] != (sorted(wanted_state), 2) and dropped[1] != (wanted_keys, 1),
+                "10. the fixture can tell: with `home` dropped on the way into `_keyed`, both answers change",
+                f"{dropped}",
+            )
+
+
 CHECKS = (
     check_server_read_budget,
     check_detail_read_budget,
     check_markdown_table_on_hand,
     check_selection_scan_equivalence,
     check_selection_drops_strays,
+    check_selection_reads_under_the_given_home,
 )
 
 
