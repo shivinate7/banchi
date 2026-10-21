@@ -255,6 +255,10 @@ Kind: build. Platform: macOS, over the capture server.
 3. Routes for add, list, detail and sweep, with client functions in `app/src/server.ts`.
    Add, list and detail are built: `POST /slabs`, `GET /slabs`, `GET /slabs/<grader>/<cert>`,
    with one Card Ladder client per server process. The sweep route waits for the owner's word.
+   The owner ruled a way back: `DELETE /slabs/<grader>/<cert>` and its client function remove
+   the slab and its sale links. Its snapshots and its sales stay, so adding it again undoes the
+   remove and its history returns. A sale that the new read no longer lists stays in the store,
+   unlinked.
    A failed read writes no snapshot: a same-day snapshot replaces every field, so a failed call
    stored as empty would erase a good value. The store replaces a re-read sale whole, so the
    route merges the new read into the stored sale first, and fields only 3.3 returns are kept. Card Ladder's numbers become text money at the route. The store refuses a sale date that is
