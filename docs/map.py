@@ -1640,7 +1640,7 @@ COMPONENTS = [
                                         "PRINTING and never per SKU.",
                                 "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D55",
                                                 "D65", "D86", "D171", "D216", "D234", "D240",
-                                                "D254", "D277", "D278", "D-one-retry-home"],
+                                                "D254", "D277", "D278", "D319"],
                                 "tested_by": ["T7"],
                                 "note": "REACHABLE AS OF 2026-08-30 (D278) — this entry read "
                                         "RECORDED RATHER THAN BUILT for one day, and the whole "
@@ -3116,7 +3116,7 @@ COMPONENTS = [
                         "host pauses only after `PAUSE_AFTER_FAILURES` lost calls in a row on "
                         "distinct URLs, shared by every `Market`, with no request or courtesy "
                         "delay while paused. Not wired into `make check`.",
-                "governed_by": ["D18", "D278", "D-one-retry-home"],
+                "governed_by": ["D18", "D278", "D319"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "

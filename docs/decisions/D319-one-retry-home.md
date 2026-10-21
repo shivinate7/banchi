@@ -1,4 +1,4 @@
-## D-one-retry-home — Every network call retries through one method
+## D319 — Every network call retries through one method
 
 Kind: build
 Plan: docs/specs/stock-images.md#one-retry-home (python)

@@ -314,7 +314,7 @@ class Offline(Unreachable):
     `try` blocks draw the line).
 
     A single `Offline`, like a single HTTP error, never pauses anything. Only a run does: a host
-    pauses after `PAUSE_AFTER_FAILURES` lost calls in a row (D-one-retry-home, every network
+    pauses after `PAUSE_AFTER_FAILURES` lost calls in a row (D319, every network
     call retries through one method).
     """
 
@@ -1046,7 +1046,7 @@ def fetch_json(
     A 403 IS `Blocked` INSTEAD, NEVER `Unreachable` — see that class for why the two must not
     share a name, and D216 for what is now answering it.
 
-    THE ONE RETRY HOME (D-one-retry-home, every network call retries through one method). A
+    THE ONE RETRY HOME (D319, every network call retries through one method). A
     paused host is refused with no request. Otherwise a `_worth_retrying` failure is retried
     up to `len(RETRY_PAUSES)` times. A `Retry-After` in seconds sets the pause. A retry is made
     only if the time spent, the pause and the next attempt's timeout fit
@@ -1518,7 +1518,7 @@ class Market:
                     for sku in skus:
                         refusals.setdefault(sku, str(exc))
                     if _worth_retrying(exc):
-                        break  # one product adds at most one URL to a run (D-one-retry-home)
+                        break  # one product adds at most one URL to a run (D319)
             for sku in skus:
                 series: Dict[str, Series] = {}
                 for range_, answers in per_range.items():
