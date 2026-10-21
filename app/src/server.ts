@@ -3619,6 +3619,8 @@ export type SkuPhotos = {
   readonly pending: readonly string[]
 }
 
+const SKU_PHOTO_BATCH = 100
+
 /** `sku -> its photo`, for exactly the SKUs asked. A SKU with no photograph of either kind
  *  is simply ABSENT from both fields — never a guess (`GET /skus/photos?sku=<s>&sku=<s>`,
  *  D298, amended F2). `#/revenue`'s own reason: a sold card's own photograph is usually
@@ -3627,38 +3629,49 @@ export type SkuPhotos = {
  *  Sets and Pricing already read. A plain read, costs nothing, so this screen calls it on
  *  arrival rather than gating it behind a press. */
 export async function getSkuPhotos(skus: string[]): Promise<SkuPhotos> {
-  if (skus.length === 0) return { photos: {}, stockPhotos: {}, pending: [] }
-  const query = skus.map((sku) => `sku=${encodeURIComponent(sku)}`).join('&')
-  const body = (await request(`/skus/photos?${query}`, NO_CACHE)) as {
-    photos: Record<string, SkuPhotoEntry>
-    stock_photos: Record<string, string>
-    pending?: string[]
+  const out: SkuPhotos = { photos: {}, stockPhotos: {}, pending: [] }
+  const pending: string[] = []
+  // In turns of SKU_PHOTO_BATCH, one after another: a long list stays under the request-line
+  // limit and never lands on the server as a burst.
+  for (let at = 0; at < skus.length; at += SKU_PHOTO_BATCH) {
+    const query = skus.slice(at, at + SKU_PHOTO_BATCH).map((sku) => `sku=${encodeURIComponent(sku)}`).join('&')
+    const body = (await request(`/skus/photos?${query}`, NO_CACHE)) as {
+      photos: Record<string, SkuPhotoEntry>
+      stock_photos: Record<string, string>
+      pending?: string[]
+    }
+    Object.assign(out.photos, body.photos)
+    Object.assign(out.stockPhotos, body.stock_photos)
+    pending.push(...(body.pending ?? []))
   }
-  return { photos: body.photos, stockPhotos: body.stock_photos, pending: body.pending ?? [] }
+  return { ...out, pending }
 }
 
-/** Waits between re-asks for pending SKUs. Its length is the cap: after the last wait the SKU
- *  is answered final, no photo. */
-export const SKU_PHOTO_BACKOFF_MS = [1000, 2000, 4000, 8000, 8000, 8000] as const
+/** Waits between re-asks, in order; the last one repeats for as long as the caller stays. */
+export const SKU_PHOTO_BACKOFF_MS = [1000, 2000, 4000, 8000] as const
 
 /** `getSkuPhotos`, settled: calls `onAnswer` with each ask's answer, and re-asks only the
- *  SKUs still pending, on `SKU_PHOTO_BACKOFF_MS`. The last `onAnswer` has `pending: []`.
- *  Returns a stop function. The one client path for a SKU's photo, so no screen keeps its
- *  own retry. */
+ *  SKUs still pending, on `SKU_PHOTO_BACKOFF_MS`, until none is pending or the returned stop
+ *  function runs. A failed ask is asked again the same way, never taken as "no photo": the
+ *  catalogue loads in the background and the capture server may be busy, and the owner's
+ *  open screen is the reason to keep asking. One steady, batched ask per wait, so the load
+ *  stays flat however many rows are shown. The one client path for a SKU's photo, so no
+ *  screen keeps its own retry. */
 export function getSkuPhotosSettled(skus: string[], onAnswer: (answer: SkuPhotos) => void): () => void {
   let stopped = false
   let timer: number | undefined
+  const again = (wanted: string[], round: number) => {
+    timer = window.setTimeout(() => ask(wanted, round + 1), SKU_PHOTO_BACKOFF_MS[Math.min(round, SKU_PHOTO_BACKOFF_MS.length - 1)])
+  }
   const ask = (wanted: string[], round: number) =>
     getSkuPhotos(wanted)
       .then((found) => {
         if (stopped) return
-        const more = found.pending.length > 0 && round < SKU_PHOTO_BACKOFF_MS.length
-        onAnswer(more ? found : { ...found, pending: [] })
-        if (more) timer = window.setTimeout(() => ask([...found.pending], round + 1), SKU_PHOTO_BACKOFF_MS[round])
+        onAnswer(found)
+        if (found.pending.length > 0) again([...found.pending], round)
       })
       .catch(() => {
-        // A failed lookup is a final "no photo", as it always was.
-        if (!stopped) onAnswer({ photos: {}, stockPhotos: {}, pending: [] })
+        if (!stopped) again(wanted, round)
       })
   void ask(skus, 0)
   return () => {
