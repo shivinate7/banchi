@@ -201,7 +201,10 @@ def open(  # noqa: A001 - the module's one verb; callers say `net.open`
         refuse_if_paused(url, clock)
     started = clock()
     attempts = len(RETRY_PAUSES) + 1
-    budget = max(REQUEST_TIMEOUT_SECONDS, attempts * timeout + sum(RETRY_PAUSES))
+    # A retry is made only if the time spent, the pause and one normal attempt fit the budget. A caller
+    # with a long timeout (a 120 s export) is counted as a normal attempt, so a hang that already ate
+    # the budget is not retried, while a quick 503 is.
+    next_attempt = min(timeout, ATTEMPT_TIMEOUT_SECONDS)
     for attempt in range(attempts):
         failure: Optional[NetError] = None
         answer = None
@@ -209,7 +212,8 @@ def open(  # noqa: A001 - the module's one verb; callers say `net.open`
         try:
             answer = _once(opener, request, timeout, max_bytes, on_chunk)
         except urllib.error.URLError as exc:
-            # urllib wraps only a failure to send in a URLError, so no byte reached the host.
+            # urllib wraps a failure to complete the request in a URLError, before any answer: the
+            # request was never completed, so a second one cannot double it.
             failure = Offline(f"Could not connect to {urllib.parse.urlsplit(url).netloc}.")
             failure.__cause__ = exc
             retry = True
@@ -228,7 +232,7 @@ def open(  # noqa: A001 - the module's one verb; callers say `net.open`
             hint = _retry_after(answer[1]) if retry else None
         if retry and attempt < attempts - 1:
             pause = RETRY_PAUSES[attempt] if hint is None else hint
-            if clock() - started + pause + timeout <= budget:
+            if clock() - started + pause + next_attempt <= REQUEST_TIMEOUT_SECONDS:
                 sleep(pause)
                 continue
         if paused and (retry or (answer is not None and answer[0] < 400)):

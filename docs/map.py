@@ -5864,8 +5864,8 @@ COMPONENTS = [
             },
             "portal_http.py": {
                 "does": "the transport both TCGplayer hosts share: the session cookie read, "
-                        "the User-Agent, the no-redirect opener, the socket handling and the "
-                        "one status ladder. Each host passes in its own refusal class, codes "
+                        "the User-Agent, its one door to the retry home (`pipeline/net.py`, "
+                        "no redirect followed) and the one status ladder. Each host passes in its own refusal class, codes "
                         "and words.",
                 "governed_by": ["D65", "D69", "D319"],
             },
