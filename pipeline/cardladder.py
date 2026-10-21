@@ -84,13 +84,15 @@ class Client:
                     wait = self._last_send + PACE_SECONDS - self._clock()
                     if wait > 0:
                         self._sleep(wait)
+                if self._limited:  # another thread's 429 landed while this one waited
+                    raise RateLimited("Card Ladder rate-limited this sweep. Try again tomorrow.")
                 self._last_send = self._clock()
         try:
             return self._transport(method, url, headers, body)
         except Exception as exc:
-            cause = exc.__cause__
-            if isinstance(cause, urllib.error.HTTPError) and cause.code == 429:
-                # The retry home wraps a 429 as `pricehistory.Unreachable` with the HTTPError as cause.
+            # The retry home wraps a 429 as `pricehistory.Unreachable` with the HTTPError as cause;
+            # a plain transport raises the HTTPError itself.
+            if any(isinstance(e, urllib.error.HTTPError) and e.code == 429 for e in (exc, exc.__cause__)):
                 self._limited = True
                 raise RateLimited("Card Ladder rate-limited this sweep. Try again tomorrow.") from None
             # The transport's own text can hold the request, so only its type survives.
