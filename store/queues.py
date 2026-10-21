@@ -44,7 +44,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
-from store.master import is_on_hand
+from store.master import departed_among
 from store.rows import Rows, TableSpec, int_or_none
 
 MAIN = "review"
@@ -236,15 +236,13 @@ class Queue:
         write. `cards` is `Inventory.cards`. A position with no card is kept, because this
         read says only what departed, and it never guesses about a card it cannot see.
         """
-        return [
-            entry
-            for entry in self.open_entries
-            if is_on_hand(cards.get(entry.position))
-        ]
+        entries = self.open_entries
+        gone = departed_among(cards, [entry.position for entry in entries])
+        return [entry for entry in entries if str(entry.position) not in gone]
 
-    @property
-    def oldest_days(self) -> Optional[int]:
-        ages = [e.age_days for e in self.open_entries if e.age_days is not None]
+    def oldest_days(self, cards) -> Optional[int]:
+        """Age of the oldest owed entry. A departed card owes no answer, so it sets no age."""
+        ages = [e.age_days for e in self.owed_entries(cards) if e.age_days is not None]
         return max(ages) if ages else None
 
     def upsert(self, entry: QueueEntry) -> bool:
@@ -324,12 +322,11 @@ class Queue:
             del self.entries[key]
         return gone
 
-    @property
-    def summary(self) -> str:
-        count = len(self.open_entries)
+    def summary(self, cards) -> str:
+        count = len(self.owed_entries(cards))
         if not count:
             return f"0 cards in {self.name}"
-        age = self.oldest_days
+        age = self.oldest_days(cards)
         oldest = "" if age is None else f", oldest {age} days"
         return f"{count} cards in {self.name}{oldest}"
 

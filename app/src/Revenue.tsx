@@ -1246,7 +1246,7 @@ function SalesView() {
           value={{}}
           onChange={() => {}}
           count={{ shown: products.length, total: viewRows.length, noun: { one: 'product', many: 'products' } }}
-          search={{ query, onChange: setQuery, placeholder: 'Search' }}
+          search={{ query, onChange: setQuery, placeholder: 'Card, set or SKU…' }}
           beside={
             <SortControl
               options={SORT_KEYS.map((k) => ({ key: k, label: SORT_SEGMENT_LABEL[k], first: DEFAULT_DIR[k], ...SORT_WORDS[k] }))}

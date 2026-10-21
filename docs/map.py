@@ -4962,7 +4962,7 @@ COMPONENTS = [
                 # D42 joins because hooks() no longer merely reports a config: it encodes where
                 # the hooks must be INSTALLED, and reads NOT ARMED for the working-tree
                 # arrangement that entry started with and then had to retract.
-                "governed_by": ["D16", "D17", "D42", "D43", "D80", "D86", "D88", "D127", "D138", "D158", "D179"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D80", "D86", "D88", "D127", "D138", "D158", "D176", "D179"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "

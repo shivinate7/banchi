@@ -2224,7 +2224,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           onChange={(event) => setHub({ paste: event.target.value })}
           disabled={busy !== null}
           rows={6}
-          placeholder="Paste the copied order here"
+          placeholder="Paste the copied order text…"
           aria-label="Order to paste"
           spellCheck={false}
         />
@@ -3659,7 +3659,7 @@ function PullStage({
       value={picked}
       onChange={setPicked}
       count={{ shown: shownGroups.length, total: base.length, noun: { one: 'buyer', many: 'buyers' } }}
-      search={{ query, onChange: setQuery, placeholder: 'Buyer or order', label: 'Search Buyers' }}
+      search={{ query, onChange: setQuery, placeholder: 'Buyer or order…', label: 'Search Buyers' }}
       sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
       hide={[
         ...(unpullableCount === 0 && !hideUnpullable
