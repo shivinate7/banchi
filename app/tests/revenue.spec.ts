@@ -906,15 +906,20 @@ test('a photo answer that lands after 31 seconds still draws on the open screen'
   await page.route(SKU_PHOTO_STOCK, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: SLOT_SVG }))
   await stub(page, generalOrders())
   let slow = true
-  await page.route(/\/skus\/photos\?/, (route) =>
-    json(route, slow ? { photos: {}, stock_photos: {}, pending: ['9100001'] } : { photos: {}, stock_photos: { '9100001': SKU_PHOTO_STOCK }, pending: [] }),
-  )
+  let asks = 0
+  await page.route(/\/skus\/photos\?/, (route) => {
+    asks += 1
+    return json(route, slow ? { photos: {}, stock_photos: {}, pending: ['9100001'] } : { photos: {}, stock_photos: { '9100001': SKU_PHOTO_STOCK }, pending: [] })
+  })
   await open(page)
   const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
   await expect(thumb).toHaveAttribute('data-pending', 'true')
-  // Two minutes of fake time with the catalogue still loading: well past the 31 s the client used
-  // to give. Each 5 s piece fires at most one due timer, so the old waits take about 45 s of pieces.
-  await spendFakeTime(page, 120_000)
+  // The catalogue stays loading while the fake clock runs, up to ten asks or the budget. The old
+  // client gave up after seven asks (the first, then six waits that add up to 31 s). A re-ask timer
+  // is armed only after the previous answer lands, so on a busy rig the pieces can pass with few
+  // asks. The count keeps the asserts below from passing on timers that never fired.
+  await spendFakeTime(page, 600_000, async () => asks >= 10)
+  expect(asks, 'the client stopped asking for the photo while the screen was open (or the timers never fired)').toBeGreaterThanOrEqual(10)
   await expect(thumb, 'the row gave up on its photo while the screen was open').toHaveAttribute('data-pending', 'true')
   await expect(thumb).not.toHaveAttribute('data-missing', 'true')
   slow = false
@@ -922,28 +927,54 @@ test('a photo answer that lands after 31 seconds still draws on the open screen'
   await expect(thumb.locator('img'), 'the late answer never reached the row').toHaveAttribute('src', SKU_PHOTO_STOCK)
 })
 
-test('a failed photo lookup is asked again, not left as no photo', async ({ page }) => {
-  test.setTimeout(90_000)
-  await page.route(SKU_PHOTO_STOCK, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: SLOT_SVG }))
-  await stub(page, generalOrders())
-  let asks = 0
-  await page.route(/\/skus\/photos\?/, (route) => {
-    asks += 1
-    if (asks === 1) {
-      return route.fulfill({
-        status: 503,
-        contentType: 'application/json',
-        body: JSON.stringify({ error: { code: 'unavailable', message: 'The server is busy.' } }),
-      })
-    }
-    return json(route, { photos: {}, stock_photos: { '9100001': SKU_PHOTO_STOCK }, pending: [] })
+/** An error answer in the server's own shape (`{ error: { code, message } }`). */
+function refuse(route: Route, status: number, code: string) {
+  return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify({ error: { code, message: 'Refused.' } }) })
+}
+
+// A busy server and a rate limit may pass; the ask is repeated.
+for (const [status, code] of [[503, 'unavailable'], [429, 'rate_limited']] as const) {
+  test(`a photo lookup that fails with ${status} is asked again, not left as no photo`, async ({ page }) => {
+    test.setTimeout(90_000)
+    await page.route(SKU_PHOTO_STOCK, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: SLOT_SVG }))
+    await stub(page, generalOrders())
+    let asks = 0
+    await page.route(/\/skus\/photos\?/, (route) => {
+      asks += 1
+      if (asks === 1) return refuse(route, status, code)
+      return json(route, { photos: {}, stock_photos: { '9100001': SKU_PHOTO_STOCK }, pending: [] })
+    })
+    await open(page)
+    const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
+    await spendFakeTime(page, 300_000, async () => (await thumb.locator('img').count()) > 0)
+    expect(asks, 'the failed lookup was final: it was never asked again').toBeGreaterThan(1)
+    await expect(thumb.locator('img')).toHaveAttribute('src', SKU_PHOTO_STOCK)
   })
-  await open(page)
-  const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
-  await spendFakeTime(page, 300_000, async () => (await thumb.locator('img').count()) > 0)
-  expect(asks, 'the failed lookup was final: it was never asked again').toBeGreaterThan(1)
-  await expect(thumb.locator('img')).toHaveAttribute('src', SKU_PHOTO_STOCK)
-})
+}
+
+// A refusal that no retry can change (a bad request, a missing route) is final, as "no photo".
+for (const [status, code] of [[400, 'bad_request'], [404, 'not_found']] as const) {
+  test(`a photo lookup refused with ${status} is not asked again, and settles on no photo`, async ({ page }) => {
+    test.setTimeout(90_000)
+    await stub(page, generalOrders())
+    let asks = 0
+    await page.route(/\/skus\/photos\?/, (route) => {
+      asks += 1
+      return refuse(route, status, code)
+    })
+    await open(page)
+    await expect.poll(() => asks, { message: 'the lookup was never asked' }).toBeGreaterThan(0)
+    // Time for a client that settles to settle. Then the count must not move: the loop ends at the
+    // first further ask, and a client that keeps asking every few seconds ends it at once.
+    await spendFakeTime(page, 20_000)
+    const settled = asks
+    await spendFakeTime(page, 200_000, async () => asks > settled)
+    expect(asks, `a ${status} no retry can change was asked again`).toBe(settled)
+    const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
+    await expect(thumb).toHaveAttribute('data-missing', 'true')
+    await expect(thumb).toContainText('No photo found')
+  })
+}
 
 test('leaving Sales ends the photo asks for a SKU that is still pending', async ({ page }) => {
   await stub(page, generalOrders())
@@ -984,26 +1015,124 @@ function manyOrders(count: number): OrderRow[] {
   )
 }
 
-test('under Show all, a row past the 40th asks for its photo and draws it', async ({ page }) => {
+function rankOf(sku: string): number {
+  return Number(sku.slice(2))
+}
+/** The SKUs one `/skus/photos` call names. */
+function skusOfCall(route: Route): string[] {
+  return new URL(route.request().url()).searchParams.getAll('sku')
+}
+/** A stock photo for each SKU, answered the way `do_skus_photos` answers one. */
+function stockFor(skus: string[]) {
+  return { photos: {}, stock_photos: Object.fromEntries(skus.map((sku) => [sku, stockOf(rankOf(sku))])), pending: [] }
+}
+/** What every board row (rank 4 and up; the podium draws the top three) draws right now, by rank:
+ *  its photo's URL, `pending` while its SKU is still out, or `none`. One read, so a 120-row board
+ *  needs no scrolling: the `<img>` is in the page whether or not it has been fetched. */
+async function boardThumbs(page: Page): Promise<Map<number, string>> {
+  const rows = await page.locator('.revenue-board li').evaluateAll((items) =>
+    items.map((item) => {
+      const thumb = item.querySelector('.bn-thumb')
+      const state = thumb?.querySelector('img')?.getAttribute('src') ?? (thumb?.getAttribute('data-pending') === 'true' ? 'pending' : 'none')
+      return [item.querySelector('.revenue-board-rk')?.textContent?.trim() ?? '', state] as [string, string]
+    }),
+  )
+  return new Map(rows.map(([rank, state]) => [Number(rank), state]))
+}
+/** The ranks from `from` to `to` whose rows do not draw their own photo. */
+async function undrawn(page: Page, from: number, to: number): Promise<number[]> {
+  const thumbs = await boardThumbs(page)
+  return Array.from({ length: to - from + 1 }, (_, i) => from + i).filter((rank) => thumbs.get(rank) !== stockOf(rank))
+}
+async function stubStockImages(page: Page) {
   await page.route(/tcgplayer-cdn\.tcgplayer\.com\/product\//, (route) =>
     route.fulfill({ status: 200, contentType: 'image/svg+xml', body: SLOT_SVG }),
   )
-  await stub(page, manyOrders(45))
+}
+
+/** `server/capture_server.py`'s `SKUS_PHOTOS_LIMIT`: one call may name this many SKUs and no more. */
+const SKUS_PHOTOS_LIMIT = 40
+
+test('under Show all, no photo call names more SKUs than the server answers, and every row draws its photo', async ({ page }) => {
+  await stubStockImages(page)
+  await stub(page, manyOrders(120))
+  const sizes: number[] = []
   const asked = new Set<string>()
   await page.route(/\/skus\/photos\?/, (route) => {
-    const skus = new URL(route.request().url()).searchParams.getAll('sku')
+    const skus = skusOfCall(route)
+    sizes.push(skus.length)
+    // The server's own answer to a call over the limit (`do_skus_photos`).
+    if (skus.length > SKUS_PHOTOS_LIMIT) return refuse(route, 400, 'too_many_skus')
     skus.forEach((sku) => asked.add(sku))
-    const stock = Object.fromEntries(skus.map((sku) => [sku, `https://tcgplayer-cdn.tcgplayer.com/product/${sku}_200w.jpg`]))
-    return json(route, { photos: {}, stock_photos: stock, pending: [] })
+    return json(route, stockFor(skus))
   })
   await open(page)
-  await page.getByRole('button', { name: 'Show all 45' }).click()
-  for (const rank of [41, 45]) {
-    const row = page.locator('.revenue-board li').filter({ has: page.locator('.revenue-board-rk', { hasText: new RegExp(`^${rank}$`) }) })
-    await row.scrollIntoViewIfNeeded()
-    await expect.poll(() => asked.has(skuOf(rank)), { message: `row ${rank}'s SKU was never asked about` }).toBe(true)
-    await expect(row.locator('.bn-thumb img'), `row ${rank} did not draw its photo`).toHaveAttribute('src', stockOf(rank))
+  await page.getByRole('button', { name: 'Show all 120' }).click()
+  // Every SKU is asked in lawful calls, or one call is refused: either ends the wait.
+  await expect
+    .poll(() => Math.max(...sizes) > SKUS_PHOTOS_LIMIT || asked.has(skuOf(120)), { message: 'the last SKU was never asked about' })
+    .toBe(true)
+  expect(Math.max(...sizes), `one call named ${Math.max(...sizes)} SKUs; the server refuses over ${SKUS_PHOTOS_LIMIT} (too_many_skus)`).toBeLessThanOrEqual(SKUS_PHOTOS_LIMIT)
+  await expect.poll(() => undrawn(page, 4, 120), { message: 'rows that did not draw their photo' }).toEqual([])
+})
+
+// The next two cases answer a call of any size. They are about WHEN a batch's answer lands and
+// WHICH SKUs are asked again; the call-size limit is the case above's.
+
+test('a photo answered by an early batch draws before the later batches answer', async ({ page }) => {
+  await stubStockImages(page)
+  await stub(page, manyOrders(120))
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const answered: string[] = []
+  await page.route(/\/skus\/photos\?/, async (route) => {
+    const skus = skusOfCall(route)
+    // The call that carries the last SKU does not answer until this case lets it.
+    if (skus.includes(skuOf(120))) await held
+    else answered.push(...skus)
+    return json(route, stockFor(skus))
+  })
+  try {
+    await open(page)
+    await page.getByRole('button', { name: 'Show all 120' }).click()
+    // A SKU past the first ten (the window the screen asked about on arrival) that a call has answered.
+    await expect.poll(() => answered.find((sku) => rankOf(sku) > 10) ?? null, { message: 'no call past the first window was answered' }).not.toBeNull()
+    const early = rankOf(answered.find((sku) => rankOf(sku) > 10) ?? '')
+    await expect
+      .poll(async () => (await boardThumbs(page)).get(early), { message: `row ${early}'s call answered, and the row waited for a later call` })
+      .toBe(stockOf(early))
+    expect((await boardThumbs(page)).get(120), 'the row still out holds its slot, not a no-photo state').toBe('pending')
+  } finally {
+    release()
   }
+  await expect.poll(() => undrawn(page, 4, 120), { message: 'rows that did not draw their photo' }).toEqual([])
+})
+
+test('when one photo batch fails, the batches that answered are not asked again', async ({ page }) => {
+  test.setTimeout(90_000)
+  await stubStockImages(page)
+  await stub(page, manyOrders(120))
+  const calls: { skus: string[]; failed: boolean }[] = []
+  await page.route(/\/skus\/photos\?/, (route) => {
+    const skus = skusOfCall(route)
+    // The call that carries the last SKU fails once, as a busy server does.
+    const failed = skus.includes(skuOf(120)) && !calls.some((call) => call.failed)
+    calls.push({ skus, failed })
+    return failed ? refuse(route, 503, 'unavailable') : json(route, stockFor(skus))
+  })
+  await open(page)
+  await page.getByRole('button', { name: 'Show all 120' }).click()
+  await spendFakeTime(page, 300_000, async () => (await boardThumbs(page)).get(120) === stockOf(120))
+  expect(await undrawn(page, 4, 120), 'rows that did not draw their photo').toEqual([])
+  const failedSkus = new Set(calls.find((call) => call.failed)?.skus)
+  const times = new Map<string, number>()
+  calls.forEach((call) => call.skus.forEach((sku) => times.set(sku, (times.get(sku) ?? 0) + 1)))
+  const wrong = [...times]
+    .filter(([sku, n]) => n !== (failedSkus.has(sku) ? 2 : 1))
+    .map(([sku, n]) => `row ${rankOf(sku)} asked ${n} times`)
+  expect(wrong.slice(0, 5), `${wrong.length} SKUs were asked the wrong number of times: each SKU of the failed batch twice, every other SKU once`).toEqual([])
 })
 
 
