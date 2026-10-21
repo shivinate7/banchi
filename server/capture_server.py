@@ -3200,6 +3200,7 @@ def do_status() -> dict:
     snapshot = Store().read()
     inventory = snapshot.inventory
     problems: List[str] = []
+    states = inventory.counts()
 
     body = {
         # WHICH PROCESS IS ANSWERING. `scripts/serve.py` restarts this server when a watched
@@ -3217,8 +3218,10 @@ def do_status() -> dict:
         "captures_root": str(captures_root()),
         "store": str(files.inventory_dir()),
         "store_exists": files.inventory_dir().is_dir(),
-        "cards": len(inventory.cards),
-        "states": inventory.counts(),
+        # The total is the sum of the per-state GROUP BY, so one query answers both and the
+        # owed-count read (`departed_among`) fits inside this route's read budget.
+        "cards": sum(states.values()),
+        "states": states,
         # OWED entries (UN-8: open, less every card that has left its box), which is what
         # `Queue.owed_entries` returns, what `Queue.summary` prints in every run report, and
         # what `GET /queues` hands the review screen. This counted

@@ -44,7 +44,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
-from store.master import is_on_hand
+from store.master import departed_among
 from store.rows import Rows, TableSpec, int_or_none
 
 MAIN = "review"
@@ -236,11 +236,9 @@ class Queue:
         write. `cards` is `Inventory.cards`. A position with no card is kept, because this
         read says only what departed, and it never guesses about a card it cannot see.
         """
-        return [
-            entry
-            for entry in self.open_entries
-            if is_on_hand(cards.get(entry.position))
-        ]
+        entries = self.open_entries
+        gone = departed_among(cards, [entry.position for entry in entries])
+        return [entry for entry in entries if str(entry.position) not in gone]
 
     def oldest_days(self, cards) -> Optional[int]:
         """Age of the oldest owed entry. A departed card owes no answer, so it sets no age."""

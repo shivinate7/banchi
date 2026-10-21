@@ -46,6 +46,8 @@ THE `Source` CONTRACT, duck-typed rather than declared, stated here once:
     top(column, limit, columns) -> Iterable[(key, tuple)]
                                             the `limit` rows with the highest `column`,
                                             descending, NULLs excluded — column values only
+    pluck(column, keys) -> Iterable[(key, value)]
+                                            one column of just the named rows, no text
 
 `equals` maps an INDEXED COLUMN NAME to a value, and `None` means the column is NULL —
 which is how `Inventory.next_index` finds a record whose box will not coerce without
@@ -339,6 +341,26 @@ class Rows(MutableMapping):
             else:
                 out.pop(key, None)
         return [(key, out[key]) for key in sorted(out)]
+
+    def pluck(self, column: str, keys: Iterable) -> Dict[str, Any]:
+        """`{key: column value}` for those of `keys` that exist, with no object built.
+
+        Cost follows `len(keys)`, never the table: the source answers every key this mapping
+        has not loaded in one indexed query. A loaded row is read live, so an attribute
+        changed in place this session is seen, as `select` does.
+        """
+        out: Dict[str, Any] = {}
+        pending: List[str] = []
+        for key in dict.fromkeys(str(k) for k in keys):
+            if key in self._deleted:
+                continue
+            if key in self._loaded:
+                out[key] = self.spec.columns(self._loaded[key]).get(column)
+            elif not (self._complete or key in self._absent):
+                pending.append(key)
+        if pending:
+            out.update((str(key), value) for key, value in self.source.pluck(column, pending))
+        return out
 
     def high_water(self, column: str, unreadable: Sequence[str], **equals) -> Optional[int]:
         """`MAX(column)` over matching rows (0 when none), straight off the source's index,
