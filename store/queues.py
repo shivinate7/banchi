@@ -242,9 +242,9 @@ class Queue:
             if is_on_hand(cards.get(entry.position))
         ]
 
-    def oldest_days(self, cards) -> Optional[int]:
-        """Age of the oldest owed entry. A departed card owes no answer, so it sets no age."""
-        ages = [e.age_days for e in self.owed_entries(cards) if e.age_days is not None]
+    @property
+    def oldest_days(self) -> Optional[int]:
+        ages = [e.age_days for e in self.open_entries if e.age_days is not None]
         return max(ages) if ages else None
 
     def upsert(self, entry: QueueEntry) -> bool:
@@ -324,11 +324,12 @@ class Queue:
             del self.entries[key]
         return gone
 
-    def summary(self, cards) -> str:
-        count = len(self.owed_entries(cards))
+    @property
+    def summary(self) -> str:
+        count = len(self.open_entries)
         if not count:
             return f"0 cards in {self.name}"
-        age = self.oldest_days(cards)
+        age = self.oldest_days
         oldest = "" if age is None else f", oldest {age} days"
         return f"{count} cards in {self.name}{oldest}"
 
