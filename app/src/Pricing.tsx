@@ -3047,7 +3047,7 @@ export function Pricing() {
               value={facetPicks}
               onChange={setFacetPicks}
               count={{ shown: drawn.reduce((sum, group) => sum + group.rows.length, 0), total: rows.length, noun: { one: 'item', many: 'items' } }}
-              search={{ query, onChange: setQuery, placeholder: 'Name, set, number or SKU', label: 'Search This List' }}
+              search={{ query, onChange: setQuery, placeholder: 'Name, set, number or SKU…', label: 'Search This List' }}
               sort={{ options: sortOptions, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
             />
           )}
@@ -3755,7 +3755,7 @@ function RuleSheet({
                   className="bn-input pricing-pct-input"
                   type="text"
                   inputMode="decimal"
-                  placeholder="0"
+                  placeholder="Percent, like 10…"
                   aria-label="Percentage"
                   aria-invalid={customBad === null ? undefined : true}
                   value={customDraft.pct}
@@ -3912,7 +3912,7 @@ function LiveSheet({
             <input name="bn-input"
               className="bn-input pricing-cap-field"
               inputMode="decimal"
-              placeholder="No limit"
+              placeholder="Dollars, like 2.00. Blank for no limit…"
               value={cap}
               onChange={(event) => {
                 const next = event.currentTarget.value.replace(/[^0-9.]/g, '')
@@ -4133,14 +4133,14 @@ function HoldPanel({
             className="bn-input bn-input-mono"
             type="text"
             inputMode="decimal"
-            placeholder="0.00"
+            placeholder="Price, like 1.50…"
             value={watch}
             onChange={(event) => setWatch(event.target.value)}
           />
         </label>
         <label className="bn-field">
           <span className="bn-field-label">Note</span>
-          <input name="bn-input" className="bn-input" type="text" placeholder="why, in a few words" value={text} onChange={(event) => setText(event.target.value)} />
+          <input name="bn-input" className="bn-input" type="text" placeholder="Why, like a restock…" value={text} onChange={(event) => setText(event.target.value)} />
         </label>
       </div>
       <div className="pricing-holdpanel-actions">

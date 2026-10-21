@@ -1048,7 +1048,7 @@ test('ux-wave1: at 820 every rail item has an accessible name equal to its label
 test('ux-wave1: the palette input shows a focus indicator when focused', async ({ page }) => {
   await open(page, RING[0])
   await page.keyboard.press('Meta+k')
-  const input = page.getByPlaceholder('Go to a screen, or a card')
+  const input = page.getByPlaceholder('Pricing, Orders, or a card name…')
   await expect(input).toBeVisible()
 
   const snap = () =>
