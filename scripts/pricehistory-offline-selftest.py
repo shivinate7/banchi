@@ -58,6 +58,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from unittest import mock
@@ -165,20 +166,46 @@ def _offline_is_retried_after_the_wait() -> None:
 
 
 def _plain_unreachable_is_not_sticky() -> None:
-    """A 500 or similar (Unreachable, not Offline) must NOT poison later, distinct calls —
-    a mirror having a bad moment on one product says nothing about the next one (D278)."""
-    calls = []
+    """A real HTTP 500 from one host, through the REAL `fetch_json` and the default fetcher, is
+    not sticky: five distinct products on that host are each asked for over the network, and
+    each product URL is reached. The old version raised a bare `Unreachable` from a fake
+    fetcher, which `Market` never latches, so it stayed green while a real 500 latched every
+    later product."""
+    urls = ["https://example.test/%d" % i for i in range(5)]
+    with _net(_host(500)) as net, contextlib.redirect_stderr(io.StringIO()):
+        market = pricehistory.Market(
+            cache_dir=None, courtesy_delay=0.0, now=lambda: net.clock[0]
+        )
+        for i, url in enumerate(urls):
+            with contextlib.suppress(pricehistory.Unreachable):
+                market.get(url, "slug-%d" % i, 3600.0)
+    reached = set(net.urls)
+    ok(reached == set(urls), "a 500 from one host does not stop the next products: each of 5 is asked for",
+       "asked for %d distinct URLs of 5 in %d requests: %r" % (len(reached), len(net.urls), sorted(reached)))
 
-    def fetcher(url):
-        calls.append(url)
-        raise pricehistory.Unreachable("simulated: host answered a bad status")
 
-    market = pricehistory.Market(cache_dir=None, fetcher=fetcher, courtesy_delay=0.0)
-    for i in range(5):
-        with contextlib.suppress(pricehistory.Unreachable):
-            market.get("https://example.test/%d" % i, "slug-%d" % i, 3600.0)
-    ok(len(calls) == 5, "a plain Unreachable is retried per distinct slug, never sticky",
-       "called %d times, want 5" % len(calls))
+def _a_503_on_one_host_does_not_refuse_another() -> None:
+    """A 503 that `fetch_json` retries and loses on host A never refuses a URL on host B: B is
+    asked for over the network, and B's payload comes back."""
+    host_a, host_b = "history.example.test", "tcgcsv.example.test"
+
+    def answer(net, _timeout):
+        net.clock[0] += 0.01
+        url = net.urls[-1]
+        if urllib.parse.urlsplit(url).hostname == host_a:
+            raise urllib.error.HTTPError(url, 503, "simulated", {}, io.BytesIO(b""))
+        return _Body(json.dumps(PAYLOAD).encode("utf-8"))
+
+    with _net(answer) as net, contextlib.redirect_stderr(io.StringIO()):
+        market = pricehistory.Market(cache_dir=None, courtesy_delay=0.0, now=lambda: net.clock[0])
+        lost = _outcome(lambda: market.get("https://%s/x" % host_a, "slug-a", 3600.0))
+        answered = _outcome(lambda: market.get("https://%s/x" % host_b, "slug-b", 3600.0))
+    ok(isinstance(lost, pricehistory.Unreachable), "host A: a 503 lost after all retries raises Unreachable",
+       "got %r" % (lost,))
+    asked_b = [u for u in net.urls if urllib.parse.urlsplit(u).hostname == host_b]
+    ok(bool(asked_b), "host B is asked for, though host A's 503 was lost",
+       "asked for %r" % (net.urls,))
+    ok(answered == PAYLOAD, "host B answers with its payload", "got %r" % (answered,))
 
 
 class _FakeResponse:
@@ -378,11 +405,13 @@ class _Net:
     def __init__(self, answer) -> None:
         self.answer = answer
         self.timeouts = []
+        self.urls = []
         self.pauses = []
         self.clock = [0.0]
         self.up = False
 
     def urlopen(self, _request, data=None, timeout=None):
+        self.urls.append(_request.full_url)
         self.timeouts.append(timeout)
         return self.answer(self, timeout)
 
@@ -561,6 +590,7 @@ def main() -> int:
     _offline_only_fetches_once()
     _offline_is_retried_after_the_wait()
     _plain_unreachable_is_not_sticky()
+    _a_503_on_one_host_does_not_refuse_another()
     _read_timeout_does_not_latch()
     _retry_connection_failure()
     _retry_http_status()

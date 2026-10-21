@@ -7,10 +7,14 @@ the order `CHECK_ORDER` runs them.
 from __future__ import annotations
 
 import contextlib
+import io
 import json
 import tempfile
 import time
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta, timezone
+from unittest import mock
 
 from pathlib import Path
 from typing import List
@@ -1180,6 +1184,67 @@ def check_stock_images_waits_fit_the_client_window(checks: Checks) -> None:
     )
 
 
+def check_stock_images_blocked_pair_is_retried_not_final(checks: Checks) -> None:
+    """A real HTTP 403 from tcgcsv, through `Market`'s default fetcher (the real `fetch_json`,
+    `urlopen` patched), while a Riftbound pair warms. `_fetch_tcgcsv` reads `Blocked` as no
+    answer, as it reads `Unreachable` ("no answer at all"), and `_warm_one` never caches it.
+    So the pair stays pending and is not stored as a final "no photo". A warm inside
+    `FETCH_RETRY_SECONDS` makes no request; once tcgcsv answers again the photo lands.
+    The decision and the stock-images spec are silent on 403, so this follows the code's docstrings."""
+    checks.note("")
+    checks.note("STOCK IMAGES BLOCKED — a 403 is no answer: retried after the wait, never a final 'no photo'")
+
+    catalog = _Catalog({"Unleashed": (24999, _NUMBER, 685007, _PHOTO)})
+    refused = [True]
+    asked: List[str] = []
+
+    def urlopen(request, timeout=None):
+        url = request.full_url
+        asked.append(url)
+        if refused[0]:
+            raise urllib.error.HTTPError(url, 403, "Forbidden", {}, io.BytesIO(b""))
+        return io.BytesIO(json.dumps(catalog(url)).encode("utf-8"))
+
+    clock = _FakeTime()
+    real_time = stockimages.time
+    stockimages.time = clock
+    try:
+        images = stockimages.StockImages(
+            market=pricehistory.Market(cache_dir=None, courtesy_delay=0.0, now=clock.time)
+        )
+        with mock.patch.object(urllib.request, "urlopen", urlopen), \
+                mock.patch.object(pricehistory, "_sleep", lambda _seconds: None), \
+                contextlib.redirect_stderr(io.StringIO()):
+            _warm(images, _PAIR)
+            checks.equal(
+                images.url_for(*_PAIR, _NUMBER), None,
+                "blocked: with tcgcsv answering 403, url_for answers None",
+            )
+            checks.ok(
+                images.group_pending(*_PAIR),
+                "blocked: and the pair is still pending, never a final 'no photo'",
+            )
+            first = len(asked)
+            checks.ok(first >= 1, "blocked: the first warm asks tcgcsv", f"asked {first} times")
+
+            clock.now += _INSIDE_WAIT
+            _warm(images, _PAIR)
+            checks.equal(len(asked), first, "blocked: inside the wait a second warm makes no request")
+
+            refused[0] = False
+            clock.now += _AFTER_WAIT
+            _warm(images, _PAIR)
+            for _ in range(100):
+                if not images.group_pending(*_PAIR):
+                    break
+                time.sleep(0.05)
+            checks.equal(
+                images.url_for(*_PAIR, _NUMBER), _PHOTO,
+                "blocked: once the wait has passed and tcgcsv answers, the photo lands",
+            )
+    finally:
+        stockimages.time = real_time
+
 
 # STOCK MIX, `GET /stock/mix` (docs/specs/sales-screen.md, Mix, checks 1 to 7). One home, `pipeline/stockmix.py`.
 # BUILDER CONTRACT, wire names read here: top level `asOf`, `cards`; per card `game set rarity finish state box
@@ -1662,6 +1727,7 @@ CHECKS = (
     check_stock_images_failed_refresh_keeps_the_good_index,
     check_stock_images_warm_until_known_skips_a_backing_off_pair,
     check_stock_images_waits_fit_the_client_window,
+    check_stock_images_blocked_pair_is_retried_not_final,
     check_search_group_stock_image,
     check_search_group_stock_image_guards,
     check_mix_leaves_out_retired_and_moved,
