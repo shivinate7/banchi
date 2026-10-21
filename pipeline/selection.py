@@ -551,8 +551,11 @@ def narrow(
     *,
     inventory: Optional[master.Inventory] = None,
     run_keys: Optional[Callable[[str], Sequence[str]]] = None,
+    chosen: Optional[Sequence[Tuple[Any, ...]]] = None,
 ) -> List[Any]:
     """The captures this selection is over, in the order they were scanned.
+
+    `chosen` is `_chosen`'s answer when the caller already read it, so the store is asked once.
 
     ORDER IS PRESERVED BECAUSE IT IS THE PRESS'S ORDER. `sidecar.scan` returns filename order
     and `cli/cmd_identify.py` walks that list to hash, prepare and submit, so re-sorting here
@@ -642,7 +645,9 @@ def narrow(
     if selection.state is not None or selection.since is not None:
         if inventory is None:  # pragma: no cover — a caller that ignored `needs_store`
             raise SelectionError("selection_invalid", "`state` needs the store to resolve.")
-        wanted = {f"{box}/{idx}" for box, idx, _ in _chosen(selection, inventory)}
+        if chosen is None:
+            chosen = _chosen(selection, inventory)
+        wanted = {f"{box}/{idx}" for box, idx, *_ in chosen}
         # A PHOTOGRAPH THE STORE HAS NO RECORD OF IS DROPPED BY THESE TWO TERMS AND NOTHING
         # ELSE. Both ask a question only a card record can answer, so a capture with no record
         # has no answer — and the honest reading of "the cards in state `captured`" is the ones
@@ -652,8 +657,9 @@ def narrow(
     return out
 
 
-def _chosen(selection: Selection, inventory: master.Inventory) -> List[Tuple[int, int, Optional[str]]]:
-    """`(box, index, cid)` of every card the `state` and `since` terms choose.
+def _chosen(selection: Selection, inventory: master.Inventory, *extra: str) -> List[Tuple[Any, ...]]:
+    """`(box, index, *extra)` of every card the `state` and `since` terms choose, `extra` being
+    more columns of the same row (`cid`, for the caller that finds photographs).
 
     ONE COLUMN READ FOR BOTH TERMS. `cards.select` builds no card objects, where
     `Inventory.in_state` builds one per row, so asking once for the columns is the difference
@@ -663,12 +669,12 @@ def _chosen(selection: Selection, inventory: master.Inventory) -> List[Tuple[int
     if selection.state is not None:
         master.check_state(selection.state)
     rows = inventory.cards.select(
-        ("box", "idx", "cid", "captured_at"),
+        ("box", "idx", *extra, "captured_at"),
         **({"state": selection.state} if selection.state is not None else {}),
     )
     return [
-        (box, idx, cid)
-        for _, (box, idx, cid, captured_at) in rows
+        (box, idx, *rest)
+        for _, (box, idx, *rest, captured_at) in rows
         if box is not None
         and idx is not None
         and (
@@ -722,7 +728,10 @@ def resolve(
             held.append(read_inventory())
         return held[0]
 
-    captures = _keyed(selection, roots, inventory_once, assume_box, variant_default)
+    chosen = None
+    if selection.state is not None or selection.since is not None:
+        chosen = _chosen(selection, inventory_once(), "cid")
+    captures = _keyed(selection, roots, chosen, inventory_once, assume_box, variant_default)
     if captures is None:
         captures = []
         for root in roots:
@@ -733,34 +742,32 @@ def resolve(
                     raise
     scanned = len(captures)
     inventory = inventory_once() if selection.needs_store else None
-    return narrow(selection, captures, inventory=inventory, run_keys=run_keys), scanned
+    return narrow(selection, captures, inventory=inventory, run_keys=run_keys, chosen=chosen), scanned
 
 
-def _keyed(selection, roots, read_inventory, assume_box, variant_default) -> Optional[List[Any]]:
+def _keyed(selection, roots, chosen, read_inventory, assume_box, variant_default) -> Optional[List[Any]]:
     """The captures for a `keys` or a `state`/`since` selection read straight from the chosen
     cards' own photographs, or None where the scan has to answer (a named path, a `run`, no term
     that names cards, or a key the store cannot place)."""
     if selection.paths:
         return None
-    by_state = not (selection.keys or selection.run) and (
-        selection.state is not None or selection.since is not None
-    )
+    by_state = chosen is not None and not (selection.keys or selection.run)
     if not selection.keys and not by_state:
         return None
     from identify import sidecar
 
-    inventory = read_inventory()
     photographs: List[Path] = []
     if by_state:
         # EVERY PHOTOGRAPH A CHOSEN CARD HAS, AT EITHER ADDRESS AND WHETHER OR NOT THE STORE SAYS
         # THE MOVE IS DONE: the scan reads a leftover file at the legacy address, `photos.find`
         # does not once `photos_relocated` is set. A chosen card with no photograph is absent from
         # the scan too. The key a capture answers to is its sidecar's, which `narrow` judges.
-        for box, index, cid in _chosen(selection, inventory):
+        for box, index, cid in chosen:
             for candidate in (photos.path(cid) if photos.is_photo_cid(cid) else None, photos.legacy_path(box, index)):
                 if candidate is not None and candidate.is_file():
                     photographs.append(candidate)
     else:
+        inventory = read_inventory()
         for key in selection.keys:
             box, index = (int(part) for part in key.split("/"))
             card = inventory.cards.get(master.position_key(box, index))
