@@ -1,311 +1,201 @@
-# Home Assistant improvements for banchi
+# The home tier: the HA Green, its 2 TB drive, the network and a Mac Studio
 
-**Status: PROPOSAL. Nothing here is built.** Each candidate needs the owner's word first. No decision
-is reopened by this file. It cites decisions to show what a candidate would touch.
+**Status: PROPOSAL. Nothing here is built.** Each role needs the owner's word before a build. The
+file cites decisions to show what a role touches. It reopens none by itself. Section 6 lists the ones
+a role would change.
 
 ## Owner rulings
 
-1. **Alerts are not the goal.** C1 to C3 below framed HA as an alert channel. That framing is set
-   aside. Home automations (lights, buttons, phone panels) are not the goal either.
+1. **Alerts are not the goal.** Home automations (lights, buttons, phone panels) are not the goal either.
 2. **The goal is infrastructure.** The always-on HA Green, its 2 TB USB drive, the UniFi network and a
-   possible Mac Studio become banchi's second tier, beside the Mac. The spec is to be rewritten around
-   the problems banchi has from living on one computer, from every aspect.
-3. **The Green tier takes four roles**, to be designed:
-   - **Storage tier.** Continuous store copies, photos, the catalog image mirror, and archived sold photos.
-   - **Front door.** A `.home.arpa` name, TLS and a login proxy, plus WireGuard for remote access.
-   - **Scheduler and waker.** HA wakes the Mac for the daily jobs.
-   - **Standby read copy.** A read-only, age-labelled copy that serves reads while the Mac is off.
-4. **Also to explore:** the Green does the server's internet fetching and holds caches.
+   possible Mac Studio become banchi's second tier, beside the Mac. The design starts from the problems
+   banchi has because it lives on one computer.
+3. **The Green tier takes four roles:** storage tier, front door, scheduler and waker, standby read
+   copy. Each is designed in section 4.
+4. **Also in scope:** the Green does the server's internet fetching and holds caches.
 
-The front door and the standby copy change D13 (the Mac holds the one truth). Proposals for them
-must cite D13 and wait for the owner's word on that entry.
+## 1. What the tier is
 
-## Background
+| Part | Facts | Limits that shape the design |
+|---|---|---|
+| HA Green | Rockchip RK3566, four Cortex-A55 cores, 4 GB RAM, 32 GB eMMC, gigabit Ethernet, two USB 2.0 ports. About 2-3 W. Always on. | It shares the box with HA Core, AdGuard (the phone's DNS over WireGuard) and the `degen` add-on. The Supervisor has no per-add-on memory cap, so a runaway add-on can take down DNS. USB 2.0 caps bulk copies well below gigabit. Keep data on the USB drive, not the eMMC. An HA restart takes about 2 minutes. HA backups are off. |
+| 2 TB USB drive | Already HA's data disk, so add-on `/share` and `/data` live on it. | The drive has no backup of its own. Never open a live SQLite file over SMB or NFS (DEBT67, D88). |
+| UniFi UDR7 | WireGuard server, a fixed IP for the Green, and AdGuard rewrites under `home.arpa` (`feed.home.arpa` already points at the Green). | A Wake-on-LAN magic packet is broadcast, so the Mac must be on the same network. |
+| This Mac | MacBook Pro, M5 Pro, 24 GB. On Wi-Fi. `pmset` sleep is 0 and `womp` is 1. 84 GB free on the system disk. | A laptop can leave the house. Wake-on-LAN does not work over Wi-Fi. |
+| Mac Studio (possible) | Idle about 6-9 W. | Not bought. Lean-server spec section 7 (option e) parks a whole-store move to a Mac mini. |
 
-The owner runs Home Assistant (HA) on a HA Green. This file records what three of the owner's
-repos do with HA and over-the-air (OTA) updates. It then says which of those patterns would help
-banchi, and which would not.
+Measured on this Mac: `store.sqlite` 126 MB, `inventory/` 733 MB (354 MB of it the model file),
+`captures/` 5.1 MB in 450 files for 4,286 cards. D172 recorded 4.45 GB of photos. The gap is
+unexplained (unmeasured why).
 
-Sources, all read-only. Paths are inside each repo.
+## 2. Problems from living on one computer
 
-- `shivinate7/home`: `CLAUDE.md`, `README.md`, `tools/ha-ws.mjs`, `tools/deploy-degen.sh`,
-  `records/` (`adguard-home.md`, `ha-mcp.md`, `home-app.md`, `hacs.md`, `backups.md`, `plan.md`,
-  `smart-home-design.md`, `scripts.md`, `tunnel.md`).
-- `shivinate7/ios-adblock`: `tools/reinstall-phone-apps`, `tools/phone-apps.json`,
-  `tools/dev.shivinate.phone-apps.reinstall.plist`, `.github/workflows/` (`ci.yml`,
-  `pin-bump.yml`, `export-lists.yml`), `DESIGN.md`.
-- `shivinate7/degen` (GitHub only): `ops/ha-addon/` (`README.md`, `config.yaml`, `run.sh`),
-  `ops/lan-check.py`, `docs/owner-steps.md`, `docs/decisions/hosting-always-on-host.md`,
-  `.github/workflows/nightly.yml`.
+Each row names the role in section 4 that answers it. "None" means no role here answers it.
 
-Not read: `shivinate7/home-app` (the owner's HA client app) and tcg-dealer (the dispenser
-firmware). The `home` records mention both. Claims about them below come from those records only.
+| Aspect | Problem for the owner | Evidence | Role |
+|---|---|---|---|
+| Durability | The store and every photo exist once. Error text says "restore from a backup", and nothing makes one. | DEBT67, D88 | R1 |
+| Durability | `price_history` is the only copy once a bucket leaves the source's 357-day window. | D219, D222 | R1 |
+| Durability | A photo reclaim deletes the sold photo with no undo. | D89 | R1 |
+| Durability | `.env` holds the Anthropic key and the TCGplayer cookie on this Mac only. | `envfile.get_live` | R1 (Q1) |
+| Fetching | A catalog export holds one of four request slots for up to 120 s. | D104, D166 | R2 |
+| Fetching | An orders fetch is about 115 requests against a 120 a minute budget, in the request. Two presses in a minute can break the budget. An unattended fetch needs its own entry. | D91, `order_transport.fetch_open_orders` | R2 |
+| Fetching | The price-history sweep is 3,656 requests, about an hour, with no schedule. | D224, DEBT32 | R2 |
+| Fetching | Stock photos are hotlinked from two CDNs with no disk cache. pokemontcg.io ends on 2027-03-01. | D301, DEBT44 | R2 |
+| Fetching | The catalog image mirror is 16.7 GB, by hand only. | D15, `make catalog-mirror` | R2 |
+| Fetching | A Haiku batch is polled by a child of the server for up to an hour. | `identify.batch` | R2 |
+| Availability | The daily price refresh and demo mirror run at set times. Nothing handles a missed run. | `scripts/launchagent.py` | R3 |
+| Availability | When the Mac is off, the Fulfiller cannot see the pack list or where a card is. | D13, D152 | R4 |
+| Access | The server has no auth and listens on every interface. A LAN client that sends no Origin can write or delete. | `capture_server.HOST`, D5, D13 | R5 |
+| Access | Plain http on a LAN name is not a secure context. The Fulfiller's phone loses `crypto.randomUUID` and any camera use. | `useCamera`, `server.ts` | R5 |
+| Access | No way in from outside the house. D13 says remote access is a tunnel, and none exists. | D13 | R5 |
+| Load | Slow reads are GIL-bound inside the server (`/orders`, `/inventory`, `/boxes`, `/search`, `/pricing`). | DEBT11, lean-server spec | None. Lean-server spec, PR #852. |
+| Ops | Dev and prod share the Mac. Test fleets wedged the live server, and branch code reached :8000 twice. | DEBT11, DEBT16, D158 | R6 |
 
-## 1. What the three repos do with HA and OTA
+## 3. The shape: the Green fetches and keeps, the Mac writes
 
-### home: the control repo for the HA Green
+One writer stays one writer (D88, D138). The Green never writes `store.sqlite`.
 
-- **Route to HA.** Four routes, all from the owner's Mac.
-  - The HA WebSocket API, through `tools/ha-ws.mjs`. It sends JSON commands and prints the results.
-  - SSH to the HA Green as root, with one key. The SSH add-on runs the `ha` CLI and the Supervisor API.
-  - The ha-mcp add-on. It is an MCP server over plain HTTP on the LAN, set to read-only (`records/ha-mcp.md`).
-  - HACS, which installs custom integrations (`records/hacs.md`).
-- **OTA.** Pull, driven by a script on the Mac. `tools/deploy-degen.sh <sha>` does these steps.
-  - It exports the commit with `git archive` and builds it.
-  - It copies the add-on folder to the Green over SSH.
-  - It runs `ha store reload`, then `ha apps update` (or `rebuild`), then starts the add-on.
-  - It probes HTTPS with retries.
-  - HA add-on updates and HACS installs are done by hand in HA.
-  - Static web files for the home app are copied into the HA `www` folder (`records/home-app.md`).
-- **Rollback.** Per change, written in the record: remove the files, delete the integration, or
-  restore a placeholder. For add-ons, `deploy-degen.sh` takes any SHA, so an older SHA is the
-  rollback. No automatic rollback exists. (This last line is my reading of the script.)
-- **Auth and secrets.** A long-lived HA token in a mode-600 file on the Mac. The script reads it and
-  never prints it. The ha-mcp URL has a secret path that is the only access control. A GitHub token
-  sits inside HA's HACS entry. Rule in `CLAUDE.md`: never print or commit a token, and Claude never
-  types one into a field.
-- **Monitoring.** Two HA automations: `addon_down_alert` (an add-on is off for 2 minutes) and
-  `disk_low_alert` (free disk under a floor for 10 minutes). Both push to the HA companion app on
-  the owner's phone. The add-on watchdog restarts a stopped add-on first, so a short stop sends no alert.
-  The disk alert is recorded as unproven. A "Needs attention" row and a "Last backup" row go on the
-  home app's System page. Backups are manual: the record says no schedule and no off-device copy.
-- **Lessons in the records.**
-  - A Core restart stranded a new HomeKit config entry. A restart now needs a check with the other
-    sessions that use HA, and a post-restart check list.
-  - HA serves `/local/` with a 31-day cache. A new deploy was not seen. The fix: `index.html` reads
-    a `version.json` with no-store, then loads assets with `?v=<n>`.
-  - After one reboot the DNS add-on bound only loopback. A restart of the add-on fixed it. The
-    record keeps a `dig` check.
-  - One restart was cleared with "no work depends on HA". A second session on the same host was
-    asked only after. The record says so in its own words.
-  - A guard is recorded as unproven until a test makes it fire.
+- The Green runs the outbound work on its own clock and drops raw results into a folder on the 2 TB
+  drive. This is the drop-folder pattern of `degen`'s JDownloader add-on: `in`, then `done` or
+  `refused`, checked by a guard that fails closed.
+- The Mac's server ingests a drop under its own store lock, the next time it is up.
+- The Mac pushes copies out: the store as a replica, photos as files.
+- Heavy compute (the free reader peaks at 1.1 GB, the card finder) never runs on the Green. It stays on
+  the Mac, or later the Studio.
 
-### ios-adblock: HA as a host, and its own OTA loop
+## 4. Roles
 
-- **Route to HA.** Almost none. It does not call the HA API. The HA Green hosts AdGuard Home as an
-  add-on, and the phone reaches it through a WireGuard tunnel. The research notes moved to `home`.
-- **OTA.** The phone app is signed with a free team, so the signing lapses every 7 days.
-  `tools/reinstall-phone-apps` is a daily launchd job on the Mac. For each app in
-  `tools/phone-apps.json`, it does these steps.
-  - It uses a private clone and runs `git reset --hard origin/main`.
-  - It runs the prebuild commands, then builds and signs.
-  - It installs with `devicectl`.
-  - It keeps a `last-success` stamp per app. It skips if the stamp is under 20 hours old. It alerts
-    if the stamp is over 3 days old.
-  - Degen is a second entry in the same job.
-  - A second OTA path: `.github/workflows/export-lists.yml` makes a versioned GitHub release of the
-    blocklists. `pin-bump.yml` opens a daily PR that bumps pinned list sources. The PR auto-merges
-    when the required check is green.
-- **Rollback.** None for the phone app. The next daily run installs main again. A failed step leaves
-  the old build on the phone.
-- **Auth and secrets.** The device id and team id are script defaults. No token. CI uses
-  `permissions: {}` by default and per-job grants. Actions are pinned by full SHA, and a zizmor
-  audit runs in CI.
-- **Monitoring.** `notify` uses `osascript` for a Mac notification. It runs on any failed step and
-  on an overdue or invalid stamp. Every step has a timeout. Step output goes to a file, not a
-  pipe, so a child that holds stdout cannot defeat the timeout. An absent or locked phone is a soft
-  fail with its own exit code (75). A nightly CI run opens an issue if main is red (`ci-alarm` action).
-- **Lessons in the repo.** A draft-skipped CI run cancelled the real run, so the draft state is now
-  in the concurrency group. A bot PR made with the workflow token gets its CI run held for approval,
-  so `pin-bump.yml` approves it. The file calls that a bandaid. The script guards its `reset --hard`
-  (real directory, own git root, expected origin).
+### R1. Storage tier
 
-### degen: a feed reader that runs as an HA add-on
+- **What.** Litestream streams the store's WAL to the Green over SFTP, as a replica copy. A nightly
+  `sqlite3 .backup` is the simpler fallback. Photos and `price_history` exports sync as files. The
+  catalog image mirror lives on the drive. A reclaim moves a sold photo to the drive instead of deleting it.
+- **Solves.** DEBT67, the one-copy store. The `price_history` loss. D89's no-undo reclaim.
+- **Cost.** Small. One replication process on the Mac and one SFTP or SSH target on the Green (the
+  `core_ssh` add-on exists). Litestream needs WAL mode and a `busy_timeout`, and the store already uses WAL (D88).
+- **Risk.** The store holds buyer names and addresses (D295 scrubs them for the demo). On the Green, any
+  add-on that maps `/share` can read it, and HA backups are off. Q1 decides where it may live.
+- **Touches.** D88, D89 (reclaim becomes a move), DEBT67, `make status` (a "last copied" line).
 
-- **Route to HA.** HA hosts it. It is not wired into HA. It is a local add-on (`ops/ha-addon/`):
-  a Dockerfile, a `config.yaml`, and a `run.sh`. The config has the arch, `boot: auto`, one TCP port,
-  `share` read-write, `ssl` read-only, and a `watchdog` on the TCP port. I found no call to the HA API
-  in `server/`. Its health route is `/api/health`.
-- **OTA.** Server: `deploy-degen.sh` in `home` (above). The add-on `version` is the short SHA, so HA
-  sees every commit as an update. The README notes a trap: `rebuild` fails when the version
-  changed, so use `update`. Web client: a PWA with a service worker. A test
-  (`app/tests/pwa-update.spec.ts`) proves that an open app picks up a new build, and that a resume
-  from the background checks for one. iPhone app: the `ios-adblock` reinstall job.
-- **Auth and secrets.** The TLS pair lives in the HA `ssl` share and never in git. `run.sh` copies
-  it to a private folder (mode 0700). It starts the server as a non-root user with `no-new-privs`.
-  Push keys are in an untracked `.env`. HTTPS uses a local CA.
-- **Monitoring.** The add-on watchdog, plus `addon_down_alert` from `home`. `ops/lan-check.py` is a
-  stdlib script run from the Mac. It prints `PASS`, `FAIL` or `UNKNOWN` per check (dns, tls, health,
-  sources, origin, csp, media). A check that cannot run is never a pass. `nightly.yml` is the same
-  red-main alarm as above.
-- **Lessons.** `ops/ha-addon/README.md` records that the add-on config cannot exclude the data share
-  from HA backups. `run.sh` records no memory limit and no disk cap (`ponytail:` notes). Degen's
-  hosting decision (`docs/decisions/hosting-always-on-host.md`) lists the facts that would reopen it.
+### R2. Fetch tier and cache
 
-## 2. Candidates for banchi
+- **What.** A local add-on on the Green runs banchi's outbound fetches and writes each result to the
+  drop folder:
+  - catalog exports per game
+  - the live listings export
+  - the orders pages
+  - the price-history sweep, on a schedule
+  - Haiku batch polling
+  - the catalog image mirror
 
-Order: value against effort, best first. Every candidate is a proposal.
+  An nginx `proxy_cache` in front of the stock-photo CDNs keeps each image once, revalidates it, and
+  serves it stale when the CDN is down. After 2027-03-01 the cache is the Pokemon stock-photo source.
+- **Solves.** No fetch holds a request slot. Jobs run on time with the Mac asleep. Fetches stay paced
+  from one place. DEBT32 and DEBT44.
+- **Cost.** Medium to large. The fetch code moves behind a drop-folder contract, and ingest becomes a
+  server step. The Green is aarch64 Linux. Banchi's fetch modules are stdlib Python, but `server.ports`
+  shells out to Mac-only tools, so the add-on needs a fetch-only entry point (unmeasured effort).
+- **Risk.** The TCGplayer cookie and the Anthropic key must live on the Green (Q1). The cookie expires
+  and is pasted by hand (`order_session_expired`), so the paste must reach the Green.
+- **Touches.** D104 (live fetch is a guarded constant), D166 (export reuse), D91 (unattended orders
+  fetch needs its own entry), D301 (stock photos are hotlinked), D13.
 
-Banchi facts that shape all of them:
+### R3. Scheduler and waker
 
-- Banchi is a Mac app with a camera, a Bluetooth link and a local store. HA is on a different box
-  that can restart. A restart takes a couple of minutes, per the `home` records. So every call to HA
-  must be best-effort and short. It must never sit inside a write path or a request slot.
-- The server has no auth (CLAUDE.md "No auth"). It listens on every interface
-  (`capture_server.HOST`), so the Fulfiller's phone can reach it (D5, D13). Nothing on the network
-  keeps HA out. "Do not let HA poll in" is a rule, not a boundary.
-- The front end talks to the capture server and nothing else, save the dispenser link (D316, a
-  Capture button starts and stops the dispenser). The browser must never call HA.
-- A new alert must be shown to fire before it is trusted. The `home` disk alert is still unproven.
+- **What is left of it after R2.** Fetches no longer need the Mac awake. The waker only matters when
+  ingest or a Mac-only job must finish before a sitting, such as the demo mirror, which needs `gh` and
+  the checkout.
+- **How.** Wake-on-LAN needs Ethernet, and this Mac is on Wi-Fi, so it cannot work today. The working
+  path is `pmset repeat wakeorpoweron` on the Mac, with HA as the one scheduler for everything on the
+  Green. Missed-run handling (catch up on the next wake) goes into both daily scripts.
+- **Cost.** Small.
+- **Touches.** `scripts/launchagent.py`, D295 (demo mirror), D176.
 
-### C1. Last-success stamp and overdue alert for the daily agents (no HA needed)
+### R4. Standby read copy
 
-- **What.** The price-refresh and demo-mirror agents each write a `last-success` stamp. A small check
-  raises a Mac notification when a stamp is older than a set limit, or invalid. A failed step also
-  notifies.
-- **Reuses.** `ios-adblock` `tools/reinstall-phone-apps`: stamp file, overdue limit, invalid-stamp
-  case, `osascript` notify, and a log-path hint in the message.
-- **Gain.** Today a failed or partial price refresh shows as a note on `#/pricing`. The owner sees
-  it only if that screen is open. This pushes the news to the owner.
-- **Cost and risk.** Small. Both agents already log to a file in `~/.banchi`. Risk: a notification
-  from a sleeping Mac is late. Risk: the demo-mirror script sits under an auto-merge fence, so its
-  change is its own PR. The price-refresh script notes the same.
-- **Touches.** D104, live fetch is its own guarded constant (the daily job runs that fetch). D295,
-  the public demo is the scrubbed real store. D42, main moves by pull request (the mirror's
-  auto-merge fence).
-- **Why first.** It gives most of the value of C2 and C3 with no HA, no secret and no network.
+- **What.** A read-only view on the Green, built from R1's replica and labeled with its age. First form:
+  a static pack list and a "where is this card" lookup, regenerated on each replica update and served
+  by nginx. It takes no writes.
+- **Why static first.** A read-only banchi server on aarch64 Linux is unproven (`server.ports` is
+  Mac-bound, and onnxruntime is untested there). A static page needs neither.
+- **Solves.** The Fulfiller can pack while the Mac is off or away.
+- **Cost.** Medium.
+- **Risk.** A stale answer about a card that just sold. The age label and "read only" must be on screen
+  (D196 keeps mechanism words off screen, so the label is a sentence).
+- **Touches.** D13 (a second place that answers about the store), D5, D27.
 
-### C2. Alert bridge: banchi failures to the owner's phone through HA
+### R5. Front door
 
-- **What.** When C1 raises an alert, also send it to HA. HA pushes it to the companion app on the
-  owner's phone. Events: a daily agent failed or is overdue, a run is stranded, an identify or send
-  stopped and needs review, the server restarted by itself.
-- **Reuses.** `home` `addon_down_alert` and the companion-app notify service. For the send, prefer an
-  HA webhook trigger over the full-access token that `tools/ha-ws.mjs` uses. A webhook can only
-  start the one automation it belongs to.
-- **Gain.** The owner learns of a stranded run or a missed refresh away from the Mac.
-- **Cost and risk.** Small to medium. It needs one HA automation on the owner's side. It needs one
-  sender function on the banchi side, with a 3 second timeout that swallows errors.
-  - Risk: the webhook id is a secret. Keep it in `~/.banchi` (mode 600). Never put it in git, a
-    log or a screen. The pre-commit hook should learn to refuse it.
-  - Risk: alert fatigue. Send one digest for review items, not one message per card.
-  - Risk: HA is down at the moment of the failure. The Mac notification from C1 stays the floor.
-- **Touches.** D305, the reaper stops only its own (the sender must not kill or restart anything).
-  D33, reachable from a screen. The hard rule that a route is not a feature applies: the setting
-  needs a control the owner can find, with a "send a test alert" press and a receipt.
-  CLAUDE.md "Opsec" (the secret scan).
+- **What.** `banchi.home.arpa` through an AdGuard rewrite, TLS from a proxy on the Green (Nginx Proxy
+  Manager add-on, or Caddy), a login at the proxy, and WireGuard for outside the house.
+- **The gap a proxy alone leaves.** The Mac's server listens on every interface, so the LAN can walk
+  around the proxy. One of these must close the bare port:
+  - The server accepts only loopback and the Green's address.
+  - The macOS firewall does the same.
+  - The proxy runs on the Mac instead.
 
-### C3. Heartbeat sensor, and HA alerts on silence
+  `HOST = "::"` fixed a dual-stack collision, and any change must keep that fix.
+- **What TLS gives.** The Fulfiller's phone gets a secure context. The capture tab stays on `localhost`,
+  because the rig is wired to the Mac and Web Bluetooth needs a secure page. A new host resets the
+  camera grant and the device keys on that device (D138, D27).
+- **Certificate choice.** A Caddy internal CA needs its root installed on each device. Let's Encrypt
+  DNS-01 needs a real domain with a DNS API, and gives a publicly trusted certificate (Q4).
+- **Cost.** Medium. A certificate to renew, a proxy to keep up, and a bind change on the Mac.
+- **Touches.** D13, D5, D138, D27, the `BANCHI_ALLOWED_ORIGINS` list.
 
-- **What.** A separate launchd watcher on the Mac (not the capture server) reads `/status` once a
-  minute. It sends a small digest to HA: server up, its boot id, open review count, unsent copies,
-  and last success per agent. HA keeps the digest as sensors. An HA automation alerts when the
-  heartbeat stops for longer than a set time.
-- **Reuses.** `home` `addon_down_alert` (the "off for N minutes" shape) and the add-on watchdog
-  idea (restart first, alert only if the restart did not help). `degen` `ops/lan-check.py`: `PASS`,
-  `FAIL` and `UNKNOWN` as three states, so "could not read" never shows as "fine".
-- **Gain.** The owner sees that the server or the Mac is down without opening a browser. It covers
-  the case where nothing runs to raise C1 or C2.
-- **Cost and risk.** Medium.
-  - The watcher must be its own process. An alert that lives in the server cannot report that the
-    server died.
-  - `/status` has no unsent-copy count and no per-agent last success, and it returns file paths
-    (`capture_server.do_status`). The digest needs new fields, and the paths must not reach HA.
-  - `/status` is on the cheap lock-free lane (`PHOTO_LANE_EXACT`), so one read per minute is safe.
-    Do not read `/inventory`.
-  - A Mac that sleeps or is off looks dead. HA needs a quiet-hours or "Mac asleep" rule. Without
-    it, this alert cries wolf.
-  - HA sensors for banchi are a second place that states what is in the store. Keep the digest to
-    counts, with no card names, SKUs or photos.
-- **Touches.** D176, the primary checkout syncs (the watcher belongs to the primary checkout only,
-  like `make launch-agent`). D43, the port follows the store (the watcher reads this checkout's
-  port from `server/ports.py`, never a fixed number). D88, SQLite and one transaction per write (the
-  watcher reads `/status` only, never the store file).
+### R6. The Mac Studio, later
 
-### C4. A small HA dashboard card for the same digest
+- **What.** The Studio runs prod: the store, capture and the heavy readers. The Green stays the
+  always-on edge (R1 to R5). This MacBook becomes a dev machine and a client.
+- **Solves.** Dev and prod stop sharing a machine (DEBT16, D158). The laptop can leave the house.
+- **Plan.** Lean-server spec section 7 is the move plan. This role adds the edge in front of it.
 
-- **What.** One HA card with the C3 numbers: server up, review queue, unsent copies, last price
-  refresh.
-- **Reuses.** `home` dashboards and the home app's System page ("Needs attention" row).
-- **Gain.** A glance at the phone or a wall tablet. Low by itself.
-- **Cost and risk.** Small once C3 exists, and pointless before. Risk: two screens say the same
-  thing (banchi's Home and HA). Banchi's Home stays the source of truth.
-- **Touches.** D27, session state is device-local (HA must not become a store of card state).
+## 5. Order
 
-### C5. Rig and dispenser state on HA
+1. R1, the storage tier. It changes no decision except D89's reclaim, and it closes the worst gap.
+2. R3, the scheduler. Missed-run handling and `pmset` alone. Small.
+3. R2, the fetch tier, after Q1. Start with the stock-photo cache and the price-history sweep. They
+   need no cookie.
+4. R5, the front door, after the bind decision.
+5. R4, the standby copy, after R1 has run for a while.
+6. R6, when a Studio exists.
 
-- **What.** Show "dispenser connected", "dealing" and "cards this sitting" in HA.
-- **Reuses.** The same digest path as C3.
-- **Gain.** Low. The owner is at the Mac when the rig runs, and the Capture screen already shows it.
-- **Cost and risk.** Medium to high. The dispenser state lives in the browser (`app/src/dealer.ts`,
-  Web Bluetooth). To send it, the browser would post to the capture server, which would store a new
-  fact. D316 says "Nothing is stored" about dealing. A phone-visible "dealing" flag could also
-  invite a remote start, which is not wanted.
-- **Touches.** D316, a Capture button starts and stops the dispenser.
-- **Recommendation.** Do not build until C2 and C3 have run for a while and the owner names a need.
+## 6. Open questions for the owner
 
-### C6. Rig firmware updates through HA (ESPHome)
+Asked one at a time. Each ruling moves into "Owner rulings" above.
 
-- **What.** Use the ESPHome add-on already on the HA Green to update the dispenser's ESP32.
-- **Reuses.** ESPHome OTA, which the HA Green already hosts.
-- **Gain.** Unknown. The dispenser advertises an OTA-style Bluetooth name. Its firmware has its
-  own `OTA:` and `WIFI:` commands, which `docs/specs/dispenser.md` forbids banchi to send.
-- **Cost and risk.** High. ESPHome would replace the firmware and its Bluetooth protocol. Banchi's
-  command allow list (`MOTOR:START`, `MOTOR:STOP`) depends on that protocol. I did not read the
-  dispenser firmware repo, so I cannot say if ESPHome can speak it. That is unmeasured.
-- **Touches.** D316, a Capture button starts and stops the dispenser (the allow list).
-- **Recommendation.** Defer. Read the firmware repo first.
+1. **Where may the store, the photos and the secrets live?** On the Green in an add-on's private
+   `/data` (mode 600, no other add-on maps it), in `/share`, or only on the Mac with the Green holding
+   an encrypted copy. This gates R1, R2 and R4.
+2. **D13, the Mac holds the one truth.** R4 adds a second place that answers about the store, and R5
+   changes how the store is reached. Does D13 bend to "one writer, many readers"?
+3. **D89's reclaim.** Should it move sold photos to the drive instead of deleting them?
+4. **Certificates.** A Caddy internal CA, or Let's Encrypt DNS-01 on a real domain.
+5. **Closing the bare port.** Loopback plus the Green, a firewall rule, or the proxy on the Mac.
+6. **Who owns the Green-side config.** The `home` repo (HA rules there: ask before an HA restart), or
+   banchi as a local add-on folder.
 
-### C7. HA-driven updates of the banchi Mac app
+## 7. What not to do
 
-- **What.** HA, or a script like `deploy-degen.sh`, would pull main and restart banchi.
-- **Gain.** Close to none. The primary checkout already fast-forwards itself from `origin/main`.
-  The supervisor then adopts the new code (D176). Deploys already go by PR.
-- **Cost and risk.** High. See section 4. **Not recommended.**
-- **Worth keeping.** The `ios-adblock` private-clone guard (real directory, own git root, expected
-  origin) fits if banchi ever adds a second automated clone. It is not needed now.
+- **Never run a live store on the Green, or over SMB or NFS.** One writer (D88). `fcntl.flock` and
+  `os.replace` do not hold over a network share (DEBT67).
+- **Never run heavy compute on the Green.** It has 4 GB of RAM, no memory cap, and it carries the phone's DNS.
+- **Never let HA or the Green restart, update or stop banchi.** The primary checkout syncs itself (D176),
+  and main moves by PR (D42).
+- **Never put the full HA token in banchi.** Banchi needs no HA API for these roles.
+- **Never put a code-card photo or code string on the Green.** A live code is a bearer instrument
+  (CLAUDE.md "Opsec").
+- **Never trust a copy that was never restored.** R1 is done only after a restore from the replica
+  passes a check.
 
-## 3. Open questions for the owner
+## Sources
 
-1. **Which channel for failures?**
-   - A: Mac notification only (C1).
-   - B: Mac notification, plus HA push to the phone (C1 and C2).
-   - C: B, plus a heartbeat (C1, C2 and C3).
-   - Recommendation: A now, then B. C only if the Mac is often unattended.
-2. **How should banchi send to HA?**
-   - A: an HA webhook (secret id, one automation).
-   - B: the HA REST API with a long-lived token named for banchi.
-   - Recommendation: A. A leaked webhook can only fire one automation. A leaked token controls HA.
-3. **Where may the secret live?**
-   - A: a mode-600 file under `~/.banchi`, outside every checkout.
-   - B: the macOS keychain.
-   - Recommendation: A, as `home` does. It matches the machine state banchi already keeps there.
-4. **What may HA see?**
-   - A: counts and times only.
-   - B: counts, times and box names.
-   - Recommendation: A. A card name or a code is a store fact or a bearer instrument. HA has its
-     own backups and add-ons.
-5. **Quiet rule for a sleeping Mac.**
-   - A: heartbeat alerts only between set hours.
-   - B: alert only if the Mac was last seen awake.
-   - C: no heartbeat alerts (skip C3).
-   - Recommendation: C unless the Mac runs unattended. Then B.
-6. **Who owns the HA side?** Each HA change needs the owner's word. A restart needs a check with
-   the other sessions that use HA (the `home` rules).
-   - A: the `home` repo holds the automation as a record, and banchi holds only the sender.
-   - B: banchi holds both.
-   - Recommendation: A (one home per capability).
+Read-only: `shivinate7/home` records, `shivinate7/home-app` `SPEC.md`, `shivinate7/ios-adblock`
+research notes and tools, `shivinate7/degen` `ops/ha-addon/` and its hosting decision,
+`shivinate7/tcg-dealer` `PROTOCOL.md`. Vendor docs: HA Green, HA add-on configuration, Litestream,
+SQLite backup and "use over a network", nginx `proxy_cache`, `pmset`, MDN secure contexts, Caddy
+automatic HTTPS, Let's Encrypt challenge types.
 
-## 4. What not to do
-
-- **Do not host banchi as an HA add-on (the degen pattern).** Banchi needs the Mac camera, Chrome
-  Web Bluetooth and a local store. An add-on has none of these. `degen` can move because it is a
-  server and a client.
-- **Do not let HA poll the capture server.** The server has no auth and already listens on the LAN. A burst
-  of clients can wedge it (`REQUEST_SLOTS`, `PHOTO_SLOTS`). Push outbound instead.
-- **Do not let HA or any remote trigger update, restart or stop banchi.** The primary checkout
-  syncs from `origin/main` already (D176). A remote restart can bounce the server mid-sitting.
-  CLAUDE.md says the capture server is not yours to restart. Main moves by PR (D42). The `home`
-  records show a restart that stranded a config entry. Banchi has more state in flight.
-- **Do not send the full HA token to banchi.** Use a webhook (C2).
-- **Do not put card data, photos, SKUs or code strings in HA.** HA backups are manual. The add-on
-  cannot exclude its data share. A code is a bearer instrument.
-- **Do not call HA from the browser.** The front end talks to the capture server only. D316 is the
-  one exception, and it is for the dispenser.
-- **Do not alert on every event.** Send one digest per sitting for review items. A guard that cries
-  wolf is ignored, and then it is spent.
-- **Do not trust an alert before it fires once.** Show each new alert red on a forced fault. The
-  `home` records flag the disk alert as unproven for this reason.
-- **Do not add the sender to the server's request path.** HA can be down for minutes. Run a send in
-  the separate watcher, with a short timeout and no retry loop.
-- **Do not build any of this before the owner names it.** Everything above is a proposal.
+Set aside by ruling 1: an earlier draft proposed failure alerts, a heartbeat and an HA dashboard card.
+It also proposed rig state in HA, ESPHome dispenser firmware and HA-driven updates. Git keeps it.

@@ -5409,11 +5409,11 @@ COMPONENTS = [
     {
         "path": "docs/specs/home-assistant.md",
         "status": "tbd",
-        "does": "PROPOSAL, nothing built: what the owner's home, ios-adblock and degen repos do "
-                "with Home Assistant and over-the-air updates, and which of those patterns would "
-                "help banchi (failure alerts, a heartbeat, a dashboard card), with open "
-                "questions and what not to do.",
-        "governed_by": ["D176", "D316", "D104", "D295", "D42"],
+        "does": "PROPOSAL, nothing built: the home tier. The always-on HA Green, its 2 TB drive, "
+                "the UniFi network and a possible Mac Studio, set against the problems banchi has "
+                "from living on one Mac. Six roles: storage tier, fetch tier and cache, scheduler, "
+                "standby read copy, front door, Studio. Owner rulings, open questions, what not to do.",
+        "governed_by": ["D13", "D88", "D89", "D104", "D166", "D91", "D301", "D176", "D42"],
     },
     {
         "path": "fixtures/",
