@@ -6,19 +6,28 @@ the order `CHECK_ORDER` runs them.
 
 from __future__ import annotations
 
+import errno
+import io
 import json
+import http.client
 import http.server
 import os
+import re
+import socket
+import ssl
 import subprocess
 import sys
 import tempfile
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
 import envfile
 
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
+from unittest import mock
 from harness.tests import Checks
 from cli import resolve, runs
 from identify import batch
@@ -35,10 +44,13 @@ from harness.tests.t7.common import (
     QuietHandler,
     SEAM_SKUS,
     _spawn_server,
+    attempt,
     error_code,
     identifications_for,
     isolated_home,
+    net_cases,
     request,
+    scripted_wire,
     seam_run,
     write_export,
 )
@@ -2225,8 +2237,897 @@ def check_key_rotation(checks: Checks) -> None:
                     os.environ[name] = value
 
 
+# ----------------------------------------------------------- D319, every network call retries once
+
+
+_REFUSED = urllib.error.URLError(ConnectionRefusedError(errno.ECONNREFUSED, "simulated: connection refused"))
+_RETRYABLE = (429, 502, 503, 504)
+
+
+def _ask(net, steps, host, **kwargs):
+    """One `net.request` over a scripted wire: `(bytes or None, the exception or None, wire)`.
+
+    EACH CASE NAMES ITS OWN HOST. The retry home counts lost calls per host and shares that count
+    across the process, so a case that lost its retries on a host another case uses would refuse
+    the other case's requests."""
+    with scripted_wire(*steps) as wire:
+        got, caught = attempt(lambda: net.request(f"https://{host}.example.test/x", **kwargs))
+    return got, caught, wire
+
+
+def _unsent_write(net, steps, host):
+    return _ask(net, steps, host, method="POST", data=b"x=1", idempotent=False)
+
+
+def _rule_c_retried_statuses(net):
+    bad = []
+    for code in _RETRYABLE:
+        got, caught, wire = _ask(net, [code, b"ok"], f"c-status-{code}")
+        if got != b"ok" or len(wire.requests) != 2 or len(wire.pauses) != 1:
+            bad.append(f"{code}: got {got!r} {caught!r}, {len(wire.requests)} requests, pauses {wire.pauses}")
+    return not bad, "; ".join(bad)
+
+
+def _rule_c_connect_failure_is_retried(net):
+    got, caught, wire = _ask(net, [_REFUSED, _REFUSED, b"ok"], "c-refused")
+    first = got == b"ok" and len(wire.requests) == 3
+    got2, caught2, wire2 = _ask(net, [TimeoutError("simulated: timed out"), b"ok"], "c-timeout")
+    second = got2 == b"ok" and len(wire2.requests) == 2
+    return first and second, (
+        f"two refusals then an answer: {got!r} {caught!r} in {len(wire.requests)} requests; "
+        f"a timeout then an answer: {got2!r} {caught2!r} in {len(wire2.requests)} requests"
+    )
+
+
+def _rule_c_three_refusals_raise_offline(net):
+    got, caught, wire = _ask(net, [_REFUSED], "c-offline")
+    return (
+        isinstance(caught, net.Offline) and len(wire.requests) == 3,
+        f"{caught!r} after {len(wire.requests)} requests",
+    )
+
+
+def _rule_c_pauses_are_short(net):
+    got, caught, wire = _ask(net, [_REFUSED], "c-pauses")
+    return (
+        len(wire.pauses) == 2 and all(p > 0 for p in wire.pauses) and sum(wire.pauses) <= 3.0,
+        f"pauses {wire.pauses}",
+    )
+
+
+def _rule_c_a_lost_status_is_not_offline(net):
+    got, caught, wire = _ask(net, [503], "c-giveup")
+    return (
+        isinstance(caught, net.NetError) and not isinstance(caught, net.Offline) and len(wire.requests) == 3,
+        f"{caught!r} after {len(wire.requests)} requests",
+    )
+
+
+def _rule_c_never_retried(net):
+    bad = []
+    for code in (500, 400, 401, 403, 404):
+        got, caught, wire = _ask(net, [code, b"ok"], f"c-never-{code}")
+        if (not isinstance(caught, net.NetError) or isinstance(caught, net.Offline)
+                or len(wire.requests) != 1 or wire.pauses):
+            bad.append(f"{code}: {caught!r}, {len(wire.requests)} requests, pauses {wire.pauses}")
+    return not bad, "; ".join(bad)
+
+
+def _rule_c_retry_after_sets_the_pause(net):
+    got, caught, wire = _ask(net, [(503, b"", {"Retry-After": "1"}), b"ok"], "c-after")
+    return got == b"ok" and wire.pauses == [1], f"{got!r} {caught!r}, pauses {wire.pauses}"
+
+
+def _rule_c_retry_after_that_does_not_fit_is_not_slept(net):
+    got, caught, wire = _ask(net, [(503, b"", {"Retry-After": "120"}), b"ok"], "c-after-long")
+    return (
+        isinstance(caught, net.NetError) and len(wire.requests) == 1 and not wire.pauses,
+        f"{caught!r}, {len(wire.requests)} requests, pauses {wire.pauses}",
+    )
+
+
+def _rule_c_idempotent_post_resends_the_same_request(net):
+    got, caught, wire = _ask(
+        net, [503, b"done"], "c-post", method="POST", data=b"a=1&b=2", headers={"X-Test": "yes"}, idempotent=True
+    )
+    sent = [(r["method"], r["data"], r["headers"].get("x-test")) for r in wire.requests]
+    return got == b"done" and sent == [("POST", b"a=1&b=2", "yes")] * 2, f"{got!r} {caught!r}, sent {sent}"
+
+
+def _rule_c_idempotent_post_follows_the_same_ladder(net):
+    got, caught, wire = _ask(net, [_REFUSED, b"done"], "c-post-refused", method="POST", data=b"a=1", idempotent=True)
+    first = got == b"done" and len(wire.requests) == 2
+    got2, caught2, wire2 = _ask(net, [500, b"done"], "c-post-500", method="POST", data=b"a=1", idempotent=True)
+    second = isinstance(caught2, net.NetError) and len(wire2.requests) == 1
+    return first and second, (
+        f"refused then done: {got!r} {caught!r} in {len(wire.requests)}; "
+        f"a plain 500: {caught2!r} in {len(wire2.requests)}"
+    )
+
+
+def _write_connect_failure_before_send_is_retried(net):
+    got, caught, wire = _unsent_write(net, [_REFUSED, b"done"], "w-refused")
+    return (
+        got == b"done" and [r["method"] for r in wire.requests] == ["POST", "POST"],
+        f"{got!r} {caught!r}, {len(wire.requests)} requests",
+    )
+
+
+def _write_that_never_connects_ends_offline(net):
+    got, caught, wire = _unsent_write(net, [_REFUSED], "w-offline")
+    return (
+        isinstance(caught, net.Offline) and 2 <= len(wire.requests) <= 3,
+        f"{caught!r} after {len(wire.requests)} requests",
+    )
+
+
+def _write_answered_with_a_status_is_raised_at_once(net):
+    bad = []
+    steps = (503, 429, 502, 504, 500, (503, b"", {"Retry-After": "1"}))
+    for index, step in enumerate(steps):
+        got, caught, wire = _unsent_write(net, [step, b"done"], f"w-status-{index}")
+        if (not isinstance(caught, net.NetError) or isinstance(caught, net.Offline)
+                or len(wire.requests) != 1 or wire.pauses):
+            bad.append(f"{step!r}: {caught!r}, {len(wire.requests)} requests, pauses {wire.pauses}")
+    return not bad, "; ".join(bad)
+
+
+def _write_dropped_after_send_is_raised_at_once(net):
+    bad = []
+    drops = (
+        TimeoutError("simulated: no answer after send"),
+        http.client.RemoteDisconnected("simulated: closed without a response"),
+        ConnectionResetError(errno.ECONNRESET, "simulated: reset by peer"),
+    )
+    for index, drop in enumerate(drops):
+        got, caught, wire = _unsent_write(net, [drop, b"done"], f"w-drop-{index}")
+        if (not isinstance(caught, net.NetError) or isinstance(caught, net.Offline)
+                or len(wire.requests) != 1 or wire.pauses):
+            bad.append(f"{type(drop).__name__}: {caught!r}, {len(wire.requests)} requests, pauses {wire.pauses}")
+    return not bad, "; ".join(bad)
+
+
+def _one_host_state_net_losses_degrade_fetch_json(net):
+    from pipeline import pricehistory
+
+    host = "https://s-net-first.example.test"
+    with scripted_wire(503) as wire:
+        for index in range(3):
+            attempt(lambda index=index: net.request(f"{host}/p{index}"))
+        before, slept = len(wire.requests), len(wire.pauses)
+        got, caught = attempt(lambda: pricehistory.fetch_json(f"{host}/p3"))
+    sent, paused = len(wire.requests) - before, len(wire.pauses) - slept
+    return sent == 1 and paused == 0, f"the next call made {sent} requests and {paused} pauses, {caught!r}"
+
+
+def _one_host_state_fetch_json_losses_degrade_net(net):
+    from pipeline import pricehistory
+
+    host = "https://s-json-first.example.test"
+    with scripted_wire(503) as wire:
+        for index in range(3):
+            attempt(lambda index=index: pricehistory.fetch_json(f"{host}/p{index}"))
+        before, slept = len(wire.requests), len(wire.pauses)
+        got, caught = attempt(lambda: net.request(f"{host}/p3"))
+    sent, paused = len(wire.requests) - before, len(wire.pauses) - slept
+    return sent == 1 and paused == 0, f"the next call made {sent} requests and {paused} pauses, {caught!r}"
+
+
+def _one_host_state_a_success_on_either_side_resets_the_count(net):
+    from pipeline import pricehistory
+
+    host = "https://s-reset.example.test"
+    with scripted_wire(lambda url: b'{"ok": 1}' if url.endswith("/good") else 503) as wire:
+        attempt(lambda: pricehistory.fetch_json(f"{host}/bad1"))
+        attempt(lambda: pricehistory.fetch_json(f"{host}/bad2"))
+        attempt(lambda: net.request(f"{host}/good"))
+        attempt(lambda: pricehistory.fetch_json(f"{host}/bad3"))
+        before = len(wire.requests)
+        attempt(lambda: pricehistory.fetch_json(f"{host}/bad4"))
+    return len(wire.requests) - before == 3, f"the fourth lost URL made {len(wire.requests) - before} requests, not 3"
+
+
+def check_net_request_retries_like_fetch_json(checks: Checks) -> None:
+    """D319 (one retry home): `net.request` applies rule C, for a GET and for an idempotent POST.
+
+    RULE C IS THE ONE `pricehistory.fetch_json` HAS TODAY, MOVED TO A SHARED HOME: back off on no
+    connection, 429, 502, 503 and 504, up to three attempts; honour `Retry-After` when the pause
+    fits; never retry a plain 500, a 403 or another 4xx. Every case runs over a scripted wire
+    (`harness/tests/t7/common.py`), so no socket is opened and no pause is spent.
+
+    On a tree with no `pipeline/net.py` every line below is one FAIL that says so."""
+    checks.note("")
+    checks.note("NET REQUEST — rule C over a scripted wire (no socket, no real pause)")
+    net_cases(checks, (
+        ("GET: 429, 502, 503 and 504 are each retried once after one pause, then the answer is returned",
+         _rule_c_retried_statuses),
+        ("GET: a refused connection, and a timeout before the socket opens, are retried",
+         _rule_c_connect_failure_is_retried),
+        ("GET: three straight refusals raise `net.Offline` after exactly 3 requests",
+         _rule_c_three_refusals_raise_offline),
+        ("GET: the two retry pauses are real and total 3 s or less", _rule_c_pauses_are_short),
+        ("GET: a 503 that never clears raises a `net.NetError` that is not `net.Offline`, after exactly 3 requests",
+         _rule_c_a_lost_status_is_not_offline),
+        ("GET: a plain 500, a 400, 401, 403 and 404 are one request each, with no pause",
+         _rule_c_never_retried),
+        ("GET: `Retry-After: 1` sets the pause to 1 s", _rule_c_retry_after_sets_the_pause),
+        ("GET: a `Retry-After` that does not fit the budget is not slept, and the call gives up after one request",
+         _rule_c_retry_after_that_does_not_fit_is_not_slept),
+        ("POST with `idempotent=True`: a 503 is retried, and every attempt sends the same method, body and header",
+         _rule_c_idempotent_post_resends_the_same_request),
+        ("POST with `idempotent=True`: a refused connection is retried, and a plain 500 is one request",
+         _rule_c_idempotent_post_follows_the_same_ladder),
+    ))
+
+
+def check_net_request_unsafe_writes(checks: Checks) -> None:
+    """D319 (one retry home), owner ruling: a TCGplayer write retries only if it was never sent.
+
+    `idempotent=False` retries ONLY a connect failure before send, which urllib raises as a
+    `URLError` with no response. Anything that may have reached the other end is raised at once and
+    makes no second request: a 5xx, a 429, a timeout, a dropped connection. A second request would
+    list the same cards twice. A failure after send is not `net.Offline`, because `Offline` says the
+    connection never opened and a caller may print "nothing was sent" from it."""
+    checks.note("")
+    checks.note("NET REQUEST — `idempotent=False` retries only what was never sent")
+    net_cases(checks, (
+        ("`idempotent=False`: a refused connection (URLError, no response) is retried and the answer returned",
+         _write_connect_failure_before_send_is_retried),
+        ("`idempotent=False`: a connection that never opens ends in `net.Offline` after 2 or 3 requests",
+         _write_that_never_connects_ends_offline),
+        ("`idempotent=False`: 503, 429, 502, 504, 500 and a 503 with Retry-After are each one request, no pause, raised at once",
+         _write_answered_with_a_status_is_raised_at_once),
+        ("`idempotent=False`: a timeout, a closed connection and a reset after send are each one request, raised at once, not Offline",
+         _write_dropped_after_send_is_raised_at_once),
+    ))
+
+
+def check_net_request_shares_one_host_state(checks: Checks) -> None:
+    """D319 (one retry home): `net.request` and `pricehistory.fetch_json` share ONE failure count per host.
+
+    The proof is behavioural. Three lost calls on distinct URLs of one host degrade that host, and
+    the other entry point's next call is still sent, as exactly ONE request with no pause (owner
+    ruling: a call is never refused unsent, and a degraded host gets one attempt). A success on either
+    side resets the one count, so the call after it retries in full. Two copies of the count would let
+    each entry point lose three calls before it learned what the other already knew."""
+    checks.note("")
+    checks.note("NET REQUEST — one host count, shared with `pricehistory.fetch_json`")
+    net_cases(checks, (
+        ("three calls lost through `net.request` degrade the host for `fetch_json` too: the next is 1 request, no pause",
+         _one_host_state_net_losses_degrade_fetch_json),
+        ("three calls lost through `fetch_json` degrade the host for `net.request` too: the next is 1 request, no pause",
+         _one_host_state_fetch_json_losses_degrade_net),
+        ("a success through `net.request` resets the count that `fetch_json` losses built: the next lost URL gets all 3 requests",
+         _one_host_state_a_success_on_either_side_resets_the_count),
+    ))
+
+
+# ------------------------------------------ D319, only the socket scripted: a partial send, a redirect
+
+
+class _Socket:
+    """A socket below `http.client`: it keeps what it is sent and answers from its step."""
+
+    def __init__(self, step) -> None:
+        self.step, self.sent = step, []
+
+    def setsockopt(self, *args) -> None:
+        return None
+
+    def settimeout(self, *args) -> None:
+        return None
+
+    def sendall(self, data) -> None:
+        if self.sent and isinstance(self.step, tuple):
+            raise self.step[1]  # the second send is the body, so the headers have gone out
+        self.sent.append(bytes(data))
+
+    def makefile(self, *args, **kwargs):
+        return io.BytesIO(self.step(b"".join(self.sent)) if callable(self.step) else self.step)
+
+    def close(self) -> None:
+        return None
+
+    def host(self) -> str:
+        return _host_header(b"".join(self.sent))
+
+
+class _SocketLog:
+    """What `_socket_wire` saw: `connects` tried, `sockets` opened, `pauses` slept, `leaks` of a real socket."""
+
+    def __init__(self, wire) -> None:
+        self.pauses, self.leaks = wire.pauses, wire.leaks
+        self.connects, self.sockets = 0, []
+
+    @property
+    def requests(self):
+        return [sock for sock in self.sockets if sock.sent]
+
+    def sent_to(self, host: str) -> bytes:
+        return b"".join(b"".join(sock.sent) for sock in self.sockets if sock.host() == host)
+
+
+def _host_header(sent: bytes) -> str:
+    found = re.search(rb"(?im)^host:\s*(\S+)", sent)
+    return found.group(1).decode() if found else ""
+
+
+def _raw(status: int, body: bytes = b"", **headers) -> bytes:
+    head = [f"HTTP/1.1 {status} Simulated", f"Content-Length: {len(body)}", "Connection: close"]
+    head += [f"{name}: {value}" for name, value in headers.items()]
+    return "\r\n".join(head).encode() + b"\r\n\r\n" + body
+
+
+@contextmanager
+def _socket_wire(*steps):
+    """`net.open` over the REAL urllib and http.client, with only the socket scripted.
+
+    `scripted_wire` stubs `OpenerDirector.open`, which sits above the redirect handler and above the
+    code that turns a failed send into a `URLError`. A case that needs either cannot run on it: a raw
+    `BrokenPipeError` from that stub is not what urllib raises. Each step is one connection, in order,
+    the last repeating: an exception (raised at connect, nothing sent), `("body", exc)` (raised on the
+    body send, after the headers went out), bytes (the raw reply), or a function of the bytes sent that
+    returns the reply. Use `http://` URLs: no TLS is wrapped. Pauses, host state and real sockets are
+    `scripted_wire`'s."""
+    real_open = urllib.request.OpenerDirector.open
+    real_connect = http.client.HTTPConnection.connect
+    owner = threading.get_ident()
+    queue = list(steps)
+    with scripted_wire() as wire:
+        log = _SocketLog(wire)
+
+        def connect(conn):
+            if threading.get_ident() != owner:
+                return real_connect(conn)
+            log.connects += 1
+            step = queue.pop(0) if len(queue) > 1 else queue[0]
+            if isinstance(step, BaseException):
+                raise step
+            conn.sock = _Socket(step)
+            log.sockets.append(conn.sock)
+
+        with mock.patch.object(urllib.request.OpenerDirector, "open", real_open), \
+                mock.patch.object(http.client.HTTPConnection, "connect", connect):
+            yield log
+
+
+_WRITE = {"method": "POST", "data": b"x=1", "idempotent": False}
+
+
+def _write_broken_after_the_headers_is_one_request(net, drop):
+    with _socket_wire(("body", drop), _raw(200, b"done")) as wire:
+        got, caught = attempt(lambda: net.open("http://w-body.example.test/x", **_WRITE))
+    return (
+        isinstance(caught, net.NetError) and not isinstance(caught, net.Offline)
+        and len(wire.requests) == 1 and not wire.pauses,
+        f"{caught or got!r} after {len(wire.requests)} requests, pauses {wire.pauses}",
+    )
+
+
+def _write_that_never_connected_is_still_retried(net, refusal):
+    with _socket_wire(refusal, _raw(200, b"done")) as wire:
+        got, caught = attempt(lambda: net.open("http://w-connect.example.test/x", **_WRITE))
+    return (
+        caught is None and got[0] == 200 and got[2] == b"done"
+        and wire.connects == 2 and len(wire.requests) == 1,
+        f"{caught or got!r} after {wire.connects} connects and {len(wire.requests)} requests",
+    )
+
+
+_FROM, _TO = "r-from.example.test", "r-to.example.test"
+
+
+def _redirects_to_another_host(sent: bytes) -> bytes:
+    return _raw(302, Location=f"http://{_TO}/y") if _host_header(sent) == _FROM else _raw(200, b"page")
+
+
+def _redirect_with_a_login_header_is_refused(net, name, value):
+    with _socket_wire(_redirects_to_another_host) as wire:
+        got, caught = attempt(
+            lambda: net.open(f"http://{_FROM}/x", headers={name: value}, follow_redirects=True)
+        )
+    leaked = value.encode() in wire.sent_to(_TO)
+    return (
+        caught is not None and not wire.leaks and not leaked,
+        f"{'raised ' + repr(caught) if caught else 'returned ' + repr(got)}; "
+        f"the second host {'WAS' if leaked else 'was not'} sent the {name} header",
+    )
+
+
+def _redirect_without_a_login_header_is_followed(net):
+    with _socket_wire(_redirects_to_another_host) as wire:
+        got, caught = attempt(lambda: net.open(f"http://{_FROM}/x", follow_redirects=True))
+    asked = sum(1 for sock in wire.requests if sock.host() == _TO)
+    return (
+        caught is None and got[0] == 200 and got[2] == b"page" and asked == 1,
+        f"{caught or got!r}; the second host got {asked} requests",
+    )
+
+
+def check_net_write_is_not_resent_after_a_partial_send(checks: Checks) -> None:
+    """D319 (one retry home), owner ruling: a TCGplayer write retries only when the request was never sent.
+
+    A broken pipe or a reset on the BODY send leaves the headers already out, so the other end may
+    have started the work. urllib wraps that `OSError` in a `URLError`, the same type as a refused
+    connect, so only a socket scripted BELOW urllib shows whether the retry home tells them apart
+    (`_socket_wire`). A refused connection and a failed name lookup never sent a byte, so a write
+    still retries those, and a refusal is read by its type, not by an errno it may not carry.
+    Every errno here is the `errno` constant: a number typed for one OS is another error on the next."""
+    checks.note("")
+    checks.note("NET REQUEST — a write is sent once after a partial send (real urllib, scripted socket)")
+    net_cases(checks, (
+        ("`idempotent=False`: a broken pipe on the body send, after the headers went out, is 1 request and raised, not Offline",
+         lambda net: _write_broken_after_the_headers_is_one_request(net, BrokenPipeError(errno.EPIPE, "simulated: broken pipe"))),
+        ("`idempotent=False`: a reset on the body send, after the headers went out, is 1 request and raised, not Offline",
+         lambda net: _write_broken_after_the_headers_is_one_request(
+             net, ConnectionResetError(errno.ECONNRESET, "simulated: reset by peer"))),
+        ("`idempotent=False`: a refused connect never sent a byte, so it is still retried (guard)",
+         lambda net: _write_that_never_connected_is_still_retried(
+             net, ConnectionRefusedError(errno.ECONNREFUSED, "simulated: connection refused"))),
+        ("`idempotent=False`: a refused connect that carries no errno never sent a byte, so it is still retried",
+         lambda net: _write_that_never_connected_is_still_retried(net, ConnectionRefusedError())),
+        ("`idempotent=False`: a failed name lookup never sent a byte, so it is still retried (guard)",
+         lambda net: _write_that_never_connected_is_still_retried(
+             net, socket.gaierror(socket.EAI_NONAME, "simulated: name lookup failed"))),
+    ))
+
+
+def check_net_redirect_never_carries_a_login_header(checks: Checks) -> None:
+    """D319 (one retry home): `follow_redirects=True` must not hand a Cookie or an Authorization header to another host.
+
+    urllib's redirect handler copies every request header to the new request, wherever it points. A
+    call that carries a login and meets a redirect to another host must refuse, and the second host
+    must never see the header. A call with no login header still follows the redirect. The redirect
+    handler runs for real here: `scripted_wire` stubs the method that holds it (`_socket_wire`)."""
+    checks.note("")
+    checks.note("NET REQUEST — a login header never follows a redirect to another host (real urllib, scripted socket)")
+    net_cases(checks, (
+        ("`follow_redirects=True`: a `Cookie` header and a redirect to another host raise, and the second host is never sent it",
+         lambda net: _redirect_with_a_login_header_is_refused(net, "Cookie", "session=s3cret")),
+        ("`follow_redirects=True`: an `Authorization` header and a redirect to another host raise, and the second host is never sent it",
+         lambda net: _redirect_with_a_login_header_is_refused(net, "Authorization", "Bearer s3cret")),
+        ("`follow_redirects=True`: with no login header the redirect to another host is still followed (guard)",
+         _redirect_without_a_login_header_is_followed),
+    ))
+
+
+# ------------------------------------------ D319, a degraded host gets one attempt, never none
+
+
+def _next_call_after_three_losses(host, lose, call):
+    """Lose three calls on three URLs of one host through `lose(url)`, then make `call(url)` on a fourth.
+
+    The wire answers 503 to every request, so the fourth call's request count reads straight off the
+    rule: 1 when the host is degraded, 3 when it is not, 0 when the call is refused unsent. Returns
+    `(requests it made, pauses it took, what it returned or raised)`. Only the fourth call is counted:
+    how the first three are paced is rule C's."""
+    base = f"https://{host}.example.test"
+    with scripted_wire(503) as wire:
+        for index in range(3):
+            attempt(lambda index=index: lose(f"{base}/lost{index}"))
+        before, slept = len(wire.requests), len(wire.pauses)
+        got, caught = attempt(lambda: call(f"{base}/next"))
+    return len(wire.requests) - before, len(wire.pauses) - slept, caught or got
+
+
+def _degraded_host_sends_one_request(host, lose, call):
+    sent, paused, result = _next_call_after_three_losses(host, lose, call)
+    return sent == 1 and paused == 0, f"the fourth call made {sent} requests and {paused} pauses, {result!r}"
+
+
+def _degraded_host_net_open(net):
+    return _degraded_host_sends_one_request("g-open", net.open, net.open)
+
+
+def _degraded_host_portal_press(net):
+    from server import portal_http
+
+    def press(url):
+        return portal_http.send(
+            urllib.request.Request(url), timeout=9, max_bytes=1 << 16,
+            unreachable=lambda cause: RuntimeError("unreachable"), dropped=lambda: RuntimeError("dropped"),
+        )
+
+    return _degraded_host_sends_one_request("g-press", net.open, press)
+
+
+def _degraded_host_model_download(net):
+    from identify import match
+
+    with isolated_home() as home:
+        dest = Path(home) / "g-model" / "model.onnx"
+
+        def download(url):
+            return match.download_model(dest, url)
+
+        return _degraded_host_sends_one_request("g-model", download, download)
+
+
+def _degraded_host_recovers_on_a_success(net):
+    flaky = []
+
+    def answer(url):
+        if url.endswith("/good"):
+            return b"ok"
+        if url.endswith("/flaky"):
+            flaky.append(url)
+            return 503 if len(flaky) == 1 else b"ok"
+        return 503
+
+    host = "https://g-reset.example.test"
+    with scripted_wire(answer) as wire:
+        for index in range(3):
+            attempt(lambda index=index: net.open(f"{host}/lost{index}"))
+        first, caught = attempt(lambda: net.open(f"{host}/good"))
+        before = len(wire.requests)
+        second, caught2 = attempt(lambda: net.open(f"{host}/flaky"))
+    sent = len(wire.requests) - before
+    return (
+        first is not None and first[0] == 200 and second is not None and second[0] == 200 and sent == 2,
+        f"a success on the degraded host: {caught or first!r}; the call after it made {sent} requests, {caught2 or second!r}",
+    )
+
+
+def _lost_writes_do_not_degrade_the_host(net):
+    host = "https://g-write.example.test"
+    with scripted_wire(lambda url: _REFUSED if url.rsplit("/", 1)[1].startswith("w") else 503) as wire:
+        for index in range(3):
+            attempt(lambda index=index: net.request(f"{host}/w{index}", **_WRITE))
+        before = len(wire.requests)
+        attempt(lambda: net.open(f"{host}/read"))
+    sent = len(wire.requests) - before
+    return sent == 3, f"after three lost writes the first read made {sent} requests, not 3"
+
+
+def check_net_degraded_host_gets_one_attempt(checks: Checks) -> None:
+    """D319 (one retry home), owner ruling: a call is never refused unsent, and a degraded host gets ONE attempt.
+
+    After `PAUSE_AFTER_FAILURES` (3) calls lost in a row on one host, every call to it makes exactly
+    one request and takes no retry pause, for `net.open`, a portal press (`server/portal_http.send`) and
+    `match.download_model` alike, with no flag to opt out. Any success resets the count, so the call after
+    it retries in full. A lost write does not count. Every case names its own host: the count is shared
+    by the process."""
+    checks.note("")
+    checks.note("NET REQUEST — a degraded host gets one attempt, never none")
+    net_cases(checks, (
+        ("after 3 calls lost in a row, the next `net.open` is 1 request with no pause",
+         _degraded_host_net_open),
+        ("after 3 calls lost in a row, a portal press (`portal_http.send`) is 1 request with no pause",
+         _degraded_host_portal_press),
+        ("after 3 calls lost in a row, `match.download_model` is 1 request with no pause",
+         _degraded_host_model_download),
+        ("a success on a degraded host resets the count: the call after it retries in full (503 then 200 is 2 requests)",
+         _degraded_host_recovers_on_a_success),
+        ("three lost writes do not degrade the host: the next read still gets all 3 attempts (guard)",
+         _lost_writes_do_not_degrade_the_host),
+    ))
+
+
+# ------------------------------- D319 review round 2: any other HTTP answer resets the count
+
+
+def _answer_then_lose(net, host, code):
+    """Degrade `host` with three lost 503s, answer one call with `code`, then lose another call.
+
+    Returns `(the answer, the exception, requests the answer took, requests the next lost call took)`.
+    The wire answers 503 to every URL but `/answer`, so the last number reads straight off the rule:
+    1 while the host is still degraded, 3 once the answer has reset the count."""
+    base = f"https://{host}.example.test"
+    with scripted_wire(lambda url: code if url.endswith("/answer") else 503) as wire:
+        for index in range(3):
+            attempt(lambda index=index: net.open(f"{base}/lost{index}"))
+        before = len(wire.requests)
+        got, caught = attempt(lambda: net.open(f"{base}/answer"))
+        middle = len(wire.requests)
+        attempt(lambda: net.open(f"{base}/lost-again"))
+    return got, caught, middle - before, len(wire.requests) - middle
+
+
+def _an_answer_resets_the_count(net, code):
+    got, caught, asked, then = _answer_then_lose(net, f"g-answer-{code}", code)
+    return (
+        got is not None and got[0] == code and asked == 1 and then == 3,
+        f"HTTP {code}: {caught or (got and got[0])!r} took {asked} requests; "
+        f"the next lost call took {then} requests, not 3 (the host is still degraded)",
+    )
+
+
+def _a_plain_500_does_not_reset_the_count(net):
+    got, caught, asked, then = _answer_then_lose(net, "g-answer-500", 500)
+    return (
+        got is not None and got[0] == 500 and asked == 1 and then == 1,
+        f"HTTP 500: {caught or (got and got[0])!r} took {asked} requests; the next lost call took {then}, not 1",
+    )
+
+
+def check_net_degraded_host_is_reset_by_any_other_answer(checks: Checks) -> None:
+    """D319 (one retry home), review round 2: ANY HTTP answer but a 429 or a 5xx resets the lost-call count.
+
+    A host that answers 403 or 404 is up: it is not lost. After three lost calls the host is degraded
+    and sends one request per call; one 4xx answer must end that, so the next lost call retries in
+    full (3 requests). A plain 500 is a 5xx: it neither counts nor resets, so the host stays
+    degraded (guard). Every case names its own host: the count is shared by the process."""
+    checks.note("")
+    checks.note("NET REQUEST — a 4xx answer resets the lost-call count, a plain 500 does not")
+    net_cases(checks, (
+        *(
+            (f"after 3 lost calls, a HTTP {code} answer resets the count: the next lost call gets all 3 requests",
+             lambda net, code=code: _an_answer_resets_the_count(net, code))
+            for code in (400, 401, 403, 404)
+        ),
+        ("after 3 lost calls, a plain 500 answer does not reset the count: the next lost call is 1 request (guard)",
+         _a_plain_500_does_not_reset_the_count),
+    ))
+
+
+# ------------ D319 review round 2: a write that may have been sent is never "could not reach host"
+
+
+class _Unreached(Exception):
+    """What a test's `unreachable` builds: the host was never reached."""
+
+
+class _Dropped(Exception):
+    """What a test's `dropped` builds: a socket failure that may have followed a send."""
+
+
+def _portal_send(url, *, data=None, idempotent=True):
+    from server import portal_http
+
+    return portal_http.send(
+        urllib.request.Request(url, data=data, method="POST" if data else "GET"),
+        timeout=9, max_bytes=1 << 16,
+        unreachable=_Unreached, dropped=_Dropped, idempotent=idempotent,
+    )
+
+
+# Both end as `net.Dropped` for a write, and urllib wraps both in a `URLError`, the same type as a
+# refused connect: the portal door must tell them from it by the retry home's verdict, not the wrapper.
+_WRITES_THAT_DROP = (
+    ("a broken pipe on the body send", lambda: ("body", BrokenPipeError(errno.EPIPE, "simulated: broken pipe"))),
+    ("a failed TLS handshake", lambda: ssl.SSLError(1, "[SSL: WRONG_VERSION_NUMBER] simulated: wrong version")),
+)
+
+
+def _a_write_that_drops_is_net_dropped(net, step, host):
+    with _socket_wire(step(), _raw(200, b"done")) as wire:
+        got, caught = attempt(lambda: net.open(f"http://{host}.example.test/x", **_WRITE))
+    return (
+        isinstance(caught, net.Dropped) and wire.connects == 1 and not wire.pauses,
+        f"{caught or got!r} after {wire.connects} connects, pauses {wire.pauses}",
+    )
+
+
+def _portal_send_reports_a_dropped_write_as_dropped(net, step, host):
+    with _socket_wire(step(), _raw(200, b"done")) as wire:
+        got, caught = attempt(lambda: _portal_send(f"http://{host}.example.test/x", data=b"x=1", idempotent=False))
+    detail = f"{caught or got!r} after {wire.connects} connects, pauses {wire.pauses}"
+    if isinstance(caught, _Unreached):
+        detail += ": a write that may have been sent was reported as never reached"
+    return isinstance(caught, _Dropped) and wire.connects == 1 and not wire.pauses, detail
+
+
+def _reset_after_send(sent):
+    raise ConnectionResetError(errno.ECONNRESET, "simulated: reset by peer")
+
+
+def _tcg_write(step):
+    url = "http://portal.example.test/admin/pricing/stagedupload"
+    with _socket_wire(step, _raw(200, b"done")) as wire:
+        got, caught = attempt(lambda: tcg_export._open(url, cookie="session=fixture", data=b"x=1", idempotent=False))
+    return got, caught, wire
+
+
+def _tcg_export_reports_a_dropped_write_like_any_other_drop(net, step):
+    """The reference is a reset after the send, which has always taken the dropped path."""
+    _, reference, _ = _tcg_write(_reset_after_send)
+    got, caught, wire = _tcg_write(step())
+    refused = isinstance(caught, tcg_export.FetchRefusal)
+    return (
+        refused and caught.code == "tcg_unreachable" and isinstance(reference, tcg_export.FetchRefusal)
+        and caught.message == reference.message and "Could not reach" not in caught.message
+        and wire.connects == 1,
+        f"{caught or got!r} (code {getattr(caught, 'code', None)}) after {wire.connects} connects; "
+        f"the reference drop said {getattr(reference, 'message', reference)!r}",
+    )
+
+
+def _a_write_that_never_connected_is_still_unreachable(net):
+    refusal = ConnectionRefusedError(errno.ECONNREFUSED, "simulated: connection refused")
+    with _socket_wire(refusal) as wire:
+        got, caught = attempt(lambda: _portal_send("http://w-refused.example.test/x", data=b"x=1", idempotent=False))
+    return (
+        isinstance(caught, _Unreached) and hasattr(caught.args[0], "reason") and wire.connects == 3,
+        f"{caught or got!r} after {wire.connects} connects",
+    )
+
+
+def _a_read_that_stalls_is_still_dropped(net):
+    def stall(sent):
+        raise TimeoutError("simulated: read timed out")
+
+    with _socket_wire(stall) as wire:
+        got, caught = attempt(lambda: _portal_send("http://r-stall.example.test/x"))
+    return isinstance(caught, _Dropped) and wire.connects == 3, f"{caught or got!r} after {wire.connects} connects"
+
+
+def check_net_portal_write_that_drops_is_not_unreachable(checks: Checks) -> None:
+    """D319 (one retry home), review round 2: `portal_http.send` reports a write that ends as `net.Dropped` through `dropped`.
+
+    A broken pipe on the body send, or a failed TLS handshake, makes urllib raise a `URLError`: the same
+    wrapper as a refused connect. `send` read that wrapper and chose `unreachable`, so such a write
+    was reported as "could not reach host", which says nothing was sent. It may have been. The retry
+    home already draws the line: `net.Offline` never connected, `net.Dropped` may have been sent. The
+    host keeps its `tcg_unreachable` code and says what a drop says. A refused write that never
+    connected stays `unreachable`, and a read that stalls after the connect stays `dropped` (guards).
+
+    Real urllib and http.client, only the socket scripted (`_socket_wire`)."""
+    checks.note("")
+    checks.note("PORTAL WRITE — a drop that may have followed a send is not `could not reach host` (real urllib, scripted socket)")
+    cases = []
+    for index, (name, step) in enumerate(_WRITES_THAT_DROP):
+        cases += [
+            (f"{name} on a write is `net.Dropped`, one connect, no retry (premise)",
+             lambda net, step=step, index=index: _a_write_that_drops_is_net_dropped(net, step, f"p-net-{index}")),
+            (f"`portal_http.send`: {name} on a write goes through `dropped`, never `unreachable`",
+             lambda net, step=step, index=index: _portal_send_reports_a_dropped_write_as_dropped(net, step, f"p-send-{index}")),
+            (f"`tcg_export._open`: {name} on a write is `tcg_unreachable` with the message of any other drop, not `Could not reach`",
+             lambda net, step=step: _tcg_export_reports_a_dropped_write_like_any_other_drop(net, step)),
+        ]
+    cases += [
+        ("`portal_http.send`: a write whose connect is refused every time is still `unreachable` (guard)",
+         _a_write_that_never_connected_is_still_unreachable),
+        ("`portal_http.send`: a read that stalls after the connect is still `dropped` (guard)",
+         _a_read_that_stalls_is_still_dropped),
+    ]
+    net_cases(checks, cases)
+
+
+# ------------------------------------------------- D319, the TCGplayer export reads through it
+
+
+_PORTAL ="https://portal.example.test/admin/pricing/downloadexportcsv"
+
+
+def check_tcg_export_reads_retry_through_the_one_home(checks: Checks) -> None:
+    """D319 (one retry home): `tcg_export._open` and `_post_export` are READS, so they retry.
+
+    A GET and the export's POST (it is a read: the body carries a filter, nothing is changed at
+    TCGplayer) each survive one 503 before the file. The POST must send the same body again.
+
+    The portal URL is a `.test` name and the wire is scripted below `urlopen`: nothing is sent."""
+    checks.note("")
+    checks.note("TCG EXPORT READS — a 503 then the file succeeds (scripted wire)")
+    os.environ[tcg_export.COOKIE_ENV] = "session=fixture"
+    os.environ[tcg_export.URL_ENV] = _PORTAL
+    csv_answer = (200, b"a,b\n1,2\n", {"Content-Type": "text/csv"})
+
+    with scripted_wire(503, csv_answer) as wire:
+        got, caught = attempt(lambda: tcg_export._open("https://portal.example.test/export", cookie="session=fixture"))
+    checks.ok(
+        caught is None and got[0] == 200 and got[2] == b"a,b\n1,2\n" and len(wire.requests) == 2,
+        "`_open` GET: a 503 then 200 returns the file after 2 requests",
+        f"got {got!r} {caught!r} after {len(wire.requests)} requests",
+    )
+
+    with scripted_wire(503, csv_answer) as wire:
+        got, caught = attempt(lambda: tcg_export._post_export({"filters": {}}))
+    sent = [(r["method"], r["data"]) for r in wire.requests]
+    checks.ok(
+        got == b"a,b\n1,2\n" and len(sent) == 2 and sent[0] == sent[1] and sent[0][0] == "POST",
+        "the export POST (a read): a 503 then 200 returns the file, and the second request carries the same body",
+        f"got {got!r} {caught!r}, sent {[(m, bool(d)) for m, d in sent]}",
+    )
+
+    with scripted_wire(500, csv_answer) as wire:
+        got, caught = attempt(lambda: tcg_export._post_export({"filters": {}}))
+    checks.ok(
+        isinstance(caught, tcg_export.FetchRefusal) and len(wire.requests) == 1,
+        "and a plain 500 is one request, refused as before",
+        f"got {got!r} {caught!r} after {len(wire.requests)} requests",
+    )
+
+
+# --------------------------------------------- D319, the paid batch start is never retried
+
+
+def check_batch_create_is_never_retried(checks: Checks) -> None:
+    """D319 (one retry home), owner ruling: `batches.create` (PAID) runs with SDK `max_retries=0`.
+
+    A create that the SDK retried could start a second paid batch for the same cards, so a failed
+    create is raised once. `batches.retrieve` and `batches.results` are reads and keep the SDK's
+    default retries. Counted over the REAL SDK with its HTTP layer replaced by a mock transport, so
+    the number is the retries the SDK really makes, whichever way the builder asks for none. The
+    SDK class is replaced for the block, so a client built inside `run_batch` is stubbed too."""
+    import anthropic
+    from anthropic import _base_client
+
+    checks.note("")
+    checks.note("BATCH — create makes one request, retrieve and results keep the SDK default (mock transport)")
+    # The SDK's HTTP library has changed its import name before (`httpx`, now `httpx2`), so it is
+    # found by what it offers and not by name.
+    http = next(
+        (m for name, m in vars(_base_client).items() if name.startswith("httpx") and hasattr(m, "MockTransport")),
+        None,
+    )
+    if http is None:
+        checks.ok(False, "the SDK's HTTP library offers a mock transport", "none found in the SDK's base client")
+        return
+
+    counts: dict = {}
+    mode = {"create_down": False, "flaky": {}}
+    overloaded = {"type": "error", "error": {"type": "overloaded_error", "message": "simulated"}}
+    results_url = "https://anthropic.example.test/v1/messages/batches/msgbatch_fixture/results"
+    ended = {
+        "id": "msgbatch_fixture", "type": "message_batch", "processing_status": "ended",
+        "request_counts": {"processing": 0, "succeeded": 1, "errored": 0, "canceled": 0, "expired": 0},
+        "created_at": "2026-01-01T00:00:00Z", "expires_at": "2026-01-02T00:00:00Z", "ended_at": "2026-01-01T00:05:00Z",
+        "cancel_initiated_at": None, "archived_at": None, "results_url": results_url,
+    }
+
+    def handler(request):
+        label = "create" if request.method == "POST" else "results" if request.url.path.endswith("/results") else "retrieve"
+        counts[label] = counts.get(label, 0) + 1
+        if (label == "create" and mode["create_down"]) or mode["flaky"].get(label, 0) > 0:
+            mode["flaky"][label] = mode["flaky"].get(label, 0) - 1
+            return http.Response(503, json=overloaded)
+        if label == "results":
+            return http.Response(200, content=b"", headers={"content-type": "application/x-jsonl"})
+        return http.Response(200, json=ended)
+
+    class Stubbed(anthropic.Anthropic):
+        def __init__(self, *args, **kwargs):
+            kwargs["http_client"] = http.Client(transport=http.MockTransport(handler))
+            super().__init__(*args, **kwargs)
+
+    items = [batch.ImageRequest("card-1", "image/jpeg", "QUJD")]
+
+    def press():
+        return batch.run_batch(items, api_key="sk-ant-fixture", poll_seconds=0)
+
+    with scripted_wire(), mock.patch.object(anthropic, "Anthropic", Stubbed):
+        mode["create_down"] = True
+        counts.clear()
+        _, caught = attempt(press)
+        checks.ok(
+            isinstance(caught, batch.BatchError) and counts.get("create") == 1,
+            "a create that the API answers 503 is raised once: exactly 1 POST, no SDK retry",
+            f"{caught!r}; requests {counts}",
+        )
+
+        mode["create_down"] = False
+        mode["flaky"] = {"retrieve": 1, "results": 1}
+        counts.clear()
+        run, caught = attempt(press)
+        checks.ok(
+            caught is None and run.batch_ids == ["msgbatch_fixture"] and counts.get("create") == 1,
+            "a create that is answered goes out once",
+            f"{caught!r}; requests {counts}",
+        )
+        checks.ok(
+            caught is None and counts.get("retrieve", 0) >= 2,
+            "`retrieve` keeps the SDK default: a 503 then 200 is read through",
+            f"{caught!r}; requests {counts}",
+        )
+        checks.ok(
+            caught is None and counts.get("results") == 2,
+            "`results` keeps the SDK default: a 503 then 200 is read through",
+            f"{caught!r}; requests {counts}",
+        )
+
+
 CHECKS = (
     check_crop_preview,
     check_export_fetch,
     check_key_rotation,
+    check_net_request_retries_like_fetch_json,
+    check_net_request_unsafe_writes,
+    check_net_request_shares_one_host_state,
+    check_net_write_is_not_resent_after_a_partial_send,
+    check_net_redirect_never_carries_a_login_header,
+    check_net_degraded_host_gets_one_attempt,
+    check_net_degraded_host_is_reset_by_any_other_answer,
+    check_net_portal_write_that_drops_is_not_unreachable,
+    check_tcg_export_reads_retry_through_the_one_home,
+    check_batch_create_is_never_retried,
 )

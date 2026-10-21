@@ -172,16 +172,13 @@ import http.client
 import json
 import sys
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
-from pipeline import games, join, pricing, tcgcsv
+from pipeline import games, join, net, pricing, tcgcsv
 
 # --------------------------------------------------------------------------------- hosts
 
@@ -219,7 +216,7 @@ RANGES: Tuple[str, ...] = ("month", "quarter", "semiannual", "annual")
 # of the same card.
 DEFAULT_RANGES: Tuple[str, ...] = ("month", "annual")
 
-REQUEST_TIMEOUT_SECONDS = 30
+REQUEST_TIMEOUT_SECONDS = net.REQUEST_TIMEOUT_SECONDS
 
 # Between two live requests. Not a rate limit anyone published — a courtesy, sized so a
 # whole box (543 cards, two ranges) spends about three minutes of wall clock rather than
@@ -305,30 +302,16 @@ class Unreachable(PriceHistoryError):
 
 
 class Offline(Unreachable):
-    """A SUBCLASS, NOT A SIBLING — every `Offline` IS an `Unreachable` and every existing
-    `except Unreachable` catches it exactly as before. IT IS RAISED ONLY WHEN NO CONNECTION
-    WAS EVER MADE — a raw `OSError`/`URLError`/`TimeoutError` reaching `urlopen` itself: a
-    refused connection, a DNS failure, or a timeout before the socket ever opened. NEVER an
-    `HTTPError` (the host answering with a bad status IS a connection, and a second product
-    on the same host may still answer normally), and NEVER a failure reading the response
-    body once a connection succeeded — a read timeout or a reset mid-body says the LINK is
-    degraded, not gone, and the next product's own fresh connection may still succeed; that
-    stays a plain, non-sticky `Unreachable` (the owner's ruling, 2026-09-27, correcting an
-    earlier version of this class that latched on a read timeout too — see
-    `fetch_json`'s own two `try` blocks, which is where that distinction is actually drawn).
+    """No connection was ever made: `urlopen` itself raised (a refused connection, a DNS failure,
+    a timeout before the socket opened). A SUBCLASS, so every `except Unreachable` catches it.
 
-    `Market.get` uses this distinction: once ONE `Offline` has been seen, every socket
-    attempt after it will fail the identical way, for the identical reason, so `Market`
-    treats the network as down for the rest of THIS instance's life rather than
-    re-attempting (and re-sleeping the courtesy delay) once per product.
+    NEVER an `HTTPError` (the host answered), and NEVER a failure reading the body after a
+    connection opened: that is a degraded link, a plain `Unreachable` (`net.Offline` and
+    `net.Dropped` draw the line).
 
-    MEASURED, 2026-09-27, on a real demo-mirror recording. 387 SKUs over a run,
-    `readings_for_rows` batched by product (D277) but resolved 325 distinct
-    (product, range) pairs, one `history()` fetch each — every one refused by the
-    recording's offline network guard, and NONE of it cached (`Market.get` only stores a
-    SUCCESSFUL fetch). 613 of those repeated the 0.15s courtesy delay for a connection that
-    was never going to succeed: 95.85s of a measured 102.2s total, `cProfile` isolating
-    `time.sleep` as the one line responsible.
+    A single `Offline`, like a single HTTP error, degrades nothing. Only a run does: a host that
+    lost `PAUSE_AFTER_FAILURES` calls in a row gets one attempt per call (D319, every network
+    call retries through one method).
     """
 
 
@@ -958,8 +941,40 @@ def index_by_name(rows: Iterable[Dict], key: str = "name") -> Dict[str, object]:
 # -------------------------------------------------------------------------- the network
 
 
+# The retry rule, the degraded-host rule and their knobs live in `pipeline/net.py` (D319, every network call
+# retries through one method). Re-exported here because callers and the self-test read them by
+# these names.
+RETRY_PAUSES = net.RETRY_PAUSES
+RETRY_STATUSES = net.RETRY_STATUSES
+ATTEMPT_TIMEOUT_SECONDS = net.ATTEMPT_TIMEOUT_SECONDS
+OFFLINE_WAIT_SECONDS = net.OFFLINE_WAIT_SECONDS
+PAUSE_AFTER_FAILURES = net.PAUSE_AFTER_FAILURES
+
+
+def _clear_host_pauses() -> None:
+    """Forget every host's failure count."""
+    net._clear_hosts()
+
+
+def _monotonic() -> float:
+    """Looked up at call time by `fetch_json`, so a test can replace the clock."""
+    return time.monotonic()
+
+
+def _sleep(seconds: float) -> None:
+    """Looked up at call time by `fetch_json`, so a test can replace the pause."""
+    time.sleep(seconds)
+
+
+def _worth_retrying(exc: PriceHistoryError) -> bool:
+    """A connection that never opened (`Offline`) and `net.RETRY_STATUSES`. Never a plain 500, a
+    403, another 4xx, an unreadable body or a read failure after connect: a second ask gets the
+    same answer. Only these count toward a degraded host."""
+    return isinstance(exc, Offline) or net.worth_retrying(exc.__cause__)
+
+
 def fetch_json(
-    url: str, timeout: float = REQUEST_TIMEOUT_SECONDS, user_agent: str = USER_AGENT
+    url: str, timeout: float = ATTEMPT_TIMEOUT_SECONDS, user_agent: str = USER_AGENT
 ) -> Dict:
     """GET a URL and parse JSON. THE ONLY IMPURE FUNCTION IN THIS MODULE.
 
@@ -977,27 +992,28 @@ def fetch_json(
     does not like, which is a refusal that reads as an authentication requirement and is not.
     A 403 IS `Blocked` INSTEAD, NEVER `Unreachable` — see that class for why the two must not
     share a name, and D216 for what is now answering it.
+
+    A THIN WRAPPER OVER `net.request` (D319, every network call retries through one method). The
+    retries, the pauses, the budget and the degraded-host rule are `pipeline/net.py`'s. This turns its
+    errors into this module's three and prints one stderr line per final failure, never one per
+    attempt. `_monotonic` and `_sleep` are handed in, looked up here at call time.
     """
-    request = urllib.request.Request(url, headers={"User-Agent": user_agent})
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            # A SEPARATE `try` FROM THE CONNECT ABOVE. `urlopen` raising means no response
-            # ever arrived — the socket itself refused, or DNS never resolved, or the
-            # attempt timed out before a byte came back, and every OTHER request to the
-            # same dead host is heading for the identical failure (`Offline`, below).
-            # `response.read()` raising means a connection WAS made — the read that
-            # follows it stalled or the peer reset mid-body, which says nothing about
-            # whether the NEXT product's own connection will succeed. That is a plain,
-            # non-sticky `Unreachable`, caught here rather than falling into the outer
-            # `except` where it would be indistinguishable from a connection that never
-            # opened at all.
-            try:
-                body = response.read()
-            except (urllib.error.URLError, OSError, TimeoutError) as exc:
-                print(f"price service {url}: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
-                raise Unreachable("The price service could not be reached. Check the connection, then try again.") from exc
-    except urllib.error.HTTPError as exc:
-        if exc.code == 403:
+        body = net.request(url, headers={"User-Agent": user_agent}, timeout=timeout, clock=_monotonic, sleep=_sleep)
+    except net.Offline as exc:
+        # `Offline`, NOT THE PLAIN `Unreachable` BELOW: no HTTP response arrived at all, a refused
+        # connection, a DNS failure, or a timeout reaching the socket in the first place. It is
+        # retried, and counts toward a degraded host.
+        print(f"price service {url}: {type(exc.__cause__).__name__}: {exc.__cause__}", file=sys.stderr, flush=True)
+        raise Offline("The price service could not be reached. Check the connection, then try again.") from exc.__cause__
+    except net.Dropped as exc:
+        # A connection WAS made and the read that followed it stalled or the peer reset mid-body.
+        # That says nothing about whether the NEXT product's own connection will succeed: a plain,
+        # non-sticky `Unreachable`, never `Offline`.
+        print(f"price service {url}: {type(exc.__cause__).__name__}: {exc.__cause__}", file=sys.stderr, flush=True)
+        raise Unreachable("The price service could not be reached. Check the connection, then try again.") from exc.__cause__
+    except net.NetError as exc:
+        if exc.status == 403:
             # NEVER THE VALUE, ONLY THE NAME OF THE KNOB — D171's rule that a refusal must
             # name its remedy, and CLAUDE.md's rule that no message here ever carries the
             # user agent string itself.
@@ -1005,16 +1021,9 @@ def fetch_json(
             raise Blocked(
                 "The price service answered 'forbidden'. Either what it allows changed, or it is declining this app's browser signature. Set the browser signature in the Mac's settings file (the .env file in the app's folder) to match your browser, then try again."
             ) from exc
-        print(f"price service {url}: HTTP {exc.code} {exc.reason}", file=sys.stderr, flush=True)
-        raise Unreachable(f"The price service answered '{http.client.responses.get(exc.code, 'an error').lower()}'. Try again in a moment.") from exc
-    except (urllib.error.URLError, OSError, TimeoutError) as exc:
-        # `Offline`, NOT THE PLAIN `Unreachable` ABOVE — raised only here, from `urlopen`
-        # itself, which means no HTTP response arrived at all: a refused connection, a DNS
-        # failure, or a timeout reaching the socket in the first place. Every socket
-        # attempt after this one is heading for the identical failure. See `Offline`'s own
-        # docstring for what a caller does with that distinction.
-        print(f"price service {url}: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
-        raise Offline("The price service could not be reached. Check the connection, then try again.") from exc
+        reason = http.client.responses.get(exc.status, "an error")
+        print(f"price service {url}: HTTP {exc.status} {reason}", file=sys.stderr, flush=True)
+        raise Unreachable(f"The price service answered '{reason.lower()}'. Try again in a moment.") from exc
     try:
         return json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -1090,12 +1099,10 @@ class Market:
         # Slugs fetched over the network this instance's life: a miss refetches a catalogue
         # list once, never once per card.
         self._attempted: set = set()
-        # SET ONCE, BY THE FIRST `Offline` (never a plain `Unreachable` — see that class's
-        # docstring), and read by every `get()` after it for the rest of THIS instance's
-        # life. A batch that has already learned the socket cannot be reached does not
-        # sleep the courtesy delay or try again before answering the identical failure —
-        # see `get`'s own paragraph for the measurement this answers.
-        self._offline: Optional[Offline] = None
+        # `slug -> when a refresh failed and the stale list was served instead`. It lifts
+        # `_attempted`'s latch once `OFFLINE_WAIT_SECONDS` has passed, so a stale catalogue
+        # list is asked for again after an outage and not only after a restart.
+        self._stale_since: Dict[str, float] = {}
 
     # ------------------------------------------------------------------------ caching
 
@@ -1152,39 +1159,44 @@ class Market:
 
         The attempt is recorded BEFORE the fetch, so with a stale list in hand a failing host
         costs one request per instance, not one per card, and the stale list is served rather
-        than an error. A payload with fewer results than the stale list held (an empty one
+        than an error. A degraded host gets one attempt. The courtesy delay is skipped only on a
+        degraded host that never answered (`net.unanswered`), and a 429's `Retry-After` is the least
+        gap before the next call (`net.retry_after`). A stale list is
+        asked for again once `OFFLINE_WAIT_SECONDS` has passed since its refresh failed.
+        A payload with fewer results than the stale list held (an empty one
         included) is never stored: the cache keeps the old list.
         """
         payload = self._cached(slug, ttl)
         if payload is not None:
             return payload
         stale = self._cached(slug, float("inf")) if catalog else None
-        if stale is not None and slug in self._attempted:
+        if stale is not None and slug in self._attempted and not self._stale_retry_due(slug):
             return stale
-        if self._offline is not None:
-            # FAIL FAST, NEVER RE-ATTEMPT. The socket has already failed once with no
-            # response at all this instance's life — a second, distinct URL over the same
-            # dead network fails the identical way, so there is nothing to wait politely
-            # before, and no reason to spend the syscall finding that out again.
-            if stale is not None:
-                return stale
-            raise self._offline
-        if self.requests and self._courtesy_delay:
-            time.sleep(self._courtesy_delay)
+        if self.requests and self._courtesy_delay and not net.unanswered(url):
+            time.sleep(max(self._courtesy_delay, net.retry_after(url)))
         self._attempted.add(slug)
         self.requests += 1
         try:
             payload = self._fetch(url)
-        except PriceHistoryError as exc:
-            if isinstance(exc, Offline):
-                self._offline = exc
+        except PriceHistoryError:
             if stale is not None:
+                self._stale_since[slug] = self._now()
                 return stale
             raise
+        self._stale_since.pop(slug, None)
         if stale is not None and len(payload.get("results") or ()) < len(stale.get("results") or ()):
             return stale
         self._store(slug, payload)
         return payload
+
+    def _stale_retry_due(self, slug: str) -> bool:
+        since = self._stale_since.get(slug)
+        return since is not None and self._now() - since >= OFFLINE_WAIT_SECONDS
+
+    def serving_stale(self, slug: str) -> bool:
+        """True while `slug`'s last refresh FAILED and `get` answered with the stale list. An
+        answer built on it, a set it lacks, says nothing about the catalogue."""
+        return slug in self._stale_since
 
     # -------------------------------------------------------------------- the catalog
 
@@ -1388,6 +1400,8 @@ class Market:
                 except PriceHistoryError as exc:
                     for sku in skus:
                         refusals.setdefault(sku, str(exc))
+                    if _worth_retrying(exc):
+                        break  # one product adds at most one URL to a run (D319)
             for sku in skus:
                 series: Dict[str, Series] = {}
                 for range_, answers in per_range.items():

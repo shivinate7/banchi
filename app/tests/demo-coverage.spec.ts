@@ -463,7 +463,7 @@ test.describe('the published demo draws what reviewers grade', () => {
     // same behavior asserted (Mark sold decrements by one, Undo restores it), against
     // whichever box and count the mirror actually holds.
     // COPY RENAMED (F5 verbiage cut, ff1b3f71 and after): a box row reads "N stored", the
-    // Fulfiller's search placeholder is "Card name or number", and Sales' shelf line is
+    // Fulfiller's search placeholder is "Card name or number…", and Sales' shelf line is
     // "N of M priced, K not yet". Same behaviour asserted, new words.
     await visit(page, 'Inventory')
     // The card pressed names its own box: its button reads "Mark sold: <box>, Section n, Card m".

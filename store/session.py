@@ -107,7 +107,8 @@ class Snapshot:
     @property
     def queue_summary(self) -> str:
         """What every run report leads with (v2 §5.5)."""
-        return " | ".join([self.review.summary, self.parked.summary])
+        cards = self.inventory.cards
+        return " | ".join([self.review.summary(cards), self.parked.summary(cards)])
 
     @property
     def tables(self) -> List[Rows]:

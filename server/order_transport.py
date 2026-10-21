@@ -635,7 +635,6 @@ def _call(
             f"{host} did not answer within {TIMEOUT_S}s. Nothing was read and "
             f"nothing was written.",
         ),
-        dropped_on=(TimeoutError,),
     )
 
 

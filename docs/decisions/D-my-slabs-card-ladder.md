@@ -26,6 +26,7 @@ person's pace (the spec's pacing section) and reads only the owner's own slabs.
 - Banchi never calls `search.cardladder.com`. That host answers a Cloudflare challenge, and
   Banchi never solves or avoids a bot check, a CAPTCHA or an app check.
 - A rate-limit answer stops the sweep for that day. Banchi never retries around it.
+- Card Ladder calls go through D319's home with idempotent=False, so a 429 is never retried.
 
 **No guessed price.** A slab with no sale at its grade shows "no sales", never a number. The
 slab's value is Card Ladder's estimate, trusted only by the spec's rules (section 4.3). Where

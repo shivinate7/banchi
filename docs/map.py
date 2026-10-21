@@ -998,6 +998,17 @@ COMPONENTS = [
                                    "than reimplemented, for a caller D77 names as the standing "
                                    "candidate and that remains unbuilt.",
                            "governed_by": ["D15", "D18", "D77"]},
+            "net.py": {"does": "the one retry home: `net.open` and `net.request` carry every network "
+                               "call. Rule C (no connection, 429, 502, 503, 504, backoff, "
+                               "Retry-After). A per-host lost-call count, shared by every "
+                               "caller, degrades a host to one attempt per call and never "
+                               "refuses one; any answer but a 429 or a 5xx resets it. "
+                               "`unanswered` and `retry_after` tell a caller when to skip or "
+                               "stretch its courtesy delay. `idempotent=False` is a write: it "
+                               "retries only a connect failure before send, and never counts "
+                               "toward or is limited by a degraded host.",
+                       "governed_by": ["D319"],
+                       "tested_by": ["T7"]},
             "pricing.py": {"does": "rules, rounding, floor clamp, threshold, no_market_data "
                                    "refusal. THRESHOLD is the DEFAULT and not the answer "
                                    "(D99): the cut-off in force is pipeline/corpus.py's "
@@ -1652,9 +1663,9 @@ COMPONENTS = [
                                         "transaction and within-bucket dispersion. It also reads "
                                         "that mirror's current /prices, which are per product per "
                                         "PRINTING and never per SKU.",
-                                "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D86",
-                                                "D55", "D278", "D65", "D277", "D171", "D216",
-                                                "D234", "D240", "D254"],
+                                "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D55",
+                                                "D65", "D86", "D171", "D216", "D234", "D240",
+                                                "D254", "D277", "D278", "D319"],
                                 "tested_by": ["T7"],
                                 "note": "REACHABLE AS OF 2026-08-30 (D278) — this entry read "
                                         "RECORDED RATHER THAN BUILT for one day, and the whole "
@@ -1710,7 +1721,10 @@ COMPONENTS = [
         "governed_by": ["D1", "D2", "D3", "D10"],
         "modules": {
             "prompt.py": {"does": "the identification prompt and its fingerprint", "governed_by": ["D2", "D3", "D22", "D23"], "tested_by": ["T1"]},
-            "batch.py": {"does": "Batch API submit/poll/collect. Batch, never sequential.", "governed_by": ["D2", "D21", "D23"], "tested_by": ["T1"]},
+            "batch.py": {"does": "Batch API submit/poll/collect. Batch, never sequential.", "governed_by": ["D2",
+                                                                                                            "D21",
+                                                                                                            "D23",
+                                                                                                            "D319"], "tested_by": ["T1"]},
             "sidecar.py": {"does": "reading a capture directory: photos, JSON sidecars, position", "governed_by": ["D2", "D3", "D10", "D21", "D22", "D23", "D183"]},
             "images.py": {"does": "downscale, encode, hash a photograph for the API, and refuse a crop that is not the card",
                           "governed_by": ["D2", "D23", "D75", "D125"], "tested_by": ["T6"]},
@@ -1727,7 +1741,7 @@ COMPONENTS = [
                                  "model's index is refused (D301's one exception: each stock image is "
                                  "read once, in memory). Stdlib at import; numpy, Pillow and onnxruntime "
                                  "load lazily.",
-                         "governed_by": ["D2", "D3", "D76", "D88", "D170", "D213", "D301"]},
+                         "governed_by": ["D2", "D3", "D76", "D88", "D170", "D213", "D301", "D319"]},
             "matchconst.py": {"does": "the few constants the background reader's watcher needs "
                                       "(served games, the model pin, the store's home), standard "
                                       "library only, because the watcher cannot import the `store` "
@@ -3124,19 +3138,13 @@ COMPONENTS = [
                 "governed_by": ["D216", "D219", "D234"],
             },
             "pricehistory-offline-selftest.py": {
-                "does": "proves `pipeline/pricehistory.py:Market` fails fast once the "
-                        "network is genuinely unreachable, no network, no real sleep. A "
-                        "counting fetcher that always raises the new `Offline` (a subclass "
-                        "of `Unreachable`, never a plain HTTP-status failure) is called "
-                        "exactly ONCE across 50 distinct slugs — every call after the first "
-                        "raises immediately, with no courtesy delay. A sibling arm proves a "
-                        "plain `Unreachable` is NOT sticky: the fetcher is called once per "
-                        "distinct slug, since a bad HTTP status from one product says "
-                        "nothing about the next (D278). Measured 2026-09-27: a real "
-                        "demo-mirror trends request over 387 SKUs went from 102.2s "
-                        "(95.85s of it `time.sleep`, per `cProfile`) to 0.78s. Not wired "
-                        "into `make check`.",
-                "governed_by": ["D18", "D278"],
+                "does": "proves `pipeline/pricehistory.fetch_json`'s one retry rule over a "
+                        "scripted `urlopen` and one fake clock, no network, no real sleep: "
+                        "which failures retry, the time budget and `Retry-After`, and that a "
+                        "host that lost `PAUSE_AFTER_FAILURES` calls in a row gets one attempt "
+                        "per call, shared by every `Market`, never refused unsent and with no "
+                        "retry pause. Not wired into `make check`.",
+                "governed_by": ["D18", "D278", "D319"],
             },
             "cardladder-selftest.py": {
                 "does": "proves `pipeline/cardladder.py` stays inside the owner's bounds for "
@@ -4996,7 +5004,7 @@ COMPONENTS = [
                 # D42 joins because hooks() no longer merely reports a config: it encodes where
                 # the hooks must be INSTALLED, and reads NOT ARMED for the working-tree
                 # arrangement that entry started with and then had to retract.
-                "governed_by": ["D16", "D17", "D42", "D43", "D80", "D86", "D88", "D127", "D138", "D158", "D179"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D80", "D86", "D88", "D127", "D138", "D158", "D176", "D179"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
@@ -5619,8 +5627,8 @@ COMPONENTS = [
                                       "copies and never fewer; whether that door should exist "
                                       "is the owner's open question. THE PUSH IS MEASURED; "
                                       "movetolive is read and has never been called from here.",
-                               "governed_by": ["D13", "D16", "D65", "D87", "D100", "D103",
-                                               "D104", "D273"],
+                               "governed_by": ["D13", "D16", "D65", "D87", "D100", "D103", "D104",
+                                               "D273", "D319"],
                                "tested_by": ["T7"]},
             "send_routes.py": {"does": "THE ONE PRESS that sends listings to TCGplayer and makes "
                                        "them live, and the checks around it. One press at a "
@@ -5673,8 +5681,8 @@ COMPONENTS = [
                 # file being fetched IS — the Pricing tab's Export Filtered CSV, which is the
                 # listing path's own input. D24 is the opsec rule this borrows: a bearer
                 # instrument does not go in a file anyone else reads.
-                "governed_by": ["D3", "D8", "D9", "D11", "D16", "D24", "D33", "D138", "D65",
-                                "D69", "D76", "D87", "D104"],
+                "governed_by": ["D3", "D8", "D9", "D11", "D16", "D24", "D33", "D65", "D69", "D76",
+                                "D87", "D104", "D138", "D319"],
                 "tested_by": ["T7"],
                 "note": "Stdlib only, like the rest of the server: requirements.txt names the "
                         "absence of `requests` on purpose and one more fetch is not a reason "
@@ -5888,10 +5896,10 @@ COMPONENTS = [
             },
             "portal_http.py": {
                 "does": "the transport both TCGplayer hosts share: the session cookie read, "
-                        "the User-Agent, the no-redirect opener, the socket handling and the "
-                        "one status ladder. Each host passes in its own refusal class, codes "
+                        "the User-Agent, its one door to the retry home (`pipeline/net.py`, "
+                        "no redirect followed) and the one status ladder. Each host passes in its own refusal class, codes "
                         "and words.",
-                "governed_by": ["D65", "D69"],
+                "governed_by": ["D65", "D69", "D319"],
             },
             "refusal.py": {
                 "does": "`BadRequest`, the refusal every route module can raise, and "
