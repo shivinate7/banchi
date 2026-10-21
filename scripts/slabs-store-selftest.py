@@ -113,7 +113,7 @@ def same(label: str, got, want) -> bool:
 
 # ------------------------------------------------------------------------------ fixtures
 
-TABLES = ("slabs", "slab_snapshots", "slab_sales")
+TABLES = ("slabs", "slab_snapshots", "slab_sales", "slab_sale_links")
 WINDOWS = ("twoWeekData", "oneMonthData", "oneQuarterData", "sixMonthData", "oneYearData")
 SNAP_FIELDS = (
     "cl_value", "cl_confidence", "estimated_value", "estimated_confidence",
@@ -490,7 +490,7 @@ def case_sales_read_scope():
 
 
 def landing(s):
-    """One write across all three tables."""
+    """One write across all four tables."""
     add_psa(s, "81299999", profile="psa-2002", added="2026-10-10")
     s.record_snapshot("81299999", "psa", "2026-10-10", **SNAP_A)
     s.record_sales("81299999", "psa", [sale("n-1", "2026-10-08"), sale("n-2", "2026-10-09")])
@@ -523,8 +523,8 @@ def case_one_transaction():
     """4. each write is one transaction"""
     with fresh_home():
         put(landing)
-        same("control: the same write, unbroken, lands a row in all three tables",
-             counts(), {"slabs": 1, "slab_snapshots": 1, "slab_sales": 2})
+        same("control: the same write, unbroken, lands a row in all four tables",
+             counts(), {"slabs": 1, "slab_snapshots": 1, "slab_sales": 2, "slab_sale_links": 2})
 
     with fresh_home():
         seen = {}
@@ -537,7 +537,7 @@ def case_one_transaction():
             pass
         ok(seen.get("inside", False), "the rows are visible inside the write before it fails")
         same("an error raised inside the write keeps no row in any table",
-             counts(), {"slabs": 0, "slab_snapshots": 0, "slab_sales": 0})
+             counts(), {"slabs": 0, "slab_snapshots": 0, "slab_sales": 0, "slab_sale_links": 0})
 
     for table in TABLES:
         with fresh_home():
@@ -561,7 +561,7 @@ def case_one_transaction():
                  snap_fields(slabs_now().snapshots_for("81200000", "psa")[0]), SNAP_A)
             put(landing)
             same(f"{table} fails: the same write works once the failure is gone",
-                 counts(), {"slabs": 2, "slab_snapshots": 2, "slab_sales": 2})
+                 counts(), {"slabs": 2, "slab_snapshots": 2, "slab_sales": 2, "slab_sale_links": 2})
 
     with fresh_home():
         put(lambda s: add_psa(s, "81200000"))
@@ -662,19 +662,22 @@ def case_upgrade():
         conn.close()
     same("the fixture really is the owner's shape: stamp 14, no slab table",
          (raw("SELECT value FROM meta WHERE key = 'schema'"),
-          raw("SELECT name FROM sqlite_master WHERE name IN ('slabs', 'slab_snapshots', 'slab_sales')")),
+          raw("SELECT name FROM sqlite_master WHERE name IN ('slabs', 'slab_snapshots', 'slab_sales', 'slab_sale_links')")),
          ([("14",)], []))
     ok(db.SCHEMA_VERSION > 14, "the schema version is past 14", str(db.SCHEMA_VERSION))
 
     store().read()
     gc.collect()
-    same("opening the store creates the three tables and re-stamps it",
-         (sorted(r[0] for r in raw("SELECT name FROM sqlite_master WHERE name IN ('slabs', 'slab_snapshots', 'slab_sales')")),
+    same("opening the store creates the four tables and re-stamps it",
+         (sorted(r[0] for r in raw("SELECT name FROM sqlite_master WHERE name IN ('slabs', 'slab_snapshots', 'slab_sales', 'slab_sale_links')")),
           raw("SELECT value FROM meta WHERE key = 'schema'")),
          (sorted(TABLES), [(str(db.SCHEMA_VERSION),)]))
+    same("and it creates the index sales_for reads the link table through",
+         raw("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'slab_sale_links_slab'"),
+         [("slab_sale_links_slab",)])
     same("and the rows already there survive", store().read().readings.entries.get("555"), survivor)
     put(landing)
-    same("and the upgraded store takes a slab write", counts(), {"slabs": 1, "slab_snapshots": 1, "slab_sales": 2})
+    same("and the upgraded store takes a slab write", counts(), {"slabs": 1, "slab_snapshots": 1, "slab_sales": 2, "slab_sale_links": 2})
 
 
 CASES = (
