@@ -13,8 +13,12 @@ connects, `Offline`) was retried, and re-slept for, once per distinct (product, 
 
 Fixed (owner ruling: a call is never refused unsent): a host that loses `PAUSE_AFTER_FAILURES`
 calls in a row is degraded. Each later call to it makes exactly ONE attempt, with no retry and no
-pause, and still raises `Unreachable` if that attempt fails. Any success resets the count
-(`_a_degraded_host_that_answers_is_reset`), and nothing waits on a clock. One failure degrades
+retry pause, and still raises `Unreachable` if that attempt fails. Any success resets the count
+(`_a_degraded_host_that_answers_is_reset`), and so does any other answer that is not a 429 or a 5xx,
+a 403 or 404 for one (`_a_4xx_answer_resets_the_count`). A degraded host that ANSWERS (429, 502, 503,
+504) keeps `Market`'s courtesy delay, and a 429's `Retry-After` is the least gap before the next
+call. Only a host whose lost calls got no HTTP answer at all (refused, unreachable, a timeout)
+skips it. Nothing waits on a real clock. One failure degrades
 nothing. A lost URL is asked again in full (`_a_lost_url_is_asked_again_and_never_refused`). The count
 is per host and shared by every `Market` in the process: a dead host degrades no other host, and a
 `Market` built after the failures is asked once too (`_a_degraded_host_is_shared_by_every_market`).
@@ -131,8 +135,9 @@ def _contract_names() -> None:
 def _offline_only_fetches_once() -> None:
     """A host that never connects, through the REAL fetch_json. The first PAUSE_AFTER distinct URLs
     each lose their retries, then the host is degraded: every later get makes ONE attempt, none is
-    refused unsent, and none takes a retry pause. The courtesy delay is recorded rather than refused
-    and is not asserted: whether a degraded get still pays it is the owner's to rule."""
+    refused unsent, and none takes a retry pause. A host that never ANSWERED also skips the courtesy
+    delay once degraded: only the gets before it pay it (a host that answers keeps it, see
+    `_a_degraded_host_that_answers_keeps_the_courtesy_delay`)."""
     urls = [_u(HOST_A, "offline-%d" % i) for i in range(50)]
     courtesy = []
     with _net(_by_url(lambda url: "down")) as net, contextlib.redirect_stderr(io.StringIO()), \
@@ -153,6 +158,9 @@ def _offline_only_fetches_once() -> None:
     ok(len(net.pauses) == PAUSE_AFTER * len(pricehistory.RETRY_PAUSES),
        "a degraded get takes no retry pause: only the first %d gets pause between attempts" % PAUSE_AFTER,
        "took %d pauses" % len(net.pauses))
+    ok(len(courtesy) == PAUSE_AFTER - 1,
+       "a host that never connects skips the courtesy delay once degraded: only gets 2 to %d pay it" % PAUSE_AFTER,
+       "paid the courtesy delay %d times in 50 gets" % len(courtesy))
 
 
 def _offline_host_answers_the_moment_it_is_up() -> None:
@@ -545,24 +553,59 @@ def _a_success_resets_the_count() -> None:
        "made %d attempts" % cost["a7"])
 
 
-def _a_plain_error_neither_counts_nor_resets() -> None:
-    """Two lost calls, a plain 500 or 404, then a lost call. The 500 or 404 must neither count
-    nor reset: the third failure in a row is the 4th URL, so the 5th is asked once."""
-    for mid in (500, 404):
+def _a_plain_500_neither_counts_nor_resets() -> None:
+    """Two lost calls, a plain 500, then a lost call. A 500 is a 5xx that is not retried: it must
+    neither count nor reset, so the third failure in a row is the 4th URL and the 5th is asked once."""
+    plan = {"b1": 503, "b2": 503, "b3": 500, "b4": 503, "b5": 503}
+    with _net(_by_url(lambda url: plan[_name(url)])) as net, contextlib.redirect_stderr(io.StringIO()):
+        for name in ("b1", "b2", "b3"):
+            _call(_u(HOST_A, name))
+        before = len(net.urls)
+        _call(_u(HOST_A, "b4"))
+        asked_b4 = len(net.urls) - before
+        before = len(net.urls)
+        _call(_u(HOST_A, "b5"))
+        asked_b5 = len(net.urls) - before
+    ok(asked_b4 == ATTEMPTS_PER_CALL and asked_b5 == 1,
+       "HTTP 500 between two 503s neither counts nor resets: the 4th URL is the third failure, the 5th is asked once",
+       "attempts for b4 %d, for b5 %d" % (asked_b4, asked_b5))
+
+
+def _a_4xx_answer_resets_the_count() -> None:
+    """Any HTTP answer that is not a 429 or a 5xx means the host is up. Two lost calls, then a
+    403 or 404: the count restarts, so the 4th and 5th URLs are asked in full (they are the first and
+    second failure after it). And a host already degraded by three lost calls stops being degraded
+    on the 4xx: its next lost call retries in full."""
+    for code in (400, 403, 404):
         _fresh_hosts()
-        plan = {"b1": 503, "b2": 503, "b3": mid, "b4": 503, "b5": 503}
+        plan = {"b1": 503, "b2": 503, "b3": code, "b4": 503, "b5": 503}
         with _net(_by_url(lambda url, plan=plan: plan[_name(url)])) as net, contextlib.redirect_stderr(io.StringIO()):
             for name in ("b1", "b2", "b3"):
                 _call(_u(HOST_A, name))
+            cost = {}
+            for name in ("b4", "b5"):
+                before = len(net.urls)
+                _call(_u(HOST_A, name))
+                cost[name] = len(net.urls) - before
+        ok(cost == {"b4": ATTEMPTS_PER_CALL, "b5": ATTEMPTS_PER_CALL},
+           "HTTP %d between two 503s resets the count: the 4th and 5th URLs are each asked in full" % code,
+           "attempts per URL %r (the host stayed on its count)" % (cost,))
+
+        _fresh_hosts()
+        plan = {"d4": code, "d5": 503}
+        with _net(_by_url(lambda url, plan=plan: plan.get(_name(url), 503))) as net, \
+                contextlib.redirect_stderr(io.StringIO()):
+            for i in range(PAUSE_AFTER):
+                _call(_u(HOST_A, "d%d" % (i + 1)))
             before = len(net.urls)
-            _call(_u(HOST_A, "b4"))
-            asked_b4 = len(net.urls) - before
+            answered = _call(_u(HOST_A, "d4"))
+            asked_answer = len(net.urls) - before
             before = len(net.urls)
-            _call(_u(HOST_A, "b5"))
-            asked_b5 = len(net.urls) - before
-        ok(asked_b4 == ATTEMPTS_PER_CALL and asked_b5 == 1,
-           "HTTP %d between two 503s neither counts nor resets: the 4th URL is the third failure, the 5th is asked once" % mid,
-           "attempts for b4 %d, for b5 %d" % (asked_b4, asked_b5))
+            _call(_u(HOST_A, "d5"))
+            asked_lost = len(net.urls) - before
+        ok(asked_answer == 1 and isinstance(answered, pricehistory.PriceHistoryError) and asked_lost == ATTEMPTS_PER_CALL,
+           "HTTP %d on a degraded host: asked once, and it ends the degrade: the next lost call retries in full" % code,
+           "the answer took %d attempts, the next lost call %d" % (asked_answer, asked_lost))
 
 
 def _a_plain_500_is_one_request_and_never_counts() -> None:
@@ -579,8 +622,8 @@ def _a_plain_500_is_one_request_and_never_counts() -> None:
 
 def _a_plain_error_on_one_url_is_asked_again_each_call() -> None:
     """A 500, 404 or 403 on one repeated URL is one request per call, every time. It is never
-    retried and never waits: under the one-retry-home rule a plain error neither counts toward a
-    pause nor resets one. A URL wait applied to a plain error would show as fewer requests here."""
+    retried and never waits: a plain error is never a lost call, so it never degrades the host. A
+    URL wait applied to a plain error would show as fewer requests here."""
     for code in (500, 404, 403):
         _fresh_hosts()
         with _net(_by_url(lambda url, code=code: code)) as net, contextlib.redirect_stderr(io.StringIO()):
@@ -753,6 +796,53 @@ def _a_degraded_host_that_answers_is_reset() -> None:
        "made %d attempts, got %r" % (len(net.urls) - before, lost))
 
 
+def _waited(gaps, least):
+    """Whether every gap was at least `least` seconds (a float's last digit forgiven)."""
+    return all(gap is not None and gap >= least - 1e-9 for gap in gaps)
+
+
+def _a_degraded_host_that_answers_keeps_the_courtesy_delay() -> None:
+    """A host that ANSWERS 429, 502, 503 or 504 is up, only unhappy: it is asked for fewer retries
+    once degraded, but never hammered. Ten gets on one such host, calls 4 to 10 on it degraded:
+    each still waits the courtesy delay (0.25 s) after the one before. Only a host that never
+    answered skips it, see the guards below."""
+    delay = 0.25
+    for code in (429, 502, 503, 504):
+        gaps, sleeps = _gaps(_host(code), courtesy_delay=delay)
+        degraded = gaps[PAUSE_AFTER - 1:]
+        ok(_waited(degraded, delay),
+           "HTTP %d: each get on the degraded host waits the courtesy delay (%.2fs) after the last" % (code, delay),
+           "gaps before calls %d to 10: %r" % (PAUSE_AFTER + 1, [None if g is None else round(g, 3) for g in degraded]))
+
+
+def _a_429_retry_after_is_the_least_gap_when_degraded() -> None:
+    """The probe: a host answering 429 with `Retry-After: 1`, ten gets, courtesy delay 0.25 s. Calls 4
+    to 10 are made on the degraded host, one attempt each, so no retry pause spaces them. Each must still
+    start at least a second after the 429 before it. Whether a gap before call 4 or earlier is owed
+    while the host is not yet degraded is not ruled, so only calls 4 to 10 are pinned."""
+    delay = 0.25
+    gaps, sleeps = _gaps(_host_retry_after(429, "1"), courtesy_delay=delay)
+    degraded = [None if g is None else round(g, 3) for g in gaps[PAUSE_AFTER - 1:]]
+    ok(_waited(gaps[PAUSE_AFTER - 1:], delay),
+       "429 with Retry-After 1: each get on the degraded host waits the courtesy delay after the last",
+       "gaps before calls %d to 10: %r" % (PAUSE_AFTER + 1, degraded))
+    ok(_waited(gaps[PAUSE_AFTER - 1:], 1.0),
+       "429 with Retry-After 1: each get on the degraded host starts at least 1s after the 429 before it",
+       "gaps before calls %d to 10: %r" % (PAUSE_AFTER + 1, degraded))
+
+
+def _a_degraded_host_that_never_answers_skips_the_courtesy_delay() -> None:
+    """The other half: refused and timed-out hosts never gave an HTTP answer, so once degraded they are
+    asked once per get with no courtesy delay, an offline sweep stays fast. Only gets 2 to
+    PAUSE_AFTER pay it. Green before and after (guard)."""
+    for label, answer in (("a refused connection", _by_url(lambda url: "down")),
+                          ("a connect timeout", _took(0.01, _timed_out))):
+        gaps, sleeps = _gaps(answer, courtesy_delay=0.25)
+        ok(len(sleeps) == PAUSE_AFTER - 1 and all(g == 0 for g in gaps[PAUSE_AFTER - 1:]),
+           "%s: a degraded host skips the courtesy delay, only gets 2 to %d pay it" % (label, PAUSE_AFTER),
+           "paid it %d times, gaps %r" % (len(sleeps), [None if g is None else round(g, 3) for g in gaps]))
+
+
 def _stale_catalog_list_is_refetched_after_the_wait() -> None:
     """A groups list on disk older than a day lacks a set released since. The host fails, so
     `get` serves the stale list (one request, not one per card). Past the wait it must ask
@@ -829,6 +919,7 @@ class _Net:
         self.answer = answer
         self.timeouts = []
         self.urls = []
+        self.starts = []  # the fake clock as each attempt began
         self.pauses = []
         self.clock = [0.0]
         self.up = False
@@ -836,6 +927,7 @@ class _Net:
     def urlopen(self, _request, data=None, timeout=None):
         self.urls.append(_request.full_url)
         self.timeouts.append(timeout)
+        self.starts.append(self.clock[0])
         return self.answer(self, timeout)
 
     def pause(self, seconds) -> None:
@@ -853,6 +945,7 @@ def _net(answer):
     with mock.patch.object(urllib.request, "urlopen", net.urlopen), \
             mock.patch.object(pricehistory, "_sleep", net.pause, create=True), \
             mock.patch.object(pricehistory, "_monotonic", lambda: net.clock[0], create=True), \
+            mock.patch.object(pricehistory.net, "_monotonic", lambda: net.clock[0]), \
             mock.patch.object(time, "sleep", _refuse_sleep):
         yield net
 
@@ -878,6 +971,40 @@ def _host(code):
             return _Body(json.dumps(PAYLOAD).encode("utf-8"))
         raise urllib.error.HTTPError(URL, code, "simulated", {}, io.BytesIO(b""))
     return answer
+
+
+def _host_retry_after(code, seconds):
+    """A host answering HTTP `code` with `Retry-After: seconds` to everything. Each answer takes 10 ms."""
+    def answer(net, _timeout):
+        net.clock[0] += 0.01
+        headers = email.message.Message()
+        headers["Retry-After"] = seconds
+        raise urllib.error.HTTPError(URL, code, "simulated", headers, io.BytesIO(b""))
+    return answer
+
+
+def _gaps(answer, calls=10, courtesy_delay=0.25):
+    """`calls` real `Market.get`s on distinct URLs of host A, on the fake clock. `time.sleep` (the
+    courtesy delay) is recorded and moves the clock, as a real sleep would. Returns `(gaps, sleeps)`:
+    `gaps[i - 1]` is how long call `i` (0-based) waited between the end of call `i - 1` and its own first
+    attempt, whichever sleep took it, or None if it sent nothing. Calls `PAUSE_AFTER` and later are the
+    ones made on a degraded host, so their gaps are `gaps[PAUSE_AFTER - 1:]`."""
+    sleeps = []
+    with _net(answer) as net, contextlib.redirect_stderr(io.StringIO()):
+        def nap(seconds):
+            sleeps.append(seconds)
+            net.clock[0] += seconds
+
+        with mock.patch.object(time, "sleep", nap):
+            market = pricehistory.Market(cache_dir=None, courtesy_delay=courtesy_delay, now=lambda: net.clock[0])
+            firsts, ends = [], []
+            for i in range(calls):
+                firsts.append(len(net.starts))
+                _outcome(lambda i=i: market.get(_u(HOST_A, "g%d" % i), "slug-g%d" % i, 3600.0))
+                ends.append(net.clock[0])
+    bounds = firsts + [len(net.starts)]
+    gaps = [net.starts[firsts[i]] - ends[i - 1] if bounds[i + 1] > bounds[i] else None for i in range(1, calls)]
+    return gaps, sleeps
 
 
 def _by_url(policy):
@@ -927,7 +1054,8 @@ CASES = (
     _one_url_asked_again_is_asked_in_full,
     _a_lost_url_is_asked_again_and_never_refused,
     _a_success_resets_the_count,
-    _a_plain_error_neither_counts_nor_resets,
+    _a_plain_500_neither_counts_nor_resets,
+    _a_4xx_answer_resets_the_count,
     _a_plain_500_is_one_request_and_never_counts,
     _a_plain_error_on_one_url_is_asked_again_each_call,
     _a_degraded_host_is_shared_by_every_market,
@@ -935,6 +1063,9 @@ CASES = (
     _a_product_that_loses_one_range_is_not_asked_for_the_rest,
     _exhausted_retries_fail_fast_once_degraded,
     _a_degraded_host_that_answers_is_reset,
+    _a_degraded_host_that_answers_keeps_the_courtesy_delay,
+    _a_429_retry_after_is_the_least_gap_when_degraded,
+    _a_degraded_host_that_never_answers_skips_the_courtesy_delay,
     _stale_catalog_list_is_refetched_after_the_wait,
     _offline_wait_fits_the_client_window,
 )

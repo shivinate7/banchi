@@ -13,6 +13,7 @@ import http.server
 import os
 import re
 import socket
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -2798,6 +2799,186 @@ def check_net_degraded_host_gets_one_attempt(checks: Checks) -> None:
     ))
 
 
+# ------------------------------- D319 review round 2: any other HTTP answer resets the count
+
+
+def _answer_then_lose(net, host, code):
+    """Degrade `host` with three lost 503s, answer one call with `code`, then lose another call.
+
+    Returns `(the answer, the exception, requests the answer took, requests the next lost call took)`.
+    The wire answers 503 to every URL but `/answer`, so the last number reads straight off the rule:
+    1 while the host is still degraded, 3 once the answer has reset the count."""
+    base = f"https://{host}.example.test"
+    with scripted_wire(lambda url: code if url.endswith("/answer") else 503) as wire:
+        for index in range(3):
+            attempt(lambda index=index: net.open(f"{base}/lost{index}"))
+        before = len(wire.requests)
+        got, caught = attempt(lambda: net.open(f"{base}/answer"))
+        middle = len(wire.requests)
+        attempt(lambda: net.open(f"{base}/lost-again"))
+    return got, caught, middle - before, len(wire.requests) - middle
+
+
+def _an_answer_resets_the_count(net, code):
+    got, caught, asked, then = _answer_then_lose(net, f"g-answer-{code}", code)
+    return (
+        got is not None and got[0] == code and asked == 1 and then == 3,
+        f"HTTP {code}: {caught or (got and got[0])!r} took {asked} requests; "
+        f"the next lost call took {then} requests, not 3 (the host is still degraded)",
+    )
+
+
+def _a_plain_500_does_not_reset_the_count(net):
+    got, caught, asked, then = _answer_then_lose(net, "g-answer-500", 500)
+    return (
+        got is not None and got[0] == 500 and asked == 1 and then == 1,
+        f"HTTP 500: {caught or (got and got[0])!r} took {asked} requests; the next lost call took {then}, not 1",
+    )
+
+
+def check_net_degraded_host_is_reset_by_any_other_answer(checks: Checks) -> None:
+    """D319 (one retry home), review round 2: ANY HTTP answer but a 429 or a 5xx resets the lost-call count.
+
+    A host that answers 403 or 404 is up: it is not lost. After three lost calls the host is degraded
+    and sends one request per call; one 4xx answer must end that, so the next lost call retries in
+    full (3 requests). A plain 500 is a 5xx: it neither counts nor resets, so the host stays
+    degraded (guard). Every case names its own host: the count is shared by the process."""
+    checks.note("")
+    checks.note("NET REQUEST — a 4xx answer resets the lost-call count, a plain 500 does not")
+    net_cases(checks, (
+        *(
+            (f"after 3 lost calls, a HTTP {code} answer resets the count: the next lost call gets all 3 requests",
+             lambda net, code=code: _an_answer_resets_the_count(net, code))
+            for code in (400, 401, 403, 404)
+        ),
+        ("after 3 lost calls, a plain 500 answer does not reset the count: the next lost call is 1 request (guard)",
+         _a_plain_500_does_not_reset_the_count),
+    ))
+
+
+# ------------ D319 review round 2: a write that may have been sent is never "could not reach host"
+
+
+class _Unreached(Exception):
+    """What a test's `unreachable` builds: the host was never reached."""
+
+
+class _Dropped(Exception):
+    """What a test's `dropped` builds: a socket failure that may have followed a send."""
+
+
+def _portal_send(url, *, data=None, idempotent=True):
+    from server import portal_http
+
+    return portal_http.send(
+        urllib.request.Request(url, data=data, method="POST" if data else "GET"),
+        timeout=9, max_bytes=1 << 16,
+        unreachable=_Unreached, dropped=_Dropped, idempotent=idempotent,
+    )
+
+
+# Both end as `net.Dropped` for a write, and urllib wraps both in a `URLError`, the same type as a
+# refused connect: the portal door must tell them from it by the retry home's verdict, not the wrapper.
+_WRITES_THAT_DROP = (
+    ("a broken pipe on the body send", lambda: ("body", BrokenPipeError(32, "simulated: broken pipe"))),
+    ("a failed TLS handshake", lambda: ssl.SSLError(1, "[SSL: WRONG_VERSION_NUMBER] simulated: wrong version")),
+)
+
+
+def _a_write_that_drops_is_net_dropped(net, step, host):
+    with _socket_wire(step(), _raw(200, b"done")) as wire:
+        got, caught = attempt(lambda: net.open(f"http://{host}.example.test/x", **_WRITE))
+    return (
+        isinstance(caught, net.Dropped) and wire.connects == 1 and not wire.pauses,
+        f"{caught or got!r} after {wire.connects} connects, pauses {wire.pauses}",
+    )
+
+
+def _portal_send_reports_a_dropped_write_as_dropped(net, step, host):
+    with _socket_wire(step(), _raw(200, b"done")) as wire:
+        got, caught = attempt(lambda: _portal_send(f"http://{host}.example.test/x", data=b"x=1", idempotent=False))
+    detail = f"{caught or got!r} after {wire.connects} connects, pauses {wire.pauses}"
+    if isinstance(caught, _Unreached):
+        detail += ": a write that may have been sent was reported as never reached"
+    return isinstance(caught, _Dropped) and wire.connects == 1 and not wire.pauses, detail
+
+
+def _reset_after_send(sent):
+    raise ConnectionResetError(54, "simulated: reset by peer")
+
+
+def _tcg_write(step):
+    url = "http://portal.example.test/admin/pricing/stagedupload"
+    with _socket_wire(step, _raw(200, b"done")) as wire:
+        got, caught = attempt(lambda: tcg_export._open(url, cookie="session=fixture", data=b"x=1", idempotent=False))
+    return got, caught, wire
+
+
+def _tcg_export_reports_a_dropped_write_like_any_other_drop(net, step):
+    """The reference is a reset after the send, which has always taken the dropped path."""
+    _, reference, _ = _tcg_write(_reset_after_send)
+    got, caught, wire = _tcg_write(step())
+    refused = isinstance(caught, tcg_export.FetchRefusal)
+    return (
+        refused and caught.code == "tcg_unreachable" and isinstance(reference, tcg_export.FetchRefusal)
+        and caught.message == reference.message and "Could not reach" not in caught.message
+        and wire.connects == 1,
+        f"{caught or got!r} (code {getattr(caught, 'code', None)}) after {wire.connects} connects; "
+        f"the reference drop said {getattr(reference, 'message', reference)!r}",
+    )
+
+
+def _a_write_that_never_connected_is_still_unreachable(net):
+    refusal = ConnectionRefusedError(61, "simulated: connection refused")
+    with _socket_wire(refusal) as wire:
+        got, caught = attempt(lambda: _portal_send("http://w-refused.example.test/x", data=b"x=1", idempotent=False))
+    return (
+        isinstance(caught, _Unreached) and hasattr(caught.args[0], "reason") and wire.connects == 3,
+        f"{caught or got!r} after {wire.connects} connects",
+    )
+
+
+def _a_read_that_stalls_is_still_dropped(net):
+    def stall(sent):
+        raise TimeoutError("simulated: read timed out")
+
+    with _socket_wire(stall) as wire:
+        got, caught = attempt(lambda: _portal_send("http://r-stall.example.test/x"))
+    return isinstance(caught, _Dropped) and wire.connects == 3, f"{caught or got!r} after {wire.connects} connects"
+
+
+def check_net_portal_write_that_drops_is_not_unreachable(checks: Checks) -> None:
+    """D319 (one retry home), review round 2: `portal_http.send` reports a write that ends as `net.Dropped` through `dropped`.
+
+    A broken pipe on the body send, or a failed TLS handshake, makes urllib raise a `URLError`: the same
+    wrapper as a refused connect. `send` read that wrapper and chose `unreachable`, so such a write
+    was reported as "could not reach host", which says nothing was sent. It may have been. The retry
+    home already draws the line: `net.Offline` never connected, `net.Dropped` may have been sent. The
+    host keeps its `tcg_unreachable` code and says what a drop says. A refused write that never
+    connected stays `unreachable`, and a read that stalls after the connect stays `dropped` (guards).
+
+    Real urllib and http.client, only the socket scripted (`_socket_wire`)."""
+    checks.note("")
+    checks.note("PORTAL WRITE — a drop that may have followed a send is not `could not reach host` (real urllib, scripted socket)")
+    cases = []
+    for index, (name, step) in enumerate(_WRITES_THAT_DROP):
+        cases += [
+            (f"{name} on a write is `net.Dropped`, one connect, no retry (premise)",
+             lambda net, step=step, index=index: _a_write_that_drops_is_net_dropped(net, step, f"p-net-{index}")),
+            (f"`portal_http.send`: {name} on a write goes through `dropped`, never `unreachable`",
+             lambda net, step=step, index=index: _portal_send_reports_a_dropped_write_as_dropped(net, step, f"p-send-{index}")),
+            (f"`tcg_export._open`: {name} on a write is `tcg_unreachable` with the message of any other drop, not `Could not reach`",
+             lambda net, step=step: _tcg_export_reports_a_dropped_write_like_any_other_drop(net, step)),
+        ]
+    cases += [
+        ("`portal_http.send`: a write whose connect is refused every time is still `unreachable` (guard)",
+         _a_write_that_never_connected_is_still_unreachable),
+        ("`portal_http.send`: a read that stalls after the connect is still `dropped` (guard)",
+         _a_read_that_stalls_is_still_dropped),
+    ]
+    net_cases(checks, cases)
+
+
 # ------------------------------------------------- D319, the TCGplayer export reads through it
 
 
@@ -2941,6 +3122,8 @@ CHECKS = (
     check_net_write_is_not_resent_after_a_partial_send,
     check_net_redirect_never_carries_a_login_header,
     check_net_degraded_host_gets_one_attempt,
+    check_net_degraded_host_is_reset_by_any_other_answer,
+    check_net_portal_write_that_drops_is_not_unreachable,
     check_tcg_export_reads_retry_through_the_one_home,
     check_batch_create_is_never_retried,
 )
