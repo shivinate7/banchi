@@ -177,8 +177,10 @@ Asked one at a time. Each ruling moves into "Owner rulings" above.
 1. **Where may the store, the photos and the secrets live?** Ruled: ruling 5.
 2. **D13, the Mac holds the one truth.** Ruled: ruling 6.
 3. **D89's reclaim.** Ruled: ruling 7. Still open: when the cleanup empties the recycle bin.
-4. **Certificates.** A Caddy internal CA, or Let's Encrypt DNS-01 on a real domain.
-5. **Closing the bare port.** Loopback plus the Green, a firewall rule, or the proxy on the Mac.
+4. **Certificates.** Deferred by the owner until more of the plan has landed. Options then: reuse the
+   mkcert root `degen` uses for `feed.home.arpa`, Let's Encrypt DNS-01 on a real domain, or a Caddy internal CA.
+5. **Closing the bare port.** Deferred with question 4, as front-door detail. Options: loopback plus
+   the Green, a firewall rule, or the proxy on the Mac.
 6. **Who owns the Green-side config.** The `home` repo (HA rules there: ask before an HA restart), or
    banchi as a local add-on folder.
 
