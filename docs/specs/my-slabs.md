@@ -243,13 +243,16 @@ Kind: build. Platform: macOS, over the capture server.
 3. Routes for add, list, detail and sweep, with client functions in `app/src/server.ts`.
 4. The `#/slabs` screen, built on `<Page>` (D275, every screen inherits the page scaffold),
    from section 4. It waits on the kit lane in 4.7.
-5. A launchd job for the daily sweep, like `make price-refresh-agent`.
+5. A launchd job for the daily sweep, like `make price-refresh-agent`. A Google error on the
+   token exchange stops the sweep too, because the exchange host has no pace of its own.
 6. The three checks that D-my-slabs-card-ladder names.
 
 ## 7. What stays unmeasured
 
 - The safe call rate (section 5).
 - The recent-sales ratio over `estimatedValue` (4.3). It was measured over `clValue` only.
+- Whether `net`'s default attempt timeout holds for `httpprofile` (3.2), which can return about
+  1,800 sales.
 - Whether Card Ladder enforces an app check on these callables later. Today none is sent, and
   each call answers 200.
 - How long a refresh token lives before Card Ladder signs the owner out.
