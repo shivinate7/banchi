@@ -85,7 +85,7 @@ TCGCSV_TTL_SECONDS = 3600.0
 # How long a pair whose fetch FAILED (the catalogue was unreachable) is left alone before
 # `warm` tries it again. Short, because a failure is not an answer: it is never stored as an
 # index, so it cannot hold a final "no photo" for the ttl. Not shorter than
-# `pricehistory.OFFLINE_WAIT_SECONDS`, so `Market` is willing again by the time this lapses.
+# `pricehistory.OFFLINE_WAIT_SECONDS`, so a paused host is open again by the time this lapses.
 # The app re-asks a pending photo for about 31 s, and the retry must land inside that.
 FETCH_RETRY_SECONDS = 20.0
 
