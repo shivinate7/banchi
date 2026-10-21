@@ -1122,6 +1122,11 @@ pricehistory-cache-selftest:
 pricehistory-offline-selftest:
 	$(PYTHON) scripts/pricehistory-offline-selftest.py
 
+# the Card Ladder client's bounds, proved against a fake transport and a fake clock.
+.PHONY: cardladder-selftest
+cardladder-selftest:
+	$(PYTHON) scripts/cardladder-selftest.py
+
 # scripts/repair-born-game.py, proved against a throwaway store.
 repair-born-game-selftest:
 	$(PYTHON) scripts/repair-born-game-selftest.py
