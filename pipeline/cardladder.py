@@ -9,15 +9,14 @@ included, so the three bounds the owner set hold in one place:
 
 The refresh token comes from the caller (the server reads `CARDLADDER_REFRESH_TOKEN`).
 No exception, log line or repr holds a token or a response body: errors carry a status code
-and a name only. The transport, clock and sleep are injected, so this module does no I/O of
-its own.
+and a name only. The transport defaults to `net_transport` (`net.open`); the clock and sleep
+are injected, and a test may inject a transport too.
 """
 
 from __future__ import annotations
 
 import json
 import threading
-import urllib.error
 import urllib.parse
 
 from pipeline import net
@@ -103,11 +102,7 @@ class Client:
         try:
             return self._transport(method, url, headers, body)
         except Exception as exc:
-            # The retry home wraps a 429 as `pricehistory.Unreachable` with the HTTPError as cause;
-            # a plain transport raises the HTTPError itself.
-            if any(isinstance(e, urllib.error.HTTPError) and e.code == 429 for e in (exc, exc.__cause__)):
-                self._limited = True
-                raise RateLimited("Card Ladder rate-limited this sweep. Try again tomorrow.") from None
+            # A 429 comes back as a status, not a raise, so a raise never latches.
             # The transport's own text can hold the request, so only its type survives.
             raise CardLadderError("The request to %s failed (%s)." % (host, type(exc).__name__)) from None
 
@@ -126,8 +121,10 @@ class Client:
             raise CardLadderError(
                 "Google (securetoken.googleapis.com) is limiting login exchanges. Try again later.")
         if status != 200:
-            raise TokenRejected(
-                "Card Ladder refused the login (%d). Copy %s again." % (status, KEY_NAME))
+            if 400 <= status < 500:  # only Google refusing the token says the token is bad
+                raise TokenRejected("Google refused the login. Copy %s again." % KEY_NAME)
+            raise CardLadderError(  # 5xx or 3xx: nothing is known about the token
+                "Google (securetoken.googleapis.com) did not complete the login exchange. Try again later.")
         try:
             fields = json.loads(answer)
             token, life = fields["id_token"], float(fields["expires_in"])
