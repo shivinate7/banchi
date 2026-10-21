@@ -13,6 +13,8 @@ a role would change.
 3. **The Green tier takes four roles:** storage tier, front door, scheduler and waker, standby read
    copy. Each is designed in section 4.
 4. **Also in scope:** the Green does the server's internet fetching and holds caches.
+5. **The Green is trusted as the Mac is.** The owner's HA setup sits inside an encrypted setup as secure
+   as the Mac. The store, the photos and the secrets (the TCGplayer cookie, the Anthropic key) may live on it.
 
 ## 1. What the tier is
 
@@ -37,7 +39,7 @@ Each row names the role in section 4 that answers it. "None" means no role here 
 | Durability | The store and every photo exist once. Error text says "restore from a backup", and nothing makes one. | DEBT67, D88 | R1 |
 | Durability | `price_history` is the only copy once a bucket leaves the source's 357-day window. | D219, D222 | R1 |
 | Durability | A photo reclaim deletes the sold photo with no undo. | D89 | R1 |
-| Durability | `.env` holds the Anthropic key and the TCGplayer cookie on this Mac only. | `envfile.get_live` | R1 (Q1) |
+| Durability | `.env` holds the Anthropic key and the TCGplayer cookie on this Mac only. | `envfile.get_live` | R1, R2 |
 | Fetching | A catalog export holds one of four request slots for up to 120 s. | D104, D166 | R2 |
 | Fetching | An orders fetch is about 115 requests against a 120 a minute budget, in the request. Two presses in a minute can break the budget. An unattended fetch needs its own entry. | D91, `order_transport.fetch_open_orders` | R2 |
 | Fetching | The price-history sweep is 3,656 requests, about an hour, with no schedule. | D224, DEBT32 | R2 |
@@ -74,8 +76,9 @@ One writer stays one writer (D88, D138). The Green never writes `store.sqlite`.
 - **Solves.** DEBT67, the one-copy store. The `price_history` loss. D89's no-undo reclaim.
 - **Cost.** Small. One replication process on the Mac and one SFTP or SSH target on the Green (the
   `core_ssh` add-on exists). Litestream needs WAL mode and a `busy_timeout`, and the store already uses WAL (D88).
-- **Risk.** The store holds buyer names and addresses (D295 scrubs them for the demo). On the Green, any
-  add-on that maps `/share` can read it, and HA backups are off. Q1 decides where it may live.
+- **Risk.** The store holds buyer names and addresses (D295 scrubs them for the demo). Ruling 5 allows it
+  on the Green. Keep it in the banchi add-on's own `/data` anyway, so no other add-on reads it by accident.
+  HA backups are off, so the Green copy is a second copy, not a backed-up one.
 - **Touches.** D88, D89 (reclaim becomes a move), DEBT67, `make status` (a "last copied" line).
 
 ### R2. Fetch tier and cache
@@ -96,7 +99,7 @@ One writer stays one writer (D88, D138). The Green never writes `store.sqlite`.
 - **Cost.** Medium to large. The fetch code moves behind a drop-folder contract, and ingest becomes a
   server step. The Green is aarch64 Linux. Banchi's fetch modules are stdlib Python, but `server.ports`
   shells out to Mac-only tools, so the add-on needs a fetch-only entry point (unmeasured effort).
-- **Risk.** The TCGplayer cookie and the Anthropic key must live on the Green (Q1). The cookie expires
+- **Risk.** The TCGplayer cookie and the Anthropic key live on the Green (ruling 5). The cookie expires
   and is pasted by hand (`order_session_expired`), so the paste must reach the Green.
 - **Touches.** D104 (live fetch is a guarded constant), D166 (export reuse), D91 (unattended orders
   fetch needs its own entry), D301 (stock photos are hotlinked), D13.
@@ -155,7 +158,7 @@ One writer stays one writer (D88, D138). The Green never writes `store.sqlite`.
 
 1. R1, the storage tier. It changes no decision except D89's reclaim, and it closes the worst gap.
 2. R3, the scheduler. Missed-run handling and `pmset` alone. Small.
-3. R2, the fetch tier, after Q1. Start with the stock-photo cache and the price-history sweep. They
+3. R2, the fetch tier. Start with the stock-photo cache and the price-history sweep. They
    need no cookie.
 4. R5, the front door, after the bind decision.
 5. R4, the standby copy, after R1 has run for a while.
@@ -165,9 +168,7 @@ One writer stays one writer (D88, D138). The Green never writes `store.sqlite`.
 
 Asked one at a time. Each ruling moves into "Owner rulings" above.
 
-1. **Where may the store, the photos and the secrets live?** On the Green in an add-on's private
-   `/data` (mode 600, no other add-on maps it), in `/share`, or only on the Mac with the Green holding
-   an encrypted copy. This gates R1, R2 and R4.
+1. **Where may the store, the photos and the secrets live?** Ruled: ruling 5.
 2. **D13, the Mac holds the one truth.** R4 adds a second place that answers about the store, and R5
    changes how the store is reached. Does D13 bend to "one writer, many readers"?
 3. **D89's reclaim.** Should it move sold photos to the drive instead of deleting them?
