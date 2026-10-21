@@ -491,7 +491,7 @@ def _a_lost_url_is_not_asked_again_inside_the_wait() -> None:
         _fresh_hosts()
         with _net(_by_url(policy)) as net, contextlib.redirect_stderr(io.StringIO()):
             market = pricehistory.Market(cache_dir=None, courtesy_delay=0.0, now=lambda: net.clock[0])
-            outcomes = [_outcome(lambda: market.category_id("Pokemon")) for _ in range(10)]
+            outcomes = [_outcome(lambda market=market: market.category_id("Pokemon")) for _ in range(10)]
             ok(net.clock[0] < pricehistory.OFFLINE_WAIT_SECONDS,
                "%s: the ten calls all fall inside OFFLINE_WAIT_SECONDS" % label,
                "clock at %.1fs" % net.clock[0])
@@ -503,7 +503,7 @@ def _a_lost_url_is_not_asked_again_inside_the_wait() -> None:
                "made %d requests" % len(net.urls))
             net.clock[0] += AFTER_WAIT
             before = len(net.urls)
-            _outcome(lambda: market.category_id("Pokemon"))
+            _outcome(lambda market=market: market.category_id("Pokemon"))
             ok(len(net.urls) - before == ATTEMPTS_PER_CALL,
                "%s: after the wait the URL is asked again: %d new requests" % (label, ATTEMPTS_PER_CALL),
                "made %d new requests" % (len(net.urls) - before))
@@ -556,7 +556,7 @@ def _a_plain_error_neither_counts_nor_resets() -> None:
     for mid in (500, 404):
         _fresh_hosts()
         plan = {"b1": 503, "b2": 503, "b3": mid, "b4": 503, "b5": 503}
-        with _net(_by_url(lambda url: plan[_name(url)])) as net, contextlib.redirect_stderr(io.StringIO()):
+        with _net(_by_url(lambda url, plan=plan: plan[_name(url)])) as net, contextlib.redirect_stderr(io.StringIO()):
             for name in ("b1", "b2", "b3"):
                 _call(_u(HOST_A, name))
             before = len(net.urls)
@@ -588,9 +588,9 @@ def _a_plain_error_on_one_url_is_asked_again_each_call() -> None:
     pause nor resets one. A URL wait applied to a plain error would show as fewer requests here."""
     for code in (500, 404, 403):
         _fresh_hosts()
-        with _net(_by_url(lambda url: code)) as net, contextlib.redirect_stderr(io.StringIO()):
+        with _net(_by_url(lambda url, code=code: code)) as net, contextlib.redirect_stderr(io.StringIO()):
             market = pricehistory.Market(cache_dir=None, courtesy_delay=0.0, now=lambda: net.clock[0])
-            outcomes = [_outcome(lambda: market.category_id("Pokemon")) for _ in range(5)]
+            outcomes = [_outcome(lambda market=market: market.category_id("Pokemon")) for _ in range(5)]
         ok(all(isinstance(o, pricehistory.PriceHistoryError) and not isinstance(o, pricehistory.Offline)
                for o in outcomes),
            "HTTP %d: each of five calls raises a plain error, never Offline" % code,
