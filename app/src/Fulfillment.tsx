@@ -1442,7 +1442,7 @@ export function Fulfillment() {
           {/* No autoFocus: a software keyboard would cover the first thing he reads.
               F5 verbiage cut (row 191) deleted the worked-example placeholder ("For example,
               <a real card's name>"). SearchField's own default placeholder, "Card name,
-              number or SKU", is fine for the owner but fails this screen's own banned-word
+              number or SKU…", is fine for the owner but fails this screen's own banned-word
               list (D196: no pipeline noun in his words) — so this screen still names its own
               placeholder, just without the machine word. */}
           <SearchField

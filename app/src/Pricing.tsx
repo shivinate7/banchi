@@ -4140,7 +4140,7 @@ function HoldPanel({
         </label>
         <label className="bn-field">
           <span className="bn-field-label">Note</span>
-          <input name="bn-input" className="bn-input" type="text" placeholder="Why, like waiting on a restock…" value={text} onChange={(event) => setText(event.target.value)} />
+          <input name="bn-input" className="bn-input" type="text" placeholder="Why, like a restock…" value={text} onChange={(event) => setText(event.target.value)} />
         </label>
       </div>
       <div className="pricing-holdpanel-actions">
