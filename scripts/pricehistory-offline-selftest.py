@@ -3,8 +3,7 @@
 after a run of failures. Proved against a scripted `urlopen` and one fake clock: no network, and
 no sleep spent for real.
 
-Protects: The price-history market stops asking a host that is down, and never gives up on a
-product after one bad answer.
+Protects: The price-history market stops asking a host or a URL that is down, and never drops a healthy product because another product had a bad answer.
 Governs: D278
 
 WHAT THIS PROVES. Measured on a real demo-mirror recording: `GET /pipeline/runs/<name>/trends`
@@ -14,10 +13,12 @@ connects, `Offline`) was retried, and re-slept for, once per distinct (product, 
 
 Fixed: a host that fails `PAUSE_AFTER_FAILURES` times in a row, each on a different URL, is refused
 for `OFFLINE_WAIT_SECONDS`. Each refused call raises `Unreachable` with no request and no courtesy
-delay. One failure, or a run of failures on one URL, pauses nothing. The pause is per host and
-shared by every `Market` in the process: a dead host blinds no other host, and the one `Market`
-the server holds for the whole process asks again after the wait
-(`_paused_host_is_asked_again_after_the_wait`).
+delay. One failure pauses nothing. A URL that just lost its retries is not asked again for
+`OFFLINE_WAIT_SECONDS` (`_a_lost_url_is_not_asked_again_inside_the_wait`), so repeats on one URL
+cost one call's retries and pause no host. The host pause is per host and the URL wait is per URL.
+Both are shared by every `Market` in the process: a dead host blinds no other host, and a `Market`
+built after the failures is refused too (`_a_pause_is_shared_by_every_market`). The host is asked
+again after the wait (`_paused_host_is_asked_again_after_the_wait`).
 
 A READ TIMEOUT IS NOT A CONNECT FAILURE. `fetch_json` draws the line where its docstring says: a
 connection that opened and then stalled reading the body is a plain, non-sticky `Unreachable`
@@ -26,8 +27,9 @@ response raises `Offline`. `_read_timeout_does_not_latch` proves it at that boun
 
 RETRY (owner ruling: every network call retries, through ONE method). `fetch_json` makes up to 3
 attempts on a connection that never opens, a connect timeout, HTTP 429, 502, 503 and 504, pausing
-between them, for at most 3.0s of added wait in all (request threads share 4 slots). A `Retry-After`
-header in seconds sets its pause. It never retries a plain 500, a 403 (`Blocked`), another 4xx, an
+between them. The default pauses total 2.0s (`RETRY_PAUSES`; request threads share 4 slots). A
+`Retry-After` header in seconds sets its pause, and that pause is taken only if the call, the pause
+and the next attempt still fit the budget, `REQUEST_TIMEOUT_SECONDS`. It never retries a plain 500, a 403 (`Blocked`), another 4xx, an
 unreadable body, or a read failure after connect. The `_retry_*` cases script `urlopen` and patch
 `pricehistory._sleep`, a module attribute that `fetch_json` must look up at CALL time (never bind
 it as a default argument). `time.sleep` itself is refused for the length of each case, except
@@ -43,8 +45,9 @@ row, `fetch_json` refuses that host for `OFFLINE_WAIT_SECONDS` with no request: 
 and never pauses the rest. The client re-asks for about 31 s (`SKU_PHOTO_BACKOFF_MS` in the app's
 `server.ts`), so the wait stays inside that window.
 
-The pause state is module-level and keyed by host (`urlsplit(url).netloc`). The runner clears it
-before every case with `_clear_host_pauses`, so no case inherits another case's failures.
+The pause state is module-level: the host pause is keyed by host (`urlsplit(url).netloc`), the URL
+wait by full URL. The runner clears both before every case with `_clear_host_pauses`. `_fetch` and
+`_net` clear them too, so one scenario never inherits another scenario's failures.
 """
 
 from __future__ import annotations
@@ -66,7 +69,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from pipeline import pricehistory  # noqa: E402
+from pipeline import pricehistory, tcgcsv  # noqa: E402
 
 PASS = 0
 FAIL = 0
@@ -76,8 +79,8 @@ FAIL = 0
 PAUSE_AFTER = getattr(pricehistory, "PAUSE_AFTER_FAILURES", 3)
 # One lost call makes this many attempts, and pauses between them this many times.
 ATTEMPTS_PER_CALL = len(pricehistory.RETRY_PAUSES) + 1
-# Offsets on the fake clock. The wait length is the builder's: INSIDE_WAIT sits under any short
-# wait, AFTER_WAIT over any sane one.
+# Offsets on the fake clock. INSIDE_WAIT sits under OFFLINE_WAIT_SECONDS, AFTER_WAIT over any sane
+# value of it.
 INSIDE_WAIT = 1.0
 AFTER_WAIT = 600.0
 RETRY_BUDGET_SECONDS = 3.0
@@ -123,7 +126,7 @@ def _contract_names() -> None:
        "contract: PAUSE_AFTER_FAILURES is 3, module-level",
        "is %r" % (getattr(pricehistory, "PAUSE_AFTER_FAILURES", None),))
     ok(callable(getattr(pricehistory, "_clear_host_pauses", None)),
-       "contract: _clear_host_pauses() exists and resets the per-host state")
+       "contract: _clear_host_pauses() exists and resets the per-host and per-URL state")
 
 
 def _offline_only_fetches_once() -> None:
@@ -184,9 +187,8 @@ def _offline_is_retried_after_the_wait() -> None:
 def _plain_unreachable_is_not_sticky() -> None:
     """A real HTTP 500 from one host, through the REAL `fetch_json` and the default fetcher, is
     not sticky: five distinct products on that host are each asked for over the network, and
-    each product URL is reached. The old version raised a bare `Unreachable` from a fake
-    fetcher, which `Market` never latches, so it stayed green while a real 500 latched every
-    later product."""
+    each product URL is reached. A fake fetcher that raises a bare `Unreachable` never reaches
+    `fetch_json`, so it cannot show a 500 pausing or waiting anything; this case does not use one."""
     urls = ["https://example.test/%d" % i for i in range(5)]
     with _net(_host(500)) as net, contextlib.redirect_stderr(io.StringIO()):
         market = pricehistory.Market(
@@ -328,6 +330,7 @@ def _fetch(*steps):
     script that runs out repeats its last step, so an extra attempt shows in the count
     rather than as an `IndexError`. Returns (payload or the exception raised, attempts made,
     the pauses requested)."""
+    _fresh_hosts()
     queue = list(steps)
     attempts = []
     pauses = []
@@ -461,19 +464,70 @@ def _third_failure_pauses_the_host() -> None:
 
 
 def _one_url_failing_is_not_a_run() -> None:
-    """The same URL failing PAUSE_AFTER times is one failure, not a run: host A stays open."""
+    """Repeats on one URL cost one call's retries, so one URL is never a run: host A stays open
+    to a different URL. The same URL is refused for the wait (`_a_lost_url_is_not_asked_again_inside_the_wait`)."""
     same = _u(HOST_A, "same")
     with _net(_by_url(lambda url: 503)) as net, contextlib.redirect_stderr(io.StringIO()):
         for _ in range(PAUSE_AFTER):
             _call(same)
-        ok(len(net.urls) == PAUSE_AFTER * ATTEMPTS_PER_CALL,
-           "the same URL is asked %d times, each losing its retries" % PAUSE_AFTER,
+        ok(len(net.urls) == ATTEMPTS_PER_CALL,
+           "the same URL lost %d times in a row costs one call's retries: %d attempts in all" % (PAUSE_AFTER, ATTEMPTS_PER_CALL),
            "made %d attempts" % len(net.urls))
         before = len(net.urls)
         other = _call(_u(HOST_A, "other"))
     ok(len(net.urls) - before == ATTEMPTS_PER_CALL and _plain_unreachable(other),
        "host A is not paused: a different URL is asked after that",
        "made %d attempts, got %r" % (len(net.urls) - before, other))
+
+
+def _a_lost_url_is_not_asked_again_inside_the_wait() -> None:
+    """A URL that just lost its retries (Offline, or HTTP 503) is not asked again for
+    OFFLINE_WAIT_SECONDS. Ten `category_id` calls inside the wait cost one call's retries. Real
+    `fetch_json`, no `fetcher=`: `categories()` is not `catalog=True`, so no `_attempted` latch
+    can hide the count. Pinned process-wide, like the host pause: a `Market` built inside the wait
+    is refused too. Matters because `server/pipeline_routes.py` builds a `Market` per request, so a
+    per-`Market` wait would re-pay the retries on every request."""
+    for label, policy in (("Offline", lambda url: "down"), ("HTTP 503", lambda url: 503)):
+        _fresh_hosts()
+        with _net(_by_url(policy)) as net, contextlib.redirect_stderr(io.StringIO()):
+            market = pricehistory.Market(cache_dir=None, courtesy_delay=0.0, now=lambda: net.clock[0])
+            outcomes = [_outcome(lambda: market.category_id("Pokemon")) for _ in range(10)]
+            ok(net.clock[0] < pricehistory.OFFLINE_WAIT_SECONDS,
+               "%s: the ten calls all fall inside OFFLINE_WAIT_SECONDS" % label,
+               "clock at %.1fs" % net.clock[0])
+            ok(all(isinstance(o, pricehistory.Unreachable) for o in outcomes),
+               "%s: all ten calls still raise Unreachable" % label, "got %r" % (outcomes,))
+            ok(len(net.urls) == ATTEMPTS_PER_CALL,
+               "%s: ten calls inside the wait cost one call's retries: %d requests, not %d"
+               % (label, ATTEMPTS_PER_CALL, 10 * ATTEMPTS_PER_CALL),
+               "made %d requests" % len(net.urls))
+            net.clock[0] += AFTER_WAIT
+            before = len(net.urls)
+            _outcome(lambda: market.category_id("Pokemon"))
+            ok(len(net.urls) - before == ATTEMPTS_PER_CALL,
+               "%s: after the wait the URL is asked again: %d new requests" % (label, ATTEMPTS_PER_CALL),
+               "made %d new requests" % (len(net.urls) - before))
+
+    _fresh_hosts()
+    with _net(_by_url(lambda url: "down")) as net, contextlib.redirect_stderr(io.StringIO()):
+        first = pricehistory.Market(cache_dir=None, courtesy_delay=0.0, now=lambda: net.clock[0])
+        _outcome(lambda: first.category_id("Pokemon"))
+        before = len(net.urls)
+        second = pricehistory.Market(cache_dir=None, courtesy_delay=0.0, now=lambda: net.clock[0])
+        refused = _outcome(lambda: second.category_id("Pokemon"))
+    ok(len(net.urls) == before and isinstance(refused, pricehistory.Unreachable),
+       "a fresh Market inside the wait makes no request: the URL wait is process-wide",
+       "made %d requests, got %r" % (len(net.urls) - before, refused))
+
+    with _net(_by_url(lambda url: "down")) as net, contextlib.redirect_stderr(io.StringIO()):
+        market = pricehistory.Market(cache_dir=None, courtesy_delay=0.0, now=lambda: net.clock[0])
+        _outcome(lambda: market.category_id("Pokemon"))
+        _fresh_hosts()
+        before = len(net.urls)
+        _outcome(lambda: market.category_id("Pokemon"))
+    ok(len(net.urls) - before == ATTEMPTS_PER_CALL,
+       "clearing the host state lifts a URL's wait too: the next call asks again",
+       "made %d requests" % (len(net.urls) - before))
 
 
 def _a_success_resets_the_count() -> None:
@@ -528,6 +582,24 @@ def _a_plain_500_is_one_request_and_never_counts() -> None:
        "asked for %r" % (sorted(set(net.urls)),))
 
 
+def _a_plain_error_on_one_url_is_asked_again_each_call() -> None:
+    """A 500, 404 or 403 on one repeated URL is one request per call, every time. It is never
+    retried and never waits: under the one-retry-home rule a plain error neither counts toward a
+    pause nor resets one. A URL wait applied to a plain error would show as fewer requests here."""
+    for code in (500, 404, 403):
+        _fresh_hosts()
+        with _net(_by_url(lambda url: code)) as net, contextlib.redirect_stderr(io.StringIO()):
+            market = pricehistory.Market(cache_dir=None, courtesy_delay=0.0, now=lambda: net.clock[0])
+            outcomes = [_outcome(lambda: market.category_id("Pokemon")) for _ in range(5)]
+        ok(all(isinstance(o, pricehistory.PriceHistoryError) and not isinstance(o, pricehistory.Offline)
+               for o in outcomes),
+           "HTTP %d: each of five calls raises a plain error, never Offline" % code,
+           "got %r" % (outcomes,))
+        ok(len(net.urls) == 5,
+           "HTTP %d: five calls on one URL make five requests, none waited" % code,
+           "made %d requests" % len(net.urls))
+
+
 def _a_pause_is_shared_by_every_market() -> None:
     with _net(_by_url(lambda url: 503)) as net, contextlib.redirect_stderr(io.StringIO()):
         first = pricehistory.Market(cache_dir=None, courtesy_delay=0.0, now=lambda: net.clock[0])
@@ -561,6 +633,47 @@ def _a_paused_host_does_not_pause_another() -> None:
     ok(_u(HOST_B, "y1") in net.urls[before:] and answered == PAYLOAD,
        "host B is still asked while host A is paused, and answers",
        "got %r, asked %r" % (answered, net.urls[before:]))
+
+
+def _a_product_that_loses_one_range_is_not_asked_for_the_rest() -> None:
+    """A product adds at most one URL to a run: a reading over several ranges stops at the first
+    range that loses its retries. Product 111 answers 503 on every range. Product 222, on the same
+    host, must still be asked for all four ranges and served. Four ranges, the whole `RANGES`
+    tuple: with the default two, base never pauses the host and the 222 half proves nothing."""
+    history_222 = {"result": [{
+        "skuId": 222001, "variant": "Normal", "condition": "Near Mint", "language": "English",
+        "totalQuantitySold": 2, "totalTransactionCount": 2,
+        "buckets": [{"bucketStartDate": "2026-09-01T00:00:00Z", "marketPrice": 1.5, "quantitySold": 2,
+                     "transactionCount": 2, "lowSalePrice": 1.0, "highSalePrice": 2.0}],
+    }]}
+
+    def answer(net, _timeout):
+        net.clock[0] += 0.01
+        url = net.urls[-1]
+        if "/price/history/111/" in url:
+            raise urllib.error.HTTPError(url, 503, "simulated", email.message.Message(), io.BytesIO(b""))
+        return _Body(json.dumps(history_222).encode("utf-8"))
+
+    rows = [{tcgcsv.SKU_COLUMN: "111001"}, {tcgcsv.SKU_COLUMN: "222001"}]
+    with _net(answer) as net, contextlib.redirect_stderr(io.StringIO()):
+        market = pricehistory.Market(cache_dir=None, courtesy_delay=0.0, now=lambda: net.clock[0])
+        readings, refusals = market.readings_for_rows(
+            rows, pricehistory.RANGES, product_ids={"111001": 111, "222001": 222})
+    asked_111 = [u for u in net.urls if "/price/history/111/" in u]
+    asked_222 = [u for u in net.urls if "/price/history/222/" in u]
+    ok(asked_111 == [pricehistory.history_url(111, pricehistory.RANGES[0])] * ATTEMPTS_PER_CALL,
+       "product 111 is asked for its first range only: %d attempts, no later range" % ATTEMPTS_PER_CALL,
+       "asked %r" % (asked_111,))
+    ok(set(asked_222) == {pricehistory.history_url(222, r) for r in pricehistory.RANGES},
+       "product 222 is asked for all four ranges though 111 lost its first",
+       "asked %r" % (asked_222,))
+    ok("111001" in refusals and "222001" not in refusals,
+       "111001 is named as refused, and 222001 is not refused",
+       "refusals %r" % (refusals,))
+    served = readings.get("222001")
+    ok(served is not None and set(served.series) == set(pricehistory.RANGES),
+       "222001 is served with a series for each of the four ranges",
+       "readings %r" % (sorted(readings),))
 
 
 def _exhausted_retries_fail_fast_for_the_wait() -> None:
@@ -731,7 +844,9 @@ class _Net:
 @contextlib.contextmanager
 def _net(answer):
     """`create=True` on the clock lets a case run against code that has no `_monotonic` yet:
-    it then fails on its count, not on a missing name."""
+    it then fails on its count, not on a missing name. Each network has its own clock, so the
+    pause state from another network's clock is cleared on entry."""
+    _fresh_hosts()
     net = _Net(answer)
     with mock.patch.object(urllib.request, "urlopen", net.urlopen), \
             mock.patch.object(pricehistory, "_sleep", net.pause, create=True), \
@@ -808,11 +923,14 @@ CASES = (
     _retry_time_is_bounded,
     _third_failure_pauses_the_host,
     _one_url_failing_is_not_a_run,
+    _a_lost_url_is_not_asked_again_inside_the_wait,
     _a_success_resets_the_count,
     _a_plain_error_neither_counts_nor_resets,
     _a_plain_500_is_one_request_and_never_counts,
+    _a_plain_error_on_one_url_is_asked_again_each_call,
     _a_pause_is_shared_by_every_market,
     _a_paused_host_does_not_pause_another,
+    _a_product_that_loses_one_range_is_not_asked_for_the_rest,
     _exhausted_retries_fail_fast_for_the_wait,
     _paused_host_is_asked_again_after_the_wait,
     _stale_catalog_list_is_refetched_after_the_wait,

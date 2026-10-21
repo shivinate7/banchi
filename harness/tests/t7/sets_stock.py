@@ -848,7 +848,7 @@ def check_skus_photos_pending(checks: Checks) -> None:
 class _FakeTime:
     """The real `time` module with its clock held still, for `stockimages.time` in one case.
     `StockImages` reads its clock as `time.time()` with no injection point; `monotonic` follows
-    the same clock so a builder who reads either one stays under test."""
+    the same clock, so a stock path that reads either one stays under test."""
 
     def __init__(self) -> None:
         self.now = 1_000_000.0
@@ -866,20 +866,21 @@ class _FakeTime:
 def check_stock_images_retry_after_failed_fetch(checks: Checks) -> None:
     """The Sales screen showed no Riftbound stock photos after ONE DNS failure at server start
     (`tcgcsv.com`, Errno 8). `STOCK_IMAGES` is one `Market` and one `StockImages` for the whole
-    process, and two things made the failure permanent: the `Market` latched `Offline` forever,
-    and `StockImages` cached the failed fetch as an EMPTY index for the full ttl, which
-    `group_pending` then reported as a final "no photo" so the client stopped asking.
+    process, so a failed catalogue fetch must not become an answer. It does not: `url_for` answers
+    None, `group_pending` stays true, and the fetch is tried again after `FETCH_RETRY_SECONDS`,
+    not after the ttl. Otherwise `group_pending` would report a final "no photo" and the client
+    would stop asking.
 
-    Each failure type runs the same story on a fake clock, no real network, no sleep. `Offline`
-    walks through both causes. A plain `Unreachable` is never latched by `Market`, so it
-    isolates the `StockImages` half: a fix to `Market` alone leaves that variant red."""
+    Each failure type runs the same story on a fake clock, no real network, no sleep. The fetcher
+    is scripted, so `Market`'s own per-URL wait is not in play: the wait under test is
+    `StockImages`'. Both `Offline` and a plain `Unreachable` run the story."""
     checks.note("")
     checks.note("STOCK IMAGES RETRY — a failed catalogue fetch is not a final 'no photo' (Sales, Riftbound)")
 
     game, set_name, number = "riftbound", "Unleashed", "118/219"
     photo = "https://tcgplayer-cdn.tcgplayer.com/product/685007_200w.jpg"
-    # The short wait is the builder's. This offset must sit over it and, to mean "not served
-    # for the full ttl", well under the ttl.
+    # This offset must sit over `FETCH_RETRY_SECONDS` and, to mean "not served for the full
+    # ttl", well under the ttl.
     after_wait = 600.0
     checks.ok(
         after_wait < stockimages.TCGCSV_TTL_SECONDS / 2,
@@ -946,8 +947,8 @@ def check_stock_images_retry_after_failed_fetch(checks: Checks) -> None:
     story(pricehistory.Unreachable)
 
 
-# The checks below share one scripted Riftbound catalogue and one fake clock. The wait a
-# failed pair earns is the builder's, so every offset brackets it: 1 s sits inside any short
+# The checks below share one scripted Riftbound catalogue and one fake clock. A failed pair
+# waits `stockimages.FETCH_RETRY_SECONDS`, so every offset brackets it: 1 s sits inside that
 # wait, 600 s sits over it and far inside the ttl.
 _RIFTBOUND_LINE = "Riftbound League of Legends Trading Card Game"
 _PAIR = ("riftbound", "Unleashed")
@@ -1067,9 +1068,9 @@ def check_stock_images_stale_groups_list_is_a_failure(checks: Checks) -> None:
 
 
 def check_stock_images_failed_pair_is_not_refetched_inside_the_wait(checks: Checks) -> None:
-    """The back-off itself, counted in requests. A plain `Unreachable` is never latched by
-    `Market`, so only `StockImages`' own wait stands between a second `warm` and a second
-    request. A `_backing_off` that always answers False turns this red."""
+    """The back-off itself, counted in requests. The fetcher is scripted, so `Market`'s own
+    per-URL wait is not in play: only `StockImages`' wait (`FETCH_RETRY_SECONDS`) stands between
+    a second `warm` and a second request. A `_backing_off` that always answers False turns this red."""
     checks.note("")
     checks.note("STOCK IMAGES BACK-OFF — a failed pair is left alone for the wait, then asked again")
 
@@ -1499,7 +1500,7 @@ def check_search_group_stock_image(checks: Checks) -> None:
             inventory = snapshot.inventory
             inventory.ensure_box(1, name="search-image box")
             # Both the card's own fields and the SKU table agree, so the answer does not
-            # depend on which of the two the builder joins through.
+            # depend on which of the two the code joins through.
             for sku, number, seed in (("9100001", "SP3/006", "hit"), ("9100002", "ZZ9/999", "miss")):
                 card, _ = inventory.allocate_capture(1, cid=fake_cid(f"search-image-{seed}"))
                 card.sku = sku
