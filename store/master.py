@@ -187,6 +187,18 @@ def is_on_hand(card) -> bool:
     card or a card with no state reads as on hand, as the open-queue walk always has."""
     return state_is_on_hand(getattr(card, "state", None))
 
+
+def departed_among(cards, positions) -> set:
+    """Which of `positions` hold a card that has left its box. `cards` is `Inventory.cards`.
+
+    The set form of `is_on_hand`: it reads only the state of the named rows, in one indexed
+    query, so a caller that owes an answer per queue entry pays for the queue and not the store.
+    A position with no card is not departed."""
+    return {
+        key for key, state in cards.pluck("state", positions).items()
+        if not state_is_on_hand(state)
+    }
+
 # Why a retired card left (D26). Required of every retirement and never inferred: it is the
 # one fact about the departure the record cannot re-derive later, and the four are a closed
 # vocabulary so the history stays greppable — free text would be a second `note`.
