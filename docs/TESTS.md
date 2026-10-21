@@ -177,7 +177,7 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | `scripts/price-postings-selftest.py` | The price postings table is append-only, so posting one SKU twice keeps both rows. | D243, D247 |
 | `scripts/pricearchive-selftest.py` | The price-history archive sweeps, stores and reads back correctly with a fake market and no network call. | D278, D219, D231, D247 |
 | `scripts/pricehistory-cache-selftest.py` | Catalog answers never expire from the cache while current prices keep their own finite lifetime. | none |
-| `scripts/pricehistory-offline-selftest.py` | The price-history market fails fast once the network is unreachable instead of sleeping through every retry. | D278 |
+| `scripts/pricehistory-offline-selftest.py` | The price-history market stops asking a host that is down, and never gives up on a | D278 |
 | `scripts/readings-selftest.py` | The stored market readings equal an independent walk of every run, and refresh only what changed. | D18, D189 |
 | `scripts/repair-born-game-selftest.py` | The born-game repair sets the game on cards with a bound SKU, leaves the rest alone and writes nothing on a preview. | D18 |
 | `scripts/sku-name-contradictions-selftest.py` | The check for one SKU with disagreeing names flags a real contradiction and leaves a short title beside its full name alone. | D240, D242 |

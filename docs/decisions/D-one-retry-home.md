@@ -17,6 +17,6 @@ Plan: docs/specs/stock-images.md#one-retry-home (python)
 
 **Measured.** Not yet measured.
 
-**Scope now.** The price fetcher (`pipeline/pricehistory`) is the first caller. `pipeline/stockimages` reaches the home through `Market`. These four files keep their own `urlopen` until a later lane moves them: `identify/match`, `server/order_transport`, `server/tcg_export`, `server/portal_http`.
+**Scope now.** The price fetcher (`pipeline/pricehistory.py`) is the first caller. `pipeline/stockimages.py` reaches the home through `Market`. These four files keep their own `urlopen` until a later lane moves them: `identify/match.py`, `server/order_transport.py`, `server/tcg_export.py`, `server/portal_http.py`.
 
 **NOT MECHANIZED.** A machine would have to see each `urllib.request.urlopen` call outside the home, and fail on each one not in a shrinking offender list. The `capability homes` row of `make docs-audit` can be that machine once the home is named in it.
