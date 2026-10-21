@@ -893,9 +893,11 @@ def case_overlap(routes):
     sent = []
 
     def held(method, url, headers, body):
-        """The first send waits here: that add is in flight until `release`. Every later send goes on."""
+        """The first callable send waits here: that add is in flight until `release`. Every other send goes on.
+        It is a callable and not the sign-in, because the client holds its own lock through the sign-in, and
+        a second add would then wait on that lock and send nothing, which proves nothing about the routes."""
         sent.append(url)
-        if len(sent) == 1:
+        if urllib.parse.urlsplit(url).hostname == CF_HOST and not entered.is_set():
             entered.set()
             release.wait(10)
         return w.transport(method, url, headers, body)
@@ -973,6 +975,9 @@ def case_no_sale_ladder(routes):
     for label, answer in (("detail", detail), ("list row", listed)):
         text = json.dumps(answer, default=str)
         ok("60.25" not in text and "55.50" not in text, f"the {label} holds neither number Card Ladder sent", text[:300])
+    stored = slabs_now().snapshots_for(CERT3, "psa")[0].ladder or []
+    same("the store holds no value at the slab's own grade either, whatever Card Ladder sent",
+         [row.get("cl_value") for row in stored if row.get("grade") == "g10"], [None])
     with_sale = {row.get("grade"): row for row in routes.do_slab("psa", CERT).get("ladder", [])}.get("g10") or {}
     same("a slab with a sale keeps the value at its own grade", with_sale.get("cl_value"), "238.50")
 
