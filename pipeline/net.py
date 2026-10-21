@@ -165,13 +165,15 @@ def _record(url: str, lost: bool, answered: bool = False, hint: Optional[float] 
 
 
 # A write's connect-time failures: nothing was sent. Any other `OSError` under a `URLError` may
-# have come after the headers went out.
+# have come after the headers went out. Errno numbers differ by platform, types do not, so a
+# refused connect is read by type and an unreachable network or host by errno.
 _UNSENT_ERRNOS = (errno.ECONNREFUSED, errno.ENETUNREACH, errno.EHOSTUNREACH)
 
 
 def _never_sent(exc: urllib.error.URLError) -> bool:
     reason = exc.reason
-    return isinstance(reason, socket.gaierror) or getattr(reason, "errno", None) in _UNSENT_ERRNOS
+    return (isinstance(reason, (ConnectionRefusedError, socket.gaierror))
+            or getattr(reason, "errno", None) in _UNSENT_ERRNOS)
 
 
 def _retry_after(headers) -> Optional[float]:
