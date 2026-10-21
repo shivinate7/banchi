@@ -2609,12 +2609,11 @@ class _Places:
             return cached
         rows: List[Tuple[int, Optional[str], bool]] = []
         try:
-            for at, _, card in self._inventory.records_in(number):
-                entry = self._game_of(card)
-                if entry is not None and not entry["located"]:
+            for at, name, state, game in self._inventory.walk_rows_in(number):
+                if not _location_of(game):
                     continue
-                name = card.name if isinstance(card.name, str) and card.name else None
-                rows.append((at, name, card.state in master.TERMINAL_STATES))
+                name = name if isinstance(name, str) and name else None
+                rows.append((at, name, state in master.TERMINAL_STATES))
         except (master.BadPosition, TypeError, ValueError):
             self._degraded = True
             self._boxmates = {}
