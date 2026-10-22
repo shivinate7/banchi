@@ -178,8 +178,9 @@ def prices_path() -> Path:
 
 
 @contextmanager
-def exclusive(directory: Path, timeout: float = LOCK_TIMEOUT_SECONDS):
-    """Hold the store's exclusive lock, or fail saying who to blame.
+def exclusive(directory: Path, timeout: float = LOCK_TIMEOUT_SECONDS, *, name: str = LOCK_NAME):
+    """Hold the store's exclusive lock, or fail saying who to blame. `name` is the lock file:
+    a run's manifest lock (`cli/runs.MANIFEST_LOCK`) is the same bounded flock on its own file.
 
     `flock` and not a lock *file whose existence* is the lock: a process that dies holding
     a flock releases it, while a stale lockfile has to be cleaned up by a human who does not
@@ -188,7 +189,7 @@ def exclusive(directory: Path, timeout: float = LOCK_TIMEOUT_SECONDS):
     import fcntl
 
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / LOCK_NAME
+    path = directory / name
     handle = open(path, "a+")  # noqa: SIM115 — the flock lives as long as this fd stays open
     began = time.monotonic()
     deadline = began + timeout

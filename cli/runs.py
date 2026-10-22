@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import contextlib
 import copy
-import fcntl
 import hashlib
 import os
 from dataclasses import dataclass, field
@@ -212,11 +211,12 @@ class Run:
 
     @contextlib.contextmanager
     def _locked(self):
-        """THE ONE HOME of a manifest write's exclusion: a blocking flock on `manifest.lock`, held
-        only for one read-modify-write. A process that dies releases it."""
-        self.directory.mkdir(parents=True, exist_ok=True)
-        with open(self.directory / MANIFEST_LOCK, "a+") as handle:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        """A manifest write's exclusion: the store's bounded flock (`files.exclusive`) on
+        `manifest.lock`, held only for one read-modify-write. A removed run directory is refused,
+        never recreated to hold a partial manifest."""
+        if not self.directory.is_dir():
+            raise RunError(f"{self.directory} is gone. Nothing was written to it.")
+        with files.exclusive(self.directory, name=MANIFEST_LOCK):
             yield
 
     def refresh(self) -> None:
@@ -252,16 +252,22 @@ class Run:
         self.manifest.update(out)
         self._base = copy.deepcopy(out)
 
-    def set_unless_joined(self, **values) -> bool:
-        """Compare-and-set under the manifest lock: write `values` with `joined=False` only if the
-        disk's run is not `joined`. False, and nothing written, when a press joined it first."""
+    def set_if(self, refuse, **values):
+        """Compare-and-set under the manifest lock: `refuse(disk)` reads the manifest on disk and
+        answers why not, or nothing. A refusal writes nothing, re-reads the disk and is returned."""
         with self._locked():
-            if (files.read_json(self.manifest_path, {}) or {}).get("joined"):
+            why = refuse(files.read_json(self.manifest_path, {}) or {})
+            if why:
                 self.refresh()
-                return False
-            self.manifest.update(values, joined=False)
-            self._write((*values, "joined"))
-        return True
+                return why
+            self.manifest.update(values)
+            self._write(tuple(values))
+        return None
+
+    def set_unless_joined(self, **values) -> bool:
+        """Write `values` with `joined=False` only if the disk's run is not `joined`. False, and
+        nothing written, when a press joined it first."""
+        return not self.set_if(lambda disk: disk.get("joined"), **values, joined=False)
 
     def set(self, **values) -> None:
         """Update manifest fields and flush immediately.
