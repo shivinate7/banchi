@@ -9658,6 +9658,12 @@ COMPONENTS = [
                         "Run by `make unit`, in `make check`'s product shard.",
                 "governed_by": ["D5", "D275"],
             },
+            "tests/unit/pricing-send-refusals.unit.ts": {
+                "does": "every refusal the Send press raises before TCGplayer is asked has its own "
+                        "sentence in SendCard, so none falls to the line that blames TCGplayer. "
+                        "Run by `make unit`, in `make check`'s product shard.",
+                "governed_by": ["D196"],
+            },
             "tests/unit/formatter-homes.unit.ts": {
                 "does": "the four formatter homes: the ago phrase (`dates.relativeDate`), the count "
                         "word and byte size (`kit/dataRules`), the local day key (`dates.localDay`). "

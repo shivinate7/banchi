@@ -256,14 +256,24 @@ STEP_TIMEOUT_S = 600
 # thing in this file: measured at roughly a minute for a 544-card box with `--crop`.
 PREFLIGHT_TIMEOUT_S = 900
 
-# HOW MANY RUNS ONE MERGED EMIT MAY NAME. This was `MAX_LEGS` and was shared with the cart of
-# boxes, which is gone: a send is one selection now and spawns one child, so there is nothing
-# left for a leg bound to bound. The emit's bound is NOT the same bound wearing the same name
-# and is kept with its own (D156 records it as a decision: *"the bound is against a request
-# nobody meant"*). What it guards is different too — `emit` spawns nothing, and every run name
-# lands in one child's argv, so this is `ARG_MAX` and a malformed client rather than a process
-# count. The operator has ten joinable runs and the steady state is the last sitting or two.
-MAX_MERGED_RUNS = 16
+# HOW MUCH ARGV ONE MERGED EMIT MAY CARRY. Every run directory lands in one child's argv, so
+# the bound is `ARG_MAX` (1 MiB on macOS, measured with `getconf ARG_MAX`), counted in bytes and
+# not in runs: a run count says nothing about it. A quarter of it leaves the environment and
+# the other flags their room. At about 120 bytes a run directory that is some 2,000 runs, far
+# past the 23 the store held when a count of 16 refused a send that was well inside the limit
+# (D156: the bound is against a request nobody meant).
+MAX_MERGED_ARGV_BYTES = 256 * 1024
+
+
+def refuse_oversize_runs(wanted: Sequence) -> None:
+    """Refuse a send whose run directories would not fit one child's argv (`too_many_runs`)."""
+    root = len(os.fsencode(str(files.runs_dir()))) + 2
+    if sum(root + len(os.fsencode(str(name))) for name in wanted) > MAX_MERGED_ARGV_BYTES:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "too_many_runs",
+            "That many runs do not fit in one send. Pick fewer runs.",
+        )
 
 # How many of a claim's cards the wire carries. Enough to recognise which selection it is —
 # two or three positions is what tells a double-click from a drawer you had forgotten — and
@@ -6752,12 +6762,7 @@ def do_pipeline_merged_emit(payload: dict) -> dict:
             "runs_required",
             "Send a non-empty `runs` list. A merged emit over no run is not a send.",
         )
-    if len(wanted) > MAX_MERGED_RUNS:
-        raise PipelineRefusal(
-            HTTPStatus.BAD_REQUEST,
-            "too_many_runs",
-            f"At most {MAX_MERGED_RUNS} runs in one send.",
-        )
+    refuse_oversize_runs(wanted)
     # RESOLVED THROUGH `_open_run`, WHICH VALIDATES THE NAME AND NEVER JOINS A PATH BLIND —
     # the same guard every other run route uses, applied before anything is read.
     directories = [str(_open_run(str(name))) for name in wanted]

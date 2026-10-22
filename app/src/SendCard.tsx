@@ -101,6 +101,23 @@ function refusalTitle(code: string, data?: unknown): string {
       return 'Not yet. Banchi checks TCGplayer first.'
     case 'write_refused':
       return 'The file could not be written, so nothing was sent.'
+    case 'runs_required':
+      return 'No run is picked, so nothing was sent.'
+    case 'too_many_runs':
+      return 'That many runs do not fit in one send, so nothing was sent. Pick fewer runs.'
+    case 'confirm_required':
+      return 'Banchi needs your confirmation first, so nothing was sent.'
+    case 'prices_invalid':
+    case 'moves_invalid':
+      return 'A price on this list could not be read, so nothing was sent.'
+    case 'run_name_invalid':
+    case 'no_such_run':
+      return 'A run on this list is gone, so nothing was sent. Reload the list.'
+    case 'claim_unreadable':
+    case 'send_busy':
+    case 'not_sendable':
+    case 'write_split':
+      return 'Banchi could not make this send, so nothing was sent.'
     case 'answers_not_saved':
       return 'Your prices could not be saved, so nothing was sent.'
     default:

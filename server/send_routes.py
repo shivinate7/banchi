@@ -1196,12 +1196,7 @@ def do_send(payload: dict) -> dict:
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST, "runs_required", "Send a non-empty `runs` list."
         )
-    if len(wanted) > pipeline_routes.MAX_MERGED_RUNS:
-        raise PipelineRefusal(
-            HTTPStatus.BAD_REQUEST,
-            "too_many_runs",
-            f"At most {pipeline_routes.MAX_MERGED_RUNS} runs in one send.",
-        )
+    pipeline_routes.refuse_oversize_runs(wanted)
     download = bool(payload.get("download"))
     payload = dict(payload, prices=_named_prices(payload), moves=_named_moves(payload))
     if not download and not bool(payload.get("confirm")):
