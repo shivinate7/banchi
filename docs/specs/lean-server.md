@@ -131,7 +131,7 @@ This comes from code and the records. Nothing here is a new measurement.
 6. **Stock image fallback when none exists.** Options: (i) real photo, (ii) a labeled placeholder. Recommend (i).
    **Ruled: (i), the real photo.**
 7. **What to build first?** Options: (i) a baseline and the slow reads (`/boxes`, `/search`, `/pipeline/waiting`, `/capture/sitting`), (ii) Fulfillment stock art (Q2), (iii) the home-device plan, (iv) the baseline alone. Recommend (i).
-   **Ruled: (ii) and (iii), as two lanes, then revised.** The home-device plan is section 7 of this spec. Fulfillment stock art is parked as DEBT-fulfil-stock-art (Fulfillment still shows the owner's photo first). The slow reads are fixed with no baseline step. `POST /pipeline/waiting` reads only the chosen cards' photos (#893). `/boxes`, `/search` and `/capture/sitting` place cards from columns, not whole card objects (#896). Each has a T7 read-budget check that stays flat as the store grows.
+   **Ruled: (ii) and (iii), as two lanes, then revised.** The home-device plan is section 7 of this spec. Fulfillment stock art is parked as DEBT-fulfill-stock-art (Fulfillment still shows the owner's photo first). The slow reads are fixed with no baseline step. `POST /pipeline/waiting` reads only the chosen cards' photos (#893). `/boxes`, `/search` and `/capture/sitting` place cards from columns, not whole card objects (#896). Each has a T7 read-budget check that stays flat as the store grows.
 
 ## 7. Home-device plan (option (e))
 
