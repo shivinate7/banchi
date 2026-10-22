@@ -32,8 +32,9 @@ import time
 import urllib.error
 import urllib.request
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -57,11 +58,11 @@ from harness.tests.t7.common import (
     seam_run,
     write_export,
 )
-from harness.tests.t7.send_markdown import send_portal, synced_home
-from pipeline import pricehistory, pricerefresh, readings as readings_walk, tcgcsv
+from harness.tests.t7.send_markdown import _markdown_dir, send_portal, synced_home
+from pipeline import pricehistory, pricerefresh, readings as readings_walk, reprice, tcgcsv
 from server import capture_server, pipeline_routes, send_routes
 from store import files
-from store.readings import KIND_RUN, Reading, Source
+from store.readings import KIND_RUN, Reading, Source, _source_key
 from store.session import Store
 
 SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "price-refresh-daily.py"
@@ -1370,6 +1371,11 @@ def check_readings_keep_the_newest_reading(checks: Checks) -> None:
         attempt(checks, "5a. run-a re-joins with an older reading", lambda: put("run-a", "8.00", 1500))
         checks.equal(attempt(checks, "5a. the table is read", held), "12.00",
                      "5a. nor does an older re-join of the same source replace its own newer row")
+        checks.equal(
+            attempt(checks, "5a. the source row is read", lambda: Store().read().readings.sources[_source_key(KIND_RUN, "run-a")]),
+            Source(KIND_RUN, "run-a", 2000, 1),
+            "5a. and its source row still says 2000: an older re-join of the same run changes no source row",
+        )
         attempt(checks, "5a. run-b writes a tie", lambda: put("run-b", "7.00", 2000))
         checks.equal(attempt(checks, "5a. the table is read", held), "7.00",
                      "5a. a tie replaces: the new reading takes the row")
@@ -1425,6 +1431,158 @@ def check_cli_emit_is_gated(checks: Checks) -> None:
         checks.equal(len(calls), 1, "6b. a multi-run emit asks the refresh once")
 
 
+# ------------------------------------------------------------------ round 2: the day, the problem, the receipt
+
+
+def _central(*parts) -> datetime:
+    return datetime(*parts, tzinfo=ZoneInfo("America/Chicago"))
+
+
+def check_standing_problem_is_not_refetched(checks: Checks) -> None:
+    """Round 2, item 1. A waiting run whose last join left a problem is not fetched again by the refresh.
+
+    `do_run_match` answers `problem_stands` before it fetches anything. The refresh names the standing
+    sentence in its join step, and the run's own problem record is left as it was. The spy records every
+    export the refresh asks for, by run name.
+    """
+    checks.note("")
+    checks.note("SEND GATE — a waiting run with a standing join problem is named, not fetched again")
+    problem = "Pokemon run needs its sets named before it can be matched."
+    with send_portal() as portal, synced_home() as home:
+        pressed = _stale_run(checks, portal, home, [(3, 1, "Dunsparce", "120/159", "normal")])
+        stuck = _waiting_run(checks, [(4, 1, "Articuno", "161", None)])
+        attempt(
+            checks, "1. the waiting run carries a standing join problem",
+            lambda: pipeline_routes._write_match(
+                stuck.directory,
+                {"at": datetime.now(timezone.utc).isoformat(), "problem": {"code": "match_refused", "message": problem, "step": "join"}},
+            ),
+        )
+        fetched = []
+        real_export = pipeline_routes.do_pipeline_export
+
+        def spy_export(*args, **kwargs):
+            fetched.append(args[0] if args else kwargs.get("name"))
+            return real_export(*args, **kwargs)
+
+        with _refresh_spy() as calls:
+            pipeline_routes.do_pipeline_export = spy_export
+            try:
+                outcome = _send_now(pressed)
+            finally:
+                pipeline_routes.do_pipeline_export = real_export
+        steps = ((calls[0]["answer"] or {}).get("steps") or {}) if calls else {}
+        join_said = (steps.get("join") or {}).get("message") or ""
+        checks.equal(
+            [name for name in fetched if name == stuck.directory.name], [],
+            "1. the refresh asks TCGplayer for nothing for the run with a standing problem",
+        )
+        checks.ok(
+            stuck.directory.name in join_said and problem in join_said,
+            "1. the refresh's join step names that run and its standing sentence",
+            repr(steps.get("join"))[:300],
+        )
+        checks.ok(outcome[0] == "answer", "1. and the send of the pressed run still goes", repr(outcome[1:])[:300])
+        still = attempt(checks, "1. the run's problem record is read back", lambda: pipeline_routes._read_match(stuck.directory))
+        checks.equal(
+            ((still or {}).get("problem") or {}).get("message"), problem,
+            "1. and the standing problem is unchanged: the refresh wrote nothing to the run",
+        )
+
+
+def check_a_read_is_from_today_central(checks: Checks) -> None:
+    """Round 2, item 2. A read is fresh when it began on today's US Central day. `fresh_for_s` counts real seconds.
+
+    Fixed instants either side of midnight, and on both 2026 daylight-saving shifts: 8 March (a 23 hour
+    day) and 1 November (a 25 hour day). A rule that counts 24 hours gets each of these wrong.
+    """
+    checks.note("")
+    checks.note("READ FRESHNESS — a read is fresh from the Central day it began on, and `fresh_for_s` counts real seconds")
+
+    def fresh(read: datetime, now: datetime) -> bool:
+        return reprice.read_is_fresh(read.isoformat(), now)
+
+    checks.equal(
+        [
+            fresh(_central(2026, 9, 26, 0, 0), _central(2026, 9, 26, 23, 59)),
+            fresh(_central(2026, 9, 25, 23, 59, 59), _central(2026, 9, 26, 0, 0, 1)),
+            fresh(_central(2026, 9, 25, 23, 59, 59), _central(2026, 9, 26, 23, 59)),
+            fresh(_central(2026, 3, 7, 23, 59, 59), _central(2026, 3, 8, 0, 0, 1)),
+            fresh(_central(2026, 3, 8, 0, 0), _central(2026, 3, 8, 23, 59, 59)),
+            fresh(_central(2026, 3, 8, 0, 0), _central(2026, 3, 9, 0, 0)),
+            fresh(_central(2026, 10, 31, 23, 59, 59), _central(2026, 11, 1, 0, 0)),
+            fresh(_central(2026, 11, 1, 0, 0), _central(2026, 11, 1, 23, 59, 59)),
+            fresh(_central(2026, 11, 1, 0, 0), _central(2026, 11, 2, 0, 0)),
+        ],
+        [True, False, False, False, True, False, False, True, False],
+        "A READ IS FRESH FROM THE CENTRAL DAY IT BEGAN ON: midnight, a second either side, and both DST shifts",
+    )
+    checks.equal(
+        [
+            attempt(checks, "2. `fresh_for_s` at noon, 8 March", lambda: reprice.fresh_for_s(_central(2026, 3, 8, 12, 0))),
+            attempt(checks, "2. `fresh_for_s` at 23:59:59, 8 March", lambda: reprice.fresh_for_s(_central(2026, 3, 8, 23, 59, 59))),
+            attempt(checks, "2. `fresh_for_s` at noon, 1 November", lambda: reprice.fresh_for_s(_central(2026, 11, 1, 12, 0))),
+            attempt(checks, "2. `fresh_for_s` at 23:59:59, 1 November", lambda: reprice.fresh_for_s(_central(2026, 11, 1, 23, 59, 59))),
+        ],
+        [39600, 82799, 46800, 89999],
+        "2. `fresh_for_s` counts real seconds: a 23 hour day ends at 82799 and a 25 hour day at 89999",
+    )
+
+
+def check_markdown_send_refuses_an_earlier_day(checks: Checks) -> None:
+    """Round 2, item 2. A mark-down from yesterday's read is refused `read_stale`. A mark-down from today's read goes."""
+    checks.note("")
+    checks.note("MARK-DOWN — a read from an earlier Central day is refused, a read from today goes")
+    central_now = datetime.now(ZoneInfo("America/Chicago"))
+    yesterday = (central_now - timedelta(days=1)).replace(hour=12, minute=0, second=0, microsecond=0)
+    with send_portal() as portal, synced_home() as home:
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+        old = _markdown_dir(home, "20261021-120000", at=yesterday.isoformat())
+        outcome = _outcome(lambda: send_routes.do_markdown_send(old.name, {"confirm": True}))
+        code, _text = _refused(outcome)
+        checks.equal(code, "read_stale", "2. a mark-down from yesterday's read is refused `read_stale`")
+        checks.equal(_pushed(portal), [], "2. and nothing reached TCGplayer's upload")
+        today = _markdown_dir(home, "20261022-120000", at=datetime.now(timezone.utc).isoformat())
+        outcome = _outcome(lambda: send_routes.do_markdown_send(today.name, {"confirm": True}))
+        checks.ok(outcome[0] == "answer", "2. a mark-down from today's read goes", repr(outcome[1:])[:300])
+
+
+def check_send_says_whether_it_refreshed(checks: Checks) -> None:
+    """Round 2, item 3. The send's answer, its receipt and the summary carry `refresh`. The CLI prints the refresh line."""
+    checks.note("")
+    checks.note("SEND RECEIPT — a send says whether its prices were refreshed, and from which day")
+    central = ZoneInfo("America/Chicago")
+    with send_portal() as portal, synced_home() as home:
+        stale = _stale_run(checks, portal, home, [(3, 1, "Dunsparce", "120/159", "normal")])
+        was = datetime.fromtimestamp((stale.directory / "export.csv").stat().st_mtime, central).date().isoformat()
+        today = datetime.now(central).date().isoformat()
+        expected = {"ran": True, "ok": True, "was": was, "export_day": today}
+        outcome = _send_now(stale)
+        send = outcome[1].get("send") or {} if outcome[0] == "answer" else {}
+        checks.equal(send.get("refresh"), expected,
+                     "3. a stale export: the answer's summary says it ran, from `was`, and now `export_day`")
+        receipts = attempt(checks, "3. the receipts are read", send_routes._receipts) or []
+        checks.equal([record.get("refresh") for _, record in receipts], [expected],
+                     "3. and the receipt on disk carries the same refresh")
+
+        same, _ = seam_run(checks, [(4, 1, "Articuno", "161", None)], market={ARTICUNO_SKU: ARTICUNO_THEN})
+        _name_sets(same)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        outcome = _send_now(same)
+        send = outcome[1].get("send") or {} if outcome[0] == "answer" else {}
+        checks.equal(send.get("refresh"), {"ran": False, "export_day": today},
+                     "3. a same-day export: the summary says the refresh did not run")
+
+        cli = _stale_run(checks, portal, home, [(6, 1, "Articuno", "161", None)])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        cli_was = datetime.fromtimestamp((cli.directory / "export.csv").stat().st_mtime, central).date().isoformat()
+        text = command(checks, "emit", str(cli.directory))
+        checks.ok(
+            f"refreshed before this send: export of {cli_was}, now {today}" in text,
+            "3. the CLI prints the refresh line, from which day and to which", text[-300:],
+        )
+
+
 CHECKS = (
     check_refresh_reaches_store_backed_runs,
     check_held_lock_is_a_recorded_skip,
@@ -1452,4 +1610,8 @@ CHECKS = (
     check_readings_keep_the_newest_reading,
     check_join_dates_pricing_to_its_export,
     check_cli_emit_is_gated,
+    check_standing_problem_is_not_refetched,
+    check_a_read_is_from_today_central,
+    check_markdown_send_refuses_an_earlier_day,
+    check_send_says_whether_it_refreshed,
 )

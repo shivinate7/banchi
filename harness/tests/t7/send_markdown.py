@@ -5941,14 +5941,17 @@ def check_live_markdown_guards(checks: Checks) -> None:
     )
 
     # ------------------------------------------------------------------ a fresh read
+    # A READ IS FRESH WHEN IT BEGAN TODAY (US Central). `now` is 07:00 Central on 26 September, so the
+    # instants below sit either side of that day's midnight. The daylight-saving shifts are in `price_fresh`.
     checks.equal(
         [
-            reprice.read_is_fresh((now - timedelta(hours=23)).isoformat(), now),
-            reprice.read_is_fresh((now - timedelta(hours=25)).isoformat(), now),
+            reprice.read_is_fresh("2026-09-26T05:00:00+00:00", now),  # 00:00 Central, today
+            reprice.read_is_fresh("2026-09-26T04:59:59+00:00", now),  # 23:59:59 Central, yesterday
+            reprice.read_is_fresh("2026-09-25T13:00:00+00:00", now),  # 08:00 Central, yesterday, 23 h before now
             reprice.read_is_fresh(None, now),
         ],
-        [True, False, False],
-        "A READ IS FRESH FOR A DAY, and one nothing can date is not fresh",
+        [True, False, False, False],
+        "A READ IS FRESH WHEN IT BEGAN TODAY (US Central), and one nothing can date is not fresh",
     )
     with send_portal() as portal, synced_home() as home:
         stale = _markdown_dir(home, "20260926-100000", at=long_ago)
@@ -5967,7 +5970,7 @@ def check_live_markdown_guards(checks: Checks) -> None:
         worklist = pipeline_routes._write_edits(manual, [{"sku": ARTICUNO_SKU, "price": "19.99"}])
         said = command(checks, "reprice", "apply", str(worklist), "--write", exits=1)
         checks.ok(
-            "more than a day ago" in said and not (manual / cmd_reprice.IMPORT).exists(),
+            "on an earlier day" in said and not (manual / cmd_reprice.IMPORT).exists(),
             "and `reprice apply --write` over a stale read writes no file",
             said,
         )
