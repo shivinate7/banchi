@@ -54,8 +54,9 @@ class Slab(NamedTuple):
     identity: dict
     subgrades: Optional[dict]
     added: str
-    # The newest snapshot, by day. Payload only, no column. `record_snapshot` is its one writer, so
-    # `GET /slabs` reads `slabs` alone and never `slab_snapshots` (spec section 6).
+    # The newest snapshot, by day. Payload only, no column. `record_snapshot` keeps it and
+    # `Slabs.add` reseeds it on a re-create, so `GET /slabs` reads `slabs` alone and never
+    # `slab_snapshots` (spec section 6).
     latest: Optional["SlabSnapshot"] = None
 
     @property

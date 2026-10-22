@@ -242,7 +242,9 @@ The store gets three tables (D88, SQLite and one transaction per write):
 - The slab row keeps a copy of its newest snapshot, so the list reads `slabs` once and never
   the snapshots, which grow by one row per slab per day. One store method writes a snapshot,
   and it updates that copy in the same write. Every snapshot writer, the sweep included, calls
-  that method. An older snapshot never replaces a newer copy.
+  that method. An older snapshot never replaces a newer copy. A source check refuses any other
+  writer in Python. It cannot see raw SQL, so a migration that inserts snapshots also updates
+  the copy.
 - A slab with no sale at its grade stores no value, never a number.
 
 ## Build plan
