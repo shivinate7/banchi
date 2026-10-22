@@ -39,15 +39,9 @@ jobs:
           while IFS=$'\t' read -r number sha updated; do
             age=$(( now - $(date -u -d "${updated}" +%s) ))
             [ "${age}" -gt 300 ] || continue
-            # A real run is one that did not skip and is not the draft refusal (a draft's `check` fails
-            # with an annotation saying so). Only a real run clears the head.
-            real=0
-            for id in $(gh api "repos/${REPO}/commits/${sha}/check-runs?check_name=check" \
-                --jq '.check_runs[] | select(.conclusion != "skipped") | .id'); do
-              if ! gh api "repos/${REPO}/check-runs/${id}/annotations" --jq '.[].message' | grep -qF 'draft: mark ready'; then
-                real=$((real + 1))
-              fi
-            done
+            # A real run is one that did not skip: a draft's run skips every job.
+            real=$(gh api "repos/${REPO}/commits/${sha}/check-runs?check_name=check" \
+              --jq '[.check_runs[] | select(.conclusion != "skipped")] | length')
             [ "${real}" = "0" ] || continue
             marker="<!-- dropped-start-alarm:${sha} -->"
             if gh api "repos/${REPO}/issues/${number}/comments" --paginate --jq '.[].body' | grep -qF "${marker}"; then

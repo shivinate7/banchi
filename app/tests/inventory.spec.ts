@@ -1328,7 +1328,7 @@ test('selecting a card shows every copy of it, each with both doors out of inven
      pointing at marked so a group of identical copies can still say which is which. */
   await expect(rows.nth(0)).toHaveAttribute('aria-current', 'true')
   await expect(rows.nth(1)).not.toHaveAttribute('aria-current', 'true')
-  await expect(rows.nth(0).getByRole('button', { name: 'Mark sold' })).toBeVisible()
+  await expect(rows.nth(0).getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
   await expect(rows.nth(0).getByRole('button', { name: 'Retire' })).toBeVisible()
 
   /* THE CEILING IS WHAT D7 PERMITS HERE, NOT THE BARE CAP. Two copies on hand against a cap of
@@ -1454,7 +1454,7 @@ test('a card with no name and no SKU still offers both doors', async ({ page }) 
   // a one-copy group rather than drawing a second kind of panel (D119); one copy and its two
   // controls, in the row shape every other copy on this screen draws.
   await expandAll(page)
-  await page.locator('.browse-row', { hasText: 'Not identified yet' }).first().click()
+  await page.locator('.browse-row', { hasText: /Not Identified Yet/ }).first().click()
   /* The list is drawn, and the screen still says why there is only one row in it. */
   await expect(page.locator('.inventory-lone')).toBeVisible()
   await expect(page.locator('.card-locations-owner')).toHaveCount(1)
@@ -1463,7 +1463,7 @@ test('a card with no name and no SKU still offers both doors', async ({ page }) 
      copy it is standing on. A card the search cannot group is still one copy at one position,
      and the whole of this case is that it may still be sold and still be retired. */
   const doors = page.locator('.card-locations-row.is-current .card-locations-action')
-  await expect(doors.getByRole('button', { name: 'Mark sold' })).toBeVisible()
+  await expect(doors.getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
   await expect(doors.getByRole('button', { name: 'Retire' })).toBeVisible()
 
   /* THE ACTION ROW'S EDGES: Mark sold on the row's left content edge, the icons on the right one. */
@@ -1487,7 +1487,7 @@ test('a card with no name and no SKU is a one-copy list, not a special case', as
    * the same component every identified card uses. */
   await open(page)
   await expandAll(page)
-  await page.locator('.browse-row', { hasText: 'Not identified yet' }).first().click()
+  await page.locator('.browse-row', { hasText: /Not Identified Yet/ }).first().click()
 
   const rows = page.locator('.card-locations-row')
   await expect(rows).toHaveCount(1)
@@ -1722,7 +1722,7 @@ test('Undo stands in Mark sold\'s own frame, and the sale never moves the row', 
   const markSold = await box('.card-locations-sell')
   const before = await rowBox()
 
-  await row.getByRole('button', { name: 'Mark sold' }).click()
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
   sell('2/1')
   /* The burst is on screen: a bill never takes a pointer event, and nothing about the row moves. */
   await expect(row.locator('.card-locations-bill').first()).toBeAttached()
@@ -1773,7 +1773,7 @@ test('one press marks a copy sold, with no panel in between', async ({ page }) =
   const wire = await open(page, BOXES, store)
 
   const row = copyRow(page, CARD_1)
-  await row.getByRole('button', { name: 'Mark sold' }).click()
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
   sell('2/1')
 
   /* THE PRESS IS THE WRITE. Red against the two-step, where this press only set `pending`.
@@ -1904,7 +1904,7 @@ test('the press that sells a copy moves nothing outside the panel it lands in', 
      `boundingBox()` returns null on the side of the comparison that matters. `is-current` is the
      one handle on this row that the write does not touch. */
   const row = page.locator('.card-locations-row.is-current')
-  const press = row.getByRole('button', { name: 'Mark sold' })
+  const press = row.getByRole('button', { name: /^Mark Sold/ })
   await press.scrollIntoViewIfNeeded()
 
   /* THE "BEFORE" SAMPLE WAITS OUT THE CARD'S OWN SEARCH. `open()` returns once the card is drawn, but
@@ -1987,7 +1987,7 @@ test('the press that sells a copy does not shift while the re-read is in flight'
   })
 
   const row = page.locator('.card-locations-row.is-current')
-  const press = row.getByRole('button', { name: 'Mark sold' })
+  const press = row.getByRole('button', { name: /^Mark Sold/ })
   await press.scrollIntoViewIfNeeded()
 
   const locations = page.locator('.card-locations')
@@ -2038,7 +2038,7 @@ test('the press that sells a copy causes no layout shift in the half second afte
   await page.reload()
   const row = page.locator('.card-locations-row.is-current')
   await expect(row).toBeVisible()
-  const press = row.getByRole('button', { name: 'Mark sold' })
+  const press = row.getByRole('button', { name: /^Mark Sold/ })
   await press.scrollIntoViewIfNeeded()
   await settleMotion(page)
   await afterPaint(page)
@@ -2117,7 +2117,7 @@ test('the slot column is already as wide as the key the sale will write into it'
   const slot = row.locator('.browse-row-position')
   const name = row.locator('.browse-row-name')
 
-  const press = copyRow(page, 'Box 12, Section 1, Card 1').getByRole('button', { name: 'Mark sold' })
+  const press = copyRow(page, 'Box 12, Section 1, Card 1').getByRole('button', { name: /^Mark Sold/ })
   await press.scrollIntoViewIfNeeded()
 
   const slotWas = (await slot.boundingBox())?.width ?? -1
@@ -2220,14 +2220,14 @@ test('the row that sold the copy becomes the way to take it back', async ({ page
     movesOnSale((undo) => (undo ? unsell('2/1') : sell('2/1'))))
 
   const row = copyRow(page, CARD_1)
-  await row.getByRole('button', { name: 'Mark sold' }).click()
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
 
   /* The slot draws `Undo` ALONE — no `Retire` beside it, because the server refuses the
      retirement of a sold card and a control that can only fail is not a control. */
   const rowUndo = row.getByRole('button', { name: 'Undo sale:' })
   await expect(rowUndo).toBeVisible()
   await expect(row.getByRole('button', { name: 'Retire' })).toHaveCount(0)
-  await expect(row.getByRole('button', { name: 'Mark sold' })).toHaveCount(0)
+  await expect(row.getByRole('button', { name: /^Mark Sold/ })).toHaveCount(0)
 
   /* THE TWO CONTROLS ARE REACHABLE APART, and they are in two different places rather than two
      different names: the slot's Undo names the position it undoes, and the receipt's rides the
@@ -2245,7 +2245,7 @@ test('the row that sold the copy becomes the way to take it back', async ({ page
   expect(sales.map((call) => call.body)).toEqual([{}, { undo: true }])
 
   // And the copy is sellable again, which is what a reversal means on this screen.
-  await expect(row.getByRole('button', { name: 'Mark sold' })).toBeVisible()
+  await expect(row.getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
   await expect(page.locator('.inventory-receipt')).toHaveCount(0)
   await expect(receiptToast(page).getByRole('button', { name: 'Undo' })).toHaveCount(0)
 })
@@ -2263,7 +2263,7 @@ test('the sale toast speaks the place, and never types the server\'s middle dot'
   const { store, sell } = sellableStore()
   await open(page, BOXES, store)
 
-  await copyRow(page, CARD_1).getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
   sell('2/1')
 
   const body = await receiptToast(page).innerText()
@@ -2300,7 +2300,7 @@ test('U undoes the newest sale, wherever the hand is', async ({ page }) => {
     movesOnSale((undo) => (undo ? unsell('2/1') : sell('2/1'))))
 
   const row = copyRow(page, CARD_1)
-  await row.getByRole('button', { name: 'Mark sold' }).click()
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
   await expect(row.getByRole('button', { name: 'Undo sale:' })).toBeVisible()
 
   // The hand is nowhere in particular — on the page heading, not in any field.
@@ -2309,7 +2309,7 @@ test('U undoes the newest sale, wherever the hand is', async ({ page }) => {
 
   const sales = wire.filter((call) => call.path.endsWith('/sold'))
   expect(sales.map((call) => call.body)).toEqual([{}, { undo: true }])
-  await expect(row.getByRole('button', { name: 'Mark sold' })).toBeVisible()
+  await expect(row.getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
 })
 
 test('u typed into the search field does not undo the sale', async ({ page }) => {
@@ -2318,7 +2318,7 @@ test('u typed into the search field does not undo the sale', async ({ page }) =>
     movesOnSale((undo) => (undo ? undefined : sell('2/1'))))
 
   const row = copyRow(page, CARD_1)
-  await row.getByRole('button', { name: 'Mark sold' }).click()
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
   const rowUndo = row.getByRole('button', { name: 'Undo sale:' })
   await expect(rowUndo).toBeVisible()
 
@@ -2336,7 +2336,7 @@ test('the receipt is the undo that survives the rows being replaced', async ({ p
   const { store, sell } = sellableStore()
   const wire = await open(page, BOXES, store)
 
-  await copyRow(page, CARD_1).getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
   sell('2/1')
   await expect(page.locator('.inventory-receipt').getByRole('button', { name: 'Undo' })).toBeVisible()
 
@@ -2345,7 +2345,7 @@ test('the receipt is the undo that survives the rows being replaced', async ({ p
      measurement that decides the owner's ruling to keep BOTH controls: without the receipt a
      twenty-second promise would be good only for as long as you stand still. */
   await expandAll(page)
-  await page.locator('.browse-row', { hasText: 'Not identified yet' }).first().click()
+  await page.locator('.browse-row', { hasText: /Not Identified Yet/ }).first().click()
   await expect(page.locator('.inventory-lone')).toBeVisible()
   /* THE ROW IS WHAT WENT, NOT THE PANEL. Since D119 the lone card draws a one-copy group of its
      own, so a count of `.card-locations-owner` no longer says the rows were replaced — the claim
@@ -2381,7 +2381,7 @@ test('another device having sold the copy draws a receipt and no undo anywhere',
   }))
 
   const row = copyRow(page, CARD_1)
-  await row.getByRole('button', { name: 'Mark sold' }).click()
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
   sell('2/1')
 
   /* A sale this device did not make leaves a receipt and nothing to press. It is a toast rather
@@ -2422,7 +2422,7 @@ test('a sale the store cannot put back offers no undo, in the row or on the rece
   }))
 
   const row = copyRow(page, CARD_1)
-  await row.getByRole('button', { name: 'Mark sold' }).click()
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
   sell('2/1')
 
   await expect(receiptToast(page)).toContainText('Marked sold')
@@ -2777,6 +2777,7 @@ test('the walk arrives with only the planted selection\'s section open, and the 
   await expect(folds.nth(1)).toHaveAttribute('aria-expanded', 'false')
   await expect(page.locator('.browse-row')).toHaveCount(0)
 
+  // Case-insensitive on purpose: the copy sweep is the casing guard; these specs check behaviour.
   await expect(page.locator('.browse-quiet').getByText(/^expand$/i)).toBeVisible()
   await page.locator('.browse-quiet').getByText(/^expand$/i).click()
   await expect(page.locator('.browse-row')).toHaveCount(7)
@@ -2998,7 +2999,7 @@ test('the last section of an open box counts what is in it, and the box line dro
 test('the card with no group gets both depths too', async ({ page }) => {
   await open(page)
   await expandAll(page)
-  await page.locator('.browse-row', { hasText: 'Not identified yet' }).first().click()
+  await page.locator('.browse-row', { hasText: /Not Identified Yet/ }).first().click()
 
   /* THE BRANCH THAT NEARLY MISSED OUT — a card with no SKU and no name, which `GET /search`
    * cannot reach at all, so it draws through the lone-copy fallback rather than through a group.
@@ -3425,7 +3426,7 @@ test('the card picker in the Claims sheet starts whole, narrows by card and by s
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Claims/ }).click()
   const picker = page.locator('.bn-set-picker')
-  await expect(picker.getByRole('button', { name: /^Whole box/ })).toHaveAttribute('aria-pressed', 'true')
+  await expect(picker.getByRole('button', { name: /^Whole box/i })).toHaveAttribute('aria-pressed', 'true')
   await expect(picker.locator('.bn-set-picker-list')).toHaveCount(0)
 
   await picker.getByRole('button', { name: 'Some cards' }).click()
@@ -3472,7 +3473,7 @@ test('the box claim sends only the switched-on fields, over only the cards picke
   expect(wire.filter((sent) => sent.method === 'PUT')).toHaveLength(0)
 
   await page.locator('.boxops-claim-row', { hasText: 'SET HINT' }).getByRole('switch').check()
-  await page.getByRole('textbox', { name: 'Set hint' }).fill('SV09')
+  await page.getByRole('textbox', { name: /set hint/i }).fill('SV09')
   await page.getByRole('button', { name: /^Apply to/ }).click()
 
   await expect(page.locator('.boxops-receipt')).toBeVisible()
@@ -3505,7 +3506,7 @@ test('Move lists on-hand cards only', async ({ page }) => {
   await open(page)
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Move,/ }).click()
-  await expect(page.locator('.bn-set-picker').getByRole('button', { name: /^Whole box, 5 cards/ })).toBeVisible()
+  await expect(page.locator('.bn-set-picker').getByRole('button', { name: /^Whole box, 5 cards/i })).toBeVisible()
   await page.locator('.bn-set-picker').getByRole('button', { name: 'Some cards' }).click()
   await expect(page.locator('.bn-set-picker-group', { hasText: 'Sold or moved out' })).toHaveCount(0)
 })
@@ -3514,7 +3515,7 @@ test('every card picked in the Claims sheet is the whole box and sends no indice
   const wire = await open(page)
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Claims/ }).click()
-  await expect(page.locator('.bn-set-picker').getByRole('button', { name: /^Whole box, 7 cards/ })).toBeVisible()
+  await expect(page.locator('.bn-set-picker').getByRole('button', { name: /^Whole box, 7 cards/i })).toBeVisible()
   await page.locator('.bn-set-picker').getByRole('button', { name: 'Some cards' }).click()
   await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
   await page.getByRole('textbox', { name: 'Note' }).fill('all')
@@ -3587,7 +3588,7 @@ for (const width of [1440, 820]) {
 
     test('picking a section selects exactly its on-hand cards and scrolls them into view', async ({ page }) => {
       await openClaims(page)
-      await choose(page, /Section 2.*59 cards/)
+      await choose(page, /Section 2.*59 Cards/)
       const picker = page.locator('.bn-set-picker')
       await expect(picker.locator('.bn-set-picker-count')).toHaveText('59 of 88 picked')
       const boxes = picker.locator('.bn-set-picker-card input')
@@ -3601,7 +3602,7 @@ for (const width of [1440, 820]) {
 
     test("applying with a section picked writes only that section's positions", async ({ page }) => {
       const wire = await openClaims(page)
-      await choose(page, /Section 2.*59 cards/)
+      await choose(page, /Section 2.*59 Cards/)
       await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
       await page.getByRole('textbox', { name: 'Note' }).fill('wb1 r1')
       await page.getByRole('button', { name: /^Apply to/ }).click()
@@ -3611,8 +3612,8 @@ for (const width of [1440, 820]) {
 
     test("whole box keeps today's behavior: no indices key", async ({ page }) => {
       const wire = await openClaims(page)
-      await choose(page, /Section 2.*59 cards/)
-      await choose(page, /^Whole box/)
+      await choose(page, /Section 2.*59 Cards/)
+      await choose(page, /^Whole box/i)
       await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
       await page.getByRole('textbox', { name: 'Note' }).fill('all')
       await page.getByRole('button', { name: /^Apply to/ }).click()
@@ -3629,7 +3630,7 @@ for (const width of [1440, 820]) {
         control: await control.boundingBox(),
         scroll: await sheet.evaluate((el) => el.scrollTop),
       }
-      await choose(page, /Section 2.*59 cards/)
+      await choose(page, /Section 2.*59 Cards/)
       await expect(page.locator('.bn-set-picker-count')).toHaveText('59 of 88 picked')
       const after = {
         control: await control.boundingBox(),
@@ -3732,14 +3733,14 @@ test('the box-claims finish control is a multi-select and sends a list', async (
      restated later — a `corrected` event and a rewritten sidecar for every card in the box,
      which is exactly what `do_put_box_claims` promises it does not do. */
   const chips = page.locator('.boxops-claim-row', { hasText: 'FINISH' }).locator('.boxops-chip')
-  await chips.filter({ hasText: 'reverse_holo' }).click()
-  await chips.filter({ hasText: /^normal$/ }).click()
+  await chips.filter({ hasText: /^reverse holo$/i }).click()
+  await chips.filter({ hasText: /^normal$/i }).click()
 
   /* BOTH read as pressed — the control is a multi-select, not a picker where the second tap
      replaces the first. That is what a `<select>` could not express, and the reason a stack
      holding two finishes had no honest claim available before the amendment. */
-  await expect(chips.filter({ hasText: /^normal$/ })).toHaveAttribute('aria-pressed', 'true')
-  await expect(chips.filter({ hasText: 'reverse_holo' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(chips.filter({ hasText: /^normal$/i })).toHaveAttribute('aria-pressed', 'true')
+  await expect(chips.filter({ hasText: /^reverse holo$/i })).toHaveAttribute('aria-pressed', 'true')
 
   await page.getByRole('button', { name: /^Apply to/ }).click()
 
@@ -3756,8 +3757,8 @@ test('untapping the last finish clears the claim rather than sending an empty li
   await page.getByRole('button', { name: /^Claims/ }).click()
   await page.locator('.boxops-claim-row', { hasText: 'FINISH' }).getByRole('switch').check()
   const chips = page.locator('.boxops-claim-row', { hasText: 'FINISH' }).locator('.boxops-chip')
-  await chips.filter({ hasText: /^normal$/ }).click()
-  await chips.filter({ hasText: /^normal$/ }).click()
+  await chips.filter({ hasText: /^normal$/i }).click()
+  await chips.filter({ hasText: /^normal$/i }).click()
   await page.getByRole('button', { name: /^Apply to/ }).click()
 
   /* `null`, never `[]`. An armed row that is empty CLEARS the claim, and null is how this
@@ -4833,7 +4834,7 @@ test('UX-190 — a sale says which card took its number, and the rows hold still
      Playwright's own click scrolled the page 77px to reach Mark sold, and every row read 77px
      higher after the sale although the sale moved nothing. The scroll is the test's, so it now
      happens first, once the press is on screen, and only the sale lies between the two reads. */
-  const markSold = page.locator('.card-locations-row.is-current').getByRole('button', { name: 'Mark sold' })
+  const markSold = page.locator('.card-locations-row.is-current').getByRole('button', { name: /^Mark Sold/ })
   await expect(markSold).toBeVisible()
   await markSold.scrollIntoViewIfNeeded()
   const before = await rects()
@@ -6123,7 +6124,7 @@ test('selling a card moves the landmark on the rows beside it, with no reload', 
 
   const before = walkReads.length
 
-  await behind.getByRole('button', { name: 'Mark sold' }).click()
+  await behind.getByRole('button', { name: /^Mark Sold/ }).click()
 
   /* THE PRESS IS THE REFRESH. `Inventory.tsx:doSell` bumps `reloads`, which is `BoxBrowse`'s
      `reloadToken` — so `GET /inventory` and the copies search both run again and every place
@@ -6846,7 +6847,7 @@ test('the two claims the correction button can overwrite are both on the panel',
      appeared nowhere on screen. Worse than silent: the editor opens with those fields EMPTY and
      reads armed-and-empty as a clear, so the correction was a blind overwrite. `rarity_claim` is
      set on 543 of 543 real records, so this was live rather than latent. */
-  await page.locator('.browse-row', { hasText: 'Not identified yet' }).first().click()
+  await page.locator('.browse-row', { hasText: /Not Identified Yet/ }).first().click()
 
   /* `Common, Uncommon` and never `common,uncommon` — the array-coercion guard, identical in kind
      to the finish case above, and the reason both rows go through one renderer. */
@@ -7489,7 +7490,7 @@ test('UX-181 — the row the walk stands on survives its own sale while sold is 
   await expandAll(page)
   await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2', '#3'])
   await page.locator('.browse-row').nth(1).click()
-  await page.locator('.card-locations-row.is-current').getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator('.card-locations-row.is-current').getByRole('button', { name: /^Mark Sold/ }).click()
 
   /* The receipt lands where the sale was pressed (D119) — which needs the row to still exist,
      and to still be where it was (D118): the re-read draws it departed, in its place. */
@@ -7567,7 +7568,7 @@ test('D132 — the Hide sold chip counts what the fold actually hides, not every
   await hiddenCount('1')
 
   await page.locator('.browse-row').nth(1).click()
-  await page.locator('.card-locations-row.is-current').getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator('.card-locations-row.is-current').getByRole('button', { name: /^Mark Sold/ }).click()
   await expect(page.locator('.card-locations-row.is-current').getByRole('button', { name: /Undo/ })).toBeVisible()
 
   /* TWO DEPARTED ROWS ON THE SHELF NOW, AND THE FOLD STILL HIDES ONLY ONE — the row the walk
@@ -7620,7 +7621,7 @@ test('B3 — a sale does not reorder the rail, on a device that has never opened
      pass on the PRE-refetch order and finish before the async reorder this case is about ever
      lands — the exact race this file's own `SaleStub` comment warns against, one layer up. */
   const boxesRefetched = page.waitForResponse((response) => /\/boxes(\?|$)/.test(response.url()))
-  await page.locator('.card-locations-row.is-current').getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator('.card-locations-row.is-current').getByRole('button', { name: /^Mark Sold/ }).click()
   await boxesRefetched
   await expect(page.locator('.card-locations-row.is-current').getByRole('button', { name: /Undo/ })).toBeVisible()
 
@@ -8465,7 +8466,7 @@ test('a sale leaves every other row where it was, and the sold row in its own pl
 
   /* Sell the row the list leads with. Its section drops from three to two and TIES box 2's
      pair, so a live re-rank would move box 2's two copies above the two box 7 has left. */
-  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: /^Mark Sold/ }).click()
   await expect(page.locator('.inventory-receipt').getByRole('button', { name: 'Undo' })).toBeVisible()
 
   /* WAIT FOR THE RE-READ AND NOT FOR THE OPTIMISM. `.is-gone` lands off `soldKeys` before any
@@ -8514,7 +8515,7 @@ test('and the re-rank is what moves it — the same sale, with the order taken a
   await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   const before = await copyOrder(page)
 
-  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: /^Mark Sold/ }).click()
   await expect(page.locator('.browse-hero-rerank')).toBeVisible()
   /* The re-read, waited for by the one string only it can produce — see the case above. */
   await expect(
@@ -8584,7 +8585,7 @@ test('the receipt has no clock (UN-5): a sale still offers Undo a faked minute l
   await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   const before = await copyOrder(page)
 
-  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: /^Mark Sold/ }).click()
   await expect(
     page.locator('.card-locations-row .card-locations-identity[aria-label="Was at Box 7, Section 1, Card 38"]'),
   ).toHaveCount(1)
@@ -8608,7 +8609,7 @@ test('the receipt has no clock (UN-5): a sale still offers Undo a faked minute l
      owner's ruling is that undo lasts "until it's built on", on every sold row, the same
      way Fulfillment's "Pulled today" list already keeps every sale of a session undoable.
      Card 39 is sold second. */
-  await copyRow(page, 'Box 7, Section 1, Card 39').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 39').getByRole('button', { name: /^Mark Sold/ }).click()
   await expect(page.getByRole('button', { name: 'Undo sale: Box 7, Section 1, Card 39' })).toHaveCount(1)
   /* Card 38's own Undo STAYS — it is not built on by anything, so it is still reversible even
      though it is no longer the newest sale. */
@@ -8708,7 +8709,7 @@ test('a new search takes a new order, so the staleness never carries across answ
   await expandAll(page)
   await page.getByRole('searchbox').fill('Thievul')
   await expect(page.locator('.card-locations-row .card-locations-identity').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
-  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: /^Mark Sold/ }).click()
   await expect(page.locator('.browse-hero-rerank')).toBeVisible()
   /* The re-read, waited for by the one string only it can produce — the chip lands off the
      sale's own response and says nothing about whether the store has answered yet. */
@@ -8823,7 +8824,7 @@ test.skip(
   await expandAll(page)
   await page.getByRole('searchbox').fill('Thievul')
   await expect(page.locator('.card-locations-row .card-locations-identity').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
-  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: /^Mark Sold/ }).click()
   await expect(
     page.locator('.card-locations-row .card-locations-identity[aria-label="Was at Box 7, Section 1, Card 38"]'),
   ).toHaveCount(1)
@@ -9043,7 +9044,7 @@ test('a box whose last live match departs keeps the walk, rather than handing it
   await page.locator('.browse-boxcell[aria-label^="ME01 commons"]').click()
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 commons/)
 
-  await copyRow(page, 'Box 2, Section 1, Card 1').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 2, Section 1, Card 1').getByRole('button', { name: /^Mark Sold/ }).click()
   await expect(
     page.locator('.card-locations-row .card-locations-identity[aria-label="Was at Box 2, Section 1, Card 1"]'),
   ).toHaveCount(1)
@@ -9072,7 +9073,7 @@ test('undoing the sale takes the staleness back with it', async ({ page }) => {
      after the sale and the chip is never drawn. Wait for the rail to name box 7. */
   await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^ME01 spares/)
 
-  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: /^Mark Sold/ }).click()
   await expect(page.locator('.browse-hero-rerank')).toHaveAttribute('aria-label', /Order is 1 copy stale/)
 
   /* NOTHING LEFT THE BOX AFTER ALL, so there is nothing for a re-rank to recompute — a
@@ -9192,7 +9193,7 @@ test('the control that re-ranks appearing moves no copy row', async ({ page }) =
   expect(await listTop(), 'the band never stopped settling').toBe(before)
   expect(before).toMatch(/^line \d+, rows \d+$/)
 
-  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: /^Mark Sold/ }).click()
   await expect(page.locator('.browse-hero-rerank')).toBeVisible()
   const after = await listTop()
   expect(after).toBe(before)
@@ -9530,7 +9531,7 @@ test('selling the claimed copy moves the held-for-order mark to its replacement 
 
   sold = true
   sell('2/1')
-  await copyRow(page, CARD_1).getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect(page.locator('.inventory-receipt').getByRole('button', { name: 'Undo' })).toBeVisible()
 
   await expect(copyRow(page, 'Box 2, Section 1, Card 3').locator('.card-locations-claim'), 'the mark did not reach the replacement').toHaveCount(1)
@@ -9566,7 +9567,7 @@ test('a sold card loses its review badge and its pane question without a reload'
 
   sold = true
   sell('2/1')
-  await copyRow(page, CARD_1).getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect(page.locator('.inventory-receipt').getByRole('button', { name: 'Undo' })).toBeVisible()
 
   await expect(badge, 'a sold card still shows its review badge').toHaveCount(0)

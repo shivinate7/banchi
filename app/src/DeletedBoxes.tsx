@@ -176,7 +176,7 @@ export function DeletedWalk({
                             <Icon name="headstone" size={12} />
                           </span>
                           <span className={entry.row.card.name ? 'browse-row-name' : 'browse-row-name is-unnamed'}>
-                            {entry.row.card.name || 'Not identified yet'}
+                            {entry.row.card.name || 'Not Identified Yet'}
                           </span>
                           <span className="browse-row-how">{stateLabel(entry.row.card.state)}</span>
                         </button>

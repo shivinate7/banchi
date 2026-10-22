@@ -231,6 +231,9 @@ def _post(path: str, fields: Dict[str, object]) -> dict:
         cookie=tcg_export._session(),
         data=_form(fields),
         content_type="application/x-www-form-urlencoded; charset=UTF-8",
+        # A WRITE: only a connect failure before send is retried (D319). A second request after one
+        # that may have reached TCGplayer could list the same cards twice.
+        idempotent=False,
     )
     if status in (301, 302, 303, 307, 308):
         location = str(headers.get("Location") or "").lower()

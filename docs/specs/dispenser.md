@@ -46,7 +46,9 @@ card's photo is taken.
 - A press that would undo while a save is out says so and does nothing.
 - While any photo is unsaved, every control that adds, moves or re-claims cards (Capture, Start, Resume, Section, undo, box and section pick) waits until Retry saving succeeds. A failed save shows one notice that names the card.
 - No photo within `SAVE_WAIT_MS` (3000, exported) after COMPLETE: stop, send STOP, and say "Stopped: no
-  photo came after the last card. Check the tray." Stop cancels the wait.
+  photo came after the last card. Check the tray." Stop cancels the wait. If the settle after the last
+  START read as an empty stand, the stage also says the baseline is likely wrong and offers Re-baseline.
+  Dealing stops after one such card, so the three-in-a-row sentence (motion-trigger spec §3) never shows.
 - `createDealer({ onMark })` reports `photo-taken`, `save-answered` and `start-sent` with the card number.
   Capture feeds them to `MotionTrace.mark`, so a downloaded trace carries `marks` and the photo-to-START
   gap reads off the file.
@@ -98,7 +100,9 @@ card's photo is taken.
   write, no START after it). Never replay `bad_card_length.json`.
 - Browser: like `motion-live.spec.ts`, the same fake through an init script. Arm motion, Connect, Start.
   No box is picked, so the first fire drops and dealing must stop. Also: disabled with its reason in
-  Manual; "Needs Chrome" with `navigator.bluetooth` removed.
+  Manual; "Needs Chrome" with `navigator.bluetooth` removed. A stop after one empty-stand settle offers
+  Re-baseline; a stop with nothing past the lens (the arm-time verdict only) does not, and a later
+  arm-time verdict (Re-baseline from the tuning panel, re-arm) clears it.
 - Hardware, manual: load 10 cards, compare cards dealt with the HUD's `fires`.
 
 ## Deferred

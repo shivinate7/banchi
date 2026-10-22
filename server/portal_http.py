@@ -6,6 +6,9 @@ socket handling and the status ladder were written twice (DEBT86). They live her
 keeps what is its own and passes it in: its refusal class and codes, its message text, its stderr
 label, its timeout and size cap, and the shape of its own `_check_status` input.
 
+THE OPENER AND ITS RETRIES ARE `pipeline/net.py`'s (D319, every network call retries through one method);
+`send` is this module's one door to it.
+
 THE MESSAGE NEVER CARRIES THE COOKIE. Nothing here builds a string from the credential or from a
 response body.
 """
@@ -18,6 +21,7 @@ import urllib.request
 from typing import Callable, Optional, Tuple
 
 import envfile
+from pipeline import net
 
 # Read through `envfile.get_live`, never `get`: the session expires, the refusal tells the operator
 # to replace the value, and `get` caches per process and could not pick the new one up.
@@ -53,17 +57,6 @@ def read_cookie(label: str) -> Tuple[Optional[str], Optional[str]]:
     return value, None
 
 
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Hand a 3xx back to the caller instead of following it.
-
-    FOLLOWING BLINDLY IS THE BUG THIS PREVENTS. An expired session answers a redirect to the logon
-    page, and the default handler would fetch it and return a 200 full of HTML.
-    """
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D102
-        return None
-
-
 def send(
     request: urllib.request.Request,
     *,
@@ -71,29 +64,39 @@ def send(
     max_bytes: int,
     unreachable: Callable[[Exception], Exception],
     dropped: Callable[[], Exception],
-    dropped_on: tuple,
-    error_body_guard: tuple = (),
+    idempotent: bool = True,
 ) -> Tuple[int, dict, bytes]:
-    """One request. Returns (status, headers, body) and raises only for a dead socket.
+    """One request through the one retry home (`pipeline/net.py`, D319). Returns (status, headers,
+    body) for any HTTP answer and raises only for a dead socket.
 
-    A 3xx arrives as an `HTTPError` BECAUSE of `NoRedirect`; its headers carry the Location.
-    `unreachable(caught)` builds the host's refusal for a `URLError`; `dropped()` builds it for any
-    of `dropped_on` (each host's own list of socket failures). `error_body_guard` names the errors
-    that turn an unreadable error body into an empty one, and is empty where the host never did.
+    A 3xx IS HANDED BACK, NEVER FOLLOWED (`follow_redirects=False`), with its Location. An expired
+    session answers a redirect to the logon page, and following it would return a 200 full of HTML
+    and send the Cookie to wherever the redirect points.
+
+    A READ RETRIES (rule C). A WRITE PASSES `idempotent=False`: only a connect failure before send is
+    retried (a refused connect, a failed name lookup, an unreachable network). `unreachable(caught)` builds the
+    host's refusal for a connection that never opened, and `dropped()` for any other failure of the
+    socket, a `net.Dropped` write first: it may have been sent.
     """
-    opener = urllib.request.build_opener(NoRedirect)
     try:
-        response = opener.open(request, timeout=timeout)
-        return response.status, dict(response.headers), response.read(max_bytes + 1)
-    except urllib.error.HTTPError as caught:
-        try:
-            body = caught.read(max_bytes + 1)
-        except error_body_guard:
-            body = b""
-        return caught.code, dict(caught.headers), body
-    except urllib.error.URLError as caught:
-        raise unreachable(caught) from None
-    except dropped_on:
+        return net.open(
+            request.full_url,
+            method=request.get_method(),
+            data=request.data,
+            headers=dict(request.header_items()),
+            timeout=timeout,
+            idempotent=idempotent,
+            follow_redirects=False,
+            max_bytes=max_bytes,
+        )
+    except net.Dropped:
+        # A write that may have been sent (a broken pipe on the body, a TLS failure after the connect)
+        # is never "could not reach": urllib wraps it in the same `URLError` as a refused connect.
+        raise dropped() from None
+    except net.NetError as caught:
+        cause = caught.__cause__
+        if isinstance(cause, urllib.error.URLError):
+            raise unreachable(cause) from None
         raise dropped() from None
 
 

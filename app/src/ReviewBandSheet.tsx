@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { MatchSweepCard, MatchSweepDetail } from './types'
 import { previewUrl } from './server'
+import { titleCase } from './CardHero'
 import { NO_REASON, NO_REASON_OFF, unreadGroup } from './reasons'
 import { Button, EmptyState, Loading, Sheet, Slot } from './kit'
 import './ReviewBandSheet.css'
@@ -26,7 +27,7 @@ const SETTLED_BY_CLAIM = new Set(['printing_settled_by_claim', 'narrowed_by_clai
 export const SHEET_LABELS: Record<MatchSweepDetail, string> = {
   matched: 'matched free',
   paid: 'waiting for a paid look',
-  unread: 'not yet looked at',
+  unread: 'not looked at yet',
   unhinted: 'need a set named',
 }
 
@@ -35,10 +36,9 @@ export function sheetTitle(kind: MatchSweepDetail, n: number): string {
   return kind === 'unhinted' && n === 1 ? '1 needs a set named' : `${n} ${SHEET_LABELS[kind]}`
 }
 
-const EMPTY: Record<'paid' | 'unread' | 'matched', string> = {
-  paid: 'No card is waiting for a paid look.',
-  unread: 'The free reader has looked at every card.',
-  matched: 'The free reader has not matched a card yet.',
+/** The sheet's HEADING: the words of `sheetTitle` in Title Case (`titleCase`, the one home). */
+export function sheetHeading(kind: MatchSweepDetail, n: number): string {
+  return titleCase(sheetTitle(kind, n), true)
 }
 
 type Group = {
@@ -165,7 +165,7 @@ function GroupView({ group, kind, readerOn }: { readonly group: Group; readonly 
       </ul>
       {seen.length < group.cards.length ? (
         <Button variant="ghost" size="sm" onClick={() => setShown(shown + PAGE)} className="rbs-more">
-          Show {PAGE} more
+          Show {PAGE} More
         </Button>
       ) : null}
     </section>
@@ -215,7 +215,7 @@ export function BandSheet({
     </>
   )
   return (
-    <Sheet open={open} onClose={onClose} title={sheetTitle(kind, cards === null ? figure : cards.length)} icon="list" className="review-band-sheet">
+    <Sheet open={open} onClose={onClose} title={sheetHeading(kind, cards === null ? figure : cards.length)} icon="list" className="review-band-sheet">
       <div className="rbs-moved" aria-live="polite">
         <Slot show={moved} ghost={again} className="rbs-moved-slot">
           {line}
@@ -226,9 +226,8 @@ export function BandSheet({
       ) : cards === null ? (
         <Loading rows={4} label="Loading the cards" />
       ) : cards.length === 0 ? (
-        kind === 'unhinted' ? null : (
-          <EmptyState icon="inbox" title={EMPTY[kind]} actions={<Button onClick={back}>Back to Capture</Button>} />
-        )
+        /* A sheet opened above zero whose count has since fallen to it: one sentence, and the way back. A zero count opens nothing (B14). */
+        <EmptyState icon="inbox" title="Nothing is left in this count." actions={<Button onClick={back}>Back to Capture</Button>} />
       ) : (
         <>
           {kind === 'unhinted' ? <p className="rbs-pointer">Name the set on the card.</p> : null}

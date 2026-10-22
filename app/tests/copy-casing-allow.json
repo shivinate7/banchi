@@ -1,0 +1,3 @@
+{
+  "_about": "Pending casing findings (R5). Route -> finding id -> lane. The finding id is `<role> <text as JSON>`. Starts EMPTY: the sweep fixes strings, not this list. Each entry only shrinks."
+}

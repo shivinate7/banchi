@@ -48,6 +48,10 @@
                                            SKU — `#/revenue`'s thumbnail lookup (D89's own gap)
     GET    /games                          the per-game registry, as `pipeline/games.py` authors it
     GET    /codes                          the code ledger: counts, tiers, every code (C8)
+    POST   /slabs                          read a slab from Card Ladder by its cert and file it
+    GET    /slabs                          every slab with its newest snapshot
+    GET    /slabs/<grader>/<cert>          one slab: snapshots, sales, the grade ladder
+    DELETE /slabs/<grader>/<cert>          take a slab off the list; its history stays. No Card Ladder call
     GET    /codes/lots                     every lot built so far, newest first
     POST   /codes/lots                     plan a lot, or BUILD one — reserving its codes
     POST   /codes/scan                     decode a box's photographs into the ledger. FREE
@@ -112,6 +116,8 @@
     GET    /pipeline/sends                 every send's receipt, what is written and not
                                            confirmed, and whether the live check is due
     POST   /pipeline/sends/<stamp>/take-back   a written file's copies back on the list
+    POST   /pipeline/held/<sku>/unhold     copies the owner removed by hand go back on the list
+    POST   /pipeline/held/<sku>/hold       the way back from unhold: hold those copies again
     POST   /pipeline/sends/<stamp>/dismiss     the owner has read a taken-back receipt's
                                                warning, so the card stops drawing it
     POST   /pipeline/sends/unreadable/<key>/release   free a live send claim the store cannot
@@ -322,7 +328,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Dict, FrozenSet, Iterable, List, Optional, Sequence, Set, Tuple
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 # `make server` runs this by path, so sys.path[0] is server/ and the project packages are
 # not importable without this. Same idiom and same reason as harness/run.py.
@@ -375,6 +381,10 @@ from server import send_routes  # noqa: E402
 # no socket and holds no key, but it does hold a buyer's ADDRESS in memory for half an hour,
 # which is its own boundary worth keeping in one file rather than inlined here.
 from server import shipping_routes  # noqa: E402
+# My Slabs (D320): the THIRD outbound module, reading Card Ladder with the owner's own login. Below the
+# line for the same reason as the two above: one host, one credential read at call time, and no token
+# or response body in any answer.
+from server import slabs_routes  # noqa: E402
 # The order transport, and it is the SECOND outbound call this process makes (D63/D69). Below
 # the line and beside the two above for the reason the paragraph gives: it reads the
 # TCGplayer session cookie out of `.env` and opens a socket to
@@ -491,6 +501,18 @@ JPEG_MAGIC = b"\xff\xd8\xff"
 # this server does not do. It is in `ALL_METHODS` as well because an origin this server
 # knows may never be told less than one it does not.
 SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+# POSTs that are not the owner's change: reads, and timer work an open tab starts on its own (the
+# live-check settle writes receipts). None of them may mark activity.
+NOT_A_CHANGE_POSTS = (
+    "/pipeline/waiting",
+    "/pipeline/preflight",
+    "/pipeline/crop-preview",
+    "/pipeline/live-check",
+    "/orders/fetch",
+    "/orders/picks",
+    "/orders/walk-plan",
+    "/inventory/copies",
+)
 ALL_METHODS = ("GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS")
 
 # The Vite dev server (`make dev`), on both spellings of this machine. Two entries and not
@@ -749,6 +771,7 @@ _MARKDOWN_SEND_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/send$"
 # THE SHAPE IS `send_routes.STAMP_SHAPE`, never a copy of it: a copy typed here missed the random
 # tail every press has written since round 2, and matched no new receipt.
 _SEND_TAKE_BACK_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/take-back$")
+_HELD_RE = re.compile(r"^/pipeline/held/([A-Za-z0-9._-]+)/(unhold|hold)$")
 _SEND_DISMISS_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/dismiss$")
 _SEND_UNREADABLE_RE = re.compile(r"^/pipeline/sends/unreadable/([A-Za-z0-9._-]+)/(release|restore)$")
 _SEND_FILE_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/file$")
@@ -777,6 +800,8 @@ _SHIPPING_FILE_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/file$")
 # collide however they are ordered.
 _SHIPPING_STAMPS_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/stamps$")
 _SHIPPING_ITEM_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})$")
+# One slab, by grader and cert. Both are percent-decoded by the route. `/slabs/sweep` matches nothing: the owner deferred the sweep.
+_SLABS_ITEM_RE = re.compile(r"^/slabs/([^/]+)/([^/]+)$")
 
 # ------------------------------------------------------- the capture claims, on the wire
 #
@@ -2266,16 +2291,16 @@ def _positioner(
 
 
 def _location_of(claim: Optional[str]) -> bool:
-    """Whether a bare `game` column value is a LOCATED game (D24), the module-level twin of
-    `_Places._game_of` for a caller that has a raw claim and not a `Card`.
+    """Whether a bare `game` column value is a LOCATED game (D24): True when the registry says
+    so, and True for an absent, empty or unregistered claim.
 
-    `_Places.for_keys` is that caller: `Inventory.occupied_indices` (`store/master.py`)
-    hands back `(index, game)` pairs rather than filtering pooled records itself, because
-    `store/` imports nothing from `pipeline/` (D63) and so cannot resolve the registry's
-    `located` flag. The rule mirrors `_game_of` exactly — an unregistered or absent claim is
-    read as `games.DEFAULT_GAME` and is located; `UnknownGame` also reads as located, the
-    same treatment `_walk` gives a `None` lookup — so the two are one rule read from two
-    directions and cannot drift apart silently.
+    `_walk` and `_Places.for_keys` are the callers. `Inventory.walk_rows_in` and
+    `Inventory.occupied_indices` (`store/master.py`) hand back `(index, game)` pairs rather
+    than filtering pooled records themselves, because `store/` imports nothing from
+    `pipeline/` (D63) and so cannot resolve the registry's `located` flag. An absent claim
+    reads as `games.DEFAULT_GAME`; `UnknownGame` reads as located, the same treatment
+    `game_entry` gives a None lookup, so a typo'd game still gets a slot here and the loud
+    stop stays with the pipeline.
     """
     try:
         entry = games.get(str(claim) if claim else games.DEFAULT_GAME)
@@ -2389,12 +2414,12 @@ class _Places:
         # has run at all. Cached for the same reason `_cache` above is: this class is
         # instantiated per request, so `do_inventory` renders 5,000 rows against one walk
         # rather than 5,000.
-        # PER BOX SINCE D88, and lazily: `Inventory.records_in` answers one box out of the
-        # `cards` table without building the other boxes' records, which is what keeps a
-        # capture's `_card_summary` from loading the whole store to label one card. The
-        # degrade is still whole-store — `records_in` refuses on an unreadable record
-        # ANYWHERE, exactly as the scan it replaces did — so `_degraded` is one flag and
-        # not one per box.
+        # PER BOX, and lazily: `Inventory.walk_rows_in` answers one box as four indexed
+        # columns (index, name, state, game) without building a `Card` per row, which is
+        # what keeps a capture's `_card_summary` from loading the box to label one card.
+        # The degrade is whole-store — `walk_rows_in` refuses on an unreadable record
+        # ANYWHERE, so a label never rests on a position scan that skipped a bad record —
+        # and `_degraded` is therefore one flag and not one per box.
         self._degraded = False
         self._boxmates: Dict[int, _Boxmates] = {}
         # False for the ordinary constructor, always. `for_keys` flips it on the instance it
@@ -2411,6 +2436,8 @@ class _Places:
         # caches the CARD, which is the layer `view()` cannot see. Safe for the same reason
         # every other cache on this class is: the instance never outlives one request.
         self._of_cache: Dict[Tuple[int, int], dict] = {}
+        # `(game, cid, capture_id)` per position key, filled by `read_claims` or on first ask.
+        self._claimed: Dict[str, Tuple[Optional[str], Optional[str], Optional[str]]] = {}
         # PER-BOX MEMO FOR `Inventory.box_order` (D294), THE PR 3 INTEGRATION. `box_order`
         # selects the whole box every call, and `.of()` reached it three times per card
         # (`_company`, the neighbour walk and the block's own `order`). Search's mid-word
@@ -2431,14 +2458,14 @@ class _Places:
         every card's NAME and is exactly the cost this constructor exists to avoid.
 
         `do_orders` is the one caller today. An order's picks can span most of the store's
-        boxes, and the ordinary constructor's `_walk` (`records_in`, full `Card` hydration
-        per row) turns that into "every box, once" — effectively the whole store, on the
-        route the Orders and Shipping screens poll. `Inventory.occupied_indices` answers the
-        same `Position.occupied` input from two indexed integer columns instead, at the cost
-        of a third column (`game`) this class filters here: `store/` cannot resolve D24's
+        boxes, and the ordinary constructor's `_walk` (`walk_rows_in`: index, name, state and
+        game for every row) turns that into "every box, once" — all the names of the store,
+        on the route the Orders and Shipping screens poll. `Inventory.occupied_indices`
+        answers the same `Position.occupied` input from the index, state and game columns
+        alone, with no name read, and this class filters the game here: `store/` cannot resolve D24's
         `located` flag (it does not import `pipeline.games`, D63), so the raw claim travels
         up and is filtered where `games` is already imported — the same rule `_walk` applies
-        to a full `Card`, applied here to the bare column value.
+        to its game column, applied here to the bare column value.
 
         `neighbors`/`section_gaps` answer null for every position built through this
         constructor, which is the SAME null the ordinary path already answers when `_walk`
@@ -2447,7 +2474,7 @@ class _Places:
         neither field.
 
         A BAD RECORD DEGRADES ONE BOX HERE, NEVER THE INSTANCE — unlike `_walk`, which sets
-        `self._degraded` once for every box because a single scan (`records_in`) can meet a
+        `self._degraded` once for every box because a single scan (`walk_rows_in`) can meet a
         bad record anywhere in the store on ANY box's first call. `occupied_indices` raises
         the SAME way (`BadPosition`, the same global null check `_positions_in` runs), so
         this loop catches it per box rather than letting one bad record blow up every pick
@@ -2557,11 +2584,38 @@ class _Places:
         treats that as located — the loud stop for a typo'd game belongs to the pipeline
         (`join.lookup_for` refuses it by name), never to the route the app polls.
         """
-        return self._game_of(self._inventory.cards.get(master.position_key(int(box), int(index))))
+        return self._game_of(self.claims(box, index)[0])
 
-    def _game_of(self, card: Optional[master.Card]) -> Optional[dict]:
-        """`game_entry`'s lookup for a record already in hand — one rule, two doors in."""
-        claimed = getattr(card, "game", None) if card is not None else None
+    def read_claims(self, positions: Iterable[Tuple[int, int]]) -> None:
+        """Read `(game, cid, capture_id)` for these positions, one `pluck` per column.
+
+        A route that renders one row per queued card calls this once before its loop, so
+        `game_entry` and `claims` answer from column reads and not one card fetch per row.
+        `db.pluck` chunks at 500 keys, so the cost is 3 statements per 500 positions.
+        A position with no record is remembered as all-None, which is what an absent
+        card answers anyway.
+        """
+        keys = list(dict.fromkeys(master.position_key(int(box), int(index)) for box, index in positions))
+        cards = self._inventory.cards
+        columns = [cards.pluck(name, keys) for name in ("game", "cid", "capture_id")]
+        for key in keys:
+            self._claimed[key] = tuple(column.get(key) for column in columns)
+
+    def claims(self, box, index) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        """`(game, cid, capture_id)` of the card at this position, None for each when no card is there."""
+        key = master.position_key(int(box), int(index))
+        if key not in self._claimed:
+            card = self._inventory.cards.get(key)
+            self._claimed[key] = tuple(getattr(card, name, None) for name in ("game", "cid", "capture_id"))
+        return self._claimed[key]
+
+    def _game_of(self, claimed: Optional[str]) -> Optional[dict]:
+        """The registry entry for a bare game claim, None for an unregistered one. Only `game_entry` calls it.
+
+        It returns the entry where `_location_of` returns only the `located` flag, so a
+        caller that needs more than that flag reads it here. The absent-claim default is
+        the same in both.
+        """
         try:
             return games.get(str(claimed) if claimed else games.DEFAULT_GAME)
         except games.UnknownGame:
@@ -2594,12 +2648,11 @@ class _Places:
             return cached
         rows: List[Tuple[int, Optional[str], bool]] = []
         try:
-            for at, _, card in self._inventory.records_in(number):
-                entry = self._game_of(card)
-                if entry is not None and not entry["located"]:
+            for at, name, state, game in self._inventory.walk_rows_in(number):
+                if not _location_of(game):
                     continue
-                name = card.name if isinstance(card.name, str) and card.name else None
-                rows.append((at, name, card.state in master.TERMINAL_STATES))
+                name = name if isinstance(name, str) and name else None
+                rows.append((at, name, state in master.TERMINAL_STATES))
         except (master.BadPosition, TypeError, ValueError):
             self._degraded = True
             self._boxmates = {}
@@ -2661,9 +2714,8 @@ class _Places:
 
         SPARSE INSTANCES (`for_keys`) ANSWER NULL WITHOUT WALKING, ALWAYS. This is the one
         line that makes that constructor actually cheap: without it, `.of()` would still
-        reach here and call `self._walk(box)` — the exact full-`records_in` hydration
-        `for_keys` exists to avoid, since a sparse instance's `_boxmates` was never
-        populated by it. A future edit to `.of()` that adds a second path into `_walk`/
+        reach here and call `self._walk(box)` — the per-box name read `for_keys` exists to
+        avoid, since a sparse instance's `_boxmates` was never populated by it. A future edit to `.of()` that adds a second path into `_walk`/
         `_boxmates` outside this method would reintroduce the same defeat silently, which is
         why this check is here and not, say, memoised by `for_keys` leaving `_boxmates`
         pre-filled with `None`s (that would look identical on the wire and cost the same as
@@ -3156,10 +3208,10 @@ def _card_row(
     return _decorate_card(asdict(card), _Places(inventory), skus, box=box, index=index)
 
 
-def _queue_depth(queue: queues.Queue) -> Tuple[Optional[int], Optional[str]]:
-    """How many cards are still waiting in one queue, or None and a finding. Never raises.
+def _queue_depth(queue: queues.Queue, cards) -> Tuple[Optional[int], Optional[str]]:
+    """How many cards still owe an answer in one queue, or None and a finding. Never raises.
 
-    `len(Queue)` IS A SORT, which is not obvious from the call and is what made this
+    `Queue.owed_entries` IS A SORT, which is not obvious from the call and is what made this
     necessary. It runs `open_entries`, which orders by `QueueEntry.sort_key` — so a `market`
     that is not a number raises `decimal.InvalidOperation`, and a `box` that arrived as a
     JSON string raises `TypeError` on the tuple compare (`Queue.parse` coerces nothing).
@@ -3176,7 +3228,7 @@ def _queue_depth(queue: queues.Queue) -> Tuple[Optional[int], Optional[str]]:
     PER QUEUE, so a corrupt `review.json` does not also hide what is sitting in parked.
     """
     try:
-        return len(queue), None
+        return len(queue.owed_entries(cards)), None
     except (ArithmeticError, TypeError, ValueError) as exc:
         return None, (
             f"the {queue.name} queue holds an entry that cannot be ordered "
@@ -3197,6 +3249,7 @@ def do_status() -> dict:
     snapshot = Store().read()
     inventory = snapshot.inventory
     problems: List[str] = []
+    states = inventory.counts()
 
     body = {
         # WHICH PROCESS IS ANSWERING. `scripts/serve.py` restarts this server when a watched
@@ -3214,10 +3267,13 @@ def do_status() -> dict:
         "captures_root": str(captures_root()),
         "store": str(files.inventory_dir()),
         "store_exists": files.inventory_dir().is_dir(),
-        "cards": len(inventory.cards),
-        "states": inventory.counts(),
-        # OPEN entries, which is what `len(Queue)` returns, what `Queue.summary` prints in
-        # every run report, and what `GET /queues` hands the review screen. This counted
+        # The total is the sum of the per-state GROUP BY, so one query answers both and the
+        # owed-count read (`departed_among`) fits inside this route's read budget.
+        "cards": sum(states.values()),
+        "states": states,
+        # OWED entries (UN-8: open, less every card that has left its box), which is what
+        # `Queue.owed_entries` returns, what `Queue.summary` prints in every run report, and
+        # what `GET /queues` hands the review screen. This counted
         # `entries` — every record in the file, cleared or not — until 7b, and the two were
         # indistinguishable because NOTHING IN THIS REPO HAD EVER SET `cleared_by_human`;
         # `store/queues.py` and `store/cache.py` both say so in their headers.
@@ -3236,7 +3292,7 @@ def do_status() -> dict:
     # from too — so the two wire keys and the finding that explains a null one cannot come to
     # disagree about which file is meant.
     for queue in (snapshot.review, snapshot.parked):
-        depth, finding = _queue_depth(queue)
+        depth, finding = _queue_depth(queue, inventory.cards)
         body["queues"][queue.name] = depth
         if finding:
             problems.append(finding)
@@ -7216,6 +7272,14 @@ def do_graveyard(buried_only: bool = False) -> dict:
 # ------------------------------------------------------------------------ standing queues
 
 
+def _queue_addressable(entry: queues.QueueEntry) -> bool:
+    """Whether the entry names a real slot (box and index from 1), as `_queue_row` reads it."""
+    try:
+        return int(entry.box) >= 1 and int(entry.index) >= 1
+    except (TypeError, ValueError):
+        return False
+
+
 def _queue_row(
     entry: queues.QueueEntry, places: "Optional[_Places]" = None
 ) -> dict:
@@ -7248,11 +7312,7 @@ def _queue_row(
     # such an entry keeps the label the join gave it. There is no box to count and nothing
     # to re-render against; asking anyway would answer `Box 0 · departed`, which is a claim
     # about a card that has left rather than about one that never had a slot.
-    try:
-        addressable = int(entry.box) >= 1 and int(entry.index) >= 1
-    except (TypeError, ValueError):
-        addressable = False
-    if places is not None and addressable:
+    if places is not None and _queue_addressable(entry):
         # THE LABEL IS RE-RENDERED AT READ TIME AND THE STORED ONE IS NEVER SERVED (D58,
         # on D56's rule). `QueueEntry.label` is written once by `cli/resolve.py` at join
         # time and never recomputed, so it is a snapshot of a rendering — and every rule
@@ -7277,9 +7337,7 @@ def _queue_row(
         # block Inventory draws (LOC-26: the box's name and the neighbours) and its place link
         # opens THIS card, `#/inventory?box=<n>&card=<cid>`, not the box's first (LOC-12).
         row["place"] = place
-        card = places._inventory.cards.get(master.position_key(int(entry.box), int(entry.index)))
-        row["cid"] = getattr(card, "cid", None)
-        row["capture_id"] = getattr(card, "capture_id", None)
+        _, row["cid"], row["capture_id"] = places.claims(entry.box, entry.index)
     return row
 
 
@@ -7374,19 +7432,21 @@ def do_queues() -> dict:
     # renders 5,000 rows against — so a card's label on the review screen and its label on
     # the inventory screen are the same string by construction rather than by care.
     places = _Places(snapshot.inventory)
-    return {
-        # A DEPARTED CARD OWES NO ANSWER (UN-8). A card retired from Review kept its
-        # open entry, so it came back on reload. The entry stays in the file, so the
-        # retire undo brings the card back here with no second write.
-        "review": [
-            _queue_row(entry, places)
-            for entry in snapshot.review.owed_entries(snapshot.inventory.cards)
-        ],
-        "parked": [
-            _queue_row(entry, places)
-            for entry in snapshot.parked.owed_entries(snapshot.inventory.cards)
-        ],
+    # A DEPARTED CARD OWES NO ANSWER (UN-8). A card retired from Review kept its
+    # open entry, so it came back on reload. The entry stays in the file, so the
+    # retire undo brings the card back here with no second write.
+    owed = {
+        "review": snapshot.review.owed_entries(snapshot.inventory.cards),
+        "parked": snapshot.parked.owed_entries(snapshot.inventory.cards),
     }
+    # The queued cards' claims in 3 statements per 500 queued positions (`db.pluck` chunks at 500 keys).
+    places.read_claims(
+        (entry.box, entry.index)
+        for entries in owed.values()
+        for entry in entries
+        if _queue_addressable(entry)
+    )
+    return {name: [_queue_row(entry, places) for entry in entries] for name, entries in owed.items()}
 
 
 def _candidate_with_sku(candidates: Sequence[dict], sku: str) -> Optional[dict]:
@@ -12040,12 +12100,10 @@ def _copy_row(places: _Places, card: master.Card) -> dict:
     }
 
 
-#: Round 2 review finding: the client's own `PHOTO_LOOKUP_CAP` (`Revenue.tsx`) bounded the
-#: request it SENDS, but nothing bounded what this route would ANSWER for — a hand-typed
-#: query string could ask for any number of SKUs in one call. No shared constant reaches
-#: across the TS/Python boundary here (`ORDER_NAMES_LIMIT`'s own precedent has the same
-#: gap, one bound per side), so this is `Revenue.tsx:PHOTO_LOOKUP_CAP`'s value, kept in
-#: step by hand.
+#: One `/skus/photos` call answers for at most this many SKUs; a hand-typed query string could
+#: otherwise name any number. No shared constant reaches across the TS/Python boundary here
+#: (`ORDER_NAMES_LIMIT`'s own precedent has the same gap, one bound per side), so this is
+#: `server.ts`'s `SKU_PHOTO_BATCH` value, kept in step by hand.
 SKUS_PHOTOS_LIMIT = 40
 
 
@@ -14293,7 +14351,7 @@ def do_order_walk_plan(payload: dict) -> dict:
         40 open orders, 31 stops, 8 drawers, 40 copies      4.5 ms -> 18.5 ms
         all 275 walkable, 64 stops, 8 drawers, 275 copies  24.1 ms -> 32.2 ms
 
-    The delta is the per-box `records_in` walk — a fixed cost of the drawers the plan
+    The delta is the per-box `walk_rows_in` column read — a fixed cost of the drawers the plan
     reaches, not of the copies in it, and paid once per press. D260 is what it buys: a card
     nobody has named is not a landmark, and the distance is what keeps the skip honest.
 
@@ -16250,7 +16308,21 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     f"another address, add it to {ORIGINS_ENV} — comma or space separated — "
                     f"and restart nothing: it is read on every request.",
                 )
+            # MARKED BEFORE THE HANDLER AS WELL AS AFTER: a long write that starts once the owner
+            # has been idle for the window is itself a change, and a restart due mid-write drains it.
+            changes = (
+                self.command not in SAFE_METHODS
+                and (urlparse(self.path).path.rstrip("/") or "/") not in NOT_A_CHANGE_POSTS
+            )
+            if changes:
+                files.mark_activity()
             handler()
+            # A REQUEST THAT CHANGES STATE IS THE OWNER'S LAST CHANGE; the supervisor holds an
+            # auto-restart while it is fresh. HERE AND NOT IN THE STORE'S WRITE PATH, because the
+            # background reader, the setup and the sweeps write the store with nobody at the screen.
+            # A request the origin gate refuses marks nothing.
+            if changes:
+                files.mark_activity()
         except BadRequest as exc:
             self._fail(exc.status, exc.code, str(exc))
         except codes_routes.CodesRefusal as exc:
@@ -16451,6 +16523,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # pass so no two of them are offered the same physical card.
             if path == "/orders":
                 return self._json(HTTPStatus.OK, do_orders())
+            if path == "/slabs":
+                return self._json(HTTPStatus.OK, slabs_routes.do_slabs())
+            match = _SLABS_ITEM_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK, slabs_routes.do_slab(unquote(match.group(1)), unquote(match.group(2)))
+                )
             if path == "/codes":
                 return self._json(HTTPStatus.OK, codes_routes.do_codes())
             if path == "/codes/lots":
@@ -17025,6 +17104,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # THE MAP'S CONFIRM (D264): the whole edit-mode draft, one store transaction.
             if path == "/boxes/sections/move-batch":
                 return self._json(HTTPStatus.OK, do_move_sections_batch(self._body()))
+            if path == "/slabs":
+                return self._json(HTTPStatus.OK, slabs_routes.do_slab_add(self._body()))
             # THE PIPELINE WRITES, AND THE FIRST OF THEM IS THE ONLY ROUTE IN THIS SERVER
             # THAT CAN COST MONEY. It is named for it, it refuses without an explicit
             # `confirm`, and it refuses a second run over a capture directory a live run is
@@ -17114,6 +17195,12 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, send_routes.do_take_back(match.group(1), self._body())
                 )
+            match = _HELD_RE.match(path)
+            if match:
+                # The copies the owner removed from TCGplayer by hand (D273, R-S4): `unhold` puts
+                # them back on the list; `hold` is the way back from that press.
+                handler = send_routes.do_unhold if match.group(2) == "unhold" else send_routes.do_rehold
+                return self._json(HTTPStatus.OK, handler(match.group(1), self._body()))
             match = _SEND_UNREADABLE_RE.match(path)
             if match:
                 # DEBT59: free a live send claim the store cannot read, and the way back.
@@ -17435,6 +17522,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 return self._json(
                     HTTPStatus.OK, shipping_routes.do_shipping_forget(match.group(1))
+                )
+            match = _SLABS_ITEM_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK, slabs_routes.do_slab_remove(unquote(match.group(1)), unquote(match.group(2)))
                 )
             if app_owns(path):
                 # The app is served here and is read-only (D138). 405 and not 404,

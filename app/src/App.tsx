@@ -242,7 +242,7 @@ export const ROUTES: readonly Route[] = [
    * side effect. */
   { path: '/inventory', label: 'Inventory', icon: 'box', view: Inventory, persona: 'owner', group: 'library', hotkey: 'i', nav: true, tab: true, keywords: 'boxes find a card where search sold retire move', keys: INVENTORY_KEYS },
   { path: '/codes', label: 'Codes', icon: 'qr', view: Codes, persona: 'owner', group: 'library', hotkey: 'd', nav: true, keywords: 'code cards qr redeem read a box', keys: CODES_KEYS },
-  { path: '/fulfillment', label: 'Cards to pull', icon: 'hand', view: Fulfillment, persona: 'fulfiller', group: 'aside', keywords: 'hand-off pull fulfiller new tab', keys: FULFILLMENT_KEYS },
+  { path: '/fulfillment', label: 'Cards to Pull', icon: 'hand', view: Fulfillment, persona: 'fulfiller', group: 'aside', keywords: 'hand-off pull fulfiller new tab', keys: FULFILLMENT_KEYS },
   { path: '/gallery', label: 'Kit', icon: 'grid', view: Gallery, persona: 'owner', group: 'aside', keywords: 'component kit design system tokens' },
   /* THE PER-PRODUCT VIEW IS OFF-NAV ON PURPOSE (D227). It is a deep link, not a destination
    * anyone browses to cold: a product name on another screen opens it, and so does the
@@ -250,7 +250,7 @@ export const ROUTES: readonly Route[] = [
    * this from reading as an omission to `route rosters` and `route census`. No hotkey: a route
    * with no nav entry earns no chord, per this file's own rule for `#/fulfillment` and
    * `#/gallery`. */
-  { path: '/product', label: 'Product history', icon: 'chart', view: ProductHistory, persona: 'owner', group: 'aside', keywords: 'sku market price archive per product history sold' },
+  { path: '/product', label: 'Product History', icon: 'chart', view: ProductHistory, persona: 'owner', group: 'aside', keywords: 'sku market price archive per product history sold' },
   /* RUNS FOLDED INTO REVIEW (D291, the owner's ruling, RULINGS.md Q6).
    * `#/runs` stays a registered route, off-nav (the same D227 shape `#/product` above
    * already has), because a route is not a feature — a bookmark, a link Pricing or
@@ -799,7 +799,7 @@ function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: (
   }
   let index = -1
   return (
-    <Modal open={open} onClose={onClose} title="Go to" className="bn-cmdk">
+    <Modal open={open} onClose={onClose} title="Go To" className="bn-cmdk">
       <div className="bn-cmdk-input">
         <Icon name="search" size={18} className="bn-muted" />
         {/* `autoFocus`, not only the kit's first-focus frame: a person types the moment the
@@ -815,7 +815,7 @@ function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: (
           autoComplete="off"
           spellCheck={false}
           value={query}
-          placeholder="Go to a screen, or a card"
+          placeholder="Pricing, Orders, or a card name…"
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') {
@@ -1023,7 +1023,7 @@ function KeysSheet({ open, onClose, path }: { open: boolean; onClose: () => void
   return (
     <Modal open={open} onClose={onClose} title="Shortcuts" icon="keyboard" className="app-keys">
       <div className="app-keys-search">
-        <SearchField value={query} onChange={setQuery} persona="owner" label="Search" placeholder="Search" autoFocus />
+        <SearchField value={query} onChange={setQuery} persona="owner" label="Search" placeholder="A key or action, like Skip…" autoFocus />
       </div>
       <div className="app-keys-body">
         {groups.length === 0 ? <p className="app-keys-none">No shortcut matches “{query}”.</p> : null}
@@ -1220,8 +1220,8 @@ function Sidebar({
             <Icon name="external" size={14} className="bn-faint" />
           </a>
         ))}
-        <Button variant="ghost" icon="search" onClick={onPalette} data-tip="Go to" aria-label="Go to" aria-haspopup="dialog">
-          <span className="bn-side-foot-text">Go to</span>
+        <Button variant="ghost" icon="search" onClick={onPalette} data-tip="Go To" aria-label="Go To" aria-haspopup="dialog">
+          <span className="bn-side-foot-text">Go To</span>
           <Kbd>⌘K</Kbd>
         </Button>
         <Button variant="ghost" icon={theme === 'light' ? 'moon' : 'sun'} onClick={onToggleTheme} aria-label="Theme" title={`Switch to ${themeLabel(nextTheme(theme))}`}>
@@ -1255,7 +1255,7 @@ function PhoneBar({ onPalette }: { onPalette: () => void }) {
       >
         Banchi
       </span>
-      <IconButton icon="search" label="Go to" onClick={onPalette} aria-haspopup="dialog" />
+      <IconButton icon="search" label="Go To" onClick={onPalette} aria-haspopup="dialog" />
     </header>
   )
 }

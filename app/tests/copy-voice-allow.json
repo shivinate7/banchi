@@ -1,0 +1,3 @@
+{
+  "_about": "Pending first-person strings (R4, R4a). Route -> finding id -> lane. The finding id is `text <word> <line as JSON>` for a rendered line, or `<attr> <word> <value as JSON>` for an attribute. Starts EMPTY: the sweep fixes strings, not this list. Each entry only shrinks."
+}

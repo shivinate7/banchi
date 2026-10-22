@@ -37,7 +37,7 @@
  * the same manual-wins-until-toggled behaviour, just kept inside the component that draws it.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 
 import { ReadingAge } from './CardLocations'
 import { collectorNumber } from './cardNumber'
@@ -81,12 +81,19 @@ export function numberCell(card: InventoryCard): string {
   return collectorNumber(card) ?? 'none'
 }
 
-/** An enum value drawn as a word: `reverse_holofoil` → `Reverse Holofoil`. */
-export function titleCase(raw: string): string {
-  return raw
-    .split(/[_\s]+/)
-    .filter((word) => word !== '')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+/** Chicago keeps these lowercase between the first and last word. */
+export const SMALL_WORDS: ReadonlySet<string> = new Set([
+  'a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'so', 'yet',
+  'as', 'at', 'by', 'in', 'of', 'on', 'to', 'up', 'via', 'per', 'unless', 'with',
+  'vs', 'about', 'under', 'over', 'into', 'onto', 'from', 'upon', 'near', 'past', 'off', 'out', 'down',
+])
+
+/** THE ONE HOME FOR TITLE CASE. An enum value drawn as a word: `reverse_holofoil` → `Reverse Holofoil`.
+ *  With `chicago`, the small words stay lowercase unless first or last: `waiting for a paid look` → `Waiting for a Paid Look`. */
+export function titleCase(raw: string, chicago = false): string {
+  const words = raw.split(/[_\s]+/).filter((word) => word !== '')
+  return words
+    .map((word, i) => (chicago && i > 0 && i < words.length - 1 && SMALL_WORDS.has(word) ? word : word.charAt(0).toUpperCase() + word.slice(1)))
     .join(' ')
 }
 
@@ -110,7 +117,7 @@ function isCode(text: string): boolean {
 
 /** A set-valued claim, rendered — a bare string reads as a one-member set. */
 export function claimText(claim: string | string[] | null, word: (member: string) => string = (member) => member): string {
-  const members = claimList(claim).map(word)
+  const members = claimList(claim).map((member) => word(member))
   return members.length === 0 ? 'none recorded' : members.join(', ')
 }
 
@@ -274,7 +281,7 @@ export function factGroupsOf(
         ...(listedAs !== null ? [listedAs] : []),
         ...(readAs !== null ? [readAs] : []),
         { label: 'Game', value: gameWord(card) ?? 'not recorded' },
-        { label: 'Set hint', value: card.set_hint ?? 'none', kind: 'mono' },
+        { label: 'Set Hint', value: card.set_hint ?? 'none', kind: 'mono' },
         /* THE COPIES HEADER'S SKU AND CONDITION LINE IS GONE: these two are its facts, said here. */
         ...(card.sku === null || card.sku.trim() === '' ? [] : [{ label: 'SKU', value: card.sku.trim(), kind: 'mono' as const }]),
         ...(card.sku === null || listings[card.sku.trim()]?.condition == null
@@ -285,8 +292,8 @@ export function factGroupsOf(
     {
       title: 'Claims',
       facts: [
-        { label: 'Finish', value: claimText(card.metadata_finish, titleCase) },
-        { label: 'Rarity', value: claimText(card.rarity_claim, titleCase) },
+        { label: 'Finish', value: claimText(card.metadata_finish, (member) => titleCase(member, true)) },
+        { label: 'Rarity', value: claimText(card.rarity_claim) },
         { label: 'Note', value: card.note ?? 'none' },
       ],
     },
@@ -306,6 +313,20 @@ export function factGroupsOf(
 }
 
 /* -------------------------------------------------------------------------- the hero head */
+
+/** A side figure with a text box that opens on hover and on keyboard focus (Escape closes it). The box is
+ *  `visibility`-toggled in CSS, so it holds its room and moves nothing (D313). */
+function FigureChip({ tip, children }: { readonly tip: string; readonly children: ReactNode }) {
+  const id = useId()
+  return (
+    <span className="browse-hero-chip" tabIndex={0} aria-describedby={id} onKeyDown={(e) => e.key === 'Escape' && e.currentTarget.blur()}>
+      {children}
+      <span id={id} role="tooltip" className="browse-hero-chip-tip">
+        {tip}
+      </span>
+    </span>
+  )
+}
 
 /** THE BAND'S FIGURES, HANDED IN BY WHICHEVER SCREEN HOLDS THE CARD'S SEARCH GROUP (the card-detail
  *  spec, "The band"). They are facts about the card and its copies, so they sit with the card and
@@ -556,7 +577,7 @@ export function CardHeroHead({
     <div className="browse-hero-head">
       <div className="browse-hero-text">
         <div className="browse-hero-titlerow">
-          <h2 className={name === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>{name ?? 'Not identified yet'}</h2>
+          <h2 className={name === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>{name ?? 'Not Identified Yet'}</h2>
           {/* THE RE-SORT BUTTON sits beside Actions, the same IconButton at the same size, so the row's
               height is the same with it or without it (D118). Shown only while the order is stale;
               the staleness sentence is its tooltip and accessible name. */}
@@ -581,13 +602,13 @@ export function CardHeroHead({
           </span>
           {preChips}
           {claimList(card.metadata_finish).map((finish) => (
-            <Pill key={`f-${finish}`} icon="sparkles" outline title={titleCase(finish)}>
-              {titleCase(finish)}
+            <Pill key={`f-${finish}`} icon="sparkles" outline title={titleCase(finish, true)}>
+              {titleCase(finish, true)}
             </Pill>
           ))}
           {claimList(card.rarity_claim).map((rarity) => (
-            <Pill key={`r-${rarity}`} outline title={titleCase(rarity)}>
-              {titleCase(rarity)}
+            <Pill key={`r-${rarity}`} outline title={rarity}>
+              {rarity}
             </Pill>
           ))}
           {/* THE CARD'S STATE ONLY WHEN IT IS THE EXCEPTION (UX-221) — `BoxBrowse.tsx`'s own
@@ -616,16 +637,16 @@ export function CardHeroHead({
           ) : null
         ) : (
           <p className="browse-hero-side">
-            <span>
+            <FigureChip tip="You have captured this many copies of this card, sold ones included.">
               Captured<b>{figures.group.copies.length}</b>
-            </span>
-            <span>
+            </FigureChip>
+            <FigureChip tip="You have this many sold copies tucked out of the list below.">
               Hidden<b>{figures.hidden}</b>
-            </span>
+            </FigureChip>
             {figures.group.sku === null ? null : (
-              <span>
+              <FigureChip tip="You have sent this many copies to TCGplayer in an import file.">
                 Sent<b>{figures.group.listed.pushed}</b>
-              </span>
+              </FigureChip>
             )}
           </p>
         )}

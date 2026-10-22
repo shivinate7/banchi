@@ -343,7 +343,7 @@ export function CardLine({
 
   const title =
     name === null ? (
-      <span className="bn-cardline-name is-unknown">Not identified yet</span>
+      <span className="bn-cardline-name is-unknown">Not Identified Yet</span>
     ) : sku ? (
       <ProductLink sku={sku} name={name} className="bn-cardline-name">
         {name}
@@ -746,7 +746,7 @@ function PickPanel<T extends string>({
             className="bn-pick-entry-input"
             type="text"
             value={narrow}
-            placeholder="Type to narrow"
+            placeholder="Part of a name…"
             aria-label={`Narrow ${label}`}
             aria-controls={`${id}-list`}
             aria-activedescendant={activeId}
@@ -1175,8 +1175,8 @@ export function SortControl<K extends string>({
   readonly className?: string
 }) {
   const current = options.find((option) => option.key === value.key)
-  const asc = current?.asc ?? 'Low to high'
-  const desc = current?.desc ?? 'High to low'
+  const asc = current?.asc ?? 'Low to High'
+  const desc = current?.desc ?? 'High to Low'
   return (
     <span className={['bn-sort', className].filter(Boolean).join(' ')}>
       <Select

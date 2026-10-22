@@ -1102,7 +1102,7 @@ async function runsIn(view: Locator): Promise<Run[]> {
  *  The label carries the accessible name as well as the visible text, because the receipts
  *  put the position in an `aria-label` — and the destructive-wording check below reads these
  *  labels, so a control whose only name is an attribute must not be invisible to it. */
-async function targets(page: Page): Promise<{ where: string; box: DOMRect; floating: boolean }[]> {
+async function targets(page: Page): Promise<{ where: string; box: DOMRect; floating: boolean; covered: boolean }[]> {
   return page.evaluate(() => {
     /* WHICH LAYER THE CONTROL IS ON. A receipt sheet is `position: fixed` over the page and
        takes every tap inside its own footprint, so a row it happens to be covering is not the
@@ -1117,16 +1117,40 @@ async function targets(page: Page): Promise<{ where: string; box: DOMRect; float
       }
       return false
     }
-    const out: { where: string; box: DOMRect; floating: boolean }[] = []
+    /* WHETHER A HAND CAN REACH THE CONTROL. A sticky bar that scrolls over a control covers it, and a
+       covered control cannot be pressed, so two controls with a gap between them are not a mis-tap
+       pair when one of them is under something opaque. The centre of the box is hit-tested. A
+       centre outside the viewport is not judged here, because it is not on screen to hit. */
+    /* A control is COVERED only when the thing on top of it is a fixed or sticky layer (the count bar, or a
+       sheet). Two plain controls that overlap are not covered: the gap check must still see them. */
+    const coveredByLayer = (element: Element, box: DOMRect): boolean => {
+      const cx = box.x + box.width / 2
+      const cy = box.y + box.height / 2
+      if (cx < 0 || cy < 0 || cx > window.innerWidth || cy > window.innerHeight) return false
+      const hit = document.elementFromPoint(cx, cy)
+      if (hit === null || hit === element || element.contains(hit)) return false
+      let node: Element | null = hit
+      while (node !== null) {
+        const position = window.getComputedStyle(node).position
+        // A layer that contains the control itself is the control's own container, not something over it.
+        if (node.contains(element)) return false
+        if (position === 'fixed' || position === 'sticky') return true
+        node = node.parentElement
+      }
+      return false
+    }
+    const out: { where: string; box: DOMRect; floating: boolean; covered: boolean }[] = []
     for (const element of document.querySelectorAll('button, a[href], input, select, textarea')) {
       if (!element.checkVisibility()) continue
       const classes = element.getAttribute('class')
       const named = element.getAttribute('aria-label')
       const text = `${(element.textContent ?? '').trim()} ${named ?? ''}`.trim()
+      const box = element.getBoundingClientRect().toJSON() as DOMRect
       out.push({
         where: `${element.tagName.toLowerCase()}${classes === null ? '' : `.${classes}`}: ${text.slice(0, 120)}`,
-        box: element.getBoundingClientRect().toJSON() as DOMRect,
+        box,
         floating: onAnOverlay(element),
+        covered: coveredByLayer(element, box),
       })
     }
     return out
@@ -1292,6 +1316,10 @@ async function fatTargets(page: Page, where: string, hasControls = true): Promis
          every control in the sheet against every other control in the sheet, and every control
          on the page against every other control on the page. */
       if (a.floating !== b.floating) continue
+      /* A COVERED CONTROL IS NOT A NEIGHBOUR. The sticky count bar scrolls over a control and the
+         control cannot be pressed under it, so a gap to it is not a gap a thumb can land between.
+         Its size is still checked above, and every other pair still runs. */
+      if (a.covered || b.covered) continue
       expect(apart(a.box, b.box), `${where}: ${a.where} -> ${b.where}`).toBeGreaterThanOrEqual(
         GAP_FLOOR,
       )
@@ -1423,7 +1451,7 @@ async function openList(page: Page, wire: Wire[] = [], mood: Mood = {}): Promise
     view(page),
     `no Fulfillment view at ${VIEW_ROUTE} — is the route registered in App.tsx?`,
   ).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Cards to pull' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Cards to Pull', exact: true })).toBeVisible()
   return states
 }
 
@@ -1715,6 +1743,824 @@ const WALK = [
    Fulfillment view drawing cards nobody put in this checkout. */
 sealEveryTest()
 
+/* The search-holds cases run at each size the screen is checked at (1440 and 820), not only the default viewport. */
+/* R19 (owner ruling, review #849): the stale notice is a floating banner that must be inside the viewport when it appears.
+   toBeVisible alone passes for a box below the fold, so this reads the box against the viewport. */
+async function expectInViewport(page: Page, target: Locator, why: string): Promise<void> {
+  const box = await target.boundingBox()
+  const size = page.viewportSize()
+  expect(box, `${why}: the box exists`).not.toBeNull()
+  expect(size, 'the viewport has a size').not.toBeNull()
+  const top = box!.y
+  const bottom = box!.y + box!.height
+  expect(top >= 0 && bottom <= size!.height, `${why}: box spans ${Math.round(top)} to ${Math.round(bottom)} in a ${size!.height}px viewport`).toBe(true)
+}
+
+/* Marks the last visible interactive element of the Fulfiller's view, in document order, outside the banner and the sheet. */
+function markLastControl(page: Page): Promise<void> {
+  return page.evaluate(() => {
+    document.querySelectorAll('[data-last-control]').forEach((el) => el.removeAttribute('data-last-control'))
+    const main = document.querySelector('main.fulfillment')
+    const found = Array.from(main?.querySelectorAll('button, a[href], input, select, textarea, [role="button"]') ?? []).filter((el) => {
+      const r = el.getBoundingClientRect()
+      return r.width > 0 && r.height > 0 && el.closest('.ff-notice, .ff-sheet') === null
+    })
+    found[found.length - 1]?.setAttribute('data-last-control', '')
+  })
+}
+
+/* A list longer than SHOWN_OWED (6), so the last list control is "Show the other N cards". */
+function longListPlan(): unknown {
+  const extra = Array.from({ length: 12 }, (_, i) => {
+    const index = i + 1
+    return {
+      ...ORDER_TAKE,
+      sku: `LONG-SKU-${index}`,
+      name: `Long list card ${index}`,
+      copies: [
+        {
+          ...ORDER_WALK_COPY,
+          key: `6/${index}`,
+          capture_id: `cap-long-${index}`,
+          place: { ...ORDER_COPY_PLACE, label: `Box 6, Section 1, Card ${index}`, box: 6, index, slot: index, card: index },
+        },
+      ],
+    }
+  })
+  return {
+    ...ONE_OPEN_ORDER_PLAN,
+    stops: [{ ...ONE_OPEN_ORDER_PLAN.stops[0]!, takes: [ORDER_TAKE, ...extra] }],
+    counts: { ...ONE_OPEN_ORDER_PLAN.counts, copies: 1 + extra.length },
+  }
+}
+
+/* The orders route for a case that fails on demand: held while `holdNow` is set, failing while `failing` is set. */
+async function ordersOnDemand(page: Page, state: { holdNow: boolean; failing: boolean }, held: Promise<void>): Promise<void> {
+  await page.route(/\/orders$/, async (route) => {
+    if (state.holdNow) await held
+    if (!state.failing) return route.fallback()
+    return route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'orders_unavailable', message: 'The orders could not be read.' } }),
+    })
+  })
+}
+
+/* Opens the long list, sells Charizard with its orders read held and then failed, and waits for the banner. The sale
+   leaves the receipt sheet open. */
+async function openLongListBanner(page: Page): Promise<{ failing: boolean }> {
+  await stubServer(page, [], { orders: ONE_OPEN_ORDER as unknown as typeof ONE_OPEN_ORDER, plan: longListPlan() as typeof ONE_OPEN_ORDER_PLAN })
+  const state = { holdNow: false, failing: false }
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await ordersOnDemand(page, state, held)
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(view(page).locator('.ff-owed-card').first(), 'the list has Pick rows on screen').toBeVisible()
+  await openCard(page, 'Charizard ex')
+  await page.getByRole('button', { name: 'Pull' }).click()
+  await expect(view(page)).toContainText('Pulled.')
+  state.holdNow = true
+  state.failing = true
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
+  await expect(view(page).locator('.ff-owed-card').first(), 'the list is back').toBeVisible()
+  await settleLayout(page)
+  await settleAnimations(page)
+  const answered = page.waitForResponse(/\/orders$/)
+  release()
+  await answered
+  await expect(view(page).locator('.ff-notice'), 'the stale banner shows on the list').toBeVisible()
+  await settleLayout(page)
+  await settleAnimations(page)
+  return state
+}
+
+/* The element at the centre of the target is the target or inside it: nothing floats over the control. */
+async function expectNotCovered(page: Page, target: Locator, why: string): Promise<void> {
+  const box = await target.boundingBox()
+  const size = page.viewportSize()
+  expect(box, `${why}: the control has a box`).not.toBeNull()
+  expect(size, 'the viewport has a size').not.toBeNull()
+  const inside = box!.y >= 0 && box!.y + box!.height <= size!.height && box!.x >= 0 && box!.x + box!.width <= size!.width
+  const metrics = await page.evaluate(() => `scrollY ${Math.round(window.scrollY)} of ${Math.round(document.documentElement.scrollHeight)}`)
+  expect(inside, `${why}: the control spans ${Math.round(box!.y)} to ${Math.round(box!.y + box!.height)} in a ${size!.height}px viewport (${metrics})`).toBe(true)
+  const hit = await target.evaluate(
+    (el, point) => {
+      const at = document.elementFromPoint(point.x, point.y)
+      return at !== null && (el === at || el.contains(at))
+    },
+    { x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 },
+  )
+  expect(hit, `${why}: the centre of the control is covered by another layer`).toBe(true)
+}
+
+const SEARCH_SIZES = [
+  { width: 1440, height: 900 },
+  { width: 820, height: 1000 },
+] as const
+const NO_PLAN = { ...ONE_OPEN_ORDER_PLAN, stops: [], shortfall: [] }
+
+for (const size of SEARCH_SIZES) {
+test.describe(`search holds on load at ${size.width}`, () => {
+test.beforeEach(async ({ page }) => setViewport(page, size))
+
+/* ux-w2 (nothing on screen moves unless the person moved it). The search field keeps its place when the orders
+   answer arrives and the count gains a digit. The orders read is held until the case releases it, so the first paint
+   is the empty count and the second is the loaded one. */
+test('ux-w2: the search field does not move when orders load and the count gains a digit', async ({ page }) => {
+  const first = ONE_OPEN_ORDER.orders[0]!
+  const twelve = {
+    ...ONE_OPEN_ORDER,
+    summary: '1 order',
+    orders: [{ ...first, wanted: 12, progress: first.progress.map((line) => ({ ...line, wanted: 12, outstanding: 12 })) }],
+    resolution: {
+      ...ONE_OPEN_ORDER.resolution,
+      orders: ONE_OPEN_ORDER.resolution.orders.map((order) => ({
+        ...order,
+        outstanding: 12,
+        lines: order.lines.map((line) => ({ ...line, wanted: 12, owed: 12, outstanding: 12, on_hand: 12 })),
+      })),
+    },
+  }
+  // The count sums the owed takes' wanted, so the plan carries the twelve as well.
+  const twelvePlan = {
+    ...ONE_OPEN_ORDER_PLAN,
+    stops: ONE_OPEN_ORDER_PLAN.stops.map((stop) => ({ ...stop, takes: stop.takes.map((take) => ({ ...take, wanted: 12 })) })),
+  }
+  await stubServer(page, [], { orders: twelve as unknown as typeof ONE_OPEN_ORDER, plan: twelvePlan })
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await page.route(/\/orders$/, async (route) => {
+    await held
+    await route.fallback()
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(searchBox(page), 'the search is drawn before the orders answer').toBeVisible()
+  // The column's entry animation (bn-page-in) moves the search on mount; read it only once that has ended.
+  await settleAnimations(page)
+  const before = await searchBox(page).boundingBox()
+  release()
+  await expect(view(page).getByText(/\b12\s+left\b/i).first(), 'the count reads 12 left once loaded').toBeVisible()
+  await settleLayout(page)
+  await settleAnimations(page)
+  const after = await searchBox(page).boundingBox()
+  expect(before, 'the search has a box before the load').not.toBeNull()
+  expect(after, 'the search has a box after the load').not.toBeNull()
+  expect(Math.abs(after!.x - before!.x), 'the search does not move sideways').toBeLessThanOrEqual(1)
+  expect(Math.abs(after!.y - before!.y), 'the search does not move down or up').toBeLessThanOrEqual(1)
+  expect(Math.abs(after!.width - before!.width), 'the search keeps its width').toBeLessThanOrEqual(1)
+})
+
+/* ux-w2 (nothing on screen moves unless the person moved it). The same held-read shape as the case above, over the states
+   a count can arrive in: no open order, a failed read, and counts of four and five digits. */
+function owedOrders(copies: number): { orders: unknown; plan: unknown } {
+  const first = ONE_OPEN_ORDER.orders[0]!
+  return {
+    orders: {
+      ...ONE_OPEN_ORDER,
+      orders: [{ ...first, wanted: copies, progress: first.progress.map((line) => ({ ...line, wanted: copies, outstanding: copies })) }],
+      resolution: {
+        ...ONE_OPEN_ORDER.resolution,
+        orders: ONE_OPEN_ORDER.resolution.orders.map((order) => ({
+          ...order,
+          outstanding: copies,
+          lines: order.lines.map((line) => ({ ...line, wanted: copies, owed: copies, outstanding: copies, on_hand: copies })),
+        })),
+      },
+    },
+    plan: {
+      ...ONE_OPEN_ORDER_PLAN,
+      stops: ONE_OPEN_ORDER_PLAN.stops.map((stop) => ({ ...stop, takes: stop.takes.map((take) => ({ ...take, wanted: copies })) })),
+    },
+  }
+}
+
+async function searchHoldsOnLoad(
+  page: Page,
+  input: { orders: unknown; plan: unknown; fail?: boolean },
+  settle: () => Promise<void>,
+): Promise<{ before: Box | null; after: Box | null }> {
+  await stubServer(page, [], { orders: input.orders as typeof ONE_OPEN_ORDER, plan: input.plan as typeof ONE_OPEN_ORDER_PLAN })
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await page.route(/\/orders$/, async (route) => {
+    await held
+    if (input.fail === true) {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'orders_unavailable', message: 'The orders could not be read.' } }),
+      })
+      return
+    }
+    await route.fallback()
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(searchBox(page), 'the search is drawn before the orders answer').toBeVisible()
+  await settleAnimations(page)
+  const before = await searchBox(page).boundingBox()
+  const answered = page.waitForResponse(/\/orders$/)
+  release()
+  await answered
+  await settle()
+  await settleLayout(page)
+  await settleAnimations(page)
+  const after = await searchBox(page).boundingBox()
+  return { before, after }
+}
+
+/* The count slot's VISIBLE text, innerText, which keeps an aria-hidden copy that is drawn. An accessible-name check would
+   miss it. R18: "0 Left" is allowed only once the orders are known and none wait. */
+async function expectNoZeroLeft(page: Page, why: string): Promise<void> {
+  const track = view(page).locator('.ff-count-track')
+  await expect(track, 'the count slot is drawn').toBeVisible()
+  const text = await track.evaluate((el) => (el as HTMLElement).innerText)
+  expect(text, why).not.toMatch(/\b0\s+left\b/i)
+}
+
+function expectSearchFixed(before: Box | null, after: Box | null): void {
+  expect(before, 'the search has a box before the answer').not.toBeNull()
+  expect(after, 'the search has a box after the answer').not.toBeNull()
+  expect(Math.abs(after!.x - before!.x), 'the search does not move sideways').toBeLessThanOrEqual(1)
+  expect(Math.abs(after!.y - before!.y), 'the search does not move down or up').toBeLessThanOrEqual(1)
+  expect(Math.abs(after!.width - before!.width), 'the search keeps its width').toBeLessThanOrEqual(1)
+}
+
+test('ux-w2: the search field does not move when no order is open', async ({ page }) => {
+  const none = {
+    summary: '0 orders',
+    orders: [],
+    resolution: { orders: [], counts: { resolved: 0, short: 0, no_copies_on_hand: 0, sku_unknown: 0, sku_unseen: 0, not_a_single: 0 } },
+  }
+  const plan = { ...ONE_OPEN_ORDER_PLAN, stops: [], shortfall: [] }
+  const r = await searchHoldsOnLoad(page, { orders: none, plan }, () => expect(view(page).getByText(/no orders are waiting/i).first()).toBeVisible())
+  expectSearchFixed(r.before, r.after)
+})
+
+test('ux-w2: the search field does not move when the orders fail to load', async ({ page }) => {
+  const owed = owedOrders(1)
+  // R18: "0 Left" is allowed only when orders are known and none wait. A first read that fails has no such knowledge.
+  const r = await searchHoldsOnLoad(page, { ...owed, fail: true }, () => expectNoZeroLeft(page, 'the count slot shows no 0 Left after the first read fails'))
+  expectSearchFixed(r.before, r.after)
+})
+
+test('ux-w2: the search field does not move when the count reaches 1,000', async ({ page }) => {
+  const owed = owedOrders(1000)
+  const r = await searchHoldsOnLoad(page, owed, () => expect(view(page).getByText(/\b1,000\s+left\b/i).first()).toBeVisible())
+  expectSearchFixed(r.before, r.after)
+})
+
+test('ux-w2: the search field does not move when the count reaches 12,345', async ({ page }) => {
+  const owed = owedOrders(12345)
+  const r = await searchHoldsOnLoad(page, owed, () => expect(view(page).getByText(/\b12,345\s+left\b/i).first()).toBeVisible())
+  expectSearchFixed(r.before, r.after)
+})
+
+/* The count bar (the sticky .ff-bar, its loading skeleton included) holds its place while the cards read lands. The
+   orders read is answered at once; only the cards read is held, so the step under test is the cards landing. */
+test('ux-w2: the count bar does not move when the cards finish loading', async ({ page }) => {
+  await stubServer(page, [], { orders: NO_ORDERS as unknown as typeof ONE_OPEN_ORDER, plan: NO_PLAN as unknown as typeof ONE_OPEN_ORDER_PLAN })
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await page.route(/\/inventory$/, async (route) => {
+    await held
+    await route.fallback()
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  const bar = page.locator('.ff-bar').first()
+  await expect(bar, 'the bar is drawn while the cards load').toBeVisible()
+  await settleAnimations(page)
+  const before = await bar.boundingBox()
+  const landed = page.waitForResponse(/\/inventory$/)
+  release()
+  await landed
+  await expect(page.locator('.ff-bar-wait'), 'the loading bar gives way to the loaded one').toHaveCount(0)
+  await settleLayout(page)
+  await settleAnimations(page)
+  const after = await page.locator('.ff-bar').first().boundingBox()
+  expectSearchFixed(before, after)
+})
+
+/* R18 (owner ruling): the count slot always answers. With no order open it reads 0 Left, not blank. */
+test('ux-w2 R18: with no order open, the count slot reads 0 Left', async ({ page }) => {
+  await stubServer(page, [], { orders: NO_ORDERS as unknown as typeof ONE_OPEN_ORDER, plan: NO_PLAN as unknown as typeof ONE_OPEN_ORDER_PLAN })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(view(page).getByText(/\b0\s+left\b/i).first(), 'the count slot reads 0 Left').toBeVisible()
+})
+
+/* R18: a failed read keeps the last count the screen showed. The screen is left for another and returned to, and the
+   return read fails. */
+test('ux-w2 R18: a failed orders read keeps the last count shown', async ({ page }) => {
+  const owed = owedOrders(12)
+  await stubServer(page, [], { orders: owed.orders as typeof ONE_OPEN_ORDER, plan: owed.plan as typeof ONE_OPEN_ORDER_PLAN })
+  let failNow = false
+  await page.route(/\/orders$/, async (route) => {
+    if (!failNow) return route.fallback()
+    return route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'orders_unavailable', message: 'The orders could not be read.' } }),
+    })
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(view(page).getByText(/\b12\s+left\b/i).first(), 'the count reads 12 left before the failure').toBeVisible()
+  failNow = true
+  // The hop to #/gallery leaves this screen and comes back, which re-mounts it. The hop's own reads are stubbed here:
+  // no boxes, and an empty store. Gallery is the one other route this file already pins, so the hop adds no roster.
+  await page.route(/\/boxes(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ boxes: [], facet_cells: [] }) }))
+  await page.route(/\/inventory$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: 2, cards: {}, boxes: {}, listings: {} }) }))
+  await page.evaluate(() => {
+    window.location.hash = '#/gallery'
+  })
+  await page.evaluate(() => {
+    window.location.hash = '#/fulfillment'
+  })
+  await expect(view(page).getByText(/\b12\s+left\b/i).first(), 'the count keeps 12 left after a failed read').toBeVisible()
+})
+
+/* R18 (owner ruling, review #849): "0 Left" is allowed only once the orders are known and none wait. While they are unread,
+   the slot's visible text never reads 0 Left. The orders read is held for the whole case, so only the unread state is on screen. */
+test('ux-w2 R18: while orders are unread, the count slot never reads 0 Left', async ({ page }) => {
+  const owed = owedOrders(1)
+  await stubServer(page, [], { orders: owed.orders as typeof ONE_OPEN_ORDER, plan: owed.plan as typeof ONE_OPEN_ORDER_PLAN })
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await page.route(/\/orders$/, async (route) => {
+    await held
+    await route.fallback()
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expectNoZeroLeft(page, 'the count slot shows no 0 Left while orders are unread')
+  release()
+})
+
+/* R18 (owner ruling, review #849): a return to the screen shows the last count at once, while the new read is still held.
+   Code reason (Fulfillment.tsx, `countFigure`): on a remount `orders` is null and `ordersFailed` is false, so the slot takes
+   the loading frame, not `lastCount`. The return must draw the kept count, never the loading "0 Left". */
+test('ux-w2 R18: on a return, the count slot shows the last count before the new read answers', async ({ page }) => {
+  const owed = owedOrders(12)
+  await stubServer(page, [], { orders: owed.orders as typeof ONE_OPEN_ORDER, plan: owed.plan as typeof ONE_OPEN_ORDER_PLAN })
+  let holdNow = false
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await page.route(/\/orders$/, async (route) => {
+    if (holdNow) await held
+    await route.fallback()
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(view(page).getByText(/\b12\s+left\b/i).first(), 'the count reads 12 left on the first visit').toBeVisible()
+  holdNow = true
+  // The hop's own reads are stubbed, as in the keep-count case: no boxes, and an empty store.
+  await page.route(/\/boxes(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ boxes: [], facet_cells: [] }) }))
+  await page.route(/\/inventory$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: 2, cards: {}, boxes: {}, listings: {} }) }))
+  await page.evaluate(() => {
+    window.location.hash = '#/gallery'
+  })
+  await page.evaluate(() => {
+    window.location.hash = '#/fulfillment'
+  })
+  await expect(view(page).getByText(/\b12\s+left\b/i).first(), 'the return shows the last count, 12 left, before the read answers').toBeVisible()
+  await expect(view(page).getByText(/\b0\s+left\b/i).first(), 'the return never flashes 0 left').not.toBeVisible()
+  release()
+})
+
+/* R18 (review #849): the stale notice that arrives on the list view after first paint moves no Pick row. The
+   sale that brings it in is the one the card-view case uses: Charizard is sold, the list re-reads, and the orders read
+   that follows fails. The orders read is held until the list has settled, so the row is measured before the notice. */
+test('ux-w2: a stale notice that arrives on the list moves no Pick row', async ({ page }) => {
+  const SECOND_TAKE = {
+    ...ORDER_TAKE,
+    sku: 'PIDGEOT-SKU',
+    name: 'Pidgeot ex',
+    copies: [
+      {
+        ...ORDER_WALK_COPY,
+        key: '3/26',
+        capture_id: 'cap-pidgeot',
+        place: { ...ORDER_COPY_PLACE, label: 'Box 3, Section 1, Card 26', index: 26, slot: 26, card: 26 },
+      },
+    ],
+  }
+  const plan = {
+    ...ONE_OPEN_ORDER_PLAN,
+    stops: [{ ...ONE_OPEN_ORDER_PLAN.stops[0]!, takes: [ORDER_TAKE, SECOND_TAKE] }],
+    counts: { ...ONE_OPEN_ORDER_PLAN.counts, copies: 2 },
+  }
+  await stubServer(page, [], { orders: ONE_OPEN_ORDER as unknown as typeof ONE_OPEN_ORDER, plan: plan as unknown as typeof ONE_OPEN_ORDER_PLAN })
+  let holdNow = false
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await page.route(/\/orders$/, async (route) => {
+    if (!holdNow) return route.fallback()
+    await held
+    return route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'orders_unavailable', message: 'The orders could not be read.' } }),
+    })
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  const pidgeot = view(page).locator('.ff-owed-card', { hasText: 'Pidgeot ex' })
+  await expect(pidgeot, 'the Pidgeot Pick row is on screen').toBeVisible()
+  await openCard(page, 'Charizard ex')
+  await page.getByRole('button', { name: 'Pull' }).click()
+  await expect(view(page)).toContainText('Pulled.')
+  holdNow = true
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
+  await expect(pidgeot, 'the list is back, with the Pidgeot row still on it').toBeVisible()
+  await settleLayout(page)
+  await settleAnimations(page)
+  const before = await pidgeot.boundingBox()
+  const answered = page.waitForResponse(/\/orders$/)
+  release()
+  await answered
+  await expect(view(page).locator('.ff-notice'), 'the stale notice is drawn on the list').toBeVisible()
+  await settleLayout(page)
+  await settleAnimations(page)
+  const after = await pidgeot.boundingBox()
+  expect(before, 'the Pidgeot row has a box before the notice').not.toBeNull()
+  expect(after, 'the Pidgeot row has a box after the notice').not.toBeNull()
+  expect(Math.abs(after!.y - before!.y), 'the Pick row does not move down or up when the notice arrives').toBeLessThanOrEqual(1)
+  expect(Math.abs(after!.x - before!.x), 'the Pick row does not move sideways when the notice arrives').toBeLessThanOrEqual(1)
+  await expectInViewport(page, view(page).locator('.ff-notice'), 'the stale notice on the list')
+})
+
+/* R19 (review #849): with a long list scrolled to the top, the stale notice that arrives on the list is inside the viewport.
+   The sale and the held orders read are the list case's own. The page is scrolled to the top before the notice arrives. */
+test('ux-w2 R19: a stale notice on a long list, scrolled to the top, is inside the viewport', async ({ page }) => {
+  const extra = Array.from({ length: 12 }, (_, i) => {
+    const index = i + 1
+    return {
+      ...ORDER_TAKE,
+      sku: `LONG-SKU-${index}`,
+      name: `Long list card ${index}`,
+      copies: [
+        {
+          ...ORDER_WALK_COPY,
+          key: `6/${index}`,
+          capture_id: `cap-long-${index}`,
+          place: { ...ORDER_COPY_PLACE, label: `Box 6, Section 1, Card ${index}`, box: 6, index, slot: index, card: index },
+        },
+      ],
+    }
+  })
+  const plan = {
+    ...ONE_OPEN_ORDER_PLAN,
+    stops: [{ ...ONE_OPEN_ORDER_PLAN.stops[0]!, takes: [ORDER_TAKE, ...extra] }],
+    counts: { ...ONE_OPEN_ORDER_PLAN.counts, copies: 1 + extra.length },
+  }
+  await stubServer(page, [], { orders: ONE_OPEN_ORDER as unknown as typeof ONE_OPEN_ORDER, plan: plan as unknown as typeof ONE_OPEN_ORDER_PLAN })
+  let holdNow = false
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await page.route(/\/orders$/, async (route) => {
+    if (!holdNow) return route.fallback()
+    await held
+    return route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'orders_unavailable', message: 'The orders could not be read.' } }),
+    })
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(view(page).locator('.ff-owed-card').first(), 'the list has Pick rows on screen').toBeVisible()
+  await openCard(page, 'Charizard ex')
+  await page.getByRole('button', { name: 'Pull' }).click()
+  await expect(view(page)).toContainText('Pulled.')
+  holdNow = true
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
+  await expect(view(page).locator('.ff-owed-card').first(), 'the list is back').toBeVisible()
+  await settleLayout(page)
+  await settleAnimations(page)
+  await page.evaluate(() => window.scrollTo(0, 0))
+  expect(await page.evaluate(() => window.scrollY), 'the page is scrolled to the top').toBe(0)
+  const answered = page.waitForResponse(/\/orders$/)
+  release()
+  await answered
+  await expect(view(page).locator('.ff-notice'), 'the stale notice is drawn on the list').toBeVisible()
+  await settleLayout(page)
+  await settleAnimations(page)
+  expect(await page.evaluate(() => window.scrollY), 'the page is still at the top when the notice lands').toBe(0)
+  await expectInViewport(page, view(page).locator('.ff-notice'), 'the stale notice on a long list scrolled to the top')
+})
+
+/* R19 (review #849): on a return, while the cards read has not answered, the count slot shows the last count, not the
+   loading frame. Code reason (Fulfillment.tsx, the `cards === null` branch): it draws `todayFrame` and never `lastCount`. */
+test('ux-w2 R19: on a return with the cards read held, the count slot shows the last count', async ({ page }) => {
+  const owed = owedOrders(12)
+  await stubServer(page, [], { orders: owed.orders as typeof ONE_OPEN_ORDER, plan: owed.plan as typeof ONE_OPEN_ORDER_PLAN })
+  let holdNow = false
+  let release: () => void = () => undefined
+  const held = new Promise<void>((done) => (release = done))
+  await page.route(/\/inventory$/, async (route) => {
+    if (holdNow) await held
+    await route.fallback()
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(view(page).getByText(/\b12\s+left\b/i).first(), 'the count reads 12 left on the first visit').toBeVisible()
+  holdNow = true
+  await page.route(/\/boxes(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ boxes: [], facet_cells: [] }) }))
+  await page.evaluate(() => {
+    window.location.hash = '#/gallery'
+  })
+  await page.evaluate(() => {
+    window.location.hash = '#/fulfillment'
+  })
+  const track = view(page).locator('.ff-count-track')
+  await expect(track, 'the count slot is drawn on the return').toBeVisible()
+  const text = await track.evaluate((el) => (el as HTMLElement).innerText)
+  expect(text, 'the return shows the last count, 12 left, while the cards read is held').toMatch(/\b12\s+left\b/i)
+  release()
+})
+
+/* R19 (review #849, sixth): with the banner showing at the bottom of the page, the last list control is fully inside the
+   viewport and not covered by the banner, with the receipt sheet open and then closed. */
+test('ux-w2 R19: the last list control is not covered by the banner at the bottom of the page', async ({ page }) => {
+  await openLongListBanner(page)
+  // The last interactive element on the whole page, in document order, outside the banner and the sheet. Browse follows
+  // the list, so at maximum scroll it is the element at the page's bottom edge, where the banner floats.
+  const markLast = () =>
+    page.evaluate(() => {
+      document.querySelectorAll('[data-last-control]').forEach((el) => el.removeAttribute('data-last-control'))
+      const main = document.querySelector('main.fulfillment')
+      const found = Array.from(main?.querySelectorAll('button, a[href], input, select, textarea, [role="button"]') ?? []).filter((el) => {
+        const r = el.getBoundingClientRect()
+        return r.width > 0 && r.height > 0 && el.closest('.ff-notice, .ff-sheet') === null
+      })
+      found[found.length - 1]?.setAttribute('data-last-control', '')
+    })
+  const last = page.locator('[data-last-control]')
+  await markLast()
+  await expect(last, 'a last interactive element is on the page').toHaveCount(1)
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  await expectNotCovered(page, last, 'at maximum scroll, with the receipt sheet open')
+  await view(page).getByRole('button', { name: 'Dismiss this receipt' }).click()
+  await expect(view(page).locator('.ff-sheet'), 'the receipt sheet is closed').toHaveCount(0)
+  await settleAnimations(page)
+  await markLast()
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  await expectNotCovered(page, last, 'at maximum scroll, with the receipt sheet closed')
+})
+
+/* R19 (review #849, seventh): with the receipt sheet open and the page at its maximum scroll, opening the big photo and
+   closing it moves nothing. The scroll position and the last interactive element's top stay where they were. */
+test('ux-w2 R19: zooming the photo with the receipt sheet open moves neither the scroll nor the last control', async ({ page }) => {
+  const SECOND = {
+    ...ORDER_TAKE,
+    sku: 'PIDGEOT-SKU',
+    name: 'Pidgeot ex',
+    copies: [{ ...ORDER_WALK_COPY, key: '3/26', capture_id: 'cap-pidgeot', place: { ...ORDER_COPY_PLACE, label: 'Box 3, Section 1, Card 26', index: 26, slot: 26, card: 26 } }],
+  }
+  const plan = {
+    ...ONE_OPEN_ORDER_PLAN,
+    stops: [{ ...ONE_OPEN_ORDER_PLAN.stops[0]!, takes: [ORDER_TAKE, SECOND] }],
+    counts: { ...ONE_OPEN_ORDER_PLAN.counts, copies: 2 },
+  }
+  await stubServer(page, [], { orders: ONE_OPEN_ORDER as unknown as typeof ONE_OPEN_ORDER, plan: plan as unknown as typeof ONE_OPEN_ORDER_PLAN })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  // Pidgeot is sold first, so the receipt sheet is open; then Charizard's card is opened beside it.
+  await openCard(page, 'Pidgeot ex')
+  await page.getByRole('button', { name: 'Pull' }).click()
+  await expect(view(page)).toContainText('Pulled.')
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
+  await expect(page.locator('.ff-sheet'), 'the receipt sheet is open').toBeVisible()
+  await openCard(page, 'Charizard ex')
+  await expect(page.locator('.ff-sheet'), 'the receipt sheet is still open with the card').toBeVisible()
+  await settleAnimations(page)
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  const markLast = () => markLastControl(page)
+  await markLast()
+  const last = page.locator('[data-last-control]')
+  await expect(last, 'a last interactive element is on the page').toHaveCount(1)
+  const scrollBefore = await page.evaluate(() => window.scrollY)
+  const lastBefore = await last.boundingBox()
+  // This case checks layout across the zoom, not hit-testing. A Playwright click scrolls its target into view first, which
+  // would move the page before the zoom opens, so both presses are plain DOM clicks with no scroll.
+  await page.getByRole('button', { name: 'Show the photo bigger' }).evaluate((el) => (el as HTMLElement).click())
+  await expect(page.locator('.ff-zoom'), 'the big photo is open').toBeVisible()
+  // The case must cross the collapse: while the zoom is open the receipt sheet is content-visibility hidden, before close.
+  await expect(page.locator('.ff-sheet'), 'the receipt sheet is content-visibility hidden while the zoom is open').toHaveCSS('content-visibility', 'hidden')
+  await settleAnimations(page)
+  await page.getByRole('button', { name: 'Close the big photo' }).evaluate((el) => (el as HTMLElement).click())
+  await expect(page.locator('.ff-zoom'), 'the big photo is closed').toHaveCount(0)
+  await settleLayout(page)
+  await settleAnimations(page)
+  const scrollAfter = await page.evaluate(() => window.scrollY)
+  const lastAfter = await last.boundingBox()
+  expect(Math.abs(scrollAfter - scrollBefore), `the scroll position holds: ${scrollBefore} before the zoom, ${scrollAfter} after`).toBeLessThanOrEqual(1)
+  expect(lastBefore, 'the last control has a box before the zoom').not.toBeNull()
+  expect(lastAfter, 'the last control has a box after the zoom').not.toBeNull()
+  expect(Math.abs(lastAfter!.y - lastBefore!.y), 'the last control top holds through the zoom').toBeLessThanOrEqual(1)
+})
+
+/* R19 (review #849, sixth): the banner clears on a successful read at the bottom of the page, and nothing on screen moves.
+   This case may already pass; it is the guard that the clearing never moves a control or a row. */
+test('ux-w2 R19: the banner clears on a successful read at the bottom of the page and nothing moves', async ({ page }) => {
+  const state = await openLongListBanner(page)
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  const control = view(page).getByRole('button', { name: /^Show the other / })
+  const row = view(page).locator('.ff-owed-card').first()
+  await settleAnimations(page)
+  const scrollBefore = await page.evaluate(() => window.scrollY)
+  const controlBefore = await control.boundingBox()
+  const rowBefore = await row.boundingBox()
+  state.failing = false
+  await view(page).locator('.ff-notice').getByRole('button', { name: 'Try again' }).click()
+  await expect(view(page).locator('.ff-notice'), 'the banner clears once the read succeeds').toHaveCount(0)
+  await settleLayout(page)
+  await settleAnimations(page)
+  const scrollAfter = await page.evaluate(() => window.scrollY)
+  const controlAfter = await control.boundingBox()
+  const rowAfter = await row.boundingBox()
+  expect(Math.abs(scrollAfter - scrollBefore), 'the page does not scroll when the banner clears').toBeLessThanOrEqual(1)
+  expect(controlBefore, 'the control has a box before').not.toBeNull()
+  expect(controlAfter, 'the control has a box after').not.toBeNull()
+  expect(Math.abs(controlAfter!.y - controlBefore!.y), 'the last control does not move when the banner clears').toBeLessThanOrEqual(1)
+  expect(rowBefore, 'the first row has a box before').not.toBeNull()
+  expect(rowAfter, 'the first row has a box after').not.toBeNull()
+  expect(Math.abs(rowAfter!.y - rowBefore!.y), 'the first row does not move when the banner clears').toBeLessThanOrEqual(1)
+})
+
+/* R19 (review #849, sixth): a banner the person dismissed shows again when a later re-read fails. Code reason
+   (Fulfillment.tsx, `staleDismissed`): it resets only after a read succeeds, so a failure with no success between leaves it
+   hidden unless the failure brings it back. The sale is the card-view case's own: refused as stale, card kept open. */
+test('ux-w2 R19: a dismissed banner shows again when a later re-read fails', async ({ page }) => {
+  await stubServer(page, [], { orders: ONE_OPEN_ORDER as unknown as typeof ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN as unknown as typeof ONE_OPEN_ORDER_PLAN })
+  const state = { holdNow: false, failing: false }
+  await ordersOnDemand(page, state, new Promise<void>(() => undefined))
+  await page.route(/\/orders\/pull$/, (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'over_fulfilled', message: 'The list no longer describes the store.' } }),
+    }),
+  )
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await openCard(page, 'Charizard ex')
+  await page.getByRole('button', { name: 'Pull' }).click()
+  await expect(view(page)).toContainText('Pulled.')
+  state.failing = true
+  const firstRead = page.waitForResponse(/\/orders$/)
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
+  await firstRead
+  const banner = view(page).locator('.ff-notice')
+  await expect(banner, 'the banner shows after the first failed re-read').toBeVisible({ timeout: 5000 })
+  await banner.getByRole('button', { name: 'Dismiss', exact: true }).click()
+  await expect(banner, 'the banner is dismissed').toHaveCount(0)
+  // The second re-read is awaited to its own answer, a failure, before the banner is looked for: the poll is bounded.
+  const secondRead = page.waitForResponse(/\/orders$/)
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
+  const answer = await secondRead
+  expect(answer.status(), 'the second re-read answers with the failure').toBe(500)
+  await expect(banner, 'a later failed re-read shows the banner again').toBeVisible({ timeout: 5000 })
+})
+})
+}
+
+/* ux-w2 (nothing on screen moves unless the person moved it, on the card view). The stale notice is drawn below the card,
+   so the photograph moves only if the notice arrives in a layout that pushes it. */
+test('ux-w2: a failed refresh on the card view moves nothing once the stale notice arrives', async ({ page }) => {
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
+  await openCard(page, 'Charizard ex')
+  // Code reason (Fulfillment.tsx, `doSell`): the refusal path re-reads the screen only for ALREADY_SOLD, a PULL_STALE
+  // code, or a success. Any other refusal sets trouble and returns without `reread()`, so no notice can follow it.
+  // A PULL_STALE refusal (`over_fulfilled`) keeps the card open (no `drop`) and calls `reread()`. The re-read's orders
+  // read fails, so `ordersFailed` is set while `cards` is still loaded, and the notice draws on the open card.
+  let failNow = false
+  await page.route(/\/orders$/, async (route) => {
+    if (!failNow) return route.fallback()
+    return route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'orders_unavailable', message: 'The orders could not be read.' } }),
+    })
+  })
+  await page.route(/\/orders\/pull$/, async (route) => {
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'over_fulfilled', message: 'The list no longer describes the store.' } }),
+    })
+  })
+  await page.getByRole('button', { name: 'Pull' }).click()
+  await expect(view(page)).toContainText('Pulled.')
+  await settleAnimations(page)
+  const photo = view(page).locator('.fulfillment-photo')
+  await expect(photo, 'the card stays open').toBeVisible()
+  const before = await photo.boundingBox()
+  failNow = true
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
+  await expect(view(page).locator('.ff-notice'), 'the stale notice is drawn after the failed refresh').toBeVisible()
+  await settleLayout(page)
+  await settleAnimations(page)
+  const after = await photo.boundingBox()
+  expect(before, 'the photograph has a box before the refresh').not.toBeNull()
+  expect(after, 'the photograph has a box after the refresh').not.toBeNull()
+  expect(Math.abs(after!.y - before!.y), 'the photograph does not move down or up').toBeLessThanOrEqual(1)
+  expect(Math.abs(after!.x - before!.x), 'the photograph does not move sideways').toBeLessThanOrEqual(1)
+  await expectInViewport(page, view(page).locator('.ff-notice'), 'the stale notice on the card view')
+})
+
+/* ux-w2 gap-check self-proof. Two plain buttons that overlap are NOT a covered pair: the gap floor must fail them. The
+   covered skip applies only when a fixed or sticky layer is on top of a control. */
+test('ux-w2 gap check: two overlapping plain buttons fail the gap floor', async ({ page }) => {
+  await page.setContent(
+    '<!doctype html><html><body style="margin:0">' +
+      '<button style="position:absolute;left:10px;top:10px;width:60px;height:60px">A</button>' +
+      '<button style="position:absolute;left:30px;top:10px;width:60px;height:60px">B</button>' +
+      '</body></html>',
+  )
+  await expect(fatTargets(page, 'overlap'), 'the overlapping pair is judged, not skipped').rejects.toThrow()
+})
+
+/* ux-w2 gap check. Two overlapping buttons that sit INSIDE a fixed sheet, or INSIDE a sticky bar, are the same
+   container's own controls. The layer that contains them does not cover them, so both must fail the gap floor. */
+test('ux-w2 gap check: overlapping buttons inside a fixed sheet fail the gap floor', async ({ page }) => {
+  await page.setContent(
+    '<!doctype html><html><body style="margin:0">' +
+      '<div style="position:fixed;left:0;top:0;width:300px;height:200px">' +
+      '<button style="position:absolute;left:10px;top:10px;width:60px;height:60px">A</button>' +
+      '<button style="position:absolute;left:30px;top:10px;width:60px;height:60px">B</button>' +
+      '</div></body></html>',
+  )
+  await expect(fatTargets(page, 'sheet overlap'), 'the pair inside the sheet is judged').rejects.toThrow()
+})
+
+test('ux-w2 gap check: overlapping buttons inside a sticky bar fail the gap floor', async ({ page }) => {
+  await page.setContent(
+    '<!doctype html><html><body style="margin:0">' +
+      '<div style="position:sticky;top:0;width:300px;height:200px">' +
+      '<button style="position:absolute;left:10px;top:10px;width:60px;height:60px">A</button>' +
+      '<button style="position:absolute;left:30px;top:10px;width:60px;height:60px">B</button>' +
+      '</div></body></html>',
+  )
+  await expect(fatTargets(page, 'bar overlap'), 'the pair inside the bar is judged').rejects.toThrow()
+})
+
+/* ux-w2 B23 (DESIGN.md Fulfillment). Asserts the count bar stays on screen as the list scrolls: it holds the "N Left" count
+   beside the search, and it stays on screen as the list scrolls. The page is made tall here by a spacer under the search's
+   own parent, so the scroll is real and the case cannot pass on a page too short to scroll. */
+test('ux-w2 B23: the count bar with N Left and the search stay on screen after scrolling 2000px', async ({ page }) => {
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
+  await expect(view(page).getByText(/\b\d+\s+left\b/i).first(), 'the N Left count is drawn').toBeVisible()
+  await expect(searchBox(page), 'the search is drawn').toBeVisible()
+  await page.evaluate(() => {
+    const spacer = document.createElement('div')
+    spacer.setAttribute('data-ux-w2-spacer', '')
+    spacer.style.height = '3000px'
+    document.querySelector('.ff-column')?.appendChild(spacer)
+  })
+  await page.mouse.move(640, 450)
+  await page.mouse.wheel(0, 2000)
+  await expect
+    .poll(() => page.evaluate(() => Math.max(window.scrollY, ...Array.from(document.querySelectorAll('*'), (el) => el.scrollTop))), {
+      message: 'the page scrolled down 2000px',
+    })
+    .toBeGreaterThanOrEqual(1500)
+  await expect(searchBox(page), 'the search stays on screen').toBeInViewport()
+  await expect(view(page).getByText(/\b\d+\s+left\b/i).first(), 'the N Left count stays on screen').toBeInViewport()
+})
+
+/* ux-w2 B23. Each location card carries a small round ordinal badge in place of the "Pick N" label. */
+test('ux-w2 B23: each owed card carries a round ordinal badge', async ({ page }) => {
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
+  const card = view(page).locator('.ff-owed-card', { hasText: 'Charizard ex' })
+  await expect(card, 'the owed card is drawn').toHaveCount(1)
+  const badge = card.getByText('1', { exact: true }).first()
+  await expect(badge, 'the ordinal badge is drawn').toBeVisible()
+  const shape = await badge.evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    const radius = getComputedStyle(el).borderTopLeftRadius
+    const px = radius.endsWith('%') ? (parseFloat(radius) / 100) * r.width : parseFloat(radius)
+    return { w: r.width, h: r.height, px }
+  })
+  expect(Math.abs(shape.w - shape.h), 'the badge is square').toBeLessThanOrEqual(1)
+  expect(shape.px, `the badge corners are round (radius ${shape.px}px on ${shape.w}px)`).toBeGreaterThanOrEqual(shape.w / 2 - 1)
+})
+
+/* ux-w2 B23. The "Pick" heading and the "Pick N" row label are both removed. */
+test('ux-w2 B23: no Pick heading and no "Pick N" row label on the list', async ({ page }) => {
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
+  const card = view(page).locator('.ff-owed-card', { hasText: 'Charizard ex' })
+  await expect(card, 'the owed card is drawn, so the absence below is not vacuous').toHaveCount(1)
+  await expect(page.getByRole('heading', { name: /^pick$/i }), 'no Pick heading').toHaveCount(0)
+  await expect(page.getByRole('region', { name: /^pick$/i }), 'no Pick section').toHaveCount(0)
+  await expect(card, 'no Pick N label on the row').not.toContainText(/pick\s+\d/i)
+})
+
 test("the owner's position treatment never reaches the Fulfiller", async ({ page }) => {
   /* ONE HELPER CALL, and that is a property of the helpers rather than a shortcut. `openSearch`
      calls `openList` itself, and `openList` calls `stubServer` — routing a page twice leaves the
@@ -1794,18 +2640,26 @@ test('the cards for sale are listed in box-walk order, and nothing else is liste
  * The rest of this file runs against a ledger with nothing open, which is the same screen with
  * that section absent; this case is the one that renders it.
  */
-test('a card an open order owes is drawn as "Pick N" with every copy the store holds, none preselected', async ({
+test('a card an open order owes is drawn with its N Left count and every copy the store holds, none preselected', async ({
   page,
 }) => {
   await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
 
-  // The figure he reads first, and it counts copies rather than orders.
-  await expect(view(page)).toContainText('1 pick')
+  // The figure he reads first, and it counts copies rather than orders (B23: the "N Left" count).
+  await expect(view(page).getByText(/\b1\s+left\b/i).first()).toBeVisible()
 
   /* The card is on screen WITHOUT opening a box: an order's demand is the list, and the boxes
      below it are the other way in. */
   const card = view(page).locator('.ff-owed-card', { hasText: 'Charizard ex' })
-  await expect(card.locator('.ff-owed-pick')).toContainText('Pick 1')
+  // B23: the one copy owed carries its round ordinal badge in place of the "Pick N" label.
+  const badge = card.getByText('1', { exact: true }).first()
+  await expect(badge, 'the copy owed carries a round ordinal badge').toBeVisible()
+  const round = await badge.evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    const radius = getComputedStyle(el).borderTopLeftRadius
+    return Math.abs(r.width - r.height) <= 1 && (radius.endsWith('%') ? parseFloat(radius) >= 50 : parseFloat(radius) >= r.width / 2 - 1)
+  })
+  expect(round, 'the ordinal badge is round').toBe(true)
   /* NONE PRESELECTED: this is `CardLocations`' own copies list, the same one a search result
      draws, with a two-step Pull/Mark-sold control on the copy itself -- not a single card that
      opens on its own screen. D218: the seam is CSS now (`.ff-place-elem::before` /
@@ -1830,7 +2684,7 @@ test('a card an open order owes is drawn as "Pick N" with every copy the store h
 
 /* SCREEN PASS F11: a card owed by several orders read "Pick 1 , 6 orders" -- the heading is a
  * flex row and its gap sat before the comma. The comma belongs to the text it ends. */
-test('a card owed by two orders reads "Pick 1, 2 orders" with no space before the comma', async ({ page }) => {
+test('a card owed by two orders reads "2 orders" with no space before the comma', async ({ page }) => {
   const twoOrders = {
     ...ONE_OPEN_ORDER_PLAN,
     stops: [
@@ -1841,25 +2695,33 @@ test('a card owed by two orders reads "Pick 1, 2 orders" with no space before th
     ],
   }
   await openList(page, [], { orders: ONE_OPEN_ORDER, plan: twoOrders })
-  const pick = view(page).locator('.ff-owed-card', { hasText: 'Charizard ex' }).locator('.ff-owed-pick')
-  await expect(pick).toContainText('Pick 1')
-  const said = await pick.evaluate((el) => (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim())
-  expect(said).toBe('Pick 1, 2 orders')
+  const owed = view(page).locator('.ff-owed-card', { hasText: 'Charizard ex' })
+  // B23: the copy carries its round ordinal badge in place of the "Pick N" label.
+  await expect(owed.getByText('1', { exact: true }).first(), 'the copy carries a round ordinal badge').toBeVisible()
+  // The order count still reads beside it, and no stray space sits before a comma (SCREEN PASS F11).
+  const said = await owed.evaluate((el) => (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim())
+  expect(said, 'the card says it is owed by two orders').toMatch(/2 orders/)
+  expect(said, 'no space before a comma').not.toMatch(/\s,/)
 })
 
 /* THE OWNER'S OWN CASE. `MULTI_PLAN`'s own comment has the ruling verbatim: two wanted,
  * three on hand, three different boxes -- and the screen must say "Pick 2" and offer every
  * one of the three, never two preselected copies standing in for the SKU. */
-test('a SKU owed 2 with 3 copies on hand shows "Pick 2" and every copy, none preselected', async ({
+test('a SKU owed 2 with 3 copies on hand shows the 2 left count and every copy, none preselected', async ({
   page,
 }) => {
   await openList(page, [], { orders: MULTI_ORDER, plan: MULTI_PLAN })
 
-  const card = view(page).locator('.ff-owed-card', { hasText: 'Promising Future' })
-  await expect(card.locator('.ff-owed-pick')).toContainText('Pick 2')
+  // B23: the wanted count reads in the "N Left" count, not a "Pick 2" label on the card.
+  await expect(view(page).getByText(/\b2\s+left\b/i).first(), 'the owed count reads 2 left').toBeVisible()
 
+  const card = view(page).locator('.ff-owed-card', { hasText: 'Promising Future' })
   // ALL THREE, not two -- the wanted count never caps the copies list (D212, D93).
   await expect(card.locator('.card-locations-copy')).toHaveCount(3)
+  // B23: each of the three copies carries its round ordinal badge, 1 to 3.
+  for (const ordinal of ['1', '2', '3']) {
+    await expect(card.getByText(ordinal, { exact: true }).first(), `copy ${ordinal} carries its ordinal badge`).toBeVisible()
+  }
   await expect(card.locator('.card-locations-place-large')).toHaveText([
     'Box 1, Section 1, Card 5',
     'Box 2, Section 1, Card 9',

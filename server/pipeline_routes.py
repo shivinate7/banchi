@@ -583,8 +583,9 @@ def _selection_captures(selection: selection_mod.Selection) -> List["sidecar.Cap
 def _resolved(selection: selection_mod.Selection) -> Tuple[List["sidecar.Capture"], int]:
     """`(captures, scanned)` from `selection_mod.resolve`, the one resolver the CLI child uses.
 
-    A keyed press reads only its own cards' sidecars. `scanned` is what was read, for the
-    empty refusal. A named root that is missing or unreadable refuses, naming it.
+    A press named by keys, state or capture time reads only the chosen cards' sidecars; any
+    other reads every sidecar under its roots. `scanned` is the number of photographs read,
+    for the empty refusal. A named root that is missing or unreadable refuses, naming it.
     """
 
     def read_inventory():
@@ -1877,9 +1878,10 @@ def do_pipeline_waiting(payload: dict) -> dict:
     screen then sends exactly that list as a `keys` selection (D180). A capture in another tab
     after this answer cannot grow the spend, because the spend names its cards.
 
-    CHEAP ON PURPOSE, AND NOT THE PREFLIGHT. This is `_selection_captures` (a sidecar scan,
-    and the store where a term needs it) and `_send_keys`, the same two reads the spend route
-    makes before it spawns. It decodes no photograph, spawns nothing and writes nothing.
+    CHEAP ON PURPOSE, AND NOT THE PREFLIGHT. This is `_selection_captures` (the sidecars the
+    selection needs, and the store where a term needs it) and `_send_keys`, the same two reads
+    the spend route makes before it spawns. It decodes no photograph, spawns nothing and
+    writes nothing.
     """
     send = _resolve_send(payload)
     try:
@@ -3587,6 +3589,17 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
             # exactly as `_run_owes` wrote it — Home counts "runs to price" off it, and a
             # run that is priced and merely under-sent is not one of those.
             row["open"] = bool(row["open"] or held > 0)
+        # OPEN WHILE ONE OF ITS SKUS HOLDS COPIES THE OWNER REMOVED BY HAND (D273, R-S4): the
+        # row is the only place Unhold can be pressed, so a closed run must not take it away.
+        listings = snapshot.inventory.listings
+        for run, parsed in tables:
+            if any(
+                getattr(listings.get(str(one.get("sku"))), "held_copies", 0) > 0
+                for one in parsed.get("skus") or []
+            ):
+                for row in roster:
+                    if row["run"] == run.name:
+                        row["open"] = True
 
     # AN EXPLICIT ASK WINS OVER THE FILTER, whether or not the run is open: naming a run has
     # already answered the question `open` exists to ask, and an answered run has to stay
@@ -3833,11 +3846,12 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
                     "staged": int(entry.staged),
                     "live": int(entry.live),
                     "sold_here": int(entry.sold_here),
+                    "held_copies": int(entry.held_copies),
                 }
         row["over_cap"] = claimed > row["add_to_quantity"]
         # A MERGED ROW THAT CAN ADD MUST NOT CARRY ONE RUN'S REASON FOR ADDING NOTHING.
-        # `nothing_to_add` reads "every copy in this run is already listed or has left the
-        # box" — true of that leg, false of the merge the moment another leg can add.
+        # `nothing_to_add` reads "Every copy in this run is already listed or has left the
+        # box." — true of that leg, false of the merge the moment another leg can add.
         if row["add_to_quantity"] > 0:
             row["nothing_to_add"] = None
             row["at_cap"] = False
@@ -7445,8 +7459,14 @@ def _trends_for_entries(
     # that were READ are saved: a refused SKU never replaces a good saved strip.
     extras: Dict[str, dict] = {}
     for sku, reading in readings.items():
+        # `entry_facts` reads 7- and 30-day windows, which only the daily `month` range holds
+        # (annual is weekly buckets, so the same windows would answer weeks under a day label).
+        # A SKU the month range does not list keeps its strip and carries no facts.
+        daily = reading.series.get("month")
+        if daily is None:
+            continue
         try:
-            extras[sku] = pricerefresh.entry_facts(reading.series[pricehistory.DEFAULT_RANGES[0]])
+            extras[sku] = pricerefresh.entry_facts(daily)
         except Exception as exc:  # noqa: BLE001 - facts are extra: the strip is saved without them, never lost for them
             files.log_cause('trends facts', exc)
     try:
@@ -7740,6 +7760,7 @@ def _refresh_worker(history: Optional[str]) -> None:
     def progress(step: str, done: int, total: int) -> None:
         with _REFRESH_LOCK:
             _REFRESH.update(step=step, done=done, total=total)
+        files.mark_activity()  # a running refresh is a change: the supervisor holds a restart over it
 
     state = "failed"
     skipped = False

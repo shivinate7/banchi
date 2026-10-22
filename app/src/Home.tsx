@@ -188,10 +188,10 @@ function deckFromCards(cards: Record<string, InventoryCard> | null): DeckCard[] 
 
 function greeting(): string {
   const hour = new Date().getHours()
-  if (hour < 5) return 'Still up'
-  if (hour < 12) return 'Good morning'
-  if (hour < 18) return 'Good afternoon'
-  return 'Good evening'
+  if (hour < 5) return 'Still Up'
+  if (hour < 12) return 'Good Morning'
+  if (hour < 18) return 'Good Afternoon'
+  return 'Good Evening'
 }
 
 /** A BOX IS SHOWN BY ITS NAME, EVERYWHERE (the owner's ruling, 2026-09-23) — never a bare
@@ -745,7 +745,7 @@ export function Home() {
                       </span>
                       {depth === 1 && one.card !== null ? (
                         <>
-                          <div className="home-deck-name">{one.card.name ?? 'Not identified yet'}</div>
+                          <div className="home-deck-name">{one.card.name ?? 'Not Identified Yet'}</div>
                           <div className="home-deck-meta">
                             {[one.card.number_display ?? one.card.number, finishOf(one.card)]
                               .filter((part): part is string => typeof part === 'string' && part !== '')
@@ -767,7 +767,9 @@ export function Home() {
                   // between its parts is CSS now (`.home-deck-card-no > span::before`).
                   <span className="home-deck-card-no">
                     {placeWordsOf(frontCard.place.label).map((part, at) => (
-                      <span key={at}>{part}</span>
+                      <span key={at} data-typed={at === 0 ? true : undefined}>
+                        {part}
+                      </span>
                     ))}
                   </span>
                 ) : (
@@ -853,7 +855,7 @@ export function Home() {
                       <Icon name="box" size={16} />
                     </span>
                     <span className="home-box-text">
-                      <span className="home-box-name" title={name}>
+                      <span className="home-box-name" title={name} data-typed>
                         {name}
                       </span>
                       <span className="home-box-meta">

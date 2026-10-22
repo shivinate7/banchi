@@ -241,7 +241,7 @@ test.describe('the published demo draws what reviewers grade', () => {
   test.afterEach(async ({ page }, testInfo) => {
     if (testInfo.status === 'passed') return
     if (testInfo.title !== 'Orders draws a walk') return
-    const walkAll = page.getByRole('button', { name: /^Walk \d+$/ })
+    const walkAll = page.getByRole('button', { name: /^start walk/i })
     const walkAllCount = await walkAll.count().catch(() => -1)
     const walkAllLabel =
       walkAllCount > 0
@@ -291,11 +291,11 @@ test.describe('the published demo draws what reviewers grade', () => {
     expect(missing, 'SKUs whose /skus/photos answer the bundle lacks; re-run make demo-mirror').toEqual([])
   })
 
-  for (const screen of ['Inventory', 'Review', 'Pricing', 'Home', 'Cards to pull'] as const) {
+  for (const screen of ['Inventory', 'Review', 'Pricing', 'Home', 'Cards to Pull'] as const) {
     test(`${screen} draws its photographs, and every one answers 200`, async ({ page }) => {
       test.setTimeout(60_000)
       let photos = watchPhotos(page)
-      if (screen === 'Cards to pull') {
+      if (screen === 'Cards to Pull') {
         // LISTEN ON THE CONTEXT BEFORE THE WINDOW OPENS, NEVER AFTER. This used to attach to the
         // popup once it had loaded and then `reload()` it to see its photographs again, which
         // loaded the 75 MB `demoServer` chunk a second time and started the poll's clock before
@@ -463,14 +463,14 @@ test.describe('the published demo draws what reviewers grade', () => {
     // same behavior asserted (Mark sold decrements by one, Undo restores it), against
     // whichever box and count the mirror actually holds.
     // COPY RENAMED (F5 verbiage cut, ff1b3f71 and after): a box row reads "N stored", the
-    // Fulfiller's search placeholder is "Card name or number", and Sales' shelf line is
+    // Fulfiller's search placeholder is "Card name or number…", and Sales' shelf line is
     // "N of M priced, K not yet". Same behaviour asserted, new words.
     await visit(page, 'Inventory')
     // The card pressed names its own box: its button reads "Mark sold: <box>, Section n, Card m".
     // The box's count is read from the cell's own meta element, never the joined button text.
-    const sell = page.getByRole('button', { name: /^Mark sold/ }).first()
+    const sell = page.getByRole('button', { name: /^Mark Sold/ }).first()
     await expect(sell).toBeVisible()
-    const placed = /^Mark sold: (.+), Section \d+, Card \d+$/.exec((await sell.getAttribute('aria-label')) ?? '')
+    const placed = /^Mark Sold: (.+), Section \d+, Card \d+$/.exec((await sell.getAttribute('aria-label')) ?? '')
     expect(placed, 'a Mark sold button names its card\'s box').not.toBeNull()
     const meta = page
       .locator('.browse-boxcell', { has: page.locator('.browse-boxcell-name', { hasText: new RegExp(`^${(placed![1] ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) }) })
@@ -482,7 +482,7 @@ test.describe('the published demo draws what reviewers grade', () => {
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
     await page.getByRole('button', { name: /^Undo/ }).first().click()
     await expect(meta).toHaveText(`${startCount} stored`)
-    await expect(page.getByRole('button', { name: 'Mark sold' }).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Mark Sold/ }).first()).toBeVisible()
   })
 
   test('Inventory: a Game pick draws a count on every box', async ({ page }) => {
@@ -538,7 +538,7 @@ test.describe('the published demo draws what reviewers grade', () => {
     // is the knob that actually needed raising.
     test.setTimeout(60_000)
     await visit(page, 'Orders')
-    await page.getByRole('button', { name: /^Walk \d+$/ }).first().click()
+    await page.getByRole('button', { name: /^start walk/i }).first().click()
     const walk = page.getByRole('list', { name: /cards to pick/i })
     await expect(walk).toBeVisible({ timeout: 30_000 })
     // DEBT23's shape: the list container appearing does not mean its rows have. A bare

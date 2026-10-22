@@ -1626,13 +1626,13 @@ export function ReviewQueue() {
               THE RELOAD BESIDE IT: one re-fetches these two queues, this one asks the
               pipeline to look at every waiting card again. Same icon vocabulary word would
               make them read as one control, so the tooltip keeps the fuller sentence. */}
-          <IconButton icon="wand" label="Re-check every waiting card" onClick={() => setRecheckOpen(true)} disabled={disabled} className="review-recheck-open" />
+          <IconButton icon="wand" label="Re-Check Every Waiting Card" onClick={() => setRecheckOpen(true)} disabled={disabled} className="review-recheck-open" />
           {/* The kit's own reload control (D288), with its internal 'r' hotkey
               OFF: this screen wires RELOAD_KEY into the same switch every other key rides,
               because a second listener would fire the read twice. */}
-          <ReloadButton onReload={reload} busy={disabled} label="Reload the queue" hotkey={false} className="review-reload" />
+          <ReloadButton onReload={reload} busy={disabled} label="Reload the Queue" hotkey={false} className="review-reload" />
           {/* D291: past runs, and every other Runs capability, behind one link. */}
-          <IconButton icon="history" label="Past runs" onClick={() => openRuns(false)} className="review-runs-open" />
+          <IconButton icon="history" label="Past Runs" onClick={() => openRuns(false)} className="review-runs-open" />
           {/* HELD WHILE THE QUEUES LOAD (D313): hidden at its own size, so the answer fills it and
               the buttons beside it stay put. */}
           {everyone.length === 0 && !(loading && rows === null) ? null : (
@@ -1833,7 +1833,7 @@ function RefusalNotice({ refusal, onReload, onDismiss, disabled }: { refusal: Re
             one primary action beside Dismiss. words="only-primary" (rule 4). */}
         {stale ? (
           <Button size="sm" icon="refresh" kbd={RELOAD_KEY_LABEL} onClick={onReload} disabled={disabled} words="only-primary">
-            Reload the queue
+            Reload the Queue
           </Button>
         ) : null}
         <IconButton icon="x" label="Dismiss" size="sm" onClick={onDismiss} />
@@ -1912,10 +1912,10 @@ function Done({
         actions={
           <>
             <Button variant="primary" size="lg" icon="tag" iconRight="arrowRight" onClick={() => (window.location.hash = '#/pricing')}>
-              Price the answers
+              Price the Answers
             </Button>
             <Button size="lg" icon="play" onClick={onOpenRuns}>
-              Run another box
+              Run Another Box
             </Button>
           </>
         }
@@ -2272,7 +2272,7 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
       chips.push(
         <span key="sorted" className="review-chip review-chip-sorted" title={`Finish at capture: ${claims.sorted.join(' or ')}`}>
           <Icon name="hand" size={12} />
-          <span className="review-chip-key">Sorted as</span>
+          <span className="review-chip-key">Sorted As</span>
           <span className="review-chip-value">{claims.sorted.map(humanize).join(' or ')}</span>
         </span>,
       )
@@ -2291,7 +2291,7 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
     chips.push(
       <span key="hint" className="review-chip review-chip-sorted" title="The set hint recorded at capture">
         <Icon name="tag" size={12} />
-        <span className="review-chip-key">Set hint</span>
+        <span className="review-chip-key">Set Hint</span>
         <span className="review-chip-value review-chip-value-mono">{claims.hint}</span>
       </span>,
     )
@@ -2515,8 +2515,8 @@ export function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoos
             if (!busy) onSearch()
           }}
           submitLabel="Search"
-          label="Search this export"
-          placeholder="Name, collector number, or SKU"
+          label="Search This Export"
+          placeholder="Name, collector number, or SKU…"
           busy={busy}
         />
       </div>
@@ -2549,7 +2549,7 @@ export function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoos
 
       {more > 0 ? (
         <Button variant="ghost" block onClick={() => setRevealed((n) => n + CATALOG_REVEAL_STEP)} disabled={busy}>
-          Show {Math.min(more, CATALOG_REVEAL_STEP)} more
+          Show {Math.min(more, CATALOG_REVEAL_STEP)} More
         </Button>
       ) : null}
 
@@ -2571,9 +2571,9 @@ function Facts({ row }: { row: Row }) {
     { label: 'Number', value: collectorNumber(entry.read) ?? 'none', mono: true },
     { label: 'Market', value: priceText(entry.market), mono: true },
     { label: 'Confidence', value: humanize(text(entry.confidence) ?? 'none recorded') },
-    { label: 'Set hint', value: text(entry.read.set_hint) ?? 'none', mono: true },
+    { label: 'Set Hint', value: text(entry.read.set_hint) ?? 'none', mono: true },
     {
-      label: 'Sorted as',
+      label: 'Sorted As',
       value: (() => {
         const members = claimMembers(entry.read.metadata_finish)
         if (members === null) return 'no claim'
@@ -2587,7 +2587,7 @@ function Facts({ row }: { row: Row }) {
       })(),
       mono: true,
     },
-    { label: 'Photo read', value: text(entry.read.detected_finish) ?? 'none', mono: true },
+    { label: 'Photo Read', value: text(entry.read.detected_finish) ?? 'none', mono: true },
     ...(entry.read.matcher_pick
       ? [
           {
@@ -2870,7 +2870,7 @@ function Waiting({
           Up next
           <Pill>{rows.length}</Pill>
         </span>
-        <IconButton icon="x" label="Close the queue" size="sm" onClick={onClose} className="review-rail-close" />
+        <IconButton icon="x" label="Close the Queue" size="sm" onClick={onClose} className="review-rail-close" />
       </div>
 
       {done === 0 && tally.skipped === 0 && receipts.length === 0 ? null : (
@@ -3046,7 +3046,7 @@ function QueueRefresh({
       open={open}
       onClose={onClose}
       dismissible={!busy}
-      title="Re-check every waiting card"
+      title="Re-Check Every Waiting Card"
       className="review-recheck"
       footer={
         !applyable ? null : (

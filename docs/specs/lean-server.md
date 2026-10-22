@@ -50,7 +50,7 @@ This comes from code and the records. Nothing here is a new measurement.
 - **Photo bytes: cheap.** About 0.75 ms per full-frame request, and a 304 skips the read. The lane exists to keep this path fast (DEBT11).
 - **Crop: the one named photo hot spot.** `preview_cut` runs the card finder on a cache miss. It is GIL-bound and runs one at a time. Cost per run: unmeasured.
 - **Free reader sweep.** `identify/sweep.py` reads every `captured` photo with the marqo model in a worker process. It reads real photos from disk and takes no request slot. Capture p99 measured 30.5 ms with it on and 30.6 ms with it off. Idle memory is the watcher only (stdlib and sqlite3). Worker CPU and memory: unmeasured.
-- **Heavy reads.** DEBT11 names `/orders`, `/inventory`, `/boxes`, `/search`, `/pricing`, `/graveyard` and `/pipeline/*` as the GIL-bound reads that wait behind parked writers. A stock image does not change these. They return rows, not photos.
+- **Heavy reads.** `/pipeline/waiting`, `/boxes`, `/search` and `/capture/sitting` are fixed (section 6, Q7). DEBT11 names `/orders`, `/inventory`, `/boxes`, `/search`, `/pricing`, `/graveyard` and `/pipeline/*` as the GIL-bound reads that wait behind parked writers. A stock image does not change these. They return rows, not photos.
 - **Writes.** One SQLite transaction per capture: 2.4 to 2.9 ms from 1,560 to 50,000 cards (D88).
 - **Client request budget.** Reads in flight are capped at 4, and polls at one per 3 s (`app/tests/request-budget.spec.ts`, `docs/specs/efficiency.md`).
 
@@ -127,15 +127,15 @@ This comes from code and the records. Nothing here is a new measurement.
 4. **Is a cloud server wanted, or only a lighter Mac?** Options: (i) a lighter Mac only ((a), (b)). (ii) A cloud API with a local capture agent ((c)). (iii) The full cloud ((d)). Recommend (i). Option (c) needs auth, an offline spool and a hosting bill. None of these exist.
    **Ruled: lighter Mac first, then a fifth option the spec did not list: (e) the same server moved to an always-on device at home.** (e) keeps one process and one store on the LAN, so D43, D88 and D138 hold and the Origin-only guard stays acceptable. It needs no cloud login or offline spool. Open for (e): which device, how the camera and dispenser reach it, and how the store moves (one writer, so a copy and a switch, never two live stores).
 5. **May real photos leave the Mac at all?** Options: (i) never, (ii) only verified cards of non-code games, (iii) all. Recommend (i) until Q4 picks (c).
-   **Ruled: (iii), all, as the owner's word.** Code-card photos may leave the Mac like other photos. No rule says they stay local: CLAUDE.md bars them only from tracked files, listings, READMEs, screenshots and commits, and that rule stands. A commit reaches GitHub, which is publishing, not storage.
+   **Ruled: (iii), all.** Code-card photos may leave the Mac like other photos. No rule says they stay local: CLAUDE.md bars them only from tracked files, listings, READMEs, screenshots and commits, and that rule stands. A commit reaches GitHub, which is publishing, not storage.
 6. **Stock image fallback when none exists.** Options: (i) real photo, (ii) a labeled placeholder. Recommend (i).
    **Ruled: (i), the real photo.**
 7. **What to build first?** Options: (i) a baseline and the slow reads (`/boxes`, `/search`, `/pipeline/waiting`, `/capture/sitting`), (ii) Fulfillment stock art (Q2), (iii) the home-device plan, (iv) the baseline alone. Recommend (i).
-   **Ruled: (ii) and (iii), as two lanes, then revised.** The home-device plan is section 7 of this spec. Fulfillment stock art is parked as DEBT-fulfil-stock-art (Fulfillment still shows the owner's photo first). The slow reads are fixed next, with no baseline step: the owner's word is "don't measure, just fix".
+   **Ruled: (ii) and (iii), as two lanes, then revised.** The home-device plan is section 7 of this spec. Fulfillment stock art is parked as DEBT-fulfil-stock-art (Fulfillment still shows the owner's photo first). The slow reads are fixed with no baseline step. `POST /pipeline/waiting` reads only the chosen cards' photos (#893). `/boxes`, `/search` and `/capture/sitting` place cards from columns, not whole card objects (#896). Each has a T7 read-budget check that stays flat as the store grows.
 
 ## 7. Home-device plan (option (e))
 
-Plan only. Nothing here is built.
+Plan only. Nothing here is built. The home-tier spec (`docs/specs/home-assistant.md`) covers the always-on devices at home. This section covers only a whole-store move.
 
 ### What the device must keep
 

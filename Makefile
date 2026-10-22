@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness harness-1 harness-2 harness-3 harness-part check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint typecheck unit venv launch-config worktree-setup worktree-provision-selftest worktree-create-selftest session-teardown-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
+.PHONY: help status restart-now map explain harness harness-1 harness-2 harness-3 harness-part check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint typecheck unit venv launch-config worktree-setup worktree-provision-selftest worktree-create-selftest session-teardown-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -1122,6 +1122,21 @@ pricehistory-cache-selftest:
 pricehistory-offline-selftest:
 	$(PYTHON) scripts/pricehistory-offline-selftest.py
 
+# the Card Ladder client's bounds, proved against a fake transport and a fake clock.
+.PHONY: cardladder-selftest
+cardladder-selftest:
+	$(PYTHON) scripts/cardladder-selftest.py
+
+# the My Slabs tables and their writes (store/slabs.py), proved against a throwaway store.
+.PHONY: slabs-store-selftest
+slabs-store-selftest:
+	$(PYTHON) scripts/slabs-store-selftest.py
+
+# the My Slabs routes (server/slabs_routes.py), proved against the real Card Ladder client on a fake transport and a throwaway store.
+.PHONY: slabs-routes-selftest
+slabs-routes-selftest:
+	$(PYTHON) scripts/slabs-routes-selftest.py
+
 # scripts/repair-born-game.py, proved against a throwaway store.
 repair-born-game-selftest:
 	$(PYTHON) scripts/repair-born-game-selftest.py
@@ -1382,6 +1397,12 @@ up:
 	$(PORT_CLAIM)
 	@$(PYTHON) scripts/serve.py up $(ARGS)
 
+# End a held auto-restart and app build now (D176). The supervisor waits for the owner to be idle
+# for five minutes, up to two hours. RUN IT ONLY AFTER THE OWNER SAID YES. From a linked worktree it
+# reaches the primary checkout's supervisor, and it does nothing while nothing waits.
+restart-now:
+	@$(PYTHON) scripts/serve.py restart-now
+
 # Stop the one process `make up` started.
 down:
 	@$(PYTHON) scripts/serve.py down $(ARGS)
@@ -1472,7 +1493,7 @@ screenshot:
 # three. app/design-check-reporter.ts carries the rest of the argument.
 #
 # `ARGS` REACHES THE LOCK AND `PW_ARGS` REACHES PLAYWRIGHT, and the two are kept apart by the
-# `--` on each side (D136). `.github/workflows/check.yml` runs this suite as six shards with
+# `--` on each side (D136). `.github/workflows/check.yml` runs this suite as twelve shards with
 # `--workers=2`, each handed its spec files by `scripts/browser-scope.py shard`, which packs
 # whole files by measured time rather than splitting the cases. More workers on one box is
 # more suite around a test, and docs/debts/ section 8 measured a one-in-thirteen red whose

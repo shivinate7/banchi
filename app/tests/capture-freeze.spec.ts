@@ -8,16 +8,14 @@ import { setViewport } from './phoneSwitch'
 import { DEALING_RAIL_TILES, SAVE_WAIT_MS } from '../src/dealer'
 
 /* A LONG SITTING MUST NOT FREEZE THE MAIN THREAD. A `longtask` observer reports only tasks of
- * 50 ms or more, so "no entry" is the bar. Three cases:
- *  1. DEALING, 50 captures, on PRs that change Capture code, and nightly: the rail (`footer.capture-undo`) stays live but draws only
- *     the newest DEALING_RAIL_TILES tiles, first tile the latest card, the Last capture panel
- *     (`aside.capture-last`) shows each new photo, no task over 50 ms in the last 10 captures, and
- *     after Stop the rail catches up to all of them. That one catch-up render may be long and is
- *     not barred. A cost that grows with the sitting can hide at 50. By the owner's word the
- *     per-PR run trades that for speed.
- *  2. DEALING, 300 captures, monthly and on demand (BANCHI_LONG_SITTING=1): the same claims.
- *     This run is what catches growth. The owner's longest sitting is 555 cards.
- *  3. HAND FEED, 60 captures with the shutter: the old bar, so hand feeding cannot regress.
+ * 50 ms or more, so "no entry" is the bar. Two cases:
+ *  1. DEALING, 300 captures, monthly and on demand (BANCHI_LONG_SITTING=1): the rail
+ *     (`footer.capture-undo`) stays live but draws only the newest DEALING_RAIL_TILES tiles, first
+ *     tile the latest card, the Last capture panel (`aside.capture-last`) shows each new photo, no
+ *     growth in blocked time, and after Stop the rail catches up to all of them. That
+ *     one catch-up render may be long and is not barred. This run is what catches growth. The
+ *     owner's longest sitting is 555 cards. No per-PR case in this file deals cards, by the owner's word.
+ *  2. HAND FEED, 60 captures with the shutter: the old bar, so hand feeding cannot regress.
  * Photos are distinct 1920x1080 JPEGs, so image decode is in the measurement. The dealer is the
  * fake Bluetooth device of `dispenser.spec.ts` (shared in `dispenserRig.ts`). Nothing reaches a
  * store: `POST /capture` is answered here. */
@@ -221,7 +219,7 @@ async function startDealing(page: Page, count: number) {
   await armMotion(page)
   await injectScene(page)
   await expect(page.locator('.capture-motion-hud')).toBeAttached({ timeout: 5_000 })
-  await control(page, 'Connect dispenser').click()
+  await control(page, 'Connect Dispenser').click()
   const start = control(page, 'Start dispenser')
   await expect(start).toBeEnabled({ timeout: 5_000 })
   await start.click()
@@ -288,11 +286,6 @@ async function dealing(page: Page, CAPTURES: number): Promise<void> {
   expect.soft(railMoved, 'while dealing the rail shows exactly the newest tiles, newest first').toBe('')
   expect(verdict, `blocked time over ${CAPTURES} dealt captures`).toBe('')
 }
-
-test('50 captures while the dispenser deals: the rail paused, the last capture live, no long task late', async ({ page }) => {
-  test.setTimeout(180_000)
-  await dealing(page, 50)
-})
 
 // Runs monthly and on demand: BANCHI_LONG_SITTING=1. About 16 minutes.
 test('300 captures while the dispenser deals: no growth in cost, the rail paused, the last capture live', async ({ page }) => {

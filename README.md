@@ -45,9 +45,9 @@ make up                     # serve the app; open the link it prints
 | Sales | `#/revenue` |  |
 | Inventory | `#/inventory` |  |
 | Codes | `#/codes` |  |
-| Cards to pull | `#/fulfillment` | Off-nav |
+| Cards to Pull | `#/fulfillment` | Off-nav |
 | Kit | `#/gallery` | Off-nav |
-| Product history | `#/product` | Off-nav |
+| Product History | `#/product` | Off-nav |
 | Runs | `#/runs` | Off-nav |
 <!-- /gen -->
 

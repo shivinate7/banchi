@@ -217,7 +217,7 @@ test.describe('the set view', () => {
     await pickSet(page, 'No set on file')
     await expect(page.locator('.sets-header')).toContainText('No set on file')
     await expect(page.locator('.sets-tile')).toHaveCount(1)
-    await expect(page.locator('.sets-tile')).toContainText('Not identified yet')
+    await expect(page.locator('.sets-tile')).toContainText('Not Identified Yet')
   })
 
   test('the stock image is the main view, and two variants sharing one keep their own label', async ({ page }) => {

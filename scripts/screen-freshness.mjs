@@ -244,6 +244,7 @@ const RECORDED = {
     // aggregated server-side. A plain read, same shape as every other entry here.
     'getInventorySets',
     'getPriceFacts', 'getPricesRefresh',        // spec 7b: the product sheet's prices and sales, and where Refresh now is
+    'getSlabs', 'getSlabDetail',                // D320, My Slabs: the list, and one slab by grader and cert
   ],
   writes: [
     'prepareMatch',                           // the free reader's one-time setup press
@@ -287,6 +288,7 @@ const RECORDED = {
     'liveCheck',                                  // press, its way back, and the check after it
     'matchRun',                                   // flow interview Q4: the match runs by itself
     'dismissSendWarning',                         // the round-3 review's H2: a taken-back warning read
+    'unholdCopies', 'reholdCopies',               // D273 R-S4: Unhold of hand-removed copies, and its Undo
     'confirmIdentity', 'undoConfirmIdentity', // identity-follows-sku.md §8.1, the confirm
                                                // press beside D252's correction — its own
                                                // pair, same shape: `ListingCorrection` folds
@@ -301,6 +303,7 @@ const RECORDED = {
     'startPricesRefresh',                     // spec 7b: Refresh now; the screen re-reads rows and strips when it ends
     'moveSectionsBatch',                      // D264, the Map's edit-mode Confirm: a whole
                                                // draft — sections and ranges — in one write
+    'addSlab', 'removeSlab',                  // D320, My Slabs: file a slab by its cert, and take it off the list
   ],
   // `previewReconcileBacklog` is the reconcile's press-nothing half and says so in its own
   // docstring — "FREE and WRITES NOTHING" — which is what earns a place on this list.

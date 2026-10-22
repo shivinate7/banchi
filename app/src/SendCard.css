@@ -215,3 +215,8 @@
 .send-moves .send-names[hidden] {
   display: none;
 }
+
+/* The toggle's two labels share one box, so the wider sets the width in both states. */
+.send-toggle { display: inline-grid; }
+.send-toggle > * { grid-area: 1 / 1; }
+.send-toggle > [data-hidden] { visibility: hidden; }

@@ -29,7 +29,9 @@ commit. Same placement and same reason as `audit-self-test`, `githooks-selftest`
 `janitor-selftest` and `verdict-selftest`.
 """
 
+import argparse
 import contextlib
+import io
 import json
 import os
 import shutil
@@ -408,9 +410,587 @@ def check_port_split() -> None:
         lone.close()
 
 
+# ---------------------------------------------------------------- idle restart (D176)
+# The auto-restart and the app build wait until the owner has been idle for five minutes. A held
+# restart fires at two hours, or at once when the skip file exists. The restart cases run in
+# process against a clock the test owns, so no case waits for a window.
+#
+# THE CONTRACT THE BUILD KEEPS: `serve.IDLE_SECONDS` (300) and `serve.HOLD_CAP_SECONDS` (7200);
+# the activity file `.serve/activity`, whose mtime is the last change; the skip file
+# `.serve/restart-now`; and the Supervisor's own `pending`, `quiet_since`, `app_pending`,
+# `app_quiet_since`, `_check_files`, `_check_app`, `_restart_for` and `_reap`. The predicate must
+# read the clock through serve.py's module-level `time` name, which the cases replace.
+# A linked worktree is told apart by `ports.is_linked_worktree(root)`, and the restart lever asks
+# `supervisor_pid(root)` before it arms anything.
+
+NOW = 1_800_000_000.0  # a fixed epoch: no case reads the wall clock
+
+
+class FakeClock:
+    """Stands in for the `time` name serve.py reads. Time moves only when a case moves it."""
+
+    def __init__(self, start: float) -> None:
+        self.now = start
+
+    def time(self) -> float:
+        return self.now
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def sleep(self, _seconds: float) -> None:
+        return None
+
+    def __getattr__(self, name: str):
+        return getattr(time, name)
+
+
+@contextlib.contextmanager
+def swapped(owner, **names):
+    """Replace names on a module or an object for one block, then put them back."""
+    saved = {name: getattr(owner, name) for name in names}
+    for name, value in names.items():
+        setattr(owner, name, value)
+    try:
+        yield
+    finally:
+        for name, value in saved.items():
+            setattr(owner, name, value)
+
+
+_ABSENT = object()
+
+
+@contextlib.contextmanager
+def swapped_or_absent(owner, **names):
+    """As `swapped`, for a name that may not exist yet: it is removed again on the way out."""
+    saved = {name: getattr(owner, name, _ABSENT) for name in names}
+    for name, value in names.items():
+        setattr(owner, name, value)
+    try:
+        yield
+    finally:
+        for name, value in saved.items():
+            if value is _ABSENT:
+                delattr(owner, name)
+            else:
+                setattr(owner, name, value)
+
+
+def run(step) -> str:
+    """Run one step of a case. A raise is a failed case, not a dead script."""
+    try:
+        step()
+        return ""
+    except Exception as err:  # noqa: BLE001 — the case reports what raised
+        return f" (raised {type(err).__name__}: {err})"
+
+
+def idle_supervisor(base: Path, clock: FakeClock):
+    """A Supervisor over a throwaway root whose restart is a recorder, not a spawn."""
+    root = base / "root"
+    (root / ".serve").mkdir(parents=True)
+    sup = serve_module.Supervisor(root=root, watch=False)
+    sup.fingerprint = serve_module.fingerprint(root)
+    sup.app_fingerprint = serve_module.app_fingerprint(root)
+    sup.quiet_since = clock.now - 10
+    restarts: list = []
+    sup._restart_for = lambda changed: restarts.append(list(changed))
+    return sup, restarts
+
+
+def touch_activity(root: Path, at: float) -> None:
+    path = root / ".serve" / "activity"
+    path.write_text("", "utf-8")
+    os.utime(path, (at, at))
+
+
+def activity_mtime(tree: Path) -> Optional[int]:
+    try:
+        return (tree / ".serve" / "activity").stat().st_mtime_ns
+    except OSError:
+        return None
+
+
+def post(port: int, path: str, body: dict, timeout: float = 5.0) -> int:
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{port}{path}", data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Connection": "close"}, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return int(response.status)
+    except urllib.error.HTTPError as refused:
+        return int(refused.code)
+    except OSError:
+        return 0
+
+
+def check_idle_restart() -> None:
+    print("\n  the restart and the app build wait for an idle owner (D176)")
+    check(
+        getattr(serve_module, "IDLE_SECONDS", None) == 300,
+        "serve.IDLE_SECONDS is 300: a change holds the restart for five idle minutes (R-I1)",
+    )
+    check(
+        getattr(serve_module, "HOLD_CAP_SECONDS", None) == 7200,
+        "serve.HOLD_CAP_SECONDS is 7200: a held restart goes ahead after two hours (R-I2)",
+    )
+    clock = FakeClock(NOW)
+    with tempfile.TemporaryDirectory() as tmp, swapped(serve_module, time=clock):
+        where = Path(tmp)
+
+        sup, restarts = idle_supervisor(where / "recent", clock)
+        touch_activity(sup.root, clock.now - 10)
+        sup.pending = {"scripts/serve.py"}
+        error = run(sup._check_files)
+        check(
+            restarts == [] and "scripts/serve.py" in sup.pending,
+            "a change 10 s old holds the restart, and the change stays pending" + error,
+        )
+
+        sup, restarts = idle_supervisor(where / "old", clock)
+        touch_activity(sup.root, clock.now - 301)
+        sup.pending = {"scripts/serve.py"}
+        error = run(sup._check_files)
+        check(
+            restarts == [["scripts/serve.py"]],
+            "a change 301 s old, past the five-minute window, restarts" + error,
+        )
+
+        sup, restarts = idle_supervisor(where / "cap", clock)
+        sup.pending = {"scripts/serve.py"}
+        fired_at = None
+        error = ""
+        for held in range(0, 7261, 60):
+            clock.now = NOW + held
+            touch_activity(sup.root, clock.now)  # the owner stays active the whole time
+            error = run(sup._check_files)
+            if restarts or error:
+                fired_at = held
+                break
+        check(
+            fired_at is not None and 7080 < fired_at <= 7260,
+            "a restart held by activity every minute fires at the two-hour cap, "
+            f"not before (fired at {fired_at} s)" + error,
+        )
+
+        sup, restarts = idle_supervisor(where / "missing", clock)
+        sup.pending = {"scripts/serve.py"}
+        error = run(sup._check_files)
+        check(
+            restarts == [["scripts/serve.py"]],
+            "no activity file at all: the restart goes ahead, so a first boot is never held"
+            + error,
+        )
+
+        sup, restarts = idle_supervisor(where / "unreadable", clock)
+        touch_activity(sup.root, clock.now - 10)
+        sup.pending = {"scripts/serve.py"}
+        state = sup.root / ".serve"
+        state.chmod(0o000)  # the file is there, and its mtime cannot be read
+        try:
+            error = run(sup._check_files)
+        finally:
+            state.chmod(0o755)
+        check(
+            restarts == [["scripts/serve.py"]],
+            "an activity file that cannot be read counts as idle, so the restart goes ahead"
+            + error,
+        )
+
+        sup, restarts = idle_supervisor(where / "skip", clock)
+        touch_activity(sup.root, clock.now - 10)
+        skip = sup.root / ".serve" / "restart-now"
+        skip.write_text("", "utf-8")
+        sup.pending = {"scripts/serve.py"}
+        error = run(sup._check_files)
+        check(
+            restarts == [["scripts/serve.py"]],
+            "the skip file fires a restart that a change 10 s old holds" + error,
+        )
+        check(not skip.exists(), "and the skip file is removed once it has fired")
+
+        cases = (("held", 10, False), ("idle", 301, False), ("skip", 10, True))
+        for label, age, skip_file in cases:
+            sup = serve_module.Supervisor(root=where / f"app-{label}" / "root", watch=False)
+            (sup.root / ".serve").mkdir(parents=True)
+            sup.app_fingerprint = serve_module.app_fingerprint(sup.root)
+            touch_activity(sup.root, clock.now - age)
+            if skip_file:
+                (sup.root / ".serve" / "restart-now").write_text("", "utf-8")
+            sup.app_pending = True
+            sup.app_quiet_since = clock.now - 10
+            builds: list = []
+            with swapped(
+                serve_module,
+                off_main=lambda root: None,
+                app_stale=lambda root: True,
+                build_app=lambda root, builds=builds: builds.append(str(root)) or True,
+            ):
+                error = run(sup._check_app)
+            if label == "held":
+                check(
+                    builds == [] and sup.app_pending,
+                    "a recent change holds the app build with the restart, and stays pending"
+                    + error,
+                )
+            elif label == "idle":
+                check(builds != [], "an app change 301 s old, past the window, builds" + error)
+            else:
+                check(
+                    builds != [],
+                    "the skip file fires a held app build as well as the restart (R-I4)" + error,
+                )
+
+        sup, restarts = idle_supervisor(where / "offmain", clock)
+        del sup._restart_for  # the real method: this case is about what it does
+        touch_activity(sup.root, clock.now - 301)
+        sup.pending = {"scripts/serve.py"}
+        spawned: list = []
+        stood_down: list = []
+        sup._sync_attempt = lambda branch: branch
+        sup._stand_down = lambda branch: stood_down.append(branch)
+        with swapped(
+            serve_module,
+            off_main=lambda root: "feature/x",
+            spawn_capture=lambda root: spawned.append(str(root)) or None,
+        ):
+            error = run(sup._check_files)
+        check(
+            stood_down == ["feature/x"] and spawned == [],
+            "an idle restart on a branch stands down before it spawns: the off-main guard "
+            "still runs first" + error,
+        )
+
+        sup, restarts = idle_supervisor(where / "crash", clock)
+
+        class Exited:
+            pid = 4242
+            returncode = 1
+
+            def poll(self):
+                return 1
+
+        touch_activity(sup.root, clock.now - 10)  # a recent change, which must not hold a crash
+        sup.capture = Exited()
+        respawned: list = []
+        sup._await_capture = lambda: None
+        with swapped(serve_module, spawn_capture=lambda root: respawned.append(str(root)) or None):
+            error = run(sup._reap)
+        check(
+            len(respawned) == 1,
+            "a crashed capture server is respawned at once, whatever the activity file says"
+            + error,
+        )
+
+
+def check_child_marks_activity() -> None:
+    """The capture child writes `.serve/activity` when a request changes state (D176).
+
+    An open tab polls reads all day. If a read marked activity, the restart would wait the full
+    two hours every time, so the reads are asserted NOT to mark it.
+    """
+    print("\n  the capture child marks activity on a state change, and not on a read (D176)")
+    with tempfile.TemporaryDirectory() as tmp:
+        tree = build_tree(Path(tmp))
+        port = PORTS[tree]
+        serve(tree, "up")
+        try:
+            up = wait_until(lambda: get(port, "/status")[0] == 200)
+            check(up, "the capture server comes up")
+            before = activity_mtime(tree)
+            get(port, "/status")
+            post(port, "/pipeline/waiting", {})
+            check(
+                activity_mtime(tree) == before,
+                "GET /status and POST /pipeline/waiting, the tab's polls, leave the activity "
+                "file alone",
+            )
+            written = post(port, "/boxes", {"name": "Idle probe"})
+            check(
+                200 <= written < 300,
+                f"POST /boxes, a state change, is accepted (answered {written})",
+            )
+            check(
+                activity_mtime(tree) not in (None, before),
+                "and that POST marks activity, so the supervisor holds the next restart",
+            )
+        finally:
+            serve(tree, "down", "--confirm")
+
+
+def check_cap_releases_build() -> None:
+    print("\n  the two-hour cap fires the restart and the app build on one release (D176)")
+    clock = FakeClock(NOW)
+    builds: list = []
+    with tempfile.TemporaryDirectory() as tmp, swapped(
+        serve_module,
+        time=clock,
+        off_main=lambda root: None,
+        app_stale=lambda root: True,
+        build_app=lambda root: builds.append(str(root)) or True,
+    ):
+        sup, restarts = idle_supervisor(Path(tmp) / "cap-release", clock)
+        sup.pending = {"scripts/serve.py"}
+        sup.app_pending = True
+        sup.app_quiet_since = clock.now - 10
+        touch_activity(sup.root, clock.now)
+        error = run(sup._check_files) + run(sup._check_app)
+        check(
+            restarts == [] and builds == [] and sup.app_pending,
+            "a change holds the restart and the app build together at the start" + error,
+        )
+
+        clock.now = NOW + serve_module.HOLD_CAP_SECONDS
+        touch_activity(sup.root, clock.now)  # still changing: only the cap can release it
+        error = run(sup._check_files)
+        check(restarts == [["scripts/serve.py"]], "the cap fires the restart" + error)
+        error = run(sup._check_app)
+        check(
+            builds != [] and not sup.app_pending,
+            "the app build goes on that same release, not a second two-hour hold" + error,
+        )
+
+
+def check_dispatch_marks_before_handler() -> None:
+    """A state change marks activity before its handler runs, not only after it returns (D176).
+
+    The body is withheld until the mark has landed. A mark that waits for the handler to finish
+    cannot land in that window, because the handler is still reading the body.
+    """
+    print("\n  a state change marks activity before its handler runs, as well as after (D176)")
+    with tempfile.TemporaryDirectory() as tmp:
+        tree = build_tree(Path(tmp))
+        port = PORTS[tree]
+        serve(tree, "up")
+        try:
+            up = wait_until(lambda: get(port, "/status")[0] == 200)
+            check(up, "the capture server comes up")
+            body = json.dumps({"name": "Mid-write probe"}).encode("utf-8")
+            before = activity_mtime(tree)
+            with socket.create_connection(("127.0.0.1", port), timeout=10) as wire:
+                wire.sendall(
+                    (f"POST /boxes HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n"
+                     "Content-Type: application/json\r\n"
+                     f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n").encode("ascii")
+                )
+                marked = wait_until(
+                    lambda: activity_mtime(tree) not in (None, before), seconds=5,
+                )
+                check(
+                    marked,
+                    "a POST whose body has not arrived has already marked activity",
+                )
+                wire.sendall(body)
+                reply = b""
+                with contextlib.suppress(OSError):
+                    for chunk in iter(lambda: wire.recv(4096), b""):
+                        reply += chunk
+            status = reply.split(b" ", 2)
+            check(
+                len(status) > 1 and status[1].startswith(b"2"),
+                "and the POST completes once its body arrives",
+            )
+        finally:
+            serve(tree, "down", "--confirm")
+
+
+def check_stale_skip_file() -> None:
+    print("\n  a skip file armed before this hold began does not release it (D176)")
+    clock = FakeClock(NOW)
+    with tempfile.TemporaryDirectory() as tmp, swapped(serve_module, time=clock):
+        sup, restarts = idle_supervisor(Path(tmp) / "stale-skip", clock)
+        skip = sup.root / ".serve" / "restart-now"
+        skip.write_text("", "utf-8")
+        os.utime(skip, (NOW - 200, NOW - 200))  # armed before the hold below began
+        sup.held_since = NOW - 100
+        touch_activity(sup.root, clock.now - 10)  # a change 10 s old: the hold must stand
+        sup.pending = {"scripts/serve.py"}
+        error = run(sup._check_files)
+        check(
+            restarts == [] and "scripts/serve.py" in sup.pending,
+            "a skip file older than the hold does not fire it, and the change stays pending"
+            + error,
+        )
+
+        skip.write_text("", "utf-8")  # armed again, inside the hold: this one counts
+        os.utime(skip, (NOW - 5, NOW - 5))
+        error = run(sup._check_files)
+        check(
+            restarts == [["scripts/serve.py"]] and not skip.exists(),
+            "a skip file armed during the hold fires it, and is removed once it has" + error,
+        )
+
+
+def check_restart_now_lever() -> None:
+    """The lever the owner runs. Its target and its state folder are swapped for a sandbox, so
+    the case cannot reach the owner's primary checkout whatever this file does."""
+    print("\n  the restart-now lever writes its skip file only while a restart waits (D176)")
+    with tempfile.TemporaryDirectory() as tmp:
+        primary = Path(tmp) / "primary"
+        state = primary / ".serve"
+        skip = state / serve_module.SKIP_FILE
+
+        def lever() -> None:
+            # A restart waits only under a live supervisor (D176), so this case runs under one.
+            with swapped_or_absent(
+                serve_module,
+                restart_target=lambda root=None: primary,
+                state_dir=lambda root=None: state,
+                supervisor_pid=lambda root=None: 4242,
+            ), contextlib.redirect_stdout(io.StringIO()):
+                serve_module.do_restart_now(argparse.Namespace())
+
+        error = run(lever)
+        check(
+            not skip.exists(),
+            "nothing waits: the lever writes no skip file, so no later hold is released by it"
+            + error,
+        )
+
+        state.mkdir(parents=True, exist_ok=True)
+        (state / serve_module.WAITING_FILE).write_text(f"{NOW}\n", "utf-8")
+        skip.unlink(missing_ok=True)
+        error = run(lever)
+        check(skip.exists(), "a restart waits: the lever writes the skip file" + error)
+
+
+def linked_supervisor(base: Path, clock: FakeClock):
+    """As `idle_supervisor`, in a linked worktree: its `.git` is a file, as `git worktree add` writes it."""
+    sup, restarts = idle_supervisor(base, clock)
+    (sup.root / ".git").write_text(f"gitdir: {base / 'gitdir'}\n", "utf-8")
+    return sup, restarts
+
+
+def check_linked_worktree_never_holds() -> None:
+    print("\n  a linked worktree never holds: its own activity does not hold its restart (D176)")
+    clock = FakeClock(NOW)
+    builds: list = []
+    with tempfile.TemporaryDirectory() as tmp, swapped(
+        serve_module,
+        time=clock,
+        off_main=lambda root: None,
+        app_stale=lambda root: True,
+        build_app=lambda root: builds.append(str(root)) or True,
+    ):
+        where = Path(tmp)
+        held: list = []
+
+        sup, _ = linked_supervisor(where / "held", clock)
+        check(
+            serve_module.ports.is_linked_worktree(sup.root),
+            "the fixture is a linked worktree by `ports.is_linked_worktree`",
+        )
+        touch_activity(sup.root, clock.now - 10)
+        error = run(lambda: held.append(sup._held()))
+        check(
+            held == [False],
+            "a change 10 s old does not hold a linked worktree's restart" + error,
+        )
+
+        sup, restarts = linked_supervisor(where / "restart", clock)
+        touch_activity(sup.root, clock.now - 10)
+        sup.pending = {"scripts/serve.py"}
+        error = run(sup._check_files)
+        check(
+            restarts == [["scripts/serve.py"]],
+            "a linked worktree's change 10 s old restarts at once, not after the idle window"
+            + error,
+        )
+
+        sup, _ = linked_supervisor(where / "build", clock)
+        touch_activity(sup.root, clock.now - 10)
+        sup.app_pending = True
+        sup.app_quiet_since = clock.now - 10
+        error = run(sup._check_app)
+        check(
+            builds != [] and not sup.app_pending,
+            "a linked worktree's app change 10 s old builds at once, not after the idle window"
+            + error,
+        )
+
+        sup, _ = idle_supervisor(where / "primary", clock)
+        touch_activity(sup.root, clock.now - 10)
+        held.clear()
+        error = run(lambda: held.append(sup._held()))
+        check(
+            held == [True],
+            "control: the same 10 s change in a tree with no `.git` file still holds" + error,
+        )
+
+
+def check_restart_now_needs_live_supervisor() -> None:
+    print("\n  restart-now arms nothing with no live supervisor, stale waiting file or not (D176)")
+    with tempfile.TemporaryDirectory() as tmp:
+        tree = Path(tmp) / "tree"
+        state = tree / ".serve"
+        state.mkdir(parents=True)
+        (state / serve_module.WAITING_FILE).write_text(f"{NOW - 3600}\n", "utf-8")
+        skip = state / serve_module.SKIP_FILE
+
+        answer: list = []
+        error = run(lambda: answer.append(serve_module.restart_now(tree)))
+        check(
+            answer == [False] and not skip.exists(),
+            "no supervisor is alive: restart_now answers False and writes no skip file" + error,
+        )
+
+        out = io.StringIO()
+
+        def lever() -> None:
+            with swapped(serve_module, restart_target=lambda root=None: tree), \
+                    contextlib.redirect_stdout(out):
+                serve_module.do_restart_now(argparse.Namespace())
+
+        error = run(lever)
+        check(
+            "nothing is waiting" in out.getvalue() and not skip.exists(),
+            "the lever reports nothing waiting, and writes no skip file" + error,
+        )
+
+
+def check_restart_target_from_linked_worktree() -> None:
+    print("\n  restart_target from a linked worktree names the primary checkout (D176)")
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    env["BANCHI_MAIN"] = "off"
+
+    def git(where: Path, *argv: str) -> None:
+        subprocess.run(  # noqa: S603
+            ["git", "-c", "user.email=selftest@example.com", "-c", "user.name=selftest",
+             "-c", "commit.gpgsign=false", *argv],
+            cwd=str(where), env=env, capture_output=True, text=True, check=False,
+        )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        primary = Path(tmp) / "primary"
+        linked = Path(tmp) / "linked"
+        primary.mkdir()
+        git(primary, "init", "-q", "-b", "main")
+        git(primary, "commit", "-q", "--no-verify", "--allow-empty", "-m", "main")
+        git(primary, "worktree", "add", "-q", "-b", "linked-branch", str(linked))
+
+        answer: list = []
+        error = run(lambda: answer.append(serve_module.restart_target(linked)))
+        check(
+            bool(answer) and Path(answer[0]).resolve() == primary.resolve(),
+            "from a linked worktree the target is the primary checkout, whose supervisor "
+            "serves :8000, not the linked tree's own `.serve/`" + error,
+        )
+
+
 def main() -> int:
     print("supervisor self-test — the build job, against a throwaway tree (D138)")
     check_port_split()
+    check_idle_restart()
+    check_child_marks_activity()
+    check_cap_releases_build()
+    check_dispatch_marks_before_handler()
+    check_stale_skip_file()
+    check_restart_now_lever()
+    check_linked_worktree_never_holds()
+    check_restart_now_needs_live_supervisor()
+    check_restart_target_from_linked_worktree()
     with tempfile.TemporaryDirectory() as tmp:
         where = Path(tmp)
         tree = build_tree(where)

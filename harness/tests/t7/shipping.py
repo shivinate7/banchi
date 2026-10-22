@@ -882,10 +882,12 @@ def check_shipping_routes(checks: Checks) -> None:
             "a trace id — never a vendor body and never the session, because a refusal that "
             "echoes a request is how a bearer instrument ends up in a log line",
         )
+        # The search is a retried read, so a connect failure builds several requests. The claim
+        # is that each one was the search POST, not how many the retry budget allows.
         checks.equal(
-            [request.get_method() for request in seen],
-            ["POST"],
-            "exactly one request was built, and it was the search POST",
+            set(request.get_method() for request in seen),
+            {"POST"},
+            "every request built was the search POST, and nothing else was sent",
         )
         sent = seen[0]
         checks.equal(

@@ -1,6 +1,4 @@
-## D13 — Mac holds the one truth
-
-**Photos and the store (SQLite, D88) live on one Mac and are read and written through the capture server, so the owner's and the Fulfiller's devices cannot disagree.** Single operator is a choice with a known exit, not an unexamined assumption. What would move: this entry, D5 (two personas on two devices) and D24's opsec rules, which assume one person controls the machine. Hosting elsewhere is a different product (backups, secrets, uptime). Remote access is a tunnel to this Mac and needs no code change.
+## D13 — The camera path: Cam Link, quarter turn, device picker
 
 **The camera path fixes three rules.** The rig is a Sony RX100 VII or A7C over HDMI into an Elgato Cam Link 4K.
 - The Cam Link presents a plain UVC webcam, distinguishable only by label and id. So the device picker is required and `facingMode: "environment"` is never used.

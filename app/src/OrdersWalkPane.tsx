@@ -925,7 +925,7 @@ export function WalkList({
                         {slots.length > line.take.wanted ? <span className="orders-walk-slot-either"> (either)</span> : null}
                       </span>
                       <span className={line.take.name === null ? 'orders-walk-name is-unnamed' : 'orders-walk-name'}>
-                        {line.take.name ?? 'Not identified yet'}
+                        {line.take.name ?? 'Not Identified Yet'}
                       </span>
                       <span className="orders-walk-pick">
                         {done ? <Icon name="check" size={14} /> : null}
@@ -973,7 +973,7 @@ export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk
     /* THE KEY IS IN THE TOOLTIP, never on the face: the button is one width on every row (D195). */
     return (
       <MarkSoldButton
-        name={`Mark sold: ${where}`}
+        name={`Mark Sold: ${where}`}
         saleKey={copy.key}
         kbd={hint}
         busy={busy}
@@ -1006,7 +1006,7 @@ export function WalkStrip({ walk, notInBoxes }: { readonly walk: OrderWalk; read
       <ol className="orders-strip-row">
         {lines.map((line) => {
           const first = line.rows[0]
-          const name = line.take.name ?? 'Not identified yet'
+          const name = line.take.name ?? 'Not Identified Yet'
           const done = pickedAllOf(line, walk.soldKeys)
           const current = line.rows.some((row) => row.rowKey === walk.current)
           /* THE PANE'S OWN LOOKUP: a card the inventory read has not answered draws no photograph, a pooled

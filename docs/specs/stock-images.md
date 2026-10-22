@@ -111,6 +111,13 @@ It asserts the cold-cache timing: a fetcher that sleeps 200ms still answers in u
 the route threading: `do_pipeline_sets` carries `image_url` only when handed a resolver, and carries
 `None` and opens no socket when it is not.
 
+## One retry home
+
+Riftbound and One Piece fetch through `Market`, and `Market` fetches through the one retry method
+(D319, every network call retries through one method). A failed walk stores nothing, so
+the pair stays pending and is asked again after `FETCH_RETRY_SECONDS`. The method is
+`pipeline/pricehistory.fetch_json`. A host that lost `PAUSE_AFTER_FAILURES` calls in a row gets one attempt per call, and no call is refused unsent.
+
 ## Not built
 
 - **A standing disk cache for the tcgcsv walk**, unlike `pipeline/pricehistory.py`'s

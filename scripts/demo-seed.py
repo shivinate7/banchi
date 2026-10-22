@@ -702,7 +702,7 @@ def build_store(force: bool) -> dict:
         # BACKWARDS. It wrote `live = min(on_hand, 4)` for every SKU in the store, so every
         # row on `#/pricing` came back `at_cap` — `room = LIVE_QUANTITY_CAP - live` was zero,
         # `add_to_quantity` was zero, and the screen correctly reported that every copy was
-        # "already listed or has left the box". The import file would have added nothing, the
+        # "Every copy in this run is already listed or has left the box.". The import file would have added nothing, the
         # trend walk skips capped rows so "Load trends" had one row to ask about, and the
         # whole point of the pricing screen was missing from the demo of it.
         #

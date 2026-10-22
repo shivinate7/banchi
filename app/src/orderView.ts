@@ -286,7 +286,7 @@ export function unnamedBuyerLabel(group: BuyerGroup): string {
 export function unnamedOrderLabel(number: string): string {
   if (number === '') return 'Buyer with no name'
   /* A no-break space keeps "order …00012" one unit, so a narrow row wraps before it, never inside it. */
-  return `Buyer on order\u00a0${number.length > 5 ? `…${number.slice(-5)}` : number}`
+  return `Buyer on Order\u00a0${number.length > 5 ? `…${number.slice(-5)}` : number}`
 }
 
 /** What the buyer of ONE order is called: the feed's name, or the same unnamed label the list

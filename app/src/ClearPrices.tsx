@@ -160,7 +160,7 @@ export function ClearPrices({
     <Sheet
       open={open}
       onClose={onClose}
-      title="Clear typed prices"
+      title="Clear Typed Prices"
       icon="eraser"
       className="clearprices"
       footer={

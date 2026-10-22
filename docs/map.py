@@ -998,6 +998,17 @@ COMPONENTS = [
                                    "than reimplemented, for a caller D77 names as the standing "
                                    "candidate and that remains unbuilt.",
                            "governed_by": ["D15", "D18", "D77"]},
+            "net.py": {"does": "the one retry home: `net.open` and `net.request` carry every network "
+                               "call. Rule C (no connection, 429, 502, 503, 504, backoff, "
+                               "Retry-After). A per-host lost-call count, shared by every "
+                               "caller, degrades a host to one attempt per call and never "
+                               "refuses one; any answer but a 429 or a 5xx resets it. "
+                               "`unanswered` and `retry_after` tell a caller when to skip or "
+                               "stretch its courtesy delay. `idempotent=False` is a write: it "
+                               "retries only a connect failure before send, and never counts "
+                               "toward or is limited by a degraded host.",
+                       "governed_by": ["D319"],
+                       "tested_by": ["T7"]},
             "pricing.py": {"does": "rules, rounding, floor clamp, threshold, no_market_data "
                                    "refusal. THRESHOLD is the DEFAULT and not the answer "
                                    "(D99): the cut-off in force is pipeline/corpus.py's "
@@ -1486,6 +1497,20 @@ COMPONENTS = [
                                     "`server/capture_server.py` alone.",
                             "governed_by": ["D214", "D225", "D31", "D88"],
                             "tested_by": ["T7"]},
+            "cardladder.py": {"does": "the Card Ladder client for My Slabs: the owner's refresh "
+                                      "token exchanged for a one-hour ID token, then one function "
+                                      "per read point of spec 3.1 to 3.6. Every request, the "
+                                      "exchange included, goes through one send path that "
+                                      "reads the `ALLOWED_CALLABLES` constant, refuses "
+                                      "`search.cardladder.com`, keeps callable sends 8 seconds "
+                                      "apart and latches on a rate-limit answer. Clock and "
+                                      "sleep are injected; the transport defaults to "
+                                      "`net_transport` on the one retry home. No error text holds a token or a response body.",
+                              "governed_by": ["D320", "D319", "D63"],
+                              "note": "The refresh token is the caller's to read from "
+                                      "`CARDLADDER_REFRESH_TOKEN`. The API key in it is Card "
+                                      "Ladder's public web key. No store tables, routes or "
+                                      "screen yet (spec build plan steps 2 to 4)."},
             "stockimages.py": {"does": "`(game, set_name, number) -> a hotlinked stock photo "
                                        "URL, or None` (D301). Riftbound and One "
                                        "Piece resolve through `pricehistory.py:Market`'s own "
@@ -1638,9 +1663,9 @@ COMPONENTS = [
                                         "transaction and within-bucket dispersion. It also reads "
                                         "that mirror's current /prices, which are per product per "
                                         "PRINTING and never per SKU.",
-                                "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D86",
-                                                "D55", "D278", "D65", "D277", "D171", "D216",
-                                                "D234", "D240", "D254"],
+                                "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D55",
+                                                "D65", "D86", "D171", "D216", "D234", "D240",
+                                                "D254", "D277", "D278", "D319"],
                                 "tested_by": ["T7"],
                                 "note": "REACHABLE AS OF 2026-08-30 (D278) — this entry read "
                                         "RECORDED RATHER THAN BUILT for one day, and the whole "
@@ -1696,7 +1721,10 @@ COMPONENTS = [
         "governed_by": ["D1", "D2", "D3", "D10"],
         "modules": {
             "prompt.py": {"does": "the identification prompt and its fingerprint", "governed_by": ["D2", "D3", "D22", "D23"], "tested_by": ["T1"]},
-            "batch.py": {"does": "Batch API submit/poll/collect. Batch, never sequential.", "governed_by": ["D2", "D21", "D23"], "tested_by": ["T1"]},
+            "batch.py": {"does": "Batch API submit/poll/collect. Batch, never sequential.", "governed_by": ["D2",
+                                                                                                            "D21",
+                                                                                                            "D23",
+                                                                                                            "D319"], "tested_by": ["T1"]},
             "sidecar.py": {"does": "reading a capture directory: photos, JSON sidecars, position", "governed_by": ["D2", "D3", "D10", "D21", "D22", "D23", "D183"]},
             "images.py": {"does": "downscale, encode, hash a photograph for the API, and refuse a crop that is not the card",
                           "governed_by": ["D2", "D23", "D75", "D125"], "tested_by": ["T6"]},
@@ -1713,7 +1741,7 @@ COMPONENTS = [
                                  "model's index is refused (D301's one exception: each stock image is "
                                  "read once, in memory). Stdlib at import; numpy, Pillow and onnxruntime "
                                  "load lazily.",
-                         "governed_by": ["D2", "D3", "D76", "D88", "D170", "D213", "D301"]},
+                         "governed_by": ["D2", "D3", "D76", "D88", "D170", "D213", "D301", "D319"]},
             "matchconst.py": {"does": "the few constants the background reader's watcher needs "
                                       "(served games, the model pin, the store's home), standard "
                                       "library only, because the watcher cannot import the `store` "
@@ -1917,12 +1945,11 @@ COMPONENTS = [
                                   "or `hold_sku`, or write the `Card` field directly where "
                                   "neither writer can build the fixture's exact state.",
                           "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D22",
-                                          "D23", "D24", "D26", "D28", "D58", "D34", "D36", "D55",
-                                          "D56", "D59", "D63", "D67", "D83", "D87", "D88",
-                                          "D89", "D100", "D115", "D118", "D132", "D145",
-                                          "D164", "D167", "D172", "D173", "D183", "D192", "D213",
-                                          "D253", "D258", "D259", "D264", "D294",
-                                          "D299", "D300"],
+                                          "D23", "D24", "D26", "D28", "D34", "D36", "D55", "D56",
+                                          "D58", "D59", "D63", "D67", "D83", "D87", "D88", "D89",
+                                          "D100", "D115", "D118", "D132", "D145", "D164", "D167",
+                                          "D172", "D173", "D183", "D192", "D213", "D253", "D258",
+                                          "D259", "D264", "D273", "D294", "D299", "D300"],
                                           "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
@@ -2067,6 +2094,17 @@ COMPONENTS = [
                                     "31 assertions, all caught. No harness test exercises it, "
                                     "so `tested_by` is empty rather than a citation nothing "
                                     "backs."},
+            "slabs.py": {"does": "the My Slabs tables and their writes: `slabs` (one row per "
+                                 "cert and grader, the grader in Card Ladder's name), "
+                                 "`slab_snapshots` (one row per slab per day, a second write "
+                                 "that day replaces it) and `slab_sales` (keyed by Card Ladder's "
+                                 "sale id, never deleted, shared by every slab that read it). "
+                                 "`Slabs.remove` drops a slab row and its sale links only. "
+                                 "A value Card Ladder did not give is NULL, never 0. Also "
+                                 "`GRADERS`, which `pipeline/cardladder.py` imports back "
+                                 "because `store/` may not import `pipeline/`.",
+                         "governed_by": ["D320", "D88", "D63"],
+                         "note": "PROVED BY `make slabs-store-selftest`."},
             # THE PRICE-HISTORY ARCHIVE (D219). Unlike `readings.py`'s
             # `Readings.replace()`, this table is NEVER a full replace — see its own module
             # docstring for why a bucket a later sweep does not mention must survive forever
@@ -2157,7 +2195,7 @@ COMPONENTS = [
                                    "for `#/graveyard`'s read.",
                            "governed_by": ["D13", "D138", "D63", "D88", "D134", "D145", "D174",
                                            "D189", "D191", "D219", "D243",
-                                           "D273"],
+                                           "D273", "D320"],
                            "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
@@ -2175,7 +2213,7 @@ COMPONENTS = [
                               "migration to add one to a store already on disk.",
                       "governed_by": ["D20", "D26", "D58", "D86", "D88", "D134", "D140", "D145",
                                       "D166", "D172", "D174", "D189", "D192", "D213", "D219",
-                                      "D243", "D294", "D273", "D299"],
+                                      "D243", "D294", "D273", "D299", "D320"],
                       "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
@@ -3111,19 +3149,51 @@ COMPONENTS = [
                 "governed_by": ["D216", "D219", "D234"],
             },
             "pricehistory-offline-selftest.py": {
-                "does": "proves `pipeline/pricehistory.py:Market` fails fast once the "
-                        "network is genuinely unreachable, no network, no real sleep. A "
-                        "counting fetcher that always raises the new `Offline` (a subclass "
-                        "of `Unreachable`, never a plain HTTP-status failure) is called "
-                        "exactly ONCE across 50 distinct slugs — every call after the first "
-                        "raises immediately, with no courtesy delay. A sibling arm proves a "
-                        "plain `Unreachable` is NOT sticky: the fetcher is called once per "
-                        "distinct slug, since a bad HTTP status from one product says "
-                        "nothing about the next (D278). Measured 2026-09-27: a real "
-                        "demo-mirror trends request over 387 SKUs went from 102.2s "
-                        "(95.85s of it `time.sleep`, per `cProfile`) to 0.78s. Not wired "
-                        "into `make check`.",
-                "governed_by": ["D18", "D278"],
+                "does": "proves `pipeline/pricehistory.fetch_json`'s one retry rule over a "
+                        "scripted `urlopen` and one fake clock, no network, no real sleep: "
+                        "which failures retry, the time budget and `Retry-After`, and that a "
+                        "host that lost `PAUSE_AFTER_FAILURES` calls in a row gets one attempt "
+                        "per call, shared by every `Market`, never refused unsent and with no "
+                        "retry pause. Not wired into `make check`.",
+                "governed_by": ["D18", "D278", "D319"],
+            },
+            "cardladder-selftest.py": {
+                "does": "proves `pipeline/cardladder.py` stays inside the owner's bounds for "
+                        "the Card Ladder login, against a fake transport and a fake clock: no "
+                        "network, no real sleep, no secrets file read. Seven cases: the allow "
+                        "list is the six read callables and the client reads that one "
+                        "constant; a callable off it is refused before any request; "
+                        "`search.cardladder.com` is refused before the transport; calls sit "
+                        "8 seconds apart, a failed call included; a rate-limit answer raises "
+                        "once, never retries and latches; the ID token is reused and "
+                        "refreshed before it expires; no token appears in any exception, "
+                        "traceback, log line or repr.",
+                "governed_by": ["D320", "D319"],
+            },
+            "slabs-store-selftest.py": {
+                "does": "proves `store/slabs.py`, the My Slabs tables, against a throwaway "
+                        "store: a slab is one row per cert and grader with the grader in Card "
+                        "Ladder's name; a snapshot is one row per slab per day and a second "
+                        "write that day replaces it; a sale is keyed by its id, kept when a "
+                        "later read drops it and shared by every slab that read it; each write "
+                        "is one transaction; a missing value stays empty, never 0; reads come "
+                        "back in order; a store stamped 14 gains the tables on its next open.",
+                "governed_by": ["D320", "D88", "D63"],
+            },
+            "slabs-routes-selftest.py": {
+                "does": "proves `server/slabs_routes.py`, the My Slabs routes, against the real Card "
+                        "Ladder client on a fake transport, a fake clock and a throwaway store: add "
+                        "reads three callables and writes the slab, the day's snapshot and the sales "
+                        "once, an update replaces the day's row, any failed or limited read writes "
+                        "nothing, one client keeps the 8 second pace and the rate-limit stop across "
+                        "requests, Card Ladder's numbers become text money and its dates one ISO "
+                        "shape, a re-read sale keeps the fields only an earlier read gave, a slab "
+                        "with no sale at its grade says no sales, a remove drops the slab and its "
+                        "sale links but keeps its snapshots and sales, needs no Card Ladder call and "
+                        "is refused while an add runs, the routes are dispatched, no "
+                        "refusal names a decision, a path or a host, no token reaches an answer or a "
+                        "log, and there is no sweep route, client function or launchd job.",
+                "governed_by": ["D320", "D88", "D196", "D319"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "
@@ -3508,11 +3578,11 @@ COMPONENTS = [
                 # lens and its re-addressed history strip (D103, D278), the value band (D277),
                 # the queue refresh (D167), the push/publish pair (D273), the live export
                 # (D104) and the seven order-line closers (D113).
-                "governed_by": ["D13", "D14", "D18", "D28", "D58", "D278", "D76", "D277", "D83",
-                                "D86", "D87", "D89", "D97", "D100", "D103", "D104", "D273", "D113",
-                                "D134", "D145", "D167", "D168", "D174", "D189", "D192",
-                                "D193", "D203", "D210", "D225", "D227", "D236", "D252", "D264",
-                                "D291", "D298", "D293"],
+                "governed_by": ["D13", "D14", "D18", "D28", "D58", "D76", "D83", "D86", "D87",
+                                "D89", "D97", "D100", "D103", "D104", "D113", "D134", "D145",
+                                "D167", "D168", "D174", "D189", "D192", "D193", "D203", "D210",
+                                "D225", "D227", "D236", "D252", "D264", "D273", "D277", "D278",
+                                "D291", "D293", "D298", "D320"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -4898,7 +4968,8 @@ COMPONENTS = [
                                 "D213", "D215", "D219", "D222", "D231", "D224", "D225",
                                 "D227", "D280", "D234", "D236", "D239", "D240",
                                 "D242", "D243", "D247", "D252", "D253", "D254",
-                                "D256", "D261", "D271", "D275", "D193", "D269", "D295", "D301"],
+                                "D256", "D261", "D271", "D275", "D193", "D269", "D295", "D301",
+                                "D320", "D196"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -4969,7 +5040,7 @@ COMPONENTS = [
                 # D42 joins because hooks() no longer merely reports a config: it encodes where
                 # the hooks must be INSTALLED, and reads NOT ARMED for the working-tree
                 # arrangement that entry started with and then had to retract.
-                "governed_by": ["D16", "D17", "D42", "D43", "D80", "D86", "D88", "D127", "D138", "D158", "D179"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D80", "D86", "D88", "D127", "D138", "D158", "D176", "D179"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
@@ -5407,11 +5478,21 @@ COMPONENTS = [
         "governed_by": ["D16"],
     },
     {
+        "path": "docs/specs/home-assistant.md",
+        "status": "tbd",
+        "does": "PROPOSAL, nothing built: the home tier. The always-on HA Green, its 2 TB drive, "
+                "the UniFi network and a possible Mac Studio, set against the problems banchi has "
+                "from living on one Mac. Six roles: storage tier, fetch tier and cache, scheduler, "
+                "standby read copy, front door, Studio. Owner rulings, open questions, what not to do.",
+        "governed_by": ["D88", "D89", "D104", "D166", "D91", "D301", "D176", "D42"],
+    },
+    {
         "path": "docs/specs/lean-server.md",
         "status": "tbd",
-        "does": "PROPOSAL, nothing built: how to make the server lighter on the Mac by showing "
-                "stock images outside Review, from the smallest change to a full cloud server, "
-                "with measured and unmeasured load, constraints, a first step and open questions.",
+        "does": "How to make the server lighter on the Mac: where the load is, options from stock "
+                "images outside Review to a full cloud server, the owner's rulings (slow reads fixed "
+                "first, photos stay on the Mac for now, Fulfillment stock art parked as a debt) and "
+                "the parked home-device plan.",
         "governed_by": ["D301", "D89", "D36", "D43", "D88", "D316", "D42"],
     },
     {
@@ -5568,7 +5649,7 @@ COMPONENTS = [
                                 "D189", "D191", "D192", "D193", "D196", "D203", "D212",
                                 "D213", "D219", "D231", "D225", "D227", "D251", "D252",
                                 "D258", "D259", "D262", "D264", "D294", "D261", "D271", "D273",
-                                "D298", "D299", "D301"],
+                                "D298", "D299", "D301", "D320"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -5600,8 +5681,8 @@ COMPONENTS = [
                                       "copies and never fewer; whether that door should exist "
                                       "is the owner's open question. THE PUSH IS MEASURED; "
                                       "movetolive is read and has never been called from here.",
-                               "governed_by": ["D13", "D16", "D65", "D87", "D100", "D103",
-                                               "D104", "D273"],
+                               "governed_by": ["D13", "D16", "D65", "D87", "D100", "D103", "D104",
+                                               "D273", "D319"],
                                "tested_by": ["T7"]},
             "send_routes.py": {"does": "THE ONE PRESS that sends listings to TCGplayer and makes "
                                        "them live, and the checks around it. One press at a "
@@ -5654,8 +5735,8 @@ COMPONENTS = [
                 # file being fetched IS — the Pricing tab's Export Filtered CSV, which is the
                 # listing path's own input. D24 is the opsec rule this borrows: a bearer
                 # instrument does not go in a file anyone else reads.
-                "governed_by": ["D3", "D8", "D9", "D11", "D16", "D24", "D33", "D138", "D65",
-                                "D69", "D76", "D87", "D104"],
+                "governed_by": ["D3", "D8", "D9", "D11", "D16", "D24", "D33", "D65", "D69", "D76",
+                                "D87", "D104", "D138", "D319"],
                 "tested_by": ["T7"],
                 "note": "Stdlib only, like the rest of the server: requirements.txt names the "
                         "absence of `requests` on purpose and one more fetch is not a reason "
@@ -5803,6 +5884,23 @@ COMPONENTS = [
                         "that is on the far side of a seam no committed fixture can hold, and "
                         "it is one upload by the owner.",
             },
+            "slabs_routes.py": {
+                "does": "the My Slabs routes: POST /slabs adds a slab by cert (Card Ladder reads "
+                        "3.1, 3.2 and 3.4 outside the store lock, then ONE write of the slab, "
+                        "today's snapshot and the sales), GET /slabs lists every slab with its "
+                        "newest snapshot, GET /slabs/<grader>/<cert> reads one, DELETE on that path "
+                        "removes the slab and its sale links (no Card Ladder call, refused while an "
+                        "add runs). One "
+                        "`pipeline.cardladder.Client` lives for the process, so the 8 second pace "
+                        "and the day's rate-limit stop hold across requests. Card Ladder's "
+                        "numbers become text money and its dates one ISO day; a sale that was "
+                        "read before keeps the fields only an earlier read gave; a slab with no "
+                        "sale at its grade stores no value. Every refusal sentence is written "
+                        "here and names no decision, path or host. There is no sweep route: "
+                        "the owner ruled it out.",
+                "governed_by": ["D320", "D88", "D196", "D319"],
+                "note": "PROVED BY `make slabs-routes-selftest`.",
+            },
             "order_transport.py": {
                 "does": "the order transport (D69): this account's own orders off "
                         "order-management-api.tcgplayer.com, cookie-authenticated with the "
@@ -5869,10 +5967,10 @@ COMPONENTS = [
             },
             "portal_http.py": {
                 "does": "the transport both TCGplayer hosts share: the session cookie read, "
-                        "the User-Agent, the no-redirect opener, the socket handling and the "
-                        "one status ladder. Each host passes in its own refusal class, codes "
+                        "the User-Agent, its one door to the retry home (`pipeline/net.py`, "
+                        "no redirect followed) and the one status ladder. Each host passes in its own refusal class, codes "
                         "and words.",
-                "governed_by": ["D65", "D69"],
+                "governed_by": ["D65", "D69", "D319"],
             },
             "refusal.py": {
                 "does": "`BadRequest`, the refusal every route module can raise, and "
@@ -6779,7 +6877,7 @@ COMPONENTS = [
                                              "D142", "D145", "D147", "D156", "D166", "D168", "D172",
                                              "D174", "D180", "D183", "D193", "D196", "D212", "D213",
                                              "D225", "D227", "D236", "D252", "D260", "D264", "D271",
-                                             "D273", "D277", "D278", "D294", "D299", "D301"]},
+                                             "D273", "D277", "D278", "D294", "D299", "D301", "D320"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D91), whether the "
@@ -6995,8 +7093,8 @@ COMPONENTS = [
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D36", "D41", "D56", "D58", "D65", "D67", "D81", "D92", "D117",
                             "D118", "D121", "D128", "D131", "D132", "D142", "D144", "D145", "D153",
-                            "D164", "D170", "D172", "D183", "D196", "D218", "D259", "D260", "D264",
-                            "D271", "D299", "D313", "D316"]},
+                            "D164", "D170", "D172", "D183", "D196", "D211", "D218", "D259", "D260",
+                            "D264", "D271", "D299", "D313", "D316"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -8040,8 +8138,8 @@ COMPONENTS = [
                                                "data starts; a fill older than that is listed "
                                                "separately as having no market data at all, "
                                                "never plotted.",
-                                       "governed_by": ["D50", "D278", "D196", "D212", "D218", "D219",
-                                                       "D227"],
+                                       "governed_by": ["D50", "D196", "D212", "D218", "D219",
+                                                       "D227", "D278", "D313"],
                                        "note": "No harness test -- a Playwright spec would be "
                                                "the honest coverage and none exists yet, named "
                                                "rather than silently absent."},
@@ -9180,6 +9278,27 @@ COMPONENTS = [
                     "the view's word count and largest prose blocks, for `make text-density` "
                     "only. `injectRepeatedSentence` is the mutation hook, and trips all four."),
                 "governed_by": ["D284", "D269"],
+            },
+            "tests/copy-checks.spec.ts": {
+                "does": ("ONE sweep, TWO copy checks over every nav route and the Fulfiller's: "
+                    "voice (no I, my, me or mine on screen) and casing (Title Case on labels "
+                    "and headings), the two DESIGN.md copy rules. Each keeps a pending list "
+                    "(`copy-voice-allow.json`, `copy-casing-allow.json`) that only shrinks."),
+                "governed_by": ["D173", "D284", "D196"],
+            },
+            "tests/copyRules.ts": {
+                "does": ("The word rules the copy checks read: which words are first person, "
+                    "which short words Title Case keeps lower, and which text is exempt."),
+                "governed_by": ["D173"],
+            },
+            "tests/copySource.ts": {
+                "does": ("Reads the reason labels and Review questions straight from source, so "
+                    "the voice check covers labels no fixture puts on screen."),
+                "governed_by": ["D173"],
+            },
+            "tests/unit/copy-rules.unit.ts": {
+                "does": "Unit cases for `copyRules.ts`: each rule, true and false, in isolation.",
+                "governed_by": ["D173"],
             },
             "tests/text-checks.spec.ts": {
                 "does": ("ONE sweep, THREE checks (D284): every route is opened once through "

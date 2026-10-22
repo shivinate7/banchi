@@ -36,6 +36,8 @@ import {
   type Failure,
   failureTone,
   refusalToast,
+  unholdCopies,
+  reholdCopies,
 } from './server'
 import type {
   DecisionsDocument,
@@ -89,6 +91,7 @@ import {
   Icon,
   IconButton,
   Kbd,
+  Loading,
   Location,
   Money,
   Notice,
@@ -105,6 +108,7 @@ import {
   SettingsOp,
   Sheet,
   SortHeader,
+  Tile,
   countFacets,
   filterRows,
   matchQuery,
@@ -365,7 +369,7 @@ function targetOf(bucket: PricingSku['bucket']): 'overrides' | 'no_market_data' 
 
 /** Why this run adds no row for this SKU, as a heading — or null for the ordinary row. */
 function groupOf(sku: PricingSku): string | null {
-  return sku.at_cap ? (sku.nothing_to_add ?? 'nothing to add this run') : null
+  return sku.at_cap ? (sku.nothing_to_add ?? 'Nothing to add this run.') : null
 }
 
 /* ONE VOCABULARY (UN-5, finding #15, the Opus review round): a reversal reads "<what it
@@ -541,10 +545,10 @@ function bandOf(row: PricingSku): string {
 type PricingSortKey = 'arranged' | 'price' | 'low' | 'range' | 'asking' | 'name'
 const SORT_OPTIONS: readonly SortOption<PricingSortKey>[] = [
   { key: 'arranged', label: 'Suggested', asc: 'Needs you first', desc: 'Needs you first', first: 'desc' },
-  { key: 'price', label: 'Market price', desc: 'High to low', asc: 'Low to high', first: 'desc' },
-  { key: 'low', label: 'Lowest price', desc: 'High to low', asc: 'Low to high', first: 'desc' },
-  { key: 'range', label: 'Range 7d', desc: 'High to low', asc: 'Low to high', first: 'desc' },
-  { key: 'asking', label: 'Asking price', desc: 'High to low', asc: 'Low to high', first: 'desc' },
+  { key: 'price', label: 'Market price', desc: 'High to Low', asc: 'Low to High', first: 'desc' },
+  { key: 'low', label: 'Lowest price', desc: 'High to Low', asc: 'Low to High', first: 'desc' },
+  { key: 'range', label: 'Range 7d', desc: 'High to Low', asc: 'Low to High', first: 'desc' },
+  { key: 'asking', label: 'Asking price', desc: 'High to Low', asc: 'Low to High', first: 'desc' },
   { key: 'name', label: 'Name', desc: 'Z to A', asc: 'A to Z', first: 'asc' },
 ]
 const SORT_AT_REST: SortValue<PricingSortKey> = { key: 'arranged', dir: 'desc' }
@@ -1655,7 +1659,7 @@ export function Pricing() {
     /* ON THE LIVE TAB THE HEADS SAY WHAT THEY HOLD: the rows with no market price, which the rule
        never lowers and the owner prices by hand, then every other live listing. */
     const live = stamp !== null
-    if (needs.length > 0) groups.push({ head: live ? 'No market price' : 'Needs you', rows: needs })
+    if (needs.length > 0) groups.push({ head: live ? 'No market price' : 'Needs You', rows: needs })
     if (ready.length > 0) {
       groups.push({ head: needs.length > 0 ? (live ? 'With a market price' : 'Ready') : '', rows: ready })
     }
@@ -2115,6 +2119,40 @@ export function Pricing() {
     [answerFor, write, writeMany, openHold],
   )
 
+  /* COPIES THE OWNER REMOVED FROM TCGPLAYER BY HAND (D273, R-S4). Unhold puts them back on the
+   * list; its toast's Undo holds them again, and the server refuses that once a send has gone. */
+  const [unholding, setUnholding] = useState<string | null>(null)
+  const unhold = useCallback(
+    async (sku: PricingSku) => {
+      setUnholding(sku.sku)
+      try {
+        const done = await unholdCopies(sku.sku)
+        reload()
+        toast({
+          kind: 'receipt',
+          title: `Unheld ${done.unheld} ${done.unheld === 1 ? 'copy' : 'copies'} of ${sku.name}`,
+          body: 'They go out with the next send.',
+          ttlMs: 8000,
+          action: {
+            label: 'Undo',
+            onPress: () =>
+              void reholdCopies(sku.sku, done.unheld, done.pushed)
+                .then(() => {
+                  reload()
+                  toast({ kind: 'ok', title: `Held ${sku.name} again` })
+                })
+                .catch((err: unknown) => toast({ ...refusalToast(err, `Could not hold ${sku.name} again`) })),
+          },
+        })
+      } catch (err) {
+        toast({ ...refusalToast(err, `Could not unhold ${sku.name}`) })
+      } finally {
+        setUnholding(null)
+      }
+    },
+    [reload],
+  )
+
   const closeHold = useCallback(() => {
     const at = holdFor
     setHoldFor(null)
@@ -2493,7 +2531,7 @@ export function Pricing() {
     <>
       <IconButton
         icon="eraser"
-        label="Clear typed prices"
+        label="Clear Typed Prices"
         onClick={() => setClearOpen(true)}
         disabled={clearableTotal === 0}
       />
@@ -2536,9 +2574,9 @@ export function Pricing() {
           label="Which live listings to show"
           options={[
             /* A STALE READ'S COUNTS ARE NOT OFFERED AS CURRENT (the owner's ruling, 2026-09-26). */
-            { value: 'all', label: readStale ? 'All' : `All ${lensCounts.all}` },
-            { value: 'offered', label: readStale ? 'Not selling' : `Not selling ${lensCounts.offered}` },
-            { value: 'refused', label: readStale ? 'Passed over' : `Passed over ${lensCounts.refused}` },
+            { value: 'all', label: readStale ? 'All' : <>All <span data-value>{lensCounts.all}</span></> },
+            { value: 'offered', label: readStale ? 'Not Selling' : <>Not Selling <span data-value>{lensCounts.offered}</span></> },
+            { value: 'refused', label: readStale ? 'Passed Over' : <>Passed Over <span data-value>{lensCounts.refused}</span></> },
           ]}
           onChange={setLens}
         />
@@ -2606,7 +2644,7 @@ export function Pricing() {
       </Button>
       {readStale ? null : (
         <Button size="sm" icon="refresh" busy={liveBusy} disabled={liveBusy} onClick={readAgain}>
-          Read again
+          Read Again
         </Button>
       )}
       <span className="bn-sr" role="status">
@@ -2654,32 +2692,120 @@ export function Pricing() {
     barObserver.current = observer
   }, [])
 
-  /* F5 verbiage cut: the reviewer's own "Status" word would drop the multi-way split this
-     line is the only place to see broken out, which the data rule refuses (numbers stay,
-     only the words around them shrink). */
-  const summary = [
-    `${progress.outCopies} ready`,
-    needsPrice > 0 ? `${needsPrice} need a price` : null,
-    progress.byHand > 0 ? `${progress.byHand} typed` : null,
-    progress.held > 0 ? `${progress.held} held` : null,
-    progress.closed > 0 ? `${progress.closed} sent` : null,
-  ].filter((part): part is string => part !== null)
+  /* THE WORKLIST IS STILL IN FLIGHT on the Unsent tab. */
+  const barLoading = !liveTab && loading && table === null
 
+  /* THE SEND BAR'S THREE TILES (the owner's Preflight pick): where pricing stands before the one
+     press, from the same figures the line said. Each link shows the rows its tile counts, so it
+     clears every other filter first (D86: a missing price is unknown). "Price Them" picks the
+     Market price band "No market price", the filter that already names those rows. */
+  /* EACH TILE'S ROOM IS ITS LONGEST NOTE (D313), written before any count is known, so a count stands in.
+     ponytail: four wide digits; a count past four digits can wrap a note one line past its room. */
+  const ROOM_COUNT = '8888'
+  const typedPrices = rows.filter((row) => {
+    /* A HELD 'unlisted' ANSWER IS A STRING AND A HOLD, not a typed price: the held tile counts it. */
+    const answer = answerFor(row)
+    return typeof answer === 'string' && !isWithheld(answer)
+  }).length
+  const showRows = (picks: typeof facetPicks, held: boolean) => {
+    setQuery('')
+    setFilterHeld(held)
+    setFacetPicks(picks)
+  }
+  const pricedTile = (
+    <Tile
+      data-tile="priced"
+      pending={barLoading}
+      icon={needsPrice > 0 ? 'alert' : 'check'}
+      tone={needsPrice > 0 ? 'warn' : 'ok'}
+      title={needsPrice > 0 ? `${needsPrice} need a price` : 'Every card is priced'}
+      room={`Price Them ${ROOM_COUNT} typed. ${ROOM_COUNT} typed quantities.`}
+    >
+      {needsPrice > 0 ? (
+        <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => showRows({ band: ['none'] }, false)}>
+          Price Them
+        </Button>
+      ) : null}{' '}
+      {[
+        typedPrices > 0 ? `${typedPrices} typed.` : null,
+        progress.byHand > 0 ? `${progress.byHand} typed ${progress.byHand === 1 ? 'quantity' : 'quantities'}.` : null,
+      ]
+        .filter((part): part is string => part !== null)
+        .join(' ') || (needsPrice > 0 ? null : 'None typed.')}
+    </Tile>
+  )
+  const tally = (
+    <div className="pricing-tally">
+      {pricedTile}
+      <Tile data-tile="held" pending={barLoading} icon="lock" tone="info" title={`${progress.held} held back`} room="Not in this send. Show Held">
+        {progress.held > 0 ? (
+          <>
+            Not in this send.{' '}
+            <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => showRows({}, true)}>
+              Show Held
+            </Button>
+          </>
+        ) : (
+          'None held.'
+        )}
+      </Tile>
+      <Tile
+        data-tile="ready"
+        pending={barLoading}
+        icon="send"
+        tone={progress.outCopies > 0 ? 'accent' : 'idle'}
+        title={progress.outCopies > 0 ? `${progress.outCopies} ready to go` : 'Nothing ready yet'}
+        room={`Copies on ${ROOM_COUNT} SKUs. Joins ${ROOM_COUNT} listings in your store.`}
+      >
+        {/* THE PRESS COUNTS SKUS (`progress.outRows`, the value `SendCard` gets) and the title counts the copies
+            on them, so the unit is named; the cap rows are listings. */}
+        {[
+          progress.outCopies > 0 ? `Copies on ${progress.outRows} ${progress.outRows === 1 ? 'SKU' : 'SKUs'}.` : null,
+          progress.closed > 0 ? `${progress.outCopies > 0 ? 'Joins ' : ''}${progress.closed} listings in your store.` : null,
+        ]
+          .filter((part): part is string => part !== null)
+          .join(' ')}
+      </Tile>
+    </div>
+  )
+
+  /* THE FIRST PAINT HOLDS THE BAR'S ROOM (D313): while the worklist is in flight the tiles are drawn
+     pending and the press is the card's own, off with nothing to send, so the bar is the height it
+     will be and the list lands under it, not over it. */
   const bar =
-    !liveTab && loaded.length > 0 ? (
-      <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send to TCGplayer">
-        <p className="pricing-bar-says">{summary.join(', ')}</p>
-        <SendCard
-          runs={loaded}
-          copies={progress.outCopies}
-          skus={progress.outRows}
-          priceChanges={priceChanges}
-          liveMoves={liveMoves}
-          settled={!dirty && !saving}
-          saveFailed={saveFailed}
-          quantities={quantitiesAsked}
-          onSent={afterSend}
-        />
+    !liveTab && (barLoading || loaded.length > 0) ? (
+      <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send to TCGplayer" aria-busy={barLoading ? 'true' : undefined}>
+        {tally}
+        {barLoading ? (
+          /* THE PENDING BAR DRAWS THE CARD'S OWN CLASSES AND NOTHING ELSE: the same press and doors, off, so the bar is the
+             height it will be, and no read starts for a card that has no worklist yet (the mount stays inside its budget). */
+          <div className="send-card">
+            <div className="send-act">
+              <Button variant="primary" size="lg" icon="send" className="pricing-emit send-press" disabled>
+                Send to TCGplayer
+              </Button>
+              <IconButton icon="more" label="More Send Options" className="send-more-press" disabled />
+              <Button variant="quiet" icon="download" className="send-door" words="word-only-control" disabled>
+                Download
+              </Button>
+              <Button variant="quiet" icon="refresh" className="send-door" disabled>
+                Refresh
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <SendCard
+            runs={loaded}
+            copies={progress.outCopies}
+            skus={progress.outRows}
+            priceChanges={priceChanges}
+            liveMoves={liveMoves}
+            settled={!dirty && !saving}
+            saveFailed={saveFailed}
+            quantities={quantitiesAsked}
+            onSent={afterSend}
+          />
+        )}
       </aside>
     ) : liveTab && stamp !== null && readStale ? (
       <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send these prices">
@@ -2690,7 +2816,7 @@ export function Pricing() {
         <div className="send-card">
           <div className="send-act">
             <Button variant="primary" size="lg" icon="refresh" className="send-press" busy={liveBusy} disabled={liveBusy} onClick={readAgain}>
-              Read again
+              Read Again
             </Button>
           </div>
         </div>
@@ -2730,26 +2856,23 @@ export function Pricing() {
                 setPush('sending')
               }}
             >
-              {`Send ${pushable.length} ${pushable.length === 1 ? 'price' : 'prices'} to TCGplayer`}
+              {`Send ${pushable.length} ${pushable.length === 1 ? 'Price' : 'Prices'} to TCGplayer`}
             </Button>
             <span className="bn-sr" role="status">
               {push === 'sending' ? 'Checking TCGplayer, then sending…' : push === 'writing' ? 'Writing the file…' : ''}
             </span>
             {/* THE PRESS KEEPS ITS WORDS WHILE IT RUNS (D118, b-runs round 9): the spinner says it
                 is busy, and the status line says what it is doing. */}
-            <Button
-              variant="quiet"
+            <IconButton
               icon="download"
+              label="Download File"
               busy={push === 'writing'}
               disabled={push !== 'idle' || pushable.length === 0}
               onClick={() => {
                 setLinkHeld(wroteUpload)
                 setPush('writing')
               }}
-            >
-              <span className="send-long">Download the file instead</span>
-              <span className="send-short">Download file</span>
-            </Button>
+            />
             {!wroteUpload || (push !== 'idle' && !linkHeld) ? null : (
               <a className="bn-btn" href={markdownFileUrl(stamp, 'import.csv')} download="import.csv">
                 <Icon name="download" size={16} />
@@ -2827,12 +2950,12 @@ export function Pricing() {
         ) : roster.length === 0 ? (
           <EmptyState
             icon="tag"
-            title="Nothing to price yet"
+            title="Nothing to Price Yet"
             body="Price your live listings on the Live tab, or read a box on Review."
             actions={
               <>
                 <Button variant="primary" icon="tag" onClick={() => goTab('live')}>
-                  Price my live listings
+                  Price Your Live Listings
                 </Button>
                 <Button icon="play" onClick={() => (window.location.hash = '#/review')}>
                   Go to Review
@@ -2868,11 +2991,14 @@ export function Pricing() {
       toolbar={toolbar}
       toolbarLabel="Which rows"
       status={hasStatus ? status : undefined}
-      loading={loading && table === null}
+      loading={loading && table === null && !barLoading}
       empty={showList ? undefined : empty}
     >
       <div className="pricing-body" data-live={liveTab ? 'true' : undefined}>
         {bar}
+        {/* THE LIST'S OWN LOADING SHAPE SITS UNDER THE BAR, which `Page` would otherwise draw alone. */}
+        {barLoading ? <Loading /> : (
+        <>
         {/* ONE BLOCK SAYS HOW FRESH EVERYTHING IS: the time, the press, and under them the price moves and
             how the daily and trends reads ended. The Live tab has no refresh, so it draws the moves alone. */}
         {(() => {
@@ -2921,7 +3047,7 @@ export function Pricing() {
               value={facetPicks}
               onChange={setFacetPicks}
               count={{ shown: drawn.reduce((sum, group) => sum + group.rows.length, 0), total: rows.length, noun: { one: 'item', many: 'items' } }}
-              search={{ query, onChange: setQuery, placeholder: 'Name, set, number or SKU', label: 'Search this list' }}
+              search={{ query, onChange: setQuery, placeholder: 'Name, set, number or SKU…', label: 'Search This List' }}
               sort={{ options: sortOptions, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
             />
           )}
@@ -2985,6 +3111,8 @@ export function Pricing() {
                     }}
                     onPhoto={() => openPhoto(sku)}
                     onHold={() => toggleHold(sku)}
+                    onUnhold={() => void unhold(sku)}
+                    unholding={unholding === sku.sku}
                     onKey={(event) => onKey(event, sku)}
                     onCommit={(value) => commit(sku, value)}
                     onFirstKey={() => {
@@ -2998,6 +3126,8 @@ export function Pricing() {
             ))}
           </div>
           </>
+        )}
+        </>
         )}
       </div>
       </Page>
@@ -3146,6 +3276,8 @@ function PricingRow({
   onHover,
   onPhoto,
   onHold,
+  onUnhold,
+  unholding,
   onKey,
   onCommit,
   onFirstKey,
@@ -3173,6 +3305,9 @@ function PricingRow({
   onHover: (on: boolean) => void
   onPhoto: () => void
   onHold: () => void
+  /** Put the copies the owner removed by hand back on the list. */
+  onUnhold: () => void
+  unholding: boolean
   onKey: (event: ReactKeyboardEvent<HTMLInputElement>) => void
   onCommit: (value: string) => void
   onFirstKey: () => boolean
@@ -3269,6 +3404,16 @@ function PricingRow({
           {sku.listing === null || (sku.listing.live ?? 0) === 0 ? null : (
             <LiveCount live={sku.listing.live} soldHere={sku.listing.sold_here} age={readAge} />
           )}
+          {(sku.listing?.held_copies ?? 0) <= 0 ? null : (
+            /* D273 R-S4: the copies the owner took down by hand are held, never missing. The caption is
+               prose; the control beside it is the way back (Unhold), with its own Undo. */
+            <span className="pricing-removed">
+              {sku.listing?.held_copies} removed by you
+              <Button size="sm" variant="quiet" busy={unholding} disabled={unholding} onClick={onUnhold}>
+                Unhold
+              </Button>
+            </span>
+          )}
           {why === null ? null : <span className="pricing-why">“{why}”</span>}
         </span>
       </div>
@@ -3307,7 +3452,7 @@ function PricingRow({
       {!source.copies ? null : (
         <span className="pricing-qty pricing-col-qty" data-asked={asked === '' ? undefined : 'true'}>
           {!showQty ? null : (
-            <input
+            <input name="bn-input"
               className="bn-input pricing-qty-input"
               type="text"
               inputMode="numeric"
@@ -3356,7 +3501,7 @@ function PricingRow({
             <span className="pricing-currency" aria-hidden="true">
               $
             </span>
-            <input
+            <input name="pricing-input"
               className="pricing-input"
               type="text"
               inputMode="decimal"
@@ -3410,8 +3555,8 @@ function PricingRow({
       <IconButton
         ref={registerHold}
         icon={withheld ? 'unlock' : 'lock'}
-        label={withheld ? 'Release' : 'Hold back'}
-        name={withheld ? `Release ${sku.name}` : `Hold back ${sku.name}`}
+        label={withheld ? 'Release' : 'Hold Back'}
+        name={withheld ? `Release ${sku.name}` : `Hold Back ${sku.name}`}
         kbd="H"
         pressed={withheld}
         className="pricing-hold"
@@ -3461,7 +3606,7 @@ function BigMoney({ value, onCommit, label }: { value: string; onCommit: (next: 
       <span aria-hidden="true" className="pricing-cheap-currency">
         $
       </span>
-      <input
+      <input name="pricing-cheap-input"
         className="pricing-cheap-input"
         inputMode="decimal"
         aria-label={label}
@@ -3606,11 +3751,11 @@ function RuleSheet({
                 onChange={(kind) => onCustomDraft({ ...customDraft, kind }, true)}
               />
               <label className="pricing-pct">
-                <input
+                <input name="percentage"
                   className="bn-input pricing-pct-input"
                   type="text"
                   inputMode="decimal"
-                  placeholder="0"
+                  placeholder="Percent, like 10…"
                   aria-label="Percentage"
                   aria-invalid={customBad === null ? undefined : true}
                   value={customDraft.pct}
@@ -3744,30 +3889,30 @@ function LiveSheet({
       <div className="pricing-sheet-fields">
         <label className="bn-field">
           <span className="bn-field-label">Not sold in this many days</span>
-          <input className="bn-input" inputMode="numeric" value={days} onChange={(event) => setDays(event.currentTarget.value.replace(/\D/g, ''))} />
+          <input name="bn-input" className="bn-input" inputMode="numeric" value={days} onChange={(event) => setDays(event.currentTarget.value.replace(/\D/g, ''))} />
         </label>
         <Segmented<'cut' | 'match'>
           label="Price"
           value={match ? 'match' : 'cut'}
           options={[
-            { value: 'cut', label: 'Under my price' },
-            { value: 'match', label: 'At my price' },
+            { value: 'cut', label: 'Under your price' },
+            { value: 'match', label: 'At your price' },
           ]}
           onChange={(next) => setMatch(next === 'match')}
         />
         {match ? null : (
           <label className="bn-field">
             <span className="bn-field-label">Percent under</span>
-            <input className="bn-input" inputMode="decimal" value={percent} onChange={(event) => setPercent(event.currentTarget.value.replace(/[^0-9.]/g, ''))} />
+            <input name="bn-input" className="bn-input" inputMode="decimal" value={percent} onChange={(event) => setPercent(event.currentTarget.value.replace(/[^0-9.]/g, ''))} />
           </label>
         )}
         {match ? null : (
           <label className="bn-field">
             <span className="bn-field-label">At most this much off a card, in dollars</span>
-            <input
+            <input name="bn-input"
               className="bn-input pricing-cap-field"
               inputMode="decimal"
-              placeholder="No limit"
+              placeholder="Dollars, like 2.00. Blank for no limit…"
               value={cap}
               onChange={(event) => {
                 const next = event.currentTarget.value.replace(/[^0-9.]/g, '')
@@ -3983,19 +4128,19 @@ function HoldPanel({
       </div>
       <div className="pricing-holdpanel-fields">
         <label className="bn-field">
-          <span className="bn-field-label">Tell me when market is above</span>
-          <input
+          <span className="bn-field-label">Alert when market is above</span>
+          <input name="bn-input"
             className="bn-input bn-input-mono"
             type="text"
             inputMode="decimal"
-            placeholder="0.00"
+            placeholder="Price, like 1.50…"
             value={watch}
             onChange={(event) => setWatch(event.target.value)}
           />
         </label>
         <label className="bn-field">
           <span className="bn-field-label">Note</span>
-          <input className="bn-input" type="text" placeholder="why, in a few words" value={text} onChange={(event) => setText(event.target.value)} />
+          <input name="bn-input" className="bn-input" type="text" placeholder="Why, like a restock…" value={text} onChange={(event) => setText(event.target.value)} />
         </label>
       </div>
       <div className="pricing-holdpanel-actions">

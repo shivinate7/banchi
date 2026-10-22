@@ -208,6 +208,24 @@ test('a failed read draws the failure notice', async ({ page }) => {
   await expect(page.getByText('Could not read your orders')).toBeVisible()
 })
 
+/* ux-w2 B19 (sales-screen.md, signed off). Red on main until the build lands. The sort field and its direction live in ONE menu: one button that
+   opens a menu, not a segmented group of sort fields. The Singles, Sealed and All toggles stay as they are. */
+test('ux-w2 B19: the sort row is one menu button, not a segmented group, and Singles, Sealed and All stay', async ({ page }) => {
+  await stub(page, generalOrders())
+  await open(page, '?period=all')
+  await expect(page.locator('main.revenue')).toBeVisible()
+
+  await expect(page.getByRole('group', { name: /^sort$/i }), 'no segmented group carries the sort fields').toHaveCount(0)
+  const trigger = page.getByRole('button', { name: /sort/i })
+  await expect(trigger, 'one button names the sort').toHaveCount(1)
+  await trigger.click()
+  await expect(page.getByRole('menu').or(page.getByRole('listbox')), 'the sort button opens one menu').toBeVisible()
+
+  for (const name of [/^singles$/i, /^sealed$/i, /^all$/i]) {
+    await expect(page.getByRole('button', { name }).first(), `the ${name} toggle stays`).toBeVisible()
+  }
+})
+
 test('gross-descending is the default sort, and its column carries aria-sort', async ({ page }) => {
   await stub(page, generalOrders())
   await open(page, '?period=all')
@@ -247,7 +265,7 @@ test('the Name column sorts, and a second click is the exact reverse of the firs
 test('the search field narrows the product table by name', async ({ page }) => {
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  await page.getByPlaceholder('Search').fill('pikachu')
+  await page.getByPlaceholder('Card, set or SKU…').fill('pikachu')
   expect(await productNames(page)).toEqual(['Pikachu VMAX'])
 })
 
@@ -259,7 +277,7 @@ test('the search field narrows the product table by name', async ({ page }) => {
 test('the search field is the shared matcher, not a substring test (D271)', async ({ page }) => {
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  await page.getByPlaceholder('Search').fill('ex charizard')
+  await page.getByPlaceholder('Card, set or SKU…').fill('ex charizard')
   expect(await productNames(page)).toEqual(['Charizard ex'])
 })
 
@@ -285,7 +303,7 @@ test('the search field also finds a row by its set name (F11b)', async ({ page }
     ...generalOrders().slice(3),
   ])
   await open(page, '?period=all')
-  await page.getByPlaceholder('Search').fill('vivid voltage')
+  await page.getByPlaceholder('Card, set or SKU…').fill('vivid voltage')
   expect(await productNames(page)).toEqual(['Pikachu VMAX'])
 })
 
@@ -293,7 +311,7 @@ test('the search field also finds a row by its set name (F11b)', async ({ page }
 test('the search field also finds a row by its SKU (F11c)', async ({ page }) => {
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  await page.getByPlaceholder('Search').fill('9200002')
+  await page.getByPlaceholder('Card, set or SKU…').fill('9200002')
   expect(await productNames(page)).toEqual(['Pikachu VMAX'])
 })
 
@@ -339,7 +357,7 @@ test('a drill-down opens a product row into the orders behind it, and closes aga
   await open(page, '?period=all')
 
   const row = page.locator('.revenue-table tbody tr', { hasText: 'Charizard ex' })
-  const toggle = row.getByRole('button', { name: /orders behind Charizard ex/ })
+  const toggle = row.getByRole('button', { name: /Orders Behind Charizard ex/ })
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
   await toggle.click()
@@ -361,7 +379,7 @@ test('sort, search and the month filter all round-trip through the URL, includin
   await open(page, '?period=all')
 
   await page.getByRole('columnheader', { name: 'Name' }).getByRole('button').click()
-  await page.getByPlaceholder('Search').fill('char')
+  await page.getByPlaceholder('Card, set or SKU…').fill('char')
   await page.locator('.revenue-month-col', { hasText: 'Jul 2026' }).click()
 
   await expect(page).toHaveURL(/[?&]sort=name&dir=asc/)
@@ -371,7 +389,7 @@ test('sort, search and the month filter all round-trip through the URL, includin
   await page.reload()
   await expect(page.locator('main.revenue')).toBeVisible()
   await expect(page.getByRole('columnheader', { name: 'Name' })).toHaveAttribute('aria-sort', 'ascending')
-  await expect(page.getByPlaceholder('Search')).toHaveValue('char')
+  await expect(page.getByPlaceholder('Card, set or SKU…')).toHaveValue('char')
   await expect(page.locator('.revenue-month-col[aria-pressed="true"]')).toContainText('Jul 2026')
   expect(await productNames(page)).toEqual(['Charizard ex'])
 })
@@ -506,7 +524,7 @@ test('no PAGE horizontal scroll at 390 with the Today column active — it scrol
   await setViewport(page, { width: 390, height: 900 })
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  await page.getByRole('button', { name: "Compare to today's market" }).click()
+  await page.getByRole('button', { name: "Compare to Today's Market", exact: true }).click()
   await expect(page.locator('.revenue-table thead th', { hasText: 'Today' })).toBeVisible()
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(0)
@@ -634,7 +652,7 @@ test('market comparison is a press, never a mount, and draws a sign and a word (
   expect(calls()).toBe(0)
   await expect(page.locator('.revenue-table thead th', { hasText: 'Today' })).toHaveCount(0)
 
-  await page.getByRole('button', { name: "Compare to today's market" }).click()
+  await page.getByRole('button', { name: "Compare to Today's Market", exact: true }).click()
   expect(calls()).toBeGreaterThan(0)
 
   await expect(page.locator('.revenue-table thead th', { hasText: 'Today' })).toBeVisible()
@@ -649,7 +667,7 @@ test('a name with no price draws no figure, never a zero, and the coverage is st
   stubPrices(page, {}) // neither the archive nor readings has priced anything
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  await page.getByRole('button', { name: "Compare to today's market" }).click()
+  await page.getByRole('button', { name: "Compare to Today's Market", exact: true }).click()
   await expect(page.locator('.revenue-market-none').first()).toHaveText('no reading')
   await expect(page.locator('.revenue-market-none')).toHaveCount(3)
   await expect(page.locator('.revenue-market-note')).toContainText('0 of 3 names have a price today, 3 do not')
@@ -664,7 +682,7 @@ test('the archive answers first, and a name only readings has priced still draws
   })
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  await page.getByRole('button', { name: "Compare to today's market" }).click()
+  await page.getByRole('button', { name: "Compare to Today's Market", exact: true }).click()
   await expect(page.locator('.revenue-market-note')).toContainText('2 of 3 names have a price today, 1 do not')
   const charizard = page.locator('.revenue-table tbody tr', { hasText: 'Charizard ex' }).locator('.revenue-market')
   await expect(charizard).toContainText('$18.00')
@@ -870,7 +888,95 @@ test('a pending tile holds the box it has with a photo (D313)', async ({ page })
   expect(after?.height).toBeCloseTo(before?.height ?? 0, 0)
 })
 
-test('a SKU pending past the cap ends on no photo found', async ({ page }) => {
+/** Moves the fake clock forward in 5 s pieces until `ms` is spent or `done` holds. A re-ask
+ *  timer is armed only after the previous answer lands, so each piece is followed by a short
+ *  real wait; a tight fastForward loop outruns the fetch. No step or interval of the product
+ *  is assumed, so a longer wait between asks only costs more pieces. */
+async function spendFakeTime(page: Page, ms: number, done: () => Promise<boolean> = async () => false): Promise<void> {
+  for (let spent = 0; spent < ms && !(await done()); spent += 5000) {
+    await page.clock.fastForward(5000)
+    await page.waitForTimeout(40) // keep: the stubbed answer lands on the real clock, outside the fake one
+  }
+}
+
+const SKU_PHOTO_STOCK = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
+
+test('a photo answer that lands after 31 seconds still draws on the open screen', async ({ page }) => {
+  test.setTimeout(90_000)
+  await page.route(SKU_PHOTO_STOCK, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: SLOT_SVG }))
+  await stub(page, generalOrders())
+  let slow = true
+  let asks = 0
+  await page.route(/\/skus\/photos\?/, (route) => {
+    asks += 1
+    return json(route, slow ? { photos: {}, stock_photos: {}, pending: ['9100001'] } : { photos: {}, stock_photos: { '9100001': SKU_PHOTO_STOCK }, pending: [] })
+  })
+  await open(page)
+  const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
+  await expect(thumb).toHaveAttribute('data-pending', 'true')
+  // The catalogue stays loading while the fake clock runs, up to ten asks or the budget. The old
+  // client gave up after seven asks (the first, then six waits that add up to 31 s). A re-ask timer
+  // is armed only after the previous answer lands, so on a busy rig the pieces can pass with few
+  // asks. The count keeps the asserts below from passing on timers that never fired.
+  await spendFakeTime(page, 600_000, async () => asks >= 10)
+  expect(asks, 'the client stopped asking for the photo while the screen was open (or the timers never fired)').toBeGreaterThanOrEqual(10)
+  await expect(thumb, 'the row gave up on its photo while the screen was open').toHaveAttribute('data-pending', 'true')
+  await expect(thumb).not.toHaveAttribute('data-missing', 'true')
+  slow = false
+  await spendFakeTime(page, 300_000, async () => (await thumb.locator('img').count()) > 0)
+  await expect(thumb.locator('img'), 'the late answer never reached the row').toHaveAttribute('src', SKU_PHOTO_STOCK)
+})
+
+/** An error answer in the server's own shape (`{ error: { code, message } }`). */
+function refuse(route: Route, status: number, code: string) {
+  return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify({ error: { code, message: 'Refused.' } }) })
+}
+
+// A busy server, a locked store, a request timeout and a rate limit may pass; the ask is repeated.
+for (const [status, code] of [[503, 'unavailable'], [429, 'rate_limited'], [423, 'store_busy'], [408, 'request_timeout']] as const) {
+  test(`a photo lookup that fails with ${status} is asked again, not left as no photo`, async ({ page }) => {
+    test.setTimeout(90_000)
+    await page.route(SKU_PHOTO_STOCK, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: SLOT_SVG }))
+    await stub(page, generalOrders())
+    let asks = 0
+    await page.route(/\/skus\/photos\?/, (route) => {
+      asks += 1
+      if (asks === 1) return refuse(route, status, code)
+      return json(route, { photos: {}, stock_photos: { '9100001': SKU_PHOTO_STOCK }, pending: [] })
+    })
+    await open(page)
+    const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
+    await spendFakeTime(page, 300_000, async () => (await thumb.locator('img').count()) > 0)
+    expect(asks, 'the failed lookup was final: it was never asked again').toBeGreaterThan(1)
+    await expect(thumb.locator('img')).toHaveAttribute('src', SKU_PHOTO_STOCK)
+  })
+}
+
+// A refusal that no retry can change (a bad request, a missing route) is final, as "no photo".
+for (const [status, code] of [[400, 'bad_request'], [404, 'not_found']] as const) {
+  test(`a photo lookup refused with ${status} is not asked again, and settles on no photo`, async ({ page }) => {
+    test.setTimeout(90_000)
+    await stub(page, generalOrders())
+    let asks = 0
+    await page.route(/\/skus\/photos\?/, (route) => {
+      asks += 1
+      return refuse(route, status, code)
+    })
+    await open(page)
+    await expect.poll(() => asks, { message: 'the lookup was never asked' }).toBeGreaterThan(0)
+    // Time for a client that settles to settle. Then the count must not move: the loop ends at the
+    // first further ask, and a client that keeps asking every few seconds ends it at once.
+    await spendFakeTime(page, 20_000)
+    const settled = asks
+    await spendFakeTime(page, 200_000, async () => asks > settled)
+    expect(asks, `a ${status} no retry can change was asked again`).toBe(settled)
+    const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
+    await expect(thumb).toHaveAttribute('data-missing', 'true')
+    await expect(thumb).toContainText('No photo found')
+  })
+}
+
+test('leaving Sales ends the photo asks for a SKU that is still pending', async ({ page }) => {
   await stub(page, generalOrders())
   let asks = 0
   await page.route(/\/skus\/photos\?/, (route) => {
@@ -878,19 +984,184 @@ test('a SKU pending past the cap ends on no photo found', async ({ page }) => {
     return json(route, { photos: {}, stock_photos: {}, pending: ['9100001'] })
   })
   await open(page)
-  const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
-  await expect(thumb).toHaveAttribute('data-pending', 'true')
-  // Each re-ask timer is set only after the previous answer lands, so wait for the ask
-  // before moving the clock. A tight fastForward loop outruns the fetch and strands the cap.
-  for (let i = 1; i <= 6; i += 1) {
-    await expect.poll(() => asks).toBe(i)
-    await page.clock.fastForward(9000)
-  }
-  await expect(thumb).toHaveAttribute('data-missing', 'true')
-  await expect(thumb).toContainText('No photo found')
+  await expect(page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')).toHaveAttribute('data-pending', 'true')
+  await spendFakeTime(page, 15_000)
+  await page.evaluate(() => {
+    window.location.hash = '#/mix'
+  })
+  await expect(page.locator('.revenue-podium')).toBeHidden()
+  await page.waitForTimeout(100) // keep: an ask already in flight when the screen closed settles on the real clock
   const final = asks
-  await page.clock.fastForward(60000)
+  await spendFakeTime(page, 120_000)
   expect(asks).toBe(final)
+})
+
+/** `count` one-line September orders, each its own SKU and each worth $1 less than the one
+ *  before, so gross-descending puts SKU `n` at rank `n` — the board's own row number. */
+function skuOf(rank: number): string {
+  return `95${String(rank).padStart(5, '0')}`
+}
+function stockOf(rank: number): string {
+  return `https://tcgplayer-cdn.tcgplayer.com/product/${skuOf(rank)}_200w.jpg`
+}
+function manyOrders(count: number): OrderRow[] {
+  return Array.from({ length: count }, (_, i) =>
+    orderRow({
+      number: `ORD-${3000 + i}`,
+      placed_at: '2026-09-05T10:00:00+00:00',
+      status: 'Shipped',
+      lines: [line({ sku: skuOf(i + 1), name: `Printing ${String(i + 1).padStart(2, '0')}`, unit_price: (100 - i).toFixed(2) })],
+    }),
+  )
+}
+
+function rankOf(sku: string): number {
+  return Number(sku.slice(2))
+}
+/** The SKUs one `/skus/photos` call names. */
+function skusOfCall(route: Route): string[] {
+  return new URL(route.request().url()).searchParams.getAll('sku')
+}
+/** A stock photo for each SKU, answered the way `do_skus_photos` answers one. */
+function stockFor(skus: string[]) {
+  return { photos: {}, stock_photos: Object.fromEntries(skus.map((sku) => [sku, stockOf(rankOf(sku))])), pending: [] }
+}
+/** What every board row (rank 4 and up; the podium draws the top three) draws right now, by rank:
+ *  its photo's URL, `pending` while its SKU is still out, or `none`. One read, so a 120-row board
+ *  needs no scrolling: the `<img>` is in the page whether or not it has been fetched. */
+async function boardThumbs(page: Page): Promise<Map<number, string>> {
+  const rows = await page.locator('.revenue-board li').evaluateAll((items) =>
+    items.map((item) => {
+      const thumb = item.querySelector('.bn-thumb')
+      const state = thumb?.querySelector('img')?.getAttribute('src') ?? (thumb?.getAttribute('data-pending') === 'true' ? 'pending' : 'none')
+      return [item.querySelector('.revenue-board-rk')?.textContent?.trim() ?? '', state] as [string, string]
+    }),
+  )
+  return new Map(rows.map(([rank, state]) => [Number(rank), state]))
+}
+/** The ranks from `from` to `to` whose rows do not draw their own photo. */
+async function undrawn(page: Page, from: number, to: number): Promise<number[]> {
+  const thumbs = await boardThumbs(page)
+  return Array.from({ length: to - from + 1 }, (_, i) => from + i).filter((rank) => thumbs.get(rank) !== stockOf(rank))
+}
+async function stubStockImages(page: Page) {
+  await page.route(/tcgplayer-cdn\.tcgplayer\.com\/product\//, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/svg+xml', body: SLOT_SVG }),
+  )
+}
+
+/** `server/capture_server.py`'s `SKUS_PHOTOS_LIMIT`: one call may name this many SKUs and no more. */
+const SKUS_PHOTOS_LIMIT = 40
+
+test('under Show all, no photo call names more SKUs than the server answers, and every row draws its photo', async ({ page }) => {
+  await stubStockImages(page)
+  await stub(page, manyOrders(120))
+  const sizes: number[] = []
+  const asked = new Set<string>()
+  await page.route(/\/skus\/photos\?/, (route) => {
+    const skus = skusOfCall(route)
+    sizes.push(skus.length)
+    // The server's own answer to a call over the limit (`do_skus_photos`).
+    if (skus.length > SKUS_PHOTOS_LIMIT) return refuse(route, 400, 'too_many_skus')
+    skus.forEach((sku) => asked.add(sku))
+    return json(route, stockFor(skus))
+  })
+  await open(page)
+  await page.getByRole('button', { name: 'Show all 120' }).click()
+  // Every SKU is asked in lawful calls, or one call is refused: either ends the wait.
+  await expect
+    .poll(() => Math.max(...sizes) > SKUS_PHOTOS_LIMIT || asked.has(skuOf(120)), { message: 'the last SKU was never asked about' })
+    .toBe(true)
+  expect(Math.max(...sizes), `one call named ${Math.max(...sizes)} SKUs; the server refuses over ${SKUS_PHOTOS_LIMIT} (too_many_skus)`).toBeLessThanOrEqual(SKUS_PHOTOS_LIMIT)
+  await expect.poll(() => undrawn(page, 4, 120), { message: 'rows that did not draw their photo' }).toEqual([])
+})
+
+// The next two cases answer a call of any size. They are about WHEN a batch's answer lands and
+// WHICH SKUs are asked again; the call-size limit is the case above's.
+
+test('a photo answered by an early batch draws before the later batches answer', async ({ page }) => {
+  await stubStockImages(page)
+  await stub(page, manyOrders(120))
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const answered: string[] = []
+  await page.route(/\/skus\/photos\?/, async (route) => {
+    const skus = skusOfCall(route)
+    // The call that carries the last SKU does not answer until this case lets it.
+    if (skus.includes(skuOf(120))) await held
+    else answered.push(...skus)
+    return json(route, stockFor(skus))
+  })
+  try {
+    await open(page)
+    await page.getByRole('button', { name: 'Show all 120' }).click()
+    // A SKU past the first ten (the window the screen asked about on arrival) that a call has answered.
+    await expect.poll(() => answered.find((sku) => rankOf(sku) > 10) ?? null, { message: 'no call past the first window was answered' }).not.toBeNull()
+    const early = rankOf(answered.find((sku) => rankOf(sku) > 10) ?? '')
+    await expect
+      .poll(async () => (await boardThumbs(page)).get(early), { message: `row ${early}'s call answered, and the row waited for a later call` })
+      .toBe(stockOf(early))
+    expect((await boardThumbs(page)).get(120), 'the row still out holds its slot, not a no-photo state').toBe('pending')
+  } finally {
+    release()
+  }
+  await expect.poll(() => undrawn(page, 4, 120), { message: 'rows that did not draw their photo' }).toEqual([])
+})
+
+test('when one photo batch fails, the batches that answered are not asked again', async ({ page }) => {
+  test.setTimeout(90_000)
+  await stubStockImages(page)
+  await stub(page, manyOrders(120))
+  const calls: { skus: string[]; failed: boolean }[] = []
+  await page.route(/\/skus\/photos\?/, (route) => {
+    const skus = skusOfCall(route)
+    // The call that carries the last SKU fails once, as a busy server does.
+    const failed = skus.includes(skuOf(120)) && !calls.some((call) => call.failed)
+    calls.push({ skus, failed })
+    return failed ? refuse(route, 503, 'unavailable') : json(route, stockFor(skus))
+  })
+  await open(page)
+  await page.getByRole('button', { name: 'Show all 120' }).click()
+  await spendFakeTime(page, 300_000, async () => (await boardThumbs(page)).get(120) === stockOf(120))
+  expect(await undrawn(page, 4, 120), 'rows that did not draw their photo').toEqual([])
+  const failedSkus = new Set(calls.find((call) => call.failed)?.skus)
+  const times = new Map<string, number>()
+  calls.forEach((call) => call.skus.forEach((sku) => times.set(sku, (times.get(sku) ?? 0) + 1)))
+  const wrong = [...times]
+    .filter(([sku, n]) => n !== (failedSkus.has(sku) ? 2 : 1))
+    .map(([sku, n]) => `row ${rankOf(sku)} asked ${n} times`)
+  expect(wrong.slice(0, 5), `${wrong.length} SKUs were asked the wrong number of times: each SKU of the failed batch twice, every other SKU once`).toEqual([])
+})
+
+test('under Show all, no two photo calls are ever in flight at once, on the first pass or on any retry', async ({ page }) => {
+  test.setTimeout(120_000)
+  await stub(page, manyOrders(400))
+  let calls = 0
+  let inFlight = 0
+  let peak = 0
+  await page.route(/\/skus\/photos\?/, async (route) => {
+    const skus = skusOfCall(route)
+    calls += 1
+    inFlight += 1
+    peak = Math.max(peak, inFlight)
+    await new Promise((resolve) => setTimeout(resolve, 25)) // keep: real time, so two calls that overlap are both open at once
+    // Closed before the answer goes out, so a client that asks again the moment it hears is never counted as overlapping.
+    inFlight -= 1
+    // Every batch answers pending: each one is asked again, on every retry step.
+    return json(route, { photos: {}, stock_photos: {}, pending: skus })
+  })
+  await open(page)
+  // The first window is answered and nothing is in flight when Show all is pressed, so what is
+  // counted below is the client's own overlap and not a call the press left behind.
+  await expect.poll(() => calls > 0 && inFlight === 0, { intervals: [10, 20], message: 'the first window was never answered' }).toBe(true)
+  await page.getByRole('button', { name: 'Show all 400' }).click()
+  // The first pass over 400 SKUs, then retry steps. Two full retry rounds of the ten batches
+  // (and the first window) is the least that proves a retry was asked at all.
+  await spendFakeTime(page, 600_000, async () => peak > 1 || calls >= 31)
+  expect(peak, `${peak} photo calls were in flight at once; each call must wait for the one before it, retries included`).toBeLessThanOrEqual(1)
+  expect(calls, 'too few photo calls: the retry steps never ran, so no overlap was looked for').toBeGreaterThanOrEqual(31)
 })
 
 

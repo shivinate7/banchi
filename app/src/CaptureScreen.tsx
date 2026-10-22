@@ -62,7 +62,7 @@ import { captureBoxLabel } from './runScope'
 // before it is a different sitting. Imported rather than restated — see `sitting` below.
 import { GAP_MINUTES } from './storeHistory'
 import { Button, ConfirmSheet, Icon, IconButton, Kbd, Notice, Page, Pill, Slot, Stat } from './kit'
-import { DEALING_RAIL_TILES, dealerSupported, useDealer } from './dealer'
+import { DEALING_RAIL_TILES, SAID_NO_PHOTO, dealerSupported, useDealer } from './dealer'
 import { matchQuery } from './kit/match'
 import { toast } from './kit/toast'
 import { placePartsOf } from './position'
@@ -1084,7 +1084,7 @@ const UndoFace = memo(
             from the rendered label. A tile with no label names its box alone. */}
         <span className="capture-undo-pos">
           {spansDrawers || undoFigure(target) === null ? (
-            <span className="capture-undo-drawer">{boxTitle(target.boxName, target.box)}</span>
+            <span className="capture-undo-drawer" data-typed>{boxTitle(target.boxName, target.box)}</span>
           ) : null}
           {undoFigure(target)}
         </span>
@@ -1677,6 +1677,11 @@ export function CaptureScreen() {
   const retryingRef = useRef(false)
   const applyTail = useRef<Promise<boolean>>(Promise.resolve(true))
   const dealingRef = useRef(false)
+  /* The latest verdict was an empty stand, read while dealing. Dealing stops after one such
+   * card, so `noCardRun` never reaches the warning's three; this lets that stop name the
+   * baseline. Every verdict rewrites it, so an arm-time verdict (re-baseline, re-arm) or a
+   * good fire after the stop clears it. */
+  const [noCardDealt, setNoCardDealt] = useState(false)
 
   
   const [carried, setCarried] = useState(() => restoredIds.current?.length ?? 0)
@@ -2212,9 +2217,9 @@ export function CaptureScreen() {
   const hintRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (openField === 'box') boxEntryRef.current?.focus()
+    if (openField === 'box') boxEntryRef.current?.focus({ preventScroll: true })
     else if (openField === 'set') {
-      hintRef.current?.focus()
+      hintRef.current?.focus({ preventScroll: true })
       /* THE VOCABULARY FOLLOWS THE FIELD BEING OPEN, not the row being tapped. `H` opens it
          from the key handler and never touches the row's `onToggle`, so hanging the load off
          the tap left the list empty for every operator who uses the keyboard — which on this
@@ -3906,7 +3911,10 @@ export function CaptureScreen() {
         camera.videoRef,
         setMotionDiag,
         DEFAULT_PARAMS,
-        (t, d, dBase, luma, event, cells) => traceRef.current?.record(t, d, dBase, luma, event, cells),
+        (t, d, dBase, luma, event, cells) => {
+          if (event !== null) setNoCardDealt(event === 'suppressed:no-card' && dealingRef.current)
+          traceRef.current?.record(t, d, dBase, luma, event, cells)
+        },
         motionControls,
       ),
     [camera.videoRef],
@@ -4081,7 +4089,8 @@ export function CaptureScreen() {
         icon: 'camera',
         tone: 'plain',
         text: null,
-        fix: { label: 'Camera', icon: 'camera', onPress: camera.retry },
+        // The stage keeps the Camera control (D211); Setup does not repeat it.
+        fix: null,
       })
     } else if (!camera.ready) {
       /* STARTED BUT NOT READY — asked for, and not delivering frames: a device that vanished,
@@ -4106,7 +4115,8 @@ export function CaptureScreen() {
         tone: 'plain',
         // The disabled Capture button above answers to this row, so it says why in a sentence.
         text: 'Pick a box before you capture.',
-        fix: { label: 'Box', icon: 'box', onPress: () => toggleField('box') },
+        // The Shooting group keeps the Box select (D211); Setup keeps only the sentence.
+        fix: null,
       })
     }
     if (gameEntry === null) {
@@ -4228,7 +4238,10 @@ export function CaptureScreen() {
    * baseline, camera ready, capture not halted. Any fire the screen declines stops it. */
   const motionArmed = triggerMode === 'motion' && motionDiag?.hasBaseline === true
   const dealer = useDealer({
-    onMark: (name, card) => traceRef.current?.mark(name, card),
+    onMark: (name, card) => {
+      if (name === 'start-sent') setNoCardDealt(false)
+      traceRef.current?.mark(name, card)
+    },
     halted: halt !== null,
     dropped: swallowedTotal + swallowed.halted,
     ready: blockers.length === 0,
@@ -4862,14 +4875,17 @@ export function CaptureScreen() {
               </div>
             </div>
 
-            {/* A run of empty-stand verdicts has exactly one likely cause and one remedy. */}
-            {triggerMode !== 'manual' && (motionDiag?.noCardRun ?? 0) >= 3 ? (
+            {/* A run of empty-stand verdicts has exactly one likely cause and one remedy. A
+                dealing stop after one such card is the same run, cut short by the dealer. */}
+            {triggerMode !== 'manual' &&
+            ((motionDiag?.noCardRun ?? 0) >= 3 ||
+              ((motionDiag?.noCardRun ?? 0) >= 1 && noCardDealt && dealer.said === SAID_NO_PHOTO)) ? (
               <div className="capture-stage-warn" role="alert">
                 <Icon name="alert" size={16} />
                 <p className="capture-refused">
-                  {motionDiag?.noCardRun} settles in a row read as an empty stand. If cards are
-                  going past the lens, the baseline was taken with something on the stand — clear
-                  it and re-baseline. Those cards were not photographed.
+                  {(motionDiag?.noCardRun ?? 0) >= 3
+                    ? `${motionDiag?.noCardRun} settles in a row read as an empty stand. If cards are going past the lens, the baseline was taken with something on the stand — clear it and re-baseline. Those cards were not photographed.`
+                    : 'The last card read as an empty stand, so the dispenser stopped. The baseline was likely taken with something on the stand — clear it and re-baseline. That card was not photographed.'}
                 </p>
                 <Button size="sm" icon="refresh" onClick={() => motionControls.current?.rebaseline()}>
                   Re-baseline
@@ -5083,7 +5099,8 @@ export function CaptureScreen() {
                   <input
                     className="bn-input capture-text capture-note"
                     type="text"
-                    placeholder={last.game.catalogued ? 'Add a note to this card' : 'What is this card?'}
+                    name="capture-note"
+                    placeholder={last.game.catalogued ? 'Add a note, like water damage…' : 'Card name, like Pikachu ex…'}
                     aria-label={`Note on ${last.card.label}`}
                     value={noteDraft}
                     onChange={(event) => setNoteDraft(event.target.value)}
@@ -5168,7 +5185,7 @@ export function CaptureScreen() {
               <div className="capture-entry">
                 <div className="capture-entrybox bn-input-wrap">
                   <Icon name="search" size={14} />
-                  <input
+                  <input name="capture-box-filter"
                     ref={boxEntryRef}
                     className="capture-filter bn-input"
                     type="text"
@@ -5187,7 +5204,7 @@ export function CaptureScreen() {
                        heuristic for a box it cannot tell apart from a real search field. The
                        control is unchanged; only the word that looked like one is gone. */
                     aria-label="Type a box's name or number, or type a new one"
-                    placeholder="Name or number"
+                    placeholder="Box name or number, like 7…"
                     value={boxEntry}
                     disabled={boxBusy}
                     onChange={(event) => {
@@ -5422,7 +5439,7 @@ export function CaptureScreen() {
                   ? 'Connecting'
                   : dealerIdle
                     ? 'Start dispenser'
-                    : 'Connect dispenser'}
+                    : 'Connect Dispenser'}
             </Button>
             <Slot as="p" className="capture-quiet capture-dealer-said">
               {dealerSaid}
@@ -5730,7 +5747,7 @@ export function CaptureScreen() {
           {openField === 'set' ? (
             <OpenField
               k="H"
-              label="Set hint"
+              label="Set Hint"
               icon="tag"
               /* THE FIELD'S OWN MODALITY, AND IT IS NOT ALWAYS "OPTIONAL". On a game whose
                  export cannot be fetched without one, this field is required in every sense
@@ -5754,12 +5771,12 @@ export function CaptureScreen() {
               >
                 <div className="capture-entrybox bn-input-wrap">
                   <Icon name="tag" size={14} />
-                  <input
+                  <input name="set-hint"
                     ref={hintRef}
                     className="capture-filter bn-input"
                     type="text"
                     placeholder="sv09"
-                    aria-label="Set hint"
+                    aria-label="Set Hint"
                     list="capture-set-names"
                     value={setHint}
                     onChange={(event) => setSetHint(event.target.value)}
@@ -5792,7 +5809,7 @@ export function CaptureScreen() {
           ) : (
             <Row
               k="H"
-              label="Set hint"
+              label="Set Hint"
               icon="tag"
               right={
                 setHint.trim() === '' ? (

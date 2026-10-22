@@ -2518,7 +2518,7 @@ export type PricingSku = {
    *
    *  NEVER READ IT BARE. `cardState.ts:forSale` takes the pair and `soldSince` takes this
    *  one; both coerce, and the `?` here is what makes the compiler say so. */
-  listing: { pushed: number; staged: number; live: number; sold_here?: number } | null
+  listing: { pushed: number; staged: number; live: number; sold_here?: number; held_copies?: number } | null
   /** What TCGplayer holds now, off the NEWEST live export on disk, or null when none was
    *  ever fetched (round 7, R6-1). Every send and every check writes one, so this is minutes
    *  old where `snap.now` is the join's. A price change and a move of live copies are named
@@ -4901,4 +4901,61 @@ export type PriceMoversPayload = {
   unmeasured: number
   movers: PriceMover[]
   refresh: PriceRefreshNote | null
+}
+
+/** One day's read of a slab (D320). Money is text; a value Card Ladder did not give is null. A slab
+ *  with no sale at its grade carries no value. `speed` is per window: `velocity` and `averagePrice`. */
+export type SlabSnapshot = {
+  day: string
+  cl_value: string | null
+  cl_confidence: number | null
+  estimated_value: string | null
+  estimated_confidence: number | null
+  last_sale_price: string | null
+  last_sale_date: string | null
+  population: number | null
+  gem_rate: number | null
+  speed: Record<string, { velocity: number | null; averagePrice: string | null }> | null
+}
+
+/** `POST /slabs`. `grader` is Card Ladder's name; `added` is true only for a slab never stored; `restored` is true for one added again after a remove. */
+export type SlabReceipt = {
+  cert: string
+  grader: string
+  label: string
+  day: string
+  added: boolean
+  restored: boolean
+  message: string
+}
+
+/** `DELETE /slabs/<grader>/<cert>`. `message` names the slab by its label. */
+export type SlabRemoved = {
+  cert: string
+  grader: string
+  label: string
+  message: string
+}
+
+/** One slab in `GET /slabs`. `note` is "no sales" when nothing sold at the slab's grade. */
+export type SlabRow = {
+  cert: string
+  grader: string
+  label: string | null
+  grade: string | null
+  added: string
+  snapshot: SlabSnapshot | null
+  note: 'no sales' | null
+}
+
+/** `GET /slabs`. */
+export type SlabList = { slabs: SlabRow[] }
+
+/** `GET /slabs/<grader>/<cert>`: snapshots oldest day first, sales newest first, the ladder in Card Ladder's order. */
+export type SlabDetail = {
+  slab: Pick<SlabRow, 'cert' | 'grader' | 'label' | 'grade' | 'added'>
+  snapshots: SlabSnapshot[]
+  sales: Array<{ id: string; date: string; price: string | null; url?: string; [field: string]: unknown }>
+  ladder: Array<{ grade: string; label: string; cl_value: string | null; cl_confidence: number | null }>
+  note: 'no sales' | null
 }

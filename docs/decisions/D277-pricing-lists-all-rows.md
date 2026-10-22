@@ -83,3 +83,30 @@ built. It waits on a read of the owner's store.
 Value is counted in copies, drawer first; nothing on hand is dropped.
 
 A typed price at the cut-off is not a drift; order is taken once per load.
+
+### The slim bar's three tiles
+
+The owner picked the Preflight design for the Unsent tab's bar. Three tiles replace the one line
+of figures, above the press. Each tile is the kit's `Tile` (`#/gallery`, "tile, each tone and
+pending"), named `[data-tile]` for the checks.
+
+| Tile | Title | Note | Tone |
+|---|---|---|---|
+| `priced` | "Every card is priced", or "N need a price" | "N typed." counts rows with a typed price; "N typed quantity." counts quantities typed on rows; "None typed." when neither. With rows owing a price, "Price Them" shows the Market price band "No market price", the filter that already names those rows. | `ok`, or `warn` (amber) while any row owes a price |
+| `held` | "N held back" | "Not in this send." and "Show Held", which turns on the Held filter. With none held, "None held." | `info` |
+| `ready` | "N ready to go" (copies) | "Copies on M SKUs." (the SKUs the press counts), then "Joins K listings in your store." (the rows at the cap). With none ready: "Nothing ready yet", and no caption unless listings stand. | `accent` while N is above 0, else `idle` |
+
+- The counts are the figures the old line gave. No row moves between tiles (D86, a missing price
+  is unknown, not low).
+- Each link clears the search and every other filter first, so it shows the rows its tile counts.
+- The tiles are drawn while the worklist is in flight, pending, above the card's own press (off,
+  nothing to send). The bar is the height it will be, so the list lands under it (D313). Each
+  tile's caption holds the room of its longest caption at the tile's width, in every state: two
+  lines where that caption wraps to two, three where it wraps to three. `Pricing`'s `ROOM_COUNT`
+  stands in for the real counts, so a count wider than it can add a line.
+- Two rows: tiles above, the press and doors below. The bar is taller, by the owner's choice. The
+  tiles wrap only where the column is too narrow for three side by side. The doors stay drawn above
+  a phone.
+- A phone draws no tiles. The bar stays one line above the tab bar (Q4).
+- "Price Them" lists every row with no market price, including one the owner already answered.
+  The tile counts only rows with no answer. A narrower filter is not built.

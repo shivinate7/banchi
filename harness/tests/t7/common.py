@@ -11,11 +11,13 @@ uses lives in that group's module.
 from __future__ import annotations
 
 import base64
+import email.message
 import io
 import json
 import hashlib
 import itertools
 import os
+import socket
 import sys
 import tempfile
 import threading
@@ -27,6 +29,7 @@ import urllib.request
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Dict, Optional, Tuple
+from unittest import mock
 from harness.tests import Checks
 from harness.tests.home import isolated_home, no_env_file  # noqa: F401  (isolated_home re-exported)
 from cli import runs
@@ -859,3 +862,190 @@ def _live_export_bytes(quantities: Dict[str, int]) -> bytes:
     return path.read_bytes()
 
 _M_PRICE_LIVE1 = "nothing to send: 1 card needs a price first, and TCGplayer already holds every copy of 1 card"
+
+
+# ------------------------------------------------------------------------------- the wire
+#
+# D319 (one retry home): every network call retries through `pipeline/net.py`. The cases that
+# prove it script the network BELOW every way this repo opens a connection.
+#
+# THE STUB SITS ON `urllib.request.OpenerDirector.open`, THE CLASS METHOD, AND NOT ON THE MODULE'S
+# `urlopen`. `match.fetch_bytes` and `match.download_model` bind `urlopen` as a default argument
+# when they are defined, so a module-level patch never reaches them. `portal_http.send` builds its
+# own `build_opener(NoRedirect)`. All three paths end at this one method. A case never passes
+# `opener=` or `attempts=` to a caller, so it survives the builder dropping either.
+#
+# A SOCKET OR A NAME LOOKUP IS REFUSED FOR THE LENGTH OF EACH CASE. A path that bypassed the stub
+# would reach a real host, so it raises instead and is counted in `Wire.leaks`. `time.sleep` is
+# replaced by a recorder, so a retry pause is read from `Wire.pauses` and never spent.
+
+
+class WireResponse:
+    """A 2xx answer, as `OpenerDirector.open` hands one back."""
+
+    def __init__(self, url: str, status: int, body: bytes, headers) -> None:
+        self.url, self.status, self.code, self.reason, self.msg = url, status, status, "OK", "OK"
+        self.headers = wire_headers(headers)
+        self._body = io.BytesIO(body)
+
+    def read(self, amt=None) -> bytes:
+        return self._body.read() if amt is None else self._body.read(amt)
+
+    def getcode(self) -> int:
+        return self.status
+
+    def geturl(self) -> str:
+        return self.url
+
+    def info(self):
+        return self.headers
+
+    def close(self) -> None:
+        return None
+
+    def __enter__(self) -> "WireResponse":
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        return None
+
+
+def wire_headers(headers) -> email.message.Message:
+    """Case-insensitive headers, which is what a real response carries."""
+    message = email.message.Message()
+    for name, value in dict(headers or {}).items():
+        message[name] = value
+    return message
+
+
+class Wire:
+    """The scripted network. `steps` answer the requests in order, and the last one repeats.
+
+    A step is an exception instance (raised), an `int` (an HTTP error, no body), `bytes` (a 200
+    with that body), `(status, body)`, `(status, body, headers)`, or a function of the URL that
+    returns any of those. `requests` holds one dict per request that reached the stub: `method`,
+    `url`, `data`, `timeout` and `headers`. `pauses` holds each `time.sleep` asked for."""
+
+    RUNAWAY = 40
+
+    def __init__(self, steps) -> None:
+        self.steps = list(steps) or [b""]
+        self.requests: list = []
+        self.pauses: list = []
+        self.leaks: list = []
+
+    def answer(self, fullurl, data, timeout):
+        if isinstance(fullurl, str):
+            url, method, body, headers = fullurl, "POST" if data is not None else "GET", data, {}
+        else:
+            url, method = fullurl.full_url, fullurl.get_method()
+            body = data if data is not None else fullurl.data
+            headers = {name.lower(): value for name, value in fullurl.header_items()}
+        self.requests.append({"url": url, "method": method, "data": body, "timeout": timeout, "headers": headers})
+        if len(self.requests) > self.RUNAWAY:
+            raise AssertionError(f"runaway: more than {self.RUNAWAY} requests, so something retries without a limit")
+        step = self.steps.pop(0) if len(self.steps) > 1 else self.steps[0]
+        if callable(step):
+            step = step(url)
+        if isinstance(step, BaseException):
+            raise step
+        if isinstance(step, int):
+            step = (step, b"")
+        elif isinstance(step, bytes):
+            step = (200, step)
+        status, payload, *rest = step
+        headers_out = rest[0] if rest else None
+        if status < 300:
+            return WireResponse(url, status, payload, headers_out)
+        raise urllib.error.HTTPError(url, status, "simulated", wire_headers(headers_out), io.BytesIO(payload))
+
+
+def fresh_hosts() -> None:
+    """Forgets every host's failure count and pause: the retry home's one state."""
+    from pipeline import pricehistory
+
+    try:
+        from pipeline import net
+    except ImportError:
+        net = None
+    hosts = getattr(net, "_HOSTS", None)
+    if hosts is not None:
+        hosts.clear()
+    clear = getattr(pricehistory, "_clear_host_pauses", None)
+    if clear is not None:
+        clear()
+
+
+@contextmanager
+def scripted_wire(*steps):
+    """A `Wire` for the length of the block. Every host starts, and ends, with no failures.
+
+    ONLY THE CALLING THREAD IS SCRIPTED. T7 runs in one process, and a server thread an earlier check
+    left running must neither be refused a socket nor have its sleeps counted as a retry pause."""
+    wire = Wire(steps)
+    owner = threading.get_ident()
+    real_open, real_sleep = urllib.request.OpenerDirector.open, time.sleep
+
+    def fake_open(opener, fullurl, data=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT):
+        if threading.get_ident() != owner:
+            return real_open(opener, fullurl, data, timeout)
+        return wire.answer(fullurl, data, timeout)
+
+    def pause(seconds):
+        if threading.get_ident() != owner:
+            return real_sleep(seconds)
+        wire.pauses.append(seconds)
+
+    def refusing(original):
+        def guard(*args, **kwargs):
+            if threading.get_ident() != owner:
+                return original(*args, **kwargs)
+            wire.leaks.append(1)
+            raise AssertionError("a wire case reached a real socket or a name lookup")
+        return guard
+
+    fresh_hosts()
+    try:
+        # stderr is silenced because the retry home prints one line per lost call and per pause.
+        with redirect_stderr(io.StringIO()), \
+                mock.patch.object(urllib.request.OpenerDirector, "open", fake_open), \
+                mock.patch.object(time, "sleep", pause), \
+                mock.patch.object(socket, "getaddrinfo", refusing(socket.getaddrinfo)), \
+                mock.patch.object(socket, "create_connection", refusing(socket.create_connection)), \
+                mock.patch.object(socket.socket, "connect", refusing(socket.socket.connect)):
+            yield wire
+    finally:
+        fresh_hosts()
+
+
+def attempt(fn):
+    """`(answer, None)`, or `(None, the exception it raised)`. The exception IS what a case reads."""
+    try:
+        return fn(), None
+    except Exception as caught:  # noqa: BLE001
+        return None, caught
+
+
+def net_cases(checks: Checks, cases) -> None:
+    """Runs `(label, body)` cases against `pipeline.net`. `body(net)` returns `(passed, detail)`.
+
+    IMPORTED HERE, NEVER AT THE TOP OF A T7 MODULE: on a tree with no `pipeline/net.py` a top-level
+    import would take the whole of T7 down, and every check in it would be red for the wrong reason.
+    Instead each case is one FAIL line that says what is missing, so the red record names every case."""
+    try:
+        from pipeline import net
+    except ImportError:
+        net = None
+    for label, body in cases:
+        if net is None:
+            checks.ok(False, label, "pipeline/net.py does not exist yet")
+            continue
+        passed, detail = attempt_case(body, net)
+        checks.ok(passed, label, detail)
+
+
+def attempt_case(body, net) -> Tuple[bool, str]:
+    try:
+        return body(net)
+    except Exception as caught:  # noqa: BLE001
+        return False, f"raised {type(caught).__name__}: {caught}"
