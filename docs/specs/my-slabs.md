@@ -257,7 +257,9 @@ Kind: build. Platform: macOS, over the capture server.
    with one Card Ladder client per server process. The sweep route waits for the owner's word.
    The owner ruled a way back: `DELETE /slabs/<grader>/<cert>` and its client function remove
    the slab and its sale links. Its snapshots and its sales stay, so adding it again undoes the
-   remove and its history returns. A sale that the new read no longer lists stays in the store,
+   remove and its history returns. The owner ruled that the undo restores the first added date,
+   and the receipt says "restored". The date comes from the oldest snapshot. Add is the only
+   writer of a slab, and it writes the first snapshot in the same write, so that snapshot exists. A sale that the new read no longer lists stays in the store,
    unlinked.
    A failed read writes no snapshot: a same-day snapshot replaces every field, so a failed call
    stored as empty would erase a good value. The store replaces a re-read sale whole, so the
