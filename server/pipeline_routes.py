@@ -2766,6 +2766,7 @@ def do_pipeline_pricing(name: str, reads: Optional[_PricingReads] = None) -> dic
     # THE LABELS, RE-RENDERED BEFORE ANYTHING LEAVES (D58). In place on the document just
     # parsed, which nothing else holds — the file on disk is untouched, exactly as D58 left
     # `QueueEntry.label`.
+    _follow_positions(directory, pricing, None if reads is None else reads.snapshot)
     _relabel_positions(pricing, None if reads is None else reads.snapshot)
     # WHEN EACH ROW'S FIGURES WERE READ: the fetch time of the export this run was last joined
     # against (its mtime, D104's own rule). Added to the answer and never written back.
@@ -3326,10 +3327,50 @@ def _follows_its_cards(directory: Path, snapshot: Optional[Snapshot]) -> bool:
         return False
     try:
         run = run_files.open_run(directory)
-        _, moved, _, _ = run_resolve.realign(run.read_identifications(), snapshot.inventory, run)
+        rebound, moved, _, _ = run_resolve.realign(
+            run.read_identifications(), snapshot.inventory, run
+        )
+        # THE JOIN'S OWN VERDICT, so this screen and the send cannot disagree about one run.
+        run_resolve.refuse_reallocated(rebound, snapshot.inventory, run)
     except (run_files.RunError, OSError, ValueError):
         return False
     return bool(moved)
+
+
+def _follow_positions(directory: Path, pricing: dict, snapshot: Optional[Snapshot]) -> None:
+    """Re-address a table's stored positions for a run over a disowned drawer (D262).
+
+    The table was written when its cards were in the old drawer, and a slot there is now a
+    foreign card (or nothing). Each position moves to where its photograph is now, and a card
+    that is on no shelf is dropped, so the copy count and the photos are the moved cards' own.
+    A run whose drawer is its own is left exactly as stored.
+    """
+    if snapshot is None:
+        return
+    try:
+        run = run_files.open_run(directory)
+        payload = run.read_identifications()
+        if not run_resolve.disowned_boxes(payload, snapshot.inventory, run):
+            return
+        _, moved, departed, _ = run_resolve.realign(payload, snapshot.inventory, run)
+    except (run_files.RunError, OSError, ValueError):
+        return
+    gone = set(departed)
+    for entry in pricing.get("skus") or []:
+        if not isinstance(entry, dict):
+            continue
+        kept = []
+        for at in entry.get("positions") or []:
+            key = f"{at.get('box')}/{at.get('index')}"
+            if key in gone:
+                continue
+            if key in moved:
+                box, _, index = moved[key].partition("/")
+                at["box"], at["index"] = int(box), int(index)
+            kept.append(at)
+        entry["positions"] = kept
+        if "copies" in entry:
+            entry["copies"] = len(kept)
 
 
 def _unreachable(inventory: master.Inventory, review_count: int, root: Path) -> dict:

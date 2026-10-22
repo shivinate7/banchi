@@ -1962,13 +1962,20 @@ def disowned_boxes(
     if not isinstance(scope_bid, int) or isinstance(scope_bid, bool):
         scope_bid = None
     # THE DELETION RECORD IS READ ONLY WHEN A BOX HAS NO REGISTRY ROW, and once X.
+    # THE RUN'S `bid` NAMES THE DRAWER IT WAS OVER (`scope.box`) AND NO OTHER. A record that
+    # was followed into another drawer is not that drawer's to disown by the old bid.
+    scope_box = scope.get("box") if isinstance(scope, dict) else None
     out: List[Tuple[int, str]] = []
     deleted = None
     for box in boxes:
         if deleted is None and inventory.box(box) is None:
             deleted = deleted_events()
         sentence = inventory.box_disowns_run(
-            box, run.name, run.created_at, bid=scope_bid, deleted=deleted or ()
+            box,
+            run.name,
+            run.created_at,
+            bid=scope_bid if scope_box is None or int(scope_box) == box else None,
+            deleted=deleted or (),
         )
         if sentence is not None:
             out.append((box, sentence))
