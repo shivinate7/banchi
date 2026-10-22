@@ -32,6 +32,7 @@ from store.session import Store
 from harness.tests.t7.common import (
     CANDIDATES,
     FIXTURE_EXPORT,
+    card_photo,
     JPEG,
     NEVER_BOUND_IDENTITY_SNAPSHOT,
     REPO_ROOT,
@@ -404,11 +405,12 @@ def check_code_ledger(checks: Checks) -> None:
         caps.mkdir()
         # A DIFFERENT COLOUR EACH, because a card is named by the sha256 of its photograph
         # (D172) and `cards_cid` holds that name UNIQUE. Both were the same flat red, which
-        # is two records carrying one name the moment `identify` writes them.
+        # is two records carrying one name the moment `identify` writes them. A BRIGHT BAND across
+        # the top, because a flat dark frame is an empty slot (its 99th-percentile luminance sits
+        # under EMPTY_SLOT_P99 and `identify` never sends it): the band clears the cut and leaves
+        # each colour, and so each name, as it was.
         for name, red in (("6-001.jpg", 200), ("6-002.jpg", 120)):
-            identify_images.Image.new("RGB", (64, 89), (red, 40, 40)).save(
-                caps / name, "JPEG"
-            )
+            card_photo((red, 40, 40)).save(caps / name, "JPEG")
         (caps / "6-001.json").write_text(
             json.dumps(
                 {"box": 6, "position": 1, "game": "pokemon_code", "set_hint": "JTG"}
@@ -2612,9 +2614,7 @@ def check_identify_preflight_stage(checks: Checks) -> None:
         caps.mkdir()
         # Two readable cards, in a registered game.
         for index in (1, 2):
-            identify_images.Image.new("RGB", (64, 89), (30, 90 + index, 200)).save(
-                caps / f"4-00{index}.jpg", "JPEG"
-            )
+            card_photo((30, 90 + index, 200)).save(caps / f"4-00{index}.jpg", "JPEG")
             (caps / f"4-00{index}.json").write_text(
                 json.dumps({"box": 4, "position": index, "game": "pokemon"}), "utf-8"
             )
@@ -2626,9 +2626,7 @@ def check_identify_preflight_stage(checks: Checks) -> None:
             json.dumps({"box": 4, "position": 3, "game": "pokemon"}), "utf-8"
         )
         # A game no registry entry answers: refused by name, before it costs a decode.
-        identify_images.Image.new("RGB", (64, 89), (200, 40, 40)).save(
-            caps / "4-004.jpg", "JPEG"
-        )
+        card_photo((200, 40, 40)).save(caps / "4-004.jpg", "JPEG")
         (caps / "4-004.json").write_text(
             json.dumps({"box": 4, "position": 4, "game": "tarot"}), "utf-8"
         )
