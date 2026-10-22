@@ -35,6 +35,7 @@ from harness.tests.t7_store_and_seams import (
     resolve,
     seam_run,
 )
+from harness.tests.t7.common import command
 from harness.tests.t7_store_and_seams import request as http_request
 
 
@@ -150,7 +151,11 @@ def check_run_follows_cards_out_of_deleted_box(checks: Checks) -> None:
             record["photo_sha256"] = photos.digest_of(inventory.cards[key].cid)
         run.write_identifications(written)
         capture_server.do_move_cards(5, {"to_box": 7, **back_of(7), "indices": [1, 2]})
-        capture_server.do_delete_box(5)
+        deleted = capture_server.do_delete_box(5)
+        checks.equal(
+            deleted["stranded_runs"], [],
+            "the delete does not warn about a run that follows its cards, only about one that cannot",
+        )
         capture_server.do_create_box({"box": 5, "name": "New five"})
         capture_server.do_capture(capture_payload(5))
         capture_server.do_capture(capture_payload(5))
@@ -176,6 +181,17 @@ def check_run_follows_cards_out_of_deleted_box(checks: Checks) -> None:
             not any(box == 5 for box, _ in where),
             "and the new box 5's cards are adopted by nobody",
             f"positions {where}",
+        )
+        command(checks, "join", str(run.directory), "--export", str(run.path("export.csv")))
+        said = command(checks, "emit", str(run.directory), "--export", str(run.path("export.csv")))
+        import csv
+
+        sent = run.path("import.csv")
+        rows = list(csv.DictReader(sent.open(encoding="utf-8"))) if sent.is_file() else []
+        checks.ok(
+            sum(int(row.get("Add to Quantity") or 0) for row in rows) >= 1,
+            "and the send writes the moved copies into its import file",
+            f"{len(rows)} row(s); {said[-200:]}",
         )
         checks.ok(
             "5/3" in loaded.departed,

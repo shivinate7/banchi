@@ -1617,9 +1617,9 @@ def check_remove_and_box_delete(checks: Checks) -> None:
         body = capture_server.do_delete_box(3)
         checks.equal(
             body["stranded_runs"],
-            ["2026-09-01-box3-01"],
-            "deleting a box whose cards were moved out names the runs it just stranded: "
-            "their cards live in another box now, and no join can reach them until a rebind",
+            [],
+            "a run with no directory on disk is not named as stranded: only a run that "
+            "exists and cannot follow its moved cards is (the backup warning)",
         )
         checks.equal(
             (body["cards"], body["buried"], body["photos"], body["sidecars"]),
