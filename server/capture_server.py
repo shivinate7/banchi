@@ -48,6 +48,10 @@
                                            SKU — `#/revenue`'s thumbnail lookup (D89's own gap)
     GET    /games                          the per-game registry, as `pipeline/games.py` authors it
     GET    /codes                          the code ledger: counts, tiers, every code (C8)
+    POST   /slabs                          read a slab from Card Ladder by its cert and file it
+    GET    /slabs                          every slab with its newest snapshot
+    GET    /slabs/<grader>/<cert>          one slab: snapshots, sales, the grade ladder
+    DELETE /slabs/<grader>/<cert>          take a slab off the list; its history stays. No Card Ladder call
     GET    /codes/lots                     every lot built so far, newest first
     POST   /codes/lots                     plan a lot, or BUILD one — reserving its codes
     POST   /codes/scan                     decode a box's photographs into the ledger. FREE
@@ -324,7 +328,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Dict, FrozenSet, Iterable, List, Optional, Sequence, Set, Tuple
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 # `make server` runs this by path, so sys.path[0] is server/ and the project packages are
 # not importable without this. Same idiom and same reason as harness/run.py.
@@ -377,6 +381,10 @@ from server import send_routes  # noqa: E402
 # no socket and holds no key, but it does hold a buyer's ADDRESS in memory for half an hour,
 # which is its own boundary worth keeping in one file rather than inlined here.
 from server import shipping_routes  # noqa: E402
+# My Slabs (D320): the THIRD outbound module, reading Card Ladder with the owner's own login. Below the
+# line for the same reason as the two above: one host, one credential read at call time, and no token
+# or response body in any answer.
+from server import slabs_routes  # noqa: E402
 # The order transport, and it is the SECOND outbound call this process makes (D63/D69). Below
 # the line and beside the two above for the reason the paragraph gives: it reads the
 # TCGplayer session cookie out of `.env` and opens a socket to
@@ -792,6 +800,8 @@ _SHIPPING_FILE_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/file$")
 # collide however they are ordered.
 _SHIPPING_STAMPS_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/stamps$")
 _SHIPPING_ITEM_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})$")
+# One slab, by grader and cert. Both are percent-decoded by the route. `/slabs/sweep` matches nothing: the owner deferred the sweep.
+_SLABS_ITEM_RE = re.compile(r"^/slabs/([^/]+)/([^/]+)$")
 
 # ------------------------------------------------------- the capture claims, on the wire
 #
@@ -16513,6 +16523,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # pass so no two of them are offered the same physical card.
             if path == "/orders":
                 return self._json(HTTPStatus.OK, do_orders())
+            if path == "/slabs":
+                return self._json(HTTPStatus.OK, slabs_routes.do_slabs())
+            match = _SLABS_ITEM_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK, slabs_routes.do_slab(unquote(match.group(1)), unquote(match.group(2)))
+                )
             if path == "/codes":
                 return self._json(HTTPStatus.OK, codes_routes.do_codes())
             if path == "/codes/lots":
@@ -17087,6 +17104,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # THE MAP'S CONFIRM (D264): the whole edit-mode draft, one store transaction.
             if path == "/boxes/sections/move-batch":
                 return self._json(HTTPStatus.OK, do_move_sections_batch(self._body()))
+            if path == "/slabs":
+                return self._json(HTTPStatus.OK, slabs_routes.do_slab_add(self._body()))
             # THE PIPELINE WRITES, AND THE FIRST OF THEM IS THE ONLY ROUTE IN THIS SERVER
             # THAT CAN COST MONEY. It is named for it, it refuses without an explicit
             # `confirm`, and it refuses a second run over a capture directory a live run is
@@ -17503,6 +17522,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 return self._json(
                     HTTPStatus.OK, shipping_routes.do_shipping_forget(match.group(1))
+                )
+            match = _SLABS_ITEM_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK, slabs_routes.do_slab_remove(unquote(match.group(1)), unquote(match.group(2)))
                 )
             if app_owns(path):
                 # The app is served here and is read-only (D138). 405 and not 404,

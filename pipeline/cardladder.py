@@ -20,6 +20,7 @@ import threading
 import urllib.parse
 
 from pipeline import net
+from store.slabs import GRADERS
 
 # Card Ladder's public web config (a Firebase web key, not a secret).
 API_KEY = "AIzaSyBqbxgaaGlpeb1F6HRvEW319OcuCsbkAHM"
@@ -38,8 +39,8 @@ BLOCKED_HOSTS = frozenset({"search.cardladder.com"})  # Cloudflare challenge; ne
 PACE_SECONDS = 8.0  # spec 5: 8 s held for about 600 calls; 3 s drew a refusal after about 8
 REFRESH_MARGIN = 300.0  # refresh the ID token this long before it expires (capped at a fifth of its life)
 
-# Card Ladder maps these to `beckett` (spec 3.1).
-GRADERS = {"psa": "psa", "beckett": "beckett", "bgs": "beckett", "bvg": "beckett", "sgc": "sgc", "cgc": "cgc"}
+# `GRADERS` (Card Ladder maps bgs and bvg to `beckett`, spec 3.1) lives in `store/slabs.py`,
+# because `store/` may not import `pipeline/` (D63); this module imports it back.
 
 
 class CardLadderError(Exception):
@@ -80,6 +81,13 @@ class Client:
         self._last_send = None  # clock time of the last callable send, failed ones included
         self._limited = False
         self._lock = threading.RLock()  # the token refresh sends through `send`
+
+    def use_refresh_token(self, refresh_token):
+        """A replaced token, with the pacing and the rate-limit stop kept: the next call exchanges the new one."""
+        with self._lock:
+            if refresh_token != self._refresh_token:
+                self._refresh_token = refresh_token
+                self._id_token = None
 
     def send(self, method, url, headers, body):
         """The one send path."""

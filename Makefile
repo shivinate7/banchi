@@ -1127,6 +1127,16 @@ pricehistory-offline-selftest:
 cardladder-selftest:
 	$(PYTHON) scripts/cardladder-selftest.py
 
+# the My Slabs tables and their writes (store/slabs.py), proved against a throwaway store.
+.PHONY: slabs-store-selftest
+slabs-store-selftest:
+	$(PYTHON) scripts/slabs-store-selftest.py
+
+# the My Slabs routes (server/slabs_routes.py), proved against the real Card Ladder client on a fake transport and a throwaway store.
+.PHONY: slabs-routes-selftest
+slabs-routes-selftest:
+	$(PYTHON) scripts/slabs-routes-selftest.py
+
 # scripts/repair-born-game.py, proved against a throwaway store.
 repair-born-game-selftest:
 	$(PYTHON) scripts/repair-born-game-selftest.py

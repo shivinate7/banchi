@@ -162,6 +162,8 @@ ROUTE_URLS = {
     "_RUN_ITEM_RE": "/pipeline/runs/{run}",
     "_SHIPPING_FILE_RE": "/shipping/batches/abc/file",
     "/stock/mix": "/stock/mix",
+    "/slabs": "/slabs",
+    "_SLABS_ITEM_RE": "/slabs/psa/12345678",
 }
 
 # The POST reads whose answer is a few cards chosen by the store: a card state, a capture time, a state in one box.
@@ -303,6 +305,14 @@ BUDGET = {
     # Mix, "Route"). `sql` is the store open's own statements plus that one, equal at S and 2S.
     '/stock/mix': {"status": 200, 'sql': 11, 'store_read': 1},
     # One store open (11 statements) and one `Store.read`, equal at S and 2S: the on_hand count must come from that one read, never a query per row.
+    # MY SLABS (D320), on SEEDED tables (`_seed_slabs`: size // 10 slabs, each with a snapshot and three sales, two slabs
+    # sharing one sale). The item route is a hit: its statements follow its own three sales, so they are equal at S and 2S.
+    # `/slabs` is the whole list in a fixed number of statements, equal at S and 2S: the store open (10), then one read of `slabs`
+    # and one of the sale-links index (the no-sales flag). The newest snapshot rides on the slab row, so the list never reads
+    # `slab_snapshots`, a table that gains a row per slab per day. A statement per slab grows with the slab count and fails the
+    # growth rule. `json_loads` is one parse per slab row (15 slabs at S).
+    '/slabs': {"status": 200, 'sql': 12, 'json_loads': 15, 'store_read': 1},
+    '_SLABS_ITEM_RE': {"status": 200, 'sql': 16, 'json_loads': 8, 'store_read': 1},
     '_MARKDOWN_TABLE_RE': {"status": 200, 'sql': 11, 'json_loads': 0, 'store_read': 1},
     '_MARKDOWN_HISTORY_RE': {"status": 404},
     '_MARKDOWN_TRENDS_RE': {"status": 404},
@@ -357,6 +367,7 @@ SCAN_ALLOWED = frozenset({
     'readings',
     'readings_sources',
     'skus',
+    'slabs',  # GET /slabs is the full list, the same shape as boxes and cards
 })
 
 
@@ -533,6 +544,30 @@ class _Meter:
 
 # --------------------------------------------------------------------------- the fixture
 
+SLAB_CERT0 = 12345678  # slab 0 is `psa:12345678`, the cert `ROUTE_URLS["_SLABS_ITEM_RE"]` reads
+SLAB_GRADERS = ("psa", "bgs", "sgc")  # `bgs` is stored as `beckett`: more than one grader in the key
+
+
+def _seed_slabs(snapshot, size: int) -> None:
+    """`size // 10` slabs, each with one snapshot and three sales, through `store/slabs.py`'s own writers.
+
+    Slabs 2k and 2k+1 read the same sale `shared-k`, so a sale is linked to two slabs. Per-slab sales stay at three at every
+    size, so the item route costs the same at S and 2S while a query run once per slab in `GET /slabs` grows."""
+    table = snapshot.slabs
+    for n in range(size // 10):
+        cert, grader = str(SLAB_CERT0 + n), SLAB_GRADERS[n % len(SLAB_GRADERS)]
+        table.add(cert, grader, profile_id=f"profile-{n}", identity={"label": f"Slab {n}", "grade": "10"},
+                  subgrades=None, added="2026-01-15")
+        table.record_snapshot(
+            cert, grader, "2026-01-15", cl_value="10.00", cl_confidence=3, estimated_value="9.50", estimated_confidence=2,
+            last_sale_price="9.00", last_sale_date="2026-01-10", population=100, gem_rate=0.5, speed=None,
+            ladder=[{"grade": "10", "label": "Gem Mint", "cl_value": "10.00", "cl_confidence": 3}],
+        )
+        table.record_sales(cert, grader, [
+            {"id": f"own-{n}-{part}", "date": f"2026-01-0{part + 1}", "price": "9.00"} for part in range(2)
+        ] + [{"id": f"shared-{n // 2}", "date": "2026-01-09", "price": "8.50"}])
+
+
 def _build(checks: Checks, size: int) -> dict:
     """The store at one size. Box count is fixed; cards, orders and queue entries scale."""
     from datetime import datetime, timedelta, timezone
@@ -566,6 +601,7 @@ def _build(checks: Checks, size: int) -> dict:
         )
         for n in range(size)
         ])
+        _seed_slabs(snapshot, size)
     cid = Store().read().inventory.cards[master.position_key(4, 1)].cid
     _write_survey(size)
     return {"run": run.directory.name, "cid": cid, "table_stamp": TABLE_STAMP}
