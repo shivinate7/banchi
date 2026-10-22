@@ -66,8 +66,12 @@ this file tests. It follows `store/readings.py` and `store/pricearchive.py`:
                             - a snapshot on an older day is stored but never replaces a newer copy;
                             - a snapshot for a slab with no row raises ValueError and writes nothing;
                             - a failed write keeps the old copy with the old snapshots, never one without the other.
-                          `add` of a slab already there keeps its copy. NOT PINNED: the copy of a slab added
-                          again after a remove (the add route records a snapshot in the same write).
+                          `add` of a slab already there keeps its copy. `add` of a slab that was removed
+                          seeds its copy from the newest snapshot it left, so the copy equals
+                          `snapshots_for(...)[-1]` before any new snapshot (case 9).
+                          No code but `Slabs.record_snapshot` writes `slab_snapshots` and none but
+                          `Slabs` (and `_parse_slab`, which decodes a stored row) sets `latest`: a
+                          source scan of `store/`, `server/`, `pipeline/` and `cli/` proves it (case 10).
     SlabSnapshot(cert, grader, day, cl_value, cl_confidence, estimated_value,
                  estimated_confidence, last_sale_price, last_sale_date, population, gem_rate, speed)
     Sale(id, date, data)    `data` is the Card Ladder sale dict, verbatim. `date` is its `date`.
@@ -91,11 +95,14 @@ In `make check`, never in the git hook: it writes a temp store (D18).
 
 from __future__ import annotations
 
+import ast
 import gc
 import json
 import sqlite3
 import sys
+import tempfile
 import traceback
+from collections.abc import Mapping, MutableMapping
 from contextlib import contextmanager
 from importlib import import_module
 from pathlib import Path
@@ -899,10 +906,263 @@ def case_latest():
             same(f"{table} fails: the slab row keeps the old copy", latest_of(cert), held)
 
 
+def case_latest_after_remove():
+    """9. a slab added again after a remove has its copy back, and an older-day snapshot cannot undo it"""
+    cert = "81234570"
+    put(lambda s: add_psa(s, cert))
+    put(lambda s: s.record_snapshot(cert, "psa", "2026-10-05", **SNAP_A))
+    put(lambda s: s.record_snapshot(cert, "psa", "2026-10-07", **SNAP_C))
+    ok(len(slabs_now().snapshots_for(cert, "psa")) == 2, "control: two days are stored")
+    same("control: the copy is the newer day", day_and_fields(latest_of(cert)), ("2026-10-07", SNAP_C))
+
+    put(lambda s: s.remove(cert, "psa"))
+    same("removed: no slab row, and both snapshots stay",
+         (slabs_now().get(cert, "psa"), len(slabs_now().snapshots_for(cert, "psa"))), (None, 2))
+
+    put(lambda s: add_psa(s, cert, added="2026-10-09"))
+    newest = newest_stored(cert)
+    ok(newest is not None and newest.day == "2026-10-07", "control: the newest stored snapshot is the 10-07 one")
+    same("re-added with no new snapshot in that write: the copy is the newest stored snapshot", latest_of(cert), newest)
+    same("and it holds the newer day's values", day_and_fields(latest_of(cert)), ("2026-10-07", SNAP_C))
+
+    put(lambda s: s.record_snapshot(cert, "psa", "2026-10-06", **SNAP_B))
+    same("an older day recorded after the re-add is stored", [x.day for x in slabs_now().snapshots_for(cert, "psa")],
+         ["2026-10-05", "2026-10-06", "2026-10-07"])
+    same("and leaves the copy on the newest stored snapshot", latest_of(cert), newest_stored(cert))
+    same("which is still the 10-07 one", day_and_fields(latest_of(cert)), ("2026-10-07", SNAP_C))
+
+    put(lambda s: s.record_snapshot(cert, "psa", "2026-10-08", **SNAP_A))
+    same("a newer day after the re-add moves the copy", (latest_of(cert), day_and_fields(latest_of(cert))),
+         (newest_stored(cert), ("2026-10-08", SNAP_A)))
+
+
+# ------------------------------------------------------------------------ who writes a snapshot
+
+SCAN_DIRS = ("store", "server", "pipeline", "cli")
+# The verbs that change a `Rows`: what `MutableMapping` adds to `Mapping` (pop, popitem, clear, update,
+# setdefault, and the two dunders), `Rows`' own `flushed` and `_remember`, and `add`/`put`, which no
+# `Rows` has yet but a writer might assume. `x.snapshots[k] = v` and `del x.snapshots[k]` are checked apart.
+WRITE_VERBS = {n for n in dir(MutableMapping) if not hasattr(Mapping, n)} | {"flushed", "_remember", "add", "put"}
+
+
+def _in(qual: str, owner: str) -> bool:
+    return qual == owner or qual.startswith(owner + ".")
+
+
+def may_write_snapshot(rel: str, qual: str) -> bool:
+    """The one writer of `slab_snapshots`."""
+    return rel == "store/slabs.py" and _in(qual, "Slabs.record_snapshot")
+
+
+def may_set_latest(rel: str, qual: str) -> bool:
+    """`Slabs`, and `_parse_slab`, which rebuilds a `Slab` from its stored payload and decides nothing."""
+    return rel == "store/slabs.py" and (_in(qual, "Slabs") or _in(qual, "_parse_slab"))
+
+
+class Scan(ast.NodeVisitor):
+    """What `ast` sees, so a string, a comment or a docstring holding the same text is never code.
+    Finds a write to the snapshots table (a subscript assignment or `del`, or a `Rows` write verb, on an
+    attribute named `snapshots`, a private field of one, or a local bound to one) and a write of `Slab.latest`
+    (an attribute assignment, a `latest=` keyword, `setattr(.., "latest", ..)`, or a `Slab(..)` call with
+    its seventh positional argument or a `*`/`**` splat). One alias hop; a table reached by `getattr`,
+    a tuple unpack or a call is not followed."""
+
+    def __init__(self, rel: str):
+        self.rel, self.scope, self.aliases, self.found = rel, [], [set()], []
+
+    def _scoped(self, node):
+        self.scope.append(node.name)
+        self.aliases.append(set())
+        self.generic_visit(node)
+        self.scope.pop()
+        self.aliases.pop()
+
+    visit_ClassDef = visit_FunctionDef = visit_AsyncFunctionDef = _scoped
+
+    def hit(self, node, kind: str, what: str):
+        qual = ".".join(self.scope)
+        if not (may_write_snapshot if kind == "snapshots" else may_set_latest)(self.rel, qual):
+            self.found.append((self.rel, node.lineno, what))
+
+    def table(self, node) -> bool:
+        if isinstance(node, ast.Attribute):
+            return node.attr == "snapshots" or self.table(node.value)
+        return isinstance(node, ast.Name) and node.id in self.aliases[-1]
+
+    def target(self, node):
+        if isinstance(node, (ast.Tuple, ast.List)):
+            for item in node.elts:
+                self.target(item)
+        elif isinstance(node, ast.Subscript) and self.table(node.value):
+            self.hit(node, "snapshots", "a write into the snapshots table")
+        elif isinstance(node, ast.Attribute) and node.attr == "latest":
+            self.hit(node, "latest", "an assignment to .latest")
+
+    def visit_Assign(self, node):
+        for target in node.targets:
+            self.target(target)
+            if isinstance(target, ast.Name) and self.table(node.value):
+                self.aliases[-1].add(target.id)
+        self.generic_visit(node)
+
+    def visit_AugAssign(self, node):
+        self.target(node.target)
+        self.generic_visit(node)
+
+    def visit_AnnAssign(self, node):
+        if node.value is not None:
+            self.target(node.target)
+        self.generic_visit(node)
+
+    def visit_Delete(self, node):
+        for target in node.targets:
+            self.target(target)
+        self.generic_visit(node)
+
+    def visit_Call(self, node):
+        func = node.func
+        if isinstance(func, ast.Attribute) and func.attr in WRITE_VERBS and self.table(func.value):
+            self.hit(node, "snapshots", "a Rows write verb on the snapshots table")
+        if any(k.arg == "latest" for k in node.keywords):
+            self.hit(node, "latest", "a latest= keyword")
+        if (isinstance(func, ast.Name) and func.id == "setattr" and len(node.args) > 1
+                and isinstance(node.args[1], ast.Constant) and node.args[1].value == "latest"):
+            self.hit(node, "latest", "setattr(.., 'latest', ..)")
+        name = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else None
+        if name == "Slab" and (len(node.args) > 6 or any(isinstance(a, ast.Starred) for a in node.args)
+                               or any(k.arg is None for k in node.keywords)):
+            self.hit(node, "latest", "a Slab(..) call that sets latest")
+        self.generic_visit(node)
+
+
+def scan_source(text: str, rel: str) -> list:
+    """(rel, line, what) for each write `rel` may not make. A file that will not parse is a finding: the scan is blind to it."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError as exc:
+        return [(rel, exc.lineno or 0, "does not parse")]
+    scan = Scan(rel)
+    scan.visit(tree)
+    return scan.found
+
+
+def scan_tree(root: Path) -> list:
+    found = []
+    for name in SCAN_DIRS:
+        for path in sorted((root / name).rglob("*.py")):
+            found += scan_source(path.read_text(encoding="utf-8"), path.relative_to(root).as_posix())
+    return found
+
+
+def lines_of(text: str, rel: str = "server/sweep.py") -> list:
+    return [line for _, line, _ in scan_source(text, rel)]
+
+
+def case_snapshot_writers():
+    """10. nothing but Slabs.record_snapshot writes a snapshot, and nothing but Slabs sets latest: a scan of the source"""
+    ok(hasattr(Rows, "flushed") and hasattr(Rows, "_remember"), "control: Rows still has the two own write verbs the scan names")
+    ok({"pop", "update", "setdefault", "clear", "popitem", "__setitem__", "__delitem__"} <= WRITE_VERBS,
+       "control: the verb set holds every MutableMapping write")
+
+    # The real tree. The planted cases below prove this answer is not blindness.
+    same("no code outside Slabs.record_snapshot writes slab_snapshots, none outside Slabs sets .latest",
+         scan_tree(ROOT), [])
+
+    # A planted offender is found, whatever form it takes. Each sits on line 2 of a function (line 3 when it has two lines).
+    for label, src in (
+        ("a subscript assignment", 't.snapshots["k"] = row'),
+        ("a nested attribute", 'self.slabs.snapshots[key] = row'),
+        ("an augmented assignment", 't.snapshots["k"] += 1'),
+        ("a del", 'del t.snapshots["k"]'),
+        ("update", 't.snapshots.update({"k": row})'),
+        ("pop", 't.snapshots.pop("k")'),
+        ("popitem", 't.snapshots.popitem()'),
+        ("clear", 't.snapshots.clear()'),
+        ("setdefault", 't.snapshots.setdefault("k", row)'),
+        ("add", 't.snapshots.add(row)'),
+        ("put", 't.snapshots.put("k", row)'),
+        ("flushed", 't.snapshots.flushed([])'),
+        ("__setitem__", 't.snapshots.__setitem__("k", row)'),
+        ("a private field", 't.snapshots._loaded["k"] = row'),
+        ("a local bound to the table", 'snaps = t.snapshots\nsnaps["k"] = row'),
+        ("a tuple target", 'a, t.snapshots["k"] = 1, row'),
+        ("a latest= keyword", 's.slabs[k] = slab._replace(latest=row)'),
+        ("an attribute assignment to latest", 'slab.latest = row'),
+        ("setattr latest", 'setattr(slab, "latest", row)'),
+        ("a Slab with a seventh argument", 'Slab(1, 2, 3, 4, 5, 6, row)'),
+        ("a Slab with a ** splat", 'Slab(**fields)'),
+        ("a Slab with a * splat", 'Slab(*fields)'),
+    ):
+        body = "\n".join("    " + line for line in src.split("\n"))
+        same(f"found: {label}", lines_of(f"def sweep(t, slab, row, fields):\n{body}\n"), [3 if "\n" in src else 2])
+
+    # The same text that is not code is not found.
+    for label, src in (
+        ("a string", 'x = \'t.snapshots["k"] = row\'\ny = "Slab(**fields)"'),
+        ("a comment", '# t.snapshots["k"] = row\n# slab.latest = row  // /* #'),
+        ("a docstring", 'def f():\n    """t.snapshots.update({})\n    slab.latest = row\n    """\n'),
+        ("a multi-line string", 'text = """\nt.snapshots["fake"] = row  # inside the string\n/* // */\nslab.latest = x\n"""\n'),
+        ("a lone quote in a comment", "# it's t.snapshots['k'] = row\n"),
+        ("reads", 'a = t.snapshots["k"]\nb = t.snapshots.where(cert="1")\nc = t.snapshots_for(1, 2)\nd = slab.latest.day\n'
+                  'e = Slab(1, 2, 3, 4, 5, 6)\nf = slab._replace(added=1)\nlatest = 4\n'),
+    ):
+        same(f"not found: {label}", lines_of(src), [])
+
+    # A comment opener or a lone quote in a string or comment does not hide the real write after it.
+    for label, src, want in (
+        ("a # inside a string", 'note = "see # here // and /* there"; t.snapshots["k"] = row', [1]),
+        ("a multi-line string above", 'text = """\nt.snapshots["fake"] = row  # fake\n/* // */\n"""\nt.snapshots["real"] = row\n', [5]),
+        ("a lone quote in a comment above", "# don't\nt.snapshots['k'] = row\n", [2]),
+        ("a lone quote in a string above", "note = \"it's\"\nt.snapshots['k'] = row\n", [2]),
+        ("a lone quote in a docstring above", 'def f(t):\n    """Don\'t."""\n    t.snapshots["k"] = row\n', [3]),
+    ):
+        same(f"found after {label}", lines_of(src), want)
+
+    # The allow list is by file and by method.
+    def in_slabs(src):
+        return lines_of(src, "store/slabs.py")
+
+    same("allowed: Slabs.record_snapshot writes the table and sets latest",
+         in_slabs('class Slabs:\n    def record_snapshot(self):\n        self.snapshots["k"] = 1\n        self.slabs[k] = s._replace(latest=1)\n'), [])
+    same("allowed: a helper nested in record_snapshot",
+         in_slabs('class Slabs:\n    def record_snapshot(self):\n        def put():\n            self.snapshots["k"] = 1\n'), [])
+    same("not allowed: another Slabs method writes the table",
+         in_slabs('class Slabs:\n    def sweep(self):\n        self.snapshots["k"] = 1\n'), [3])
+    same("not allowed: another class with that method name",
+         in_slabs('class Other:\n    def record_snapshot(self):\n        self.snapshots["k"] = 1\n'), [3])
+    same("not allowed: a module function with that name", in_slabs('def record_snapshot(self):\n    self.snapshots["k"] = 1\n'), [2])
+    same("not allowed: the same method in another file",
+         lines_of('class Slabs:\n    def record_snapshot(self):\n        self.snapshots["k"] = 1\n', "server/slabs.py"), [3])
+    same("allowed: Slabs sets latest in any method",
+         in_slabs('class Slabs:\n    def add(self):\n        return Slab(1, 2, 3, 4, 5, 6, history[-1])\n'), [])
+    same("allowed: _parse_slab decodes a stored row", in_slabs('def _parse_slab(key, record):\n    return Slab(**row)\n'), [])
+    same("not allowed: another store/slabs.py function sets latest", in_slabs('def other(row):\n    return Slab(**row)\n'), [2])
+    same("not allowed: _parse_slab in another file",
+         lines_of('def _parse_slab(key, record):\n    return Slab(**row)\n', "server/x.py"), [2])
+    same("a file that will not parse is a finding", [what for _, _, what in scan_source("def (:\n", "pipeline/broken.py")],
+         ["does not parse"])
+
+    # The tree walk: a planted file is found where it sits; a quiet one, the allowed one and one outside the four folders are not.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        for rel, src in (
+            ("server/planted.py", 'def sweep(t, row):\n    t.snapshots["k"] = row\n'),
+            ("pipeline/quiet.py", '"""t.snapshots["k"] = row"""\n# slab.latest = row\n'),
+            ("cli/sub/deep.py", 'def f(s):\n    s.slabs.snapshots.update({})\n'),
+            ("scripts/outside.py", 'def f(s):\n    s.snapshots["k"] = 1\n'),
+            ("store/slabs.py", 'class Slabs:\n    def record_snapshot(self):\n        self.snapshots["k"] = 1\n'),
+        ):
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text(src, encoding="utf-8")
+        same("a planted file is found where it sits",
+             sorted((rel, line) for rel, line, _ in scan_tree(root)), [("cli/sub/deep.py", 2), ("server/planted.py", 2)])
+
+
 CASES = (
     case_slabs, case_grader_home, case_snapshots, case_grader_separation, case_sales,
     case_shared_sale, case_sale_date_text, case_one_transaction, case_no_guessed_value,
     case_reading_back, case_sales_read_scope, case_upgrade, case_remove, case_latest,
+    case_latest_after_remove, case_snapshot_writers,
 )
 
 
