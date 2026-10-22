@@ -13,7 +13,7 @@ read-only POSTs in `POST_READS`, is called once per size through a real in-proce
 only for the routes in `PHOTO_WALK_FREE`: `scan` (calls to `sidecar.scan`) and `walk` (directory
 entries listed under the photograph roots, `captures/` and `photos/`).
 
-Six rules:
+Seven rules:
 1. EXACT BUDGET. `BUDGET[route]` holds each counter's value at size S. Over it fails. Under it
    fails with "lower to N" (the `UNSCOPED_WALK_EXPECTED` ratchet in `scripts/docs_audit/core.py`).
 2. GROWTH. `CONSTANT` counters must be equal at S and 2S. `json_loads` and `read_sidecar` may
@@ -40,6 +40,12 @@ Six rules:
    fixture cannot: the sitting and the search hits there grow with the store, and a card already parsed as a hit hides
    its box from the walk. Here each answer is three rows at every size, in boxes that grow.
 
+7. QUEUE FLAT. `GET /queues` makes the same number of SQL statements at S and 2S while its queued entries double, each on a
+   position of its own. The answer grows by design (a row per entry), so unlike rule 6 the rows answered are held to the
+   queued count and `json_loads` may follow them; the statements may not. The shared fixture queues the same three positions
+   at every size (`entry(4, 1 + n % 3)`), so a statement per queued card is a constant there and only
+   `check_queue_read_flat`, on a fixture of its own, can see it grow.
+
 Two checks hold the answer of those selections to the full scan (`sidecar.scan` over every photograph,
 then `narrow`):
 - `check_selection_scan_equivalence`: the answer equals the scan key for key, in the same order, for a
@@ -50,9 +56,9 @@ then `narrow`):
 - `check_selection_reads_under_the_given_home`: `resolve` finds the chosen cards' photographs under the `home` it is
   given when that is not `files.home()`, for a state and for a keys selection, and reads only those.
 
-One check holds the answers of the three `JSON_FLAT` reads to what they were before the walk read columns:
+One check holds the answers of the three `JSON_FLAT` reads to `PINS`:
 - `check_box_walk_equivalence`: the box rows, the positions with their neighbours, and the order the sitting and the
-  search answer in, for a small world that holds every shape the walk reads (`PIN_WORLD`). `PINS` was taken from the head.
+  search answer in, for a small world that holds every shape the walk reads (`PIN_WORLD`). `PINS` holds those rows.
 """
 
 from __future__ import annotations
@@ -256,7 +262,10 @@ BUDGET = {
     '_INVENTORY_BOX_RE': {"status": 200, 'sql': 29, 'json_loads': 51, 'records_in': 1, 'places': 1, 'store_read': 1},
     '/inventory/recent': {"status": 200, 'sql': 26, 'json_loads': 15, 'places': 1, 'store_read': 1},
     '/inventory/history': {"status": 200, 'sql': 12, 'store_read': 1},
-    # sql 23: `_walk` reads columns and no longer warms the Rows cache, so /queues fetches its own cards (a constant +2).
+    # sql 23: 20 statements that do not depend on the queued entries (the store open, both queues, the queued cards' states,
+    # box 4's name, positions, columns and order) and one `cards.get` per DISTINCT queued position, 3 here (4/1, 4/2, 4/3). `_walk`
+    # loads no card, so `_queue_row` fetches each one itself. The fixture queues the same 3 positions at every size, so this
+    # row cannot show that part grow: `check_queue_read_flat` holds it.
     '/queues': {"status": 200, 'sql': 23, 'json_loads': 7, 'places': 1, 'store_read': 1},
     '/capture/sitting': {"status": 200, 'sql': 208, 'json_loads': 86, 'places': 1, 'store_read': 1},
     '/boxes': {"status": 200, 'sql': 79, 'json_loads': 5, 'places': 1, 'store_read': 1},
@@ -1164,9 +1173,79 @@ def check_box_walk_json_flat(checks: Checks) -> None:
     checks.ok(not problems, f"11. {len(JSON_FLAT)} reads parse the same rows at S and 2S, and answer {JSON_FLAT_ANSWER} rows each")
 
 
+# --------------------------------------------------------------------------- the queue read, statements
+
+def _queue_world(size: int) -> int:
+    """`size` cards in `BOXES`, the first `size // 3` of them queued for review, each at a position of its own. The
+    positions span every box and double with `size`. Returns how many entries are queued."""
+    queued = size // 3
+    with Store().write() as snapshot:
+        inv = snapshot.inventory
+        for n in range(size):
+            card, _ = inv.allocate_capture(BOXES[n % len(BOXES)], cid=fake_cid(f"qf-{n}"))
+            card.name = f"Filler {n}"
+            if n < queued:
+                snapshot.review.upsert(entry(card.box, card.index, market="1.00"))
+    return queued
+
+
+def _queue_read(size: int) -> dict:
+    """What `GET /queues` answered and cost at one store size: status, rows, distinct positions, queued, statements."""
+    import json
+
+    with isolated_home():
+        queued = _queue_world(size)
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = _spawn_server(httpd)
+        try:
+            with _Meter() as meter:
+                status, body, _ = request(port, "GET", "/queues", origin=capture_server.DEFAULT_ALLOWED_ORIGINS[0])
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+    answer = json.loads(body) if status == 200 else {"review": [], "parked": []}
+    rows = answer["review"] + answer["parked"]
+    return {
+        "status": status, "rows": len(rows), "distinct": len({(row["box"], row["index"]) for row in rows}),
+        "queued": queued, "sql": meter.counts["sql"],
+    }
+
+
+def check_queue_read_flat(checks: Checks) -> None:
+    """Rule 7. `GET /queues` answers one row per queued entry, each on its own position, and makes the same number of SQL
+    statements at S and at 2S. The answer is held to the queued count at both sizes first: a fixture that queued the same
+    few positions, or answered nothing, could not tell a flat read from one that fetches a card per entry. A meter that
+    sees no statement fails as well. The rows grow here, so the rule is on the statements and not on the rows."""
+    checks.note("")
+    checks.note("QUEUE READ FLAT — statements per request, at S and 2S")
+    problems: list = []
+    small, big = _queue_read(SIZES[0]), _queue_read(SIZES[1])
+    for label, got in (("S", small), ("2S", big)):
+        if got["status"] != 200:
+            problems.append(f"/queues answered {got['status']} at {label}")
+        elif not got["rows"] == got["distinct"] == got["queued"]:
+            problems.append(
+                f"/queues answers {got['rows']} rows on {got['distinct']} distinct positions at {label}, the fixture queues {got['queued']}"
+            )
+        elif not got["sql"]:
+            problems.append(f"/queues made no statement at {label}: the meter no longer sees the store")
+    if not problems and big["queued"] <= small["queued"]:
+        problems.append(f"the fixture's queue does not grow: {small['queued']} entries at S, {big['queued']} at 2S")
+    if not problems and small["sql"] != big["sql"]:
+        problems.append(
+            f"/queues sql grows with the queued entries: {small['sql']} statements for {small['queued']} entries at S, "
+            f"{big['sql']} for {big['queued']} at 2S. It must read the queued cards in a fixed number of statements"
+        )
+    for problem in problems:
+        checks.ok(False, problem)
+    checks.ok(not problems, "13. /queues makes the same number of statements at S and 2S, while its queued entries double")
+
+
 # --------------------------------------------------------------------------- the box walk, answers
 
-# What the three reads answered before `_Places` stopped parsing a `Card` per record, pinned on the head. Every fact the
+# What the three reads answer for `PIN_WORLD`. Every fact the
 # walk reads is here: a name set, empty and absent, a sold, a retired and a moved record, a pooled game and an unregistered
 # one, a card placed mid-box, a box of more than nine records, declared sections, a named section, and a box nothing is
 # left in. The card is `(name, state, game, order, sku)` and the cards of a box are indexes 1, 2, 3 ... in this order.
@@ -1283,7 +1362,7 @@ def _pins() -> dict:
     return out
 
 
-# `_pins()` on the head, one row each. Boxes: `(box, name, cards, on_hand, sold, retired, moved, fill, next_index, [(section, start, end, count, name)])`.
+# `_pins()` for `PIN_WORLD`, one row each. Boxes: `(box, name, cards, on_hand, sold, retired, moved, fill, next_index, [(section, start, end, count, name)])`.
 # Sitting: `(key, state, label, section, card, place)`. Search: `(sku, on_hand, [(key, state, place)])`. Place: `(located, label, order, slot,
 # section, card, section_start, section_end, box_total, fraction, section_gaps, (prev, next))`, a neighbour `(index, slot, name, unread)`.
 PINS = {
@@ -1340,7 +1419,7 @@ def check_box_walk_equivalence(checks: Checks) -> None:
         diffs = [f"row {i}: answered {a!r}, pinned {b!r}" for i, (a, b) in enumerate(zip(rows_, want)) if a != b]
         if len(rows_) != len(want):
             diffs.append(f"{len(rows_)} rows answered, {len(want)} pinned")
-        checks.ok(not diffs, f"12. {route} answers the rows and positions it answered before", "\n".join(diffs[:4]))
+        checks.ok(not diffs, f"12. {route} answers the pinned rows and positions", "\n".join(diffs[:4]))
 
 
 CHECKS = (
@@ -1352,6 +1431,7 @@ CHECKS = (
     check_selection_reads_under_the_given_home,
     check_box_walk_json_flat,
     check_box_walk_equivalence,
+    check_queue_read_flat,
 )
 
 

@@ -4102,14 +4102,12 @@ def check_order_places_scoped(checks: Checks) -> None:
     """Store-scaling item 6: `do_orders` scopes its `_Places` build to the boxes its picks
     actually touch, never to the whole store.
 
-    `_Places.of()` has always been lazy PER BOX (D88) — the ordinary constructor does no
-    eager scan — but the cost that survived that fix is what "per box" means once it runs:
-    `_walk` hydrates a full `Card` for every record in a touched box (`records_in`), to
-    answer `slot`/`label`/`section`/`fraction`, fields two indexed integer columns already
-    answer, because the SAME walk also builds D58's neighbor/gap decoration, which
-    genuinely needs every card's name. An order's picks routinely span most of the store's
-    boxes, so five boxes cost a fifth of a full read, five times — measured 185 ms ->
-    3,465 ms at 20x the store.
+    `_Places.of()` is lazy PER BOX (D88): the ordinary constructor does no eager scan. What
+    it does once per touched box is `_walk`, which reads four indexed columns
+    (`Inventory.walk_rows_in`) of every record in the box to build D58's neighbor/gap
+    decoration, and that decoration genuinely needs every card's name. An order's picks
+    routinely span most of the store's boxes, so five boxes cost a column read of five
+    boxes, on the route the Orders and Shipping screens poll.
 
     `Orders.tsx`/`OrdersShipStage.tsx` read neither `neighbors` nor `section_gaps`, so
     `_Places.for_keys` answers everything else — `Inventory.occupied_indices`, two columns
@@ -4117,10 +4115,12 @@ def check_order_places_scoped(checks: Checks) -> None:
     answers when `_walk` degrades. This is an existing, typed, degraded state and not a
     new one.
 
-    THE RISK IS SILENT DEFEAT: a bug that calls `_walk` anyway (forgetting `_sparse` in
-    `_company`, or a future `.of()` refactor that opens a second path into `_walk`/
-    `_boxmates`) produces an IDENTICAL response at the OLD cost. A response that "looks
-    right" cannot catch that — only a loaded-object count can, which is Assertion 1.
+    THE RISK IS SILENT DEFEAT, AND TWO ASSERTIONS EACH SEE ONE SHAPE OF IT. A bug that calls
+    `_walk` anyway (forgetting `_sparse` in `_company`, or a future `.of()` refactor that
+    opens a second path into `_walk`/`_boxmates`) answers `neighbors` and `section_gaps`
+    non-null: Assertion 2 holds both null. A bug that builds whole records where it needs
+    two columns loads card objects: Assertion 1 counts them. `_walk` itself loads none, so
+    the count alone cannot see a walk.
 
     A MIXED BOX IS ALREADY IN THIS FILE'S OWN FIXTURES AND IS NOT INVENTED HERE:
     `check_order_screen`'s pull block sets `cards["3/5"].game = "pokemon_code"` beside four
@@ -4209,15 +4209,10 @@ def check_order_places_scoped(checks: Checks) -> None:
         checks.equal(
             after_loaded - before_loaded,
             0,
-            "ZERO card objects to place three picks in a 20-card box. `_Places.of()` is "
-            "lazy PER BOX already (D88), so the ordinary constructor would ALSO touch only "
-            "this one box — the saving this item makes is not 'the other four boxes', it "
-            "is that the touched box's `_walk` (`records_in`) hydrates every one of its "
-            "records to answer `slot`, where `occupied_indices` answers the same three "
-            "picks' slots from two indexed columns and builds nothing. Measured by hand "
-            "against the OLD `_Places(inventory)` over this identical fixture: 17 — the "
-            "box's other 17 records, on top of the 3 the resolver's own `where(sku=…)` "
-            "already loaded before `_Places` runs at all",
+            "ZERO card objects to place three picks in a 20-card box. The sparse build "
+            "answers each pick's slot from `occupied_indices`'s two columns and builds no "
+            "record, so the only objects loaded are the 3 the resolver's own "
+            "`where(sku=…)` loaded before `_Places` runs at all",
         )
         checks.ok(
             not snapshot.inventory.cards.complete,
