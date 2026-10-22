@@ -357,3 +357,5 @@ Kind: build. Platform: macOS, over the capture server.
 - Why `estimatedValue` trails the newest sale, and by how long. One PSA 10 card showed it in
   its sales list. A Riftbound card's two last-sale fields also differ, but its sales list is
   unchecked. The cause is unmeasured.
+- The unit of `velocity` in the sales speed (3.4). The screen shows the number under the
+  label "Velocity" with no unit.
