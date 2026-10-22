@@ -1,4 +1,4 @@
-## DEBT-fulfill-stock-art — Fulfillment still shows the owner's photo first
+## DEBT96 — Fulfillment still shows the owner's photo first
 
 **The owner ruled that Fulfillment shows the catalog image first, with the owner's own photo one press away** (lean-server spec, section 6, Q2 and Q6). `#/fulfillment` still shows the capture photo (`previewUrl`) first.
 
