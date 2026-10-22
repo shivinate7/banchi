@@ -241,6 +241,58 @@ def check_run_follows_cards_out_of_deleted_box(checks: Checks) -> None:
         )
 
 
+def check_unfollowable_run_promises_nothing(checks: Checks) -> None:
+    """A run that cannot follow its cards adds no copies to the worklist and is named instead.
+
+    The records carry no photograph digest, so nothing ties them to the cards now in box 7.
+    Pricing must not count those copies as ready while the send leaves them out: the run is
+    skipped by name and listed under `unreachable.reallocated` with its card count.
+    """
+    checks.note("")
+    checks.note("A RUN THAT CANNOT FOLLOW ITS CARDS PROMISES NO COPIES")
+    from server import pipeline_routes
+
+    cards = [(5, 1, "Dunsparce", "120/159", "holo"), (5, 2, "Dunsparce", "120/159", "reverse_holo")]
+    with isolated_home():
+        run, _ = seam_run(checks, cards, join=False)
+        with Store().write() as snapshot:
+            for box, index, name, number, finish in cards:
+                snapshot.inventory.record_identification(
+                    master.position_key(box, index),
+                    name=name, number=number, printed_total="159",
+                    confidence="high", detected_finish=finish, run=run.name,
+                )
+        command(checks, "join", str(run.directory), "--export", str(run.path("export.csv")))
+        from cli import runs as run_files
+
+        # An older run: it names its drawer by number only, with no true index recorded.
+        run_files.open_run(run.directory).set(scope={"box": 5, "whole_box": False, "cards": 2})
+        capture_server.do_move_cards(5, {"to_box": 7, **back_of(7), "indices": [1, 2]})
+        capture_server.do_delete_box(5)
+        capture_server.do_create_box({"box": 5, "name": "New five"})
+        capture_server.do_capture(capture_payload(5))
+        with Store().write() as snapshot:
+            snapshot.inventory.record_identification(
+                master.position_key(5, 1), name="Foreign", number="1/1", printed_total="1",
+                confidence="high", detected_finish=None, run="t7-other-run",
+            )
+        worklist = pipeline_routes.do_pipeline_worklist([run.name])
+        checks.equal(
+            [row for row in worklist["skus"] if row.get("add_to_quantity")], [],
+            "no copy of the unfollowable run is counted as ready to send",
+        )
+        checks.equal(
+            [skipped["code"] for skipped in worklist["skipped"]], ["box_reallocated"],
+            "the run is skipped by name",
+        )
+        named = {row["run"]: row["cards"] for row in worklist["unreachable"]["reallocated"]}
+        checks.ok(
+            named.get(run.name, 0) >= 1,
+            "and the screen's excluded line counts the cards it holds back",
+            f"unreachable {worklist['unreachable']}",
+        )
+
+
 def _drawn(body: dict) -> dict:
     """A Map drop as the Map sends it: with the destination's `layout_token` as it stands now
     (`docs/specs/subbox-capture.md` 1.6). A body that names its own token keeps it."""
@@ -2534,7 +2586,7 @@ def check_s_refuses_empty_last_section(checks: Checks) -> None:
 
 
 CHECKS = (
-    check_box_map_safety, check_run_follows_cards_out_of_deleted_box, check_section_moves, check_order_key_migration,
+    check_box_map_safety, check_run_follows_cards_out_of_deleted_box, check_unfollowable_run_promises_nothing, check_section_moves, check_order_key_migration,
     check_per_card_order, check_card_moves, check_delete_after_placement,
     check_undo_keeps_paid_answers, check_front_of_box, check_card_move_refusals,
     check_divider_editor_keys, check_delete_keeps_dividers, check_merge_speed,
