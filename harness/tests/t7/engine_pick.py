@@ -679,7 +679,7 @@ def check_second_look_agreement(checks: Checks) -> None:
     and the reason says which, never `low_confidence` over a high read."""
     import re
 
-    from cli import requeue
+    from cli import requeue, resolve
     from harness.tests.t7.common import capture_payload, entry, write_export
     from server import capture_server
     from store import master
@@ -752,6 +752,56 @@ def check_second_look_agreement(checks: Checks) -> None:
             and held[0].after.reason != routing.LOW_CONFIDENCE and "disagree" in held[0].after.reason,
             "re-resolve: the open disagree + high entry stays, with the readers-disagreed reason",
         )
+
+    # The free reader's top three: a paid read that names the same printing as ANY of them agrees.
+    # Each block is the wire shape `cmd_identify._second_look_record` writes, parsed by `resolve._second_look`.
+    wrong, right = ("Raichu", "026", "Base Set"), ("Dunsparce", "120", SV09_SET)
+
+    def top_three(*picks):
+        first = picks[0]
+        return {
+            "code": match.UNREAD_MARGIN, "name": first[0], "number": first[1], "set": first[2],
+            "floor": 0.91, "margin": 0.03,
+            "picks": [{"name": n, "number": no, "set": s, "score": 0.9} for n, no, s in picks],
+        }
+
+    def old_block(name, number, set):
+        return {"code": match.UNREAD_MARGIN, "name": name, "number": number, "set": set, "floor": 0.91, "margin": 0.03}
+
+    def judged(index, block, confidence):
+        return join.join_batch([card(index, resolve._second_look(block), confidence)], catalog, router=router)
+
+    pick_two = judged(5, top_three(wrong, right, wrong), "high")
+    checks.equal(list(pick_two.matches), [DUNSPARCE_SKU], "top3: pick 2 agrees + high: the card lists")
+    checks.equal([q.destination.reason for q in pick_two.queued], [], "top3: pick 2 agrees + high: nothing is queued")
+
+    pick_three = judged(6, top_three(wrong, wrong, right), "high")
+    checks.equal(list(pick_three.matches), [DUNSPARCE_SKU], "top3: pick 3 agrees + high: the card lists")
+    checks.equal([q.destination.reason for q in pick_three.queued], [], "top3: pick 3 agrees + high: nothing is queued")
+
+    pick_two_medium = judged(7, top_three(wrong, right, wrong), "medium")
+    checks.equal(list(pick_two_medium.matches), [], "top3: pick 2 agrees + medium: nothing lists")
+    checks.equal(
+        [q.destination.reason for q in pick_two_medium.queued], [routing.SECOND_LOOK_UNSURE],
+        "top3: pick 2 agrees + medium: held as second_look_unsure",
+    )
+
+    other_total = judged(8, top_three(wrong, ("Dunsparce", "120/200", SV09_SET), wrong), "high")
+    checks.equal(list(other_total.matches), [], "top3: pick 2 with another printed total + high: nothing lists")
+    checks.equal(
+        [q.destination.reason for q in other_total.queued], [routing.READERS_DISAGREE],
+        "top3: pick 2 with another printed total + high: held as readers_disagree",
+    )
+
+    old_right = judged(9, old_block(*right), "high")
+    checks.equal(list(old_right.matches), [DUNSPARCE_SKU], "top3: old block with no picks, right pick + high: the card lists")
+
+    old_wrong = judged(10, old_block(*wrong), "high")
+    checks.equal(list(old_wrong.matches), [], "top3: old block with no picks, wrong pick + high: nothing lists")
+    checks.equal(
+        [q.destination.reason for q in old_wrong.queued], [routing.READERS_DISAGREE],
+        "top3: old block with no picks, wrong pick + high: held as readers_disagree",
+    )
 
 
 def check_disagree_candidates_hold_both(checks: Checks) -> None:
