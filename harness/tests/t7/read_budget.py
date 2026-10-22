@@ -220,10 +220,11 @@ BUDGET = {
     # One store open (11 statements) and one `Store.read`, equal at S and 2S: the on_hand count must come from that one read, never a query per row.
     # MY SLABS (D320), on SEEDED tables (`_seed_slabs`: size // 10 slabs, each with a snapshot and three sales, two slabs
     # sharing one sale). The item route is a hit: its statements follow its own three sales, so they are equal at S and 2S.
-    # `/slabs` is the whole list in a fixed number of statements, equal at S and 2S: the store open (10), then one read each
-    # of `slabs`, `slab_snapshots` and the sale links. A statement per slab grows with the slab count and fails the growth
-    # rule. `json_loads` is one parse per slab row and per snapshot row (15 slabs at S, one snapshot each).
-    '/slabs': {"status": 200, 'sql': 13, 'json_loads': 30, 'store_read': 1},
+    # `/slabs` is the whole list in a fixed number of statements, equal at S and 2S: the store open (10), then one read of `slabs`
+    # and one of the sale-links index (the no-sales flag). The newest snapshot rides on the slab row, so the list never reads
+    # `slab_snapshots`, a table that gains a row per slab per day. A statement per slab grows with the slab count and fails the
+    # growth rule. `json_loads` is one parse per slab row (15 slabs at S).
+    '/slabs': {"status": 200, 'sql': 12, 'json_loads': 15, 'store_read': 1},
     '_SLABS_ITEM_RE': {"status": 200, 'sql': 16, 'json_loads': 8, 'store_read': 1},
     '_MARKDOWN_TABLE_RE': {"status": 200, 'sql': 11, 'json_loads': 0, 'store_read': 1},
     '_MARKDOWN_HISTORY_RE': {"status": 404},
