@@ -30,15 +30,44 @@ from harness.tests.t7.common import (
 )
 
 
+@contextlib.contextmanager
+def _counting_walks(calls: list):
+    """Records the box of every walk of a box's records, by either reader: `walk_rows_in` (the columns `_Places._walk`
+    reads) and `records_in` (a `Card` per record). Counting both keeps the rule about the walk, not about which reader
+    the walk calls today."""
+    from store import master
+
+    saved = {name: getattr(master.Inventory, name) for name in ("walk_rows_in", "records_in")}
+
+    def counted(name):
+        def walk(self, box):
+            calls.append(int(box))
+            return saved[name](self, box)
+
+        return walk
+
+    for name in saved:
+        setattr(master.Inventory, name, counted(name))
+    try:
+        yield
+    finally:
+        for name, real in saved.items():
+            setattr(master.Inventory, name, real)
+
+
 def check_sitting_read_walks_each_box_once(checks: Checks) -> None:
     """`GET /capture/sitting` re-hydrated the whole box once PER CARD (72 s on a 490-card
-    sitting in a 1,100-card box). One read walks a box at most once, and the rows are the
-    ones a per-card `_card_summary` gives, which is the oracle."""
+    sitting in a 1,100-card box). One read walks a box once, and the rows are the
+    ones a per-card `_card_summary` gives, which is the oracle.
+
+    THE COUNT MUST BE ABLE TO SEE THE WALK. `_Places._walk` reads columns (`walk_rows_in`), so a counter on
+    `records_in` alone reads 0 for any walk and passes a per-card one. The read is held at exactly one walk
+    of box 1, and the same read with `_walk` made to forget its cache must count more: a meter that sees
+    nothing fails the first, a meter blind to the walk fails the second."""
     checks.note("")
     checks.note("SITTING READ: ONE BOX WALK PER BOX, NOT PER CARD")
     from datetime import datetime, timedelta, timezone
 
-    from store import master
     from harness.tests.t7.common import fake_cid
 
     with isolated_home():
@@ -50,23 +79,15 @@ def check_sitting_read_walks_each_box_once(checks: Checks) -> None:
                 if n < 600:
                     card.captured_at = stale
         calls: list = []
-        real = master.Inventory.records_in
-
-        def counting(self, box):
-            calls.append(int(box))
-            return real(self, box)
-
-        master.Inventory.records_in = counting
-        try:
+        with _counting_walks(calls):
             started = time.monotonic()
             body = capture_server.do_capture_sitting()
             elapsed = time.monotonic() - started
-        finally:
-            master.Inventory.records_in = real
         checks.equal(len(body["cards"]), 500, "the open sitting is the 500 fresh cards")
-        checks.ok(
-            calls.count(1) <= 1,
-            f"box 1 is walked at most once for the whole read, not once per card: {calls.count(1)} walks",
+        checks.equal(
+            calls.count(1),
+            1,
+            "box 1 is walked once for the whole read, not once per card",
         )
         inventory = Store().read().inventory
         wants = [
@@ -81,6 +102,23 @@ def check_sitting_read_walks_each_box_once(checks: Checks) -> None:
             "every row's places are the per-card summary's, unchanged",
         )
         checks.ok(elapsed < 10, f"and the read is not minutes: {elapsed:.1f}s")
+
+        walk, forgetful = capture_server._Places._walk, []
+
+        def per_card(self, box):
+            self._boxmates.pop(int(box), None)  # the cache `_walk` fills: forgetting it walks again for every card
+            return walk(self, box)
+
+        capture_server._Places._walk = per_card
+        try:
+            with _counting_walks(forgetful):
+                capture_server.do_capture_sitting()
+        finally:
+            capture_server._Places._walk = walk
+        checks.ok(
+            forgetful.count(1) > 1,
+            f"the meter can tell: a `_walk` that forgets its cache walks box 1 once per card, {forgetful.count(1)} walks",
+        )
 
 
 def check_connection_close(checks: Checks) -> None:

@@ -1973,6 +1973,26 @@ class Inventory:
                     continue  # an unreadable index names no slot; `_walk` degrades the same way
         return tuple(sorted(gone))
 
+    def walk_rows_in(self, box) -> List[Tuple[int, Optional[str], Optional[str], Optional[str]]]:
+        """`(index, name, state, game claim)` for every record in `box`, ascending by index,
+        refusing on the same records `records_in` refuses on.
+
+        The neighbour walk (`_Places._walk`) reads these four and nothing else, and all four
+        are indexed columns, so this is one column read where `records_in` builds a `Card`
+        (a JSON parse) per row. The order is index order and not the box's order (D294): the
+        caller sorts by `box_order`, which it already holds.
+        """
+        box = _as_position_int(box, "box")
+        self._positions_in(box)  # the refusal, before anything is built
+        out = [
+            (int(raw_index), name, state, game)
+            for _key, (raw_index, name, state, game) in self.cards.select(
+                ("idx", "name", "state", "game"), box=box
+            )
+        ]
+        out.sort(key=lambda row: row[0])
+        return out
+
     def records_in(self, box) -> List[Tuple[int, str, Card]]:
         """`(index, key, card)` for every record in `box`, ascending, coerced the way
         `next_index` coerces and refusing the same way. What the box-scoped routes walk
