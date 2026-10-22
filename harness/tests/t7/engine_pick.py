@@ -803,6 +803,44 @@ def check_second_look_agreement(checks: Checks) -> None:
         "top3: old block with no picks, wrong pick + high: held as readers_disagree",
     )
 
+    # The per-pick guards: a pick past the first must name the same set and the same total too.
+    # Pick 1 is wrong in both cases, so only pick 2's own guard decides.
+    rift = join.Catalog(tcgcsv.read_export(REPO_ROOT / "fixtures/riftbound_export_untouched.csv"))
+
+    def riftbound_pick_two(index, set_label):
+        block = top_three(wrong, ("Fortified Position", "279/298", set_label), wrong)
+        return join.join_batch([join.IdentifiedCard(
+            position=join.Position(box=3, index=index), name="Fortified Position (Oversized)", number="279/298",
+            metadata_finish=("normal",), photo=f"captures/box3/{index:04d}.jpg", confidence="high",
+            second_look=resolve._second_look(block), game="riftbound", set_hint="Origins: Proving Grounds",
+        )], rift, router=router)
+
+    short_set = riftbound_pick_two(11, "Origins")
+    checks.equal(list(short_set.matches), [], "top3: pick 2 says Origins for Origins: Proving Grounds, number and total agree + high: nothing lists")
+    checks.equal(
+        [q.destination.reason for q in short_set.queued], [routing.READERS_DISAGREE],
+        "top3: pick 2 with a short set label + high: held as readers_disagree",
+    )
+    full_set = riftbound_pick_two(12, "Origins: Proving Grounds")
+    checks.equal(len(full_set.matches), 1, "top3: control, pick 2 with the full set label + high: the card lists")
+
+    def sv_pick_two(index, printed_total):
+        block = top_three(wrong, ("Dunsparce", "120", SV09_SET), wrong)
+        return join.join_batch([join.IdentifiedCard(
+            position=join.Position(box=3, index=index), name="Dunsparce", number="120",
+            printed_total=printed_total, metadata_finish="normal", photo=f"captures/box3/{index:04d}.jpg",
+            confidence="high", second_look=resolve._second_look(block),
+        )], catalog, router=router)
+
+    bare_number = sv_pick_two(13, None)
+    checks.equal(list(bare_number.matches), [], "top3: pick 2 bare number 120 + blank card total + high: nothing lists")
+    checks.equal(
+        [q.destination.reason for q in bare_number.queued], [routing.READERS_DISAGREE],
+        "top3: pick 2 bare number 120 + blank card total + high: held as readers_disagree",
+    )
+    with_total = sv_pick_two(14, "159")
+    checks.equal(list(with_total.matches), [DUNSPARCE_SKU], "top3: control, pick 2 bare number 120 with total 159 + high: the card lists")
+
 
 def check_disagree_candidates_hold_both(checks: Checks) -> None:
     """A `readers_disagree` entry offers BOTH printings, so one numbered press answers it: the
