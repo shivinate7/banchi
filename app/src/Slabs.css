@@ -1,0 +1,72 @@
+/* SLABS (D320). Tokens only; the kit's control sizes are never overridden (4.7). */
+
+.slabs-panel { overflow: hidden; }
+.slabs-frame { overflow-x: auto; }
+.slabs-table { table-layout: fixed; width: 100%; }
+.slabs-table th,
+.slabs-table td { padding-left: var(--bn-2); padding-right: var(--bn-2); }
+.slabs-table th {
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: normal;
+  vertical-align: bottom;
+  font-size: var(--bn-fs-sm);
+}
+.slabs-table th:first-child,
+.slabs-table td:first-child { padding-left: var(--bn-4); }
+.slabs-table th:last-child,
+.slabs-table td:last-child { padding-right: var(--bn-4); }
+.slabs-table td { font-size: var(--bn-fs-sm); }
+
+.slabs-dash,
+.slabs-no-sales { color: var(--bn-ink-3); }
+.slabs-conf[data-low='true'] { color: var(--bn-warn); font-weight: 600; }
+
+.slabs-card-btn {
+  min-height: var(--bn-control-h-sm);
+  padding: 0;
+  text-align: left;
+  color: var(--bn-ink);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  transition: color var(--bn-t-fast) var(--bn-ease);
+}
+.slabs-card-btn:hover { color: var(--bn-accent); }
+
+.slabs-skeleton { height: 1em; width: 70%; }
+.slabs-loading-row td { height: var(--bn-control-h-lg); }
+
+/* ---- the add sheet -------------------------------------------------------------- */
+.slabs-add { display: flex; flex-direction: column; gap: var(--bn-4); }
+/* The answer to a press has a place of its own, so it moves nothing (D118). */
+.slabs-add-status { min-height: var(--bn-9); }
+.slabs-reading { margin: 0; color: var(--bn-ink-2); }
+
+/* ---- the detail sheet ------------------------------------------------------------ */
+.slabs-body { display: flex; flex-direction: column; gap: var(--bn-6); }
+.slabs-facts { margin: 0; color: var(--bn-ink-2); }
+.slabs-worth { display: grid; gap: var(--bn-4); margin: 0; }
+.slabs-worth dt { color: var(--bn-ink-2); font-size: var(--bn-fs-sm); }
+.slabs-worth dd { margin: 0; }
+.slabs-source { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.slabs-pop { margin: 0; }
+
+.slabs-rows { list-style: none; margin: 0; padding: 0; }
+.slabs-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--bn-2) var(--bn-4);
+  min-height: var(--bn-control-h-lg);
+  border-bottom: 1px solid var(--bn-line);
+}
+.slabs-rows > .slabs-row:last-child { border-bottom: 0; }
+.slabs-sale-when { color: var(--bn-ink-2); flex: 1 1 auto; }
+.slabs-link { display: inline-flex; align-items: center; gap: var(--bn-1); min-height: var(--bn-control-h-sm); color: var(--bn-accent); }
+.slabs-speed,
+.slabs-step,
+.slabs-snap { display: grid; align-items: center; column-gap: var(--bn-3); }
+.slabs-speed { grid-template-columns: 1fr auto auto; }
+.slabs-step { grid-template-columns: 1fr auto auto; padding: 0 var(--bn-2); }
+.slabs-snap { grid-template-columns: 1fr auto auto auto; }
+.slabs-step[data-here='true'] { background: var(--bn-accent-tint); border-radius: var(--bn-r-sm); font-weight: 600; }
