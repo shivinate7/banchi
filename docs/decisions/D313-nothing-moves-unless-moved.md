@@ -4,6 +4,8 @@
 and a changed string are not the person. The owner's rule: reserve space so loading elements
 cause no layout shift. It is the first case of this rule. Later cases join the same table.
 
+**One exception, by the owner's word: the Review band sheet's title count.** The sheet titled "N Waiting for a Paid Look" (and its three siblings) shows the band's live count in its title, so the count updates when a run ends. The sheet's rows stay a snapshot, and the held line "The count has moved" with "Show it again" stays for them. The exception covers the title's number and nothing else on that sheet. `docs/specs/identify-engine-pick.md`, section 10.1, holds the behaviour.
+
 **The cases are rows of one table.** `app/tests/stability.spec.ts` holds the table. A case is a
 name, the widths it runs at, and the way it provokes motion. A new class of shift adds a row.
 It adds no file. The measure is the browser's `layout-shift` entry with no recent-input
