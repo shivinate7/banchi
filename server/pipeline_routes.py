@@ -583,8 +583,9 @@ def _selection_captures(selection: selection_mod.Selection) -> List["sidecar.Cap
 def _resolved(selection: selection_mod.Selection) -> Tuple[List["sidecar.Capture"], int]:
     """`(captures, scanned)` from `selection_mod.resolve`, the one resolver the CLI child uses.
 
-    A keyed press reads only its own cards' sidecars. `scanned` is what was read, for the
-    empty refusal. A named root that is missing or unreadable refuses, naming it.
+    A press named by keys, state or capture time reads only the chosen cards' sidecars; any
+    other reads every sidecar under its roots. `scanned` is the number of photographs read,
+    for the empty refusal. A named root that is missing or unreadable refuses, naming it.
     """
 
     def read_inventory():
@@ -1877,9 +1878,10 @@ def do_pipeline_waiting(payload: dict) -> dict:
     screen then sends exactly that list as a `keys` selection (D180). A capture in another tab
     after this answer cannot grow the spend, because the spend names its cards.
 
-    CHEAP ON PURPOSE, AND NOT THE PREFLIGHT. This is `_selection_captures` (a sidecar scan,
-    and the store where a term needs it) and `_send_keys`, the same two reads the spend route
-    makes before it spawns. It decodes no photograph, spawns nothing and writes nothing.
+    CHEAP ON PURPOSE, AND NOT THE PREFLIGHT. This is `_selection_captures` (the sidecars the
+    selection needs, and the store where a term needs it) and `_send_keys`, the same two reads
+    the spend route makes before it spawns. It decodes no photograph, spawns nothing and
+    writes nothing.
     """
     send = _resolve_send(payload)
     try:
