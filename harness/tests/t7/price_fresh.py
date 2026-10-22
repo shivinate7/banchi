@@ -57,9 +57,12 @@ from harness.tests.t7.common import (
     seam_run,
     write_export,
 )
+from harness.tests.t7.send_markdown import send_portal, synced_home
 from pipeline import pricehistory, pricerefresh, readings as readings_walk, tcgcsv
-from server import capture_server, pipeline_routes
+from server import capture_server, pipeline_routes, send_routes
 from store import files
+from store.readings import KIND_RUN, Reading, Source
+from store.session import Store
 
 SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "price-refresh-daily.py"
 
@@ -1145,6 +1148,283 @@ def check_trends_facts_need_no_month_series(checks: Checks) -> None:
     )
 
 
+# ------------------------------------------------------- the send gate (`refresh_before_send`)
+#
+# A send never prices from an export older than today (US Central). These cases go through the two
+# real doors, `send_routes.do_send` (the runs sheet, `#/pricing`) and `cli/cmd_emit.run` (the CLI),
+# against `send_markdown.send_portal`, which serves the live read, the catalog export and the pricing
+# upload. On `main` there is no gate, so each case is red by its own sentence. `_refresh_spy` says
+# whether a refresh was asked and what receipts existed when it was.
+
+PUSH_CALLS = ("initializeexportcsv", "uploadexportcsv", "finalizeexportcsv", "movetolive")
+DAY = 86400
+
+
+def _outcome(fn):
+    """What `fn` did: `("answer", value)`, `("refused", code, message)`, or `("raised", text)`."""
+    try:
+        return ("answer", fn())
+    except pipeline_routes.PipelineRefusal as caught:
+        return ("refused", caught.code, str(caught))
+    except Exception as caught:  # noqa: BLE001 - a missing function reads as a failed case, not a crash
+        return ("raised", f"{type(caught).__name__}: {caught}")
+
+
+def _refused(outcome) -> tuple:
+    """`(code, message)` when `outcome` refused, else `(None, "")`."""
+    return (outcome[1], outcome[2]) if outcome[0] == "refused" else (None, "")
+
+
+def _send_now(run):
+    return _outcome(lambda: send_routes.do_send({"runs": [run.directory.name], "confirm": True}))
+
+
+def _receipt_dirs() -> list:
+    root = send_routes.sends_dir()
+    return sorted(path.name for path in root.iterdir()) if root.is_dir() else []
+
+
+@contextmanager
+def _refresh_spy():
+    """Each call to `pipeline_routes.do_prices_refresh`: the receipts that existed then, and its answer.
+
+    It forwards every argument, because main's refresh takes no `also`. `refresh_before_send` reads
+    the function as a module global, so one patch covers `do_send` and `cli/cmd_emit`."""
+    real = pipeline_routes.do_prices_refresh
+    calls = []
+
+    def spy(*args, **kwargs):
+        call = {"receipts": _receipt_dirs(), "answer": None}
+        calls.append(call)
+        call["answer"] = real(*args, **kwargs)
+        return call["answer"]
+
+    pipeline_routes.do_prices_refresh = spy
+    try:
+        yield calls
+    finally:
+        pipeline_routes.do_prices_refresh = real
+
+
+def _age(path, days: int) -> int:
+    """Set `path`'s mtime `days` back, to a whole second. Returns that stamp."""
+    stamp = int(time.time()) - days * DAY
+    os.utime(path, (stamp, stamp))
+    return stamp
+
+
+def _name_sets(run, set_id: str = "SV09") -> None:
+    """A Pokemon run names its set (D170), as `world` does. Without one, a refresh cannot fetch it."""
+    path = run.directory / pipeline_routes.run_files.IDENTIFICATIONS
+    payload = json.loads(path.read_text())
+    for card in payload["cards"].values():
+        card["set_hint"] = set_id
+    path.write_text(json.dumps(payload))
+
+
+def _stale_run(checks: Checks, portal: dict, home: Path, cards):
+    """A joined Pokemon run priced at `THEN`, its export two days old. The portal's catalog says `NOW`."""
+    run, _ = seam_run(checks, cards, market={DUNSPARCE_SKU: THEN, ARTICUNO_SKU: ARTICUNO_THEN})
+    _name_sets(run)
+    _age(run.directory / "export.csv", 2)
+    portal["catalog"] = write_export(home / "catalog-now.csv", market={DUNSPARCE_SKU: NOW, ARTICUNO_SKU: ARTICUNO_NOW}).read_bytes()
+    return run
+
+
+def _waiting_run(checks: Checks, cards):
+    """A run read and collected but not joined: phase `join` (`_phase`), the mark `cmd_match` writes."""
+    run, _ = seam_run(checks, cards, join=False)
+    run.set(collected=True)
+    return run
+
+
+def _pushed(portal) -> list:
+    """The pricing-upload calls the portal received. Empty when no upload reached TCGplayer."""
+    return [name for kind, name in portal["calls"] if kind == "POST" and name in PUSH_CALLS]
+
+
+def _uploaded(portal) -> dict:
+    """`{TCGplayer Id: MyPrice}` for every row the portal kept."""
+    return {row["ProductConditionId"]: row["MyPrice"] for row in portal["rows"]}
+
+
+def check_send_refreshes_a_stale_export_first(checks: Checks) -> None:
+    """Case 1. An export from an earlier day is refreshed before the send, and the send carries the new price.
+
+    The refresh runs before any receipt exists. The pricing upload carries $16.25, not $10.37.
+    """
+    checks.note("")
+    checks.note("SEND GATE — an export from an earlier day is refreshed before the send")
+    with send_portal() as portal, synced_home() as home:
+        run = _stale_run(checks, portal, home, [(3, 1, "Dunsparce", "120/159", "normal")])
+        with _refresh_spy() as calls:
+            outcome = _send_now(run)
+        checks.equal(len(calls), 1, "1. a stale export makes the send run the refresh once")
+        checks.equal(
+            calls[0]["receipts"] if calls else None, [],
+            "1. and no receipt exists when the refresh runs: the gate sits before the receipt",
+        )
+        checks.ok(outcome[0] == "answer", "1. the send goes after the refresh", repr(outcome[1:])[:300])
+        checks.equal(attempt(checks, "1. the run's table", lambda: table_row(run, DUNSPARCE_SKU)["snap"].get("market")), NOW,
+                     "1. the run's own table carries the refreshed Market")
+        checks.equal(_uploaded(portal).get(DUNSPARCE_SKU), NOW,
+                     "1. the pricing upload sends $16.25, not the stale $10.37")
+
+
+def check_refused_refresh_sends_nothing(checks: Checks) -> None:
+    """Case 2. A refresh that cannot bring the prices current refuses the send, names the cause, and sends nothing."""
+    checks.note("")
+    checks.note("SEND GATE — a refresh that cannot run refuses the send, with its cause, and sends nothing")
+    with send_portal() as portal, synced_home() as home:
+        run = _stale_run(checks, portal, home, [(3, 1, "Dunsparce", "120/159", "normal")])
+        saved = os.environ.pop("TCGPLAYER_STORE_COOKIE", None)
+        try:
+            with _refresh_spy() as calls:
+                outcome = _send_now(run)
+        finally:
+            if saved is not None:
+                os.environ["TCGPLAYER_STORE_COOKIE"] = saved
+        code, text = _refused(outcome)
+        checks.equal(code, "prices_stale", "2a. with no cookie the refresh cannot run: the send refuses with `prices_stale`")
+        checks.ok(text.startswith("Nothing was sent"), "2a. the refusal opens `Nothing was sent`", text[:300])
+        checks.equal(len(calls), 1, "2a. the refresh was asked once")
+        checks.equal(_pushed(portal), [], "2a. and no pricing upload reached TCGplayer")
+        checks.equal(_receipt_dirs(), [], "2a. and no receipt was written")
+
+        with pricerefresh.refresh_lock() as held:
+            checks.ok(held, "2b. the probe holds the refresh lock, as another process would")
+            with _refresh_spy() as calls:
+                outcome = _send_now(run)
+        code, text = _refused(outcome)
+        checks.equal(code, "prices_stale", "2b. another refresh running: the send refuses with `prices_stale`")
+        checks.ok(
+            text.startswith("Nothing was sent") and "another refresh is running" in text,
+            "2b. the refusal opens `Nothing was sent` and names the running refresh", text[:300],
+        )
+        checks.equal(_pushed(portal), [], "2b. and no pricing upload reached TCGplayer")
+        checks.equal(_receipt_dirs(), [], "2b. and no receipt was written")
+
+
+def check_same_day_export_asks_no_refresh(checks: Checks) -> None:
+    """Case 3. An export from today asks no refresh, and the send goes as before."""
+    checks.note("")
+    checks.note("SEND GATE — a same-day export is sent without a refresh")
+    with send_portal(), synced_home():
+        run, _ = seam_run(checks, [(3, 1, "Dunsparce", "120/159", "normal")], market={DUNSPARCE_SKU: THEN})
+        _name_sets(run)
+        with _refresh_spy() as calls:
+            outcome = _send_now(run)
+        checks.equal(len(calls), 0, "3. an export from today asks no refresh")
+        checks.ok(outcome[0] == "answer", "3. and the send goes", repr(outcome[1:])[:300])
+
+
+def check_waiting_run_is_joined_and_send_stays_narrow(checks: Checks) -> None:
+    """Case 4. The refresh joins a run waiting at phase join, and a run that cannot join is named and does not block the send.
+
+    The pressed run holds Dunsparce. A waiting run holds Articuno and joins. A second waiting run has
+    no set hint, so its join fails. The pressed send must carry Dunsparce alone.
+    """
+    checks.note("")
+    checks.note("SEND GATE — a waiting run is joined by the refresh, a failed join is named, the send is not widened")
+    with send_portal() as portal, synced_home() as home:
+        pressed = _stale_run(checks, portal, home, [(3, 1, "Dunsparce", "120/159", "normal")])
+        waiting = _waiting_run(checks, [(4, 1, "Articuno", "161", None)])
+        _name_sets(waiting)
+        broken = _waiting_run(checks, [(5, 1, "Articuno", "161", None)])
+        with _refresh_spy() as calls:
+            outcome = _send_now(pressed)
+        checks.equal(len(calls), 1, "4. the refresh runs once, for the stale pressed run")
+        worklist = attempt(checks, "4. `do_pipeline_worklist` answers", lambda: pipeline_routes.do_pipeline_worklist([]))
+        row = row_of(ARTICUNO_SKU, worklist) if worklist else None
+        checks.ok(row is not None, "4. the waiting run is joined by the refresh and lands on the worklist",
+                  json.dumps([r.get("sku") for r in (worklist or {}).get("skus", [])])[:300])
+        steps = (calls[0]["answer"] or {}).get("steps") or {} if calls else {}
+        join_said = (steps.get("join") or {}).get("message") or ""
+        checks.ok(broken.directory.name in join_said, "4. the run that cannot join is named by the refresh's join step",
+                  repr(steps.get("join"))[:300])
+        checks.ok(outcome[0] == "answer", "4. a failed join does not block the send", repr(outcome[1:])[:300])
+        checks.equal(set(_uploaded(portal)), {DUNSPARCE_SKU},
+                     "4. the pressed send is not widened: only its own SKU is uploaded")
+
+
+def check_readings_keep_the_newest_reading(checks: Checks) -> None:
+    """Case 5a. `replace_source` keeps the row dated later. A tie takes the new reading."""
+    checks.note("")
+    checks.note("READINGS — a newer reading is kept over an older one, from any source")
+    with isolated_home():
+
+        def put(source: str, price: str, at: int) -> None:
+            with Store().write() as writable:
+                writable.readings.replace_source(
+                    KIND_RUN, source, {"501": Reading(price, at, source, KIND_RUN, "Card")},
+                    Source(KIND_RUN, source, at, 1),
+                )
+
+        def held() -> str:
+            return Store().read().readings.entries["501"].market
+
+        attempt(checks, "5a. run-a is written", lambda: put("run-a", "12.00", 2000))
+        attempt(checks, "5a. run-b, an older reading from another source, is written", lambda: put("run-b", "9.00", 1000))
+        checks.equal(attempt(checks, "5a. the table is read", held), "12.00",
+                     "5a. an older reading from another source does not replace a newer row")
+        attempt(checks, "5a. run-a re-joins with an older reading", lambda: put("run-a", "8.00", 1500))
+        checks.equal(attempt(checks, "5a. the table is read", held), "12.00",
+                     "5a. nor does an older re-join of the same source replace its own newer row")
+        attempt(checks, "5a. run-b writes a tie", lambda: put("run-b", "7.00", 2000))
+        checks.equal(attempt(checks, "5a. the table is read", held), "7.00",
+                     "5a. a tie replaces: the new reading takes the row")
+
+
+def check_join_dates_pricing_to_its_export(checks: Checks) -> None:
+    """Case 5b. `join` stamps pricing.json with the export's own time, and `readings adopt` recomputes the same `at`."""
+    checks.note("")
+    checks.note("READINGS — a join is dated to the export it priced from, never to now")
+    with isolated_home():
+        run, _ = seam_run(checks, [(3, 1, "Dunsparce", "120/159", "normal")], market={DUNSPARCE_SKU: THEN}, join=False)
+        export = run.directory / "export.csv"
+        stamp = _age(export, 2)
+        command(checks, "join", str(run.directory), "--export", str(export))
+        pricing = run.directory / pipeline_routes.run_files.PRICING
+        checks.equal(int(pricing.stat().st_mtime), stamp, "5b. `join` dates pricing.json to the export it joined, not to now")
+
+        def reading_at() -> int:
+            return Store().read().readings.entries[DUNSPARCE_SKU].at
+
+        checks.equal(attempt(checks, "5b. the reading is read", reading_at), stamp,
+                     "5b. the reading carries that same time")
+        command(checks, "readings", "adopt", "--write")
+        checks.equal(attempt(checks, "5b. the reading is read again", reading_at), stamp,
+                     "5b. `readings adopt` recomputes the same `at`")
+
+
+def check_cli_emit_is_gated(checks: Checks) -> None:
+    """Case 6. `emit` with a stale `--export` is refused, and a multi-run emit is gated by the same refresh."""
+    checks.note("")
+    checks.note("SEND GATE — the CLI `emit` is refused on stale prices, one run or several")
+    with send_portal() as portal, synced_home() as home:
+        run, _ = seam_run(checks, [(3, 1, "Dunsparce", "120/159", "normal")], market={DUNSPARCE_SKU: THEN})
+        stale = write_export(home / "stale-export.csv", market={DUNSPARCE_SKU: THEN})
+        _age(stale, 2)
+        with _refresh_spy() as calls:
+            text = command(checks, "emit", str(run.directory), "--export", str(stale), exits=1)
+        checks.ok("Nothing was sent" in text, "6a. a stale `--export` is refused with `Nothing was sent`", text[-300:])
+        checks.equal(len(calls), 0, "6a. a named file is the owner's choice, so it is refused without a refresh")
+        checks.equal(sorted(run.directory.glob("import*.csv")), [], "6a. and no import file was written")
+
+        second, _ = seam_run(checks, [(4, 1, "Articuno", "161", None)], market={ARTICUNO_SKU: ARTICUNO_THEN})
+        _age(run.directory / "export.csv", 2)
+        _age(second.directory / "export.csv", 2)
+        with pricerefresh.refresh_lock() as held:
+            checks.ok(held, "6b. the probe holds the refresh lock, as another process would")
+            with _refresh_spy() as calls:
+                text = command(checks, "emit", str(run.directory), str(second.directory), exits=1)
+        checks.ok(
+            "Nothing was sent" in text and "another refresh is running" in text,
+            "6b. a multi-run emit over stale runs is refused with the running refresh named", text[-300:],
+        )
+        checks.equal(len(calls), 1, "6b. a multi-run emit asks the refresh once")
+
+
 CHECKS = (
     check_refresh_reaches_store_backed_runs,
     check_held_lock_is_a_recorded_skip,
@@ -1165,4 +1445,11 @@ CHECKS = (
     check_saved_file_and_routes,
     check_live_read_rejoins,
     check_trends_facts_need_no_month_series,
+    check_send_refreshes_a_stale_export_first,
+    check_refused_refresh_sends_nothing,
+    check_same_day_export_asks_no_refresh,
+    check_waiting_run_is_joined_and_send_stays_narrow,
+    check_readings_keep_the_newest_reading,
+    check_join_dates_pricing_to_its_export,
+    check_cli_emit_is_gated,
 )
