@@ -33,24 +33,24 @@ const WINDOWS: ReadonlyArray<readonly [string, string]> = [
 type Column = { readonly name: string; readonly width: number; readonly num?: boolean }
 /* The owner's order (4.1). Widths are fixed, so a column keeps its width empty or full (D313). */
 const COLUMNS: readonly Column[] = [
-  { name: 'Pop', width: 64, num: true },
-  { name: 'Graded', width: 72, num: true },
-  { name: 'Rate', width: 64, num: true },
-  { name: 'Top %', width: 68, num: true },
-  { name: 'Best %', width: 72, num: true },
-  { name: 'Grade', width: 96 },
-  { name: 'Set', width: 64 },
-  { name: 'Card', width: 280 },
-  { name: 'Var', width: 56 },
-  { name: 'Ask', width: 72, num: true },
-  { name: 'Card Ladder', width: 112, num: true },
-  { name: 'Conf', width: 88 },
-  { name: 'Last sale', width: 96, num: true },
-  { name: 'PSA 10', width: 80, num: true },
-  { name: 'Raw NM', width: 80, num: true },
-  { name: 'Slab vs raw', width: 104, num: true },
-  { name: '×', width: 48, num: true },
-  { name: 'Do', width: 56 },
+  { name: 'Pop', width: 48, num: true },
+  { name: 'Graded', width: 56, num: true },
+  { name: 'Rate', width: 44, num: true },
+  { name: 'Top %', width: 58, num: true },
+  { name: 'Best %', width: 58, num: true },
+  { name: 'Grade', width: 80 },
+  { name: 'Set', width: 40 },
+  { name: 'Card', width: 172 },
+  { name: 'Var', width: 40 },
+  { name: 'Ask', width: 48, num: true },
+  { name: 'Card Ladder', width: 96, num: true },
+  { name: 'Conf', width: 68 },
+  { name: 'Last sale', width: 80, num: true },
+  { name: 'PSA 10', width: 60, num: true },
+  { name: 'Raw NM', width: 64, num: true },
+  { name: 'Slab vs raw', width: 64, num: true },
+  { name: '×', width: 32, num: true },
+  { name: 'Do', width: 36 },
 ]
 const TABLE_MIN = COLUMNS.reduce((sum, column) => sum + column.width, 0)
 /* The cells no route fills yet. Rate, Top % and Best % need the pop report, which the routes do not store. */
@@ -445,10 +445,9 @@ function SlabSheet({
     if (!open || row === null) return
     let live = true
     setRead(null)
-    getSlabDetail(row.grader, row.cert).then(
-      (detail) => live && setRead({ key, detail, failure: null }),
-      (err) => live && setRead({ key, detail: null, failure: describeFailure(err) }),
-    )
+    getSlabDetail(row.grader, row.cert)
+      .then((detail) => live && setRead({ key, detail, failure: null }))
+      .catch((err) => live && setRead({ key, detail: null, failure: describeFailure(err) }))
     return () => {
       live = false
     }
@@ -567,22 +566,27 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
       </Section>
 
       <Section title="Sales speed">
-        {loading ? (
-          <SkeletonRows n={WINDOWS.length} />
-        ) : (
-          <Rows>
-            {WINDOWS.map(([id, words]) => {
-              const one = speed?.[id]
-              return (
-                <li key={id} className="slabs-row slabs-speed">
-                  <span>{words}</span>
-                  <span className="slabs-fig">{one?.velocity == null ? DASH : one.velocity.toLocaleString('en-US')} sold</span>
-                  <Money value={amount(one?.averagePrice)} />
-                </li>
-              )
-            })}
-          </Rows>
-        )}
+        <Rows loading={loading}>
+          <li className="slabs-row slabs-speed slabs-head" aria-hidden="true">
+            <span>Window</span>
+            <span className="slabs-fig">Velocity</span>
+            <span className="slabs-fig">Average price</span>
+          </li>
+          {WINDOWS.map(([id, words]) => {
+            const one = speed?.[id]
+            return loading ? (
+              <li key={id} className="slabs-row">
+                <Skeleton className="slabs-skeleton" />
+              </li>
+            ) : (
+              <li key={id} className="slabs-row slabs-speed">
+                <span>{words}</span>
+                <span className="slabs-fig">{one?.velocity == null ? DASH : one.velocity.toLocaleString('en-US')}</span>
+                <Money value={amount(one?.averagePrice)} />
+              </li>
+            )
+          })}
+        </Rows>
       </Section>
 
       <Section title="Population at the grade">
@@ -592,6 +596,11 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
       <Section title="Grade ladder">
         {loading ? null : (
           <Rows>
+            <li className="slabs-row slabs-step slabs-head" aria-hidden="true">
+              <span>Grade</span>
+              <span className="slabs-fig">Value</span>
+              <span>Confidence</span>
+            </li>
             {detail.ladder.map((step) => (
               <li key={step.grade} className="slabs-row slabs-step" data-here={step.grade === row.grade ? 'true' : undefined} aria-current={step.grade === row.grade ? 'true' : undefined}>
                 <span>{step.label}</span>
@@ -606,6 +615,12 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
       <Section title="Snapshots">
         {loading ? null : (
           <Rows>
+            <li className="slabs-row slabs-snap slabs-head" aria-hidden="true">
+              <span>Day</span>
+              <span className="slabs-fig">Estimate</span>
+              <span>Confidence</span>
+              <span className="slabs-fig">Last sale</span>
+            </li>
             {[...detail.snapshots].reverse().map((snap) => (
               <li key={snap.day} className="slabs-row slabs-snap">
                 <span>{dayDate(snap.day)}</span>
