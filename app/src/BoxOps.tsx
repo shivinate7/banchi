@@ -1777,15 +1777,8 @@ function DeleteBox({
           record.sold + record.retired > 0
             ? ` ${count(record.sold + record.retired, 'sold or retired record', 'sold or retired records')} stay on the Deleted boxes shelf.`
             : ''
-        }${result.directory_removed ? '' : ' One photo folder stays: it holds a file the delete did not expect.'}${
-          result.stranded_runs.length > 0
-            ? ` ${count(result.stranded_runs.length, 'reading', 'readings')} of cards moved out of it wait on a re-link, and those cards stay off the price list until then. Open Runs and press Rebind.`
-            : ''
-        }`,
-        ttlMs: result.stranded_runs.length > 0 ? 30000 : 12000,
-        ...(result.stranded_runs.length > 0
-          ? { action: { label: 'Open Runs', onPress: () => { window.location.hash = '#/runs' } } }
-          : {}),
+        }${result.directory_removed ? '' : ' One photo folder stays: it holds a file the delete did not expect.'}`,
+        ttlMs: 12000,
       })
       onChanged()
       onDeleted()
