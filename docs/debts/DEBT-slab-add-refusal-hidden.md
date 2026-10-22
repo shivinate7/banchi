@@ -1,4 +1,4 @@
-## DEBT97 — a Card Ladder failure on Add hides its plain sentence
+## DEBT-slab-add-refusal-hidden — a Card Ladder failure on Add hides its plain sentence
 
 **The Add sheet titles `cardladder_failed` and `cardladder_unreadable` with the screen's generic line.** `Slabs.tsx` words only the codes in `SAID`. For any other code the title is "That slab could not be added.", and the server's sentence sits behind "What the server said".
 
