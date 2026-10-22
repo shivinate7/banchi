@@ -10,8 +10,9 @@ RESUME BEATS RESUBMIT. Batch results stay retrievable for 29 days, so a run whos
 died mid-poll already owns its answers. Re-running reattaches by default; `--force-resubmit`
 pays again on purpose, which is what you want after a prompt change and never otherwise.
 
-RETRY, THEN CROP RETRY. A card that errored, expired, was cancelled or came back malformed
-is re-sent within `--retry-budget` (default 1). A card that came back `low` confidence or
+RETRY, THEN CROP RETRY. A card that errored, expired, was cancelled, ran out of tokens or came
+back malformed is re-sent within `--retry-budget` (default 1). A card that ran out of tokens is
+re-sent with a larger cap (`prompt.RETRY_MAX_TOKENS`), never the same request. A card that came back `low` confidence or
 malformed is re-sent WITH CROPS: the card found in the frame, deskewed, plus enlarged title
 and number bands. A `025` rendered 40px wide is a coin flip; the same digits at 600px are
 not. If the card cannot be found in the frame there is no crop retry at all — cropping blind
@@ -82,7 +83,7 @@ SYSTEM_TOKENS = 1000
 OUTPUT_TOKENS = 60
 
 # What triggers which kind of retry (v2 §4.4, §4.5).
-PLAIN_RETRY_STATUSES = ("errored", "expired", "canceled", "absent")
+PLAIN_RETRY_STATUSES = ("errored", "expired", "canceled", "absent", batch.MAX_TOKENS_STOP)
 CROP_RETRY_STATUSES = ("malformed",)
 WEAK_CONFIDENCE = "low"
 
@@ -523,6 +524,11 @@ def _requests(items: List[Item], with_crops: bool, say) -> List[batch.ImageReque
                 rarity_claim=None,
                 regions=regions,
                 strategy=item.strategy,
+                # Per card, from its own status: a retry round mixes cards, and only the one
+                # that ran out of tokens gets more room.
+                max_tokens=(
+                    prompt.RETRY_MAX_TOKENS if item.status == batch.MAX_TOKENS_STOP else None
+                ),
             )
         )
     return out
