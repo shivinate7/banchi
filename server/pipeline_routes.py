@@ -2628,6 +2628,9 @@ class _PricingReads:
     def __init__(self, snapshot: Optional["Snapshot"], book: Optional["corpus.Corpus"]) -> None:
         self.snapshot = snapshot
         self.book = book
+        # Runs over a disowned drawer that still find their cards: the only ones whose stored
+        # positions need re-addressing, so a healthy run pays no extra read.
+        self.followed: set = set()
         self._held: Optional[Tuple[Optional[str], Dict[str, Any]]] = None
 
     def held(self) -> Tuple[Optional[str], Dict[str, Any]]:
@@ -2766,7 +2769,8 @@ def do_pipeline_pricing(name: str, reads: Optional[_PricingReads] = None) -> dic
     # THE LABELS, RE-RENDERED BEFORE ANYTHING LEAVES (D58). In place on the document just
     # parsed, which nothing else holds — the file on disk is untouched, exactly as D58 left
     # `QueueEntry.label`.
-    _follow_positions(directory, pricing, None if reads is None else reads.snapshot)
+    if reads is None or name in reads.followed:
+        _follow_positions(directory, pricing, None if reads is None else reads.snapshot)
     _relabel_positions(pricing, None if reads is None else reads.snapshot)
     # WHEN EACH ROW'S FIGURES WERE READ: the fetch time of the export this run was last joined
     # against (its mtime, D104's own rule). Added to the answer and never written back.
@@ -3594,9 +3598,14 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
                 }
             )
             continue
-        if summary.get("box_former") and (
-            rescues_by_stranded.get(entry.name) or not _follows_its_cards(entry, snapshot)
-        ):
+        follows = bool(
+            summary.get("box_former")
+            and not rescues_by_stranded.get(entry.name)
+            and _follows_its_cards(entry, snapshot)
+        )
+        if follows:
+            reads.followed.add(entry.name)
+        if summary.get("box_former") and not follows:
             # A RUN OVER A DRAWER THAT NO LONGER EXISTS (D36). Never open, never in the
             # union: its positions are another drawer's cards now, and `emit` refuses it by
             # name. Drawn in the picker as `Box N (deleted)` so the operator can see why.
