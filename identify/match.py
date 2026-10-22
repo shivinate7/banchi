@@ -67,23 +67,24 @@ from store.cache import ENGINE_MATCHER as ENGINE
 # ------------------------------------------------------------------------ the rules
 
 # THE ACCEPT RULE. One home. The margin is on hub-corrected scores (`HUB_BETA`), in cosine units.
-MARGIN_MIN = 0.05
+MARGIN_MIN = 0.04
 # HUBNESS. A stock photo that sits close to many others (a plain, mostly-empty card face) scores
 # high against any photograph. Each stock entry's `r` is its mean cosine to its `HUB_K` nearest
 # other entries of the same game; candidates rank by `cosine - HUB_BETA * r`.
 HUB_K = 10
 HUB_BETA = 0.5
-# THE SHARE OF CARDS THE READER DOES NOT ACCEPT, used for a quote that is not measured. The
-# held-out check's 3,001 store photographs measured 37.5 percent at this margin, with a 95 percent
-# upper bound of 39.2. The figure is rounded UP to 0.40 so an estimate never understates the
-# second look's cost. The quote says "estimated" whenever it is used.
-UNACCEPTED_SHARE = 0.40
+# THE SHARE OF CARDS THE READER DOES NOT ACCEPT, used for a quote that is not measured. Measured on
+# the 4,224 store cards with a SKU and a photograph under this rule: 7.1 percent, 95 percent upper
+# bound 7.9, rounded UP to 0.08 so an estimate never understates the second look's cost. The quote says
+# "estimated" whenever it is used.
+UNACCEPTED_SHARE = 0.08
 # A dry run over more cards than this does not run the matcher. The request that asked for the
 # quote waits for the dry run, the matcher costs 50 to 90 ms a card, and a long selection would
 # hold a request slot for minutes. The press itself always counts for real, in its own child.
 MEASURE_MAX = 200
-# The floor is the chosen entry's RAW cosine, never the corrected score.
-FLOOR_MIN = 0.755
+# The floor is the chosen entry's RAW cosine, never the corrected score. 0.69 with a margin of 0.04
+# accepted 3,297 of 3,605 filed non-free cards and 4 were wrong, 1 of them human-cleared.
+FLOOR_MIN = 0.69
 TOP_N = 3
 # AN EMPTY SLOT HAS NO BRIGHT PIXEL. Measured at full size on the rig's photographs: the 99th-percentile
 # luminance (0 to 255) of seven empty-slot photographs is 75 or less, and of 2,642 photographs of real
