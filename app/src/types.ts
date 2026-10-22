@@ -967,6 +967,8 @@ export type BoxDeleteResult = {
   cache_deleted: number
   registry_deleted: boolean
   directory_removed: boolean
+  /** Runs whose cards moved out of this box and now need a Rebind on Runs before they can be priced. */
+  stranded_runs: string[]
 }
 
 /** One row of `GET /graveyard` (D134, amended by the UX review's graveyard ruling,
