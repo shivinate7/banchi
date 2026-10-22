@@ -89,4 +89,5 @@ DEBT92 the tile lead check fails a proper noun after the first word
 DEBT93 the Show Held and Price Them clears have never gone red
 DEBT94 a five-digit count can wrap a tile note and grow the send bar
 DEBT95 the priced tile counts typed prices on rows the send leaves out
+DEBT97 a Card Ladder failure on Add hides its plain sentence
 ```
