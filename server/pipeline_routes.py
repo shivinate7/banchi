@@ -3315,6 +3315,23 @@ def _on_hand_by_run(inventory: master.Inventory, runs: Iterable[str]) -> Dict[st
     return counts
 
 
+def _follows_its_cards(directory: Path, snapshot: Optional[Snapshot]) -> bool:
+    """True when a run over a disowned drawer still finds its cards by photograph (D262).
+
+    Such a run prices and sends like any other: `realign` re-binds it to wherever its cards
+    stand now. A run that already has a joined rescue stays out (the caller checks), because
+    the rescue run holds those same cards and counting both would send them twice (D86).
+    """
+    if snapshot is None:
+        return False
+    try:
+        run = run_files.open_run(directory)
+        _, moved, _, _ = run_resolve.realign(run.read_identifications(), snapshot.inventory, run)
+    except (run_files.RunError, OSError, ValueError):
+        return False
+    return bool(moved)
+
+
 def _unreachable(inventory: master.Inventory, review_count: int, root: Path) -> dict:
     """The copies NO worklist can offer, named rather than left out (`CLAUDE.md`: never
     silently drop a card). Each figure is a door to the screen that can move it.
@@ -3536,7 +3553,9 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
                 }
             )
             continue
-        if summary.get("box_former"):
+        if summary.get("box_former") and (
+            rescues_by_stranded.get(entry.name) or not _follows_its_cards(entry, snapshot)
+        ):
             # A RUN OVER A DRAWER THAT NO LONGER EXISTS (D36). Never open, never in the
             # union: its positions are another drawer's cards now, and `emit` refuses it by
             # name. Drawn in the picker as `Box N (deleted)` so the operator can see why.
