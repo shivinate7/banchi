@@ -116,11 +116,20 @@ const SAID: Readonly<Record<string, string>> = {
   slab_unknown: 'That slab is not in the list.',
 }
 
-/** The sentence a refusal gets on screen: the screen's own for the codes it words, else the refusal's own message (the
- *  server's, or the client's from `describeFailure`). The login codes also lose the server's text, which names the settings key. */
-function said(failure: Failure, fallback: string): { title: string; failure: Failure } {
+/** A refusal's title is the screen's own sentence: its wording for the codes in `SAID`, else `fallback` (D196). The
+ *  refusal's own message (the server's, or the client's from `describeFailure`) is the body, behind the notice's
+ *  disclosure or under a toast's title. A code the screen words sends no body, so the login text, which names the
+ *  settings key, never reaches the screen (4.8). */
+function said(failure: Failure, fallback: string): { title: string; body: string; failure: Failure } {
   const own = SAID[failure.code]
-  return { title: own ?? (failure.message === '' ? fallback : failure.message), failure: own !== undefined && failure.code.startsWith('cardladder_token') ? { ...failure, message: own } : failure }
+  const body = own === undefined ? failure.message : ''
+  return { title: own ?? fallback, body, failure: { ...failure, message: body } }
+}
+
+/** The kit's refusal-toast shape (`refusalToast`), from a failure already described. */
+function refusalToastOf(failure: Failure, fallback: string) {
+  const one = said(failure, fallback)
+  return { kind: 'refusal' as const, tone: failureTone(failure), title: one.title, ...(one.body === '' ? {} : { body: one.body }) }
 }
 
 function Refused({ failure, fallback, onRetry, busy, compact }: { readonly failure: Failure; readonly fallback: string; readonly onRetry?: () => void; readonly busy?: boolean; readonly compact?: boolean }) {
@@ -205,7 +214,7 @@ export default function Slabs() {
     } catch (err) {
       const f = describeFailure(err)
       if (fromSheet && addOpenNow.current) setAddFailure(f)
-      else toast({ kind: 'refusal', tone: failureTone(f), title: said(f, 'That slab could not be added.').title })
+      else toast(refusalToastOf(f, fromSheet ? 'That slab could not be added.' : 'The slab was not put back.'))
     } finally {
       addBusy.current = false
       setAdding(false)
@@ -217,15 +226,20 @@ export default function Slabs() {
   const [removeFailure, setRemoveFailure] = useState<Failure | null>(null)
   const removeBusy = useRef(false)
 
-  /* Where focus goes once the removed row has left the list: the next row's Card button, else the add button. */
+  /* Where focus goes after a Remove: the next row's Card button, else the add button. This runs in the commit that
+     closes the sheet, after the sheet's trap is off, and moves focus out of the sheet at once. The sheet's own
+     focus-return moves only focus left on the body or in the sheet, so it then leaves this alone. It runs again when the
+     removed row leaves the list, for the one case where that drops focus: the header's add button goes when the list empties. */
   const [handover, setHandover] = useState<{ readonly gone: string; readonly next: string | null } | null>(null)
   useEffect(() => {
-    if (handover === null || rows === null || rows.some((one) => rowKey(one) === handover.gone)) return
-    setHandover(null)
+    if (handover === null) return
     const active = document.activeElement
-    if (active !== null && active !== document.body && active.isConnected) return
-    const target = [...document.querySelectorAll<HTMLElement>('[data-slab]')].find((el) => el.dataset.slab === handover.next) ?? document.querySelector<HTMLElement>('[data-slabs-add]')
-    target?.focus()
+    const stranded = active === null || active === document.body || !active.isConnected || active.closest('[data-bn-overlay]') !== null
+    if (stranded) {
+      const target = [...document.querySelectorAll<HTMLElement>('[data-slab]')].find((el) => el.dataset.slab === handover.next) ?? document.querySelector<HTMLElement>('[data-slabs-add]')
+      target?.focus({ preventScroll: true })
+    }
+    if (rows !== null && !rows.some((one) => rowKey(one) === handover.gone)) setHandover(null)
   }, [rows, handover])
 
   const remove = async (row: SlabRow): Promise<void> => {
@@ -537,7 +551,7 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
 
       <Section title="Worth">
         {noSales ? (
-          <p className="slabs-no-sales">No sales at this grade.</p>
+          <p className="slabs-no-sales">Card Ladder gives no estimate without a sale.</p>
         ) : (
           <dl className="slabs-worth">
             <div>
@@ -545,14 +559,14 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
               <dd>
                 <Money value={amount(newest?.estimated_value)} /> <Conf value={newest?.estimated_confidence ?? null} />
               </dd>
-              <dd className="slabs-source">Card Ladder's estimate.</dd>
+              <dd className="slabs-source">From Card Ladder's sales.</dd>
             </div>
             <div>
               <dt>Grade ladder value</dt>
               <dd>
                 <Money value={amount(newest?.cl_value)} /> <Conf value={newest?.cl_confidence ?? null} />
               </dd>
-              <dd className="slabs-source">Card Ladder's ladder value.</dd>
+              <dd className="slabs-source">From Card Ladder's grade ladder.</dd>
             </div>
           </dl>
         )}
@@ -563,7 +577,7 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
           <SkeletonRows n={held} />
         ) : (
           <Rows>
-            {sales.length === 0 ? <li className="slabs-row slabs-no-sales">No sales at this grade yet.</li> : null}
+            {sales.length === 0 ? <li className="slabs-row slabs-no-sales">No sales at this grade.</li> : null}
             {sales.map((sale) => (
               <li key={sale.id} className="slabs-row slabs-sale">
                 <Money value={amount(sale.price)} />
