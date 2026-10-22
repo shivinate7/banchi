@@ -25,8 +25,11 @@ The answer holds a one-hour `id_token` and the owner's `user_id`. Each call send
 `Authorization: Bearer <id_token>`. The server refreshes the ID token before it expires.
 
 The owner copies the token by hand, in the DevTools Console on `app.cardladder.com`. It is the
-`stsTokenManager.refreshToken` field of the record in IndexedDB `firebaseLocalStorageDb`. A
-token that fails the exchange shows one sentence on screen and one action: copy it again.
+`stsTokenManager.refreshToken` field of the record in IndexedDB `firebaseLocalStorageDb`. The
+owner pastes it into `.env` as `CARDLADDER_REFRESH_TOKEN=<token>` and restarts nothing: the
+next add reads it. A missing or failed token shows one plain sentence on screen, such as "Card
+Ladder needs you to sign in again.", and never the key's name (D196, no user-visible string
+names a decision). These steps are where the owner finds the key.
 
 ## 3. Every point the token can read
 
@@ -122,18 +125,28 @@ Base: `https://firestore.googleapis.com/v1/projects/cardladder-71d53/databases/(
 `#/slabs` lands on one table of every slab, the owner's pick of the five mockups (01 Ledger).
 The columns, in the owner's order:
 
-Pop, Graded, Rate, Top %, Best %, Grade, Set, Card, Var, Ask, Card Ladder, Conf, Last sale,
-PSA 10, Raw NM, Slab vs raw, ×, Do.
+Pop, Graded, Rate, Top %, Best %, Grade, Set, Card, Var, Ask, Card Ladder, Conf, Last Sale,
+PSA 10, Raw NM, Slab vs Raw, ×, Do.
 
 - The default sort is ×, highest first. × is the slab's value divided by its raw NM price.
+  A row with no × sorts after every row with one. Ties, and rows with no ×, fall back to the
+  Card Ladder value, highest first, and a slab with no sales at its grade comes last.
+- All 18 headers show, in the owner's order, while a route cannot fill some of them. Such a
+  cell holds a typed dash (D218, a typed dot is a defect). Each column keeps its width
+  whether it is empty or full (D313, nothing on screen moves unless the person moved it).
+- The table scrolls sideways inside its own frame when it is wider than the page, at 820
+  for example. The page itself never scrolls sideways.
 - The cert is hidden on screen. The buyer export keeps it.
 - Names are short. A name carries no year. Set shows as a code (SFD, ME01, SV09, SWSH07, CRZ,
   MEP, OP14), with a JP or CN suffix. "Stamp" shows as "Stamped". A variation that names the
   product a card came from (box, collection, ETB, tin) shows as "P". Rarities are abbreviated.
-- Last sale is the newest sale at the slab's grade, from the sales list in 3.2, sorted by date.
+- Last Sale is the newest sale at the slab's grade, from the sales list in 3.2, sorted by date.
   It never comes from `lastSalePrice` in 3.4, because that field can trail by a sale.
-- The detail opens the last five sales at the grade, the grade ladder and the sales speed per
-  window. Each sale links to its listing.
+- A press on a row's card opens its detail in a side sheet from the right, the owner's pick
+  over a row that opens in place. The ledger behind it never moves. The sheet's sections, in
+  order: Worth, Sales at the grade (the last five, each linked to its listing), Sales speed per
+  window, Population at the grade, the grade ladder with this grade marked, and Snapshots.
+  Remove sits in the sheet's footer, never on a row.
 
 ### 4.2 The buyer export: through a check step
 
@@ -204,10 +217,56 @@ Each count is per grader, from 3.1's pop report.
   no cross-grader PSA 10 (3.2).
 - Population and confidence: Card Ladder, 3.1 and 3.2.
 
-### 4.7 Depends on the kit
+### 4.7 Control sizes come from the kit
 
-Every control a thumb presses is 40px or more. The kit's controls are 34px or 28px today. The
-fix goes into the kit, for every screen, as its own lane. `#/slabs` does not override it.
+Every control a thumb presses is 40px or more. The kit meets that on touch: the
+`(max-width: 767px), (hover: none) and (pointer: coarse)` block in `app/src/tokens.css` raises
+`--bn-control-h-sm`, `--bn-control-h` and `--bn-control-h-lg` to 40, 42 and 46px. With a mouse
+they stay 28 and 34px, as on every other screen. `#/slabs` uses the kit's sizes and overrides
+none of them.
+
+### 4.8 The screen's rules
+
+These hold until a later route changes them.
+
+- The screen computes no trust verdict, because the browser holds no pipeline logic. It shows
+  Card Ladder's estimate and the ladder value, each with its source.
+- Remove acts at once. Its receipt carries Undo, which adds the slab again and restores its
+  first date. An Undo that Card Ladder refuses, a rate limit included, shows that refusal's
+  sentence. It never fails without a word.
+- A rate limit is a refusal, never a retry: its sentence says to try again tomorrow and offers
+  no Retry.
+- The grader list on screen copies `store/slabs.GRADERS`, because no route sends it yet. A
+  check fails when the two differ.
+- A slab with no label never shows its cert. The screen writes its own receipt sentence then.
+- A login refusal says what to do in plain words, such as "Card Ladder needs you to sign in
+  again." It never names the settings key (section 2 does).
+- The screen's nav key is `l`.
+
+### 4.9 The screen's parts and states
+
+- **Ledger cells.** Money shows in the kit's money face (D221, money stays mono). Numbers sit
+  right. Conf shows a word: 1 Very low, 2 Low, 3 Fair, 4 Good, 5 High, and 2 or less is drawn
+  as a warning. A slab with no sale at its grade shows "No sales" in its Card Ladder cell and
+  leaves Conf and Last Sale empty. The Card cell is the button that opens the detail.
+- **Header.** The title is "Slabs". The line under it counts the slabs and those that never
+  sold at their grade. The actions are Reload and "Add a Slab".
+- **Detail sheet.** Its title is the row's label. Under it: the grader and grade, and the day
+  the slab joined the list. Worth shows the estimate and the ladder value, each with its
+  confidence and source. A sale with no link shows no link. While the detail loads, every
+  section holds its loaded shape, and the two sections of unknown length come last, so arrival
+  only grows downward (D313, nothing on screen moves unless the person moved it). Esc closes
+  the sheet, and focus goes back to the row's Card button.
+- **Add sheet.** A cert field and a grader list. Add stays off while the cert is empty. While
+  the read runs, Add is busy and a line says the read takes a while. A success closes the sheet
+  and shows the receipt sentence the route sent. A refusal shows its sentence in the sheet, or
+  as a toast when the sheet has closed. A double press sends one request.
+- **Remove.** It sits in the detail sheet's footer. It is off while this tab has an add in
+  flight. A double press sends one request.
+- **Empty.** "No slabs yet", one sentence, and the add button. The header's add button hides
+  while the list is empty.
+- **Loading and failure.** The list loads as skeleton rows under a header that keeps its shape.
+  A failed list read shows its sentence with Retry, except a rate limit (4.8).
 
 ## 5. Pacing
 
@@ -273,7 +332,9 @@ Kind: build. Platform: macOS, over the capture server.
    Card Ladder's numbers become text money at the route. The store refuses a sale date that is
    not text, so the route turns any other date form into an ISO date first.
 4. The `#/slabs` screen, built on `<Page>` (D275, every screen inherits the page scaffold),
-   from section 4. It waits on the kit lane in 4.7. The client's login errors name a Google
+   from section 4, with the kit's control sizes (4.7). It builds the 4.1 ledger and its
+   detail, and add and remove controls, on the routes of step 3 only. The 4.2 buyer export
+   and the sweep wait for the owner's word. The client's login errors name a Google
    host; the screen shows them as a sentence with no host name (D196, no user-visible string
    names a decision).
    The busy refusal says a slab is being added, even when a second remove caused it. So the
@@ -296,3 +357,5 @@ Kind: build. Platform: macOS, over the capture server.
 - Why `estimatedValue` trails the newest sale, and by how long. One PSA 10 card showed it in
   its sales list. A Riftbound card's two last-sale fields also differ, but its sales list is
   unchecked. The cause is unmeasured.
+- The unit of `velocity` in the sales speed (3.4). The screen shows the number under the
+  label "Velocity" with no unit.

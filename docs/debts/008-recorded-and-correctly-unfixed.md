@@ -24,4 +24,12 @@ No work proposed. Each item is a gap a green run does not show.
 - **A Sales photo ask in flight is not aborted when the board changes.** `server.ts`'s `getSkuPhotosSettled` stops its timer on unmount, but a call already sent finishes, and the next mount's asks wait behind it on the one shared line. The server's `photo_busy` 503 bounds the wait.
 - **The Sales photo retry timer is outside `usePoll`** (D207, all polling goes through usePoll). It is a plain timer with no hidden-tab pause, so a stuck SKU is asked once per 8 s until Sales closes. It was outside `usePoll` before this change too.
 
+- **The Slabs focus hand-over can take focus from the Add sheet.** After Remove, `Slabs.tsx` moves focus to the next Card button when the list read lands, if focus sits in any overlay. If the person opens Add a Slab and types before a slow read lands, focus jumps to Close and the next keys are lost. It needs a read slower than the person, which is rare on loopback. The fix is to check the detail sheet only, or to let the kit `Sheet` take a return target (`useReturnFocus` already accepts one).
+- **The kit `SkeletonText` shimmer runs left of the page edge.** Seen on the Slabs loading count line: at 1440 it starts left of the page inset, and at 820 it runs over the rail. The cause is in the kit, not the screen.
+- **The kit refusal toast shows the server's text as its body.** A Slabs Undo refused with `store_busy` or `store_unavailable` would show a pipeline noun or a file name in the body. Slabs follows the kit. Each screen that calls `refusalToast` with those codes has the same gap.
+- **Slabs Worth copy repeats a fact.** The Worth source lines restate their labels, and a no-sales slab says it has no sale under Worth and again under Sales. Wording only.
+
+- **Two screens mark their "Unnamed Box" fallback as a typed value.** `Fulfillment.tsx` and `BoxOps.tsx` put the fallback inside `data-typed`, so the copy-casing sweep never grades it. Slabs marks only the stored name (`Slabs.tsx` `NameText`), which is the pattern to copy.
+- **The Slabs sheet title's typed marker is unasserted.** `slabs.spec.ts` checks the marker on the Card button only. The sweep never opens a sheet, so a marker moved onto the sheet title's whole heading would pass.
+
 **Outcome at risk.** A run is read as a promise none of these gives.

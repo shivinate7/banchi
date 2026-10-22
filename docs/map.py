@@ -6674,6 +6674,27 @@ COMPONENTS = [
                                       "rendering. No Playwright spec covers this screen yet.",
                               "governed_by": ["D14", "D20", "D24", "D33", "D56", "D70", "D172",
                                               "D218", "D259", "D270", "D271", "D272"]},
+            "src/Slabs.tsx": {"does": "the Slabs screen, `#/slabs`: one ledger of the owner's graded "
+                                      "slabs with all 18 headers in the owner's order and a typed "
+                                      "dash in each cell no route fills, sorted by Card Ladder's "
+                                      "estimate with a slab that never sold last. A press on a "
+                                      "slab's name opens its detail in a Sheet from the right. "
+                                      "Add and Remove each send one request; a Remove receipt "
+                                      "carries Undo, which adds the slab again. A rate limit is a "
+                                      "refusal in words with no Retry, and a login refusal never "
+                                      "names the settings key. No cert is ever drawn, and the "
+                                      "browser computes no trust verdict.",
+                              "governed_by": ["D320", "D196", "D218", "D221", "D275", "D313"]},
+            "src/Slabs.css": {"does": "the Slabs screen's look: a fixed-width column set inside "
+                                      "its own sideways-scrolling frame, so the header keeps its "
+                                      "shape while the rows load and the page never scrolls "
+                                      "sideways. Kit control sizes only, and tokens only.",
+                              "governed_by": ["D118", "D320", "D313"]},
+            "src/slabGraders.ts": {"does": "the grader list the Add sheet offers: a copy of "
+                                           "`store/slabs.GRADERS`, because no route sends the "
+                                           "list yet. `tests/unit/slab-graders.unit.ts` fails "
+                                           "when the two differ.",
+                                   "governed_by": ["D320"]},
             "src/Codes.css": {"does": "the code screen's look. The two lanes are the first "
                                       "numbers drawn, because they are the decision; the "
                                       "duplicate panel takes the one non-hairline border in "
@@ -9657,6 +9678,22 @@ COMPONENTS = [
                         "`scripts/kit-adoption.mjs --routes`: the unit tier's pilot, no browser. "
                         "Run by `make unit`, in `make check`'s product shard.",
                 "governed_by": ["D5", "D275"],
+            },
+            "tests/slabs.spec.ts": {
+                "does": "the Slabs screen with the four slab routes stubbed: the 18 headers in the "
+                        "owner's order, a typed dash in each cell no route fills, the sort by Card "
+                        "Ladder value with a slab that never sold last, the Conf words, no cert and no "
+                        "settings key anywhere on screen, a refusal in words with no Retry for a rate "
+                        "limit (on add, on the list and on Undo), one request from a double press of "
+                        "Add or Remove, Esc and focus on the detail sheet, and no sideways page scroll "
+                        "at 1440 and 820. Run by `make design-check`.",
+                "governed_by": ["D320", "D196", "D218", "D221", "D275", "D313"],
+            },
+            "tests/unit/slab-graders.unit.ts": {
+                "does": "the grader list the Slabs screen offers (`src/slabGraders.ts`) equals "
+                        "`store/slabs.GRADERS`, in order, read by running Python. Run by `make unit`, "
+                        "in `make check`'s product shard.",
+                "governed_by": ["D320"],
             },
             "tests/unit/formatter-homes.unit.ts": {
                 "does": "the four formatter homes: the ago phrase (`dates.relativeDate`), the count "
