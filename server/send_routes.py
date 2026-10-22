@@ -19,6 +19,9 @@ WHAT ONE PRESS DOES, IN ORDER, AND WHERE EACH STEP STOPS (`do_send`):
   0. ONE PRESS AT A TIME in this server (`_press`): a second press while one runs is refused
      by name before it asks TCGplayer anything, so a dropped connection can never invite a
      second send while the first still runs.
+  0b. PRICES FROM TODAY (`pipeline_routes.refresh_before_send`): when any run's export is from an
+     earlier day (US Central), the same refresh `#/pricing` runs brings it current first. If it
+     cannot, the press stops here with a sentence, before a receipt exists.
   1. Fetch the live export (`pipeline_routes.do_live_export`). A refusal here is the send's
      refusal: nothing was written and nothing was sent.
   2. `reconcile --live --write` over that file, so the store's `live` figures are the ones
@@ -1212,6 +1215,7 @@ def do_send(payload: dict) -> dict:
         )
     directories = [pipeline_routes._open_run(str(name)) for name in wanted]
     with _press("listing"):
+        pipeline_routes.refresh_before_send([d.name for d in directories], progress=lambda *_: files.mark_activity())
         return _send(payload, directories, download)
 
 

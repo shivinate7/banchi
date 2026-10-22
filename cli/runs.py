@@ -20,12 +20,12 @@ import fcntl
 import hashlib
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from pipeline import games
-from store import files
+from store import clock, files
 
 MANIFEST = "manifest.json"
 # The per-run flock a manifest write holds. Apart from any press's own lock (`match.lock`): this one guards one read-modify-write.
@@ -130,6 +130,26 @@ def sha256_of(path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def stale_runs(opened: List["Run"], overrides=None) -> Dict[str, date]:
+    """`{run name: US Central day}` for each run whose prices come from an export older than today.
+
+    THE PRICES A SEND USES ARE THE EXPORT'S (D166): `overrides` when `emit` was handed files,
+    otherwise the files the run's join recorded. The day is the oldest file's own mtime, its
+    fetch time. A file that is missing is left out: `emit` names it itself. A run that recorded
+    no export is left out too, because `emit` refuses it.
+    """
+    today = clock.central_day(clock.now())
+    out: Dict[str, date] = {}
+    for run in opened:
+        paths = [Path(p) for p in overrides] if overrides else list(run.exports_by_game.values())
+        stamps = [path.stat().st_mtime for path in paths if path.is_file()]
+        if stamps:
+            day = clock.central_day(datetime.fromtimestamp(min(stamps), timezone.utc))
+            if day < today:
+                out[run.name] = day
+    return out
 
 
 def describe_source(path) -> Dict[str, Any]:
