@@ -142,8 +142,11 @@ PSA 10, Raw NM, Slab vs raw, ×, Do.
   product a card came from (box, collection, ETB, tin) shows as "P". Rarities are abbreviated.
 - Last sale is the newest sale at the slab's grade, from the sales list in 3.2, sorted by date.
   It never comes from `lastSalePrice` in 3.4, because that field can trail by a sale.
-- The detail opens the last five sales at the grade, the grade ladder and the sales speed per
-  window. Each sale links to its listing.
+- A press on a row's card opens its detail in a side sheet from the right, the owner's pick
+  over a row that opens in place. The ledger behind it never moves. The sheet's sections, in
+  order: Worth, Sales at the grade (the last five, each linked to its listing), Sales speed per
+  window, Population at the grade, the grade ladder with this grade marked, and Snapshots.
+  Remove sits in the sheet's footer, never on a row.
 
 ### 4.2 The buyer export: through a check step
 
