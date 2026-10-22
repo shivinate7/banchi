@@ -298,6 +298,9 @@ function MatchReceipt({ detail }: { readonly detail: RunDetail }) {
   const cards = (n: number) => `${n} card${n === 1 ? '' : 's'}`
   const joined = detail.joined
   const keySig = rows.map((row) => String(row.key)).join(',')
+  /* The effect reads the keys as they stand; the signature is WHEN to read. */
+  const keys = useRef<Set<string>>(new Set())
+  keys.current = new Set(rows.map((row) => String(row.key)))
   const [where, setWhere] = useState<{ sig: string; text: string | null } | null>(null)
   useEffect(() => {
     if (!joined || second === 0) return
@@ -305,8 +308,7 @@ function MatchReceipt({ detail }: { readonly detail: RunDetail }) {
     void getQueues()
       .then((snapshot) => {
         if (!live) return
-        const keys = new Set(keySig.split(','))
-        const ours = (entry: { box: number; index: number }) => keys.has(`${entry.box}/${entry.index}`)
+        const ours = (entry: { box: number; index: number }) => keys.current.has(`${entry.box}/${entry.index}`)
         const open = snapshot.review.filter(ours)
         const held = open.filter((entry) => SECOND_LOOK_HELD.has(entry.reason)).length
         const main = open.length - held
