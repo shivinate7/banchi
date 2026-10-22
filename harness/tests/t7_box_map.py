@@ -118,6 +118,72 @@ def check_box_map_safety(checks: Checks) -> None:
         )
 
 
+def check_run_follows_cards_out_of_deleted_box(checks: Checks) -> None:
+    """A run follows its cards by name out of a box that was merged away, deleted and reused.
+
+    The owner's case: box 5's cards moved to another box, box 5 was deleted, and its number
+    went to a new drawer. The run still names box 5, and every join refused it, so the moved
+    cards sat off the price list. A card deleted WITH the box is named, never dropped.
+    """
+    checks.note("")
+    checks.note("A RUN FOLLOWS ITS CARDS OUT OF A DELETED, REUSED BOX (D262, amended)")
+    cards = [
+        (5, 1, "Dunsparce", "120/159", None),
+        (5, 2, "Dunsparce", "120/159", "reverse_holo"),
+        (5, 3, "Articuno", "161/159", "holo"),
+    ]
+    with isolated_home():
+        run, _ = seam_run(checks, cards, join=False)
+        with Store().write() as snapshot:
+            for box, index, name, number, finish in cards:
+                snapshot.inventory.record_identification(
+                    master.position_key(box, index),
+                    name=name, number=number, printed_total="159",
+                    confidence="high", detected_finish=finish, run=run.name,
+                )
+        # A real run carries each photograph's digest, which is what it is followed by.
+        from store import photos
+
+        inventory = Store().read().inventory
+        written = run.read_identifications()
+        for key, record in written["cards"].items():
+            record["photo_sha256"] = photos.digest_of(inventory.cards[key].cid)
+        run.write_identifications(written)
+        capture_server.do_move_cards(5, {"to_box": 7, **back_of(7), "indices": [1, 2]})
+        capture_server.do_delete_box(5)
+        capture_server.do_create_box({"box": 5, "name": "New five"})
+        capture_server.do_capture(capture_payload(5))
+        capture_server.do_capture(capture_payload(5))
+        with Store().write() as snapshot:
+            for index in (1, 2):
+                snapshot.inventory.record_identification(
+                    master.position_key(5, index), name="Foreign", number="1/1",
+                    printed_total="1", confidence="high", detected_finish=None,
+                    run="t7-other-run",
+                )
+
+        loaded = resolve.load(run, {"pokemon": run.path("export.csv")})
+        where = sorted(
+            (p.box, p.index) for match in loaded.matches.values() for p in match.positions
+        )
+        checks.ok(
+            (7, 2) in where and all(box == 7 for box, _ in where),
+            "the moved cards keep their rows, at the box they are in now, though box 5's "
+            "number belongs to a new drawer",
+            f"positions {where}",
+        )
+        checks.ok(
+            not any(box == 5 for box, _ in where),
+            "and the new box 5's cards are adopted by nobody",
+            f"positions {where}",
+        )
+        checks.ok(
+            "5/3" in loaded.departed,
+            "the card deleted with the box is named as departed, not dropped silently",
+            f"departed {loaded.departed}",
+        )
+
+
 def _drawn(body: dict) -> dict:
     """A Map drop as the Map sends it: with the destination's `layout_token` as it stands now
     (`docs/specs/subbox-capture.md` 1.6). A body that names its own token keeps it."""
@@ -2411,7 +2477,7 @@ def check_s_refuses_empty_last_section(checks: Checks) -> None:
 
 
 CHECKS = (
-    check_box_map_safety, check_section_moves, check_order_key_migration,
+    check_box_map_safety, check_run_follows_cards_out_of_deleted_box, check_section_moves, check_order_key_migration,
     check_per_card_order, check_card_moves, check_delete_after_placement,
     check_undo_keeps_paid_answers, check_front_of_box, check_card_move_refusals,
     check_divider_editor_keys, check_delete_keeps_dividers, check_merge_speed,

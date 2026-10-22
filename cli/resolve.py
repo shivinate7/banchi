@@ -1112,6 +1112,7 @@ def _games_needed(run: runs.Run) -> "OrderedDict[str, List[str]]":
     # the `held.game` fallback below would read a foreign card's game as this card's — which
     # is how the first refusal to fire named 53 riftbound cards in a Pokemon run.
     if not run.store_backed:  # a store-read payload is at today's slots by construction
+        payload = realign(payload, inventory, run)[0]
         refuse_reallocated(payload, inventory, run)
     return _needed_games(payload.get("cards") or {}, inventory)
 
@@ -1611,7 +1612,9 @@ def _named_cards_in(
 
 
 def realign(
-    payload: dict, inventory: Optional[master.Inventory] = None
+    payload: dict,
+    inventory: Optional[master.Inventory] = None,
+    run: Optional[runs.Run] = None,
 ) -> Tuple[dict, Dict[str, str], List[str], List[int]]:
     """Re-bind a run's records to the slots their photographs occupy now (D36).
 
@@ -1698,6 +1701,39 @@ def realign(
             else:
                 continue
             del records[key]
+
+    # A DRAWER THE STORE DISOWNS FOR THIS RUN IS NEVER READ BY SLOT (D262, amended). Its
+    # number belongs to another drawer now, so a slot there is a foreign card. The run's
+    # records are looked up by photograph in every live drawer instead, which is where a
+    # merge sent them: found once is a certain link, found twice is a question, found nowhere
+    # is a departure. If none can be found, the records are left for `refuse_reallocated`.
+    disowned = (
+        [] if run is None or inventory is None
+        else [box for box, _ in disowned_boxes(payload, inventory, run)]
+    )
+    if disowned:
+        live = sorted(int(entry.box) for entry in inventory.boxes.values())
+        everywhere, everywhere_twice, source = _photo_digests(live, inventory)
+        for box in disowned:
+            records = by_box.get(box) or {}
+            found = {
+                key: everywhere[rec["photo_sha256"]]
+                for key, rec in records.items()
+                if rec.get("photo_sha256") in everywhere
+                and rec["photo_sha256"] not in everywhere_twice
+            }
+            if not found:
+                by_box.pop(box, None)
+                continue
+            sources.append(source)
+            for key, rec in sorted(records.items()):
+                if key in found:
+                    moved[key] = found[key]
+                elif rec.get("photo_sha256") in everywhere_twice:
+                    ambiguous.append(key)
+                else:
+                    departed.append(key)
+            by_box.pop(box)
 
     for box, records in sorted(by_box.items()):
         if not records:
@@ -1901,6 +1937,44 @@ class DisownedRun(runs.RunError):
         self.sentence = sentence
 
 
+def disowned_boxes(
+    payload: dict, inventory: master.Inventory, run: runs.Run
+) -> List[Tuple[int, str]]:
+    """`(box, sentence)` for every drawer this run names that the store disowns for it.
+
+    The one place the rule is read for a payload: `refuse_reallocated` and `realign` both ask
+    here, so they cannot decide one run two ways.
+    """
+    boxes = sorted(
+        {
+            int(record["box"])
+            for record in (payload.get("cards") or {}).values()
+            if isinstance(record, dict) and record.get("box") is not None
+        }
+    )
+    # THE RUN'S OWN RECORD OF WHICH DRAWER IT WAS OVER, WHERE IT HAS ONE (D145).
+    # A run started after that landed carries its box's true index in its scope block, which
+    # settles this case rather than inferring it. Every run on the owner's machine predates
+    # the field and takes the rule below unchanged — so this narrows nothing and can only
+    # turn an abstention into a refusal.
+    scope = run.manifest.get("scope")
+    scope_bid = scope.get("bid") if isinstance(scope, dict) else None
+    if not isinstance(scope_bid, int) or isinstance(scope_bid, bool):
+        scope_bid = None
+    # THE DELETION RECORD IS READ ONLY WHEN A BOX HAS NO REGISTRY ROW, and once X.
+    out: List[Tuple[int, str]] = []
+    deleted = None
+    for box in boxes:
+        if deleted is None and inventory.box(box) is None:
+            deleted = deleted_events()
+        sentence = inventory.box_disowns_run(
+            box, run.name, run.created_at, bid=scope_bid, deleted=deleted or ()
+        )
+        if sentence is not None:
+            out.append((box, sentence))
+    return out
+
+
 def refuse_reallocated(payload: dict, inventory: master.Inventory, run: runs.Run) -> None:
     """Refuse a run over a box whose number was deleted and reused since (D36, amended).
 
@@ -1938,42 +2012,20 @@ def refuse_reallocated(payload: dict, inventory: master.Inventory, run: runs.Run
     snapshot, for a caller handing a mapping straight in. One refusal, not three. Raises
     `RunError` before anything is joined, written or queued; returns None otherwise.
     """
-    boxes = sorted(
-        {
-            int(record["box"])
-            for record in (payload.get("cards") or {}).values()
-            if isinstance(record, dict) and record.get("box") is not None
-        }
+    disowned = disowned_boxes(payload, inventory, run)
+    if not disowned:
+        return
+    box, sentence = disowned[0]
+    raise DisownedRun(
+        f"REFUSING: {sentence}. This run describes a drawer that no longer exists and "
+        f"cannot be joined.\n"
+        f"Re-identify the box as it is now (`banchi identify`, or Identify on #/runs) "
+        f"if that is what you want joined; this run's directory is a record of the old "
+        f"drawer and is left as it is.\n"
+        f"Nothing was joined, nothing was written, and no queue was touched.",
+        f"Run {run.name} was over box {box}, which has been deleted or replaced since, "
+        f"so nothing was sent. Rebind it on Runs, or send without it.",
     )
-    # THE RUN'S OWN RECORD OF WHICH DRAWER IT WAS OVER, WHERE IT HAS ONE (D145).
-    # A run started after that landed carries its box's true index in its scope block, which
-    # settles this case rather than inferring it. Every run on the owner's machine predates
-    # the field and takes the rule below unchanged — so this narrows nothing and can only
-    # turn an abstention into a refusal.
-    scope = run.manifest.get("scope")
-    scope_bid = scope.get("bid") if isinstance(scope, dict) else None
-    if not isinstance(scope_bid, int) or isinstance(scope_bid, bool):
-        scope_bid = None
-    # THE DELETION RECORD IS READ ONLY WHEN A BOX HAS NO REGISTRY ROW, and once X.
-    deleted = None
-    for box in boxes:
-        if deleted is None and inventory.box(box) is None:
-            deleted = deleted_events()
-        sentence = inventory.box_disowns_run(
-            box, run.name, run.created_at, bid=scope_bid, deleted=deleted or ()
-        )
-        if sentence is None:
-            continue
-        raise DisownedRun(
-            f"REFUSING: {sentence}. This run describes a drawer that no longer exists and "
-            f"cannot be joined.\n"
-            f"Re-identify the box as it is now (`banchi identify`, or Identify on #/runs) "
-            f"if that is what you want joined; this run's directory is a record of the old "
-            f"drawer and is left as it is.\n"
-            f"Nothing was joined, nothing was written, and no queue was touched.",
-            f"Run {run.name} was over box {box}, which has been deleted or replaced since, "
-            f"so nothing was sent. Rebind it on Runs, or send without it.",
-        )
 
 
 def paperwork_for(run: runs.Run) -> List[orders.PaperworkEntry]:
@@ -2026,7 +2078,7 @@ def paperwork_for(run: runs.Run) -> List[orders.PaperworkEntry]:
         # every consumer re-checks the card it lands on anyway.
         moved, gone = {}, set()
     else:
-        _, moved, departed, _ = realign(payload) if not run.store_backed else (0, {}, [], 0)
+        _, moved, departed, _ = realign(payload, run=run) if not run.store_backed else (0, {}, [], 0)
         gone = set(departed)
 
     found: List[orders.PaperworkEntry] = []
@@ -2093,7 +2145,7 @@ def load(
     if run.store_backed:  # read from the store just now: nothing frozen to realign or disown
         realigned, departed, unverified = {}, [], []
     else:
-        payload, realigned, departed, unverified = realign(payload)
+        payload, realigned, departed, unverified = realign(payload, run=run)
 
     snapshot = Store().read()
     # D36 (amended) — the same refusal `_games_needed` raises on the `exports_for` path, as
