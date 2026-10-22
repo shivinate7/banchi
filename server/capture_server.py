@@ -7096,6 +7096,13 @@ def do_delete_box(box: int) -> dict:
         "cache_deleted": cache_dropped,
         "registry_deleted": registry_deleted,
         "directory_removed": directory_removed,
+        # RUNS THIS DELETE JUST STRANDED. A card moved out of this box (D83) keeps the run
+        # that read it, and that run names this drawer; once the drawer is gone no join can
+        # reach the moved cards until a Rebind (D145), so they drop off the price list. The
+        # screen says so here rather than leaving it for Pricing's small excluded row.
+        "stranded_runs": sorted(
+            {str(card.run) for _, _, card in holds if card.state == master.MOVED and card.run}
+        ),
     }
 
 
