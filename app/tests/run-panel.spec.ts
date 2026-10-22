@@ -3622,13 +3622,13 @@ test('a free run says what it matched and how many went to the second look', asy
   })
   await openFreeRun(page)
   await expect(page.locator('.runs-detail-panel')).toContainText(
-    'Matched 30 cards free. 2 cards got a second look from the paid read, held until join.',
+    'Matched 30 cards free. 2 cards got a second look from the paid read, waiting to be matched.',
   )
   /* A CODE IS THE RUN RECORD'S, never the screen's. */
   await expect(page.locator('.runs-detail-panel')).not.toContainText(/margin_too_small|lookalike_guard/)
 })
 
-test('a joined free run says how its second-look cards split: held, in the main queue, settled', async ({ page }) => {
+test('a joined free run says how its second-look cards split: to review, settled', async ({ page }) => {
   await open(page, {
     detail: {
       joined: true,
@@ -3638,11 +3638,11 @@ test('a joined free run says how its second-look cards split: held, in the main 
   })
   await openFreeRun(page)
   await expect(page.locator('.runs-detail-panel')).toContainText(
-    'Matched 30 cards free. 3 cards got a second look from the paid read: 1 held for review, 1 in the main queue, 1 settled.',
+    'Matched 30 cards free. 3 cards got a second look from the paid read: 2 to review, 1 settled.',
   )
 })
 
-test('a joined free run with parked cards says so before settled', async ({ page }) => {
+test('a joined free run with parked cards says so: to review, under the threshold, settled', async ({ page }) => {
   await open(page, {
     detail: {
       joined: true,
@@ -3652,7 +3652,7 @@ test('a joined free run with parked cards says so before settled', async ({ page
   })
   await openFreeRun(page)
   await expect(page.locator('.runs-detail-panel')).toContainText(
-    'Matched 30 cards free. 3 cards got a second look from the paid read: 1 held for review, 0 in the main queue, 1 parked, 1 settled.',
+    'Matched 30 cards free. 3 cards got a second look from the paid read: 1 to review, 1 under the threshold, 1 settled.',
   )
 })
 
@@ -3666,7 +3666,7 @@ test('a joined free run settles what neither queue holds: second-look total less
   })
   await openFreeRun(page)
   await expect(page.locator('.runs-detail-panel')).toContainText(
-    'Matched 30 cards free. 6 cards got a second look from the paid read: 2 held for review, 1 in the main queue, 1 parked, 2 settled.',
+    'Matched 30 cards free. 6 cards got a second look from the paid read: 3 to review, 1 under the threshold, 2 settled.',
   )
 })
 
@@ -3679,8 +3679,10 @@ test('a joined free run whose join wrote no second-look counts ends at the paid 
     },
   })
   await openFreeRun(page)
-  await expect(page.locator('.runs-detail-panel')).toContainText('Matched 30 cards free. 3 cards got a second look from the paid read.')
-  await expect(page.locator('.runs-detail-panel')).not.toContainText('held for review')
+  /* The receipt line alone: the panel also draws other figures that may say "parked". */
+  const receipt = page.locator('.runs-detail-panel span.bn-muted', { hasText: 'got a second look from the paid read' })
+  await expect(receipt).toHaveText('Matched 30 cards free. 3 cards got a second look from the paid read.')
+  await expect(receipt).not.toContainText(/main queue|held until join|parked/)
 })
 
 test('opening a joined free run reads no queue: its receipt is the join record', async ({ page }) => {
@@ -3701,5 +3703,5 @@ test('opening a joined free run reads no queue: its receipt is the join record',
   /* The receipt's read, if it made one, has landed by the time the page is idle. */
   await page.waitForLoadState('networkidle')
   expect(queueReads, 'the receipt reads the run record, not GET /queues').toEqual([])
-  await expect(page.locator('.runs-detail-panel')).toContainText('1 held for review')
+  await expect(page.locator('.runs-detail-panel')).toContainText('2 to review')
 })

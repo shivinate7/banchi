@@ -27,8 +27,10 @@ from types import SimpleNamespace as NS
 from harness.tests import Checks
 
 
-def _queued(box: int, index: int, queue: str, reason: str) -> NS:
-    return NS(card=NS(position=NS(box=box, index=index)), queue=queue, destination=NS(queue=queue, reason=reason))
+def _queued(box: int, index: int, queue: str, reason: str, *, look: bool = True) -> NS:
+    """A queued card. `look` says whether the free reader sent it to a second look: the split matches on that."""
+    card = NS(position=NS(box=box, index=index), second_look=NS(code=reason) if look else None)
+    return NS(card=card, queue=queue, destination=NS(queue=queue, reason=reason))
 
 
 class _Report:
@@ -61,8 +63,8 @@ def check_second_look_record(checks: Checks) -> None:
         _queued(9, 2, routing.MAIN, routing.SECOND_LOOK_UNSURE),
         _queued(9, 3, routing.MAIN, "match_too_weak"),
         _queued(9, 4, routing.PARKED, "match_too_weak"),
-        _queued(9, 7, routing.MAIN, "match_too_weak"),
-        _queued(9, 8, routing.PARKED, "match_too_weak"),
+        _queued(9, 7, routing.MAIN, "match_too_weak", look=False),
+        _queued(9, 8, routing.PARKED, "match_too_weak", look=False),
     ]
     game = NS(game="pokemon", source={}, report=_Report(queued))
     resolved = NS(
