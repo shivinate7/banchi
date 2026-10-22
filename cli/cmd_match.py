@@ -184,6 +184,8 @@ class _Session:
     def leave_joined(self) -> None:
         """A chunk that cannot price names its cards into an UNJOINED run: a joined run's priced
         cards would otherwise leave the worklist the moment an unjoined card joined them."""
+        if self.run is not None:
+            self.run.refresh()  # a press may have joined it since this worker last wrote it
         if self.run is not None and self.run.manifest.get("joined"):
             self.run, self.keys, self.recover = None, [], False
 
