@@ -5,7 +5,6 @@ import {
   describeFailure,
   fetchExport,
   getExportScope,
-  getQueues,
   getRun,
   getRuns,
   getTcgSets,
@@ -17,7 +16,7 @@ import {
 import type { ExportAsked, ExportFetched, ExportScope, RunDetail, RunSummary } from './types'
 import { usePoll } from './usePoll'
 import { readUpload } from './csvUpload'
-import { Button, EmptyState, Icon, IconButton, Loading, Money, Notice, Pill, Segmented, Select, SkeletonText, Stat } from './kit'
+import { Button, EmptyState, Icon, IconButton, Loading, Money, Notice, Pill, Segmented, Select, Stat } from './kit'
 import { toast } from './kit/toast'
 import { RunFiles } from './RunFiles'
 import { RunRescue } from './RunRescue'
@@ -284,58 +283,23 @@ function freeRun(detail: RunDetail): boolean {
   return flags?.engine === 'marqo-b'
 }
 
-/** The two reasons that hold a second-look card for review: the readers disagree, or the second look is unsure.
- *  Any other open row is the main queue's. The same split `cli/cmd_identify.py:_held_now` makes. */
-const SECOND_LOOK_HELD = new Set(['readers_disagree', 'second_look_unsure'])
-
 /** What the free reader did, as a sentence with its figures: matched, and sent to a second look. It says where those
- *  cards are only from the store: "held until join" before the join, the queues read back after it, and nothing
- *  about where when that read fails. */
-function MatchReceipt({ detail }: { readonly detail: RunDetail }) {
+ *  cards are only from the run's own join record (`counts.second_look_*`, written by `cli/cmd_join.py`'s `record_join`,
+ *  the one source beside "To review" and "Parked"): "held until join" before the join, the counts after it, and nothing
+ *  about where for a run joined before the record carried them. Settled is every second-look card in neither queue. */
+function matchReceipt(detail: RunDetail): string {
   const matched = typeof detail.manifest.matched === 'number' ? detail.manifest.matched : 0
-  const rows = Array.isArray(detail.manifest.second_look) ? (detail.manifest.second_look as { key?: unknown }[]) : []
-  const second = rows.length
+  const second = Array.isArray(detail.manifest.second_look) ? detail.manifest.second_look.length : 0
   const cards = (n: number) => `${n} card${n === 1 ? '' : 's'}`
-  const joined = detail.joined
-  const keySig = rows.map((row) => String(row.key)).join(',')
-  /* The effect reads the keys as they stand; the signature is WHEN to read. */
-  const keys = useRef<Set<string>>(new Set())
-  keys.current = new Set(rows.map((row) => String(row.key)))
-  const [where, setWhere] = useState<{ sig: string; text: string | null } | null>(null)
-  useEffect(() => {
-    if (!joined || second === 0) return
-    let live = true
-    void getQueues()
-      .then((snapshot) => {
-        if (!live) return
-        const ours = (entry: { box: number; index: number }) => keys.current.has(`${entry.box}/${entry.index}`)
-        const open = snapshot.review.filter(ours)
-        const held = open.filter((entry) => SECOND_LOOK_HELD.has(entry.reason)).length
-        const main = open.length - held
-        const parked = snapshot.parked.filter(ours).length
-        const parts = [`${held} held for review`, `${main} in the main queue`]
-        if (parked > 0) parts.push(`${parked} parked`)
-        parts.push(`${second - held - main - parked} settled`)
-        setWhere({ sig: keySig, text: parts.join(', ') })
-      })
-      .catch(() => live && setWhere({ sig: keySig, text: null }))
-    return () => {
-      live = false
-    }
-  }, [joined, second, keySig])
-  if (second === 0) return <>{`Matched ${cards(matched)}.`}</>
+  if (second === 0) return `Matched ${cards(matched)}.`
   const base = `Matched ${cards(matched)} free. ${cards(second)} got a second look from the paid read`
-  if (!joined) return <>{`${base}, held until join.`}</>
-  /* The read-back lands in a bar the sentence's own size (D313). */
-  if (where === null || where.sig !== keySig) {
-    return (
-      <>
-        {`${base}: `}
-        <SkeletonText>0 held for review, 0 in the main queue, 0 settled.</SkeletonText>
-      </>
-    )
-  }
-  return <>{where.text === null ? `${base}.` : `${base}: ${where.text}.`}</>
+  if (!detail.joined) return `${base}, held until join.`
+  const { second_look_held: held, second_look_main: main, second_look_parked: parked = 0 } = detail.counts
+  if (held === undefined || main === undefined) return `${base}.`
+  const parts = [`${held} held for review`, `${main} in the main queue`]
+  if (parked > 0) parts.push(`${parked} parked`)
+  parts.push(`${Math.max(0, second - held - main - parked)} settled`)
+  return `${base}: ${parts.join(', ')}.`
 }
 
 /** Whether the figure beside the tokens is the run's own record or today's rates over it. */
@@ -984,7 +948,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                     /* THE FREE READER'S RECEIPT: what it matched, and how many went to the second
                        look. A second-look card is not a failure; where it sits is said only from the store. */
                     <span className="bn-muted">
-                      <MatchReceipt detail={detail} />
+                      {matchReceipt(detail)}
                     </span>
                   ) : null}
                 </div>
