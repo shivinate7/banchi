@@ -71,7 +71,15 @@ type Wire = {
 }
 
 /** `server/slabs_routes.py`'s answer when Card Ladder fails inside an add: not a rate limit, not a login. */
-const BAD_GATEWAY = refuse(502, 'cardladder_failed', 'Card Ladder could not be read just now. Nothing was saved. Try again later.')
+const BAD_GATEWAY_SAID = 'Card Ladder could not be read just now. Nothing was saved. Try again later.'
+const BAD_GATEWAY = refuse(502, 'cardladder_failed', BAD_GATEWAY_SAID)
+
+/** `server/capture_server.py`'s answers when the inventory lock times out and when the store file cannot be read, word
+ *  for word. One names two jobs of the Mac and the other names a file; neither is the owner's to read as a title. */
+const STORE_BUSY_SAID = 'The inventory is being used by another job, most likely an identify or a send that is still running. Wait for it to finish, then try again.'
+const STORE_BUSY = refuse(503, 'store_busy', STORE_BUSY_SAID)
+const STORE_UNAVAILABLE_SAID = 'The store file store.sqlite is damaged and could not be read. Restore it from a backup.'
+const STORE_UNAVAILABLE = refuse(503, 'store_unavailable', STORE_UNAVAILABLE_SAID)
 
 /** Card Ladder's grader for each name `store/slabs.GRADERS` accepts. */
 const CARD_LADDER: Record<Grader, string> = { psa: 'psa', beckett: 'beckett', bgs: 'beckett', bvg: 'beckett', sgc: 'sgc', cgc: 'cgc' }
@@ -490,6 +498,34 @@ test('a Card Ladder rate limit is a refusal though it arrives as a 429', async (
   expect(kind, 'a rate limit would be offered a retry').toBe('refusal')
 })
 
+/* NO EMPTY BAND BETWEEN THE COUNT LINE AND THE TABLE. `Page` draws its `StatusSlot` only when the screen passes a
+   status, and a slot with nothing in it still takes a notice's height, so a loaded list with no notice must hold no slot
+   at all. Read by element, never by a gap in pixels: a slot that is absent has no text and no height. The count line and
+   the rows are waited for first, so an unfinished page cannot pass for a clean one. */
+const statusSlots = (page: Page) =>
+  view(page).locator('.bn-status-slot').evaluateAll((els) => els.map((el) => ({ text: (el.textContent ?? '').trim(), height: el.getBoundingClientRect().height })))
+
+test('a loaded list with no notice holds no status band between the count line and the table', async ({ page }) => {
+  await open(page)
+  await expect(dataRows(page)).toHaveCount(5)
+  await expect(view(page).locator('.bn-verdict')).toContainText(/\b5\b/)
+  expect(await statusSlots(page), 'a status slot is drawn with no notice in it').toEqual([])
+})
+
+test('the status band goes when a failed list read is retried and the list loads', async ({ page }) => {
+  const wire = makeWire()
+  wire.listReply = () => refuse(500, 'server_error', 'The server hit a problem.')
+  await open(page, wire)
+  const again = retryButtons(page)
+  await expect(again, 'a server fault offers a retry').toBeVisible()
+  expect((await statusSlots(page)).length, 'the refusal is drawn in the status slot').toBeGreaterThan(0)
+  wire.listReply = null
+  await again.click()
+  await expect(dataRows(page)).toHaveCount(5)
+  await expect(view(page).locator('.bn-verdict')).toContainText(/\b5\b/)
+  expect(await statusSlots(page), 'the status slot stays after the notice has gone').toEqual([])
+})
+
 /* ---------------------------------------------------------------------------- the detail */
 
 test('a press on the Card cell opens the slab in a sheet with its sections in order', async ({ page }) => {
@@ -764,6 +800,39 @@ test('a rate limit on add is one request, a sentence that says tomorrow, and no 
   expect(wire.posts, 'a rate limit was sent again').toHaveLength(1)
 })
 
+/* A NOTICE'S TITLE IS THE SCREEN'S OWN SENTENCE, NEVER THE SERVER'S (D196): the server's words sit behind the
+   notice's "What the server said", closed. These two codes are ones the screen has no wording for, and both servers'
+   sentences name things that are not the owner's: the Mac's jobs, and the store file. The title is read first, with
+   its own positive check, so a notice that is missing cannot pass for one that is clean. */
+for (const [name, reply, said, words] of [
+  ['the store is busy', STORE_BUSY, STORE_BUSY_SAID, /identify|send/i],
+  ['the store is unavailable', STORE_UNAVAILABLE, STORE_UNAVAILABLE_SAID, /sqlite/i],
+] as const) {
+  test(`when ${name}, the Add sheet's notice is titled in the screen's own words, not the server's`, async ({ page }) => {
+    const wire = makeWire()
+    wire.postReply = () => reply
+    await open(page, wire)
+    await expect(dataRows(page)).toHaveCount(5)
+    const sheet = await openAdd(page)
+    await certField(sheet).fill(GENGAR.cert)
+    await addButton(sheet).click()
+    await expect.poll(() => wire.posts.length).toBe(1)
+    await expect(addButton(sheet)).toBeEnabled() // the read is over; its "reading" line shares the notice's place
+    const notice = sheet.locator('.bn-notice')
+    const title = notice.locator('.bn-notice-title')
+    await expect(title, 'the refusal has no title').toHaveText(/\S/)
+    expect((await title.innerText()).trim(), 'the title is the server’s sentence').not.toBe(said)
+    /* Everything the notice shows with its disclosure closed: the title and any body. */
+    const shown = await notice.evaluate((el) => {
+      const copy = el.cloneNode(true) as HTMLElement
+      copy.querySelectorAll('details').forEach((d) => d.remove())
+      return copy.textContent ?? ''
+    })
+    expect(shown, 'the server’s words are outside the disclosure').not.toMatch(words)
+    await expect(sheet, 'a refusal keeps the sheet open').toBeVisible()
+  })
+}
+
 test('the Add sheet opens empty again after a refusal: no old cert, no old refusal', async ({ page }) => {
   const wire = await open(page)
   await expect(dataRows(page)).toHaveCount(5)
@@ -854,6 +923,24 @@ test('an Undo that Card Ladder fails on shows the sentence the server sent, not 
   expect(wire.posts).toHaveLength(1)
 })
 
+/* The toast form of the same rule: a refusal toast's title is the screen's own, and the server's sentence is its body. */
+test('an Undo that Card Ladder fails on titles its toast in the screen’s own words and keeps the server’s sentence in the body', async ({ page }) => {
+  const wire = await open(page)
+  await expect(dataRows(page)).toHaveCount(5)
+  await removeFrom(page, rowFor(page, LABEL.charizard))
+  await expect(undoButton(page)).toBeVisible()
+  wire.postReply = () => BAD_GATEWAY
+  await undoButton(page).click()
+  /* The receipt toast fades but stays in the stack, so the refusal is the one that is not leaving. */
+  const refusal = page.locator('.bn-toast-refusal:not([data-leaving])')
+  await expect(refusal, 'Undo failed without a refusal toast').toBeVisible()
+  const title = refusal.locator('.bn-toast-title')
+  await expect(title, 'the toast has no title').toHaveText(/\S/)
+  expect((await title.innerText()).trim(), 'the toast’s title is the server’s sentence').not.toBe(BAD_GATEWAY_SAID)
+  await expect(refusal.locator('.bn-toast-body'), 'the server’s sentence is not in the toast body').toHaveText(BAD_GATEWAY_SAID)
+  expect(wire.posts).toHaveLength(1)
+})
+
 test('an Undo that never reaches the server says so in the client’s own sentence', async ({ page }) => {
   const wire = await open(page)
   await expect(dataRows(page)).toHaveCount(5)
@@ -904,6 +991,74 @@ test('after Remove succeeds, focus is on something on the page and never on the 
   await frames(page) // it has to hold, not only pass through
   expect(await focused(), 'focus landed somewhere and then fell off the page').not.toMatch(/^nothing/)
 })
+
+/* FOCUS AFTER REMOVE WHEN THE LIST READ IS NOT HELD. The case above holds the read, so the Card button is still on the
+   page when the sheet gives focus back. A real read is quick: the row is gone while the sheet is still leaving. Where
+   focus is then decides it. A click that focuses Remove leaves focus on the body once Remove goes off, and the page
+   moves it on to a Card button when the row goes. A press that leaves focus inside the sheet (a mouse press in Safari
+   does not focus a button; `click()` on the element is that press) finds focus still in the sheet when the row goes.
+   The sheet gives focus back one frame after it closes, to the button that opened it: if the row is still there the
+   button takes it and the page moves it on, but if the list read has landed first that button is gone, and the kit
+   sends focus to the page's h1. The stub's read is a race with that frame, so the second press holds the page's frames
+   from the press until the row has gone, which makes the read land first every time. Either way focus must end on a
+   Card button (on Add a Slab when the list is empty), never on the h1 or the body, and must stay there. The holder is
+   named in words, so a red run says who had focus. */
+const focusHolder = (page: Page) =>
+  page.evaluate(() => {
+    const el = document.activeElement
+    if (el === null || el === document.body || el === document.documentElement) return 'the body'
+    if (!el.isConnected || !el.checkVisibility()) return `a hidden ${el.tagName.toLowerCase()}`
+    const text = (el.textContent ?? '').trim().slice(0, 30)
+    if (el.hasAttribute('data-bn-page-title')) return `the h1: ${text}`
+    if (el.hasAttribute('data-slab')) return `card button: ${text}`
+    if (el.hasAttribute('data-slabs-add')) return `add button: ${text}`
+    return `${el.tagName.toLowerCase()}: ${text}`
+  })
+
+type FrameWindow = Window & { __held?: FrameRequestCallback[]; __real?: typeof requestAnimationFrame }
+const holdFrames = (page: Page) =>
+  page.evaluate(() => {
+    const w = window as FrameWindow
+    w.__held = []
+    w.__real = window.requestAnimationFrame.bind(window)
+    window.requestAnimationFrame = (callback) => w.__held?.push(callback) ?? 0
+  })
+const releaseFrames = (page: Page) =>
+  page.evaluate(() => {
+    const w = window as FrameWindow
+    if (w.__real === undefined) return
+    window.requestAnimationFrame = w.__real
+    for (const callback of w.__held?.splice(0) ?? []) w.__real(callback)
+  })
+
+const LAST_SLAB = severalSlabs().filter((row) => row.label === LABEL.mew)
+
+for (const [press, focusesRemove] of [['a click that focuses Remove and a quick list read', true], ['a press that leaves focus in the sheet and a list read that lands before the first frame', false]] as const) {
+  for (const [name, rows, lands] of [
+    ['a Card button', null, /^card button:/],
+    ['Add a Slab when the list is empty', LAST_SLAB, /^add button:/],
+  ] as const) {
+    test(`after Remove by ${press}, focus lands on ${name} and stays there`, async ({ page }) => {
+      await open(page, makeWire(rows === null ? {} : { rows: [...rows] }))
+      const row = rows === null ? rowFor(page, LABEL.terapagos) : dataRows(page)
+      await expect(dataRows(page)).toHaveCount(rows === null ? 5 : 1)
+      await cardButton(row).click()
+      const remove = page.getByRole('dialog').getByRole('button', { name: 'Remove', exact: true })
+      await expect(remove).toBeVisible()
+      if (focusesRemove) await remove.click()
+      else {
+        await holdFrames(page)
+        await remove.evaluate((el) => (el as HTMLElement).click())
+      }
+      await expect(undoButton(page)).toBeVisible()
+      await expect(dataRows(page)).toHaveCount(rows === null ? 4 : 0)
+      await releaseFrames(page)
+      await expect.poll(() => focusHolder(page), { message: `focus did not land on ${name}`, timeout: 3000 }).toMatch(lands)
+      await frames(page, 10) // it has to hold, not only pass through
+      expect(await focusHolder(page), `focus landed on ${name} and then left it`).toMatch(lands)
+    })
+  }
+}
 
 test('a double press of Remove sends one request', async ({ page }) => {
   const wire = makeWire()
