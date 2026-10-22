@@ -44,6 +44,7 @@ from typing import Dict, List, Optional, Sequence
 import geometry
 from cli import runs
 from identify import batch, cost, images, match, prompt, sidecar
+from identify.matchconst import UNREAD_EMPTY_SLOT
 from pipeline import games
 from pipeline import join
 from pipeline import selection as selection_mod
@@ -695,6 +696,12 @@ def _run_matcher(to_read: List[Item], say) -> batch.BatchRun:
     return batch.BatchRun(outcomes=outcomes)
 
 
+def _goes_to_paid(item: Item) -> bool:
+    """A card the free reader did not accept goes to the paid second look, except an empty slot:
+    there is nothing for the paid read to read. It goes to the main queue with its photograph."""
+    return item.unread is not None and item.unread.code != UNREAD_EMPTY_SLOT
+
+
 def _second_look_record(item: Item) -> Optional[dict]:
     """What the free reader thought of a card it did not accept, for the review queue."""
     if item.unread is None:
@@ -1320,7 +1327,7 @@ def run(args, say) -> int:
     # press runs in its own detached child and always counts.
     if ready and (not args.dry_run or len(to_send) <= match.MEASURE_MAX):
         matcher_run = _run_matcher(to_send, say)
-        second_look = [i for i in to_send if i.unread is not None]
+        second_look = [i for i in to_send if _goes_to_paid(i)]
         measured = True
     if free:
         if measured:
@@ -1692,6 +1699,10 @@ def run(args, say) -> int:
         ))
         read_count = sum(1 for i in to_send if i.identification is not None)
         second = [i for i in to_send if i.identification is None]
+        for item in [i for i in second if i.unread is not None and not _goes_to_paid(i)]:
+            item.status = UNREAD_EMPTY_SLOT
+            item.error = item.unread.detail
+        second = [i for i in second if i.status != UNREAD_EMPTY_SLOT]
         # THE RECEIPT'S FIGURES, in the manifest the runs sheet reads: how many the free reader
         # matched, and which cards went to the second look and why. Written before the paid
         # batch, so a run that dies later still says what the free read did.
@@ -1972,8 +1983,9 @@ def run(args, say) -> int:
     # --------------------------------------------------------------------------- report
     reported = [i for i in items if i.stage != STAGE_HELD]  # a held card is neither read nor failed
     answered = [i for i in reported if i.identification is not None]
-    second_looked = [i for i in items if i.unread is not None]
-    failed = [i for i in reported if i.identification is None]
+    second_looked = [i for i in items if _goes_to_paid(i)]
+    empty_slots = [i for i in items if i.status == UNREAD_EMPTY_SLOT]
+    failed = [i for i in reported if i.identification is None and i.status != UNREAD_EMPTY_SLOT]
     stale = [i for i in items if i.stale_prompt]
     not_detected = [i for i in items if i.detection == NOT_DETECTED]
     unfit_crops = [i for i in items if i.detection == UNFIT_CROP]
@@ -2024,6 +2036,9 @@ def run(args, say) -> int:
         say(f"second look     {len(second_looked)} card(s) the free reader could not accept went "
             f"to the paid read and wait in review: "
             + ", ".join(f"{count} {code}" for count, code in sorted(reasons.items())))
+    if empty_slots:
+        say(f"empty slot      {len(empty_slots)} photograph(s) show no card. They were not sent to the "
+            f"paid read and go to the main queue as card_not_detected with their photographs.")
     if failed:
         say(f"failed          {len(failed)} card(s) go to the main queue as "
             f"identification_failed — never dropped:")
