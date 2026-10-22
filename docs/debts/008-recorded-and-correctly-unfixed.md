@@ -29,4 +29,7 @@ No work proposed. Each item is a gap a green run does not show.
 - **The kit refusal toast shows the server's text as its body.** A Slabs Undo refused with `store_busy` or `store_unavailable` would show a pipeline noun or a file name in the body. Slabs follows the kit. Each screen that calls `refusalToast` with those codes has the same gap.
 - **Slabs Worth copy repeats a fact.** The Worth source lines restate their labels, and a no-sales slab says it has no sale under Worth and again under Sales. Wording only.
 
+- **Two screens mark their "Unnamed Box" fallback as a typed value.** `Fulfillment.tsx` and `BoxOps.tsx` put the fallback inside `data-typed`, so the copy-casing sweep never grades it. Slabs marks only the stored name (`Slabs.tsx` `NameText`), which is the pattern to copy.
+- **The Slabs sheet title's typed marker is unasserted.** `slabs.spec.ts` checks the marker on the Card button only. The sweep never opens a sheet, so a marker moved onto the sheet title's whole heading would pass.
+
 **Outcome at risk.** A run is read as a promise none of these gives.
