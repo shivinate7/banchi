@@ -122,6 +122,8 @@ ROUTE_URLS = {
     "_RUN_ITEM_RE": "/pipeline/runs/{run}",
     "_SHIPPING_FILE_RE": "/shipping/batches/abc/file",
     "/stock/mix": "/stock/mix",
+    "/slabs": "/slabs",
+    "_SLABS_ITEM_RE": "/slabs/psa/12345678",
 }
 
 # Read-only POSTs, named by hand: `do_GET` cannot list them.
@@ -216,6 +218,11 @@ BUDGET = {
     # Mix, "Route"). `sql` is the store open's own statements plus that one, equal at S and 2S.
     '/stock/mix': {"status": 200, 'sql': 11, 'store_read': 1},
     # One store open (11 statements) and one `Store.read`, equal at S and 2S: the on_hand count must come from that one read, never a query per row.
+    # MY SLABS (D320), both on the EMPTY slab tables (DEBT85, the miss-path shape): one store open (11 statements)
+    # and one `Store.read`, equal at S and 2S. The item route is a 404, an unknown cert. `/slabs` lists, so it reads
+    # the whole `slabs` table (see SCAN_ALLOWED); a SQL statement per slab would show only once the fixture holds slabs.
+    '/slabs': {"status": 200, 'sql': 11, 'store_read': 1},
+    '_SLABS_ITEM_RE': {"status": 404, 'sql': 11, 'store_read': 1},
     '_MARKDOWN_TABLE_RE': {"status": 200, 'sql': 11, 'json_loads': 0, 'store_read': 1},
     '_MARKDOWN_HISTORY_RE': {"status": 404},
     '_MARKDOWN_TRENDS_RE': {"status": 404},
@@ -262,6 +269,7 @@ SCAN_ALLOWED = frozenset({
     'readings',
     'readings_sources',
     'skus',
+    'slabs',  # `GET /slabs` lists every slab: no WHERE, so no index can narrow the read
 })
 
 
