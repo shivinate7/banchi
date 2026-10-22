@@ -416,7 +416,7 @@ composes it for every open run (the roster of `do_pipeline_worklist`), in this o
 |---|---|---|---|
 | 1. listings | `do_live_export`, unchanged | one portal request | `inventory/.live/`, the readings table |
 | 2. catalog prices | per game with a waiting card: `do_pipeline_export` with `refresh: true` once. `_reusable` then serves every later run of that game for `EXPORT_REUSE_S` | one portal request per game | `inventory/.exports/<game>/` |
-| 3. join | per open run: `do_pipeline_step(name, "join", {"fetched": [file]})` | local | each run's `pricing.json`, and the readings table (`reading_from_table`) |
+| 3. join | per open run, and per run a send names (`also`): `do_pipeline_step(name, "join", {"fetched": [file]})`. Per run waiting at phase join: `do_run_match`, which fetches or reuses the export and prices it | local | each run's `pricing.json`, and the readings table (`reading_from_table`) |
 | 4. sales history | `do_price_trends_preload`, now saving per-day facts (below) | market history host, at its courtesy pace | `inventory/price-trends.json` |
 
 Steps 1 to 3 set the page's "Prices as of". Step 4 is the slow one and runs last. So prices are
@@ -436,6 +436,33 @@ screen proposes can move overnight.
 D104 now says this, by the owner's word. The daily job also fetches the catalog export per game
 and re-joins every open run. Everything else in D104 stands. The guard stands: nothing here
 writes at TCGplayer, a failed step is named, and a typed answer never moves.
+
+### A send is from today
+
+**A send never prices from an export older than today (the US Central calendar day), by the owner's
+ruling.** A send priced 229 SKUs from a 21-day-old export, and 13 of them crossed the $0.25
+threshold. The daily job is not a promise: a Mac that was off that morning leaves the run tables as
+they were.
+
+- **The gate is `pipeline_routes.refresh_before_send`.** It reads each named run's recorded export
+  (`cli/runs.stale_runs`: the oldest file's mtime, its fetch time) and does nothing when every one is
+  from today. Otherwise it runs `do_prices_refresh` with the send's runs added (`also`), then checks
+  the outcome: every named run must now be from today. If not, nothing is sent and a sentence says
+  why (the first failed step's own message, or "another refresh is running").
+- **Two callers, one door.** `do_send` calls it first, inside its press and before a receipt exists.
+  `cli/cmd_emit.run` calls it for every other send: the CLI, `POST /pipeline/emit` and the free
+  `emit` step all run that command. The runs sheet and `#/pricing` both send through `do_send`. A
+  mark-down send is out: its prices come from a live read that `_markdown_fresh` holds to a day.
+- **A refresh that fails for another run does not stop this send.** The outcome is what is tested.
+  A named `--export` file is the owner's own prices, so a stale one is refused without a refresh.
+- **The refresh joins runs waiting at phase join.** The free reader leaves a run unjoined when no
+  export is within `EXPORT_REUSE_S`. The roster holds joined runs only, so such a run was on no
+  worklist. Step 3 now calls `do_run_match` for each, with `retry`. A run that cannot join is named
+  in `steps.join` and stays waiting. A pressed send is never widened to the runs the refresh joined:
+  they land on the worklist for the next send.
+- **A reading is never replaced by an older one.** `store/readings.replace_source` keeps a SKU's
+  row when it is dated later than the new one. `at` is the export's own mtime: `cmd_join` dates
+  `pricing.json` and its reading to the oldest export it joined, as `cmd_match` does.
 
 ### The one home for the current Market and Lowest of a SKU
 
