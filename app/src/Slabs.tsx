@@ -59,6 +59,8 @@ const DASH_COLUMNS: ReadonlySet<string> = new Set(['Graded', 'Rate', 'Top %', 'B
 /* ----------------------------------------------------------------------------- words */
 
 const rowKey = (row: Pick<SlabRow, 'grader' | 'cert'>): string => `${row.grader}/${row.cert}`
+const named = (row: Pick<SlabRow, 'label'>): boolean => (row.label ?? '').trim() !== ''
+const NameText = ({ row }: { row: Pick<SlabRow, 'label'> }) => (named(row) ? <span data-typed>{nameOf(row)}</span> : <>{NO_NAME}</>)
 const nameOf = (row: Pick<SlabRow, 'label'>): string => (row.label ?? '').trim() === '' ? NO_NAME : (row.label as string)
 
 /** Card Ladder's money text as a number; null where it gave none. */
@@ -422,8 +424,8 @@ function LedgerRow({ row, onOpen }: { readonly row: SlabRow; readonly onOpen: ()
       }
       case 'Card':
         return (
-          <button type="button" className="slabs-card-btn" data-typed data-slab={rowKey(row)} onClick={onOpen}>
-            {nameOf(row)}
+          <button type="button" className="slabs-card-btn" data-slab={rowKey(row)} onClick={onOpen}>
+            <NameText row={row} />
           </button>
         )
       case 'Card Ladder':
@@ -490,7 +492,7 @@ function SlabSheet({
   return (
     <Sheet
       open={open}
-      title={row === null ? NO_NAME : nameOf(row)}
+      title={row === null ? NO_NAME : <NameText row={row} />}
       onClose={onClose}
       className="slabs-sheet"
       footer={
@@ -572,7 +574,7 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
         )}
       </Section>
 
-      <Section title="Sales at the grade">
+      <Section title="Sales at the Grade">
         {loading ? (
           <SkeletonRows n={held} />
         ) : (
@@ -601,7 +603,7 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
         )}
       </Section>
 
-      <Section title="Sales speed">
+      <Section title="Sales Speed">
         <Rows loading={loading}>
           <li className="slabs-row slabs-speed slabs-head" aria-hidden="true">
             <span>Window</span>
@@ -625,13 +627,13 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
         </Rows>
       </Section>
 
-      <Section title="Population at the grade">
+      <Section title="Population at the Grade">
         <p className="slabs-pop">{newest?.population == null ? dash() : <Count value={newest.population} />} at this grade</p>
       </Section>
 
       {detail === null ? null : (
         <>
-          <Section title="Grade ladder">
+          <Section title="Grade Ladder">
             <Rows>
               <li className="slabs-row slabs-step slabs-head" aria-hidden="true">
                 <span>Grade</span>
