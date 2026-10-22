@@ -352,12 +352,12 @@ def _slab_row(slab) -> dict:
 def do_slabs() -> dict:
     table = Store().read().slabs
     rows = []
+    with_sales = table.keys_with_sales()
     for slab in table.list():
-        snapshots = table.snapshots_for(slab.cert, slab.grader)
         rows.append({
             **_slab_row(slab),
-            "snapshot": _snapshot(snapshots[-1]) if snapshots else None,
-            "note": None if table.sales_for(slab.cert, slab.grader) else "no sales",
+            "snapshot": _snapshot(slab.latest) if slab.latest else None,
+            "note": None if f"{slab.grader}:{slab.cert}" in with_sales else "no sales",
         })
     return {"slabs": rows}
 
