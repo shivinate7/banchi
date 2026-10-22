@@ -1089,7 +1089,7 @@ def run(args, say) -> int:
     finally:
         if marker is not None:
             marker.unlink(missing_ok=True)
-            signal.signal(signal.SIGTERM, previous)
+            signal.signal(signal.SIGTERM, previous or signal.SIG_DFL)
 
 
 def _run(args, say) -> int:
