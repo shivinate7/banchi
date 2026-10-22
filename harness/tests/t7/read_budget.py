@@ -263,9 +263,10 @@ BUDGET = {
     '/inventory/recent': {"status": 200, 'sql': 26, 'json_loads': 15, 'places': 1, 'store_read': 1},
     '/inventory/history': {"status": 200, 'sql': 12, 'store_read': 1},
     # sql 23: 20 statements that do not depend on the queued entries (the store open, both queues, the queued cards' states,
-    # box 4's name, positions, columns and order) and one `cards.get` per DISTINCT queued position, 3 here (4/1, 4/2, 4/3). `_walk`
-    # loads no card, so `_queue_row` fetches each one itself. The fixture queues the same 3 positions at every size, so this
-    # row cannot show that part grow: `check_queue_read_flat` holds it.
+    # box 4's name, positions, columns and order) and one card fetch per DISTINCT queued position, 3 here (4/1, 4/2, 4/3). The
+    # fetch is `_Places.game_entry`'s, reached through `of()` for the card's `game`; `_queue_row` then reads `cid` and `capture_id`
+    # off the loaded card. `_walk` loads no card to share. The fixture queues the same 3 positions at every size, so this row
+    # cannot show that part grow: `check_queue_read_flat` holds it.
     '/queues': {"status": 200, 'sql': 23, 'json_loads': 7, 'places': 1, 'store_read': 1},
     '/capture/sitting': {"status": 200, 'sql': 208, 'json_loads': 86, 'places': 1, 'store_read': 1},
     '/boxes': {"status": 200, 'sql': 79, 'json_loads': 5, 'places': 1, 'store_read': 1},
