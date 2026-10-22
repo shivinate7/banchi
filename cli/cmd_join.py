@@ -812,7 +812,9 @@ def run(args, say) -> int:
     # beside a fresh report would be the two-files-from-two-moments problem the pricing route
     # exists to avoid.
     table = _pricing_table(run_dir, resolved, choice, store.read())
-    pricing_path = write_pricing_table(run_dir, table)
+    # DATED TO THE EXPORT, NEVER TO NOW: the oldest file joined, so a reading never looks newer than its prices.
+    at = min((int(Path(str(g.source["path"])).stat().st_mtime) for g in resolved.joins.values()), default=None)
+    pricing_path = write_pricing_table(run_dir, table, at)
     say(f"pricing table    {len(resolved.matches)} SKU(s) -> {pricing_path}")
 
     # -------------------------------------------------------------- readings cache (D189)

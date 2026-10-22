@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
+
+#: The owner's calendar. A price is "from today" by the US Central day, whatever zone this Mac is set to.
+CENTRAL = ZoneInfo("America/Chicago")
 
 
 def now() -> datetime:
@@ -29,3 +33,8 @@ def parse(stamp: Optional[str]) -> Optional[datetime]:
     except ValueError:
         return None
     return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+
+
+def central_day(moment: datetime) -> date:
+    """The US Central calendar day an aware moment falls on."""
+    return moment.astimezone(CENTRAL).date()

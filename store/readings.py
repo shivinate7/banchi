@@ -245,18 +245,15 @@ class Readings:
         or not the new file happens to reprice the same SKU. `KIND_RUN` never needs this: two
         run directories coexist and neither's rows expire when a third joins.
 
-        EVERY SKU IN `found` IS WRITTEN UNCONDITIONALLY, not compared against the table's
-        current `at` for that SKU. This is deliberately looser than `collect()`'s own
-        newest-wins comparison and it is still correct: `found` was built with `at` = the
-        moment THIS write just happened (a join's `pricing.json` mtime taken after writing
-        it, or a live fetch's own embedded stamp), and by construction nothing already in the
-        table can be dated later than the write that is happening right now. The one exception is
-        the background reader's join (`cli/cmd_match`), which dates its reading to the export's
-        mtime, at most `EXPORT_REUSE_S` old, so it may overwrite a reading written in that window.
-        A full
-        `readings adopt --write` remains the periodic proof that this local reasoning has not
-        drifted from `collect()`'s own arbitration.
+        THE NEWEST READING WINS, BY `at`, AND `at` IS THE EXPORT'S OWN TIME. A SKU in `found` replaces
+        the row the table holds only when the table's row is not dated later (a tie goes to the new
+        reading), including the row this same source held before it was cleared above. So a join
+        against an older export, or a late write, never puts an older price over a newer one. `at`
+        is the export's mtime for a join (`cli/cmd_join`, `cli/cmd_match`) and the fetch's own stamp
+        for a live read. A full `readings adopt --write` remains the periodic proof that this local
+        reasoning has not drifted from `collect()`'s own arbitration.
         """
+        newest = {str(sku): self.entries[str(sku)] for sku in found if str(sku) in self.entries}
         for old_name in (supersede if supersede is not None else (name,)):
             old_key = _source_key(kind, old_name)
             if old_key in self.sources:
@@ -265,6 +262,7 @@ class Readings:
                 if entry.kind == kind and entry.source == old_name:
                     del self.entries[sku]
         for sku, reading in found.items():
-            self.entries[str(sku)] = reading
+            held = newest.get(str(sku))
+            self.entries[str(sku)] = held if held is not None and held.at > reading.at else reading
         if source is not None:
             self.sources[_source_key(source.kind, source.name)] = source
