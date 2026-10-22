@@ -3220,7 +3220,7 @@ export type RunPreflightTotal = {
   matcher_read: number | null
   can_read: number | null
   /** The matcher-first press: cards the free reader takes, cards that go to the paid second look,
-   *  and whether the pass was measured (true) or estimated from the held-out share (false). */
+   *  and whether the pass was measured (true). Null for a long selection: its count and cost wait for the run. */
   free_read: number | null
   second_look: number | null
   second_look_measured: boolean | null

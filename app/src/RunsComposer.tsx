@@ -1483,19 +1483,15 @@ export function RunsComposer({
                      The margin judges the best answer, so cards left unread for that reason are
                      counted after the read, and the line says so. */
                   <span className="runs-quote-line">
-                    <span>
-                      {quote.total.second_look_measured === false ? 'About ' : ''}
-                      {count(quote.total.free_read)} read free
-                    </span>
-                    <span>
-                      {quote.total.second_look_measured === false ? 'about ' : ''}
-                      {count(quote.total.second_look)} get a second look from the paid read
-                    </span>
-                    <span>
-                      {quote.total.second_look_measured === false
-                        ? 'Estimated from earlier cards, rounded up. The press counts them for real.'
-                        : 'Counted by reading them now'}
-                    </span>
+                    {quote.total.second_look === null ? (
+                      <span>The free read and the second look are counted when the run starts.</span>
+                    ) : (
+                      <>
+                        <span>{count(quote.total.free_read)} read free</span>
+                        <span>{count(quote.total.second_look)} get a second look from the paid read</span>
+                        <span>Counted by reading them now</span>
+                      </>
+                    )}
                     {Object.entries(quote.total.unread).map(([code, n]) => (
                       <span key={code}>{unreadLine(code, n)}</span>
                     ))}
@@ -1610,7 +1606,9 @@ export function RunsComposer({
                       onClick={() => void doStart()}
                     >
                       {free
-                        ? `Match ${count(quote.total.to_send)} cards, then spend ${money(quote.total.estimate_usd)} on the second look`
+                        ? quote.total.estimate_usd === null
+                          ? `Match ${count(quote.total.to_send)} cards, then pay for the second look`
+                          : `Match ${count(quote.total.to_send)} cards, then spend ${money(quote.total.estimate_usd)} on the second look`
                         : `Spend ${money(quote.total.estimate_usd)} and identify ${count(quote.total.to_send)} cards`}
                     </Button>
                     <span className="runs-quote-fine">

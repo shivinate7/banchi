@@ -429,9 +429,9 @@ _MATCHER_READ = re.compile(r"^matcher-read\s+(\d+)\b", re.M)
 _CAN_READ = re.compile(r"^can read\s+(\d+) of (\d+)\b", re.M)
 _UNREAD_LINE = re.compile(r"^unread\s+(\d+) ([a-z_]+)\s*$", re.M)
 # The matcher-first press's quote: how many cards the free reader takes and how many go to the
-# paid second look, and whether the pass was measured or estimated from the held-out share.
-_FREE_READ = re.compile(r"^free read\s+(\d+) of (\d+) (measured|estimated)\s*$", re.M)
-_SECOND_LOOK = re.compile(r"^second look\s+(\d+) of (\d+) (measured|estimated)\s*$", re.M)
+# paid second look. A quote over a long selection carries neither line, so both are None.
+_FREE_READ = re.compile(r"^free read\s+(\d+) of (\d+) (measured)\s*$", re.M)
+_SECOND_LOOK = re.compile(r"^second look\s+(\d+) of (\d+) (measured)\s*$", re.M)
 
 
 class PipelineRefusal(Exception):

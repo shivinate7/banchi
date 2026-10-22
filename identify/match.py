@@ -73,14 +73,9 @@ MARGIN_MIN = 0.04
 # other entries of the same game; candidates rank by `cosine - HUB_BETA * r`.
 HUB_K = 10
 HUB_BETA = 0.5
-# THE SHARE OF CARDS THE READER DOES NOT ACCEPT, used for a quote that is not measured. Measured on
-# the 4,224 store cards with a SKU and a photograph under this rule: 7.1 percent, 95 percent upper
-# bound 7.9, rounded UP to 0.08 so an estimate never understates the second look's cost. The quote says
-# "estimated" whenever it is used.
-UNACCEPTED_SHARE = 0.08
-# A dry run over more cards than this does not run the matcher. The request that asked for the
-# quote waits for the dry run, the matcher costs 50 to 90 ms a card, and a long selection would
-# hold a request slot for minutes. The press itself always counts for real, in its own child.
+# A dry run over more cards than this does not run the matcher, and its quote states no count and no cost.
+# The request that asked for the quote waits for the dry run, the matcher costs 50 to 90 ms a card, and a
+# long selection would hold a request slot for minutes. The press itself always counts, in its own child.
 MEASURE_MAX = 200
 # The floor is the chosen entry's RAW cosine, never the corrected score. 0.69 with a margin of 0.04
 # accepted 3,297 of 3,605 filed non-free cards and 4 were wrong, 1 of them human-cleared.
