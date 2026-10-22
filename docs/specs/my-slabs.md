@@ -243,6 +243,31 @@ These hold until a later route changes them.
   again." It never names the settings key (section 2 does).
 - The screen's nav key is `l`.
 
+### 4.9 The screen's parts and states
+
+- **Ledger cells.** Money shows in the kit's money face (D221, money stays mono). Numbers sit
+  right. Conf shows a word: 1 Very low, 2 Low, 3 Fair, 4 Good, 5 High, and 2 or less is drawn
+  as a warning. A slab with no sale at its grade shows "No sales" in its Card Ladder cell and
+  leaves Conf and Last sale empty. The Card cell is the button that opens the detail.
+- **Header.** The title is "Slabs". The line under it counts the slabs and those that never
+  sold at their grade. The actions are Reload and "Add a Slab".
+- **Detail sheet.** Its title is the row's label. Under it: the grader and grade, and the day
+  the slab joined the list. Worth shows the estimate and the ladder value, each with its
+  confidence and source. A sale with no link shows no link. While the detail loads, every
+  section holds its loaded shape, and the two sections of unknown length come last, so arrival
+  only grows downward (D313, nothing on screen moves unless the person moved it). Esc closes
+  the sheet, and focus goes back to the row's Card button.
+- **Add sheet.** A cert field and a grader list. Add stays off while the cert is empty. While
+  the read runs, Add is busy and a line says the read takes a while. A success closes the sheet
+  and shows the receipt sentence the route sent. A refusal shows its sentence in the sheet, or
+  as a toast when the sheet has closed. A double press sends one request.
+- **Remove.** It sits in the detail sheet's footer. It is off while this tab has an add in
+  flight. A double press sends one request.
+- **Empty.** "No slabs yet", one sentence, and the add button. The header's add button hides
+  while the list is empty.
+- **Loading and failure.** The list loads as skeleton rows under a header that keeps its shape.
+  A failed list read shows its sentence with Retry, except a rate limit (4.8).
+
 ## 5. Pacing
 
 Measured once: about 15 calls in about 30 seconds drew `Too many requests. Please wait a minute
