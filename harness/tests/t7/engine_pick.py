@@ -74,37 +74,37 @@ def _read_one(sims, names, blocked=(), *, hint=None, promo_games=frozenset()):
 
 
 def check_matcher_accept_rule(checks: Checks) -> None:
-    """The accept rule: margin 0.05 and floor 0.755, one home (`match.MARGIN_MIN`).
+    """The accept rule: margin 0.04 and floor 0.69, one home (`match.MARGIN_MIN`, `match.FLOOR_MIN`).
 
-    TWO DOUBLES ABOVE 0.5 DIFFER BY A MULTIPLE OF 2**-53, and 0.05 is not one, so "exactly 0.05"
+    TWO DOUBLES ABOVE 0.5 DIFFER BY A MULTIPLE OF 2**-53, and 0.04 is not one, so "exactly 0.04"
     cannot be built from two cosines. The cases below use the pair whose difference is the
-    nearest the arithmetic gives (0.9 - 0.85, 0.05000000000000004) and a pair 0.049 apart, so a
-    margin moved either way across 0.05 changes an answer."""
+    nearest the arithmetic gives (0.9 - 0.86, 0.04000000000000004) and a pair 0.039 apart, so a
+    margin moved either way across 0.04 changes an answer."""
     checks.note("")
-    checks.note("MATCHER ACCEPT RULE — margin 0.05 at the floor, top candidates kept, look-alike guard")
+    checks.note("MATCHER ACCEPT RULE — margin 0.04 at the floor, top candidates kept, look-alike guard")
     names = ["Vex, Gloomist", "Vex, Gloomist (Alternate Art)", "Other Card"]
 
-    at_margin = _read_one([0.9, 0.85, 0.5], names)
+    at_margin = _read_one([0.9, 0.86, 0.5], names)
     checks.ok(
-        0.05 <= at_margin.margin < 0.0500001,
-        "the 0.9 and 0.85 pair is a margin of 0.05 as the arithmetic gives it",
+        0.04 <= at_margin.margin < 0.0400001,
+        "the 0.9 and 0.86 pair is a margin of 0.04 as the arithmetic gives it",
         f"margin {at_margin.margin!r}",
     )
-    checks.ok(at_margin.accepted, "a margin of 0.05, at a floor of 0.9, is accepted", at_margin.detail)
+    checks.ok(at_margin.accepted, "a margin of 0.04, at a floor of 0.9, is accepted", at_margin.detail)
     checks.equal(
         at_margin.payload["engine"] if at_margin.payload else None,
         cache_mod.ENGINE_MATCHER,
         "and the accepted answer names the free reader as its engine",
     )
 
-    under = _read_one([0.9, 0.851, 0.5], names)
-    checks.ok(0.0489 < under.margin < 0.0491, "the 0.9 and 0.851 pair is a margin of 0.049", f"{under.margin!r}")
-    checks.ok(not under.accepted, "a margin of 0.049 is not accepted")
+    under = _read_one([0.9, 0.861, 0.5], names)
+    checks.ok(0.0389 < under.margin < 0.0391, "the 0.9 and 0.861 pair is a margin of 0.039", f"{under.margin!r}")
+    checks.ok(not under.accepted, "a margin of 0.039 is not accepted")
     checks.equal(under.code, match.UNREAD_MARGIN, "and it is left unread for the margin, by its code")
 
     # A NON-ACCEPTED RESULT KEEPS WHAT THE READER THOUGHT: the second look and the review screen
     # show the top pick beside the paid answer, so every unread code keeps the top candidates.
-    weak = _read_one([0.69, 0.5, 0.4], names)
+    weak = _read_one([0.68, 0.5, 0.4], names)
     for label, result, code in (
         ("margin", under, match.UNREAD_MARGIN),
         ("floor", weak, match.UNREAD_FLOOR),
@@ -217,6 +217,52 @@ class _ModelServer(http.server.BaseHTTPRequestHandler):
 
     def log_message(self, *_args):
         pass
+
+
+def check_matcher_hub_correction(checks: Checks) -> None:
+    """The hub correction on a real index. A stock photo that sits close to ten others (`r` 0.95)
+    ranks by `cosine - HUB_BETA * r`, so the true card (0.70, no close neighbors) leads the hub
+    card (0.71 raw, 0.235 corrected). The floor reads the chosen entry's RAW cosine; the margin is
+    on corrected scores."""
+    import tempfile
+    from unittest import mock
+
+    import numpy as np
+
+    checks.note("")
+    checks.note("MATCHER HUB CORRECTION — a stock photo near many others loses its lead, on a real index")
+    checks.equal((match.FLOOR_MIN, match.MARGIN_MIN), (0.69, 0.04), "the owner's floor and margin")
+
+    def vec(*head):
+        out = np.zeros(match.DIM, np.float32)
+        out[: len(head)] = head
+        return out
+
+    hub, target = vec(1.0), vec(0.0, 1.0)
+    side = math.sqrt(1.0 - 0.95 * 0.95)
+    neighbors = [vec(0.95, 0.0, *([0.0] * (1 + i)), side) for i in range(10)]
+    photo = vec(0.71, 0.70, math.sqrt(1.0 - 0.71 * 0.71 - 0.70 * 0.70))
+    entries = [("Hub Card", hub), ("Target Card", target)] + [(f"Near {i}", v) for i, v in enumerate(neighbors)]
+    with tempfile.TemporaryDirectory() as tmp:
+        with match.Index(Path(tmp) / "fingerprints.sqlite") as index:
+            index.meta("model_sha256", match.MODEL_SHA256)
+            index.db.execute("insert into sets values(?,?,?,?,?,?,?)", ("riftbound", "Set A", "tcgcsv", "", 12, 0, "t"))
+            for pid, (name, v) in enumerate(entries):
+                index.db.execute(
+                    "insert into vec values(?,?,?,?,?,?,?,?,?,?)",
+                    ("riftbound", "Set A", str(pid), str(pid + 1).zfill(3), name, "", match.S_OK, None, v.tobytes(), "t"),
+                )
+            index.db.commit()
+            with mock.patch.object(match, "_crop", lambda *_a: object()), \
+                    mock.patch.object(match, "embed", lambda cards, _path=None: np.stack([photo] * len(cards))), \
+                    mock.patch.object(match, "SERVED_GAMES", ("riftbound",)):
+                request = match.Request("1/1", Path("unused.jpg"), "riftbound", "riftbound_card_v1", "Set A")
+                res = match.read([request], index, promo_games=set())[0]
+    checks.ok(res.accepted, "the true card is accepted over the hub card that scores higher raw", f"code={res.code} {res.detail}")
+    checks.ok(bool(res.payload and res.payload.get("name") == "Target Card"), "and the pick is the true card")
+    checks.ok(res.floor is not None and abs(res.floor - 0.70) < 1e-4, "the floor is the chosen entry's raw cosine", f"floor {res.floor!r}")
+    checks.ok(res.margin is not None and res.margin > 0.4, "the margin is on corrected scores (0.70 against 0.235)", f"margin {res.margin!r}")
+    checks.equal([c["name"] for c in res.candidates][:2], ["Target Card", "Hub Card"], "candidates rank corrected, best first")
 
 
 def check_model_download(checks: Checks) -> None:
@@ -404,8 +450,8 @@ def check_identify_free_first(checks: Checks) -> None:
     """`identify --engine marqo-b` with a fake matcher and a fake batch transport.
 
     Four Pokemon photographs: `4/1` the free reader accepts, `4/2` to `4/4` it does not. Only the
-    last three may reach the paid batch; the preflight says whether its count is estimated or
-    measured; a press with no index is refused; the run record keeps what the free reader thought
+    last three may reach the paid batch; the quote's counts are measured, or wait for the run when
+    the selection is long; a press with no index is refused; the run record keeps what the free reader thought
     of each card it passed on, on a cached press and on a resumed one too."""
     from cli import __main__ as cli_entry
     from cli import cmd_identify, resolve
@@ -467,14 +513,19 @@ def check_identify_free_first(checks: Checks) -> None:
             return code, lines
 
         try:
-            # ------------------------------------------------ no index: estimated, and refused
+            # ------------------------------------------------ no index: every card a second look, and refused
             match.status = lambda *_a, **_k: {"ready": False}
             code, lines = press(caps, "--dry-run")
             checks.equal(code, 0, "a free dry run with no index exits 0")
             checks.equal(
                 spoken(lines, "second look"),
-                "second look     4 of 4 estimated",
+                "second look     4 of 4 measured",
                 "with no index every card is a certain second look: the pool rules cannot read any",
+            )
+            checks.ok(
+                not [line for line in lines if "estimated" in line and not line.startswith("estimated cost")],
+                "and no line calls that count 'estimated': it is the pool rules' floor, not an assumed share",
+                "\n".join(lines),
             )
             checks.equal(asked, [], "and the estimate read no photograph")
             code, lines = press(caps)
@@ -487,22 +538,28 @@ def check_identify_free_first(checks: Checks) -> None:
             checks.equal(sent, [], "and nothing reached the paid batch")
             checks.equal(list(Path(home).glob("**/identifications.json")), [], "and no run record was written")
 
-            # ------------------------------------------------ a long selection: estimated, never run
-            # N = max(round(0.40 x M), the cards the pool rules cannot read). M is 4 here, so 0.40 gives 2.
+            # ------------------------------------------------ a long selection: counted when the run starts
             match.status = lambda *_a, **_k: {"ready": True}
             match.MEASURE_MAX = 3
-            for can_read, expected in ((4, 2), (1, 3), (0, 4)):
+            for can_read in (4, 1, 0):
                 match.preflight = lambda requests, *_a, can_read=can_read, **_k: {
                     "cards": len(requests), "can_read": can_read, "unread": {}, "state": {"ready": True},
                 }
                 code, lines = press(caps, "--dry-run")
                 checks.equal(
                     spoken(lines, "second look"),
-                    f"second look     {expected} of 4 estimated",
-                    f"a dry run over 4 > MEASURE_MAX cards with {can_read} readable by the pool rules estimates "
-                    f"max(round(0.40 x 4), {4 - can_read}) = {expected}",
+                    "second look     counted when the run starts",
+                    f"a dry run over 4 > MEASURE_MAX cards with {can_read} readable by the pool rules states no count",
+                )
+                checks.equal(spoken(lines, "free read"), "", f"and no free read count ({can_read} readable)")
+                checks.equal(spoken(lines, "estimated cost"), "", f"and no estimated cost ({can_read} readable)")
+                checks.ok(
+                    not any("estimated" in line for line in lines),
+                    f"and no line says 'estimated' ({can_read} readable)",
+                    "\n".join(lines),
                 )
             checks.equal(asked, [], "and a dry run past MEASURE_MAX never runs the matcher")
+            checks.ok(not hasattr(match, "UNACCEPTED_SHARE"), "and the assumed share is gone from the matcher")
             match.MEASURE_MAX, match.preflight = real[4], real[3]
 
             # ------------------------------------------------ an index: measured, only 4/2 to 4/4 paid
@@ -514,6 +571,11 @@ def check_identify_free_first(checks: Checks) -> None:
                 "within MEASURE_MAX the count is MEASURED by a free pass over the selection",
             )
             checks.equal(spoken(lines, "free read"), "free read       1 of 4 measured", "and so is the free read")
+            checks.ok(
+                not [line for line in lines if "estimated" in line and not line.startswith("estimated cost")],
+                "and no count line says 'estimated'",
+                "\n".join(lines),
+            )
             checks.equal(sent, [], "a dry run sends nothing")
 
             code, lines = press(caps)
@@ -1748,6 +1810,7 @@ def check_match_route_lane(checks: Checks) -> None:
 
 CHECKS = (
     check_matcher_accept_rule,
+    check_matcher_hub_correction,
     check_model_download,
     check_model_download_retries_through_the_one_home,
     check_fetch_bytes_retries_through_the_one_home,
