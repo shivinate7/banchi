@@ -6457,6 +6457,56 @@ def check_identify_empty_flag_refuses(checks: Checks) -> None:
             urllib.request.urlopen = real["urlopen"]
 
 
+def check_empty_state_refusal_blames_no_missing_folder(checks: Checks) -> None:
+    """A `state` selection that chooses no card does not blame a capture folder when photographs exist elsewhere.
+
+    INCIDENT SHAPE: `resolve` answers a `state` selection from the store and reads only the chosen cards' photographs, so
+    `scanned` counts photographs READ and is 0 whenever no card is chosen, however many the store holds. `refuse_empty`
+    read that 0 as "the folder holds none" and, with `captures/cards` absent (every store captured since the content-addressed
+    layout), told the operator "No photos found. The capture folder ... does not exist." That is a false claim about a
+    store whose photographs are in `photos/`. The fixture: one card, identified, its photograph in `photos/` and no
+    `captures/cards` directory, then `--state captured`. Read through both doors a person uses, the command and the
+    preflight route.
+    """
+    from cli import __main__ as cli_entry
+    from harness.tests.t7.common import quiet as quiet_out
+    from pipeline import selection as selection_mod
+    from store import photos
+
+    checks.note("")
+    checks.note("EMPTY STATE SELECTION — the refusal blames no capture folder while photographs sit under photos/")
+
+    with isolated_home():
+        home = files.home()
+        capture_server.do_capture(capture_payload(3))
+        with Store().write() as snapshot:
+            card = snapshot.inventory.cards.get(master.position_key(3, 1))
+            card.state = master.IDENTIFIED
+            cid = card.cid
+        folder = home.joinpath(*selection_mod.CAPTURES)
+        checks.ok(photos.path(cid).is_file() and not folder.exists(), "10. the fixture: the photograph is under photos/ and captures/cards does not exist")
+        read, _ = selection_mod.resolve(selection_mod.Selection(state="identified"), home, read_inventory=lambda: Store().read().inventory)
+        checks.equal([c.key for c in read], ["3/1"], "10. the fixture: that photograph is readable, so no folder is missing from where a photograph is")
+
+        def blames_folder(text: str) -> bool:
+            lowered = text.lower()
+            return "no photos" in lowered or "does not exist" in lowered or str(folder) in text
+
+        with quiet_out() as said:
+            code = cli_entry.main(["identify", "--state", "captured", "--engine", "haiku", "--dry-run"])
+        text = said.getvalue()
+        checks.ok(code == 1 and "Nothing to identify" in text, "10. `identify --state captured` over no captured card refuses as empty", f"exit {code}, said: {text.strip()!r}")
+        checks.ok(not blames_folder(text), "10. and does not say no photos were found or that the capture folder does not exist", f"said: {text.strip()!r}")
+
+        try:
+            pipeline_routes.do_pipeline_preflight({"state": "captured"})
+            route_code, route_text = None, "did not refuse"
+        except pipeline_routes.PipelineRefusal as refused:
+            route_code, route_text = refused.code, str(refused)
+        checks.equal(route_code, "selection_is_empty", "10. the preflight route refuses the same selection as empty")
+        checks.ok(not blames_folder(route_text), "10. and its sentence does not say no photos were found or that the capture folder does not exist", f"said: {route_text!r}")
+
+
 CHECKS = (
     check_cli_seams,
     check_code_ledger,
@@ -6487,4 +6537,5 @@ CHECKS = (
     check_identify_empty_refuses_before_work,
     check_selection_unknown_route_keys,
     check_identify_empty_flag_refuses,
+    check_empty_state_refusal_blames_no_missing_folder,
 )

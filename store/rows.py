@@ -112,6 +112,9 @@ class Rows(MutableMapping):
         self._loaded: Dict[str, Any] = {}
         self._baseline: Dict[str, dict] = {}
         self._deleted: set = set()
+        # Keys that came from the source, tracked or not: `_baseline` is empty on a read
+        # snapshot, so `__len__` cannot tell a loaded stored row from a new one by it.
+        self._stored: set = set()
         # Keys the source said it does not hold. A read snapshot is one transaction and a
         # write session holds the lock, so nothing but this mapping can add a row meanwhile;
         # `__setitem__` is the one way in here and it clears the key.
@@ -142,6 +145,7 @@ class Rows(MutableMapping):
         if obj is None:
             return None
         self._loaded[key] = obj
+        self._stored.add(key)
         if self._track:
             self._baseline[key] = self.spec.dump(obj)
         return obj
@@ -201,7 +205,7 @@ class Rows(MutableMapping):
     def __len__(self) -> int:
         if self._complete:
             return len(self._loaded)
-        fresh = sum(1 for key in self._loaded if key not in self._baseline)
+        fresh = sum(1 for key in self._loaded if key not in self._stored)
         return int(self.source.count()) - len(self._deleted) + fresh
 
     # ------------------------------------------------------------------ the queries

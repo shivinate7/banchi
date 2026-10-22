@@ -1286,11 +1286,11 @@ def run(args, say) -> int:
     # one path, which under a selection would be the scan root — `captures/cards` for a press
     # over box 3 — and therefore the least informative true line available. The sentence is
     # `Selection.sentence`, composed once so the report, the refusals and the screen cannot
-    # describe one press three ways. `scanned` beside it is what the terms narrowed FROM, which
-    # is the figure that says whether a selection did any narrowing at all.
+    # describe one press three ways. `read` beside it is how many photographs were read, which
+    # is the figure that says whether a selection did any narrowing after reading.
     say(f"selection       {selection.sentence()}")
     if scanned != len(items):
-        say(f"scanned         {scanned} photograph(s), narrowed to {len(items)}")
+        say(f"read            {scanned} photograph(s), narrowed to {len(items)}")
     say(f"photographs     {len(items)}")
     # COUNTED, NOT SUBTRACTED, and that is a repair the sentinel paid for. This read
     # `len(items) - len(to_send) - len(unreadable)`, and a card refused for want of a prompt
