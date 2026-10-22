@@ -47,8 +47,9 @@ this file tests. It follows `store/readings.py` and `store/pricearchive.py`:
         the snapshots back, and a sale the next read omits stays in the table, unlinked. A sale
         another slab also read stays linked to that slab. Answers the removed Slab, or None (and
         writes nothing) when there is none; an unknown grader raises ValueError as everywhere.
-        NOT PINNED: the `added` of a slab added again after a remove, and what a sale row's own
-        list of slabs says after one of them is removed.
+        The `added` of a slab added again after a remove is pinned at the route (the routes
+        selftest's restore cases), not here: the snapshots this file keeps are what it reads.
+        NOT PINNED: what a sale row's own list of slabs says after one of them is removed.
     Slabs.get(cert, grader) -> Optional[Slab]
     Slabs.list() -> List[Slab]                      same order however the slabs were added
     Slabs.snapshots_for(cert, grader) -> List[SlabSnapshot]   oldest day first; [] if none

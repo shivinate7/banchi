@@ -8,7 +8,8 @@ Governs: D320, D88, D196, D319
 BUILD PLAN STEP 3 (`docs/specs/my-slabs.md`). The owner DEFERRED the sweep: it waits for the
 owner's word. Until that word: NO sweep route, no screen for a sweep, no launchd job. The spec's
 build plan names a sweep in steps 3 to 5 and section 5; this file pins the deferral. The owner
-RULED a remove route that keeps history (cases 18 to 22).
+RULED a remove route that keeps history (cases 18 to 22) and that adding a removed slab again
+RESTORES it (cases 20, 23 and 24).
 
 ROUTES, in `server/slabs_routes.py`, dispatched by `server/capture_server.py`. A refusal is a
 `server.refusal.BadRequest(status, code, message)`: the dispatcher already catches it.
@@ -34,9 +35,13 @@ answer stops adds for that day (`TODAY()`); the next day adds again. A token tha
 WIRE (text money, ISO dates, `null` for a value Card Ladder did not give):
 
     add body    {"cert": "<text>", "grader": "psa|beckett|bgs|bvg|sgc|cgc" (any case)}
-    receipt     {"cert", "grader" (Card Ladder's name), "label", "day", "added": bool, "message"}
-                `added` is false when the slab was already there; `message` is one sentence that
-                names the slab by its label.
+    receipt     {"cert", "grader" (Card Ladder's name), "label", "day", "added": bool,
+                 "restored": bool, "message"}
+                `day` is the day of the snapshot this add wrote. `added` is true only for a slab that
+                was never in the store; `restored` is true only for a slab added again after a
+                remove; both are false for a re-read of a slab that is in the list. `restored` is
+                on every receipt. `message` is one plain sentence that names the slab by its label:
+                "Added <label>.", "Updated <label>." or "Restored <label>.".
     snapshot    {"day", "cl_value", "cl_confidence", "estimated_value", "estimated_confidence",
                  "last_sale_price", "last_sale_date", "population", "gem_rate", "speed"}
     row         {"cert", "grader", "label", "grade", "added", "snapshot": newest | null,
@@ -69,8 +74,16 @@ slab is looked up, so the same answer comes for a stored slab, the one being re-
 one. The add's final write would otherwise put the removed slab back. The 409 sends nothing and
 writes nothing, and the next remove works once the add is done. A refused or failed remove frees
 the way for the next add.
-NOT PINNED, left to the owner (Input Needed in the report): the `added` date and the receipt's
-`added` flag of a slab added again after a remove, and what a sale row's own list of slabs says.
+THE UNDO RESTORES (cases 20, 23, 24; the owner's ruling, build plan step 3). A slab added again
+after a remove gets back its FIRST added day, so its `added` (in the receipt's slab, the list row
+and the detail) is the day of its OLDEST snapshot, and the receipt is `added` false, `restored` true,
+"Restored <label>.". The day of the add is the receipt's `day`. No new storage: add is the only
+writer of a slab and writes its first snapshot in the same write, so every slab has a snapshot dated
+its added day (case 24 pins that, on every add this file makes). A slab that a remove never took out
+is updated, not restored. A same-day remove and add is a restore too. A failed
+re-add writes nothing and restores nothing, so the next good add still restores. The history is the
+slab's own: another grader's slab of the same cert has none, and any form of the grader finds it.
+NOT PINNED, left to the owner (Input Needed in the report): what a sale row's own list of slabs says.
 
 WHAT EACH ADD DOES: 3.1, 3.2, 3.4 and no other callable (spec 5: three calls a slab), the reads
 OUTSIDE the store lock (they are paced and take 16 seconds or more), then ONE store write: the
@@ -151,7 +164,7 @@ RT_NEW = "RTSENTINEL-0d43aa17-rotated"
 ID_MARK = "IDSENTINEL-77aa31d4"  # every fake ID token holds this
 CF_HOST = urllib.parse.urlsplit(cardladder.CALLABLE_BASE).hostname
 GOOGLE_HOST = urllib.parse.urlsplit(cardladder.TOKEN_URL).hostname
-DAY1, DAY2 = "2026-10-20", "2026-10-21"
+DAY1, DAY2, DAY3 = "2026-10-20", "2026-10-21", "2026-10-22"
 CERT, CERT2, CERT3 = "12345678", "87654321", "55555555"
 PROFILE = "psa-4d2f"
 LABEL = "2023 Pokemon Obsidian Flames Charizard ex 125 PSA 10"
@@ -434,9 +447,20 @@ def gaps(calls) -> list:
     return [round(b.t - a.t, 6) for a, b in zip(calls, calls[1:])]
 
 
+def added_day_has_snapshot(table, cert, grader) -> bool:
+    """The restore reads a slab's first added day from its oldest snapshot. That holds only while
+    every slab has a snapshot dated its added day, so every add must leave one."""
+    slab = table.get(cert, grader)
+    return slab is not None and slab.added in {x.day for x in table.snapshots_for(cert, grader)}
+
+
 def add(routes, cert=CERT, grader="psa"):
+    """One add through the route. Silent when the invariant holds; one FAIL when an add left a slab
+    with no snapshot of its added day (case 24 holds its own checks and a control that goes red)."""
     answer = routes.do_slab_add({"cert": cert, "grader": grader})
     POOL.append(json.dumps(answer, default=str))
+    if isinstance(answer, dict) and not added_day_has_snapshot(slabs_now(), answer.get("cert"), answer.get("grader")):
+        ok(False, f"after an add of {cert}, the slab has a snapshot dated its added day", repr(answer))
     return answer
 
 
@@ -542,6 +566,8 @@ def case_add(routes):
     ok(LABEL in str(receipt.get("message")), "and its message is a sentence that names the slab by its label",
        str(receipt.get("message")))
     plain("the receipt", str(receipt.get("message")))
+    same("a first add says Added, and is not restored",
+         (receipt.get("restored"), receipt.get("message")), (False, f"Added {LABEL}."))
 
     names = [c.name for c in w.calls]
     same("exactly three callables, 3.1 first", (len(names), names[:1]), (3, ["httpcertlookup"]))
@@ -578,6 +604,8 @@ def case_add(routes):
     again = add(routes)
     same("the same slab added again is an update, not a second slab",
          (again.get("added"), again.get("day")), (False, DAY1))
+    same("a re-read of a slab in the list says Updated, and is not restored",
+         (again.get("restored"), again.get("message")), (False, f"Updated {LABEL}."))
     s = slabs_now()
     same("still one slab and one snapshot, and no sale twice",
          (count(s.slabs), count(s.snapshots), count(s.sales)), (1, 1, before_sales))
@@ -591,6 +619,8 @@ def case_add(routes):
     s = slabs_now()
     same("the next day adds a second snapshot", [x.day for x in s.snapshots_for(CERT, "psa")], [DAY1, DAY2])
     same("the receipt says it was an update, on the new day", (nxt.get("added"), nxt.get("day")), (False, DAY2))
+    same("an older snapshot does not make a slab in the list restored: Updated",
+         (nxt.get("restored"), nxt.get("message")), (False, f"Updated {LABEL}."))
     same("and the slab keeps the day it was first added", s.get(CERT, "psa").added, DAY1)
 
 
@@ -1208,7 +1238,7 @@ def case_remove_one_write(routes):
 
 
 def case_remove_undo(routes):
-    """20. adding a removed slab again is the way back: its snapshots return and only the new read's sales are linked"""
+    """20. adding a removed slab again is the way back: its snapshots and first added day return and only the new read's sales are linked"""
     w = new_world(routes)
     remove = remover(routes)
     if remove is None:
@@ -1223,10 +1253,15 @@ def case_remove_undo(routes):
     kept = [sale for sale in default_sales() if sale["id"] != "s-old"]
     w.load(card(sales=kept + [raw_sale("s-fresh", "2026-10-08", 150)], estimate=130.0, confidence=3))
     sent = len(w.calls)
-    add(routes)
+    back = add(routes)
     same("the add after a remove reads Card Ladder as any add does", len(w.calls) - sent, 3)
+    same("its receipt says restored, not added, on the day of this read",
+         {k: back.get(k) for k in ("added", "restored", "day", "message")},
+         {"added": False, "restored": True, "day": DAY2, "message": f"Restored {LABEL}."})
     detail = routes.do_slab("psa", CERT)
     POOL.append(json.dumps(detail, default=str))
+    same("the slab has its first added day back, not the day of the add",
+         (detail.get("slab", {}).get("added"), [r["added"] for r in routes.do_slabs()["slabs"]]), (DAY1, [DAY1]))
     same("the old snapshot is back, and the new read's follows", [x.get("day") for x in detail.get("snapshots", [])],
          [DAY1, DAY2])
     same("the old one is the old read, unchanged", detail["snapshots"][0], first["snapshots"][0])
@@ -1358,11 +1393,142 @@ def case_remove_busy(routes):
     same("and the store holds no slab", slabs_now().list(), [])
 
 
+def case_restore(routes):
+    """23. a removed slab added again is RESTORED: its first added day returns from the oldest snapshot and the receipt says Restored"""
+    w = new_world(routes)
+    remove = remover(routes)
+    if remove is None:
+        return
+
+    def says(label, receipt, verb, day, label_text):
+        """The receipt of one add: its two flags, its day and its one sentence all agree with the verb."""
+        message = f"{verb} {label_text}."
+        want = {"added": verb == "Added", "restored": verb == "Restored", "day": day, "message": message}
+        if same(label, {k: receipt.get(k) for k in want}, want):
+            one_sentence(label, message)
+            plain(label, message)
+
+    def added_in(cert, grader):
+        """The slab's first added day as the store, the detail and the list each give it."""
+        listed = [r["added"] for r in routes.do_slabs()["slabs"] if (r["cert"], r["grader"]) == (cert, grader)]
+        return (slabs_now().get(cert, grader).added, routes.do_slab(grader, cert)["slab"]["added"], listed)
+
+    # Two snapshot days before the remove, so the oldest is not the newest: a restore that read the newest day fails.
+    w.load(card())
+    w.day = DAY1
+    add(routes)
+    w.day = DAY2
+    add(routes)
+    remove("psa", CERT)
+    w.day = DAY3
+    receipt = add(routes)
+    says("added again on a third day: restored, with this day's read", receipt, "Restored", DAY3, LABEL)
+    same("its first added day is the oldest snapshot's, in the store, the detail and the list",
+         added_in(CERT, "psa"), (DAY1, DAY1, [DAY1]))
+    same("and the snapshots are the two old days and the new one",
+         [x.day for x in slabs_now().snapshots_for(CERT, "psa")], [DAY1, DAY2, DAY3])
+    again = add(routes)
+    says("a re-read of the restored slab is an update again", again, "Updated", DAY3, LABEL)
+    same("and keeps the first added day", added_in(CERT, "psa"), (DAY1, DAY1, [DAY1]))
+
+    # The same day: a remove and an add in one day is still a slab put back.
+    w.load(card(cert=CERT2))
+    w.day = DAY3
+    add(routes, CERT2)
+    remove("psa", CERT2)
+    says("removed and added again the same day: restored", add(routes, CERT2), "Restored", DAY3, LABEL)
+    same("with that day as its first added day", added_in(CERT2, "psa"), (DAY3, DAY3, [DAY3]))
+
+    # A failed re-add writes nothing and restores nothing; the next good add still restores.
+    w.load(card(cert=CERT3))
+    w.day = DAY1
+    add(routes, CERT3)
+    remove("psa", CERT3)
+    w.day = DAY2
+    w.fail["httpprofile"] = (500, FAIL_BODY)
+    refusal("a re-add Card Ladder fails", refused(routes.do_slab_add, {"cert": CERT3, "grader": "psa"}), "cardladder_failed")
+    w.fail.clear()
+    same("the failed re-add put nothing back", (slabs_now().get(CERT3, "psa"), [x.day for x in slabs_now().snapshots_for(CERT3, "psa")]),
+         (None, [DAY1]))
+    w.day = DAY3
+    says("the next good add restores it", add(routes, CERT3), "Restored", DAY3, LABEL)
+    same("with its first added day", added_in(CERT3, "psa"), (DAY1, DAY1, [DAY1]))
+
+    # The history is the slab's own: the same cert at another grader has none, and is added, not restored.
+    cgc_label = "2023 Pokemon Obsidian Flames Charizard ex 125 CGC 10"
+    w.load(card(cert=CERT, grader="cgc", profile_id="cgc-1", label=cgc_label,
+                sales=[raw_sale("c-1", "2026-09-01", 10, "cgc", "g10")]))
+    remove("psa", CERT)
+    w.day = DAY2
+    says("the same cert at another grader is a new slab: Added", add(routes, CERT, "cgc"), "Added", DAY2, cgc_label)
+    same("with its own first added day", added_in(CERT, "cgc"), (DAY2, DAY2, [DAY2]))
+    w.day = DAY3
+    says("the psa slab put back still has its own first day", add(routes, CERT), "Restored", DAY3, LABEL)
+    same("DAY1, not the cgc slab's day", added_in(CERT, "psa"), (DAY1, DAY1, [DAY1]))
+
+    # Any form of the grader finds the history, and a cert keeps its zeros.
+    pikachu = "2022 Pokemon Crown Zenith Pikachu BGS 9.5"
+    w.load(card(cert="0012345678", grader="beckett", grade="g9_5", profile_id="beckett-77", label=pikachu,
+                sales=default_sales("beckett", "g9_5")))
+    w.day = DAY1
+    says("a Beckett slab added as bgs: Added", add(routes, "0012345678", "bgs"), "Added", DAY1, pikachu)
+    remove("BVG", "0012345678")
+    w.day = DAY3
+    says("added again as beckett: restored", add(routes, "0012345678", "beckett"), "Restored", DAY3, pikachu)
+    same("with its first added day", added_in("0012345678", "beckett"), (DAY1, DAY1, [DAY1]))
+
+
+def case_added_day_snapshot(routes):
+    """24. every add leaves a snapshot dated the slab's added day, which is what the restore reads"""
+    w = new_world(routes)
+    remove = remover(routes)
+    if remove is None:
+        return
+    w.load(card())
+
+    def held(label):
+        slab = slabs_now().get(CERT, "psa")
+        ok(added_day_has_snapshot(slabs_now(), CERT, "psa"), f"{label}: the slab has a snapshot dated its added day",
+           repr((slab.added if slab else None, [x.day for x in slabs_now().snapshots_for(CERT, "psa")])))
+
+    w.day = DAY1
+    add(routes)
+    held("a first add")
+    add(routes)
+    held("a re-read the same day")
+    w.day = DAY2
+    add(routes)
+    held("a re-read the next day")
+    remove("psa", CERT)
+    w.day = DAY3
+    add(routes)
+    held("an add after a remove")
+    same("and that day is the oldest snapshot's", slabs_now().get(CERT, "psa").added,
+         slabs_now().snapshots_for(CERT, "psa")[0].day)
+
+    # The control: the check goes red on a slab that breaks the rule, so a future add that writes a slab
+    # and no snapshot of its added day is caught by every add above.
+    seed(CERT2)
+    ok(added_day_has_snapshot(slabs_now(), CERT2, "psa"), "control: a seeded slab with a snapshot of its added day passes")
+    with store().write() as snap:
+        snap.slabs.add(CERT3, "psa", profile_id="p-" + CERT3, identity={"label": LABEL, "grade": "g10"},
+                       subgrades=None, added=DAY1)
+        snap.slabs.record_snapshot(
+            CERT3, "psa", DAY2, cl_value=None, cl_confidence=None, estimated_value=None, estimated_confidence=None,
+            last_sale_price=None, last_sale_date=None, population=None, gem_rate=None, speed=None)
+    same("control: a slab whose only snapshot is another day goes red", added_day_has_snapshot(slabs_now(), CERT3, "psa"), False)
+    with store().write() as snap:
+        snap.slabs.add("99999999", "psa", profile_id="p-9", identity={"label": LABEL}, subgrades=None, added=DAY1)
+    same("control: a slab with no snapshot goes red", added_day_has_snapshot(slabs_now(), "99999999", "psa"), False)
+    same("control: no slab goes red", added_day_has_snapshot(slabs_now(), "00000000", "psa"), False)
+
+
 ROUTE_CASES = (
     case_seams, case_add, case_grader_forms, case_refusals, case_failed_read, case_pacing,
     case_money_and_dates, case_sale_merge, case_two_slabs, case_list, case_detail, case_http,
     case_overlap, case_no_sale_ladder, case_latch_restart,
     case_remove, case_remove_one_write, case_remove_undo, case_remove_unknown, case_remove_busy,
+    case_restore, case_added_day_snapshot,
 )
 
 
