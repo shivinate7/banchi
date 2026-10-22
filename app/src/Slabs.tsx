@@ -551,7 +551,7 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
 
       <Section title="Worth">
         {noSales ? (
-          <p className="slabs-no-sales">Card Ladder gives no estimate without a sale.</p>
+          <p className="slabs-no-sales">No estimate without a sale.</p>
         ) : (
           <dl className="slabs-worth">
             <div>
