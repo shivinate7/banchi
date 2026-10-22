@@ -203,6 +203,11 @@ def departed_among(cards, positions) -> set:
 # one fact about the departure the record cannot re-derive later, and the four are a closed
 # vocabulary so the history stays greppable — free text would be a second `note`.
 RETIRE_REASONS = ("pulled", "damaged", "lost", "given_away")
+# The reason of a retirement no person chose: `cli/cmd_identify.py` retires a captured card whose photograph
+# shows an empty slot. Not a `RETIRE_REASONS` member, because that tuple is what a person may pick and what
+# the retire route accepts; `Inventory.retire` takes both. The event carries the evidence.
+EMPTY_SLOT = "empty_slot"
+AUTOMATIC_RETIRE_REASONS = (EMPTY_SLOT,)
 
 PUSHED = "pushed"
 STAGED = "staged"
@@ -706,7 +711,7 @@ class Card:
     read_disputes: bool = False
     state: str = CAPTURED
     state_at: Optional[str] = None
-    # Why a retired card left — one of `RETIRE_REASONS`, set by `retire()` and cleared by
+    # Why a retired card left — one of `RETIRE_REASONS` or `AUTOMATIC_RETIRE_REASONS`, set by `retire()` and cleared by
     # the route that reverses one; None on every card in any other state. NOT a capture
     # claim, and deliberately absent from `CAPTURE_CLAIM_FIELDS` below: a claim survives a
     # re-record and is settable at capture time, while this describes a departure — a
@@ -2999,7 +3004,7 @@ class Inventory:
         self._log(event, key, sku=card.sku, bound_by=card.bound_by, run=card.run)
         return card
 
-    def retire(self, key: str, reason: str) -> bool:
+    def retire(self, key: str, reason: str, **evidence) -> bool:
         """Move one card to `retired`, carrying why it left. False if the position is empty.
 
         `set_state` with the reason attached, and ONE method rather than a `set_state` call
@@ -3012,15 +3017,19 @@ class Inventory:
         The reason is validated here as well as at the route, because this module is the
         store's own boundary: a caller that bypassed the server must still be unable to
         write a reason outside the vocabulary.
+
+        `evidence` is extra fields for the history line (an automatic retirement names what it
+        measured there), never written onto the card.
         """
-        check_retire_reason(reason)
+        if reason not in AUTOMATIC_RETIRE_REASONS:
+            check_retire_reason(reason)
         card = self.cards.get(key)
         if card is None:
             return False
         card.retire_reason = reason
         card.state = RETIRED
         card.state_at = now()
-        self._log(RETIRED, key, sku=card.sku, run=card.run, reason=reason)
+        self._log(RETIRED, key, sku=card.sku, run=card.run, reason=reason, **evidence)
         return True
 
     def record_photo_reclaimed(self, key: str, *, sha256: str, size: int) -> bool:
