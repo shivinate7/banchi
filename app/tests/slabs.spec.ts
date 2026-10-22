@@ -544,29 +544,19 @@ async function openAdd(page: Page): Promise<Locator> {
   return sheet
 }
 const certField = (sheet: Locator) => sheet.getByRole('textbox', { name: 'Cert', exact: true })
-const graderField = (sheet: Locator) => sheet.getByRole('combobox', { name: 'Grader', exact: true })
+/* The kit Select's trigger: a button named "Grader" then the picked value, e.g. "Grader PSA". */
+const graderField = (sheet: Locator) => sheet.getByRole('button', { name: /^Grader\b/ })
 /* Matched by its first word, so a button that reads "Adding" while it works is still found. */
 const addButton = (sheet: Locator) => sheet.getByRole('button', { name: /^Add\b|^Adding/ })
 
-/** Choose a grader by the string `store/slabs.GRADERS` holds, from a native select or from a list of options. */
+/** Choose a grader by the string `store/slabs.GRADERS` holds, from the kit Select's list of options. */
 async function pickGrader(sheet: Locator, grader: string): Promise<void> {
-  const field = graderField(sheet)
-  if (await field.evaluate((el) => el.tagName === 'SELECT')) {
-    const index = await field.evaluate((el, want) => Array.from((el as HTMLSelectElement).options).findIndex((o) => (o.value || o.text).toLowerCase() === want), grader)
-    expect(index, `the Grader list has no "${grader}"`).toBeGreaterThanOrEqual(0)
-    await field.selectOption({ index })
-    return
-  }
-  await field.click()
+  await graderField(sheet).click()
   await sheet.page().getByRole('option', { name: new RegExp(`^${grader}$`, 'i') }).click()
 }
 
 async function graderChoices(sheet: Locator): Promise<string[]> {
-  const field = graderField(sheet)
-  if (await field.evaluate((el) => el.tagName === 'SELECT')) {
-    return field.evaluate((el) => Array.from((el as HTMLSelectElement).options).map((o) => (o.value || o.text).toLowerCase()))
-  }
-  await field.click()
+  await graderField(sheet).click()
   const names = (await sheet.page().getByRole('option').allInnerTexts()).map((t) => t.trim().toLowerCase())
   await sheet.page().getByRole('option', { name: /^psa$/i }).click()
   return names
