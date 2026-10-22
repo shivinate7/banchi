@@ -40,6 +40,7 @@ import os
 import signal
 import sys
 import threading
+import time
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
@@ -1038,7 +1039,7 @@ def _no_connection(run_dir) -> Optional[str]:
     return None
 
 
-PREFETCH_WAIT_S = 30  # how long the run waits for its own background fetch before it goes on
+PREFETCH_WAIT_S = 30  # the TOTAL the run waits for its own background fetch, from the moment it starts
 
 
 def _prefetch_export(run_dir) -> Optional[threading.Thread]:
@@ -1069,10 +1070,11 @@ def _prefetch_export(run_dir) -> Optional[threading.Thread]:
 
 
 def _wait_prefetch(args) -> None:
-    """Wait, bounded, for this run's background export fetch if one started."""
+    """Wait for this run's background export fetch, if one started, until its one deadline: every wait
+    (before the join, and on the way out) spends the same `PREFETCH_WAIT_S`, so the bound is total."""
     thread = getattr(args, "prefetch", None)
     if thread is not None:
-        thread.join(timeout=PREFETCH_WAIT_S)
+        thread.join(timeout=max(0.0, args.prefetch_deadline - time.monotonic()))
 
 
 def _join_now(run_dir, say) -> Optional[str]:
@@ -1780,6 +1782,7 @@ def _run(args, say) -> int:
 
     # THE EXPORT IS FETCHED WHILE THE READ RUNS, so the join at the end finds it (see `_prefetch_export`).
     args.prefetch = _prefetch_export(run_dir)
+    args.prefetch_deadline = time.monotonic() + PREFETCH_WAIT_S
 
     # Keyed by the SUBMITTED id, not the store key: outcomes come back named by
     # custom_id, and building the lookup through the same translation is what lets
