@@ -39,6 +39,7 @@ import json
 import os
 import signal
 import sys
+import threading
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
@@ -1024,22 +1025,51 @@ def _own_pid_marker(args) -> Optional[Path]:
         return None
 
 
+def _no_connection(run_dir) -> Optional[str]:
+    """Why this run may not reach for TCGplayer, or None. NO SOCKET UNDER A TEST RUN: the harness and CI
+    set one of these, and the owner's Mac holds a live TCGplayer cookie in the repo's settings file, so a
+    harness press would otherwise download a real export. And `do_run_match` and `do_pipeline_export`
+    take a run NAME and look it up in this store's runs folder, so a run directory anywhere else could
+    be answered by a different run of the same name: only the run itself is joined."""
+    if os.environ.get("CI") or os.environ.get("BANCHI_HARNESS"):
+        return "this is a test run, which opens no connection to TCGplayer"
+    if run_dir.directory.resolve() != (store_files.runs_dir() / run_dir.directory.name).resolve():
+        return "this run directory is not in the store's runs folder, so it is not joined here"
+    return None
+
+
+def _prefetch_export(run_dir) -> Optional[threading.Thread]:
+    """Start the game's export fetch now, beside the read, so the join at the end finds it. The one
+    downloader is `pipeline_routes.do_pipeline_export`, with its 900 s reuse rule (D166): a read that
+    outlasts 15 minutes makes the join fetch again. A failure here is only logged, by its code and never
+    its message or any cookie: the join asks again and reports "not joined" if it still cannot."""
+    if _no_connection(run_dir) is not None:
+        return None
+    from server import pipeline_routes
+
+    def fetch() -> None:
+        try:
+            pipeline_routes.do_pipeline_export(run_dir.directory.name, {})
+        except pipeline_routes.PipelineRefusal as refusal:
+            store_files.log_note(f"identify export prefetch: refused ({refusal.code})")
+        except Exception as exc:  # noqa: BLE001 - the join fetches again
+            store_files.log_note(f"identify export prefetch: {type(exc).__name__}")
+
+    thread = threading.Thread(target=fetch, name="export-prefetch")
+    thread.start()
+    return thread
+
+
 def _join_now(run_dir, say) -> Optional[str]:
     """Join this run against an export now, by the one path the screen's automatic match takes
     (`pipeline_routes.do_run_match`: the game's export, reused when under 900 s old (D166) or fetched,
     then `banchi join`). Returns None when the run is joined, else one plain sentence saying why not;
-    the run then stays at phase `join` and its match record tells the screen.
-
-    NO SOCKET UNDER A TEST RUN: the harness and CI set one of these, and the owner's Mac holds a live
-    TCGplayer cookie in the repo's settings file, so a harness press would otherwise download a real export."""
-    if os.environ.get("CI") or os.environ.get("BANCHI_HARNESS"):
-        return "this is a test run, which opens no connection to TCGplayer"
+    the run then stays at phase `join` and its match record tells the screen."""
+    refused = _no_connection(run_dir)
+    if refused is not None:
+        return refused
     from server import pipeline_routes
 
-    # `do_run_match` takes a run NAME and looks it up in this store's runs folder, so a run directory
-    # anywhere else could be answered by a different run of the same name. Join only the run itself.
-    if run_dir.directory.resolve() != (store_files.runs_dir() / run_dir.directory.name).resolve():
-        return "this run directory is not in the store's runs folder, so it is not joined here"
     say("joining         fetching the game's export (reused when under 15 minutes old), then joining the run")
     try:
         outcome = pipeline_routes.do_run_match(run_dir.directory.name, {})
@@ -1732,6 +1762,9 @@ def _run(args, say) -> int:
         with store.write() as naming:
             naming.submissions.attach_run(claim.receipt, run_dir.name)
 
+    # THE EXPORT IS FETCHED WHILE THE READ RUNS, so the join at the end finds it (see `_prefetch_export`).
+    prefetch = _prefetch_export(run_dir)
+
     # Keyed by the SUBMITTED id, not the store key: outcomes come back named by
     # custom_id, and building the lookup through the same translation is what lets
     # `_apply` stay a plain dict.get with nothing to decode.
@@ -2073,6 +2106,8 @@ def _run(args, say) -> int:
     # and a join that cannot run (no export, a refusal) costs nothing but the next step. The report below reads
     # the queues back after it: the outcomes "wait in review" and "main queue" are the join's, so they are said
     # from what the store holds, and "held until join" when it did not run.
+    if prefetch is not None:
+        prefetch.join()  # one fetch at a time: the join below then reuses what it kept
     not_joined = _join_now(run_dir, say)
     after_join = None if not_joined else store.read()
 
