@@ -1258,6 +1258,38 @@ test('one press sends and makes live, and says when the check comes', async ({ p
   expect(sendPosts(wire)).toHaveLength(1)
 })
 
+/* A SEND FROM AN EARLIER DAY SAYS THE PRICES WERE READ AGAIN FIRST, and names the day they came from, so the owner
+ * knows the screen's prices may have moved. Four screens: 1440 and 820, light and dark. */
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [1440, 820]) {
+    test(`send from an earlier day: the prices-refreshed notice shows at ${width} in ${theme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: theme })
+      await setViewport(page, { width, height: 900 })
+      const refresh = { ran: true, ok: true, was: '2026-10-21', export_day: '2026-10-22' }
+      const wire = await open(page, {
+        sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [sendSummary({ refresh })] } : SENDS_NONE),
+      })
+      await sendPress(page).click()
+      await expect.poll(() => sendPosts(wire).length).toBe(1)
+      const notice = page.locator('.send-prices-refreshed')
+      await expect(notice).toContainText('Prices were refreshed before sending.')
+      await expect(notice).toContainText('They came from October 21')
+      await page.screenshot({ path: test.info().outputPath(`send-refreshed-${width}-${theme}.png`) })
+    })
+  }
+}
+
+test('a same-day send shows no prices-refreshed notice', async ({ page }) => {
+  const wire = await open(page, {
+    sends: (seen) =>
+      sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [sendSummary({ refresh: { ran: false, export_day: '2026-10-22' } })] } : SENDS_NONE,
+  })
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  await expect(page.locator('.send-standing')).toContainText('3 copies went live at')
+  await expect(page.locator('.send-prices-refreshed')).toHaveCount(0)
+})
+
 test('what the double-send guard held back is named, card by card', async ({ page }) => {
   const trimmed = sendSummary({
     trimmed: [{ sku: '8608459', name: 'Dunsparce', live: 2, on_hand: 3, would: 3, goes: 1 }],
