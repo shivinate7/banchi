@@ -6522,10 +6522,10 @@ def _paid_caps(directory: Path, cards) -> None:
 
     directory.mkdir()
     for box, position in cards:
-        # A colour per position, from a hash: a card is named by its photograph (D172), so two
-        # presses must never share bytes, and a colour taken from the box number clamps past 255.
-        colour = tuple(hashlib.sha256(f"{box}/{position}".encode()).digest()[:3])
-        identify_images.Image.new("RGB", (64, 89), colour).save(directory / f"{box}-{position:03d}.jpg", "JPEG")
+        # A color per position, from a hash: a card is named by its photograph (D172), so two
+        # presses must never share bytes, and a color taken from the box number clamps past 255.
+        color = tuple(hashlib.sha256(f"{box}/{position}".encode()).digest()[:3])
+        identify_images.Image.new("RGB", (64, 89), color).save(directory / f"{box}-{position:03d}.jpg", "JPEG")
         (directory / f"{box}-{position:03d}.json").write_text(
             json.dumps({"box": box, "position": position, "game": "pokemon", "set_hint": "SV09"}), "utf-8"
         )
@@ -7082,6 +7082,109 @@ def check_prefetch_refusal_does_not_stop_the_join(checks: Checks) -> None:
                   "and no cookie reaches the log", repr(err))
 
 
+def check_prefetch_start_failure_still_joins(checks: Checks) -> None:
+    """A prefetch that cannot start is logged by its type, and the identify run and the join still run.
+
+    The thread start is the step refused: the join imports the same module, so an import failure
+    would stop the join too and is not a case of its own.
+    """
+    real_start = threading.Thread.start
+
+    def refused_start(self):
+        if self.name == "export-prefetch":
+            raise RuntimeError("t8 no thread")
+        return real_start(self)
+
+    checks.note("")
+    checks.note("PREFETCH CANNOT START — logged by its type; the run and the join still run")
+    with isolated_home() as home, _stand_in_portal() as hits:
+        caps = Path(home) / "start-refused-caps"
+        _paid_caps(caps, [(5, 1)])
+        run = runs.create("t8-start-refused")
+        _as_child(run.directory)
+        with mock.patch.object(threading.Thread, "start", refused_start):
+            code, lines, err = _run_press_with_log(run, caps, {"5/1": DUNSPARCE_PAYLOAD})
+        manifest = json.loads((run.directory / runs.MANIFEST).read_text("utf-8"))
+        text = "\n".join(lines)
+        checks.ok(
+            "identify export prefetch: not started (RuntimeError)" in err.splitlines(),
+            "the refused start is logged by its type, and no more",
+            err,
+        )
+        checks.ok(any(line.startswith("joined ") for line in lines), "the identify run still ends, and joins", text)
+        checks.ok(manifest.get("joined") is True, "and the run's manifest is joined", text)
+        checks.ok(hits["export"] == 1, "the join fetched the export itself", repr(hits))
+
+
+def check_stalled_prefetch_holds_run_only_bounded(checks: Checks) -> None:
+    """A stalled export fetch holds the run for no longer than PREFETCH_WAIT_S, and its thread is a daemon.
+
+    The waits on the prefetch thread are summed. The run is allowed PREFETCH_WAIT_S plus a quarter second.
+    """
+    from cli import cmd_identify
+
+    release = threading.Event()
+    real_export = pipeline_routes.do_pipeline_export
+    real_join = threading.Thread.join
+    daemon_flags: list = []
+    waits: list = []
+
+    def stalled(name, payload):
+        if threading.current_thread().name == "export-prefetch":
+            daemon_flags.append(threading.current_thread().daemon)
+            release.wait(timeout=60)
+            return None
+        return real_export(name, payload)
+
+    def timed_join(self, timeout=None):
+        began = time.monotonic()
+        real_join(self, timeout)
+        if self.name == "export-prefetch":
+            waits.append(time.monotonic() - began)
+
+    checks.note("")
+    checks.note("STALLED PREFETCH — the run waits at most PREFETCH_WAIT_S for it, and it is a daemon thread")
+    try:
+        with isolated_home() as home, _stand_in_portal():
+            caps = Path(home) / "stalled-caps"
+            _paid_caps(caps, [(5, 1)])
+            run = runs.create("t8-stalled")
+            _as_child(run.directory)
+            with mock.patch.object(cmd_identify, "PREFETCH_WAIT_S", 0.5, create=True), \
+                    mock.patch.object(pipeline_routes, "do_pipeline_export", stalled), \
+                    mock.patch.object(threading.Thread, "join", timed_join):
+                code, lines, err = _run_press_with_log(run, caps, {"5/1": DUNSPARCE_PAYLOAD})
+            manifest = json.loads((run.directory / runs.MANIFEST).read_text("utf-8"))
+            text = "\n".join(lines)
+            checks.ok(bool(daemon_flags) and all(daemon_flags), "the prefetch thread is a daemon", repr(daemon_flags))
+            checks.ok(manifest.get("joined") is True, "the run still joins while the fetch is stalled", text)
+            checks.ok(
+                sum(waits) <= 0.5 + 0.25,
+                "the run holds for the stalled fetch no longer than PREFETCH_WAIT_S",
+                f"waits on the prefetch thread: {[round(w, 3) for w in waits]}",
+            )
+    finally:
+        release.set()
+
+
+def check_lock_failure_is_not_running(checks: Checks) -> None:
+    """A lock failure that is not contention is not answered `running`: a `flock` that fails with EIO is an error, not "another join"."""
+    import errno
+
+    checks.note("")
+    checks.note("LOCK FAILURE, NOT CONTENTION — not answered `running`")
+    with isolated_home(), _stand_in_portal():
+        run = runs.create("t8-lock-failure")
+        with mock.patch("fcntl.flock", side_effect=OSError(errno.EIO, "t8 lock failed")) as flock, quiet():
+            try:
+                answer = pipeline_routes.do_run_match(run.directory.name, {})
+                outcome = answer.get("reason") or "answered without a reason"
+            except Exception as caught:  # noqa: BLE001 - the answer is what this check reads
+                outcome = type(caught).__name__
+    checks.ok(flock.called, "the run reaches its lock, so the failure is the lock's own", repr(flock.call_count))
+    checks.ok(outcome != "running", "a lock failure that is not contention is not answered `running`", outcome)
+
+
 CHECKS = (
     check_cli_seams,
     check_code_ledger,
@@ -7123,4 +7226,7 @@ CHECKS = (
     check_join_refusals_say_their_reason,
     check_prefetch_downloads_once_and_join_reuses_it,
     check_prefetch_refusal_does_not_stop_the_join,
+    check_prefetch_start_failure_still_joins,
+    check_stalled_prefetch_holds_run_only_bounded,
+    check_lock_failure_is_not_running,
 )
