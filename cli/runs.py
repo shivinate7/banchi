@@ -234,19 +234,34 @@ class Run:
         only the fields that differ from `_base` (or are named in `explicit`) are laid over it
         (`_merge`), and the result is written atomically. A key leaves only when this caller removed it."""
         with self._locked():
-            disk = files.read_json(self.manifest_path, {}) or {}
-            out = dict(disk)
-            for key, value in self.manifest.items():
-                if key in explicit or key not in self._base or value != self._base[key]:
-                    out[key] = _merge(self._base.get(key), value, disk[key]) if key in disk else value
-            for key in self._base:
-                if key not in self.manifest:
-                    out.pop(key, None)
-            out["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-            files.write_json(self.manifest_path, out)
-            self.manifest.clear()
-            self.manifest.update(out)
-            self._base = copy.deepcopy(out)
+            self._write(explicit)
+
+    def _write(self, explicit) -> None:
+        """The read-modify-write itself. The caller holds `_locked`."""
+        disk = files.read_json(self.manifest_path, {}) or {}
+        out = dict(disk)
+        for key, value in self.manifest.items():
+            if key in explicit or key not in self._base or value != self._base[key]:
+                out[key] = _merge(self._base.get(key), value, disk[key]) if key in disk else value
+        for key in self._base:
+            if key not in self.manifest:
+                out.pop(key, None)
+        out["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        files.write_json(self.manifest_path, out)
+        self.manifest.clear()
+        self.manifest.update(out)
+        self._base = copy.deepcopy(out)
+
+    def set_unless_joined(self, **values) -> bool:
+        """Compare-and-set under the manifest lock: write `values` with `joined=False` only if the
+        disk's run is not `joined`. False, and nothing written, when a press joined it first."""
+        with self._locked():
+            if (files.read_json(self.manifest_path, {}) or {}).get("joined"):
+                self.refresh()
+                return False
+            self.manifest.update(values, joined=False)
+            self._write((*values, "joined"))
+        return True
 
     def set(self, **values) -> None:
         """Update manifest fields and flush immediately.

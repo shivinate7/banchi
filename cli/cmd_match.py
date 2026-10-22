@@ -393,8 +393,22 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session
         # NAMED, NOT PRICED: the run is `collected` and not `joined`, which is the state a screen names
         # "needs join" and `pipeline_routes.do_run_match` finishes (it fetches per the 900 s rule). A
         # later chunk with a fresh export joins these cards too (`recover`). Nothing here prices a card.
+        # COMPARE-AND-SET under the manifest lock: a press may have joined the run since `leave_joined`
+        # looked. Then the run is left joined, and the named cards are moved to a run of their own.
         resolve.record_cards(session.run, session.keys, store.read().inventory)
-        session.run.set(selection={"keys": list(session.keys)}, cards=session.run.manifest["cards"], collected=True, joined=False)
+        if not session.run.set_unless_joined(
+            selection={"keys": list(session.keys)}, cards=session.run.manifest["cards"], collected=True
+        ):
+            old, session.run = session.run, None
+            moved = list(named)
+            new = session.open_run()
+            session.keys = moved
+            with store.write() as writable:
+                for key in moved:
+                    if key in writable.inventory.cards and writable.inventory.cards[key].run == old.name:
+                        writable.inventory.cards[key].run = new.name
+            resolve.record_cards(new, moved, store.read().inventory)
+            new.set(selection={"keys": moved}, cards=new.manifest["cards"], collected=True, joined=False)
         session.recover = True
         session.waiting += len(named)
     session.drop_empty_run()
