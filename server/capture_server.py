@@ -2281,16 +2281,16 @@ def _positioner(
 
 
 def _location_of(claim: Optional[str]) -> bool:
-    """Whether a bare `game` column value is a LOCATED game (D24), the module-level twin of
-    `_Places._game_of` for a caller that has a raw claim and not a `Card`.
+    """Whether a bare `game` column value is a LOCATED game (D24): True when the registry says
+    so, and True for an absent, empty or unregistered claim.
 
-    `_Places.for_keys` is that caller: `Inventory.occupied_indices` (`store/master.py`)
-    hands back `(index, game)` pairs rather than filtering pooled records itself, because
-    `store/` imports nothing from `pipeline/` (D63) and so cannot resolve the registry's
-    `located` flag. The rule mirrors `_game_of` exactly — an unregistered or absent claim is
-    read as `games.DEFAULT_GAME` and is located; `UnknownGame` also reads as located, the
-    same treatment `_walk` gives a `None` lookup — so the two are one rule read from two
-    directions and cannot drift apart silently.
+    `_walk` and `_Places.for_keys` are the callers. `Inventory.walk_rows_in` and
+    `Inventory.occupied_indices` (`store/master.py`) hand back `(index, game)` pairs rather
+    than filtering pooled records themselves, because `store/` imports nothing from
+    `pipeline/` (D63) and so cannot resolve the registry's `located` flag. An absent claim
+    reads as `games.DEFAULT_GAME`; `UnknownGame` reads as located, the same treatment
+    `game_entry` gives a None lookup, so a typo'd game still gets a slot here and the loud
+    stop stays with the pipeline.
     """
     try:
         entry = games.get(str(claim) if claim else games.DEFAULT_GAME)
@@ -2577,11 +2577,12 @@ class _Places:
         return self._game_of(self.claims(box, index)[0])
 
     def read_claims(self, positions: Iterable[Tuple[int, int]]) -> None:
-        """Read `(game, cid, capture_id)` for these positions in one statement per column.
+        """Read `(game, cid, capture_id)` for these positions, one `pluck` per column.
 
         A route that renders one row per queued card calls this once before its loop, so
-        `game_entry` and `claims` answer from three column reads and not one card fetch per
-        row. A position with no record is remembered as all-None, which is what an absent
+        `game_entry` and `claims` answer from column reads and not one card fetch per row.
+        `db.pluck` chunks at 500 keys, so the cost is 3 statements per 500 positions.
+        A position with no record is remembered as all-None, which is what an absent
         card answers anyway.
         """
         keys = list(dict.fromkeys(master.position_key(int(box), int(index)) for box, index in positions))
@@ -2599,7 +2600,12 @@ class _Places:
         return self._claimed[key]
 
     def _game_of(self, claimed: Optional[str]) -> Optional[dict]:
-        """`game_entry`'s lookup for a game claim already in hand — one rule, two doors in."""
+        """The registry entry for a bare game claim, None for an unregistered one. Only `game_entry` calls it.
+
+        It returns the entry where `_location_of` returns only the `located` flag, so a
+        caller that needs more than that flag reads it here. The absent-claim default is
+        the same in both.
+        """
         try:
             return games.get(str(claimed) if claimed else games.DEFAULT_GAME)
         except games.UnknownGame:
@@ -7423,7 +7429,7 @@ def do_queues() -> dict:
         "review": snapshot.review.owed_entries(snapshot.inventory.cards),
         "parked": snapshot.parked.owed_entries(snapshot.inventory.cards),
     }
-    # The queued cards' claims in a fixed number of statements, however many are queued.
+    # The queued cards' claims in 3 statements per 500 queued positions (`db.pluck` chunks at 500 keys).
     places.read_claims(
         (entry.box, entry.index)
         for entries in owed.values()
