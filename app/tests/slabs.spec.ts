@@ -197,7 +197,7 @@ async function open(page: Page, wire: Wire = makeWire(), width = 1440): Promise<
 /* ---------------------------------------------------------------------------- the ledger */
 
 /** Spec 4.1: the owner's columns, in the owner's order. */
-const COLUMNS = ['Pop', 'Graded', 'Rate', 'Top %', 'Best %', 'Grade', 'Set', 'Card', 'Var', 'Ask', 'Card Ladder', 'Conf', 'Last sale', 'PSA 10', 'Raw NM', 'Slab vs raw', '×', 'Do'] as const
+const COLUMNS = ['Pop', 'Graded', 'Rate', 'Top %', 'Best %', 'Grade', 'Set', 'Card', 'Var', 'Ask', 'Card Ladder', 'Conf', 'Last Sale', 'PSA 10', 'Raw NM', 'Slab vs Raw', '×', 'Do'] as const
 type Column = (typeof COLUMNS)[number]
 const at = (name: Column): number => COLUMNS.indexOf(name)
 
@@ -213,7 +213,7 @@ const rowFor = (page: Page, label: string) => dataRows(page).filter({ has: page.
 const DASH = /^[—–]$/
 /** The cells no route fills in this build: the raw price, the PSA 10 price, what is asked, the sell rule, the
  *  set and variation (the list carries no identity) and the card's graded count. Each holds a dash. */
-const NEVER_FILLED: readonly Column[] = ['Graded', 'Set', 'Var', 'Ask', 'PSA 10', 'Raw NM', 'Slab vs raw', '×', 'Do']
+const NEVER_FILLED: readonly Column[] = ['Graded', 'Set', 'Var', 'Ask', 'PSA 10', 'Raw NM', 'Slab vs Raw', '×', 'Do']
 
 const money = (text: string): number | null => {
   const found = /-?[\d,]+(?:\.\d+)?/.exec(text.replace('$', ''))
@@ -318,7 +318,7 @@ test('every cell holds something, and the cells no route fills hold a typed dash
     expect(line.texts.length, `row ${i + 1} has the wrong number of cells`).toBe(COLUMNS.length)
     for (const name of NEVER_FILLED) expect(line.texts[at(name)], `row ${i + 1}, ${name}`).toMatch(DASH)
     COLUMNS.forEach((name, c) => {
-      const noSale = line.label === LABEL.mew && (name === 'Conf' || name === 'Last sale')
+      const noSale = line.label === LABEL.mew && (name === 'Conf' || name === 'Last Sale')
       if (!noSale) expect(line.texts[c], `row ${i + 1}, ${name} is blank`).not.toBe('')
     })
   }
@@ -337,12 +337,12 @@ test('the ledger sorts by Card Ladder value, highest first, and a slab that neve
   expect(lines[4]?.texts[at('Card Ladder')]).toBe('No sales')
 })
 
-test('a slab that never sold shows "No sales" and leaves Conf and Last sale empty', async ({ page }) => {
+test('a slab that never sold shows "No sales" and leaves Conf and Last Sale empty', async ({ page }) => {
   await open(page)
   await expect(dataRows(page)).toHaveCount(5)
   const row = rowFor(page, LABEL.mew)
   await expect(cellAt(row, 'Card Ladder')).toHaveText('No sales')
-  for (const name of ['Conf', 'Last sale'] as const) expect((await cellAt(row, name).innerText()).trim(), name).toMatch(/^[—–]?$/)
+  for (const name of ['Conf', 'Last Sale'] as const) expect((await cellAt(row, name).innerText()).trim(), name).toMatch(/^[—–]?$/)
   expect(money(await cellAt(row, 'Pop').innerText()), 'its population is still known').toBe(301)
 })
 
@@ -371,7 +371,7 @@ test('numbers sit right, and money is drawn in the money face', async ({ page })
   await expect(dataRows(page)).toHaveCount(5)
   const row = rowFor(page, LABEL.terapagos)
   expect(money(await cellAt(row, 'Pop').innerText()), 'Pop is the count at the grade').toBe(118)
-  for (const name of ['Pop', 'Card Ladder', 'Last sale'] as const) {
+  for (const name of ['Pop', 'Card Ladder', 'Last Sale'] as const) {
     const gaps = await cellAt(row, name).evaluate((el) => {
       const range = document.createRange()
       range.selectNodeContents(el)
@@ -381,7 +381,7 @@ test('numbers sit right, and money is drawn in the money face', async ({ page })
     })
     expect(gaps.right, `${name} sits to the left of its cell`).toBeLessThanOrEqual(gaps.left + 1)
   }
-  for (const name of ['Card Ladder', 'Last sale'] as const) {
+  for (const name of ['Card Ladder', 'Last Sale'] as const) {
     const cell = cellAt(row, name)
     const marked = await cell.evaluate((el) => el.matches('.bn-money') || el.querySelector('.bn-money') !== null)
     expect(marked, `${name} is a dollar figure without .bn-money`).toBe(true)
