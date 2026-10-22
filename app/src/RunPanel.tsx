@@ -283,23 +283,31 @@ function freeRun(detail: RunDetail): boolean {
   return flags?.engine === 'marqo-b'
 }
 
-/** What the free reader did, as a sentence with its figures: matched, and sent to a second look. It says where those
- *  cards are only from the run's own join record (`counts.second_look_*`, written by `cli/cmd_join.py`'s `record_join`,
- *  the one source beside "To review" and "Parked"): "held until join" before the join, the counts after it, and nothing
- *  about where for a run joined before the record carried them. Settled is every second-look card in neither queue. */
+/** What the free reader did, as a sentence with its figures: matched, and sent to a second look. Where those cards
+ *  went is said only from the run's own join record (`counts.second_look_*`, written by `cli/cmd_join.py`'s
+ *  `record_join`). Before the join they wait to be matched. After it, "to review" is held and main together, the queue
+ *  the "To review" figure counts, and the low-value queue takes Review's own words for it. A run joined before the
+ *  record carried these counts says nothing about where. A clause at 0 is left out. Settled is the rest. */
 function matchReceipt(detail: RunDetail): string {
   const matched = typeof detail.manifest.matched === 'number' ? detail.manifest.matched : 0
   const second = Array.isArray(detail.manifest.second_look) ? detail.manifest.second_look.length : 0
   const cards = (n: number) => `${n} card${n === 1 ? '' : 's'}`
   if (second === 0) return `Matched ${cards(matched)}.`
   const base = `Matched ${cards(matched)} free. ${cards(second)} got a second look from the paid read`
-  if (!detail.joined) return `${base}, held until join.`
-  const { second_look_held: held, second_look_main: main, second_look_parked: parked = 0 } = detail.counts
+  if (!detail.joined) return `${base}, waiting to be matched.`
+  const { second_look_held: held, second_look_main: main, second_look_parked: under = 0 } = detail.counts
   if (held === undefined || main === undefined) return `${base}.`
-  const parts = [`${held} held for review`, `${main} in the main queue`]
-  if (parked > 0) parts.push(`${parked} parked`)
-  parts.push(`${Math.max(0, second - held - main - parked)} settled`)
-  return `${base}: ${parts.join(', ')}.`
+  const review = held + main
+  const said = (
+    [
+      [review, 'to review'],
+      [under, 'under the threshold'],
+      [Math.max(0, second - review - under), 'settled'],
+    ] as const
+  )
+    .filter(([n]) => n > 0)
+    .map(([n, words]) => `${n} ${words}`)
+  return said.length === 0 ? `${base}.` : `${base}: ${said.join(', ')}.`
 }
 
 /** Whether the figure beside the tokens is the run's own record or today's rates over it. */
@@ -946,7 +954,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                   ) : null}
                   {freeRun(detail) ? (
                     /* THE FREE READER'S RECEIPT: what it matched, and how many went to the second
-                       look. A second-look card is not a failure; where it sits is said only from the store. */
+                       look. A second-look card is not a failure; where it sits is said only from the run's join record. */
                     <span className="bn-muted">
                       {matchReceipt(detail)}
                     </span>

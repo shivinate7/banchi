@@ -387,14 +387,16 @@ def _second_look_where(run_dir, resolved) -> Optional[dict]:
     """Where this run's own second-look cards went at this join: held for review (`routing.READERS_DISAGREE`
     or `routing.SECOND_LOOK_UNSURE`), in the main queue for any other reason, or parked. A card in none
     of them is settled. None when the run had no second look. Read by the run panel's receipt, so the
-    panel and the counts beside it have one source."""
+    panel and the counts beside it have one source. A queued card is matched by the second look it
+    carries, not by its slot, so a card `resolve.realign` moved is still counted where it went. A
+    pre-join failure carries no card, so it is matched by its record key, which realign does not move."""
     keys = {str(row.get("key")) for row in run_dir.manifest.get("second_look") or [] if isinstance(row, dict)}
     if not keys:
         return None
     held = main = parked = 0
     for g in resolved.joins.values():
         for q in g.report.queued:
-            if f"{q.card.position.box}/{q.card.position.index}" not in keys:
+            if q.card.second_look is None:
                 continue
             if q.queue == routing.PARKED:
                 parked += 1
