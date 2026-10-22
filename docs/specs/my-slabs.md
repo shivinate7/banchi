@@ -229,6 +229,17 @@ The store gets three tables (D88, SQLite and one transaction per write):
 - `slab_sales`: each sale seen, keyed by the sale `id`. A sale Card Ladder later drops stays
   here.
 
+`store/slabs.py` holds them. The rules the build chose:
+
+- A slab added again keeps its first added date, profile, identity and subgrades.
+- A second snapshot on one day replaces that day's row.
+- A sale that two slabs read is one row, linked to both.
+- Money is stored as text. Step 3 converts Card Ladder's numbers at the route.
+- Sale dates are text and sort as ISO strings. A sale with any other date is refused before
+  the write. Card Ladder's date format is unmeasured.
+- A slab's sales are read through an indexed link table, one row per slab and sale.
+- A slab with no sale at its grade stores no value, never a number.
+
 ## Build plan
 
 Kind: build. Platform: macOS, over the capture server.
@@ -241,6 +252,10 @@ Kind: build. Platform: macOS, over the capture server.
    Card Ladder's.
 2. The three store tables and their writes.
 3. Routes for add, list, detail and sweep, with client functions in `app/src/server.ts`.
+   A failed read writes no snapshot: a same-day snapshot replaces every field, so a failed call
+   stored as empty would erase a good value. The store replaces a re-read sale whole, so the
+   route merges the new read into the stored sale first, and fields only 3.3 returns are kept. Card Ladder's numbers become text money at the route. The store refuses a sale date that is
+   not text, so the route turns any other date form into an ISO date first.
 4. The `#/slabs` screen, built on `<Page>` (D275, every screen inherits the page scaffold),
    from section 4. It waits on the kit lane in 4.7. The client's login errors name a Google host;
    the screen shows them as a sentence with no host name (D196, no user-visible string names a decision).
