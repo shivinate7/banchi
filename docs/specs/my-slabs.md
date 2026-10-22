@@ -259,15 +259,17 @@ Kind: build. Platform: macOS, over the capture server.
    the slab and its sale links. Its snapshots and its sales stay, so adding it again undoes the
    remove and its history returns. The owner ruled that the undo restores the first added date,
    and the receipt says "restored". The date comes from the oldest snapshot. Add is the only
-   writer of a slab, and it writes the first snapshot in the same write, so that snapshot exists. A sale that the new read no longer lists stays in the store,
-   unlinked.
+   writer of a slab, and it writes the first snapshot in the same write, so that snapshot
+   exists. A sale that the new read no longer lists stays in the store, unlinked.
    A failed read writes no snapshot: a same-day snapshot replaces every field, so a failed call
    stored as empty would erase a good value. The store replaces a re-read sale whole, so the
-   route merges the new read into the stored sale first, and fields only 3.3 returns are kept. Card Ladder's numbers become text money at the route. The store refuses a sale date that is
+   route merges the new read into the stored sale first, and fields only 3.3 returns are kept.
+   Card Ladder's numbers become text money at the route. The store refuses a sale date that is
    not text, so the route turns any other date form into an ISO date first.
 4. The `#/slabs` screen, built on `<Page>` (D275, every screen inherits the page scaffold),
-   from section 4. It waits on the kit lane in 4.7. The client's login errors name a Google host;
-   the screen shows them as a sentence with no host name (D196, no user-visible string names a decision).
+   from section 4. It waits on the kit lane in 4.7. The client's login errors name a Google
+   host; the screen shows them as a sentence with no host name (D196, no user-visible string
+   names a decision).
    The busy refusal says a slab is being added, even when a second remove caused it. So the
    remove control waits for its answer, and a double press never sends a second remove.
 5. A launchd job for the daily sweep, like `make price-refresh-agent`. A Google error on the
