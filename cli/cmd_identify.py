@@ -1038,26 +1038,41 @@ def _no_connection(run_dir) -> Optional[str]:
     return None
 
 
+PREFETCH_WAIT_S = 30  # how long the run waits for its own background fetch before it goes on
+
+
 def _prefetch_export(run_dir) -> Optional[threading.Thread]:
     """Start the game's export fetch now, beside the read, so the join at the end finds it. The one
     downloader is `pipeline_routes.do_pipeline_export`, with its 900 s reuse rule (D166): a read that
-    outlasts 15 minutes makes the join fetch again. A failure here is only logged, by its code and never
-    its message or any cookie: the join asks again and reports "not joined" if it still cannot."""
+    outlasts 15 minutes makes the join fetch again. ANY failure, even starting the thread, is only logged,
+    by its code and never its message or any cookie: the join asks again and reports "not joined" if it
+    still cannot. A daemon thread, so a stalled fetch never holds the process open."""
     if _no_connection(run_dir) is not None:
         return None
-    from server import pipeline_routes
+    try:
+        from server import pipeline_routes
 
-    def fetch() -> None:
-        try:
-            pipeline_routes.do_pipeline_export(run_dir.directory.name, {})
-        except pipeline_routes.PipelineRefusal as refusal:
-            store_files.log_note(f"identify export prefetch: refused ({refusal.code})")
-        except Exception as exc:  # noqa: BLE001 - the join fetches again
-            store_files.log_note(f"identify export prefetch: {type(exc).__name__}")
+        def fetch() -> None:
+            try:
+                pipeline_routes.do_pipeline_export(run_dir.directory.name, {})
+            except pipeline_routes.PipelineRefusal as refusal:
+                store_files.log_note(f"identify export prefetch: refused ({refusal.code})")
+            except Exception as exc:  # noqa: BLE001 - the join fetches again
+                store_files.log_note(f"identify export prefetch: {type(exc).__name__}")
 
-    thread = threading.Thread(target=fetch, name="export-prefetch")
-    thread.start()
-    return thread
+        thread = threading.Thread(target=fetch, name="export-prefetch", daemon=True)
+        thread.start()
+        return thread
+    except Exception as exc:  # noqa: BLE001 - no prefetch is only a slower join
+        store_files.log_note(f"identify export prefetch: not started ({type(exc).__name__})")
+        return None
+
+
+def _wait_prefetch(args) -> None:
+    """Wait, bounded, for this run's background export fetch if one started."""
+    thread = getattr(args, "prefetch", None)
+    if thread is not None:
+        thread.join(timeout=PREFETCH_WAIT_S)
 
 
 def _join_now(run_dir, say) -> Optional[str]:
@@ -1122,8 +1137,8 @@ def _held_now(snapshot, items) -> str:
 
 def run(args, say) -> int:
     """The command. A wrapper so the run's `running.pid` is gone when this process ends by a return, a
-    raised error, or SIGTERM (turned into a normal exit so the `finally` runs). SIGKILL is the exception. It is removed only when
-    it names this pid. The claim's release is NOT here (D174): a run that dies between submitting and
+    raised error, or SIGTERM (turned into a normal exit so the `finally` runs). SIGKILL is the exception.
+    It is removed only when it names this pid. The claim's release is NOT here (D174): a run that dies between submitting and
     collecting keeps its claim."""
     marker = _own_pid_marker(args)
     previous = None
@@ -1135,6 +1150,7 @@ def run(args, say) -> int:
         if marker is not None:
             marker.unlink(missing_ok=True)
             signal.signal(signal.SIGTERM, previous or signal.SIG_DFL)
+        _wait_prefetch(args)  # bounded, on every path out, so a fetch never outlives the run by more than this
 
 
 def _run(args, say) -> int:
@@ -1763,7 +1779,7 @@ def _run(args, say) -> int:
             naming.submissions.attach_run(claim.receipt, run_dir.name)
 
     # THE EXPORT IS FETCHED WHILE THE READ RUNS, so the join at the end finds it (see `_prefetch_export`).
-    prefetch = _prefetch_export(run_dir)
+    args.prefetch = _prefetch_export(run_dir)
 
     # Keyed by the SUBMITTED id, not the store key: outcomes come back named by
     # custom_id, and building the lookup through the same translation is what lets
@@ -2106,8 +2122,7 @@ def _run(args, say) -> int:
     # and a join that cannot run (no export, a refusal) costs nothing but the next step. The report below reads
     # the queues back after it: the outcomes "wait in review" and "main queue" are the join's, so they are said
     # from what the store holds, and "held until join" when it did not run.
-    if prefetch is not None:
-        prefetch.join()  # one fetch at a time: the join below then reuses what it kept
+    _wait_prefetch(args)  # one fetch at a time: the join below then reuses what it kept
     not_joined = _join_now(run_dir, say)
     after_join = None if not_joined else store.read()
 

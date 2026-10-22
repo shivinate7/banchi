@@ -9253,19 +9253,13 @@ def do_run_match(name: str, payload: dict) -> dict:
     to a join that then finishes reads `not_waiting` and not a second join; the one that finds the
     lock held is answered `running` and does nothing. A process that dies releases it.
     """
-    import fcntl
-
     directory = _open_run(name)
-    handle = open(directory / MATCH_LOCK, "a+")  # noqa: SIM115 - the flock lives as long as this fd
-    try:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        handle.close()
-        return {"ran": False, "reason": "running", "summary": _summary(directory)}
-    try:
+    with contextlib.ExitStack() as held:
+        try:
+            held.enter_context(files.exclusive(directory, timeout=0, name=MATCH_LOCK))
+        except files.LockTimeout:  # held by another join; any other failure to lock is not "running"
+            return {"ran": False, "reason": "running", "summary": _summary(directory)}
         return _match_locked(name, directory, payload)
-    finally:
-        handle.close()  # closing releases the flock
 
 
 def _match_locked(name: str, directory: Path, payload: dict) -> dict:
