@@ -151,6 +151,7 @@ class _Session:
         self.fresh = False  # the run was created by this worker and holds no joined card yet
         self.resumed = False
         self.recover = False  # the open run's last join did not finish: its cards join again
+        self.waiting = 0  # cards named and left unjoined for want of a fresh export (the worker says so)
 
     def resume(self, store) -> None:
         """Pick up the newest `match-sweep` run while it holds fewer than `RUN_CARDS` cards (a
@@ -177,8 +178,14 @@ class _Session:
 
         if self.run is None or len(self.keys) >= self.RUN_CARDS:
             self.run = runs.create("match-sweep")
-            self.keys, self.fresh = [], True
+            self.keys, self.fresh, self.recover = [], True, False
         return self.run
+
+    def leave_joined(self) -> None:
+        """A chunk that cannot price names its cards into an UNJOINED run: a joined run's priced
+        cards would otherwise leave the worklist the moment an unjoined card joined them."""
+        if self.run is not None and self.run.manifest.get("joined"):
+            self.run, self.keys, self.recover = None, [], False
 
     def drop_empty_run(self) -> None:
         """A run this worker created and never joined a card into (every prep aborted) is
@@ -189,13 +196,19 @@ class _Session:
         self.fresh = False
 
 
-def _export_for(game: str):
-    """The newest export this game holds whose scope note covers the whole category, or None,
-    with NO age limit (owner's ruling). The 900 s rule belongs to a press, because an export is
-    also a price reading (D166); the reader only uses the file to name and adopt cards, and dates
-    everything it writes from it to the file's own mtime. `pipeline_routes._held_exports` orders
-    them and `_covers` is the press's own scope test. A narrower file is never used: it would
-    queue a card of a set it lacks as `no_catalog_row`."""
+def _export_for(game: str, *, fresh: bool = False):
+    """The export this game holds whose scope note covers the whole category, or None.
+
+    TWO ASKS, ONE RULE (D166, the export is a reading): NAMING AND PRICING DO NOT NEED THE SAME FILE.
+    `fresh=False` is the newest covering export of ANY age. The reader uses it only to name and adopt
+    cards (the set list a hint is checked against), so an old file does no harm. `fresh=True` is the
+    export a press would reuse, within `pipeline_routes.EXPORT_REUSE_S` (`_reusable`, the press's own
+    test). EVERYTHING THAT PRICES uses this one: a SKU's market price, the threshold and
+    sub-threshold routing, the price readings, and anything `emit` or `#/pricing` reads. With none,
+    the reader names cards and leaves the pricing to a press's join, which fetches
+    (`pipeline_routes.do_run_match`). It never fetches itself and never prices from an old file.
+    `_held_exports` orders the files and `_covers` is the press's scope test. A narrower file is
+    never used: it would queue a card of a set it lacks as `no_catalog_row`."""
     from server import pipeline_routes, tcg_export
     from pipeline import games
 
@@ -203,6 +216,9 @@ def _export_for(game: str):
     if category is None:
         return None
     scope = tcg_export.Scope(category_id=int(category))
+    if fresh:
+        held = pipeline_routes._reusable(game, scope)
+        return held[0] if held else None
     for path in pipeline_routes._held_exports(game):
         note = pipeline_routes._read_note(path)
         if note is not None and pipeline_routes._covers(note, scope):
@@ -268,8 +284,10 @@ def _stamp(path):
 
 def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session") -> int:
     """ONE `Store.write` for one chunk, holding the lock only for writes. Every card the reader
-    ACCEPTS gets the press's own adoption (`_adopt`) and then the join's own write
-    (`cmd_join.apply_join`), so a free match is `identified` as a paid read is. A card the ladder
+    ACCEPTS gets the press's own adoption (`_adopt`, against an export of any age) and then, only
+    when every game's export is within the press's 900 s rule (`priced`), the join's own write
+    (`cmd_join.apply_join`), so a free match is `identified` as a paid read is. With no fresh export
+    the cards are named into an unjoined run that a press's join (`do_run_match`) prices. A card the ladder
     cannot settle lands in review as a press leaves it. An unaccepted card is only noted as tried.
 
     THE JOIN'S READS HAPPEN BEFORE THE LOCK OPENS: the export parse, the catalog and the ladder
@@ -293,7 +311,13 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session
         for game in wanted:
             if (path := _export_for(game)) is not None:
                 paths[game] = path
-    threshold = pricing.check_threshold(corpus.Corpus.read().policy_for(None)["threshold"]) if paths else None
+    # PRICES NEED THE PRESS'S FRESH EXPORT (`_export_for`): the join below runs only when every game's
+    # covering export is within the 900 s rule. Otherwise the chunk NAMES its cards and they wait at join.
+    priced = bool(paths) and {g: _export_for(g, fresh=True) for g in paths} == paths
+    if paths and not priced:
+        session.leave_joined()
+    threshold = pricing.check_threshold(corpus.Corpus.read().policy_for(None)["threshold"]) if priced else None
+    named: list = []
 
     for attempt in range(3):
         live = [r for r in results if r.accepted and r.payload is not None]
@@ -309,7 +333,7 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session
             snap = store.read()
             ready = [r for r in live if _still_here(snap.inventory, meta[r.key][0], r.key)]
             adopted = _adopt(snap, ready, meta, paths, session, rehearsal=True)
-            if adopted or session.recover:
+            if priced and (adopted or session.recover):
                 run = session.open_run()
                 resolved = resolve.load_from_store(
                     run, session.keys + adopted, paths, threshold=threshold,
@@ -345,13 +369,14 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session
                 keys = _adopt(writable, ok, meta, paths, session)
                 source = {Path(str(g.source["path"])): g.source for g in resolved.joins.values()}
                 cmd_join.apply_join(writable, resolved, fold, source)
-                # DATED TO THE EXPORT, NEVER TO NOW: the oldest file joined, so the pricing screens see its true age.
+                # DATED TO THE EXPORT, NEVER TO NOW: the oldest file joined (within the 900 s rule, `priced`), so the pricing screens see its true age.
                 at = min(int(Path(str(g.source["path"])).stat().st_mtime) for g in resolved.joins.values())
                 table = cmd_join._pricing_table(run, resolved, choice, writable)
                 cmd_join.record_readings(writable, run, table, at)
                 session.keys = session.keys + [k for k in keys if k not in session.keys]
             else:
-                _adopt(writable, ok, meta, {}, session)
+                named = _adopt(writable, ok, meta, paths if paths and not priced else {}, session)
+                session.keys = session.keys + [k for k in named if k not in session.keys]
         break
     if resolved is not None:
         # FILES, OUTSIDE ANY LOCK, each safe to write again: `resume` finishes a run whose record
@@ -362,6 +387,14 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session
         run.set(selection={"keys": list(session.keys)}, cards=run.manifest["cards"])
         cmd_join.record_join(run, resolved, routing.CONFIDENCE_LOW)
         session.recover = False
+    elif named:
+        # NAMED, NOT PRICED: the run is `collected` and not `joined`, which is the state a screen names
+        # "needs join" and `pipeline_routes.do_run_match` finishes (it fetches per the 900 s rule). A
+        # later chunk with a fresh export joins these cards too (`recover`). Nothing here prices a card.
+        resolve.record_cards(session.run, session.keys, store.read().inventory)
+        session.run.set(selection={"keys": list(session.keys)}, cards=session.run.manifest["cards"], collected=True, joined=False)
+        session.recover = True
+        session.waiting += len(named)
     session.drop_empty_run()
     return accepted
 
@@ -449,6 +482,8 @@ def sweep_worker(say) -> int:
         sweep.settle_inflight(crashed=True)
         return 1
     say(f"sweep           {accepted} matched, {tried} left for a press")
+    if session.waiting:
+        say(f"sweep           {session.waiting} named, not priced: no export under 900 s old, so they wait at join")
     return 0
 
 
