@@ -66,10 +66,13 @@ from store.cache import ENGINE_MATCHER as ENGINE
 
 # ------------------------------------------------------------------------ the rules
 
-# THE ACCEPT RULE. One home. Fit on the spike's 500 photographs (margin alone filters almost
-# nothing; with the floor, 0 wrong of 459 accepted, 91.8% accepted) and NOT yet confirmed on
-# photographs the spike never saw.
+# THE ACCEPT RULE. One home. The margin is on hub-corrected scores (`HUB_BETA`), in cosine units.
 MARGIN_MIN = 0.05
+# HUBNESS. A stock photo that sits close to many others (a plain, mostly-empty card face) scores
+# high against any photograph. Each stock entry's `r` is its mean cosine to its `HUB_K` nearest
+# other entries of the same game; candidates rank by `cosine - HUB_BETA * r`.
+HUB_K = 10
+HUB_BETA = 0.5
 # THE SHARE OF CARDS THE READER DOES NOT ACCEPT, used for a quote that is not measured. The
 # held-out check's 3,001 store photographs measured 37.5 percent at this margin, with a 95 percent
 # upper bound of 39.2. The figure is rounded UP to 0.40 so an estimate never understates the
@@ -79,6 +82,7 @@ UNACCEPTED_SHARE = 0.40
 # quote waits for the dry run, the matcher costs 50 to 90 ms a card, and a long selection would
 # hold a request slot for minutes. The press itself always counts for real, in its own child.
 MEASURE_MAX = 200
+# The floor is the chosen entry's RAW cosine, never the corrected score.
 FLOOR_MIN = 0.755
 TOP_N = 3
 # AN EMPTY SLOT HAS NO BRIGHT PIXEL. Measured at full size on the rig's photographs: the 99th-percentile
@@ -375,6 +379,7 @@ class Pool:
     blocked_rows: List[Tuple[str, str, str]] = field(default_factory=list)
     unreleased_names: Set[str] = field(default_factory=set)  # names of no-photo printings in unreleased sets
     cells: Optional[Dict[Tuple[str, str], Tuple[str, str]]] = None  # `{(set, product id): (rarity, card type)}`, read once
+    hub: Optional["object"] = None  # numpy [n] float32 `r` per row (`Index.hubness`); None means no correction
 
 
 class Index:
@@ -384,6 +389,7 @@ class Index:
         self.db = sqlite3.connect(str(self.path), check_same_thread=False)
         self.db.executescript(_SCHEMA)
         self._lock = threading.Lock()
+        self._hub: Dict[str, Tuple[int, Dict[Tuple[str, str], float]]] = {}
 
     def close(self) -> None:
         self.db.close()
@@ -405,6 +411,33 @@ class Index:
 
     def set_names(self, game: str) -> List[str]:
         return [r[0] for r in self.db.execute("select set_name from sets where game=? order by set_name", (game,))]
+
+    def hubness(self, game: str) -> Dict[Tuple[str, str], float]:
+        """`{(set_name, product_id): r}` over EVERY fingerprint of the game, not only the pool's sets.
+        Cached on this index, and read again when the game's `ok` row count changes.
+        # ponytail: one matmul per 1024-row block, no vector index; an approximate-neighbour index if a
+        # catalogue ever outgrows a few seconds here."""
+        import numpy as np
+
+        count = self.db.execute("select count(*) from vec where game=? and status=?", (game, S_OK)).fetchone()[0]
+        held = self._hub.get(game)
+        if held is not None and held[0] == count:
+            return held[1]
+        found = self.db.execute(
+            "select set_name, product_id, vec from vec where game=? and status=? and vec is not null", (game, S_OK)
+        ).fetchall()
+        out: Dict[Tuple[str, str], float] = {}
+        if len(found) > 1:
+            matrix = np.stack([np.frombuffer(row[2], dtype=np.float32) for row in found])
+            k = min(HUB_K, len(found) - 1)
+            for start in range(0, len(found), 1024):
+                block = matrix[start : start + 1024] @ matrix.T
+                block[np.arange(len(block)), np.arange(start, start + len(block))] = -np.inf
+                means = np.partition(block, -k, axis=1)[:, -k:].mean(axis=1)
+                for row, value in zip(found[start : start + 1024], means):
+                    out[(row[0], row[1])] = float(value)
+        self._hub[game] = (count, out)
+        return out
 
     def pool(self, game: str, set_names: Sequence[str]) -> Pool:
         import numpy as np
@@ -436,8 +469,10 @@ class Index:
                         blocked.add(card_name(name))
                         blocked_rows.append((set_name, pid, name))
         matrix = np.stack(vectors).astype(np.float32) if vectors else np.zeros((0, DIM), np.float32)
+        hubs = self.hubness(game) if vectors else {}
+        hub = np.array([hubs.get((row[1], row[2]), 0.0) for row in rows], dtype=np.float32)
         return Pool(matrix, rows, names, printed, blocked, tuple(set_names),
-                    blocked_rows=blocked_rows, unreleased_names=unreleased_names)
+                    blocked_rows=blocked_rows, unreleased_names=unreleased_names, hub=hub)
 
     _printed_cache: Dict[Tuple[str, str], str] = {}
 
@@ -705,13 +740,19 @@ class _Verdict(NamedTuple):
     floor: float
 
 
+def _raw(pool: Pool, sims, i: int) -> float:
+    """Entry `i`'s raw cosine. `sims` holds the hub-corrected scores that rank and measure margins;
+    a floor always reads the raw cosine."""
+    return float(sims[i]) + (HUB_BETA * float(pool.hub[i]) if pool.hub is not None else 0.0)
+
+
 def _verdict(request: "Request", pool: Pool, sims, order, blocked: Set[str]) -> _Verdict:
     """The accept rule over one ordered field. The order is fixed: look-alike guard, baseline
     margin (a thin one may be settled by the claim), baseline floor, then the two rules below it,
     clear winner and battlefield. The first that holds names the accept."""
     best = int(order[0])
-    floor = float(sims[best])
-    margin = floor - float(sims[int(order[1])]) if len(order) > 1 else floor
+    floor = _raw(pool, sims, best)
+    margin = float(sims[best]) - float(sims[int(order[1])]) if len(order) > 1 else float(sims[best])
     if card_name(pool.names[best]) in blocked:
         detail = f"{pool.names[best]} shares its name with a printing that has no stock photo"
         return _Verdict(best, None, UNREAD_LOOKALIKE, detail, margin, floor)
@@ -721,7 +762,7 @@ def _verdict(request: "Request", pool: Pool, sims, order, blocked: Set[str]) -> 
         if settled is None:
             return _Verdict(best, None, UNREAD_MARGIN, f"margin {margin:.4f} is under {MARGIN_MIN}", margin, floor)
         pick, code = settled, ACCEPT_CLAIM
-        floor = float(sims[pick])  # the floor is the chosen printing's own score
+        floor = _raw(pool, sims, pick)  # the floor is the chosen printing's own raw cosine
     if floor >= FLOOR_MIN:
         if code is None and card_name(pool.names[best]) in pool.unreleased_names:
             code = ACCEPT_UNRELEASED
@@ -888,7 +929,8 @@ def _read_chunk(
             if len(pool.rows) == 0:
                 out[request.key] = Result(request.key, False, code=UNREAD_NO_INDEX, detail="the pool holds no fingerprint")
                 continue
-            sims = pool.vectors @ vector
+            raw = pool.vectors @ vector
+            sims = raw - HUB_BETA * pool.hub if pool.hub is not None else raw
             order = np.argsort(-sims)
             candidates = [
                 {
@@ -896,7 +938,7 @@ def _read_chunk(
                     "set": pool.rows[int(i)][1],
                     "number": pool.rows[int(i)][3],
                     "name": pool.names[int(i)],
-                    "cosine": round(float(sims[int(i)]), 4),
+                    "cosine": round(float(raw[int(i)]), 4),
                 }
                 for i in order[:TOP_N]
             ]
