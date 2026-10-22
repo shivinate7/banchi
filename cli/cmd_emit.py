@@ -1219,12 +1219,13 @@ def _prices_from_today(named, overrides, say) -> bool:
     from server import pipeline_routes
 
     try:
-        pipeline_routes.refresh_before_send(
+        done = pipeline_routes.refresh_before_send(
             [runs.open_run(path).name for path in named], overrides, lambda step, *_: say(f"refresh          {step}")
         )
     except pipeline_routes.PipelineRefusal as refusal:
         say(str(refusal))
         return False
+    say(f"prices           refreshed before this send: export of {done['was']}, now {done['export_day']}")
     return True
 
 

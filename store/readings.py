@@ -247,12 +247,17 @@ class Readings:
 
         THE NEWEST READING WINS, BY `at`, AND `at` IS THE EXPORT'S OWN TIME. A SKU in `found` replaces
         the row the table holds only when the table's row is not dated later (a tie goes to the new
-        reading), including the row this same source held before it was cleared above. So a join
+        reading), including the row this same source held before it was cleared above. A source whose own
+        row is dated later than the new one is left whole, so a re-join against an older export of
+        the same run changes neither its rows nor its source row. So a join
         against an older export, or a late write, never puts an older price over a newer one. `at`
         is the export's mtime for a join (`cli/cmd_join`, `cli/cmd_match`) and the fetch's own stamp
         for a live read. A full `readings adopt --write` remains the periodic proof that this local
         reasoning has not drifted from `collect()`'s own arbitration.
         """
+        held_source = self.sources.get(_source_key(kind, name))
+        if held_source is not None and source is not None and held_source.at > source.at:
+            return  # a re-join against an older export of the same source changes nothing it holds
         newest = {str(sku): self.entries[str(sku)] for sku in found if str(sku) in self.entries}
         for old_name in (supersede if supersede is not None else (name,)):
             old_key = _source_key(kind, old_name)

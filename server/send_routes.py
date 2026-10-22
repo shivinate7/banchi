@@ -739,6 +739,7 @@ def _summary(
         "files": record.get("files") or [],
         "taken_back_at": record.get("taken_back_at"),
         "warning": _warning(record),
+        "refresh": record.get("refresh"),
     }
 
 
@@ -1215,8 +1216,8 @@ def do_send(payload: dict) -> dict:
         )
     directories = [pipeline_routes._open_run(str(name)) for name in wanted]
     with _press("listing"):
-        pipeline_routes.refresh_before_send([d.name for d in directories], progress=lambda *_: files.mark_activity())
-        return _send(payload, directories, download)
+        refreshed = pipeline_routes.refresh_before_send([d.name for d in directories], progress=lambda *_: files.mark_activity())
+        return _send(payload, directories, download, refreshed)
 
 
 def _named_prices(payload: dict) -> List[dict]:
@@ -1363,7 +1364,7 @@ def _refuse_unreadable_claim() -> None:
         ) from None
 
 
-def _send(payload: dict, directories: Sequence[Path], download: bool) -> dict:
+def _send(payload: dict, directories: Sequence[Path], download: bool, refreshed: Optional[dict] = None) -> dict:
     step = "written" if download else "sent"
     _refuse_unreadable_claim()
 
@@ -1395,6 +1396,9 @@ def _send(payload: dict, directories: Sequence[Path], download: bool) -> dict:
         # from, where the round-2 receipt left it nothing and the check read zero.
         "live_export": live_name,
         "live_seen": {sku: n for sku, n in sorted(live_before.items()) if n > 0},
+        # WHETHER A PRICE REFRESH RAN BEFORE THIS PRESS, and the day its prices come from
+        # (`pipeline_routes.refresh_before_send`). A refused refresh makes no receipt at all.
+        "refresh": refreshed,
     }
     # WRITTEN BEFORE `emit` RUNS, so a server that dies after emit counted the copies leaves a
     # receipt naming them rather than a claim nobody can see.
@@ -2678,15 +2682,15 @@ def _markdown_send(stamp: str, directory: Path, progress: Dict[str, bool]) -> di
 
 
 def _markdown_fresh(directory: Path) -> None:
-    """Refuse a mark-down whose read is older than `reprice.READ_FRESH_S` (the owner's ruling,
-    2026-09-26: "require a fresh read"). Its prices were worked out from what TCGplayer held
-    then, so the screen reads again and the owner prices from that read."""
+    """Refuse a mark-down whose read is from an earlier US Central day (the owner's ruling: a send
+    never prices from an older day, `store/clock.before_today`). Its prices were worked out from
+    what TCGplayer held then, so the screen reads again and the owner prices from that read."""
     at = (pipeline_routes._survey_envelope(directory) or {}).get("at")
     if not reprice.read_is_fresh(at):
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "read_stale",
-            "These prices come from a read more than a day old. Read what is live again, then "
+            "These prices come from a read of an earlier day. Read what is live again, then "
             "send from that read. Nothing was sent.",
         )
 

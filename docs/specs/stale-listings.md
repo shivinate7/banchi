@@ -452,16 +452,22 @@ they were.
 - **Two callers, one door.** `do_send` calls it first, inside its press and before a receipt exists.
   `cli/cmd_emit.run` calls it for every other send: the CLI, `POST /pipeline/emit` and the free
   `emit` step all run that command. The runs sheet and `#/pricing` both send through `do_send`. A
-  mark-down send is out: its prices come from a live read that `_markdown_fresh` holds to a day.
+  mark-down send is held to the same day by the same test (`store/clock.before_today`, through
+  `reprice.read_is_fresh`): its read must be from today, or it refuses as `read_stale`.
+- **The receipt says so.** `do_send`'s receipt and answer carry `refresh`: `ran`, `ok`, the day
+  the prices were `was`, and the `export_day` they now come from. The send card says in one
+  sentence when prices were refreshed first, and that they may differ from what was on screen.
 - **A refresh that fails for another run does not stop this send.** The outcome is what is tested.
   A named `--export` file is the owner's own prices, so a stale one is refused without a refresh.
 - **The refresh joins runs waiting at phase join.** The free reader leaves a run unjoined when no
   export is within `EXPORT_REUSE_S`. The roster holds joined runs only, so such a run was on no
-  worklist. Step 3 now calls `do_run_match` for each, with `retry`. A run that cannot join is named
+  worklist. Step 3 now calls `do_run_match` for each, without `retry`: a run whose last try left a problem is not fetched again (one portal
+  request a day, D104), and waits for its own retry press. A run that cannot join is named
   in `steps.join` and stays waiting. A pressed send is never widened to the runs the refresh joined:
   they land on the worklist for the next send.
 - **A reading is never replaced by an older one.** `store/readings.replace_source` keeps a SKU's
-  row when it is dated later than the new one. `at` is the export's own mtime: `cmd_join` dates
+  row when it is dated later than the new one, and leaves a source whole when its own row is later
+  (a re-join against an older export). `at` is the export's own mtime: `cmd_join` dates
   `pricing.json` and its reading to the oldest export it joined, as `cmd_match` does.
 
 ### The one home for the current Market and Lowest of a SKU

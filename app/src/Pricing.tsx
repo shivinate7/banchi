@@ -1340,7 +1340,7 @@ export function Pricing() {
   }, [sheet, kindOk])
 
   /** WHETHER THIS READ IS TOO OLD TO SEND FROM (the owner's ruling, 2026-09-26: "require a fresh
-   *  read"). The limit is the server's own constant (`reprice.READ_FRESH_S`); a table that does
+   *  read"). The limit is the server's own constant (`reprice.fresh_for_s`, the seconds since today began); a table that does
    *  not carry it, or a read nothing can date, is stale. */
   const readStale = useMemo(() => {
     if (sheet === null) return false

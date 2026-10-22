@@ -5778,10 +5778,11 @@ def do_markdown_table(stamp: str) -> dict:
         # against $0.40 on a store set to $0.29, so the sheet drew the wrong figure and the
         # receipt named it.
         "floor": _markdown_floor(),
-        # HOW OLD THIS READ MAY BE AND STILL BE SENT FROM, the constant itself (the owner's
-        # ruling, 2026-09-26: "require a fresh read"). The screen offers "Read again" in place
-        # of Send past it, and the apply and the send refuse past it.
-        "stale_after_s": reprice.READ_FRESH_S,
+        # HOW OLD THIS READ MAY BE AND STILL BE SENT FROM: it must be from today (US Central), so
+        # this is the seconds since the day began. The screen offers "Read again" in place of Send
+        # past it, and the apply and the send refuse past it. A screen left open over midnight
+        # still offers Send once; the server's refusal is the one that counts.
+        "stale_after_s": reprice.fresh_for_s(),
     }
 
 
@@ -7737,16 +7738,20 @@ def _prices_refresh_steps(
         else:
             trouble.append(f"{name}: " + ((result["console"].strip().splitlines() or [""])[-1]))
     # RUNS WAITING AT PHASE JOIN are priced by the press that already joins them, which fetches or
-    # reuses the game's export. A run that cannot join is named and stays waiting.
+    # reuses the game's export. A run whose last try left a problem is NOT tried again here (`do_run_match`
+    # answers `problem_stands`, one fetch a day, D104): its sentence is named and it stays waiting
+    # for its own "retry" press.
     waiting = _waiting_runs()
     for name in waiting:
-        answer = do_run_match(name, {"retry": True})
+        answer = do_run_match(name, {})
         if answer.get("ran") and answer.get("ok"):
             joined += 1
         elif answer.get("ran"):
             trouble.append(f"{name}: {answer['problem']['message']}")
         elif answer.get("reason") == "running":
             trouble.append(f"{name}: another join of this run is running.")
+        elif answer.get("reason") == "problem_stands":
+            trouble.append(f"{name}: {((_read_match(_open_run(name)) or {}).get('problem') or {}).get('message') or 'its last join failed.'}")
     pricerefresh.note_step(
         "join", not trouble, runs=len(fetched) + len(waiting), joined=joined, message=trouble[0] if trouble else ""
     )
@@ -7844,7 +7849,11 @@ def _day_words(day) -> str:
     return f"{day:%B} {day.day}"
 
 
-def refresh_before_send(names: Sequence[str], overrides: Optional[Sequence[str]] = None, progress=None) -> None:
+def _day_iso(moment) -> str:
+    return clock.central_day(moment).isoformat()
+
+
+def refresh_before_send(names: Sequence[str], overrides: Optional[Sequence[str]] = None, progress=None) -> dict:
     """THE ONE GATE BEFORE ANY SEND, by the owner's ruling: a send never prices from an export older than
     today (the US Central day). It does nothing when every named run's prices are from today. Otherwise
     it runs the refresh `#/pricing` runs (`do_prices_refresh`, with these runs added) and
@@ -7856,13 +7865,17 @@ def refresh_before_send(names: Sequence[str], overrides: Optional[Sequence[str]]
     which is the one door every other route's `emit` passes through (`do_pipeline_emit`,
     `do_pipeline_step`, the CLI). A named `overrides` file is the owner's choice of prices, so a stale
     one is refused without a refresh that could not change it. A mark-down send is out of scope: its
-    prices come from a live read that `_markdown_fresh` already holds to a day.
+    prices come from a live read that `_markdown_fresh` holds to the same day.
+
+    IT ANSWERS WHAT IT DID, for the send's receipt: `{"ran": False, "export_day"}` when nothing was
+    old, `{"ran": True, "ok": True, "was", "export_day"}` after a refresh (ISO days, US Central).
     """
     opened = [run_files.open_run(_open_run(str(name))) for name in names]
+    moments = run_files.export_moments(opened, overrides)
     stale = run_files.stale_runs(opened, overrides)
     if not stale:
-        return
-    oldest = _day_words(min(stale.values()))
+        return {"ran": False, "export_day": _day_iso(min(moments.values())) if moments else None}
+    oldest = _day_words(clock.central_day(min(stale.values())))
     start = f"Nothing was sent. The prices come from an export of {oldest}, and a send needs today's."
     if overrides:
         raise PipelineRefusal(
@@ -7870,8 +7883,12 @@ def refresh_before_send(names: Sequence[str], overrides: Optional[Sequence[str]]
             f"{start} Fetch a new export and name it, or leave the file off so the runs' own are refreshed.",
         )
     answer = do_prices_refresh(progress, history=None, also=[str(name) for name in names])
-    if not run_files.stale_runs([run_files.open_run(_open_run(str(name))) for name in names]):
-        return
+    reopened = [run_files.open_run(_open_run(str(name))) for name in names]
+    if not run_files.stale_runs(reopened):
+        return {
+            "ran": True, "ok": True, "was": _day_iso(min(stale.values())),
+            "export_day": _day_iso(min(run_files.export_moments(reopened).values())),
+        }
     if answer.get("running"):
         cause = "another refresh is running. Try again when it ends."
     else:
