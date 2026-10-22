@@ -17,6 +17,8 @@ The per-SKU half is what a price is. TCGplayer prices per SKU globally. D7 state
 
 **Deleted.** The first build answered the duplication with a fan-out write into N files, conflict detection on every row, and an agreement refusal. All of it reconciled a duplication. The first `pipeline/merge.py` carried a `PriceDisagreement`. Run against three real runs, it refused 66 SKUs. Almost all were the market moving between two joins, not a disagreement. Making a defect unrepresentable is worth more than reporting it.
 
+**A send never prices from an export older than today.** `emit` refuses the old reading and refreshes it first (`refresh_before_send`), because a market price moves between joins. The corpus stays the answer. Only the market reading under it is renewed.
+
 **Kept whole: the cap.** It is arithmetic over positions, not an answer. Centralizing does not change it. See "The cap is D59's defect one register up" below.
 
 **Migration.** `banchi prices adopt` previews by default, because it holds a real decision. Ruling: newest wins. Three of the eight contested SKUs are a `withheld` hold answered by a later price. Newest-wins resolves those to the price, the direction that cost money. The command names those three.
