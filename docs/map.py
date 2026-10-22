@@ -2099,6 +2099,7 @@ COMPONENTS = [
                                  "`slab_snapshots` (one row per slab per day, a second write "
                                  "that day replaces it) and `slab_sales` (keyed by Card Ladder's "
                                  "sale id, never deleted, shared by every slab that read it). "
+                                 "`Slabs.remove` drops a slab row and its sale links only. "
                                  "A value Card Ladder did not give is NULL, never 0. Also "
                                  "`GRADERS`, which `pipeline/cardladder.py` imports back "
                                  "because `store/` may not import `pipeline/`.",
@@ -3179,6 +3180,21 @@ COMPONENTS = [
                         "back in order; a store stamped 14 gains the tables on its next open.",
                 "governed_by": ["D320", "D88", "D63"],
             },
+            "slabs-routes-selftest.py": {
+                "does": "proves `server/slabs_routes.py`, the My Slabs routes, against the real Card "
+                        "Ladder client on a fake transport, a fake clock and a throwaway store: add "
+                        "reads three callables and writes the slab, the day's snapshot and the sales "
+                        "once, an update replaces the day's row, any failed or limited read writes "
+                        "nothing, one client keeps the 8 second pace and the rate-limit stop across "
+                        "requests, Card Ladder's numbers become text money and its dates one ISO "
+                        "shape, a re-read sale keeps the fields only an earlier read gave, a slab "
+                        "with no sale at its grade says no sales, a remove drops the slab and its "
+                        "sale links but keeps its snapshots and sales, needs no Card Ladder call and "
+                        "is refused while an add runs, the routes are dispatched, no "
+                        "refusal names a decision, a path or a host, no token reaches an answer or a "
+                        "log, and there is no sweep route, client function or launchd job.",
+                "governed_by": ["D320", "D88", "D196", "D319"],
+            },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "
                         "server/pipeline_routes.py:do_product_history against a throwaway "
@@ -3562,11 +3578,11 @@ COMPONENTS = [
                 # lens and its re-addressed history strip (D103, D278), the value band (D277),
                 # the queue refresh (D167), the push/publish pair (D273), the live export
                 # (D104) and the seven order-line closers (D113).
-                "governed_by": ["D13", "D14", "D18", "D28", "D58", "D278", "D76", "D277", "D83",
-                                "D86", "D87", "D89", "D97", "D100", "D103", "D104", "D273", "D113",
-                                "D134", "D145", "D167", "D168", "D174", "D189", "D192",
-                                "D193", "D203", "D210", "D225", "D227", "D236", "D252", "D264",
-                                "D291", "D298", "D293"],
+                "governed_by": ["D13", "D14", "D18", "D28", "D58", "D76", "D83", "D86", "D87",
+                                "D89", "D97", "D100", "D103", "D104", "D113", "D134", "D145",
+                                "D167", "D168", "D174", "D189", "D192", "D193", "D203", "D210",
+                                "D225", "D227", "D236", "D252", "D264", "D273", "D277", "D278",
+                                "D291", "D293", "D298", "D320"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -4953,7 +4969,7 @@ COMPONENTS = [
                                 "D227", "D280", "D234", "D236", "D239", "D240",
                                 "D242", "D243", "D247", "D252", "D253", "D254",
                                 "D256", "D261", "D271", "D275", "D193", "D269", "D295", "D301",
-                                "D320"],
+                                "D320", "D196"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -5624,7 +5640,7 @@ COMPONENTS = [
                                 "D189", "D191", "D192", "D193", "D196", "D203", "D212",
                                 "D213", "D219", "D231", "D225", "D227", "D251", "D252",
                                 "D258", "D259", "D262", "D264", "D294", "D261", "D271", "D273",
-                                "D298", "D299", "D301"],
+                                "D298", "D299", "D301", "D320"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -5858,6 +5874,23 @@ COMPONENTS = [
                         "PROVE is that Pirate Ship's importer accepts the file this renders — "
                         "that is on the far side of a seam no committed fixture can hold, and "
                         "it is one upload by the owner.",
+            },
+            "slabs_routes.py": {
+                "does": "the My Slabs routes: POST /slabs adds a slab by cert (Card Ladder reads "
+                        "3.1, 3.2 and 3.4 outside the store lock, then ONE write of the slab, "
+                        "today's snapshot and the sales), GET /slabs lists every slab with its "
+                        "newest snapshot, GET /slabs/<grader>/<cert> reads one, DELETE on that path "
+                        "removes the slab and its sale links (no Card Ladder call, refused while an "
+                        "add runs). One "
+                        "`pipeline.cardladder.Client` lives for the process, so the 8 second pace "
+                        "and the day's rate-limit stop hold across requests. Card Ladder's "
+                        "numbers become text money and its dates one ISO day; a sale that was "
+                        "read before keeps the fields only an earlier read gave; a slab with no "
+                        "sale at its grade stores no value. Every refusal sentence is written "
+                        "here and names no decision, path or host. There is no sweep route: "
+                        "the owner ruled it out.",
+                "governed_by": ["D320", "D88", "D196", "D319"],
+                "note": "PROVED BY `make slabs-routes-selftest`.",
             },
             "order_transport.py": {
                 "does": "the order transport (D69): this account's own orders off "
@@ -6835,7 +6868,7 @@ COMPONENTS = [
                                              "D142", "D145", "D147", "D156", "D166", "D168", "D172",
                                              "D174", "D180", "D183", "D193", "D196", "D212", "D213",
                                              "D225", "D227", "D236", "D252", "D260", "D264", "D271",
-                                             "D273", "D277", "D278", "D294", "D299", "D301"]},
+                                             "D273", "D277", "D278", "D294", "D299", "D301", "D320"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D91), whether the "

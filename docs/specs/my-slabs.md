@@ -225,7 +225,8 @@ The store gets three tables (D88, SQLite and one transaction per write):
 
 - `slabs`: cert, grader, `profileId`, identity, subgrades, and the date the owner added it.
 - `slab_snapshots`: one row per slab per day. It holds both values and their confidence, the
-  last sale, the population at grade, the gem rate and the sales speed per window.
+  last sale, the population at grade, the gem rate, the sales speed per window and the grade
+  ladder from that read. The detail shows the newest snapshot's ladder.
 - `slab_sales`: each sale seen, keyed by the sale `id`. A sale Card Ladder later drops stays
   here.
 
@@ -238,6 +239,12 @@ The store gets three tables (D88, SQLite and one transaction per write):
 - Sale dates are text and sort as ISO strings. A sale with any other date is refused before
   the write. Card Ladder's date format is unmeasured.
 - A slab's sales are read through an indexed link table, one row per slab and sale.
+- The slab row keeps a copy of its newest snapshot, so the list reads `slabs` once and never
+  the snapshots, which grow by one row per slab per day. One store method writes a snapshot,
+  and it updates that copy in the same write. Every snapshot writer, the sweep included, calls
+  that method. An older snapshot never replaces a newer copy. A source check refuses any other
+  writer in Python. It cannot see raw SQL, so a migration that inserts snapshots also updates
+  the copy.
 - A slab with no sale at its grade stores no value, never a number.
 
 ## Build plan
@@ -252,13 +259,25 @@ Kind: build. Platform: macOS, over the capture server.
    Card Ladder's.
 2. The three store tables and their writes.
 3. Routes for add, list, detail and sweep, with client functions in `app/src/server.ts`.
+   Add, list and detail are built: `POST /slabs`, `GET /slabs`, `GET /slabs/<grader>/<cert>`,
+   with one Card Ladder client per server process. The sweep route waits for the owner's word.
+   The owner ruled a way back: `DELETE /slabs/<grader>/<cert>` and its client function remove
+   the slab and its sale links. Its snapshots and its sales stay, so adding it again undoes the
+   remove and its history returns. The owner ruled that the undo restores the first added date,
+   and the receipt says "restored". The date comes from the oldest snapshot. Add is the only
+   writer of a slab, and it writes the first snapshot in the same write, so that snapshot
+   exists. A sale that the new read no longer lists stays in the store, unlinked.
    A failed read writes no snapshot: a same-day snapshot replaces every field, so a failed call
    stored as empty would erase a good value. The store replaces a re-read sale whole, so the
-   route merges the new read into the stored sale first, and fields only 3.3 returns are kept. Card Ladder's numbers become text money at the route. The store refuses a sale date that is
+   route merges the new read into the stored sale first, and fields only 3.3 returns are kept.
+   Card Ladder's numbers become text money at the route. The store refuses a sale date that is
    not text, so the route turns any other date form into an ISO date first.
 4. The `#/slabs` screen, built on `<Page>` (D275, every screen inherits the page scaffold),
-   from section 4. It waits on the kit lane in 4.7. The client's login errors name a Google host;
-   the screen shows them as a sentence with no host name (D196, no user-visible string names a decision).
+   from section 4. It waits on the kit lane in 4.7. The client's login errors name a Google
+   host; the screen shows them as a sentence with no host name (D196, no user-visible string
+   names a decision).
+   The busy refusal says a slab is being added, even when a second remove caused it. So the
+   remove control waits for its answer, and a double press never sends a second remove.
 5. A launchd job for the daily sweep, like `make price-refresh-agent`. A Google error on the
    token exchange stops the sweep too, because the exchange host has no pace of its own.
 6. The three checks that D320 names.

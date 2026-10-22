@@ -101,6 +101,10 @@ import type {
   PullTarget,
   ShippingBatch,
   ShippingForgotten,
+  SlabDetail,
+  SlabList,
+  SlabReceipt,
+  SlabRemoved,
   TrendsPayload,
   OrderFillReason,
   OrderFillResult,
@@ -4601,4 +4605,36 @@ export async function forgetShippingExport(batch: string): Promise<ShippingForgo
   return (await request(`/shipping/batches/${encodeURIComponent(batch)}`, {
     method: 'DELETE',
   })) as ShippingForgotten
+}
+
+/* ------------------------------------------------------------------ My Slabs */
+
+/**
+ * Read one slab from Card Ladder by its cert and file it. A refusal writes nothing. The read
+ * is paced, so the press takes about 16 seconds or more. There is no sweep: a slab is read
+ * only when the owner adds it.
+ */
+export async function addSlab(input: { cert: string; grader: string }): Promise<SlabReceipt> {
+  return (await request('/slabs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cert: input.cert, grader: input.grader }),
+  })) as SlabReceipt
+}
+
+/** Every slab with its newest snapshot. A read from the store; it calls no one. */
+export async function getSlabs(): Promise<SlabList> {
+  return (await request('/slabs', NO_CACHE)) as SlabList
+}
+
+/** One slab: its snapshots, its sales and its grade ladder. The cert is text and keeps its zeros. */
+export async function getSlabDetail(grader: string, cert: string): Promise<SlabDetail> {
+  return (await request(`/slabs/${encodeURIComponent(grader)}/${encodeURIComponent(cert)}`, NO_CACHE)) as SlabDetail
+}
+
+/** Take a slab off the list. Calls no one; the snapshots and sales stay, and adding the slab again brings them back. */
+export async function removeSlab(grader: string, cert: string): Promise<SlabRemoved> {
+  return (await request(`/slabs/${encodeURIComponent(grader)}/${encodeURIComponent(cert)}`, {
+    method: 'DELETE',
+  })) as SlabRemoved
 }

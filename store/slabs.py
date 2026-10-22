@@ -7,8 +7,13 @@ at all.
 - `slabs`: one row per (cert, grader). The grader is stored in Card Ladder's name, so `bgs`,
   `bvg` and `beckett` are one slab. A cert is text; `"0012345678"` keeps its zeros.
 - `slab_snapshots`: one row per slab per day. A second write that day REPLACES the row whole.
+  The slab row keeps a copy of its newest one (`Slab.latest`), so `GET /slabs` never reads this
+  table. `record_snapshot` is the one snapshot writer and keeps the copy; `Slabs.add` reseeds it
+  from the newest stored snapshot when it re-creates a removed slab; `_parse_slab` rebuilds it
+  from the stored row.
 - `slab_sales`: one row per Card Ladder sale id however many slabs and reads see it, and NEVER
   deleted: a sale Card Ladder later drops stays here. The row names every slab that read it.
+- A remove (`Slabs.remove`) takes the slab row and its links only; snapshots and sales stay.
 - `slab_sale_links`: one row per (slab, sale), indexed on the slab key, so `sales_for` fetches
   that slab's sales by key and never scans `slab_sales`.
 
@@ -49,6 +54,14 @@ class Slab(NamedTuple):
     identity: dict
     subgrades: Optional[dict]
     added: str
+    # The newest snapshot, by day. Payload only, no column. `record_snapshot` keeps it and
+    # `Slabs.add` reseeds it on a re-create, so `GET /slabs` reads `slabs` alone and never
+    # `slab_snapshots` (spec section 6).
+    latest: Optional["SlabSnapshot"] = None
+
+    @property
+    def key(self) -> str:
+        return _slab_key(self.cert, self.grader)
 
 
 class SlabSnapshot(NamedTuple):
@@ -64,6 +77,9 @@ class SlabSnapshot(NamedTuple):
     population: Optional[int]
     gem_rate: Optional[float]
     speed: Optional[dict]
+    # The card's grade ladder as that day's read gave it. Payload only, no column; a row stored
+    # before this field reads None.
+    ladder: Optional[list] = None
 
 
 class Sale(NamedTuple):
@@ -84,7 +100,13 @@ class _SaleRow(NamedTuple):
 def _parse_slab(key: str, record: dict) -> Optional[Slab]:
     if not record.get("cert") or not record.get("grader"):
         return None
-    return Slab(**{name: record.get(name) for name in Slab._fields})
+    row = {name: record.get(name) for name in Slab._fields}
+    row["latest"] = _parse_snapshot(key, record["latest"]) if isinstance(record.get("latest"), dict) else None
+    return Slab(**row)
+
+
+def _dump_slab(slab: Slab) -> dict:
+    return {**slab._asdict(), "latest": slab.latest._asdict() if slab.latest else None}
 
 
 def _parse_snapshot(key: str, record: dict) -> Optional[SlabSnapshot]:
@@ -118,7 +140,7 @@ class Slabs:
     SLABS = TableSpec(
         "slabs",
         parse=_parse_slab,
-        dump=lambda r: r._asdict(),
+        dump=_dump_slab,
         columns=lambda r: {"cert": r.cert, "grader": r.grader, "profile_id": r.profile_id, "added": r.added},
         column_names=("cert", "grader", "profile_id", "added"),
     )
@@ -172,20 +194,32 @@ class Slabs:
         key = _slab_key(cert, grader)
         if key in self.slabs:
             return self.slabs[key]
-        slab = Slab(str(cert), _grader(grader), profile_id, identity, subgrades, added)
+        # A slab added again after a remove keeps the snapshots it left, so its copy is the newest of them.
+        history = self.snapshots_for(cert, grader)
+        slab = Slab(str(cert), _grader(grader), profile_id, identity, subgrades, added, history[-1] if history else None)
         self.slabs[key] = slab
         return slab
 
     def record_snapshot(
         self, cert, grader, day, *, cl_value, cl_confidence, estimated_value,
         estimated_confidence, last_sale_price, last_sale_date, population, gem_rate, speed,
+        ladder=None,
     ) -> SlabSnapshot:
-        """One row per slab per day; a second write that day replaces every field."""
+        """One row per slab per day; a second write that day replaces every field.
+
+        The slab row's `latest` moves in the same write, unless this day is older than the copy's.
+        A slab with no row raises ValueError and writes nothing."""
+        key = _slab_key(cert, grader)
+        slab = self.slabs.get(key)
+        if slab is None:
+            raise ValueError("No slab %s to record a snapshot for." % key)
         snapshot = SlabSnapshot(
             str(cert), _grader(grader), day, cl_value, cl_confidence, estimated_value,
-            estimated_confidence, last_sale_price, last_sale_date, population, gem_rate, speed,
+            estimated_confidence, last_sale_price, last_sale_date, population, gem_rate, speed, ladder,
         )
-        self.snapshots["%s:%s" % (_slab_key(cert, grader), day)] = snapshot
+        self.snapshots["%s:%s" % (key, day)] = snapshot
+        if slab.latest is None or day >= slab.latest.day:
+            self.slabs[key] = slab._replace(latest=snapshot)
         return snapshot
 
     def record_sales(self, cert, grader, sales) -> None:
@@ -202,6 +236,17 @@ class Slabs:
             self.sales[key] = _SaleRow(key, sale.get("date"), sale, seen if slab in seen else seen + (slab,))
             self.links["%s|%s" % (slab, key)] = Link(slab, key)
 
+    def remove(self, cert, grader) -> Optional[Slab]:
+        """The slab row and its sale links go. Snapshots and sales stay, so adding it again brings them back."""
+        key = _slab_key(cert, grader)
+        slab = self.slabs.get(key)
+        if slab is None:
+            return None
+        for link in self.links.where(slab=key):
+            del self.links["%s|%s" % (link.slab, link.sale)]
+        del self.slabs[key]
+        return slab
+
     # -------------------------------------------------------------------------- reading
 
     def get(self, cert, grader) -> Optional[Slab]:
@@ -209,6 +254,10 @@ class Slabs:
 
     def list(self) -> List[Slab]:
         return [self.slabs[key] for key in sorted(self.slabs)]
+
+    def keys_with_sales(self) -> set:
+        """Keys (`grader:cert`) of the slabs that have a sale: one indexed read of the links."""
+        return self.links.distinct("slab")
 
     def snapshots_for(self, cert, grader) -> List[SlabSnapshot]:
         rows = self.snapshots.where(cert=str(cert), grader=_grader(grader))

@@ -41,13 +41,37 @@ this file tests. It follows `store/readings.py` and `store/pricearchive.py`:
         without an `id` raises and none of the batch is kept. A sale whose `date` is not text
         (an int, a dict, or no `date` key) raises ValueError before the batch writes anything,
         so no stored row can make `sales_for` raise on its sort.
+    Slabs.remove(cert, grader) -> Optional[Slab]
+        The owner's remove (build plan step 3): the slab row and its sale links go, in the one
+        write it is called in. Its snapshots and every sale stay, so adding the slab again brings
+        the snapshots back, and a sale the next read omits stays in the table, unlinked. A sale
+        another slab also read stays linked to that slab. Answers the removed Slab, or None (and
+        writes nothing) when there is none; an unknown grader raises ValueError as everywhere.
+        The `added` of a slab added again after a remove is pinned at the route (the routes
+        selftest's restore cases), not here: the snapshots this file keeps are what it reads.
+        NOT PINNED: what a sale row's own list of slabs says after one of them is removed.
     Slabs.get(cert, grader) -> Optional[Slab]
     Slabs.list() -> List[Slab]                      same order however the slabs were added
     Slabs.snapshots_for(cert, grader) -> List[SlabSnapshot]   oldest day first; [] if none
     Slabs.sales_for(cert, grader) -> List[Sale]     newest `date` first, ties by `id` descending
                                                     (`Readings.sources_payload`'s rule); [] if none.
                                                     Reads only that slab's sales (see below).
-    Slab(cert, grader, profile_id, identity, subgrades, added)
+    Slab(cert, grader, profile_id, identity, subgrades, added, latest=None)
+    Slab.latest           the slab row's copy of its NEWEST snapshot, the one with the greatest `day`: a
+                          SlabSnapshot equal to `snapshots_for(...)[-1]`, or None until one is recorded.
+                          `GET /slabs` reads `slabs` once and never `slab_snapshots`, which gains a row per
+                          slab per day (spec section 6). `record_snapshot` is the one method that writes a
+                          snapshot, and it updates this copy in the same write (case 8):
+                            - a snapshot on a newer day, or the same day again, makes it the copy;
+                            - a snapshot on an older day is stored but never replaces a newer copy;
+                            - a snapshot for a slab with no row raises ValueError and writes nothing;
+                            - a failed write keeps the old copy with the old snapshots, never one without the other.
+                          `add` of a slab already there keeps its copy. `add` of a slab that was removed
+                          seeds its copy from the newest snapshot it left, so the copy equals
+                          `snapshots_for(...)[-1]` before any new snapshot (case 9).
+                          No code but `Slabs.record_snapshot` writes `slab_snapshots` and none but
+                          `Slabs` (and `_parse_slab`, which decodes a stored row) sets `latest`: a
+                          source scan of `store/`, `server/`, `pipeline/` and `cli/` proves it (case 10).
     SlabSnapshot(cert, grader, day, cl_value, cl_confidence, estimated_value,
                  estimated_confidence, last_sale_price, last_sale_date, population, gem_rate, speed)
     Sale(id, date, data)    `data` is the Card Ladder sale dict, verbatim. `date` is its `date`.
@@ -71,11 +95,14 @@ In `make check`, never in the git hook: it writes a temp store (D18).
 
 from __future__ import annotations
 
+import ast
 import gc
 import json
 import sqlite3
 import sys
+import tempfile
 import traceback
+from collections.abc import Mapping, MutableMapping
 from contextlib import contextmanager
 from importlib import import_module
 from pathlib import Path
@@ -680,10 +707,462 @@ def case_upgrade():
     same("and the upgraded store takes a slab write", counts(), {"slabs": 1, "slab_snapshots": 1, "slab_sales": 2, "slab_sale_links": 2})
 
 
+def inject_delete_failure(table: str):
+    conn = sqlite3.connect(store().db_path, isolation_level=None)
+    try:
+        conn.execute(
+            f"CREATE TRIGGER inject_failure BEFORE DELETE ON {table} "
+            "BEGIN SELECT RAISE(ABORT, 'injected failure'); END"
+        )
+    finally:
+        conn.close()
+
+
+def removal_seed(s):
+    """Two PSA slabs that share a sale, and the same cert at CGC. The first has two days of snapshots."""
+    a, b = "81234567", "81234568"
+    s1, s2, s3 = sale("s-100", "2026-10-01"), sale("s-101", "2026-10-05", "130.00"), sale("s-102", "2026-09-20", "88.00")
+    add_psa(s, a)
+    add_psa(s, b)
+    s.add(a, "cgc", profile_id="cgc-3003", identity=IDENTITY, subgrades=None, added="2026-10-02")
+    s.record_snapshot(a, "psa", "2026-10-05", **SNAP_A)
+    s.record_snapshot(a, "psa", "2026-10-06", **SNAP_C)
+    s.record_snapshot(b, "psa", "2026-10-05", **SNAP_B)
+    s.record_snapshot(a, "cgc", "2026-10-05", **SNAP_C)
+    s.record_sales(a, "psa", [s1, s2])
+    s.record_sales(b, "psa", [s2, s3])
+    s.record_sales(a, "cgc", [sale("s-103", "2026-10-02")])
+
+
+def case_remove():
+    """3d. remove: the slab and its sale links go in one write; its snapshots and sales stay; a slab added again gets them back"""
+    from store.slabs import Slabs
+
+    if not ok(callable(getattr(Slabs, "remove", None)), "Slabs.remove exists"):
+        return
+    a, b = "81234567", "81234568"
+    put(removal_seed)
+    before = counts()
+    same("control: three slabs, four snapshots, four sales, five links", before,
+         {"slabs": 3, "slab_snapshots": 4, "slab_sales": 4, "slab_sale_links": 5})
+    sales_before = {x.id: x.data for x in slabs_now().sales_for(b, "psa")}
+
+    got = put(lambda s: s.remove(a, "psa"))
+    same("remove answers the slab it took out", (got.cert, got.grader, got.identity) if got else None, (a, "psa", IDENTITY))
+    s = slabs_now()
+    same("the slab is gone", s.get(a, "psa"), None)
+    same("the list holds the other two", sorted((x.cert, x.grader) for x in s.list()), sorted([(b, "psa"), (a, "cgc")]))
+    same("every snapshot stays in the table", counts()["slab_snapshots"], 4)
+    same("and every sale", counts()["slab_sales"], 4)
+    same("its two links went, the other three stay", counts()["slab_sale_links"], 3)
+    same("it lists no sale", s.sales_for(a, "psa"), [])
+    same("its snapshots still read back whole",
+         [(x.day, snap_fields(x)) for x in s.snapshots_for(a, "psa")],
+         [("2026-10-05", SNAP_A), ("2026-10-06", SNAP_C)])
+    same("a slab that read a shared sale still lists it", [x.id for x in s.sales_for(b, "psa")], ["s-101", "s-102"])
+    same("with the sale whole", {x.id: x.data for x in s.sales_for(b, "psa")}, sales_before)
+    same("the same cert at another grader is untouched",
+         ([x.id for x in s.sales_for(a, "cgc")], [x.day for x in s.snapshots_for(a, "cgc")]), (["s-103"], ["2026-10-05"]))
+
+    again = put(lambda s: s.remove(a, "psa"))
+    same("a second remove finds nothing and answers None", again, None)
+    same("and writes nothing", counts()["slab_sale_links"], 3)
+    same("so does a cert nobody added", put(lambda s: s.remove("99999999", "psa")), None)
+    refused = False
+    try:
+        put(lambda s: s.remove(a, "pokemon"))
+    except ValueError:
+        refused = True
+    ok(refused, "an unknown grader raises ValueError, as every other method does")
+
+    # The way back: add it again, and what it stored comes back.
+    put(lambda s: add_psa(s, a, added="2026-10-09"))
+    s = slabs_now()
+    same("added again, its snapshots are back", [x.day for x in s.snapshots_for(a, "psa")], ["2026-10-05", "2026-10-06"])
+    same("with no sale linked yet", s.sales_for(a, "psa"), [])
+    put(lambda s: s.record_sales(a, "psa", [sale("s-101", "2026-10-05", "130.00"), sale("s-104", "2026-10-03")]))
+    s = slabs_now()
+    same("a read that lists two sales links those two", [x.id for x in s.sales_for(a, "psa")], ["s-101", "s-104"])
+    ok("s-100" in s.sales, "the sale that read omits stays in the table")
+    same("unlinked: this slab does not list it", "s-100" in [x.id for x in s.sales_for(a, "psa")], False)
+    same("five links (its two and the others' three) and five sales",
+         (counts()["slab_sale_links"], counts()["slab_sales"]), (5, 5))
+
+    put(lambda s: s.add("0012345678", "bgs", profile_id="beckett-77", identity=IDENTITY, subgrades=SUBGRADES, added="2026-10-01"))
+    got = put(lambda s: s.remove("0012345678", "BVG"))
+    same("a grader typed in another form is the same grader: bvg removes the slab added under bgs, keeping its zeros",
+         (got.cert, got.grader) if got else None, ("0012345678", "beckett"))
+
+    for table in ("slabs", "slab_sale_links"):
+        with fresh_home():
+            put(removal_seed)
+            before = counts()
+            inject_delete_failure(table)
+            raised = False
+            try:
+                put(lambda s: s.remove(a, "psa"))
+            except Exception:
+                raised = True
+            clear_failure()
+            ok(raised, f"a delete that fails in {table} fails the remove")
+            same(f"and leaves no table changed ({table})", counts(), before)
+            ok(slabs_now().get(a, "psa") is not None and len(slabs_now().sales_for(a, "psa")) == 2,
+               f"the slab and its two sales are still there ({table})")
+            put(lambda s: s.remove(a, "psa"))
+            same(f"the same remove works once the failure is gone ({table})", counts()["slab_sale_links"], 3)
+
+
+def latest_of(cert, grader="psa"):
+    """The slab row's copy of its newest snapshot, from a fresh read. None when there is no row or no copy."""
+    row = slabs_now().get(cert, grader)
+    return getattr(row, "latest", None) if row else None
+
+
+def newest_stored(cert, grader="psa"):
+    rows = slabs_now().snapshots_for(cert, grader)
+    return rows[-1] if rows else None
+
+
+def day_and_fields(row):
+    return (row.day, snap_fields(row)) if row else None
+
+
+def case_latest():
+    """8. the slab row keeps its newest snapshot, updated by record_snapshot in the same write"""
+    cert = "81234567"
+    put(lambda s: add_psa(s, cert))
+    same("a slab with no snapshot has no copy", latest_of(cert), None)
+
+    answered = put(lambda s: s.record_snapshot(cert, "psa", "2026-10-05", **SNAP_A))
+    row = latest_of(cert)
+    same("after a snapshot the slab row holds that day and every value", day_and_fields(row), ("2026-10-05", SNAP_A))
+    same("the copy is the stored snapshot, whole", row, newest_stored(cert))
+    same("and the one record_snapshot answered", row, answered)
+
+    put(lambda s: s.record_snapshot(cert, "psa", "2026-10-05", **SNAP_B))
+    row = latest_of(cert)
+    same("a second write that day replaces the copy whole: SNAP_B's values, none of SNAP_A's",
+         day_and_fields(row), ("2026-10-05", SNAP_B))
+    same("and it is still the stored snapshot", row, newest_stored(cert))
+
+    put(lambda s: s.record_snapshot(cert, "psa", "2026-10-07", **SNAP_C))
+    same("a newer day moves the copy to that day", day_and_fields(latest_of(cert)), ("2026-10-07", SNAP_C))
+
+    put(lambda s: s.record_snapshot(cert, "psa", "2026-10-06", **SNAP_A))
+    row = latest_of(cert)
+    same("an older day written after a newer one leaves the copy on the newer", day_and_fields(row), ("2026-10-07", SNAP_C))
+    same("the older snapshot is still stored", [x.day for x in slabs_now().snapshots_for(cert, "psa")],
+         ["2026-10-05", "2026-10-06", "2026-10-07"])
+    same("and the copy is still the newest stored snapshot", row, newest_stored(cert))
+    put(lambda s: s.record_snapshot(cert, "psa", "2026-10-06", **SNAP_B))
+    same("replacing that older day again leaves the copy alone", latest_of(cert), row)
+
+    put(lambda s: add_psa(s, cert, added="2026-10-20"))
+    same("adding a slab that is already there keeps its copy", latest_of(cert), row)
+
+    newer_first, older_first = "81234568", "81234569"
+    put(lambda s: (add_psa(s, newer_first), add_psa(s, older_first)))
+
+    def both_ways(s):
+        s.record_snapshot(newer_first, "psa", "2026-10-09", **SNAP_C)
+        s.record_snapshot(newer_first, "psa", "2026-10-08", **SNAP_A)
+        s.record_snapshot(older_first, "psa", "2026-10-08", **SNAP_A)
+        s.record_snapshot(older_first, "psa", "2026-10-09", **SNAP_C)
+    put(both_ways)
+    same("two writes in one transaction, newer day first: the copy is the newer",
+         day_and_fields(latest_of(newer_first)), ("2026-10-09", SNAP_C))
+    same("two writes in one transaction, older day first: the copy is the newer",
+         day_and_fields(latest_of(older_first)), ("2026-10-09", SNAP_C))
+
+    put(lambda s: s.add(cert, "cgc", profile_id="cgc-3003", identity=IDENTITY, subgrades=None, added="2026-10-02"))
+    put(lambda s: s.record_snapshot(cert, "cgc", "2026-10-04", **SNAP_B))
+    same("one cert under another grader keeps its own copy", day_and_fields(latest_of(cert, "cgc")), ("2026-10-04", SNAP_B))
+    same("and the first grader's copy is untouched", latest_of(cert), row)
+
+    before = counts()
+    refused = False
+    try:
+        put(lambda s: s.record_snapshot("99999999", "psa", "2026-10-05", **SNAP_A))
+    except ValueError:
+        refused = True
+    ok(refused, "a snapshot for a slab with no row raises ValueError")
+    same("and it writes nothing: no snapshot row, no slab row", counts(), before)
+
+    for table in ("slabs", "slab_snapshots"):
+        with fresh_home():
+            put(lambda s: add_psa(s, cert))
+            put(lambda s: s.record_snapshot(cert, "psa", "2026-10-05", **SNAP_A))
+            held, before = latest_of(cert), counts()
+            ok(held is not None, f"{table} fails: control, the slab row holds a copy before the write")
+            inject_failure(table)
+            raised = False
+            try:
+                put(lambda s: s.record_snapshot(cert, "psa", "2026-10-06", **SNAP_C))
+            except Exception:
+                raised = True
+            clear_failure()
+            ok(raised, f"{table} fails: the snapshot write raises")
+            same(f"{table} fails: no snapshot row lands without its copy", counts(), before)
+            same(f"{table} fails: the slab row keeps the old copy", latest_of(cert), held)
+
+
+def case_latest_after_remove():
+    """9. a slab added again after a remove has its copy back, and an older-day snapshot cannot undo it"""
+    cert = "81234570"
+    put(lambda s: add_psa(s, cert))
+    put(lambda s: s.record_snapshot(cert, "psa", "2026-10-05", **SNAP_A))
+    put(lambda s: s.record_snapshot(cert, "psa", "2026-10-07", **SNAP_C))
+    ok(len(slabs_now().snapshots_for(cert, "psa")) == 2, "control: two days are stored")
+    same("control: the copy is the newer day", day_and_fields(latest_of(cert)), ("2026-10-07", SNAP_C))
+
+    put(lambda s: s.remove(cert, "psa"))
+    same("removed: no slab row, and both snapshots stay",
+         (slabs_now().get(cert, "psa"), len(slabs_now().snapshots_for(cert, "psa"))), (None, 2))
+
+    put(lambda s: add_psa(s, cert, added="2026-10-09"))
+    newest = newest_stored(cert)
+    ok(newest is not None and newest.day == "2026-10-07", "control: the newest stored snapshot is the 10-07 one")
+    same("re-added with no new snapshot in that write: the copy is the newest stored snapshot", latest_of(cert), newest)
+    same("and it holds the newer day's values", day_and_fields(latest_of(cert)), ("2026-10-07", SNAP_C))
+
+    put(lambda s: s.record_snapshot(cert, "psa", "2026-10-06", **SNAP_B))
+    same("an older day recorded after the re-add is stored", [x.day for x in slabs_now().snapshots_for(cert, "psa")],
+         ["2026-10-05", "2026-10-06", "2026-10-07"])
+    same("and leaves the copy on the newest stored snapshot", latest_of(cert), newest_stored(cert))
+    same("which is still the 10-07 one", day_and_fields(latest_of(cert)), ("2026-10-07", SNAP_C))
+
+    put(lambda s: s.record_snapshot(cert, "psa", "2026-10-08", **SNAP_A))
+    same("a newer day after the re-add moves the copy", (latest_of(cert), day_and_fields(latest_of(cert))),
+         (newest_stored(cert), ("2026-10-08", SNAP_A)))
+
+
+# ------------------------------------------------------------------------ who writes a snapshot
+
+SCAN_DIRS = ("store", "server", "pipeline", "cli")
+# The verbs that change a `Rows`: what `MutableMapping` adds to `Mapping` (pop, popitem, clear, update,
+# setdefault, and the two dunders), `Rows`' own `flushed` and `_remember`, and `add`/`put`, which no
+# `Rows` has yet but a writer might assume. `x.snapshots[k] = v` and `del x.snapshots[k]` are checked apart.
+WRITE_VERBS = {n for n in dir(MutableMapping) if not hasattr(Mapping, n)} | {"flushed", "_remember", "add", "put"}
+
+
+def _in(qual: str, owner: str) -> bool:
+    return qual == owner or qual.startswith(owner + ".")
+
+
+def may_write_snapshot(rel: str, qual: str) -> bool:
+    """The one writer of `slab_snapshots`."""
+    return rel == "store/slabs.py" and _in(qual, "Slabs.record_snapshot")
+
+
+def may_set_latest(rel: str, qual: str) -> bool:
+    """`Slabs`, and `_parse_slab`, which rebuilds a `Slab` from its stored payload and decides nothing."""
+    return rel == "store/slabs.py" and (_in(qual, "Slabs") or _in(qual, "_parse_slab"))
+
+
+class Scan(ast.NodeVisitor):
+    """What `ast` sees, so a string, a comment or a docstring holding the same text is never code.
+    Finds a write to the snapshots table (a subscript assignment or `del`, or a `Rows` write verb, on an
+    attribute named `snapshots`, a private field of one, or a local bound to one) and a write of `Slab.latest`
+    (an attribute assignment, a `latest=` keyword, `setattr(.., "latest", ..)`, or a `Slab(..)` call with
+    its seventh positional argument or a `*`/`**` splat). One alias hop; a table reached by `getattr`,
+    a tuple unpack or a call is not followed."""
+
+    def __init__(self, rel: str):
+        self.rel, self.scope, self.aliases, self.found = rel, [], [set()], []
+
+    def _scoped(self, node):
+        self.scope.append(node.name)
+        self.aliases.append(set())
+        self.generic_visit(node)
+        self.scope.pop()
+        self.aliases.pop()
+
+    visit_ClassDef = visit_FunctionDef = visit_AsyncFunctionDef = _scoped
+
+    def hit(self, node, kind: str, what: str):
+        qual = ".".join(self.scope)
+        if not (may_write_snapshot if kind == "snapshots" else may_set_latest)(self.rel, qual):
+            self.found.append((self.rel, node.lineno, what))
+
+    def table(self, node) -> bool:
+        if isinstance(node, ast.Attribute):
+            return node.attr == "snapshots" or self.table(node.value)
+        return isinstance(node, ast.Name) and node.id in self.aliases[-1]
+
+    def target(self, node):
+        if isinstance(node, (ast.Tuple, ast.List)):
+            for item in node.elts:
+                self.target(item)
+        elif isinstance(node, ast.Subscript) and self.table(node.value):
+            self.hit(node, "snapshots", "a write into the snapshots table")
+        elif isinstance(node, ast.Attribute) and node.attr == "latest":
+            self.hit(node, "latest", "an assignment to .latest")
+
+    def visit_Assign(self, node):
+        for target in node.targets:
+            self.target(target)
+            if isinstance(target, ast.Name) and self.table(node.value):
+                self.aliases[-1].add(target.id)
+        self.generic_visit(node)
+
+    def visit_AugAssign(self, node):
+        self.target(node.target)
+        self.generic_visit(node)
+
+    def visit_AnnAssign(self, node):
+        if node.value is not None:
+            self.target(node.target)
+        self.generic_visit(node)
+
+    def visit_Delete(self, node):
+        for target in node.targets:
+            self.target(target)
+        self.generic_visit(node)
+
+    def visit_Call(self, node):
+        func = node.func
+        if isinstance(func, ast.Attribute) and func.attr in WRITE_VERBS and self.table(func.value):
+            self.hit(node, "snapshots", "a Rows write verb on the snapshots table")
+        if any(k.arg == "latest" for k in node.keywords):
+            self.hit(node, "latest", "a latest= keyword")
+        if (isinstance(func, ast.Name) and func.id == "setattr" and len(node.args) > 1
+                and isinstance(node.args[1], ast.Constant) and node.args[1].value == "latest"):
+            self.hit(node, "latest", "setattr(.., 'latest', ..)")
+        name = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else None
+        if name == "Slab" and (len(node.args) > 6 or any(isinstance(a, ast.Starred) for a in node.args)
+                               or any(k.arg is None for k in node.keywords)):
+            self.hit(node, "latest", "a Slab(..) call that sets latest")
+        self.generic_visit(node)
+
+
+def scan_source(text: str, rel: str) -> list:
+    """(rel, line, what) for each write `rel` may not make. A file that will not parse is a finding: the scan is blind to it."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError as exc:
+        return [(rel, exc.lineno or 0, "does not parse")]
+    scan = Scan(rel)
+    scan.visit(tree)
+    return scan.found
+
+
+def scan_tree(root: Path) -> list:
+    found = []
+    for name in SCAN_DIRS:
+        for path in sorted((root / name).rglob("*.py")):
+            found += scan_source(path.read_text(encoding="utf-8"), path.relative_to(root).as_posix())
+    return found
+
+
+def lines_of(text: str, rel: str = "server/sweep.py") -> list:
+    return [line for _, line, _ in scan_source(text, rel)]
+
+
+def case_snapshot_writers():
+    """10. nothing but Slabs.record_snapshot writes a snapshot, and nothing but Slabs sets latest: a scan of the source"""
+    ok(hasattr(Rows, "flushed") and hasattr(Rows, "_remember"), "control: Rows still has the two own write verbs the scan names")
+    ok({"pop", "update", "setdefault", "clear", "popitem", "__setitem__", "__delitem__"} <= WRITE_VERBS,
+       "control: the verb set holds every MutableMapping write")
+
+    # The real tree. The planted cases below prove this answer is not blindness.
+    same("no code outside Slabs.record_snapshot writes slab_snapshots, none outside Slabs sets .latest",
+         scan_tree(ROOT), [])
+
+    # A planted offender is found, whatever form it takes. Each sits on line 2 of a function (line 3 when it has two lines).
+    for label, src in (
+        ("a subscript assignment", 't.snapshots["k"] = row'),
+        ("a nested attribute", 'self.slabs.snapshots[key] = row'),
+        ("an augmented assignment", 't.snapshots["k"] += 1'),
+        ("a del", 'del t.snapshots["k"]'),
+        ("update", 't.snapshots.update({"k": row})'),
+        ("pop", 't.snapshots.pop("k")'),
+        ("popitem", 't.snapshots.popitem()'),
+        ("clear", 't.snapshots.clear()'),
+        ("setdefault", 't.snapshots.setdefault("k", row)'),
+        ("add", 't.snapshots.add(row)'),
+        ("put", 't.snapshots.put("k", row)'),
+        ("flushed", 't.snapshots.flushed([])'),
+        ("__setitem__", 't.snapshots.__setitem__("k", row)'),
+        ("a private field", 't.snapshots._loaded["k"] = row'),
+        ("a local bound to the table", 'snaps = t.snapshots\nsnaps["k"] = row'),
+        ("a tuple target", 'a, t.snapshots["k"] = 1, row'),
+        ("a latest= keyword", 's.slabs[k] = slab._replace(latest=row)'),
+        ("an attribute assignment to latest", 'slab.latest = row'),
+        ("setattr latest", 'setattr(slab, "latest", row)'),
+        ("a Slab with a seventh argument", 'Slab(1, 2, 3, 4, 5, 6, row)'),
+        ("a Slab with a ** splat", 'Slab(**fields)'),
+        ("a Slab with a * splat", 'Slab(*fields)'),
+    ):
+        body = "\n".join("    " + line for line in src.split("\n"))
+        same(f"found: {label}", lines_of(f"def sweep(t, slab, row, fields):\n{body}\n"), [3 if "\n" in src else 2])
+
+    # The same text that is not code is not found.
+    for label, src in (
+        ("a string", 'x = \'t.snapshots["k"] = row\'\ny = "Slab(**fields)"'),
+        ("a comment", '# t.snapshots["k"] = row\n# slab.latest = row  // /* #'),
+        ("a docstring", 'def f():\n    """t.snapshots.update({})\n    slab.latest = row\n    """\n'),
+        ("a multi-line string", 'text = """\nt.snapshots["fake"] = row  # inside the string\n/* // */\nslab.latest = x\n"""\n'),
+        ("a lone quote in a comment", "# it's t.snapshots['k'] = row\n"),
+        ("reads", 'a = t.snapshots["k"]\nb = t.snapshots.where(cert="1")\nc = t.snapshots_for(1, 2)\nd = slab.latest.day\n'
+                  'e = Slab(1, 2, 3, 4, 5, 6)\nf = slab._replace(added=1)\nlatest = 4\n'),
+    ):
+        same(f"not found: {label}", lines_of(src), [])
+
+    # A comment opener or a lone quote in a string or comment does not hide the real write after it.
+    for label, src, want in (
+        ("a # inside a string", 'note = "see # here // and /* there"; t.snapshots["k"] = row', [1]),
+        ("a multi-line string above", 'text = """\nt.snapshots["fake"] = row  # fake\n/* // */\n"""\nt.snapshots["real"] = row\n', [5]),
+        ("a lone quote in a comment above", "# don't\nt.snapshots['k'] = row\n", [2]),
+        ("a lone quote in a string above", "note = \"it's\"\nt.snapshots['k'] = row\n", [2]),
+        ("a lone quote in a docstring above", 'def f(t):\n    """Don\'t."""\n    t.snapshots["k"] = row\n', [3]),
+    ):
+        same(f"found after {label}", lines_of(src), want)
+
+    # The allow list is by file and by method.
+    def in_slabs(src):
+        return lines_of(src, "store/slabs.py")
+
+    same("allowed: Slabs.record_snapshot writes the table and sets latest",
+         in_slabs('class Slabs:\n    def record_snapshot(self):\n        self.snapshots["k"] = 1\n        self.slabs[k] = s._replace(latest=1)\n'), [])
+    same("allowed: a helper nested in record_snapshot",
+         in_slabs('class Slabs:\n    def record_snapshot(self):\n        def put():\n            self.snapshots["k"] = 1\n'), [])
+    same("not allowed: another Slabs method writes the table",
+         in_slabs('class Slabs:\n    def sweep(self):\n        self.snapshots["k"] = 1\n'), [3])
+    same("not allowed: another class with that method name",
+         in_slabs('class Other:\n    def record_snapshot(self):\n        self.snapshots["k"] = 1\n'), [3])
+    same("not allowed: a module function with that name", in_slabs('def record_snapshot(self):\n    self.snapshots["k"] = 1\n'), [2])
+    same("not allowed: the same method in another file",
+         lines_of('class Slabs:\n    def record_snapshot(self):\n        self.snapshots["k"] = 1\n', "server/slabs.py"), [3])
+    same("allowed: Slabs sets latest in any method",
+         in_slabs('class Slabs:\n    def add(self):\n        return Slab(1, 2, 3, 4, 5, 6, history[-1])\n'), [])
+    same("allowed: _parse_slab decodes a stored row", in_slabs('def _parse_slab(key, record):\n    return Slab(**row)\n'), [])
+    same("not allowed: another store/slabs.py function sets latest", in_slabs('def other(row):\n    return Slab(**row)\n'), [2])
+    same("not allowed: _parse_slab in another file",
+         lines_of('def _parse_slab(key, record):\n    return Slab(**row)\n', "server/x.py"), [2])
+    same("a file that will not parse is a finding", [what for _, _, what in scan_source("def (:\n", "pipeline/broken.py")],
+         ["does not parse"])
+
+    # The tree walk: a planted file is found where it sits; a quiet one, the allowed one and one outside the four folders are not.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        for rel, src in (
+            ("server/planted.py", 'def sweep(t, row):\n    t.snapshots["k"] = row\n'),
+            ("pipeline/quiet.py", '"""t.snapshots["k"] = row"""\n# slab.latest = row\n'),
+            ("cli/sub/deep.py", 'def f(s):\n    s.slabs.snapshots.update({})\n'),
+            ("scripts/outside.py", 'def f(s):\n    s.snapshots["k"] = 1\n'),
+            ("store/slabs.py", 'class Slabs:\n    def record_snapshot(self):\n        self.snapshots["k"] = 1\n'),
+        ):
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text(src, encoding="utf-8")
+        same("a planted file is found where it sits",
+             sorted((rel, line) for rel, line, _ in scan_tree(root)), [("cli/sub/deep.py", 2), ("server/planted.py", 2)])
+
+
 CASES = (
     case_slabs, case_grader_home, case_snapshots, case_grader_separation, case_sales,
     case_shared_sale, case_sale_date_text, case_one_transaction, case_no_guessed_value,
-    case_reading_back, case_sales_read_scope, case_upgrade,
+    case_reading_back, case_sales_read_scope, case_upgrade, case_remove, case_latest,
+    case_latest_after_remove, case_snapshot_writers,
 )
 
 
