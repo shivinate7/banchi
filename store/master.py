@@ -204,10 +204,9 @@ def departed_among(cards, positions) -> set:
 # vocabulary so the history stays greppable — free text would be a second `note`.
 RETIRE_REASONS = ("pulled", "damaged", "lost", "given_away")
 # The reason of a retirement no person chose: `cli/cmd_identify.py` retires a captured card whose photograph
-# shows an empty slot. Not a `RETIRE_REASONS` member, because that tuple is what a person may pick and what
-# the retire route accepts; `Inventory.retire` takes both. The event carries the evidence.
+# shows an empty slot, through `Inventory.retire_empty_slot` alone. Not a `RETIRE_REASONS` member, because
+# that tuple is what a person may pick, what the retire route accepts and what `Inventory.retire` takes.
 EMPTY_SLOT = "empty_slot"
-AUTOMATIC_RETIRE_REASONS = (EMPTY_SLOT,)
 
 PUSHED = "pushed"
 STAGED = "staged"
@@ -711,7 +710,7 @@ class Card:
     read_disputes: bool = False
     state: str = CAPTURED
     state_at: Optional[str] = None
-    # Why a retired card left — one of `RETIRE_REASONS` or `AUTOMATIC_RETIRE_REASONS`, set by `retire()` and cleared by
+    # Why a retired card left — one of `RETIRE_REASONS` (or `EMPTY_SLOT`, set by `retire_empty_slot()`), set by `retire()` and cleared by
     # the route that reverses one; None on every card in any other state. NOT a capture
     # claim, and deliberately absent from `CAPTURE_CLAIM_FIELDS` below: a claim survives a
     # re-record and is settable at capture time, while this describes a departure — a
@@ -3004,7 +3003,7 @@ class Inventory:
         self._log(event, key, sku=card.sku, bound_by=card.bound_by, run=card.run)
         return card
 
-    def retire(self, key: str, reason: str, **evidence) -> bool:
+    def retire(self, key: str, reason: str) -> bool:
         """Move one card to `retired`, carrying why it left. False if the position is empty.
 
         `set_state` with the reason attached, and ONE method rather than a `set_state` call
@@ -3017,12 +3016,21 @@ class Inventory:
         The reason is validated here as well as at the route, because this module is the
         store's own boundary: a caller that bypassed the server must still be unable to
         write a reason outside the vocabulary.
-
-        `evidence` is extra fields for the history line (an automatic retirement names what it
-        measured there), never written onto the card.
         """
-        if reason not in AUTOMATIC_RETIRE_REASONS:
-            check_retire_reason(reason)
+        check_retire_reason(reason)
+        return self._retire(key, reason)
+
+    def retire_empty_slot(self, key: str, *, p99: float, best_match: float, identify_run: str) -> bool:
+        """Retire a CAPTURED card whose photograph shows an empty slot. False, and nothing written, for
+        a missing card or one in any other state. The one caller is `cli/cmd_identify.py`, and `retire`
+        refuses this reason, so no route or other caller can pass it. The history line carries what was
+        measured, so a wrong retirement is found from the store record alone."""
+        card = self.cards.get(key)
+        if card is None or card.state != CAPTURED:
+            return False
+        return self._retire(key, EMPTY_SLOT, p99=p99, best_match=best_match, identify_run=identify_run)
+
+    def _retire(self, key: str, reason: str, **evidence) -> bool:
         card = self.cards.get(key)
         if card is None:
             return False

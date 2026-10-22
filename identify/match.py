@@ -90,8 +90,8 @@ TOP_N = 3
 # main queue as "empty", never to a wrong listing; widen with a second feature if one is ever measured.
 EMPTY_SLOT_P99 = 100
 # A DARK PHOTOGRAPH IS RETIRED ONLY WHEN THE FREE READER'S BEST MATCH IS ALSO WEAK. Best raw cosine of
-# the seven empties is 0.2455 to 0.2841 over every non-promo Riftbound set (0.1803 to 0.2342 over the
-# hinted set). The lowest real photograph near the dark cut (p99 127 to 141) is 0.7211, and real cards
+# the seven empties is 0.2455 to 0.2841 over the whole Riftbound pool, promos included (`_whole_pool`;
+# the one pool the signal is read over). The lowest real photograph near the dark cut (p99 127 to 141) is 0.7211, and real cards
 # dimmed to p99 60 stay at 0.6373 or more. The line leans to the real-card side of the gap: a wrong
 # retirement is found from the store record only, a stuck empty only waits in the main queue.
 EMPTY_SLOT_WEAK_COSINE = 0.40
@@ -587,14 +587,10 @@ def empty_slot(photo: Path) -> bool:
 
 
 def retires_empty_slot(result: "Result") -> bool:
-    """True when both signals agree that the slot is empty: the photograph is dark (the result is
-    `empty_slot`) AND the best match is weak. No ranked best match is no second signal, so the card
-    stays in the main queue."""
-    return (
-        result.code == UNREAD_EMPTY_SLOT
-        and result.best_match is not None
-        and result.best_match < EMPTY_SLOT_WEAK_COSINE
-    )
+    """True when the best match over the whole pool is weak. Only a dark photograph's result carries
+    a `best_match`, so both signals agree whenever this is True. No ranked best match is no second
+    signal, so the card stays in the main queue."""
+    return result.best_match is not None and result.best_match < EMPTY_SLOT_WEAK_COSINE
 
 
 def _crop(photo: Path, aspect: float):
@@ -878,15 +874,18 @@ def _read_chunk(
     out: Dict[str, Result] = {}
     current = index.meta("model_sha256") == MODEL_SHA256
     pending: List[Tuple[Request, Tuple[str, ...], "object"]] = []
-    # A DARK PHOTOGRAPH IS RANKED LIKE ANY OTHER AND NEVER ACCEPTED: the best match is the second
-    # signal `retires_empty_slot` reads, and one ranking serves both. Every refusal below still applies,
-    # and a dark photograph that none of them ranks has no best match.
+    # A DARK PHOTOGRAPH IS NEVER ACCEPTED AND NEVER MATCHED THROUGH ITS OWN HINT. Its best match is the
+    # second signal `retires_empty_slot` reads, so it is ranked over the whole pool of its game
+    # (`_whole_pool`) and nowhere else: a wrong hint or a missing set would give a real dark card a
+    # weak score and retire it. No whole pool, no best match.
     dark: Dict[str, float] = {}
     for request in requests:
         p99 = luminance_p99(request.photo)
         if p99 is not None and p99 < EMPTY_SLOT_P99:
             dark[request.key] = p99
     for request in requests:
+        if request.key in dark:
+            continue
         if isinstance(request.rarity_claim, str):  # the one entry: a bare string is one cell, never a substring pool
             request = replace(request, rarity_claim=[request.rarity_claim])
         if request.game not in SERVED_GAMES:
@@ -932,9 +931,6 @@ def _read_chunk(
                 }
                 for i in order[:TOP_N]
             ]
-            if request.key in dark:  # no verdict: a dark photograph is never accepted
-                out[request.key] = Result(request.key, False, candidates=candidates)
-                continue
             verdict = _verdict(request, pool, sims, order, pool.blocked)
             if verdict.refusal is not None:
                 narrowed = _narrowed(request, pool, sims, order)
@@ -962,13 +958,78 @@ def _read_chunk(
                 },
             )
             out[request.key] = Result(request.key, True, payload=payload, code=code, margin=margin, floor=floor, candidates=candidates)
-    for key, p99 in dark.items():
-        ranked = out[key].candidates
-        out[key] = Result(
-            key, False, code=UNREAD_EMPTY_SLOT, detail="the slot holds no card", candidates=ranked,
-            p99=p99, best_match=ranked[0]["cosine"] if ranked else None,
-        )
+    if dark:
+        ranked = _rank_dark([r for r in requests if r.key in dark], index, model, aspect, current)
+        for key, p99 in dark.items():
+            candidates = ranked.get(key, [])
+            out[key] = Result(
+                key, False, code=UNREAD_EMPTY_SLOT, detail="the slot holds no card", candidates=candidates,
+                p99=p99, best_match=candidates[0]["cosine"] if candidates else None,
+            )
     return [out[r.key] for r in requests]
+
+
+def _whole_pool(index: Index, game: str) -> Optional[Tuple[str, ...]]:
+    """Every set the index serves for the game, promos included, or None. None unless the game is
+    served, the index was built by the pinned model, and it holds every set the catalogue lists for the
+    game. A game whose catalogue lists no sets (Pokemon, whose sets come from the store) cannot be
+    proved whole, so it has no whole pool."""
+    if game not in SERVED_GAMES or index.meta("model_sha256") != MODEL_SHA256:
+        return None
+    held = set(index.set_names(game))
+    try:
+        listed = [name for name, _group in _stock_images().catalog_sets(game)]
+    except Exception:  # noqa: BLE001 - a catalogue that cannot be read proves nothing
+        return None
+    if not held or not listed or any(name not in held for name in listed):
+        return None
+    return tuple(sorted(held))
+
+
+def _rank_dark(requests: Sequence[Request], index: Index, model: Optional[Path], aspect: float, current: bool) -> Dict[str, List[dict]]:
+    """`{key: top candidates}` for each dark photograph that has a whole pool and a card to rank.
+    A key left out has no best match, so `retires_empty_slot` is False for it."""
+    import numpy as np
+
+    out: Dict[str, List[dict]] = {}
+    if not current:
+        return out
+    whole: Dict[str, Optional[Tuple[str, ...]]] = {}
+    cards: List[Tuple[Request, Tuple[str, ...], "object"]] = []
+    for request in requests:
+        if request.game not in whole:
+            whole[request.game] = _whole_pool(index, request.game)
+        sets = whole[request.game]
+        if sets is None:
+            continue
+        try:
+            card = _crop(request.photo, aspect)
+        except Exception:  # noqa: BLE001 - an unreadable photograph has no best match
+            continue
+        if card is not None:
+            cards.append((request, sets, card))
+    if not cards:
+        return out
+    vectors = embed([card for _r, _s, card in cards], model)
+    pools: Dict[str, Pool] = {}
+    for (request, sets, _card), vector in zip(cards, vectors):
+        if request.game not in pools:
+            pools[request.game] = index.pool(request.game, sets)
+        pool = pools[request.game]
+        if len(pool.rows) == 0:
+            continue
+        sims = pool.vectors @ vector
+        out[request.key] = [
+            {
+                "product_id": pool.rows[int(i)][2],
+                "set": pool.rows[int(i)][1],
+                "number": pool.rows[int(i)][3],
+                "name": pool.names[int(i)],
+                "cosine": round(float(sims[int(i)]), 4),
+            }
+            for i in np.argsort(-sims)[:TOP_N]
+        ]
+    return out
 
 
 # ------------------------------------------------------------------------ the preflight

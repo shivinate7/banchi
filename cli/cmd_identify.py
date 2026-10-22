@@ -1937,18 +1937,18 @@ def run(args, say) -> int:
                         note=item.capture.note,
                     )
                 )
-            if item.stage == STAGE_EMPTY and item.capture.has_position and match.retires_empty_slot(item.unread):
-                # RETIRED ONLY WHEN DARK AND A WEAK MATCH AGREE, and only a card nothing has been
-                # said about (`captured`): an identified or sold card is never retired here. The
-                # event names the reason and both measures, so a wrong retirement is found from the
-                # store record alone.
-                held = writable.inventory.cards.get(item.key)
-                if held is not None and held.state == master.CAPTURED:
-                    writable.inventory.retire(
-                        item.key, master.EMPTY_SLOT,
-                        p99=round(item.unread.p99, 1), best_match=item.unread.best_match, identify_run=run_dir.name,
-                    )
-                    retired_empty.append(item)
+            # RETIRED ONLY WHEN DARK AND A WEAK MATCH AGREE, and only a card nothing has been said about
+            # (`captured`): an identified or sold card is never retired here. The event names the reason
+            # and both measures, so a wrong retirement is found from the store record alone.
+            if (
+                item.stage == STAGE_EMPTY
+                and item.capture.has_position
+                and match.retires_empty_slot(item.unread)
+                and writable.inventory.retire_empty_slot(
+                    item.key, p99=round(item.unread.p99, 1), best_match=item.unread.best_match, identify_run=run_dir.name,
+                )
+            ):
+                retired_empty.append(item)
             if item.cached:
                 # A CACHED ANSWER IS ADOPTED ONTO A CARD THAT IS STILL `captured` AND NEVER ONTO
                 # ONE THE READER OR AN EARLIER PRESS ALREADY IDENTIFIED. Without this a press over
