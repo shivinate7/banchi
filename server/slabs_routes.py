@@ -296,16 +296,20 @@ def _add(body: dict) -> dict:
 
     with Store().write() as snap:
         table = snap.slabs
-        added = table.get(cert, grader) is None
+        # A slab out of the list that still has snapshots was removed: it comes back with its first day.
+        history = table.snapshots_for(cert, grader)
+        fresh = table.get(cert, grader) is None
+        restored = fresh and bool(history)
+        added = fresh and not history
         slab = table.add(cert, grader, profile_id=look["profileId"], identity=identity,
-                         subgrades=look.get("subGrades"), added=day)
+                         subgrades=look.get("subGrades"), added=history[0].day if restored else day)
         table.record_snapshot(cert, grader, day, population=population, gem_rate=gem_rate, ladder=ladder, **values)
         # The store replaces a sale whole, so what only an earlier read gave (3.3's fields) is merged in first.
         table.record_sales(cert, grader, [
             {**table.sales[sale["id"]].data, **sale} if sale["id"] in table.sales else sale for sale in sales])
     label = (slab.identity or {}).get("label") or f"slab {cert}"
     return {"cert": slab.cert, "grader": slab.grader, "label": label, "day": day, "added": added,
-            "message": f"{'Added' if added else 'Updated'} {label}."}
+            "restored": restored, "message": f"{'Added' if added else 'Restored' if restored else 'Updated'} {label}."}
 
 
 def _unreadable():

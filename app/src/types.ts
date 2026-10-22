@@ -4918,13 +4918,14 @@ export type SlabSnapshot = {
   speed: Record<string, { velocity: number | null; averagePrice: string | null }> | null
 }
 
-/** `POST /slabs`. `grader` is Card Ladder's name; `added` is false when the slab was already there. */
+/** `POST /slabs`. `grader` is Card Ladder's name; `added` is true only for a slab never stored; `restored` is true for one added again after a remove. */
 export type SlabReceipt = {
   cert: string
   grader: string
   label: string
   day: string
   added: boolean
+  restored: boolean
   message: string
 }
 
