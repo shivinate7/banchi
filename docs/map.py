@@ -9649,6 +9649,22 @@ COMPONENTS = [
                         "Run by `make unit`, in `make check`'s product shard.",
                 "governed_by": ["D5", "D275"],
             },
+            "tests/slabs.spec.ts": {
+                "does": "the Slabs screen with the four slab routes stubbed: the 18 headers in the "
+                        "owner's order, a typed dash in each cell no route fills, the sort by Card "
+                        "Ladder value with a slab that never sold last, the Conf words, no cert and no "
+                        "settings key anywhere on screen, a refusal in words with no Retry for a rate "
+                        "limit (on add, on the list and on Undo), one request from a double press of "
+                        "Add or Remove, Esc and focus on the detail sheet, and no sideways page scroll "
+                        "at 1440 and 820. Run by `make design-check`.",
+                "governed_by": ["D320", "D196", "D218", "D221", "D275", "D313"],
+            },
+            "tests/unit/slab-graders.unit.ts": {
+                "does": "the grader list the Slabs screen offers (`src/slabGraders.ts`) equals "
+                        "`store/slabs.GRADERS`, in order, read by running Python. Run by `make unit`, "
+                        "in `make check`'s product shard.",
+                "governed_by": ["D320"],
+            },
             "tests/unit/formatter-homes.unit.ts": {
                 "does": "the four formatter homes: the ago phrase (`dates.relativeDate`), the count "
                         "word and byte size (`kit/dataRules`), the local day key (`dates.localDay`). "
