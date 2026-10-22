@@ -550,7 +550,7 @@ test('a press on the Card cell opens the slab in a sheet with its sections in or
   /* Each heading is looked for AFTER the one before it: Worth names the grade ladder as the source of a figure,
      and that line is not the ladder's own heading. */
   let from = 0
-  const where = [/^worth/i, /^sales at the grade/i, /^sales speed/i, /^population/i, /ladder/i, /^snapshots?/i].map((p) => {
+  const where = [/^worth/i, /^Sales at the Grade/, /^Sales Speed/, /^Population at the Grade/, /^Grade Ladder/, /^snapshots?/i].map((p) => {
     const found = lines.findIndex((l, i) => i >= from && p.test(l))
     if (found >= 0) from = found + 1
     return found
@@ -641,13 +641,13 @@ for (const width of [1440, 820]) {
       await expect(sheet).toBeVisible()
       await expect.poll(() => wire.details.length, { message: 'the sheet never asked for its detail' }).toBe(1)
       const before = await sectionTops(sheet)
-      expect(Object.keys(before), 'the sheet draws Sales speed while the detail is on its way').toContain('Sales speed')
+      expect(Object.keys(before), 'the sheet draws Sales Speed while the detail is on its way').toContain('Sales Speed')
 
       gate.open()
       await expect(sheet.getByText(arrival.firstStep, { exact: true }), 'the detail never arrived').toBeVisible()
       await frames(page)
       const after = await sectionTops(sheet)
-      expect(Object.keys(after), 'Sales speed is still drawn once the detail has arrived').toContain('Sales speed')
+      expect(Object.keys(after), 'Sales Speed is still drawn once the detail has arrived').toContain('Sales Speed')
       const moved = Object.keys(before).filter((name) => name in after && Math.abs((after[name] ?? 0) - (before[name] ?? 0)) > 1)
       expect(moved.map((name) => `${name} ${before[name]} to ${after[name]}`), 'a section moved when the detail arrived').toEqual([])
     })
@@ -666,6 +666,50 @@ test('a slab whose label is the empty string still has a Card button with a visi
   await expect(sheet).toContainText('412.00')
   await expect(sheet, 'the sheet needs a name that is not blank').toHaveAccessibleName(/\S/)
   await expectNoCert(page, 'the sheet of a slab with an empty label')
+})
+
+/* The copy sweep (copy-checks.spec.ts) skips whatever sits under `[data-typed]`: that marker is for a value the owner
+   or Card Ladder typed. The screen's own "Unnamed Slab" is copy and has to be graded, so it may not sit under one;
+   the stored name has to, and the marker holds nothing but that name. The three blank labels are the empty string,
+   null and spaces: each one is shown as "Unnamed Slab". */
+test('the Card button marks only the stored name as typed, and the screen\'s own Unnamed Slab is not under a marker', async ({ page }) => {
+  const SPACES = slabRow({ cert: '99900222', grader: 'sgc', label: '   ', grade: 'g8', added: '2026-10-22' })
+  await open(page, makeWire({ rows: [EMPTY_LABEL, SPACES, ...severalSlabs()] }))
+  await expect(dataRows(page)).toHaveCount(7)
+
+  const named = new Set<string>(Object.values(LABEL))
+  const rows = dataRows(page)
+  const faults: string[] = []
+  let blank = 0
+  let stored = 0
+  for (let i = 0; i < (await rows.count()); i++) {
+    /* One entry per text node in the button: its words, and the words of the nearest `[data-typed]` above it, if any. */
+    const nodes = await cardButton(rows.nth(i)).evaluate((button) => {
+      const out: Array<{ text: string; marker: string | null }> = []
+      const walk = document.createTreeWalker(button, NodeFilter.SHOW_TEXT)
+      for (let n = walk.nextNode(); n !== null; n = walk.nextNode()) {
+        const text = (n.textContent ?? '').replace(/\s+/g, ' ').trim()
+        if (text === '') continue
+        const marker = n.parentElement?.closest('[data-typed]') ?? null
+        out.push({ text, marker: marker === null ? null : (marker.textContent ?? '').replace(/\s+/g, ' ').trim() })
+      }
+      return out
+    })
+    const whole = nodes.map((n) => n.text).join(' ')
+    if (whole === 'Unnamed Slab') {
+      blank++
+      for (const n of nodes) if (n.marker !== null) faults.push(`row ${i}: the screen's own "${n.text}" is under a [data-typed] marker, so the copy sweep never reads it`)
+    } else if (named.has(whole)) {
+      stored++
+      for (const n of nodes) {
+        if (n.marker === null) faults.push(`row ${i}: the stored name "${n.text}" is under no [data-typed] marker`)
+        else if (n.marker !== whole) faults.push(`row ${i}: the marker over "${whole}" holds "${n.marker}"`)
+      }
+    } else faults.push(`row ${i}: the Card button reads "${whole}", which is neither a stored name nor the screen's own Unnamed Slab`)
+  }
+  expect(blank, 'the empty string, null and spaces each show Unnamed Slab').toBe(3)
+  expect(stored, 'every stored name is on a row').toBe(named.size)
+  expect(faults).toEqual([])
 })
 
 /* ---------------------------------------------------------------------------- add */
