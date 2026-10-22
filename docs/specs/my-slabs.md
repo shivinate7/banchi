@@ -126,6 +126,13 @@ Pop, Graded, Rate, Top %, Best %, Grade, Set, Card, Var, Ask, Card Ladder, Conf,
 PSA 10, Raw NM, Slab vs raw, ×, Do.
 
 - The default sort is ×, highest first. × is the slab's value divided by its raw NM price.
+  A row with no × sorts after every row with one. Ties, and rows with no ×, fall back to the
+  Card Ladder value, highest first, and a slab with no sales at its grade comes last.
+- All 18 headers show, in the owner's order, while a route cannot fill some of them. Such a
+  cell holds a typed dash (D218, a typed dot is a defect). Each column keeps its width
+  whether it is empty or full (D313, nothing on screen moves unless the person moved it).
+- The table scrolls sideways inside its own frame when it is wider than the page, at 820
+  for example. The page itself never scrolls sideways.
 - The cert is hidden on screen. The buyer export keeps it.
 - Names are short. A name carries no year. Set shows as a code (SFD, ME01, SV09, SWSH07, CRZ,
   MEP, OP14), with a JP or CN suffix. "Stamp" shows as "Stamped". A variation that names the
