@@ -696,6 +696,51 @@ def check_stale_chunk_opens_own_run(checks: Checks) -> None:
         checks.ok(not (stale / "pricing.json").exists(), "2. with no pricing.json")
 
 
+def check_joined_run_after_the_look(checks: Checks) -> None:
+    """A press joins the worker's run after `leave_joined` has looked. The look is disabled here, so
+    the stale chunk meets a joined run: its compare-and-set refuses it, the run keeps only its own
+    keys and stays joined, and the named card lands in a run of its own."""
+    from cli import cmd_match
+
+    checks.note("")
+    checks.note("JOINED AFTER THE LOOK — a stale chunk never joins a run a press joined, even when the look missed it")
+    with isolated_home(), mock.patch.object(cmd_match._Session, "leave_joined", lambda _self: None):
+        cards = [_shoot(ARTICUNO) for _ in range(9)]
+        export = _seed_export()
+        reads: list = []
+
+        def age_export_after_first_chunk(read):
+            def wrapped(requests, index=None, *a, **k):
+                reads.append([r.key for r in requests])
+                if len(reads) == 2:  # the second chunk meets an export past 900 s
+                    stamp = time.time() - 901
+                    os.utime(export, (stamp, stamp))
+                return read(requests, index, *a, **k)
+            return wrapped
+
+        _sweep(age_export_after_first_chunk(_results(cards, {k: ARTICUNO for k in cards})))
+        checks.equal(len(reads), 2, "1. the worker read two chunks")
+        first, second = set(reads[0]) if reads else set(), set(reads[1]) if len(reads) > 1 else set()
+        runs = _sweep_runs()
+        checks.ok(len(runs) == 2, "1. the named card opens a run of its own", f"match-sweep runs: {len(runs)}")
+        if not runs:
+            return
+        priced = runs[0]
+        named = runs[1] if len(runs) > 1 else None
+        checks.equal(_manifest(priced).get("joined"), True, "1. the press's joined run stays joined")
+        checks.equal(set((_manifest(priced).get("selection") or {}).get("keys") or []), first,
+                     "2. and holds only its own cards, not the stale chunk's")
+        if named is not None:
+            checks.ok(_manifest(named).get("collected") is True and _manifest(named).get("joined") is False,
+                      "2. the new run is collected and not joined", f"manifest: {_manifest(named)!r:.200}")
+            checks.equal(set((_manifest(named).get("selection") or {}).get("keys") or []), second,
+                         "2. and holds the named card alone")
+        cards_on_disk = Store().read().inventory.cards
+        for key in sorted(second):
+            checks.equal(cards_on_disk[key].run, named.name if named else None,
+                         "3. the named card's run points at the new run")
+
+
 CHECKS = (
     check_free_match_identifies,
     check_press_after_sweep,
@@ -705,6 +750,7 @@ CHECKS = (
     check_export_past_900_names_only,
     check_export_under_900_prices,
     check_stale_chunk_opens_own_run,
+    check_joined_run_after_the_look,
     check_lock_hold_cold_session,
     check_moved_between_prep_and_lock,
     check_one_run_across_restarts,
