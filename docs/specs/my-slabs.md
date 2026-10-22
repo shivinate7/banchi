@@ -125,8 +125,8 @@ Base: `https://firestore.googleapis.com/v1/projects/cardladder-71d53/databases/(
 `#/slabs` lands on one table of every slab, the owner's pick of the five mockups (01 Ledger).
 The columns, in the owner's order:
 
-Pop, Graded, Rate, Top %, Best %, Grade, Set, Card, Var, Ask, Card Ladder, Conf, Last sale,
-PSA 10, Raw NM, Slab vs raw, ×, Do.
+Pop, Graded, Rate, Top %, Best %, Grade, Set, Card, Var, Ask, Card Ladder, Conf, Last Sale,
+PSA 10, Raw NM, Slab vs Raw, ×, Do.
 
 - The default sort is ×, highest first. × is the slab's value divided by its raw NM price.
   A row with no × sorts after every row with one. Ties, and rows with no ×, fall back to the
@@ -140,7 +140,7 @@ PSA 10, Raw NM, Slab vs raw, ×, Do.
 - Names are short. A name carries no year. Set shows as a code (SFD, ME01, SV09, SWSH07, CRZ,
   MEP, OP14), with a JP or CN suffix. "Stamp" shows as "Stamped". A variation that names the
   product a card came from (box, collection, ETB, tin) shows as "P". Rarities are abbreviated.
-- Last sale is the newest sale at the slab's grade, from the sales list in 3.2, sorted by date.
+- Last Sale is the newest sale at the slab's grade, from the sales list in 3.2, sorted by date.
   It never comes from `lastSalePrice` in 3.4, because that field can trail by a sale.
 - A press on a row's card opens its detail in a side sheet from the right, the owner's pick
   over a row that opens in place. The ledger behind it never moves. The sheet's sections, in
@@ -248,7 +248,7 @@ These hold until a later route changes them.
 - **Ledger cells.** Money shows in the kit's money face (D221, money stays mono). Numbers sit
   right. Conf shows a word: 1 Very low, 2 Low, 3 Fair, 4 Good, 5 High, and 2 or less is drawn
   as a warning. A slab with no sale at its grade shows "No sales" in its Card Ladder cell and
-  leaves Conf and Last sale empty. The Card cell is the button that opens the detail.
+  leaves Conf and Last Sale empty. The Card cell is the button that opens the detail.
 - **Header.** The title is "Slabs". The line under it counts the slabs and those that never
   sold at their grade. The actions are Reload and "Add a Slab".
 - **Detail sheet.** Its title is the row's label. Under it: the grader and grade, and the day
