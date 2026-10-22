@@ -204,16 +204,6 @@ def check_run_follows_cards_out_of_deleted_box(checks: Checks) -> None:
         import csv
 
         # THE SCREENS FIRST, BEFORE THE SEND SPENDS THE COPIES.
-        priced = pipeline_routes.do_pipeline_pricing(run.name)["pricing"]
-        shown = sorted(
-            (p["box"], p["index"]) for row in priced["skus"] for p in row.get("positions") or []
-        )
-        checks.ok(
-            shown and all(box == 7 for box, _ in shown),
-            "Pricing draws the moved cards at the box they are in now, never a slot of the "
-            "new box 5",
-            f"positions {shown}",
-        )
         checks.ok(
             pipeline_routes._follows_its_cards(run.directory, Store().read()),
             "and the worklist keeps the run out of the unreachable list",

@@ -2769,8 +2769,10 @@ def do_pipeline_pricing(name: str, reads: Optional[_PricingReads] = None) -> dic
     # THE LABELS, RE-RENDERED BEFORE ANYTHING LEAVES (D58). In place on the document just
     # parsed, which nothing else holds — the file on disk is untouched, exactly as D58 left
     # `QueueEntry.label`.
-    if reads is None or name in reads.followed:
-        _follow_positions(directory, pricing, None if reads is None else reads.snapshot)
+    # ONLY THE WORKLIST'S REQUEST KNOWS WHICH RUNS FOLLOW (`reads.followed`); the single-run
+    # route pays no extra read for a screen that draws no worklist.
+    if reads is not None and name in reads.followed:
+        _follow_positions(directory, pricing, reads.snapshot)
     _relabel_positions(pricing, None if reads is None else reads.snapshot)
     # WHEN EACH ROW'S FIGURES WERE READ: the fetch time of the export this run was last joined
     # against (its mtime, D104's own rule). Added to the answer and never written back.
