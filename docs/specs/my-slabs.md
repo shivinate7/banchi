@@ -239,6 +239,10 @@ The store gets three tables (D88, SQLite and one transaction per write):
 - Sale dates are text and sort as ISO strings. A sale with any other date is refused before
   the write. Card Ladder's date format is unmeasured.
 - A slab's sales are read through an indexed link table, one row per slab and sale.
+- The slab row keeps a copy of its newest snapshot, so the list reads `slabs` once and never
+  the snapshots, which grow by one row per slab per day. One store method writes a snapshot,
+  and it updates that copy in the same write. Every snapshot writer, the sweep included, calls
+  that method. An older snapshot never replaces a newer copy.
 - A slab with no sale at its grade stores no value, never a number.
 
 ## Build plan
