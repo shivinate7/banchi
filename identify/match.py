@@ -112,18 +112,13 @@ UNREAD_FLOOR = "match_too_weak"
 # An ACCEPTED read's reason, not an unread one: the margin was thin between two printings of one
 # card and the card's own rarity claim fit exactly one of them (`_settled_by_claim`).
 ACCEPT_CLAIM = "printing_settled_by_claim"
-# Three more accepts below the baseline rule, each measured on 2,953 paid-identified cards with 0
-# new errors (docs/specs/identify-engine-pick.md, section 3). `_verdict` tries them in a fixed
-# order: baseline, claim settles a printing, clear winner, battlefield. `_read_chunk` then tries
-# the claim narrowing the field.
-ACCEPT_CLEAR = "clear_winner"
+# Accepts beyond the baseline rule (docs/specs/identify-engine-pick.md, section 3). `_verdict`
+# tries them in a fixed order: baseline, claim settles a printing, battlefield. `_read_chunk`
+# then tries the claim narrowing the field.
 ACCEPT_BATTLEFIELD = "battlefield_margin"
 ACCEPT_NARROWED = "narrowed_by_claim"
 # Rule 4: the guard did not hold the card only because the same-name printing is unreleased.
 ACCEPT_UNRELEASED = "unreleased_twin"
-# Rule 3: any card with a wide gap and a middling floor.
-CLEAR_MARGIN_MIN = 0.08
-CLEAR_FLOOR_MIN = 0.70
 # Rule 2: a battlefield is printed sideways and scores low against its upright stock photo, so
 # its floor is lower and its margin higher.
 BATTLEFIELD_MARGIN_MIN = 0.10
@@ -749,8 +744,8 @@ def _raw(pool: Pool, sims, i: int) -> float:
 
 def _verdict(request: "Request", pool: Pool, sims, order, blocked: Set[str]) -> _Verdict:
     """The accept rule over one ordered field. The order is fixed: look-alike guard, baseline
-    margin (a thin one may be settled by the claim), baseline floor, then the two rules below it,
-    clear winner and battlefield. The first that holds names the accept."""
+    margin (a thin one may be settled by the claim), baseline floor, then battlefield.
+    The first that holds names the accept."""
     best = int(order[0])
     floor = _raw(pool, sims, best)
     margin = float(sims[best]) - float(sims[int(order[1])]) if len(order) > 1 else float(sims[best])
@@ -768,8 +763,6 @@ def _verdict(request: "Request", pool: Pool, sims, order, blocked: Set[str]) -> 
         if code is None and card_name(pool.names[best]) in pool.unreleased_names:
             code = ACCEPT_UNRELEASED
         return _Verdict(pick, code, None, "", margin, floor)
-    if code is None and margin >= CLEAR_MARGIN_MIN and floor >= CLEAR_FLOOR_MIN:
-        return _Verdict(pick, ACCEPT_CLEAR, None, "", margin, floor)
     if (code is None and margin >= BATTLEFIELD_MARGIN_MIN and floor >= BATTLEFIELD_FLOOR_MIN
             and _pool_card_types(pool, request.game)[pick] == BATTLEFIELD_TYPE):
         return _Verdict(pick, ACCEPT_BATTLEFIELD, None, "", margin, floor)

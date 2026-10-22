@@ -110,10 +110,8 @@ The matcher ranks every stock photo by a hub-corrected score: `cosine - HUB_BETA
 
 - **A rarity claim settles one card's printing.** When M is under 0.04, the top two are one card. That needs the names to match once a bracketed suffix goes, and the collector numbers to match once an alt-art letter goes. The card's `rarity_claim` equals the catalog `Rarity` of exactly one of the two. The matcher accepts that printing if S holds and both conditions above hold. Different cards, a claim that fits neither or both, and no claim stay refused. The rarity is read at read time from `StockImages.catalog_products`. Pokemon has none there, so it never settles. The result's code is `printing_settled_by_claim`. This is the same pick `variant.resolve` makes from a finish claim.
 - **A rarity claim narrows the field (rule 1).** When the baseline refuses, the claim removes every printing whose catalog `Rarity` it contradicts, inside the game's own pool (Riftbound: every set when unhinted; Pokemon: the hinted set, D170). A printing with no rarity stays. The matcher accepts only when all three hold. The narrowed winner is the unnarrowed top-1. That card's own rarity is known and fits. The accept rule holds on the narrowed field. The claim never adds a competitor and never moves the pick. The no-photo guard narrows the same way. Code `narrowed_by_claim`. Measured on 2,953 paid-identified cards: 204 accepted, 0 wrong.
-- **Battlefields accept at a lower floor (rule 2).** A card whose catalog `Card Type` is `Battlefield` is accepted at M of 0.10 and S of 0.45 (`BATTLEFIELD_MARGIN_MIN`, `BATTLEFIELD_FLOOR_MIN`). Battlefields print sideways and score low. Code `battlefield_margin`. Measured: 7 accepted, 0 wrong. The type is read with the rarity, from `StockImages.catalog_products`.
-- **A clear winner accepts at a lower floor (rule 3).** Any card is accepted at M of 0.08 and S of 0.70 (`CLEAR_MARGIN_MIN`, `CLEAR_FLOOR_MIN`). Code `clear_winner`. Measured: 123 accepted, 0 wrong. The tried order is baseline, claim settles a printing, clear winner, battlefield, then rule 1.
+- **Battlefields accept at a lower floor (rule 2).** A card whose catalog `Card Type` is `Battlefield` is accepted at M of 0.10 and S of 0.45 (`BATTLEFIELD_MARGIN_MIN`, `BATTLEFIELD_FLOOR_MIN`). Battlefields print sideways and score low. Code `battlefield_margin`. Measured: 7 accepted, 0 wrong. The type is read with the rarity, from `StockImages.catalog_products`. The tried order is baseline, claim settles a printing, battlefield, then rule 1.
 - **An unreleased set trips no guard (rule 4).** A no-photo printing in a set that has no stock photo yet is not a look-alike. `match.unreleased_sets` is the one home: a set the catalog dates after today, else (Pokemon, or no dates) a set with no photographed row in the index. A card accepted only because of it carries `unreleased_twin`. Measured: 20 accepted, 0 wrong.
-- **Together (measured on 2,953 paid-identified cards, read-only):** the baseline accepts 2,272 and the four rules accept 354 more, 2,626 in all, with 0 new wrong. The 6 wrong accepts left (5 same-card other-printing, 1 by the claim settle) are the baseline's own, and 5 of them trace to a stored number the paid read misread.
 
 Measured on the 500 photographs, Marqo-B:
 
@@ -261,7 +259,7 @@ The manifest records the engine in `flags`. It records the model hash and the po
 **Tests the build must add.**
 
 - A seam test with stubbed embeddings, so CI needs no model.
-- A cache test for the four rules above.
+- A cache test for the accept rules above.
 - The parity script.
 - The spike's eval, as a script that runs on demand. It is not in `make check`, because it needs the owner's photographs.
 - T1 stays the Haiku gate.
