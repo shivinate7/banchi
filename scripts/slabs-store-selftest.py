@@ -56,7 +56,18 @@ this file tests. It follows `store/readings.py` and `store/pricearchive.py`:
     Slabs.sales_for(cert, grader) -> List[Sale]     newest `date` first, ties by `id` descending
                                                     (`Readings.sources_payload`'s rule); [] if none.
                                                     Reads only that slab's sales (see below).
-    Slab(cert, grader, profile_id, identity, subgrades, added)
+    Slab(cert, grader, profile_id, identity, subgrades, added, latest=None)
+    Slab.latest           the slab row's copy of its NEWEST snapshot, the one with the greatest `day`: a
+                          SlabSnapshot equal to `snapshots_for(...)[-1]`, or None until one is recorded.
+                          `GET /slabs` reads `slabs` once and never `slab_snapshots`, which gains a row per
+                          slab per day (spec section 6). `record_snapshot` is the one method that writes a
+                          snapshot, and it updates this copy in the same write (case 8):
+                            - a snapshot on a newer day, or the same day again, makes it the copy;
+                            - a snapshot on an older day is stored but never replaces a newer copy;
+                            - a snapshot for a slab with no row raises ValueError and writes nothing;
+                            - a failed write keeps the old copy with the old snapshots, never one without the other.
+                          `add` of a slab already there keeps its copy. NOT PINNED: the copy of a slab added
+                          again after a remove (the add route records a snapshot in the same write).
     SlabSnapshot(cert, grader, day, cl_value, cl_confidence, estimated_value,
                  estimated_confidence, last_sale_price, last_sale_date, population, gem_rate, speed)
     Sale(id, date, data)    `data` is the Card Ladder sale dict, verbatim. `date` is its `date`.
@@ -794,10 +805,104 @@ def case_remove():
             same(f"the same remove works once the failure is gone ({table})", counts()["slab_sale_links"], 3)
 
 
+def latest_of(cert, grader="psa"):
+    """The slab row's copy of its newest snapshot, from a fresh read. None when there is no row or no copy."""
+    row = slabs_now().get(cert, grader)
+    return getattr(row, "latest", None) if row else None
+
+
+def newest_stored(cert, grader="psa"):
+    rows = slabs_now().snapshots_for(cert, grader)
+    return rows[-1] if rows else None
+
+
+def day_and_fields(row):
+    return (row.day, snap_fields(row)) if row else None
+
+
+def case_latest():
+    """8. the slab row keeps its newest snapshot, updated by record_snapshot in the same write"""
+    cert = "81234567"
+    put(lambda s: add_psa(s, cert))
+    same("a slab with no snapshot has no copy", latest_of(cert), None)
+
+    answered = put(lambda s: s.record_snapshot(cert, "psa", "2026-10-05", **SNAP_A))
+    row = latest_of(cert)
+    same("after a snapshot the slab row holds that day and every value", day_and_fields(row), ("2026-10-05", SNAP_A))
+    same("the copy is the stored snapshot, whole", row, newest_stored(cert))
+    same("and the one record_snapshot answered", row, answered)
+
+    put(lambda s: s.record_snapshot(cert, "psa", "2026-10-05", **SNAP_B))
+    row = latest_of(cert)
+    same("a second write that day replaces the copy whole: SNAP_B's values, none of SNAP_A's",
+         day_and_fields(row), ("2026-10-05", SNAP_B))
+    same("and it is still the stored snapshot", row, newest_stored(cert))
+
+    put(lambda s: s.record_snapshot(cert, "psa", "2026-10-07", **SNAP_C))
+    same("a newer day moves the copy to that day", day_and_fields(latest_of(cert)), ("2026-10-07", SNAP_C))
+
+    put(lambda s: s.record_snapshot(cert, "psa", "2026-10-06", **SNAP_A))
+    row = latest_of(cert)
+    same("an older day written after a newer one leaves the copy on the newer", day_and_fields(row), ("2026-10-07", SNAP_C))
+    same("the older snapshot is still stored", [x.day for x in slabs_now().snapshots_for(cert, "psa")],
+         ["2026-10-05", "2026-10-06", "2026-10-07"])
+    same("and the copy is still the newest stored snapshot", row, newest_stored(cert))
+    put(lambda s: s.record_snapshot(cert, "psa", "2026-10-06", **SNAP_B))
+    same("replacing that older day again leaves the copy alone", latest_of(cert), row)
+
+    put(lambda s: add_psa(s, cert, added="2026-10-20"))
+    same("adding a slab that is already there keeps its copy", latest_of(cert), row)
+
+    newer_first, older_first = "81234568", "81234569"
+    put(lambda s: (add_psa(s, newer_first), add_psa(s, older_first)))
+
+    def both_ways(s):
+        s.record_snapshot(newer_first, "psa", "2026-10-09", **SNAP_C)
+        s.record_snapshot(newer_first, "psa", "2026-10-08", **SNAP_A)
+        s.record_snapshot(older_first, "psa", "2026-10-08", **SNAP_A)
+        s.record_snapshot(older_first, "psa", "2026-10-09", **SNAP_C)
+    put(both_ways)
+    same("two writes in one transaction, newer day first: the copy is the newer",
+         day_and_fields(latest_of(newer_first)), ("2026-10-09", SNAP_C))
+    same("two writes in one transaction, older day first: the copy is the newer",
+         day_and_fields(latest_of(older_first)), ("2026-10-09", SNAP_C))
+
+    put(lambda s: s.add(cert, "cgc", profile_id="cgc-3003", identity=IDENTITY, subgrades=None, added="2026-10-02"))
+    put(lambda s: s.record_snapshot(cert, "cgc", "2026-10-04", **SNAP_B))
+    same("one cert under another grader keeps its own copy", day_and_fields(latest_of(cert, "cgc")), ("2026-10-04", SNAP_B))
+    same("and the first grader's copy is untouched", latest_of(cert), row)
+
+    before = counts()
+    refused = False
+    try:
+        put(lambda s: s.record_snapshot("99999999", "psa", "2026-10-05", **SNAP_A))
+    except ValueError:
+        refused = True
+    ok(refused, "a snapshot for a slab with no row raises ValueError")
+    same("and it writes nothing: no snapshot row, no slab row", counts(), before)
+
+    for table in ("slabs", "slab_snapshots"):
+        with fresh_home():
+            put(lambda s: add_psa(s, cert))
+            put(lambda s: s.record_snapshot(cert, "psa", "2026-10-05", **SNAP_A))
+            held, before = latest_of(cert), counts()
+            ok(held is not None, f"{table} fails: control, the slab row holds a copy before the write")
+            inject_failure(table)
+            raised = False
+            try:
+                put(lambda s: s.record_snapshot(cert, "psa", "2026-10-06", **SNAP_C))
+            except Exception:
+                raised = True
+            clear_failure()
+            ok(raised, f"{table} fails: the snapshot write raises")
+            same(f"{table} fails: no snapshot row lands without its copy", counts(), before)
+            same(f"{table} fails: the slab row keeps the old copy", latest_of(cert), held)
+
+
 CASES = (
     case_slabs, case_grader_home, case_snapshots, case_grader_separation, case_sales,
     case_shared_sale, case_sale_date_text, case_one_transaction, case_no_guessed_value,
-    case_reading_back, case_sales_read_scope, case_upgrade, case_remove,
+    case_reading_back, case_sales_read_scope, case_upgrade, case_remove, case_latest,
 )
 
 
