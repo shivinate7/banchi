@@ -879,15 +879,18 @@ test('after Remove succeeds, focus is on something on the page and never on the 
   const wire = await open(page)
   await expect(dataRows(page)).toHaveCount(5)
   /* The list read after the remove is held, so the Card button stays on the page while the sheet gives focus back to
-     it. The row goes only when the read is let through, and focus has to be somewhere else by then. */
+     it. The row goes only when the read is let through, and focus has to be somewhere else by then. A build that
+     closes the sheet only after that read is not held here: it has no Card button to give focus back to. */
   const gate = new Gate()
   wire.hold.list = gate
   const reads = wire.lists
   const sheet = await removeFrom(page, rowFor(page, LABEL.terapagos))
+  await expect.poll(() => wire.lists, { message: 'the list was not read again after the remove' }).toBe(reads + 1)
+  await sheet.waitFor({ state: 'hidden', timeout: 2000 }).catch(() => undefined)
+  await frames(page)
+  gate.open()
   await expect(undoButton(page)).toBeVisible()
   await expect(sheet).toBeHidden()
-  await expect.poll(() => wire.lists, { message: 'the list was not read again after the remove' }).toBe(reads + 1)
-  gate.open()
   await expect(dataRows(page)).toHaveCount(4)
   await expect(rowFor(page, LABEL.terapagos)).toHaveCount(0)
   const focused = () =>
