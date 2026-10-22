@@ -9,6 +9,7 @@ at all.
 - `slab_snapshots`: one row per slab per day. A second write that day REPLACES the row whole.
 - `slab_sales`: one row per Card Ladder sale id however many slabs and reads see it, and NEVER
   deleted: a sale Card Ladder later drops stays here. The row names every slab that read it.
+- A remove (`Slabs.remove`) takes the slab row and its links only; snapshots and sales stay.
 - `slab_sale_links`: one row per (slab, sale), indexed on the slab key, so `sales_for` fetches
   that slab's sales by key and never scans `slab_sales`.
 
@@ -64,6 +65,9 @@ class SlabSnapshot(NamedTuple):
     population: Optional[int]
     gem_rate: Optional[float]
     speed: Optional[dict]
+    # The card's grade ladder as that day's read gave it. Payload only, no column; a row stored
+    # before this field reads None.
+    ladder: Optional[list] = None
 
 
 class Sale(NamedTuple):
@@ -179,11 +183,12 @@ class Slabs:
     def record_snapshot(
         self, cert, grader, day, *, cl_value, cl_confidence, estimated_value,
         estimated_confidence, last_sale_price, last_sale_date, population, gem_rate, speed,
+        ladder=None,
     ) -> SlabSnapshot:
         """One row per slab per day; a second write that day replaces every field."""
         snapshot = SlabSnapshot(
             str(cert), _grader(grader), day, cl_value, cl_confidence, estimated_value,
-            estimated_confidence, last_sale_price, last_sale_date, population, gem_rate, speed,
+            estimated_confidence, last_sale_price, last_sale_date, population, gem_rate, speed, ladder,
         )
         self.snapshots["%s:%s" % (_slab_key(cert, grader), day)] = snapshot
         return snapshot
@@ -201,6 +206,17 @@ class Slabs:
             seen = self.sales[key].slabs if key in self.sales else ()
             self.sales[key] = _SaleRow(key, sale.get("date"), sale, seen if slab in seen else seen + (slab,))
             self.links["%s|%s" % (slab, key)] = Link(slab, key)
+
+    def remove(self, cert, grader) -> Optional[Slab]:
+        """The slab row and its sale links go. Snapshots and sales stay, so adding it again brings them back."""
+        key = _slab_key(cert, grader)
+        slab = self.slabs.get(key)
+        if slab is None:
+            return None
+        for link in self.links.where(slab=key):
+            del self.links["%s|%s" % (link.slab, link.sale)]
+        del self.slabs[key]
+        return slab
 
     # -------------------------------------------------------------------------- reading
 

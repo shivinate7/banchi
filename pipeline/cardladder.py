@@ -82,6 +82,13 @@ class Client:
         self._limited = False
         self._lock = threading.RLock()  # the token refresh sends through `send`
 
+    def use_refresh_token(self, refresh_token):
+        """A replaced token, with the pacing and the rate-limit stop kept: the next call exchanges the new one."""
+        with self._lock:
+            if refresh_token != self._refresh_token:
+                self._refresh_token = refresh_token
+                self._id_token = None
+
     def send(self, method, url, headers, body):
         """The one send path."""
         host = urllib.parse.urlsplit(url).hostname

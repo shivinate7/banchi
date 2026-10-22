@@ -41,6 +41,15 @@ this file tests. It follows `store/readings.py` and `store/pricearchive.py`:
         without an `id` raises and none of the batch is kept. A sale whose `date` is not text
         (an int, a dict, or no `date` key) raises ValueError before the batch writes anything,
         so no stored row can make `sales_for` raise on its sort.
+    Slabs.remove(cert, grader) -> Optional[Slab]
+        The owner's remove (build plan step 3): the slab row and its sale links go, in the one
+        write it is called in. Its snapshots and every sale stay, so adding the slab again brings
+        the snapshots back, and a sale the next read omits stays in the table, unlinked. A sale
+        another slab also read stays linked to that slab. Answers the removed Slab, or None (and
+        writes nothing) when there is none; an unknown grader raises ValueError as everywhere.
+        The `added` of a slab added again after a remove is pinned at the route (the routes
+        selftest's restore cases), not here: the snapshots this file keeps are what it reads.
+        NOT PINNED: what a sale row's own list of slabs says after one of them is removed.
     Slabs.get(cert, grader) -> Optional[Slab]
     Slabs.list() -> List[Slab]                      same order however the slabs were added
     Slabs.snapshots_for(cert, grader) -> List[SlabSnapshot]   oldest day first; [] if none
@@ -680,10 +689,115 @@ def case_upgrade():
     same("and the upgraded store takes a slab write", counts(), {"slabs": 1, "slab_snapshots": 1, "slab_sales": 2, "slab_sale_links": 2})
 
 
+def inject_delete_failure(table: str):
+    conn = sqlite3.connect(store().db_path, isolation_level=None)
+    try:
+        conn.execute(
+            f"CREATE TRIGGER inject_failure BEFORE DELETE ON {table} "
+            "BEGIN SELECT RAISE(ABORT, 'injected failure'); END"
+        )
+    finally:
+        conn.close()
+
+
+def removal_seed(s):
+    """Two PSA slabs that share a sale, and the same cert at CGC. The first has two days of snapshots."""
+    a, b = "81234567", "81234568"
+    s1, s2, s3 = sale("s-100", "2026-10-01"), sale("s-101", "2026-10-05", "130.00"), sale("s-102", "2026-09-20", "88.00")
+    add_psa(s, a)
+    add_psa(s, b)
+    s.add(a, "cgc", profile_id="cgc-3003", identity=IDENTITY, subgrades=None, added="2026-10-02")
+    s.record_snapshot(a, "psa", "2026-10-05", **SNAP_A)
+    s.record_snapshot(a, "psa", "2026-10-06", **SNAP_C)
+    s.record_snapshot(b, "psa", "2026-10-05", **SNAP_B)
+    s.record_snapshot(a, "cgc", "2026-10-05", **SNAP_C)
+    s.record_sales(a, "psa", [s1, s2])
+    s.record_sales(b, "psa", [s2, s3])
+    s.record_sales(a, "cgc", [sale("s-103", "2026-10-02")])
+
+
+def case_remove():
+    """3d. remove: the slab and its sale links go in one write; its snapshots and sales stay; a slab added again gets them back"""
+    from store.slabs import Slabs
+
+    if not ok(callable(getattr(Slabs, "remove", None)), "Slabs.remove exists"):
+        return
+    a, b = "81234567", "81234568"
+    put(removal_seed)
+    before = counts()
+    same("control: three slabs, four snapshots, four sales, five links", before,
+         {"slabs": 3, "slab_snapshots": 4, "slab_sales": 4, "slab_sale_links": 5})
+    sales_before = {x.id: x.data for x in slabs_now().sales_for(b, "psa")}
+
+    got = put(lambda s: s.remove(a, "psa"))
+    same("remove answers the slab it took out", (got.cert, got.grader, got.identity) if got else None, (a, "psa", IDENTITY))
+    s = slabs_now()
+    same("the slab is gone", s.get(a, "psa"), None)
+    same("the list holds the other two", sorted((x.cert, x.grader) for x in s.list()), sorted([(b, "psa"), (a, "cgc")]))
+    same("every snapshot stays in the table", counts()["slab_snapshots"], 4)
+    same("and every sale", counts()["slab_sales"], 4)
+    same("its two links went, the other three stay", counts()["slab_sale_links"], 3)
+    same("it lists no sale", s.sales_for(a, "psa"), [])
+    same("its snapshots still read back whole",
+         [(x.day, snap_fields(x)) for x in s.snapshots_for(a, "psa")],
+         [("2026-10-05", SNAP_A), ("2026-10-06", SNAP_C)])
+    same("a slab that read a shared sale still lists it", [x.id for x in s.sales_for(b, "psa")], ["s-101", "s-102"])
+    same("with the sale whole", {x.id: x.data for x in s.sales_for(b, "psa")}, sales_before)
+    same("the same cert at another grader is untouched",
+         ([x.id for x in s.sales_for(a, "cgc")], [x.day for x in s.snapshots_for(a, "cgc")]), (["s-103"], ["2026-10-05"]))
+
+    again = put(lambda s: s.remove(a, "psa"))
+    same("a second remove finds nothing and answers None", again, None)
+    same("and writes nothing", counts()["slab_sale_links"], 3)
+    same("so does a cert nobody added", put(lambda s: s.remove("99999999", "psa")), None)
+    refused = False
+    try:
+        put(lambda s: s.remove(a, "pokemon"))
+    except ValueError:
+        refused = True
+    ok(refused, "an unknown grader raises ValueError, as every other method does")
+
+    # The way back: add it again, and what it stored comes back.
+    put(lambda s: add_psa(s, a, added="2026-10-09"))
+    s = slabs_now()
+    same("added again, its snapshots are back", [x.day for x in s.snapshots_for(a, "psa")], ["2026-10-05", "2026-10-06"])
+    same("with no sale linked yet", s.sales_for(a, "psa"), [])
+    put(lambda s: s.record_sales(a, "psa", [sale("s-101", "2026-10-05", "130.00"), sale("s-104", "2026-10-03")]))
+    s = slabs_now()
+    same("a read that lists two sales links those two", [x.id for x in s.sales_for(a, "psa")], ["s-101", "s-104"])
+    ok("s-100" in s.sales, "the sale that read omits stays in the table")
+    same("unlinked: this slab does not list it", "s-100" in [x.id for x in s.sales_for(a, "psa")], False)
+    same("five links (its two and the others' three) and five sales",
+         (counts()["slab_sale_links"], counts()["slab_sales"]), (5, 5))
+
+    put(lambda s: s.add("0012345678", "bgs", profile_id="beckett-77", identity=IDENTITY, subgrades=SUBGRADES, added="2026-10-01"))
+    got = put(lambda s: s.remove("0012345678", "BVG"))
+    same("a grader typed in another form is the same grader: bvg removes the slab added under bgs, keeping its zeros",
+         (got.cert, got.grader) if got else None, ("0012345678", "beckett"))
+
+    for table in ("slabs", "slab_sale_links"):
+        with fresh_home():
+            put(removal_seed)
+            before = counts()
+            inject_delete_failure(table)
+            raised = False
+            try:
+                put(lambda s: s.remove(a, "psa"))
+            except Exception:
+                raised = True
+            clear_failure()
+            ok(raised, f"a delete that fails in {table} fails the remove")
+            same(f"and leaves no table changed ({table})", counts(), before)
+            ok(slabs_now().get(a, "psa") is not None and len(slabs_now().sales_for(a, "psa")) == 2,
+               f"the slab and its two sales are still there ({table})")
+            put(lambda s: s.remove(a, "psa"))
+            same(f"the same remove works once the failure is gone ({table})", counts()["slab_sale_links"], 3)
+
+
 CASES = (
     case_slabs, case_grader_home, case_snapshots, case_grader_separation, case_sales,
     case_shared_sale, case_sale_date_text, case_one_transaction, case_no_guessed_value,
-    case_reading_back, case_sales_read_scope, case_upgrade,
+    case_reading_back, case_sales_read_scope, case_upgrade, case_remove,
 )
 
 
