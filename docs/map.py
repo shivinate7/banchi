@@ -3578,11 +3578,11 @@ COMPONENTS = [
                 # lens and its re-addressed history strip (D103, D278), the value band (D277),
                 # the queue refresh (D167), the push/publish pair (D273), the live export
                 # (D104) and the seven order-line closers (D113).
-                "governed_by": ["D13", "D14", "D18", "D28", "D58", "D278", "D76", "D277", "D83",
-                                "D86", "D87", "D89", "D97", "D100", "D103", "D104", "D273", "D113",
-                                "D134", "D145", "D167", "D168", "D174", "D189", "D192",
-                                "D193", "D203", "D210", "D225", "D227", "D236", "D252", "D264",
-                                "D291", "D298", "D293"],
+                "governed_by": ["D13", "D14", "D18", "D28", "D58", "D76", "D83", "D86", "D87",
+                                "D89", "D97", "D100", "D103", "D104", "D113", "D134", "D145",
+                                "D167", "D168", "D174", "D189", "D192", "D193", "D203", "D210",
+                                "D225", "D227", "D236", "D252", "D264", "D273", "D277", "D278",
+                                "D291", "D293", "D298", "D320"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
