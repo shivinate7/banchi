@@ -204,10 +204,13 @@ Each count is per grader, from 3.1's pop report.
   no cross-grader PSA 10 (3.2).
 - Population and confidence: Card Ladder, 3.1 and 3.2.
 
-### 4.7 Depends on the kit
+### 4.7 Control sizes come from the kit
 
-Every control a thumb presses is 40px or more. The kit's controls are 34px or 28px today. The
-fix goes into the kit, for every screen, as its own lane. `#/slabs` does not override it.
+Every control a thumb presses is 40px or more. The kit meets that on touch: the
+`(max-width: 767px), (hover: none) and (pointer: coarse)` block in `app/src/tokens.css` raises
+`--bn-control-h-sm`, `--bn-control-h` and `--bn-control-h-lg` to 40, 42 and 46px. With a mouse
+they stay 28 and 34px, as on every other screen. `#/slabs` uses the kit's sizes and overrides
+none of them.
 
 ## 5. Pacing
 
@@ -273,7 +276,9 @@ Kind: build. Platform: macOS, over the capture server.
    Card Ladder's numbers become text money at the route. The store refuses a sale date that is
    not text, so the route turns any other date form into an ISO date first.
 4. The `#/slabs` screen, built on `<Page>` (D275, every screen inherits the page scaffold),
-   from section 4. It waits on the kit lane in 4.7. The client's login errors name a Google
+   from section 4, with the kit's control sizes (4.7). It builds the 4.1 ledger and its
+   detail, and add and remove controls, on the routes of step 3 only. The 4.2 buyer export
+   and the sweep wait for the owner's word. The client's login errors name a Google
    host; the screen shows them as a sentence with no host name (D196, no user-visible string
    names a decision).
    The busy refusal says a slab is being added, even when a second remove caused it. So the
