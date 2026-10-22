@@ -59,7 +59,7 @@ const DASH_COLUMNS: ReadonlySet<string> = new Set(['Graded', 'Rate', 'Top %', 'B
 /* ----------------------------------------------------------------------------- words */
 
 const rowKey = (row: Pick<SlabRow, 'grader' | 'cert'>): string => `${row.grader}/${row.cert}`
-const nameOf = (row: Pick<SlabRow, 'label'>): string => row.label ?? NO_NAME
+const nameOf = (row: Pick<SlabRow, 'label'>): string => (row.label ?? '').trim() === '' ? NO_NAME : (row.label as string)
 
 /** Card Ladder's money text as a number; null where it gave none. */
 function amount(text: string | null | undefined): number | null {
@@ -116,10 +116,11 @@ const SAID: Readonly<Record<string, string>> = {
   slab_unknown: 'That slab is not in the list.',
 }
 
-/** The sentence a refusal gets on screen. The login codes also lose the server's own text, which names the settings key. */
+/** The sentence a refusal gets on screen: the screen's own for the codes it words, else the refusal's own message (the
+ *  server's, or the client's from `describeFailure`). The login codes also lose the server's text, which names the settings key. */
 function said(failure: Failure, fallback: string): { title: string; failure: Failure } {
   const own = SAID[failure.code]
-  return { title: own ?? fallback, failure: own !== undefined && failure.code.startsWith('cardladder_token') ? { ...failure, message: own } : failure }
+  return { title: own ?? (failure.message === '' ? fallback : failure.message), failure: own !== undefined && failure.code.startsWith('cardladder_token') ? { ...failure, message: own } : failure }
 }
 
 function Refused({ failure, fallback, onRetry, busy, compact }: { readonly failure: Failure; readonly fallback: string; readonly onRetry?: () => void; readonly busy?: boolean; readonly compact?: boolean }) {
@@ -163,6 +164,7 @@ export default function Slabs() {
     void load()
   }, [load])
 
+  const ordered = useMemo(() => (rows === null ? [] : sorted(rows)), [rows])
   const [detail, setDetail] = useState<SlabRow | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
 
@@ -176,6 +178,8 @@ export default function Slabs() {
   const addBusy = useRef(false)
 
   const openAdd = () => {
+    setCert('')
+    setAddFailure(null)
     addOpenNow.current = true
     setAddOpen(true)
   }
@@ -213,6 +217,17 @@ export default function Slabs() {
   const [removeFailure, setRemoveFailure] = useState<Failure | null>(null)
   const removeBusy = useRef(false)
 
+  /* Where focus goes once the removed row has left the list: the next row's Card button, else the add button. */
+  const [handover, setHandover] = useState<{ readonly gone: string; readonly next: string | null } | null>(null)
+  useEffect(() => {
+    if (handover === null || rows === null || rows.some((one) => rowKey(one) === handover.gone)) return
+    setHandover(null)
+    const active = document.activeElement
+    if (active !== null && active !== document.body && active.isConnected) return
+    const target = [...document.querySelectorAll<HTMLElement>('[data-slab]')].find((el) => el.dataset.slab === handover.next) ?? document.querySelector<HTMLElement>('[data-slabs-add]')
+    target?.focus()
+  }, [rows, handover])
+
   const remove = async (row: SlabRow): Promise<void> => {
     if (removeBusy.current || addBusy.current) return
     removeBusy.current = true
@@ -220,6 +235,9 @@ export default function Slabs() {
     setRemoveFailure(null)
     try {
       const gone = await removeSlab(row.grader, row.cert)
+      const at = ordered.findIndex((one) => rowKey(one) === rowKey(row))
+      const next = ordered[at + 1] ?? ordered[at - 1]
+      setHandover({ gone: rowKey(row), next: next === undefined ? null : rowKey(next) })
       setDetailOpen(false)
       toast({
         kind: 'receipt',
@@ -235,11 +253,10 @@ export default function Slabs() {
     }
   }
 
-  const ordered = useMemo(() => (rows === null ? [] : sorted(rows)), [rows])
   const loading = rows === null && failure === null
   const never = ordered.filter((row) => row.note === 'no sales').length
   const addButton = (
-    <Button variant="primary" icon="plus" onClick={openAdd}>
+    <Button variant="primary" icon="plus" onClick={openAdd} data-slabs-add="">
       Add a Slab
     </Button>
   )
@@ -263,7 +280,7 @@ export default function Slabs() {
             {rows !== null && rows.length === 0 ? null : addButton}
           </>
         }
-        status={failure === null ? null : <Refused failure={failure} fallback="The slabs could not be read." onRetry={() => void load()} busy={reloading} />}
+        status={failure === null ? undefined : <Refused failure={failure} fallback="The slabs could not be read." onRetry={() => void load()} busy={reloading} />}
         empty={
           rows !== null && rows.length === 0 ? (
             <EmptyState icon="layers" title="No slabs yet" body="Add a slab by its cert number." actions={addButton} />
@@ -364,7 +381,7 @@ export default function Slabs() {
           />
           <div className="slabs-add-status" aria-live="polite">
             {adding ? (
-              <p className="slabs-reading">Reading Card Ladder. This takes about 20 seconds.</p>
+              <p className="slabs-reading">Reading Card Ladder. This takes a little while.</p>
             ) : addFailure === null ? null : (
               <Refused failure={addFailure} fallback="That slab could not be added." compact />
             )}
@@ -391,7 +408,7 @@ function LedgerRow({ row, onOpen }: { readonly row: SlabRow; readonly onOpen: ()
       }
       case 'Card':
         return (
-          <button type="button" className="slabs-card-btn" onClick={onOpen}>
+          <button type="button" className="slabs-card-btn" data-slab={rowKey(row)} onClick={onOpen}>
             {nameOf(row)}
           </button>
         )
@@ -502,7 +519,7 @@ function SkeletonRows({ n }: { readonly n: number }) {
   )
 }
 
-/** Fixed sections first, the two of unknown length last, so arrival only grows downward (D313). */
+/** Fixed sections first, the two of unknown length last and drawn only once the detail is here, so arrival only grows downward (D313). */
 function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: SlabDetail | null }) {
   const loading = detail === null
   const newest: SlabSnapshot | null = detail === null ? row.snapshot : (detail.snapshots[detail.snapshots.length - 1] ?? row.snapshot)
@@ -510,6 +527,8 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
   const grade = gradeText(row)
   const speed = newest?.speed ?? null
   const sales = detail?.sales.slice(0, 5) ?? []
+  /* Rows the sales list holds a place for, from the list row, which is there from the first paint: one for "no sales", else five (D313). */
+  const held = row.note === 'no sales' ? 1 : 5
   return (
     <div className="slabs-body">
       <p className="bn-facts slabs-facts">
@@ -526,14 +545,14 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
               <dd>
                 <Money value={amount(newest?.estimated_value)} /> <Conf value={newest?.estimated_confidence ?? null} />
               </dd>
-              <dd className="slabs-source">From Card Ladder's sales estimate for this grade.</dd>
+              <dd className="slabs-source">Card Ladder's estimate.</dd>
             </div>
             <div>
               <dt>Grade ladder value</dt>
               <dd>
                 <Money value={amount(newest?.cl_value)} /> <Conf value={newest?.cl_confidence ?? null} />
               </dd>
-              <dd className="slabs-source">From Card Ladder's value at this grade.</dd>
+              <dd className="slabs-source">Card Ladder's ladder value.</dd>
             </div>
           </dl>
         )}
@@ -541,7 +560,7 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
 
       <Section title="Sales at the grade">
         {loading ? (
-          <SkeletonRows n={5} />
+          <SkeletonRows n={held} />
         ) : (
           <Rows>
             {sales.length === 0 ? <li className="slabs-row slabs-no-sales">No sales at this grade yet.</li> : null}
@@ -560,6 +579,9 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
                   </a>
                 ) : null}
               </li>
+            ))}
+            {Array.from({ length: Math.max(0, held - Math.max(1, sales.length)) }, (_, at) => (
+              <li key={`held-${at}`} className="slabs-row" aria-hidden="true" />
             ))}
           </Rows>
         )}
@@ -590,48 +612,48 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
       </Section>
 
       <Section title="Population at the grade">
-        <p className="slabs-pop">{newest?.population == null ? dash() : <Count value={newest.population} />} graded at this grade</p>
+        <p className="slabs-pop">{newest?.population == null ? dash() : <Count value={newest.population} />} at this grade</p>
       </Section>
 
-      <Section title="Grade ladder">
-        {loading ? null : (
-          <Rows>
-            <li className="slabs-row slabs-step slabs-head" aria-hidden="true">
-              <span>Grade</span>
-              <span className="slabs-fig">Value</span>
-              <span>Confidence</span>
-            </li>
-            {detail.ladder.map((step) => (
-              <li key={step.grade} className="slabs-row slabs-step" data-here={step.grade === row.grade ? 'true' : undefined} aria-current={step.grade === row.grade ? 'true' : undefined}>
-                <span>{step.label}</span>
-                <Money value={amount(step.cl_value)} />
-                <Conf value={step.cl_confidence} />
+      {detail === null ? null : (
+        <>
+          <Section title="Grade ladder">
+            <Rows>
+              <li className="slabs-row slabs-step slabs-head" aria-hidden="true">
+                <span>Grade</span>
+                <span className="slabs-fig">Value</span>
+                <span>Confidence</span>
               </li>
-            ))}
-          </Rows>
-        )}
-      </Section>
+              {detail.ladder.map((step) => (
+                <li key={step.grade} className="slabs-row slabs-step" data-here={step.grade === row.grade ? 'true' : undefined} aria-current={step.grade === row.grade ? 'true' : undefined}>
+                  <span>{step.label}</span>
+                  <Money value={amount(step.cl_value)} />
+                  <Conf value={step.cl_confidence} />
+                </li>
+              ))}
+            </Rows>
+          </Section>
 
-      <Section title="Snapshots">
-        {loading ? null : (
-          <Rows>
-            <li className="slabs-row slabs-snap slabs-head" aria-hidden="true">
-              <span>Day</span>
-              <span className="slabs-fig">Estimate</span>
-              <span>Confidence</span>
-              <span className="slabs-fig">Last sale</span>
-            </li>
-            {[...detail.snapshots].reverse().map((snap) => (
-              <li key={snap.day} className="slabs-row slabs-snap">
-                <span>{dayDate(snap.day)}</span>
-                <Money value={amount(snap.estimated_value)} />
-                <Conf value={snap.estimated_confidence} />
-                <Money value={amount(snap.last_sale_price)} />
+          <Section title="Snapshots">
+            <Rows>
+              <li className="slabs-row slabs-snap slabs-head" aria-hidden="true">
+                <span>Day</span>
+                <span className="slabs-fig">Estimate</span>
+                <span>Confidence</span>
+                <span className="slabs-fig">Last sale</span>
               </li>
-            ))}
-          </Rows>
-        )}
-      </Section>
+              {[...detail.snapshots].reverse().map((snap) => (
+                <li key={snap.day} className="slabs-row slabs-snap">
+                  <span>{dayDate(snap.day)}</span>
+                  <Money value={amount(snap.estimated_value)} />
+                  <Conf value={snap.estimated_confidence} />
+                  <Money value={amount(snap.last_sale_price)} />
+                </li>
+              ))}
+            </Rows>
+          </Section>
+        </>
+      )}
     </div>
   )
 }
