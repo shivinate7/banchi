@@ -9212,8 +9212,7 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
 
 
 MATCH_RECORD = "match.json"
-_MATCHING: Dict[str, bool] = {}
-_MATCHING_LOCK = threading.Lock()
+MATCH_LOCK = "match.lock"
 
 
 def _read_match(directory: Path) -> Optional[dict]:
@@ -9248,45 +9247,55 @@ def do_run_match(name: str, payload: dict) -> dict:
     never asks TCGplayer again over a problem that stands. `retry: true` is the door's own
     press.
 
-    ONE MATCH PER RUN AT A TIME. Two tabs that both see the reading finish would otherwise both
-    fetch and both join; the second is answered `running` and does nothing.
+    ONE MATCH PER RUN AT A TIME, ACROSS PROCESSES. Two tabs that both see the reading finish, or a
+    tab and the `identify` child that is still joining its own run, would otherwise both fetch and
+    both join. The run's `flock` is taken BEFORE the phase is read, so a caller that loses the race
+    to a join that then finishes reads `not_waiting` and not a second join; the one that finds the
+    lock held is answered `running` and does nothing. A process that dies releases it.
     """
+    import fcntl
+
     directory = _open_run(name)
+    handle = open(directory / MATCH_LOCK, "a+")  # noqa: SIM115 - the flock lives as long as this fd
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        return {"ran": False, "reason": "running", "summary": _summary(directory)}
+    try:
+        return _match_locked(name, directory, payload)
+    finally:
+        handle.close()  # closing releases the flock
+
+
+def _match_locked(name: str, directory: Path, payload: dict) -> dict:
     manifest = _manifest(directory)
     if _phase(manifest, _live_pid(directory) is not None) != "join":
         return {"ran": False, "reason": "not_waiting", "summary": _summary(directory)}
     standing = _read_match(directory) or {}
     if standing.get("problem") and not bool(payload.get("retry")):
         return {"ran": False, "reason": "problem_stands", "summary": _summary(directory)}
-    with _MATCHING_LOCK:
-        if _MATCHING.get(directory.name):
-            return {"ran": False, "reason": "running", "summary": _summary(directory)}
-        _MATCHING[directory.name] = True
+    at = clock.now_iso()
     try:
-        at = clock.now_iso()
-        try:
-            fetched = do_pipeline_export(name, {})
-        except PipelineRefusal as refusal:
-            problem = {"code": refusal.code, "message": str(refusal), "step": "fetch"}
-            _write_match(directory, {"at": at, "problem": problem})
-            return {"ran": True, "ok": False, "problem": problem, "summary": _summary(directory)}
-        result = do_pipeline_step(name, "join", {"fetched": [fetched["file"]]})
-        if not result["ok"]:
-            last = (result["console"].strip().splitlines() or [""])[-1]
-            problem = {"code": "match_refused", "message": last, "step": "join"}
-            _write_match(directory, {"at": at, "problem": problem, "fetched": fetched["file"]})
-            return {
-                "ran": True,
-                "ok": False,
-                "problem": problem,
-                "console": result["console"],
-                "summary": _summary(directory),
-            }
-        _write_match(directory, {"at": at, "problem": None, "fetched": fetched["file"]})
-        return {"ran": True, "ok": True, "console": result["console"], "summary": _summary(directory)}
-    finally:
-        with _MATCHING_LOCK:
-            _MATCHING.pop(directory.name, None)
+        fetched = do_pipeline_export(name, {})
+    except PipelineRefusal as refusal:
+        problem = {"code": refusal.code, "message": str(refusal), "step": "fetch"}
+        _write_match(directory, {"at": at, "problem": problem})
+        return {"ran": True, "ok": False, "problem": problem, "summary": _summary(directory)}
+    result = do_pipeline_step(name, "join", {"fetched": [fetched["file"]]})
+    if not result["ok"]:
+        last = (result["console"].strip().splitlines() or [""])[-1]
+        problem = {"code": "match_refused", "message": last, "step": "join"}
+        _write_match(directory, {"at": at, "problem": problem, "fetched": fetched["file"]})
+        return {
+            "ran": True,
+            "ok": False,
+            "problem": problem,
+            "console": result["console"],
+            "summary": _summary(directory),
+        }
+    _write_match(directory, {"at": at, "problem": None, "fetched": fetched["file"]})
+    return {"ran": True, "ok": True, "console": result["console"], "summary": _summary(directory)}
 
 
 def do_pipeline_step(name: str, step: str, payload: dict) -> dict:

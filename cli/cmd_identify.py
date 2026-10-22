@@ -1036,29 +1036,44 @@ def _join_now(run_dir, say) -> Optional[str]:
         return "this is a test run, which opens no connection to TCGplayer"
     from server import pipeline_routes
 
+    # `do_run_match` takes a run NAME and looks it up in this store's runs folder, so a run directory
+    # anywhere else could be answered by a different run of the same name. Join only the run itself.
+    if run_dir.directory.resolve() != (store_files.runs_dir() / run_dir.directory.name).resolve():
+        return "this run directory is not in the store's runs folder, so it is not joined here"
     say("joining         fetching the game's export (reused when under 15 minutes old), then joining the run")
     try:
         outcome = pipeline_routes.do_run_match(run_dir.directory.name, {})
+    except pipeline_routes.PipelineRefusal as refusal:
+        return f"the join was refused ({refusal.code}): {refusal}"
     except Exception as exc:  # noqa: BLE001 - the answers are banked already; say why the join did not run
+        store_files.log_cause("identify auto-join", exc)
         return f"the join could not start because {store_files.plain_cause(exc)}"
     if outcome.get("ok"):
         return None
     problem = outcome.get("problem")
     if isinstance(problem, dict) and problem.get("message"):
         return str(problem["message"])
-    return f"the join did not run ({outcome.get('reason') or 'no reason given'})"
+    reason = outcome.get("reason")
+    if reason == "running":
+        return "another join of this run is already in progress"
+    if reason == "not_waiting":
+        return "the run is not waiting for a join: it is already joined or still being read"
+    if reason == "problem_stands":
+        standing = (outcome.get("summary") or {}).get("match_problem") or {}
+        return f"an earlier join problem stands: {standing.get('message') or 'see the run'}"
+    return f"the join did not run ({reason or 'no reason given'})"
 
 
 def _held_now(snapshot, items) -> str:
     """Where the store holds these cards now, read back from the queues: "9 held for review, 2 in the
     main queue, 13 settled". The review queue IS the main queue, so the split is by reason: the two
     second-look reasons are "held for review", every other open entry is "in the main queue". Parked is
-    named only when a card is there. Settled is a card with no open entry in either queue."""
+    named only when a card is there. Settled is a card with no open entry in either queue.
+    A card with no position is looked up by its file key, which is how the join files it (no_position)."""
     from pipeline import routing
 
     held = main = parked = 0
-    keyed = [i for i in items if i.capture.has_position]
-    for item in keyed:
+    for item in items:
         entry = snapshot.review.entries.get(item.key)
         away = snapshot.parked.entries.get(item.key)
         if entry is not None and not entry.cleared_by_human:
@@ -1071,13 +1086,13 @@ def _held_now(snapshot, items) -> str:
     parts = [f"{held} held for review", f"{main} in the main queue"]
     if parked:
         parts.append(f"{parked} parked")
-    parts.append(f"{len(keyed) - held - main - parked} settled")
+    parts.append(f"{len(items) - held - main - parked} settled")
     return ", ".join(parts)
 
 
 def run(args, say) -> int:
-    """The command. A wrapper so the run's `running.pid` is gone however this process ends: a return, a
-    raised error, or SIGTERM (turned into a normal exit so the `finally` runs). It is removed only when
+    """The command. A wrapper so the run's `running.pid` is gone when this process ends by a return, a
+    raised error, or SIGTERM (turned into a normal exit so the `finally` runs). SIGKILL is the exception. It is removed only when
     it names this pid. The claim's release is NOT here (D174): a run that dies between submitting and
     collecting keeps its claim."""
     marker = _own_pid_marker(args)
