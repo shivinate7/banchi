@@ -970,8 +970,9 @@ export const SLAB_CERT = {
 } as const
 
 /** One day's read of a slab, in the wire's shape (`types.ts:SlabSnapshot`). The defaults are the
- *  Terapagos slab's. Card Ladder's two values and their two confidences are equal in every row
- *  `severalSlabs()` builds, so a case does not depend on which of the two a column reads. */
+ *  Terapagos slab's. In every row `severalSlabs()` builds, Card Ladder's two confidences are equal
+ *  and its two values are not (here the ladder's 405.00 and the estimate's 412.00), so a case can
+ *  tell which of the two a figure was read from. A slab that never sold has neither value. */
 export function slabSnapshot(over: Partial<SlabSnapshot> = {}): SlabSnapshot {
   return {
     day: '2026-10-14',

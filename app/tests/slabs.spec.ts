@@ -65,8 +65,13 @@ type Wire = {
   deletes: string[]
   listReply: (() => Reply) | null
   postReply: ((body: { cert: string; grader: string }) => Reply) | null
-  hold: { list: Gate | null; post: Gate | null; del: Gate | null }
+  /** What `GET /slabs/<grader>/<cert>` sends for a slab on the list; null is `slabDetailOf(row)`. */
+  detailReply: ((row: SlabRow) => Reply) | null
+  hold: { list: Gate | null; post: Gate | null; del: Gate | null; detail: Gate | null }
 }
+
+/** `server/slabs_routes.py`'s answer when Card Ladder fails inside an add: not a rate limit, not a login. */
+const BAD_GATEWAY = refuse(502, 'cardladder_failed', 'Card Ladder could not be read just now. Nothing was saved. Try again later.')
 
 /** Card Ladder's grader for each name `store/slabs.GRADERS` accepts. */
 const CARD_LADDER: Record<Grader, string> = { psa: 'psa', beckett: 'beckett', bgs: 'beckett', bvg: 'beckett', sgc: 'sgc', cgc: 'cgc' }
@@ -99,7 +104,8 @@ function makeWire(over: Partial<Wire> = {}): Wire {
     deletes: [],
     listReply: null,
     postReply: null,
-    hold: { list: null, post: null, del: null },
+    detailReply: null,
+    hold: { list: null, post: null, del: null, detail: null },
     ...over,
   }
   live.push(wire)
@@ -152,7 +158,9 @@ async function stubApi(page: Page, wire: Wire): Promise<void> {
         const row = wire.rows.find((r) => r.grader === grader && r.cert === cert)
         if (method === 'GET') {
           wire.details.push(`${grader}/${cert}`)
-          return send(row === undefined ? refuse(404, 'slab_unknown', 'That slab is not in the list. Add it by its cert number first.') : ok(slabDetailOf(row)))
+          await wire.hold.detail?.opened
+          if (row === undefined) return send(refuse(404, 'slab_unknown', 'That slab is not in the list. Add it by its cert number first.'))
+          return send(wire.detailReply?.(row) ?? ok(slabDetailOf(row)))
         }
         if (method === 'DELETE') {
           wire.deletes.push(`${grader}/${cert}`)
@@ -231,8 +239,11 @@ const LABEL = {
 
 /* ---------------------------------------------------------------------------- the page */
 
+/** A label of "" is not null: the screen's own no-label sentence has to cover it too. */
+const EMPTY_LABEL = slabRow({ cert: '99900111', grader: 'sgc', label: '', grade: 'g8', added: '2026-10-22' })
+
 /** Every cert and the zero-stripped form of every one, so a cert that lost its zeros is still found. */
-const CERTS = [...Object.values(SLAB_CERT), GENGAR.cert, UNLABELED_NEW.cert].flatMap((c) => [c, c.replace(/^0+/, '')])
+const CERTS = [...Object.values(SLAB_CERT), GENGAR.cert, UNLABELED_NEW.cert, EMPTY_LABEL.cert].flatMap((c) => [c, c.replace(/^0+/, '')])
 
 /** All that is on the page for a reader: the text of every element, hidden disclosures included, and the
  *  words an element hands a screen reader. Scripts and styles are not on screen. The value of a field
@@ -465,6 +476,20 @@ test('a rate limit on the list is a refusal in words, with no retry', async ({ p
   await expect(page.locator('.bn-retry')).toHaveCount(0)
 })
 
+/* `server.ts` reads `import.meta.env` when it loads, so no unit case can import it: the page's own module graph can.
+   A 429 is a retry for every other code (`failureKind`), so this is the case that goes red when Card Ladder's
+   rate limit stops being named a refusal. The screen cases above are its other readers. */
+test('a Card Ladder rate limit is a refusal though it arrives as a 429', async ({ page }) => {
+  await open(page)
+  await expect(dataRows(page)).toHaveCount(5)
+  const kind = await page.evaluate(async () => {
+    const path = '/src/server.ts'
+    const { describeFailure, ServerError } = await import(/* @vite-ignore */ path)
+    return describeFailure(new ServerError('cardladder_rate_limited', 'Card Ladder asked us to slow down.', 429)).kind
+  })
+  expect(kind, 'a rate limit would be offered a retry').toBe('refusal')
+})
+
 /* ---------------------------------------------------------------------------- the detail */
 
 test('a press on the Card cell opens the slab in a sheet with its sections in order', async ({ page }) => {
@@ -532,6 +557,79 @@ test('no cert is on screen: not on the ledger, not in the sheet of a slab with a
   await expect(bare).toContainText('128.00')
   await expect(bare, 'the sheet needs a name that is not blank').toHaveAccessibleName(/\S/)
   await expectNoCert(page, 'the sheet of a slab with no label')
+})
+
+/* The sheet while its detail is on the way (spec 4.9, D313). `open()`'s sheet draws every section at once from the
+   row it already has, then the detail arrives. WHAT IS MEASURED IS THE TOP OF EACH SECTION, from the section's own
+   heading, before and after: a section that is drawn on both sides of the arrival has to hold its place. The slab with
+   two sales and the one with none are the shapes where the sales list is shorter than the five rows it held a place
+   for. The ladder's first step is the thing that exists only once the detail has arrived. */
+const frames = (page: Page, n = 2) =>
+  page.evaluate(
+    (k) =>
+      new Promise<void>((done) => {
+        const step = (left: number): void => (left === 0 ? done() : void requestAnimationFrame(() => step(left - 1)))
+        step(k)
+      }),
+    n,
+  )
+
+async function sectionTops(sheet: Locator): Promise<Record<string, number>> {
+  return sheet.getByRole('region').evaluateAll((els) =>
+    Object.fromEntries(
+      els.map((el) => {
+        const id = el.getAttribute('aria-labelledby')
+        const name = (id === null ? null : document.getElementById(id)?.textContent?.trim()) || '?'
+        return [name, Math.round(el.getBoundingClientRect().top)]
+      }),
+    ),
+  )
+}
+
+const ARRIVALS = [
+  { name: 'two sales', label: LABEL.terapagos, firstStep: 'PSA 8', reply: (row: SlabRow): Reply => ok(slabDetailOf(row, { sales: slabDetailOf(row).sales.slice(0, 2) })) },
+  { name: 'no sales', label: LABEL.mew, firstStep: 'SGC 8', reply: null },
+] as const
+
+for (const width of [1440, 820]) {
+  for (const arrival of ARRIVALS) {
+    test(`no section of the sheet moves when the detail of a slab with ${arrival.name} arrives, at ${width} (D313)`, async ({ page }) => {
+      const wire = makeWire()
+      const gate = new Gate()
+      wire.hold.detail = gate
+      wire.detailReply = arrival.reply
+      await open(page, wire, width)
+      await expect(dataRows(page)).toHaveCount(5)
+      await cardButton(rowFor(page, arrival.label)).click()
+      const sheet = page.getByRole('dialog', { name: arrival.label, exact: true })
+      await expect(sheet).toBeVisible()
+      await expect.poll(() => wire.details.length, { message: 'the sheet never asked for its detail' }).toBe(1)
+      const before = await sectionTops(sheet)
+      expect(Object.keys(before), 'the sheet draws Sales speed while the detail is on its way').toContain('Sales speed')
+
+      gate.open()
+      await expect(sheet.getByText(arrival.firstStep, { exact: true }), 'the detail never arrived').toBeVisible()
+      await frames(page)
+      const after = await sectionTops(sheet)
+      expect(Object.keys(after), 'Sales speed is still drawn once the detail has arrived').toContain('Sales speed')
+      const moved = Object.keys(before).filter((name) => name in after && Math.abs((after[name] ?? 0) - (before[name] ?? 0)) > 1)
+      expect(moved.map((name) => `${name} ${before[name]} to ${after[name]}`), 'a section moved when the detail arrived').toEqual([])
+    })
+  }
+}
+
+test('a slab whose label is the empty string still has a Card button with a visible name, and it opens the sheet', async ({ page }) => {
+  await open(page, makeWire({ rows: [EMPTY_LABEL] }))
+  await expect(dataRows(page)).toHaveCount(1)
+  const button = cardButton(dataRows(page))
+  await expect(button, 'the Card button of a slab with an empty label shows nothing').toHaveText(/\S/)
+  await expect(button, 'and it has no name for a screen reader').toHaveAccessibleName(/\S/)
+  await button.click()
+  const sheet = page.getByRole('dialog')
+  await expect(sheet).toBeVisible()
+  await expect(sheet).toContainText('412.00')
+  await expect(sheet, 'the sheet needs a name that is not blank').toHaveAccessibleName(/\S/)
+  await expectNoCert(page, 'the sheet of a slab with an empty label')
 })
 
 /* ---------------------------------------------------------------------------- add */
@@ -666,6 +764,26 @@ test('a rate limit on add is one request, a sentence that says tomorrow, and no 
   expect(wire.posts, 'a rate limit was sent again').toHaveLength(1)
 })
 
+test('the Add sheet opens empty again after a refusal: no old cert, no old refusal', async ({ page }) => {
+  const wire = await open(page)
+  await expect(dataRows(page)).toHaveCount(5)
+  const sheet = await openAdd(page)
+  await certField(sheet).fill('12345678') // not in the catalog, so the route answers cert_not_found
+  const before = sentenceLines(await sheet.innerText())
+  await addButton(sheet).click()
+  await expect.poll(() => wire.posts.length).toBe(1)
+  await expect(addButton(sheet)).toBeEnabled()
+  await expect.poll(async () => (await newSentences(sheet, before)).length, { message: 'the sheet says nothing about the refusal' }).toBeGreaterThan(0)
+  const refusal = await newSentences(sheet, before)
+  await page.keyboard.press('Escape')
+  await expect(sheet).toBeHidden()
+
+  const again = await openAdd(page)
+  await expect(certField(again), 'the cert typed last time is still in the field').toHaveValue('')
+  const now = sentenceLines(await again.innerText())
+  for (const line of refusal) expect(now, `the last refusal is still in the sheet: ${line}`).not.toContain(line)
+})
+
 /* ---------------------------------------------------------------------------- remove */
 
 /** Open a row's sheet and press Remove. Returns the sheet. */
@@ -723,6 +841,65 @@ test('an Undo that Card Ladder refuses says so, with no retry', async ({ page })
   await expect(retryButtons(page)).toHaveCount(0)
   expect(wire.posts).toHaveLength(1)
   await expect(rowFor(page, LABEL.charizard), 'a refused Undo put the slab back').toHaveCount(0)
+})
+
+test('an Undo that Card Ladder fails on shows the sentence the server sent, not a generic one', async ({ page }) => {
+  const wire = await open(page)
+  await expect(dataRows(page)).toHaveCount(5)
+  await removeFrom(page, rowFor(page, LABEL.charizard))
+  await expect(undoButton(page)).toBeVisible()
+  wire.postReply = () => BAD_GATEWAY
+  await undoButton(page).click()
+  await expect(visibleText(page, /Card Ladder could not be read just now\./), 'Undo failed without the refusal’s own sentence').toBeVisible()
+  expect(wire.posts).toHaveLength(1)
+})
+
+test('an Undo that never reaches the server says so in the client’s own sentence', async ({ page }) => {
+  const wire = await open(page)
+  await expect(dataRows(page)).toHaveCount(5)
+  await removeFrom(page, rowFor(page, LABEL.charizard))
+  await expect(undoButton(page)).toBeVisible()
+  let dropped = 0
+  await page.route(
+    (url) => url.port === String(CAPTURE_PORT) && url.pathname === '/slabs',
+    (route) => {
+      if (route.request().method() !== 'POST') return route.fallback()
+      dropped += 1
+      return route.abort()
+    },
+  )
+  await undoButton(page).click()
+  /* `server.ts:request()` words this one itself. The shell's `/status` still answers, so it is the "will not accept changes" sentence. */
+  await expect(visibleText(page, /will not accept changes from this address|server did not answer/i), 'Undo failed without the client’s sentence').toBeVisible()
+  expect(dropped).toBe(1)
+  expect(wire.posts, 'the dropped request reached the stub').toHaveLength(0)
+})
+
+test('after Remove succeeds, focus is on something on the page and never on the body', async ({ page }) => {
+  const wire = await open(page)
+  await expect(dataRows(page)).toHaveCount(5)
+  /* The list read after the remove is held, so the Card button stays on the page while the sheet gives focus back to
+     it. The row goes only when the read is let through, and focus has to be somewhere else by then. */
+  const gate = new Gate()
+  wire.hold.list = gate
+  const reads = wire.lists
+  const sheet = await removeFrom(page, rowFor(page, LABEL.terapagos))
+  await expect(undoButton(page)).toBeVisible()
+  await expect(sheet).toBeHidden()
+  await expect.poll(() => wire.lists, { message: 'the list was not read again after the remove' }).toBe(reads + 1)
+  gate.open()
+  await expect(dataRows(page)).toHaveCount(4)
+  await expect(rowFor(page, LABEL.terapagos)).toHaveCount(0)
+  const focused = () =>
+    page.evaluate(() => {
+      const el = document.activeElement
+      if (el === null || el === document.body || el === document.documentElement) return 'nothing: the body has focus'
+      if (!el.isConnected || !el.checkVisibility()) return `nothing: a hidden ${el.tagName.toLowerCase()} has focus`
+      return `${el.tagName.toLowerCase()} ${(el.textContent ?? '').trim().slice(0, 30)}`
+    })
+  await expect.poll(focused, { message: 'the Card button focus went back to left the page', timeout: 3000 }).not.toMatch(/^nothing/)
+  await frames(page) // it has to hold, not only pass through
+  expect(await focused(), 'focus landed somewhere and then fell off the page').not.toMatch(/^nothing/)
 })
 
 test('a double press of Remove sends one request', async ({ page }) => {
