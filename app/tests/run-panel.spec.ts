@@ -4,7 +4,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { NO_FREE_FIELDS, matchState, runRow, stubMatchState } from './routeFixtures'
 import { HAIKU_NAME_TOOLTIP, MATCHER_NAME_TOOLTIP } from '../src/engines'
-import type { MatchState, QueueEntryWire } from '../src/types'
+import type { MatchState } from '../src/types'
 import { expectOneStagger } from './staggerCheck'
 import { afterPaint, settleMotion } from './motionSettled'
 import { boxTitle } from '../src/kit/dataRules'
@@ -3584,34 +3584,27 @@ test('a paid quote with nothing the free reader answered draws no re-read ask at
   await expect(page.locator('.runs-quote-ask')).toHaveCount(0)
 })
 
-/** A queue row as `GET /queues` answers it: the full wire shape, because Review draws the same read and a bare row breaks it. */
-function queueRow(box: number, index: number, reason: string): QueueEntryWire {
+/** The second-look rows a free run's manifest names: one per key, `9/1`, `9/2`, and so on. */
+function secondLookRows(count: number) {
+  return Array.from({ length: count }, (_, i) => ({ key: `9/${i + 1}`, code: 'margin_too_small', name: 'Raichu' }))
+}
+
+/** A joined run's counts with the join's own second-look figures. Omit `look` for a join that wrote none. */
+function joinedCounts(look?: { held: number; main: number; parked: number }) {
   return {
-    position: `${box}/${index}`,
-    box,
-    index,
-    label: `Box ${box} · Section 1 · Card ${index}`,
-    photo: null,
-    reason,
-    candidates: [],
-    market: null,
-    read: { name: 'Raichu', number: '026/132', set_hint: 'ME01' },
-    confidence: 'high',
-    first_seen: '2026-08-24',
-    age_days: 0,
-    cleared_by_human: false,
+    cards_in: 30,
+    skus: 20,
+    queued_main: 1,
+    queued_parked: 0,
+    ...(look ? { second_look_held: look.held, second_look_main: look.main, second_look_parked: look.parked } : {}),
   }
 }
 
-/** The free run's manifest: 30 matched, and the three keys sent to a second look. */
-const FREE_RUN_MANIFEST = {
-  flags: { engine: 'marqo-b' },
-  matched: 30,
-  second_look: [
-    { key: '9/1', code: 'margin_too_small', name: 'Raichu' },
-    { key: '9/2', code: 'lookalike_guard', name: 'Pikachu' },
-    { key: '9/3', code: 'margin_too_small', name: 'Eevee' },
-  ],
+/** Opens the first run and expands its match step, so the receipt line is on screen. */
+async function openFreeRun(page: Page) {
+  await openRun(page)
+  const head = page.locator('.runs-detail-panel .runs-step-head').first()
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click()
 }
 
 test('a free run says what it matched and how many went to the second look', async ({ page }) => {
@@ -3627,10 +3620,7 @@ test('a free run says what it matched and how many went to the second look', asy
       },
     },
   })
-  await openRun(page)
-  const head = page.locator('.runs-detail-panel .runs-step-head').first()
-  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click()
-  /* Not joined, so the cards' places are not read yet: the line says they wait for the join. */
+  await openFreeRun(page)
   await expect(page.locator('.runs-detail-panel')).toContainText(
     'Matched 30 cards free. 2 cards got a second look from the paid read, held until join.',
   )
@@ -3638,37 +3628,78 @@ test('a free run says what it matched and how many went to the second look', asy
   await expect(page.locator('.runs-detail-panel')).not.toContainText(/margin_too_small|lookalike_guard/)
 })
 
-test('a joined free run says which second-look cards are held, in the main queue, or settled', async ({ page }) => {
-  await open(page, { detail: { joined: true, manifest: FREE_RUN_MANIFEST } })
-  /* After open(), so this handler wins over the empty queue open() registers. */
-  await page.route(/\/queues$/, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        review: [queueRow(9, 1, 'readers_disagree'), queueRow(9, 2, 'match_too_weak')],
-        parked: [],
-      }),
-    })
+test('a joined free run says how its second-look cards split: held, in the main queue, settled', async ({ page }) => {
+  await open(page, {
+    detail: {
+      joined: true,
+      counts: joinedCounts({ held: 1, main: 1, parked: 0 }),
+      manifest: { flags: { engine: 'marqo-b' }, matched: 30, second_look: secondLookRows(3) },
+    },
   })
-  await openRun(page)
-  const head = page.locator('.runs-detail-panel .runs-step-head').first()
-  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click()
+  await openFreeRun(page)
   await expect(page.locator('.runs-detail-panel')).toContainText(
     'Matched 30 cards free. 3 cards got a second look from the paid read: 1 held for review, 1 in the main queue, 1 settled.',
   )
 })
 
-test('a joined free run whose queue read fails ends at the paid read, with no where', async ({ page }) => {
-  await open(page, { detail: { joined: true, manifest: FREE_RUN_MANIFEST } })
-  await page.route(/\/queues$/, async (route) => {
-    await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'queues unreadable' }) })
+test('a joined free run with parked cards says so before settled', async ({ page }) => {
+  await open(page, {
+    detail: {
+      joined: true,
+      counts: joinedCounts({ held: 1, main: 0, parked: 1 }),
+      manifest: { flags: { engine: 'marqo-b' }, matched: 30, second_look: secondLookRows(3) },
+    },
   })
-  await openRun(page)
-  const head = page.locator('.runs-detail-panel .runs-step-head').first()
-  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click()
+  await openFreeRun(page)
   await expect(page.locator('.runs-detail-panel')).toContainText(
-    'Matched 30 cards free. 3 cards got a second look from the paid read.',
+    'Matched 30 cards free. 3 cards got a second look from the paid read: 1 held for review, 0 in the main queue, 1 parked, 1 settled.',
   )
+})
+
+test('a joined free run settles what neither queue holds: second-look total less held, main and parked', async ({ page }) => {
+  await open(page, {
+    detail: {
+      joined: true,
+      counts: joinedCounts({ held: 2, main: 1, parked: 1 }),
+      manifest: { flags: { engine: 'marqo-b' }, matched: 30, second_look: secondLookRows(6) },
+    },
+  })
+  await openFreeRun(page)
+  await expect(page.locator('.runs-detail-panel')).toContainText(
+    'Matched 30 cards free. 6 cards got a second look from the paid read: 2 held for review, 1 in the main queue, 1 parked, 2 settled.',
+  )
+})
+
+test('a joined free run whose join wrote no second-look counts ends at the paid read', async ({ page }) => {
+  await open(page, {
+    detail: {
+      joined: true,
+      counts: joinedCounts(),
+      manifest: { flags: { engine: 'marqo-b' }, matched: 30, second_look: secondLookRows(3) },
+    },
+  })
+  await openFreeRun(page)
+  await expect(page.locator('.runs-detail-panel')).toContainText('Matched 30 cards free. 3 cards got a second look from the paid read.')
   await expect(page.locator('.runs-detail-panel')).not.toContainText('held for review')
+})
+
+test('opening a joined free run reads no queue: its receipt is the join record', async ({ page }) => {
+  const queueReads: string[] = []
+  page.on('request', (request) => {
+    if (/\/queues$/.test(request.url())) queueReads.push(request.url())
+  })
+  await open(page, {
+    detail: {
+      joined: true,
+      counts: joinedCounts({ held: 1, main: 1, parked: 0 }),
+      manifest: { flags: { engine: 'marqo-b' }, matched: 30, second_look: secondLookRows(3) },
+    },
+  })
+  /* The screen mounts Review, which reads the queues at load (D291). Only a read the press starts counts here. */
+  queueReads.length = 0
+  await openFreeRun(page)
+  /* The receipt's read, if it made one, has landed by the time the page is idle. */
+  await page.waitForLoadState('networkidle')
+  expect(queueReads, 'the receipt reads the run record, not GET /queues').toEqual([])
+  await expect(page.locator('.runs-detail-panel')).toContainText('1 held for review')
 })
