@@ -501,7 +501,9 @@ test('R6: while held the Capture button is disabled; after a successful Retry Ca
 /* The owner's sitting: a baseline taken with a card on the stand reads each similar card as the
    empty stand, and the dealer stops after the first one. The stop must name the baseline there,
    not after three, because dealing never reaches three. */
-test('a dealing stop after one empty-stand settle offers Re-baseline', async ({ page }) => {
+/** Deal one card that crosses the lens and settles back onto the baseline: one no-card verdict,
+ *  then the dealer's no-photo stop. */
+async function dealOneEmptyStand(page: Page): Promise<void> {
   await ready(page, true)
   const start = control(page, 'Start dispenser')
   await expect(start).toBeEnabled({ timeout: 5_000 })
@@ -522,6 +524,10 @@ test('a dealing stop after one empty-stand settle offers Re-baseline', async ({ 
   )
 
   await expect(page.locator('.capture-controls').getByText(/no photo came/)).toBeVisible({ timeout: 10_000 })
+}
+
+test('a dealing stop after one empty-stand settle offers Re-baseline', async ({ page }) => {
+  await dealOneEmptyStand(page)
   const warn = page.locator('.capture-stage-warn[role="alert"]').filter({ hasText: 'empty stand' })
   await expect(warn).toBeVisible()
   await warn.getByRole('button', { name: 'Re-baseline' }).click()
@@ -538,4 +544,22 @@ test('a dealing stop with nothing past the lens says check the tray and offers n
   await start.click()
   await expect(page.locator('.capture-controls').getByText(/no photo came/)).toBeVisible({ timeout: 10_000 })
   await expect(page.locator('.capture-stage-warn[role="alert"]').filter({ hasText: 'empty stand' })).toHaveCount(0)
+})
+
+/* The warning belongs to the dealt card's verdict, not to the stop line, which stands until the
+   next Start. Re-baselining from the tuning panel books one arm-time verdict on the empty stand,
+   and that must not bring the warning back. */
+test('after the stop, a Re-baseline from the tuning panel does not bring the warning back', async ({ page }) => {
+  await dealOneEmptyStand(page)
+  const warn = page.locator('.capture-stage-warn[role="alert"]').filter({ hasText: 'empty stand' })
+  await expect(warn).toBeVisible()
+  const tuning = page.locator('details.capture-tuning')
+  await tuning.locator('summary').click()
+  await expect(tuning).toHaveAttribute('open', '')
+  const empty = tuning.getByText(/^empty \d+$/)
+  const before = Number((await empty.textContent())?.split(' ')[1])
+  await tuning.getByRole('button', { name: /Re-baseline/ }).click()
+  await expect(empty).toHaveText(`empty ${before + 1}`, { timeout: 5_000 }) // the arm-time verdict
+  await page.waitForTimeout(500) // keep: a few diagnostics reports after that verdict
+  await expect(warn).toHaveCount(0)
 })

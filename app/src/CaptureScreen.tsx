@@ -1677,9 +1677,10 @@ export function CaptureScreen() {
   const retryingRef = useRef(false)
   const applyTail = useRef<Promise<boolean>>(Promise.resolve(true))
   const dealingRef = useRef(false)
-  /* The settle after the last card sent read as an empty stand. Dealing stops after one such
+  /* The latest verdict was an empty stand, read while dealing. Dealing stops after one such
    * card, so `noCardRun` never reaches the warning's three; this lets that stop name the
-   * baseline. Set from the live verdict, never the arm-time one, which comes before any deal. */
+   * baseline. Every verdict rewrites it, so an arm-time verdict (re-baseline, re-arm) or a
+   * good fire after the stop clears it. */
   const [noCardDealt, setNoCardDealt] = useState(false)
 
   
@@ -3911,7 +3912,7 @@ export function CaptureScreen() {
         setMotionDiag,
         DEFAULT_PARAMS,
         (t, d, dBase, luma, event, cells) => {
-          if (event === 'suppressed:no-card' && dealingRef.current) setNoCardDealt(true)
+          if (event !== null) setNoCardDealt(event === 'suppressed:no-card' && dealingRef.current)
           traceRef.current?.record(t, d, dBase, luma, event, cells)
         },
         motionControls,
@@ -4886,14 +4887,7 @@ export function CaptureScreen() {
                     ? `${motionDiag?.noCardRun} settles in a row read as an empty stand. If cards are going past the lens, the baseline was taken with something on the stand — clear it and re-baseline. Those cards were not photographed.`
                     : 'The last card read as an empty stand, so the dispenser stopped. The baseline was likely taken with something on the stand — clear it and re-baseline. That card was not photographed.'}
                 </p>
-                <Button
-                  size="sm"
-                  icon="refresh"
-                  onClick={() => {
-                    setNoCardDealt(false) // the new baseline's own arm verdict is not a dealt card
-                    motionControls.current?.rebaseline()
-                  }}
-                >
+                <Button size="sm" icon="refresh" onClick={() => motionControls.current?.rebaseline()}>
                   Re-baseline
                 </Button>
               </div>
