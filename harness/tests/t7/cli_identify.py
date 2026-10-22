@@ -15,6 +15,7 @@ import time
 
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 from harness.tests import Checks
 from cli import cmd_reconcile, resolve, runs
 from identify import batch, prompt, sidecar
@@ -6507,6 +6508,309 @@ def check_empty_state_refusal_blames_no_missing_folder(checks: Checks) -> None:
         checks.ok(not blames_folder(route_text), "10. and its sentence does not say no photos were found or that the capture folder does not exist", f"said: {route_text!r}")
 
 
+# ------------------------------------------------ the token cap: thinking off, the cap's own stop
+#
+# The real `run_batch`, the real requests and the real collection run. Only the transport is a
+# stub: it answers each request from the request it was sent, so a case says what the model did
+# at each cap. Nothing is paid for. The wire words are literals (`max_tokens`, 512, 2048,
+# `thinking`), never the product's constants, because the contract is what the request carries
+# and what the run prints.
+
+CAP_STOP = "max_tokens"
+THINKING_TEXT = "The title is clear. The number is at the bottom left."
+PIKACHU_ANSWER = json.dumps(
+    {"name": "Pikachu", "number": "025", "printed_total": "102", "finish": "normal", "confidence": "high"}
+)
+
+
+def _message(*, text=None, thinking=None, stop="end_turn", output=40):
+    content = []
+    if thinking is not None:
+        content.append(SimpleNamespace(type="thinking", thinking=thinking))
+    if text is not None:
+        content.append(SimpleNamespace(type="text", text=text))
+    usage = SimpleNamespace(input_tokens=1200, output_tokens=output)
+    return SimpleNamespace(content=content, stop_reason=stop, usage=usage)
+
+
+def _succeeded(message):
+    return SimpleNamespace(type="succeeded", message=message)
+
+
+def _errored():
+    return SimpleNamespace(type="errored", error=SimpleNamespace(type="api_error"))
+
+
+def _long_card(params):
+    """A card that needs more than 512 tokens: it stops at the cap, and answers at 2048."""
+    if params["max_tokens"] < 2048:
+        return _succeeded(_message(thinking=THINKING_TEXT, stop=CAP_STOP, output=params["max_tokens"]))
+    return _succeeded(_message(thinking=THINKING_TEXT, text=PIKACHU_ANSWER, output=900))
+
+
+class _StubBatches:
+    """The batch calls `identify/batch.py` makes. `answer(custom_id, params, round)` picks each result."""
+
+    def __init__(self, answer):
+        self.answer = answer
+        self.sent: list = []  # one list of request dicts per batch the run created
+        self.results_by_id: dict = {}
+
+    def create(self, requests):
+        self.sent.append(list(requests))
+        round_no = len(self.sent)
+        batch_id = f"msgbatch_stub_{round_no}"
+        self.results_by_id[batch_id] = [
+            SimpleNamespace(custom_id=r["custom_id"], result=self.answer(r["custom_id"], r["params"], round_no))
+            for r in requests
+        ]
+        return SimpleNamespace(id=batch_id)
+
+    def retrieve(self, batch_id):
+        return SimpleNamespace(id=batch_id, processing_status="ended", request_counts=None)
+
+    def results(self, batch_id):
+        return iter(self.results_by_id[batch_id])
+
+
+class _StubClient:
+    def __init__(self, answer):
+        self.messages = SimpleNamespace(batches=_StubBatches(answer))
+
+    def with_options(self, **_kwargs):
+        return self
+
+    def rounds(self) -> list:
+        """Each batch the run sent, as `{custom_id: max_tokens}`."""
+        return [{r["custom_id"]: r["params"]["max_tokens"] for r in sent} for sent in self.messages.batches.sent]
+
+
+def _images_per_card(client) -> list:
+    """Each batch's requests as `{custom_id: image blocks}`. A crop retry adds one block a region."""
+    return [
+        {
+            r["custom_id"]: sum(1 for block in r["params"]["messages"][0]["content"] if block.get("type") == "image")
+            for r in sent
+        }
+        for sent in client.messages.batches.sent
+    ]
+
+
+def _identify_stubbed(home, answer, indexes, *, crops=None):
+    """One `banchi identify` over cards 1..n in a fresh capture folder. -> (exit code or the
+    exception text, the stub client)."""
+    from unittest import mock
+
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+    from identify import images as identify_images
+
+    caps = Path(home) / "captures" / "cards" / "box3"
+    caps.mkdir(parents=True)
+    for index in indexes:
+        identify_images.Image.new("RGB", (64, 89), (120 + index, 40, 40)).save(caps / f"{index:04d}.jpg", "JPEG")
+        (caps / f"{index:04d}.json").write_text(
+            json.dumps({"box": 3, "index": index, "position": index, "game": "pokemon"}), "utf-8"
+        )
+    client = _StubClient(answer)
+    crop_stub = crops if crops is not None else cmd_identify._crop_attachments
+    with mock.patch.object(batch, "_client", lambda *_a, **_k: client), mock.patch.object(
+        cmd_identify, "_crop_attachments", crop_stub
+    ), quiet():
+        try:
+            outcome = cmd_identify.run(
+                cli_entry.build_parser().parse_args(["identify", str(caps), "--engine", "haiku"]),
+                lambda *_a: None,
+            )
+        except Exception as exc:  # a crash fails its own check; it must not take T7 down
+            outcome = f"raised {type(exc).__name__}: {exc}"
+    return outcome, client
+
+
+def _stub_run(answer):
+    """One `run_batch` over one card, through the stub client. -> (the run, the stub client)."""
+    client = _StubClient(answer)
+    request = batch.ImageRequest(custom_id="card-1", media_type="image/jpeg", data_b64="AAAA")
+    return batch.run_batch([request], client=client, poll_seconds=0), client
+
+
+def check_identify_request_thinks_off_under_cap(checks: Checks) -> None:
+    """The identification request says `thinking: disabled` and keeps the 512 cap.
+
+    Haiku 5.5 thinks by default and thinking spends the cap, so the request must turn it off.
+    """
+    request = batch.ImageRequest(custom_id="card-1", media_type="image/jpeg", data_b64="AAAA")
+    params = batch.build_request(request)["params"]
+    checks.equal(
+        params.get("thinking"), {"type": "disabled"},
+        "the request says `thinking: disabled`, so every output token is the answer",
+    )
+    checks.equal(params.get("max_tokens"), 512, "and the first request's cap is 512")
+
+
+def check_identify_thinking_only_stop_is_named_and_counted(checks: Checks) -> None:
+    """A card that spent its whole cap on thinking is named `max_tokens`, not `malformed`.
+
+    The message has a thinking block and no text block, and its stop reason is `max_tokens`.
+    The tokens it spent still count on the run.
+    """
+    run, _client = _stub_run(
+        lambda _cid, _params, _round: _succeeded(_message(thinking=THINKING_TEXT, stop=CAP_STOP, output=512))
+    )
+    outcome = run.outcomes.get("card-1")
+    checks.equal(
+        getattr(outcome, "status", None), CAP_STOP,
+        "the outcome is named `max_tokens`, so the retry gives it room instead of a crop",
+    )
+    checks.equal(run.usage.output_tokens, 512, "and the 512 tokens it spent are counted on the run")
+
+
+def check_identify_thinking_then_text_still_parses(checks: Checks) -> None:
+    """A thinking block ahead of the answer does not stop the answer from parsing.
+
+    The cap was not reached, so this is a success and nothing is retried.
+    """
+    run, client = _stub_run(
+        lambda _cid, _params, _round: _succeeded(_message(thinking=THINKING_TEXT, text=PIKACHU_ANSWER, output=300))
+    )
+    outcome = run.outcomes.get("card-1")
+    checks.equal(getattr(outcome, "status", None), batch.SUCCEEDED, "a thinking block then a text block under the cap is a success")
+    checks.equal(
+        getattr(getattr(outcome, "identification", None), "name", None), "Pikachu",
+        "and the text block's JSON is the answer that parses",
+    )
+    checks.equal(len(client.messages.batches.sent), 1, "with no retry round")
+
+
+def check_identify_retry_carries_the_larger_cap(checks: Checks) -> None:
+    """A card that stopped on its cap is re-sent at 2048. The first request carried 512."""
+    from cli import cmd_identify
+
+    with isolated_home() as home:
+        outcome, client = _identify_stubbed(home, lambda _cid, params, _round: _long_card(params), [1])
+    cid = cmd_identify._custom_id("3/1")
+    rounds = client.rounds()
+    checks.equal(outcome, 0, "`banchi identify` exits 0 once the retry answers")
+    checks.equal(rounds[:1], [{cid: 512}], "the first request carries the 512 cap")
+    checks.equal(rounds[1:2], [{cid: 2048}], "the retry carries 2048, never the same 512 request again")
+
+
+def check_identify_mixed_retry_round_caps_only_the_long_card(checks: Checks) -> None:
+    """One retry round holds a card that stopped on its cap and a card that errored.
+
+    Each keeps its own cap: 2048 for the card that ran out, 512 for the card that did not.
+    """
+    from cli import cmd_identify
+
+    long_cid = cmd_identify._custom_id("3/1")
+    flaky_cid = cmd_identify._custom_id("3/2")
+    flaky_attempts: list = []
+
+    def answer(cid, params, _round):
+        if cid != flaky_cid:
+            return _long_card(params)
+        flaky_attempts.append(cid)
+        if len(flaky_attempts) == 1:
+            return _errored()
+        return _succeeded(_message(text=PIKACHU_ANSWER, output=60))
+
+    with isolated_home() as home:
+        outcome, client = _identify_stubbed(home, answer, [1, 2])
+    rounds = client.rounds()
+    checks.equal(outcome, 0, "`banchi identify` exits 0 once the mixed retry answers")
+    checks.equal(
+        rounds[1:2], [{long_cid: 2048, flaky_cid: 512}],
+        "the mixed retry round caps only the card that ran out: 2048 for it, 512 for the errored one",
+    )
+
+
+def check_identify_second_cap_stop_queues_identification_failed(checks: Checks) -> None:
+    """A card that stops on its cap twice is not re-sent a third time: the budget is one.
+
+    It queues as `identification_failed`, with its photograph and the reason of its last attempt.
+    """
+    from cli import cmd_identify
+
+    def always_stops(_cid, params, _round):
+        return _succeeded(_message(thinking=THINKING_TEXT, stop=CAP_STOP, output=params["max_tokens"]))
+
+    with isolated_home() as home:
+        outcome, client = _identify_stubbed(home, always_stops, [1])
+        run = runs.latest()
+        try:
+            resolved = resolve.load(run, {"pokemon": FIXTURE_EXPORT})
+            main, _parked = resolve.entries_for(resolved)
+            failed = [entry for entry in main if entry.reason == routing.IDENTIFICATION_FAILED]
+        except Exception as exc:  # a crash fails the checks below by name
+            failed = f"raised {type(exc).__name__}: {exc}"
+    cid = cmd_identify._custom_id("3/1")
+    checks.equal(client.rounds(), [{cid: 512}, {cid: 2048}], "one retry at 2048, then no third request: the budget is one")
+    checks.equal(outcome, 0, "`banchi identify` exits 0 with the card queued, not dropped")
+    checks.equal(
+        len(failed) if isinstance(failed, list) else failed, 1,
+        "the card is queued as `identification_failed`, once",
+    )
+    if isinstance(failed, list) and failed:
+        queued = failed[0]
+        checks.ok(
+            str(queued.photo or "").endswith("0001.jpg"),
+            "the queued card carries its photograph",
+            f"photo: {queued.photo!r}",
+        )
+        checks.equal(queued.read.get("status"), CAP_STOP, "its read names the cap stop")
+        checks.ok(
+            "2048" in str(queued.read.get("error")),
+            "its reason is the last attempt's: the answer ran out at 2048 tokens",
+            f"error: {queued.read.get('error')!r}",
+        )
+
+
+def check_identify_cap_stops_count_in_the_run_usage(checks: Checks) -> None:
+    """The run's manifest counts the output tokens of both cap stops: 512, then 2048."""
+
+    def always_stops(_cid, params, _round):
+        return _succeeded(_message(thinking=THINKING_TEXT, stop=CAP_STOP, output=params["max_tokens"]))
+
+    with isolated_home() as home:
+        _identify_stubbed(home, always_stops, [1])
+        manifest = runs.latest().manifest
+    checks.equal(
+        (manifest.get("usage") or {}).get("output_tokens"), 512 + 2048,
+        "the manifest's output total includes both stops",
+    )
+
+
+def check_identify_max_tokens_card_not_sent_on_crop_path(checks: Checks) -> None:
+    """A card that stopped on its cap is not sent with crops, even when a card in its retry round needs them.
+
+    The cure for a cap stop is room. A crop is the cure for a bad read, and it is the wrong one here.
+    """
+    from cli import cmd_identify
+
+    long_cid = cmd_identify._custom_id("3/1")
+    bad_cid = cmd_identify._custom_id("3/2")
+
+    def answer(cid, params, _round):
+        if cid == bad_cid:
+            return _succeeded(_message(text="I cannot read this card.", output=30))
+        return _long_card(params)
+
+    def crop_stub(_item, _say):
+        return [batch.Attachment(media_type="image/jpeg", data_b64="QUJD")]
+
+    with isolated_home() as home:
+        _outcome, client = _identify_stubbed(home, answer, [1, 2], crops=crop_stub)
+    images = _images_per_card(client)
+    checks.equal(
+        images[:1], [{long_cid: 1, bad_cid: 1}],
+        "the first request sends each card's photograph alone",
+    )
+    checks.equal(
+        images[1:2], [{long_cid: 1, bad_cid: 2}],
+        "the retry round crops the bad read and not the card that stopped on its cap",
+    )
+
+
 CHECKS = (
     check_cli_seams,
     check_code_ledger,
@@ -6538,4 +6842,12 @@ CHECKS = (
     check_selection_unknown_route_keys,
     check_identify_empty_flag_refuses,
     check_empty_state_refusal_blames_no_missing_folder,
+    check_identify_request_thinks_off_under_cap,
+    check_identify_thinking_only_stop_is_named_and_counted,
+    check_identify_thinking_then_text_still_parses,
+    check_identify_retry_carries_the_larger_cap,
+    check_identify_mixed_retry_round_caps_only_the_long_card,
+    check_identify_second_cap_stop_queues_identification_failed,
+    check_identify_cap_stops_count_in_the_run_usage,
+    check_identify_max_tokens_card_not_sent_on_crop_path,
 )
