@@ -25,8 +25,11 @@ The answer holds a one-hour `id_token` and the owner's `user_id`. Each call send
 `Authorization: Bearer <id_token>`. The server refreshes the ID token before it expires.
 
 The owner copies the token by hand, in the DevTools Console on `app.cardladder.com`. It is the
-`stsTokenManager.refreshToken` field of the record in IndexedDB `firebaseLocalStorageDb`. A
-token that fails the exchange shows one sentence on screen and one action: copy it again.
+`stsTokenManager.refreshToken` field of the record in IndexedDB `firebaseLocalStorageDb`. The
+owner pastes it into `.env` as `CARDLADDER_REFRESH_TOKEN=<token>` and restarts nothing: the
+next add reads it. A missing or failed token shows one plain sentence on screen, such as "Card
+Ladder needs you to sign in again.", and never the key's name (D196, no user-visible string
+names a decision). These steps are where the owner finds the key.
 
 ## 3. Every point the token can read
 
@@ -218,6 +221,24 @@ Every control a thumb presses is 40px or more. The kit meets that on touch: the
 `--bn-control-h-sm`, `--bn-control-h` and `--bn-control-h-lg` to 40, 42 and 46px. With a mouse
 they stay 28 and 34px, as on every other screen. `#/slabs` uses the kit's sizes and overrides
 none of them.
+
+### 4.8 The screen's rules
+
+These hold until a later route changes them.
+
+- The screen computes no trust verdict, because the browser holds no pipeline logic. It shows
+  Card Ladder's estimate and the ladder value, each with its source.
+- Remove acts at once. Its receipt carries Undo, which adds the slab again and restores its
+  first date. An Undo that Card Ladder refuses, a rate limit included, shows that refusal's
+  sentence. It never fails without a word.
+- A rate limit is a refusal, never a retry: its sentence says to try again tomorrow and offers
+  no Retry.
+- The grader list on screen copies `store/slabs.GRADERS`, because no route sends it yet. A
+  check fails when the two differ.
+- A slab with no label never shows its cert. The screen writes its own receipt sentence then.
+- A login refusal says what to do in plain words, such as "Card Ladder needs you to sign in
+  again." It never names the settings key (section 2 does).
+- The screen's nav key is `l`.
 
 ## 5. Pacing
 
