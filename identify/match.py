@@ -81,13 +81,13 @@ UNACCEPTED_SHARE = 0.40
 MEASURE_MAX = 200
 FLOOR_MIN = 0.755
 TOP_N = 3
-# AN EMPTY SLOT HAS NO BRIGHT PIXEL. Measured on the rig's photographs: the 99th-percentile luminance
-# (0 to 255) of seven empty-slot photographs is 29 to 76, and of 2,642 photographs of real cards it is
-# 128 or more. The cut sits between. PONYTAIL CEILING: a fixed exposure is assumed. A rig session shot
+# AN EMPTY SLOT HAS NO BRIGHT PIXEL. Measured at full size on the rig's photographs: the 99th-percentile
+# luminance (0 to 255) of seven empty-slot photographs is 75 or less, and of 2,642 photographs of real
+# cards it is 141 or more. The cut sits between. Read at full size (about 41 ms a photograph): a
+# downscaled decode dilutes thin bright detail and would call a dark card with fine white lines empty. PONYTAIL CEILING: a fixed exposure is assumed. A rig session shot
 # far darker than the others would send its real cards to the main queue as "empty", never to a wrong
 # listing; widen with a second feature if one is ever measured.
 EMPTY_SLOT_P99 = 100
-EMPTY_SLOT_EDGE = 256  # the long edge the luminance is read at; JPEG draft mode decodes it, not the full frame
 
 
 # The reasons a card is left unread. Each is a stable code the run record and the screen read.
@@ -556,15 +556,14 @@ class Result:
 
 
 def empty_slot(photo: Path) -> bool:
-    """True when the photograph shows an empty slot: no pixel anywhere is brighter than
-    `EMPTY_SLOT_P99` at the 99th percentile. A photograph that will not open is False here; the
-    crop step names it `photo_unreadable`."""
+    """True when the photograph shows an empty slot: its 99th-percentile luminance, at full size, is
+    below `EMPTY_SLOT_P99`. The one home: `match.read` and `cli/cmd_identify.run` both call it.
+    A photograph that will not open is False here; the crop step names it `photo_unreadable`."""
     import numpy as np
     from PIL import Image
 
     try:
         with Image.open(photo) as image:
-            image.draft("L", (EMPTY_SLOT_EDGE, EMPTY_SLOT_EDGE))
             pixels = np.asarray(image.convert("L"))
     except Exception:
         return False

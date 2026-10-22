@@ -140,6 +140,7 @@ STAGE_PENDING = "pending"  # undecided; once the preflight is over, this IS the 
 STAGE_CACHED = "cached"  # the store already owns this answer — never prepared, never sent
 STAGE_UNREADABLE = "unreadable"  # the bytes would not hash, or would not decode
 STAGE_HELD = "held"  # a cleared answer that will not parse: in review, not sent, not adopted
+STAGE_EMPTY = "empty_slot"  # the photograph shows an empty slot: not sent on any engine, queued with its photo
 STAGE_REFUSED = "refused"  # no prompt to read it with — named, not sent, not dropped
 
 
@@ -694,12 +695,6 @@ def _run_matcher(to_read: List[Item], say) -> batch.BatchRun:
         else:
             item.unread = result
     return batch.BatchRun(outcomes=outcomes)
-
-
-def _goes_to_paid(item: Item) -> bool:
-    """A card the free reader did not accept goes to the paid second look, except an empty slot:
-    there is nothing for the paid read to read. It goes to the main queue with its photograph."""
-    return item.unread is not None and item.unread.code != UNREAD_EMPTY_SLOT
 
 
 def _second_look_record(item: Item) -> Optional[dict]:
@@ -1281,6 +1276,14 @@ def run(args, say) -> int:
 
     # ONE FIELD, AFTER THE PREPARE PASS. A card that failed to decode has just left
     # `STAGE_PENDING`, so this filter must be read here and not before it.
+    # AN EMPTY SLOT IS NEVER SENT, ON ANY ENGINE. `--engine haiku` skips the free reader, so the check
+    # runs here, before the send list is taken. `unread` carries the reason `cli/resolve.py` reads.
+    for item in items:
+        if item.stage == STAGE_PENDING and match.empty_slot(Path(item.capture.photo)):
+            item.unread = match.Result(item.key, False, code=UNREAD_EMPTY_SLOT, detail="the slot holds no card")
+            item.status = UNREAD_EMPTY_SLOT
+            item.error = item.unread.detail
+            item.stage = STAGE_EMPTY
     to_send = [i for i in items if i.stage == STAGE_PENDING]
     unreadable = [i for i in items if i.stage == STAGE_UNREADABLE]
     no_position = [i for i in items if not i.capture.has_position]
@@ -1327,7 +1330,7 @@ def run(args, say) -> int:
     # press runs in its own detached child and always counts.
     if ready and (not args.dry_run or len(to_send) <= match.MEASURE_MAX):
         matcher_run = _run_matcher(to_send, say)
-        second_look = [i for i in to_send if _goes_to_paid(i)]
+        second_look = [i for i in to_send if i.unread is not None]
         measured = True
     if free:
         if measured:
@@ -1699,10 +1702,6 @@ def run(args, say) -> int:
         ))
         read_count = sum(1 for i in to_send if i.identification is not None)
         second = [i for i in to_send if i.identification is None]
-        for item in [i for i in second if i.unread is not None and not _goes_to_paid(i)]:
-            item.status = UNREAD_EMPTY_SLOT
-            item.error = item.unread.detail
-        second = [i for i in second if i.status != UNREAD_EMPTY_SLOT]
         # THE RECEIPT'S FIGURES, in the manifest the runs sheet reads: how many the free reader
         # matched, and which cards went to the second look and why. Written before the paid
         # batch, so a run that dies later still says what the free read did.
@@ -1983,9 +1982,9 @@ def run(args, say) -> int:
     # --------------------------------------------------------------------------- report
     reported = [i for i in items if i.stage != STAGE_HELD]  # a held card is neither read nor failed
     answered = [i for i in reported if i.identification is not None]
-    second_looked = [i for i in items if _goes_to_paid(i)]
-    empty_slots = [i for i in items if i.status == UNREAD_EMPTY_SLOT]
-    failed = [i for i in reported if i.identification is None and i.status != UNREAD_EMPTY_SLOT]
+    second_looked = [i for i in items if i.unread is not None and i.stage != STAGE_EMPTY]
+    empty_slots = [i for i in items if i.stage == STAGE_EMPTY]
+    failed = [i for i in reported if i.identification is None and i.stage != STAGE_EMPTY]
     stale = [i for i in items if i.stale_prompt]
     not_detected = [i for i in items if i.detection == NOT_DETECTED]
     unfit_crops = [i for i in items if i.detection == UNFIT_CROP]
