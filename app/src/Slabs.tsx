@@ -18,7 +18,7 @@ import './Slabs.css'
 
 const GRADER_NAME: Record<string, string> = { psa: 'PSA', beckett: 'Beckett', bgs: 'BGS', bvg: 'BVG', sgc: 'SGC', cgc: 'CGC' }
 const CONF_WORD: Record<number, string> = { 1: 'Very low', 2: 'Low', 3: 'Fair', 4: 'Good', 5: 'High' }
-const NO_NAME = 'Unnamed slab'
+const NO_NAME = 'Unnamed Slab'
 const DASH = '—'
 
 /** Sales windows in the order Card Ladder's speed block lists them, with the words for each. */
@@ -45,16 +45,16 @@ const COLUMNS: readonly Column[] = [
   { name: 'Ask', width: 48, num: true },
   { name: 'Card Ladder', width: 96, num: true },
   { name: 'Conf', width: 68 },
-  { name: 'Last sale', width: 80, num: true },
+  { name: 'Last Sale', width: 80, num: true },
   { name: 'PSA 10', width: 60, num: true },
   { name: 'Raw NM', width: 64, num: true },
-  { name: 'Slab vs raw', width: 64, num: true },
+  { name: 'Slab vs Raw', width: 64, num: true },
   { name: '×', width: 32, num: true },
   { name: 'Do', width: 36 },
 ]
 const TABLE_MIN = COLUMNS.reduce((sum, column) => sum + column.width, 0)
 /* The cells no route fills yet. Rate, Top % and Best % need the pop report, which the routes do not store. */
-const DASH_COLUMNS: ReadonlySet<string> = new Set(['Graded', 'Rate', 'Top %', 'Best %', 'Set', 'Var', 'Ask', 'PSA 10', 'Raw NM', 'Slab vs raw', '×', 'Do'])
+const DASH_COLUMNS: ReadonlySet<string> = new Set(['Graded', 'Rate', 'Top %', 'Best %', 'Set', 'Var', 'Ask', 'PSA 10', 'Raw NM', 'Slab vs Raw', '×', 'Do'])
 
 /* ----------------------------------------------------------------------------- words */
 
@@ -422,7 +422,7 @@ function LedgerRow({ row, onOpen }: { readonly row: SlabRow; readonly onOpen: ()
       }
       case 'Card':
         return (
-          <button type="button" className="slabs-card-btn" data-slab={rowKey(row)} onClick={onOpen}>
+          <button type="button" className="slabs-card-btn" data-typed data-slab={rowKey(row)} onClick={onOpen}>
             {nameOf(row)}
           </button>
         )
@@ -430,7 +430,7 @@ function LedgerRow({ row, onOpen }: { readonly row: SlabRow; readonly onOpen: ()
         return noSales ? <span className="slabs-no-sales">No sales</span> : snapshot === null ? dash() : <Money value={amount(snapshot.estimated_value)} />
       case 'Conf':
         return noSales ? null : <Conf value={snapshot?.estimated_confidence ?? null} />
-      case 'Last sale':
+      case 'Last Sale':
         return noSales ? null : <Money value={amount(snapshot?.last_sale_price)} />
       default:
         return dash()
@@ -654,7 +654,7 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
                 <span>Day</span>
                 <span className="slabs-fig">Estimate</span>
                 <span>Confidence</span>
-                <span className="slabs-fig">Last sale</span>
+                <span className="slabs-fig">Last Sale</span>
               </li>
               {[...detail.snapshots].reverse().map((snap) => (
                 <li key={snap.day} className="slabs-row slabs-snap">
