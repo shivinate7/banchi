@@ -181,7 +181,7 @@ from store.session import Snapshot  # noqa: E402
 
 BANCHI = REPO_ROOT / "banchi"
 CONSOLE = "console.log"
-PID_FILE = "running.pid"
+PID_FILE = run_files.PID_FILE
 
 # ONE RESOLVER, FOR THE PROCESS'S WHOLE LIFE (`D301`). `pipeline/stockimages.py`'s
 # own header says why: its cache is only worth having if the same instance answers every
@@ -2217,11 +2217,12 @@ def _spawn(send: Send, captures) -> dict:
     # leaves a window in which the marker names a pid the table has never heard of and the run
     # reads as somebody else's orphan.
     #
-    # THE MARKER IS STILL WRITTEN AND STILL NEVER DELETED. It is the only thing about this
-    # child that survives this process — a restart, a `make up` reload, a crash — and it is
-    # what `scripts/reap.py` and a person reading a run directory have to go on. Deleting it
-    # from `_live_pid` was considered and declined: `scripts/serve.py` documents that function
-    # as one that "only ever READS", it is the 4s-polled path, and cases 1 and 2 never open it.
+    # THE MARKER IS WRITTEN HERE AND REMOVED BY THE CHILD WHEN IT ENDS (`cmd_identify.run`). It is
+    # the only thing about this child that survives this process — a restart, a `make up`
+    # reload, a crash — so a person reading a run directory and `_live_pid`'s orphan arm have
+    # it to go on while the child lives. `_live_pid` still only ever READS it: it is the
+    # 4s-polled path, and cases 1 and 2 never open it. A child that exits before this line
+    # runs leaves a marker naming a dead pid, which `_live_pid`'s signal-0 probe reads honestly.
     _remember_child(run.directory, child)
     (run.directory / PID_FILE).write_text(f"{child.pid}\n")
     return {
