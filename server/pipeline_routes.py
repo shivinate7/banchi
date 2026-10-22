@@ -3349,15 +3349,15 @@ def _follow_positions(directory: Path, pricing: dict, snapshot: Optional[Snapsho
     that is on no shelf is dropped, so the copy count and the photos are the moved cards' own.
     A run whose drawer is its own is left exactly as stored.
     """
-    if snapshot is None:
-        return
     try:
+        if snapshot is None:
+            snapshot = Store().read()
         run = run_files.open_run(directory)
         payload = run.read_identifications()
         if not run_resolve.disowned_boxes(payload, snapshot.inventory, run):
             return
         _, moved, departed, _ = run_resolve.realign(payload, snapshot.inventory, run)
-    except (run_files.RunError, OSError, ValueError):
+    except (run_files.RunError, files.StoreError, OSError, ValueError):
         return
     gone = set(departed)
     for entry in pricing.get("skus") or []:
@@ -3605,6 +3605,9 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
         )
         if follows:
             reads.followed.add(entry.name)
+            # THE LEDGER BELOW COUNTS COPIES OFF THESE POSITIONS, so they are re-addressed here
+            # and not only on the per-run route: the screen's count has to be the send's.
+            _follow_positions(entry, parsed, snapshot)
         if summary.get("box_former") and not follows:
             # A RUN OVER A DRAWER THAT NO LONGER EXISTS (D36). Never open, never in the
             # union: its positions are another drawer's cards now, and `emit` refuses it by

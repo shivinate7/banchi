@@ -129,10 +129,12 @@ def check_run_follows_cards_out_of_deleted_box(checks: Checks) -> None:
     checks.note("")
     checks.note("A RUN FOLLOWS ITS CARDS OUT OF A DELETED, REUSED BOX (D262, amended)")
     cards = [
-        (5, 1, "Dunsparce", "120/159", None),
+        (5, 1, "Dunsparce", "120/159", "holo"),
         (5, 2, "Dunsparce", "120/159", "reverse_holo"),
         (5, 3, "Articuno", "161/159", "holo"),
     ]
+    from server import pipeline_routes
+
     with isolated_home():
         run, _ = seam_run(checks, cards, join=False)
         with Store().write() as snapshot:
@@ -150,7 +152,13 @@ def check_run_follows_cards_out_of_deleted_box(checks: Checks) -> None:
         for key, record in written["cards"].items():
             record["photo_sha256"] = photos.digest_of(inventory.cards[key].cid)
         run.write_identifications(written)
+        # JOINED BEFORE ANYTHING MOVES, so `pricing.json` holds the old drawer's positions: the
+        # stale table every later screen has to re-address.
+        command(checks, "join", str(run.directory), "--export", str(run.path("export.csv")))
         # A run started since D145 records its drawer's true index; it names box 5, not box 7.
+        from cli import runs as run_files
+
+        run = run_files.open_run(run.directory)  # the join just wrote its manifest
         run.set(scope={"box": 5, "whole_box": False, "cards": 3, "bid": inventory.box(5).bid})
         capture_server.do_move_cards(5, {"to_box": 7, **back_of(7), "indices": [1, 2]})
         deleted = capture_server.do_delete_box(5)
@@ -193,11 +201,9 @@ def check_run_follows_cards_out_of_deleted_box(checks: Checks) -> None:
             "and the new box 5's cards are adopted by nobody",
             f"positions {where}",
         )
-        command(checks, "join", str(run.directory), "--export", str(run.path("export.csv")))
-        said = command(checks, "emit", str(run.directory), "--export", str(run.path("export.csv")))
         import csv
-        from server import pipeline_routes
 
+        # THE SCREENS FIRST, BEFORE THE SEND SPENDS THE COPIES.
         priced = pipeline_routes.do_pipeline_pricing(run.name)["pricing"]
         shown = sorted(
             (p["box"], p["index"]) for row in priced["skus"] for p in row.get("positions") or []
@@ -205,19 +211,27 @@ def check_run_follows_cards_out_of_deleted_box(checks: Checks) -> None:
         checks.ok(
             shown and all(box == 7 for box, _ in shown),
             "Pricing draws the moved cards at the box they are in now, never a slot of the "
-            "new box 5, and counts only their copies",
+            "new box 5",
             f"positions {shown}",
         )
         checks.ok(
             pipeline_routes._follows_its_cards(run.directory, Store().read()),
             "and the worklist keeps the run out of the unreachable list",
         )
-
+        worklist = pipeline_routes.do_pipeline_worklist([run.name])
+        owed = sum(int(row.get("add_to_quantity") or 0) for row in worklist["skus"])
+        checks.ok(
+            owed >= 1
+            and all(p["box"] == 7 for row in worklist["skus"] for p in row.get("positions") or []),
+            "the worklist counts the moved copies at their new box, and none at the reused one",
+            f"add_to_quantity {owed}",
+        )
+        said = command(checks, "emit", str(run.directory), "--export", str(run.path("export.csv")))
         sent = run.path("import.csv")
         rows = list(csv.DictReader(sent.open(encoding="utf-8"))) if sent.is_file() else []
         checks.ok(
-            sum(int(row.get("Add to Quantity") or 0) for row in rows) >= 1,
-            "and the send writes the moved copies into its import file",
+            sum(int(row.get("Add to Quantity") or 0) for row in rows) == owed,
+            "and the send writes exactly the copies the worklist counted",
             f"{len(rows)} row(s); {said[-200:]}",
         )
         checks.ok(
