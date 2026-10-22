@@ -11,10 +11,10 @@ the paid read in the same press, and that answer goes to the review queue beside
 top pick (the owner's flow: the free reader first, the paid read only on the low-confidence
 cards, a human last).
 
-  accept rule     the margin M (best minus second cosine) is at least `MARGIN_MIN` AND the
-                  floor S (best cosine) is at least `FLOOR_MIN`. Both were fit on the spike's
-                  500 photographs. The margin floor is the owner's ruling (0.05: cards under it get the second
-                  look). The held-out check (`scripts/match-heldout.py`) measured it at 0 wrong.
+  accept rule     candidates rank by the hub-corrected score `cosine - HUB_BETA * r` (`Index.hubness`).
+                  The margin M (best minus second corrected score) is at least `MARGIN_MIN` AND the
+                  floor S (the best entry's raw cosine) is at least `FLOOR_MIN`. The margin floor is
+                  the owner's ruling: cards under it get the second look.
   look-alike      a printing with no stock image loses to its same-name twin (measured: 96 of
   guard           the wrong answers accepted in the absent-photo test were same-name siblings).
                   So a best answer that shares a card name with a no-image printing in the pool

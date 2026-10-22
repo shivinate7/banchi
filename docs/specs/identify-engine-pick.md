@@ -102,7 +102,7 @@ Nothing is guessed at any step. A card Haiku answers wrongly cannot reach a list
 
 ## 3. The accept rule
 
-The matcher answers with its best card and two numbers. The margin M is the cosine of the best match minus the cosine of the second. The floor S is the cosine of the best match.
+The matcher ranks every stock photo by a hub-corrected score: `cosine - HUB_BETA * r`, with `HUB_BETA` 0.5. A stock photo's `r` is its mean cosine to its `HUB_K` (10) nearest other photos of the same game, so a photo that sits close to many others ranks lower (`Index.hubness`, cached on the index, read over the whole game and not only the pool). The matcher answers with its best card and two numbers. The margin M is the corrected score of the best match minus the corrected score of the second. The floor S is the raw cosine of the best match.
 
 **Accept only when all three hold:** the look-alike guard does not fire (section 2), M is at least 0.05, and S is at least 0.755. An accepted card gets `confidence` of `high` in the identification record. The owner ruled the margin floor at 0.05: a card under it gets a Haiku auto pass.
 
