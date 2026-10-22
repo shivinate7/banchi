@@ -1712,8 +1712,12 @@ def realign(
         else [box for box, _ in disowned_boxes(payload, inventory, run)]
     )
     if disowned:
-        live = sorted(int(entry.box) for entry in inventory.boxes.values())
-        everywhere, everywhere_twice, source = _photo_digests(live, inventory)
+        everywhere, everywhere_twice = _id_digests(
+            inventory,
+            (rec.get("photo_sha256") for box in disowned for rec in (by_box.get(box) or {}).values()
+             if rec.get("photo_sha256")),
+        )
+        source = "card ids"
         for box in disowned:
             records = by_box.get(box) or {}
             found = {
@@ -1866,6 +1870,32 @@ def realign(
         rebuilt[now] = moved_record
     rebound["cards"] = rebuilt
     return rebound, moved, departed, unverified
+
+
+def _id_digests(
+    inventory: master.Inventory, digests: Iterable[str]
+) -> Tuple[Dict[str, str], set]:
+    """(digest -> position key, digests carried by more than one card), for these digests.
+
+    KEYED ON THE CARD'S FROZEN ID ALONE (D183). `cards.cid` is the sha256 of the card's first
+    photograph, issued once, indexed and unique, so each digest is one indexed lookup of the
+    name (and of its `<digest>-2` twin) and never a file read. A card whose photograph was
+    deleted or replaced by a stock image is still found, and a sold or retired card is a
+    record that stays where it is. A `moved:` tombstone has another name and is never hit.
+    Two cards that project to one digest are a question, reported as `twice`.
+    """
+    found: Dict[str, str] = {}
+    twice: set = set()
+    for digest in sorted(set(digests)):
+        hits = [
+            card for name in (digest, f"{digest}-2")
+            for card in inventory.cards.where(cid=name)
+        ]
+        if len(hits) > 1:
+            twice.add(digest)
+        if hits:
+            found[digest] = master.position_key(hits[0].box, hits[0].index)
+    return found, twice
 
 
 def follow_moved(

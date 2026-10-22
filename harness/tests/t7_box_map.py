@@ -169,6 +169,15 @@ def check_run_follows_cards_out_of_deleted_box(checks: Checks) -> None:
                     run="t7-other-run",
                 )
 
+        # The owner's case: a moved, unsold card whose photograph file is gone is still its
+        # card, found by its frozen id and not by a file.
+        gone = Store().read().inventory.cards["7/2"].cid
+        existed = photos.find(gone, 7, 2)
+        checks.ok(existed is not None, "the moved card's photograph file is on disk to begin with")
+        for path in (photos.path(gone), photos.legacy_path(7, 2)):
+            if path.is_file():
+                path.unlink()
+        checks.ok(photos.find(gone, 7, 2) is None, "and then it is deleted")
         loaded = resolve.load(run, {"pokemon": run.path("export.csv")})
         where = sorted(
             (p.box, p.index) for match in loaded.matches.values() for p in match.positions
