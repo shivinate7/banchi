@@ -2404,12 +2404,12 @@ class _Places:
         # has run at all. Cached for the same reason `_cache` above is: this class is
         # instantiated per request, so `do_inventory` renders 5,000 rows against one walk
         # rather than 5,000.
-        # PER BOX SINCE D88, and lazily: `Inventory.records_in` answers one box out of the
-        # `cards` table without building the other boxes' records, which is what keeps a
-        # capture's `_card_summary` from loading the whole store to label one card. The
-        # degrade is still whole-store — `records_in` refuses on an unreadable record
-        # ANYWHERE, exactly as the scan it replaces did — so `_degraded` is one flag and
-        # not one per box.
+        # PER BOX, and lazily: `Inventory.walk_rows_in` answers one box as four indexed
+        # columns (index, name, state, game) without building a `Card` per row, which is
+        # what keeps a capture's `_card_summary` from loading the box to label one card.
+        # The degrade is whole-store — `walk_rows_in` refuses on an unreadable record
+        # ANYWHERE, so a label never rests on a position scan that skipped a bad record —
+        # and `_degraded` is therefore one flag and not one per box.
         self._degraded = False
         self._boxmates: Dict[int, _Boxmates] = {}
         # False for the ordinary constructor, always. `for_keys` flips it on the instance it
@@ -2426,6 +2426,8 @@ class _Places:
         # caches the CARD, which is the layer `view()` cannot see. Safe for the same reason
         # every other cache on this class is: the instance never outlives one request.
         self._of_cache: Dict[Tuple[int, int], dict] = {}
+        # `(game, cid, capture_id)` per position key, filled by `read_claims` or on first ask.
+        self._claimed: Dict[str, Tuple[Optional[str], Optional[str], Optional[str]]] = {}
         # PER-BOX MEMO FOR `Inventory.box_order` (D294), THE PR 3 INTEGRATION. `box_order`
         # selects the whole box every call, and `.of()` reached it three times per card
         # (`_company`, the neighbour walk and the block's own `order`). Search's mid-word
@@ -2446,14 +2448,14 @@ class _Places:
         every card's NAME and is exactly the cost this constructor exists to avoid.
 
         `do_orders` is the one caller today. An order's picks can span most of the store's
-        boxes, and the ordinary constructor's `_walk` (`records_in`, full `Card` hydration
-        per row) turns that into "every box, once" — effectively the whole store, on the
-        route the Orders and Shipping screens poll. `Inventory.occupied_indices` answers the
-        same `Position.occupied` input from two indexed integer columns instead, at the cost
-        of a third column (`game`) this class filters here: `store/` cannot resolve D24's
+        boxes, and the ordinary constructor's `_walk` (`walk_rows_in`: index, name, state and
+        game for every row) turns that into "every box, once" — all the names of the store,
+        on the route the Orders and Shipping screens poll. `Inventory.occupied_indices`
+        answers the same `Position.occupied` input from the index, state and game columns
+        alone, with no name read, and this class filters the game here: `store/` cannot resolve D24's
         `located` flag (it does not import `pipeline.games`, D63), so the raw claim travels
         up and is filtered where `games` is already imported — the same rule `_walk` applies
-        to a full `Card`, applied here to the bare column value.
+        to its game column, applied here to the bare column value.
 
         `neighbors`/`section_gaps` answer null for every position built through this
         constructor, which is the SAME null the ordinary path already answers when `_walk`
@@ -2462,7 +2464,7 @@ class _Places:
         neither field.
 
         A BAD RECORD DEGRADES ONE BOX HERE, NEVER THE INSTANCE — unlike `_walk`, which sets
-        `self._degraded` once for every box because a single scan (`records_in`) can meet a
+        `self._degraded` once for every box because a single scan (`walk_rows_in`) can meet a
         bad record anywhere in the store on ANY box's first call. `occupied_indices` raises
         the SAME way (`BadPosition`, the same global null check `_positions_in` runs), so
         this loop catches it per box rather than letting one bad record blow up every pick
@@ -2572,11 +2574,32 @@ class _Places:
         treats that as located — the loud stop for a typo'd game belongs to the pipeline
         (`join.lookup_for` refuses it by name), never to the route the app polls.
         """
-        return self._game_of(self._inventory.cards.get(master.position_key(int(box), int(index))))
+        return self._game_of(self.claims(box, index)[0])
 
-    def _game_of(self, card: Optional[master.Card]) -> Optional[dict]:
-        """`game_entry`'s lookup for a record already in hand — one rule, two doors in."""
-        claimed = getattr(card, "game", None) if card is not None else None
+    def read_claims(self, positions: Iterable[Tuple[int, int]]) -> None:
+        """Read `(game, cid, capture_id)` for these positions in one statement per column.
+
+        A route that renders one row per queued card calls this once before its loop, so
+        `game_entry` and `claims` answer from three column reads and not one card fetch per
+        row. A position with no record is remembered as all-None, which is what an absent
+        card answers anyway.
+        """
+        keys = list(dict.fromkeys(master.position_key(int(box), int(index)) for box, index in positions))
+        cards = self._inventory.cards
+        columns = [cards.pluck(name, keys) for name in ("game", "cid", "capture_id")]
+        for key in keys:
+            self._claimed[key] = tuple(column.get(key) for column in columns)
+
+    def claims(self, box, index) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        """`(game, cid, capture_id)` of the card at this position, None for each when no card is there."""
+        key = master.position_key(int(box), int(index))
+        if key not in self._claimed:
+            card = self._inventory.cards.get(key)
+            self._claimed[key] = tuple(getattr(card, name, None) for name in ("game", "cid", "capture_id"))
+        return self._claimed[key]
+
+    def _game_of(self, claimed: Optional[str]) -> Optional[dict]:
+        """`game_entry`'s lookup for a game claim already in hand — one rule, two doors in."""
         try:
             return games.get(str(claimed) if claimed else games.DEFAULT_GAME)
         except games.UnknownGame:
@@ -2675,9 +2698,8 @@ class _Places:
 
         SPARSE INSTANCES (`for_keys`) ANSWER NULL WITHOUT WALKING, ALWAYS. This is the one
         line that makes that constructor actually cheap: without it, `.of()` would still
-        reach here and call `self._walk(box)` — the exact full-`records_in` hydration
-        `for_keys` exists to avoid, since a sparse instance's `_boxmates` was never
-        populated by it. A future edit to `.of()` that adds a second path into `_walk`/
+        reach here and call `self._walk(box)` — the per-box name read `for_keys` exists to
+        avoid, since a sparse instance's `_boxmates` was never populated by it. A future edit to `.of()` that adds a second path into `_walk`/
         `_boxmates` outside this method would reintroduce the same defeat silently, which is
         why this check is here and not, say, memoised by `for_keys` leaving `_boxmates`
         pre-filled with `None`s (that would look identical on the wire and cost the same as
@@ -7234,6 +7256,14 @@ def do_graveyard(buried_only: bool = False) -> dict:
 # ------------------------------------------------------------------------ standing queues
 
 
+def _queue_addressable(entry: queues.QueueEntry) -> bool:
+    """Whether the entry names a real slot (box and index from 1), as `_queue_row` reads it."""
+    try:
+        return int(entry.box) >= 1 and int(entry.index) >= 1
+    except (TypeError, ValueError):
+        return False
+
+
 def _queue_row(
     entry: queues.QueueEntry, places: "Optional[_Places]" = None
 ) -> dict:
@@ -7266,11 +7296,7 @@ def _queue_row(
     # such an entry keeps the label the join gave it. There is no box to count and nothing
     # to re-render against; asking anyway would answer `Box 0 · departed`, which is a claim
     # about a card that has left rather than about one that never had a slot.
-    try:
-        addressable = int(entry.box) >= 1 and int(entry.index) >= 1
-    except (TypeError, ValueError):
-        addressable = False
-    if places is not None and addressable:
+    if places is not None and _queue_addressable(entry):
         # THE LABEL IS RE-RENDERED AT READ TIME AND THE STORED ONE IS NEVER SERVED (D58,
         # on D56's rule). `QueueEntry.label` is written once by `cli/resolve.py` at join
         # time and never recomputed, so it is a snapshot of a rendering — and every rule
@@ -7295,9 +7321,7 @@ def _queue_row(
         # block Inventory draws (LOC-26: the box's name and the neighbours) and its place link
         # opens THIS card, `#/inventory?box=<n>&card=<cid>`, not the box's first (LOC-12).
         row["place"] = place
-        card = places._inventory.cards.get(master.position_key(int(entry.box), int(entry.index)))
-        row["cid"] = getattr(card, "cid", None)
-        row["capture_id"] = getattr(card, "capture_id", None)
+        _, row["cid"], row["capture_id"] = places.claims(entry.box, entry.index)
     return row
 
 
@@ -7392,19 +7416,21 @@ def do_queues() -> dict:
     # renders 5,000 rows against — so a card's label on the review screen and its label on
     # the inventory screen are the same string by construction rather than by care.
     places = _Places(snapshot.inventory)
-    return {
-        # A DEPARTED CARD OWES NO ANSWER (UN-8). A card retired from Review kept its
-        # open entry, so it came back on reload. The entry stays in the file, so the
-        # retire undo brings the card back here with no second write.
-        "review": [
-            _queue_row(entry, places)
-            for entry in snapshot.review.owed_entries(snapshot.inventory.cards)
-        ],
-        "parked": [
-            _queue_row(entry, places)
-            for entry in snapshot.parked.owed_entries(snapshot.inventory.cards)
-        ],
+    # A DEPARTED CARD OWES NO ANSWER (UN-8). A card retired from Review kept its
+    # open entry, so it came back on reload. The entry stays in the file, so the
+    # retire undo brings the card back here with no second write.
+    owed = {
+        "review": snapshot.review.owed_entries(snapshot.inventory.cards),
+        "parked": snapshot.parked.owed_entries(snapshot.inventory.cards),
     }
+    # The queued cards' claims in a fixed number of statements, however many are queued.
+    places.read_claims(
+        (entry.box, entry.index)
+        for entries in owed.values()
+        for entry in entries
+        if _queue_addressable(entry)
+    )
+    return {name: [_queue_row(entry, places) for entry in entries] for name, entries in owed.items()}
 
 
 def _candidate_with_sku(candidates: Sequence[dict], sku: str) -> Optional[dict]:
@@ -14311,7 +14337,7 @@ def do_order_walk_plan(payload: dict) -> dict:
         40 open orders, 31 stops, 8 drawers, 40 copies      4.5 ms -> 18.5 ms
         all 275 walkable, 64 stops, 8 drawers, 275 copies  24.1 ms -> 32.2 ms
 
-    The delta is the per-box `records_in` walk — a fixed cost of the drawers the plan
+    The delta is the per-box `walk_rows_in` column read — a fixed cost of the drawers the plan
     reaches, not of the copies in it, and paid once per press. D260 is what it buys: a card
     nobody has named is not a landmark, and the distance is what keeps the skip honest.
 
