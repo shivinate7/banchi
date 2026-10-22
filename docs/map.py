@@ -5487,6 +5487,15 @@ COMPONENTS = [
         "governed_by": ["D88", "D89", "D104", "D166", "D91", "D301", "D176", "D42"],
     },
     {
+        "path": "docs/specs/lean-server.md",
+        "status": "tbd",
+        "does": "How to make the server lighter on the Mac: where the load is, options from stock "
+                "images outside Review to a full cloud server, the owner's rulings (slow reads fixed "
+                "first, photos stay on the Mac for now, Fulfillment stock art parked as a debt) and "
+                "the parked home-device plan.",
+        "governed_by": ["D301", "D89", "D36", "D43", "D88", "D316", "D42"],
+    },
+    {
         "path": "fixtures/",
         "status": "built",
         "does": "real TCGplayer exports for three product lines — Pokemon (SV09), Riftbound "
