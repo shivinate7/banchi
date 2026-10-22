@@ -62,7 +62,7 @@ import { captureBoxLabel } from './runScope'
 // before it is a different sitting. Imported rather than restated — see `sitting` below.
 import { GAP_MINUTES } from './storeHistory'
 import { Button, ConfirmSheet, Icon, IconButton, Kbd, Notice, Page, Pill, Slot, Stat } from './kit'
-import { DEALING_RAIL_TILES, dealerSupported, useDealer } from './dealer'
+import { DEALING_RAIL_TILES, SAID_NO_PHOTO, dealerSupported, useDealer } from './dealer'
 import { matchQuery } from './kit/match'
 import { toast } from './kit/toast'
 import { placePartsOf } from './position'
@@ -1677,6 +1677,10 @@ export function CaptureScreen() {
   const retryingRef = useRef(false)
   const applyTail = useRef<Promise<boolean>>(Promise.resolve(true))
   const dealingRef = useRef(false)
+  /* The settle after the last card sent read as an empty stand. Dealing stops after one such
+   * card, so `noCardRun` never reaches the warning's three; this lets that stop name the
+   * baseline. Set from the live verdict, never the arm-time one, which comes before any deal. */
+  const [noCardDealt, setNoCardDealt] = useState(false)
 
   
   const [carried, setCarried] = useState(() => restoredIds.current?.length ?? 0)
@@ -3906,7 +3910,10 @@ export function CaptureScreen() {
         camera.videoRef,
         setMotionDiag,
         DEFAULT_PARAMS,
-        (t, d, dBase, luma, event, cells) => traceRef.current?.record(t, d, dBase, luma, event, cells),
+        (t, d, dBase, luma, event, cells) => {
+          if (event === 'suppressed:no-card' && dealingRef.current) setNoCardDealt(true)
+          traceRef.current?.record(t, d, dBase, luma, event, cells)
+        },
         motionControls,
       ),
     [camera.videoRef],
@@ -4230,7 +4237,10 @@ export function CaptureScreen() {
    * baseline, camera ready, capture not halted. Any fire the screen declines stops it. */
   const motionArmed = triggerMode === 'motion' && motionDiag?.hasBaseline === true
   const dealer = useDealer({
-    onMark: (name, card) => traceRef.current?.mark(name, card),
+    onMark: (name, card) => {
+      if (name === 'start-sent') setNoCardDealt(false)
+      traceRef.current?.mark(name, card)
+    },
     halted: halt !== null,
     dropped: swallowedTotal + swallowed.halted,
     ready: blockers.length === 0,
@@ -4864,16 +4874,26 @@ export function CaptureScreen() {
               </div>
             </div>
 
-            {/* A run of empty-stand verdicts has exactly one likely cause and one remedy. */}
-            {triggerMode !== 'manual' && (motionDiag?.noCardRun ?? 0) >= 3 ? (
+            {/* A run of empty-stand verdicts has exactly one likely cause and one remedy. A
+                dealing stop after one such card is the same run, cut short by the dealer. */}
+            {triggerMode !== 'manual' &&
+            ((motionDiag?.noCardRun ?? 0) >= 3 ||
+              ((motionDiag?.noCardRun ?? 0) >= 1 && noCardDealt && dealer.said === SAID_NO_PHOTO)) ? (
               <div className="capture-stage-warn" role="alert">
                 <Icon name="alert" size={16} />
                 <p className="capture-refused">
-                  {motionDiag?.noCardRun} settles in a row read as an empty stand. If cards are
-                  going past the lens, the baseline was taken with something on the stand — clear
-                  it and re-baseline. Those cards were not photographed.
+                  {(motionDiag?.noCardRun ?? 0) >= 3
+                    ? `${motionDiag?.noCardRun} settles in a row read as an empty stand. If cards are going past the lens, the baseline was taken with something on the stand — clear it and re-baseline. Those cards were not photographed.`
+                    : 'The last card read as an empty stand, so the dispenser stopped. The baseline was likely taken with something on the stand — clear it and re-baseline. That card was not photographed.'}
                 </p>
-                <Button size="sm" icon="refresh" onClick={() => motionControls.current?.rebaseline()}>
+                <Button
+                  size="sm"
+                  icon="refresh"
+                  onClick={() => {
+                    setNoCardDealt(false) // the new baseline's own arm verdict is not a dealt card
+                    motionControls.current?.rebaseline()
+                  }}
+                >
                   Re-baseline
                 </Button>
               </div>

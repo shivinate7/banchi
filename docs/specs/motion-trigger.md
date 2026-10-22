@@ -152,7 +152,10 @@ trace as evidence about lighting and gates nothing.
 
 **A run of refusals is a sentence and not a counter.** `empty` is a total, and a total does not say
 "this is happening right now". Three consecutive refusals render as what they mean, with the likely
-cause (a baseline taken with something on the stand) and the remedy under it. `Re-baseline` is a
+cause (a baseline taken with something on the stand) and the remedy under it. While the dispenser
+deals, one refusal is enough: the dealer stops after the first card with no photo, so the run never
+reaches three. A dealing stop whose last settle was `suppressed:no-card` shows the same warning. The
+arm-time verdict does not count, since it lands before any card is dealt. `Re-baseline` is a
 button and not a letter. The operator presses it after clearing the stand, with a hand already off the keyboard. The letter it would want (`b`) is the box field's.
 
 The `C` key is disarmed in motion mode, so one trigger sits behind the seam at a time. The capture
