@@ -4,7 +4,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { NO_FREE_FIELDS, matchState, runRow, stubMatchState } from './routeFixtures'
 import { HAIKU_NAME_TOOLTIP, MATCHER_NAME_TOOLTIP } from '../src/engines'
-import type { MatchState } from '../src/types'
+import type { MatchState, QueueEntryWire } from '../src/types'
 import { expectOneStagger } from './staggerCheck'
 import { afterPaint, settleMotion } from './motionSettled'
 import { boxTitle } from '../src/kit/dataRules'
@@ -3584,6 +3584,36 @@ test('a paid quote with nothing the free reader answered draws no re-read ask at
   await expect(page.locator('.runs-quote-ask')).toHaveCount(0)
 })
 
+/** A queue row as `GET /queues` answers it: the full wire shape, because Review draws the same read and a bare row breaks it. */
+function queueRow(box: number, index: number, reason: string): QueueEntryWire {
+  return {
+    position: `${box}/${index}`,
+    box,
+    index,
+    label: `Box ${box} · Section 1 · Card ${index}`,
+    photo: null,
+    reason,
+    candidates: [],
+    market: null,
+    read: { name: 'Raichu', number: '026/132', set_hint: 'ME01' },
+    confidence: 'high',
+    first_seen: '2026-08-24',
+    age_days: 0,
+    cleared_by_human: false,
+  }
+}
+
+/** The free run's manifest: 30 matched, and the three keys sent to a second look. */
+const FREE_RUN_MANIFEST = {
+  flags: { engine: 'marqo-b' },
+  matched: 30,
+  second_look: [
+    { key: '9/1', code: 'margin_too_small', name: 'Raichu' },
+    { key: '9/2', code: 'lookalike_guard', name: 'Pikachu' },
+    { key: '9/3', code: 'margin_too_small', name: 'Eevee' },
+  ],
+}
+
 test('a free run says what it matched and how many went to the second look', async ({ page }) => {
   await open(page, {
     detail: {
@@ -3600,9 +3630,45 @@ test('a free run says what it matched and how many went to the second look', asy
   await openRun(page)
   const head = page.locator('.runs-detail-panel .runs-step-head').first()
   if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click()
+  /* Not joined, so the cards' places are not read yet: the line says they wait for the join. */
   await expect(page.locator('.runs-detail-panel')).toContainText(
-    'Matched 30 cards free. 2 cards got a second look from the paid read and wait in review.',
+    'Matched 30 cards free. 2 cards got a second look from the paid read, held until join.',
   )
   /* A CODE IS THE RUN RECORD'S, never the screen's. */
   await expect(page.locator('.runs-detail-panel')).not.toContainText(/margin_too_small|lookalike_guard/)
+})
+
+test('a joined free run says which second-look cards are held, in the main queue, or settled', async ({ page }) => {
+  await open(page, { detail: { joined: true, manifest: FREE_RUN_MANIFEST } })
+  /* After open(), so this handler wins over the empty queue open() registers. */
+  await page.route(/\/queues$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        review: [queueRow(9, 1, 'readers_disagree'), queueRow(9, 2, 'match_too_weak')],
+        parked: [],
+      }),
+    })
+  })
+  await openRun(page)
+  const head = page.locator('.runs-detail-panel .runs-step-head').first()
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click()
+  await expect(page.locator('.runs-detail-panel')).toContainText(
+    'Matched 30 cards free. 3 cards got a second look from the paid read: 1 held for review, 1 in the main queue, 1 settled.',
+  )
+})
+
+test('a joined free run whose queue read fails ends at the paid read, with no where', async ({ page }) => {
+  await open(page, { detail: { joined: true, manifest: FREE_RUN_MANIFEST } })
+  await page.route(/\/queues$/, async (route) => {
+    await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'queues unreadable' }) })
+  })
+  await openRun(page)
+  const head = page.locator('.runs-detail-panel .runs-step-head').first()
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click()
+  await expect(page.locator('.runs-detail-panel')).toContainText(
+    'Matched 30 cards free. 3 cards got a second look from the paid read.',
+  )
+  await expect(page.locator('.runs-detail-panel')).not.toContainText('held for review')
 })
