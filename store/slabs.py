@@ -7,7 +7,10 @@ at all.
 - `slabs`: one row per (cert, grader). The grader is stored in Card Ladder's name, so `bgs`,
   `bvg` and `beckett` are one slab. A cert is text; `"0012345678"` keeps its zeros.
 - `slab_snapshots`: one row per slab per day. A second write that day REPLACES the row whole.
-  The slab row keeps a copy of its newest one (`Slab.latest`), set only by `record_snapshot`.
+  The slab row keeps a copy of its newest one (`Slab.latest`), so `GET /slabs` never reads this
+  table. `record_snapshot` is the one snapshot writer and keeps the copy; `Slabs.add` reseeds it
+  from the newest stored snapshot when it re-creates a removed slab; `_parse_slab` rebuilds it
+  from the stored row.
 - `slab_sales`: one row per Card Ladder sale id however many slabs and reads see it, and NEVER
   deleted: a sale Card Ladder later drops stays here. The row names every slab that read it.
 - A remove (`Slabs.remove`) takes the slab row and its links only; snapshots and sales stay.
@@ -54,6 +57,10 @@ class Slab(NamedTuple):
     # The newest snapshot, by day. Payload only, no column. `record_snapshot` is its one writer, so
     # `GET /slabs` reads `slabs` alone and never `slab_snapshots` (spec section 6).
     latest: Optional["SlabSnapshot"] = None
+
+    @property
+    def key(self) -> str:
+        return _slab_key(self.cert, self.grader)
 
 
 class SlabSnapshot(NamedTuple):

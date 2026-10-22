@@ -357,7 +357,7 @@ def do_slabs() -> dict:
         rows.append({
             **_slab_row(slab),
             "snapshot": _snapshot(slab.latest) if slab.latest else None,
-            "note": None if f"{slab.grader}:{slab.cert}" in with_sales else "no sales",
+            "note": None if slab.key in with_sales else "no sales",
         })
     return {"slabs": rows}
 
