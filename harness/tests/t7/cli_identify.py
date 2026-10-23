@@ -250,7 +250,6 @@ def check_code_ledger(checks: Checks) -> None:
 
     from cli import __main__ as cli_entry
     from cli import cmd_identify
-    from identify import images as identify_images
 
     # 3-4-3-3, with a `?` for a character the model could not read and a lowercase letter
     # that `normalize_number` would have folded — the two properties the parser must keep.
@@ -2595,7 +2594,6 @@ def check_identify_preflight_stage(checks: Checks) -> None:
     """
     from cli import __main__ as cli_entry
     from cli import cmd_identify
-    from identify import images as identify_images
 
     checks.note("")
     checks.note("IDENTIFY PREFLIGHT — hash, then cache, then prepare (Item.stage)")
