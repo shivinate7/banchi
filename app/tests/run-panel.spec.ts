@@ -259,6 +259,8 @@ async function open(
       unread?: Record<string, number>
       /** A dry run over a long selection: the matcher does not run, so the quote states no count and no cost. */
       uncounted?: boolean
+      /** The most a long free quote can cost (every card a second look), named when no count is. */
+      ceiling?: number
     }
     /** Cards the free reader already answered in this selection: the paid press's ask. */
     matcherRead?: number
@@ -400,6 +402,7 @@ async function open(
                   : (options.free?.secondLook ?? perBox - (options.free?.freeRead ?? 30)) * legs,
                 second_look_measured: options.free?.uncounted ? null : (options.free?.measured ?? true),
                 unread: options.free?.unread ?? {},
+                ceiling_usd: options.free?.uncounted ? (options.free?.ceiling ?? null) : null,
               }
             : {}),
         },
@@ -3480,7 +3483,7 @@ test('a counted free quote says it was counted, and gives the free read and the 
   await expect(quote).toContainText('30 read free')
   await expect(quote).toContainText('6 get a second look from the paid read')
   await expect(quote).toContainText('Counted by reading them now')
-  await expect(quote).not.toContainText('counted when the run starts')
+  await expect(quote).not.toContainText(/counted when the run starts/i)
   await expect(quote).not.toContainText('About 30')
 })
 
@@ -3491,11 +3494,37 @@ test('a free quote over a long selection says its count waits for the run', asyn
   const quote = page.locator('.run-quote')
   await expect(quote).toBeVisible()
 
-  await expect(quote).toContainText('The free read and the second look are counted when the run starts.')
+  await expect(quote).toContainText('Counted when the run starts.')
   await expect(quote).not.toContainText('read free')
   await expect(quote).not.toContainText('get a second look')
   await expect(quote).not.toContainText('Counted by reading them now')
   await expect(page.locator('.run-button-money')).toHaveText('Match 36 cards, then pay for the second look')
+})
+
+test('a free quote over a long selection with a ceiling names the most it can cost', async ({ page }) => {
+  await open(page, { free: { uncounted: true, ceiling: 0.52 } })
+  await atReading(page, 9, 'free')
+  await page.getByRole('button', { name: 'Check what it will read' }).click()
+  const quote = page.locator('.run-quote')
+  await expect(quote).toBeVisible()
+
+  await expect(page.locator('.run-quote .bn-label').first()).toHaveText('Second look, at most')
+  await expect(page.locator('.runs-quote-money')).toHaveText('$0.52')
+  await expect(quote).toContainText('Counted when the run starts.')
+  await expect(quote).not.toContainText('read free')
+  await expect(page.locator('.run-button-money')).toHaveText('Match 36 cards, then spend up to $0.52 on the second look')
+})
+
+test('a counted free quote with no index says the free read is not set up', async ({ page }) => {
+  await open(page, { free: { freeRead: 0, secondLook: 36, measured: false } })
+  await atReading(page, 9, 'free')
+  await page.getByRole('button', { name: 'Check what it will read' }).click()
+  const quote = page.locator('.run-quote')
+  await expect(quote).toBeVisible()
+
+  await expect(quote).toContainText('36 get a second look from the paid read')
+  await expect(quote).toContainText('The free read is not set up, so every card goes to the second look.')
+  await expect(quote).not.toContainText('Counted by reading them now')
 })
 
 test('cards the free reader cannot take are named in sentences, never by their code', async ({ page }) => {

@@ -265,6 +265,57 @@ def check_matcher_hub_correction(checks: Checks) -> None:
     checks.equal([c["name"] for c in res.candidates][:2], ["Target Card", "Hub Card"], "candidates rank corrected, best first")
 
 
+def check_hub_cache_moves_on_replace(checks: Checks) -> None:
+    """`Index.hubness` is cached per game. A fingerprint replaced in place (same key, new vector)
+    must move the answer: the same index instance answers what a fresh read of the file answers.
+    The highest-rowid row is replaced too, because a key of count alone cannot see that change."""
+    import tempfile
+
+    import numpy as np
+
+    checks.note("")
+    checks.note("HUB CACHE — an in-place replace moves the answer on the same index instance")
+
+    def vec(*head):
+        out = np.zeros(match.DIM, np.float32)
+        out[: len(head)] = head
+        return out
+
+    def put(index, pid, v):
+        index.db.execute(
+            "insert or replace into vec values(?,?,?,?,?,?,?,?,?,?)",
+            ("riftbound", "Set A", str(pid), str(pid), f"Card {pid}", "", match.S_OK, None, v.tobytes(), "t"),
+        )
+
+    def same(a, b):
+        return a.keys() == b.keys() and all(abs(a[k] - b[k]) < 1e-6 for k in a)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "fingerprints.sqlite"
+        with match.Index(path) as index:
+            put(index, 1, vec(1.0))
+            put(index, 2, vec(0.9, 0.1))
+            put(index, 3, vec(0.0, 1.0))
+            put(index, 4, vec(0.0, 0.0, 1.0))
+            index.db.commit()
+            before = index.hubness("riftbound")
+            put(index, 1, vec(0.0, 0.0, 0.0, 1.0))
+            index.db.commit()
+            after = index.hubness("riftbound")
+            with match.Index(path) as fresh:
+                truth = fresh.hubness("riftbound")
+            checks.ok(not same(before, truth), "a replaced fingerprint changes the answer (a fresh read differs from before)")
+            checks.ok(same(after, truth), "the same instance answers what a fresh read of the file answers", f"cached {after!r}\nfresh  {truth!r}")
+
+            put(index, 4, vec(1.0, 0.2))
+            index.db.commit()
+            latest = index.hubness("riftbound")
+            with match.Index(path) as fresh:
+                truth = fresh.hubness("riftbound")
+            checks.ok(not same(after, truth), "replacing the highest-rowid fingerprint changes the answer too")
+            checks.ok(same(latest, truth), "and the same instance still answers what a fresh read gives", f"cached {latest!r}\nfresh  {truth!r}")
+
+
 def check_model_download(checks: Checks) -> None:
     """`match.download_model` against a local server: a wrong file is thrown away, a right one kept.
 
@@ -456,6 +507,7 @@ def check_identify_free_first(checks: Checks) -> None:
     from cli import __main__ as cli_entry
     from cli import cmd_identify, resolve
     from store.session import Store
+    from server import pipeline_routes
 
     checks.note("")
     checks.note("IDENTIFY, FREE FIRST — fake matcher, fake batch (nothing paid, nothing downloaded)")
@@ -519,8 +571,15 @@ def check_identify_free_first(checks: Checks) -> None:
             checks.equal(code, 0, "a free dry run with no index exits 0")
             checks.equal(
                 spoken(lines, "second look"),
-                "second look     4 of 4 measured",
+                "second look     4 of 4 certain",
                 "with no index every card is a certain second look: the pool rules cannot read any",
+            )
+            checks.equal(spoken(lines, "free read"), "free read       0 of 4 certain", "and the free read is certain too: nothing is read")
+            no_index_figure = spoken(lines, "estimated cost").split("$")[-1]
+            checks.equal(
+                pipeline_routes._parse_preflight("\n".join(lines)).get("second_look_measured"),
+                False,
+                "the server reads 'certain' as an unmeasured second look",
             )
             checks.ok(
                 not [line for line in lines if "estimated" in line and not line.startswith("estimated cost")],
@@ -553,6 +612,16 @@ def check_identify_free_first(checks: Checks) -> None:
                 )
                 checks.equal(spoken(lines, "free read"), "", f"and no free read count ({can_read} readable)")
                 checks.equal(spoken(lines, "estimated cost"), "", f"and no estimated cost ({can_read} readable)")
+                checks.equal(
+                    spoken(lines, "at most"),
+                    f"at most         ${no_index_figure}  if every card went to the second look",
+                    f"and it names the most it can cost: every card a second look ({can_read} readable)",
+                )
+                checks.equal(
+                    pipeline_routes._parse_preflight("\n".join(lines)).get("ceiling_usd"),
+                    float(no_index_figure),
+                    f"the server reads that line into ceiling_usd ({can_read} readable)",
+                )
                 checks.ok(
                     not any("estimated" in line for line in lines),
                     f"and no line says 'estimated' ({can_read} readable)",
@@ -1811,6 +1880,7 @@ def check_match_route_lane(checks: Checks) -> None:
 CHECKS = (
     check_matcher_accept_rule,
     check_matcher_hub_correction,
+    check_hub_cache_moves_on_replace,
     check_model_download,
     check_model_download_retries_through_the_one_home,
     check_fetch_bytes_retries_through_the_one_home,
