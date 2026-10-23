@@ -306,6 +306,28 @@ class _Catalog:
         return [(name, 1) for name in self._listed]
 
 
+class _BrokenCatalog:
+    """Stands in for the stock images when the catalogue read raises."""
+
+    def catalog_sets(self, _game):
+        raise OSError("the catalogue cannot be read")
+
+
+class _StaleIndex(_PoolIndex):
+    """An index built by another model file: its meta names another sha."""
+
+    def meta(self, _name):
+        return "stale-model"
+
+
+def _whole_pool_answer(index, game: str):
+    """`match._whole_pool`'s answer, or the exception it raised, so a check reads a crash as a failure."""
+    try:
+        return match._whole_pool(index, game)
+    except Exception as exc:  # noqa: BLE001 - the answer is what the check judges
+        return f"raised {type(exc).__name__}"
+
+
 def _ranked_read(photo: Path, top: float):
     """One request through `match.read` with a real ranking over one set. The crop and the embed are
     stubbed; the query is the unit vector, so the top printing's raw cosine is `top`."""
@@ -687,7 +709,8 @@ def _real_read(index, listed):
         stack.enter_context(mock.patch.object(match, "Index", lambda *_a, **_k: index))
         stack.enter_context(mock.patch.object(match, "_crop", lambda *_a: object()))
         stack.enter_context(mock.patch.object(match, "embed", lambda cards, _model=None: [query for _ in cards]))
-        stack.enter_context(mock.patch.object(match, "_stock_images", lambda: _Catalog(listed)))
+        catalog = listed if isinstance(listed, _BrokenCatalog) else _Catalog(listed)
+        stack.enter_context(mock.patch.object(match, "_stock_images", lambda: catalog))
         stack.enter_context(mock.patch.object(match, "status", lambda *_a, **_k: {"ready": True}))
         yield
 
@@ -723,14 +746,14 @@ def _press_real(caps: Path):
     return code, asked
 
 
-def _real_outcome(index, listed, hint=None):
+def _real_outcome(index, listed, hint=None, game="riftbound"):
     """One captured dark card, pressed through the real read over `index`. Returns the exit code, the
     card's state, its retired events, its second-look code, and whether the paid read was asked for it."""
     from cli import cmd_identify
 
     with isolated_home() as home:
         _store_captures(7, 1)
-        caps = _caps(Path(home) / "caps", 7, {1: DARK}, game="riftbound", hint=hint)
+        caps = _caps(Path(home) / "caps", 7, {1: DARK}, game=game, hint=hint)
         with _real_read(index, listed):
             code, asked = _press_real(caps)
         paid = cmd_identify._custom_id("7/1") in asked
@@ -810,6 +833,62 @@ def check_inventory_retire_refuses_empty_slot_reason(checks: Checks) -> None:
         checks.equal(_state("7/1"), master.CAPTURED, "and the card is not retired through it")
 
 
+def check_no_listed_groups_does_not_retire(checks: Checks) -> None:
+    from store import master
+
+    checks.note("")
+    checks.note("NO LISTED GROUPS — a catalogue that lists no sets for the game has no whole pool, so no retire")
+    index = _PoolIndex({"Base Set": [("1", "1", 0.2)], "Second Set": [("2", "2", 0.3)]})
+    with _real_read(index, []):
+        checks.equal(_whole_pool_answer(index, "riftbound"), None,
+                     "the catalogue lists no sets, so `_whole_pool` answers None")
+    code, state, retired, second, paid = _real_outcome(index, [])
+    checks.equal(code, 0, "`identify --engine marqo-b` exits 0 through the real read")
+    checks.equal(second, CODE, "the dark card reached the empty decision (its second look names it)")
+    checks.equal(state, master.CAPTURED, "with no whole pool there is no best match, so the card stays captured")
+    checks.equal(retired, [], "and no retired event is written")
+    checks.ok(not paid, "and the paid read is never asked for the dark card")
+
+
+def check_stale_model_or_unserved_game_does_not_retire(checks: Checks) -> None:
+    from store import master
+
+    checks.note("")
+    checks.note("MODEL AND GAME GATE — an index built by another model, or a game the matcher does not serve, has no whole pool")
+    weak = {"Base Set": [("1", "1", 0.2)], "Second Set": [("2", "2", 0.3)]}
+    listed = ["Base Set", "Second Set"]
+    stale = _StaleIndex(weak)
+    with _real_read(stale, listed):
+        checks.equal(_whole_pool_answer(stale, "riftbound"), None, "a stale model sha answers None")
+        checks.equal(_whole_pool_answer(_PoolIndex(weak), "misc"), None, "an unserved game answers None")
+    code, state, retired, second, paid = _real_outcome(stale, listed)
+    checks.equal(code, 0, "`identify --engine marqo-b` exits 0 with a stale model sha")
+    checks.equal(second, CODE, "the dark card reached the empty decision with a stale model sha")
+    checks.equal(state, master.CAPTURED, "a stale model sha gives no whole pool, so the card stays captured")
+    checks.equal(retired, [], "and no retired event is written")
+    code, state, retired, second, paid = _real_outcome(_PoolIndex(weak), listed, game="misc")
+    checks.equal(code, 0, "`identify --engine marqo-b` exits 0 for an unserved game")
+    checks.equal(second, CODE, "the dark card reached the empty decision for an unserved game")
+    checks.equal(state, master.CAPTURED, "an unserved game gives no whole pool, so the card stays captured")
+    checks.equal(retired, [], "and no retired event is written")
+
+
+def check_failed_catalogue_read_does_not_retire(checks: Checks) -> None:
+    from store import master
+
+    checks.note("")
+    checks.note("CATALOGUE RAISES — a catalogue read that raises proves nothing, so no whole pool and no retire")
+    index = _PoolIndex({"Base Set": [("1", "1", 0.2)], "Second Set": [("2", "2", 0.3)]})
+    with _real_read(index, _BrokenCatalog()):
+        checks.equal(_whole_pool_answer(index, "riftbound"), None, "a catalogue read that raises answers None")
+    code, state, retired, second, paid = _real_outcome(index, _BrokenCatalog())
+    checks.equal(code, 0, "`identify --engine marqo-b` exits 0 when the catalogue read raises")
+    checks.equal(second, CODE, "the dark card reached the empty decision when the catalogue read raises")
+    checks.equal(state, master.CAPTURED, "with no whole pool the card stays captured")
+    checks.equal(retired, [], "and no retired event is written")
+    checks.ok(not paid, "and the paid read is never asked for the dark card")
+
+
 CHECKS = (
     check_empty_slot_fixtures,
     check_empty_slot_boundary,
@@ -832,4 +911,7 @@ CHECKS = (
     check_promo_with_unfilled_set_name_does_not_retire,
     check_full_pool_weak_retires_captured_card,
     check_inventory_retire_refuses_empty_slot_reason,
+    check_no_listed_groups_does_not_retire,
+    check_stale_model_or_unserved_game_does_not_retire,
+    check_failed_catalogue_read_does_not_retire,
 )
