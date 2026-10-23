@@ -1,12 +1,17 @@
 // Protects: The Slabs screen draws one ledger of the owner's slabs, never shows a cert or the settings key, and answers every Card Ladder refusal in words.
 // Governs: D320, D196, D218, D221, D275, D313
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { CAPTURE_PORT } from '../devPort'
 import { sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
+import { afterPaint, settleMotion } from './motionSettled'
+import { scanMachineWords } from './machineWords'
 import { scanMoneyFace } from './moneyFace'
 import { setViewport } from './phoneSwitch'
-import { SLAB_CERT, severalSlabs, slabDetailOf, slabRefusal, slabRow, slabSnapshot } from './routeFixtures'
+import { SLAB_CERT, SLAB_SALE_PLATFORMS, severalSlabs, slabDetailOf, slabRefusal, slabRow, slabSnapshot } from './routeFixtures'
 import type { SlabRow } from '../src/types'
 
 /* THE SLABS SCREEN (D320, `docs/specs/my-slabs.md` 4.1, 4.7, 4.8, 4.9), WRITTEN BEFORE IT EXISTS.
@@ -41,6 +46,9 @@ const RATE_LIMITED = refuse(429, 'cardladder_rate_limited', 'Card Ladder asked u
 const TOKEN_MISSING = refuse(409, 'cardladder_token_missing', 'Card Ladder cannot be read yet. Add CARDLADDER_REFRESH_TOKEN to the settings file, then try again.')
 const TOKEN_REJECTED = refuse(409, 'cardladder_token_rejected', 'Card Ladder did not accept the saved login. Copy CARDLADDER_REFRESH_TOKEN again, then try again.')
 const SETTINGS_KEY = 'CARDLADDER_REFRESH_TOKEN'
+const UNREADABLE = refuse(502, 'cardladder_unreadable', 'Card Ladder sent an answer this app could not read. Nothing was saved. Try again later.')
+const CERT_NOT_FOUND = refuse(404, 'cert_not_found', 'Card Ladder has no slab with that cert number for that grader. Nothing was saved.')
+const ADD_BUSY = refuse(409, 'slab_add_busy', 'A slab is being added right now. Wait for it to finish, then try again.')
 
 /** A response the stub holds back until a case opens it, so a press is in flight while the case looks. */
 class Gate {
@@ -1139,4 +1147,532 @@ test('Remove is off while this tab has an add in flight', async ({ page }) => {
   await expect(remove).toBeDisabled()
   wire.hold.post.open()
   await expect(remove, 'Remove stays off after the add has finished').toBeEnabled()
+})
+
+/* ---------------------------------------------------------------------------- the polish rulings (spec 4.8) */
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+/** `scripts/machine-words.json`, the one word list the repo keeps (D196). */
+const DICTIONARY = (() => {
+  const raw = JSON.parse(readFileSync(resolve(HERE, '..', '..', 'scripts', 'machine-words.json'), 'utf8')) as { words: Record<string, string>; repoTopDirs: string[] }
+  return { words: raw.words, repoTopDirs: raw.repoTopDirs }
+})()
+
+const UNDO_SAID = 'The slab was not put back.'
+const NO_ESTIMATE = 'No estimate without a sale.'
+
+/* THE REASON UNDER A SHORT SENTENCE (4.8). The spec pins the two sentences and says each carries a reason that shows on
+   hover, on keyboard focus and on a tap. It pins no wording, no markup and no kit part, so a reason is found by what a
+   reader gets: a run of text that was not painted before, is a sentence (four words or more), sits near the sentence, is
+   fully inside the window and is not covered by anything. A native `title` attribute is therefore not a reason: it is not
+   in the DOM, and it never shows on focus or on a tap. A button's one-word tip ("Dismiss") is too short to count.
+   The kit fades its tips by opacity, which Playwright's visibility counts as visible, so a run counts only at full opacity. */
+type Box = { left: number; top: number; right: number; bottom: number }
+type Run = Box & { text: string; painted: boolean }
+
+/** Every run of text on the page this frame. `painted` is worked out only for a run not in `known`, when `paint` is set. */
+const readRuns = (page: Page, known: string[], paint: boolean): Promise<Run[]> =>
+  page.evaluate(
+    (args) => {
+      const had = new Set(args.known)
+      const own = new Map<Element, { text: string; first: Text; last: Text }>()
+      const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+      for (let n = walk.nextNode(); n !== null; n = walk.nextNode()) {
+        const node = n as Text
+        const parent = node.parentElement
+        const piece = (node.textContent ?? '').replace(/\s+/g, ' ').trim()
+        if (parent === null || piece === '' || parent.closest('script, style, noscript, template') !== null) continue
+        const held = own.get(parent)
+        own.set(parent, { text: held === undefined ? piece : `${held.text} ${piece}`, first: held?.first ?? node, last: node })
+      }
+      const runs: Array<Box & { text: string; painted: boolean }> = []
+      for (const [parent, { text, first, last }] of own) {
+        if (!parent.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) continue
+        let seen = true
+        for (let el: Element | null = parent; el !== null; el = el.parentElement) {
+          const style = getComputedStyle(el)
+          if (Number(style.opacity) < 0.99) seen = false
+          const size = el.getBoundingClientRect()
+          const clipped = style.overflow !== 'visible' || style.clip !== 'auto' || style.clipPath !== 'none'
+          if ((size.width <= 1 || size.height <= 1) && style.display !== 'contents' && clipped) seen = false
+        }
+        if (!seen) continue
+        const range = document.createRange()
+        range.setStartBefore(first)
+        range.setEndAfter(last)
+        const r = range.getBoundingClientRect()
+        if (r.width < 4 || r.height < 4 || r.right <= 0 || r.bottom <= 0 || r.left >= innerWidth || r.top >= innerHeight) continue
+        let painted = false
+        if (args.paint && !had.has(text)) {
+          /* A tip is `pointer-events: none` so a click never lands on it, and hit-testing skips it. The probe sets it back
+             to `auto` for these four reads, at the midpoint of each edge (a rounded corner hides the corner pixel). The
+             element on top at each point must be the run's own, so a tip under the sheet is not painted. */
+          const el = parent as HTMLElement
+          const keep = el.style.pointerEvents
+          el.style.pointerEvents = 'auto'
+          const mx = (r.left + r.right) / 2
+          const my = (r.top + r.bottom) / 2
+          const probes: Array<[number, number]> = [[mx, r.top + 1], [mx, r.bottom - 1], [r.left + 1, my], [r.right - 1, my]]
+          const inside = r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
+          painted = inside && probes.every(([x, y]) => {
+            const top = document.elementFromPoint(x, y)
+            return top !== null && (top === el || el.contains(top))
+          })
+          el.style.pointerEvents = keep
+        }
+        runs.push({ text, left: r.left, top: r.top, right: r.right, bottom: r.bottom, painted })
+      }
+      return runs
+    },
+    { known, paint },
+  )
+
+const boxOf = (sentence: Locator): Promise<Box> =>
+  sentence.evaluate((el) => {
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    const r = range.getBoundingClientRect()
+    return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }
+  })
+
+const wordCount = (text: string): number => text.split(/\s+/).filter(Boolean).length
+/** How far apart two boxes are on the axis they are furthest apart; 0 when they touch or overlap. */
+const apart = (a: Box, b: Box): number =>
+  Math.max(Math.max(0, a.left - b.right, b.left - a.right), Math.max(0, a.top - b.bottom, b.top - a.bottom))
+
+/** Words that name machinery, read the way the repo reads them (`machineWords.ts` on `scripts/machine-words.json`), plus
+ *  the shapes a refusal leaks: a decision id, a snake_case code, the settings key, a status number, a route, a cert.
+ *  `scanMachineWords` reads `.bn-view`, and a tip may be drawn outside it, so the text is read through a probe that
+ *  takes the first `.bn-view` for the length of the read. */
+async function mechanismIn(page: Page, text: string): Promise<string[]> {
+  await page.evaluate((t) => {
+    const probe = document.createElement('div')
+    probe.className = 'bn-view'
+    probe.setAttribute('data-probe', '')
+    probe.style.cssText = 'position: fixed; left: -9999px; top: 0'
+    probe.textContent = t
+    document.body.prepend(probe)
+  }, text)
+  const found = await page.evaluate(scanMachineWords, DICTIONARY)
+  await page.evaluate(() => document.querySelector('[data-probe]')?.remove())
+  const shapes: Array<[string, RegExp]> = [
+    ['a decision id', /\bD\d+\b/],
+    ['a snake_case code', /\b[a-z]+_[a-z_]+\b/],
+    ['the settings key', /CARDLADDER|REFRESH_TOKEN/i],
+    ['a status number', /\b[45]\d\d\b/],
+    ['a route', /\/slabs\b/],
+    ['a token', /\btoken\b/i],
+    ['a cert', new RegExp(CERTS.join('|'))],
+  ]
+  return [...found.words.map((w) => w.word), ...found.paths.map((p) => p.path), ...shapes.filter(([, re]) => re.test(text)).map(([name]) => name)]
+}
+
+/** Press Tab until focus is on the sentence, or on a control that holds it and is no bigger than a sentence's block (a
+ *  scroller that Chrome lets focus is not the sentence). Names what focus visited, so a red run says where Tab went. */
+async function tabTo(page: Page, sentence: Locator, said: string): Promise<void> {
+  const visited: string[] = []
+  for (let press = 0; press < 120; press++) {
+    await page.keyboard.press('Tab')
+    const on = await sentence.evaluate((el) => {
+      const held = document.activeElement
+      if (held === null) return { name: 'nothing', mine: false }
+      const name = `${held.tagName.toLowerCase()} "${(held.getAttribute('aria-label') ?? held.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 24)}"`
+      if (held.matches('html, body, main, #root, [role="dialog"], [aria-live]')) return { name, mine: false }
+      const small = held.getBoundingClientRect().height <= el.getBoundingClientRect().height * 3 + 80
+      return { name, mine: el.contains(held) || (held.contains(el) && small) }
+    })
+    visited.push(on.name)
+    if (on.mine) return
+  }
+  expect(false, `Tab never reached "${said}" in ${visited.length} presses. The stops Tab visited, in order: ${[...new Set(visited)].join(', ')}`).toBe(true)
+}
+
+/** Open the sheet of the Terapagos slab (or `label`'s) at `width` and wait for its detail. */
+async function openSheet(page: Page, width = 1440, label: string = LABEL.terapagos, firstStep = 'PSA 8'): Promise<Locator> {
+  await open(page, makeWire(), width)
+  await expect(dataRows(page)).toHaveCount(5)
+  await cardButton(rowFor(page, label)).click()
+  const sheet = page.getByRole('dialog', { name: label, exact: true })
+  await expect(sheet.getByText(firstStep, { exact: true }), 'the detail never arrived').toBeVisible()
+  return sheet
+}
+
+/** Undo's request gets no answer. `blocked`: `/status` still answers, so the client words it `origin_blocked` (the existing
+ *  never-reaches-the-server case). `down`: the one `/status` read that follows the dropped request fails too, so the client
+ *  words it `unreachable`, and the shell's offline banner rises. */
+async function dropUndo(page: Page, how: 'blocked' | 'down'): Promise<void> {
+  let probe = false
+  if (how === 'down') {
+    await page.route(
+      (url) => url.port === String(CAPTURE_PORT) && url.pathname === '/status',
+      (route) => {
+        if (!probe) return route.fallback()
+        probe = false
+        return route.abort()
+      },
+    )
+  }
+  await page.route(
+    (url) => url.port === String(CAPTURE_PORT) && url.pathname === '/slabs',
+    (route) => {
+      if (route.request().method() !== 'POST') return route.fallback()
+      probe = true
+      return route.abort()
+    },
+  )
+}
+
+/** Remove Charizard, press Undo, and let Card Ladder refuse it with `reply`, or drop the request (`dropUndo`). Returns the refusal toast. */
+async function refusedUndo(page: Page, reply: Reply | 'blocked' | 'down'): Promise<Locator> {
+  const wire = await open(page)
+  await expect(dataRows(page)).toHaveCount(5)
+  await removeFrom(page, rowFor(page, LABEL.charizard))
+  await expect(undoButton(page)).toBeVisible()
+  if (typeof reply === 'string') await dropUndo(page, reply)
+  else wire.postReply = () => reply
+  await undoButton(page).click()
+  const refusal = page.locator('.bn-toast-refusal:not([data-leaving])')
+  await expect(refusal, 'Undo failed without a refusal toast').toBeVisible()
+  return refusal
+}
+
+type Subject = {
+  readonly name: string
+  readonly said: string
+  /** What the reason says (4.8), as properties and never as wording. */
+  readonly says: ReadonlyArray<readonly [string, RegExp]>
+  readonly arrive: (page: Page) => Promise<Locator>
+}
+const SUBJECTS: readonly Subject[] = [
+  {
+    name: 'a refused Undo',
+    said: UNDO_SAID,
+    says: [['why the add-back failed, or what to do', /Card Ladder|limit|later|again|tomorrow/i]],
+    arrive: async (page) => (await refusedUndo(page, BAD_GATEWAY)).getByText(UNDO_SAID, { exact: true }),
+  },
+  {
+    name: 'the Worth line of a slab with no sales',
+    said: NO_ESTIMATE,
+    says: [
+      ['that the slab has not sold', /\b(sold|sell|sells|sale|sales)\b/i],
+      ['the grade', /\bgrade\b/i],
+    ],
+    arrive: async (page) => {
+      const sheet = await openSheet(page, 1440, LABEL.mew, 'SGC 8')
+      return sheet.getByText(NO_ESTIMATE, { exact: true })
+    },
+  },
+]
+
+/** The reasons a reader has now: sentences not painted before, near the sentence, whole and uncovered. Waits up to 4s for one. */
+async function reasonsNear(page: Page, known: string[], said: string, box: Box, because: string): Promise<Run[]> {
+  let reasons: Run[] = []
+  await expect
+    .poll(
+      async () => {
+        const now = await readRuns(page, known, true)
+        reasons = now.filter((r) => !known.includes(r.text) && r.text !== said && wordCount(r.text) >= 4 && r.painted && apart(r, box) <= 240)
+        return reasons.length
+      },
+      { message: `${because}: no new sentence of four words or more is painted, whole and uncovered, within 240px of it`, timeout: 4000 },
+    )
+    .toBeGreaterThan(0)
+  return reasons
+}
+
+/** The page has stopped moving: what the last move changed is painted, and every finite animation has finished. A sheet's
+ *  sections fade in one after another, and a section still arriving is a new sentence to the reason finder. */
+const settled = async (page: Page): Promise<void> => {
+  await afterPaint(page)
+  await settleMotion(page)
+}
+
+type Mode = 'hover' | 'focus' | 'tap'
+/** Settle the page, open the reason under `sentence` the way `mode` says, and return the runs of the reason. */
+async function openReason(page: Page, sentence: Locator, said: string, mode: Mode, who: string): Promise<Run[]> {
+  await expect(sentence, `${who} never showed "${said}"`).toBeVisible()
+  /* The pointer starts away from the sentence: an Undo press leaves it where the refusal lands. */
+  await page.mouse.move(10, 10)
+  await expect.poll(async () => (await readRuns(page, [], false)).some((r) => r.text === said), { message: `"${said}" is never fully painted` }).toBe(true)
+  await settled(page)
+  const known = (await readRuns(page, [], false)).map((r) => r.text)
+  const box = await boxOf(sentence)
+
+  if (mode === 'hover') await sentence.hover()
+  else if (mode === 'tap') await sentence.tap()
+  else await tabTo(page, sentence, said)
+
+  const reasons = await reasonsNear(page, known, said, box, `${mode === 'hover' ? 'Hovering' : mode === 'tap' ? 'Tapping' : 'Tabbing to'} "${said}" shows no reason`)
+  /* WHAT IS PAINTED IS THE TIP. The finder takes any new sentence near the sentence, so a heading that arrives late would
+     pass for a reason. The sentence names its tip with `aria-describedby`, and the painted text must be that tip's text. */
+  await expect(sentence, `${who}: the painted reason is not the tip the sentence is described by`).toHaveAccessibleDescription(reasons.map((r) => r.text).join(' '))
+  return reasons
+}
+
+async function expectReason(page: Page, subject: Subject, mode: Mode): Promise<void> {
+  const sentence = await subject.arrive(page)
+  const reason = (await openReason(page, sentence, subject.said, mode, subject.name)).map((r) => r.text).join(' ')
+  for (const [what, pattern] of subject.says) expect(reason, `the reason does not say ${what}`).toMatch(pattern)
+  expect(await mechanismIn(page, reason), `the reason names machinery: "${reason}"`).toEqual([])
+}
+
+for (const subject of SUBJECTS) {
+  for (const mode of ['hover', 'focus'] as const) {
+    test(`the reason of ${subject.name} shows on ${mode}, in words that name no mechanism`, async ({ page }) => {
+      await expectReason(page, subject, mode)
+    })
+  }
+}
+
+/* THE TWO PROBES, SHOWN RED AND GREEN ON KNOWN TEXT (a guard is trusted once it has gone red on its defect, and the cases
+   above are red on a screen that has no reason to find). The finder is given a sentence that draws three tips on hover:
+   one a reader sees, one at zero opacity and one under the sheet. It must report the first and neither of the others. The
+   machinery probe is given a sentence that names machinery and one that does not. */
+test('the reason finder reports a tip a reader sees, and not one at zero opacity or under the page', async ({ page }) => {
+  const sentence = await SUBJECTS[1]?.arrive(page)
+  if (sentence === undefined) throw new Error('no Worth subject')
+  await expect(sentence).toBeVisible()
+  await sentence.evaluate((el) => {
+    el.addEventListener('mouseenter', () => {
+      const r = el.getBoundingClientRect()
+      const tip = (text: string, style: string) => {
+        const one = document.createElement('div')
+        one.textContent = text
+        one.style.cssText = `position: fixed; left: ${r.left}px; pointer-events: none; ${style}`
+        document.body.appendChild(one)
+      }
+      tip('This slab has never sold here.', `top: ${r.bottom + 6}px; z-index: 9999; opacity: 1`)
+      tip('This faded tip cannot be read.', `top: ${r.bottom + 40}px; z-index: 9999; opacity: 0`)
+      tip('This covered tip cannot be read.', `top: ${r.bottom + 70}px; z-index: -1; opacity: 1`)
+    })
+  })
+  await page.mouse.move(10, 10)
+  await settled(page)
+  const known = (await readRuns(page, [], false)).map((r) => r.text)
+  const box = await boxOf(sentence)
+  await sentence.hover()
+  const seen = (await reasonsNear(page, known, NO_ESTIMATE, box, 'The finder missed the tip a reader sees')).map((r) => r.text)
+  expect(seen).toEqual(['This slab has never sold here.'])
+})
+
+test('the machinery probe names the resolver, a decision id and a code, and passes a plain sentence', async ({ page }) => {
+  await open(page)
+  await expect(dataRows(page)).toHaveCount(5)
+  expect((await mechanismIn(page, 'The resolver sent slab_unknown for D320 with a 502.')).length, 'machinery in a tip went unseen').toBeGreaterThanOrEqual(3)
+  expect(await mechanismIn(page, 'Card Ladder did not answer. Try again later.')).toEqual([])
+  expect(await page.locator('[data-probe]').count(), 'the probe stayed on the page').toBe(0)
+})
+
+/* A TAP. The context has a touchscreen, and `tap()` sends touch events. Chromium also sends the mouse events a tap
+   implies, so a build whose reason answers only to a pointer entering may pass this case; the focus case is what holds
+   that build to account. */
+test.describe('on a touchscreen', () => {
+  test.use({ hasTouch: true })
+  for (const subject of SUBJECTS) {
+    test(`the reason of ${subject.name} shows on a tap, in words that name no mechanism`, async ({ page }) => {
+      await expectReason(page, subject, 'tap')
+    })
+  }
+})
+
+/* 4.8: an Undo that Card Ladder refuses, a rate limit included, shows the one sentence. The server's own words stay behind
+   the sentence (the toast cases above), and a rate limit still offers no Retry. */
+for (const [name, reply] of [['a rate limit', RATE_LIMITED], ['a failed read', BAD_GATEWAY]] as const) {
+  test(`an Undo refused by ${name} is titled "${UNDO_SAID}", offers no Retry and puts nothing back`, async ({ page }) => {
+    const refusal = await refusedUndo(page, reply)
+    await expect(refusal.getByText(UNDO_SAID, { exact: true }), 'the refusal is not titled with the screen’s sentence').toBeVisible()
+    await expect(retryButtons(page)).toHaveCount(0)
+    await expect(rowFor(page, LABEL.charizard), 'a refused Undo put the slab back').toHaveCount(0)
+  })
+}
+
+/* 4.8, THE REASON OF A REFUSED UNDO IS TRUE FOR ITS CODE. One reason shared by every code the screen does not word is false for
+   most of them. Each case refuses Undo with one real code, opens the reason by keyboard focus and asserts the FACT the reason
+   gives, never its wording. A fact is read off the reason's own text
+   and never off the page: the toast's body holds the server's sentence, which says "sign in", "did not answer" and "cert number"
+   for itself, so a page-wide match would pass on the defect. */
+const codeOf = (reply: Reply): string => (reply.body as { error: { code: string } }).error.code
+
+/** `holds`: the reason must match (a fact it gives) or must not match (a claim that would be false for the code). */
+type Fact = readonly [what: string, pattern: RegExp, holds: boolean]
+const UNDO_REASONS: ReadonlyArray<{ readonly reply: Reply; readonly facts: readonly Fact[] }> = [
+  { reply: RATE_LIMITED, facts: [['it tells the owner to try again tomorrow', /tomorrow/i, true]] },
+  {
+    reply: TOKEN_MISSING,
+    facts: [
+      ['it tells the owner to sign in to Card Ladder again', /sign in/i, true],
+      ['it speaks of a "saved" sign-in, when none was saved', /saved/i, false],
+    ],
+  },
+  {
+    reply: TOKEN_REJECTED,
+    facts: [
+      ['it tells the owner to sign in to Card Ladder again', /sign in/i, true],
+      ['it speaks of a "saved" sign-in', /saved/i, false],
+    ],
+  },
+  {
+    reply: BAD_GATEWAY,
+    facts: [
+      ['it says Card Ladder could not be read just now', /could not be read/i, true],
+      ['it says Card Ladder did not answer, when the server sends this code for an answer that was an error or not understood', /did not answer/i, false],
+    ],
+  },
+  { reply: UNREADABLE, facts: [['it says Card Ladder did not answer, when it answered and the answer could not be read', /did not answer/i, false]] },
+  {
+    reply: CERT_NOT_FOUND,
+    facts: [
+      ['it says Card Ladder did not answer, when it answered that the slab is not there', /did not answer/i, false],
+      ['it carries digits, and a cert is never drawn', /\d/, false],
+    ],
+  },
+  { reply: ADD_BUSY, facts: [['it names Card Ladder, when the wait is for another add on this app', /Card Ladder/i, false]] },
+]
+
+for (const { reply, facts } of UNDO_REASONS) {
+  const code = codeOf(reply)
+  test(`an Undo refused with ${code} gives a reason that is true for that code, opened by keyboard focus`, async ({ page }) => {
+    const sentence = (await refusedUndo(page, reply)).getByText(UNDO_SAID, { exact: true })
+    const reason = (await openReason(page, sentence, UNDO_SAID, 'focus', `the Undo refused with ${code}`)).map((r) => r.text).join(' ')
+    for (const [what, pattern, holds] of facts) {
+      const check = expect.soft(reason, holds ? `the reason for ${code} is missing a fact, ${what}: "${reason}"` : `the reason for ${code} makes a false claim, ${what}: "${reason}"`)
+      if (holds) check.toMatch(pattern)
+      else check.not.toMatch(pattern)
+    }
+    expect.soft(await mechanismIn(page, reason), `the reason for ${code} names machinery: "${reason}"`).toEqual([])
+  })
+}
+
+/* A refusal with no cause the screen can name has the title and the body's own sentence, and no reason behind either: a reason
+   guessed at is a lie. The first row is a real code `undoRefusalToast` does not name. The second is the app's own request
+   dropped while `/status` still answers (`origin_blocked`, the client's own sentence), the third the same with the server
+   down (`unreachable`, which raises the shell's offline banner, so the case clears it to leave the screen as it found it; the
+   body's sentence is what tells the two apart). */
+const NO_REASON: ReadonlyArray<{ readonly name: string; readonly how: Reply | 'blocked' | 'down'; readonly body: string | RegExp }> = [
+  { name: 'a code the screen does not word (store_busy)', how: STORE_BUSY, body: STORE_BUSY_SAID },
+  { name: 'a request the server will not take from this address (origin_blocked)', how: 'blocked', body: /will not accept changes from this address/ },
+  { name: 'a server that does not answer (unreachable)', how: 'down', body: /server did not answer/ },
+]
+
+for (const { name, how, body } of NO_REASON) {
+  test(`an Undo refused by ${name} keeps the title and the body's sentence and gives no reason`, async ({ page }) => {
+    const refusal = await refusedUndo(page, how)
+    const sentence = refusal.getByText(UNDO_SAID, { exact: true })
+    await expect(sentence, `the refusal is not titled "${UNDO_SAID}"`).toBeVisible()
+    await expect(refusal.locator('.bn-toast-body'), 'the sentence of the refusal is not in the toast body').toHaveText(body)
+    await page.mouse.move(10, 10)
+    await expect.poll(async () => (await readRuns(page, [], false)).some((r) => r.text === UNDO_SAID), { message: `"${UNDO_SAID}" is never fully painted` }).toBe(true)
+    await settled(page)
+    const known = (await readRuns(page, [], false)).map((r) => r.text)
+    const box = await boxOf(sentence)
+    await sentence.hover()
+    await frames(page, 45) // the 120ms fade in took 13 to 18 frames to finish when measured, so this holds for about three times that
+    const reasons = (await readRuns(page, known, true)).filter((r) => !known.includes(r.text) && r.text !== UNDO_SAID && wordCount(r.text) >= 4 && r.painted && apart(r, box) <= 240)
+    expect(reasons.map((r) => r.text), 'hovering the title shows a reason the screen cannot know is true').toEqual([])
+    await expect(sentence, 'the title is given a reason that a screen reader reads').toHaveAccessibleDescription('')
+    if (how === 'down') {
+      /* The banner may clear by itself on the shell's next read, so Retry is pressed only if it is still there. */
+      await page.locator('.bn-banner').getByRole('button', { name: 'Retry' }).click({ timeout: 2000 }).catch(() => undefined)
+      await expect(page.locator('.bn-banner'), 'the offline banner stayed after Retry').toHaveCount(0)
+    }
+  })
+}
+
+/* ESCAPE CLOSES A REASON AND NOTHING UNDER IT. A reason opened by focus is a popover over the sheet; the sheet's own Escape
+   is the shell's and must not hear this one. The reason is the Worth line's, in a sheet, because that is where a reason sits
+   over another layer. The sheet leaves in 140ms (`useLeave`), so it is asserted after a hold well past that: a sheet still
+   leaving counts as visible. A second Escape, with the reason gone, closes the sheet: a reason that stays stuck would swallow
+   every Escape. */
+test('Escape closes an open reason and leaves the sheet open, and a second Escape closes the sheet', async ({ page }) => {
+  const worth = SUBJECTS.find((one) => one.said === NO_ESTIMATE)
+  if (worth === undefined) throw new Error('no Worth subject')
+  const sentence = await worth.arrive(page)
+  const sheet = page.getByRole('dialog', { name: LABEL.mew, exact: true })
+  const shown = (await openReason(page, sentence, NO_ESTIMATE, 'focus', worth.name)).map((r) => r.text)
+  await expect(sheet, 'the sheet closed before Escape was pressed').toBeVisible()
+  await page.keyboard.press('Escape')
+  const stillOpen = async () => (await readRuns(page, [], true)).filter((r) => r.painted && shown.includes(r.text)).length
+  await expect.poll(stillOpen, { message: 'Escape left the reason open' }).toBe(0)
+  await frames(page, 40) // well past the sheet's 140ms leave
+  expect(await stillOpen(), 'the reason came back while focus stayed on its sentence').toBe(0)
+  await expect(sheet, 'Escape closed the sheet along with the reason').toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(sheet, 'a second Escape did not close the sheet').toBeHidden()
+})
+
+/* ---- Sales Speed (4.8). The section is read as text runs in rows, so the cells' markup is the builder's. */
+type Cell = { text: string; right: number }
+const speedRows = (sheet: Locator): Promise<Cell[][]> =>
+  sheet.getByRole('region', { name: 'Sales Speed', exact: true }).evaluate((root) => {
+    const cells: Array<{ text: string; left: number; right: number; mid: number }> = []
+    const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+    for (let n = walk.nextNode(); n !== null; n = walk.nextNode()) {
+      const text = (n.textContent ?? '').replace(/\s+/g, ' ').trim()
+      if (text === '' || n.parentElement?.closest('h1, h2, h3, h4, h5, h6') != null) continue
+      const range = document.createRange()
+      range.selectNodeContents(n)
+      const r = range.getBoundingClientRect()
+      if (r.width < 1) continue
+      cells.push({ text, left: r.left, right: r.right, mid: (r.top + r.bottom) / 2 })
+    }
+    cells.sort((a, b) => a.mid - b.mid || a.left - b.left)
+    const rows: Array<typeof cells> = []
+    for (const cell of cells) {
+      const row = rows[rows.length - 1]
+      if (row !== undefined && Math.abs((row[0]?.mid ?? 0) - cell.mid) < 10) row.push(cell)
+      else rows.push([cell])
+    }
+    return rows.map((row) => row.sort((a, b) => a.left - b.left).map((cell) => ({ text: cell.text, right: cell.right })))
+  })
+
+const dump = (rows: Cell[][]): string => rows.map((row) => row.map((cell) => cell.text).join(' | ')).join(' / ')
+
+for (const [name, label, step] of [['a slab that sold', LABEL.terapagos, 'PSA 8'], ['a slab that never sold', LABEL.mew, 'SGC 8']] as const) {
+  test(`Sales Speed heads its count column "Sales" and says Velocity nowhere, for ${name}`, async ({ page }) => {
+    const sheet = await openSheet(page, 1440, label, step)
+    const rows = await speedRows(sheet)
+    expect(rows.length, `Sales Speed is a heading row and five windows: ${dump(rows)}`).toBe(6)
+    expect(rows[0]?.[1]?.text, `the count column's heading, in: ${dump(rows.slice(0, 1))}`).toBe('Sales')
+    expect(await everything(page), 'Velocity is on the page').not.toMatch(/velocity/i)
+  })
+}
+
+test('Sales Speed lists the five windows Card Ladder sends, in order, and no 7-day window', async ({ page }) => {
+  const sheet = await openSheet(page)
+  const rows = await speedRows(sheet)
+  expect(rows.slice(1).map((row) => row[0]?.text.toLowerCase()), 'the window labels').toEqual(['two weeks', 'one month', 'three months', 'six months', 'one year'])
+  expect(await sheet.innerText(), 'the sheet invents a 7-day window').not.toMatch(/\b(7|seven)[- ]?days?\b|\b(1|one) week\b/i)
+})
+
+for (const width of [1440, 820]) {
+  test(`the numbers in Sales Speed line up under their headings, at ${width}`, async ({ page }) => {
+    const sheet = await openSheet(page, width)
+    const [head, ...windows] = await speedRows(sheet)
+    expect(head?.length, 'the heading row has a window, a count and an average price').toBe(3)
+    expect(windows.length, 'five windows').toBe(5)
+    /* The right edge of the text, as the ledger's own number case reads it: a cell can be wider than its figure. */
+    const off: string[] = []
+    for (const row of windows) {
+      for (const col of [1, 2]) {
+        const delta = (row[col]?.right ?? Number.NaN) - (head?.[col]?.right ?? Number.NaN)
+        if (!(Math.abs(delta) <= 1)) off.push(`${row[0]?.text}: "${row[col]?.text}" ends ${delta.toFixed(1)}px from the right edge of "${head?.[col]?.text}"`)
+      }
+    }
+    expect(off).toEqual([])
+  })
+}
+
+/* ---- the platform of a sale (4.8). `slabDetailOf` gives the sales a platform but the third, which carries none. */
+test('each sale at the grade shows its platform, and a sale with none shows none and no stray "on"', async ({ page }) => {
+  const sheet = await openSheet(page)
+  const sales = sheet.getByRole('region', { name: 'Sales at the Grade', exact: true }).getByRole('listitem')
+  await expect(sales, 'the newest five sales').toHaveCount(5)
+  const platforms = [...new Set(SLAB_SALE_PLATFORMS.filter((p): p is string => p !== null))]
+  for (let sale = 0; sale < 5; sale++) {
+    const text = (await sales.nth(sale).innerText()).replace(/\s+/g, ' ')
+    expect(text, `row ${sale + 1} is not the sale it should be`).toContain((400 - sale * 6).toFixed(2))
+    const own = SLAB_SALE_PLATFORMS[sale] ?? null
+    expect(platforms.filter((name) => text.includes(name)), `row ${sale + 1} shows ${own === null ? 'a platform it does not have' : 'the wrong platform'}: ${text}`).toEqual(own === null ? [] : [own])
+    if (own === null) expect(text, `row ${sale + 1} has no platform but reads "on": ${text}`).not.toMatch(/\bon\b/i)
+  }
 })

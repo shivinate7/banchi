@@ -144,9 +144,9 @@ PSA 10, Raw NM, Slab vs Raw, ×, Do.
   It never comes from `lastSalePrice` in 3.4, because that field can trail by a sale.
 - A press on a row's card opens its detail in a side sheet from the right, the owner's pick
   over a row that opens in place. The ledger behind it never moves. The sheet's sections, in
-  order: Worth, Sales at the grade (the last five, each linked to its listing), Sales speed per
-  window, Population at the grade, the grade ladder with this grade marked, and Snapshots.
-  Remove sits in the sheet's footer, never on a row.
+  order: Worth, Sales at the grade (the last five, each with its platform when it has one,
+  linked to its listing), Sales speed per window, Population at the grade, the grade ladder
+  with this grade marked, and Snapshots. Remove sits in the sheet's footer, never on a row.
 
 ### 4.2 The buyer export: through a check step
 
@@ -232,8 +232,17 @@ These hold until a later route changes them.
 - The screen computes no trust verdict, because the browser holds no pipeline logic. It shows
   Card Ladder's estimate and the ladder value, each with its source.
 - Remove acts at once. Its receipt carries Undo, which adds the slab again and restores its
-  first date. An Undo that Card Ladder refuses, a rate limit included, shows that refusal's
-  sentence. It never fails without a word.
+  first date. An Undo that Card Ladder refuses, a rate limit included, shows "The slab was not
+  put back." It never fails without a word.
+- Two short sentences carry their reason in hover text: "The slab was not put back." for a
+  refused Undo, and "No estimate without a sale." in Worth for a slab with no sales. The reason
+  also shows on keyboard focus and on a tap, not only under a mouse. It names no mechanism (D196,
+  no user-visible string may name a decision).
+  - Undo's reason says why the add-back failed, for example that Card Ladder could not be read
+    just now or hit today's limit, so the owner should try later. Each reason is true for its
+    refusal code. A refusal with no true reason shows no reason.
+  - The no-sale reason says the slab has never sold at its grade, so Card Ladder gives no
+    estimate.
 - A rate limit is a refusal, never a retry: its sentence says to try again tomorrow and offers
   no Retry.
 - The grader list on screen copies `store/slabs.GRADERS`, because no route sends it yet. A
@@ -241,6 +250,14 @@ These hold until a later route changes them.
 - A slab with no label never shows its cert. The screen writes its own receipt sentence then.
 - A login refusal says what to do in plain words, such as "Card Ladder needs you to sign in
   again." It never names the settings key (section 2 does).
+- The detail's Sales speed section heads its count column "Sales", not "Velocity". The numbers
+  line up under their headings.
+- Sales speed shows the windows Card Ladder returns: two weeks, one month, three months, six
+  months and one year (`_WINDOWS` in `server/slabs_routes.py`). Card Ladder has no 7-day window,
+  and the screen never invents one.
+- Each sale row in Sales at the grade shows the sale's platform (eBay, Goldin and others) when
+  the sale carries one. The route sends it as `platform`, a field of each sale in 3.2. A sale
+  with no platform shows none.
 - The screen's nav key is `l`.
 
 ### 4.9 The screen's parts and states
@@ -358,4 +375,4 @@ Kind: build. Platform: macOS, over the capture server.
   its sales list. A Riftbound card's two last-sale fields also differ, but its sales list is
   unchecked. The cause is unmeasured.
 - The unit of `velocity` in the sales speed (3.4). The screen shows the number under the
-  label "Velocity" with no unit.
+  label "Sales" with no unit.

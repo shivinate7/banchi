@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 import { Button, Count, EmptyState, FailureNotice, Icon, Money, Page, ReloadButton, Section, Select, Sheet, Skeleton, SkeletonText } from './kit'
 import { toast } from './kit/toast'
@@ -134,6 +135,132 @@ function refusalToastOf(failure: Failure, fallback: string) {
   return { kind: 'refusal' as const, tone: failureTone(failure), title: one.title, ...(one.body === '' ? {} : { body: one.body }) }
 }
 
+/** Escape closes an open reason and nothing under it (4.8). The kit's layers hear keys on `window` in the capture phase,
+ *  in the order they opened, so a listener added when a reason opens would run after a sheet's and lose. This one is
+ *  added once at load, ahead of every layer, and swallows Escape only while a reason is open. */
+const openReasons = new Set<() => void>()
+window.addEventListener(
+  'keydown',
+  (e) => {
+    if (e.key !== 'Escape' || openReasons.size === 0) return
+    e.preventDefault()
+    e.stopImmediatePropagation()
+    for (const close of openReasons) close()
+  },
+  true,
+)
+
+/** A short sentence that carries its reason (4.8). The reason shows on hover, on keyboard focus and on a tap; it is in the
+ *  DOM always (at zero opacity) so `aria-describedby` reads it. Portalled to `<body>` because a toast and a sheet clip
+ *  what is drawn inside them. It is not the kit's `IconButton` tip: that one is `aria-hidden` and `nowrap`, and this one
+ *  must be read by a screen reader (`role="tooltip"`, `aria-describedby`) and must wrap. That is the reason for a second home. */
+function Reason({ said: sentence, why }: { readonly said: string; readonly why: string }) {
+  const id = useId()
+  const [hover, setHover] = useState(false)
+  const [focus, setFocus] = useState(false)
+  const [tapped, setTapped] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const tip = useRef<HTMLSpanElement>(null)
+  const touch = useRef(false)
+  const open = (hover || focus || tapped) && !dismissed
+  useEffect(() => {
+    if (!open) return
+    const close = () => setDismissed(true)
+    openReasons.add(close)
+    return () => {
+      openReasons.delete(close)
+    }
+  }, [open])
+  /* A tap opens the reason and a tap anywhere else closes it. Not every browser focuses a button on a tap, so blur alone is not enough. */
+  useEffect(() => {
+    if (!tapped) return
+    const away = (e: PointerEvent) => {
+      if (e.target !== trigger.current) setTapped(false)
+    }
+    document.addEventListener('pointerdown', away)
+    return () => document.removeEventListener('pointerdown', away)
+  }, [tapped])
+  const place = () => {
+    if (trigger.current === null || tip.current === null) return
+    const b = trigger.current.getBoundingClientRect()
+    const margin = 8
+    const left = Math.max(margin, Math.min(b.left, window.innerWidth - tip.current.offsetWidth - margin))
+    const above = b.top - tip.current.offsetHeight - margin
+    tip.current.style.left = `${Math.round(left)}px`
+    tip.current.style.top = `${Math.round(above < margin ? b.bottom + margin : above)}px`
+  }
+  return (
+    <>
+      <button
+        ref={trigger}
+        type="button"
+        className="slabs-reason"
+        aria-describedby={id}
+        onMouseEnter={() => {
+          if (window.matchMedia('(hover: hover)').matches) setHover(true)
+          setDismissed(false)
+          place()
+        }}
+        onMouseLeave={() => {
+          setHover(false)
+          setDismissed(false)
+        }}
+        onFocus={(e) => {
+          setFocus(e.currentTarget.matches(':focus-visible'))
+          setDismissed(false)
+          place()
+        }}
+        onBlur={() => {
+          setFocus(false)
+          setTapped(false)
+          setDismissed(false)
+        }}
+        onPointerDown={(e) => {
+          touch.current = e.pointerType === 'touch'
+        }}
+        onClick={() => {
+          if (touch.current) setTapped((on) => !on)
+          setDismissed(false)
+          place()
+        }}
+      >
+        {sentence}
+      </button>
+      {createPortal(
+        <span ref={tip} id={id} role="tooltip" className="slabs-tip" data-tip-visible={open ? 'true' : undefined}>
+          {why}
+        </span>,
+        document.body,
+      )}
+    </>
+  )
+}
+
+/** Undo's refusal: the screen's one sentence is the title. A code with a known cause gets its reason behind the title; any
+ *  other code keeps the title plain, because a reason that is not true for the code is worse than none. The body is the
+ *  screen's wording for the code, else the server's own sentence, so a rate limit keeps "tomorrow" on screen. */
+const UNDO_SAID = 'The slab was not put back.'
+const UNDO_WHY: Readonly<Record<string, string>> = {
+  cardladder_rate_limited: "Card Ladder's limit for today is used up. Try again tomorrow.",
+  cardladder_token_missing: LOGIN_SENTENCE,
+  cardladder_token_rejected: LOGIN_SENTENCE,
+  cardladder_failed: 'Card Ladder could not be read just now. Try again later.',
+  cardladder_unreadable: "Card Ladder's answer could not be read. Try again later.",
+  cert_not_found: 'Card Ladder no longer finds this slab.',
+  slab_add_busy: 'Another slab is still being added. Try again when it finishes.',
+}
+function undoRefusalToast(failure: Failure) {
+  const body = SAID[failure.code] ?? failure.message
+  const why = UNDO_WHY[failure.code]
+  return {
+    kind: 'refusal' as const,
+    tone: failureTone(failure),
+    title: why === undefined ? UNDO_SAID : <Reason said={UNDO_SAID} why={why} />,
+    ...(body === '' ? {} : { body }),
+  }
+}
+
 function Refused({ failure, fallback, onRetry, busy, compact }: { readonly failure: Failure; readonly fallback: string; readonly onRetry?: () => void; readonly busy?: boolean; readonly compact?: boolean }) {
   const one = said(failure, fallback)
   return <FailureNotice failure={one.failure} title={one.title} onRetry={onRetry} busy={busy} compact={compact} />
@@ -216,7 +343,7 @@ export default function Slabs() {
     } catch (err) {
       const f = describeFailure(err)
       if (fromSheet && addOpenNow.current) setAddFailure(f)
-      else toast(refusalToastOf(f, fromSheet ? 'That slab could not be added.' : 'The slab was not put back.'))
+      else toast(fromSheet ? refusalToastOf(f, 'That slab could not be added.') : undoRefusalToast(f))
     } finally {
       addBusy.current = false
       setAdding(false)
@@ -515,9 +642,9 @@ function SlabSheet({
   )
 }
 
-function Rows({ children, loading }: { readonly children?: ReactNode; readonly loading?: boolean }) {
+function Rows({ children, loading, className }: { readonly children?: ReactNode; readonly loading?: boolean; readonly className?: string }) {
   return (
-    <ul className="slabs-rows" aria-busy={loading ? 'true' : undefined}>
+    <ul className={className === undefined ? 'slabs-rows' : `slabs-rows ${className}`} aria-busy={loading ? 'true' : undefined}>
       {children}
     </ul>
   )
@@ -553,7 +680,9 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
 
       <Section title="Worth">
         {noSales ? (
-          <p className="slabs-no-sales">No estimate without a sale.</p>
+          <p className="slabs-no-sales">
+            <Reason said="No estimate without a sale." why="This slab has never sold at its grade, so Card Ladder gives no estimate." />
+          </p>
         ) : (
           <dl className="slabs-worth">
             <div>
@@ -604,10 +733,10 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
       </Section>
 
       <Section title="Sales Speed">
-        <Rows loading={loading}>
+        <Rows loading={loading} className="slabs-speed-rows">
           <li className="slabs-row slabs-speed slabs-head" aria-hidden="true">
             <span>Window</span>
-            <span className="slabs-fig">Velocity</span>
+            <span className="slabs-fig">Sales</span>
             <span className="slabs-fig">Average price</span>
           </li>
           {WINDOWS.map(([id, words]) => {

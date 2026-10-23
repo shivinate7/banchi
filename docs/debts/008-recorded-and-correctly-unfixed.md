@@ -31,5 +31,9 @@ No work proposed. Each item is a gap a green run does not show.
 
 - **Two screens mark their "Unnamed Box" fallback as a typed value.** `Fulfillment.tsx` and `BoxOps.tsx` put the fallback inside `data-typed`, so the copy-casing sweep never grades it. Slabs marks only the stored name (`Slabs.tsx` `NameText`), which is the pattern to copy.
 - **The Slabs sheet title's typed marker is unasserted.** `slabs.spec.ts` checks the marker on the Card button only. The sweep never opens a sheet, so a marker moved onto the sheet title's whole heading would pass.
+- **The Slabs Undo reason repeats the toast body.** For a sign-in refusal it matches word for word, and nearly so for the daily limit and for an add still running. Hovering adds nothing there.
+- **A Slabs reason tip closed with Escape comes back.** It returns when the mouse leaves the trigger while keyboard focus stays on it.
+- **Two Slabs cases have no test.** One is a tip opened by hover and closed with Escape. The other is a refused-Undo toast over an open detail sheet.
+- **A hot reload of `Slabs.tsx` leaves one inert listener.** In development, one window Escape listener stays behind. It does nothing.
 
 **Outcome at risk.** A run is read as a promise none of these gives.

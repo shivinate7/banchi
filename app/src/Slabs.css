@@ -61,7 +61,7 @@
   border-bottom: 1px solid var(--bn-line);
 }
 .slabs-rows > .slabs-row:last-child { border-bottom: 0; }
-.slabs-sale-when { color: var(--bn-ink-2); flex: 1 1 auto; }
+.slabs-sale-when { color: var(--bn-ink-2); flex: 1 1 8rem; min-width: 0; }
 .slabs-link { display: inline-flex; align-items: center; gap: var(--bn-1); min-height: var(--bn-control-h-sm); color: var(--bn-accent); }
 .slabs-speed,
 .slabs-step,
@@ -72,3 +72,43 @@
 .slabs-step[data-here='true'] { background: var(--bn-accent-tint); border-radius: var(--bn-r-sm); font-weight: 600; }
 .slabs-head { min-height: 0; padding-bottom: var(--bn-1); color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
 .slabs-fig { font-variant-numeric: tabular-nums; text-align: right; }
+
+/* Sales Speed: one grid for the heading and every window, so a column is as wide for all of them and the figures meet
+   their headings at the right edge. */
+.slabs-speed-rows { display: grid; grid-template-columns: 1fr auto auto; column-gap: var(--bn-3); }
+.slabs-speed-rows > .slabs-row { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
+.slabs-speed-rows > .slabs-row > :not(:first-child) { text-align: right; }
+
+/* ---- a short sentence with its reason (Reason) ------------------------------------ */
+.slabs-reason {
+  position: relative;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+/* A thumb-sized press area that moves nothing. */
+.slabs-reason::before { content: ''; position: absolute; inset: -12px -4px; }
+.slabs-tip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 90;
+  max-width: min(280px, calc(100vw - 16px));
+  padding: var(--bn-1-5) var(--bn-2);
+  border-radius: var(--bn-r-sm);
+  background: var(--bn-ink);
+  color: var(--bn-bg);
+  font-size: var(--bn-fs-xs);
+  font-weight: 500;
+  line-height: var(--bn-lh-base);
+  /* A ring in the page colour parts the tip from a toast of its own colour in either theme. */
+  box-shadow: 0 0 0 1px var(--bn-bg), var(--bn-shadow-3);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--bn-t-fast) var(--bn-ease);
+}
+.slabs-tip[data-tip-visible='true'] { opacity: 1; }
