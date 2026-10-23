@@ -148,6 +148,7 @@ export const UNREAD_GROUPS: Readonly<Record<string, UnreadGroup>> = {
   'lookalike_guard': { title: 'A look-alike with no photo of its own', fix: null, note: 'Only a paid look can tell these apart.' },
   'photo_unreadable': { title: 'A photo problem', fix: PHOTO_FIX },
   'no_card_found': { title: 'A photo problem', fix: PHOTO_FIX },
+  'empty_slot': { title: 'An empty slot', fix: 'Put the card in the slot and shoot it again.' },
   'set_not_resolved': { title: 'The set named matches no set, or more than one', fix: 'Correct the set.' },
   'promo_set': SET_NOT_READ,
   'promo_held': SET_NOT_READ,

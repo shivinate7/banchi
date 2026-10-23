@@ -61,7 +61,7 @@ from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Sequenc
 
 from pipeline import net
 from store import files as store_files
-from identify.matchconst import MODEL_BYTES, MODEL_FILENAME, MODEL_SHA256, SERVED_GAMES  # noqa: F401
+from identify.matchconst import MODEL_BYTES, MODEL_FILENAME, MODEL_SHA256, SERVED_GAMES, UNREAD_EMPTY_SLOT  # noqa: F401
 from store.cache import ENGINE_MATCHER as ENGINE
 
 # ------------------------------------------------------------------------ the rules
@@ -81,6 +81,13 @@ UNACCEPTED_SHARE = 0.40
 MEASURE_MAX = 200
 FLOOR_MIN = 0.755
 TOP_N = 3
+# AN EMPTY SLOT HAS NO BRIGHT PIXEL. Measured at full size on the rig's photographs: the 99th-percentile
+# luminance (0 to 255) of seven empty-slot photographs is 75 or less, and of 2,642 photographs of real
+# cards it is 141 or more. The cut sits between. Read at full size (about 41 ms a photograph): a
+# downscaled decode dilutes thin bright detail and would call a dark card with fine white lines empty. PONYTAIL CEILING: a fixed exposure is assumed. A rig session shot
+# far darker than the others would send its real cards to the main queue as "empty", never to a wrong
+# listing; widen with a second feature if one is ever measured.
+EMPTY_SLOT_P99 = 100
 
 
 # The reasons a card is left unread. Each is a stable code the run record and the screen read.
@@ -548,6 +555,21 @@ class Result:
     candidates: List[dict] = field(default_factory=list)
 
 
+def empty_slot(photo: Path) -> bool:
+    """True when the photograph shows an empty slot: its 99th-percentile luminance, at full size, is
+    below `EMPTY_SLOT_P99`. The one home: `match.read` and `cli/cmd_identify.run` both call it.
+    A photograph that will not open is False here; the crop step names it `photo_unreadable`."""
+    import numpy as np
+    from PIL import Image
+
+    try:
+        with Image.open(photo) as image:
+            pixels = np.asarray(image.convert("L"))
+    except Exception:
+        return False
+    return bool(np.percentile(pixels, 99) < EMPTY_SLOT_P99)
+
+
 def _crop(photo: Path, aspect: float):
     """The card alone, in the box's own orientation, cut by `images.card_box_for`, the one guarded
     box the preview uses, then `registered_card`. None when no card is found."""
@@ -832,6 +854,9 @@ def _read_chunk(
     for request in requests:
         if isinstance(request.rarity_claim, str):  # the one entry: a bare string is one cell, never a substring pool
             request = replace(request, rarity_claim=[request.rarity_claim])
+        if empty_slot(request.photo):  # first, so no other refusal sends an empty slot to the paid read
+            out[request.key] = Result(request.key, False, code=UNREAD_EMPTY_SLOT, detail="the slot holds no card")
+            continue
         if request.game not in SERVED_GAMES:
             out[request.key] = Result(request.key, False, code=UNREAD_GAME, detail=f"the matcher serves {', '.join(SERVED_GAMES)}")
             continue

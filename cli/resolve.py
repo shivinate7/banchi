@@ -33,6 +33,7 @@ from typing import (
 )
 
 from cli import runs
+from identify.matchconst import UNREAD_EMPTY_SLOT
 from pipeline import games, join, orders, pricing, routing, tcgcsv, variant
 from store import files, master, photos, queues
 from store.session import Store
@@ -2472,11 +2473,14 @@ def _resolve(
             continue
 
         if not identification:
+            # THE FREE READER SAW AN EMPTY SLOT and the paid read was never asked: a named
+            # "no card" entry for the owner to look at, never retired and never identified.
+            slot_is_empty = (record.get("second_look") or {}).get("code") == UNREAD_EMPTY_SLOT
             failures.append(
                 PreJoinFailure(
                     key=key,
                     photo=record.get("photo"),
-                    reason=routing.IDENTIFICATION_FAILED,
+                    reason=routing.CARD_NOT_DETECTED if slot_is_empty else routing.IDENTIFICATION_FAILED,
                     box=box,
                     index=index,
                     read={"status": record.get("status"), "error": record.get("error")},

@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 from . import records, strings
+from . import reasons as reasons_mod
 from .code_invariants import _PAYLOAD_ASSIGN_RE, _payload_keys, _ts_function_body
 from .core import ROOT, _GATES_STEP_SLUG, Report, _sibling, top_level_names
 from .env_map import cited_decisions
@@ -190,12 +191,22 @@ def run(ok) -> None:
        "eight of that file's fourteen constants are not reasons")
 
     print("\nthe roster declaration is not evidence that a reason is emitted")
-    emitted = _emitted_names()
-    ok("CARD_NOT_DETECTED" not in emitted,
+    # A SYNTHETIC TREE. Every reason the real rosters declare has a producer now, so no real name
+    # can show the roster skip. GHOST is declared in the roster and loaded nowhere else; REAL is
+    # the positive control, loaded inside a function. The real tree still counts a real producer.
+    ok("SET_AMBIGUOUS" in _emitted_names(),
+       "while a reason with a real producer still counts")
+    with tempfile.TemporaryDirectory() as tmp:
+        (Path(tmp) / "pipeline").mkdir()
+        (Path(tmp) / "pipeline" / "routing.py").write_text(
+            'GHOST = "ghost"\nREAL = "real"\nROUTING_REASONS = (GHOST, REAL)\n'
+            "def produce():\n    return REAL\n", encoding="utf-8")
+        with mock.patch.object(reasons_mod, "ROOT", Path(tmp)):
+            emitted = _emitted_names()
+    ok("GHOST" not in emitted,
        "a reason whose only load is the roster tuple counts as unemitted",
        "counting it made the row green for all thirteen the moment the rosters landed")
-    ok("SET_AMBIGUOUS" in emitted,
-       "while a reason with a real producer still counts")
+    ok("REAL" in emitted, "and the same tree's real producer does count")
 
     # THE FIXTURE'S SLUGS ARE COMPOSED, AND THIS BLOCK IS WHY THE RULE IS WRITTEN DOWN. They
     # were spelled out, borrowed from a real entry so the citations would resolve — and the
