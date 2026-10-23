@@ -63,11 +63,11 @@ def _read_one(photo: Path, stub_crop: bool) -> tuple:
     """One request through `match.read`. The pool is fixed, so only the photograph decides the code.
     `stub_crop` makes the crop find nothing, so a read that gets past the empty check ends there;
     without it the real crop runs and names a missing photograph."""
-    index = mock.Mock()
-    index.meta.return_value = match.MODEL_SHA256
+    index = _PoolIndex({"Set": []})
     request = match.Request("k", photo, "riftbound", "tcg")
     with contextlib.ExitStack() as stack:
         stack.enter_context(mock.patch.object(match, "_resolve_pool", lambda *_a: (("Set",), None, "")))
+        stack.enter_context(mock.patch.object(match, "_stock_images", lambda: _Catalog(["Set"])))
         embed = stack.enter_context(mock.patch.object(match, "embed"))
         crop = stack.enter_context(mock.patch.object(match, "_crop", return_value=None)) if stub_crop else None
         result = match.read([request], index, None, 0.716, lambda _m: None, promo_games=set())[0]
@@ -258,37 +258,66 @@ class _FakeIndex:
         return False
 
 
-class _RankedIndex:
-    """A two-printing pool. The first printing sits at `top` to the unit query, the second far off."""
+class _PoolIndex:
+    """A stand-in for the match index. `sets` maps each set name to its printings, as (product id,
+    number, raw cosine to the unit query). `held` is the sets the index holds, all of them by default."""
 
-    def __init__(self, top: float) -> None:
-        vectors = np.array([[top, (1 - top * top) ** 0.5], [0.0, 1.0]], np.float32)
-        self._pool = match.Pool(
-            vectors=vectors,
-            rows=[("riftbound", "Set", "1", "1"), ("riftbound", "Set", "2", "2")],
-            names=["Top", "Other"],
-            printed=["1", "2"],
-            blocked=set(),
-            sets=("Set",),
-        )
+    def __init__(self, sets: dict, held=None) -> None:
+        self._sets = sets
+        self._held = list(sets) if held is None else list(held)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        return False
 
     def meta(self, _name):
         return match.MODEL_SHA256
 
-    def pool(self, _game, _sets):
-        return self._pool
+    def set_names(self, _game):
+        return list(self._held)
+
+    def pool(self, _game, sets):
+        rows, vectors, names, printed = [], [], [], []
+        for name in sets:
+            for product_id, number, cosine in self._sets.get(name, []):
+                rows.append(("riftbound", name, product_id, number))
+                vectors.append([cosine, (1 - cosine * cosine) ** 0.5])
+                names.append(f"Card {product_id}")
+                printed.append(number)
+        return match.Pool(
+            vectors=np.array(vectors, np.float32).reshape(-1, 2),
+            rows=rows,
+            names=names,
+            printed=printed,
+            blocked=set(),
+            sets=tuple(sets),
+        )
+
+
+class _Catalog:
+    """Stands in for the stock images: the set names the catalogue lists for a game."""
+
+    def __init__(self, listed) -> None:
+        self._listed = list(listed)
+
+    def catalog_sets(self, _game):
+        return [(name, 1) for name in self._listed]
 
 
 def _ranked_read(photo: Path, top: float):
-    """One request through `match.read` with a real ranking. The crop and the embed are stubbed; the
-    query is the unit vector, so the top printing's raw cosine is `top`."""
+    """One request through `match.read` with a real ranking over one set. The crop and the embed are
+    stubbed; the query is the unit vector, so the top printing's raw cosine is `top`."""
     query = np.array([1.0, 0.0], np.float32)
+    index = _PoolIndex({"Set": [("1", "1", top), ("2", "2", 0.0)]})
     request = match.Request("k", photo, "riftbound", "tcg")
     with contextlib.ExitStack() as stack:
         stack.enter_context(mock.patch.object(match, "_resolve_pool", lambda *_a: (("Set",), None, "")))
         stack.enter_context(mock.patch.object(match, "_crop", lambda *_a: object()))
         stack.enter_context(mock.patch.object(match, "embed", lambda cards, _model=None: [query for _ in cards]))
-        return match.read([request], _RankedIndex(top), None, 0.716, lambda _m: None, promo_games=set())[0]
+        stack.enter_context(mock.patch.object(match, "_stock_images", lambda: _Catalog(["Set"])))
+        return match.read([request], index, None, 0.716, lambda _m: None, promo_games=set())[0]
 
 
 def _store_captures(box: int, last: int) -> None:
@@ -306,16 +335,17 @@ def _dress_stored(box: int, index: int, luminance: int) -> None:
     Image.new("L", FRAME, luminance).save(photo_of(box, index), "JPEG", quality=95)
 
 
-def _caps(folder: Path, box: int, shots: dict) -> Path:
+def _caps(folder: Path, box: int, shots: dict, *, game: str = "misc", hint=None) -> Path:
     """One capture folder: a flat photograph per position, at the luminance `shots` gives it. The
-    sidecars name the `misc` game, which needs no set hint."""
+    sidecars name the `misc` game and no set hint, unless the caller names them."""
     folder.mkdir(parents=True, exist_ok=True)
     for position, luminance in shots.items():
         name = f"{box}-{position:03d}"
         _jpeg(folder / f"{name}.jpg", np.full(FRAME, luminance, np.uint8))
-        (folder / f"{name}.json").write_text(
-            json.dumps({"box": box, "position": position, "game": "misc"}), "utf-8"
-        )
+        sidecar = {"box": box, "position": position, "game": game}
+        if hint is not None:
+            sidecar["set_hint"] = hint
+        (folder / f"{name}.json").write_text(json.dumps(sidecar), "utf-8")
     return folder
 
 
@@ -648,6 +678,138 @@ def check_manual_retire_refuses_empty_slot_reason(checks: Checks) -> None:
         checks.equal(_state("7/1"), master.CAPTURED, "and the card is not retired")
 
 
+@contextlib.contextmanager
+def _real_read(index, listed):
+    """The real `match.read` and `_read_chunk` run. Stubbed: the index handle, the crop and the embed
+    (the photograph model is not on the harness), the set names the catalogue lists, and the status."""
+    query = np.array([1.0, 0.0], np.float32)
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(mock.patch.object(match, "Index", lambda *_a, **_k: index))
+        stack.enter_context(mock.patch.object(match, "_crop", lambda *_a: object()))
+        stack.enter_context(mock.patch.object(match, "embed", lambda cards, _model=None: [query for _ in cards]))
+        stack.enter_context(mock.patch.object(match, "_stock_images", lambda: _Catalog(listed)))
+        stack.enter_context(mock.patch.object(match, "status", lambda *_a, **_k: {"ready": True}))
+        yield
+
+
+def _press_real(caps: Path):
+    """`identify --engine marqo-b` over `caps`, through the real read. Returns the exit code and the
+    custom ids the paid transport was asked for."""
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+    from identify import batch
+
+    asked: list = []
+
+    def refuse(requests, log=None, on_submit=None):
+        outcomes = {}
+        for request in requests:
+            asked.append(request.custom_id)
+            outcomes[request.custom_id] = batch.Outcome(
+                request.custom_id, batch.UNKNOWN_STRATEGY, error="the stub refuses this card"
+            )
+        return batch.BatchRun(outcomes=outcomes)
+
+    real_run_batch = cmd_identify.batch.run_batch
+    cmd_identify.batch.run_batch = refuse
+    try:
+        with quiet():
+            code = cmd_identify.run(
+                cli_entry.build_parser().parse_args(["identify", str(caps), "--engine", "marqo-b"]),
+                lambda _line: None,
+            )
+    finally:
+        cmd_identify.batch.run_batch = real_run_batch
+    return code, asked
+
+
+def _real_outcome(index, listed, hint=None):
+    """One captured dark card, pressed through the real read over `index`. Returns the exit code, the
+    card's state, its retired events, its second-look code, and whether the paid read was asked for it."""
+    from cli import cmd_identify
+
+    with isolated_home() as home:
+        _store_captures(7, 1)
+        caps = _caps(Path(home) / "caps", 7, {1: DARK}, game="riftbound", hint=hint)
+        with _real_read(index, listed):
+            code, asked = _press_real(caps)
+        paid = cmd_identify._custom_id("7/1") in asked
+        return code, _state("7/1"), _retired("7/1"), _second_look_code("7/1"), paid
+
+
+def check_wrong_set_hint_does_not_retire(checks: Checks) -> None:
+    from store import master
+
+    checks.note("")
+    checks.note("WRONG HINT — a dark card whose set hint names another set is not retired on that set's score")
+    index = _PoolIndex({"Base Set": [("1", "1", 0.9)], "Other Set": [("2", "2", 0.2), ("3", "3", 0.1)]})
+    code, state, retired, second, paid = _real_outcome(index, ["Base Set", "Other Set"], hint="Other Set")
+    checks.equal(code, 0, "`identify --engine marqo-b` exits 0 through the real read")
+    checks.equal(second, CODE, "the dark card reached the empty decision (its second look names it)")
+    checks.equal(state, master.CAPTURED,
+                 "the whole pool holds the card's own printing, so the wrong hint does not retire it")
+    checks.equal(retired, [], "and no retired event is written")
+    checks.ok(not paid, "and the paid read is never asked for the dark card")
+
+
+def check_index_missing_the_card_set_does_not_retire(checks: Checks) -> None:
+    from store import master
+
+    checks.note("")
+    checks.note("MISSING SET — the index does not hold the set that lists the card's printing, so no retire")
+    index = _PoolIndex({"Base Set": [("1", "1", 0.2), ("2", "2", 0.1)], "Other Set": [("9", "9", 0.9)]},
+                       held=["Base Set"])
+    code, state, retired, second, paid = _real_outcome(index, ["Base Set", "Other Set"])
+    checks.equal(code, 0, "`identify --engine marqo-b` exits 0 through the real read")
+    checks.equal(second, CODE, "the dark card reached the empty decision (its second look names it)")
+    checks.equal(state, master.CAPTURED, "the index is incomplete, so there is no whole pool and no retire")
+    checks.equal(retired, [], "and no retired event is written")
+    checks.ok(not paid, "and the paid read is never asked for the dark card")
+
+
+def check_promo_with_unfilled_set_name_does_not_retire(checks: Checks) -> None:
+    from store import master
+
+    checks.note("")
+    checks.note("UNFILLED PROMO — a promo listed by the catalogue whose set name is not filled in is not held, so no retire")
+    index = _PoolIndex({"Base Set": [("1", "1", 0.2)], "Promo Set": [("P1", "1", 0.9)]}, held=["Base Set"])
+    code, state, retired, second, paid = _real_outcome(index, ["Base Set", "Promo Set"])
+    checks.equal(code, 0, "`identify --engine marqo-b` exits 0 through the real read")
+    checks.equal(second, CODE, "the dark card reached the empty decision (its second look names it)")
+    checks.equal(state, master.CAPTURED, "a promo with no filled set name leaves the pool incomplete, so no retire")
+    checks.equal(retired, [], "and no retired event is written")
+    checks.ok(not paid, "and the paid read is never asked for the dark card")
+
+
+def check_full_pool_weak_retires_captured_card(checks: Checks) -> None:
+    from store import master
+
+    checks.note("")
+    checks.note("FULL POOL WEAK — every listed set is held and every printing is weak: the card is retired")
+    index = _PoolIndex({"Base Set": [("1", "1", 0.2)], "Second Set": [("2", "2", 0.3)]})
+    code, state, retired, second, paid = _real_outcome(index, ["Base Set", "Second Set"])
+    checks.equal(code, 0, "`identify --engine marqo-b` exits 0 through the real read")
+    checks.equal(state, master.RETIRED, "the whole pool is complete and weak, so the captured card is retired")
+    checks.equal([event.get("best_match") for event in retired], [0.3],
+                 "and the one event carries the top raw cosine of the whole pool")
+    checks.ok(not paid, "and the paid read is never asked for the dark card")
+
+
+def check_inventory_retire_refuses_empty_slot_reason(checks: Checks) -> None:
+    from store import master
+    from store.session import Store
+
+    checks.note("")
+    checks.note("GENERAL PATH — Inventory.retire refuses the automatic reason; only retire_empty_slot writes it")
+    with isolated_home():
+        _store_captures(7, 1)
+        with Store().write() as snapshot:
+            checks.raises(master.UnknownRetireReason,
+                          lambda: snapshot.inventory.retire("7/1", CODE),
+                          "Inventory.retire(reason='empty_slot') is refused on the general path")
+        checks.equal(_state("7/1"), master.CAPTURED, "and the card is not retired through it")
+
+
 CHECKS = (
     check_empty_slot_fixtures,
     check_empty_slot_boundary,
@@ -665,4 +827,9 @@ CHECKS = (
     check_dry_run_counts_empty_slots_and_writes_nothing,
     check_store_backed_join_files_empty_slot,
     check_manual_retire_refuses_empty_slot_reason,
+    check_wrong_set_hint_does_not_retire,
+    check_index_missing_the_card_set_does_not_retire,
+    check_promo_with_unfilled_set_name_does_not_retire,
+    check_full_pool_weak_retires_captured_card,
+    check_inventory_retire_refuses_empty_slot_reason,
 )
