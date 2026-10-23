@@ -711,6 +711,11 @@ def _second_look_record(item: Item) -> Optional[dict]:
         "floor": item.unread.floor,
         "margin": item.unread.margin,
         **({"p99": item.unread.p99, "best_match": item.unread.best_match} if item.unread.p99 is not None else {}),
+        # the top three for the agree test; the first repeats the flat fields, `score` is the cosine
+        "picks": [
+            {"name": c.get("name"), "number": c.get("number"), "set": c.get("set"), "score": c.get("cosine")}
+            for c in item.unread.candidates[:3]
+        ],
     }
 
 

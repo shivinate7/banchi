@@ -24,6 +24,7 @@ import { Pricing } from './Pricing'
 import { Orders } from './Orders'
 import { Shipping } from './Shipping'
 import { Codes } from './Codes'
+import Slabs from './Slabs'
 import { Revenue } from './Revenue'
 import { ProductHistory } from './ProductHistory'
 import { Fulfillment } from './Fulfillment'
@@ -189,6 +190,10 @@ const CODES_KEYS: ScreenKeys = {
   rows: [{ keys: ['Esc'], does: 'Close the open sheet' }],
 }
 
+const SLABS_KEYS: ScreenKeys = {
+  rows: [{ keys: ['Esc'], does: 'Close the open sheet' }],
+}
+
 const FULFILLMENT_KEYS: ScreenKeys = {
   where: 'On that screen, where ? lists its own keys.',
   rows: [
@@ -242,6 +247,7 @@ export const ROUTES: readonly Route[] = [
    * side effect. */
   { path: '/inventory', label: 'Inventory', icon: 'box', view: Inventory, persona: 'owner', group: 'library', hotkey: 'i', nav: true, tab: true, keywords: 'boxes find a card where search sold retire move', keys: INVENTORY_KEYS },
   { path: '/codes', label: 'Codes', icon: 'qr', view: Codes, persona: 'owner', group: 'library', hotkey: 'd', nav: true, keywords: 'code cards qr redeem read a box', keys: CODES_KEYS },
+  { path: '/slabs', label: 'Slabs', icon: 'layers', view: Slabs, persona: 'owner', group: 'library', hotkey: 'l', nav: true, keywords: 'slab graded psa beckett bgs sgc cgc card ladder cert value', keys: SLABS_KEYS },
   { path: '/fulfillment', label: 'Cards to Pull', icon: 'hand', view: Fulfillment, persona: 'fulfiller', group: 'aside', keywords: 'hand-off pull fulfiller new tab', keys: FULFILLMENT_KEYS },
   { path: '/gallery', label: 'Kit', icon: 'grid', view: Gallery, persona: 'owner', group: 'aside', keywords: 'component kit design system tokens' },
   /* THE PER-PRODUCT VIEW IS OFF-NAV ON PURPOSE (D227). It is a deep link, not a destination

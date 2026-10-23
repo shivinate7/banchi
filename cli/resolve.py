@@ -2760,6 +2760,8 @@ def _second_look(raw) -> Optional[join.MatcherPick]:
     a record from before the flow existed has none, and nothing here guesses one."""
     if not isinstance(raw, dict) or not raw.get("code"):
         return None
+    # `picks` is the top three, the first repeating the flat fields. An old block has none.
+    picks = [p for p in raw.get("picks") or () if isinstance(p, dict)] if isinstance(raw.get("picks"), list) else []
     return join.MatcherPick(
         code=str(raw["code"]),
         name=raw.get("name"),
@@ -2767,7 +2769,16 @@ def _second_look(raw) -> Optional[join.MatcherPick]:
         set=raw.get("set"),
         floor=raw.get("floor"),
         margin=raw.get("margin"),
+        others=tuple(
+            join.MatcherPick(code=str(raw["code"]), name=p.get("name"), number=p.get("number"), set=p.get("set"), score=p.get("score"))
+            for p in picks[1:]
+        ),
+        score=picks[0].get("score") if picks else None,
     )
+
+
+def _pick_dict(pick: join.MatcherPick) -> dict:
+    return {"name": pick.name, "number": pick.number, "set": pick.set, "score": pick.score}
 
 
 def queue_entry(queued: join.QueuedCard) -> queues.QueueEntry:
@@ -2820,6 +2831,11 @@ def queue_entry(queued: join.QueuedCard) -> queues.QueueEntry:
                         "number": card.second_look.number,
                         "set": card.second_look.set,
                         "reason": card.second_look.code,
+                        **(
+                            {"picks": [_pick_dict(p) for p in (card.second_look, *card.second_look.others)]}
+                            if card.second_look.others
+                            else {}
+                        ),
                     }
                 }
             ),

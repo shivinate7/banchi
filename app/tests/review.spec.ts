@@ -2856,6 +2856,7 @@ test.describe('the Review band sheets', () => {
         wire.fates['3/6'] = 'paid'
         wire.why['3/6'] = { code: 'match_too_weak' }
         await expect(sheet(page)).toContainText('The count has moved', { timeout: 8_000 }) // keep: waits one 3s poll tick
+        await expect(sheet(page), 'the title follows the live count, the rows do not').toHaveAccessibleName(/^3 waiting for a paid look$/i)
         await expect(sheet(page).getByRole('listitem'), 'the rows did not move under the person').toHaveCount(2)
         const reads = wire.details.length
         await sheet(page).getByRole('button', { name: 'Show it again' }).click()
