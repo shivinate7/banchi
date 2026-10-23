@@ -790,8 +790,10 @@ def check_card_named_mid_join(checks: Checks) -> None:
 
     checks.note("")
     checks.note("NAMED MID-JOIN — a card the reader names while a press joins is never joined unread")
-    with isolated_home():
-        export = _seed_export(age=901)  # stale: the reader names its cards and prices none
+    stale = _central(2026, 10, 21, 23, 59).timestamp()  # yesterday: the reader names its cards and prices none
+    fresh = _central(2026, 10, 22, 9, 0).timestamp()  # earlier today: a press reuses it and prices
+    with isolated_home(), _pinned_day(_central(2026, 10, 22, 15, 0)):
+        export = _seed_export(at=stale)
         k1 = _shoot(ARTICUNO)
         _sweep(_results((k1,), {k1: ARTICUNO}))
         runs_found = _sweep_runs()
@@ -802,7 +804,7 @@ def check_card_named_mid_join(checks: Checks) -> None:
         k2 = _shoot(ARTICUNO)  # captured: the reader names it while the press runs
         checks.ok("cards" in runs.open_run(run_dir).manifest, "(precondition) the run records its cards")
         checks.equal(Store().read().inventory.cards[k1].state, master.IDENTIFIED, "(precondition) k1 is identified")
-        _touch(export, 0)  # a fresh export: the press prices
+        os.utime(export, (fresh, fresh))  # a fresh export: the press prices
 
         seen: list = []
         mid = {"pending": True}
@@ -813,9 +815,9 @@ def check_card_named_mid_join(checks: Checks) -> None:
             seen.append(resolved)
             if mid["pending"]:
                 mid["pending"] = False
-                _touch(export, 901)  # the reader's view: stale, so it names and prices nothing
+                os.utime(export, (stale, stale))  # the reader's view: stale, so it names and prices nothing
                 _sweep(_results((k2,), {k2: ARTICUNO}))
-                _touch(export, 0)
+                os.utime(export, (fresh, fresh))
             return resolved
 
         with mock.patch.object(resolve, "load", named_mid_join):
