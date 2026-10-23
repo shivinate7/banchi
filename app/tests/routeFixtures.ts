@@ -1092,6 +1092,11 @@ export function severalSlabs(): SlabRow[] {
   ]
 }
 
+/** The platform each of `slabDetailOf`'s seven sales carries, newest first (spec 4.8). The third has none: the
+ *  field is left off, as the route leaves it off a sale Card Ladder gave no platform for. It is inside the newest
+ *  five, and not the second (the sale with no link), so no sale lacks both. */
+export const SLAB_SALE_PLATFORMS: ReadonlyArray<string | null> = ['eBay', 'Goldin', null, 'Heritage', 'Fanatics Collect', 'eBay', 'Whatnot']
+
 /** `GET /slabs/<grader>/<cert>`: the row's own snapshot on three days, seven sales newest first
  *  (the second has no link; only the newest five are on screen) and a three-grade ladder. No
  *  field holds the cert except `slab.cert`, which a screen never draws. A slab that never sold
@@ -1111,10 +1116,12 @@ export function slabDetailOf(row: SlabRow, over: Partial<SlabDetail> = {}): Slab
     sales: sold
       ? Array.from({ length: 7 }, (_, at) => {
           const id = `sale-${at + 1}`
+          const platform = SLAB_SALE_PLATFORMS[at] ?? null
           return {
             id,
             date: `2026-10-${String(14 - at).padStart(2, '0')}`,
             price: (400 - at * 6).toFixed(2),
+            ...(platform === null ? {} : { platform }),
             ...(at === 1 ? {} : { url: `https://sales.example.test/lot/${id}` }),
           }
         })
