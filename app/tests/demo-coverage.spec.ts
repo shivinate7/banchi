@@ -550,7 +550,7 @@ test.describe('the published demo draws what reviewers grade', () => {
     // The press took effect: the control now reads "Stop" and is pressed. Without this, the
     // single buyer's own list could equal the plan's count and pass with no press at all.
     await expect(page.getByRole('button', { name: /^stop$/i, pressed: true }), 'Start Walk never became a pressed "Stop" control').toBeVisible()
-    const walk =page.getByRole('list', { name: /cards to pick/i })
+    const walk = page.getByRole('list', { name: /cards to pick/i })
     await expect(walk).toBeVisible({ timeout: 30_000 })
     // DEBT23's shape: the list container appearing does not mean its rows have. A bare
     // count() right after does not retry, so it can read zero while the rows are still
