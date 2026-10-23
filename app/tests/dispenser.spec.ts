@@ -523,7 +523,10 @@ async function dealOneEmptyStand(page: Page): Promise<void> {
     { card: CARD, gap: GAP_LUMA },
   )
 
-  await expect(page.locator('.capture-controls').getByText(/no photo came/)).toBeVisible({ timeout: 10_000 })
+  // The stop line waits on the dealer's own 3 s save timer behind a loaded runner: three CI runs
+  // waited out 10 s. 30 s is 3x, and the case limit (30 s default) rises so the wait can use it.
+  test.setTimeout(90_000)
+  await expect(page.locator('.capture-controls').getByText(/no photo came/)).toBeVisible({ timeout: 30_000 })
 }
 
 test('a dealing stop after one empty-stand settle offers Re-baseline', async ({ page }) => {
