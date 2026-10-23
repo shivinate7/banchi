@@ -2743,7 +2743,6 @@ test('a scope already on disk says the press will not ask TCGplayer at all', asy
         reusable: {
           file: 'export-tcgplayer-20260912-070000-deadbeef.csv',
           age_s: 120,
-          window_s: 900,
         },
       }),
     })

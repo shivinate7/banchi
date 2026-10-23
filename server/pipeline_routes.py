@@ -181,7 +181,7 @@ from store.session import Snapshot  # noqa: E402
 
 BANCHI = REPO_ROOT / "banchi"
 CONSOLE = "console.log"
-PID_FILE = "running.pid"
+PID_FILE = run_files.PID_FILE
 
 # ONE RESOLVER, FOR THE PROCESS'S WHOLE LIFE (`D301`). `pipeline/stockimages.py`'s
 # own header says why: its cache is only worth having if the same instance answers every
@@ -391,21 +391,17 @@ FETCHED_PREFIX = "export-tcgplayer-"
 # in eighteen seconds (07:41:33 to 07:41:51) across five run directories.
 EXPORTS_DIR = files.EXPORTS_DIRNAME
 
-# HOW LONG A FETCHED EXPORT ANSWERS THE NEXT PRESS, IN SECONDS, AND THIS IS THE HALF THAT
-# SAVES THE REQUEST RATHER THAN THE DISK. Deduping after the fetch turns six files into one
-# and still spends six round trips; re-joining a store means pressing Fetch once per run, and
-# the seven presses that produced the measurement above were nine minutes apart end to end
-# while five of them were eighteen seconds apart. A press whose game already holds an export
-# fetched inside this window, at a scope that COVERS what this run needs, answers from that
-# file and opens no socket.
-#
-# FIFTEEN MINUTES IS SIZED TO THE SITTING AND NOT TO THE READING. An export is a reading of
-# `Total Quantity` and `TCG Market Price`, and `describe_source`'s mtime is when that reading
-# was taken — so reuse must never be long enough that an operator thinks they refreshed and
-# did not. A re-join pass over a store is minutes; a deliberate refresh the next morning is
-# hours. `refresh: true` on the request forces the socket open whatever the age, and the
-# receipt says `reused` with the file's age on it either way, so nothing here is silent.
-EXPORT_REUSE_S = 900
+# WHEN A FETCHED EXPORT ANSWERS THE NEXT PRESS (D166), AND THIS IS THE HALF THAT SAVES THE
+# REQUEST RATHER THAN THE DISK. An export is FRESH if it was downloaded on the same US Central
+# calendar day (`_reusable`, `store/clock.before_today`): one rule for matching, the free
+# reader, a send and `#/pricing`. A press whose game already holds a fresh export, at a scope
+# that COVERS what this run needs, answers from that file and opens no socket. The daily job
+# and the owner's "Refresh now" press (`refresh: true`) take a new reading; the receipt says
+# `reused` with the file's age either way, so nothing here is silent.
+
+#: How soon after a finished "Refresh now" a second press is refused (`refresh_too_soon`). A
+#: double-press guard, not a freshness test.
+REFRESH_DEBOUNCE_S = 900
 
 # WHEN A WIDENED FETCH IS REPORTED WITH BOTH FIGURES ON IT (D65/D76). `tcg_export.MAX_BYTES`
 # is 32 MB and refuses past it; a scope that widens to the whole category is the only way to
@@ -2221,11 +2217,12 @@ def _spawn(send: Send, captures) -> dict:
     # leaves a window in which the marker names a pid the table has never heard of and the run
     # reads as somebody else's orphan.
     #
-    # THE MARKER IS STILL WRITTEN AND STILL NEVER DELETED. It is the only thing about this
-    # child that survives this process — a restart, a `make up` reload, a crash — and it is
-    # what `scripts/reap.py` and a person reading a run directory have to go on. Deleting it
-    # from `_live_pid` was considered and declined: `scripts/serve.py` documents that function
-    # as one that "only ever READS", it is the 4s-polled path, and cases 1 and 2 never open it.
+    # THE MARKER IS WRITTEN HERE AND REMOVED BY THE CHILD WHEN IT ENDS (`cmd_identify.run`). It is
+    # the only thing about this child that survives this process — a restart, a `make up`
+    # reload, a crash — so a person reading a run directory and `_live_pid`'s orphan arm have
+    # it to go on while the child lives. `_live_pid` still only ever READS it: it is the
+    # 4s-polled path, and cases 1 and 2 never open it. A child that exits before this line
+    # runs leaves a marker naming a dead pid, which `_live_pid`'s signal-0 probe reads honestly.
     _remember_child(run.directory, child)
     (run.directory / PID_FILE).write_text(f"{child.pid}\n")
     return {
@@ -5782,10 +5779,11 @@ def do_markdown_table(stamp: str) -> dict:
         # against $0.40 on a store set to $0.29, so the sheet drew the wrong figure and the
         # receipt named it.
         "floor": _markdown_floor(),
-        # HOW OLD THIS READ MAY BE AND STILL BE SENT FROM, the constant itself (the owner's
-        # ruling, 2026-09-26: "require a fresh read"). The screen offers "Read again" in place
-        # of Send past it, and the apply and the send refuse past it.
-        "stale_after_s": reprice.READ_FRESH_S,
+        # HOW OLD THIS READ MAY BE AND STILL BE SENT FROM: it must be from today (US Central), so
+        # this is the seconds since the day began. The screen offers "Read again" in place of Send
+        # past it, and the apply and the send refuse past it. A screen left open over midnight
+        # still offers Send once; the server's refusal is the one that counts.
+        "stale_after_s": reprice.fresh_for_s(),
     }
 
 
@@ -7568,7 +7566,7 @@ def do_price_trends_preload() -> dict:
 # ------------------------------------------------------------------ the price refresh (spec 7b)
 
 #: `GET /pipeline/prices/refresh`'s own state, one per process. A press starts one worker; a second
-#: press while it runs starts nothing. `finished_at` holds the next press off for `EXPORT_REUSE_S`.
+#: press while it runs starts nothing. `finished_at` holds the next press off for `REFRESH_DEBOUNCE_S`.
 _REFRESH_LOCK = threading.Lock()
 _REFRESH: Dict[str, Any] = {"state": "idle", "step": None, "done": 0, "total": 0, "finished_at": None}
 
@@ -7578,6 +7576,20 @@ def _open_runs() -> Tuple[dict, List[str]]:
     answers, never a second definition of "open"."""
     work = do_pipeline_worklist([])
     return work, [str(row["run"]) for row in work["roster"] if row.get("open")]
+
+
+def _waiting_runs() -> List[str]:
+    """The runs that wait at phase join (`_phase`): named and collected, never priced. The roster
+    holds joined runs only, so a run the free reader left unjoined is on no worklist until a join
+    prices it."""
+    root = files.runs_dir()
+    if not root.is_dir():
+        return []
+    return [
+        entry.name for entry in sorted(root.iterdir())
+        if (entry / run_files.MANIFEST).is_file()
+        and _phase(_manifest(entry), _live_pid(entry) is not None) == "join"
+    ]
 
 
 def _stale_history(work: dict) -> Set[str]:
@@ -7628,17 +7640,20 @@ def do_prices_refresh(
     progress: Optional[Callable[[str, int, int], None]] = None,
     *,
     history: Optional[str] = "all",
+    also: Sequence[str] = (),
 ) -> dict:
     """ONE REFRESH AT A TIME, ACROSS PROCESSES: the daily job and the server share a file lock. A
-    caller that finds it held answers `running` and fetches nothing. The work is
-    `_prices_refresh_steps`."""
+    caller that finds it held answers `running` and fetches nothing. `also` names runs to bring
+    current beyond the open ones (a send's own runs). The work is `_prices_refresh_steps`."""
     with pricerefresh.refresh_lock() as held:
         if not held:
             return {"ok": False, "running": True, "steps": (pricerefresh.read_status() or {}).get("steps") or {}, "live": {}}
-        return _prices_refresh_steps(progress, history)
+        return _prices_refresh_steps(progress, history, also)
 
 
-def _prices_refresh_steps(progress: Optional[Callable[[str, int, int], None]], history: Optional[str]) -> dict:
+def _prices_refresh_steps(
+    progress: Optional[Callable[[str, int, int], None]], history: Optional[str], also: Sequence[str] = ()
+) -> dict:
     """THE MORNING JOB AND THE "Refresh now" PRESS (`docs/specs/stale-listings.md`, 7b). It brings
     every waiting card's Market and Lowest current by refreshing the run tables, never by drawing
     a second figure over them: the unit is the pair `do_pipeline_export`, then the join, which is
@@ -7646,7 +7661,8 @@ def _prices_refresh_steps(progress: Optional[Callable[[str, int, int], None]], h
     screen.
 
     ORDER: 1 the live listings, 2 the catalog (one request per game, `_reusable` serves the later
-    runs), 3 the join of every open run, 4 the sales history (`history`: "all" asks for every
+    runs), 3 the join of every open run, of each run in `also`, and of each run waiting at phase
+    join (`do_run_match`, which prices it), 4 the sales history (`history`: "all" asks for every
     row, "stale" only for rows whose history ends before yesterday, `None` skips it). Each step
     records itself in `inventory/price-refresh.json`. A failed step keeps the last good data and
     names itself; it never raises out of here, except the live listings when `live_refusal` (the
@@ -7685,6 +7701,7 @@ def _prices_refresh_steps(progress: Optional[Callable[[str, int, int], None]], h
         files.log_cause("prices refresh runs", exc)
         runs = []
         unreadable = f"The open runs could not be read because {files.plain_cause(exc)}."
+    runs += [name for name in also if name not in runs]
     fetched: Dict[str, List[str]] = {}
     problems: List[str] = []
     by_game: Dict[str, List[str]] = {}
@@ -7721,7 +7738,26 @@ def _prices_refresh_steps(progress: Optional[Callable[[str, int, int], None]], h
             joined += 1
         else:
             trouble.append(f"{name}: " + ((result["console"].strip().splitlines() or [""])[-1]))
-    pricerefresh.note_step("join", not trouble, runs=len(fetched), joined=joined, message=trouble[0] if trouble else "")
+    # RUNS WAITING AT PHASE JOIN are priced by the press that already joins them, which fetches or
+    # reuses the game's export. A run whose last try left a problem is NOT tried again here (`do_run_match`
+    # answers `problem_stands`, one fetch a day, D104): it stays waiting for its own "retry" press. That
+    # is a wait, not a failure of this refresh, so the step stays ok and its note names the wait.
+    waiting = _waiting_runs()
+    held: List[str] = []
+    for name in waiting:
+        answer = do_run_match(name, {})
+        if answer.get("ran") and answer.get("ok"):
+            joined += 1
+        elif answer.get("ran"):
+            trouble.append(f"{name}: {answer['problem']['message']}")
+        elif answer.get("reason") == "running":
+            trouble.append(f"{name}: another join of this run is running.")
+        elif answer.get("reason") == "problem_stands":
+            said = ((_read_match(_open_run(name)) or {}).get("problem") or {}).get("message") or "its last join left a problem."
+            held.append(f"{name} waits on its own problem until it is retried: {said}")
+    pricerefresh.note_step(
+        "join", not trouble, runs=len(fetched) + len(waiting), joined=joined, message=(trouble + held)[0] if trouble or held else ""
+    )
 
     # 4. the sales history, last, because it is the slow one.
     if history is not None:
@@ -7752,7 +7788,7 @@ def do_live_export_rejoined() -> Tuple[HTTPStatus, dict]:
     background worker as Refresh now (listings, catalog, join; no history), so the row and the sheet
     never show two times for one card, and the POST holds no request slot. It answers at once; the
     screen reads `GET /pipeline/prices/refresh` and takes the listings' file name from
-    `steps.listings.fetched`. The press is the person's own, so it presses past the reuse window."""
+    `steps.listings.fetched`. The press is the person's own, so it presses past the double-press guard."""
     return do_prices_refresh_start({"force": True}, history=None)
 
 
@@ -7779,7 +7815,7 @@ def _refresh_worker(history: Optional[str]) -> None:
         pricerefresh.note_step("refresh", False, message=files.plain_cause(caught))
     finally:
         with _REFRESH_LOCK:
-            # ONLY A "Refresh now" THAT RAN ARMS THE REUSE WINDOW; the Live tab's press is its own, and a skip fetched nothing.
+            # ONLY A "Refresh now" THAT RAN ARMS THE DOUBLE-PRESS GUARD; the Live tab's press is its own, and a skip fetched nothing.
             _REFRESH.update(state=state, step=None, **({"finished_at": time.time()} if history is not None and not skipped else {}))
 
 
@@ -7787,14 +7823,14 @@ def do_prices_refresh_start(payload: dict, history: Optional[str] = "stale") -> 
     """`POST /pipeline/prices/refresh` — "Refresh now". It starts the work in a worker thread and
     answers 202 at once; steps 2 and 3 can outlast a request slot (DEBT11). One run goes at a
     time: a press while one runs answers `running` and starts nothing. A press inside
-    `EXPORT_REUSE_S` of a finished run is refused unless the body says `force`, which the screen
+    `REFRESH_DEBOUNCE_S` of a finished run is refused unless the body says `force`, which the screen
     sends only from "Try again". FREE, and only a press calls it."""
     force = bool(payload.get("force"))
     with _REFRESH_LOCK:
         if _REFRESH["state"] == "running":
             return HTTPStatus.ACCEPTED, {"state": "running", "started": False}
         finished = _REFRESH["finished_at"]
-        if not force and finished is not None and time.time() - finished <= EXPORT_REUSE_S:
+        if not force and finished is not None and time.time() - finished <= REFRESH_DEBOUNCE_S:
             raise PipelineRefusal(
                 HTTPStatus.CONFLICT,
                 "refresh_too_soon",
@@ -7810,6 +7846,66 @@ def do_prices_refresh_state() -> dict:
     with _REFRESH_LOCK:
         state = {key: _REFRESH[key] for key in ("state", "step", "done", "total")}
     return {**state, "note": pricerefresh.read_status()}
+
+
+def _export_words(moment) -> str:
+    """The export, named by its day. `UNDATED` (an export of no recorded age) has none, and never prints as 1970."""
+    if moment == run_files.UNDATED:
+        return "an export from an unknown day"
+    day = clock.central_day(moment)
+    return f"an export of {day:%B} {day.day}"
+
+
+def _day_iso(moment) -> Optional[str]:
+    """The day as an ISO date, or `None` for `UNDATED`: the receipt and the screen say "unknown" for `None`."""
+    return None if moment == run_files.UNDATED else clock.central_day(moment).isoformat()
+
+
+def refresh_before_send(names: Sequence[str], overrides: Optional[Sequence[str]] = None, progress=None) -> dict:
+    """THE ONE GATE BEFORE ANY SEND, by the owner's ruling: a send never prices from an export older than
+    today (the US Central day). It does nothing when every named run's prices are from today. Otherwise
+    it runs the refresh `#/pricing` runs (`do_prices_refresh`, with these runs added) and
+    checks the outcome: every named run must now be from today, or `PipelineRefusal` says why in a
+    sentence and nothing is sent. A refresh that fails for another run's sake does not stop a send
+    whose own runs came out current.
+
+    CALLERS: `do_send` (before its receipt exists, so a refusal leaves none) and `cli/cmd_emit.run`,
+    which is the one door every other route's `emit` passes through (`do_pipeline_emit`,
+    `do_pipeline_step`, the CLI). A named `overrides` file is the owner's choice of prices, so a stale
+    one is refused without a refresh that could not change it. A mark-down send is out of scope: its
+    prices come from a live read that `_markdown_fresh` holds to the same day.
+
+    IT ANSWERS WHAT IT DID, for the send's receipt: `{"ran": False, "export_day"}` when nothing was
+    old, `{"ran": True, "ok": True, "was", "export_day"}` after a refresh (ISO days, US Central; `was` is None
+    when the oldest export's day is unknown).
+    """
+    opened = [run_files.open_run(_open_run(str(name))) for name in names]
+    moments = run_files.export_moments(opened, overrides)
+    stale = run_files.stale_runs(opened, overrides)
+    if not stale:
+        return {"ran": False, "export_day": _day_iso(min(moments.values())) if moments else None}
+    start = f"Nothing was sent. The prices come from {_export_words(min(stale.values()))}, and a send needs today's."
+    if overrides:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT, "prices_stale",
+            f"{start} Fetch a new export and name it, or leave the file off so the runs' own are refreshed.",
+        )
+    answer = do_prices_refresh(progress, history=None, also=[str(name) for name in names])
+    reopened = [run_files.open_run(_open_run(str(name))) for name in names]
+    if not run_files.stale_runs(reopened):
+        return {
+            "ran": True, "ok": True, "was": _day_iso(min(stale.values())),
+            "export_day": _day_iso(min(run_files.export_moments(reopened).values())),
+        }
+    if answer.get("running"):
+        cause = "another refresh is running. Try again when it ends."
+    else:
+        steps = answer.get("steps") or {}
+        said = next(
+            (str(steps[k]["message"]) for k in ("listings", "catalog", "join") if steps.get(k, {}).get("message") and not steps[k].get("ok")), ""
+        )
+        cause = (said.rstrip(".") + ".") if said else "it brought in no new prices for these runs."
+    raise PipelineRefusal(HTTPStatus.CONFLICT, "prices_stale", f"{start} Refreshing them failed: {cause}")
 
 
 def _live_rows_for_trends(taken: Set[str]) -> Dict[str, dict]:
@@ -8737,7 +8833,8 @@ def _held_exports(game: str) -> List[Path]:
 
 
 def _reusable(game: str, scope: "tcg_export.Scope") -> Optional[Tuple[Path, float]]:
-    """The export that answers this scope without a request, with its age in seconds.
+    """The export that answers this scope without a request, with its age in seconds: one
+    downloaded on today's US Central day (D166, `store/clock.before_today`).
 
     THIS IS THE HALF THAT SAVES THE REQUEST, and it is the only part of this route whose
     saving an outcome assertion cannot see: a reuse and a fetch produce the same file, the
@@ -8749,11 +8846,11 @@ def _reusable(game: str, scope: "tcg_export.Scope") -> Optional[Tuple[Path, floa
         if note is None or not _covers(note, scope):
             continue
         try:
-            age = time.time() - path.stat().st_mtime
+            taken = path.stat().st_mtime
         except OSError:
             continue
-        if 0 <= age <= EXPORT_REUSE_S:
-            return path, age
+        if not clock.before_today(datetime.fromtimestamp(taken, timezone.utc)):
+            return path, max(0.0, time.time() - taken)
     return None
 
 
@@ -8869,7 +8966,7 @@ def _reuse_note(asked: Optional[dict]) -> Optional[dict]:
     if held is None:
         return None
     path, age = held
-    return {"file": path.name, "age_s": int(age), "window_s": EXPORT_REUSE_S}
+    return {"file": path.name, "age_s": int(age)}
 
 
 def _unhinted_said(
@@ -9215,8 +9312,7 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
 
 
 MATCH_RECORD = "match.json"
-_MATCHING: Dict[str, bool] = {}
-_MATCHING_LOCK = threading.Lock()
+MATCH_LOCK = "match.lock"
 
 
 def _read_match(directory: Path) -> Optional[dict]:
@@ -9251,45 +9347,49 @@ def do_run_match(name: str, payload: dict) -> dict:
     never asks TCGplayer again over a problem that stands. `retry: true` is the door's own
     press.
 
-    ONE MATCH PER RUN AT A TIME. Two tabs that both see the reading finish would otherwise both
-    fetch and both join; the second is answered `running` and does nothing.
+    ONE MATCH PER RUN AT A TIME, ACROSS PROCESSES. Two tabs that both see the reading finish, or a
+    tab and the `identify` child that is still joining its own run, would otherwise both fetch and
+    both join. The run's `flock` is taken BEFORE the phase is read, so a caller that loses the race
+    to a join that then finishes reads `not_waiting` and not a second join; the one that finds the
+    lock held is answered `running` and does nothing. A process that dies releases it.
     """
     directory = _open_run(name)
+    with contextlib.ExitStack() as held:
+        try:
+            held.enter_context(files.exclusive(directory, timeout=0, name=MATCH_LOCK))
+        except files.LockTimeout:  # held by another join; any other failure to lock is not "running"
+            return {"ran": False, "reason": "running", "summary": _summary(directory)}
+        return _match_locked(name, directory, payload)
+
+
+def _match_locked(name: str, directory: Path, payload: dict) -> dict:
     manifest = _manifest(directory)
     if _phase(manifest, _live_pid(directory) is not None) != "join":
         return {"ran": False, "reason": "not_waiting", "summary": _summary(directory)}
     standing = _read_match(directory) or {}
     if standing.get("problem") and not bool(payload.get("retry")):
         return {"ran": False, "reason": "problem_stands", "summary": _summary(directory)}
-    with _MATCHING_LOCK:
-        if _MATCHING.get(directory.name):
-            return {"ran": False, "reason": "running", "summary": _summary(directory)}
-        _MATCHING[directory.name] = True
+    at = clock.now_iso()
     try:
-        at = clock.now_iso()
-        try:
-            fetched = do_pipeline_export(name, {})
-        except PipelineRefusal as refusal:
-            problem = {"code": refusal.code, "message": str(refusal), "step": "fetch"}
-            _write_match(directory, {"at": at, "problem": problem})
-            return {"ran": True, "ok": False, "problem": problem, "summary": _summary(directory)}
-        result = do_pipeline_step(name, "join", {"fetched": [fetched["file"]]})
-        if not result["ok"]:
-            last = (result["console"].strip().splitlines() or [""])[-1]
-            problem = {"code": "match_refused", "message": last, "step": "join"}
-            _write_match(directory, {"at": at, "problem": problem, "fetched": fetched["file"]})
-            return {
-                "ran": True,
-                "ok": False,
-                "problem": problem,
-                "console": result["console"],
-                "summary": _summary(directory),
-            }
-        _write_match(directory, {"at": at, "problem": None, "fetched": fetched["file"]})
-        return {"ran": True, "ok": True, "console": result["console"], "summary": _summary(directory)}
-    finally:
-        with _MATCHING_LOCK:
-            _MATCHING.pop(directory.name, None)
+        fetched = do_pipeline_export(name, {})
+    except PipelineRefusal as refusal:
+        problem = {"code": refusal.code, "message": str(refusal), "step": "fetch"}
+        _write_match(directory, {"at": at, "problem": problem})
+        return {"ran": True, "ok": False, "problem": problem, "summary": _summary(directory)}
+    result = do_pipeline_step(name, "join", {"fetched": [fetched["file"]]})
+    if not result["ok"]:
+        last = (result["console"].strip().splitlines() or [""])[-1]
+        problem = {"code": "match_refused", "message": last, "step": "join"}
+        _write_match(directory, {"at": at, "problem": problem, "fetched": fetched["file"]})
+        return {
+            "ran": True,
+            "ok": False,
+            "problem": problem,
+            "console": result["console"],
+            "summary": _summary(directory),
+        }
+    _write_match(directory, {"at": at, "problem": None, "fetched": fetched["file"]})
+    return {"ran": True, "ok": True, "console": result["console"], "summary": _summary(directory)}
 
 
 def do_pipeline_step(name: str, step: str, payload: dict) -> dict:

@@ -400,8 +400,8 @@ COMPONENTS = [
                                         "`pipeline/selection.py:scope_block` rather than a "
                                         "second copy of it.",
                                 "governed_by": ["D1", "D2", "D21", "D23", "D33", "D36", "D43",
-                                                "D180", "D63", "D145", "D163", "D172",
-                                                "D174", "D125"]},
+                                                "D63", "D125", "D145", "D163", "D166", "D172",
+                                                "D174", "D180"]},
             "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews. "
                                     "SEEDS inventory/prices.json's rule and basis on the first "
                                     "join of an EMPTY corpus and never reassigns them (D86) "
@@ -753,7 +753,9 @@ COMPONENTS = [
                                            "D56", "D58", "D59", "D65", "D87", "D89", "D115", "D137",
                                            "D145", "D147", "D150", "D156", "D166", "D180",
                                            "D183", "D188", "D253", "D259", "D262"], "tested_by": ["T7"]},
-            "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D86", "D54", "D65"], "tested_by": ["T7"]},
+            "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25",
+                                                                                     "D54", "D65",
+                                                                                     "D86", "D166"], "tested_by": ["T7"]},
         },
     },
     {

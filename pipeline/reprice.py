@@ -95,6 +95,7 @@ from decimal import Decimal
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 from pipeline import corpus, pricing, tcgcsv
+from store import clock
 
 #: The price a markdown starts from. `pricing.BASES` is deliberately NOT widened to include
 #: it. `basis` reaches `join` and `emit` through `cli/__main__.py`'s `choices=`, and there the
@@ -159,22 +160,17 @@ SKIP_SENTENCE: Dict[str, str] = {
     NO_MARKET: "no market price, so the rule leaves it to you",
 }
 
-#: HOW OLD A LIVE READ MAY BE AND STILL BE SENT FROM (the owner's ruling, 2026-09-26: "require a
-#: fresh read"). A day, because the rule's own inputs move by the day: its window is whole days
-#: of no sale, and a card that sold since the read is one the read still offers. The send reads
-#: what is live again and refuses a price TCGplayer moved (`server/send_routes.py`), so this
-#: bound is what keeps the SET honest, not the price. The screen reads this constant off the
-#: table route and never types its own copy.
-READ_FRESH_S = 24 * 60 * 60
+def fresh_for_s(now: Optional[datetime] = None) -> int:
+    """How old a read may be and still be sent from: it began today (US Central), like every send's
+    prices (`store/clock.before_today`). The screen reads this off the table route."""
+    return clock.seconds_into_today(now)
 
 
 def read_is_fresh(at: Optional[str], now: Optional[datetime] = None) -> bool:
-    """Whether a read stamped `at` is young enough to send from. An unparseable or absent stamp
-    is not fresh: a read nothing can date is a read nobody may send from."""
+    """Whether a read stamped `at` is from today (US Central). An unparseable or absent stamp is
+    not fresh: a read nothing can date is a read nobody may send from."""
     when = _parse_stamp(at)
-    if when is None:
-        return False
-    return ((now or datetime.now(timezone.utc)) - when).total_seconds() <= READ_FRESH_S
+    return when is not None and not clock.before_today(when, now)
 
 
 def is_sealed(row: Mapping[str, str]) -> bool:

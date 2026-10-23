@@ -851,11 +851,11 @@ def _apply(args, say) -> int:
     # that moves money on a decision nobody made.
     # A STALE READ WRITES NOTHING (the owner's ruling, 2026-09-26: "require a fresh read"). The
     # file this writes is judged against the read's prices, so a read older than
-    # `reprice.READ_FRESH_S` would put prices worked out from it in front of TCGplayer — by the
+    # an earlier day (`reprice.read_is_fresh`) would put prices worked out from it in front of TCGplayer — by the
     # send press, or by hand from "Download the file instead". Read again first.
     if not reprice.read_is_fresh(manifest.get("at")):
         say("")
-        say(f"REFUSED — this read was taken {manifest.get('at')}, more than a day ago. Prices")
+        say(f"REFUSED — this read was taken {manifest.get('at')}, on an earlier day. Prices")
         say("and sales may have moved since. Read what is live again, then price from that read.")
         return 1
 
