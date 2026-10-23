@@ -238,8 +238,9 @@ These hold until a later route changes them.
   refused Undo, and "No estimate without a sale." in Worth for a slab with no sales. The reason
   also shows on keyboard focus and on a tap, not only under a mouse. It names no mechanism (D196,
   no user-visible string may name a decision).
-  - Undo's reason says why the add-back failed, for example that Card Ladder did not answer or
-    hit today's limit, so the owner should try later.
+  - Undo's reason says why the add-back failed, for example that Card Ladder could not be read
+    just now or hit today's limit, so the owner should try later. Each reason is true for its
+    refusal code. A refusal with no true reason shows no reason.
   - The no-sale reason says the slab has never sold at its grade, so Card Ladder gives no
     estimate.
 - A rate limit is a refusal, never a retry: its sentence says to try again tomorrow and offers
