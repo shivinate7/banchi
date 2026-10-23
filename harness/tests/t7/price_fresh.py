@@ -1811,6 +1811,27 @@ def check_undated_export_is_an_unknown_day(checks: Checks) -> None:
                   "6c. and that line never prints the epoch's day or None", line or text[-300:])
 
 
+def check_a_check_holds_one_central_day(checks: Checks) -> None:
+    """A check lives in one US Central day, though the real clock passes midnight inside it.
+
+    `hermetic` pins `clock._current` to the check's first instant, so an export a check wrote before
+    00:00 is not called stale by a press after it. The probe moves the real clock a day ahead, as
+    midnight does: `clock.now` follows it and `clock.before_today` does not.
+    """
+    class NextDay(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return super().now(tz) + timedelta(days=1)
+
+    held = clock._current()
+    with mock.patch.object(clock, "datetime", NextDay):
+        checks.ok(clock.central_day(clock.now()) > clock.central_day(held), "the probe moves the real clock past midnight")
+        checks.ok(not clock.before_today(held), "the check's first instant is still today, after midnight")
+        checks.equal(clock._current(), held, "the day the gate reads does not move")
+        with hermetic():
+            checks.equal(clock._current(), held, "a nested hermetic keeps the instant the check began with")
+
+
 CHECKS = (
     check_refresh_reaches_store_backed_runs,
     check_held_lock_is_a_recorded_skip,
@@ -1847,4 +1868,5 @@ CHECKS = (
     check_dead_path_with_no_age_is_stale,
     check_dead_path_run_is_not_sent_on_old_prices,
     check_undated_export_is_an_unknown_day,
+    check_a_check_holds_one_central_day,
 )
