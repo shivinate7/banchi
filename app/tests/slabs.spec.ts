@@ -45,6 +45,9 @@ const RATE_LIMITED = refuse(429, 'cardladder_rate_limited', 'Card Ladder asked u
 const TOKEN_MISSING = refuse(409, 'cardladder_token_missing', 'Card Ladder cannot be read yet. Add CARDLADDER_REFRESH_TOKEN to the settings file, then try again.')
 const TOKEN_REJECTED = refuse(409, 'cardladder_token_rejected', 'Card Ladder did not accept the saved login. Copy CARDLADDER_REFRESH_TOKEN again, then try again.')
 const SETTINGS_KEY = 'CARDLADDER_REFRESH_TOKEN'
+const UNREADABLE = refuse(502, 'cardladder_unreadable', 'Card Ladder sent an answer this app could not read. Nothing was saved. Try again later.')
+const CERT_NOT_FOUND = refuse(404, 'cert_not_found', 'Card Ladder has no slab with that cert number for that grader. Nothing was saved.')
+const ADD_BUSY = refuse(409, 'slab_add_busy', 'A slab is being added right now. Wait for it to finish, then try again.')
 
 /** A response the stub holds back until a case opens it, so a press is in flight while the case looks. */
 class Gate {
@@ -1293,13 +1296,39 @@ async function openSheet(page: Page, width = 1440, label: string = LABEL.terapag
   return sheet
 }
 
-/** Remove Charizard, press Undo, and let Card Ladder refuse it with `reply`. Returns the refusal toast. */
-async function refusedUndo(page: Page, reply: Reply): Promise<Locator> {
+/** Undo's request gets no answer. `blocked`: `/status` still answers, so the client words it `origin_blocked` (the existing
+ *  never-reaches-the-server case). `down`: the one `/status` read that follows the dropped request fails too, so the client
+ *  words it `unreachable`, and the shell's offline banner rises. */
+async function dropUndo(page: Page, how: 'blocked' | 'down'): Promise<void> {
+  let probe = false
+  if (how === 'down') {
+    await page.route(
+      (url) => url.port === String(CAPTURE_PORT) && url.pathname === '/status',
+      (route) => {
+        if (!probe) return route.fallback()
+        probe = false
+        return route.abort()
+      },
+    )
+  }
+  await page.route(
+    (url) => url.port === String(CAPTURE_PORT) && url.pathname === '/slabs',
+    (route) => {
+      if (route.request().method() !== 'POST') return route.fallback()
+      probe = true
+      return route.abort()
+    },
+  )
+}
+
+/** Remove Charizard, press Undo, and let Card Ladder refuse it with `reply`, or drop the request (`dropUndo`). Returns the refusal toast. */
+async function refusedUndo(page: Page, reply: Reply | 'blocked' | 'down'): Promise<Locator> {
   const wire = await open(page)
   await expect(dataRows(page)).toHaveCount(5)
   await removeFrom(page, rowFor(page, LABEL.charizard))
   await expect(undoButton(page)).toBeVisible()
-  wire.postReply = () => reply
+  if (typeof reply === 'string') await dropUndo(page, reply)
+  else wire.postReply = () => reply
   await undoButton(page).click()
   const refusal = page.locator('.bn-toast-refusal:not([data-leaving])')
   await expect(refusal, 'Undo failed without a refusal toast').toBeVisible()
@@ -1351,22 +1380,26 @@ async function reasonsNear(page: Page, known: string[], said: string, box: Box, 
 }
 
 type Mode = 'hover' | 'focus' | 'tap'
-async function expectReason(page: Page, subject: Subject, mode: Mode): Promise<void> {
-  const sentence = await subject.arrive(page)
-  await expect(sentence, `${subject.name} never showed "${subject.said}"`).toBeVisible()
+/** Settle the page, open the reason under `sentence` the way `mode` says, and return the runs of the reason. */
+async function openReason(page: Page, sentence: Locator, said: string, mode: Mode, who: string): Promise<Run[]> {
+  await expect(sentence, `${who} never showed "${said}"`).toBeVisible()
   /* The pointer starts away from the sentence: an Undo press leaves it where the refusal lands. */
   await page.mouse.move(10, 10)
-  await expect.poll(async () => (await readRuns(page, [], false)).some((r) => r.text === subject.said), { message: `"${subject.said}" is never fully painted` }).toBe(true)
+  await expect.poll(async () => (await readRuns(page, [], false)).some((r) => r.text === said), { message: `"${said}" is never fully painted` }).toBe(true)
   await frames(page, 4)
   const known = (await readRuns(page, [], false)).map((r) => r.text)
   const box = await boxOf(sentence)
 
   if (mode === 'hover') await sentence.hover()
   else if (mode === 'tap') await sentence.tap()
-  else await tabTo(page, sentence, subject.said)
+  else await tabTo(page, sentence, said)
 
-  const reasons = await reasonsNear(page, known, subject.said, box, `${mode === 'hover' ? 'Hovering' : mode === 'tap' ? 'Tapping' : 'Tabbing to'} "${subject.said}" shows no reason`)
-  const reason = reasons.map((r) => r.text).join(' ')
+  return reasonsNear(page, known, said, box, `${mode === 'hover' ? 'Hovering' : mode === 'tap' ? 'Tapping' : 'Tabbing to'} "${said}" shows no reason`)
+}
+
+async function expectReason(page: Page, subject: Subject, mode: Mode): Promise<void> {
+  const sentence = await subject.arrive(page)
+  const reason = (await openReason(page, sentence, subject.said, mode, subject.name)).map((r) => r.text).join(' ')
   for (const [what, pattern] of subject.says) expect(reason, `the reason does not say ${what}`).toMatch(pattern)
   expect(await mechanismIn(page, reason), `the reason names machinery: "${reason}"`).toEqual([])
 }
@@ -1440,6 +1473,112 @@ for (const [name, reply] of [['a rate limit', RATE_LIMITED], ['a failed read', B
     await expect(rowFor(page, LABEL.charizard), 'a refused Undo put the slab back').toHaveCount(0)
   })
 }
+
+/* 4.8, THE REASON OF A REFUSED UNDO IS TRUE FOR ITS CODE. Review round 1 found one reason, "Card Ladder did not answer", under
+   every code the screen does not word, and that is false for most of them. Each case refuses Undo with one real code, opens the
+   reason by keyboard focus and asserts the FACT the reason gives, never its wording. A fact is read off the reason's own text
+   and never off the page: the toast's body holds the server's sentence, which says "sign in", "did not answer" and "cert number"
+   for itself, so a page-wide match would pass on the defect. */
+const codeOf = (reply: Reply): string => (reply.body as { error: { code: string } }).error.code
+
+/** `holds`: the reason must match (a fact it gives) or must not match (a claim that would be false for the code). */
+type Fact = readonly [what: string, pattern: RegExp, holds: boolean]
+const UNDO_REASONS: ReadonlyArray<{ readonly reply: Reply; readonly facts: readonly Fact[] }> = [
+  { reply: RATE_LIMITED, facts: [['it tells the owner to try again tomorrow', /tomorrow/i, true]] },
+  {
+    reply: TOKEN_MISSING,
+    facts: [
+      ['it tells the owner to sign in to Card Ladder again', /sign in/i, true],
+      ['it speaks of a "saved" sign-in, when none was saved', /saved/i, false],
+    ],
+  },
+  {
+    reply: TOKEN_REJECTED,
+    facts: [
+      ['it tells the owner to sign in to Card Ladder again', /sign in/i, true],
+      ['it speaks of a "saved" sign-in', /saved/i, false],
+    ],
+  },
+  { reply: BAD_GATEWAY, facts: [['it says Card Ladder did not answer', /did not answer/i, true]] },
+  { reply: UNREADABLE, facts: [['it says Card Ladder did not answer, when it answered and the answer could not be read', /did not answer/i, false]] },
+  {
+    reply: CERT_NOT_FOUND,
+    facts: [
+      ['it says Card Ladder did not answer, when it answered that the slab is not there', /did not answer/i, false],
+      ['it carries digits, and a cert is never drawn', /\d/, false],
+    ],
+  },
+  { reply: ADD_BUSY, facts: [['it names Card Ladder, when the wait is for another add on this app', /Card Ladder/i, false]] },
+]
+
+for (const { reply, facts } of UNDO_REASONS) {
+  const code = codeOf(reply)
+  test(`an Undo refused with ${code} gives a reason that is true for that code, opened by keyboard focus`, async ({ page }) => {
+    const sentence = (await refusedUndo(page, reply)).getByText(UNDO_SAID, { exact: true })
+    const reason = (await openReason(page, sentence, UNDO_SAID, 'focus', `the Undo refused with ${code}`)).map((r) => r.text).join(' ')
+    for (const [what, pattern, holds] of facts) {
+      const check = expect.soft(reason, holds ? `the reason for ${code} is missing a fact, ${what}: "${reason}"` : `the reason for ${code} makes a false claim, ${what}: "${reason}"`)
+      if (holds) check.toMatch(pattern)
+      else check.not.toMatch(pattern)
+    }
+    expect.soft(await mechanismIn(page, reason), `the reason for ${code} names machinery: "${reason}"`).toEqual([])
+  })
+}
+
+/* A refusal with no cause the screen can name has the title and the body's own sentence, and no reason behind either: a reason
+   guessed at is a lie. The first row is a real code `undoRefusalToast` does not name. The second is the app's own request
+   dropped while `/status` still answers (`origin_blocked`, the client's own sentence), the third the same with the server
+   down (`unreachable`, which raises the shell's offline banner, so the case clears it to leave the screen as it found it; the
+   body's sentence is what tells the two apart). */
+const NO_REASON: ReadonlyArray<{ readonly name: string; readonly how: Reply | 'blocked' | 'down'; readonly body: string | RegExp }> = [
+  { name: 'a code the screen does not word (store_busy)', how: STORE_BUSY, body: STORE_BUSY_SAID },
+  { name: 'a request the server will not take from this address (origin_blocked)', how: 'blocked', body: /will not accept changes from this address/ },
+  { name: 'a server that does not answer (unreachable)', how: 'down', body: /server did not answer/ },
+]
+
+for (const { name, how, body } of NO_REASON) {
+  test(`an Undo refused by ${name} keeps the title and the body's sentence and gives no reason`, async ({ page }) => {
+    const refusal = await refusedUndo(page, how)
+    const sentence = refusal.getByText(UNDO_SAID, { exact: true })
+    await expect(sentence, `the refusal is not titled "${UNDO_SAID}"`).toBeVisible()
+    await expect(refusal.locator('.bn-toast-body'), 'the sentence of the refusal is not in the toast body').toHaveText(body)
+    await page.mouse.move(10, 10)
+    await expect.poll(async () => (await readRuns(page, [], false)).some((r) => r.text === UNDO_SAID), { message: `"${UNDO_SAID}" is never fully painted` }).toBe(true)
+    await frames(page, 4)
+    const known = (await readRuns(page, [], false)).map((r) => r.text)
+    const box = await boxOf(sentence)
+    await sentence.hover()
+    await frames(page, 45) // the 120ms fade in took 13 to 18 frames to finish when measured, so this holds for about three times that
+    const reasons = (await readRuns(page, known, true)).filter((r) => !known.includes(r.text) && r.text !== UNDO_SAID && wordCount(r.text) >= 4 && r.painted && apart(r, box) <= 240)
+    expect(reasons.map((r) => r.text), 'hovering the title shows a reason the screen cannot know is true').toEqual([])
+    await expect(sentence, 'the title is given a reason that a screen reader reads').toHaveAccessibleDescription('')
+    if (how === 'down') {
+      /* The banner may clear by itself on the shell's next read, so Retry is pressed only if it is still there. */
+      await page.locator('.bn-banner').getByRole('button', { name: 'Retry' }).click({ timeout: 2000 }).catch(() => undefined)
+      await expect(page.locator('.bn-banner'), 'the offline banner stayed after Retry').toHaveCount(0)
+    }
+  })
+}
+
+/* ESCAPE CLOSES A REASON AND NOTHING UNDER IT. A reason opened by focus is a popover over the sheet; the sheet's own Escape
+   is the shell's and must not hear this one. The reason is the Worth line's, in a sheet, because that is where a reason sits
+   over another layer. The sheet leaves in 140ms (`useLeave`), so it is asserted after a hold well past that: a sheet still
+   leaving counts as visible. */
+test('Escape closes an open reason and leaves the sheet that holds it open', async ({ page }) => {
+  const worth = SUBJECTS.find((one) => one.said === NO_ESTIMATE)
+  if (worth === undefined) throw new Error('no Worth subject')
+  const sentence = await worth.arrive(page)
+  const sheet = page.getByRole('dialog', { name: LABEL.mew, exact: true })
+  await frames(page, 90) // the sheet's sections fade in one after another; a section that is still arriving is not a reason
+  const shown = (await openReason(page, sentence, NO_ESTIMATE, 'focus', worth.name)).map((r) => r.text)
+  await expect(sheet, 'the sheet closed before Escape was pressed').toBeVisible()
+  await page.keyboard.press('Escape')
+  const stillOpen = async () => (await readRuns(page, [], true)).filter((r) => r.painted && shown.includes(r.text)).length
+  await expect.poll(stillOpen, { message: 'Escape left the reason open' }).toBe(0)
+  await frames(page, 40) // well past the sheet's 140ms leave
+  expect(await stillOpen(), 'the reason came back while focus stayed on its sentence').toBe(0)
+  await expect(sheet, 'Escape closed the sheet along with the reason').toBeVisible()
+})
 
 /* ---- Sales Speed (4.8). The section is read as text runs in rows, so the cells' markup is the builder's. */
 type Cell = { text: string; right: number }
