@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Icon, type IconName } from './Icon'
 import { IconButton } from './index'
 
@@ -9,7 +9,7 @@ export type ToastKind = 'receipt' | 'status' | 'ok' | 'refusal'
 export type Toast = {
   readonly id: number
   readonly kind: ToastKind
-  readonly title: string
+  readonly title: ReactNode
   readonly body?: string
   readonly icon?: IconName
   /** A refusal toast is amber; `danger` makes it red for a real fault (`server.ts:failureTone`). */

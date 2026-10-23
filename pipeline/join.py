@@ -785,6 +785,10 @@ class MatcherPick:
     set: Optional[str] = None
     floor: Optional[float] = None
     margin: Optional[float] = None
+    # The reader's 2nd and 3rd picks. A paid read that names the same printing as any of the top
+    # three settles the card. An entry from before this field has none.
+    others: Tuple["MatcherPick", ...] = ()
+    score: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -2783,13 +2787,18 @@ def _pick_number_is(pick: "MatcherPick", card: "IdentifiedCard", row, *, need_to
 
 
 def _picks_same_printing(card: "IdentifiedCard", pick: "MatcherPick", row) -> bool:
-    """Did the free reader's pick name the resolved row's printing? The WHOLE set label folds
-    equal (`setnames.fold`: `Origins` is not `Origins: Proving Grounds`) and the number agrees
-    with its total. A blank set or number on the pick is no evidence: a name alone never counts."""
-    if row is None or not pick.set or not pick.number:
+    """Did ANY of the free reader's top three picks name the resolved row's printing? Per pick,
+    the WHOLE set label folds equal (`setnames.fold`: `Origins` is not `Origins: Proving Grounds`)
+    and the number agrees with its total. A blank set or number on a pick is no evidence: a name
+    alone never counts."""
+    if row is None:
         return False
-    return setnames.fold(pick.set) == setnames.fold(row[tcgcsv.SET_COLUMN]) and _pick_number_is(
-        pick, card, row, need_total=True
+    return any(
+        p.set
+        and p.number
+        and setnames.fold(p.set) == setnames.fold(row[tcgcsv.SET_COLUMN])
+        and _pick_number_is(p, card, row, need_total=True)
+        for p in (pick, *pick.others)
     )
 
 

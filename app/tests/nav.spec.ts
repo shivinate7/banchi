@@ -2,6 +2,7 @@
 // Governs: D20, D43, D51, D70, D86, D105, D134, D192
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { stubSlabs } from './routeFixtures'
 import { CAPTURE_PORT } from '../devPort'
 import { setViewport } from './phoneSwitch'
 
@@ -72,6 +73,7 @@ const RING = [
   '#/revenue',
   '#/inventory',
   '#/codes',
+  '#/slabs',
 ] as const
 
 /** What each of those routes renders, so a step is asserted to have ARRIVED rather than
@@ -92,6 +94,8 @@ const VIEW: Record<(typeof RING)[number], string> = {
   '#/revenue': 'main.revenue',
   '#/inventory': 'main.inventory',
   '#/codes': 'main.codes',
+  /* No class is pinned for this screen, so it is found by its one h1 (spec 4.9: the title is "Slabs"). */
+  '#/slabs': 'main:has(h1:text-is("Slabs"))',
 }
 
 /** The end of the ring, read off the array rather than written out beside it. Three cases
@@ -256,6 +260,9 @@ async function stub(page: Page, cards: unknown[] = []) {
      `sealEveryTest` named it — the same gap this stub's own `/status` comment records being
      caught by hand once already. */
   await page.route(/\/codes\/lots$/, (route) => json(route, { lots: [] }))
+  /* `#/slabs` reads its ledger on arrival, and this file walks the ring through it. The shared
+     answer, from the one home of the shape (`routeFixtures.ts:stubSlabs`). */
+  await stubSlabs(page)
   await page.route(/\/codes$/, (route) =>
     json(route, {
       counts: {},

@@ -5,6 +5,7 @@
     "the resolver": "pipeline/join.py's per-order picker (D174, D181) — an internal component name; the operator sees which copies fill an order, never which module chose them",
     "the model": "the vision call identify/ makes (D2) — naming the model is naming a vendor and a technique, not a fact about a card",
     "the server sent": "server.ts's own phrase for relaying a response — the operator reads a fact about their store, never about an HTTP exchange with it",
+    "main queue": "routing.MAIN, the join's name for the queue a card waits in for an answer — the operator reads how many cards wait for review, never the queue's internal name",
     "the join": "pipeline/join.py's join step (D11) — a pipeline stage; the operator sees a listed card or a reason it queued, never the step that produced either",
     "the corpus": "pipeline/corpus.py's one-file pricing store (D86) — a storage detail; the operator thinks in prices and holds, never in which file holds them",
     "the ledger": "the code-card and order ledgers (D24, D63) as STORAGE — codes and orders are the operator's own words; that either is kept in one file called a ledger is not",
