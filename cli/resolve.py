@@ -2186,7 +2186,16 @@ def store_payload(keys: Sequence[str], inventory: master.Inventory) -> Dict[str,
         identified = card.confidence is not None
         reading = card_reading(card) if identified else None
         unavailable = identified and reading.outcome == READING_UNAVAILABLE
+        # The store keeps no `second_look`, so an unidentified card's photograph is read for an empty
+        # slot here, through the one home, and `_resolve` reads the same `second_look` block it reads
+        # off a run record. Lazy import: the matcher stays out of this module's load.
+        empty = False
+        if not identified and card.photo:
+            from identify import match
+
+            empty = match.empty_slot(Path(card.photo))
         cards[key] = {
+            "second_look": {"code": UNREAD_EMPTY_SLOT} if empty else None,
             "photo": card.photo,
             "box": card.box,
             "index": card.index,

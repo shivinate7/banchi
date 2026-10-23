@@ -11,10 +11,10 @@ the paid read in the same press, and that answer goes to the review queue beside
 top pick (the owner's flow: the free reader first, the paid read only on the low-confidence
 cards, a human last).
 
-  accept rule     the margin M (best minus second cosine) is at least `MARGIN_MIN` AND the
-                  floor S (best cosine) is at least `FLOOR_MIN`. Both were fit on the spike's
-                  500 photographs. The margin floor is the owner's ruling (0.05: cards under it get the second
-                  look). The held-out check (`scripts/match-heldout.py`) measured it at 0 wrong.
+  accept rule     candidates rank by the hub-corrected score `cosine - HUB_BETA * r` (`Index.hubness`).
+                  The margin M (best minus second corrected score) is at least `MARGIN_MIN` AND the
+                  floor S (the best entry's raw cosine) is at least `FLOOR_MIN`. The margin floor is
+                  the owner's ruling: cards under it get the second look.
   look-alike      a printing with no stock image loses to its same-name twin (measured: 96 of
   guard           the wrong answers accepted in the absent-photo test were same-name siblings).
                   So a best answer that shares a card name with a no-image printing in the pool
@@ -66,28 +66,35 @@ from store.cache import ENGINE_MATCHER as ENGINE
 
 # ------------------------------------------------------------------------ the rules
 
-# THE ACCEPT RULE. One home. Fit on the spike's 500 photographs (margin alone filters almost
-# nothing; with the floor, 0 wrong of 459 accepted, 91.8% accepted) and NOT yet confirmed on
-# photographs the spike never saw.
-MARGIN_MIN = 0.05
-# THE SHARE OF CARDS THE READER DOES NOT ACCEPT, used for a quote that is not measured. The
-# held-out check's 3,001 store photographs measured 37.5 percent at this margin, with a 95 percent
-# upper bound of 39.2. The figure is rounded UP to 0.40 so an estimate never understates the
-# second look's cost. The quote says "estimated" whenever it is used.
-UNACCEPTED_SHARE = 0.40
-# A dry run over more cards than this does not run the matcher. The request that asked for the
-# quote waits for the dry run, the matcher costs 50 to 90 ms a card, and a long selection would
-# hold a request slot for minutes. The press itself always counts for real, in its own child.
+# THE ACCEPT RULE. One home. The margin is on hub-corrected scores (`HUB_BETA`), in cosine units.
+MARGIN_MIN = 0.04
+# HUBNESS. A stock photo that sits close to many others (a plain, mostly-empty card face) scores
+# high against any photograph. Each stock entry's `r` is its mean cosine to its `HUB_K` nearest
+# other entries of the same game; candidates rank by `cosine - HUB_BETA * r`.
+HUB_K = 10
+HUB_BETA = 0.5
+# A dry run over more cards than this does not run the matcher, and its quote states no count and no cost.
+# The request that asked for the quote waits for the dry run, the matcher costs 50 to 90 ms a card, and a
+# long selection would hold a request slot for minutes. The press itself always counts, in its own child.
 MEASURE_MAX = 200
-FLOOR_MIN = 0.755
+# The floor is the chosen entry's RAW cosine, never the corrected score. 0.69 with a margin of 0.04
+# accepted 3,297 of 3,605 filed non-free cards and 4 were wrong, 1 of them human-cleared.
+FLOOR_MIN = 0.69
 TOP_N = 3
 # AN EMPTY SLOT HAS NO BRIGHT PIXEL. Measured at full size on the rig's photographs: the 99th-percentile
-# luminance (0 to 255) of seven empty-slot photographs is 75 or less, and of 2,642 photographs of real
-# cards it is 141 or more. The cut sits between. Read at full size (about 41 ms a photograph): a
-# downscaled decode dilutes thin bright detail and would call a dark card with fine white lines empty. PONYTAIL CEILING: a fixed exposure is assumed. A rig session shot
-# far darker than the others would send its real cards to the main queue as "empty", never to a wrong
-# listing; widen with a second feature if one is ever measured.
+# luminance (0 to 255) of seven empty-slot photographs is 75 or less, one black photograph of a retired
+# card is 4, and every other one of the 5,088 stored photographs is 127 or more (the dimmest real card).
+# The cut sits between. Read at full size (about 41 ms a photograph): a downscaled decode dilutes thin
+# bright detail and would call a dark card with fine white lines empty. PONYTAIL CEILING: a fixed
+# exposure is assumed. A rig session shot far darker than the others would send its real cards to the
+# main queue as "empty", never to a wrong listing; widen with a second feature if one is ever measured.
 EMPTY_SLOT_P99 = 100
+# A DARK PHOTOGRAPH IS RETIRED ONLY WHEN THE FREE READER'S BEST MATCH IS ALSO WEAK. Best raw cosine of
+# the seven empties is 0.2455 to 0.2841 over the whole Riftbound pool, promos included (`_whole_pool`;
+# the one pool the signal is read over). The lowest real photograph near the dark cut (p99 127 to 141) is 0.7211, and real cards
+# dimmed to p99 60 stay at 0.6373 or more. The line leans to the real-card side of the gap: a wrong
+# retirement is found from the store record only, a stuck empty only waits in the main queue.
+EMPTY_SLOT_WEAK_COSINE = 0.40
 
 
 # The reasons a card is left unread. Each is a stable code the run record and the screen read.
@@ -107,18 +114,13 @@ UNREAD_FLOOR = "match_too_weak"
 # An ACCEPTED read's reason, not an unread one: the margin was thin between two printings of one
 # card and the card's own rarity claim fit exactly one of them (`_settled_by_claim`).
 ACCEPT_CLAIM = "printing_settled_by_claim"
-# Three more accepts below the baseline rule, each measured on 2,953 paid-identified cards with 0
-# new errors (docs/specs/identify-engine-pick.md, section 3). `_verdict` tries them in a fixed
-# order: baseline, claim settles a printing, clear winner, battlefield. `_read_chunk` then tries
-# the claim narrowing the field.
-ACCEPT_CLEAR = "clear_winner"
+# Accepts beyond the baseline rule (docs/specs/identify-engine-pick.md, section 3). `_verdict`
+# tries them in a fixed order: baseline, claim settles a printing, battlefield. `_read_chunk`
+# then tries the claim narrowing the field.
 ACCEPT_BATTLEFIELD = "battlefield_margin"
 ACCEPT_NARROWED = "narrowed_by_claim"
 # Rule 4: the guard did not hold the card only because the same-name printing is unreleased.
 ACCEPT_UNRELEASED = "unreleased_twin"
-# Rule 3: any card with a wide gap and a middling floor.
-CLEAR_MARGIN_MIN = 0.08
-CLEAR_FLOOR_MIN = 0.70
 # Rule 2: a battlefield is printed sideways and scores low against its upright stock photo, so
 # its floor is lower and its margin higher.
 BATTLEFIELD_MARGIN_MIN = 0.10
@@ -375,6 +377,7 @@ class Pool:
     blocked_rows: List[Tuple[str, str, str]] = field(default_factory=list)
     unreleased_names: Set[str] = field(default_factory=set)  # names of no-photo printings in unreleased sets
     cells: Optional[Dict[Tuple[str, str], Tuple[str, str]]] = None  # `{(set, product id): (rarity, card type)}`, read once
+    hub: Optional["object"] = None  # numpy [n] float32 `r` per row (`Index.hubness`); None means no correction
 
 
 class Index:
@@ -384,6 +387,7 @@ class Index:
         self.db = sqlite3.connect(str(self.path), check_same_thread=False)
         self.db.executescript(_SCHEMA)
         self._lock = threading.Lock()
+        self._hub: Dict[str, Tuple[tuple, Dict[Tuple[str, str], float]]] = {}
 
     def close(self) -> None:
         self.db.close()
@@ -405,6 +409,36 @@ class Index:
 
     def set_names(self, game: str) -> List[str]:
         return [r[0] for r in self.db.execute("select set_name from sets where game=? order by set_name", (game,))]
+
+    def hubness(self, game: str) -> Dict[Tuple[str, str], float]:
+        """`{(set_name, product_id): r}` over EVERY fingerprint of the game, not only the pool's sets.
+        Cached on this index, and read again when the game's `ok` rows change.
+        # ponytail: one matmul per 1024-row block, no vector index; an approximate-neighbour index if a
+        # catalogue ever outgrows a few seconds here."""
+        import numpy as np
+
+        # `insert or replace` gives a replaced row a new rowid, so (count, max rowid, max at) moves on any change.
+        count = self.db.execute(
+            "select count(*), max(rowid), max(at) from vec where game=? and status=?", (game, S_OK)
+        ).fetchone()
+        held = self._hub.get(game)
+        if held is not None and held[0] == count:
+            return held[1]
+        found = self.db.execute(
+            "select set_name, product_id, vec from vec where game=? and status=? and vec is not null", (game, S_OK)
+        ).fetchall()
+        out: Dict[Tuple[str, str], float] = {}
+        if len(found) > 1:
+            matrix = np.stack([np.frombuffer(row[2], dtype=np.float32) for row in found])
+            k = min(HUB_K, len(found) - 1)
+            for start in range(0, len(found), 1024):
+                block = matrix[start : start + 1024] @ matrix.T
+                block[np.arange(len(block)), np.arange(start, start + len(block))] = -np.inf
+                means = np.partition(block, -k, axis=1)[:, -k:].mean(axis=1)
+                for row, value in zip(found[start : start + 1024], means):
+                    out[(row[0], row[1])] = float(value)
+        self._hub[game] = (count, out)
+        return out
 
     def pool(self, game: str, set_names: Sequence[str]) -> Pool:
         import numpy as np
@@ -436,8 +470,10 @@ class Index:
                         blocked.add(card_name(name))
                         blocked_rows.append((set_name, pid, name))
         matrix = np.stack(vectors).astype(np.float32) if vectors else np.zeros((0, DIM), np.float32)
+        hubs = self.hubness(game) if vectors else {}
+        hub = np.array([hubs.get((row[1], row[2]), 0.0) for row in rows], dtype=np.float32)
         return Pool(matrix, rows, names, printed, blocked, tuple(set_names),
-                    blocked_rows=blocked_rows, unreleased_names=unreleased_names)
+                    blocked_rows=blocked_rows, unreleased_names=unreleased_names, hub=hub)
 
     _printed_cache: Dict[Tuple[str, str], str] = {}
 
@@ -553,21 +589,37 @@ class Result:
     margin: Optional[float] = None
     floor: Optional[float] = None
     candidates: List[dict] = field(default_factory=list)
+    # Set only on an `empty_slot` answer: the photograph's 99th-percentile luminance, and the raw top
+    # cosine of the best printing (None when the read could not rank one).
+    p99: Optional[float] = None
+    best_match: Optional[float] = None
 
 
-def empty_slot(photo: Path) -> bool:
-    """True when the photograph shows an empty slot: its 99th-percentile luminance, at full size, is
-    below `EMPTY_SLOT_P99`. The one home: `match.read` and `cli/cmd_identify.run` both call it.
-    A photograph that will not open is False here; the crop step names it `photo_unreadable`."""
+def luminance_p99(photo: Path) -> Optional[float]:
+    """The photograph's 99th-percentile luminance (0 to 255), at full size, or None when it will not
+    open (the crop step names that `photo_unreadable`). The one read behind `empty_slot`."""
     import numpy as np
     from PIL import Image
 
     try:
         with Image.open(photo) as image:
-            pixels = np.asarray(image.convert("L"))
+            return float(np.percentile(np.asarray(image.convert("L")), 99))
     except Exception:
-        return False
-    return bool(np.percentile(pixels, 99) < EMPTY_SLOT_P99)
+        return None
+
+
+def empty_slot(photo: Path) -> bool:
+    """True when the photograph shows an empty slot: its 99th-percentile luminance is below
+    `EMPTY_SLOT_P99`. The one home: `match.read` and `cli/cmd_identify.run` both call it."""
+    p99 = luminance_p99(photo)
+    return p99 is not None and p99 < EMPTY_SLOT_P99
+
+
+def retires_empty_slot(result: "Result") -> bool:
+    """True when the best match over the whole pool is weak. Only a dark photograph's result carries
+    a `best_match`, so both signals agree whenever this is True. No ranked best match is no second
+    signal, so the card stays in the main queue."""
+    return result.best_match is not None and result.best_match < EMPTY_SLOT_WEAK_COSINE
 
 
 def _crop(photo: Path, aspect: float):
@@ -705,13 +757,19 @@ class _Verdict(NamedTuple):
     floor: float
 
 
+def _raw(pool: Pool, sims, i: int) -> float:
+    """Entry `i`'s raw cosine. `sims` holds the hub-corrected scores that rank and measure margins;
+    a floor always reads the raw cosine."""
+    return float(sims[i]) + (HUB_BETA * float(pool.hub[i]) if pool.hub is not None else 0.0)
+
+
 def _verdict(request: "Request", pool: Pool, sims, order, blocked: Set[str]) -> _Verdict:
     """The accept rule over one ordered field. The order is fixed: look-alike guard, baseline
-    margin (a thin one may be settled by the claim), baseline floor, then the two rules below it,
-    clear winner and battlefield. The first that holds names the accept."""
+    margin (a thin one may be settled by the claim), baseline floor, then battlefield.
+    The first that holds names the accept."""
     best = int(order[0])
-    floor = float(sims[best])
-    margin = floor - float(sims[int(order[1])]) if len(order) > 1 else floor
+    floor = _raw(pool, sims, best)
+    margin = float(sims[best]) - float(sims[int(order[1])]) if len(order) > 1 else float(sims[best])
     if card_name(pool.names[best]) in blocked:
         detail = f"{pool.names[best]} shares its name with a printing that has no stock photo"
         return _Verdict(best, None, UNREAD_LOOKALIKE, detail, margin, floor)
@@ -721,13 +779,11 @@ def _verdict(request: "Request", pool: Pool, sims, order, blocked: Set[str]) -> 
         if settled is None:
             return _Verdict(best, None, UNREAD_MARGIN, f"margin {margin:.4f} is under {MARGIN_MIN}", margin, floor)
         pick, code = settled, ACCEPT_CLAIM
-        floor = float(sims[pick])  # the floor is the chosen printing's own score
+        floor = _raw(pool, sims, pick)  # the floor is the chosen printing's own raw cosine
     if floor >= FLOOR_MIN:
         if code is None and card_name(pool.names[best]) in pool.unreleased_names:
             code = ACCEPT_UNRELEASED
         return _Verdict(pick, code, None, "", margin, floor)
-    if code is None and margin >= CLEAR_MARGIN_MIN and floor >= CLEAR_FLOOR_MIN:
-        return _Verdict(pick, ACCEPT_CLEAR, None, "", margin, floor)
     if (code is None and margin >= BATTLEFIELD_MARGIN_MIN and floor >= BATTLEFIELD_FLOOR_MIN
             and _pool_card_types(pool, request.game)[pick] == BATTLEFIELD_TYPE):
         return _Verdict(pick, ACCEPT_BATTLEFIELD, None, "", margin, floor)
@@ -851,12 +907,20 @@ def _read_chunk(
     out: Dict[str, Result] = {}
     current = index.meta("model_sha256") == MODEL_SHA256
     pending: List[Tuple[Request, Tuple[str, ...], "object"]] = []
+    # A DARK PHOTOGRAPH IS NEVER ACCEPTED AND NEVER MATCHED THROUGH ITS OWN HINT. Its best match is the
+    # second signal `retires_empty_slot` reads, so it is ranked over the whole pool of its game
+    # (`_whole_pool`) and nowhere else: a wrong hint or a missing set would give a real dark card a
+    # weak score and retire it. No whole pool, no best match.
+    dark: Dict[str, float] = {}
     for request in requests:
+        p99 = luminance_p99(request.photo)
+        if p99 is not None and p99 < EMPTY_SLOT_P99:
+            dark[request.key] = p99
+    for request in requests:
+        if request.key in dark:
+            continue
         if isinstance(request.rarity_claim, str):  # the one entry: a bare string is one cell, never a substring pool
             request = replace(request, rarity_claim=[request.rarity_claim])
-        if empty_slot(request.photo):  # first, so no other refusal sends an empty slot to the paid read
-            out[request.key] = Result(request.key, False, code=UNREAD_EMPTY_SLOT, detail="the slot holds no card")
-            continue
         if request.game not in SERVED_GAMES:
             out[request.key] = Result(request.key, False, code=UNREAD_GAME, detail=f"the matcher serves {', '.join(SERVED_GAMES)}")
             continue
@@ -888,7 +952,8 @@ def _read_chunk(
             if len(pool.rows) == 0:
                 out[request.key] = Result(request.key, False, code=UNREAD_NO_INDEX, detail="the pool holds no fingerprint")
                 continue
-            sims = pool.vectors @ vector
+            raw = pool.vectors @ vector
+            sims = raw - HUB_BETA * pool.hub if pool.hub is not None else raw
             order = np.argsort(-sims)
             candidates = [
                 {
@@ -896,7 +961,7 @@ def _read_chunk(
                     "set": pool.rows[int(i)][1],
                     "number": pool.rows[int(i)][3],
                     "name": pool.names[int(i)],
-                    "cosine": round(float(sims[int(i)]), 4),
+                    "cosine": round(float(raw[int(i)]), 4),
                 }
                 for i in order[:TOP_N]
             ]
@@ -927,7 +992,78 @@ def _read_chunk(
                 },
             )
             out[request.key] = Result(request.key, True, payload=payload, code=code, margin=margin, floor=floor, candidates=candidates)
+    if dark:
+        ranked = _rank_dark([r for r in requests if r.key in dark], index, model, aspect, current)
+        for key, p99 in dark.items():
+            candidates = ranked.get(key, [])
+            out[key] = Result(
+                key, False, code=UNREAD_EMPTY_SLOT, detail="the slot holds no card", candidates=candidates,
+                p99=p99, best_match=candidates[0]["cosine"] if candidates else None,
+            )
     return [out[r.key] for r in requests]
+
+
+def _whole_pool(index: Index, game: str) -> Optional[Tuple[str, ...]]:
+    """Every set the index serves for the game, promos included, or None. None unless the game is
+    served, the index was built by the pinned model, and it holds every set the catalogue lists for the
+    game. A game whose catalogue lists no sets (Pokemon, whose sets come from the store) cannot be
+    proved whole, so it has no whole pool."""
+    if game not in SERVED_GAMES or index.meta("model_sha256") != MODEL_SHA256:
+        return None
+    held = set(index.set_names(game))
+    try:
+        listed = [name for name, _group in _stock_images().catalog_sets(game)]
+    except Exception:  # noqa: BLE001 - a catalogue that cannot be read proves nothing
+        return None
+    if not held or not listed or any(name not in held for name in listed):
+        return None
+    return tuple(sorted(held))
+
+
+def _rank_dark(requests: Sequence[Request], index: Index, model: Optional[Path], aspect: float, current: bool) -> Dict[str, List[dict]]:
+    """`{key: top candidates}` for each dark photograph that has a whole pool and a card to rank.
+    A key left out has no best match, so `retires_empty_slot` is False for it."""
+    import numpy as np
+
+    out: Dict[str, List[dict]] = {}
+    if not current:
+        return out
+    whole: Dict[str, Optional[Tuple[str, ...]]] = {}
+    cards: List[Tuple[Request, Tuple[str, ...], "object"]] = []
+    for request in requests:
+        if request.game not in whole:
+            whole[request.game] = _whole_pool(index, request.game)
+        sets = whole[request.game]
+        if sets is None:
+            continue
+        try:
+            card = _crop(request.photo, aspect)
+        except Exception:  # noqa: BLE001 - an unreadable photograph has no best match
+            continue
+        if card is not None:
+            cards.append((request, sets, card))
+    if not cards:
+        return out
+    vectors = embed([card for _r, _s, card in cards], model)
+    pools: Dict[str, Pool] = {}
+    for (request, sets, _card), vector in zip(cards, vectors):
+        if request.game not in pools:
+            pools[request.game] = index.pool(request.game, sets)
+        pool = pools[request.game]
+        if len(pool.rows) == 0:
+            continue
+        sims = pool.vectors @ vector
+        out[request.key] = [
+            {
+                "product_id": pool.rows[int(i)][2],
+                "set": pool.rows[int(i)][1],
+                "number": pool.rows[int(i)][3],
+                "name": pool.names[int(i)],
+                "cosine": round(float(sims[int(i)]), 4),
+            }
+            for i in np.argsort(-sims)[:TOP_N]
+        ]
+    return out
 
 
 # ------------------------------------------------------------------------ the preflight
