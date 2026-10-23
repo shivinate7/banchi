@@ -682,7 +682,10 @@ def check_export_from_earlier_today_prices(checks: Checks) -> None:
         checks.equal(len(runs), 1, "1. one match-sweep run holds the cards")
         if len(runs) == 1:
             checks.equal(_manifest(runs[0]).get("joined"), True, "1. the run is joined")
-            checks.equal(int((runs[0] / "pricing.json").stat().st_mtime), stamp, "2. its pricing.json carries the export's mtime")
+            priced = runs[0] / "pricing.json"
+            checks.ok(priced.exists(), "2. and writes a pricing.json")
+            if priced.exists():
+                checks.equal(int(priced.stat().st_mtime), stamp, "2. its pricing.json carries the export's mtime")
         reads = {r.at for r in Store().read().readings.entries.values()}
         checks.equal(reads, {stamp}, "2. and so does every market reading")
 
