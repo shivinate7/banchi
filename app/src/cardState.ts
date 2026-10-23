@@ -162,5 +162,6 @@ export const RETIRE_REASONS: readonly { readonly reason: RetireReason; readonly 
 /** The retire reason as a person reads it: `given_away` is `Given away`. Takes `string` because
  *  `DepartedCard.retire_reason` is stored untyped. An unknown value falls back to itself. */
 export function reasonWord(reason: string): string {
+  if (reason === 'empty_slot') return 'Empty slot' // retired by the identify press, never picked by a person
   return RETIRE_REASONS.find((candidate) => candidate.reason === reason)?.label ?? reason
 }

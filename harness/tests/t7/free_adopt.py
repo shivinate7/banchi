@@ -35,12 +35,12 @@ from harness.tests.t7 import engine_sweep
 from harness.tests.t7.common import (
     FIXTURE_EXPORT,
     capture_payload,
+    card_photo,
     isolated_home,
     quiet,
 )
 from pipeline import tcgcsv
 from identify import batch, match, prompt
-from identify import images as identify_images
 from server import capture_server
 from store import cache as cache_mod
 from store import clock, files, master
@@ -58,7 +58,7 @@ def _jpeg() -> bytes:
     """A real, distinct JPEG: the press prepares a card it sends to the paid batch."""
     n = next(_N)
     out = io.BytesIO()
-    identify_images.Image.new("RGB", (64, 89), (n * 7 % 256, n * 13 % 256, n * 29 % 256)).save(out, "JPEG")
+    card_photo((n * 7 % 256, n * 13 % 256, n * 29 % 256)).save(out, "JPEG")
     return out.getvalue()
 
 
@@ -768,6 +768,103 @@ def check_joined_run_after_the_look(checks: Checks) -> None:
                          "3. the named card's run points at the new run")
 
 
+def _join_run(run_dir: Path, export: Path) -> tuple:
+    """`join <run-dir>`, the press `do_run_match` runs over a run the reader named into. Returns (exit code, say lines)."""
+    from cli import __main__ as cli_entry
+    from cli import cmd_join
+
+    lines: list = []
+    argv = ["join", str(run_dir), "--export", str(export)]
+    with quiet():
+        code = cmd_join.run(cli_entry.build_parser().parse_args(argv), lines.append)
+    return code, lines
+
+
+def check_card_named_mid_join(checks: Checks) -> None:
+    """A press joins a run the reader named cards into. The reader names a second card into that run
+    after the join has read the run's cards and before it records the join. The join must not mark
+    the run joined over a card it never read: the run stays unjoined, the join result names the card,
+    and the next join of that run prices it. The reader's write is the real worker (`sweep`), so
+    the card lands the way a reader's chunk lands it."""
+    from cli import resolve, runs
+
+    checks.note("")
+    checks.note("NAMED MID-JOIN — a card the reader names while a press joins is never joined unread")
+    stale = _central(2026, 10, 21, 23, 59).timestamp()  # yesterday: the reader names its cards and prices none
+    fresh = _central(2026, 10, 22, 9, 0).timestamp()  # earlier today: a press reuses it and prices
+    with isolated_home(), _pinned_day(_central(2026, 10, 22, 15, 0)):
+        export = _seed_export(at=stale)
+        k1 = _shoot(ARTICUNO)
+        _sweep(_results((k1,), {k1: ARTICUNO}))
+        runs_found = _sweep_runs()
+        checks.equal(len(runs_found), 1, "(precondition) the reader opened one match-sweep run")
+        if len(runs_found) != 1:
+            return
+        run_dir = runs_found[0]
+        k2 = _shoot(ARTICUNO)  # captured: the reader names it while the press runs
+        checks.ok("cards" in runs.open_run(run_dir).manifest, "(precondition) the run records its cards")
+        checks.equal(Store().read().inventory.cards[k1].state, master.IDENTIFIED, "(precondition) k1 is identified")
+        os.utime(export, (fresh, fresh))  # a fresh export: the press prices
+
+        seen: list = []
+        mid = {"pending": True}
+        real_load = resolve.load
+
+        def named_mid_join(*a, **k):
+            resolved = real_load(*a, **k)
+            seen.append(resolved)
+            if mid["pending"]:
+                mid["pending"] = False
+                os.utime(export, (stale, stale))  # the reader's view: stale, so it names and prices nothing
+                _sweep(_results((k2,), {k2: ARTICUNO}))
+                os.utime(export, (fresh, fresh))
+            return resolved
+
+        with mock.patch.object(resolve, "load", named_mid_join):
+            code1, say1 = _join_run(run_dir, export)
+            disk = runs.open_run(run_dir).manifest
+            checks.ok(k2 in (disk.get("cards") or {}), "(precondition) the reader named k2 into the run mid-join",
+                      f"cards on disk: {sorted((disk.get('cards') or {}))}")
+            checks.equal(code1, 0, "1. the press exits 0")
+            checks.ok(disk.get("joined") is not True, "1. the run stays unjoined",
+                      f"joined on disk: {disk.get('joined')!r}")
+            held = [line for line in say1 if "were added to this run while it joined" in line]
+            checks.equal(len(held), 1, "2. the join result says cards were added mid-join")
+            checks.ok(bool(held) and "1 card(s)" in held[0] and "Articuno" in held[0],
+                      "2. and names the one card, k2", f"join said: {held!r}")
+
+            code2, say2 = _join_run(run_dir, export)
+            checks.equal(code2, 0, "3. the next press exits 0")
+            checks.ok(not any("were added to this run" in line for line in say2), "3. and joins the run whole")
+            checks.ok(runs.open_run(run_dir).manifest.get("joined") is True, "3. the run is joined")
+            priced = {f"{p.box}/{p.index}" for m in seen[-1].matches.values() for p in m.positions}
+            checks.ok(k2 in priced, "3. the next press prices k2", f"priced positions: {sorted(priced)}")
+
+
+def check_removed_run_stays_gone(checks: Checks) -> None:
+    """A write to a run directory that is gone is refused and leaves nothing behind. The manifest
+    lock used to recreate the directory and write a partial manifest into it."""
+    from cli import runs
+
+    checks.note("")
+    checks.note("REMOVED RUN — a later write to a run directory that is gone is refused, never recreated")
+    with isolated_home():
+        for label, write in (
+            ("set", lambda run: run.set(joined=True)),
+            ("set_unless_joined", lambda run: run.set_unless_joined(selection={"keys": []})),
+        ):
+            run = runs.create(f"removed-{label.replace('_', '-')}")
+            run.set(selection={"keys": []})
+            shutil.rmtree(run.directory)
+            refused = None
+            try:
+                write(run)
+            except Exception as error:  # the refusal's type is not asserted; the absence below is
+                refused = error
+            checks.ok(refused is not None, f"1. {label} on a removed run is refused", f"raised: {refused!r}")
+            checks.ok(not run.directory.exists(), f"1. {label} does not recreate the run directory")
+
+
 CHECKS = (
     check_free_match_identifies,
     check_press_after_sweep,
@@ -778,6 +875,8 @@ CHECKS = (
     check_export_from_earlier_today_prices,
     check_stale_chunk_opens_own_run,
     check_joined_run_after_the_look,
+    check_card_named_mid_join,
+    check_removed_run_stays_gone,
     check_lock_hold_cold_session,
     check_moved_between_prep_and_lock,
     check_one_run_across_restarts,

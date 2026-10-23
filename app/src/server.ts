@@ -310,7 +310,11 @@ const RETRY_CODES: ReadonlySet<string> = new Set(['unreachable', 'bad_response',
 /** ONE RULE FOR "THE SERVER BROKE": a 5xx. `failureKind` and `failureTone` both read it. */
 const isServerFault = (status: number | undefined): boolean => status !== undefined && status >= 500
 
+/** A rate limit from Card Ladder is a "no" until tomorrow, even though it arrives as a 429, so no second press is offered. */
+const REFUSAL_CODES: ReadonlySet<string> = new Set(['cardladder_rate_limited'])
+
 function failureKind(code: string, status: number): 'refusal' | 'retry' {
+  if (REFUSAL_CODES.has(code)) return 'refusal'
   if (RETRY_CODES.has(code)) return 'retry'
   if (isServerFault(status) || status === 408 || status === 429 || status === 423) return 'retry'
   return 'refusal'

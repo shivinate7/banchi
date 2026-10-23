@@ -203,6 +203,10 @@ def departed_among(cards, positions) -> set:
 # one fact about the departure the record cannot re-derive later, and the four are a closed
 # vocabulary so the history stays greppable — free text would be a second `note`.
 RETIRE_REASONS = ("pulled", "damaged", "lost", "given_away")
+# The reason of a retirement no person chose: `cli/cmd_identify.py` retires a captured card whose photograph
+# shows an empty slot, through `Inventory.retire_empty_slot` alone. Not a `RETIRE_REASONS` member, because
+# that tuple is what a person may pick, what the retire route accepts and what `Inventory.retire` takes.
+EMPTY_SLOT = "empty_slot"
 
 PUSHED = "pushed"
 STAGED = "staged"
@@ -706,7 +710,7 @@ class Card:
     read_disputes: bool = False
     state: str = CAPTURED
     state_at: Optional[str] = None
-    # Why a retired card left — one of `RETIRE_REASONS`, set by `retire()` and cleared by
+    # Why a retired card left — one of `RETIRE_REASONS` (or `EMPTY_SLOT`, set by `retire_empty_slot()`), set by `retire()` and cleared by
     # the route that reverses one; None on every card in any other state. NOT a capture
     # claim, and deliberately absent from `CAPTURE_CLAIM_FIELDS` below: a claim survives a
     # re-record and is settable at capture time, while this describes a departure — a
@@ -3014,13 +3018,26 @@ class Inventory:
         write a reason outside the vocabulary.
         """
         check_retire_reason(reason)
+        return self._retire(key, reason)
+
+    def retire_empty_slot(self, key: str, *, p99: float, best_match: float, identify_run: str) -> bool:
+        """Retire a CAPTURED card whose photograph shows an empty slot. False, and nothing written, for
+        a missing card or one in any other state. The one caller is `cli/cmd_identify.py`, and `retire`
+        refuses this reason, so no route or other caller can pass it. The history line carries what was
+        measured, so a wrong retirement is found from the store record alone."""
+        card = self.cards.get(key)
+        if card is None or card.state != CAPTURED:
+            return False
+        return self._retire(key, EMPTY_SLOT, p99=p99, best_match=best_match, identify_run=identify_run)
+
+    def _retire(self, key: str, reason: str, **evidence) -> bool:
         card = self.cards.get(key)
         if card is None:
             return False
         card.retire_reason = reason
         card.state = RETIRED
         card.state_at = now()
-        self._log(RETIRED, key, sku=card.sku, run=card.run, reason=reason)
+        self._log(RETIRED, key, sku=card.sku, run=card.run, reason=reason, **evidence)
         return True
 
     def record_photo_reclaimed(self, key: str, *, sha256: str, size: int) -> bool:
