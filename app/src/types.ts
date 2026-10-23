@@ -3214,13 +3214,16 @@ export type RunPreflightTotal = {
   cache_hits: number | null
   to_send: number | null
   estimate_usd: number | null
+  /** A long free press names no cost, only the most it can cost (every card a second look). Absent when counted. */
+  ceiling_usd?: number | null
   cards: number
   /** Cards the free reader already answered (named only by a press that has some), and, for a
    *  free press, how many the pool rules let it read and why the rest are left unread. */
   matcher_read: number | null
   can_read: number | null
   /** The matcher-first press: cards the free reader takes, cards that go to the paid second look,
-   *  and whether the pass was measured (true) or estimated from the held-out share (false). */
+   *  and whether the pass was measured (true) or certain (false: no index, every card a second look).
+   *  Null for a long selection: its count waits for the run. */
   free_read: number | null
   second_look: number | null
   second_look_measured: boolean | null

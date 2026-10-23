@@ -1343,28 +1343,28 @@ def run(args, say) -> int:
     say(f"payload         {payload_bytes / 1_000_000:.1f} MB in {chunks} batch chunk(s)")
     # THE MATCHER-FIRST QUOTE (D180: money is named before it is spent). When the free reader is
     # prepared this is a MEASURED pass over the selection: the same read the press repeats, free
-    # and bounded by the preflight's own timeout. Before the index exists the second-look count
-    # is ESTIMATED from the share the held-out check measured, and the line says so.
+    # and bounded by the preflight's own timeout. A dry run over more than `match.MEASURE_MAX` cards
+    # does not run it and states no count and no cost: nothing here is assumed. Before the index
+    # exists every card is a certain second look, so that count needs no read.
     matcher_run: Optional[batch.BatchRun] = None
     second_look: List[Item] = list(to_send)
     measured = False
     ready = bool(free and (to_send or empties) and match.status()["ready"])
-    # A DRY RUN OVER A LONG SELECTION ESTIMATES, because the screen's request waits for it. A real
+    # A DRY RUN OVER A LONG SELECTION STATES NOTHING, because the screen's request waits for it. A real
     # press runs in its own detached child and always counts. THE EMPTY SLOTS RIDE IN THE SAME READ,
     # for their best match; they are never accepted, so they stay out of `to_send` and the second look.
-    if ready and (not args.dry_run or len(to_send) + len(empties) <= match.MEASURE_MAX):
+    uncounted = ready and args.dry_run and len(to_send) + len(empties) > match.MEASURE_MAX
+    if ready and not uncounted:
         matcher_run = _run_matcher(to_send + empties, say)
         second_look = [i for i in to_send if i.unread is not None]
         measured = True
-    if free:
+    if free and not uncounted:
         if measured:
             second_count = len(second_look)
             second_cost = _estimate(second_look)
         else:
-            # NEVER UNDER THE FLOOR THE POOL RULES ALREADY PROVE: a card the pool rules cannot
-            # match goes to the second look for certain, so the estimate is at least that many.
-            pool_floor = len(to_send) - match.preflight([_match_request(i) for i in to_send])["can_read"]
-            second_count = max(round(len(to_send) * match.UNACCEPTED_SHARE), pool_floor)
+            # NO INDEX: the pool rules send every card to the second look for certain.
+            second_count = len(to_send) - match.preflight([_match_request(i) for i in to_send])["can_read"]
             share = Decimal(second_count) / Decimal(max(len(to_send), 1))
             second_cost = (_estimate(to_send) * share).quantize(Decimal("0.01"))
     retiring = [i for i in empties if i.unread is not None and match.retires_empty_slot(i.unread)]
@@ -1377,16 +1377,23 @@ def run(args, say) -> int:
         say(f"empty slot      {len(empties)} photograph(s) show no card and are not sent: "
             f"{len(retiring)} {'would be ' if args.dry_run else 'will be '}retired (dark and a weak match), "
             f"{len(empties) - len(retiring)} stay in the main queue")
-    say(f"estimated cost  ${second_cost if free else _estimate(to_send)}")
+    if uncounted:
+        say("second look     counted when the run starts")
+        # THE CEILING IS CERTAIN: no card can cost more than going to the second look. It is a maximum, not a share.
+        ceiling = _estimate(to_send)
+        say(f"at most         ${ceiling}  if every card went to the second look")
+    else:
+        say(f"estimated cost  ${second_cost if free else _estimate(to_send)}")
     if free:
         # FREE FIRST, PAID ONLY ON THE LOW-CONFIDENCE CARDS. The pool rules refuse some cards
         # before any photograph is decoded, and those are counted here. The margin, the floor and
         # the look-alike guard judge the best answer, so they are counted only after the read.
         pre = match.preflight([_match_request(i) for i in to_send])
-        basis = "measured" if measured else "estimated"
+        basis = "measured" if measured else "certain"  # no index: every card is a certain second look
         say(f"engine          {engine} first, then haiku on the cards it cannot accept")
-        say(f"free read       {len(to_send) - second_count} of {len(to_send)} {basis}")
-        say(f"second look     {second_count} of {len(to_send)} {basis}")
+        if not uncounted:
+            say(f"free read       {len(to_send) - second_count} of {len(to_send)} {basis}")
+            say(f"second look     {second_count} of {len(to_send)} {basis}")
         say(f"can read        {pre['can_read']} of {len(to_send)} by the pool rules")
         for code, count in sorted(pre["unread"].items()):
             say(f"unread          {count} {code}")
