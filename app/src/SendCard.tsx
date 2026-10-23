@@ -24,7 +24,7 @@
  * NO PIPELINE WORD REACHES THE SCREEN (D196): not emit, not staged, not reconcile. */
 
 import { count } from './kit/dataRules'
-import { useEffect, useId, useState } from 'react'
+import { Fragment, useEffect, useId, useState } from 'react'
 import { Button, Icon, IconButton, Money, Notice, Refusal, Retry } from './kit'
 import { atClockTime, clockTime } from './dates'
 import { describeFailure, dismissSendWarning, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, takeBackSend } from './server'
@@ -904,10 +904,16 @@ export function SendCard({
       )}
 
       {open.map((send) => (
-        <SendStanding key={send.stamp} send={send} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} sendAnyway={(stamp) => setPassed((was) => [...was, stamp])} />
+        <Fragment key={send.stamp}>
+          <SendStanding send={send} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} sendAnyway={(stamp) => setPassed((was) => [...was, stamp])} />
+          <PricesRefreshed send={send} />
+        </Fragment>
       ))}
       {blocking === null || open.some((send) => send.stamp === blocking.stamp) || standing?.stamp === blocking.stamp ? null : (
-        <SendStanding send={blocking} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} sendAnyway={(stamp) => setPassed((was) => [...was, stamp])} />
+        <>
+          <SendStanding send={blocking} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} sendAnyway={(stamp) => setPassed((was) => [...was, stamp])} />
+          <PricesRefreshed send={blocking} />
+        </>
       )}
 
       {(live.status?.unreadable ?? []).map((row) => (

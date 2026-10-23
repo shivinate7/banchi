@@ -160,12 +160,6 @@ SKIP_SENTENCE: Dict[str, str] = {
     NO_MARKET: "no market price, so the rule leaves it to you",
 }
 
-#: HOW OLD A LIVE READ MAY BE AND STILL BE SENT FROM (the owner's ruling, 2026-09-26: "require a
-#: fresh read"). A day, because the rule's own inputs move by the day: its window is whole days
-#: of no sale, and a card that sold since the read is one the read still offers. The send reads
-#: what is live again and refuses a price TCGplayer moved (`server/send_routes.py`), so this
-#: bound is what keeps the SET honest, not the price. The screen reads this constant off the
-#: table route and never types its own copy.
 def fresh_for_s(now: Optional[datetime] = None) -> int:
     """How old a read may be and still be sent from: it began today (US Central), like every send's
     prices (`store/clock.before_today`). The screen reads this off the table route."""
