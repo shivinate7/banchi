@@ -33,6 +33,7 @@ from typing import (
 )
 
 from cli import runs
+from identify.matchconst import UNREAD_EMPTY_SLOT
 from pipeline import games, join, orders, pricing, routing, tcgcsv, variant
 from store import files, master, photos, queues
 from store.session import Store
@@ -1176,41 +1177,6 @@ def games_claimed(export: tcgcsv.Export) -> Tuple[str, ...]:
     )
 
 
-def _by_recorded_digest(run: runs.Run, missing: Path) -> Optional[Path]:
-    """The file this run recorded, found by its DIGEST under `inventory/.exports/`.
-
-    NEVER A GUESS AND NEVER A SUBSTITUTE (D166). It answers only with a file
-    whose FULL sha256 equals the one the manifest recorded for this exact path, so it cannot
-    quietly join a run against a newer reading — which is the whole hazard of exports moving
-    into a directory several runs share. A run that finds nothing carrying its digest refuses
-    exactly as before; this recovers the file, it does not choose one.
-
-    WHAT IT IS FOR: the manifest's `path` is the only link from a run to its export now that
-    the file is not inside the run, and a path is the half of that record which can go stale.
-    The digest is the half that cannot.
-    """
-    recorded = run.manifest.get("exports")
-    if not isinstance(recorded, dict):
-        return None
-    wanted = next(
-        (
-            str(source.get("sha256") or "")
-            for source in recorded.values()
-            if isinstance(source, dict) and Path(str(source.get("path") or "")) == missing
-        ),
-        "",
-    )
-    if len(wanted) != 64:
-        return None
-    root = files.inventory_dir() / files.EXPORTS_DIRNAME
-    if not root.is_dir():
-        return None
-    for candidate in sorted(root.glob(f"*/*-{wanted[:8]}.csv")):
-        if candidate.is_file() and runs.sha256_of(candidate) == wanted:
-            return candidate
-    return None
-
-
 def exports_for(
     run: runs.Run, overrides: Optional[Sequence[str]]
 ) -> ExportPlan:
@@ -1264,7 +1230,7 @@ def exports_for(
     # `--export` — has a digest on file to recover a moved file by. `exports_for_store` has no
     # manifest at all, so it calls `_claim_files` with no recovery and a missing file there is
     # refused outright.
-    recover = None if overrides else (lambda missing: _by_recorded_digest(run, missing))
+    recover = None if overrides else (lambda missing: runs.recorded_digest_file(run, missing))
     for index, path in enumerate(distinct):
         if not path.is_file():
             found = recover(path) if recover is not None else None
@@ -2185,7 +2151,16 @@ def store_payload(keys: Sequence[str], inventory: master.Inventory) -> Dict[str,
         identified = card.confidence is not None
         reading = card_reading(card) if identified else None
         unavailable = identified and reading.outcome == READING_UNAVAILABLE
+        # The store keeps no `second_look`, so an unidentified card's photograph is read for an empty
+        # slot here, through the one home, and `_resolve` reads the same `second_look` block it reads
+        # off a run record. Lazy import: the matcher stays out of this module's load.
+        empty = False
+        if not identified and card.photo:
+            from identify import match
+
+            empty = match.empty_slot(Path(card.photo))
         cards[key] = {
+            "second_look": {"code": UNREAD_EMPTY_SLOT} if empty else None,
             "photo": card.photo,
             "box": card.box,
             "index": card.index,
@@ -2472,11 +2447,14 @@ def _resolve(
             continue
 
         if not identification:
+            # THE FREE READER SAW AN EMPTY SLOT and the paid read was never asked: a named
+            # "no card" entry for the owner to look at, never retired and never identified.
+            slot_is_empty = (record.get("second_look") or {}).get("code") == UNREAD_EMPTY_SLOT
             failures.append(
                 PreJoinFailure(
                     key=key,
                     photo=record.get("photo"),
-                    reason=routing.IDENTIFICATION_FAILED,
+                    reason=routing.CARD_NOT_DETECTED if slot_is_empty else routing.IDENTIFICATION_FAILED,
                     box=box,
                     index=index,
                     read={"status": record.get("status"), "error": record.get("error")},

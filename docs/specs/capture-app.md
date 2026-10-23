@@ -27,15 +27,15 @@ measures anything. It is not in `make check`, because it starts a browser and a 
 
 **Reason codes.** Fifteen exist: six ladder reasons (`pipeline/variant.py`'s `LADDER_REASONS`)
 and nine routing reasons (`pipeline/routing.py`'s `ROUTING_REASONS`). `docs/DESIGN.md` requires
-each on screen as a human label with the machine string small beneath. Two cannot reach the
+each on screen as a human label with the machine string small beneath. One cannot reach the
 queue:
 
 - `no_market_data` is a routing destination of its own. `pipeline/join.py` writes a queue
   entry only for `routing.MAIN` and `routing.PARKED`. A card with a blank or $0.00 market cell
   is priced by hand on `#/pricing` (D9, threshold and floor, and D86, one file for the store).
-- `card_not_detected` has no producer in `pipeline/`, `cli/` or `identify/`. The `reason
-  emissions` row of `make docs-audit` excuses it by name in `UNEMITTED_REASONS`. That exemption
-  goes stale the day something emits it. The screen still labels it.
+
+`card_not_detected` is emitted by `cli/resolve.py` for a photograph the free reader called an
+empty slot (`identify/match.py`'s `empty_slot`). The paid read never sees it.
 
 ## 0. Scope
 

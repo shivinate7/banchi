@@ -24,9 +24,9 @@
  * NO PIPELINE WORD REACHES THE SCREEN (D196): not emit, not staged, not reconcile. */
 
 import { count } from './kit/dataRules'
-import { useEffect, useId, useState } from 'react'
+import { Fragment, useEffect, useId, useState } from 'react'
 import { Button, Icon, IconButton, Money, Notice, Refusal, Retry } from './kit'
-import { atClockTime, clockTime } from './dates'
+import { atClockTime, clockTime, dayMonth } from './dates'
 import { describeFailure, dismissSendWarning, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, takeBackSend } from './server'
 import type { Failure } from './server'
 import type { EmptySend, LiveMove, PriceChange, RefusedPrice, SendSummary, SendTrim } from './types'
@@ -296,6 +296,19 @@ const LEFT_WHY: Record<string, string> = {
   already: 'TCGplayer already shows this price',
   not_live: 'no copy is live now',
   adds_copies: 'its new copies carry the price',
+}
+
+/** THE PRICES WERE READ AGAIN FIRST, because the runs' export was from an earlier day. They may
+ *  differ from what the screen showed when the owner pressed. */
+function PricesRefreshed({ send }: { readonly send: SendSummary }) {
+  const refresh = send.refresh
+  if (!refresh?.ran) return null
+  const day = refresh.was ? dayMonth(`${refresh.was}T12:00:00`) : 'an unknown day'
+  return (
+    <Notice tone="info" compact className="send-prices-refreshed" title="Prices were refreshed before sending.">
+      They came from {day}, so Banchi read them again first. They may differ from what you saw.
+    </Notice>
+  )
 }
 
 /** The price changes the button named that this press left out. Named once, right after the
@@ -915,10 +928,16 @@ export function SendCard({
       )}
 
       {open.map((send) => (
-        <SendStanding key={send.stamp} send={send} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} sendAnyway={(stamp) => setPassed((was) => [...was, stamp])} />
+        <Fragment key={send.stamp}>
+          <SendStanding send={send} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} sendAnyway={(stamp) => setPassed((was) => [...was, stamp])} />
+          <PricesRefreshed send={send} />
+        </Fragment>
       ))}
       {blocking === null || open.some((send) => send.stamp === blocking.stamp) || standing?.stamp === blocking.stamp ? null : (
-        <SendStanding send={blocking} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} sendAnyway={(stamp) => setPassed((was) => [...was, stamp])} />
+        <>
+          <SendStanding send={blocking} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} sendAnyway={(stamp) => setPassed((was) => [...was, stamp])} />
+          <PricesRefreshed send={blocking} />
+        </>
       )}
 
       {(live.status?.unreadable ?? []).map((row) => (
@@ -969,6 +988,8 @@ export function SendCard({
           {sent !== null && sent.stamp === standing.stamp ? <NotSent gone={standing.gone} /> : null}
           {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TookOff taken={standing.taken_off} download={false} /> : null}
           {sent !== null && sent.stamp === standing.stamp ? <PricesLeft send={standing} /> : null}
+          {/* THE RECEIPT KEEPS IT, so a reload still says the prices were read again. */}
+          <PricesRefreshed send={standing} />
         </>
       )}
 

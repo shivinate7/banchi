@@ -18,7 +18,7 @@ from pipeline import movers, pricerefresh
 from server import pipeline_routes
 from store import files
 from store.pricearchive import Bucket
-from store.readings import KIND_LIVE, Reading, Source
+from store.readings import KIND_LIVE, KIND_RUN, Reading, Source
 from store.session import Store
 
 SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "price-refresh-daily.py"
@@ -359,9 +359,48 @@ def check_trends_press_saves(checks: Checks) -> None:
         pricehistory.Market, pricehistory.catalogued_row, pipeline_routes._history_spark = real
 
 
+def check_older_rejoin_keeps_newer_rows(checks: Checks) -> None:
+    """A re-join against an OLDER export of a run writes the SKUs only that export has, keeps the row a
+    newer reading already holds on a shared SKU, and leaves the run's source row at the newer time.
+
+    Before the fix the whole re-join was dropped, so a SKU only the older export carried never
+    reached the table. The reads are fresh `Store().read()` calls, not the writer's own view.
+    """
+    checks.note("")
+    checks.note("OLDER RE-JOIN — adds what only the older export has, keeps the newer rows")
+    with isolated_home():
+        with Store().write() as writable:
+            writable.readings.replace_source(
+                KIND_RUN, "run-x", {"501": Reading("12.00", 2000, "run-x", KIND_RUN)},
+                Source(KIND_RUN, "run-x", 2000, 1),
+            )
+        with Store().write() as writable:
+            writable.readings.replace_source(
+                KIND_RUN, "run-x",
+                {"501": Reading("9.00", 1000, "run-x", KIND_RUN), "502": Reading("5.00", 1000, "run-x", KIND_RUN)},
+                Source(KIND_RUN, "run-x", 1000, 2),
+            )
+        readings = Store().read().readings
+        shared, only_older = readings.entries.get("501"), readings.entries.get("502")
+        checks.equal(
+            (getattr(shared, "market", None), getattr(shared, "at", None)),
+            ("12.00", 2000),
+            "a SKU both exports carry keeps the newer row, its price and its time",
+        )
+        checks.equal(
+            getattr(only_older, "market", None), "5.00",
+            "a SKU only the older export carries is written",
+        )
+        checks.equal(
+            [source["at"] for source in readings.sources_payload() if source["name"] == "run-x"], [2000],
+            "the run's source row keeps the newer export's time",
+        )
+
+
 CHECKS = (
     check_price_movers,
     check_price_refresh_note,
     check_price_trends_preload,
     check_trends_press_saves,
+    check_older_rejoin_keeps_newer_rows,
 )

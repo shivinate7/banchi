@@ -1258,6 +1258,85 @@ test('one press sends and makes live, and says when the check comes', async ({ p
   expect(sendPosts(wire)).toHaveLength(1)
 })
 
+/* A SEND FROM AN EARLIER DAY SAYS THE PRICES WERE READ AGAIN FIRST, and names the day they came from, so the owner
+ * knows the screen's prices may have moved. Four screens: 1440 and 820, light and dark. */
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [1440, 820]) {
+    test(`send from an earlier day: the prices-refreshed notice shows at ${width} in ${theme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: theme })
+      await setViewport(page, { width, height: 900 })
+      const refresh = { ran: true, ok: true, was: '2026-10-21', export_day: '2026-10-22' }
+      const wire = await open(page, {
+        sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [sendSummary({ refresh })] } : SENDS_NONE),
+      })
+      await sendPress(page).click()
+      await expect.poll(() => sendPosts(wire).length).toBe(1)
+      const notice = page.locator('.send-prices-refreshed')
+      await expect(notice).toContainText('Prices were refreshed before sending.')
+      await expect(notice).toContainText('They came from October 21')
+      await page.screenshot({ path: test.info().outputPath(`send-refreshed-${width}-${theme}.png`) })
+    })
+  }
+}
+
+/* AN EXPORT OF NO RECOVERABLE AGE HAS NO DAY: the receipt's `was` is null. The notice still shows and says so,
+ * so it neither hides on a falsy `was` nor prints a made-up date. */
+test('send from an unknown day: the prices-refreshed notice names an unknown day', async ({ page }) => {
+  const refresh = { ran: true, ok: true, was: null, export_day: '2026-10-22' }
+  const wire = await open(page, {
+    sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [sendSummary({ refresh })] } : SENDS_NONE),
+  })
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  const notice = page.locator('.send-prices-refreshed')
+  await expect(notice).toBeVisible()
+  await expect(notice).toContainText('Prices were refreshed before sending.')
+  await expect(notice).toContainText('They came from an unknown day')
+  await expect(notice).not.toContainText(/1970|Invalid/)
+})
+
+test('a same-day send shows no prices-refreshed notice', async ({ page }) => {
+  const wire = await open(page, {
+    sends: (seen) =>
+      sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [sendSummary({ refresh: { ran: false, export_day: '2026-10-22' } })] } : SENDS_NONE,
+  })
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  await expect(page.locator('.send-standing')).toContainText('3 copies went live at')
+  await expect(page.locator('.send-prices-refreshed')).toHaveCount(0)
+})
+
+/* THE RECEIPT KEEPS THE NOTICE: a reload still says the prices were read again first. Each receipt is
+ * asserted drawn before its notice, so a receipt that did not render cannot pass as a missing notice. */
+test('the prices-refreshed notice survives a reload on a standing receipt', async ({ page }) => {
+  const refresh = { ran: true, ok: true, was: '2026-10-21', export_day: '2026-10-22' }
+  await open(page, { sends: () => ({ ...SENDS_NONE, sends: [sendSummary({ refresh })] }) })
+  await expect(page.locator('.send-standing')).toContainText('3 copies went live at')
+  await expect(page.locator('.send-prices-refreshed')).toContainText('Prices were refreshed before sending.')
+  await page.reload()
+  await expect(page.locator('.send-standing')).toContainText('3 copies went live at')
+  await expect(page.locator('.send-prices-refreshed')).toContainText('Prices were refreshed before sending.')
+})
+
+test('the prices-refreshed notice survives a reload on an unconfirmed receipt', async ({ page }) => {
+  const refresh = { ran: true, ok: true, was: '2026-10-21', export_day: '2026-10-22' }
+  const written = sendSummary({
+    kind: 'download',
+    state: 'written',
+    published_at: null,
+    check_after: '2026-09-24T12:17:00+00:00',
+    take_back_after: '2026-09-24T12:17:00+00:00',
+    copies: 4,
+    refresh,
+  })
+  await open(page, { sends: () => ({ ...SENDS_NONE, sends: [written], unconfirmed: { copies: 4, stamps: [written.stamp] } }) })
+  await expect(page.locator('.send-unconfirmed')).toContainText('4 copies written, not confirmed at TCGplayer')
+  await expect(page.locator('.send-prices-refreshed')).toContainText('Prices were refreshed before sending.')
+  await page.reload()
+  await expect(page.locator('.send-unconfirmed')).toContainText('4 copies written, not confirmed at TCGplayer')
+  await expect(page.locator('.send-prices-refreshed')).toContainText('Prices were refreshed before sending.')
+})
+
 test('what the double-send guard held back is named, card by card', async ({ page }) => {
   const trimmed = sendSummary({
     trimmed: [{ sku: '8608459', name: 'Dunsparce', live: 2, on_hand: 3, would: 3, goes: 1 }],

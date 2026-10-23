@@ -5822,6 +5822,31 @@ def check_run_match(checks: Checks) -> None:
             "and the door's own press asks again, and the fixed run matches",
         )
 
+    with _case(checks, "Q4: a run waiting on its own stored problem leaves the refresh's join step ok"), send_portal() as portal, \
+            synced_home():
+        run = reading_done(hinted=0)
+        held = pipeline_routes.do_run_match(run.name, {})
+        checks.equal(
+            (held["ok"], (held["summary"]["match_problem"] or {}).get("code")),
+            (False, "export_needs_set_hint"),
+            "the run stores its own problem first, by the route the case above takes",
+        )
+        answer = pipeline_routes.do_prices_refresh(history=None)
+        join = (answer.get("steps") or {}).get("join") or {}
+        checks.equal(
+            join.get("ok"), True,
+            "a refresh that finds the run waiting on its own problem leaves the join step ok",
+        )
+        checks.ok(
+            "waits on its own problem" in str(join.get("message") or ""),
+            "and the join step's note says it waits on its own problem",
+            json.dumps(join)[:400],
+        )
+        checks.equal(
+            answer.get("ok"), True,
+            "so the refresh is not failed: its listings, catalog and join all came out ok",
+        )
+
     with _case(checks, "Q4: a signed-out session is the next step"), send_portal() as portal, \
             synced_home():
         run = reading_done(hinted=len(cards))
@@ -5957,14 +5982,17 @@ def check_live_markdown_guards(checks: Checks) -> None:
     )
 
     # ------------------------------------------------------------------ a fresh read
+    # A READ IS FRESH WHEN IT BEGAN TODAY (US Central). `now` is 07:00 Central on 26 September, so the
+    # instants below sit either side of that day's midnight. The daylight-saving shifts are in `price_fresh`.
     checks.equal(
         [
-            reprice.read_is_fresh((now - timedelta(hours=23)).isoformat(), now),
-            reprice.read_is_fresh((now - timedelta(hours=25)).isoformat(), now),
+            reprice.read_is_fresh("2026-09-26T05:00:00+00:00", now),  # 00:00 Central, today
+            reprice.read_is_fresh("2026-09-26T04:59:59+00:00", now),  # 23:59:59 Central, yesterday
+            reprice.read_is_fresh("2026-09-25T13:00:00+00:00", now),  # 08:00 Central, yesterday, 23 h before now
             reprice.read_is_fresh(None, now),
         ],
-        [True, False, False],
-        "A READ IS FRESH FOR A DAY, and one nothing can date is not fresh",
+        [True, False, False, False],
+        "A READ IS FRESH WHEN IT BEGAN TODAY (US Central), and one nothing can date is not fresh",
     )
     with send_portal() as portal, synced_home() as home:
         stale = _markdown_dir(home, "20260926-100000", at=long_ago)
@@ -5983,7 +6011,7 @@ def check_live_markdown_guards(checks: Checks) -> None:
         worklist = pipeline_routes._write_edits(manual, [{"sku": ARTICUNO_SKU, "price": "19.99"}])
         said = command(checks, "reprice", "apply", str(worklist), "--write", exits=1)
         checks.ok(
-            "more than a day ago" in said and not (manual / cmd_reprice.IMPORT).exists(),
+            "on an earlier day" in said and not (manual / cmd_reprice.IMPORT).exists(),
             "and `reprice apply --write` over a stale read writes no file",
             said,
         )

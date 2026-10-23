@@ -7,14 +7,21 @@ the order `CHECK_ORDER` runs them.
 from __future__ import annotations
 
 import dataclasses
+import http.server
 import json
 import hashlib
+import os
 import shutil
+import signal
 import tempfile
+import threading
 import time
 
+from contextlib import contextmanager
 from decimal import Decimal
+from unittest import mock
 from pathlib import Path
+from types import SimpleNamespace
 from harness.tests import Checks
 from cli import cmd_reconcile, resolve, runs
 from identify import batch, prompt, sidecar
@@ -32,6 +39,7 @@ from store.session import Store
 from harness.tests.t7.common import (
     CANDIDATES,
     FIXTURE_EXPORT,
+    card_photo,
     JPEG,
     NEVER_BOUND_IDENTITY_SNAPSHOT,
     REPO_ROOT,
@@ -249,7 +257,6 @@ def check_code_ledger(checks: Checks) -> None:
 
     from cli import __main__ as cli_entry
     from cli import cmd_identify
-    from identify import images as identify_images
 
     # 3-4-3-3, with a `?` for a character the model could not read and a lowercase letter
     # that `normalize_number` would have folded — the two properties the parser must keep.
@@ -404,11 +411,12 @@ def check_code_ledger(checks: Checks) -> None:
         caps.mkdir()
         # A DIFFERENT COLOUR EACH, because a card is named by the sha256 of its photograph
         # (D172) and `cards_cid` holds that name UNIQUE. Both were the same flat red, which
-        # is two records carrying one name the moment `identify` writes them.
+        # is two records carrying one name the moment `identify` writes them. A BRIGHT BAND across
+        # the top, because a flat dark frame is an empty slot (its 99th-percentile luminance sits
+        # under EMPTY_SLOT_P99 and `identify` never sends it): the band clears the cut and leaves
+        # each colour, and so each name, as it was.
         for name, red in (("6-001.jpg", 200), ("6-002.jpg", 120)):
-            identify_images.Image.new("RGB", (64, 89), (red, 40, 40)).save(
-                caps / name, "JPEG"
-            )
+            card_photo((red, 40, 40)).save(caps / name, "JPEG")
         (caps / "6-001.json").write_text(
             json.dumps(
                 {"box": 6, "position": 1, "game": "pokemon_code", "set_hint": "JTG"}
@@ -2593,7 +2601,6 @@ def check_identify_preflight_stage(checks: Checks) -> None:
     """
     from cli import __main__ as cli_entry
     from cli import cmd_identify
-    from identify import images as identify_images
 
     checks.note("")
     checks.note("IDENTIFY PREFLIGHT — hash, then cache, then prepare (Item.stage)")
@@ -2612,9 +2619,7 @@ def check_identify_preflight_stage(checks: Checks) -> None:
         caps.mkdir()
         # Two readable cards, in a registered game.
         for index in (1, 2):
-            identify_images.Image.new("RGB", (64, 89), (30, 90 + index, 200)).save(
-                caps / f"4-00{index}.jpg", "JPEG"
-            )
+            card_photo((30, 90 + index, 200)).save(caps / f"4-00{index}.jpg", "JPEG")
             (caps / f"4-00{index}.json").write_text(
                 json.dumps({"box": 4, "position": index, "game": "pokemon"}), "utf-8"
             )
@@ -2626,9 +2631,7 @@ def check_identify_preflight_stage(checks: Checks) -> None:
             json.dumps({"box": 4, "position": 3, "game": "pokemon"}), "utf-8"
         )
         # A game no registry entry answers: refused by name, before it costs a decode.
-        identify_images.Image.new("RGB", (64, 89), (200, 40, 40)).save(
-            caps / "4-004.jpg", "JPEG"
-        )
+        card_photo((200, 40, 40)).save(caps / "4-004.jpg", "JPEG")
         (caps / "4-004.json").write_text(
             json.dumps({"box": 4, "position": 4, "game": "tarot"}), "utf-8"
         )
@@ -6507,6 +6510,981 @@ def check_empty_state_refusal_blames_no_missing_folder(checks: Checks) -> None:
         checks.ok(not blames_folder(route_text), "10. and its sentence does not say no photos were found or that the capture folder does not exist", f"said: {route_text!r}")
 
 
+# ----------------------------------------- a paid run ends joined (identify-engine-pick.md, section 7)
+
+
+def _paid_caps(directory: Path, cards) -> None:
+    """One photograph and one sidecar per `(box, position)`, named as a capture directory is named."""
+    directory.mkdir()
+    for box, position in cards:
+        # A color per position, from a hash: a card is named by its photograph (D172), so two
+        # presses must never share bytes, and a color taken from the box number clamps past 255.
+        # `card_photo`, not a flat frame: a flat dark frame is an empty slot and `identify` never sends it.
+        color = tuple(hashlib.sha256(f"{box}/{position}".encode()).digest()[:3])
+        card_photo(color).save(directory / f"{box}-{position:03d}.jpg", "JPEG")
+        (directory / f"{box}-{position:03d}.json").write_text(
+            json.dumps({"box": box, "position": position, "game": "pokemon", "set_hint": "SV09"}), "utf-8"
+        )
+
+
+def _paid_transport(answers: dict):
+    """A fake batch transport, answering by store key: a payload, or None for a card it fails."""
+    from cli import cmd_identify
+
+    keys = {cmd_identify._custom_id(key): key for key in answers}
+
+    def run_batch(requests, log=None, on_submit=None):
+        outcomes = {}
+        for request in requests:
+            payload = answers[keys[request.custom_id]]
+            if payload is None:
+                outcomes[request.custom_id] = batch.Outcome(
+                    request.custom_id, "errored", error="the transport refused this card"
+                )
+            else:
+                outcomes[request.custom_id] = batch.Outcome(
+                    request.custom_id, batch.SUCCEEDED,
+                    identification=prompt.parse(dict(payload), request.strategy),
+                )
+        return batch.BatchRun(outcomes=outcomes)
+
+    return run_batch
+
+
+def _paid_press(run_dir: Path, caps: Path, engine: str = "haiku"):
+    """`banchi identify <caps> --run-dir <run>`, the argv a press's child is started with. Returns (code, lines)."""
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+
+    lines: list = []
+    argv = ["identify", str(caps), "--engine", engine, "--run-dir", str(run_dir)]
+    with quiet():
+        code = cmd_identify.run(cli_entry.build_parser().parse_args(argv), lines.append)
+    return code, lines
+
+
+def _as_child(run_dir: Path) -> None:
+    """The marker the server writes when it starts a press: it names the process that runs the press."""
+    (run_dir / pipeline_routes.PID_FILE).write_text(f"{os.getpid()}\n")
+
+
+@contextmanager
+def _stand_in_portal(*, cookie: bool = True):
+    """TCGplayer's Filtered Export, stood in for on 127.0.0.1 for the length of the `with`.
+
+    It answers the two calls `server/tcg_export.py` makes: the filter vocabulary, with one set
+    (SV09) so the run's hint resolves, and the export, which is the committed SV09 fixture. The URL
+    override points here and the cookie is fake, so nothing leaves the machine. CI and BANCHI_HARNESS
+    are cleared for the `with`, because `_join_now` skips the join under either, and the join is what
+    these cases watch. Yields the request counts, `{"filters": n, "export": n}`.
+    """
+    filters = {
+        "Sets": [{"Text": "All Set Names", "Value": "0"}, {"Text": "SV09: Journey Together", "Value": "4242"}],
+        "Rarities": [{"Text": "All Rarities", "Value": "0"}],
+        "Conditions": [{"Text": "All Conditions", "Value": "0"}],
+        "Printings": [{"Text": "All Printings", "Value": "0"}],
+    }
+    body = FIXTURE_EXPORT.read_bytes()
+    hits = {"filters": 0, "export": 0}
+
+    class Portal(http.server.BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):  # noqa: A003
+            pass
+
+        def _send(self, content_type: str, payload: bytes) -> None:
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def _export(self) -> None:
+            hits["export"] += 1
+            self._send("text/csv", body)
+
+        def do_GET(self):  # noqa: N802
+            if "getjsonfilters" in self.path:
+                hits["filters"] += 1
+                self._send("application/json", json.dumps(filters).encode())
+            else:
+                self._export()
+
+        def do_POST(self):  # noqa: N802
+            self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            self._export()
+
+    portal = http.server.HTTPServer(("127.0.0.1", 0), Portal)
+    threading.Thread(target=portal.serve_forever, daemon=True).start()
+    names = ("BANCHI_TCG_EXPORT_URL", "TCGPLAYER_STORE_COOKIE", "CI", "BANCHI_HARNESS")
+    saved = {name: os.environ.get(name) for name in names}
+    try:
+        os.environ["BANCHI_TCG_EXPORT_URL"] = (
+            f"http://127.0.0.1:{portal.server_address[1]}/admin/pricing/downloadexportcsv"
+        )
+        os.environ.pop("CI", None)
+        os.environ.pop("BANCHI_HARNESS", None)
+        if cookie:
+            os.environ["TCGPLAYER_STORE_COOKIE"] = "TCGAuthTicket_Production=t7-not-a-real-session"
+        else:
+            os.environ.pop("TCGPLAYER_STORE_COOKIE", None)
+        yield hits
+    finally:
+        portal.shutdown()
+        portal.server_close()
+        for name, value in saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
+DUNSPARCE_PAYLOAD = {"name": "Dunsparce", "number": "120", "printed_total": "159", "finish": "normal", "confidence": "high"}
+
+
+def check_paid_run_ends_joined(checks: Checks) -> None:
+    """A paid press ends joined: the manifest says so, and the run's phase is past `join`.
+
+    The press is started the way the server starts one: `--run-dir` names the run and the marker
+    names the process running it.
+    """
+    from cli import cmd_identify
+
+    checks.note("")
+    checks.note("PAID RUN ENDS JOINED — stand-in portal, fake batch transport")
+    answers = {
+        "5/1": DUNSPARCE_PAYLOAD,
+        "5/2": {**DUNSPARCE_PAYLOAD, "finish": "reverse_holo"},
+        "5/3": {"name": "Articuno", "number": "161", "printed_total": "159", "finish": "holo", "confidence": "high"},
+    }
+    with isolated_home() as home, _stand_in_portal():
+        caps = Path(home) / "paid-caps"
+        _paid_caps(caps, [(5, 1), (5, 2), (5, 3)])
+        run = runs.create("t7-paid-joined")
+        _as_child(run.directory)
+        with mock.patch.object(cmd_identify.batch, "run_batch", _paid_transport(answers)):
+            code, lines = _paid_press(run.directory, caps)
+        manifest = json.loads((run.directory / runs.MANIFEST).read_text("utf-8"))
+        text = "\n".join(lines)
+        checks.ok(code == 0, "the paid press exits 0", text)
+        checks.ok(manifest.get("joined") is True, "the run's manifest is joined", text)
+        checks.equal(
+            pipeline_routes._phase(manifest, False), "emit",
+            "and its phase is past `join`: the next step is emit",
+        )
+        checks.ok(any(line.startswith("joined ") for line in lines), "the summary says the run is joined", text)
+
+
+def check_paid_run_no_export_holds_at_join(checks: Checks) -> None:
+    """With no export to be had, the run stays at `join` and the summary says why, card by card."""
+    from cli import cmd_identify
+
+    checks.note("")
+    checks.note("PAID RUN, NO EXPORT — the run waits at join, and the summary says so and why")
+    answers = {"5/1": DUNSPARCE_PAYLOAD, "5/2": None}  # the failed card puts a "held until join" line in the summary
+    with isolated_home() as home, _stand_in_portal(cookie=False):
+        caps = Path(home) / "no-export-caps"
+        _paid_caps(caps, [(5, 1), (5, 2)])
+        run = runs.create("t7-paid-no-export")
+        _as_child(run.directory)
+        with mock.patch.object(cmd_identify.batch, "run_batch", _paid_transport(answers)):
+            code, lines = _paid_press(run.directory, caps)
+        manifest = json.loads((run.directory / runs.MANIFEST).read_text("utf-8"))
+        text = "\n".join(lines)
+        checks.ok(code == 0, "the paid press still exits 0 when the join does not run", text)
+        checks.ok(manifest.get("joined") is not True, "the run is not joined", text)
+        checks.ok(pipeline_routes._phase(manifest, False) == "join", "and its phase stays at `join`", text)
+        not_joined = [line for line in lines if line.startswith("not joined")]
+        checks.ok(len(not_joined) == 1 and "not signed in" in not_joined[0],
+                  "the summary says it is not joined, and gives the reason: TCGplayer is not signed in", text)
+        checks.ok(not any("test run" in line for line in lines),
+                  "and the reason is the real one, not the test run's sentence", text)
+        checks.ok(any(line.strip() == "in the store now: held until join" for line in lines),
+                  "the failed card's line says it is held until join", text)
+
+
+def check_paid_run_readback_matches_queues(checks: Checks) -> None:
+    """The summary's read-back counts are the queues', card for card.
+
+    Held for review is a `readers_disagree` or `second_look_unsure` entry. The main queue is every
+    other open entry. Settled is a card with no open entry in either queue.
+    """
+    from cli import cmd_identify
+    from harness.tests.t7.engine_pick import _accepted, _unaccepted
+    from identify import match
+
+    checks.note("")
+    checks.note("PAID RUN READ-BACK — the summary's counts against the queues, card for card")
+    accepted = {"6/1"}
+    agreed = {"6/5"}  # the free reader's pick is Dunsparce, and so is the paid answer: it settles
+    answers = {
+        "6/2": DUNSPARCE_PAYLOAD,  # disagrees with the free reader's pick (Raichu): readers_disagree
+        "6/3": {"name": "Raichu", "number": "026", "printed_total": "102", "finish": "normal", "confidence": "high"},
+        "6/4": None,  # the paid read fails: a failed card
+        "6/5": DUNSPARCE_PAYLOAD,
+    }
+
+    def pick_dunsparce(key):
+        return match.Result(
+            key, False, code=match.UNREAD_MARGIN, detail="the free reader is not sure", margin=0.031, floor=0.91,
+            candidates=[{"product_id": "8608459", "set": "SV09: Journey Together", "number": "120", "name": "Dunsparce", "cosine": 0.91}],
+        )
+
+    def fake_read(requests, index, model=None, aspect=0.716, log=lambda _m: None, promo_games=None):
+        out = []
+        for request in requests:
+            if request.key in accepted:
+                out.append(_accepted(request.key))
+            elif request.key in agreed:
+                out.append(pick_dunsparce(request.key))
+            else:
+                out.append(_unaccepted(request.key))
+        return out
+
+    free_reader = {
+        "read": fake_read,
+        "status": lambda *_a, **_k: {"ready": True},
+        "preflight": lambda requests, *_a, **_k: {
+            "cards": len(requests), "can_read": len(requests), "unread": {}, "state": {"ready": True},
+        },
+    }
+    with isolated_home() as home, _stand_in_portal(), mock.patch.multiple(match, **free_reader), \
+            mock.patch.object(cmd_identify.batch, "run_batch", _paid_transport(answers)):
+        caps = Path(home) / "readback-caps"
+        _paid_caps(caps, [(6, 1), (6, 2), (6, 3), (6, 4), (6, 5)])
+        run = runs.create("t7-paid-readback")
+        _as_child(run.directory)
+        code, lines = _paid_press(run.directory, caps, engine="marqo-b")
+        text = "\n".join(lines)
+        snapshot = Store().read()
+
+        def bucket(key: str) -> str:
+            entry = snapshot.review.entries.get(key)
+            if entry is not None and not entry.cleared_by_human:
+                held = entry.reason in (routing.READERS_DISAGREE, routing.SECOND_LOOK_UNSURE)
+                return "held" if held else "main"
+            if snapshot.parked.entries.get(key) is not None:
+                return "parked"
+            return "settled"
+
+        def expected(keys) -> str:
+            counts = {name: sum(bucket(key) == name for key in keys) for name in ("held", "main", "parked", "settled")}
+            parts = [f"{counts['held']} held for review", f"{counts['main']} in the main queue"]
+            if counts["parked"]:
+                parts.append(f"{counts['parked']} parked")
+            parts.append(f"{counts['settled']} settled")
+            return ", ".join(parts)
+
+        looked, failed = ["6/2", "6/3", "6/4", "6/5"], ["6/4"]
+        buckets = {bucket(key) for key in looked}
+        checks.ok({"held", "main", "settled"} <= buckets,
+                  "fixture: the second-look cards reach held for review, the main queue and settled", text)
+        read_back = [line.split("in the store now: ", 1)[1] for line in lines if "in the store now: " in line]
+        checks.ok(len(read_back) == 2, "the summary reads the queues back for the second look and the failed cards", text)
+        if len(read_back) == 2:
+            checks.equal(read_back[0], expected(looked), "the second-look counts are the queues' counts")
+            checks.equal(read_back[1], expected(failed), "the failed-card counts are the queues' counts")
+        checks.ok(code == 0, "the paid press exits 0", text)
+
+
+def check_paid_run_clears_pid_marker(checks: Checks) -> None:
+    """`running.pid` is removed when the run ends, however it ends: a return, a raised error or SIGTERM.
+
+    A marker that names another pid is not this run's, and is left alone.
+    """
+    from cli import cmd_identify
+
+    checks.note("")
+    checks.note("PID MARKER — removed on return, on a raised error and on SIGTERM; another pid's is left alone")
+    answers = {"7/1": DUNSPARCE_PAYLOAD}
+
+    def started(name: str):
+        run = runs.create(name)
+        marker = run.directory / pipeline_routes.PID_FILE
+        marker.write_text(f"{os.getpid()}\n")
+        return run.directory, marker
+
+    # The run skips its own join under BANCHI_HARNESS: nothing here is about the join, and it never reaches TCGplayer.
+    with isolated_home() as home, mock.patch.dict(os.environ, {"BANCHI_HARNESS": "1"}), \
+            mock.patch.object(cmd_identify.batch, "run_batch", _paid_transport(answers)):
+        caps = Path(home) / "marker-caps"
+        _paid_caps(caps, [(7, 1)])
+
+        run_dir, marker = started("t7-marker-return")
+        code, _ = _paid_press(run_dir, caps)
+        checks.equal(code, 0, "fixture: a press that returns exits 0")
+        checks.ok(not marker.exists(), "a normal return removes the run's own marker")
+
+        run_dir, marker = started("t7-marker-raise")
+        with mock.patch.object(cmd_identify, "Store", side_effect=RuntimeError("t7: raised inside the run")):
+            checks.raises(RuntimeError, lambda: _paid_press(run_dir, caps), "a raised error reaches the caller")
+        checks.ok(not marker.exists(), "and a raised error removes the run's own marker")
+
+        run_dir, marker = started("t7-marker-term")
+        harness_handler = signal.signal(signal.SIGTERM, lambda _signo, _frame: None)
+        ended = "no outcome"
+
+        def term_then_go_on(*_args, **_kwargs):
+            os.kill(os.getpid(), signal.SIGTERM)
+            raise RuntimeError("t7: the run went on after SIGTERM")
+
+        try:
+            with mock.patch.object(cmd_identify, "Store", side_effect=term_then_go_on):
+                try:
+                    _paid_press(run_dir, caps)
+                    ended = "returned"
+                except SystemExit as caught:
+                    ended = f"exit {caught.code}"
+                except RuntimeError as caught:
+                    ended = str(caught)
+        finally:
+            signal.signal(signal.SIGTERM, harness_handler)
+        checks.equal(ended, "exit 143", "SIGTERM ends the run as a normal exit, 143")
+        checks.ok(not marker.exists(), "and the marker is removed")
+
+        run = runs.create("t7-marker-other")
+        other = os.getppid()
+        marker = run.directory / pipeline_routes.PID_FILE
+        marker.write_text(f"{other}\n")
+        _paid_press(run.directory, caps)
+        checks.ok(marker.exists() and marker.read_text().strip() == str(other),
+                  "a marker naming another pid is left alone")
+
+
+def _press_waiting(home: Path, name: str, cards, answers: dict):
+    """A paid press whose run is left waiting at `join`: the test-run gate keeps the join from running."""
+    from cli import cmd_identify
+
+    caps = Path(home) / f"{name}-caps"
+    _paid_caps(caps, cards)
+    run = runs.create(name)
+    _as_child(run.directory)
+    with mock.patch.dict(os.environ, {"BANCHI_HARNESS": "1"}), \
+            mock.patch.object(cmd_identify.batch, "run_batch", _paid_transport(answers)):
+        _paid_press(run.directory, caps)
+    return run
+
+
+def _run_press_with_log(run, caps: Path, answers: dict):
+    """A press run with stderr kept, for the lines a worker thread logs. Returns (code, lines, stderr)."""
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+
+    lines: list = []
+    argv = ["identify", str(caps), "--engine", "haiku", "--run-dir", str(run.directory)]
+    with quiet() as log, mock.patch.object(cmd_identify.batch, "run_batch", _paid_transport(answers)):
+        code = cmd_identify.run(cli_entry.build_parser().parse_args(argv), lines.append)
+    return code, lines, log.getvalue()
+
+
+def check_positionless_failed_card_counts_main_queue(checks: Checks) -> None:
+    """A failed card with no position is filed under its file key, and the read-back counts it: one in the main queue."""
+    from identify import images as identify_images
+
+    checks.note("")
+    checks.note("POSITIONLESS FAILED CARD — the read-back counts it, filed by its file key")
+    with isolated_home() as home, _stand_in_portal():
+        caps = Path(home) / "loose-caps"
+        _paid_caps(caps, [(5, 1)])
+        identify_images.Image.new("RGB", (64, 89), (210, 90, 40)).save(caps / "loose-001.jpg", "JPEG")
+        (caps / "loose-001.json").write_text(json.dumps({"game": "pokemon", "set_hint": "SV09"}), "utf-8")
+        run = runs.create("t7-positionless")
+        _as_child(run.directory)
+        answers = {"5/1": DUNSPARCE_PAYLOAD, "file:loose-001.jpg": None}
+        code, lines, _ = _run_press_with_log(run, caps, answers)
+        text = "\n".join(lines)
+        read_back = [line.split("in the store now: ", 1)[1] for line in lines if "in the store now: " in line]
+        checks.ok(any(line.startswith("joined ") for line in lines), "the run is joined", text)
+        checks.ok(
+            read_back == ["0 held for review, 1 in the main queue, 0 settled"],
+            "the failed positionless card reads one in the main queue after the join",
+            text,
+        )
+
+
+def check_run_dir_outside_store_is_not_joined(checks: Checks) -> None:
+    """`--run-dir` names a run folder outside the store's runs folder: that run is not joined, and the summary says why.
+
+    A run of the same name in the store is not joined in its place.
+    """
+    from cli import cmd_identify
+
+    checks.note("")
+    checks.note("RUN DIRECTORY OUTSIDE THE STORE — not joined, and the summary says why")
+    with isolated_home() as home, _stand_in_portal():
+        store_run = runs.create("t7-same-name")
+        outside = runs.create("t7-same-name", root=Path(home) / "elsewhere")
+        checks.equal(outside.directory.name, store_run.directory.name, "fixture: both runs carry one name")
+        caps = Path(home) / "outside-caps"
+        _paid_caps(caps, [(5, 1)])
+        _as_child(outside.directory)
+        with mock.patch.object(cmd_identify.batch, "run_batch", _paid_transport({"5/1": DUNSPARCE_PAYLOAD})):
+            code, lines = _paid_press(outside.directory, caps)
+        text = "\n".join(lines)
+        outside_manifest = json.loads((outside.directory / runs.MANIFEST).read_text("utf-8"))
+        store_manifest = json.loads((store_run.directory / runs.MANIFEST).read_text("utf-8"))
+        checks.ok(
+            any(line.startswith("not joined      this run directory is not in the store's runs folder") for line in lines),
+            "the summary says the run is not joined, and why",
+            text,
+        )
+        checks.ok(outside_manifest.get("joined") is not True, "the run outside the store is not joined", text)
+        checks.ok(store_manifest.get("joined") is not True, "and the same-named run in the store is not joined in its place", text)
+
+
+def check_join_lock_held_answers_running(checks: Checks) -> None:
+    """With `match.lock` held by another join of this run, `do_run_match` answers `running`, and the press says so."""
+    import fcntl
+
+    checks.note("")
+    checks.note("JOIN LOCK HELD — the run answers `running`, and the press says another join is in progress")
+    with isolated_home() as home, _stand_in_portal():
+        caps = Path(home) / "lock-caps"
+        _paid_caps(caps, [(5, 1)])
+        run = runs.create("t7-lock")
+        _as_child(run.directory)
+        with open(run.directory / "match.lock", "a+") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            code, lines, _ = _run_press_with_log(run, caps, {"5/1": DUNSPARCE_PAYLOAD})
+            answer = pipeline_routes.do_run_match(run.directory.name, {})
+        manifest = json.loads((run.directory / runs.MANIFEST).read_text("utf-8"))
+        text = "\n".join(lines)
+        checks.ok(
+            answer.get("ran") is False and answer.get("reason") == "running",
+            "do_run_match answers `running` while the lock is held",
+            repr({k: v for k, v in answer.items() if k != "summary"}),
+        )
+        checks.ok(
+            "not joined      another join of this run is already in progress" in lines,
+            "and the press says another join of this run is already in progress",
+            text,
+        )
+        checks.ok(manifest.get("joined") is not True, "and the locked press joins nothing", text)
+
+
+def check_join_refusals_say_their_reason(checks: Checks) -> None:
+    """Each refusal the join can give has its own sentence. An unexpected error is logged, not only said."""
+    import subprocess
+
+    checks.note("")
+    checks.note("JOIN REFUSALS — each refusal prints its own sentence; an unexpected error is logged")
+    with isolated_home() as home, _stand_in_portal():
+
+        def press(box: int, name: str):
+            """One press over its own box and run, so each refusal is the only thing that differs."""
+            caps = Path(home) / f"{name}-caps"
+            _paid_caps(caps, [(box, 1)])
+            run = runs.create(name)
+            _as_child(run.directory)
+            return run, _run_press_with_log(run, caps, {f"{box}/1": DUNSPARCE_PAYLOAD})
+
+        not_waiting = {"ran": False, "reason": "not_waiting", "summary": {}}
+        with mock.patch.object(pipeline_routes, "do_run_match", return_value=not_waiting):
+            _, (code, lines, _) = press(11, "t7-not-waiting")
+        checks.ok(
+            "not joined      the run is not waiting for a join: it is already joined or still being read" in lines,
+            "a run not waiting for a join says so in its own sentence",
+            "\n".join(lines),
+        )
+
+        standing = runs.create("t7-problem-stands")
+        (standing.directory / "match.json").write_text(json.dumps({
+            "at": "2026-10-22T00:00:00+00:00",
+            "problem": {"code": "tcg_export_empty", "message": "TCGplayer sent no rows for this game", "step": "fetch"},
+        }), "utf-8")
+        _as_child(standing.directory)
+        _caps = Path(home) / "problem-caps"
+        _paid_caps(_caps, [(12, 1)])
+        code, lines, _ = _run_press_with_log(standing, _caps, {"12/1": DUNSPARCE_PAYLOAD})
+        checks.ok(
+            any(line.startswith("not joined      an earlier join problem stands: TCGplayer sent no rows") for line in lines),
+            "a standing problem says so, with its message",
+            "\n".join(lines),
+        )
+
+        with mock.patch.object(subprocess, "run", side_effect=subprocess.TimeoutExpired("banchi", 1)):
+            _, (code, lines, _) = press(14, "t7-timeout")
+        checks.ok(
+            any(line.startswith("not joined      the join was refused (step_timed_out): ") for line in lines),
+            "a step that times out prints its code",
+            "\n".join(lines),
+        )
+
+        with mock.patch.object(pipeline_routes, "do_run_match", side_effect=RuntimeError("t7 boom")):
+            _, (code, lines, err) = press(15, "t7-unexpected")
+        checks.ok(
+            "identify auto-join: RuntimeError: t7 boom" in err,
+            "an unexpected error is logged to the server log, by its type and message",
+            err,
+        )
+        checks.ok(
+            any(line.startswith("not joined      the join could not start because ") for line in lines),
+            "and the press says the join could not start",
+            "\n".join(lines),
+        )
+
+
+def check_identify_export_starts_at_the_join(checks: Checks) -> None:
+    """An identify run starts no export download before its join: the one download is made by the join, on the thread that runs the join, and on no thread the run starts.
+
+    Exactly one export request reaches the portal.
+    """
+    checks.note("")
+    checks.note("EXPORT FROM THE JOIN — no download before the join, none on a thread the run starts, one at most")
+    real_match = pipeline_routes.do_run_match
+    real_export = pipeline_routes.do_pipeline_export
+    real_start = threading.Thread.start
+    events: list = []
+    started: list = []
+
+    def recording_start(self):
+        started.append(self.name)
+        return real_start(self)
+
+    def recording_match(name, payload):
+        events.append(("join", threading.current_thread().name))
+        return real_match(name, payload)
+
+    def recording_export(name, payload):
+        events.append(("export", threading.current_thread().name))
+        return real_export(name, payload)
+
+    with isolated_home() as home, _stand_in_portal() as hits:
+        caps = Path(home) / "export-from-join-caps"
+        _paid_caps(caps, [(5, 1)])
+        run = runs.create("t7-export-from-join")
+        _as_child(run.directory)
+        with mock.patch.object(threading.Thread, "start", recording_start), \
+                mock.patch.object(pipeline_routes, "do_run_match", recording_match), \
+                mock.patch.object(pipeline_routes, "do_pipeline_export", recording_export):
+            _, lines, _ = _run_press_with_log(run, caps, {"5/1": DUNSPARCE_PAYLOAD})
+        manifest = json.loads((run.directory / runs.MANIFEST).read_text("utf-8"))
+    kinds = [kind for kind, _ in events]
+    join_thread = events[0][1] if events else None
+    export_thread = events[1][1] if len(events) > 1 else None
+    checks.ok(kinds == ["join", "export"], "the join starts first, and the export is fetched from inside it", repr(events))
+    checks.ok(
+        export_thread is not None and export_thread == join_thread and export_thread not in started,
+        "the export is fetched on the join's own thread, and no thread the run starts fetches it",
+        f"events {events!r}, threads started {started!r}",
+    )
+    checks.ok(hits["export"] == 1, "exactly one export request reaches the portal", repr(hits))
+    checks.ok(manifest.get("joined") is True, "and the run is joined", "\n".join(lines))
+
+
+def check_lock_failure_is_not_running(checks: Checks) -> None:
+    """A lock failure that is not contention is not answered `running`: a `flock` that fails with EIO is an error, not "another join"."""
+    import errno
+
+    checks.note("")
+    checks.note("LOCK FAILURE, NOT CONTENTION — not answered `running`")
+    with isolated_home(), _stand_in_portal():
+        run = runs.create("t8-lock-failure")
+        with mock.patch("fcntl.flock", side_effect=OSError(errno.EIO, "t8 lock failed")) as flock, quiet():
+            try:
+                answer = pipeline_routes.do_run_match(run.directory.name, {})
+                outcome = answer.get("reason") or "answered without a reason"
+            except Exception as caught:  # noqa: BLE001 - the answer is what this check reads
+                outcome = type(caught).__name__
+    checks.ok(flock.called, "the run reaches its lock, so the failure is the lock's own", repr(flock.call_count))
+    checks.ok(outcome != "running", "a lock failure that is not contention is not answered `running`", outcome)
+
+
+# ------------------------------------------------ the token cap: thinking off, the cap's own stop
+#
+# The real `run_batch`, the real requests and the real collection run. Only the transport is a
+# stub: it answers each request from the request it was sent, so a case says what the model did
+# at each cap. Nothing is paid for. The wire words are literals (`max_tokens`, 512, 2048,
+# `thinking`), never the product's constants, because the contract is what the request carries
+# and what the run prints.
+
+CAP_STOP = "max_tokens"
+THINKING_TEXT = "The title is clear. The number is at the bottom left."
+PIKACHU_ANSWER = json.dumps(
+    {"name": "Pikachu", "number": "025", "printed_total": "102", "finish": "normal", "confidence": "high"}
+)
+
+
+def _message(*, text=None, thinking=None, stop="end_turn", output=40):
+    content = []
+    if thinking is not None:
+        content.append(SimpleNamespace(type="thinking", thinking=thinking))
+    if text is not None:
+        content.append(SimpleNamespace(type="text", text=text))
+    usage = SimpleNamespace(input_tokens=1200, output_tokens=output)
+    return SimpleNamespace(content=content, stop_reason=stop, usage=usage)
+
+
+def _succeeded(message):
+    return SimpleNamespace(type="succeeded", message=message)
+
+
+def _errored():
+    return SimpleNamespace(type="errored", error=SimpleNamespace(type="api_error"))
+
+
+def _long_card(params):
+    """A card that needs more than 512 tokens: it stops at the cap, and answers at 2048."""
+    if params["max_tokens"] < 2048:
+        return _succeeded(_message(thinking=THINKING_TEXT, stop=CAP_STOP, output=params["max_tokens"]))
+    return _succeeded(_message(thinking=THINKING_TEXT, text=PIKACHU_ANSWER, output=900))
+
+
+class _StubBatches:
+    """The batch calls `identify/batch.py` makes. `answer(custom_id, params, round)` picks each result."""
+
+    def __init__(self, answer):
+        self.answer = answer
+        self.sent: list = []  # one list of request dicts per batch the run created
+        self.results_by_id: dict = {}
+
+    def create(self, requests):
+        self.sent.append(list(requests))
+        round_no = len(self.sent)
+        batch_id = f"msgbatch_stub_{round_no}"
+        self.results_by_id[batch_id] = [
+            SimpleNamespace(custom_id=r["custom_id"], result=self.answer(r["custom_id"], r["params"], round_no))
+            for r in requests
+        ]
+        return SimpleNamespace(id=batch_id)
+
+    def retrieve(self, batch_id):
+        return SimpleNamespace(id=batch_id, processing_status="ended", request_counts=None)
+
+    def results(self, batch_id):
+        return iter(self.results_by_id[batch_id])
+
+
+class _StubClient:
+    def __init__(self, answer):
+        self.messages = SimpleNamespace(batches=_StubBatches(answer))
+
+    def with_options(self, **_kwargs):
+        return self
+
+    def rounds(self) -> list:
+        """Each batch the run sent, as `{custom_id: max_tokens}`."""
+        return [{r["custom_id"]: r["params"]["max_tokens"] for r in sent} for sent in self.messages.batches.sent]
+
+
+def _images_per_card(client) -> list:
+    """Each batch's requests as `{custom_id: image blocks}`. A crop retry adds one block a region."""
+    return [
+        {
+            r["custom_id"]: sum(1 for block in r["params"]["messages"][0]["content"] if block.get("type") == "image")
+            for r in sent
+        }
+        for sent in client.messages.batches.sent
+    ]
+
+
+def _identify_stubbed(home, answer, indexes, *, crops=None, budget=None):
+    """One `banchi identify` over cards 1..n in a fresh capture folder. -> (exit code or the
+    exception text, the stub client). `budget` is `--retry-budget`; None keeps the default."""
+    from unittest import mock
+
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+
+    caps = Path(home) / "captures" / "cards" / "box3"
+    caps.mkdir(parents=True)
+    for index in indexes:
+        # `card_photo`, not a flat frame: a flat dark frame is an empty slot and `identify` never sends it.
+        card_photo((120 + index, 40, 40)).save(caps / f"{index:04d}.jpg", "JPEG")
+        (caps / f"{index:04d}.json").write_text(
+            json.dumps({"box": 3, "index": index, "position": index, "game": "pokemon"}), "utf-8"
+        )
+    client = _StubClient(answer)
+    crop_stub = crops if crops is not None else cmd_identify._crop_attachments
+    with mock.patch.object(batch, "_client", lambda *_a, **_k: client), mock.patch.object(
+        cmd_identify, "_crop_attachments", crop_stub
+    ), quiet():
+        try:
+            outcome = cmd_identify.run(
+                cli_entry.build_parser().parse_args(
+                    ["identify", str(caps), "--engine", "haiku", *(["--retry-budget", str(budget)] if budget else [])]
+                ),
+                lambda *_a: None,
+            )
+        except Exception as exc:  # a crash fails its own check; it must not take T7 down
+            outcome = f"raised {type(exc).__name__}: {exc}"
+    return outcome, client
+
+
+def _stub_run(answer):
+    """One `run_batch` over one card, through the stub client. -> (the run, the stub client)."""
+    client = _StubClient(answer)
+    request = batch.ImageRequest(custom_id="card-1", media_type="image/jpeg", data_b64="AAAA")
+    return batch.run_batch([request], client=client, poll_seconds=0), client
+
+
+def check_identify_request_thinks_off_under_cap(checks: Checks) -> None:
+    """The identification request says `thinking: disabled` and keeps the 512 cap.
+
+    Haiku 5.5 thinks by default and thinking spends the cap, so the request must turn it off.
+    """
+    request = batch.ImageRequest(custom_id="card-1", media_type="image/jpeg", data_b64="AAAA")
+    params = batch.build_request(request)["params"]
+    checks.equal(
+        params.get("thinking"), {"type": "disabled"},
+        "the request says `thinking: disabled`, so every output token is the answer",
+    )
+    checks.equal(params.get("max_tokens"), 512, "and the first request's cap is 512")
+
+
+def check_identify_thinking_only_stop_is_named_and_counted(checks: Checks) -> None:
+    """A card that spent its whole cap on thinking is named `max_tokens`, not `malformed`.
+
+    The message has a thinking block and no text block, and its stop reason is `max_tokens`.
+    The tokens it spent still count on the run.
+    """
+    run, _client = _stub_run(
+        lambda _cid, _params, _round: _succeeded(_message(thinking=THINKING_TEXT, stop=CAP_STOP, output=512))
+    )
+    outcome = run.outcomes.get("card-1")
+    checks.equal(
+        getattr(outcome, "status", None), CAP_STOP,
+        "the outcome is named `max_tokens`, so the retry gives it room instead of a crop",
+    )
+    checks.equal(run.usage.output_tokens, 512, "and the 512 tokens it spent are counted on the run")
+
+
+def check_identify_thinking_then_text_still_parses(checks: Checks) -> None:
+    """A thinking block ahead of the answer does not stop the answer from parsing.
+
+    The cap was not reached, so this is a success and nothing is retried.
+    """
+    run, client = _stub_run(
+        lambda _cid, _params, _round: _succeeded(_message(thinking=THINKING_TEXT, text=PIKACHU_ANSWER, output=300))
+    )
+    outcome = run.outcomes.get("card-1")
+    checks.equal(getattr(outcome, "status", None), batch.SUCCEEDED, "a thinking block then a text block under the cap is a success")
+    checks.equal(
+        getattr(getattr(outcome, "identification", None), "name", None), "Pikachu",
+        "and the text block's JSON is the answer that parses",
+    )
+    checks.equal(len(client.messages.batches.sent), 1, "with no retry round")
+
+
+def check_identify_retry_carries_the_larger_cap(checks: Checks) -> None:
+    """A card that stopped on its cap is re-sent at 2048. The first request carried 512."""
+    from cli import cmd_identify
+
+    with isolated_home() as home:
+        outcome, client = _identify_stubbed(home, lambda _cid, params, _round: _long_card(params), [1])
+    cid = cmd_identify._custom_id("3/1")
+    rounds = client.rounds()
+    checks.equal(outcome, 0, "`banchi identify` exits 0 once the retry answers")
+    checks.equal(rounds[:1], [{cid: 512}], "the first request carries the 512 cap")
+    checks.equal(rounds[1:2], [{cid: 2048}], "the retry carries 2048, never the same 512 request again")
+
+
+def check_identify_mixed_retry_round_caps_only_the_long_card(checks: Checks) -> None:
+    """One retry round holds a card that stopped on its cap and a card that errored.
+
+    Each keeps its own cap: 2048 for the card that ran out, 512 for the card that did not.
+    """
+    from cli import cmd_identify
+
+    long_cid = cmd_identify._custom_id("3/1")
+    flaky_cid = cmd_identify._custom_id("3/2")
+    flaky_attempts: list = []
+
+    def answer(cid, params, _round):
+        if cid != flaky_cid:
+            return _long_card(params)
+        flaky_attempts.append(cid)
+        if len(flaky_attempts) == 1:
+            return _errored()
+        return _succeeded(_message(text=PIKACHU_ANSWER, output=60))
+
+    with isolated_home() as home:
+        outcome, client = _identify_stubbed(home, answer, [1, 2])
+    rounds = client.rounds()
+    checks.equal(outcome, 0, "`banchi identify` exits 0 once the mixed retry answers")
+    checks.equal(
+        rounds[1:2], [{long_cid: 2048, flaky_cid: 512}],
+        "the mixed retry round caps only the card that ran out: 2048 for it, 512 for the errored one",
+    )
+
+
+def check_identify_second_cap_stop_queues_identification_failed(checks: Checks) -> None:
+    """A card that stops on its cap twice is not re-sent a third time: the budget is one.
+
+    It queues as `identification_failed`, with its photograph and the reason of its last attempt.
+    """
+    from cli import cmd_identify
+
+    def always_stops(_cid, params, _round):
+        return _succeeded(_message(thinking=THINKING_TEXT, stop=CAP_STOP, output=params["max_tokens"]))
+
+    with isolated_home() as home:
+        outcome, client = _identify_stubbed(home, always_stops, [1])
+        run = runs.latest()
+        try:
+            resolved = resolve.load(run, {"pokemon": FIXTURE_EXPORT})
+            main, _parked = resolve.entries_for(resolved)
+            failed = [entry for entry in main if entry.reason == routing.IDENTIFICATION_FAILED]
+        except Exception as exc:  # a crash fails the checks below by name
+            failed = f"raised {type(exc).__name__}: {exc}"
+    cid = cmd_identify._custom_id("3/1")
+    checks.equal(client.rounds(), [{cid: 512}, {cid: 2048}], "one retry at 2048, then no third request: the budget is one")
+    checks.equal(outcome, 0, "`banchi identify` exits 0 with the card queued, not dropped")
+    checks.equal(
+        len(failed) if isinstance(failed, list) else failed, 1,
+        "the card is queued as `identification_failed`, once",
+    )
+    if isinstance(failed, list) and failed:
+        queued = failed[0]
+        checks.ok(
+            str(queued.photo or "").endswith("0001.jpg"),
+            "the queued card carries its photograph",
+            f"photo: {queued.photo!r}",
+        )
+        checks.equal(queued.read.get("status"), CAP_STOP, "its read names the cap stop")
+        checks.ok(
+            "2048" in str(queued.read.get("error")),
+            "its reason is the last attempt's: the answer ran out at 2048 tokens",
+            f"error: {queued.read.get('error')!r}",
+        )
+
+
+def check_identify_cap_stops_count_in_the_run_usage(checks: Checks) -> None:
+    """The run's manifest counts the output tokens of both cap stops: 512, then 2048."""
+
+    def always_stops(_cid, params, _round):
+        return _succeeded(_message(thinking=THINKING_TEXT, stop=CAP_STOP, output=params["max_tokens"]))
+
+    with isolated_home() as home:
+        _identify_stubbed(home, always_stops, [1])
+        manifest = runs.latest().manifest
+    checks.equal(
+        (manifest.get("usage") or {}).get("output_tokens"), 512 + 2048,
+        "the manifest's output total includes both stops",
+    )
+
+
+def check_identify_max_tokens_card_not_sent_on_crop_path(checks: Checks) -> None:
+    """A card that stopped on its cap is not sent with crops, even when a card in its retry round needs them.
+
+    The cure for a cap stop is room. A crop is the cure for a bad read, and it is the wrong one here.
+    """
+    from cli import cmd_identify
+
+    long_cid = cmd_identify._custom_id("3/1")
+    bad_cid = cmd_identify._custom_id("3/2")
+
+    def answer(cid, params, _round):
+        if cid == bad_cid:
+            return _succeeded(_message(text="I cannot read this card.", output=30))
+        return _long_card(params)
+
+    def crop_stub(_item, _say):
+        return [batch.Attachment(media_type="image/jpeg", data_b64="QUJD")]
+
+    with isolated_home() as home:
+        _outcome, client = _identify_stubbed(home, answer, [1, 2], crops=crop_stub)
+    images = _images_per_card(client)
+    checks.equal(
+        images[:1], [{long_cid: 1, bad_cid: 1}],
+        "the first request sends each card's photograph alone",
+    )
+    checks.equal(
+        images[1:2], [{long_cid: 1, bad_cid: 2}],
+        "the retry round crops the bad read and not the card that stopped on its cap",
+    )
+
+
+def _second_cap_stop_is_final(checks: Checks, budget: int) -> None:
+    """A card that stops on its cap at 512 and again at 2048 gets no third request, at any budget."""
+    from cli import cmd_identify
+
+    def always_stops(_cid, params, _round):
+        return _succeeded(_message(thinking=THINKING_TEXT, stop=CAP_STOP, output=params["max_tokens"]))
+
+    with isolated_home() as home:
+        outcome, client = _identify_stubbed(home, always_stops, [1], budget=budget)
+        run = runs.latest()
+        try:
+            resolved = resolve.load(run, {"pokemon": FIXTURE_EXPORT})
+            main, _parked = resolve.entries_for(resolved)
+            failed = [entry for entry in main if entry.reason == routing.IDENTIFICATION_FAILED]
+        except Exception as exc:  # a crash fails the checks below by name
+            failed = f"raised {type(exc).__name__}: {exc}"
+    cid = cmd_identify._custom_id("3/1")
+    checks.equal(
+        client.rounds(), [{cid: 512}, {cid: 2048}],
+        f"at budget {budget}: 512, then 2048, and no third request",
+    )
+    checks.equal(outcome, 0, f"at budget {budget}: `banchi identify` exits 0 with the card queued, not dropped")
+    checks.equal(
+        len(failed) if isinstance(failed, list) else failed, 1,
+        f"at budget {budget}: the card is queued as `identification_failed`, once",
+    )
+
+
+def check_identify_second_cap_stop_is_final_at_budget_two(checks: Checks) -> None:
+    """Budget 2 leaves a retry unspent after the second cap stop. It is not spent: the 2048 request ran out already."""
+    _second_cap_stop_is_final(checks, 2)
+
+
+def check_identify_second_cap_stop_is_final_at_budget_three(checks: Checks) -> None:
+    """Budget 3 leaves two retries unspent after the second cap stop. Neither is spent."""
+    _second_cap_stop_is_final(checks, 3)
+
+
+def check_identify_errored_retry_of_a_cap_stop_keeps_the_larger_cap(checks: Checks) -> None:
+    """A card stops on its cap, its 2048 retry errors, and the next send is 2048 again.
+
+    The cap follows the card's history. Its last status is `errored`, which says nothing about room.
+    """
+    from cli import cmd_identify
+
+    def answer(_cid, params, round_no):
+        return _errored() if round_no == 2 else _long_card(params)
+
+    with isolated_home() as home:
+        outcome, client = _identify_stubbed(home, answer, [1], budget=2)
+    cid = cmd_identify._custom_id("3/1")
+    checks.equal(outcome, 0, "`banchi identify` exits 0 once the third request answers")
+    checks.equal(
+        client.rounds(), [{cid: 512}, {cid: 2048}, {cid: 2048}],
+        "512, then the 2048 retry that errors, then 2048 again and not 512",
+    )
+
+
+def check_identify_mixed_rounds_keep_each_cards_cap_after_both_error(checks: Checks) -> None:
+    """A cap stop and an errored card share two retry rounds: 2048 for the first, 512 for the second.
+
+    In round 3 both cards' last status is `errored` and their caps still differ, because only
+    one of them has ever run out of room.
+    """
+    from cli import cmd_identify
+
+    long_cid = cmd_identify._custom_id("3/1")
+    flaky_cid = cmd_identify._custom_id("3/2")
+
+    def answer(cid, params, round_no):
+        if round_no == 2 or (round_no == 1 and cid == flaky_cid):
+            return _errored()
+        if cid == long_cid:
+            return _long_card(params)
+        return _succeeded(_message(text=PIKACHU_ANSWER, output=60))
+
+    with isolated_home() as home:
+        outcome, client = _identify_stubbed(home, answer, [1, 2], budget=2)
+    rounds = client.rounds()
+    checks.equal(outcome, 0, "`banchi identify` exits 0 once the third request answers")
+    checks.equal(rounds[:1], [{long_cid: 512, flaky_cid: 512}], "the first request carries 512 for both cards")
+    checks.equal(
+        rounds[1:2], [{long_cid: 2048, flaky_cid: 512}],
+        "round 2: 2048 for the card that ran out, 512 for the one that errored",
+    )
+    checks.equal(
+        rounds[2:3], [{long_cid: 2048, flaky_cid: 512}],
+        "round 3, both last answers errored: the card that ran out keeps 2048, the other keeps 512",
+    )
+
+
 CHECKS = (
     check_cli_seams,
     check_code_ledger,
@@ -6538,4 +7516,26 @@ CHECKS = (
     check_selection_unknown_route_keys,
     check_identify_empty_flag_refuses,
     check_empty_state_refusal_blames_no_missing_folder,
+    check_paid_run_ends_joined,
+    check_paid_run_no_export_holds_at_join,
+    check_paid_run_readback_matches_queues,
+    check_paid_run_clears_pid_marker,
+    check_positionless_failed_card_counts_main_queue,
+    check_run_dir_outside_store_is_not_joined,
+    check_join_lock_held_answers_running,
+    check_join_refusals_say_their_reason,
+    check_identify_export_starts_at_the_join,
+    check_lock_failure_is_not_running,
+    check_identify_request_thinks_off_under_cap,
+    check_identify_thinking_only_stop_is_named_and_counted,
+    check_identify_thinking_then_text_still_parses,
+    check_identify_retry_carries_the_larger_cap,
+    check_identify_mixed_retry_round_caps_only_the_long_card,
+    check_identify_second_cap_stop_queues_identification_failed,
+    check_identify_cap_stops_count_in_the_run_usage,
+    check_identify_max_tokens_card_not_sent_on_crop_path,
+    check_identify_second_cap_stop_is_final_at_budget_two,
+    check_identify_second_cap_stop_is_final_at_budget_three,
+    check_identify_errored_retry_of_a_cap_stop_keeps_the_larger_cap,
+    check_identify_mixed_rounds_keep_each_cards_cap_after_both_error,
 )

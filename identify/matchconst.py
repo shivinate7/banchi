@@ -14,6 +14,10 @@ from pathlib import Path
 
 SERVED_GAMES = ("pokemon", "riftbound", "one_piece")
 
+# The reason code of a photograph of an empty slot. Here, not in `identify/match.py`, because the
+# run record carries it and `cli/resolve.py` reads it without importing the matcher.
+UNREAD_EMPTY_SLOT = "empty_slot"
+
 MODEL_FILENAME = "marqo-b-image.onnx"
 MODEL_SHA256 = "79bc0fec967bdbb695a082344a5c2b4dc8ca47f34e72bf32c90f2e99e455a003"
 MODEL_BYTES = 371_700_983

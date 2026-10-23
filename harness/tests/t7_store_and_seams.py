@@ -192,6 +192,7 @@ from harness.tests.t7 import (  # noqa: E402
     free_adopt,
     match_audit,
     match_claim,
+    empty_slot,
     drift_homes,
     drift_homes_batch2,
     orders,
@@ -207,6 +208,7 @@ from harness.tests.t7 import (  # noqa: E402
     realized_prices,
     preview_crop,
     read_budget,
+    manifest_merge,
     second_look_counts,
 )
 # `t7_box_map.py` imports these names from this module, so they stay reachable here (D264).
@@ -253,6 +255,7 @@ CHECK_ORDER = (
     *free_adopt.CHECKS,
     *match_audit.CHECKS,
     *match_claim.CHECKS,
+    *empty_slot.CHECKS,
     *drift_homes.CHECKS,
     *drift_homes_batch2.CHECKS,
     *auto_setup.CHECKS,
@@ -270,6 +273,7 @@ CHECK_ORDER = (
     *realized_prices.CHECKS,
     *preview_crop.CHECKS,
     *read_budget.CHECKS,
+    *manifest_merge.CHECKS,
     *second_look_counts.CHECKS,
 )
 
