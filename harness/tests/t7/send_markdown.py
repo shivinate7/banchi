@@ -5806,6 +5806,31 @@ def check_run_match(checks: Checks) -> None:
             "and the door's own press asks again, and the fixed run matches",
         )
 
+    with _case(checks, "Q4: a run waiting on its own stored problem leaves the refresh's join step ok"), send_portal() as portal, \
+            synced_home():
+        run = reading_done(hinted=0)
+        held = pipeline_routes.do_run_match(run.name, {})
+        checks.equal(
+            (held["ok"], (held["summary"]["match_problem"] or {}).get("code")),
+            (False, "export_needs_set_hint"),
+            "the run stores its own problem first, by the route the case above takes",
+        )
+        answer = pipeline_routes.do_prices_refresh(history=None)
+        join = (answer.get("steps") or {}).get("join") or {}
+        checks.equal(
+            join.get("ok"), True,
+            "a refresh that finds the run waiting on its own problem leaves the join step ok",
+        )
+        checks.ok(
+            "waits on its own problem" in str(join.get("message") or ""),
+            "and the join step's note says it waits on its own problem",
+            json.dumps(join)[:400],
+        )
+        checks.equal(
+            answer.get("ok"), True,
+            "so the refresh is not failed: its listings, catalog and join all came out ok",
+        )
+
     with _case(checks, "Q4: a signed-out session is the next step"), send_portal() as portal, \
             synced_home():
         run = reading_done(hinted=len(cards))

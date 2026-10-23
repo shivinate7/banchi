@@ -856,7 +856,7 @@ test('the Live tab’s Download keeps its words and its place while it writes', 
 test('a read older than a day offers Read again in place of Send, and no count as if current', async ({ page }) => {
   await open(page, { at: new Date(Date.now() - 3 * 86_400_000).toISOString() })
   const bar = page.getByRole('region', { name: 'Send these prices' })
-  await expect(bar).toContainText('more than a day ago')
+  await expect(bar).toContainText('on an earlier day')
   await expect(bar.getByRole('button', { name: 'Read Again' })).toBeVisible()
   await expect(page.getByRole('button', { name: /^Send/ })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /^Download/ })).toHaveCount(0)
