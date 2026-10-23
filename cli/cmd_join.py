@@ -383,6 +383,31 @@ def record_readings(writable, run_dir, table, at) -> None:
     writable.readings.replace_source(readings_store.KIND_RUN, run_dir.name, found, source)
 
 
+def _second_look_where(run_dir, resolved) -> Optional[dict]:
+    """Where this run's own second-look cards went at this join: held for review (`routing.READERS_DISAGREE`
+    or `routing.SECOND_LOOK_UNSURE`), in the main queue for any other reason, or parked. A card in none
+    of them is settled. None when the run had no second look. Read by the run panel's receipt, so the
+    panel and the counts beside it have one source. A queued card is matched by the second look it
+    carries, not by its slot, so a card `resolve.realign` moved is still counted where it went. A
+    pre-join failure carries no card, so it is matched by its record key, which realign does not move."""
+    keys = {str(row.get("key")) for row in run_dir.manifest.get("second_look") or [] if isinstance(row, dict)}
+    if not keys:
+        return None
+    held = main = parked = 0
+    for g in resolved.joins.values():
+        for q in g.report.queued:
+            if q.card.second_look is None:
+                continue
+            if q.queue == routing.PARKED:
+                parked += 1
+            elif q.destination.reason in (routing.READERS_DISAGREE, routing.SECOND_LOOK_UNSURE):
+                held += 1
+            elif q.queue == routing.MAIN:
+                main += 1
+    main += sum(1 for f in resolved.failures if f.key in keys)
+    return {"held": held, "main": main, "parked": parked}
+
+
 def read_cids(manifest) -> Optional[frozenset]:
     """The card identities a join reads off a run (`resolve.store_backed_payload` follows them),
     taken before the join reads its cards. None for a run that records none."""
@@ -407,6 +432,7 @@ def record_join(run_dir, resolved, review_below, read: Optional[frozenset] = Non
         return [str(e.get("name") or e.get("cid")) for e in (disk.get("cards") or {}).values()
                 if e.get("cid") not in read]
 
+    where = _second_look_where(run_dir, resolved)
     return run_dir.set_if(
         unread,
         exports={g.game: g.source for g in resolved.joins.values()},
@@ -426,6 +452,7 @@ def record_join(run_dir, resolved, review_below, read: Optional[frozenset] = Non
             ),
             "no_market_data": len(resolved.no_market_data_skus),
             "sub_threshold": len(resolved.sub_threshold_skus),
+            **({} if where is None else {f"second_look_{name}": n for name, n in where.items()}),
         },
     ) or []
 
