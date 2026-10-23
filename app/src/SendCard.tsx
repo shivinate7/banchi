@@ -274,8 +274,6 @@ const LEFT_WHY: Record<string, string> = {
   adds_copies: 'its new copies carry the price',
 }
 
-/** The price changes the button named that this press left out. Named once, right after the
- *  press, like the guard's trims. */
 /** THE PRICES WERE READ AGAIN FIRST, because the runs' export was from an earlier day. They may
  *  differ from what the screen showed when the owner pressed. */
 function PricesRefreshed({ send }: { readonly send: SendSummary }) {
@@ -284,11 +282,13 @@ function PricesRefreshed({ send }: { readonly send: SendSummary }) {
   const day = new Date(`${refresh.was}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
   return (
     <Notice tone="info" compact className="send-prices-refreshed" title="Prices were refreshed before sending.">
-      They came from {day}, so Banchi read today's first. They may differ from what you saw.
+      They came from {day}, so Banchi read them again first. They may differ from what you saw.
     </Notice>
   )
 }
 
+/** The price changes the button named that this press left out. Named once, right after the
+ *  press, like the guard's trims. */
 function PricesLeft({ send }: { readonly send: SendSummary }) {
   if (send.prices_left.length === 0) return null
   return (
@@ -958,7 +958,8 @@ export function SendCard({
           {sent !== null && sent.stamp === standing.stamp ? <NotSent gone={standing.gone} /> : null}
           {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TookOff taken={standing.taken_off} download={false} /> : null}
           {sent !== null && sent.stamp === standing.stamp ? <PricesLeft send={standing} /> : null}
-          {sent !== null && sent.stamp === standing.stamp ? <PricesRefreshed send={standing} /> : null}
+          {/* THE RECEIPT KEEPS IT, so a reload still says the prices were read again. */}
+          <PricesRefreshed send={standing} />
         </>
       )}
 

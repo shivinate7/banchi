@@ -456,18 +456,20 @@ they were.
   `reprice.read_is_fresh`): its read must be from today, or it refuses as `read_stale`.
 - **The receipt says so.** `do_send`'s receipt and answer carry `refresh`: `ran`, `ok`, the day
   the prices were `was`, and the `export_day` they now come from. The send card says in one
-  sentence when prices were refreshed first, and that they may differ from what was on screen.
+  sentence when prices were refreshed first, and that they may differ from what was on screen. It
+  reads the receipt, so a reload keeps it for as long as the receipt stands on the card.
 - **A refresh that fails for another run does not stop this send.** The outcome is what is tested.
   A named `--export` file is the owner's own prices, so a stale one is refused without a refresh.
 - **The refresh joins runs waiting at phase join.** The free reader leaves a run unjoined when no
   export is within `EXPORT_REUSE_S`. The roster holds joined runs only, so such a run was on no
   worklist. Step 3 now calls `do_run_match` for each, without `retry`: a run whose last try left a problem is not fetched again (one portal
-  request a day, D104), and waits for its own retry press. A run that cannot join is named
-  in `steps.join` and stays waiting. A pressed send is never widened to the runs the refresh joined:
+  request a day, D104), and waits for its own retry press. That wait is not a failure: `steps.join`
+  stays ok and names the run as waiting on its own problem. A run that tried and could not join fails
+  the step, is named in `steps.join`, and stays waiting. A pressed send is never widened to the runs the refresh joined:
   they land on the worklist for the next send.
 - **A reading is never replaced by an older one.** `store/readings.replace_source` keeps a SKU's
-  row when it is dated later than the new one, and leaves a source whole when its own row is later
-  (a re-join against an older export). `at` is the export's own mtime: `cmd_join` dates
+  row when it is dated later than the new one. A re-join against an older export clears nothing,
+  keeps the source row, and writes only the SKUs no newer row holds. `at` is the export's own mtime: `cmd_join` dates
   `pricing.json` and its reading to the oldest export it joined, as `cmd_match` does.
 
 ### The one home for the current Market and Lowest of a SKU

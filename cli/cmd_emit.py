@@ -1225,7 +1225,11 @@ def _prices_from_today(named, overrides, say) -> bool:
     except pipeline_routes.PipelineRefusal as refusal:
         say(str(refusal))
         return False
-    say(f"prices           refreshed before this send: export of {done['was']}, now {done['export_day']}")
+    if done.get("ran"):
+        say(f"prices           refreshed before this send: export of {done.get('was')}, now {done.get('export_day')}")
+    else:
+        # STALE AT THE FIRST LOOK, CURRENT AT THE GATE'S OWN: another process refreshed in between.
+        say(f"prices           already from today: another refresh brought them current, export of {done.get('export_day')}")
     return True
 
 

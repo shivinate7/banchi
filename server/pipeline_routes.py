@@ -7739,9 +7739,10 @@ def _prices_refresh_steps(
             trouble.append(f"{name}: " + ((result["console"].strip().splitlines() or [""])[-1]))
     # RUNS WAITING AT PHASE JOIN are priced by the press that already joins them, which fetches or
     # reuses the game's export. A run whose last try left a problem is NOT tried again here (`do_run_match`
-    # answers `problem_stands`, one fetch a day, D104): its sentence is named and it stays waiting
-    # for its own "retry" press.
+    # answers `problem_stands`, one fetch a day, D104): it stays waiting for its own "retry" press. That
+    # is a wait, not a failure of this refresh, so the step stays ok and its note names the wait.
     waiting = _waiting_runs()
+    held: List[str] = []
     for name in waiting:
         answer = do_run_match(name, {})
         if answer.get("ran") and answer.get("ok"):
@@ -7751,9 +7752,10 @@ def _prices_refresh_steps(
         elif answer.get("reason") == "running":
             trouble.append(f"{name}: another join of this run is running.")
         elif answer.get("reason") == "problem_stands":
-            trouble.append(f"{name}: {((_read_match(_open_run(name)) or {}).get('problem') or {}).get('message') or 'its last join failed.'}")
+            said = ((_read_match(_open_run(name)) or {}).get("problem") or {}).get("message") or "its last join left a problem."
+            held.append(f"{name} waits on its own problem until it is retried: {said}")
     pricerefresh.note_step(
-        "join", not trouble, runs=len(fetched) + len(waiting), joined=joined, message=trouble[0] if trouble else ""
+        "join", not trouble, runs=len(fetched) + len(waiting), joined=joined, message=(trouble + held)[0] if trouble or held else ""
     )
 
     # 4. the sales history, last, because it is the slow one.
@@ -7893,7 +7895,9 @@ def refresh_before_send(names: Sequence[str], overrides: Optional[Sequence[str]]
         cause = "another refresh is running. Try again when it ends."
     else:
         steps = answer.get("steps") or {}
-        said = next((str(steps[k]["message"]) for k in ("listings", "catalog", "join") if steps.get(k, {}).get("message")), "")
+        said = next(
+            (str(steps[k]["message"]) for k in ("listings", "catalog", "join") if steps.get(k, {}).get("message") and not steps[k].get("ok")), ""
+        )
         cause = (said.rstrip(".") + ".") if said else "it brought in no new prices for these runs."
     raise PipelineRefusal(HTTPStatus.CONFLICT, "prices_stale", f"{start} Refreshing them failed: {cause}")
 

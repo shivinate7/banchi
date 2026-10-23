@@ -248,18 +248,17 @@ class Readings:
         THE NEWEST READING WINS, BY `at`, AND `at` IS THE EXPORT'S OWN TIME. A SKU in `found` replaces
         the row the table holds only when the table's row is not dated later (a tie goes to the new
         reading), including the row this same source held before it was cleared above. A source whose own
-        row is dated later than the new one is left whole, so a re-join against an older export of
-        the same run changes neither its rows nor its source row. So a join
+        row is dated later than the new one is not cleared and keeps its source row: a re-join against
+        an older export of the same run writes only the SKUs no newer row holds. So a join
         against an older export, or a late write, never puts an older price over a newer one. `at`
         is the export's mtime for a join (`cli/cmd_join`, `cli/cmd_match`) and the fetch's own stamp
         for a live read. A full `readings adopt --write` remains the periodic proof that this local
         reasoning has not drifted from `collect()`'s own arbitration.
         """
         held_source = self.sources.get(_source_key(kind, name))
-        if held_source is not None and source is not None and held_source.at > source.at:
-            return  # a re-join against an older export of the same source changes nothing it holds
+        older = held_source is not None and source is not None and held_source.at > source.at
         newest = {str(sku): self.entries[str(sku)] for sku in found if str(sku) in self.entries}
-        for old_name in (supersede if supersede is not None else (name,)):
+        for old_name in () if older else (supersede if supersede is not None else (name,)):
             old_key = _source_key(kind, old_name)
             if old_key in self.sources:
                 del self.sources[old_key]
@@ -269,5 +268,5 @@ class Readings:
         for sku, reading in found.items():
             held = newest.get(str(sku))
             self.entries[str(sku)] = held if held is not None and held.at > reading.at else reading
-        if source is not None:
+        if source is not None and not older:
             self.sources[_source_key(source.kind, source.name)] = source

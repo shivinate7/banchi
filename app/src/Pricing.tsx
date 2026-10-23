@@ -2810,7 +2810,7 @@ export function Pricing() {
     ) : liveTab && stamp !== null && readStale ? (
       <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send these prices">
         <p className="pricing-bar-says">
-          {sheet?.at ? `This read is from ${absoluteDate(sheet.at)}, more than a day ago. ` : 'This read has no date. '}
+          {sheet?.at ? `This read was taken on an earlier day, ${absoluteDate(sheet.at)}. ` : 'This read has no date. '}
           Read again to see what would change.
         </p>
         <div className="send-card">
