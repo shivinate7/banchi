@@ -537,6 +537,19 @@ test.describe('the published demo draws what reviewers grade', () => {
     // 36316345981's own error names it: "Test timeout of 30000ms exceeded." `test.setTimeout`
     // is the knob that actually needed raising.
     test.setTimeout(60_000)
+    // The walk-all plan is the recorded `POST /orders/walk-plan` that names the most order
+    // keys. The list draws one section button per stop and one press button per take.
+    const { responses } = JSON.parse(readFileSync(BUNDLE, 'utf-8')) as {
+      responses: Record<string, { body: { stops?: Array<{ takes: unknown[] }> } }>
+    }
+    const largest = Object.keys(responses)
+      .filter((key) => key.startsWith('POST /orders/walk-plan '))
+      .map((key) => ({ key, orders: (JSON.parse(key.slice(key.indexOf('{'))) as { keys: string[] }).keys.length }))
+      .sort((a, b) => b.orders - a.orders)[0]
+    if (largest === undefined) throw new Error('the recording holds no POST /orders/walk-plan entry, so there is no walk-all plan to draw')
+    const stops = responses[largest.key]?.body.stops ?? []
+    const expectedRows = stops.length + stops.reduce((sum, stop) => sum + stop.takes.length, 0)
+    expect(expectedRows, 'the largest recorded walk-plan entry has no stops to draw').toBeGreaterThan(0)
     await visit(page, 'Orders')
     await page.getByRole('button', { name: /^start walk/i }).first().click()
     const walk = page.getByRole('list', { name: /cards to pick/i })
@@ -546,12 +559,11 @@ test.describe('the published demo draws what reviewers grade', () => {
     // filling in. Wait for a row itself, web-first, before counting.
     const walkRows = walk.getByRole('button')
     await expect(walkRows.first()).toBeVisible()
-    // THE LIST APPEARS BEFORE THE PRESS DOES ANYTHING (the selected buyer's own walk is
-    // already drawn), so "a row exists" passed on that list and raced the walk-all plan the
-    // press asks for (main's demo run 36599655970 caught the race under CI load). The
-    // walk-all plan is many rows and the single buyer's is a few: wait for the many. A plan
-    // the recording lacks replaces the list with a notice, and this then fails, on any speed.
-    await expect.poll(() => walkRows.count(), { message: 'the walk-all plan never replaced the single-buyer list' }).toBeGreaterThan(20)
+    // THE LIST APPEARS BEFORE THE PRESS DOES ANYTHING: the selected buyer's own walk is already
+    // drawn, with fewer rows than the walk-all plan. So wait for the count to EQUAL the
+    // recorded walk-all plan's rows, never for a row to exist. A recording without that plan
+    // replaces the list with a notice, so the count never reaches it, at any speed.
+    await expect.poll(() => walkRows.count(), { message: `the walk-all plan (${expectedRows} rows) never replaced the single-buyer list` }).toBe(expectedRows)
     await expect(page.getByText('Could not read where the copies are')).toHaveCount(0)
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
   })
