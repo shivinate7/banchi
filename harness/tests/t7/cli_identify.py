@@ -251,7 +251,6 @@ def check_code_ledger(checks: Checks) -> None:
 
     from cli import __main__ as cli_entry
     from cli import cmd_identify
-    from identify import images as identify_images
 
     # 3-4-3-3, with a `?` for a character the model could not read and a lowercase letter
     # that `normalize_number` would have folded — the two properties the parser must keep.
@@ -2596,7 +2595,6 @@ def check_identify_preflight_stage(checks: Checks) -> None:
     """
     from cli import __main__ as cli_entry
     from cli import cmd_identify
-    from identify import images as identify_images
 
     checks.note("")
     checks.note("IDENTIFY PREFLIGHT — hash, then cache, then prepare (Item.stage)")
@@ -6601,12 +6599,12 @@ def _identify_stubbed(home, answer, indexes, *, crops=None, budget=None):
 
     from cli import __main__ as cli_entry
     from cli import cmd_identify
-    from identify import images as identify_images
 
     caps = Path(home) / "captures" / "cards" / "box3"
     caps.mkdir(parents=True)
     for index in indexes:
-        identify_images.Image.new("RGB", (64, 89), (120 + index, 40, 40)).save(caps / f"{index:04d}.jpg", "JPEG")
+        # `card_photo`, not a flat frame: a flat dark frame is an empty slot and `identify` never sends it.
+        card_photo((120 + index, 40, 40)).save(caps / f"{index:04d}.jpg", "JPEG")
         (caps / f"{index:04d}.json").write_text(
             json.dumps({"box": 3, "index": index, "position": index, "game": "pokemon"}), "utf-8"
         )

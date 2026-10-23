@@ -40,7 +40,6 @@ from harness.tests.t7.common import (
 )
 from pipeline import tcgcsv
 from identify import batch, match, prompt
-from identify import images as identify_images
 from server import capture_server
 from store import cache as cache_mod
 from store import files, master
