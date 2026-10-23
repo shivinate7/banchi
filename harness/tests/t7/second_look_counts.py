@@ -50,6 +50,16 @@ class _RunDir:
     def set(self, **fields) -> None:
         self.written = fields
 
+    def set_if(self, refuse, **values):
+        """`runs.Run.set_if`: `refuse(disk)` answers why not, or nothing. A refusal writes nothing
+        and is returned. The manifest here stands for the disk."""
+        why = refuse(self.manifest)
+        if why:
+            return why
+        self.manifest.update(values)
+        self.written = values
+        return None
+
 
 def check_second_look_record(checks: Checks) -> None:
     checks.note("")

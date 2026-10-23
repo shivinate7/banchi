@@ -35,7 +35,7 @@ Five runs closed under the old rule. Each lists its unsent copies:
 
 **Where it lives: `#/pricing`. It is the first door widened, not a third door.** The operator asked for runs to be more unified. The answer is a view that is not run-scoped. That is the opposite of putting it on `#/runs`. That screen is the run log and the money gate. A run there is one box (D180). `#/inventory` is where cards are, and it never sends (D31). The ship bar, the cut-off, the cap field, the per-card quantity, the holds and the rule strip all live on `#/pricing`. D105's rule decides it: a markdown lives where prices are decided, and so does a send.
 
-One rule changed. A run is open while it owes something OR holds an unsent copy. The default landing asks for open runs, so it became the unsent worklist by that definition alone. `roster[].unsent` is the count. `owes` is unchanged, so Home's "runs to price" keeps its meaning.
+A run waiting at phase join is on no worklist until it joins. The price refresh joins each one (`do_run_match`), so its cards land here. One rule changed. A run is open while it owes something OR holds an unsent copy. The default landing asks for open runs, so it became the unsent worklist by that definition alone. `roster[].unsent` is the count. `owes` is unchanged, so Home's "runs to price" keeps its meaning.
 
 **A row is a SKU, and its copies sit on it.** The import file counts by SKU with a quantity (D7). The row already draws every box a card sits in. It also draws the positions that address its photograph. The Qty field's placeholder shows the copies that can still go. Its title says how many of the rest are already at TCGplayer. A row per copy would draw seven rows for one line of the spreadsheet.
 

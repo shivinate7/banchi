@@ -6873,6 +6873,20 @@ def do_reclaim_box_photos(box: int, payload: dict) -> dict:
     }
 
 
+def _runs_that_lost_their_cards(names) -> List[str]:
+    """Of these runs, the ones that no longer find any card after their drawer was deleted."""
+    snapshot = Store().read()
+    lost = []
+    for name in sorted(names):
+        try:
+            directory = pipeline_routes._open_run(name)
+        except pipeline_routes.PipelineRefusal:
+            continue
+        if not pipeline_routes._follows_its_cards(directory, snapshot):
+            lost.append(name)
+    return lost
+
+
 def do_delete_box(box: int) -> dict:
     """Delete a whole box: records, photos, sidecars, queue entries, cache, registry.
 
@@ -7096,6 +7110,12 @@ def do_delete_box(box: int) -> dict:
         "cache_deleted": cache_dropped,
         "registry_deleted": registry_deleted,
         "directory_removed": directory_removed,
+        # THE BACKUP WARNING. A run over this drawer follows its moved cards by photograph
+        # (D262), so only a run whose cards cannot be followed is named here: those stay off
+        # the price list until a Rebind.
+        "stranded_runs": _runs_that_lost_their_cards(
+            {str(card.run) for _, _, card in holds if card.state == master.MOVED and card.run}
+        ),
     }
 
 

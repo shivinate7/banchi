@@ -1112,6 +1112,45 @@ for (const [press, focusesRemove] of [['a click that focuses Remove and a quick 
   }
 }
 
+/* FOCUS AFTER REMOVE WHEN THE SHEET'S FRAME RUNS BETWEEN THE EMPTY LIST AND THE PAGE'S EFFECT. The loop above meets
+   that order only by timing, so this case forces it. The frames are held and the list read is held, so the sheet has
+   closed and queued its frame before the read lands. When the last row leaves the page (the commit of the empty list,
+   which takes the header's add button and drops focus on the body) the held frames run in the microtask after that
+   commit. React asks for a paint after a commit that changed the page, so it flushes the page's effect that moves focus
+   in a later task, which is after that microtask. The sheet's frame finds focus on the body and sends it to the h1,
+   and the page's effect then finds focus on the h1 and leaves it there. Focus must still end on Add a Slab and stay. */
+test('after Remove, when the sheet gives focus back between the empty list and the page moving it, focus lands on Add a Slab and stays there', async ({ page }) => {
+  const wire = await open(page, makeWire({ rows: [...LAST_SLAB] }))
+  await expect(dataRows(page)).toHaveCount(1)
+  await cardButton(dataRows(page)).click()
+  const sheet = page.getByRole('dialog')
+  const remove = sheet.getByRole('button', { name: 'Remove', exact: true })
+  await expect(remove).toBeVisible()
+  wire.hold.list = new Gate()
+  await holdFrames(page)
+  await page.evaluate(() => {
+    const w = window as FrameWindow
+    new MutationObserver((_, watch) => {
+      if (document.querySelector('[data-slab]') !== null) return
+      watch.disconnect()
+      for (const callback of w.__held?.splice(0) ?? []) callback(performance.now())
+    }).observe(document.body, { childList: true, subtree: true })
+  })
+  await remove.evaluate((el) => {
+    ;(el as HTMLElement).focus()
+    ;(el as HTMLElement).click()
+  })
+  await expect(undoButton(page)).toBeVisible()
+  await expect(sheet).toBeHidden()
+  await expect(dataRows(page), 'the list read landed before the sheet closed').toHaveCount(1)
+  wire.hold.list.open()
+  await expect(dataRows(page)).toHaveCount(0)
+  await releaseFrames(page)
+  await expect.poll(() => focusHolder(page), { message: 'focus did not land on Add a Slab', timeout: 3000 }).toMatch(/^add button:/)
+  await frames(page, 10) // it has to hold, not only pass through
+  expect(await focusHolder(page), 'focus landed on Add a Slab and then left it').toMatch(/^add button:/)
+})
+
 test('a double press of Remove sends one request', async ({ page }) => {
   const wire = makeWire()
   wire.hold.del = new Gate()

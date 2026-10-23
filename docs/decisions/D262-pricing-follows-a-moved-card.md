@@ -33,14 +33,28 @@ D145's sentence protects one outcome: a join never guesses which card a record i
 run says what the model read, the store says which slot it is in) earned that caution. A
 re-join of box 2 once wrote 47 queue entries one position off.
 
-The new rule keeps that outcome with a narrower door:
+The rule keeps that outcome with two doors, and both match by the card's own name:
 
-1. `realign` follows a tombstone's own `moved_to` link, one hop at a time.
-2. At the destination, the card's `cid` must equal the tombstone's `cid`. On a mismatch, the
-   join refuses the card and names it, as it does today.
-3. No other search runs. The join never looks in a box by any other reason.
+1. `realign` follows a tombstone's own `moved_to` link, one hop at a time. At the
+   destination, the card's `cid` must equal the tombstone's `cid`. On a mismatch, the join
+   refuses the card and names it.
+2. Where the store disowns a run's drawer (`cli/resolve.py:disowned_boxes`, the rule
+   `refuse_reallocated` reads), the drawer's slots are never read, because that number
+   belongs to another drawer. `realign` looks up each record's photograph digest in every
+   live drawer instead. One match is a certain link. Two matches is a question and refuses.
+   No match is a departed card, and the join names it. If no record matches anywhere,
+   `refuse_reallocated` still refuses the run, as before.
 
-D36's refusal, `refuse_reallocated` and D145's `bid` binding stay as they are.
+The second door exists because the first one dies with the tombstone. Deleting a box that a
+merge emptied (D134) buries its tombstones, so the run's link was gone from the store and the
+run read as stranded. Measured on the owner's store: 105 cards moved from box 5 to box 3 and
+box 5 was deleted 3 seconds later. Three runs (99, 65 and 94 sellable cards) came off the
+price list that way, and a send then wrote ghost cards into the dead box. A foreign card in a
+reused slot is still never adopted: its digest matches no record of the run.
+
+`banchi rescue` and Rebind remain for a run whose cards sit in more than one box. A run that
+already has a joined rescue stays out of the pricing roster, so the rescue and its source never
+count the same cards twice (D86).
 
 ### One more guard in the same slice
 

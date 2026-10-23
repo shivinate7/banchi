@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 import { Button, Count, EmptyState, FailureNotice, Icon, Money, Page, ReloadButton, Section, Select, Sheet, Skeleton, SkeletonText } from './kit'
@@ -356,11 +356,12 @@ export default function Slabs() {
   const removeBusy = useRef(false)
 
   /* Where focus goes after a Remove: the next row's Card button, else the add button. This runs in the commit that
-     closes the sheet, after the sheet's trap is off, and moves focus out of the sheet at once. The sheet's own
-     focus-return moves only focus left on the body or in the sheet, so it then leaves this alone. It runs again when the
-     removed row leaves the list, for the one case where that drops focus: the header's add button goes when the list empties. */
+     closes the sheet, after the sheet's trap is off, and moves focus out of the sheet at once. A layout effect runs inside
+     the commit, so it moves focus before the sheet's focus-return frame (`overlay.restore`) can send stranded focus to the
+     h1; that frame then leaves this alone. It runs again when the removed row leaves the list, for the one case where that
+     drops focus: the header's add button goes when the list empties. */
   const [handover, setHandover] = useState<{ readonly gone: string; readonly next: string | null } | null>(null)
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (handover === null) return
     const active = document.activeElement
     const stranded = active === null || active === document.body || !active.isConnected || active.closest('[data-bn-overlay]') !== null

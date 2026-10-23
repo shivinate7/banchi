@@ -35,6 +35,7 @@ from harness.tests.t7_store_and_seams import (
     resolve,
     seam_run,
 )
+from harness.tests.t7.common import command
 from harness.tests.t7_store_and_seams import request as http_request
 
 
@@ -115,6 +116,170 @@ def check_box_map_safety(checks: Checks) -> None:
             moved == {} and departed == ["5/2"],
             "a move link whose card has another name is refused and named, not followed",
             f"moved {moved}, departed {departed}",
+        )
+
+
+def check_run_follows_cards_out_of_deleted_box(checks: Checks) -> None:
+    """A run follows its cards by name out of a box that was merged away, deleted and reused.
+
+    The owner's case: box 5's cards moved to another box, box 5 was deleted, and its number
+    went to a new drawer. The run still names box 5, and every join refused it, so the moved
+    cards sat off the price list. A card deleted WITH the box is named, never dropped.
+    """
+    checks.note("")
+    checks.note("A RUN FOLLOWS ITS CARDS OUT OF A DELETED, REUSED BOX (D262, amended)")
+    cards = [
+        (5, 1, "Dunsparce", "120/159", "holo"),
+        (5, 2, "Dunsparce", "120/159", "reverse_holo"),
+        (5, 3, "Articuno", "161/159", "holo"),
+    ]
+    from server import pipeline_routes
+
+    with isolated_home():
+        run, _ = seam_run(checks, cards, join=False)
+        with Store().write() as snapshot:
+            for box, index, name, number, finish in cards:
+                snapshot.inventory.record_identification(
+                    master.position_key(box, index),
+                    name=name, number=number, printed_total="159",
+                    confidence="high", detected_finish=finish, run=run.name,
+                )
+        # A real run carries each photograph's digest, which is what it is followed by.
+        from store import photos
+
+        inventory = Store().read().inventory
+        written = run.read_identifications()
+        for key, record in written["cards"].items():
+            record["photo_sha256"] = photos.digest_of(inventory.cards[key].cid)
+        run.write_identifications(written)
+        # JOINED BEFORE ANYTHING MOVES, so `pricing.json` holds the old drawer's positions: the
+        # stale table every later screen has to re-address.
+        command(checks, "join", str(run.directory), "--export", str(run.path("export.csv")))
+        # A run started since D145 records its drawer's true index; it names box 5, not box 7.
+        from cli import runs as run_files
+
+        run = run_files.open_run(run.directory)  # the join just wrote its manifest
+        run.set(scope={"box": 5, "whole_box": False, "cards": 3, "bid": inventory.box(5).bid})
+        capture_server.do_move_cards(5, {"to_box": 7, **back_of(7), "indices": [1, 2]})
+        deleted = capture_server.do_delete_box(5)
+        checks.equal(
+            deleted["stranded_runs"], [],
+            "the delete does not warn about a run that follows its cards, only about one that cannot",
+        )
+        capture_server.do_create_box({"box": 5, "name": "New five"})
+        capture_server.do_capture(capture_payload(5))
+        capture_server.do_capture(capture_payload(5))
+        with Store().write() as snapshot:
+            for index in (1, 2):
+                snapshot.inventory.record_identification(
+                    master.position_key(5, index), name="Foreign", number="1/1",
+                    printed_total="1", confidence="high", detected_finish=None,
+                    run="t7-other-run",
+                )
+
+        # The owner's case: a moved, unsold card whose photograph file is gone is still its
+        # card, found by its frozen id and not by a file.
+        gone = Store().read().inventory.cards["7/2"].cid
+        existed = photos.find(gone, 7, 2)
+        checks.ok(existed is not None, "the moved card's photograph file is on disk to begin with")
+        for path in (photos.path(gone), photos.legacy_path(7, 2)):
+            if path.is_file():
+                path.unlink()
+        checks.ok(photos.find(gone, 7, 2) is None, "and then it is deleted")
+        loaded = resolve.load(run, {"pokemon": run.path("export.csv")})
+        where = sorted(
+            (p.box, p.index) for match in loaded.matches.values() for p in match.positions
+        )
+        checks.ok(
+            (7, 2) in where and all(box == 7 for box, _ in where),
+            "the moved cards keep their rows, at the box they are in now, though box 5's "
+            "number belongs to a new drawer",
+            f"positions {where}",
+        )
+        checks.ok(
+            not any(box == 5 for box, _ in where),
+            "and the new box 5's cards are adopted by nobody",
+            f"positions {where}",
+        )
+        import csv
+
+        # THE SCREENS FIRST, BEFORE THE SEND SPENDS THE COPIES.
+        checks.ok(
+            pipeline_routes._follows_its_cards(run.directory, Store().read()),
+            "and the worklist keeps the run out of the unreachable list",
+        )
+        worklist = pipeline_routes.do_pipeline_worklist([run.name])
+        owed = sum(int(row.get("add_to_quantity") or 0) for row in worklist["skus"])
+        checks.ok(
+            owed >= 1
+            and all(p["box"] == 7 for row in worklist["skus"] for p in row.get("positions") or []),
+            "the worklist counts the moved copies at their new box, and none at the reused one",
+            f"add_to_quantity {owed}",
+        )
+        said = command(checks, "emit", str(run.directory), "--export", str(run.path("export.csv")))
+        sent = run.path("import.csv")
+        rows = list(csv.DictReader(sent.open(encoding="utf-8"))) if sent.is_file() else []
+        checks.ok(
+            sum(int(row.get("Add to Quantity") or 0) for row in rows) == owed,
+            "and the send writes exactly the copies the worklist counted",
+            f"{len(rows)} row(s); {said[-200:]}",
+        )
+        checks.ok(
+            "5/3" in loaded.departed,
+            "the card deleted with the box is named as departed, not dropped silently",
+            f"departed {loaded.departed}",
+        )
+
+
+def check_unfollowable_run_promises_nothing(checks: Checks) -> None:
+    """A run that cannot follow its cards adds no copies to the worklist and is named instead.
+
+    The records carry no photograph digest, so nothing ties them to the cards now in box 7.
+    Pricing must not count those copies as ready while the send leaves them out: the run is
+    skipped by name and listed under `unreachable.reallocated` with its card count.
+    """
+    checks.note("")
+    checks.note("A RUN THAT CANNOT FOLLOW ITS CARDS PROMISES NO COPIES")
+    from server import pipeline_routes
+
+    cards = [(5, 1, "Dunsparce", "120/159", "holo"), (5, 2, "Dunsparce", "120/159", "reverse_holo")]
+    with isolated_home():
+        run, _ = seam_run(checks, cards, join=False)
+        with Store().write() as snapshot:
+            for box, index, name, number, finish in cards:
+                snapshot.inventory.record_identification(
+                    master.position_key(box, index),
+                    name=name, number=number, printed_total="159",
+                    confidence="high", detected_finish=finish, run=run.name,
+                )
+        command(checks, "join", str(run.directory), "--export", str(run.path("export.csv")))
+        from cli import runs as run_files
+
+        # An older run: it names its drawer by number only, with no true index recorded.
+        run_files.open_run(run.directory).set(scope={"box": 5, "whole_box": False, "cards": 2})
+        capture_server.do_move_cards(5, {"to_box": 7, **back_of(7), "indices": [1, 2]})
+        capture_server.do_delete_box(5)
+        capture_server.do_create_box({"box": 5, "name": "New five"})
+        capture_server.do_capture(capture_payload(5))
+        with Store().write() as snapshot:
+            snapshot.inventory.record_identification(
+                master.position_key(5, 1), name="Foreign", number="1/1", printed_total="1",
+                confidence="high", detected_finish=None, run="t7-other-run",
+            )
+        worklist = pipeline_routes.do_pipeline_worklist([run.name])
+        checks.equal(
+            [row for row in worklist["skus"] if row.get("add_to_quantity")], [],
+            "no copy of the unfollowable run is counted as ready to send",
+        )
+        checks.equal(
+            [skipped["code"] for skipped in worklist["skipped"]], ["box_reallocated"],
+            "the run is skipped by name",
+        )
+        named = {row["run"]: row["cards"] for row in worklist["unreachable"]["reallocated"]}
+        checks.ok(
+            named.get(run.name, 0) >= 1,
+            "and the screen's excluded line counts the cards it holds back",
+            f"unreachable {worklist['unreachable']}",
         )
 
 
@@ -2411,7 +2576,7 @@ def check_s_refuses_empty_last_section(checks: Checks) -> None:
 
 
 CHECKS = (
-    check_box_map_safety, check_section_moves, check_order_key_migration,
+    check_box_map_safety, check_run_follows_cards_out_of_deleted_box, check_unfollowable_run_promises_nothing, check_section_moves, check_order_key_migration,
     check_per_card_order, check_card_moves, check_delete_after_placement,
     check_undo_keeps_paid_answers, check_front_of_box, check_card_move_refusals,
     check_divider_editor_keys, check_delete_keeps_dividers, check_merge_speed,
