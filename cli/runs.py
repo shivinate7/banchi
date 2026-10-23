@@ -132,20 +132,75 @@ def sha256_of(path) -> str:
     return digest.hexdigest()
 
 
+def recorded_digest_file(run: "Run", missing: Path) -> Optional[Path]:
+    """The file this run recorded, found by its DIGEST under `inventory/.exports/`.
+
+    NEVER A GUESS AND NEVER A SUBSTITUTE (D166). It answers only with a file
+    whose FULL sha256 equals the one the manifest recorded for this exact path, so it cannot
+    quietly join a run against a newer reading — which is the whole hazard of exports moving
+    into a directory several runs share. A run that finds nothing carrying its digest refuses
+    exactly as before; this recovers the file, it does not choose one.
+
+    WHAT IT IS FOR: the manifest's `path` is the only link from a run to its export now that
+    the file is not inside the run, and a path is the half of that record which can go stale.
+    The digest is the half that cannot.
+    """
+    recorded = run.manifest.get("exports")
+    if not isinstance(recorded, dict):
+        return None
+    wanted = next(
+        (
+            str(source.get("sha256") or "")
+            for source in recorded.values()
+            if isinstance(source, dict) and Path(str(source.get("path") or "")) == missing
+        ),
+        "",
+    )
+    if len(wanted) != 64:
+        return None
+    root = files.inventory_dir() / files.EXPORTS_DIRNAME
+    if not root.is_dir():
+        return None
+    for candidate in sorted(root.glob(f"*/*-{wanted[:8]}.csv")):
+        if candidate.is_file() and sha256_of(candidate) == wanted:
+            return candidate
+    return None
+
+
+# A run whose export has no recoverable age. Any moment `clock.central_day` takes and `min()` orders.
+UNDATED = datetime.fromtimestamp(0, timezone.utc)
+
+
+def _export_moment(run: "Run", game: str, path: Path) -> datetime:
+    """When one recorded export was read. A live file is dated by its own mtime (D166). A file that
+    moved is dated by the `mtime` the manifest recorded, then by the file its digest recovers,
+    else it is `UNDATED`, which counts as stale: a price of unknown age is never read as fresh."""
+    if path.is_file():
+        return datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)
+    source = (run.manifest.get("exports") or {}).get(game)
+    try:
+        return datetime.fromisoformat(source["mtime"]).astimezone(timezone.utc)
+    except (TypeError, KeyError, ValueError):
+        pass
+    found = recorded_digest_file(run, path)
+    return datetime.fromtimestamp(found.stat().st_mtime, timezone.utc) if found else UNDATED
+
+
 def export_moments(opened: List["Run"], overrides=None) -> Dict[str, datetime]:
-    """`{run name: the moment its prices were read}`: the oldest export file's own mtime, which is
-    its fetch time (D166).
+    """`{run name: the moment its prices were read}`: the oldest export's moment (`_export_moment`).
 
     THE PRICES A SEND USES ARE THE EXPORT'S: `overrides` when `emit` was handed files, otherwise the
-    files the run's join recorded. A file that is missing is left out: `emit` names it itself. A run
-    that recorded no export is left out too, because `emit` refuses it.
+    files the run's join recorded. A named override that is missing is left out: `emit` names it
+    itself. A run that recorded no export is left out too, because `emit` refuses it.
     """
     out: Dict[str, datetime] = {}
     for run in opened:
-        paths = [Path(p) for p in overrides] if overrides else list(run.exports_by_game.values())
-        stamps = [path.stat().st_mtime for path in paths if path.is_file()]
+        if overrides:
+            stamps = [datetime.fromtimestamp(Path(p).stat().st_mtime, timezone.utc) for p in overrides if Path(p).is_file()]
+        else:
+            stamps = [_export_moment(run, game, path) for game, path in run.exports_by_game.items()]
         if stamps:
-            out[run.name] = datetime.fromtimestamp(min(stamps), timezone.utc)
+            out[run.name] = min(stamps)
     return out
 
 
