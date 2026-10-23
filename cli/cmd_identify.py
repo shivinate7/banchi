@@ -1345,6 +1345,9 @@ def run(args, say) -> int:
             second_cost = (_estimate(to_send) * share).quantize(Decimal("0.01"))
     if uncounted:
         say("second look     counted when the run starts")
+        # THE CEILING IS CERTAIN: no card can cost more than going to the second look. It is a maximum, not a share.
+        ceiling = _estimate(to_send)
+        say(f"at most         ${ceiling}  if every card went to the second look")
     else:
         say(f"estimated cost  ${second_cost if free else _estimate(to_send)}")
     if free:
@@ -1352,7 +1355,7 @@ def run(args, say) -> int:
         # before any photograph is decoded, and those are counted here. The margin, the floor and
         # the look-alike guard judge the best answer, so they are counted only after the read.
         pre = match.preflight([_match_request(i) for i in to_send])
-        basis = "measured"
+        basis = "measured" if measured else "certain"  # no index: every card is a certain second look
         say(f"engine          {engine} first, then haiku on the cards it cannot accept")
         if not uncounted:
             say(f"free read       {len(to_send) - second_count} of {len(to_send)} {basis}")

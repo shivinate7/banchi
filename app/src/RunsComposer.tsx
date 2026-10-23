@@ -499,6 +499,8 @@ export function RunsComposer({
 
   /* The preflight's answer — step one of the money gate — and the send it was quoted for. */
   const [quote, setQuote] = useState<RunPreflight | null>(null)
+  /* A long free press names no cost, only the most it can cost. */
+  const ceiling = quote?.total.ceiling_usd ?? null
   const [ticket, setTicket] = useState('')
   const [showPreflight, setShowPreflight] = useState(false)
 
@@ -868,7 +870,7 @@ export function RunsComposer({
       const answer = await startRun(send)
       setStarted({
         runs: answer.started,
-        estimate: quote?.total.estimate_usd ?? null,
+        estimate: quote?.total.estimate_usd ?? quote?.total.ceiling_usd ?? null,
         cards: quote?.total.to_send ?? null,
       })
       /* The quote is spent: identifying more needs a fresh preflight. */
@@ -882,7 +884,7 @@ export function RunsComposer({
         toast({
           kind: 'ok',
           title: `${runLabel(first, boxes) ?? line} started`,
-          body: `${money(quote?.total.estimate_usd)} (${nounCount(quote?.total.to_send ?? 0, 'card')})`,
+          body: `${money(quote?.total.estimate_usd ?? quote?.total.ceiling_usd)} (${nounCount(quote?.total.to_send ?? 0, 'card')})`,
         })
       }
     })
@@ -1469,8 +1471,10 @@ export function RunsComposer({
           {stage === 'quote' && quote !== null ? (
             <div className="runs-composer-stage runs-quote run-quote" key="quote">
               <div className="runs-quote-figure">
-                <span className="bn-label">{free ? 'Second look, estimated cost' : 'Estimated cost'}</span>
-                <span className="runs-quote-money">{money(quote.total.estimate_usd)}</span>
+                <span className="bn-label">
+                  {free ? (quote.total.estimate_usd === null && ceiling !== null ? 'Second look, at most' : 'Second look, estimated cost') : 'Estimated cost'}
+                </span>
+                <span className="runs-quote-money">{money(quote.total.estimate_usd ?? ceiling)}</span>
                 <span className="runs-quote-line">
                   <span>
                     <strong>{nounCount(quote.total.to_send ?? 0, 'card')}</strong> {free ? 'to match' : 'to send'}
@@ -1484,12 +1488,16 @@ export function RunsComposer({
                      counted after the read, and the line says so. */
                   <span className="runs-quote-line">
                     {quote.total.second_look === null ? (
-                      <span>The free read and the second look are counted when the run starts.</span>
+                      <span>Counted when the run starts.</span>
                     ) : (
                       <>
                         <span>{count(quote.total.free_read)} read free</span>
                         <span>{count(quote.total.second_look)} get a second look from the paid read</span>
-                        <span>Counted by reading them now</span>
+                        <span>
+                          {quote.total.second_look_measured === false
+                            ? 'The free read is not set up, so every card goes to the second look.'
+                            : 'Counted by reading them now'}
+                        </span>
                       </>
                     )}
                     {Object.entries(quote.total.unread).map(([code, n]) => (
@@ -1607,7 +1615,9 @@ export function RunsComposer({
                     >
                       {free
                         ? quote.total.estimate_usd === null
-                          ? `Match ${count(quote.total.to_send)} cards, then pay for the second look`
+                          ? ceiling === null
+                            ? `Match ${count(quote.total.to_send)} cards, then pay for the second look`
+                            : `Match ${count(quote.total.to_send)} cards, then spend up to ${money(ceiling)} on the second look`
                           : `Match ${count(quote.total.to_send)} cards, then spend ${money(quote.total.estimate_usd)} on the second look`
                         : `Spend ${money(quote.total.estimate_usd)} and identify ${count(quote.total.to_send)} cards`}
                     </Button>

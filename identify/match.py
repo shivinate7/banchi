@@ -380,7 +380,7 @@ class Index:
         self.db = sqlite3.connect(str(self.path), check_same_thread=False)
         self.db.executescript(_SCHEMA)
         self._lock = threading.Lock()
-        self._hub: Dict[str, Tuple[int, Dict[Tuple[str, str], float]]] = {}
+        self._hub: Dict[str, Tuple[tuple, Dict[Tuple[str, str], float]]] = {}
 
     def close(self) -> None:
         self.db.close()
@@ -405,12 +405,15 @@ class Index:
 
     def hubness(self, game: str) -> Dict[Tuple[str, str], float]:
         """`{(set_name, product_id): r}` over EVERY fingerprint of the game, not only the pool's sets.
-        Cached on this index, and read again when the game's `ok` row count changes.
+        Cached on this index, and read again when the game's `ok` rows change.
         # ponytail: one matmul per 1024-row block, no vector index; an approximate-neighbour index if a
         # catalogue ever outgrows a few seconds here."""
         import numpy as np
 
-        count = self.db.execute("select count(*) from vec where game=? and status=?", (game, S_OK)).fetchone()[0]
+        # `insert or replace` gives a replaced row a new rowid, so (count, max rowid, max at) moves on any change.
+        count = self.db.execute(
+            "select count(*), max(rowid), max(at) from vec where game=? and status=?", (game, S_OK)
+        ).fetchone()
         held = self._hub.get(game)
         if held is not None and held[0] == count:
             return held[1]
