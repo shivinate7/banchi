@@ -234,10 +234,11 @@ to one line on a phone. Round 6 limited the price rows to the prices the screen 
 The owner's word was "Require a fresh read". Before this, the mark-down press read what is live and then pushed a file judged against
 the survey, however old. On the owner's screen that survey was 17 days old.
 
-- **A day.** A read older than `pipeline/reprice.py:READ_FRESH_S` (24 hours) sends nothing. The
+- **Today.** A read from an earlier US Central day sends nothing (`pipeline/reprice.py:read_is_fresh`,
+  the same test as every send's prices, `store/clock.before_today`). The
   rule's window is whole days without a sale, so a card sold since the read is one the read still
-  offers. A day keeps that gap under the window's own unit. The screen reads the constant off the
-  table route. Past it, the bar offers "Read again" in place of Send, and no count or lens figure
+  offers. A day keeps that gap under the window's own unit. The screen reads the seconds since
+  today began (`fresh_for_s`) off the table route. Past it, the bar offers "Read again" in place of Send, and no count or lens figure
   is offered as current. `reprice apply --write` refuses a stale read too, so "Download the file
   instead" cannot write one. `POST /pipeline/markdowns/<stamp>/send` refuses it as `read_stale`
   before TCGplayer is asked anything.

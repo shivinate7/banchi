@@ -3509,7 +3509,7 @@ export type ExportScope = {
   width: ExportWidth | null
   /** The file a press would answer from without asking TCGplayer, if there is one
    *  (D166). Null means the press opens a socket. */
-  reusable: { file: string; age_s: number; window_s: number } | null
+  reusable: { file: string; age_s: number } | null
 }
 
 /** One code on the ledger, as `GET /codes` serves it (C3, C8, C11).
@@ -4457,7 +4457,7 @@ export type MarkdownTable = {
    *  enforces it and two lists would drift. */
   unpriceable: string[]
   floor: string
-  /** How old this read may be and still be sent from, in seconds (`reprice.READ_FRESH_S`).
+  /** How old this read may be and still be sent from, in seconds (`reprice.fresh_for_s`: since today began, US Central).
    *  Past it the tab offers "Read again" in place of Send (the owner's ruling, 2026-09-26). */
   stale_after_s?: number
 }
@@ -4686,6 +4686,9 @@ export type SendTrim = {
 }
 
 export type SendSummary = {
+  /** Whether a price refresh ran before this press, and the US Central day (`YYYY-MM-DD`) its
+   *  prices come from. `was` is the older day it replaced. Absent on a receipt made before it. */
+  refresh?: { ran: boolean; ok?: boolean; was?: string | null; export_day: string | null } | null
   stamp: string
   kind: 'send' | 'download'
   state: SendState

@@ -3599,7 +3599,7 @@ export async function getPricesRefresh(): Promise<PricesRefreshState> {
 }
 
 /** "Refresh now" (`POST /pipeline/prices/refresh`): starts the work and answers at once. Free, and
- *  only a press calls it. `force` presses again inside the reuse window, from "Try again" alone. */
+ *  only a press calls it. `force` presses again inside the double-press guard, from "Try again" alone. */
 export async function startPricesRefresh(force = false): Promise<void> {
   await request('/pipeline/prices/refresh', {
     method: 'POST',
