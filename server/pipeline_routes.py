@@ -7871,7 +7871,8 @@ def refresh_before_send(names: Sequence[str], overrides: Optional[Sequence[str]]
     prices come from a live read that `_markdown_fresh` holds to the same day.
 
     IT ANSWERS WHAT IT DID, for the send's receipt: `{"ran": False, "export_day"}` when nothing was
-    old, `{"ran": True, "ok": True, "was", "export_day"}` after a refresh (ISO days, US Central).
+    old, `{"ran": True, "ok": True, "was", "export_day"}` after a refresh (ISO days, US Central; `was` is None
+    when the oldest export's day is unknown).
     """
     opened = [run_files.open_run(_open_run(str(name))) for name in names]
     moments = run_files.export_moments(opened, overrides)
