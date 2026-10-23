@@ -8,8 +8,9 @@ import './ReviewBandSheet.css'
 
 /* THE REVIEW BAND'S SHEETS (`docs/specs/identify-engine-pick.md`, section 10). One sheet per count: waiting for a paid look
  * (grouped by why the free reader stopped), not yet looked at (by box), matched free (by set) and the cards that need a set
- * named (by box). A sheet is a SNAPSHOT taken at open (D313, D181): when the band's count later differs it says so in a held
- * line and offers "Show it again", and never rewrites itself. It builds no fix. It points at the free fix the app already has,
+ * named (by box). A sheet's ROWS are a SNAPSHOT taken at open (D313, D181): when the band's count later differs it says so in a held
+ * line and offers "Show it again", and never rewrites its rows. Its TITLE COUNT is the one exception (D313): it follows the
+ * band's live count. It builds no fix. It points at the free fix the app already has,
  * and a row press goes to the card's own place on Inventory, where the claim and the set hint are corrected.
  *
  * A GROUP SHOWS ITS FIRST 50 ROWS, then "Show 50 more", so a 2,000-card group paints 50 photographs. */
@@ -186,7 +187,7 @@ export function BandSheet({
   readonly onClose: () => void
   /** null before the first press: nothing to draw while the leave beat runs. */
   readonly data: BandSheetData | null
-  /** The band's own figure for this count, titling the sheet until its rows arrive. */
+  /** The band's own figure for this count. It titles the sheet and follows the count live; the rows do not. */
   readonly figure: number
   /** The band's count differs from the snapshot. */
   readonly moved: boolean
@@ -215,7 +216,7 @@ export function BandSheet({
     </>
   )
   return (
-    <Sheet open={open} onClose={onClose} title={sheetHeading(kind, cards === null ? figure : cards.length)} icon="list" className="review-band-sheet">
+    <Sheet open={open} onClose={onClose} title={sheetHeading(kind, figure)} icon="list" className="review-band-sheet">
       <div className="rbs-moved" aria-live="polite">
         <Slot show={moved} ghost={again} className="rbs-moved-slot">
           {line}
