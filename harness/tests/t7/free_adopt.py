@@ -26,6 +26,7 @@ import os
 import shutil
 import time
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
@@ -42,7 +43,7 @@ from pipeline import tcgcsv
 from identify import batch, match, prompt
 from server import capture_server
 from store import cache as cache_mod
-from store import files, master
+from store import clock, files, master
 from store import session as store_session
 from store.session import Store
 
@@ -70,7 +71,7 @@ def _shoot(said: dict, hint: str = "SV09", game: str = "pokemon") -> str:
     return next(iter(set(Store().read().inventory.cards) - before))
 
 
-def _seed_export(*, blank_market: str = "", age: float = 0.0, game: str = "pokemon", source=None, category: int = 3, set_ids=()) -> Path:
+def _seed_export(*, blank_market: str = "", at: float | None = None, game: str = "pokemon", source=None, category: int = 3, set_ids=()) -> Path:
     """The fixture export where the reader looks for one: `inventory/.exports/<game>/`.
 
     A scope note sits beside it (the shape `pipeline_routes._write_note` writes: the whole
@@ -85,15 +86,33 @@ def _seed_export(*, blank_market: str = "", age: float = 0.0, game: str = "pokem
         table = tcgcsv.read_export(FIXTURE_EXPORT)
         rows = [dict(r, **{tcgcsv.MARKET_PRICE_COLUMN: ""}) if r["TCGplayer Id"] == blank_market else r for r in table.rows]
         tcgcsv.write_csv(target, table.header, rows)
-    if age:  # `pipeline_routes._reusable` reuses an export up to EXPORT_REUSE_S (900 s) old
-        stamp = time.time() - age
-        os.utime(target, (stamp, stamp))
+    if at is not None:  # the day it was downloaded: `pipeline_routes._reusable` prices only from today (Central)
+        os.utime(target, (at, at))
     Path(str(target) + ".scope.json").write_text(
         json.dumps({"game": game, "category_id": category, "set_ids": list(set_ids), "scope": "category" if not set_ids else "sets",
                     "widened": True, "bytes": target.stat().st_size, "at": master.now()}),
         "utf-8",
     )
     return target
+
+
+def _central(*parts) -> datetime:
+    return datetime(*parts, tzinfo=clock.CENTRAL)
+
+
+@contextmanager
+def _pinned_day(moment: datetime):
+    """`clock.before_today` reads `clock._current` when it is given no `now`. Pinning it makes the
+    US Central day of every export in the block a fact of the test, not of the hour it runs."""
+    with mock.patch.object(clock, "_current", lambda: moment):
+        yield
+
+
+def _reused() -> bool:
+    """Whether a press would reuse the Pokemon export for the whole category, at the pinned moment."""
+    from server import pipeline_routes, tcg_export
+
+    return pipeline_routes._reusable("pokemon", tcg_export.Scope(category_id=3, set_ids=())) is not None
 
 
 def _results(keys, accepted: dict):
@@ -588,10 +607,10 @@ def check_adoption_export_gate(checks: Checks) -> None:
     days = 3 * 86400
     with isolated_home():
         a, b = _shoot(ARTICUNO), _shoot(DUNSPARCE)
-        _seed_export(age=days)  # owner's ruling: naming has NO age limit; pricing keeps the press's 900 s
+        _seed_export(at=time.time() - days)  # owner's ruling: naming has NO age limit; pricing needs an export from today (Central)
         _sweep(_results((a, b), {a: ARTICUNO, b: DUNSPARCE}))
         checks.equal(_card(a)[0], master.IDENTIFIED, "3. an export days old adopts: naming has no age limit")
-        checks.ok(_review((b,)) == [] and _skus() == [], "3. and the join waits: no SKU row, no review row, for an export past 900 s")
+        checks.ok(_review((b,)) == [] and _skus() == [], "3. and the join waits: no SKU row, no review row, for an export from an earlier day")
         runs = _sweep_runs()
         checks.equal(len(runs), 1, "2. one match-sweep run holds the named cards")
         checks.ok(not any((run / "pricing.json").exists() for run in runs), "2. and that run writes no pricing.json")
@@ -610,22 +629,25 @@ def check_adoption_export_gate(checks: Checks) -> None:
         checks.equal(_card(plain)[0], master.IDENTIFIED, "4. while a card the export covers still is")
 
 
-def check_export_past_900_names_only(checks: Checks) -> None:
+def check_export_from_earlier_day_names_only(checks: Checks) -> None:
     checks.note("")
-    checks.note("NAMES ONLY PAST 900 s — the run waits at join, and a press's failed fetch keeps it waiting and says so")
+    checks.note("NAMES ONLY FROM AN EARLIER DAY — the run waits at join, and a press's failed fetch keeps it waiting and says so")
     from http import HTTPStatus
 
     from server import pipeline_routes
 
-    with isolated_home():
+    # Downloaded 23:59 yesterday, the clock at 00:05 today (Central): one minute either side of
+    # midnight. A rolling 24 h window would reuse it; the day rule does not.
+    with isolated_home(), _pinned_day(_central(2026, 10, 22, 0, 5)):
         a, b = _shoot(ARTICUNO), _shoot(DUNSPARCE)
-        _seed_export(age=901)
+        _seed_export(at=_central(2026, 10, 21, 23, 59).timestamp())
         lines: list = []
         _sweep(_results((a, b), {a: ARTICUNO, b: DUNSPARCE}), lines=lines)
-        checks.equal(_card(a)[0], master.IDENTIFIED, "1. a card names from an export 901 s old")
+        checks.equal(_card(a)[0], master.IDENTIFIED, "1. a card names from an export downloaded 23:59 yesterday")
         checks.equal(_card(b)[0], master.IDENTIFIED, "1. and so does the second")
         checks.equal(_skus(), [], "1. no SKU row: nothing is priced")
         checks.equal(_review((a, b)), [], "1. and the join does not run")
+        checks.ok(not _reused(), "1. and no press reuses it: it is from an earlier Central day")
         checks.ok(any("named, not priced" in line for line in lines), "1. the worker says the cards wait at join", "\n".join(lines))
         runs = _sweep_runs()
         checks.equal(len(runs), 1, "1. one match-sweep run holds them")
@@ -644,13 +666,14 @@ def check_export_past_900_names_only(checks: Checks) -> None:
         checks.equal(_skus(), [], "2. and the cards stay unpriced")
 
 
-def check_export_under_900_prices(checks: Checks) -> None:
+def check_export_from_earlier_today_prices(checks: Checks) -> None:
     checks.note("")
-    checks.note("PRICES UNDER 900 s — an export a press would still reuse prices the card in the same chunk")
-    with isolated_home():
+    checks.note("PRICES FROM EARLIER TODAY — an export downloaded six hours ago, the same Central day, is reused and prices the card in the same chunk")
+    with isolated_home(), _pinned_day(_central(2026, 10, 22, 15, 0)):
         a, b = _shoot(ARTICUNO), _shoot(DUNSPARCE)
-        export = _seed_export(age=899)
+        export = _seed_export(at=_central(2026, 10, 22, 9, 0).timestamp())
         stamp = int(export.stat().st_mtime)
+        checks.ok(_reused(), "1. a press reuses an export downloaded six hours ago, on the same Central day")
         _sweep(_results((a, b), {a: ARTICUNO, b: DUNSPARCE}))
         checks.equal(_card(a)[0], master.IDENTIFIED, "1. the card names")
         checks.equal(_review((b,)), [(b, AMBIGUOUS)], "1. the join queues the ambiguous card as it does for a fresh export")
@@ -659,24 +682,27 @@ def check_export_under_900_prices(checks: Checks) -> None:
         checks.equal(len(runs), 1, "1. one match-sweep run holds the cards")
         if len(runs) == 1:
             checks.equal(_manifest(runs[0]).get("joined"), True, "1. the run is joined")
-            checks.equal(int((runs[0] / "pricing.json").stat().st_mtime), stamp, "2. its pricing.json carries the export's mtime")
+            priced = runs[0] / "pricing.json"
+            checks.ok(priced.exists(), "2. and writes a pricing.json")
+            if priced.exists():
+                checks.equal(int(priced.stat().st_mtime), stamp, "2. its pricing.json carries the export's mtime")
         reads = {r.at for r in Store().read().readings.entries.values()}
         checks.equal(reads, {stamp}, "2. and so does every market reading")
 
 
 def check_stale_chunk_opens_own_run(checks: Checks) -> None:
     checks.note("")
-    checks.note("STALE CHUNK AFTER A PRICED ONE — the export ages between chunks, and the stale chunk opens its own run")
-    with isolated_home():
+    checks.note("STALE CHUNK AFTER A PRICED ONE — the export moves to an earlier day between chunks, and the stale chunk opens its own run")
+    with isolated_home(), _pinned_day(_central(2026, 10, 22, 15, 0)):
         cards = [_shoot(ARTICUNO) for _ in range(9)]  # the worker reads eight at a time: two chunks
-        export = _seed_export()
+        export = _seed_export(at=_central(2026, 10, 22, 9, 0).timestamp())
         chunks: list = []
 
         def age_export_after_first_chunk(read):
             def wrapped(requests, index=None, *a, **k):
                 chunks.append(len(requests))
-                if len(chunks) == 2:  # the second chunk meets an export past 900 s
-                    stamp = time.time() - 901
+                if len(chunks) == 2:  # the second chunk meets an export from yesterday (Central)
+                    stamp = _central(2026, 10, 21, 23, 59).timestamp()
                     os.utime(export, (stamp, stamp))
                 return read(requests, index, *a, **k)
             return wrapped
@@ -704,16 +730,17 @@ def check_joined_run_after_the_look(checks: Checks) -> None:
 
     checks.note("")
     checks.note("JOINED AFTER THE LOOK — a stale chunk never joins a run a press joined, even when the look missed it")
-    with isolated_home(), mock.patch.object(cmd_match._Session, "leave_joined", lambda _self: None):
+    with isolated_home(), _pinned_day(_central(2026, 10, 22, 15, 0)), \
+            mock.patch.object(cmd_match._Session, "leave_joined", lambda _self: None):
         cards = [_shoot(ARTICUNO) for _ in range(9)]
-        export = _seed_export()
+        export = _seed_export(at=_central(2026, 10, 22, 9, 0).timestamp())
         reads: list = []
 
         def age_export_after_first_chunk(read):
             def wrapped(requests, index=None, *a, **k):
                 reads.append([r.key for r in requests])
-                if len(reads) == 2:  # the second chunk meets an export past 900 s
-                    stamp = time.time() - 901
+                if len(reads) == 2:  # the second chunk meets an export from yesterday (Central)
+                    stamp = _central(2026, 10, 21, 23, 59).timestamp()
                     os.utime(export, (stamp, stamp))
                 return read(requests, index, *a, **k)
             return wrapped
@@ -763,8 +790,10 @@ def check_card_named_mid_join(checks: Checks) -> None:
 
     checks.note("")
     checks.note("NAMED MID-JOIN — a card the reader names while a press joins is never joined unread")
-    with isolated_home():
-        export = _seed_export(age=901)  # stale: the reader names its cards and prices none
+    stale = _central(2026, 10, 21, 23, 59).timestamp()  # yesterday: the reader names its cards and prices none
+    fresh = _central(2026, 10, 22, 9, 0).timestamp()  # earlier today: a press reuses it and prices
+    with isolated_home(), _pinned_day(_central(2026, 10, 22, 15, 0)):
+        export = _seed_export(at=stale)
         k1 = _shoot(ARTICUNO)
         _sweep(_results((k1,), {k1: ARTICUNO}))
         runs_found = _sweep_runs()
@@ -775,7 +804,7 @@ def check_card_named_mid_join(checks: Checks) -> None:
         k2 = _shoot(ARTICUNO)  # captured: the reader names it while the press runs
         checks.ok("cards" in runs.open_run(run_dir).manifest, "(precondition) the run records its cards")
         checks.equal(Store().read().inventory.cards[k1].state, master.IDENTIFIED, "(precondition) k1 is identified")
-        _touch(export, 0)  # a fresh export: the press prices
+        os.utime(export, (fresh, fresh))  # a fresh export: the press prices
 
         seen: list = []
         mid = {"pending": True}
@@ -786,9 +815,9 @@ def check_card_named_mid_join(checks: Checks) -> None:
             seen.append(resolved)
             if mid["pending"]:
                 mid["pending"] = False
-                _touch(export, 901)  # the reader's view: stale, so it names and prices nothing
+                os.utime(export, (stale, stale))  # the reader's view: stale, so it names and prices nothing
                 _sweep(_results((k2,), {k2: ARTICUNO}))
-                _touch(export, 0)
+                os.utime(export, (fresh, fresh))
             return resolved
 
         with mock.patch.object(resolve, "load", named_mid_join):
@@ -842,8 +871,8 @@ CHECKS = (
     check_sweep_one_lock_per_chunk,
     check_adopted_card_is_priced,
     check_adoption_export_gate,
-    check_export_past_900_names_only,
-    check_export_under_900_prices,
+    check_export_from_earlier_day_names_only,
+    check_export_from_earlier_today_prices,
     check_stale_chunk_opens_own_run,
     check_joined_run_after_the_look,
     check_card_named_mid_join,

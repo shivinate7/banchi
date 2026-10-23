@@ -415,7 +415,7 @@ composes it for every open run (the roster of `do_pipeline_worklist`), in this o
 | step | what it does | reads | writes |
 |---|---|---|---|
 | 1. listings | `do_live_export`, unchanged | one portal request | `inventory/.live/`, the readings table |
-| 2. catalog prices | per game with a waiting card: `do_pipeline_export` with `refresh: true` once. `_reusable` then serves every later run of that game for `EXPORT_REUSE_S` | one portal request per game | `inventory/.exports/<game>/` |
+| 2. catalog prices | per game with a waiting card: `do_pipeline_export` with `refresh: true` once. `_reusable` then serves every later run of that game for the rest of the US Central day | one portal request per game | `inventory/.exports/<game>/` |
 | 3. join | per open run, and per run a send names (`also`): `do_pipeline_step(name, "join", {"fetched": [file]})`. Per run waiting at phase join: `do_run_match`, which fetches or reuses the export and prices it | local | each run's `pricing.json`, and the readings table (`reading_from_table`) |
 | 4. sales history | `do_price_trends_preload`, now saving per-day facts (below) | market history host, at its courtesy pace | `inventory/price-trends.json` |
 
@@ -461,7 +461,7 @@ they were.
 - **A refresh that fails for another run does not stop this send.** The outcome is what is tested.
   A named `--export` file is the owner's own prices, so a stale one is refused without a refresh.
 - **The refresh joins runs waiting at phase join.** The free reader leaves a run unjoined when no
-  export is within `EXPORT_REUSE_S`. The roster holds joined runs only, so such a run was on no
+  export was downloaded today. The roster holds joined runs only, so such a run was on no
   worklist. Step 3 now calls `do_run_match` for each, without `retry`: a run whose last try left a problem is not fetched again (one portal
   request a day, D104), and waits for its own retry press. That wait is not a failure: `steps.join`
   stays ok and names the run as waiting on its own problem. A run that tried and could not join fails
@@ -564,7 +564,7 @@ button asks for that, and for everything else.
   nothing at TCGplayer. It reads the stored session secret, so the route follows
   `/pipeline/live-export`'s posture. One run goes at a time: a second press while one runs
   answers `running` and starts nothing. Only a press calls it. No render, route load or timer
-  calls it. A second press inside `EXPORT_REUSE_S` of a finished run is refused unless the body
+  calls it. A second press inside `REFRESH_DEBOUNCE_S` of a finished run is refused unless the body
   says `force`. The screen sends `force` only from an explicit "Try again" after a failed run.
 - **What it runs.** Steps 1 to 3 always. Step 4 runs only for a SKU whose saved history ends
   before the newest finished day. So a press after the morning job asks the market host for
@@ -659,7 +659,7 @@ Each is one claim. A build makes each one red first.
 10. **One home.** `Reading` carries all four cells from one source and one second. A test feeds a
     run table and a newer live row. It gets one whole row back, never a mix.
 11. **The route.** `POST /pipeline/prices/refresh` answers 202, and a second press answers
-    `running`. A press inside `EXPORT_REUSE_S` of a finished run is refused without `force`.
+    `running`. A press inside `REFRESH_DEBOUNCE_S` of a finished run is refused without `force`.
 12. **Facts are one function.** `Series.window` gives the units, sales, average and range for a
     fixture history. A window with no sales gives an average of none, never zero.
 13. **The saved file.** The preload writes `facts`, `days` and `through`. `trends-saved` omits

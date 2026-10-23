@@ -204,8 +204,8 @@ def _export_for(game: str, *, fresh: bool = False):
     TWO ASKS, ONE RULE (D166, the export is a reading): NAMING AND PRICING DO NOT NEED THE SAME FILE.
     `fresh=False` is the newest covering export of ANY age. The reader uses it only to name and adopt
     cards (the set list a hint is checked against), so an old file does no harm. `fresh=True` is the
-    export a press would reuse, within `pipeline_routes.EXPORT_REUSE_S` (`_reusable`, the press's own
-    test). EVERYTHING THAT PRICES uses this one: a SKU's market price, the threshold and
+    export a press would reuse, one downloaded today (`pipeline_routes._reusable`, the press's own
+    test, `store/clock.before_today`). EVERYTHING THAT PRICES uses this one: a SKU's market price, the threshold and
     sub-threshold routing, the price readings, and anything `emit` or `#/pricing` reads. With none,
     the reader names cards and leaves the pricing to a press's join, which fetches
     (`pipeline_routes.do_run_match`). It never fetches itself and never prices from an old file.
@@ -287,7 +287,7 @@ def _stamp(path):
 def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session") -> int:
     """ONE `Store.write` for one chunk, holding the lock only for writes. Every card the reader
     ACCEPTS gets the press's own adoption (`_adopt`, against an export of any age) and then, only
-    when every game's export is within the press's 900 s rule (`priced`), the join's own write
+    when every game's export is from today (`priced`), the join's own write
     (`cmd_join.apply_join`), so a free match is `identified` as a paid read is. With no fresh export
     the cards are named into an unjoined run that a press's join (`do_run_match`) prices. A card the ladder
     cannot settle lands in review as a press leaves it. An unaccepted card is only noted as tried.
@@ -314,7 +314,7 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session
             if (path := _export_for(game)) is not None:
                 paths[game] = path
     # PRICES NEED THE PRESS'S FRESH EXPORT (`_export_for`): the join below runs only when every game's
-    # covering export is within the 900 s rule. Otherwise the chunk NAMES its cards and they wait at join.
+    # covering export is from today. Otherwise the chunk NAMES its cards and they wait at join.
     priced = bool(paths) and {g: _export_for(g, fresh=True) for g in paths} == paths
     if paths and not priced:
         session.leave_joined()
@@ -371,7 +371,7 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session
                 keys = _adopt(writable, ok, meta, paths, session)
                 source = {Path(str(g.source["path"])): g.source for g in resolved.joins.values()}
                 cmd_join.apply_join(writable, resolved, fold, source)
-                # DATED TO THE EXPORT, NEVER TO NOW: the oldest file joined (within the 900 s rule, `priced`), so the pricing screens see its true age.
+                # DATED TO THE EXPORT, NEVER TO NOW: the oldest file joined (from today, `priced`), so the pricing screens see its true age.
                 at = min(int(Path(str(g.source["path"])).stat().st_mtime) for g in resolved.joins.values())
                 table = cmd_join._pricing_table(run, resolved, choice, writable)
                 cmd_join.record_readings(writable, run, table, at)
@@ -391,7 +391,7 @@ def _write_chunk(store, results, meta, noted, *, adopt: bool, session: "_Session
         session.recover = False
     elif named:
         # NAMED, NOT PRICED: the run is `collected` and not `joined`, which is the state a screen names
-        # "needs join" and `pipeline_routes.do_run_match` finishes (it fetches per the 900 s rule). A
+        # "needs join" and `pipeline_routes.do_run_match` finishes (it fetches per the same-day rule). A
         # later chunk with a fresh export joins these cards too (`recover`). Nothing here prices a card.
         # COMPARE-AND-SET under the manifest lock: a press may have joined the run since `leave_joined`
         # looked. Then the run is left joined, and the named cards are moved to a run of their own.
@@ -499,7 +499,7 @@ def sweep_worker(say) -> int:
         return 1
     say(f"sweep           {accepted} matched, {tried} left for a press")
     if session.waiting:
-        say(f"sweep           {session.waiting} named, not priced: no export under 900 s old, so they wait at join")
+        say(f"sweep           {session.waiting} named, not priced: no export from today, so they wait at join")
     return 0
 
 

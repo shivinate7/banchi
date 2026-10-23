@@ -44,7 +44,7 @@ A SKU-to-`Set Name` join on every request is refused on two grounds.
 
 **The route is polled.** `#/inventory` is read on a timer. `_copies_out` is already a full-table pass costing about 1s on the owner's store. A per-request export join on a polled route repeats that defect.
 
-**A derived facet disappears.** `inventory/.exports/` holds whatever was last fetched. It is deduped by digest and reused within 900s (D166). A filter that works today and empties tomorrow, because an export aged out, is worse than no filter. The operator cannot tell a set they own nothing in from a set the machine can no longer see. A stored column answers the same on a machine with no export.
+**A derived facet disappears.** `inventory/.exports/` holds whatever was last fetched. It is deduped by digest and reused for the rest of the US Central day it was downloaded (D166). A filter that works today and empties tomorrow, because an export aged out, is worse than no filter. The operator cannot tell a set they own nothing in from a set the machine can no longer see. A stored column answers the same on a machine with no export.
 
 So the set is written onto the card **at identification time**, from the candidate row the answer already carries. What the store already holds is backfilled once.
 

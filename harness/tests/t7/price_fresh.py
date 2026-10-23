@@ -541,7 +541,7 @@ def check_daily_job_reaches_only_the_refresh(checks: Checks) -> None:
 
 
 def check_refresh_route(checks: Checks) -> None:
-    """Item 11. 202 on a press, `running` on a second, a refusal inside the reuse window, `force` overrides."""
+    """Item 11. 202 on a press, `running` on a second, a refusal inside the refresh debounce, `force` overrides."""
     checks.note("")
     checks.note("POST /pipeline/prices/refresh — one at a time, and not twice in a row")
     with world(checks) as w:
@@ -574,7 +574,7 @@ def check_refresh_route(checks: Checks) -> None:
             )
             if status == 202:
                 again, _raw, _ = request(w.port, "POST", "/pipeline/prices/refresh", payload={})
-                checks.ok(400 <= again < 500, "11. a press inside `EXPORT_REUSE_S` of a finished run is refused", str(again))
+                checks.ok(400 <= again < 500, "11. a press inside `REFRESH_DEBOUNCE_S` of a finished run is refused", str(again))
                 forced, _raw, _ = request(w.port, "POST", "/pipeline/prices/refresh", payload={"force": True})
                 checks.equal(forced, 202, "11. and `force` presses anyway")
                 time.sleep(0.2)
