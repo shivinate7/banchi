@@ -1078,7 +1078,8 @@ test.describe('Background Match', () => {
     await expect(row(page)).toBeEnabled()
     await expect(row(page)).toContainText('Off')
     await expect(row(page)).toHaveAttribute('aria-checked', 'false')
-    expect((await row(page).boundingBox())!.height, 'the row changed height when the state arrived').toBe(before.height)
+    // Whole pixels: the box reads sub-pixel floats (31.99994 vs 32.00012), so an exact toBe flakes.
+    expect((await row(page).boundingBox())!.height, 'the row changed height when the state arrived').toBeCloseTo(before.height, 0)
   })
 
   test('a press calls PUT with the flipped state and shows it', async ({ page }) => {
