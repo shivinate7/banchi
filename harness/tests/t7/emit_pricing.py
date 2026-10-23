@@ -25,8 +25,9 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Dict, List, Tuple
+from unittest import mock
 from harness.tests import Checks
-from cli import cmd_reconcile, runs
+from cli import cmd_emit, cmd_reconcile, runs
 from identify import cost
 from pipeline import corpus, join, merge, pricing, selection, tcgcsv
 from server import capture_server, pipeline_routes, send_routes
@@ -5252,7 +5253,37 @@ def check_hold_take_reads(checks: Checks) -> None:
         )
 
 
+def check_prices_from_today_names_another_refresh(checks: Checks) -> None:
+    """`cmd_emit._prices_from_today` names a refresh that another process ran between the send's first look
+    and the gate's own look.
+
+    The gate answers `{"ran": False, "export_day"}` when nothing was old at its look. The send's sentence
+    used to read `done["was"]`, a key that answer never carries, so the send raised KeyError where it
+    should have said the prices were already from today. Only the two looks are patched; the branch
+    under test is the real one.
+    """
+    checks.note("")
+    checks.note("PRICES FROM TODAY — a gate that finds nothing old names the other refresh, and does not raise")
+    with isolated_home():
+        run_dir, _ = seam_run(checks, [(3, 1, "Articuno", "161", None)])
+        said: List[str] = []
+        gate = {"ran": False, "export_day": "2026-10-22"}
+        with mock.patch.object(cmd_emit.runs, "stale_runs", return_value={run_dir.name: object()}), \
+                mock.patch.object(pipeline_routes, "refresh_before_send", return_value=gate):
+            try:
+                answer = cmd_emit._prices_from_today([run_dir.directory], None, said.append)
+            except Exception as exc:  # noqa: BLE001 - a raise is the defect, and it must read as a failed check
+                answer = repr(exc)
+        checks.equal(answer, True, "the send goes on when another process has already made the prices current")
+        checks.ok(
+            any("already from today" in line and "2026-10-22" in line for line in said),
+            "and the sentence names it: the prices were already from today",
+            "\n".join(said),
+        )
+
+
 CHECKS = (
+    check_prices_from_today_names_another_refresh,
     check_pipeline_routes,
     check_emit_claim_decides,
     check_emit_unpriced_left_out,
