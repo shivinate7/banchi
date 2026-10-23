@@ -2628,6 +2628,9 @@ class _PricingReads:
     def __init__(self, snapshot: Optional["Snapshot"], book: Optional["corpus.Corpus"]) -> None:
         self.snapshot = snapshot
         self.book = book
+        # Runs over a disowned drawer that still find their cards: the only ones whose stored
+        # positions need re-addressing, so a healthy run pays no extra read.
+        self.followed: set = set()
         self._held: Optional[Tuple[Optional[str], Dict[str, Any]]] = None
 
     def held(self) -> Tuple[Optional[str], Dict[str, Any]]:
@@ -2766,6 +2769,10 @@ def do_pipeline_pricing(name: str, reads: Optional[_PricingReads] = None) -> dic
     # THE LABELS, RE-RENDERED BEFORE ANYTHING LEAVES (D58). In place on the document just
     # parsed, which nothing else holds — the file on disk is untouched, exactly as D58 left
     # `QueueEntry.label`.
+    # ONLY THE WORKLIST'S REQUEST KNOWS WHICH RUNS FOLLOW (`reads.followed`); the single-run
+    # route pays no extra read for a screen that draws no worklist.
+    if reads is not None and name in reads.followed:
+        _follow_positions(directory, pricing, reads.snapshot)
     _relabel_positions(pricing, None if reads is None else reads.snapshot)
     # WHEN EACH ROW'S FIGURES WERE READ: the fetch time of the export this run was last joined
     # against (its mtime, D104's own rule). Added to the answer and never written back.
@@ -3315,6 +3322,63 @@ def _on_hand_by_run(inventory: master.Inventory, runs: Iterable[str]) -> Dict[st
     return counts
 
 
+def _follows_its_cards(directory: Path, snapshot: Optional[Snapshot]) -> bool:
+    """True when a run over a disowned drawer still finds its cards by photograph (D262).
+
+    Such a run prices and sends like any other: `realign` re-binds it to wherever its cards
+    stand now. A run that already has a joined rescue stays out (the caller checks), because
+    the rescue run holds those same cards and counting both would send them twice (D86).
+    """
+    if snapshot is None:
+        return False
+    try:
+        run = run_files.open_run(directory)
+        rebound, moved, _, _ = run_resolve.realign(
+            run.read_identifications(), snapshot.inventory, run
+        )
+        # THE JOIN'S OWN VERDICT, so this screen and the send cannot disagree about one run.
+        run_resolve.refuse_reallocated(rebound, snapshot.inventory, run)
+    except (run_files.RunError, OSError, ValueError):
+        return False
+    return bool(moved)
+
+
+def _follow_positions(directory: Path, pricing: dict, snapshot: Optional[Snapshot]) -> None:
+    """Re-address a table's stored positions for a run over a disowned drawer (D262).
+
+    The table was written when its cards were in the old drawer, and a slot there is now a
+    foreign card (or nothing). Each position moves to where its photograph is now, and a card
+    that is on no shelf is dropped, so the copy count and the photos are the moved cards' own.
+    A run whose drawer is its own is left exactly as stored.
+    """
+    try:
+        if snapshot is None:
+            snapshot = Store().read()
+        run = run_files.open_run(directory)
+        payload = run.read_identifications()
+        if not run_resolve.disowned_boxes(payload, snapshot.inventory, run):
+            return
+        _, moved, departed, _ = run_resolve.realign(payload, snapshot.inventory, run)
+    except (run_files.RunError, files.StoreError, OSError, ValueError):
+        return
+    gone = set(departed)
+    for entry in pricing.get("skus") or []:
+        if not isinstance(entry, dict):
+            continue
+        kept = []
+        for at in entry.get("positions") or []:
+            key = f"{at.get('box')}/{at.get('index')}"
+            if key in gone:
+                continue
+            if key in moved:
+                box, _, index = moved[key].partition("/")
+                at["box"], at["index"] = int(box), int(index)
+            kept.append(at)
+        entry["positions"] = kept
+        if "copies" in entry:
+            entry["copies"] = len(kept)
+
+
 def _unreachable(inventory: master.Inventory, review_count: int, root: Path) -> dict:
     """The copies NO worklist can offer, named rather than left out (`CLAUDE.md`: never
     silently drop a card). Each figure is a door to the screen that can move it.
@@ -3536,7 +3600,17 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
                 }
             )
             continue
-        if summary.get("box_former"):
+        follows = bool(
+            summary.get("box_former")
+            and not rescues_by_stranded.get(entry.name)
+            and _follows_its_cards(entry, snapshot)
+        )
+        if follows:
+            reads.followed.add(entry.name)
+            # THE LEDGER BELOW COUNTS COPIES OFF THESE POSITIONS, so they are re-addressed here
+            # and not only on the per-run route: the screen's count has to be the send's.
+            _follow_positions(entry, parsed, snapshot)
+        if summary.get("box_former") and not follows:
             # A RUN OVER A DRAWER THAT NO LONGER EXISTS (D36). Never open, never in the
             # union: its positions are another drawer's cards now, and `emit` refuses it by
             # name. Drawn in the picker as `Box N (deleted)` so the operator can see why.
