@@ -1407,7 +1407,7 @@ def check_cli_emit_is_gated(checks: Checks) -> None:
     """Case 6. `emit` with a stale `--export` is refused, and a multi-run emit is gated by the same refresh."""
     checks.note("")
     checks.note("SEND GATE — the CLI `emit` is refused on stale prices, one run or several")
-    with send_portal() as portal, synced_home() as home:
+    with send_portal(), synced_home() as home:
         run, _ = seam_run(checks, [(3, 1, "Dunsparce", "120/159", "normal")], market={DUNSPARCE_SKU: THEN})
         stale = write_export(home / "stale-export.csv", market={DUNSPARCE_SKU: THEN})
         _age(stale, 2)
