@@ -56,8 +56,10 @@
 .pricing-bar:has(.pricing-tally) .send-more-press { display: none; }
 .pricing-bar:has(.pricing-tally) .send-act:not([data-more='open']) .send-door { display: inline-flex; }
 /* THE CARD TAKES WHAT THE SAYS LINE LEAVES (basis 0), so a notice under the press never decides whether
-   the line wraps above it: the press holds its place whatever the status says (D313). */
-.pricing-bar .send-card { flex: 1 1 0; min-width: 0; }
+   the line wraps above it: the press holds its place whatever the status says (D313). Its floor is
+   its own press (min-content), so a long says line wraps the card under it instead of squeezing
+   the press past the bar's edge. */
+.pricing-bar .send-card { flex: 1 1 0; min-width: min-content; }
 
 /* ---- the rule line (Q5) -------------------------------------------------------------------- */
 .pricing-rule-line {
