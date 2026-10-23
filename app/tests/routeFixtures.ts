@@ -146,14 +146,14 @@ export function matchState(overrides: Partial<MatchState> = {}): MatchState {
     runtime_missing: false,
     progress: null,
     model_url: 'https://github.com/shivinate7/banchi/releases/download/matcher-model-1/marqo-b-image.onnx',
-    margin_min: 0.05,
-    floor_min: 0.755,
+    margin_min: 0.04,
+    floor_min: 0.69,
     ...overrides,
   }
 }
 
 /** The preflight total's free-reader fields, all absent: what a paid quote carries. Spread it into
- *  a `total` so a fixture cannot forget one of the six (a free quote reads `unread` with
+ *  a `total` so a fixture cannot forget one of the seven (a free quote reads `unread` with
  *  `Object.entries`, and a missing one crashes the sheet rather than failing a case). */
 export const NO_FREE_FIELDS = {
   matcher_read: null,
@@ -162,6 +162,7 @@ export const NO_FREE_FIELDS = {
   second_look: null,
   second_look_measured: null,
   unread: {},
+  ceiling_usd: null,
 } as const
 
 /** Stub `GET /pipeline/match`, the free reader's state, which the Identify sheet reads when it opens.
