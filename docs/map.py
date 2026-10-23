@@ -5836,15 +5836,14 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D1", "D2", "D125", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20",
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20",
                                 "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36",
-                                "D43", "D47", "D180", "D86", "D54", "D56", "D58", "D59", "D278",
-                                "D65", "D67", "D68", "D76", "D277", "D87",
-                                "D88", "D89", "D100", "D103", "D104", "D105", "D134", "D137",
-                                "D145", "D147", "D156", "D163", "D166", "D168",
-                                "D170", "D172", "D174", "D188", "D189", "D196", "D212",
-                                "D216", "D219", "D225", "D227", "D236", "D254", "D258", "D273",
-                                "D291", "D293", "D301"],
+                                "D43", "D47", "D54", "D56", "D58", "D59", "D65", "D67", "D68",
+                                "D76", "D86", "D87", "D88", "D89", "D100", "D103", "D104", "D105",
+                                "D125", "D134", "D137", "D145", "D147", "D156", "D163", "D166",
+                                "D168", "D170", "D172", "D174", "D180", "D188", "D189", "D196",
+                                "D212", "D216", "D219", "D225", "D227", "D236", "D254", "D258",
+                                "D262", "D273", "D277", "D278", "D291", "D293", "D301"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {

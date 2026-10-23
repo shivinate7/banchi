@@ -1612,7 +1612,15 @@ def check_remove_and_box_delete(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.listing("8608859").set(master.PUSHED, 0)
 
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["3/3"].run = "2026-09-01-box3-01"
         body = capture_server.do_delete_box(3)
+        checks.equal(
+            body["stranded_runs"],
+            [],
+            "a run with no directory on disk is not named as stranded: only a run that "
+            "exists and cannot follow its moved cards is (the backup warning)",
+        )
         checks.equal(
             (body["cards"], body["buried"], body["photos"], body["sidecars"]),
             (4, 3, 3, 3),

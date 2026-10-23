@@ -3809,11 +3809,19 @@ def check_rescue_stranded_run(checks: Checks) -> None:
             "fixture: box 3 carries a true index (D145)",
             f"bid: {box3_bid!r}",
         )
-        checks.raises(
-            runs.RunError,
-            lambda: resolve.exports_for(run, [str(export)]),
-            "fixture: the join refuses this run, which is what makes it stranded",
+        checks.ok(
+            bool(resolve.disowned_boxes(run.read_identifications(), Store().read().inventory, run)),
+            "fixture: the store disowns this run's drawer, which is what makes it stranded",
         )
+        # THE JOIN NO LONGER REFUSES IT (D262, amended): both records carry a digest that
+        # names a card in box 3, so the join follows them there. Rescue stays for a run whose
+        # cards sit in more than one box.
+        try:
+            resolve.exports_for(run, [str(export)])
+            followed = True
+        except runs.RunError:
+            followed = False
+        checks.ok(followed, "and the join follows its cards instead of refusing it")
 
         # (a) THE PREVIEW PRESSES NOTHING.
         before = run_count()

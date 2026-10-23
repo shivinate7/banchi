@@ -83,28 +83,7 @@ def _stranded_because(payload: dict, inventory: master.Inventory, run: runs.Run)
     raises on the first one and this collects them all, because the operator is being shown why
     a rescue is being offered rather than being stopped.
     """
-    scope = run.manifest.get("scope")
-    bid = scope.get("bid") if isinstance(scope, dict) else None
-    if not isinstance(bid, int) or isinstance(bid, bool):
-        bid = None
-    boxes = sorted(
-        {
-            int(record["box"])
-            for record in (payload.get("cards") or {}).values()
-            if isinstance(record, dict) and record.get("box") is not None
-        }
-    )
-    out: List[str] = []
-    deleted = None
-    for box in boxes:
-        if deleted is None and inventory.box(box) is None:
-            deleted = Store().named_events(master.BOX_DELETED)
-        sentence = inventory.box_disowns_run(
-            box, run.name, run.created_at, bid=bid, deleted=deleted or ()
-        )
-        if sentence is not None:
-            out.append(sentence)
-    return out
+    return [sentence for _, sentence in resolve.disowned_boxes(payload, inventory, run)]
 
 
 def _existing_rescues(source: str, root: Path) -> List[runs.Run]:
