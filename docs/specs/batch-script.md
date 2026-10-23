@@ -248,6 +248,9 @@ export prefetch at run start, because no identification exists then to scope it.
 Open, not built: the card state `read`. A card is `read` after Haiku has answered and before the join
 has run. It sits between `captured` and `identified`.
 
+The screen half: the runs screen reads the run's phase and its match record, so a run left at the join
+step shows why. The screen names the state `read` once it is built, and its "Join again" wording is open.
+
 ---
 
 ## 5. `join`
