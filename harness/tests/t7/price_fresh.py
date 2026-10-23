@@ -32,8 +32,9 @@ import time
 import urllib.error
 import urllib.request
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -57,9 +58,12 @@ from harness.tests.t7.common import (
     seam_run,
     write_export,
 )
-from pipeline import pricehistory, pricerefresh, readings as readings_walk, tcgcsv
-from server import capture_server, pipeline_routes
+from harness.tests.t7.send_markdown import _markdown_dir, send_portal, synced_home
+from pipeline import pricehistory, pricerefresh, readings as readings_walk, reprice, tcgcsv
+from server import capture_server, pipeline_routes, send_routes
 from store import files
+from store.readings import KIND_RUN, Reading, Source, _source_key
+from store.session import Store
 
 SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "price-refresh-daily.py"
 
@@ -1145,6 +1149,440 @@ def check_trends_facts_need_no_month_series(checks: Checks) -> None:
     )
 
 
+# ------------------------------------------------------- the send gate (`refresh_before_send`)
+#
+# A send never prices from an export older than today (US Central). These cases go through the two
+# real doors, `send_routes.do_send` (the runs sheet, `#/pricing`) and `cli/cmd_emit.run` (the CLI),
+# against `send_markdown.send_portal`, which serves the live read, the catalog export and the pricing
+# upload. On `main` there is no gate, so each case is red by its own sentence. `_refresh_spy` says
+# whether a refresh was asked and what receipts existed when it was.
+
+PUSH_CALLS = ("initializeexportcsv", "uploadexportcsv", "finalizeexportcsv", "movetolive")
+DAY = 86400
+
+
+def _outcome(fn):
+    """What `fn` did: `("answer", value)`, `("refused", code, message)`, or `("raised", text)`."""
+    try:
+        return ("answer", fn())
+    except pipeline_routes.PipelineRefusal as caught:
+        return ("refused", caught.code, str(caught))
+    except Exception as caught:  # noqa: BLE001 - a missing function reads as a failed case, not a crash
+        return ("raised", f"{type(caught).__name__}: {caught}")
+
+
+def _refused(outcome) -> tuple:
+    """`(code, message)` when `outcome` refused, else `(None, "")`."""
+    return (outcome[1], outcome[2]) if outcome[0] == "refused" else (None, "")
+
+
+def _send_now(run):
+    return _outcome(lambda: send_routes.do_send({"runs": [run.directory.name], "confirm": True}))
+
+
+def _receipt_dirs() -> list:
+    root = send_routes.sends_dir()
+    return sorted(path.name for path in root.iterdir()) if root.is_dir() else []
+
+
+@contextmanager
+def _refresh_spy():
+    """Each call to `pipeline_routes.do_prices_refresh`: the receipts that existed then, and its answer.
+
+    It forwards every argument, because main's refresh takes no `also`. `refresh_before_send` reads
+    the function as a module global, so one patch covers `do_send` and `cli/cmd_emit`."""
+    real = pipeline_routes.do_prices_refresh
+    calls = []
+
+    def spy(*args, **kwargs):
+        call = {"receipts": _receipt_dirs(), "answer": None}
+        calls.append(call)
+        call["answer"] = real(*args, **kwargs)
+        return call["answer"]
+
+    pipeline_routes.do_prices_refresh = spy
+    try:
+        yield calls
+    finally:
+        pipeline_routes.do_prices_refresh = real
+
+
+def _age(path, days: int) -> int:
+    """Set `path`'s mtime `days` back, to a whole second. Returns that stamp."""
+    stamp = int(time.time()) - days * DAY
+    os.utime(path, (stamp, stamp))
+    return stamp
+
+
+def _name_sets(run, set_id: str = "SV09") -> None:
+    """A Pokemon run names its set (D170), as `world` does. Without one, a refresh cannot fetch it."""
+    path = run.directory / pipeline_routes.run_files.IDENTIFICATIONS
+    payload = json.loads(path.read_text())
+    for card in payload["cards"].values():
+        card["set_hint"] = set_id
+    path.write_text(json.dumps(payload))
+
+
+def _stale_run(checks: Checks, portal: dict, home: Path, cards):
+    """A joined Pokemon run priced at `THEN`, its export two days old. The portal's catalog says `NOW`."""
+    run, _ = seam_run(checks, cards, market={DUNSPARCE_SKU: THEN, ARTICUNO_SKU: ARTICUNO_THEN})
+    _name_sets(run)
+    _age(run.directory / "export.csv", 2)
+    portal["catalog"] = write_export(home / "catalog-now.csv", market={DUNSPARCE_SKU: NOW, ARTICUNO_SKU: ARTICUNO_NOW}).read_bytes()
+    return run
+
+
+def _waiting_run(checks: Checks, cards):
+    """A run read and collected but not joined: phase `join` (`_phase`), the mark `cmd_match` writes."""
+    run, _ = seam_run(checks, cards, join=False)
+    run.set(collected=True)
+    return run
+
+
+def _pushed(portal) -> list:
+    """The pricing-upload calls the portal received. Empty when no upload reached TCGplayer."""
+    return [name for kind, name in portal["calls"] if kind == "POST" and name in PUSH_CALLS]
+
+
+def _uploaded(portal) -> dict:
+    """`{TCGplayer Id: MyPrice}` for every row the portal kept."""
+    return {row["ProductConditionId"]: row["MyPrice"] for row in portal["rows"]}
+
+
+def check_send_refreshes_a_stale_export_first(checks: Checks) -> None:
+    """Case 1. An export from an earlier day is refreshed before the send, and the send carries the new price.
+
+    The refresh runs before any receipt exists. The pricing upload carries $16.25, not $10.37.
+    """
+    checks.note("")
+    checks.note("SEND GATE — an export from an earlier day is refreshed before the send")
+    with send_portal() as portal, synced_home() as home:
+        run = _stale_run(checks, portal, home, [(3, 1, "Dunsparce", "120/159", "normal")])
+        with _refresh_spy() as calls:
+            outcome = _send_now(run)
+        checks.equal(len(calls), 1, "1. a stale export makes the send run the refresh once")
+        checks.equal(
+            calls[0]["receipts"] if calls else None, [],
+            "1. and no receipt exists when the refresh runs: the gate sits before the receipt",
+        )
+        checks.ok(outcome[0] == "answer", "1. the send goes after the refresh", repr(outcome[1:])[:300])
+        checks.equal(attempt(checks, "1. the run's table", lambda: table_row(run, DUNSPARCE_SKU)["snap"].get("market")), NOW,
+                     "1. the run's own table carries the refreshed Market")
+        checks.equal(_uploaded(portal).get(DUNSPARCE_SKU), NOW,
+                     "1. the pricing upload sends $16.25, not the stale $10.37")
+
+
+def check_refused_refresh_sends_nothing(checks: Checks) -> None:
+    """Case 2. A refresh that cannot bring the prices current refuses the send, names the cause, and sends nothing."""
+    checks.note("")
+    checks.note("SEND GATE — a refresh that cannot run refuses the send, with its cause, and sends nothing")
+    with send_portal() as portal, synced_home() as home:
+        run = _stale_run(checks, portal, home, [(3, 1, "Dunsparce", "120/159", "normal")])
+        saved = os.environ.pop("TCGPLAYER_STORE_COOKIE", None)
+        try:
+            with _refresh_spy() as calls:
+                outcome = _send_now(run)
+        finally:
+            if saved is not None:
+                os.environ["TCGPLAYER_STORE_COOKIE"] = saved
+        code, text = _refused(outcome)
+        checks.equal(code, "prices_stale", "2a. with no cookie the refresh cannot run: the send refuses with `prices_stale`")
+        checks.ok(text.startswith("Nothing was sent"), "2a. the refusal opens `Nothing was sent`", text[:300])
+        checks.equal(len(calls), 1, "2a. the refresh was asked once")
+        checks.equal(_pushed(portal), [], "2a. and no pricing upload reached TCGplayer")
+        checks.equal(_receipt_dirs(), [], "2a. and no receipt was written")
+
+        with pricerefresh.refresh_lock() as held:
+            checks.ok(held, "2b. the probe holds the refresh lock, as another process would")
+            with _refresh_spy() as calls:
+                outcome = _send_now(run)
+        code, text = _refused(outcome)
+        checks.equal(code, "prices_stale", "2b. another refresh running: the send refuses with `prices_stale`")
+        checks.ok(
+            text.startswith("Nothing was sent") and "another refresh is running" in text,
+            "2b. the refusal opens `Nothing was sent` and names the running refresh", text[:300],
+        )
+        checks.equal(_pushed(portal), [], "2b. and no pricing upload reached TCGplayer")
+        checks.equal(_receipt_dirs(), [], "2b. and no receipt was written")
+
+
+def check_same_day_export_asks_no_refresh(checks: Checks) -> None:
+    """Case 3. An export from today asks no refresh, and the send goes as before."""
+    checks.note("")
+    checks.note("SEND GATE — a same-day export is sent without a refresh")
+    with send_portal(), synced_home():
+        run, _ = seam_run(checks, [(3, 1, "Dunsparce", "120/159", "normal")], market={DUNSPARCE_SKU: THEN})
+        _name_sets(run)
+        with _refresh_spy() as calls:
+            outcome = _send_now(run)
+        checks.equal(len(calls), 0, "3. an export from today asks no refresh")
+        checks.ok(outcome[0] == "answer", "3. and the send goes", repr(outcome[1:])[:300])
+
+
+def check_waiting_run_is_joined_and_send_stays_narrow(checks: Checks) -> None:
+    """Case 4. The refresh joins a run waiting at phase join, and a run that cannot join is named and does not block the send.
+
+    The pressed run holds Dunsparce. A waiting run holds Articuno and joins. A second waiting run has
+    no set hint, so its join fails. The pressed send must carry Dunsparce alone.
+    """
+    checks.note("")
+    checks.note("SEND GATE — a waiting run is joined by the refresh, a failed join is named, the send is not widened")
+    with send_portal() as portal, synced_home() as home:
+        pressed = _stale_run(checks, portal, home, [(3, 1, "Dunsparce", "120/159", "normal")])
+        waiting = _waiting_run(checks, [(4, 1, "Articuno", "161", None)])
+        _name_sets(waiting)
+        broken = _waiting_run(checks, [(5, 1, "Articuno", "161", None)])
+        with _refresh_spy() as calls:
+            outcome = _send_now(pressed)
+        checks.equal(len(calls), 1, "4. the refresh runs once, for the stale pressed run")
+        worklist = attempt(checks, "4. `do_pipeline_worklist` answers", lambda: pipeline_routes.do_pipeline_worklist([]))
+        row = row_of(ARTICUNO_SKU, worklist) if worklist else None
+        checks.ok(row is not None, "4. the waiting run is joined by the refresh and lands on the worklist",
+                  json.dumps([r.get("sku") for r in (worklist or {}).get("skus", [])])[:300])
+        steps = (calls[0]["answer"] or {}).get("steps") or {} if calls else {}
+        join_said = (steps.get("join") or {}).get("message") or ""
+        checks.ok(broken.directory.name in join_said, "4. the run that cannot join is named by the refresh's join step",
+                  repr(steps.get("join"))[:300])
+        checks.ok(outcome[0] == "answer", "4. a failed join does not block the send", repr(outcome[1:])[:300])
+        checks.equal(set(_uploaded(portal)), {DUNSPARCE_SKU},
+                     "4. the pressed send is not widened: only its own SKU is uploaded")
+
+
+def check_readings_keep_the_newest_reading(checks: Checks) -> None:
+    """Case 5a. `replace_source` keeps the row dated later. A tie takes the new reading."""
+    checks.note("")
+    checks.note("READINGS — a newer reading is kept over an older one, from any source")
+    with isolated_home():
+
+        def put(source: str, price: str, at: int) -> None:
+            with Store().write() as writable:
+                writable.readings.replace_source(
+                    KIND_RUN, source, {"501": Reading(price, at, source, KIND_RUN, "Card")},
+                    Source(KIND_RUN, source, at, 1),
+                )
+
+        def held() -> str:
+            return Store().read().readings.entries["501"].market
+
+        attempt(checks, "5a. run-a is written", lambda: put("run-a", "12.00", 2000))
+        attempt(checks, "5a. run-b, an older reading from another source, is written", lambda: put("run-b", "9.00", 1000))
+        checks.equal(attempt(checks, "5a. the table is read", held), "12.00",
+                     "5a. an older reading from another source does not replace a newer row")
+        attempt(checks, "5a. run-a re-joins with an older reading", lambda: put("run-a", "8.00", 1500))
+        checks.equal(attempt(checks, "5a. the table is read", held), "12.00",
+                     "5a. nor does an older re-join of the same source replace its own newer row")
+        checks.equal(
+            attempt(checks, "5a. the source row is read", lambda: Store().read().readings.sources[_source_key(KIND_RUN, "run-a")]),
+            Source(KIND_RUN, "run-a", 2000, 1),
+            "5a. and its source row still says 2000: an older re-join of the same run changes no source row",
+        )
+        attempt(checks, "5a. run-b writes a tie", lambda: put("run-b", "7.00", 2000))
+        checks.equal(attempt(checks, "5a. the table is read", held), "7.00",
+                     "5a. a tie replaces: the new reading takes the row")
+
+
+def check_join_dates_pricing_to_its_export(checks: Checks) -> None:
+    """Case 5b. `join` stamps pricing.json with the export's own time, and `readings adopt` recomputes the same `at`."""
+    checks.note("")
+    checks.note("READINGS — a join is dated to the export it priced from, never to now")
+    with isolated_home():
+        run, _ = seam_run(checks, [(3, 1, "Dunsparce", "120/159", "normal")], market={DUNSPARCE_SKU: THEN}, join=False)
+        export = run.directory / "export.csv"
+        stamp = _age(export, 2)
+        command(checks, "join", str(run.directory), "--export", str(export))
+        pricing = run.directory / pipeline_routes.run_files.PRICING
+        checks.equal(int(pricing.stat().st_mtime), stamp, "5b. `join` dates pricing.json to the export it joined, not to now")
+
+        def reading_at() -> int:
+            return Store().read().readings.entries[DUNSPARCE_SKU].at
+
+        checks.equal(attempt(checks, "5b. the reading is read", reading_at), stamp,
+                     "5b. the reading carries that same time")
+        command(checks, "readings", "adopt", "--write")
+        checks.equal(attempt(checks, "5b. the reading is read again", reading_at), stamp,
+                     "5b. `readings adopt` recomputes the same `at`")
+
+
+def check_cli_emit_is_gated(checks: Checks) -> None:
+    """Case 6. `emit` with a stale `--export` is refused, and a multi-run emit is gated by the same refresh."""
+    checks.note("")
+    checks.note("SEND GATE — the CLI `emit` is refused on stale prices, one run or several")
+    with send_portal(), synced_home() as home:
+        run, _ = seam_run(checks, [(3, 1, "Dunsparce", "120/159", "normal")], market={DUNSPARCE_SKU: THEN})
+        stale = write_export(home / "stale-export.csv", market={DUNSPARCE_SKU: THEN})
+        _age(stale, 2)
+        with _refresh_spy() as calls:
+            text = command(checks, "emit", str(run.directory), "--export", str(stale), exits=1)
+        checks.ok("Nothing was sent" in text, "6a. a stale `--export` is refused with `Nothing was sent`", text[-300:])
+        checks.equal(len(calls), 0, "6a. a named file is the owner's choice, so it is refused without a refresh")
+        checks.equal(sorted(run.directory.glob("import*.csv")), [], "6a. and no import file was written")
+
+        second, _ = seam_run(checks, [(4, 1, "Articuno", "161", None)], market={ARTICUNO_SKU: ARTICUNO_THEN})
+        _age(run.directory / "export.csv", 2)
+        _age(second.directory / "export.csv", 2)
+        with pricerefresh.refresh_lock() as held:
+            checks.ok(held, "6b. the probe holds the refresh lock, as another process would")
+            with _refresh_spy() as calls:
+                text = command(checks, "emit", str(run.directory), str(second.directory), exits=1)
+        checks.ok(
+            "Nothing was sent" in text and "another refresh is running" in text,
+            "6b. a multi-run emit over stale runs is refused with the running refresh named", text[-300:],
+        )
+        checks.equal(len(calls), 1, "6b. a multi-run emit asks the refresh once")
+
+
+# ------------------------------------------------------------------ round 2: the day, the problem, the receipt
+
+
+def _central(*parts) -> datetime:
+    return datetime(*parts, tzinfo=ZoneInfo("America/Chicago"))
+
+
+def check_standing_problem_is_not_refetched(checks: Checks) -> None:
+    """Round 2, item 1. A waiting run whose last join left a problem is not fetched again by the refresh.
+
+    `do_run_match` answers `problem_stands` before it fetches anything. The refresh names the standing
+    sentence in its join step, and the run's own problem record is left as it was. The spy records every
+    export the refresh asks for, by run name.
+    """
+    checks.note("")
+    checks.note("SEND GATE — a waiting run with a standing join problem is named, not fetched again")
+    problem = "Pokemon run needs its sets named before it can be matched."
+    with send_portal() as portal, synced_home() as home:
+        pressed = _stale_run(checks, portal, home, [(3, 1, "Dunsparce", "120/159", "normal")])
+        stuck = _waiting_run(checks, [(4, 1, "Articuno", "161", None)])
+        attempt(
+            checks, "1. the waiting run carries a standing join problem",
+            lambda: pipeline_routes._write_match(
+                stuck.directory,
+                {"at": datetime.now(timezone.utc).isoformat(), "problem": {"code": "match_refused", "message": problem, "step": "join"}},
+            ),
+        )
+        fetched = []
+        real_export = pipeline_routes.do_pipeline_export
+
+        def spy_export(*args, **kwargs):
+            fetched.append(args[0] if args else kwargs.get("name"))
+            return real_export(*args, **kwargs)
+
+        with _refresh_spy() as calls:
+            pipeline_routes.do_pipeline_export = spy_export
+            try:
+                outcome = _send_now(pressed)
+            finally:
+                pipeline_routes.do_pipeline_export = real_export
+        steps = ((calls[0]["answer"] or {}).get("steps") or {}) if calls else {}
+        join_said = (steps.get("join") or {}).get("message") or ""
+        checks.equal(
+            [name for name in fetched if name == stuck.directory.name], [],
+            "1. the refresh asks TCGplayer for nothing for the run with a standing problem",
+        )
+        checks.ok(
+            stuck.directory.name in join_said and problem in join_said,
+            "1. the refresh's join step names that run and its standing sentence",
+            repr(steps.get("join"))[:300],
+        )
+        checks.ok(outcome[0] == "answer", "1. and the send of the pressed run still goes", repr(outcome[1:])[:300])
+        still = attempt(checks, "1. the run's problem record is read back", lambda: pipeline_routes._read_match(stuck.directory))
+        checks.equal(
+            ((still or {}).get("problem") or {}).get("message"), problem,
+            "1. and the standing problem is unchanged: the refresh wrote nothing to the run",
+        )
+
+
+def check_a_read_is_from_today_central(checks: Checks) -> None:
+    """Round 2, item 2. A read is fresh when it began on today's US Central day. `fresh_for_s` counts real seconds.
+
+    Fixed instants either side of midnight, and on both 2026 daylight-saving shifts: 8 March (a 23 hour
+    day) and 1 November (a 25 hour day). A rule that counts 24 hours gets each of these wrong.
+    """
+    checks.note("")
+    checks.note("READ FRESHNESS — a read is fresh from the Central day it began on, and `fresh_for_s` counts real seconds")
+
+    def fresh(read: datetime, now: datetime) -> bool:
+        return reprice.read_is_fresh(read.isoformat(), now)
+
+    checks.equal(
+        [
+            fresh(_central(2026, 9, 26, 0, 0), _central(2026, 9, 26, 23, 59)),
+            fresh(_central(2026, 9, 25, 23, 59, 59), _central(2026, 9, 26, 0, 0, 1)),
+            fresh(_central(2026, 9, 25, 23, 59, 59), _central(2026, 9, 26, 23, 59)),
+            fresh(_central(2026, 3, 7, 23, 59, 59), _central(2026, 3, 8, 0, 0, 1)),
+            fresh(_central(2026, 3, 8, 0, 0), _central(2026, 3, 8, 23, 59, 59)),
+            fresh(_central(2026, 3, 8, 0, 0), _central(2026, 3, 9, 0, 0)),
+            fresh(_central(2026, 10, 31, 23, 59, 59), _central(2026, 11, 1, 0, 0)),
+            fresh(_central(2026, 11, 1, 0, 0), _central(2026, 11, 1, 23, 59, 59)),
+            fresh(_central(2026, 11, 1, 0, 0), _central(2026, 11, 2, 0, 0)),
+        ],
+        [True, False, False, False, True, False, False, True, False],
+        "A READ IS FRESH FROM THE CENTRAL DAY IT BEGAN ON: midnight, a second either side, and both DST shifts",
+    )
+    checks.equal(
+        [
+            attempt(checks, "2. `fresh_for_s` at noon, 8 March", lambda: reprice.fresh_for_s(_central(2026, 3, 8, 12, 0))),
+            attempt(checks, "2. `fresh_for_s` at 23:59:59, 8 March", lambda: reprice.fresh_for_s(_central(2026, 3, 8, 23, 59, 59))),
+            attempt(checks, "2. `fresh_for_s` at noon, 1 November", lambda: reprice.fresh_for_s(_central(2026, 11, 1, 12, 0))),
+            attempt(checks, "2. `fresh_for_s` at 23:59:59, 1 November", lambda: reprice.fresh_for_s(_central(2026, 11, 1, 23, 59, 59))),
+        ],
+        [39600, 82799, 46800, 89999],
+        "2. `fresh_for_s` counts real seconds: a 23 hour day ends at 82799 and a 25 hour day at 89999",
+    )
+
+
+def check_markdown_send_refuses_an_earlier_day(checks: Checks) -> None:
+    """Round 2, item 2. A mark-down from yesterday's read is refused `read_stale`. A mark-down from today's read goes."""
+    checks.note("")
+    checks.note("MARK-DOWN — a read from an earlier Central day is refused, a read from today goes")
+    central_now = datetime.now(ZoneInfo("America/Chicago"))
+    yesterday = (central_now - timedelta(days=1)).replace(hour=12, minute=0, second=0, microsecond=0)
+    with send_portal() as portal, synced_home() as home:
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+        old = _markdown_dir(home, "20261021-120000", at=yesterday.isoformat())
+        outcome = _outcome(lambda: send_routes.do_markdown_send(old.name, {"confirm": True}))
+        code, _text = _refused(outcome)
+        checks.equal(code, "read_stale", "2. a mark-down from yesterday's read is refused `read_stale`")
+        checks.equal(_pushed(portal), [], "2. and nothing reached TCGplayer's upload")
+        today = _markdown_dir(home, "20261022-120000", at=datetime.now(timezone.utc).isoformat())
+        outcome = _outcome(lambda: send_routes.do_markdown_send(today.name, {"confirm": True}))
+        checks.ok(outcome[0] == "answer", "2. a mark-down from today's read goes", repr(outcome[1:])[:300])
+
+
+def check_send_says_whether_it_refreshed(checks: Checks) -> None:
+    """Round 2, item 3. The send's answer, its receipt and the summary carry `refresh`. The CLI prints the refresh line."""
+    checks.note("")
+    checks.note("SEND RECEIPT — a send says whether its prices were refreshed, and from which day")
+    central = ZoneInfo("America/Chicago")
+    with send_portal() as portal, synced_home() as home:
+        stale = _stale_run(checks, portal, home, [(3, 1, "Dunsparce", "120/159", "normal")])
+        was = datetime.fromtimestamp((stale.directory / "export.csv").stat().st_mtime, central).date().isoformat()
+        today = datetime.now(central).date().isoformat()
+        expected = {"ran": True, "ok": True, "was": was, "export_day": today}
+        outcome = _send_now(stale)
+        send = outcome[1].get("send") or {} if outcome[0] == "answer" else {}
+        checks.equal(send.get("refresh"), expected,
+                     "3. a stale export: the answer's summary says it ran, from `was`, and now `export_day`")
+        receipts = attempt(checks, "3. the receipts are read", send_routes._receipts) or []
+        checks.equal([record.get("refresh") for _, record in receipts], [expected],
+                     "3. and the receipt on disk carries the same refresh")
+
+        same, _ = seam_run(checks, [(4, 1, "Articuno", "161", None)], market={ARTICUNO_SKU: ARTICUNO_THEN})
+        _name_sets(same)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        outcome = _send_now(same)
+        send = outcome[1].get("send") or {} if outcome[0] == "answer" else {}
+        checks.equal(send.get("refresh"), {"ran": False, "export_day": today},
+                     "3. a same-day export: the summary says the refresh did not run")
+
+        cli = _stale_run(checks, portal, home, [(6, 1, "Articuno", "161", None)])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        cli_was = datetime.fromtimestamp((cli.directory / "export.csv").stat().st_mtime, central).date().isoformat()
+        text = command(checks, "emit", str(cli.directory))
+        checks.ok(
+            f"refreshed before this send: export of {cli_was}, now {today}" in text,
+            "3. the CLI prints the refresh line, from which day and to which", text[-300:],
+        )
+
+
 CHECKS = (
     check_refresh_reaches_store_backed_runs,
     check_held_lock_is_a_recorded_skip,
@@ -1165,4 +1603,15 @@ CHECKS = (
     check_saved_file_and_routes,
     check_live_read_rejoins,
     check_trends_facts_need_no_month_series,
+    check_send_refreshes_a_stale_export_first,
+    check_refused_refresh_sends_nothing,
+    check_same_day_export_asks_no_refresh,
+    check_waiting_run_is_joined_and_send_stays_narrow,
+    check_readings_keep_the_newest_reading,
+    check_join_dates_pricing_to_its_export,
+    check_cli_emit_is_gated,
+    check_standing_problem_is_not_refetched,
+    check_a_read_is_from_today_central,
+    check_markdown_send_refuses_an_earlier_day,
+    check_send_says_whether_it_refreshed,
 )

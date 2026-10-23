@@ -1210,6 +1210,29 @@ def _write_merged(resolved, priced, choice, run_dir, args, say, zero=None):
 
 
 
+def _prices_from_today(named, overrides, say) -> bool:
+    """False, with its sentence said, when the send's prices are older than today and could not be
+    refreshed. THE ONE DOOR EVERY SEND PASSES THROUGH (the CLI, the runs sheet, `#/pricing`): the
+    refresh itself is `pipeline_routes.refresh_before_send`, imported only when a run is stale."""
+    if not runs.stale_runs([runs.open_run(path) for path in named], overrides):
+        return True
+    from server import pipeline_routes
+
+    try:
+        done = pipeline_routes.refresh_before_send(
+            [runs.open_run(path).name for path in named], overrides, lambda step, *_: say(f"refresh          {step}")
+        )
+    except pipeline_routes.PipelineRefusal as refusal:
+        say(str(refusal))
+        return False
+    if done.get("ran"):
+        say(f"prices           refreshed before this send: export of {done.get('was')}, now {done.get('export_day')}")
+    else:
+        # STALE AT THE FIRST LOOK, CURRENT AT THE GATE'S OWN: another process refreshed in between.
+        say(f"prices           already from today: another refresh brought them current, export of {done.get('export_day')}")
+    return True
+
+
 def run(args, say) -> int:
     # THE CAP IS PARSED FIRST, SO AN UNUSABLE ONE IS A SENTENCE (D7, amended 2026-09-08).
     # `_cap_for` raises `MalformedDecisions`, and the only `except` that names it wraps
@@ -1232,6 +1255,8 @@ def run(args, say) -> int:
     # every reconcile written before D86 behaves identically. `run_merged` is reached only by
     # naming more than one run, which is a thing nobody could do until now.
     named = args.run_dir if isinstance(args.run_dir, list) else [args.run_dir]
+    if not _prices_from_today(named, args.export if len(named) == 1 else None, say):
+        return 1
     if len(named) > 1:
         return run_merged(args, say)
     # BEFORE THE RESOLVE, which is what makes it the plan's basis (`_listing_basis`).

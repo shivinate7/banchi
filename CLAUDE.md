@@ -100,6 +100,8 @@ make catalog-mirror # fills the image mirror (about 16.7 GB). ARGS=--dry-run sam
                                    #   pending, so run reconcile --live first. --quantity SKU=N sends N copies.
                                    #   --listed-only sends above-threshold rows only. --split-threshold writes
                                    #   import-listed.csv and import-subthreshold.csv. --split-games writes one file per game.
+                                   #   A send whose runs' prices are from an export older than today (US Central)
+                                   #   refreshes them first, or stops and says why (D166, the catalog export belongs to the game).
                                    #   --live-guard FILE trims rows so TCGplayer never holds more copies than
                                    #   are here. --reprice-live F adds a price-only row per live card F names.
 ./banchi match    audit [--write]  # the free reader over every filed card with a photo. Free. Lists disagreements;
