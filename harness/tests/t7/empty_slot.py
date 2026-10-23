@@ -873,7 +873,7 @@ def check_stale_model_or_unserved_game_does_not_retire(checks: Checks) -> None:
     checks.equal(retired, [], "and no retired event is written")
 
 
-def check_failed_catalogue_read_does_not_retire(checks: Checks) -> None:
+def check_failed_catalog_read_does_not_retire(checks: Checks) -> None:
     from store import master
 
     checks.note("")
@@ -913,5 +913,5 @@ CHECKS = (
     check_inventory_retire_refuses_empty_slot_reason,
     check_no_listed_groups_does_not_retire,
     check_stale_model_or_unserved_game_does_not_retire,
-    check_failed_catalogue_read_does_not_retire,
+    check_failed_catalog_read_does_not_retire,
 )
