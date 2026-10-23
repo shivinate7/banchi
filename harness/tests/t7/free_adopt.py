@@ -34,12 +34,12 @@ from harness.tests.t7 import engine_sweep
 from harness.tests.t7.common import (
     FIXTURE_EXPORT,
     capture_payload,
+    card_photo,
     isolated_home,
     quiet,
 )
 from pipeline import tcgcsv
 from identify import batch, match, prompt
-from identify import images as identify_images
 from server import capture_server
 from store import cache as cache_mod
 from store import files, master
@@ -57,7 +57,7 @@ def _jpeg() -> bytes:
     """A real, distinct JPEG: the press prepares a card it sends to the paid batch."""
     n = next(_N)
     out = io.BytesIO()
-    identify_images.Image.new("RGB", (64, 89), (n * 7 % 256, n * 13 % 256, n * 29 % 256)).save(out, "JPEG")
+    card_photo((n * 7 % 256, n * 13 % 256, n * 29 % 256)).save(out, "JPEG")
     return out.getvalue()
 
 

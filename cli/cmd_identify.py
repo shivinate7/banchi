@@ -10,8 +10,9 @@ RESUME BEATS RESUBMIT. Batch results stay retrievable for 29 days, so a run whos
 died mid-poll already owns its answers. Re-running reattaches by default; `--force-resubmit`
 pays again on purpose, which is what you want after a prompt change and never otherwise.
 
-RETRY, THEN CROP RETRY. A card that errored, expired, was cancelled or came back malformed
-is re-sent within `--retry-budget` (default 1). A card that came back `low` confidence or
+RETRY, THEN CROP RETRY. A card that errored, expired, was cancelled, ran out of tokens or came
+back malformed is re-sent within `--retry-budget` (default 1). A card that ran out of tokens is
+re-sent once with a larger cap (`prompt.RETRY_MAX_TOKENS`), never the same request; a second cap stop is final at any budget. A card that came back `low` confidence or
 malformed is re-sent WITH CROPS: the card found in the frame, deskewed, plus enlarged title
 and number bands. A `025` rendered 40px wide is a coin flip; the same digits at 600px are
 not. If the card cannot be found in the frame there is no crop retry at all — cropping blind
@@ -47,6 +48,7 @@ from typing import Dict, List, Optional, Sequence
 import geometry
 from cli import runs
 from identify import batch, cost, images, match, prompt, sidecar
+from identify.matchconst import UNREAD_EMPTY_SLOT
 from pipeline import games
 from pipeline import join
 from pipeline import selection as selection_mod
@@ -85,7 +87,7 @@ SYSTEM_TOKENS = 1000
 OUTPUT_TOKENS = 60
 
 # What triggers which kind of retry (v2 §4.4, §4.5).
-PLAIN_RETRY_STATUSES = ("errored", "expired", "canceled", "absent")
+PLAIN_RETRY_STATUSES = ("errored", "expired", "canceled", "absent", batch.MAX_TOKENS_STOP)
 CROP_RETRY_STATUSES = ("malformed",)
 WEAK_CONFIDENCE = "low"
 
@@ -142,6 +144,7 @@ STAGE_PENDING = "pending"  # undecided; once the preflight is over, this IS the 
 STAGE_CACHED = "cached"  # the store already owns this answer — never prepared, never sent
 STAGE_UNREADABLE = "unreadable"  # the bytes would not hash, or would not decode
 STAGE_HELD = "held"  # a cleared answer that will not parse: in review, not sent, not adopted
+STAGE_EMPTY = "empty_slot"  # the photograph shows an empty slot: not sent on any engine, queued with its photo
 STAGE_REFUSED = "refused"  # no prompt to read it with — named, not sent, not dropped
 
 
@@ -503,7 +506,8 @@ def _requests(items: List[Item], with_crops: bool, say) -> List[batch.ImageReque
         if item.prepared is None or item.strategy is None:
             continue
         regions: List[batch.Attachment] = []
-        if with_crops:
+        # A cap stop needs room, not a crop: the card was never misread.
+        if with_crops and item.status != batch.MAX_TOKENS_STOP:
             regions = _crop_attachments(item, say)
         out.append(
             batch.ImageRequest(
@@ -526,6 +530,9 @@ def _requests(items: List[Item], with_crops: bool, say) -> List[batch.ImageReque
                 rarity_claim=None,
                 regions=regions,
                 strategy=item.strategy,
+                # Per card, from its own status: a retry round mixes cards, and only the one
+                # that ran out of tokens gets more room.
+                max_tokens=prompt.RETRY_MAX_TOKENS if _cap_raised(item) else None,
             )
         )
     return out
@@ -702,7 +709,8 @@ def _second_look_record(item: Item) -> Optional[dict]:
     """What the free reader thought of a card it did not accept, for the review queue."""
     if item.unread is None:
         return item.held_second_look
-    top = item.unread.candidates[0] if item.unread.candidates else {}
+    # An empty slot has no pick to name: its best match is a score on the record, not a card.
+    top = item.unread.candidates[0] if item.unread.candidates and item.unread.p99 is None else {}
     return {
         "code": item.unread.code,
         "name": top.get("name"),
@@ -710,6 +718,7 @@ def _second_look_record(item: Item) -> Optional[dict]:
         "set": top.get("set"),
         "floor": item.unread.floor,
         "margin": item.unread.margin,
+        **({"p99": item.unread.p99, "best_match": item.unread.best_match} if item.unread.p99 is not None else {}),
         # the top three for the agree test; the first repeats the flat fields, `score` is the cosine
         "picks": [
             {"name": c.get("name"), "number": c.get("number"), "set": c.get("set"), "score": c.get("cosine")}
@@ -731,8 +740,23 @@ def _apply(items_by_key: Dict[str, Item], run_result: batch.BatchRun) -> None:
             item.error = outcome.error
 
 
+def _cap_raised(item: Item) -> bool:
+    """True once a cap stop has put this card on the larger cap (`RETRY_MAX_TOKENS`).
+
+    `run` appends the reason before it builds the request, so at build time this is true for
+    every send after the first cap stop and false for the first send. It stays true if a
+    later round re-sends the card for another reason.
+    """
+    return batch.MAX_TOKENS_STOP in item.retry_reasons
+
+
 def _needs_retry(item: Item):
-    """(retry?, crop?, reason). Crop retry is for a bad READ; plain retry is for no read."""
+    """(retry?, crop?, reason). Crop retry is for a bad READ; plain retry is for no read.
+
+    A cap stop on the larger cap is final at any budget: the same request would run out the same way.
+    """
+    if item.status == batch.MAX_TOKENS_STOP and _cap_raised(item):
+        return False, False, ""
     if item.status in PLAIN_RETRY_STATUSES:
         return True, False, item.status
     if item.status in CROP_RETRY_STATUSES:
@@ -837,6 +861,12 @@ def _adopt_cached(item: Item, entry, fingerprints: Dict[str, str]) -> None:
         and expected is not None
         and entry.prompt_fingerprint != expected
     )
+
+
+def blank_answer(identification) -> bool:
+    """True when a saved answer names nothing: the model's reply for a photograph with no card."""
+    said = identification if isinstance(identification, dict) else {}
+    return not any(said.get(field) for field in ("name", "number", "printed_id", "code"))
 
 
 def cached_refusal(item: Item, entry) -> Optional[str]:
@@ -1277,6 +1307,11 @@ def _run(args, say) -> int:
         if item.key in stale_targets:
             item.retry_reasons.append("reidentify-stale")
             continue
+        # A BLANK SAVED ANSWER FOR A DARK PHOTOGRAPH IS NEVER ADOPTED: it would file the empty slot
+        # as `identified`. The card stays pending, and the empty-slot pass below takes it. A person's
+        # own answer is left alone. ponytail: one 41 ms read per blank cached answer only.
+        if not entry.cleared_by_human and blank_answer(entry.identification) and match.empty_slot(item.capture.photo):
+            continue
         why = cached_refusal(item, entry)
         if why is not None and entry.cleared_by_human:
             # A PERSON SETTLED THIS CARD AND THE ANSWER CANNOT BE USED: never paid for, never
@@ -1385,7 +1420,20 @@ def _run(args, say) -> int:
 
     # ONE FIELD, AFTER THE PREPARE PASS. A card that failed to decode has just left
     # `STAGE_PENDING`, so this filter must be read here and not before it.
+    # AN EMPTY SLOT IS NEVER SENT, ON ANY ENGINE. `--engine haiku` skips the free reader, so the check
+    # runs here, before the send list is taken. `unread` carries the reason `cli/resolve.py` reads.
+    for item in items:
+        if item.stage != STAGE_PENDING:
+            continue
+        p99 = match.luminance_p99(Path(item.capture.photo))
+        if p99 is not None and p99 < match.EMPTY_SLOT_P99:
+            # No best match yet: the free reader's one read below ranks it, when it runs at all.
+            item.unread = match.Result(item.key, False, code=UNREAD_EMPTY_SLOT, detail="the slot holds no card", p99=p99)
+            item.status = UNREAD_EMPTY_SLOT
+            item.error = item.unread.detail
+            item.stage = STAGE_EMPTY
     to_send = [i for i in items if i.stage == STAGE_PENDING]
+    empties = [i for i in items if i.stage == STAGE_EMPTY]
     unreadable = [i for i in items if i.stage == STAGE_UNREADABLE]
     no_position = [i for i in items if not i.capture.has_position]
 
@@ -1421,39 +1469,57 @@ def _run(args, say) -> int:
     say(f"payload         {payload_bytes / 1_000_000:.1f} MB in {chunks} batch chunk(s)")
     # THE MATCHER-FIRST QUOTE (D180: money is named before it is spent). When the free reader is
     # prepared this is a MEASURED pass over the selection: the same read the press repeats, free
-    # and bounded by the preflight's own timeout. Before the index exists the second-look count
-    # is ESTIMATED from the share the held-out check measured, and the line says so.
+    # and bounded by the preflight's own timeout. A dry run over more than `match.MEASURE_MAX` cards
+    # does not run it and states no count and no cost: nothing here is assumed. Before the index
+    # exists every card is a certain second look, so that count needs no read.
     matcher_run: Optional[batch.BatchRun] = None
     second_look: List[Item] = list(to_send)
     measured = False
-    ready = bool(free and to_send and match.status()["ready"])
-    # A DRY RUN OVER A LONG SELECTION ESTIMATES, because the screen's request waits for it. A real
-    # press runs in its own detached child and always counts.
-    if ready and (not args.dry_run or len(to_send) <= match.MEASURE_MAX):
-        matcher_run = _run_matcher(to_send, say)
+    ready = bool(free and (to_send or empties) and match.status()["ready"])
+    # A DRY RUN OVER A LONG SELECTION STATES NOTHING, because the screen's request waits for it. A real
+    # press runs in its own detached child and always counts. THE EMPTY SLOTS RIDE IN THE SAME READ,
+    # for their best match; they are never accepted, so they stay out of `to_send` and the second look.
+    uncounted = ready and args.dry_run and len(to_send) + len(empties) > match.MEASURE_MAX
+    if ready and not uncounted:
+        matcher_run = _run_matcher(to_send + empties, say)
         second_look = [i for i in to_send if i.unread is not None]
         measured = True
-    if free:
+    if free and not uncounted:
         if measured:
             second_count = len(second_look)
             second_cost = _estimate(second_look)
         else:
-            # NEVER UNDER THE FLOOR THE POOL RULES ALREADY PROVE: a card the pool rules cannot
-            # match goes to the second look for certain, so the estimate is at least that many.
-            pool_floor = len(to_send) - match.preflight([_match_request(i) for i in to_send])["can_read"]
-            second_count = max(round(len(to_send) * match.UNACCEPTED_SHARE), pool_floor)
+            # NO INDEX: the pool rules send every card to the second look for certain.
+            second_count = len(to_send) - match.preflight([_match_request(i) for i in to_send])["can_read"]
             share = Decimal(second_count) / Decimal(max(len(to_send), 1))
             second_cost = (_estimate(to_send) * share).quantize(Decimal("0.01"))
-    say(f"estimated cost  ${second_cost if free else _estimate(to_send)}")
+    retiring = [i for i in empties if i.unread is not None and match.retires_empty_slot(i.unread)]
+    if not empties:
+        say("empty slot      0")
+    elif args.dry_run and not measured:
+        say(f"empty slot      {len(empties)} photograph(s) show no card and are not sent; "
+            f"the free read has not ranked them, so none is counted as retired")
+    else:
+        say(f"empty slot      {len(empties)} photograph(s) show no card and are not sent: "
+            f"{len(retiring)} {'would be ' if args.dry_run else 'will be '}retired (dark and a weak match), "
+            f"{len(empties) - len(retiring)} stay in the main queue")
+    if uncounted:
+        say("second look     counted when the run starts")
+        # THE CEILING IS CERTAIN: no card can cost more than going to the second look. It is a maximum, not a share.
+        ceiling = _estimate(to_send)
+        say(f"at most         ${ceiling}  if every card went to the second look")
+    else:
+        say(f"estimated cost  ${second_cost if free else _estimate(to_send)}")
     if free:
         # FREE FIRST, PAID ONLY ON THE LOW-CONFIDENCE CARDS. The pool rules refuse some cards
         # before any photograph is decoded, and those are counted here. The margin, the floor and
         # the look-alike guard judge the best answer, so they are counted only after the read.
         pre = match.preflight([_match_request(i) for i in to_send])
-        basis = "measured" if measured else "estimated"
+        basis = "measured" if measured else "certain"  # no index: every card is a certain second look
         say(f"engine          {engine} first, then haiku on the cards it cannot accept")
-        say(f"free read       {len(to_send) - second_count} of {len(to_send)} {basis}")
-        say(f"second look     {second_count} of {len(to_send)} {basis}")
+        if not uncounted:
+            say(f"free read       {len(to_send) - second_count} of {len(to_send)} {basis}")
+            say(f"second look     {second_count} of {len(to_send)} {basis}")
         say(f"can read        {pre['can_read']} of {len(to_send)} by the pool rules")
         for code, count in sorted(pre["unread"].items()):
             say(f"unread          {count} {code}")
@@ -1961,6 +2027,7 @@ def _run(args, say) -> int:
     run_dir.write_identifications(payload)
 
     disagreements: List[dict] = []
+    retired_empty: List[Item] = []
     released_keys = 0
     with store.write() as writable:
         for item in items:
@@ -2008,6 +2075,18 @@ def _run(args, say) -> int:
                         note=item.capture.note,
                     )
                 )
+            # RETIRED ONLY WHEN DARK AND A WEAK MATCH AGREE, and only a card nothing has been said about
+            # (`captured`): an identified or sold card is never retired here. The event names the reason
+            # and both measures, so a wrong retirement is found from the store record alone.
+            if (
+                item.stage == STAGE_EMPTY
+                and item.capture.has_position
+                and match.retires_empty_slot(item.unread)
+                and writable.inventory.retire_empty_slot(
+                    item.key, p99=round(item.unread.p99, 1), best_match=item.unread.best_match, identify_run=run_dir.name,
+                )
+            ):
+                retired_empty.append(item)
             if item.cached:
                 # A CACHED ANSWER IS ADOPTED ONTO A CARD THAT IS STILL `captured` AND NEVER ONTO
                 # ONE THE READER OR AN EARLIER PRESS ALREADY IDENTIFIED. Without this a press over
@@ -2094,8 +2173,9 @@ def _run(args, say) -> int:
 
     reported = [i for i in items if i.stage != STAGE_HELD]  # a held card is neither read nor failed
     answered = [i for i in reported if i.identification is not None]
-    second_looked = [i for i in items if i.unread is not None]
-    failed = [i for i in reported if i.identification is None]
+    second_looked = [i for i in items if i.unread is not None and i.stage != STAGE_EMPTY]
+    empty_slots = [i for i in items if i.stage == STAGE_EMPTY]
+    failed = [i for i in reported if i.identification is None and i.stage != STAGE_EMPTY]
     stale = [i for i in items if i.stale_prompt]
     not_detected = [i for i in items if i.detection == NOT_DETECTED]
     unfit_crops = [i for i in items if i.detection == UNFIT_CROP]
@@ -2147,6 +2227,14 @@ def _run(args, say) -> int:
             f"to the paid read: "
             + ", ".join(f"{count} {code}" for count, code in sorted(reasons.items())))
         say(f"                  in the store now: {held_card_where(second_looked)}")
+    if empty_slots:
+        kept = len(empty_slots) - len(retired_empty)
+        say(f"empty slot      {len(empty_slots)} photograph(s) show no card. They were not sent to the "
+            f"paid read. {len(retired_empty)} retired (dark and a weak match); {kept} go to the main "
+            f"queue as card_not_detected with their photographs.")
+        for item in retired_empty:
+            say(f"                retired {item.key}: p99 {item.unread.p99:.1f}, best match "
+                f"{item.unread.best_match:.4f} (under {match.EMPTY_SLOT_WEAK_COSINE})")
     if failed:
         say(f"failed          {len(failed)} card(s) came back with no usable answer:")
         for item in failed:

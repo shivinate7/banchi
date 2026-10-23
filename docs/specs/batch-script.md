@@ -153,11 +153,21 @@ directory with an unfinished batch reattaches and collects by default. Results s
 29 days. A re-submit would pay twice for an answer already owned. `--force-resubmit` pays again on
 purpose, for example after a prompt change.
 
-Per-request failures are `errored`, `expired`, `canceled` and `malformed`. Each is retried within a
-bounded budget: default 1, `--retry-budget`. The run report gives the count and the reasons, so a
-systematic failure cannot look like scattered bad luck. A card that still fails after the budget goes to the
-main review queue as `identification_failed`. A card with no identification has no price. An unpriced
-card is not a cheap card.
+Per-request failures are `errored`, `expired`, `canceled`, `max_tokens` and `malformed`. Each is
+retried within a bounded budget: default 1, `--retry-budget`. The run report gives the count and the
+reasons, so a systematic failure cannot look like scattered bad luck. A card that still fails after the
+budget goes to the main review queue as `identification_failed`, with its photo and its last reason. A card
+with no identification has no price. An unpriced card is not a cheap card.
+
+`max_tokens` means that the model spent its whole cap and wrote no answer. The call sends `thinking: disabled`
+(`identify/prompt.py`'s `THINKING`), so the cap holds the answer alone: 26 to 42 tokens measured, against a
+cap of 512. Haiku 5.5 thinks by default, and thinking counts toward the cap. The retry of a `max_tokens`
+card carries four times the cap (`RETRY_MAX_TOKENS`). It is never the same request again, because the same
+request runs out the same way. A second `max_tokens` stop, on the larger cap, is final at any
+`--retry-budget`: the card goes to the review queue as `identification_failed`. Cost: about $0.00003 less per card at batch rates, from output tokens no longer spent on
+thinking. Accuracy with thinking off: a paid check of 24 cards had 24 `end_turn` stops, one card
+newly correct, and every other known answer unchanged. So answers cached from thinking-on runs stay
+valid under the unchanged prompt fingerprint; no re-read is needed.
 
 ### 4.5 Crop retry
 

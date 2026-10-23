@@ -21,6 +21,7 @@ from contextlib import contextmanager
 from decimal import Decimal
 from unittest import mock
 from pathlib import Path
+from types import SimpleNamespace
 from harness.tests import Checks
 from cli import cmd_reconcile, resolve, runs
 from identify import batch, prompt, sidecar
@@ -38,6 +39,7 @@ from store.session import Store
 from harness.tests.t7.common import (
     CANDIDATES,
     FIXTURE_EXPORT,
+    card_photo,
     JPEG,
     NEVER_BOUND_IDENTITY_SNAPSHOT,
     REPO_ROOT,
@@ -255,7 +257,6 @@ def check_code_ledger(checks: Checks) -> None:
 
     from cli import __main__ as cli_entry
     from cli import cmd_identify
-    from identify import images as identify_images
 
     # 3-4-3-3, with a `?` for a character the model could not read and a lowercase letter
     # that `normalize_number` would have folded — the two properties the parser must keep.
@@ -410,11 +411,12 @@ def check_code_ledger(checks: Checks) -> None:
         caps.mkdir()
         # A DIFFERENT COLOUR EACH, because a card is named by the sha256 of its photograph
         # (D172) and `cards_cid` holds that name UNIQUE. Both were the same flat red, which
-        # is two records carrying one name the moment `identify` writes them.
+        # is two records carrying one name the moment `identify` writes them. A BRIGHT BAND across
+        # the top, because a flat dark frame is an empty slot (its 99th-percentile luminance sits
+        # under EMPTY_SLOT_P99 and `identify` never sends it): the band clears the cut and leaves
+        # each colour, and so each name, as it was.
         for name, red in (("6-001.jpg", 200), ("6-002.jpg", 120)):
-            identify_images.Image.new("RGB", (64, 89), (red, 40, 40)).save(
-                caps / name, "JPEG"
-            )
+            card_photo((red, 40, 40)).save(caps / name, "JPEG")
         (caps / "6-001.json").write_text(
             json.dumps(
                 {"box": 6, "position": 1, "game": "pokemon_code", "set_hint": "JTG"}
@@ -2599,7 +2601,6 @@ def check_identify_preflight_stage(checks: Checks) -> None:
     """
     from cli import __main__ as cli_entry
     from cli import cmd_identify
-    from identify import images as identify_images
 
     checks.note("")
     checks.note("IDENTIFY PREFLIGHT — hash, then cache, then prepare (Item.stage)")
@@ -2618,9 +2619,7 @@ def check_identify_preflight_stage(checks: Checks) -> None:
         caps.mkdir()
         # Two readable cards, in a registered game.
         for index in (1, 2):
-            identify_images.Image.new("RGB", (64, 89), (30, 90 + index, 200)).save(
-                caps / f"4-00{index}.jpg", "JPEG"
-            )
+            card_photo((30, 90 + index, 200)).save(caps / f"4-00{index}.jpg", "JPEG")
             (caps / f"4-00{index}.json").write_text(
                 json.dumps({"box": 4, "position": index, "game": "pokemon"}), "utf-8"
             )
@@ -2632,9 +2631,7 @@ def check_identify_preflight_stage(checks: Checks) -> None:
             json.dumps({"box": 4, "position": 3, "game": "pokemon"}), "utf-8"
         )
         # A game no registry entry answers: refused by name, before it costs a decode.
-        identify_images.Image.new("RGB", (64, 89), (200, 40, 40)).save(
-            caps / "4-004.jpg", "JPEG"
-        )
+        card_photo((200, 40, 40)).save(caps / "4-004.jpg", "JPEG")
         (caps / "4-004.json").write_text(
             json.dumps({"box": 4, "position": 4, "game": "tarot"}), "utf-8"
         )
@@ -7093,6 +7090,402 @@ def check_lock_failure_is_not_running(checks: Checks) -> None:
     checks.ok(outcome != "running", "a lock failure that is not contention is not answered `running`", outcome)
 
 
+# ------------------------------------------------ the token cap: thinking off, the cap's own stop
+#
+# The real `run_batch`, the real requests and the real collection run. Only the transport is a
+# stub: it answers each request from the request it was sent, so a case says what the model did
+# at each cap. Nothing is paid for. The wire words are literals (`max_tokens`, 512, 2048,
+# `thinking`), never the product's constants, because the contract is what the request carries
+# and what the run prints.
+
+CAP_STOP = "max_tokens"
+THINKING_TEXT = "The title is clear. The number is at the bottom left."
+PIKACHU_ANSWER = json.dumps(
+    {"name": "Pikachu", "number": "025", "printed_total": "102", "finish": "normal", "confidence": "high"}
+)
+
+
+def _message(*, text=None, thinking=None, stop="end_turn", output=40):
+    content = []
+    if thinking is not None:
+        content.append(SimpleNamespace(type="thinking", thinking=thinking))
+    if text is not None:
+        content.append(SimpleNamespace(type="text", text=text))
+    usage = SimpleNamespace(input_tokens=1200, output_tokens=output)
+    return SimpleNamespace(content=content, stop_reason=stop, usage=usage)
+
+
+def _succeeded(message):
+    return SimpleNamespace(type="succeeded", message=message)
+
+
+def _errored():
+    return SimpleNamespace(type="errored", error=SimpleNamespace(type="api_error"))
+
+
+def _long_card(params):
+    """A card that needs more than 512 tokens: it stops at the cap, and answers at 2048."""
+    if params["max_tokens"] < 2048:
+        return _succeeded(_message(thinking=THINKING_TEXT, stop=CAP_STOP, output=params["max_tokens"]))
+    return _succeeded(_message(thinking=THINKING_TEXT, text=PIKACHU_ANSWER, output=900))
+
+
+class _StubBatches:
+    """The batch calls `identify/batch.py` makes. `answer(custom_id, params, round)` picks each result."""
+
+    def __init__(self, answer):
+        self.answer = answer
+        self.sent: list = []  # one list of request dicts per batch the run created
+        self.results_by_id: dict = {}
+
+    def create(self, requests):
+        self.sent.append(list(requests))
+        round_no = len(self.sent)
+        batch_id = f"msgbatch_stub_{round_no}"
+        self.results_by_id[batch_id] = [
+            SimpleNamespace(custom_id=r["custom_id"], result=self.answer(r["custom_id"], r["params"], round_no))
+            for r in requests
+        ]
+        return SimpleNamespace(id=batch_id)
+
+    def retrieve(self, batch_id):
+        return SimpleNamespace(id=batch_id, processing_status="ended", request_counts=None)
+
+    def results(self, batch_id):
+        return iter(self.results_by_id[batch_id])
+
+
+class _StubClient:
+    def __init__(self, answer):
+        self.messages = SimpleNamespace(batches=_StubBatches(answer))
+
+    def with_options(self, **_kwargs):
+        return self
+
+    def rounds(self) -> list:
+        """Each batch the run sent, as `{custom_id: max_tokens}`."""
+        return [{r["custom_id"]: r["params"]["max_tokens"] for r in sent} for sent in self.messages.batches.sent]
+
+
+def _images_per_card(client) -> list:
+    """Each batch's requests as `{custom_id: image blocks}`. A crop retry adds one block a region."""
+    return [
+        {
+            r["custom_id"]: sum(1 for block in r["params"]["messages"][0]["content"] if block.get("type") == "image")
+            for r in sent
+        }
+        for sent in client.messages.batches.sent
+    ]
+
+
+def _identify_stubbed(home, answer, indexes, *, crops=None, budget=None):
+    """One `banchi identify` over cards 1..n in a fresh capture folder. -> (exit code or the
+    exception text, the stub client). `budget` is `--retry-budget`; None keeps the default."""
+    from unittest import mock
+
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+
+    caps = Path(home) / "captures" / "cards" / "box3"
+    caps.mkdir(parents=True)
+    for index in indexes:
+        # `card_photo`, not a flat frame: a flat dark frame is an empty slot and `identify` never sends it.
+        card_photo((120 + index, 40, 40)).save(caps / f"{index:04d}.jpg", "JPEG")
+        (caps / f"{index:04d}.json").write_text(
+            json.dumps({"box": 3, "index": index, "position": index, "game": "pokemon"}), "utf-8"
+        )
+    client = _StubClient(answer)
+    crop_stub = crops if crops is not None else cmd_identify._crop_attachments
+    with mock.patch.object(batch, "_client", lambda *_a, **_k: client), mock.patch.object(
+        cmd_identify, "_crop_attachments", crop_stub
+    ), quiet():
+        try:
+            outcome = cmd_identify.run(
+                cli_entry.build_parser().parse_args(
+                    ["identify", str(caps), "--engine", "haiku", *(["--retry-budget", str(budget)] if budget else [])]
+                ),
+                lambda *_a: None,
+            )
+        except Exception as exc:  # a crash fails its own check; it must not take T7 down
+            outcome = f"raised {type(exc).__name__}: {exc}"
+    return outcome, client
+
+
+def _stub_run(answer):
+    """One `run_batch` over one card, through the stub client. -> (the run, the stub client)."""
+    client = _StubClient(answer)
+    request = batch.ImageRequest(custom_id="card-1", media_type="image/jpeg", data_b64="AAAA")
+    return batch.run_batch([request], client=client, poll_seconds=0), client
+
+
+def check_identify_request_thinks_off_under_cap(checks: Checks) -> None:
+    """The identification request says `thinking: disabled` and keeps the 512 cap.
+
+    Haiku 5.5 thinks by default and thinking spends the cap, so the request must turn it off.
+    """
+    request = batch.ImageRequest(custom_id="card-1", media_type="image/jpeg", data_b64="AAAA")
+    params = batch.build_request(request)["params"]
+    checks.equal(
+        params.get("thinking"), {"type": "disabled"},
+        "the request says `thinking: disabled`, so every output token is the answer",
+    )
+    checks.equal(params.get("max_tokens"), 512, "and the first request's cap is 512")
+
+
+def check_identify_thinking_only_stop_is_named_and_counted(checks: Checks) -> None:
+    """A card that spent its whole cap on thinking is named `max_tokens`, not `malformed`.
+
+    The message has a thinking block and no text block, and its stop reason is `max_tokens`.
+    The tokens it spent still count on the run.
+    """
+    run, _client = _stub_run(
+        lambda _cid, _params, _round: _succeeded(_message(thinking=THINKING_TEXT, stop=CAP_STOP, output=512))
+    )
+    outcome = run.outcomes.get("card-1")
+    checks.equal(
+        getattr(outcome, "status", None), CAP_STOP,
+        "the outcome is named `max_tokens`, so the retry gives it room instead of a crop",
+    )
+    checks.equal(run.usage.output_tokens, 512, "and the 512 tokens it spent are counted on the run")
+
+
+def check_identify_thinking_then_text_still_parses(checks: Checks) -> None:
+    """A thinking block ahead of the answer does not stop the answer from parsing.
+
+    The cap was not reached, so this is a success and nothing is retried.
+    """
+    run, client = _stub_run(
+        lambda _cid, _params, _round: _succeeded(_message(thinking=THINKING_TEXT, text=PIKACHU_ANSWER, output=300))
+    )
+    outcome = run.outcomes.get("card-1")
+    checks.equal(getattr(outcome, "status", None), batch.SUCCEEDED, "a thinking block then a text block under the cap is a success")
+    checks.equal(
+        getattr(getattr(outcome, "identification", None), "name", None), "Pikachu",
+        "and the text block's JSON is the answer that parses",
+    )
+    checks.equal(len(client.messages.batches.sent), 1, "with no retry round")
+
+
+def check_identify_retry_carries_the_larger_cap(checks: Checks) -> None:
+    """A card that stopped on its cap is re-sent at 2048. The first request carried 512."""
+    from cli import cmd_identify
+
+    with isolated_home() as home:
+        outcome, client = _identify_stubbed(home, lambda _cid, params, _round: _long_card(params), [1])
+    cid = cmd_identify._custom_id("3/1")
+    rounds = client.rounds()
+    checks.equal(outcome, 0, "`banchi identify` exits 0 once the retry answers")
+    checks.equal(rounds[:1], [{cid: 512}], "the first request carries the 512 cap")
+    checks.equal(rounds[1:2], [{cid: 2048}], "the retry carries 2048, never the same 512 request again")
+
+
+def check_identify_mixed_retry_round_caps_only_the_long_card(checks: Checks) -> None:
+    """One retry round holds a card that stopped on its cap and a card that errored.
+
+    Each keeps its own cap: 2048 for the card that ran out, 512 for the card that did not.
+    """
+    from cli import cmd_identify
+
+    long_cid = cmd_identify._custom_id("3/1")
+    flaky_cid = cmd_identify._custom_id("3/2")
+    flaky_attempts: list = []
+
+    def answer(cid, params, _round):
+        if cid != flaky_cid:
+            return _long_card(params)
+        flaky_attempts.append(cid)
+        if len(flaky_attempts) == 1:
+            return _errored()
+        return _succeeded(_message(text=PIKACHU_ANSWER, output=60))
+
+    with isolated_home() as home:
+        outcome, client = _identify_stubbed(home, answer, [1, 2])
+    rounds = client.rounds()
+    checks.equal(outcome, 0, "`banchi identify` exits 0 once the mixed retry answers")
+    checks.equal(
+        rounds[1:2], [{long_cid: 2048, flaky_cid: 512}],
+        "the mixed retry round caps only the card that ran out: 2048 for it, 512 for the errored one",
+    )
+
+
+def check_identify_second_cap_stop_queues_identification_failed(checks: Checks) -> None:
+    """A card that stops on its cap twice is not re-sent a third time: the budget is one.
+
+    It queues as `identification_failed`, with its photograph and the reason of its last attempt.
+    """
+    from cli import cmd_identify
+
+    def always_stops(_cid, params, _round):
+        return _succeeded(_message(thinking=THINKING_TEXT, stop=CAP_STOP, output=params["max_tokens"]))
+
+    with isolated_home() as home:
+        outcome, client = _identify_stubbed(home, always_stops, [1])
+        run = runs.latest()
+        try:
+            resolved = resolve.load(run, {"pokemon": FIXTURE_EXPORT})
+            main, _parked = resolve.entries_for(resolved)
+            failed = [entry for entry in main if entry.reason == routing.IDENTIFICATION_FAILED]
+        except Exception as exc:  # a crash fails the checks below by name
+            failed = f"raised {type(exc).__name__}: {exc}"
+    cid = cmd_identify._custom_id("3/1")
+    checks.equal(client.rounds(), [{cid: 512}, {cid: 2048}], "one retry at 2048, then no third request: the budget is one")
+    checks.equal(outcome, 0, "`banchi identify` exits 0 with the card queued, not dropped")
+    checks.equal(
+        len(failed) if isinstance(failed, list) else failed, 1,
+        "the card is queued as `identification_failed`, once",
+    )
+    if isinstance(failed, list) and failed:
+        queued = failed[0]
+        checks.ok(
+            str(queued.photo or "").endswith("0001.jpg"),
+            "the queued card carries its photograph",
+            f"photo: {queued.photo!r}",
+        )
+        checks.equal(queued.read.get("status"), CAP_STOP, "its read names the cap stop")
+        checks.ok(
+            "2048" in str(queued.read.get("error")),
+            "its reason is the last attempt's: the answer ran out at 2048 tokens",
+            f"error: {queued.read.get('error')!r}",
+        )
+
+
+def check_identify_cap_stops_count_in_the_run_usage(checks: Checks) -> None:
+    """The run's manifest counts the output tokens of both cap stops: 512, then 2048."""
+
+    def always_stops(_cid, params, _round):
+        return _succeeded(_message(thinking=THINKING_TEXT, stop=CAP_STOP, output=params["max_tokens"]))
+
+    with isolated_home() as home:
+        _identify_stubbed(home, always_stops, [1])
+        manifest = runs.latest().manifest
+    checks.equal(
+        (manifest.get("usage") or {}).get("output_tokens"), 512 + 2048,
+        "the manifest's output total includes both stops",
+    )
+
+
+def check_identify_max_tokens_card_not_sent_on_crop_path(checks: Checks) -> None:
+    """A card that stopped on its cap is not sent with crops, even when a card in its retry round needs them.
+
+    The cure for a cap stop is room. A crop is the cure for a bad read, and it is the wrong one here.
+    """
+    from cli import cmd_identify
+
+    long_cid = cmd_identify._custom_id("3/1")
+    bad_cid = cmd_identify._custom_id("3/2")
+
+    def answer(cid, params, _round):
+        if cid == bad_cid:
+            return _succeeded(_message(text="I cannot read this card.", output=30))
+        return _long_card(params)
+
+    def crop_stub(_item, _say):
+        return [batch.Attachment(media_type="image/jpeg", data_b64="QUJD")]
+
+    with isolated_home() as home:
+        _outcome, client = _identify_stubbed(home, answer, [1, 2], crops=crop_stub)
+    images = _images_per_card(client)
+    checks.equal(
+        images[:1], [{long_cid: 1, bad_cid: 1}],
+        "the first request sends each card's photograph alone",
+    )
+    checks.equal(
+        images[1:2], [{long_cid: 1, bad_cid: 2}],
+        "the retry round crops the bad read and not the card that stopped on its cap",
+    )
+
+
+def _second_cap_stop_is_final(checks: Checks, budget: int) -> None:
+    """A card that stops on its cap at 512 and again at 2048 gets no third request, at any budget."""
+    from cli import cmd_identify
+
+    def always_stops(_cid, params, _round):
+        return _succeeded(_message(thinking=THINKING_TEXT, stop=CAP_STOP, output=params["max_tokens"]))
+
+    with isolated_home() as home:
+        outcome, client = _identify_stubbed(home, always_stops, [1], budget=budget)
+        run = runs.latest()
+        try:
+            resolved = resolve.load(run, {"pokemon": FIXTURE_EXPORT})
+            main, _parked = resolve.entries_for(resolved)
+            failed = [entry for entry in main if entry.reason == routing.IDENTIFICATION_FAILED]
+        except Exception as exc:  # a crash fails the checks below by name
+            failed = f"raised {type(exc).__name__}: {exc}"
+    cid = cmd_identify._custom_id("3/1")
+    checks.equal(
+        client.rounds(), [{cid: 512}, {cid: 2048}],
+        f"at budget {budget}: 512, then 2048, and no third request",
+    )
+    checks.equal(outcome, 0, f"at budget {budget}: `banchi identify` exits 0 with the card queued, not dropped")
+    checks.equal(
+        len(failed) if isinstance(failed, list) else failed, 1,
+        f"at budget {budget}: the card is queued as `identification_failed`, once",
+    )
+
+
+def check_identify_second_cap_stop_is_final_at_budget_two(checks: Checks) -> None:
+    """Budget 2 leaves a retry unspent after the second cap stop. It is not spent: the 2048 request ran out already."""
+    _second_cap_stop_is_final(checks, 2)
+
+
+def check_identify_second_cap_stop_is_final_at_budget_three(checks: Checks) -> None:
+    """Budget 3 leaves two retries unspent after the second cap stop. Neither is spent."""
+    _second_cap_stop_is_final(checks, 3)
+
+
+def check_identify_errored_retry_of_a_cap_stop_keeps_the_larger_cap(checks: Checks) -> None:
+    """A card stops on its cap, its 2048 retry errors, and the next send is 2048 again.
+
+    The cap follows the card's history. Its last status is `errored`, which says nothing about room.
+    """
+    from cli import cmd_identify
+
+    def answer(_cid, params, round_no):
+        return _errored() if round_no == 2 else _long_card(params)
+
+    with isolated_home() as home:
+        outcome, client = _identify_stubbed(home, answer, [1], budget=2)
+    cid = cmd_identify._custom_id("3/1")
+    checks.equal(outcome, 0, "`banchi identify` exits 0 once the third request answers")
+    checks.equal(
+        client.rounds(), [{cid: 512}, {cid: 2048}, {cid: 2048}],
+        "512, then the 2048 retry that errors, then 2048 again and not 512",
+    )
+
+
+def check_identify_mixed_rounds_keep_each_cards_cap_after_both_error(checks: Checks) -> None:
+    """A cap stop and an errored card share two retry rounds: 2048 for the first, 512 for the second.
+
+    In round 3 both cards' last status is `errored` and their caps still differ, because only
+    one of them has ever run out of room.
+    """
+    from cli import cmd_identify
+
+    long_cid = cmd_identify._custom_id("3/1")
+    flaky_cid = cmd_identify._custom_id("3/2")
+
+    def answer(cid, params, round_no):
+        if round_no == 2 or (round_no == 1 and cid == flaky_cid):
+            return _errored()
+        if cid == long_cid:
+            return _long_card(params)
+        return _succeeded(_message(text=PIKACHU_ANSWER, output=60))
+
+    with isolated_home() as home:
+        outcome, client = _identify_stubbed(home, answer, [1, 2], budget=2)
+    rounds = client.rounds()
+    checks.equal(outcome, 0, "`banchi identify` exits 0 once the third request answers")
+    checks.equal(rounds[:1], [{long_cid: 512, flaky_cid: 512}], "the first request carries 512 for both cards")
+    checks.equal(
+        rounds[1:2], [{long_cid: 2048, flaky_cid: 512}],
+        "round 2: 2048 for the card that ran out, 512 for the one that errored",
+    )
+    checks.equal(
+        rounds[2:3], [{long_cid: 2048, flaky_cid: 512}],
+        "round 3, both last answers errored: the card that ran out keeps 2048, the other keeps 512",
+    )
+
+
 CHECKS = (
     check_cli_seams,
     check_code_ledger,
@@ -7134,4 +7527,16 @@ CHECKS = (
     check_join_refusals_say_their_reason,
     check_identify_export_starts_at_the_join,
     check_lock_failure_is_not_running,
+    check_identify_request_thinks_off_under_cap,
+    check_identify_thinking_only_stop_is_named_and_counted,
+    check_identify_thinking_then_text_still_parses,
+    check_identify_retry_carries_the_larger_cap,
+    check_identify_mixed_retry_round_caps_only_the_long_card,
+    check_identify_second_cap_stop_queues_identification_failed,
+    check_identify_cap_stops_count_in_the_run_usage,
+    check_identify_max_tokens_card_not_sent_on_crop_path,
+    check_identify_second_cap_stop_is_final_at_budget_two,
+    check_identify_second_cap_stop_is_final_at_budget_three,
+    check_identify_errored_retry_of_a_cap_stop_keeps_the_larger_cap,
+    check_identify_mixed_rounds_keep_each_cards_cap_after_both_error,
 )
