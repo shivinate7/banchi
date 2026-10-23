@@ -26,8 +26,8 @@ const COUNTS = [
 ] as const
 
 /* THREE COUNTS ABOVE ZERO AND THE SET-NAMED LINE OPEN A SHEET (`ReviewBandSheet.tsx`); "waiting for you" opens nothing, so it stays plain
-   (Review's rail is its list). A sheet is a snapshot taken at open: `sigOf` is the signature of what the band counts now, so
-   the sheet can tell when the count has moved. */
+   (Review's rail is its list). A sheet's rows are a snapshot taken at open: `sigOf` is the signature of what the band counts now, so
+   the sheet can tell when the count has moved. Its title count follows the band's live figure (D313's one exception). */
 
 export function ReviewBand({
   waiting,

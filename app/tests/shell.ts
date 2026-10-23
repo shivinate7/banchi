@@ -1,6 +1,6 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
 import { CAPTURE_PORT, DEV_PORT } from '../devPort'
-import { NO_FREE_FIELDS, stubMatchState } from './routeFixtures'
+import { NO_FREE_FIELDS, stubMatchState, stubSlabs } from './routeFixtures'
 
 /* NOTHING IN THIS DIRECTORY MAY REACH THE CAPTURE SERVER, AND UNTIL THIS FILE EXISTED TEN
  * SPECS DID — WHICH TURNED OUT TO BE THE SMALL HALF.
@@ -734,6 +734,10 @@ export async function stubStore(page: Page): Promise<void> {
       sealed_excluded: { names: 0, reason: 'sealed product has no card record' },
     }),
   )
+
+  /* `#/slabs`' TWO READS: the ledger and one slab's detail. A populated ledger, so a sweep that
+   *  lands on the screen draws rows and not its empty state. Reads only, as everything in this module is. */
+  await stubSlabs(page)
 
   await stubCropPreview(page)
 
