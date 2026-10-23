@@ -243,21 +243,20 @@ def check_matcher_hub_correction(checks: Checks) -> None:
     neighbors = [vec(0.95, 0.0, *([0.0] * (1 + i)), side) for i in range(10)]
     photo = vec(0.71, 0.70, math.sqrt(1.0 - 0.71 * 0.71 - 0.70 * 0.70))
     entries = [("Hub Card", hub), ("Target Card", target)] + [(f"Near {i}", v) for i, v in enumerate(neighbors)]
-    with tempfile.TemporaryDirectory() as tmp:
-        with match.Index(Path(tmp) / "fingerprints.sqlite") as index:
-            index.meta("model_sha256", match.MODEL_SHA256)
-            index.db.execute("insert into sets values(?,?,?,?,?,?,?)", ("riftbound", "Set A", "tcgcsv", "", 12, 0, "t"))
-            for pid, (name, v) in enumerate(entries):
-                index.db.execute(
-                    "insert into vec values(?,?,?,?,?,?,?,?,?,?)",
-                    ("riftbound", "Set A", str(pid), str(pid + 1).zfill(3), name, "", match.S_OK, None, v.tobytes(), "t"),
-                )
-            index.db.commit()
-            with mock.patch.object(match, "_crop", lambda *_a: object()), \
-                    mock.patch.object(match, "embed", lambda cards, _path=None: np.stack([photo] * len(cards))), \
-                    mock.patch.object(match, "SERVED_GAMES", ("riftbound",)):
-                request = match.Request("1/1", Path("unused.jpg"), "riftbound", "riftbound_card_v1", "Set A")
-                res = match.read([request], index, promo_games=set())[0]
+    with tempfile.TemporaryDirectory() as tmp, match.Index(Path(tmp) / "fingerprints.sqlite") as index:
+        index.meta("model_sha256", match.MODEL_SHA256)
+        index.db.execute("insert into sets values(?,?,?,?,?,?,?)", ("riftbound", "Set A", "tcgcsv", "", 12, 0, "t"))
+        for pid, (name, v) in enumerate(entries):
+            index.db.execute(
+                "insert into vec values(?,?,?,?,?,?,?,?,?,?)",
+                ("riftbound", "Set A", str(pid), str(pid + 1).zfill(3), name, "", match.S_OK, None, v.tobytes(), "t"),
+            )
+        index.db.commit()
+        with mock.patch.object(match, "_crop", lambda *_a: object()), \
+                mock.patch.object(match, "embed", lambda cards, _path=None: np.stack([photo] * len(cards))), \
+                mock.patch.object(match, "SERVED_GAMES", ("riftbound",)):
+            request = match.Request("1/1", Path("unused.jpg"), "riftbound", "riftbound_card_v1", "Set A")
+            res = match.read([request], index, promo_games=set())[0]
     checks.ok(res.accepted, "the true card is accepted over the hub card that scores higher raw", f"code={res.code} {res.detail}")
     checks.ok(bool(res.payload and res.payload.get("name") == "Target Card"), "and the pick is the true card")
     checks.ok(res.floor is not None and abs(res.floor - 0.70) < 1e-4, "the floor is the chosen entry's raw cosine", f"floor {res.floor!r}")
