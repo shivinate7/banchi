@@ -501,7 +501,8 @@ def _requests(items: List[Item], with_crops: bool, say) -> List[batch.ImageReque
         if item.prepared is None or item.strategy is None:
             continue
         regions: List[batch.Attachment] = []
-        if with_crops:
+        # A cap stop needs room, not a crop: the card was never misread.
+        if with_crops and item.status != batch.MAX_TOKENS_STOP:
             regions = _crop_attachments(item, say)
         out.append(
             batch.ImageRequest(
