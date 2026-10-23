@@ -521,38 +521,36 @@ test.describe('the published demo draws what reviewers grade', () => {
   })
 
   test('Orders draws a walk', async ({ page }) => {
-    // STALE, REWRITTEN 2026-09-27 (D295 full mirror, plus an unrelated aria-label rename):
-    // no order is ticked by default, and nothing named "cards this walk covers" exists any
-    // more — `OrdersWalkPane.tsx:WalkList`'s list is now "The cards to pick, in the order
-    // the boxes are walked". Press "Walk N" first (the demo-mirror-data-build
-    // lane's walk-plan fix records exactly this "walk all" set), then read the current list.
+    // No order is ticked by default. Pressing "Start Walk" ticks every walkable buyer, and the
+    // pane then asks for the walk-all plan. Its list is "The cards to pick, in the order the
+    // boxes are walked"; this case reads that list once the press has taken effect.
     //
-    // THE PRIOR FIX (CI run 36314954311) RAISED THE WRONG TIMEOUT. Pressing "Walk all"
-    // over this mirror's full 71 open orders (70 buyers) runs `useOrderWalk`'s solve
-    // client-side, over every one of them plus the whole inventory already in memory —
-    // a real cost, confirmed by reproducing the click with console/pageerror logging: no
-    // error, the walk pane renders correctly, just slower than a toggle. Raising only the
-    // assertion's own wait (to 45s) did nothing, because Playwright's own PER-TEST timeout
-    // (30s, this file's config sets none of its own) killed the whole test first — CI run
-    // 36316345981's own error names it: "Test timeout of 30000ms exceeded." `test.setTimeout`
-    // is the knob that actually needed raising.
+    // The config sets no per-test timeout, so Playwright's 30s default would end the case
+    // before the 30s wait for the list below could run out. `test.setTimeout` raises the limit.
     test.setTimeout(60_000)
     // The walk-all plan is the recorded `POST /orders/walk-plan` that names the most order
-    // keys. The list draws one section button per stop and one press button per take.
+    // keys. The list draws a take only for a copy the stop reaches (`here: true`), and a
+    // section only for a stop that keeps such a take: one section button per kept stop, one
+    // press button per kept take (`OrdersWalkPane.tsx`'s `rowsOf`).
     const { responses } = JSON.parse(readFileSync(BUNDLE, 'utf-8')) as {
-      responses: Record<string, { body: { stops?: Array<{ takes: unknown[] }> } }>
+      responses: Record<string, { body: { stops?: Array<{ takes: Array<{ copies: Array<{ here: boolean }> }> }> } }>
     }
     const largest = Object.keys(responses)
       .filter((key) => key.startsWith('POST /orders/walk-plan '))
       .map((key) => ({ key, orders: (JSON.parse(key.slice(key.indexOf('{'))) as { keys: string[] }).keys.length }))
       .sort((a, b) => b.orders - a.orders)[0]
     if (largest === undefined) throw new Error('the recording holds no POST /orders/walk-plan entry, so there is no walk-all plan to draw')
-    const stops = responses[largest.key]?.body.stops ?? []
-    const expectedRows = stops.length + stops.reduce((sum, stop) => sum + stop.takes.length, 0)
-    expect(expectedRows, 'the largest recorded walk-plan entry has no stops to draw').toBeGreaterThan(0)
+    const keptTakes = (responses[largest.key]?.body.stops ?? [])
+      .map((stop) => stop.takes.filter((take) => take.copies.some((copy) => copy.here)).length)
+      .filter((takes) => takes > 0)
+    const expectedRows = keptTakes.length + keptTakes.reduce((sum, takes) => sum + takes, 0)
+    expect(expectedRows, 'the largest recorded walk-plan entry has no stop with a copy here to draw').toBeGreaterThan(0)
     await visit(page, 'Orders')
     await page.getByRole('button', { name: /^start walk/i }).first().click()
-    const walk = page.getByRole('list', { name: /cards to pick/i })
+    // The press took effect: the control now reads "Stop" and is pressed. Without this, the
+    // single buyer's own list could equal the plan's count and pass with no press at all.
+    await expect(page.getByRole('button', { name: /^stop$/i, pressed: true }), 'Start Walk never became a pressed "Stop" control').toBeVisible()
+    const walk =page.getByRole('list', { name: /cards to pick/i })
     await expect(walk).toBeVisible({ timeout: 30_000 })
     // DEBT23's shape: the list container appearing does not mean its rows have. A bare
     // count() right after does not retry, so it can read zero while the rows are still
