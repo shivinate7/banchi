@@ -45,6 +45,7 @@ from typing import Dict, List, Optional, Sequence
 import geometry
 from cli import runs
 from identify import batch, cost, images, match, prompt, sidecar
+from identify.matchconst import UNREAD_EMPTY_SLOT
 from pipeline import games
 from pipeline import join
 from pipeline import selection as selection_mod
@@ -140,6 +141,7 @@ STAGE_PENDING = "pending"  # undecided; once the preflight is over, this IS the 
 STAGE_CACHED = "cached"  # the store already owns this answer — never prepared, never sent
 STAGE_UNREADABLE = "unreadable"  # the bytes would not hash, or would not decode
 STAGE_HELD = "held"  # a cleared answer that will not parse: in review, not sent, not adopted
+STAGE_EMPTY = "empty_slot"  # the photograph shows an empty slot: not sent on any engine, queued with its photo
 STAGE_REFUSED = "refused"  # no prompt to read it with — named, not sent, not dropped
 
 
@@ -1294,6 +1296,14 @@ def run(args, say) -> int:
 
     # ONE FIELD, AFTER THE PREPARE PASS. A card that failed to decode has just left
     # `STAGE_PENDING`, so this filter must be read here and not before it.
+    # AN EMPTY SLOT IS NEVER SENT, ON ANY ENGINE. `--engine haiku` skips the free reader, so the check
+    # runs here, before the send list is taken. `unread` carries the reason `cli/resolve.py` reads.
+    for item in items:
+        if item.stage == STAGE_PENDING and match.empty_slot(Path(item.capture.photo)):
+            item.unread = match.Result(item.key, False, code=UNREAD_EMPTY_SLOT, detail="the slot holds no card")
+            item.status = UNREAD_EMPTY_SLOT
+            item.error = item.unread.detail
+            item.stage = STAGE_EMPTY
     to_send = [i for i in items if i.stage == STAGE_PENDING]
     unreadable = [i for i in items if i.stage == STAGE_UNREADABLE]
     no_position = [i for i in items if not i.capture.has_position]
@@ -1992,8 +2002,9 @@ def run(args, say) -> int:
     # --------------------------------------------------------------------------- report
     reported = [i for i in items if i.stage != STAGE_HELD]  # a held card is neither read nor failed
     answered = [i for i in reported if i.identification is not None]
-    second_looked = [i for i in items if i.unread is not None]
-    failed = [i for i in reported if i.identification is None]
+    second_looked = [i for i in items if i.unread is not None and i.stage != STAGE_EMPTY]
+    empty_slots = [i for i in items if i.stage == STAGE_EMPTY]
+    failed = [i for i in reported if i.identification is None and i.stage != STAGE_EMPTY]
     stale = [i for i in items if i.stale_prompt]
     not_detected = [i for i in items if i.detection == NOT_DETECTED]
     unfit_crops = [i for i in items if i.detection == UNFIT_CROP]
@@ -2044,6 +2055,9 @@ def run(args, say) -> int:
         say(f"second look     {len(second_looked)} card(s) the free reader could not accept went "
             f"to the paid read and wait in review: "
             + ", ".join(f"{count} {code}" for count, code in sorted(reasons.items())))
+    if empty_slots:
+        say(f"empty slot      {len(empty_slots)} photograph(s) show no card. They were not sent to the "
+            f"paid read and go to the main queue as card_not_detected with their photographs.")
     if failed:
         say(f"failed          {len(failed)} card(s) go to the main queue as "
             f"identification_failed — never dropped:")

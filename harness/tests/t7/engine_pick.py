@@ -21,7 +21,7 @@ from pathlib import Path
 from unittest import mock
 
 from harness.tests import Checks
-from harness.tests.t7.common import REPO_ROOT, attempt, isolated_home, quiet, scripted_wire
+from harness.tests.t7.common import REPO_ROOT, attempt, card_photo, isolated_home, quiet, scripted_wire
 from identify import batch, images as identify_images, match, prompt
 from pipeline import join, routing, tcgcsv
 from store import cache as cache_mod
@@ -420,7 +420,7 @@ def check_identify_free_first(checks: Checks) -> None:
     def photos(directory, box, count):
         directory.mkdir()
         for index in range(1, count + 1):
-            identify_images.Image.new("RGB", (64, 89), (40 * index, (90 + 30 * index + 70 * box) % 256, 200 - 50 * index)).save(
+            card_photo((40 * index, (90 + 30 * index + 70 * box) % 256, 200 - 50 * index)).save(
                 directory / f"{box}-00{index}.jpg", "JPEG"
             )
             (directory / f"{box}-00{index}.json").write_text(
@@ -997,7 +997,7 @@ def check_cache_position_key(checks: Checks) -> None:
     with isolated_home() as home:
         caps = Path(home) / "cache-key-caps"
         caps.mkdir()
-        identify_images.Image.new("RGB", (64, 89), (30, 120, 200)).save(caps / "4-001.jpg", "JPEG")
+        card_photo((30, 120, 200)).save(caps / "4-001.jpg", "JPEG")
         (caps / "4-001.json").write_text(json.dumps({"box": 4, "position": 1, "game": "pokemon"}), "utf-8")
         digest = identify_images.sha256_of(caps / "4-001.jpg")
         sent: list = []
@@ -1112,7 +1112,7 @@ def check_refused_hit_is_claimed(checks: Checks) -> None:
                 # Colours far apart: flat images one step apart can encode to identical bytes, and
                 # identical bytes are one photograph, which the store refuses as a second card.
                 color = [(30, 120, 200), (200, 40, 40)][position - 1]
-                identify_images.Image.new("RGB", (64, 89), color).save(caps / f"4-00{position}.jpg", "JPEG")
+                card_photo(color).save(caps / f"4-00{position}.jpg", "JPEG")
                 (caps / f"4-00{position}.json").write_text(
                     json.dumps({"box": 4, "position": position, "game": "pokemon"}), "utf-8"
                 )
@@ -1198,7 +1198,7 @@ def check_cache_game_miss(checks: Checks) -> None:
         with isolated_home() as home:
             caps = Path(home) / "game-caps"
             caps.mkdir()
-            identify_images.Image.new("RGB", (64, 89), (30, 120, 200)).save(caps / "4-001.jpg", "JPEG")
+            card_photo((30, 120, 200)).save(caps / "4-001.jpg", "JPEG")
             (caps / "4-001.json").write_text(json.dumps({"box": 4, "position": 1, "game": "one_piece"}), "utf-8")
             record = {
                 "identification": dict(answer), "photo_sha256": identify_images.sha256_of(caps / "4-001.jpg"),
@@ -1266,7 +1266,7 @@ def check_cache_game_sent(checks: Checks) -> None:
         with isolated_home() as home:
             caps = Path(home) / "reattach-caps"
             caps.mkdir()
-            identify_images.Image.new("RGB", (64, 89), (30, 120, 200)).save(caps / "4-001.jpg", "JPEG")
+            card_photo((30, 120, 200)).save(caps / "4-001.jpg", "JPEG")
             sidecar = caps / "4-001.json"
 
             def claim_game(game):
@@ -1339,7 +1339,7 @@ def check_cleared_unparsed_goes_to_review(checks: Checks) -> None:
         with isolated_home() as home:
             caps = Path(home) / "cleared-caps"
             caps.mkdir()
-            identify_images.Image.new("RGB", (64, 89), (30, 120, 200)).save(caps / "4-001.jpg", "JPEG")
+            card_photo((30, 120, 200)).save(caps / "4-001.jpg", "JPEG")
             (caps / "4-001.json").write_text(json.dumps({"box": 4, "position": 1, "game": "pokemon"}), "utf-8")
             digest = identify_images.sha256_of(caps / "4-001.jpg")
             cleared = cache_mod.CacheEntry(
@@ -1414,7 +1414,7 @@ def _cleared_press(home, cards, cache, review=()):
     caps.mkdir()
     colors = [(30, 120, 200), (200, 40, 40), (40, 200, 40)]
     for n, (stem, sidecar) in enumerate(cards):
-        identify_images.Image.new("RGB", (64, 89), colors[n]).save(caps / f"{stem}.jpg", "JPEG")
+        card_photo(colors[n]).save(caps / f"{stem}.jpg", "JPEG")
         if sidecar is not None:
             (caps / f"{stem}.json").write_text(json.dumps(sidecar), "utf-8")
     with Store().write() as snapshot:

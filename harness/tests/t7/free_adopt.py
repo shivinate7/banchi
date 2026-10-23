@@ -34,6 +34,7 @@ from harness.tests.t7 import engine_sweep
 from harness.tests.t7.common import (
     FIXTURE_EXPORT,
     capture_payload,
+    card_photo,
     isolated_home,
     quiet,
 )
@@ -57,7 +58,7 @@ def _jpeg() -> bytes:
     """A real, distinct JPEG: the press prepares a card it sends to the paid batch."""
     n = next(_N)
     out = io.BytesIO()
-    identify_images.Image.new("RGB", (64, 89), (n * 7 % 256, n * 13 % 256, n * 29 % 256)).save(out, "JPEG")
+    card_photo((n * 7 % 256, n * 13 % 256, n * 29 % 256)).save(out, "JPEG")
     return out.getvalue()
 
 
