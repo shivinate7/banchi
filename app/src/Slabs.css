@@ -104,7 +104,7 @@
   color: var(--bn-bg);
   font-size: var(--bn-fs-xs);
   font-weight: 500;
-  line-height: 1.4;
+  line-height: var(--bn-lh-base);
   /* A ring in the page colour parts the tip from a toast of its own colour in either theme. */
   box-shadow: 0 0 0 1px var(--bn-bg), var(--bn-shadow-3);
   pointer-events: none;
