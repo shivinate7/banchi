@@ -1,6 +1,6 @@
 ## DEBT-empty-slot-check-decodes-all — the empty-slot check decodes every uncached photo at full size
 
-**The empty-slot check decodes each photograph that has no cached answer, at full size, before the quote is printed.** `cli/cmd_identify.run` calls `identify/match.empty_slot` on each of them. The check runs before the dry-run quote can skip it, so a dry run pays for the whole pass. On 2,500 new cards the pass takes 100 to 300 s.
+**The empty-slot check decodes each photograph that has no cached answer, at full size, before the quote is printed.** `cli/cmd_identify.run` calls the check in `identify/match.py` (`empty_slot`) on each of them. The check runs before the dry-run quote can skip it, so a dry run pays for the whole pass. On 2,500 new cards the pass takes 100 to 300 s.
 
 - **Result:** a dry run over a large new box waits for minutes before it prints a quote. The screen's quote waits with it.
 - **Not fixed because** the check is correct and catches the empty slots it was built for. Only its cost is wrong.
