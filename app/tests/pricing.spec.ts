@@ -1279,6 +1279,22 @@ for (const theme of ['light', 'dark'] as const) {
   }
 }
 
+/* AN EXPORT OF NO RECOVERABLE AGE HAS NO DAY: the receipt's `was` is null. The notice still shows and says so,
+ * so it neither hides on a falsy `was` nor prints a made-up date. */
+test('send from an unknown day: the prices-refreshed notice names an unknown day', async ({ page }) => {
+  const refresh = { ran: true, ok: true, was: null, export_day: '2026-10-22' }
+  const wire = await open(page, {
+    sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [sendSummary({ refresh })] } : SENDS_NONE),
+  })
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  const notice = page.locator('.send-prices-refreshed')
+  await expect(notice).toBeVisible()
+  await expect(notice).toContainText('Prices were refreshed before sending.')
+  await expect(notice).toContainText('They came from an unknown day')
+  await expect(notice).not.toContainText(/1970|Invalid/)
+})
+
 test('a same-day send shows no prices-refreshed notice', async ({ page }) => {
   const wire = await open(page, {
     sends: (seen) =>

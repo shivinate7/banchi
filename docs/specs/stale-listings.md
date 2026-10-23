@@ -445,7 +445,8 @@ threshold. The daily job is not a promise: a Mac that was off that morning leave
 they were.
 
 - **The gate is `pipeline_routes.refresh_before_send`.** It reads each named run's recorded export
-  (`cli/runs.stale_runs`: the oldest file's mtime, its fetch time) and does nothing when every one is
+  (`cli/runs.stale_runs`: the file's mtime; for a file that moved, the run record's export time, then the
+  file found by its digest; with neither, an unknown day, which counts as stale) and does nothing when every one is
   from today. Otherwise it runs `do_prices_refresh` with the send's runs added (`also`), then checks
   the outcome: every named run must now be from today. If not, nothing is sent and a sentence says
   why (the first failed step's own message, or "another refresh is running").

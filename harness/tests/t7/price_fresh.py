@@ -41,6 +41,7 @@ from unittest import mock
 from urllib.parse import parse_qs
 
 import envfile
+from cli import resolve, runs as run_files
 from harness.tests import Checks
 from harness.tests.t7.common import (
     DUNSPARCE_REVERSE_SKU,
@@ -61,7 +62,7 @@ from harness.tests.t7.common import (
 from harness.tests.t7.send_markdown import _markdown_dir, send_portal, synced_home
 from pipeline import pricehistory, pricerefresh, readings as readings_walk, reprice, tcgcsv
 from server import capture_server, pipeline_routes, send_routes
-from store import files
+from store import clock, files
 from store.readings import KIND_RUN, Reading, Source, _source_key
 from store.session import Store
 
@@ -1583,6 +1584,233 @@ def check_send_says_whether_it_refreshed(checks: Checks) -> None:
         )
 
 
+# ------------------------------------------- the send gate, for a run whose recorded export path is gone
+#
+# A run records the path of the export it joined. A path can go dead (the checkout it named moved) while
+# the file lives on under `inventory/.exports/`, where `resolve.exports_for` finds it by the recorded
+# digest and `emit` prices from it. The gate must judge such a run by the age of those prices: the
+# manifest's own `mtime` for that export first, the recovered file's mtime second, and when neither gives
+# an age the run counts as stale. It must never read a run it cannot date as fresh.
+
+
+def _two_days_ago() -> datetime:
+    return datetime.now(timezone.utc) - timedelta(days=2)
+
+
+def _legacy_run(checks: Checks, box: int):
+    """A joined Pokemon run whose export is from today.
+
+    Each box prices at its own cent, so no two runs share an export's bytes. A shared digest would let
+    one run's recovered file answer for another run whose file is meant to be unrecoverable.
+    """
+    run, _ = seam_run(checks, [(box, 1, "Dunsparce", "120/159", "normal")], market={DUNSPARCE_SKU: f"10.3{box}"})
+    return run
+
+
+def _export_found(run):
+    """The file `resolve.exports_for` would price this run from, or `None` when it refuses to find one."""
+    try:
+        return next(iter(resolve.exports_for(run_files.open_run(run.directory), None).by_game.values()))
+    except run_files.RunError:
+        return None
+
+
+def _strand_export(checks: Checks, run, *, recorded, recovered_days) -> None:
+    """Leave `run` as an old run on the owner's store is: the manifest names an export path that is gone.
+
+    `recorded` is the `mtime` the manifest keeps for that export (`None` drops the key). With
+    `recovered_days` set, the file moves under `inventory/.exports/<game>/` carrying its digest in the
+    name, aged that many days, so the recorded digest still finds it. With `None` the file is deleted.
+    The bytes are never rewritten, so the recorded digest stays true.
+    """
+    manifest_path = run.directory / run_files.MANIFEST
+    manifest = json.loads(manifest_path.read_text())
+    game, source = next(iter(manifest["exports"].items()))
+    live = Path(source["path"])
+    source["path"] = str(live.parent / "moved-away" / live.name)
+    if recorded is None:
+        source.pop("mtime", None)
+    else:
+        source["mtime"] = recorded.isoformat(timespec="milliseconds")
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+    if recovered_days is None:
+        live.unlink()
+        checks.equal(_export_found(run), None, "fixture: the recorded export is gone and no file carries its digest")
+        return
+    kept = files.inventory_dir() / files.EXPORTS_DIRNAME / game
+    kept.mkdir(parents=True, exist_ok=True)
+    target = kept / f"{pipeline_routes.FETCHED_PREFIX}t7-{source['sha256'][:8]}.csv"
+    os.replace(live, target)
+    _age(target, recovered_days)
+    checks.equal(_export_found(run), target, "fixture: the recorded path is gone and its digest finds the file under .exports")
+
+
+def _stale_set(checks: Checks, label: str, *runs) -> dict:
+    """`stale_runs` over these runs, reopened from disk. `{}` after a failed check when it raises."""
+    return attempt(checks, label, lambda: run_files.stale_runs([run_files.open_run(run.directory) for run in runs])) or {}
+
+
+def check_dead_path_is_judged_by_its_recorded_mtime(checks: Checks) -> None:
+    """Cases 1, 1b and 2. A dead path is dated by the manifest's `mtime`, ahead of the recovered file's.
+
+    1b is the dangerous shape: the file reappears under `.exports/` with a new mtime (a copy), while the
+    manifest says the prices were read two days ago. The prices are the old ones.
+    """
+    checks.note("")
+    checks.note("SEND GATE — a run whose export path is gone is dated by the mtime its manifest recorded")
+    with isolated_home():
+        old = _legacy_run(checks, 3)
+        _strand_export(checks, old, recorded=_two_days_ago(), recovered_days=None)
+        copied = _legacy_run(checks, 4)
+        _strand_export(checks, copied, recorded=_two_days_ago(), recovered_days=0)
+        today = _legacy_run(checks, 5)
+        _strand_export(checks, today, recorded=datetime.now(timezone.utc), recovered_days=None)
+
+        named = _stale_set(checks, "1. `stale_runs` answers over the three runs", old, copied, today)
+        checks.ok(old.name in named, "1. dead path, manifest mtime two days back: the run is named stale", repr(sorted(named)))
+        if old.name in named:
+            checks.equal(
+                attempt(checks, "1. the moment is read", lambda: clock.central_day(named[old.name])),
+                clock.central_day(_two_days_ago()),
+                "1. and its moment is the manifest's, so the refusal can say which day the prices are from",
+            )
+        checks.ok(
+            copied.name in named, "1b. dead path, manifest mtime two days back, recovered copy with a new mtime: still named stale",
+            repr(sorted(named)),
+        )
+        checks.ok(today.name not in named, "2. dead path, manifest mtime from today: not named", repr(sorted(named)))
+
+
+def check_dead_path_without_mtime_is_judged_by_its_recovered_file(checks: Checks) -> None:
+    """Cases 3 and 3b. With no recorded `mtime`, the digest-recovered file's own mtime dates the run."""
+    checks.note("")
+    checks.note("SEND GATE — a dead path with no recorded mtime is dated by the file its digest recovers")
+    with isolated_home():
+        old = _legacy_run(checks, 3)
+        _strand_export(checks, old, recorded=None, recovered_days=2)
+        fresh = _legacy_run(checks, 4)
+        _strand_export(checks, fresh, recorded=None, recovered_days=0)
+        named = _stale_set(checks, "3. `stale_runs` answers over both runs", old, fresh)
+        checks.ok(old.name in named, "3. no mtime recorded, recovered file two days old: the run is named stale", repr(sorted(named)))
+        checks.ok(fresh.name not in named, "3b. no mtime recorded, recovered file from today: not named", repr(sorted(named)))
+
+
+def check_dead_path_with_no_age_is_stale(checks: Checks) -> None:
+    """Case 4. A dead path with no recorded `mtime` and no recoverable file is stale. The gate refreshes first.
+
+    `refresh_before_send` takes the oldest moment of the stale runs, so a run with no age must still
+    leave it a refusal and not an exception. The refresh lock is held, as another process would hold it,
+    so the refresh is asked and cannot run.
+    """
+    checks.note("")
+    checks.note("SEND GATE — a run that cannot be dated counts as stale and is never read as fresh")
+    with send_portal(), synced_home():
+        lost = _legacy_run(checks, 3)
+        _strand_export(checks, lost, recorded=None, recovered_days=None)
+        named = _stale_set(checks, "4. `stale_runs` answers", lost)
+        checks.ok(lost.name in named, "4. dead path, no mtime, no recoverable file: the run is named stale", repr(sorted(named)))
+        with pricerefresh.refresh_lock() as held:
+            checks.ok(held, "4. the probe holds the refresh lock, as another process would")
+            with _refresh_spy() as calls:
+                outcome = _outcome(lambda: pipeline_routes.refresh_before_send([lost.directory.name]))
+        code, text = _refused(outcome)
+        checks.ok(code == "prices_stale", "4. the gate refuses `prices_stale`, not an answer and not a crash", repr(outcome)[:300])
+        checks.ok(text.startswith("Nothing was sent"), "4. the refusal opens `Nothing was sent`", text[:300])
+        checks.equal(len(calls), 1, "4. and the refresh was asked once")
+
+
+def check_dead_path_run_is_not_sent_on_old_prices(checks: Checks) -> None:
+    """Case 5. Both doors of the send stop a dead-path run whose prices are two days old.
+
+    5a, the runs sheet's `do_send`: it refreshes first and uploads the new price, or it refuses
+    `prices_stale` and sends nothing. 5b, the CLI `emit` with another refresh running: refused, no file.
+    The fixture is the run class of the owner's store: a dead recorded path, a file that its digest
+    recovers, and prices two days old.
+    """
+    checks.note("")
+    checks.note("SEND GATE — the send and the CLI emit do not price a dead-path run from its old export")
+    with send_portal() as portal, synced_home() as home:
+        run = _stale_run(checks, portal, home, [(3, 1, "Dunsparce", "120/159", "normal")])
+        _strand_export(checks, run, recorded=_two_days_ago(), recovered_days=2)
+        with _refresh_spy() as calls:
+            outcome = _send_now(run)
+        code, _text = _refused(outcome)
+        uploaded = _uploaded(portal)
+        checks.ok(uploaded.get(DUNSPARCE_SKU) != THEN, "5a. the old price $10.37 is never uploaded", f"uploaded {uploaded!r}; refresh asked {len(calls)} time(s)")
+        checks.ok(
+            code == "prices_stale" or (outcome[0] == "answer" and len(calls) == 1 and uploaded.get(DUNSPARCE_SKU) == NOW),
+            "5a. the send refuses `prices_stale`, or refreshes once and uploads $16.25",
+            f"{repr(outcome)[:200]}; refresh asked {len(calls)} time(s); uploaded {uploaded!r}",
+        )
+        if code == "prices_stale":
+            checks.equal((_pushed(portal), _receipt_dirs()), ([], []), "5a. a refusal sends nothing and leaves no receipt")
+
+        second = _stale_run(checks, portal, home, [(4, 1, "Dunsparce", "120/159", "normal")])
+        _strand_export(checks, second, recorded=_two_days_ago(), recovered_days=2)
+        with pricerefresh.refresh_lock() as held:
+            checks.ok(held, "5b. the probe holds the refresh lock, as another process would")
+            text = command(checks, "emit", str(second.directory), exits=1)
+        checks.ok(
+            "Nothing was sent" in text and "another refresh is running" in text,
+            "5b. `emit` refuses the dead-path run and names the running refresh", text[-300:],
+        )
+        checks.equal(sorted(second.directory.glob("import*.csv")), [], "5b. and no import file was written")
+
+
+# How `UNDATED` (the epoch, 1970-01-01 UTC) reads as a US Central day or a month name, and the word a bare `None` would print.
+EPOCH_WORDS = ("1969", "1970", "December 31", "None")
+
+
+def _undated_run(checks: Checks, portal: dict, home: Path, cards):
+    """A stale joined run whose export is gone, with no recorded `mtime` and no file its digest finds: `run_files.UNDATED`."""
+    run = _stale_run(checks, portal, home, cards)
+    _strand_export(checks, run, recorded=None, recovered_days=None)
+    return run
+
+
+def check_undated_export_is_an_unknown_day(checks: Checks) -> None:
+    """Case 6. An export of no recoverable age is `run_files.UNDATED` (the epoch). The refusal, the receipt and the CLI line call it an unknown day, never 1970.
+
+    6a, the gate's refusal with the refresh lock held. 6b, a send that refreshes: the summary and the
+    receipt on disk carry `was: None`. 6c, the refreshed line `emit` prints.
+    """
+    checks.note("")
+    checks.note("SEND GATE — an export of no recoverable age is an unknown day, never 1970")
+    central = ZoneInfo("America/Chicago")
+    today = datetime.now(central).date().isoformat()
+    with send_portal() as portal, synced_home() as home:
+        lost = _undated_run(checks, portal, home, [(3, 1, "Dunsparce", "120/159", "normal")])
+        checks.equal(_stale_set(checks, "6. `stale_runs` answers", lost).get(lost.name), run_files.UNDATED,
+                     "6. the run is dated `UNDATED`")
+
+        with pricerefresh.refresh_lock() as held:
+            checks.ok(held, "6a. the probe holds the refresh lock, as another process would")
+            outcome = _outcome(lambda: pipeline_routes.refresh_before_send([lost.directory.name]))
+        code, text = _refused(outcome)
+        checks.equal(code, "prices_stale", "6a. the gate refuses `prices_stale`")
+        checks.ok("The prices come from an export from an unknown day, and" in text,
+                  "6a. and the refusal says the prices come from an export from an unknown day", text[:300])
+        checks.ok(not any(word in text for word in EPOCH_WORDS), "6a. and never names the epoch's day", text[:300])
+
+        outcome = _send_now(lost)
+        send = outcome[1].get("send") or {} if outcome[0] == "answer" else {}
+        expected = {"ran": True, "ok": True, "was": None, "export_day": today}
+        checks.ok(outcome[0] == "answer", "6b. the send refreshes the undated run and goes", repr(outcome[1:])[:300])
+        checks.equal(send.get("refresh"), expected, "6b. the summary says the refresh ran, with `was` null")
+        receipts = attempt(checks, "6b. the receipts are read", send_routes._receipts) or []
+        checks.equal([record.get("refresh") for _, record in receipts], [expected],
+                     "6b. and the receipt on disk carries `was` null")
+
+        cli = _undated_run(checks, portal, home, [(6, 1, "Articuno", "161", None)])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        text = command(checks, "emit", str(cli.directory))
+        line = next((row for row in text.splitlines() if "refreshed before this send" in row), "")
+        checks.ok(line.endswith(f"refreshed before this send: export of an unknown day, now {today}"),
+                  "6c. the CLI prints the refresh line, from an unknown day", line or text[-300:])
+        checks.ok(line != "" and not any(word in line for word in EPOCH_WORDS),
+                  "6c. and that line never prints the epoch's day or None", line or text[-300:])
+
+
 CHECKS = (
     check_refresh_reaches_store_backed_runs,
     check_held_lock_is_a_recorded_skip,
@@ -1614,4 +1842,9 @@ CHECKS = (
     check_a_read_is_from_today_central,
     check_markdown_send_refuses_an_earlier_day,
     check_send_says_whether_it_refreshed,
+    check_dead_path_is_judged_by_its_recorded_mtime,
+    check_dead_path_without_mtime_is_judged_by_its_recovered_file,
+    check_dead_path_with_no_age_is_stale,
+    check_dead_path_run_is_not_sent_on_old_prices,
+    check_undated_export_is_an_unknown_day,
 )
