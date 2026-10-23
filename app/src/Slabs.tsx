@@ -245,7 +245,7 @@ const UNDO_WHY: Readonly<Record<string, string>> = {
   cardladder_rate_limited: "Card Ladder's limit for today is used up. Try again tomorrow.",
   cardladder_token_missing: LOGIN_SENTENCE,
   cardladder_token_rejected: LOGIN_SENTENCE,
-  cardladder_failed: 'Card Ladder did not answer. Try again in a few minutes.',
+  cardladder_failed: 'Card Ladder could not be read just now. Try again later.',
   cardladder_unreadable: "Card Ladder's answer could not be read. Try again later.",
   cert_not_found: 'Card Ladder no longer finds this slab.',
   slab_add_busy: 'Another slab is still being added. Try again when it finishes.',
