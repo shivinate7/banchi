@@ -118,8 +118,10 @@ def _fake_matcher(read):
         yield
 
 
-def _sweep(read, expect_code: int = 0) -> int:
-    """Run the background worker over the store's queue, once, under the fake matcher."""
+def _sweep(read, expect_code: int = 0, lines: list | None = None) -> int:
+    """Run the background worker over the store's queue, once, under the fake matcher.
+
+    `lines`, when given, collects what the worker says (its `say` lines)."""
     from cli import cmd_match
 
     engine_sweep._switch(True)
@@ -131,8 +133,9 @@ def _sweep(read, expect_code: int = 0) -> int:
             engine_sweep._switch(False)
         return read(requests, index, *a, **k)
 
+    say = lines.append if lines is not None else (lambda _line: None)
     with _fake_matcher(counted), quiet():
-        code = cmd_match.sweep_worker(lambda _line: None)
+        code = cmd_match.sweep_worker(say)
     assert code == expect_code, f"the worker exited {code}, expected {expect_code}"
     return len(reads)
 
@@ -568,21 +571,32 @@ def check_join_record_recovery(checks: Checks) -> None:
         checks.ok(any(b in keys for keys in joined_keys), "4. while the identified one still is")
 
 
+def _sweep_runs() -> list:
+    """The `match-sweep` runs the reader opened, oldest first."""
+    return sorted(files.runs_dir().glob("*-match-sweep-*"))
+
+
+def _manifest(run: Path) -> dict:
+    from cli import runs
+
+    return runs.open_run(run).manifest
+
+
 def check_adoption_export_gate(checks: Checks) -> None:
     checks.note("")
-    checks.note("EXPORT GATE — the reader adopts only on an export a press would reuse, covering the card's set")
+    checks.note("EXPORT GATE — the reader names a card with any export, and prices only on one a press would reuse")
     days = 3 * 86400
     with isolated_home():
         a, b = _shoot(ARTICUNO), _shoot(DUNSPARCE)
-        export = _seed_export(age=days)  # owner's ruling: the reader has NO age limit (a press keeps 900 s)
-        stamp = int(export.stat().st_mtime)
+        _seed_export(age=days)  # owner's ruling: naming has NO age limit; pricing keeps the press's 900 s
         _sweep(_results((a, b), {a: ARTICUNO, b: DUNSPARCE}))
-        checks.equal(_card(a)[0], master.IDENTIFIED, "3. an export days old adopts: the reader has no age limit")
-        checks.ok(_review((b,)) == [(b, AMBIGUOUS)] and _skus() != [], "3. and the join queues and fills the SKU table as for a fresh one")
-        run = sorted(files.runs_dir().glob("*-match-sweep-*"))[0]
-        checks.equal(int((run / "pricing.json").stat().st_mtime), stamp, "2. the run's pricing.json carries the export's mtime, not the adoption time")
+        checks.equal(_card(a)[0], master.IDENTIFIED, "3. an export days old adopts: naming has no age limit")
+        checks.ok(_review((b,)) == [] and _skus() == [], "3. and the join waits: no SKU row, no review row, for an export past 900 s")
+        runs = _sweep_runs()
+        checks.equal(len(runs), 1, "2. one match-sweep run holds the named cards")
+        checks.ok(not any((run / "pricing.json").exists() for run in runs), "2. and that run writes no pricing.json")
         reads = {r.at for r in Store().read().readings.entries.values()}
-        checks.equal(reads, {stamp}, "2. and so does every market reading the reader wrote")
+        checks.equal(reads, set(), "2. and the reader writes no market reading")
     with isolated_home():
         a = _shoot(ARTICUNO)
         _seed_export(set_ids=(101,))  # a narrower scope than the whole category
@@ -596,12 +610,244 @@ def check_adoption_export_gate(checks: Checks) -> None:
         checks.equal(_card(plain)[0], master.IDENTIFIED, "4. while a card the export covers still is")
 
 
+def check_export_past_900_names_only(checks: Checks) -> None:
+    checks.note("")
+    checks.note("NAMES ONLY PAST 900 s — the run waits at join, and a press's failed fetch keeps it waiting and says so")
+    from http import HTTPStatus
+
+    from server import pipeline_routes
+
+    with isolated_home():
+        a, b = _shoot(ARTICUNO), _shoot(DUNSPARCE)
+        _seed_export(age=901)
+        lines: list = []
+        _sweep(_results((a, b), {a: ARTICUNO, b: DUNSPARCE}), lines=lines)
+        checks.equal(_card(a)[0], master.IDENTIFIED, "1. a card names from an export 901 s old")
+        checks.equal(_card(b)[0], master.IDENTIFIED, "1. and so does the second")
+        checks.equal(_skus(), [], "1. no SKU row: nothing is priced")
+        checks.equal(_review((a, b)), [], "1. and the join does not run")
+        checks.ok(any("named, not priced" in line for line in lines), "1. the worker says the cards wait at join", "\n".join(lines))
+        runs = _sweep_runs()
+        checks.equal(len(runs), 1, "1. one match-sweep run holds them")
+        if len(runs) != 1:
+            return
+        run = runs[0]
+        checks.equal(_manifest(run).get("joined"), False, "1. the run is not joined")
+        checks.equal(pipeline_routes._summary(run)["phase"], "join", "1. and it waits at phase join")
+        checks.ok(not (run / "pricing.json").exists(), "1. with no pricing.json")
+        refused = pipeline_routes.PipelineRefusal(HTTPStatus.BAD_GATEWAY, "export_fetch_failed", "the export fetch failed")
+        with mock.patch.object(pipeline_routes, "do_pipeline_export", side_effect=refused):
+            answer = pipeline_routes.do_run_match(run.name, {})
+        checks.ok(answer["ran"] and not answer["ok"], "2. a press's match runs its fetch, and the fetch fails", f"reason {answer.get('reason')}")
+        checks.equal(answer["summary"]["phase"], "join", "2. a failed fetch keeps the run waiting at join")
+        checks.equal((answer["summary"]["match_problem"] or {}).get("step"), "fetch", "2. and says so: the problem names the fetch step")
+        checks.equal(_skus(), [], "2. and the cards stay unpriced")
+
+
+def check_export_under_900_prices(checks: Checks) -> None:
+    checks.note("")
+    checks.note("PRICES UNDER 900 s — an export a press would still reuse prices the card in the same chunk")
+    with isolated_home():
+        a, b = _shoot(ARTICUNO), _shoot(DUNSPARCE)
+        export = _seed_export(age=899)
+        stamp = int(export.stat().st_mtime)
+        _sweep(_results((a, b), {a: ARTICUNO, b: DUNSPARCE}))
+        checks.equal(_card(a)[0], master.IDENTIFIED, "1. the card names")
+        checks.equal(_review((b,)), [(b, AMBIGUOUS)], "1. the join queues the ambiguous card as it does for a fresh export")
+        checks.ok(_skus() != [], "1. and the join fills the SKU table")
+        runs = _sweep_runs()
+        checks.equal(len(runs), 1, "1. one match-sweep run holds the cards")
+        if len(runs) == 1:
+            checks.equal(_manifest(runs[0]).get("joined"), True, "1. the run is joined")
+            checks.equal(int((runs[0] / "pricing.json").stat().st_mtime), stamp, "2. its pricing.json carries the export's mtime")
+        reads = {r.at for r in Store().read().readings.entries.values()}
+        checks.equal(reads, {stamp}, "2. and so does every market reading")
+
+
+def check_stale_chunk_opens_own_run(checks: Checks) -> None:
+    checks.note("")
+    checks.note("STALE CHUNK AFTER A PRICED ONE — the export ages between chunks, and the stale chunk opens its own run")
+    with isolated_home():
+        cards = [_shoot(ARTICUNO) for _ in range(9)]  # the worker reads eight at a time: two chunks
+        export = _seed_export()
+        chunks: list = []
+
+        def age_export_after_first_chunk(read):
+            def wrapped(requests, index=None, *a, **k):
+                chunks.append(len(requests))
+                if len(chunks) == 2:  # the second chunk meets an export past 900 s
+                    stamp = time.time() - 901
+                    os.utime(export, (stamp, stamp))
+                return read(requests, index, *a, **k)
+            return wrapped
+
+        _sweep(age_export_after_first_chunk(_results(cards, {k: ARTICUNO for k in cards})))
+        checks.equal(len(chunks), 2, "1. the worker read two chunks")
+        runs = _sweep_runs()
+        checks.equal(len(runs), 2, "1. the stale chunk opens its own run")
+        if len(runs) != 2:
+            return
+        priced, stale = runs
+        held = [set((_manifest(run).get("selection") or {}).get("keys") or []) for run in runs]
+        checks.equal(_manifest(priced).get("joined"), True, "1. the run of the first chunk, priced, stays joined")
+        checks.equal(len(held[0]), 8, "1. and holds that chunk's eight cards")
+        checks.equal(_manifest(stale).get("joined"), False, "2. the stale chunk's run is not joined")
+        checks.equal(held[1], set(cards) - held[0], "2. and holds the ninth card alone")
+        checks.ok(not (stale / "pricing.json").exists(), "2. with no pricing.json")
+
+
+def check_joined_run_after_the_look(checks: Checks) -> None:
+    """A press joins the worker's run after `leave_joined` has looked. The look is disabled here, so
+    the stale chunk meets a joined run: its compare-and-set refuses it, the run keeps only its own
+    keys and stays joined, and the named card lands in a run of its own."""
+    from cli import cmd_match
+
+    checks.note("")
+    checks.note("JOINED AFTER THE LOOK — a stale chunk never joins a run a press joined, even when the look missed it")
+    with isolated_home(), mock.patch.object(cmd_match._Session, "leave_joined", lambda _self: None):
+        cards = [_shoot(ARTICUNO) for _ in range(9)]
+        export = _seed_export()
+        reads: list = []
+
+        def age_export_after_first_chunk(read):
+            def wrapped(requests, index=None, *a, **k):
+                reads.append([r.key for r in requests])
+                if len(reads) == 2:  # the second chunk meets an export past 900 s
+                    stamp = time.time() - 901
+                    os.utime(export, (stamp, stamp))
+                return read(requests, index, *a, **k)
+            return wrapped
+
+        _sweep(age_export_after_first_chunk(_results(cards, {k: ARTICUNO for k in cards})))
+        checks.equal(len(reads), 2, "1. the worker read two chunks")
+        first, second = set(reads[0]) if reads else set(), set(reads[1]) if len(reads) > 1 else set()
+        runs = _sweep_runs()
+        checks.ok(len(runs) == 2, "1. the named card opens a run of its own", f"match-sweep runs: {len(runs)}")
+        if not runs:
+            return
+        priced = runs[0]
+        named = runs[1] if len(runs) > 1 else None
+        checks.equal(_manifest(priced).get("joined"), True, "1. the press's joined run stays joined")
+        checks.equal(set((_manifest(priced).get("selection") or {}).get("keys") or []), first,
+                     "2. and holds only its own cards, not the stale chunk's")
+        if named is not None:
+            checks.ok(_manifest(named).get("collected") is True and _manifest(named).get("joined") is False,
+                      "2. the new run is collected and not joined", f"manifest: {_manifest(named)!r:.200}")
+            checks.equal(set((_manifest(named).get("selection") or {}).get("keys") or []), second,
+                         "2. and holds the named card alone")
+        cards_on_disk = Store().read().inventory.cards
+        for key in sorted(second):
+            checks.equal(cards_on_disk[key].run, named.name if named else None,
+                         "3. the named card's run points at the new run")
+
+
+def _join_run(run_dir: Path, export: Path) -> tuple:
+    """`join <run-dir>`, the press `do_run_match` runs over a run the reader named into. Returns (exit code, say lines)."""
+    from cli import __main__ as cli_entry
+    from cli import cmd_join
+
+    lines: list = []
+    argv = ["join", str(run_dir), "--export", str(export)]
+    with quiet():
+        code = cmd_join.run(cli_entry.build_parser().parse_args(argv), lines.append)
+    return code, lines
+
+
+def check_card_named_mid_join(checks: Checks) -> None:
+    """A press joins a run the reader named cards into. The reader names a second card into that run
+    after the join has read the run's cards and before it records the join. The join must not mark
+    the run joined over a card it never read: the run stays unjoined, the join result names the card,
+    and the next join of that run prices it. The reader's write is the real worker (`sweep`), so
+    the card lands the way a reader's chunk lands it."""
+    from cli import resolve, runs
+
+    checks.note("")
+    checks.note("NAMED MID-JOIN — a card the reader names while a press joins is never joined unread")
+    with isolated_home():
+        export = _seed_export(age=901)  # stale: the reader names its cards and prices none
+        k1 = _shoot(ARTICUNO)
+        _sweep(_results((k1,), {k1: ARTICUNO}))
+        runs_found = _sweep_runs()
+        checks.equal(len(runs_found), 1, "(precondition) the reader opened one match-sweep run")
+        if len(runs_found) != 1:
+            return
+        run_dir = runs_found[0]
+        k2 = _shoot(ARTICUNO)  # captured: the reader names it while the press runs
+        checks.ok("cards" in runs.open_run(run_dir).manifest, "(precondition) the run records its cards")
+        checks.equal(Store().read().inventory.cards[k1].state, master.IDENTIFIED, "(precondition) k1 is identified")
+        _touch(export, 0)  # a fresh export: the press prices
+
+        seen: list = []
+        mid = {"pending": True}
+        real_load = resolve.load
+
+        def named_mid_join(*a, **k):
+            resolved = real_load(*a, **k)
+            seen.append(resolved)
+            if mid["pending"]:
+                mid["pending"] = False
+                _touch(export, 901)  # the reader's view: stale, so it names and prices nothing
+                _sweep(_results((k2,), {k2: ARTICUNO}))
+                _touch(export, 0)
+            return resolved
+
+        with mock.patch.object(resolve, "load", named_mid_join):
+            code1, say1 = _join_run(run_dir, export)
+            disk = runs.open_run(run_dir).manifest
+            checks.ok(k2 in (disk.get("cards") or {}), "(precondition) the reader named k2 into the run mid-join",
+                      f"cards on disk: {sorted((disk.get('cards') or {}))}")
+            checks.equal(code1, 0, "1. the press exits 0")
+            checks.ok(disk.get("joined") is not True, "1. the run stays unjoined",
+                      f"joined on disk: {disk.get('joined')!r}")
+            held = [line for line in say1 if "were added to this run while it joined" in line]
+            checks.equal(len(held), 1, "2. the join result says cards were added mid-join")
+            checks.ok(bool(held) and "1 card(s)" in held[0] and "Articuno" in held[0],
+                      "2. and names the one card, k2", f"join said: {held!r}")
+
+            code2, say2 = _join_run(run_dir, export)
+            checks.equal(code2, 0, "3. the next press exits 0")
+            checks.ok(not any("were added to this run" in line for line in say2), "3. and joins the run whole")
+            checks.ok(runs.open_run(run_dir).manifest.get("joined") is True, "3. the run is joined")
+            priced = {f"{p.box}/{p.index}" for m in seen[-1].matches.values() for p in m.positions}
+            checks.ok(k2 in priced, "3. the next press prices k2", f"priced positions: {sorted(priced)}")
+
+
+def check_removed_run_stays_gone(checks: Checks) -> None:
+    """A write to a run directory that is gone is refused and leaves nothing behind. The manifest
+    lock used to recreate the directory and write a partial manifest into it."""
+    from cli import runs
+
+    checks.note("")
+    checks.note("REMOVED RUN — a later write to a run directory that is gone is refused, never recreated")
+    with isolated_home():
+        for label, write in (
+            ("set", lambda run: run.set(joined=True)),
+            ("set_unless_joined", lambda run: run.set_unless_joined(selection={"keys": []})),
+        ):
+            run = runs.create(f"removed-{label.replace('_', '-')}")
+            run.set(selection={"keys": []})
+            shutil.rmtree(run.directory)
+            refused = None
+            try:
+                write(run)
+            except Exception as error:  # the refusal's type is not asserted; the absence below is
+                refused = error
+            checks.ok(refused is not None, f"1. {label} on a removed run is refused", f"raised: {refused!r}")
+            checks.ok(not run.directory.exists(), f"1. {label} does not recreate the run directory")
+
+
 CHECKS = (
     check_free_match_identifies,
     check_press_after_sweep,
     check_sweep_one_lock_per_chunk,
     check_adopted_card_is_priced,
     check_adoption_export_gate,
+    check_export_past_900_names_only,
+    check_export_under_900_prices,
+    check_stale_chunk_opens_own_run,
+    check_joined_run_after_the_look,
+    check_card_named_mid_join,
+    check_removed_run_stays_gone,
     check_lock_hold_cold_session,
     check_moved_between_prep_and_lock,
     check_one_run_across_restarts,

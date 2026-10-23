@@ -37,6 +37,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import signal
+import sys
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
@@ -1044,7 +1047,110 @@ def _read_disputes_for(writable, key: str, read_name) -> Optional[bool]:
     return join.name_disputes(read_name, [row.raw])
 
 
+def _own_pid_marker(args) -> Optional[Path]:
+    """This run's `running.pid` if it names THIS process, else None. The app's route writes it for the
+    detached child it starts; a terminal run has none, and a marker naming another pid is not ours."""
+    if not getattr(args, "run_dir", None):
+        return None
+    try:
+        marker = runs.open_run(args.run_dir).directory / runs.PID_FILE
+        return marker if int(marker.read_text().strip()) == os.getpid() else None
+    except (runs.RunError, OSError, ValueError):
+        return None
+
+
+def _no_connection(run_dir) -> Optional[str]:
+    """Why this run may not reach for TCGplayer, or None. NO SOCKET UNDER A TEST RUN: the harness and CI
+    set one of these, and the owner's Mac holds a live TCGplayer cookie in the repo's settings file, so a
+    harness press would otherwise download a real export. And `do_run_match` and `do_pipeline_export`
+    take a run NAME and look it up in this store's runs folder, so a run directory anywhere else could
+    be answered by a different run of the same name: only the run itself is joined."""
+    if os.environ.get("CI") or os.environ.get("BANCHI_HARNESS"):
+        return "this is a test run, which opens no connection to TCGplayer"
+    if run_dir.directory.resolve() != (store_files.runs_dir() / run_dir.directory.name).resolve():
+        return "this run directory is not in the store's runs folder, so it is not joined here"
+    return None
+
+
+def _join_now(run_dir, say) -> Optional[str]:
+    """Join this run against an export now, by the one path the screen's automatic match takes
+    (`pipeline_routes.do_run_match`: the game's export, reused when under 900 s old (D166) or fetched,
+    then `banchi join`). Returns None when the run is joined, else one plain sentence saying why not;
+    the run then stays at phase `join` and its match record tells the screen."""
+    refused = _no_connection(run_dir)
+    if refused is not None:
+        return refused
+    try:
+        from server import pipeline_routes
+
+        say("joining         fetching the game's export (reused when under 15 minutes old), then joining the run")
+        try:
+            outcome = pipeline_routes.do_run_match(run_dir.directory.name, {})
+        except pipeline_routes.PipelineRefusal as refusal:
+            return f"the join was refused ({refusal.code}): {refusal}"
+    except Exception as exc:  # noqa: BLE001 - the answers are banked already; say why the join did not run
+        store_files.log_cause("identify auto-join", exc)
+        return f"the join could not start because {store_files.plain_cause(exc)}"
+    if outcome.get("ok"):
+        return None
+    problem = outcome.get("problem")
+    if isinstance(problem, dict) and problem.get("message"):
+        return str(problem["message"])
+    reason = outcome.get("reason")
+    if reason == "running":
+        return "another join of this run is already in progress"
+    if reason == "not_waiting":
+        return "the run is not waiting for a join: it is already joined or still being read"
+    if reason == "problem_stands":
+        standing = (outcome.get("summary") or {}).get("match_problem") or {}
+        return f"an earlier join problem stands: {standing.get('message') or 'see the run'}"
+    return f"the join did not run ({reason or 'no reason given'})"
+
+
+def _held_now(snapshot, items) -> str:
+    """Where the store holds these cards now, read back from the queues: "9 held for review, 2 in the
+    main queue, 13 settled". The review queue IS the main queue, so the split is by reason: the two
+    second-look reasons are "held for review", every other open entry is "in the main queue". Parked is
+    named only when a card is there. Settled is a card with no open entry in either queue.
+    A card with no position is looked up by its file key, which is how the join files it (no_position)."""
+    from pipeline import routing
+
+    held = main = parked = 0
+    for item in items:
+        entry = snapshot.review.entries.get(item.key)
+        away = snapshot.parked.entries.get(item.key)
+        if entry is not None and not entry.cleared_by_human:
+            if entry.reason in (routing.READERS_DISAGREE, routing.SECOND_LOOK_UNSURE):
+                held += 1
+            else:
+                main += 1
+        elif away is not None and not away.cleared_by_human:
+            parked += 1
+    parts = [f"{held} held for review", f"{main} in the main queue"]
+    if parked:
+        parts.append(f"{parked} parked")
+    parts.append(f"{len(items) - held - main - parked} settled")
+    return ", ".join(parts)
+
+
 def run(args, say) -> int:
+    """The command. A wrapper so the run's `running.pid` is gone when this process ends by a return, a
+    raised error, or SIGTERM (turned into a normal exit so the `finally` runs). SIGKILL is the exception.
+    It is removed only when it names this pid. The claim's release is NOT here (D174): a run that dies between submitting and
+    collecting keeps its claim."""
+    marker = _own_pid_marker(args)
+    previous = None
+    if marker is not None:
+        previous = signal.signal(signal.SIGTERM, lambda _signo, _frame: sys.exit(143))
+    try:
+        return _run(args, say)
+    finally:
+        if marker is not None:
+            marker.unlink(missing_ok=True)
+            signal.signal(signal.SIGTERM, previous or signal.SIG_DFL)
+
+
+def _run(args, say) -> int:
     store = Store()
 
     # ------------------------------------------------------ WHICH CARDS, BEFORE ANY OTHER WORK
@@ -2053,7 +2159,18 @@ def run(args, say) -> int:
             if freed is not None:
                 released_keys = len(freed.keys)
 
-    # --------------------------------------------------------------------------- report
+    # ------------------------------------------------------------------------ join, then report
+    #
+    # THE RUN JOINS ITSELF HERE, AFTER THE STORE WRITE AND THE CLAIM'S RELEASE, because the answers are banked
+    # and a join that cannot run (no export, a refusal) costs nothing but the next step. The report below reads
+    # the queues back after it: the outcomes "wait in review" and "main queue" are the join's, so they are said
+    # from what the store holds, and "held until join" when it did not run.
+    not_joined = _join_now(run_dir, say)
+    after_join = None if not_joined else store.read()
+
+    def held_card_where(cards) -> str:
+        return "held until join" if after_join is None else _held_now(after_join, cards)
+
     reported = [i for i in items if i.stage != STAGE_HELD]  # a held card is neither read nor failed
     answered = [i for i in reported if i.identification is not None]
     second_looked = [i for i in items if i.unread is not None and i.stage != STAGE_EMPTY]
@@ -2107,8 +2224,9 @@ def run(args, say) -> int:
         for item in second_looked:
             reasons[str(item.unread.code)] = reasons.get(str(item.unread.code), 0) + 1
         say(f"second look     {len(second_looked)} card(s) the free reader could not accept went "
-            f"to the paid read and wait in review: "
+            f"to the paid read: "
             + ", ".join(f"{count} {code}" for count, code in sorted(reasons.items())))
+        say(f"                  in the store now: {held_card_where(second_looked)}")
     if empty_slots:
         kept = len(empty_slots) - len(retired_empty)
         say(f"empty slot      {len(empty_slots)} photograph(s) show no card. They were not sent to the "
@@ -2118,10 +2236,10 @@ def run(args, say) -> int:
             say(f"                retired {item.key}: p99 {item.unread.p99:.1f}, best match "
                 f"{item.unread.best_match:.4f} (under {match.EMPTY_SLOT_WEAK_COSINE})")
     if failed:
-        say(f"failed          {len(failed)} card(s) go to the main queue as "
-            f"identification_failed — never dropped:")
+        say(f"failed          {len(failed)} card(s) came back with no usable answer:")
         for item in failed:
             say(f"                  {item.key} {item.status}: {item.error}")
+        say(f"                  in the store now: {held_card_where(failed)}")
     if claim is not None:
         # THE WORK, NOT THE OUTCOME. A guard whose figures are never printed is a guard nobody
         # can tell is armed — the addendum to the hash-first PR records deleting its gate and
@@ -2129,5 +2247,9 @@ def run(args, say) -> int:
         # it gave them back, and `make submission-selftest` asserts both figures.
         say(f"claim           {released_keys} card(s) released ({claim.receipt})")
     say("")
-    say(f"next: banchi join {run_dir.directory} --export <filtered-export.csv>")
+    if not_joined is None:
+        say(f"joined          this run is joined against the game's export. next: banchi emit {run_dir.directory}")
+    else:
+        say(f"not joined      {not_joined}")
+        say(f"                  the run waits at join. next: banchi join {run_dir.directory} --export <filtered-export.csv>")
     return 0

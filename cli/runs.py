@@ -14,6 +14,8 @@ you do not have when the poll is the thing that died.
 
 from __future__ import annotations
 
+import contextlib
+import copy
 import hashlib
 import os
 from dataclasses import dataclass, field
@@ -25,7 +27,11 @@ from pipeline import games
 from store import files
 
 MANIFEST = "manifest.json"
+# The per-run flock a manifest write holds. Apart from any press's own lock (`match.lock`): this one guards one read-modify-write.
+MANIFEST_LOCK = "manifest.lock"
 IDENTIFICATIONS = "identifications.json"
+# The marker a detached `identify` child leaves in its run directory; the child removes it when it ends.
+PID_FILE = "running.pid"
 DECISIONS = "decisions.json"
 # A LEGACY ANSWER FILE, RETIRED (D86, amended 2026-09-02). `banchi prices adopt --write`
 # folds a run's `decisions.json` into `inventory/prices.json` and then renames it to this, so
@@ -153,10 +159,42 @@ def describe_source(path) -> Dict[str, Any]:
     }
 
 
+def _merge(base: Any, new: Any, disk: Any) -> Any:
+    """Three-way merge of one manifest value: what this caller changed (`base` -> `new`) laid over
+    what another process wrote since (`disk`). A dict merges key by key and a list of scalars by
+    member, so a key a peer added survives, and a member leaves only when this caller removed it.
+    A scalar this caller changed wins. Anything else (a list of dicts) this caller wrote wins."""
+    if isinstance(new, dict) and isinstance(disk, dict):
+        base = base if isinstance(base, dict) else {}
+        out = dict(disk)
+        for key in new:
+            if key not in base or new[key] != base[key]:
+                out[key] = _merge(base.get(key), new[key], disk.get(key)) if key in disk else new[key]
+        for key in base:
+            if key not in new:
+                out.pop(key, None)
+        return out
+    if isinstance(new, list) and isinstance(disk, list):
+        try:
+            base = base if isinstance(base, list) else []
+            gone = {x for x in base if x not in new}
+            have = set(disk)
+            return [x for x in disk if x not in gone] + [x for x in new if x not in base and x not in have]
+        except TypeError:  # an unhashable member: this caller's list stands
+            return new
+    return new
+
+
 @dataclass
 class Run:
     directory: Path
     manifest: Dict[str, Any] = field(default_factory=dict)
+    # What the manifest held when this object last read or wrote the disk: `save` writes only the
+    # fields that differ from it, so a stale copy cannot overwrite a field a peer changed.
+    _base: Dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        self._base = copy.deepcopy(self.manifest)
 
     # ------------------------------------------------------------------------- paths
 
@@ -173,21 +211,76 @@ class Run:
 
     # ----------------------------------------------------------------------- manifest
 
-    def save(self) -> None:
-        self.manifest["updated_at"] = datetime.now(timezone.utc).isoformat(
-            timespec="seconds"
-        )
-        files.write_json(self.manifest_path, self.manifest)
+    @contextlib.contextmanager
+    def _locked(self):
+        """A manifest write's exclusion: the store's bounded flock (`files.exclusive`) on
+        `manifest.lock`, held only for one read-modify-write. A removed run directory is refused,
+        never recreated to hold a partial manifest."""
+        if not self.directory.is_dir():
+            raise RunError(f"{self.directory} is gone. Nothing was written to it.")
+        with files.exclusive(self.directory, name=MANIFEST_LOCK):
+            yield
+
+    def refresh(self) -> None:
+        """Read the manifest again from the disk, dropping this object's unsaved edits."""
+        disk = files.read_json(self.manifest_path, {}) or {}
+        self.manifest.clear()
+        self.manifest.update(disk)
+        self._base = copy.deepcopy(disk)
+
+    def save(self, *explicit: str) -> None:
+        """Write this object's changes over the manifest as it stands on disk, under the lock.
+
+        THE CAUSE OF A LOST FIELD WAS A WHOLE-DICT WRITE: a press holding an older copy saved it over
+        a field the sweep worker had just written (`joined`, a card key). Now the disk is read again,
+        only the fields that differ from `_base` (or are named in `explicit`) are laid over it
+        (`_merge`), and the result is written atomically. A key leaves only when this caller removed it."""
+        with self._locked():
+            self._write(explicit)
+
+    def _write(self, explicit) -> None:
+        """The read-modify-write itself. The caller holds `_locked`."""
+        disk = files.read_json(self.manifest_path, {}) or {}
+        out = dict(disk)
+        for key, value in self.manifest.items():
+            if key in explicit or key not in self._base or value != self._base[key]:
+                out[key] = _merge(self._base.get(key), value, disk[key]) if key in disk else value
+        for key in self._base:
+            if key not in self.manifest:
+                out.pop(key, None)
+        out["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        files.write_json(self.manifest_path, out)
+        self.manifest.clear()
+        self.manifest.update(out)
+        self._base = copy.deepcopy(out)
+
+    def set_if(self, refuse, **values):
+        """Compare-and-set under the manifest lock: `refuse(disk)` reads the manifest on disk and
+        answers why not, or nothing. A refusal writes nothing, re-reads the disk and is returned."""
+        with self._locked():
+            why = refuse(files.read_json(self.manifest_path, {}) or {})
+            if why:
+                self.refresh()
+                return why
+            self.manifest.update(values)
+            self._write(tuple(values))
+        return None
+
+    def set_unless_joined(self, **values) -> bool:
+        """Write `values` with `joined=False` only if the disk's run is not `joined`. False, and
+        nothing written, when a press joined it first."""
+        return not self.set_if(lambda disk: disk.get("joined"), **values, joined=False)
 
     def set(self, **values) -> None:
         """Update manifest fields and flush immediately.
 
         Flushed on every set rather than at the end, because the two things most worth
         having after a crash — the batch ids and the capture directory — are exactly the
-        things a deferred write loses.
+        things a deferred write loses. The fields named here are written even where they equal
+        this object's copy (a deliberate `joined=False`); the rest of the disk is kept.
         """
         self.manifest.update(values)
-        self.save()
+        self.save(*values)
 
     # ------------------------------------------------------------------ the emit record
 
@@ -211,9 +304,8 @@ class Run:
     def record_emit(self, *, listed, sub_threshold, pushed: int) -> None:
         """Merge one emit's output into the record. D54: a re-emit ADDS; it never subtracts.
 
-        `Run.set` stays replace-not-merge — `set(collected=…)`, `set(joined=…)` and
-        `set(batch_ids=…)` all depend on that, and a global merge would be a wide silent
-        change for one field's problem. So the merge is named, and here.
+        `Run.set` writes the fields it names over the disk's manifest (`_merge`), so this
+        record's own union is named, and here: a scalar a caller sets replaces, a list unions.
 
         THE UNION IS NOT TIDINESS; `reconcile` IS WHY. It passes these SKUs to
         `join.reconcile_import`, which reports BOTH directions — so after
@@ -369,6 +461,7 @@ def create(label: str, root: Optional[Path] = None) -> Run:
     directory.mkdir(parents=True)
     run = Run(directory=directory, manifest={"created_at": datetime.now(timezone.utc)
                                              .isoformat(timespec="seconds")})
+    run._base = {}
     run.save()
     return run
 

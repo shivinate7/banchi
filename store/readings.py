@@ -250,7 +250,10 @@ class Readings:
         newest-wins comparison and it is still correct: `found` was built with `at` = the
         moment THIS write just happened (a join's `pricing.json` mtime taken after writing
         it, or a live fetch's own embedded stamp), and by construction nothing already in the
-        table can be dated later than the write that is happening right now. A full
+        table can be dated later than the write that is happening right now. The one exception is
+        the background reader's join (`cli/cmd_match`), which dates its reading to the export's
+        mtime, at most `EXPORT_REUSE_S` old, so it may overwrite a reading written in that window.
+        A full
         `readings adopt --write` remains the periodic proof that this local reasoning has not
         drifted from `collect()`'s own arbitration.
         """
