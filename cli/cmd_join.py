@@ -26,7 +26,7 @@ import os
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from cli import resolve, runs
 from pipeline import corpus, decisions, join, pricing, routing, tcgcsv, worklist
@@ -383,10 +383,58 @@ def record_readings(writable, run_dir, table, at) -> None:
     writable.readings.replace_source(readings_store.KIND_RUN, run_dir.name, found, source)
 
 
-def record_join(run_dir, resolved, review_below) -> None:
+def _second_look_where(run_dir, resolved) -> Optional[dict]:
+    """Where this run's own second-look cards went at this join: held for review (`routing.READERS_DISAGREE`
+    or `routing.SECOND_LOOK_UNSURE`), in the main queue for any other reason, or parked. A card in none
+    of them is settled. None when the run had no second look. Read by the run panel's receipt, so the
+    panel and the counts beside it have one source. A queued card is matched by the second look it
+    carries, not by its slot, so a card `resolve.realign` moved is still counted where it went. A
+    pre-join failure carries no card, so it is matched by its record key, which realign does not move."""
+    keys = {str(row.get("key")) for row in run_dir.manifest.get("second_look") or [] if isinstance(row, dict)}
+    if not keys:
+        return None
+    held = main = parked = 0
+    for g in resolved.joins.values():
+        for q in g.report.queued:
+            if q.card.second_look is None:
+                continue
+            if q.queue == routing.PARKED:
+                parked += 1
+            elif q.destination.reason in (routing.READERS_DISAGREE, routing.SECOND_LOOK_UNSURE):
+                held += 1
+            elif q.queue == routing.MAIN:
+                main += 1
+    main += sum(1 for f in resolved.failures if f.key in keys)
+    return {"held": held, "main": main, "parked": parked}
+
+
+def read_cids(manifest) -> Optional[frozenset]:
+    """The card identities a join reads off a run (`resolve.store_backed_payload` follows them),
+    taken before the join reads its cards. None for a run that records none."""
+    if "cards" not in manifest:
+        return None
+    return frozenset(e.get("cid") for e in (manifest.get("cards") or {}).values())
+
+
+def record_join(run_dir, resolved, review_below, read: Optional[frozenset] = None) -> List[str]:
     """The manifest a join leaves: what it verified. `joined=True` is what the worklist and the
-    unsent ledger read a run by."""
-    run_dir.set(
+    unsent ledger read a run by. Returns the cards it was NOT written over (empty: joined).
+
+    A RUN IS JOINED ONLY OVER THE CARDS THIS JOIN READ. `read` is `read_cids` from before the join
+    read its cards. The background reader may name a card into this run while the join runs
+    (`cli/cmd_match._write_chunk`), so the check is a compare-and-set under the manifest lock
+    (`runs.Run.set_if`): with a card on disk this join never read, nothing is written, the run stays
+    at join, and the next join prices every card. Compared by cid, so a card that slid still counts
+    as read. `read=None` checks nothing (a run that records no cards, or the reader's own join)."""
+    def unread(disk) -> List[str]:
+        if read is None:
+            return []
+        return [str(e.get("name") or e.get("cid")) for e in (disk.get("cards") or {}).values()
+                if e.get("cid") not in read]
+
+    where = _second_look_where(run_dir, resolved)
+    return run_dir.set_if(
+        unread,
         exports={g.game: g.source for g in resolved.joins.values()},
         rule=str(resolved.rule),
         basis=resolved.basis,
@@ -404,8 +452,9 @@ def record_join(run_dir, resolved, review_below) -> None:
             ),
             "no_market_data": len(resolved.no_market_data_skus),
             "sub_threshold": len(resolved.sub_threshold_skus),
+            **({} if where is None else {f"second_look_{name}": n for name, n in where.items()}),
         },
-    )
+    ) or []
 
 
 def run(args, say) -> int:
@@ -540,6 +589,7 @@ def run(args, say) -> int:
     # (D36's `realign`); `load_from_store` reads the store directly, at this instant, for the
     # keys named — no frozen snapshot, so nothing to reconcile. Everything below this line
     # reads `resolved`, never which loader built it.
+    read = read_cids(run_dir.manifest)  # the cards this join reads, before it reads them (`record_join`)
     try:
         resolved = (
             resolve.load(
@@ -840,7 +890,13 @@ def run(args, say) -> int:
     # files' own Product Line cells above. An old run's scalar `export` key is read-side
     # backfilled by `runs.Run.exports_by_game` and never rewritten here — this writes
     # what THIS join verified, nothing else.
-    record_join(run_dir, resolved, args.review_below_confidence)
+    unread = record_join(run_dir, resolved, args.review_below_confidence, read)
+    held = (
+        [f"not joined: {len(unread)} card(s) were added to this run while it joined: "
+         f"{', '.join(unread[:8])}{' and more' if len(unread) > 8 else ''}. "
+         "Nothing was lost: match this run again and it prices every card."]
+        if unread else []
+    )
 
     full_report = "\n".join(
         [f"run: {run_dir.name}"]
@@ -860,10 +916,14 @@ def run(args, say) -> int:
         ]
         + [f"    {f.describe}" for f in resolved.failures]
         + ["", f"standing queues: {queue_line}"]
+        + held
     )
     path = run_dir.write_text(runs.REPORT, full_report + "\n")
     say("")
     say(f"report           {path}")
+    if held:
+        say(held[0])
+        return 0
     say(f"next: price on #/pricing (or edit {files.prices_path()}), then banchi emit "
         f"{run_dir.directory}")
     return 0

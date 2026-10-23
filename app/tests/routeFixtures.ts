@@ -14,6 +14,10 @@ import type {
   ResolvedOrder,
   ShippingBatch,
   ShippingRow,
+  SlabDetail,
+  SlabList,
+  SlabRow,
+  SlabSnapshot,
   WalkPlan,
 } from '../src/types'
 
@@ -142,14 +146,14 @@ export function matchState(overrides: Partial<MatchState> = {}): MatchState {
     runtime_missing: false,
     progress: null,
     model_url: 'https://github.com/shivinate7/banchi/releases/download/matcher-model-1/marqo-b-image.onnx',
-    margin_min: 0.05,
-    floor_min: 0.755,
+    margin_min: 0.04,
+    floor_min: 0.69,
     ...overrides,
   }
 }
 
 /** The preflight total's free-reader fields, all absent: what a paid quote carries. Spread it into
- *  a `total` so a fixture cannot forget one of the six (a free quote reads `unread` with
+ *  a `total` so a fixture cannot forget one of the seven (a free quote reads `unread` with
  *  `Object.entries`, and a missing one crashes the sheet rather than failing a case). */
 export const NO_FREE_FIELDS = {
   matcher_read: null,
@@ -158,6 +162,7 @@ export const NO_FREE_FIELDS = {
   second_look: null,
   second_look_measured: null,
   unread: {},
+  ceiling_usd: null,
 } as const
 
 /** Stub `GET /pipeline/match`, the free reader's state, which the Identify sheet reads when it opens.
@@ -951,6 +956,204 @@ export async function seedPopulatedPricing(page: Page): Promise<void> {
       }),
     }),
   )
+}
+
+/* ------------------------------------------------------------------------- #/slabs */
+
+/** The five certs of `severalSlabs()`. Each is distinctive on purpose: a cert is never on screen
+ *  (spec 4.1, 4.8), so a case greps the page for these. `pikachu`'s keeps its leading zeros. */
+export const SLAB_CERT = {
+  umbreon: '71234508',
+  terapagos: '84520917',
+  pikachu: '00481923',
+  charizard: '61930458',
+  mew: '70418266',
+} as const
+
+/** One day's read of a slab, in the wire's shape (`types.ts:SlabSnapshot`). The defaults are the
+ *  Terapagos slab's. In every row `severalSlabs()` builds, Card Ladder's two confidences are equal
+ *  and its two values are not (here the ladder's 405.00 and the estimate's 412.00), so a case can
+ *  tell which of the two a figure was read from. A slab that never sold has neither value. */
+export function slabSnapshot(over: Partial<SlabSnapshot> = {}): SlabSnapshot {
+  return {
+    day: '2026-10-14',
+    cl_value: '405.00',
+    cl_confidence: 4,
+    estimated_value: '412.00',
+    estimated_confidence: 4,
+    last_sale_price: '398.00',
+    last_sale_date: '2026-10-14',
+    population: 118,
+    gem_rate: 0.62,
+    speed: {
+      twoWeekData: { velocity: 1.5, averagePrice: '401.00' },
+      oneMonthData: { velocity: 4, averagePrice: '396.50' },
+      oneQuarterData: { velocity: 11, averagePrice: '380.25' },
+      sixMonthData: { velocity: 20, averagePrice: '371.00' },
+      oneYearData: { velocity: 41, averagePrice: '352.80' },
+    },
+    ...over,
+  }
+}
+
+/** What `POST /slabs` stores for a slab that never sold at its grade: no value, never a number
+ *  (`server/slabs_routes.py`, `has_sale`). */
+const NO_SALE_SNAPSHOT: Partial<SlabSnapshot> = {
+  cl_value: null,
+  cl_confidence: null,
+  estimated_value: null,
+  estimated_confidence: null,
+  last_sale_price: null,
+  last_sale_date: null,
+  speed: null,
+}
+
+/** One slab in `GET /slabs`. The defaults are a PSA 10 with a label and a sale. */
+export function slabRow(over: Partial<SlabRow> = {}): SlabRow {
+  return {
+    cert: SLAB_CERT.terapagos,
+    grader: 'psa',
+    label: 'Terapagos ex Special Illustration Rare',
+    grade: 'g10',
+    added: '2026-09-02',
+    snapshot: slabSnapshot(),
+    note: null,
+    ...over,
+  }
+}
+
+/** FIVE SLABS, IN THE ORDER THE ROUTE SENDS THEM, WHICH IS THE REVERSE OF THE ORDER THE LEDGER
+ *  SORTS THEM TO. The ledger's order is Card Ladder's value, highest first, and a slab with no
+ *  sale at its grade last: Umbreon 1200, Terapagos 412, Pikachu 130, Charizard 95.50, Mew (no
+ *  sales). `1200.00` against `95.50` is what a sort on the text would get wrong. Pikachu has no
+ *  label, which is what a cert not in Card Ladder's index looks like; Mew never sold at its grade.
+ *  The four confidences are four different words, and Charizard's is a warning (2 or less). */
+export function severalSlabs(): SlabRow[] {
+  return [
+    slabRow({
+      cert: SLAB_CERT.mew,
+      grader: 'sgc',
+      label: 'Mew ex 151 Special Illustration Rare',
+      grade: 'g9',
+      added: '2026-10-01',
+      snapshot: slabSnapshot({ ...NO_SALE_SNAPSHOT, population: 301, gem_rate: 0.4 }),
+      note: 'no sales',
+    }),
+    slabRow({
+      cert: SLAB_CERT.charizard,
+      grader: 'beckett',
+      label: 'Charizard ex Obsidian Flames Double Rare',
+      grade: 'g9_5',
+      added: '2026-09-20',
+      snapshot: slabSnapshot({
+        cl_value: '97.00',
+        cl_confidence: 2,
+        estimated_value: '95.50',
+        estimated_confidence: 2,
+        last_sale_price: '91.00',
+        last_sale_date: '2026-10-09',
+        population: 2210,
+        gem_rate: 0.18,
+      }),
+    }),
+    slabRow({
+      cert: SLAB_CERT.pikachu,
+      grader: 'cgc',
+      label: null,
+      grade: 'g10',
+      added: '2026-09-11',
+      snapshot: slabSnapshot({
+        cl_value: '128.00',
+        cl_confidence: 3,
+        estimated_value: '130.00',
+        estimated_confidence: 3,
+        last_sale_price: '126.00',
+        last_sale_date: '2026-10-12',
+        population: 640,
+        gem_rate: 0.51,
+      }),
+    }),
+    slabRow(),
+    slabRow({
+      cert: SLAB_CERT.umbreon,
+      label: 'Umbreon VMAX Alternate Art Secret',
+      grade: 'g10',
+      added: '2026-08-15',
+      snapshot: slabSnapshot({
+        cl_value: '1190.00',
+        cl_confidence: 5,
+        estimated_value: '1200.00',
+        estimated_confidence: 5,
+        last_sale_price: '1175.00',
+        last_sale_date: '2026-10-13',
+        population: 36,
+        gem_rate: 0.7,
+      }),
+    }),
+  ]
+}
+
+/** The platform each of `slabDetailOf`'s seven sales carries, newest first (spec 4.8). The third has none: the
+ *  field is left off, as the route leaves it off a sale Card Ladder gave no platform for. It is inside the newest
+ *  five, and not the second (the sale with no link), so no sale lacks both. */
+export const SLAB_SALE_PLATFORMS: ReadonlyArray<string | null> = ['eBay', 'Goldin', null, 'Heritage', 'Fanatics Collect', 'eBay', 'Whatnot']
+
+/** `GET /slabs/<grader>/<cert>`: the row's own snapshot on three days, seven sales newest first
+ *  (the second has no link; only the newest five are on screen) and a three-grade ladder. No
+ *  field holds the cert except `slab.cert`, which a screen never draws. A slab that never sold
+ *  has no sales and a note, as the route sends it. */
+export function slabDetailOf(row: SlabRow, over: Partial<SlabDetail> = {}): SlabDetail {
+  const sold = row.note === null
+  const snapshot = row.snapshot
+  const ladder = ['g8', 'g9', 'g10'].map((grade, at) => ({
+    grade,
+    label: `${row.grader.toUpperCase()} ${at + 8}`,
+    cl_value: sold ? (20 + at * 30).toFixed(2) : null,
+    cl_confidence: sold ? 3 : null,
+  }))
+  return {
+    slab: { cert: row.cert, grader: row.grader, label: row.label, grade: row.grade, added: row.added },
+    snapshots: snapshot === null ? [] : [{ ...snapshot, day: '2026-10-12' }, { ...snapshot, day: '2026-10-13' }, snapshot],
+    sales: sold
+      ? Array.from({ length: 7 }, (_, at) => {
+          const id = `sale-${at + 1}`
+          const platform = SLAB_SALE_PLATFORMS[at] ?? null
+          return {
+            id,
+            date: `2026-10-${String(14 - at).padStart(2, '0')}`,
+            price: (400 - at * 6).toFixed(2),
+            ...(platform === null ? {} : { platform }),
+            ...(at === 1 ? {} : { url: `https://sales.example.test/lot/${id}` }),
+          }
+        })
+      : [],
+    ladder,
+    note: sold ? null : 'no sales',
+    ...over,
+  }
+}
+
+/** The `{ error: { code, message } }` envelope every refusal of this app is sent in. */
+export const slabRefusal = (code: string, message: string) => ({ error: { code, message } })
+
+/** `GET /slabs` and `GET /slabs/<grader>/<cert>`, answered from `rows`. READS ONLY: any other method
+ *  falls through to the seal, so a screen that writes without a spec saying so is named. Called by
+ *  `shell.ts:stubStore`, so every spec that sweeps the owner's screens draws a populated ledger; a spec
+ *  about the screen registers its own handlers after this, and the newest wins. */
+export async function stubSlabs(page: Page, rows: SlabRow[] = severalSlabs()): Promise<void> {
+  await page.route(/\/slabs$/, (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const body: SlabList = { slabs: rows }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  })
+  await page.route(/\/slabs\/[^/]+\/[^/]+$/, (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const [grader, cert] = new URL(route.request().url()).pathname.split('/').slice(-2).map(decodeURIComponent)
+    const row = rows.find((r) => r.grader === grader && r.cert === cert)
+    return row === undefined
+      ? route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify(slabRefusal('slab_unknown', 'That slab is not in the list. Add it by its cert number first.')) })
+      : route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(slabDetailOf(row)) })
+  })
 }
 
 /* ------------------------------------------------------------------------- the roster */
