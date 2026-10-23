@@ -12,7 +12,7 @@ pays again on purpose, which is what you want after a prompt change and never ot
 
 RETRY, THEN CROP RETRY. A card that errored, expired, was cancelled, ran out of tokens or came
 back malformed is re-sent within `--retry-budget` (default 1). A card that ran out of tokens is
-re-sent with a larger cap (`prompt.RETRY_MAX_TOKENS`), never the same request. A card that came back `low` confidence or
+re-sent once with a larger cap (`prompt.RETRY_MAX_TOKENS`), never the same request; a second cap stop is final at any budget. A card that came back `low` confidence or
 malformed is re-sent WITH CROPS: the card found in the frame, deskewed, plus enlarged title
 and number bands. A `025` rendered 40px wide is a coin flip; the same digits at 600px are
 not. If the card cannot be found in the frame there is no crop retry at all — cropping blind
@@ -526,9 +526,7 @@ def _requests(items: List[Item], with_crops: bool, say) -> List[batch.ImageReque
                 strategy=item.strategy,
                 # Per card, from its own status: a retry round mixes cards, and only the one
                 # that ran out of tokens gets more room.
-                max_tokens=(
-                    prompt.RETRY_MAX_TOKENS if item.status == batch.MAX_TOKENS_STOP else None
-                ),
+                max_tokens=prompt.RETRY_MAX_TOKENS if _cap_raised(item) else None,
             )
         )
     return out
@@ -729,8 +727,23 @@ def _apply(items_by_key: Dict[str, Item], run_result: batch.BatchRun) -> None:
             item.error = outcome.error
 
 
+def _cap_raised(item: Item) -> bool:
+    """True once a cap stop has put this card on the larger cap (`RETRY_MAX_TOKENS`).
+
+    `run` appends the reason before it builds the request, so at build time this is true for
+    every send after the first cap stop and false for the first send. It stays true if a
+    later round re-sends the card for another reason.
+    """
+    return batch.MAX_TOKENS_STOP in item.retry_reasons
+
+
 def _needs_retry(item: Item):
-    """(retry?, crop?, reason). Crop retry is for a bad READ; plain retry is for no read."""
+    """(retry?, crop?, reason). Crop retry is for a bad READ; plain retry is for no read.
+
+    A cap stop on the larger cap is final at any budget: the same request would run out the same way.
+    """
+    if item.status == batch.MAX_TOKENS_STOP and _cap_raised(item):
+        return False, False, ""
     if item.status in PLAIN_RETRY_STATUSES:
         return True, False, item.status
     if item.status in CROP_RETRY_STATUSES:

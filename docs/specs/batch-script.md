@@ -163,8 +163,11 @@ with no identification has no price. An unpriced card is not a cheap card.
 (`identify/prompt.py`'s `THINKING`), so the cap holds the answer alone: 26 to 42 tokens measured, against a
 cap of 512. Haiku 5.5 thinks by default, and thinking counts toward the cap. The retry of a `max_tokens`
 card carries four times the cap (`RETRY_MAX_TOKENS`). It is never the same request again, because the same
-request runs out the same way. Cost: about $0.00003 less per card at batch rates, from output tokens no longer spent on
-thinking. Accuracy with thinking off is unmeasured on Haiku 5.5.
+request runs out the same way. A second `max_tokens` stop, on the larger cap, is final at any
+`--retry-budget`: the card goes to the review queue as `identification_failed`. Cost: about $0.00003 less per card at batch rates, from output tokens no longer spent on
+thinking. Accuracy with thinking off: a paid check of 24 cards had 24 `end_turn` stops, one card
+newly correct, and every other known answer unchanged. So answers cached from thinking-on runs stay
+valid under the unchanged prompt fingerprint; no re-read is needed.
 
 ### 4.5 Crop retry
 

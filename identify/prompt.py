@@ -72,8 +72,10 @@ RETRY_MAX_TOKENS = 4 * MAX_TOKENS
 
 # Thinking is off for the identification call. Haiku 5.5 runs adaptive thinking when the
 # request says nothing, and the cap above was sized for an answer with no thinking in it.
-# `budget_tokens` is a 400 on Haiku 5.5, so off is the one bounded setting. `disabled` is
-# legal at the default effort; it is a 400 at `xhigh` and `max`, so never send those here.
+# Measured, not forced: with thinking off, 24 of 24 cards ended `end_turn`, the card that
+# spent its whole cap on thinking now answers correctly, and every other known answer is
+# unchanged. `budget_tokens` is a 400 on Haiku 5.5. `disabled` is legal at the default
+# effort; it is a 400 at `xhigh` and `max`, so never send those here.
 # NOT in `prompt_fingerprint`, on purpose: T1 pins that hash. T1's banked score is Haiku 4.5,
 # which never thought, so off is the setting closest to what was measured.
 THINKING: Dict[str, str] = {"type": "disabled"}
