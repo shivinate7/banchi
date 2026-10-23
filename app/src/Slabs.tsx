@@ -135,17 +135,43 @@ function refusalToastOf(failure: Failure, fallback: string) {
   return { kind: 'refusal' as const, tone: failureTone(failure), title: one.title, ...(one.body === '' ? {} : { body: one.body }) }
 }
 
+/** Escape closes an open reason and nothing under it (4.8). The kit's layers hear keys on `window` in the capture phase,
+ *  in the order they opened, so a listener added when a reason opens would run after a sheet's and lose. This one is
+ *  added once at load, ahead of every layer, and swallows Escape only while a reason is open. */
+const openReasons = new Set<() => void>()
+window.addEventListener(
+  'keydown',
+  (e) => {
+    if (e.key !== 'Escape' || openReasons.size === 0) return
+    e.preventDefault()
+    e.stopImmediatePropagation()
+    for (const close of openReasons) close()
+  },
+  true,
+)
+
 /** A short sentence that carries its reason (4.8). The reason shows on hover, on keyboard focus and on a tap; it is in the
  *  DOM always (at zero opacity) so `aria-describedby` reads it. Portalled to `<body>` because a toast and a sheet clip
- *  what is drawn inside them. The kit's tooltip belongs to `IconButton` alone, so this is the screen's own. */
+ *  what is drawn inside them. It is not the kit's `IconButton` tip: that one is `aria-hidden` and `nowrap`, and this one
+ *  must be read by a screen reader (`role="tooltip"`, `aria-describedby`) and must wrap. That is the reason for a second home. */
 function Reason({ said: sentence, why }: { readonly said: string; readonly why: string }) {
   const id = useId()
   const [hover, setHover] = useState(false)
   const [focus, setFocus] = useState(false)
   const [tapped, setTapped] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
   const trigger = useRef<HTMLButtonElement>(null)
   const tip = useRef<HTMLSpanElement>(null)
   const touch = useRef(false)
+  const open = (hover || focus || tapped) && !dismissed
+  useEffect(() => {
+    if (!open) return
+    const close = () => setDismissed(true)
+    openReasons.add(close)
+    return () => {
+      openReasons.delete(close)
+    }
+  }, [open])
   /* A tap opens the reason and a tap anywhere else closes it. Not every browser focuses a button on a tap, so blur alone is not enough. */
   useEffect(() => {
     if (!tapped) return
@@ -173,29 +199,36 @@ function Reason({ said: sentence, why }: { readonly said: string; readonly why: 
         aria-describedby={id}
         onMouseEnter={() => {
           if (window.matchMedia('(hover: hover)').matches) setHover(true)
+          setDismissed(false)
           place()
         }}
-        onMouseLeave={() => setHover(false)}
+        onMouseLeave={() => {
+          setHover(false)
+          setDismissed(false)
+        }}
         onFocus={(e) => {
           setFocus(e.currentTarget.matches(':focus-visible'))
+          setDismissed(false)
           place()
         }}
         onBlur={() => {
           setFocus(false)
           setTapped(false)
+          setDismissed(false)
         }}
         onPointerDown={(e) => {
           touch.current = e.pointerType === 'touch'
         }}
         onClick={() => {
           if (touch.current) setTapped((on) => !on)
+          setDismissed(false)
           place()
         }}
       >
         {sentence}
       </button>
       {createPortal(
-        <span ref={tip} id={id} role="tooltip" className="slabs-tip" data-tip-visible={hover || focus || tapped ? 'true' : undefined}>
+        <span ref={tip} id={id} role="tooltip" className="slabs-tip" data-tip-visible={open ? 'true' : undefined}>
           {why}
         </span>,
         document.body,
@@ -204,18 +237,28 @@ function Reason({ said: sentence, why }: { readonly said: string; readonly why: 
   )
 }
 
-/** Undo's refusal: the screen's one sentence is the title, with the reason behind it. The body is the screen's wording for
- *  the code, else the server's own sentence, so a rate limit keeps "tomorrow" on screen. */
+/** Undo's refusal: the screen's one sentence is the title. A code with a known cause gets its reason behind the title; any
+ *  other code keeps the title plain, because a reason that is not true for the code is worse than none. The body is the
+ *  screen's wording for the code, else the server's own sentence, so a rate limit keeps "tomorrow" on screen. */
 const UNDO_SAID = 'The slab was not put back.'
+const UNDO_WHY: Readonly<Record<string, string>> = {
+  cardladder_rate_limited: "Card Ladder's limit for today is used up. Try again tomorrow.",
+  cardladder_token_missing: LOGIN_SENTENCE,
+  cardladder_token_rejected: LOGIN_SENTENCE,
+  cardladder_failed: 'Card Ladder did not answer. Try again in a few minutes.',
+  cardladder_unreadable: "Card Ladder's answer could not be read. Try again later.",
+  cert_not_found: 'Card Ladder no longer finds this slab.',
+  slab_add_busy: 'Another slab is still being added. Try again when it finishes.',
+}
 function undoRefusalToast(failure: Failure) {
   const body = SAID[failure.code] ?? failure.message
-  const why =
-    failure.code === 'cardladder_rate_limited'
-      ? 'Card Ladder hit its limit for today, so it could not add the slab back. Try again tomorrow.'
-      : failure.code === 'cardladder_token_missing' || failure.code === 'cardladder_token_rejected'
-        ? 'Card Ladder would not accept the saved sign-in, so it could not add the slab back.'
-        : 'Card Ladder did not answer, so it could not add the slab back. Try again later.'
-  return { kind: 'refusal' as const, tone: failureTone(failure), title: <Reason said={UNDO_SAID} why={why} />, ...(body === '' ? {} : { body }) }
+  const why = UNDO_WHY[failure.code]
+  return {
+    kind: 'refusal' as const,
+    tone: failureTone(failure),
+    title: why === undefined ? UNDO_SAID : <Reason said={UNDO_SAID} why={why} />,
+    ...(body === '' ? {} : { body }),
+  }
 }
 
 function Refused({ failure, fallback, onRetry, busy, compact }: { readonly failure: Failure; readonly fallback: string; readonly onRetry?: () => void; readonly busy?: boolean; readonly compact?: boolean }) {
