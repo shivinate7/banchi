@@ -7,6 +7,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test'
 import { CAPTURE_PORT } from '../devPort'
 import { sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
+import { afterPaint, settleMotion } from './motionSettled'
 import { scanMachineWords } from './machineWords'
 import { scanMoneyFace } from './moneyFace'
 import { setViewport } from './phoneSwitch'
@@ -1379,6 +1380,13 @@ async function reasonsNear(page: Page, known: string[], said: string, box: Box, 
   return reasons
 }
 
+/** The page has stopped moving: what the last move changed is painted, and every finite animation has finished. A sheet's
+ *  sections fade in one after another, and a section still arriving is a new sentence to the reason finder. */
+const settled = async (page: Page): Promise<void> => {
+  await afterPaint(page)
+  await settleMotion(page)
+}
+
 type Mode = 'hover' | 'focus' | 'tap'
 /** Settle the page, open the reason under `sentence` the way `mode` says, and return the runs of the reason. */
 async function openReason(page: Page, sentence: Locator, said: string, mode: Mode, who: string): Promise<Run[]> {
@@ -1386,7 +1394,7 @@ async function openReason(page: Page, sentence: Locator, said: string, mode: Mod
   /* The pointer starts away from the sentence: an Undo press leaves it where the refusal lands. */
   await page.mouse.move(10, 10)
   await expect.poll(async () => (await readRuns(page, [], false)).some((r) => r.text === said), { message: `"${said}" is never fully painted` }).toBe(true)
-  await frames(page, 4)
+  await settled(page)
   const known = (await readRuns(page, [], false)).map((r) => r.text)
   const box = await boxOf(sentence)
 
@@ -1394,7 +1402,11 @@ async function openReason(page: Page, sentence: Locator, said: string, mode: Mod
   else if (mode === 'tap') await sentence.tap()
   else await tabTo(page, sentence, said)
 
-  return reasonsNear(page, known, said, box, `${mode === 'hover' ? 'Hovering' : mode === 'tap' ? 'Tapping' : 'Tabbing to'} "${said}" shows no reason`)
+  const reasons = await reasonsNear(page, known, said, box, `${mode === 'hover' ? 'Hovering' : mode === 'tap' ? 'Tapping' : 'Tabbing to'} "${said}" shows no reason`)
+  /* WHAT IS PAINTED IS THE TIP. The finder takes any new sentence near the sentence, so a heading that arrives late would
+     pass for a reason. The sentence names its tip with `aria-describedby`, and the painted text must be that tip's text. */
+  await expect(sentence, `${who}: the painted reason is not the tip the sentence is described by`).toHaveAccessibleDescription(reasons.map((r) => r.text).join(' '))
+  return reasons
 }
 
 async function expectReason(page: Page, subject: Subject, mode: Mode): Promise<void> {
@@ -1435,7 +1447,7 @@ test('the reason finder reports a tip a reader sees, and not one at zero opacity
     })
   })
   await page.mouse.move(10, 10)
-  await frames(page, 4)
+  await settled(page)
   const known = (await readRuns(page, [], false)).map((r) => r.text)
   const box = await boxOf(sentence)
   await sentence.hover()
@@ -1544,7 +1556,7 @@ for (const { name, how, body } of NO_REASON) {
     await expect(refusal.locator('.bn-toast-body'), 'the sentence of the refusal is not in the toast body').toHaveText(body)
     await page.mouse.move(10, 10)
     await expect.poll(async () => (await readRuns(page, [], false)).some((r) => r.text === UNDO_SAID), { message: `"${UNDO_SAID}" is never fully painted` }).toBe(true)
-    await frames(page, 4)
+    await settled(page)
     const known = (await readRuns(page, [], false)).map((r) => r.text)
     const box = await boxOf(sentence)
     await sentence.hover()
@@ -1569,7 +1581,6 @@ test('Escape closes an open reason and leaves the sheet that holds it open', asy
   if (worth === undefined) throw new Error('no Worth subject')
   const sentence = await worth.arrive(page)
   const sheet = page.getByRole('dialog', { name: LABEL.mew, exact: true })
-  await frames(page, 90) // the sheet's sections fade in one after another; a section that is still arriving is not a reason
   const shown = (await openReason(page, sentence, NO_ESTIMATE, 'focus', worth.name)).map((r) => r.text)
   await expect(sheet, 'the sheet closed before Escape was pressed').toBeVisible()
   await page.keyboard.press('Escape')
