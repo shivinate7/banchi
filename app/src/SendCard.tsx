@@ -26,7 +26,7 @@
 import { count } from './kit/dataRules'
 import { Fragment, useEffect, useId, useState } from 'react'
 import { Button, Icon, IconButton, Money, Notice, Refusal, Retry } from './kit'
-import { atClockTime, clockTime } from './dates'
+import { atClockTime, clockTime, dayMonth } from './dates'
 import { describeFailure, dismissSendWarning, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, takeBackSend } from './server'
 import type { Failure } from './server'
 import type { EmptySend, LiveMove, PriceChange, RefusedPrice, SendSummary, SendTrim } from './types'
@@ -279,10 +279,7 @@ const LEFT_WHY: Record<string, string> = {
 function PricesRefreshed({ send }: { readonly send: SendSummary }) {
   const refresh = send.refresh
   if (!refresh?.ran) return null
-  const day = refresh.was
-    ? new Date(`${refresh.was}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
-    : 'an unknown day'
-
+  const day = refresh.was ? dayMonth(`${refresh.was}T12:00:00`) : 'an unknown day'
   return (
     <Notice tone="info" compact className="send-prices-refreshed" title="Prices were refreshed before sending.">
       They came from {day}, so Banchi read them again first. They may differ from what you saw.
