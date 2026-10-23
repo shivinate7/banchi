@@ -1486,9 +1486,9 @@ for (const [name, reply] of [['a rate limit', RATE_LIMITED], ['a failed read', B
   })
 }
 
-/* 4.8, THE REASON OF A REFUSED UNDO IS TRUE FOR ITS CODE. Review round 1 found one reason, "Card Ladder did not answer", under
-   every code the screen does not word, and that is false for most of them. Each case refuses Undo with one real code, opens the
-   reason by keyboard focus and asserts the FACT the reason gives, never its wording. A fact is read off the reason's own text
+/* 4.8, THE REASON OF A REFUSED UNDO IS TRUE FOR ITS CODE. One reason shared by every code the screen does not word is false for
+   most of them. Each case refuses Undo with one real code, opens the reason by keyboard focus and asserts the FACT the reason
+   gives, never its wording. A fact is read off the reason's own text
    and never off the page: the toast's body holds the server's sentence, which says "sign in", "did not answer" and "cert number"
    for itself, so a page-wide match would pass on the defect. */
 const codeOf = (reply: Reply): string => (reply.body as { error: { code: string } }).error.code
@@ -1511,7 +1511,13 @@ const UNDO_REASONS: ReadonlyArray<{ readonly reply: Reply; readonly facts: reado
       ['it speaks of a "saved" sign-in', /saved/i, false],
     ],
   },
-  { reply: BAD_GATEWAY, facts: [['it says Card Ladder did not answer', /did not answer/i, true]] },
+  {
+    reply: BAD_GATEWAY,
+    facts: [
+      ['it says Card Ladder could not be read just now', /could not be read/i, true],
+      ['it says Card Ladder did not answer, when the server sends this code for an answer that was an error or not understood', /did not answer/i, false],
+    ],
+  },
   { reply: UNREADABLE, facts: [['it says Card Ladder did not answer, when it answered and the answer could not be read', /did not answer/i, false]] },
   {
     reply: CERT_NOT_FOUND,
@@ -1575,8 +1581,9 @@ for (const { name, how, body } of NO_REASON) {
 /* ESCAPE CLOSES A REASON AND NOTHING UNDER IT. A reason opened by focus is a popover over the sheet; the sheet's own Escape
    is the shell's and must not hear this one. The reason is the Worth line's, in a sheet, because that is where a reason sits
    over another layer. The sheet leaves in 140ms (`useLeave`), so it is asserted after a hold well past that: a sheet still
-   leaving counts as visible. */
-test('Escape closes an open reason and leaves the sheet that holds it open', async ({ page }) => {
+   leaving counts as visible. A second Escape, with the reason gone, closes the sheet: a reason that stays stuck would swallow
+   every Escape. */
+test('Escape closes an open reason and leaves the sheet open, and a second Escape closes the sheet', async ({ page }) => {
   const worth = SUBJECTS.find((one) => one.said === NO_ESTIMATE)
   if (worth === undefined) throw new Error('no Worth subject')
   const sentence = await worth.arrive(page)
@@ -1589,6 +1596,8 @@ test('Escape closes an open reason and leaves the sheet that holds it open', asy
   await frames(page, 40) // well past the sheet's 140ms leave
   expect(await stillOpen(), 'the reason came back while focus stayed on its sentence').toBe(0)
   await expect(sheet, 'Escape closed the sheet along with the reason').toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(sheet, 'a second Escape did not close the sheet').toBeHidden()
 })
 
 /* ---- Sales Speed (4.8). The section is read as text runs in rows, so the cells' markup is the builder's. */
