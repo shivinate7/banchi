@@ -6573,15 +6573,14 @@ def _as_child(run_dir: Path) -> None:
 
 
 @contextmanager
-def _stand_in_portal(*, cookie: bool = True, first_export_status: int = 0):
+def _stand_in_portal(*, cookie: bool = True):
     """TCGplayer's Filtered Export, stood in for on 127.0.0.1 for the length of the `with`.
 
     It answers the two calls `server/tcg_export.py` makes: the filter vocabulary, with one set
     (SV09) so the run's hint resolves, and the export, which is the committed SV09 fixture. The URL
     override points here and the cookie is fake, so nothing leaves the machine. CI and BANCHI_HARNESS
     are cleared for the `with`, because `_join_now` skips the join under either, and the join is what
-    these cases watch. Yields the request counts, `{"filters": n, "export": n}`. A non-zero
-    `first_export_status` answers the first export request with that status and no body.
+    these cases watch. Yields the request counts, `{"filters": n, "export": n}`.
     """
     filters = {
         "Sets": [{"Text": "All Set Names", "Value": "0"}, {"Text": "SV09: Journey Together", "Value": "4242"}],
@@ -6596,8 +6595,8 @@ def _stand_in_portal(*, cookie: bool = True, first_export_status: int = 0):
         def log_message(self, fmt, *args):  # noqa: A003
             pass
 
-        def _send(self, content_type: str, payload: bytes, status: int = 200) -> None:
-            self.send_response(status)
+        def _send(self, content_type: str, payload: bytes) -> None:
+            self.send_response(200)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
@@ -6605,10 +6604,7 @@ def _stand_in_portal(*, cookie: bool = True, first_export_status: int = 0):
 
         def _export(self) -> None:
             hits["export"] += 1
-            if first_export_status and hits["export"] == 1:
-                self._send("text/plain", b"", status=first_export_status)
-            else:
-                self._send("text/csv", body)
+            self._send("text/csv", body)
 
         def do_GET(self):  # noqa: N802
             if "getjsonfilters" in self.path:
@@ -7031,140 +7027,52 @@ def check_join_refusals_say_their_reason(checks: Checks) -> None:
         )
 
 
-def check_prefetch_downloads_once_and_join_reuses_it(checks: Checks) -> None:
-    """With the test-run gate clear and a stand-in portal, the export is fetched first in `export-prefetch`, and the join reuses it.
+def check_identify_export_starts_at_the_join(checks: Checks) -> None:
+    """An identify run starts no export download before its join: the one download is made by the join, on the thread that runs the join, and on no thread the run starts.
 
     Exactly one export request reaches the portal.
     """
     checks.note("")
-    checks.note("EXPORT PREFETCH — one download, first in the export-prefetch thread, reused by the join")
+    checks.note("EXPORT FROM THE JOIN — no download before the join, none on a thread the run starts, one at most")
+    real_match = pipeline_routes.do_run_match
     real_export = pipeline_routes.do_pipeline_export
-    calls: list = []
-
-    def recording(name, payload):
-        calls.append(threading.current_thread().name)
-        return real_export(name, payload)
-
-    with isolated_home() as home, _stand_in_portal() as hits:
-        caps = Path(home) / "prefetch-caps"
-        _paid_caps(caps, [(5, 1), (5, 2)])
-        run = runs.create("t7-prefetch")
-        _as_child(run.directory)
-        answers = {"5/1": DUNSPARCE_PAYLOAD, "5/2": {**DUNSPARCE_PAYLOAD, "finish": "reverse_holo"}}
-        with mock.patch.object(pipeline_routes, "do_pipeline_export", recording):
-            code, lines, _ = _run_press_with_log(run, caps, answers)
-        manifest = json.loads((run.directory / runs.MANIFEST).read_text("utf-8"))
-        checks.ok(calls[:1] == ["export-prefetch"], "the export is fetched first, in the export-prefetch thread", repr(calls))
-        checks.ok(calls[1:] == [threading.current_thread().name], "and the join asks for it from the press's own thread", repr(calls))
-        checks.ok(hits["export"] == 1, "exactly one export request reaches the portal", repr(hits))
-        checks.ok(manifest.get("joined") is True, "and the run is joined", "\n".join(lines))
-
-
-def check_prefetch_refusal_does_not_stop_the_join(checks: Checks) -> None:
-    """A refused prefetch does not stop the join. Its log line holds the refusal's code and nothing else: no message, no cookie."""
-    import re
-
-    checks.note("")
-    checks.note("PREFETCH REFUSAL — the join still runs; the log line holds the code only")
-    with isolated_home() as home, _stand_in_portal(first_export_status=503) as hits:
-        caps = Path(home) / "refused-prefetch-caps"
-        _paid_caps(caps, [(5, 1)])
-        run = runs.create("t7-prefetch-refused")
-        _as_child(run.directory)
-        code, lines, err = _run_press_with_log(run, caps, {"5/1": DUNSPARCE_PAYLOAD})
-        manifest = json.loads((run.directory / runs.MANIFEST).read_text("utf-8"))
-        prefetch_lines = [line for line in err.splitlines() if "identify export prefetch" in line]
-        match = re.fullmatch(r"identify export prefetch: refused \((\w+)\)", prefetch_lines[0]) if len(prefetch_lines) == 1 else None
-        checks.ok(match is not None, "the refused prefetch is logged, as its code alone", repr(prefetch_lines))
-        checks.ok(manifest.get("joined") is True, "and the join still runs and joins the run", "\n".join(lines))
-        checks.ok(hits["export"] == 2, "the join fetched again, since the refused prefetch kept nothing", repr(hits))
-        checks.ok("t7-not-a-real-session" not in err and "TCGAuthTicket" not in err,
-                  "and no cookie reaches the log", repr(err))
-
-
-def check_prefetch_start_failure_still_joins(checks: Checks) -> None:
-    """A prefetch that cannot start is logged by its type, and the identify run and the join still run.
-
-    The thread start is the step refused: the join imports the same module, so an import failure
-    would stop the join too and is not a case of its own.
-    """
     real_start = threading.Thread.start
+    events: list = []
+    started: list = []
 
-    def refused_start(self):
-        if self.name == "export-prefetch":
-            raise RuntimeError("t8 no thread")
+    def recording_start(self):
+        started.append(self.name)
         return real_start(self)
 
-    checks.note("")
-    checks.note("PREFETCH CANNOT START — logged by its type; the run and the join still run")
-    with isolated_home() as home, _stand_in_portal() as hits:
-        caps = Path(home) / "start-refused-caps"
-        _paid_caps(caps, [(5, 1)])
-        run = runs.create("t8-start-refused")
-        _as_child(run.directory)
-        with mock.patch.object(threading.Thread, "start", refused_start):
-            code, lines, err = _run_press_with_log(run, caps, {"5/1": DUNSPARCE_PAYLOAD})
-        manifest = json.loads((run.directory / runs.MANIFEST).read_text("utf-8"))
-        text = "\n".join(lines)
-        checks.ok(
-            "identify export prefetch: not started (RuntimeError)" in err.splitlines(),
-            "the refused start is logged by its type, and no more",
-            err,
-        )
-        checks.ok(any(line.startswith("joined ") for line in lines), "the identify run still ends, and joins", text)
-        checks.ok(manifest.get("joined") is True, "and the run's manifest is joined", text)
-        checks.ok(hits["export"] == 1, "the join fetched the export itself", repr(hits))
+    def recording_match(name, payload):
+        events.append(("join", threading.current_thread().name))
+        return real_match(name, payload)
 
-
-def check_stalled_prefetch_holds_run_only_bounded(checks: Checks) -> None:
-    """A stalled export fetch holds the run for no longer than PREFETCH_WAIT_S, and its thread is a daemon.
-
-    The waits on the prefetch thread are summed. The run is allowed PREFETCH_WAIT_S plus a quarter second.
-    """
-    from cli import cmd_identify
-
-    release = threading.Event()
-    real_export = pipeline_routes.do_pipeline_export
-    real_join = threading.Thread.join
-    daemon_flags: list = []
-    waits: list = []
-
-    def stalled(name, payload):
-        if threading.current_thread().name == "export-prefetch":
-            daemon_flags.append(threading.current_thread().daemon)
-            release.wait(timeout=60)
-            return None
+    def recording_export(name, payload):
+        events.append(("export", threading.current_thread().name))
         return real_export(name, payload)
 
-    def timed_join(self, timeout=None):
-        began = time.monotonic()
-        real_join(self, timeout)
-        if self.name == "export-prefetch":
-            waits.append(time.monotonic() - began)
-
-    checks.note("")
-    checks.note("STALLED PREFETCH — the run waits at most PREFETCH_WAIT_S for it, and it is a daemon thread")
-    try:
-        with isolated_home() as home, _stand_in_portal():
-            caps = Path(home) / "stalled-caps"
-            _paid_caps(caps, [(5, 1)])
-            run = runs.create("t8-stalled")
-            _as_child(run.directory)
-            with mock.patch.object(cmd_identify, "PREFETCH_WAIT_S", 0.5, create=True), \
-                    mock.patch.object(pipeline_routes, "do_pipeline_export", stalled), \
-                    mock.patch.object(threading.Thread, "join", timed_join):
-                code, lines, err = _run_press_with_log(run, caps, {"5/1": DUNSPARCE_PAYLOAD})
-            manifest = json.loads((run.directory / runs.MANIFEST).read_text("utf-8"))
-            text = "\n".join(lines)
-            checks.ok(bool(daemon_flags) and all(daemon_flags), "the prefetch thread is a daemon", repr(daemon_flags))
-            checks.ok(manifest.get("joined") is True, "the run still joins while the fetch is stalled", text)
-            checks.ok(
-                sum(waits) <= 0.5 + 0.25,
-                "the run holds for the stalled fetch no longer than PREFETCH_WAIT_S",
-                f"waits on the prefetch thread: {[round(w, 3) for w in waits]}",
-            )
-    finally:
-        release.set()
+    with isolated_home() as home, _stand_in_portal() as hits:
+        caps = Path(home) / "export-from-join-caps"
+        _paid_caps(caps, [(5, 1)])
+        run = runs.create("t7-export-from-join")
+        _as_child(run.directory)
+        with mock.patch.object(threading.Thread, "start", recording_start), \
+                mock.patch.object(pipeline_routes, "do_run_match", recording_match), \
+                mock.patch.object(pipeline_routes, "do_pipeline_export", recording_export):
+            _, lines, _ = _run_press_with_log(run, caps, {"5/1": DUNSPARCE_PAYLOAD})
+        manifest = json.loads((run.directory / runs.MANIFEST).read_text("utf-8"))
+    kinds = [kind for kind, _ in events]
+    join_thread = events[0][1] if events else None
+    export_thread = events[1][1] if len(events) > 1 else None
+    checks.ok(kinds == ["join", "export"], "the join starts first, and the export is fetched from inside it", repr(events))
+    checks.ok(
+        export_thread is not None and export_thread == join_thread and export_thread not in started,
+        "the export is fetched on the join's own thread, and no thread the run starts fetches it",
+        f"events {events!r}, threads started {started!r}",
+    )
+    checks.ok(hits["export"] == 1, "exactly one export request reaches the portal", repr(hits))
+    checks.ok(manifest.get("joined") is True, "and the run is joined", "\n".join(lines))
 
 
 def check_lock_failure_is_not_running(checks: Checks) -> None:
@@ -7224,9 +7132,6 @@ CHECKS = (
     check_run_dir_outside_store_is_not_joined,
     check_join_lock_held_answers_running,
     check_join_refusals_say_their_reason,
-    check_prefetch_downloads_once_and_join_reuses_it,
-    check_prefetch_refusal_does_not_stop_the_join,
-    check_prefetch_start_failure_still_joins,
-    check_stalled_prefetch_holds_run_only_bounded,
+    check_identify_export_starts_at_the_join,
     check_lock_failure_is_not_running,
 )
