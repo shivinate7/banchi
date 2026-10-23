@@ -59,9 +59,26 @@ from pipeline.namefold import fold_name_typography
 # CLAUDE.md pins the model. Batch API only — see identify/batch.py.
 MODEL = "claude-haiku-5-5"
 
-# One small JSON object. Structured outputs make the shape a guarantee, so this only has
-# to cover the object itself.
+# One small JSON object, and nothing else: thinking is off (`THINKING`), so every output
+# token is the answer. The answer is 26 to 42 tokens over 79 Haiku 4.5 results and 28 over 13
+# Haiku 5.5 results with no thinking block, so 512 is more than ten times what it needs.
+# Haiku 5.5 thinks by default, and thinking counts toward this cap: 17 of 32 results spent 117
+# to 494 tokens on it, and one card spent all 512 and returned no text, twice.
 MAX_TOKENS = 512
+
+# A card that stopped on `MAX_TOKENS` is re-sent with this cap, never the same request. Only
+# the retry carries it, so `prompt_fingerprint` does not move.
+RETRY_MAX_TOKENS = 4 * MAX_TOKENS
+
+# Thinking is off for the identification call. Haiku 5.5 runs adaptive thinking when the
+# request says nothing, and the cap above was sized for an answer with no thinking in it.
+# Measured, not forced: with thinking off, 24 of 24 cards ended `end_turn`, the card that
+# spent its whole cap on thinking now answers correctly, and every other known answer is
+# unchanged. `budget_tokens` is a 400 on Haiku 5.5. `disabled` is legal at the default
+# effort; it is a 400 at `xhigh` and `max`, so never send those here.
+# NOT in `prompt_fingerprint`, on purpose: T1 pins that hash. T1's banked score is Haiku 4.5,
+# which never thought, so off is the setting closest to what was measured.
+THINKING: Dict[str, str] = {"type": "disabled"}
 
 UNKNOWN_FINISH = "unknown"
 

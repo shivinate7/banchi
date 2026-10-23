@@ -873,6 +873,33 @@ test('a read older than a day offers Read again in place of Send, and no count a
   await expect(page.getByRole('button', { name: /^Send/ })).toHaveCount(0)
 })
 
+/* THE STALE BAR'S PRESS STAYS INSIDE THE BAR. Its card takes what the says line leaves
+ * (`.pricing-bar .send-card`), so the press can run past the bar's own edge. 1440 is the control. */
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [820, 1440]) {
+    test(`a read older than a day keeps Read again inside its bar at ${width} in ${theme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: theme })
+      await setViewport(page, { width, height: 900 })
+      await open(page, { at: new Date(Date.now() - 3 * 86_400_000).toISOString() })
+      await settleMotion(page)
+      const bar = page.getByRole('region', { name: 'Send these prices' })
+      const press = bar.getByRole('button', { name: 'Read Again' })
+      await expect(press).toBeVisible()
+      const barBox = await bar.boundingBox()
+      const pressBox = await press.boundingBox()
+      expect(barBox).not.toBeNull()
+      expect(pressBox).not.toBeNull()
+      const b = barBox!
+      const p = pressBox!
+      const tol = 0.5
+      expect.soft(p.x, `press left ${p.x} is left of bar left ${b.x} at ${width} ${theme}`).toBeGreaterThanOrEqual(b.x - tol)
+      expect.soft(p.x + p.width, `press right ${p.x + p.width} is past bar right ${b.x + b.width} at ${width} ${theme}`).toBeLessThanOrEqual(b.x + b.width + tol)
+      expect.soft(p.y, `press top ${p.y} is above bar top ${b.y} at ${width} ${theme}`).toBeGreaterThanOrEqual(b.y - tol)
+      expect.soft(p.y + p.height, `press bottom ${p.y + p.height} is below bar bottom ${b.y + b.height} at ${width} ${theme}`).toBeLessThanOrEqual(b.y + b.height + tol)
+    })
+  }
+}
+
 test('Mark down fills the rule price to the cent, and Send counts and sends exactly those', async ({ page }) => {
   const wire = await open(page, {
     skus: [

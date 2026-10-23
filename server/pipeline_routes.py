@@ -421,6 +421,8 @@ EXPORT_NEAR_CAP = 0.80
 # figure in the log are the same string produced by the same code.
 _TO_SEND = re.compile(r"^to send\s+(\d+)\s*$", re.M)
 _ESTIMATE = re.compile(r"^estimated cost\s+\$([0-9.]+)\s*$", re.M)
+# The most a press over a long selection can cost: every card a second look. Printed instead of a count.
+_CEILING = re.compile(r"^at most\s+\$([0-9.]+)\b", re.M)
 _CACHE_HITS = re.compile(r"^cache hits\s+(\d+)\s*$", re.M)
 _PHOTOGRAPHS = re.compile(r"^photographs\s+(\d+)\s*$", re.M)
 # The free reader's preflight lines, and the paid press's count of cards the free reader already
@@ -429,9 +431,9 @@ _MATCHER_READ = re.compile(r"^matcher-read\s+(\d+)\b", re.M)
 _CAN_READ = re.compile(r"^can read\s+(\d+) of (\d+)\b", re.M)
 _UNREAD_LINE = re.compile(r"^unread\s+(\d+) ([a-z_]+)\s*$", re.M)
 # The matcher-first press's quote: how many cards the free reader takes and how many go to the
-# paid second look, and whether the pass was measured or estimated from the held-out share.
-_FREE_READ = re.compile(r"^free read\s+(\d+) of (\d+) (measured|estimated)\s*$", re.M)
-_SECOND_LOOK = re.compile(r"^second look\s+(\d+) of (\d+) (measured|estimated)\s*$", re.M)
+# paid second look. A quote over a long selection carries neither line, so both are None.
+_FREE_READ = re.compile(r"^free read\s+(\d+) of (\d+) (measured|certain)\s*$", re.M)
+_SECOND_LOOK = re.compile(r"^second look\s+(\d+) of (\d+) (measured|certain)\s*$", re.M)
 
 
 class PipelineRefusal(Exception):
@@ -1741,6 +1743,7 @@ def _parse_preflight(text: str) -> dict:
         "cache_hits": _one(_CACHE_HITS, int),
         "to_send": _one(_TO_SEND, int),
         "estimate_usd": _one(_ESTIMATE, float),
+        "ceiling_usd": _one(_CEILING, float),
         # The free reader's figures. `None` where the press was not the free reader's (or an
         # older preflight said nothing), so a changed preflight is a missing figure.
         "matcher_read": _one(_MATCHER_READ, int),
@@ -1837,6 +1840,7 @@ def _total(console: str, captures: Sequence["sidecar.Capture"]) -> dict:
         "estimate_usd": (
             None if figures["estimate_usd"] is None else round(figures["estimate_usd"], 2)
         ),
+        "ceiling_usd": None if figures["ceiling_usd"] is None else round(figures["ceiling_usd"], 2),
         "cards": len(captures),
     }
 

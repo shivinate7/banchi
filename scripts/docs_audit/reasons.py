@@ -1464,15 +1464,7 @@ EMISSION_ROOTS = ("pipeline", "server", "cli", "identify", "store", "codes")
 # Self-cleaning: an entry naming a reason that IS emitted is stale and reported, and one
 # naming nothing in the rosters is dangling and reported. A list that only grows stops
 # being read.
-UNEMITTED_REASONS: Dict[str, str] = {
-    "card_not_detected": (
-        "reachable in principle and has no producer in the repo today — recorded in "
-        "docs/specs/capture-app.md, which argues it is not a defect in the screen and costs "
-        "no more than a line in a lookup table. The screen must still label it, because a "
-        "reason with no label draws the bare machine string on the day something first "
-        "emits one."
-    ),
-}
+UNEMITTED_REASONS: Dict[str, str] = {}
 
 
 def _roster(module: str, name: str) -> Optional[List[str]]:
