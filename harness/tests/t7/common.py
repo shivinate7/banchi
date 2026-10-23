@@ -350,6 +350,20 @@ def quiet():
         yield buffer
 
 
+def card_photo(color, size=(64, 89)):
+    """A flat card-colored photograph with a bright band across its top.
+
+    A flat dark frame is an empty slot: its 99th-percentile luminance sits under EMPTY_SLOT_P99,
+    and `identify` never sends it. The band (6 rows, about 7% of the frame) clears the cut and
+    leaves the color alone, so the color still names each card.
+    """
+    from PIL import Image
+
+    photo = Image.new("RGB", size, color)
+    photo.paste((235, 235, 235), (0, 0, size[0], 6))
+    return photo
+
+
 class QuietHandler(capture_server.CaptureHandler):
     """The real handler with its request log silenced.
 

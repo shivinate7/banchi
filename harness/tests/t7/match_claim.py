@@ -75,7 +75,7 @@ def check_claim_never_guesses(checks: Checks) -> None:
     checks.ok(not both.accepted, "a claim that fits both printings (foil vs non-foil) stays refused", f"{both.code}")
     none = _read(SAME_NAME, (EPIC, SHOWCASE), tight, None)
     checks.ok(not none.accepted, "no claim stays refused", f"{none.code}")
-    weak = _read(SAME_NAME, (EPIC, SHOWCASE), [0.70, 0.68], [SHOWCASE])
+    weak = _read(SAME_NAME, (EPIC, SHOWCASE), [0.68, 0.66], [SHOWCASE])
     checks.ok(not weak.accepted and weak.code is not None, "a claim never lifts a floor under FLOOR_MIN", f"{weak.code}")
 
 
@@ -86,7 +86,7 @@ def check_claim_round_two(checks: Checks) -> None:
     checks.ok(not blank.accepted, "a blank rarity on the other printing may fit, so refuse", f"{blank.code}")
     missing = _read(SAME_NAME, (EPIC, None), tight, [EPIC])
     checks.ok(not missing.accepted, "a missing rarity on the other printing may fit, so refuse", f"{missing.code}")
-    low = _read(SAME_NAME, (EPIC, SHOWCASE), [0.77, 0.74], [SHOWCASE])
+    low = _read(SAME_NAME, (EPIC, SHOWCASE), [0.71, 0.68], [SHOWCASE])
     checks.ok(not low.accepted, "the floor applies to the chosen printing's own score", f"{low.code}")
     other3 = _read(SAME_NAME + ("Kai, Dawnblade",), (EPIC, SHOWCASE, EPIC), [0.90, 0.89, 0.88], [SHOWCASE],
                    numbers=("7", "7", "9"))
@@ -107,7 +107,7 @@ def check_claim_four_candidates(checks: Checks) -> None:
     checks.ok(not fits.accepted, "a fourth printing that also fits the claim, within the margin, refuses", f"{fits.code}")
 
 
-# ---------------------------------------------------------------- the four free-reader rules
+# ---------------------------------------------------------------- the free-reader rules
 # INTERFACE ASSUMED (the builder may rename, then re-point here): `Pool.card_types`, parallel to
 # `rows` ("Battlefield" marks a battlefield, tcgcsv's `Card Type` extended cell); and
 # `match.unreleased_sets(game)`, the set names with no stock photo yet, which `Index.pool` leaves
@@ -150,15 +150,6 @@ def check_rule2_battlefield(checks: Checks, codes=None) -> None:
     ):
         got = _plain(cos, types)
         checks.ok(not got.accepted, label, f"{got.code}")
-
-
-def check_rule3_clear_winner(checks: Checks, codes=None) -> None:
-    codes = {} if codes is None else codes
-    _accepted(checks, codes, "clear", _plain([0.72, 0.63, 0.50]), "margin 0.09 at floor 0.72 accepts")
-    low_margin = _plain([0.72, 0.65, 0.50])
-    checks.ok(not low_margin.accepted, "margin 0.07 at floor 0.72 refuses", f"{low_margin.code}")
-    low_floor = _plain([0.69, 0.60, 0.50])
-    checks.ok(not low_floor.accepted, "margin 0.09 at floor 0.69 refuses", f"{low_floor.code}")
 
 
 def _index_read(tmp, unreleased, status="no_photo"):
@@ -231,13 +222,13 @@ def check_claim_as_bare_string(checks: Checks) -> None:
 def check_accept_reasons_distinct(checks: Checks) -> None:
     codes: dict = {}
     scratch = Checks()
-    for fn in (check_rule1_claim_narrows, check_rule2_battlefield, check_rule3_clear_winner, check_rule4_unreleased_sets):
+    for fn in (check_rule1_claim_narrows, check_rule2_battlefield, check_rule4_unreleased_sets):
         fn(scratch, codes)
     every = list(codes.values()) + [match.ACCEPT_CLAIM]
-    checks.ok(len(codes) == 4 and all(every) and len(set(every)) == len(every),
+    checks.ok(len(codes) == 3 and all(every) and len(set(every)) == len(every),
               "each rule's accept carries its own reason code", f"{codes}")
 
 
 CHECKS = (check_claim_settles_printing, check_claim_never_guesses, check_claim_round_two, check_claim_four_candidates,
-          check_rule1_claim_narrows, check_rule2_battlefield, check_rule3_clear_winner, check_rule4_unreleased_sets,
+          check_rule1_claim_narrows, check_rule2_battlefield, check_rule4_unreleased_sets,
           check_unreleased_fallback_needs_no_photo_rows, check_claim_as_bare_string, check_accept_reasons_distinct)

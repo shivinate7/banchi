@@ -185,6 +185,9 @@ def exclusive(directory: Path, timeout: float = LOCK_TIMEOUT_SECONDS, *, name: s
     `flock` and not a lock *file whose existence* is the lock: a process that dies holding
     a flock releases it, while a stale lockfile has to be cleaned up by a human who does not
     know whether it is stale.
+
+    `name` is the lock file inside `directory`: another lock of the same kind (a run's `match.lock`) is the
+    same primitive under its own name. `timeout=0` is a try-lock: it raises `LockTimeout` at once if held.
     """
     import fcntl
 

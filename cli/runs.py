@@ -30,6 +30,8 @@ MANIFEST = "manifest.json"
 # The per-run flock a manifest write holds. Apart from any press's own lock (`match.lock`): this one guards one read-modify-write.
 MANIFEST_LOCK = "manifest.lock"
 IDENTIFICATIONS = "identifications.json"
+# The marker a detached `identify` child leaves in its run directory; the child removes it when it ends.
+PID_FILE = "running.pid"
 DECISIONS = "decisions.json"
 # A LEGACY ANSWER FILE, RETIRED (D86, amended 2026-09-02). `banchi prices adopt --write`
 # folds a run's `decisions.json` into `inventory/prices.json` and then renames it to this, so
