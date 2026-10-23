@@ -7843,12 +7843,17 @@ def do_prices_refresh_state() -> dict:
     return {**state, "note": pricerefresh.read_status()}
 
 
-def _day_words(day) -> str:
-    return f"{day:%B} {day.day}"
+def _export_words(moment) -> str:
+    """The export, named by its day. `UNDATED` (an export of no recorded age) has none, and never prints as 1970."""
+    if moment == run_files.UNDATED:
+        return "an export from an unknown day"
+    day = clock.central_day(moment)
+    return f"an export of {day:%B} {day.day}"
 
 
-def _day_iso(moment) -> str:
-    return clock.central_day(moment).isoformat()
+def _day_iso(moment) -> Optional[str]:
+    """The day as an ISO date, or `None` for `UNDATED`: the receipt and the screen say "unknown" for `None`."""
+    return None if moment == run_files.UNDATED else clock.central_day(moment).isoformat()
 
 
 def refresh_before_send(names: Sequence[str], overrides: Optional[Sequence[str]] = None, progress=None) -> dict:
@@ -7873,8 +7878,7 @@ def refresh_before_send(names: Sequence[str], overrides: Optional[Sequence[str]]
     stale = run_files.stale_runs(opened, overrides)
     if not stale:
         return {"ran": False, "export_day": _day_iso(min(moments.values())) if moments else None}
-    oldest = _day_words(clock.central_day(min(stale.values())))
-    start = f"Nothing was sent. The prices come from an export of {oldest}, and a send needs today's."
+    start = f"Nothing was sent. The prices come from {_export_words(min(stale.values()))}, and a send needs today's."
     if overrides:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT, "prices_stale",

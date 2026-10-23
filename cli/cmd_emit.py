@@ -1226,7 +1226,7 @@ def _prices_from_today(named, overrides, say) -> bool:
         say(str(refusal))
         return False
     if done.get("ran"):
-        say(f"prices           refreshed before this send: export of {done.get('was')}, now {done.get('export_day')}")
+        say(f"prices           refreshed before this send: export of {done.get('was') or 'an unknown day'}, now {done.get('export_day')}")
     else:
         # STALE AT THE FIRST LOOK, CURRENT AT THE GATE'S OWN: another process refreshed in between.
         say(f"prices           already from today: another refresh brought them current, export of {done.get('export_day')}")

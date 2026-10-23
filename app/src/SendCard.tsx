@@ -278,8 +278,11 @@ const LEFT_WHY: Record<string, string> = {
  *  differ from what the screen showed when the owner pressed. */
 function PricesRefreshed({ send }: { readonly send: SendSummary }) {
   const refresh = send.refresh
-  if (!refresh?.ran || !refresh.was) return null
-  const day = new Date(`${refresh.was}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+  if (!refresh?.ran) return null
+  const day = refresh.was
+    ? new Date(`${refresh.was}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+    : 'an unknown day'
+
   return (
     <Notice tone="info" compact className="send-prices-refreshed" title="Prices were refreshed before sending.">
       They came from {day}, so Banchi read them again first. They may differ from what you saw.
