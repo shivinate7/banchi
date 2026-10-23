@@ -25,6 +25,7 @@ import urllib.request
 import envfile
 
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 from unittest import mock
@@ -33,7 +34,7 @@ from cli import resolve, runs
 from identify import batch
 from pipeline import games, tcgcsv
 from server import capture_server, pipeline_routes, tcg_export
-from store import files
+from store import clock, files
 from store.session import Store
 from scripts import serve
 from harness.tests.t7.common import (
@@ -1658,14 +1659,16 @@ def check_export_fetch(checks: Checks) -> None:
                     "a reuse leaves the mtime alone, because it took no reading",
                 )
 
-                # ------------------------- AND A READING OLDER THAN THE WINDOW IS RE-TAKEN
+                # ------------------------- AND A READING FROM AN EARLIER CENTRAL DAY IS RE-TAKEN
                 #
                 # EVERY FILE THE GAME HOLDS IS AGED, not just the one this block fetched.
                 # `_reusable` walks the whole directory newest first and answers with the
                 # first covering file — which is right, and means ageing one of several
                 # proves nothing: the press would reuse a sibling and the check would read
-                # as a reuse that ignored the window.
-                stale = was_mtime - pipeline_routes.EXPORT_REUSE_S - 60
+                # as a reuse that ignored the day.
+                # A minute before this reading's day began: the previous Central day, at any
+                # hour. `now - 86400` would stay on the same day across a 25-hour fall-back day.
+                stale = was_mtime - clock.seconds_into_today(datetime.fromtimestamp(was_mtime, clock.CENTRAL)) - 60
                 for entry in (exports_root / "pokemon").glob("*.csv"):
                     os.utime(entry, (stale, stale))
                 was_mtime = held.stat().st_mtime
@@ -1679,15 +1682,38 @@ def check_export_fetch(checks: Checks) -> None:
                 checks.equal(
                     (json.loads(raw)["reused"], posts() - before_posts),
                     (False, 1),
-                    "an export older than EXPORT_REUSE_S is re-fetched rather than reused — "
-                    "the window is sized to a SITTING, and a reuse long enough that the "
-                    "operator thinks they refreshed and did not is worse than the request",
+                    "an export from an earlier Central day is re-fetched rather than reused — "
+                    "a reuse of yesterday's reading is taken for a fresh price, and that is "
+                    "worse than the request",
                 )
                 checks.equal(
                     held.stat().st_mtime > was_mtime,
                     True,
                     "and THAT one touches the mtime, because identical bytes arriving from "
                     "the portal really are a fresh observation of the same reading",
+                )
+
+                # ------------------- AN EXPORT FROM EARLIER THE SAME CENTRAL DAY IS REUSED, WITH NO REQUEST
+                #
+                # The rule is the day a reading was taken on, not its age in seconds. The clock is
+                # pinned to the reading's own moment so no day boundary can move under this case:
+                # six hours back where the day allows it, otherwise the day's first minute.
+                taken = datetime.fromtimestamp(held.stat().st_mtime, clock.CENTRAL)
+                same_day = taken.timestamp() - min(6 * 3600, clock.seconds_into_today(taken) - 60)
+                for entry in (exports_root / "pokemon").glob("*.csv"):
+                    os.utime(entry, (same_day, same_day))
+                before_posts = posts()
+                with mock.patch.object(clock, "_current", lambda: taken):
+                    status, raw, _ = request(
+                        port,
+                        "POST",
+                        f"/pipeline/runs/{second.directory.name}/export",
+                        payload={},
+                    )
+                checks.equal(
+                    (status, json.loads(raw)["reused"], posts() - before_posts),
+                    (200, True, 0),
+                    "an export from earlier the same Central day is reused, and no request goes out",
                 )
 
                 # ------------------------------------------ `refresh` FORCES THE SOCKET OPEN
