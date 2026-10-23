@@ -222,6 +222,8 @@ fulfillment   http://localhost:5173/#/fulfillment  .ff,.ff-title
 # must not guess one.
 product       http://localhost:5173/#/product  .producthistory,.bn-title
 
+slabs         http://localhost:5173/#/slabs  .bn-title
+
 # ---------------------------------------------------------------------------------------
 # THE ROUTES THIS MANIFEST DELIBERATELY DOES NOT RENDER, each with the reason beside it.
 #
