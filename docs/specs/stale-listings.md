@@ -467,7 +467,7 @@ they were.
   stays ok and names the run as waiting on its own problem. A run that tried and could not join fails
   the step, is named in `steps.join`, and stays waiting. A pressed send is never widened to the runs the refresh joined:
   they land on the worklist for the next send.
-- **A reading is never replaced by an older one.** `store/readings.replace_source` keeps a SKU's
+- **A reading is never replaced by an older one.** `store/readings.Readings`'s `replace_source` keeps a SKU's
   row when it is dated later than the new one. A re-join against an older export clears nothing,
   keeps the source row, and writes only the SKUs no newer row holds. `at` is the export's own mtime: `cmd_join` dates
   `pricing.json` and its reading to the oldest export it joined, as `cmd_match` does.
