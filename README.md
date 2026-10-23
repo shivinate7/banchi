@@ -45,6 +45,7 @@ make up                     # serve the app; open the link it prints
 | Sales | `#/revenue` |  |
 | Inventory | `#/inventory` |  |
 | Codes | `#/codes` |  |
+| Slabs | `#/slabs` |  |
 | Cards to Pull | `#/fulfillment` | Off-nav |
 | Kit | `#/gallery` | Off-nav |
 | Product History | `#/product` | Off-nav |

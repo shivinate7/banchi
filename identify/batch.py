@@ -48,6 +48,11 @@ API_KEY_ENV = "ANTHROPIC_API_KEY"
 
 SUCCEEDED = "succeeded"
 
+# The API's own `stop_reason`, used as the outcome status: the model ran out of `max_tokens`
+# before it finished. Its own status, not `malformed`, because the cure differs: more room,
+# where a malformed answer gets crops.
+MAX_TOKENS_STOP = "max_tokens"
+
 # The two refusal codes for a request whose strategy names no usable profile. Statuses
 # rather than exceptions, because a refused card must come out of the run the way every
 # card does — as an `Outcome` under its `custom_id`, counted in the report — never as a
@@ -92,6 +97,9 @@ class ImageRequest:
     # what it always submitted. `run_batch` refuses, by name and per item, any strategy
     # `prompt.profile` cannot answer; nothing falls through to another game's prompt.
     strategy: str = prompt.DEFAULT_PROFILE
+    # A cap for this request alone. None sends the profile's. The retry of a card that stopped
+    # on its cap sets it, so the second request differs from the first.
+    max_tokens: Optional[int] = None
 
     @property
     def payload_bytes(self) -> int:
@@ -238,7 +246,8 @@ def build_request(item: ImageRequest) -> dict:
         "custom_id": item.custom_id,
         "params": {
             "model": chosen.model,
-            "max_tokens": chosen.max_tokens,
+            "max_tokens": item.max_tokens or chosen.max_tokens,
+            "thinking": prompt.THINKING,
             "system": chosen.system,
             # Structured outputs: the response is guaranteed to match the profile's
             # schema, so the parser handles surprises rather than tolerating slop.
@@ -297,6 +306,16 @@ def _collect(
         refusal = prompt_refusal(custom_id, strategy)
         if refusal is not None:
             run.outcomes[custom_id] = refusal
+            continue
+        # The cap, not the model, ended this answer. Named on its own so the report says so,
+        # and so the retry gives it room instead of resending the request that ran out.
+        if getattr(message, "stop_reason", None) == "max_tokens":
+            used = getattr(getattr(message, "usage", None), "output_tokens", None)
+            run.outcomes[custom_id] = Outcome(
+                custom_id,
+                MAX_TOKENS_STOP,
+                error=f"the answer was cut off at the token limit ({used} tokens used)",
+            )
             continue
         try:
             identification = prompt.parse(_text_of(message), strategy)

@@ -181,7 +181,7 @@ from store.session import Snapshot  # noqa: E402
 
 BANCHI = REPO_ROOT / "banchi"
 CONSOLE = "console.log"
-PID_FILE = "running.pid"
+PID_FILE = run_files.PID_FILE
 
 # ONE RESOLVER, FOR THE PROCESS'S WHOLE LIFE (`D301`). `pipeline/stockimages.py`'s
 # own header says why: its cache is only worth having if the same instance answers every
@@ -421,6 +421,8 @@ EXPORT_NEAR_CAP = 0.80
 # figure in the log are the same string produced by the same code.
 _TO_SEND = re.compile(r"^to send\s+(\d+)\s*$", re.M)
 _ESTIMATE = re.compile(r"^estimated cost\s+\$([0-9.]+)\s*$", re.M)
+# The most a press over a long selection can cost: every card a second look. Printed instead of a count.
+_CEILING = re.compile(r"^at most\s+\$([0-9.]+)\b", re.M)
 _CACHE_HITS = re.compile(r"^cache hits\s+(\d+)\s*$", re.M)
 _PHOTOGRAPHS = re.compile(r"^photographs\s+(\d+)\s*$", re.M)
 # The free reader's preflight lines, and the paid press's count of cards the free reader already
@@ -429,9 +431,9 @@ _MATCHER_READ = re.compile(r"^matcher-read\s+(\d+)\b", re.M)
 _CAN_READ = re.compile(r"^can read\s+(\d+) of (\d+)\b", re.M)
 _UNREAD_LINE = re.compile(r"^unread\s+(\d+) ([a-z_]+)\s*$", re.M)
 # The matcher-first press's quote: how many cards the free reader takes and how many go to the
-# paid second look, and whether the pass was measured or estimated from the held-out share.
-_FREE_READ = re.compile(r"^free read\s+(\d+) of (\d+) (measured|estimated)\s*$", re.M)
-_SECOND_LOOK = re.compile(r"^second look\s+(\d+) of (\d+) (measured|estimated)\s*$", re.M)
+# paid second look. A quote over a long selection carries neither line, so both are None.
+_FREE_READ = re.compile(r"^free read\s+(\d+) of (\d+) (measured|certain)\s*$", re.M)
+_SECOND_LOOK = re.compile(r"^second look\s+(\d+) of (\d+) (measured|certain)\s*$", re.M)
 
 
 class PipelineRefusal(Exception):
@@ -1741,6 +1743,7 @@ def _parse_preflight(text: str) -> dict:
         "cache_hits": _one(_CACHE_HITS, int),
         "to_send": _one(_TO_SEND, int),
         "estimate_usd": _one(_ESTIMATE, float),
+        "ceiling_usd": _one(_CEILING, float),
         # The free reader's figures. `None` where the press was not the free reader's (or an
         # older preflight said nothing), so a changed preflight is a missing figure.
         "matcher_read": _one(_MATCHER_READ, int),
@@ -1837,6 +1840,7 @@ def _total(console: str, captures: Sequence["sidecar.Capture"]) -> dict:
         "estimate_usd": (
             None if figures["estimate_usd"] is None else round(figures["estimate_usd"], 2)
         ),
+        "ceiling_usd": None if figures["ceiling_usd"] is None else round(figures["ceiling_usd"], 2),
         "cards": len(captures),
     }
 
@@ -2217,11 +2221,12 @@ def _spawn(send: Send, captures) -> dict:
     # leaves a window in which the marker names a pid the table has never heard of and the run
     # reads as somebody else's orphan.
     #
-    # THE MARKER IS STILL WRITTEN AND STILL NEVER DELETED. It is the only thing about this
-    # child that survives this process — a restart, a `make up` reload, a crash — and it is
-    # what `scripts/reap.py` and a person reading a run directory have to go on. Deleting it
-    # from `_live_pid` was considered and declined: `scripts/serve.py` documents that function
-    # as one that "only ever READS", it is the 4s-polled path, and cases 1 and 2 never open it.
+    # THE MARKER IS WRITTEN HERE AND REMOVED BY THE CHILD WHEN IT ENDS (`cmd_identify.run`). It is
+    # the only thing about this child that survives this process — a restart, a `make up`
+    # reload, a crash — so a person reading a run directory and `_live_pid`'s orphan arm have
+    # it to go on while the child lives. `_live_pid` still only ever READS it: it is the
+    # 4s-polled path, and cases 1 and 2 never open it. A child that exits before this line
+    # runs leaves a marker naming a dead pid, which `_live_pid`'s signal-0 probe reads honestly.
     _remember_child(run.directory, child)
     (run.directory / PID_FILE).write_text(f"{child.pid}\n")
     return {
@@ -9305,8 +9310,7 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
 
 
 MATCH_RECORD = "match.json"
-_MATCHING: Dict[str, bool] = {}
-_MATCHING_LOCK = threading.Lock()
+MATCH_LOCK = "match.lock"
 
 
 def _read_match(directory: Path) -> Optional[dict]:
@@ -9341,45 +9345,49 @@ def do_run_match(name: str, payload: dict) -> dict:
     never asks TCGplayer again over a problem that stands. `retry: true` is the door's own
     press.
 
-    ONE MATCH PER RUN AT A TIME. Two tabs that both see the reading finish would otherwise both
-    fetch and both join; the second is answered `running` and does nothing.
+    ONE MATCH PER RUN AT A TIME, ACROSS PROCESSES. Two tabs that both see the reading finish, or a
+    tab and the `identify` child that is still joining its own run, would otherwise both fetch and
+    both join. The run's `flock` is taken BEFORE the phase is read, so a caller that loses the race
+    to a join that then finishes reads `not_waiting` and not a second join; the one that finds the
+    lock held is answered `running` and does nothing. A process that dies releases it.
     """
     directory = _open_run(name)
+    with contextlib.ExitStack() as held:
+        try:
+            held.enter_context(files.exclusive(directory, timeout=0, name=MATCH_LOCK))
+        except files.LockTimeout:  # held by another join; any other failure to lock is not "running"
+            return {"ran": False, "reason": "running", "summary": _summary(directory)}
+        return _match_locked(name, directory, payload)
+
+
+def _match_locked(name: str, directory: Path, payload: dict) -> dict:
     manifest = _manifest(directory)
     if _phase(manifest, _live_pid(directory) is not None) != "join":
         return {"ran": False, "reason": "not_waiting", "summary": _summary(directory)}
     standing = _read_match(directory) or {}
     if standing.get("problem") and not bool(payload.get("retry")):
         return {"ran": False, "reason": "problem_stands", "summary": _summary(directory)}
-    with _MATCHING_LOCK:
-        if _MATCHING.get(directory.name):
-            return {"ran": False, "reason": "running", "summary": _summary(directory)}
-        _MATCHING[directory.name] = True
+    at = clock.now_iso()
     try:
-        at = clock.now_iso()
-        try:
-            fetched = do_pipeline_export(name, {})
-        except PipelineRefusal as refusal:
-            problem = {"code": refusal.code, "message": str(refusal), "step": "fetch"}
-            _write_match(directory, {"at": at, "problem": problem})
-            return {"ran": True, "ok": False, "problem": problem, "summary": _summary(directory)}
-        result = do_pipeline_step(name, "join", {"fetched": [fetched["file"]]})
-        if not result["ok"]:
-            last = (result["console"].strip().splitlines() or [""])[-1]
-            problem = {"code": "match_refused", "message": last, "step": "join"}
-            _write_match(directory, {"at": at, "problem": problem, "fetched": fetched["file"]})
-            return {
-                "ran": True,
-                "ok": False,
-                "problem": problem,
-                "console": result["console"],
-                "summary": _summary(directory),
-            }
-        _write_match(directory, {"at": at, "problem": None, "fetched": fetched["file"]})
-        return {"ran": True, "ok": True, "console": result["console"], "summary": _summary(directory)}
-    finally:
-        with _MATCHING_LOCK:
-            _MATCHING.pop(directory.name, None)
+        fetched = do_pipeline_export(name, {})
+    except PipelineRefusal as refusal:
+        problem = {"code": refusal.code, "message": str(refusal), "step": "fetch"}
+        _write_match(directory, {"at": at, "problem": problem})
+        return {"ran": True, "ok": False, "problem": problem, "summary": _summary(directory)}
+    result = do_pipeline_step(name, "join", {"fetched": [fetched["file"]]})
+    if not result["ok"]:
+        last = (result["console"].strip().splitlines() or [""])[-1]
+        problem = {"code": "match_refused", "message": last, "step": "join"}
+        _write_match(directory, {"at": at, "problem": problem, "fetched": fetched["file"]})
+        return {
+            "ran": True,
+            "ok": False,
+            "problem": problem,
+            "console": result["console"],
+            "summary": _summary(directory),
+        }
+    _write_match(directory, {"at": at, "problem": None, "fetched": fetched["file"]})
+    return {"ran": True, "ok": True, "console": result["console"], "summary": _summary(directory)}
 
 
 def do_pipeline_step(name: str, step: str, payload: dict) -> dict:

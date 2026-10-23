@@ -257,6 +257,10 @@ async function open(
       secondLook?: number
       measured?: boolean
       unread?: Record<string, number>
+      /** A dry run over a long selection: the matcher does not run, so the quote states no count and no cost. */
+      uncounted?: boolean
+      /** The most a long free quote can cost (every card a second look), named when no count is. */
+      ceiling?: number
     }
     /** Cards the free reader already answered in this selection: the paid press's ask. */
     matcherRead?: number
@@ -385,17 +389,20 @@ async function open(
           photographs: 40 * legs,
           cache_hits: (options.cacheHits ?? 4) * legs,
           to_send: perBox * legs,
-          estimate_usd: Number((perBoxMoney * legs).toFixed(2)),
+          estimate_usd: options.free?.uncounted ? null : Number((perBoxMoney * legs).toFixed(2)),
           cards: 40 * legs,
           ...NO_FREE_FIELDS,
           matcher_read: free ? null : options.matcherRead ? options.matcherRead * legs : null,
           ...(free
             ? {
                 can_read: perBox * legs,
-                free_read: (options.free?.freeRead ?? 30) * legs,
-                second_look: (options.free?.secondLook ?? perBox - (options.free?.freeRead ?? 30)) * legs,
-                second_look_measured: options.free?.measured ?? true,
+                free_read: options.free?.uncounted ? null : (options.free?.freeRead ?? 30) * legs,
+                second_look: options.free?.uncounted
+                  ? null
+                  : (options.free?.secondLook ?? perBox - (options.free?.freeRead ?? 30)) * legs,
+                second_look_measured: options.free?.uncounted ? null : (options.free?.measured ?? true),
                 unread: options.free?.unread ?? {},
+                ceiling_usd: options.free?.uncounted ? (options.free?.ceiling ?? null) : null,
               }
             : {}),
         },
@@ -3476,20 +3483,47 @@ test('a counted free quote says it was counted, and gives the free read and the 
   await expect(quote).toContainText('30 read free')
   await expect(quote).toContainText('6 get a second look from the paid read')
   await expect(quote).toContainText('Counted by reading them now')
-  await expect(quote).not.toContainText('Estimated from earlier cards')
+  await expect(quote).not.toContainText(/counted when the run starts/i)
   await expect(quote).not.toContainText('About 30')
 })
 
-test('an estimated free quote says so on every figure it estimates', async ({ page }) => {
-  await open(page, { free: { freeRead: 23, secondLook: 13, measured: false } })
+test('a free quote over a long selection says its count waits for the run', async ({ page }) => {
+  await open(page, { free: { uncounted: true } })
   await atReading(page, 9, 'free')
   await page.getByRole('button', { name: 'Check what it will read' }).click()
   const quote = page.locator('.run-quote')
   await expect(quote).toBeVisible()
 
-  await expect(quote).toContainText('About 23 read free')
-  await expect(quote).toContainText('about 13 get a second look from the paid read')
-  await expect(quote).toContainText('Estimated from earlier cards, rounded up. The press counts them for real.')
+  await expect(quote).toContainText('Counted when the run starts.')
+  await expect(quote).not.toContainText('read free')
+  await expect(quote).not.toContainText('get a second look')
+  await expect(quote).not.toContainText('Counted by reading them now')
+  await expect(page.locator('.run-button-money')).toHaveText('Match 36 cards, then pay for the second look')
+})
+
+test('a free quote over a long selection with a ceiling names the most it can cost', async ({ page }) => {
+  await open(page, { free: { uncounted: true, ceiling: 0.52 } })
+  await atReading(page, 9, 'free')
+  await page.getByRole('button', { name: 'Check what it will read' }).click()
+  const quote = page.locator('.run-quote')
+  await expect(quote).toBeVisible()
+
+  await expect(page.locator('.run-quote .bn-label').first()).toHaveText('Second look, at most')
+  await expect(page.locator('.runs-quote-money')).toHaveText('$0.52')
+  await expect(quote).toContainText('Counted when the run starts.')
+  await expect(quote).not.toContainText('read free')
+  await expect(page.locator('.run-button-money')).toHaveText('Match 36 cards, then spend up to $0.52 on the second look')
+})
+
+test('a counted free quote with no index says the free read is not set up', async ({ page }) => {
+  await open(page, { free: { freeRead: 0, secondLook: 36, measured: false } })
+  await atReading(page, 9, 'free')
+  await page.getByRole('button', { name: 'Check what it will read' }).click()
+  const quote = page.locator('.run-quote')
+  await expect(quote).toBeVisible()
+
+  await expect(quote).toContainText('36 get a second look from the paid read')
+  await expect(quote).toContainText('The free read is not set up, so every card goes to the second look.')
   await expect(quote).not.toContainText('Counted by reading them now')
 })
 
@@ -3584,6 +3618,29 @@ test('a paid quote with nothing the free reader answered draws no re-read ask at
   await expect(page.locator('.runs-quote-ask')).toHaveCount(0)
 })
 
+/** The second-look rows a free run's manifest names: one per key, `9/1`, `9/2`, and so on. */
+function secondLookRows(count: number) {
+  return Array.from({ length: count }, (_, i) => ({ key: `9/${i + 1}`, code: 'margin_too_small', name: 'Raichu' }))
+}
+
+/** A joined run's counts with the join's own second-look figures. Omit `look` for a join that wrote none. */
+function joinedCounts(look?: { held: number; main: number; parked: number }) {
+  return {
+    cards_in: 30,
+    skus: 20,
+    queued_main: 1,
+    queued_parked: 0,
+    ...(look ? { second_look_held: look.held, second_look_main: look.main, second_look_parked: look.parked } : {}),
+  }
+}
+
+/** Opens the first run and expands its match step, so the receipt line is on screen. */
+async function openFreeRun(page: Page) {
+  await openRun(page)
+  const head = page.locator('.runs-detail-panel .runs-step-head').first()
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click()
+}
+
 test('a free run says what it matched and how many went to the second look', async ({ page }) => {
   await open(page, {
     detail: {
@@ -3597,12 +3654,88 @@ test('a free run says what it matched and how many went to the second look', asy
       },
     },
   })
-  await openRun(page)
-  const head = page.locator('.runs-detail-panel .runs-step-head').first()
-  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click()
+  await openFreeRun(page)
   await expect(page.locator('.runs-detail-panel')).toContainText(
-    'Matched 30 cards free. 2 cards got a second look from the paid read and wait in review.',
+    'Matched 30 cards free. 2 cards got a second look from the paid read, waiting to be matched.',
   )
   /* A CODE IS THE RUN RECORD'S, never the screen's. */
   await expect(page.locator('.runs-detail-panel')).not.toContainText(/margin_too_small|lookalike_guard/)
+})
+
+test('a joined free run says how its second-look cards split: to review, settled', async ({ page }) => {
+  await open(page, {
+    detail: {
+      joined: true,
+      counts: joinedCounts({ held: 1, main: 1, parked: 0 }),
+      manifest: { flags: { engine: 'marqo-b' }, matched: 30, second_look: secondLookRows(3) },
+    },
+  })
+  await openFreeRun(page)
+  await expect(page.locator('.runs-detail-panel')).toContainText(
+    'Matched 30 cards free. 3 cards got a second look from the paid read: 2 to review, 1 settled.',
+  )
+})
+
+test('a joined free run with parked cards says so: to review, under the threshold, settled', async ({ page }) => {
+  await open(page, {
+    detail: {
+      joined: true,
+      counts: joinedCounts({ held: 1, main: 0, parked: 1 }),
+      manifest: { flags: { engine: 'marqo-b' }, matched: 30, second_look: secondLookRows(3) },
+    },
+  })
+  await openFreeRun(page)
+  await expect(page.locator('.runs-detail-panel')).toContainText(
+    'Matched 30 cards free. 3 cards got a second look from the paid read: 1 to review, 1 under the threshold, 1 settled.',
+  )
+})
+
+test('a joined free run settles what neither queue holds: second-look total less held, main and parked', async ({ page }) => {
+  await open(page, {
+    detail: {
+      joined: true,
+      counts: joinedCounts({ held: 2, main: 1, parked: 1 }),
+      manifest: { flags: { engine: 'marqo-b' }, matched: 30, second_look: secondLookRows(6) },
+    },
+  })
+  await openFreeRun(page)
+  await expect(page.locator('.runs-detail-panel')).toContainText(
+    'Matched 30 cards free. 6 cards got a second look from the paid read: 3 to review, 1 under the threshold, 2 settled.',
+  )
+})
+
+test('a joined free run whose join wrote no second-look counts ends at the paid read', async ({ page }) => {
+  await open(page, {
+    detail: {
+      joined: true,
+      counts: joinedCounts(),
+      manifest: { flags: { engine: 'marqo-b' }, matched: 30, second_look: secondLookRows(3) },
+    },
+  })
+  await openFreeRun(page)
+  /* The receipt line alone: the panel also draws other figures that may say "parked". */
+  const receipt = page.locator('.runs-detail-panel span.bn-muted', { hasText: 'got a second look from the paid read' })
+  await expect(receipt).toHaveText('Matched 30 cards free. 3 cards got a second look from the paid read.')
+  await expect(receipt).not.toContainText(/main queue|held until join|parked/)
+})
+
+test('opening a joined free run reads no queue: its receipt is the join record', async ({ page }) => {
+  const queueReads: string[] = []
+  page.on('request', (request) => {
+    if (/\/queues$/.test(request.url())) queueReads.push(request.url())
+  })
+  await open(page, {
+    detail: {
+      joined: true,
+      counts: joinedCounts({ held: 1, main: 1, parked: 0 }),
+      manifest: { flags: { engine: 'marqo-b' }, matched: 30, second_look: secondLookRows(3) },
+    },
+  })
+  /* The screen mounts Review, which reads the queues at load (D291). Only a read the press starts counts here. */
+  queueReads.length = 0
+  await openFreeRun(page)
+  /* The receipt's read, if it made one, has landed by the time the page is idle. */
+  await page.waitForLoadState('networkidle')
+  expect(queueReads, 'the receipt reads the run record, not GET /queues').toEqual([])
+  await expect(page.locator('.runs-detail-panel')).toContainText('2 to review')
 })
