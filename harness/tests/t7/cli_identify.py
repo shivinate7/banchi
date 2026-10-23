@@ -6515,14 +6515,13 @@ def check_empty_state_refusal_blames_no_missing_folder(checks: Checks) -> None:
 
 def _paid_caps(directory: Path, cards) -> None:
     """One photograph and one sidecar per `(box, position)`, named as a capture directory is named."""
-    from identify import images as identify_images
-
     directory.mkdir()
     for box, position in cards:
         # A color per position, from a hash: a card is named by its photograph (D172), so two
         # presses must never share bytes, and a color taken from the box number clamps past 255.
+        # `card_photo`, not a flat frame: a flat dark frame is an empty slot and `identify` never sends it.
         color = tuple(hashlib.sha256(f"{box}/{position}".encode()).digest()[:3])
-        identify_images.Image.new("RGB", (64, 89), color).save(directory / f"{box}-{position:03d}.jpg", "JPEG")
+        card_photo(color).save(directory / f"{box}-{position:03d}.jpg", "JPEG")
         (directory / f"{box}-{position:03d}.json").write_text(
             json.dumps({"box": box, "position": position, "game": "pokemon", "set_hint": "SV09"}), "utf-8"
         )
