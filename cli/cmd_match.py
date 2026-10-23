@@ -204,8 +204,8 @@ def _export_for(game: str, *, fresh: bool = False):
     TWO ASKS, ONE RULE (D166, the export is a reading): NAMING AND PRICING DO NOT NEED THE SAME FILE.
     `fresh=False` is the newest covering export of ANY age. The reader uses it only to name and adopt
     cards (the set list a hint is checked against), so an old file does no harm. `fresh=True` is the
-    export a press would reuse, within `pipeline_routes.EXPORT_REUSE_S` (`_reusable`, the press's own
-    test). EVERYTHING THAT PRICES uses this one: a SKU's market price, the threshold and
+    export a press would reuse, one downloaded today (`pipeline_routes._reusable`, the press's own
+    test, `store/clock.before_today`). EVERYTHING THAT PRICES uses this one: a SKU's market price, the threshold and
     sub-threshold routing, the price readings, and anything `emit` or `#/pricing` reads. With none,
     the reader names cards and leaves the pricing to a press's join, which fetches
     (`pipeline_routes.do_run_match`). It never fetches itself and never prices from an old file.

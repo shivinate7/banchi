@@ -3506,7 +3506,7 @@ export type ExportScope = {
   width: ExportWidth | null
   /** The file a press would answer from without asking TCGplayer, if there is one
    *  (D166). Null means the press opens a socket. */
-  reusable: { file: string; age_s: number; window_s: number } | null
+  reusable: { file: string; age_s: number } | null
 }
 
 /** One code on the ledger, as `GET /codes` serves it (C3, C8, C11).

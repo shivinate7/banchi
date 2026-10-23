@@ -391,21 +391,17 @@ FETCHED_PREFIX = "export-tcgplayer-"
 # in eighteen seconds (07:41:33 to 07:41:51) across five run directories.
 EXPORTS_DIR = files.EXPORTS_DIRNAME
 
-# HOW LONG A FETCHED EXPORT ANSWERS THE NEXT PRESS, IN SECONDS, AND THIS IS THE HALF THAT
-# SAVES THE REQUEST RATHER THAN THE DISK. Deduping after the fetch turns six files into one
-# and still spends six round trips; re-joining a store means pressing Fetch once per run, and
-# the seven presses that produced the measurement above were nine minutes apart end to end
-# while five of them were eighteen seconds apart. A press whose game already holds an export
-# fetched inside this window, at a scope that COVERS what this run needs, answers from that
-# file and opens no socket.
-#
-# FIFTEEN MINUTES IS SIZED TO THE SITTING AND NOT TO THE READING. An export is a reading of
-# `Total Quantity` and `TCG Market Price`, and `describe_source`'s mtime is when that reading
-# was taken — so reuse must never be long enough that an operator thinks they refreshed and
-# did not. A re-join pass over a store is minutes; a deliberate refresh the next morning is
-# hours. `refresh: true` on the request forces the socket open whatever the age, and the
-# receipt says `reused` with the file's age on it either way, so nothing here is silent.
-EXPORT_REUSE_S = 900
+# WHEN A FETCHED EXPORT ANSWERS THE NEXT PRESS (D166), AND THIS IS THE HALF THAT SAVES THE
+# REQUEST RATHER THAN THE DISK. An export is FRESH if it was downloaded on the same US Central
+# calendar day (`_reusable`, `store/clock.before_today`): one rule for matching, the free
+# reader, a send and `#/pricing`. A press whose game already holds a fresh export, at a scope
+# that COVERS what this run needs, answers from that file and opens no socket. The daily job
+# and the owner's "Refresh now" press (`refresh: true`) take a new reading; the receipt says
+# `reused` with the file's age either way, so nothing here is silent.
+
+#: How soon after a finished "Refresh now" a second press is refused (`refresh_too_soon`). A
+#: double-press guard, not a freshness test.
+REFRESH_DEBOUNCE_S = 900
 
 # WHEN A WIDENED FETCH IS REPORTED WITH BOTH FIGURES ON IT (D65/D76). `tcg_export.MAX_BYTES`
 # is 32 MB and refuses past it; a scope that widens to the whole category is the only way to
@@ -7565,7 +7561,7 @@ def do_price_trends_preload() -> dict:
 # ------------------------------------------------------------------ the price refresh (spec 7b)
 
 #: `GET /pipeline/prices/refresh`'s own state, one per process. A press starts one worker; a second
-#: press while it runs starts nothing. `finished_at` holds the next press off for `EXPORT_REUSE_S`.
+#: press while it runs starts nothing. `finished_at` holds the next press off for `REFRESH_DEBOUNCE_S`.
 _REFRESH_LOCK = threading.Lock()
 _REFRESH: Dict[str, Any] = {"state": "idle", "step": None, "done": 0, "total": 0, "finished_at": None}
 
@@ -7787,7 +7783,7 @@ def do_live_export_rejoined() -> Tuple[HTTPStatus, dict]:
     background worker as Refresh now (listings, catalog, join; no history), so the row and the sheet
     never show two times for one card, and the POST holds no request slot. It answers at once; the
     screen reads `GET /pipeline/prices/refresh` and takes the listings' file name from
-    `steps.listings.fetched`. The press is the person's own, so it presses past the reuse window."""
+    `steps.listings.fetched`. The press is the person's own, so it presses past the double-press guard."""
     return do_prices_refresh_start({"force": True}, history=None)
 
 
@@ -7814,7 +7810,7 @@ def _refresh_worker(history: Optional[str]) -> None:
         pricerefresh.note_step("refresh", False, message=files.plain_cause(caught))
     finally:
         with _REFRESH_LOCK:
-            # ONLY A "Refresh now" THAT RAN ARMS THE REUSE WINDOW; the Live tab's press is its own, and a skip fetched nothing.
+            # ONLY A "Refresh now" THAT RAN ARMS THE DOUBLE-PRESS GUARD; the Live tab's press is its own, and a skip fetched nothing.
             _REFRESH.update(state=state, step=None, **({"finished_at": time.time()} if history is not None and not skipped else {}))
 
 
@@ -7822,14 +7818,14 @@ def do_prices_refresh_start(payload: dict, history: Optional[str] = "stale") -> 
     """`POST /pipeline/prices/refresh` — "Refresh now". It starts the work in a worker thread and
     answers 202 at once; steps 2 and 3 can outlast a request slot (DEBT11). One run goes at a
     time: a press while one runs answers `running` and starts nothing. A press inside
-    `EXPORT_REUSE_S` of a finished run is refused unless the body says `force`, which the screen
+    `REFRESH_DEBOUNCE_S` of a finished run is refused unless the body says `force`, which the screen
     sends only from "Try again". FREE, and only a press calls it."""
     force = bool(payload.get("force"))
     with _REFRESH_LOCK:
         if _REFRESH["state"] == "running":
             return HTTPStatus.ACCEPTED, {"state": "running", "started": False}
         finished = _REFRESH["finished_at"]
-        if not force and finished is not None and time.time() - finished <= EXPORT_REUSE_S:
+        if not force and finished is not None and time.time() - finished <= REFRESH_DEBOUNCE_S:
             raise PipelineRefusal(
                 HTTPStatus.CONFLICT,
                 "refresh_too_soon",
@@ -8827,7 +8823,8 @@ def _held_exports(game: str) -> List[Path]:
 
 
 def _reusable(game: str, scope: "tcg_export.Scope") -> Optional[Tuple[Path, float]]:
-    """The export that answers this scope without a request, with its age in seconds.
+    """The export that answers this scope without a request, with its age in seconds: one
+    downloaded on today's US Central day (D166, `store/clock.before_today`).
 
     THIS IS THE HALF THAT SAVES THE REQUEST, and it is the only part of this route whose
     saving an outcome assertion cannot see: a reuse and a fetch produce the same file, the
@@ -8839,11 +8836,11 @@ def _reusable(game: str, scope: "tcg_export.Scope") -> Optional[Tuple[Path, floa
         if note is None or not _covers(note, scope):
             continue
         try:
-            age = time.time() - path.stat().st_mtime
+            taken = path.stat().st_mtime
         except OSError:
             continue
-        if 0 <= age <= EXPORT_REUSE_S:
-            return path, age
+        if not clock.before_today(datetime.fromtimestamp(taken, timezone.utc)):
+            return path, max(0.0, time.time() - taken)
     return None
 
 
@@ -8959,7 +8956,7 @@ def _reuse_note(asked: Optional[dict]) -> Optional[dict]:
     if held is None:
         return None
     path, age = held
-    return {"file": path.name, "age_s": int(age), "window_s": EXPORT_REUSE_S}
+    return {"file": path.name, "age_s": int(age)}
 
 
 def _unhinted_said(
