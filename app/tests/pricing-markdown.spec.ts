@@ -191,7 +191,7 @@ async function open(
            one key for both. This said '0.40' beside a threshold of '0.49' — a wire shape that had
            stopped being producible, which is the way a stub quietly stops testing the product. */
         floor: '0.49',
-        /* `reprice.READ_FRESH_S`, which the server sends so the screen never types its own. */
+        /* `reprice.fresh_for_s`, which the server sends so the screen never types its own. */
         stale_after_s: 86400,
       }),
     })

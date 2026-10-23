@@ -1757,6 +1757,60 @@ def check_dead_path_run_is_not_sent_on_old_prices(checks: Checks) -> None:
         checks.equal(sorted(second.directory.glob("import*.csv")), [], "5b. and no import file was written")
 
 
+# How `UNDATED` (the epoch, 1970-01-01 UTC) reads as a US Central day or a month name, and the word a bare `None` would print.
+EPOCH_WORDS = ("1969", "1970", "December 31", "None")
+
+
+def _undated_run(checks: Checks, portal: dict, home: Path, cards):
+    """A stale joined run whose export is gone, with no recorded `mtime` and no file its digest finds: `run_files.UNDATED`."""
+    run = _stale_run(checks, portal, home, cards)
+    _strand_export(checks, run, recorded=None, recovered_days=None)
+    return run
+
+
+def check_undated_export_is_an_unknown_day(checks: Checks) -> None:
+    """Case 6. An export of no recoverable age is `run_files.UNDATED` (the epoch). The refusal, the receipt and the CLI line call it an unknown day, never 1970.
+
+    6a, the gate's refusal with the refresh lock held. 6b, a send that refreshes: the summary and the
+    receipt on disk carry `was: None`. 6c, the refreshed line `emit` prints.
+    """
+    checks.note("")
+    checks.note("SEND GATE — an export of no recoverable age is an unknown day, never 1970")
+    central = ZoneInfo("America/Chicago")
+    today = datetime.now(central).date().isoformat()
+    with send_portal() as portal, synced_home() as home:
+        lost = _undated_run(checks, portal, home, [(3, 1, "Dunsparce", "120/159", "normal")])
+        checks.equal(_stale_set(checks, "6. `stale_runs` answers", lost).get(lost.name), run_files.UNDATED,
+                     "6. the run is dated `UNDATED`")
+
+        with pricerefresh.refresh_lock() as held:
+            checks.ok(held, "6a. the probe holds the refresh lock, as another process would")
+            outcome = _outcome(lambda: pipeline_routes.refresh_before_send([lost.directory.name]))
+        code, text = _refused(outcome)
+        checks.equal(code, "prices_stale", "6a. the gate refuses `prices_stale`")
+        checks.ok("The prices come from an export from an unknown day, and" in text,
+                  "6a. and the refusal says the prices come from an export from an unknown day", text[:300])
+        checks.ok(not any(word in text for word in EPOCH_WORDS), "6a. and never names the epoch's day", text[:300])
+
+        outcome = _send_now(lost)
+        send = outcome[1].get("send") or {} if outcome[0] == "answer" else {}
+        expected = {"ran": True, "ok": True, "was": None, "export_day": today}
+        checks.ok(outcome[0] == "answer", "6b. the send refreshes the undated run and goes", repr(outcome[1:])[:300])
+        checks.equal(send.get("refresh"), expected, "6b. the summary says the refresh ran, with `was` null")
+        receipts = attempt(checks, "6b. the receipts are read", send_routes._receipts) or []
+        checks.equal([record.get("refresh") for _, record in receipts], [expected],
+                     "6b. and the receipt on disk carries `was` null")
+
+        cli = _undated_run(checks, portal, home, [(6, 1, "Articuno", "161", None)])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        text = command(checks, "emit", str(cli.directory))
+        line = next((row for row in text.splitlines() if "refreshed before this send" in row), "")
+        checks.ok(line.endswith(f"refreshed before this send: export of an unknown day, now {today}"),
+                  "6c. the CLI prints the refresh line, from an unknown day", line or text[-300:])
+        checks.ok(line != "" and not any(word in line for word in EPOCH_WORDS),
+                  "6c. and that line never prints the epoch's day or None", line or text[-300:])
+
+
 CHECKS = (
     check_refresh_reaches_store_backed_runs,
     check_held_lock_is_a_recorded_skip,
@@ -1792,4 +1846,5 @@ CHECKS = (
     check_dead_path_without_mtime_is_judged_by_its_recovered_file,
     check_dead_path_with_no_age_is_stale,
     check_dead_path_run_is_not_sent_on_old_prices,
+    check_undated_export_is_an_unknown_day,
 )
