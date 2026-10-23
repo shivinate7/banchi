@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 import { Button, Count, EmptyState, FailureNotice, Icon, Money, Page, ReloadButton, Section, Select, Sheet, Skeleton, SkeletonText } from './kit'
 import { toast } from './kit/toast'
@@ -134,6 +135,89 @@ function refusalToastOf(failure: Failure, fallback: string) {
   return { kind: 'refusal' as const, tone: failureTone(failure), title: one.title, ...(one.body === '' ? {} : { body: one.body }) }
 }
 
+/** A short sentence that carries its reason (4.8). The reason shows on hover, on keyboard focus and on a tap; it is in the
+ *  DOM always (at zero opacity) so `aria-describedby` reads it. Portalled to `<body>` because a toast and a sheet clip
+ *  what is drawn inside them. The kit's tooltip belongs to `IconButton` alone, so this is the screen's own. */
+function Reason({ said: sentence, why }: { readonly said: string; readonly why: string }) {
+  const id = useId()
+  const [hover, setHover] = useState(false)
+  const [focus, setFocus] = useState(false)
+  const [tapped, setTapped] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const tip = useRef<HTMLSpanElement>(null)
+  const touch = useRef(false)
+  /* A tap opens the reason and a tap anywhere else closes it. Not every browser focuses a button on a tap, so blur alone is not enough. */
+  useEffect(() => {
+    if (!tapped) return
+    const away = (e: PointerEvent) => {
+      if (e.target !== trigger.current) setTapped(false)
+    }
+    document.addEventListener('pointerdown', away)
+    return () => document.removeEventListener('pointerdown', away)
+  }, [tapped])
+  const place = () => {
+    if (trigger.current === null || tip.current === null) return
+    const b = trigger.current.getBoundingClientRect()
+    const margin = 8
+    const left = Math.max(margin, Math.min(b.left, window.innerWidth - tip.current.offsetWidth - margin))
+    const above = b.top - tip.current.offsetHeight - margin
+    tip.current.style.left = `${Math.round(left)}px`
+    tip.current.style.top = `${Math.round(above < margin ? b.bottom + margin : above)}px`
+  }
+  return (
+    <>
+      <button
+        ref={trigger}
+        type="button"
+        className="slabs-reason"
+        aria-describedby={id}
+        onMouseEnter={() => {
+          if (window.matchMedia('(hover: hover)').matches) setHover(true)
+          place()
+        }}
+        onMouseLeave={() => setHover(false)}
+        onFocus={(e) => {
+          setFocus(e.currentTarget.matches(':focus-visible'))
+          place()
+        }}
+        onBlur={() => {
+          setFocus(false)
+          setTapped(false)
+        }}
+        onPointerDown={(e) => {
+          touch.current = e.pointerType === 'touch'
+        }}
+        onClick={() => {
+          if (touch.current) setTapped((on) => !on)
+          place()
+        }}
+      >
+        {sentence}
+      </button>
+      {createPortal(
+        <span ref={tip} id={id} role="tooltip" className="slabs-tip" data-tip-visible={hover || focus || tapped ? 'true' : undefined}>
+          {why}
+        </span>,
+        document.body,
+      )}
+    </>
+  )
+}
+
+/** Undo's refusal: the screen's one sentence is the title, with the reason behind it. The body is the screen's wording for
+ *  the code, else the server's own sentence, so a rate limit keeps "tomorrow" on screen. */
+const UNDO_SAID = 'The slab was not put back.'
+function undoRefusalToast(failure: Failure) {
+  const body = SAID[failure.code] ?? failure.message
+  const why =
+    failure.code === 'cardladder_rate_limited'
+      ? 'Card Ladder hit its limit for today, so it could not add the slab back. Try again tomorrow.'
+      : failure.code === 'cardladder_token_missing' || failure.code === 'cardladder_token_rejected'
+        ? 'Card Ladder would not accept the saved sign-in, so it could not add the slab back.'
+        : 'Card Ladder did not answer, so it could not add the slab back. Try again later.'
+  return { kind: 'refusal' as const, tone: failureTone(failure), title: <Reason said={UNDO_SAID} why={why} />, ...(body === '' ? {} : { body }) }
+}
+
 function Refused({ failure, fallback, onRetry, busy, compact }: { readonly failure: Failure; readonly fallback: string; readonly onRetry?: () => void; readonly busy?: boolean; readonly compact?: boolean }) {
   const one = said(failure, fallback)
   return <FailureNotice failure={one.failure} title={one.title} onRetry={onRetry} busy={busy} compact={compact} />
@@ -216,7 +300,7 @@ export default function Slabs() {
     } catch (err) {
       const f = describeFailure(err)
       if (fromSheet && addOpenNow.current) setAddFailure(f)
-      else toast(refusalToastOf(f, fromSheet ? 'That slab could not be added.' : 'The slab was not put back.'))
+      else toast(fromSheet ? refusalToastOf(f, 'That slab could not be added.') : undoRefusalToast(f))
     } finally {
       addBusy.current = false
       setAdding(false)
@@ -515,9 +599,9 @@ function SlabSheet({
   )
 }
 
-function Rows({ children, loading }: { readonly children?: ReactNode; readonly loading?: boolean }) {
+function Rows({ children, loading, className }: { readonly children?: ReactNode; readonly loading?: boolean; readonly className?: string }) {
   return (
-    <ul className="slabs-rows" aria-busy={loading ? 'true' : undefined}>
+    <ul className={className === undefined ? 'slabs-rows' : `slabs-rows ${className}`} aria-busy={loading ? 'true' : undefined}>
       {children}
     </ul>
   )
@@ -553,7 +637,9 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
 
       <Section title="Worth">
         {noSales ? (
-          <p className="slabs-no-sales">No estimate without a sale.</p>
+          <p className="slabs-no-sales">
+            <Reason said="No estimate without a sale." why="This slab has never sold at its grade, so Card Ladder gives no estimate." />
+          </p>
         ) : (
           <dl className="slabs-worth">
             <div>
@@ -604,10 +690,10 @@ function SlabBody({ row, detail }: { readonly row: SlabRow; readonly detail: Sla
       </Section>
 
       <Section title="Sales Speed">
-        <Rows loading={loading}>
+        <Rows loading={loading} className="slabs-speed-rows">
           <li className="slabs-row slabs-speed slabs-head" aria-hidden="true">
             <span>Window</span>
-            <span className="slabs-fig">Velocity</span>
+            <span className="slabs-fig">Sales</span>
             <span className="slabs-fig">Average price</span>
           </li>
           {WINDOWS.map(([id, words]) => {
