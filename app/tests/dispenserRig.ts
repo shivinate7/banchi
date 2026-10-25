@@ -92,13 +92,23 @@ export async function slowCapture(
   page: Page,
   ms: number | ((post: number) => number),
   failIf: (post: number) => boolean = () => false,
-): Promise<{ posts: () => number; answered: () => number; events: () => string[]; bodies: () => string[]; sections: () => string[] }> {
+): Promise<{
+  posts: () => number
+  answered: () => number
+  events: () => string[]
+  bodies: () => string[]
+  sections: () => string[]
+  hold: () => void
+  release: () => void
+}> {
   let posts = 0
   let answered = 0
   let saved = 0 // the slot a successful save takes: failed POSTs burn none
   const events: string[] = [] // `sent:N` when POST N arrives, `answered:N` when its reply goes out
   const sections: string[] = [] // the `section` each POST asked for, '' for the box's last
   const bodies: string[] = [] // a short digest of each POST's body: the same frame resent matches itself
+  let gated = false
+  const unanswered: Array<() => void> = [] // answers `hold` is keeping back
   await page.route(/\/capture$/, (route) => {
     posts += 1
     const post = posts
@@ -114,7 +124,8 @@ export async function slowCapture(
       claimed = '?'
     }
     sections.push(claimed)
-    setTimeout(() => { // keep: the slow save held
+    const delay = typeof ms === 'number' ? ms : ms(post)
+    const answer = () => setTimeout(() => { // keep: the slow save held
       answered += 1
       events.push(`answered:${post}`)
       if (failIf(post)) {
@@ -136,9 +147,25 @@ export async function slowCapture(
           place: { box_total: index, located: true, label: `Box 5, Card ${index}` },
         }),
       })
-    }, typeof ms === 'number' ? ms : ms(post))
+    }, delay)
+    if (gated) unanswered.push(answer)
+    else answer()
   })
-  return { posts: () => posts, answered: () => answered, events: () => events.slice(), bodies: () => bodies.slice(), sections: () => sections.slice() }
+  return {
+    posts: () => posts,
+    answered: () => answered,
+    events: () => events.slice(),
+    bodies: () => bodies.slice(),
+    sections: () => sections.slice(),
+    /** Answer nothing until `release`: a POST that arrives meanwhile counts, and its `ms` starts at release.
+     *  A test that needs a later step to land while a save is out holds the answers until that step is seen,
+     *  because the stub's clock does not slow with a throttled page. */
+    hold: () => { gated = true },
+    release: () => {
+      gated = false
+      for (const answer of unanswered.splice(0)) answer()
+    },
+  }
 }
 
 export async function writes(page: Page): Promise<string[]> {
@@ -174,8 +201,11 @@ export async function injectScene(page: Page): Promise<void> {
     canvas.height = 360
     const context = canvas.getContext('2d')
     if (context === null) throw new Error('no 2d context')
-    const scene = { base: first }
+    // `path`: the levels the next draws take, one per draw (`crossLens`); `arrived` fires after the last
+    const scene = { base: first, path: [] as number[], arrived: null as (() => void) | null }
     const draw = () => {
+      const next = scene.path.shift()
+      if (next !== undefined) scene.base = next
       context.fillStyle = `rgb(${scene.base},${scene.base},${scene.base})`
       context.fillRect(0, 0, 640, 360)
       if (scene.base !== first) {
@@ -188,6 +218,7 @@ export async function injectScene(page: Page): Promise<void> {
           context.fillRect(0, y + 20, 640, 20)
         }
       }
+      if (next !== undefined && scene.path.length === 0) scene.arrived?.()
       window.requestAnimationFrame(draw)
     }
     draw()
@@ -195,4 +226,32 @@ export async function injectScene(page: Page): Promise<void> {
     video.srcObject = canvas.captureStream(30)
     void video.play()
   }, GAP_LUMA)
+}
+
+/* SOMETHING CROSSES THE LENS AND THE SCENE SETTLES BACK ONTO `rest`: CROSSING_LEVELS rising levels,
+ * then `rest`, one level per drawn frame, so the pace is the frames and never a clock.
+ *
+ * The screen photographs a picture that stands still for its settle window. Every level differs
+ * from every other by at least CROSSING_STEP, so any two frames the stream delivers differ and the
+ * picture cannot stand still until it is back on `rest`, where it books its one no-card verdict.
+ * 16 is twice the motion machine's `tHi` at the seed (8), so each change reads as movement. */
+const CROSSING_STEP = 16
+const CROSSING_LEVELS = 10
+export async function crossLens(page: Page, rest = GAP_LUMA): Promise<void> {
+  await page.evaluate(
+    ({ rest: to, step, levels }) =>
+      new Promise<void>((done) => {
+        const scene = (window as unknown as { __scene: { path: number[]; arrived: (() => void) | null } }).__scene
+        scene.arrived = done
+        scene.path = [...Array.from({ length: levels }, (_, i) => 60 + i * step), to]
+      }),
+    { rest, step: CROSSING_STEP, levels: CROSSING_LEVELS },
+  )
+}
+
+/** `DISPENSER_CPU_THROTTLE=<n>` slows this page's CPU n-fold, to replay a case the way a loaded runner
+ *  runs it. Unset or 1 does nothing. */
+export async function throttleCpu(page: Page): Promise<void> {
+  const rate = Number(process.env.DISPENSER_CPU_THROTTLE ?? 1)
+  if (rate > 1) await (await page.context().newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate })
 }
