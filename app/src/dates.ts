@@ -117,8 +117,8 @@ export function weekdayDate(at: Date | string | number | null | undefined): stri
 }
 const WEEKDAY = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 
-/** `24 September`, or `—` where there is no date. The day leads, for a sentence that reads
- *  "since 24 September" — `absoluteDate`'s "Sep 24, 2026" reads wrong in that position. */
+/** `September 24`, or `—` where there is no date: the long month and the day, no year, for a
+ *  sentence that reads "since September 24", where `absoluteDate`'s "Sep 24, 2026" reads wrong. */
 export function dayMonth(at: Date | string | number | null | undefined): string {
   const when = toDate(at)
   return when === null ? '—' : DAY_MONTH.format(when)
