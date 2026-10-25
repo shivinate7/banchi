@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { setViewport } from './phoneSwitch'
 import type { Page } from '@playwright/test'
-import { CARD, GAP_LUMA, armMotion, control, crossLens, fakeBluetooth, injectScene, slowCapture, throttleCpu, writes } from './dispenserRig'
+import { CARD, armMotion, control, crossLens, fakeBluetooth, injectScene, slowCapture, throttleCpu, writes } from './dispenserRig'
 
 /* THE DISPENSER'S BROWSER HALF, in a real browser against the real capture screen. The unit tier
  * (`unit/dispenser.unit.ts`) holds the loop against tcg-dealer's recorded sequences; this file
@@ -86,7 +86,12 @@ async function ready(page: Page, withBox: boolean, manual = false): Promise<void
       await page.keyboard.press('b')
       await expect(page.locator('.capture-opt').filter({ hasText: /Dispenser box/ })).toBeVisible({ timeout: 1_000 })
     }).toPass({ timeout: 15_000 })
+    // a slow first "b" lets the retry press a second one, and that one is typed into the query
+    await page.keyboard.press('ControlOrMeta+a')
     await page.keyboard.type('5')
+    // Enter takes the top row; the typed number shows as that row's " Box 5" once the list has narrowed,
+    // and a press on a query with no row makes a new box instead
+    await expect(page.locator('.capture-opt').filter({ hasText: /Dispenser box\s*Box 5/ })).toBeVisible()
     await page.keyboard.press('Enter')
   }
   if (manual) return // Manual trigger: no motion, no scene, no dispenser
@@ -132,20 +137,8 @@ test('a fire while the previous save is still out is photographed, not swallowed
   await ready(page, true)
   // Registered after `stubWire`, so it answers first: every save takes 4 s, far past a card's 0.42 s.
   const wire = await slowCapture(page, 4_000)
-  const start = control(page, 'Start dispenser')
-  await expect(start).toBeEnabled({ timeout: 5_000 })
-  await start.click()
-  const scene = (base: number) =>
-    page.evaluate((b) => {
-      ;(window as unknown as { __scene: { base: number } }).__scene.base = b
-    }, base)
-
-  await scene(CARD) // card 1 lands: fire 1, its save is held
-  await expect.poll(wire.posts, { timeout: 8_000 }).toBe(1)
-  await scene(GAP_LUMA) // card 1 leaves, card 2 arrives while save 1 is still out
-  await page.waitForTimeout(400) // keep: let the gap register before the next card
-  await scene(CARD - 40) // a different picture: the same one would be suppressed as unchanged
-  await expect.poll(wire.posts, { timeout: 8_000 }).toBe(2) // fire 2 was kept and saved, not dropped
+  await twoCards(page, wire) // card 1 lands and its save is held; card 2 (a different picture, or it would be suppressed as unchanged) fires and is kept behind it
+  await expect.poll(wire.posts, { timeout: 8_000 }).toBe(2) // fire 2 was saved once save 1 answered, not dropped
   await expect(page.locator('.capture-controls').getByText(/not photographed|Resume captures first/)).toHaveCount(0)
   await expect(control(page, 'Stop dispenser')).toBeVisible()
   await control(page, 'Stop dispenser').click()
@@ -154,19 +147,7 @@ test('a fire while the previous save is still out is photographed, not swallowed
 test('saves reach the server in capture order: card 2 is sent only after card 1 has answered', async ({ page }) => {
   await ready(page, true)
   const wire = await slowCapture(page, 2_000)
-  const start = control(page, 'Start dispenser')
-  await expect(start).toBeEnabled({ timeout: 5_000 })
-  await start.click()
-  const scene = (base: number) =>
-    page.evaluate((b) => {
-      ;(window as unknown as { __scene: { base: number } }).__scene.base = b
-    }, base)
-
-  await scene(CARD) // card 1: fire 1, its save is held 2 s
-  await expect.poll(wire.posts, { timeout: 8_000 }).toBe(1)
-  await scene(GAP_LUMA)
-  await page.waitForTimeout(400) // keep: let the gap register before the next card
-  await scene(CARD - 40) // card 2 is photographed while save 1 is still out
+  await twoCards(page, wire) // card 1: fire 1, its save held; card 2 is photographed while save 1 is still out
   await expect.poll(wire.posts, { timeout: 8_000 }).toBe(2)
   // two photos in flight at once may commit out of order: card 2 goes only after card 1 answered
   expect(wire.events()).toEqual(['sent:1', 'answered:1', 'sent:2'])
@@ -188,8 +169,9 @@ const hudCount = (page: Page, name: 'empty' | 'fires') =>
   page.locator('.capture-motion-hud').getByText(new RegExp(`^${name} \\d+$`))
 
 /** Card 1 fires and its save is held; card 2 is photographed behind it (queued, in memory).
- *  Each step waits for the screen's own count, never a clock: a loaded runner stretches the screen's
- *  reading of a frame, and a fixed sleep then lets the next step (or a reload) come first. */
+ *  The last step waits for the screen's own record of both photos, never a clock: a loaded runner
+ *  stretches the screen's reading of a frame, and a fixed sleep then lets the next step (or a reload)
+ *  come first. */
 async function twoCards(page: Page, wire: Awaited<ReturnType<typeof slowCapture>>): Promise<void> {
   wire.hold() // save 1 stays out until card 2 is photographed: the stub's clock does not slow with a throttled page
   const start = control(page, 'Start dispenser')
@@ -201,13 +183,13 @@ async function twoCards(page: Page, wire: Awaited<ReturnType<typeof slowCapture>
   // page's own clock, and a throttled page cannot stretch that. A gap that waited for its own settled
   // verdict took a third of it, and card 2 then fired after "no photo came" and was dropped.
   await sceneTo(page, CARD - 40)
-  await expect(hudCount(page, 'fires'), 'card 2 fires').toHaveText('fires 2')
-  // card 2 is photographed behind save 1 once the screen has kept both photos' ids (a reload reads them)
-  await expect
-    .poll(() => page.evaluate(() => (sessionStorage.getItem('banchi.session.captureId') ?? '').split(' ').filter(Boolean).length))
-    .toBe(2)
+  await expect.poll(() => keptIds(page), { message: 'card 2 is photographed behind save 1' }).toBe(2)
   wire.release()
 }
+
+/** How many unsaved photos the screen has kept the ids of (a reload reads them back). */
+const keptIds = (page: Page) =>
+  page.evaluate(() => (sessionStorage.getItem('banchi.session.captureId') ?? '').split(' ').filter(Boolean).length)
 
 /* CONTRACT: when card 1's save fails twice, the screen says `Box 5, Card 1 was not saved` (its own
  * label, the slot it was to take) and offers a button named `Retry saving` that re-sends it, then card 2,
@@ -251,9 +233,7 @@ test('Undo pressed while a save is out says so, plainly, and deletes nothing', a
   await start.click()
   await sceneTo(page, CARD)
   await expect.poll(wire.answered, { timeout: 8_000 }).toBe(1) // card 1 is saved
-  await sceneTo(page, GAP_LUMA)
-  await page.waitForTimeout(400) // keep: let the gap register before the next card
-  await sceneTo(page, CARD - 40)
+  await sceneTo(page, CARD - 40) // card 2 follows at once: see `twoCards` for why no gap
   await expect.poll(wire.posts, { timeout: 8_000 }).toBe(2) // card 2's save is out
   await page.keyboard.press('u')
   await expect(page.locator('.capture-undo-note')).toContainText(/saving|saved|wait/i, { timeout: 3_000 })
@@ -422,15 +402,16 @@ test('R7: while held, undo (divider and back) sends no request and the divider s
   await start.click()
   await sceneTo(page, CARD)
   await expect.poll(wire.answered, { timeout: 8_000 }).toBe(1) // card 0 is a committed shot
-  await sceneTo(page, GAP_LUMA)
+  wire.hold() // the failing saves stay out until card 2 is kept: the stub's clock does not slow with a throttled page
   await page.keyboard.press('s') // a divider after it
   await expect.poll(w.opened, { timeout: 5_000 }).toBe(1)
-  await page.waitForTimeout(400) // keep: let the gap register before the next card
+  // the divider is on screen, so card 1 is captured into it
+  await expect(page.locator('.capture-section-slot .capture-row').first()).toContainText(/Section \d of 2/)
   await sceneTo(page, CARD - 40)
   await expect.poll(wire.posts, { timeout: 8_000 }).toBe(2) // card 1 after the divider, its save held
-  await sceneTo(page, GAP_LUMA)
-  await page.waitForTimeout(400) // keep: let the gap register before the next card
-  await sceneTo(page, CARD)
+  await sceneTo(page, CARD) // card 2 follows at once: see `twoCards` for why no gap
+  await expect.poll(() => keptIds(page), { message: 'card 2 is photographed behind save 1' }).toBe(2)
+  wire.release()
   await expect.poll(wire.answered, { timeout: 10_000 }).toBe(3)
   await expect(unsaved(page)).toBeVisible()
 
