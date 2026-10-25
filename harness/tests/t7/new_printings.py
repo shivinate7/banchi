@@ -14,7 +14,9 @@ What the cases pin (no name is the builder's to follow; each reads only `match.b
   `match.unread_targets` / `pipeline_routes.ensure_stock_setup`  a set the index holds but the catalogue now lists
         more of counts as work, so the background check starts a Prepare. A set whose catalogue count matches what
         the index holds is no work, and one Prepare that reads the new printings leaves nothing for the next look.
-        (Red on main: `unread_targets` compares set NAMES only.)
+        (Red before the fix: `unread_targets` compared set NAMES only.) A new printing with no photo (no URL, or a
+        404) is work once and not after one Prepare, which keeps a row for it. A held set whose list raises is no work
+        and hides no other set's work.
 
 Nothing downloads: the stock catalog, the photo fetch and the embedder are fakes.
 """
@@ -26,7 +28,7 @@ from unittest import mock
 from harness.tests import Checks
 from harness.tests.t7.auto_setup import SWITCH, _Child, _env, _Popen, _runtime, _Stock
 from harness.tests.t7.common import isolated_home, quiet
-from harness.tests.t7.photo_recheck import _Embedder, _fetcher, _model, _stamp
+from harness.tests.t7.photo_recheck import _Embedder, _model, _png, _stamp
 from identify import match
 from pipeline import games, pricehistory, stockimages
 from pipeline.stockimages import CatalogProduct
@@ -36,23 +38,44 @@ GAME, SET = "riftbound", "Radiance"
 
 
 class _Listing(_Stock):
-    """A tcgcsv-shaped stock whose one Riftbound set lists `count` printings; `count` can grow between looks."""
+    """A tcgcsv-shaped stock whose Riftbound sets list `count` printings (`extra`: other sets, name -> count); `count`
+    can grow between looks. `urls` replaces printing `i`'s URL ("" is a listing with no image). A set named in
+    `broken` raises when its list is read."""
 
-    def __init__(self, count):
-        self.count = count
+    def __init__(self, count, extra=None, urls=None, broken=()):
+        self.count, self.extra, self.urls, self.broken = count, extra or {}, urls or {}, set(broken)
+
+    def _sizes(self):
+        return {SET: self.count, **self.extra}
 
     def catalog_sets(self, game):
-        return [(SET, 7)] if game == GAME else []
+        return [(name, 7 + i) for i, name in enumerate(self._sizes())] if game == GAME else []
 
     def catalog_products(self, game, set_name):
-        if (game, set_name) != (GAME, SET):
+        if game != GAME or set_name not in self._sizes():
             return None
-        return [CatalogProduct(f"p{i}", f"Card {i}", f"{i:03d}", "", f"u{i}") for i in range(1, self.count + 1)], 0
+        if set_name in self.broken:
+            raise RuntimeError("the catalogue list could not be read")
+        tag = "" if set_name == SET else f"{set_name}-"
+        return [CatalogProduct(f"{tag}p{i}", f"Card {i}", f"{i:03d}", "", self.urls.get(i, f"{tag}u{i}"))
+                for i in range(1, self._sizes()[set_name] + 1)], 0
+
+
+def _missing(*gone):
+    """A photo fetch that answers 404 for the URLs in `gone` and a picture for every other."""
+    asked = []
+
+    def fetch(url):
+        asked.append(url)
+        return (None, "http_404") if url in gone else (_png(), None)
+
+    fetch.asked = asked
+    return fetch
 
 
 def _build(stock, fetch=None):
     """One Prepare's index build over the stock's own targets, with the embedder and the photo fetch faked."""
-    fetch = fetch or _fetcher({f"u{i}" for i in range(1, 1000)})
+    fetch = fetch or _missing()
     with mock.patch.object(match, "_session", lambda *_a, **_k: _Embedder()), quiet(), match.Index() as index:
         report = match.build_index(index, match.targets_for(stock, []), stock, model=_model(), fetch=fetch)
     return report, fetch.asked
@@ -146,8 +169,41 @@ def check_auto_start_counts_new_printings_as_work(checks: Checks) -> None:
         checks.equal(_spawned(stock), 0, "and the next look starts none")
 
 
+def check_new_printing_with_no_photo_is_work_once(checks: Checks) -> None:
+    checks.note("")
+    checks.note("NEW PRINTINGS — a new printing with no photo is work once, and a Prepare that finds none ends it")
+    with isolated_home():
+        stock = _Listing(4)
+        _build(stock)
+        stock.count, stock.urls = 6, {5: "", 6: "u6"}  # one listed with no image, one whose URL answers 404
+        checks.equal(match.unread_targets(stock, []), [(GAME, SET)], "two new printings, neither with a photo: the set is work")
+        report, asked = _build(stock, _missing("u6"))
+        checks.equal((report.embedded, report.no_image, asked), (0, 2, ["u6"]), "the Prepare reads neither and asks the CDN for the 404 one only")
+        rows = _rows()
+        checks.equal((rows["p5"][0], rows["p6"][0]), (match.S_NO_URL, match.S_NO_PHOTO), "and keeps a row for each, so the guard reads their names")
+        checks.equal(match.unread_targets(stock, []), [], "after that one Prepare the set is no work")
+        checks.equal(_spawned(stock), 0, "so the background look does not start another")
+
+
+def check_one_unreadable_list_does_not_hide_the_rest(checks: Checks) -> None:
+    checks.note("")
+    checks.note("NEW PRINTINGS — a held set whose product list cannot be read does not hide another set's work")
+    with isolated_home():
+        stock = _Listing(4, extra={"Origins": 2})
+        _build(stock)
+        stock.extra, stock.broken = {"Origins": 3}, {SET}
+        try:
+            got = match.unread_targets(stock, [])
+        except Exception as exc:  # noqa: BLE001
+            got = f"raised {type(exc).__name__}"
+        checks.equal(got, [(GAME, "Origins")], "Origins gained a printing and Radiance's list raises: only Origins is work")
+        checks.equal(_spawned(stock), 1, "and the background look still starts a Prepare")
+
+
 CHECKS = (
     check_build_reads_only_the_new_printings,
     check_product_list_is_not_cached_forever,
     check_auto_start_counts_new_printings_as_work,
+    check_new_printing_with_no_photo_is_work_once,
+    check_one_unreadable_list_does_not_hide_the_rest,
 )
