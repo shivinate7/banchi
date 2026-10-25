@@ -246,6 +246,21 @@ prompt being scored. The harness does that. Production inventory is a different 
 Re-reading thousands of correct answers after one line is reworded costs real money to mostly
 reproduce them. The recorded fingerprint makes a targeted re-read possible.
 
+### 4.7 A run joins itself
+
+At its end, every identify run, paid or free, joins itself (D321, every identify run
+joins itself at its end). The join helper in `cli/cmd_identify.py` (`_join_now`) takes the screen's automatic match: the game's
+export (a recent one is reused, else one is fetched; D166, the catalog export belongs to the game),
+then the join. If the join does not run, the run stays at the join step. The summary says why, and says the cards are
+held until the join. A second helper in `cli/cmd_identify.py` (`_held_now`) reads the queues back for the summary. There is no
+export prefetch at run start, because no identification exists then to scope it.
+
+Open, not built: the card state `read`. A card is `read` after Haiku has answered and before the join
+has run. It sits between `captured` and `identified`.
+
+The screen half: the runs screen reads the run's phase and its match record, so a run left at the join
+step shows why. The screen names the state `read` once it is built, and its "Join again" wording is open.
+
 ---
 
 ## 5. `join`

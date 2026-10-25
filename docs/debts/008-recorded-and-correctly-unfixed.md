@@ -36,4 +36,16 @@ No work proposed. Each item is a gap a green run does not show.
 - **Two Slabs cases have no test.** One is a tip opened by hover and closed with Escape. The other is a refused-Undo toast over an open detail sheet.
 - **A hot reload of `Slabs.tsx` leaves one inert listener.** In development, one window Escape listener stays behind. It does nothing.
 
+- **PR #906's "settled" count overclaims a card with no market data.** The summary helper in `cli/cmd_identify.py` (`_held_now`) counts a card with no open queue entry as settled, and a card with no market data can be one.
+- **The "Join again" button wording is unsettled.** Every run now joins itself (D321, every identify run joins itself at its end), so a press repeats a join and does not start the first one.
+- **`harness/tests/t7_box_map.py:check_merge_speed` has a 10 s wall-clock backstop that flakes under load.** DEBT43 (the merge-speed guard counts SQLite ticks only) names the backstop. On a loaded machine it fails with no defect in the code.
+- **PR #902's "waits at join" tail is false for a run that is already joined.**
+- **A cap stop is final within one process only.** A hard kill, then a reattach, sends the 2048-token request once more. The cap also starts again on each fresh run.
+- **The PR #908 hub-correction test uses r=0, so it cannot tell raw from corrected.** Its answer is the same either way, so it stays green if the correction breaks.
+- **The free quote's "at most $X" leaves out the retry round.** It also rounds half to even.
+- **An export file with a future mtime counts as a fresh export.**
+- **`store/readings.py:Readings.replace_source` can orphan a newer entry's source row.**
+- **A failed send refresh re-requests on every retry.**
+- **PR #910's auto-retire is unmeasured in two cases.** One is a printing with no stock photo. The other is the 24 h catalog cache.
+
 **Outcome at risk.** A run is read as a promise none of these gives.

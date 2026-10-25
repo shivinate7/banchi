@@ -415,8 +415,8 @@ composes it for every open run (the roster of `do_pipeline_worklist`), in this o
 | step | what it does | reads | writes |
 |---|---|---|---|
 | 1. listings | `do_live_export`, unchanged | one portal request | `inventory/.live/`, the readings table |
-| 2. catalog prices | per game with a waiting card: `do_pipeline_export` with `refresh: true` once. `_reusable` then serves every later run of that game for `EXPORT_REUSE_S` | one portal request per game | `inventory/.exports/<game>/` |
-| 3. join | per open run: `do_pipeline_step(name, "join", {"fetched": [file]})` | local | each run's `pricing.json`, and the readings table (`reading_from_table`) |
+| 2. catalog prices | per game with a waiting card: `do_pipeline_export` with `refresh: true` once. `_reusable` then serves every later run of that game for the rest of the US Central day | one portal request per game | `inventory/.exports/<game>/` |
+| 3. join | per open run, and per run a send names (`also`): `do_pipeline_step(name, "join", {"fetched": [file]})`. Per run waiting at phase join: `do_run_match`, which fetches or reuses the export and prices it | local | each run's `pricing.json`, and the readings table (`reading_from_table`) |
 | 4. sales history | `do_price_trends_preload`, now saving per-day facts (below) | market history host, at its courtesy pace | `inventory/price-trends.json` |
 
 Steps 1 to 3 set the page's "Prices as of". Step 4 is the slow one and runs last. So prices are
@@ -436,6 +436,42 @@ screen proposes can move overnight.
 D104 now says this, by the owner's word. The daily job also fetches the catalog export per game
 and re-joins every open run. Everything else in D104 stands. The guard stands: nothing here
 writes at TCGplayer, a failed step is named, and a typed answer never moves.
+
+### A send is from today
+
+**A send never prices from an export older than today (the US Central calendar day), by the owner's
+ruling.** A send priced 229 SKUs from a 21-day-old export, and 13 of them crossed the $0.25
+threshold. The daily job is not a promise: a Mac that was off that morning leaves the run tables as
+they were.
+
+- **The gate is `pipeline_routes.refresh_before_send`.** It reads each named run's recorded export
+  (`cli/runs.stale_runs`: the file's mtime; for a file that moved, the run record's export time, then the
+  file found by its digest; with neither, an unknown day, which counts as stale) and does nothing when every one is
+  from today. Otherwise it runs `do_prices_refresh` with the send's runs added (`also`), then checks
+  the outcome: every named run must now be from today. If not, nothing is sent and a sentence says
+  why (the first failed step's own message, or "another refresh is running").
+- **Two callers, one door.** `do_send` calls it first, inside its press and before a receipt exists.
+  `cli/cmd_emit.run` calls it for every other send: the CLI, `POST /pipeline/emit` and the free
+  `emit` step all run that command. The runs sheet and `#/pricing` both send through `do_send`. A
+  mark-down send is held to the same day by the same test (`store/clock.before_today`, through
+  `reprice.read_is_fresh`): its read must be from today, or it refuses as `read_stale`.
+- **The receipt says so.** `do_send`'s receipt and answer carry `refresh`: `ran`, `ok`, the day
+  the prices were `was`, and the `export_day` they now come from. The send card says in one
+  sentence when prices were refreshed first, and that they may differ from what was on screen. It
+  reads the receipt, so a reload keeps it for as long as the receipt stands on the card.
+- **A refresh that fails for another run does not stop this send.** The outcome is what is tested.
+  A named `--export` file is the owner's own prices, so a stale one is refused without a refresh.
+- **The refresh joins runs waiting at phase join.** The free reader leaves a run unjoined when no
+  export was downloaded today. The roster holds joined runs only, so such a run was on no
+  worklist. Step 3 now calls `do_run_match` for each, without `retry`: a run whose last try left a problem is not fetched again (one portal
+  request a day, D104), and waits for its own retry press. That wait is not a failure: `steps.join`
+  stays ok and names the run as waiting on its own problem. A run that tried and could not join fails
+  the step, is named in `steps.join`, and stays waiting. A pressed send is never widened to the runs the refresh joined:
+  they land on the worklist for the next send.
+- **A reading is never replaced by an older one.** `store/readings.Readings`'s `replace_source` keeps a SKU's
+  row when it is dated later than the new one. A re-join against an older export clears nothing,
+  keeps the source row, and writes only the SKUs no newer row holds. `at` is the export's own mtime: `cmd_join` dates
+  `pricing.json` and its reading to the oldest export it joined, as `cmd_match` does.
 
 ### The one home for the current Market and Lowest of a SKU
 
@@ -529,7 +565,7 @@ button asks for that, and for everything else.
   nothing at TCGplayer. It reads the stored session secret, so the route follows
   `/pipeline/live-export`'s posture. One run goes at a time: a second press while one runs
   answers `running` and starts nothing. Only a press calls it. No render, route load or timer
-  calls it. A second press inside `EXPORT_REUSE_S` of a finished run is refused unless the body
+  calls it. A second press inside `REFRESH_DEBOUNCE_S` of a finished run is refused unless the body
   says `force`. The screen sends `force` only from an explicit "Try again" after a failed run.
 - **What it runs.** Steps 1 to 3 always. Step 4 runs only for a SKU whose saved history ends
   before the newest finished day. So a press after the morning job asks the market host for
@@ -624,7 +660,7 @@ Each is one claim. A build makes each one red first.
 10. **One home.** `Reading` carries all four cells from one source and one second. A test feeds a
     run table and a newer live row. It gets one whole row back, never a mix.
 11. **The route.** `POST /pipeline/prices/refresh` answers 202, and a second press answers
-    `running`. A press inside `EXPORT_REUSE_S` of a finished run is refused without `force`.
+    `running`. A press inside `REFRESH_DEBOUNCE_S` of a finished run is refused without `force`.
 12. **Facts are one function.** `Series.window` gives the units, sales, average and range for a
     fixture history. A window with no sales gives an average of none, never zero.
 13. **The saved file.** The preload writes `facts`, `days` and `through`. `trends-saved` omits

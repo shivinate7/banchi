@@ -100,6 +100,8 @@ make catalog-mirror # fills the image mirror (about 16.7 GB). ARGS=--dry-run sam
                                    #   pending, so run reconcile --live first. --quantity SKU=N sends N copies.
                                    #   --listed-only sends above-threshold rows only. --split-threshold writes
                                    #   import-listed.csv and import-subthreshold.csv. --split-games writes one file per game.
+                                   #   A send whose runs' prices are from an export older than today (US Central)
+                                   #   refreshes them first, or stops and says why (D166, the catalog export belongs to the game).
                                    #   --live-guard FILE trims rows so TCGplayer never holds more copies than
                                    #   are here. --reprice-live F adds a price-only row per live card F names.
 ./banchi match    audit [--write]  # the free reader over every filed card with a photo. Free. Lists disagreements;
@@ -266,7 +268,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   unless the operator named `set_ids` or `scope`. A widening is never silent: every fetch carries a `width` block.
   Fix an unhinted card in Manage box, under Set claims.
 - **The catalog export belongs to the game, not the drawer** (D166, the catalog export is a property of the game). It lands in `inventory/.exports/<game>/`.
-  A covering export under 900s old is reused. `refresh: true` forces a new one.
+  A covering export downloaded on the same US Central day is reused. `refresh: true` forces a new one.
 - **The pricing answer is one file, keyed by SKU** (D86, one file for the store): `pipeline/corpus.py` over
   `inventory/prices.json`. `policy.threshold` is also the floor. `sub_threshold` defaults to $0.49 (D9, threshold and floor).
   `banchi prices adopt` migrates legacy run files. `join` and `emit` refuse over an unadopted one.

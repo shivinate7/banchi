@@ -833,6 +833,7 @@ async function open(
         cache_deleted: 0,
         registry_deleted: true,
         directory_removed: true,
+        stranded_runs: [],
       }),
     })
   })

@@ -208,6 +208,7 @@ from harness.tests.t7 import (  # noqa: E402
     realized_prices,
     preview_crop,
     read_budget,
+    manifest_merge,
     second_look_counts,
 )
 # `t7_box_map.py` imports these names from this module, so they stay reachable here (D264).
@@ -272,6 +273,7 @@ CHECK_ORDER = (
     *realized_prices.CHECKS,
     *preview_crop.CHECKS,
     *read_budget.CHECKS,
+    *manifest_merge.CHECKS,
     *second_look_counts.CHECKS,
 )
 

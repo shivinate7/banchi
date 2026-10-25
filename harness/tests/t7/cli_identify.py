@@ -7,13 +7,19 @@ the order `CHECK_ORDER` runs them.
 from __future__ import annotations
 
 import dataclasses
+import http.server
 import json
 import hashlib
+import os
 import shutil
+import signal
 import tempfile
+import threading
 import time
 
+from contextlib import contextmanager
 from decimal import Decimal
+from unittest import mock
 from pathlib import Path
 from types import SimpleNamespace
 from harness.tests import Checks
@@ -3803,11 +3809,19 @@ def check_rescue_stranded_run(checks: Checks) -> None:
             "fixture: box 3 carries a true index (D145)",
             f"bid: {box3_bid!r}",
         )
-        checks.raises(
-            runs.RunError,
-            lambda: resolve.exports_for(run, [str(export)]),
-            "fixture: the join refuses this run, which is what makes it stranded",
+        checks.ok(
+            bool(resolve.disowned_boxes(run.read_identifications(), Store().read().inventory, run)),
+            "fixture: the store disowns this run's drawer, which is what makes it stranded",
         )
+        # THE JOIN NO LONGER REFUSES IT (D262, amended): both records carry a digest that
+        # names a card in box 3, so the join follows them there. Rescue stays for a run whose
+        # cards sit in more than one box.
+        try:
+            resolve.exports_for(run, [str(export)])
+            followed = True
+        except runs.RunError:
+            followed = False
+        checks.ok(followed, "and the join follows its cards instead of refusing it")
 
         # (a) THE PREVIEW PRESSES NOTHING.
         before = run_count()
@@ -6504,6 +6518,585 @@ def check_empty_state_refusal_blames_no_missing_folder(checks: Checks) -> None:
         checks.ok(not blames_folder(route_text), "10. and its sentence does not say no photos were found or that the capture folder does not exist", f"said: {route_text!r}")
 
 
+# ----------------------------------------- a paid run ends joined (identify-engine-pick.md, section 7)
+
+
+def _paid_caps(directory: Path, cards) -> None:
+    """One photograph and one sidecar per `(box, position)`, named as a capture directory is named."""
+    directory.mkdir()
+    for box, position in cards:
+        # A color per position, from a hash: a card is named by its photograph (D172), so two
+        # presses must never share bytes, and a color taken from the box number clamps past 255.
+        # `card_photo`, not a flat frame: a flat dark frame is an empty slot and `identify` never sends it.
+        color = tuple(hashlib.sha256(f"{box}/{position}".encode()).digest()[:3])
+        card_photo(color).save(directory / f"{box}-{position:03d}.jpg", "JPEG")
+        (directory / f"{box}-{position:03d}.json").write_text(
+            json.dumps({"box": box, "position": position, "game": "pokemon", "set_hint": "SV09"}), "utf-8"
+        )
+
+
+def _paid_transport(answers: dict):
+    """A fake batch transport, answering by store key: a payload, or None for a card it fails."""
+    from cli import cmd_identify
+
+    keys = {cmd_identify._custom_id(key): key for key in answers}
+
+    def run_batch(requests, log=None, on_submit=None):
+        outcomes = {}
+        for request in requests:
+            payload = answers[keys[request.custom_id]]
+            if payload is None:
+                outcomes[request.custom_id] = batch.Outcome(
+                    request.custom_id, "errored", error="the transport refused this card"
+                )
+            else:
+                outcomes[request.custom_id] = batch.Outcome(
+                    request.custom_id, batch.SUCCEEDED,
+                    identification=prompt.parse(dict(payload), request.strategy),
+                )
+        return batch.BatchRun(outcomes=outcomes)
+
+    return run_batch
+
+
+def _paid_press(run_dir: Path, caps: Path, engine: str = "haiku"):
+    """`banchi identify <caps> --run-dir <run>`, the argv a press's child is started with. Returns (code, lines)."""
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+
+    lines: list = []
+    argv = ["identify", str(caps), "--engine", engine, "--run-dir", str(run_dir)]
+    with quiet():
+        code = cmd_identify.run(cli_entry.build_parser().parse_args(argv), lines.append)
+    return code, lines
+
+
+def _as_child(run_dir: Path) -> None:
+    """The marker the server writes when it starts a press: it names the process that runs the press."""
+    (run_dir / pipeline_routes.PID_FILE).write_text(f"{os.getpid()}\n")
+
+
+@contextmanager
+def _stand_in_portal(*, cookie: bool = True):
+    """TCGplayer's Filtered Export, stood in for on 127.0.0.1 for the length of the `with`.
+
+    It answers the two calls `server/tcg_export.py` makes: the filter vocabulary, with one set
+    (SV09) so the run's hint resolves, and the export, which is the committed SV09 fixture. The URL
+    override points here and the cookie is fake, so nothing leaves the machine. CI and BANCHI_HARNESS
+    are cleared for the `with`, because `_join_now` skips the join under either, and the join is what
+    these cases watch. Yields the request counts, `{"filters": n, "export": n}`.
+    """
+    filters = {
+        "Sets": [{"Text": "All Set Names", "Value": "0"}, {"Text": "SV09: Journey Together", "Value": "4242"}],
+        "Rarities": [{"Text": "All Rarities", "Value": "0"}],
+        "Conditions": [{"Text": "All Conditions", "Value": "0"}],
+        "Printings": [{"Text": "All Printings", "Value": "0"}],
+    }
+    body = FIXTURE_EXPORT.read_bytes()
+    hits = {"filters": 0, "export": 0}
+
+    class Portal(http.server.BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):  # noqa: A003
+            pass
+
+        def _send(self, content_type: str, payload: bytes) -> None:
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def _export(self) -> None:
+            hits["export"] += 1
+            self._send("text/csv", body)
+
+        def do_GET(self):  # noqa: N802
+            if "getjsonfilters" in self.path:
+                hits["filters"] += 1
+                self._send("application/json", json.dumps(filters).encode())
+            else:
+                self._export()
+
+        def do_POST(self):  # noqa: N802
+            self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            self._export()
+
+    portal = http.server.HTTPServer(("127.0.0.1", 0), Portal)
+    threading.Thread(target=portal.serve_forever, daemon=True).start()
+    names = ("BANCHI_TCG_EXPORT_URL", "TCGPLAYER_STORE_COOKIE", "CI", "BANCHI_HARNESS")
+    saved = {name: os.environ.get(name) for name in names}
+    try:
+        os.environ["BANCHI_TCG_EXPORT_URL"] = (
+            f"http://127.0.0.1:{portal.server_address[1]}/admin/pricing/downloadexportcsv"
+        )
+        os.environ.pop("CI", None)
+        os.environ.pop("BANCHI_HARNESS", None)
+        if cookie:
+            os.environ["TCGPLAYER_STORE_COOKIE"] = "TCGAuthTicket_Production=t7-not-a-real-session"
+        else:
+            os.environ.pop("TCGPLAYER_STORE_COOKIE", None)
+        yield hits
+    finally:
+        portal.shutdown()
+        portal.server_close()
+        for name, value in saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
+DUNSPARCE_PAYLOAD = {"name": "Dunsparce", "number": "120", "printed_total": "159", "finish": "normal", "confidence": "high"}
+
+
+def check_paid_run_ends_joined(checks: Checks) -> None:
+    """A paid press ends joined: the manifest says so, and the run's phase is past `join`.
+
+    The press is started the way the server starts one: `--run-dir` names the run and the marker
+    names the process running it.
+    """
+    from cli import cmd_identify
+
+    checks.note("")
+    checks.note("PAID RUN ENDS JOINED — stand-in portal, fake batch transport")
+    answers = {
+        "5/1": DUNSPARCE_PAYLOAD,
+        "5/2": {**DUNSPARCE_PAYLOAD, "finish": "reverse_holo"},
+        "5/3": {"name": "Articuno", "number": "161", "printed_total": "159", "finish": "holo", "confidence": "high"},
+    }
+    with isolated_home() as home, _stand_in_portal():
+        caps = Path(home) / "paid-caps"
+        _paid_caps(caps, [(5, 1), (5, 2), (5, 3)])
+        run = runs.create("t7-paid-joined")
+        _as_child(run.directory)
+        with mock.patch.object(cmd_identify.batch, "run_batch", _paid_transport(answers)):
+            code, lines = _paid_press(run.directory, caps)
+        manifest = json.loads((run.directory / runs.MANIFEST).read_text("utf-8"))
+        text = "\n".join(lines)
+        checks.ok(code == 0, "the paid press exits 0", text)
+        checks.ok(manifest.get("joined") is True, "the run's manifest is joined", text)
+        checks.equal(
+            pipeline_routes._phase(manifest, False), "emit",
+            "and its phase is past `join`: the next step is emit",
+        )
+        checks.ok(any(line.startswith("joined ") for line in lines), "the summary says the run is joined", text)
+
+
+def check_paid_run_no_export_holds_at_join(checks: Checks) -> None:
+    """With no export to be had, the run stays at `join` and the summary says why, card by card."""
+    from cli import cmd_identify
+
+    checks.note("")
+    checks.note("PAID RUN, NO EXPORT — the run waits at join, and the summary says so and why")
+    answers = {"5/1": DUNSPARCE_PAYLOAD, "5/2": None}  # the failed card puts a "held until join" line in the summary
+    with isolated_home() as home, _stand_in_portal(cookie=False):
+        caps = Path(home) / "no-export-caps"
+        _paid_caps(caps, [(5, 1), (5, 2)])
+        run = runs.create("t7-paid-no-export")
+        _as_child(run.directory)
+        with mock.patch.object(cmd_identify.batch, "run_batch", _paid_transport(answers)):
+            code, lines = _paid_press(run.directory, caps)
+        manifest = json.loads((run.directory / runs.MANIFEST).read_text("utf-8"))
+        text = "\n".join(lines)
+        checks.ok(code == 0, "the paid press still exits 0 when the join does not run", text)
+        checks.ok(manifest.get("joined") is not True, "the run is not joined", text)
+        checks.ok(pipeline_routes._phase(manifest, False) == "join", "and its phase stays at `join`", text)
+        not_joined = [line for line in lines if line.startswith("not joined")]
+        checks.ok(len(not_joined) == 1 and "not signed in" in not_joined[0],
+                  "the summary says it is not joined, and gives the reason: TCGplayer is not signed in", text)
+        checks.ok(not any("test run" in line for line in lines),
+                  "and the reason is the real one, not the test run's sentence", text)
+        checks.ok(any(line.strip() == "in the store now: held until join" for line in lines),
+                  "the failed card's line says it is held until join", text)
+
+
+def check_paid_run_readback_matches_queues(checks: Checks) -> None:
+    """The summary's read-back counts are the queues', card for card.
+
+    Held for review is a `readers_disagree` or `second_look_unsure` entry. The main queue is every
+    other open entry. Settled is a card with no open entry in either queue.
+    """
+    from cli import cmd_identify
+    from harness.tests.t7.engine_pick import _accepted, _unaccepted
+    from identify import match
+
+    checks.note("")
+    checks.note("PAID RUN READ-BACK — the summary's counts against the queues, card for card")
+    accepted = {"6/1"}
+    agreed = {"6/5"}  # the free reader's pick is Dunsparce, and so is the paid answer: it settles
+    answers = {
+        "6/2": DUNSPARCE_PAYLOAD,  # disagrees with the free reader's pick (Raichu): readers_disagree
+        "6/3": {"name": "Raichu", "number": "026", "printed_total": "102", "finish": "normal", "confidence": "high"},
+        "6/4": None,  # the paid read fails: a failed card
+        "6/5": DUNSPARCE_PAYLOAD,
+    }
+
+    def pick_dunsparce(key):
+        return match.Result(
+            key, False, code=match.UNREAD_MARGIN, detail="the free reader is not sure", margin=0.031, floor=0.91,
+            candidates=[{"product_id": "8608459", "set": "SV09: Journey Together", "number": "120", "name": "Dunsparce", "cosine": 0.91}],
+        )
+
+    def fake_read(requests, index, model=None, aspect=0.716, log=lambda _m: None, promo_games=None):
+        out = []
+        for request in requests:
+            if request.key in accepted:
+                out.append(_accepted(request.key))
+            elif request.key in agreed:
+                out.append(pick_dunsparce(request.key))
+            else:
+                out.append(_unaccepted(request.key))
+        return out
+
+    free_reader = {
+        "read": fake_read,
+        "status": lambda *_a, **_k: {"ready": True},
+        "preflight": lambda requests, *_a, **_k: {
+            "cards": len(requests), "can_read": len(requests), "unread": {}, "state": {"ready": True},
+        },
+    }
+    with isolated_home() as home, _stand_in_portal(), mock.patch.multiple(match, **free_reader), \
+            mock.patch.object(cmd_identify.batch, "run_batch", _paid_transport(answers)):
+        caps = Path(home) / "readback-caps"
+        _paid_caps(caps, [(6, 1), (6, 2), (6, 3), (6, 4), (6, 5)])
+        run = runs.create("t7-paid-readback")
+        _as_child(run.directory)
+        code, lines = _paid_press(run.directory, caps, engine="marqo-b")
+        text = "\n".join(lines)
+        snapshot = Store().read()
+
+        def bucket(key: str) -> str:
+            entry = snapshot.review.entries.get(key)
+            if entry is not None and not entry.cleared_by_human:
+                held = entry.reason in (routing.READERS_DISAGREE, routing.SECOND_LOOK_UNSURE)
+                return "held" if held else "main"
+            if snapshot.parked.entries.get(key) is not None:
+                return "parked"
+            return "settled"
+
+        def expected(keys) -> str:
+            counts = {name: sum(bucket(key) == name for key in keys) for name in ("held", "main", "parked", "settled")}
+            parts = [f"{counts['held']} held for review", f"{counts['main']} in the main queue"]
+            if counts["parked"]:
+                parts.append(f"{counts['parked']} parked")
+            parts.append(f"{counts['settled']} settled")
+            return ", ".join(parts)
+
+        looked, failed = ["6/2", "6/3", "6/4", "6/5"], ["6/4"]
+        buckets = {bucket(key) for key in looked}
+        checks.ok({"held", "main", "settled"} <= buckets,
+                  "fixture: the second-look cards reach held for review, the main queue and settled", text)
+        read_back = [line.split("in the store now: ", 1)[1] for line in lines if "in the store now: " in line]
+        checks.ok(len(read_back) == 2, "the summary reads the queues back for the second look and the failed cards", text)
+        if len(read_back) == 2:
+            checks.equal(read_back[0], expected(looked), "the second-look counts are the queues' counts")
+            checks.equal(read_back[1], expected(failed), "the failed-card counts are the queues' counts")
+        checks.ok(code == 0, "the paid press exits 0", text)
+
+
+def check_paid_run_clears_pid_marker(checks: Checks) -> None:
+    """`running.pid` is removed when the run ends, however it ends: a return, a raised error or SIGTERM.
+
+    A marker that names another pid is not this run's, and is left alone.
+    """
+    from cli import cmd_identify
+
+    checks.note("")
+    checks.note("PID MARKER — removed on return, on a raised error and on SIGTERM; another pid's is left alone")
+    answers = {"7/1": DUNSPARCE_PAYLOAD}
+
+    def started(name: str):
+        run = runs.create(name)
+        marker = run.directory / pipeline_routes.PID_FILE
+        marker.write_text(f"{os.getpid()}\n")
+        return run.directory, marker
+
+    # The run skips its own join under BANCHI_HARNESS: nothing here is about the join, and it never reaches TCGplayer.
+    with isolated_home() as home, mock.patch.dict(os.environ, {"BANCHI_HARNESS": "1"}), \
+            mock.patch.object(cmd_identify.batch, "run_batch", _paid_transport(answers)):
+        caps = Path(home) / "marker-caps"
+        _paid_caps(caps, [(7, 1)])
+
+        run_dir, marker = started("t7-marker-return")
+        code, _ = _paid_press(run_dir, caps)
+        checks.equal(code, 0, "fixture: a press that returns exits 0")
+        checks.ok(not marker.exists(), "a normal return removes the run's own marker")
+
+        run_dir, marker = started("t7-marker-raise")
+        with mock.patch.object(cmd_identify, "Store", side_effect=RuntimeError("t7: raised inside the run")):
+            checks.raises(RuntimeError, lambda: _paid_press(run_dir, caps), "a raised error reaches the caller")
+        checks.ok(not marker.exists(), "and a raised error removes the run's own marker")
+
+        run_dir, marker = started("t7-marker-term")
+        harness_handler = signal.signal(signal.SIGTERM, lambda _signo, _frame: None)
+        ended = "no outcome"
+
+        def term_then_go_on(*_args, **_kwargs):
+            os.kill(os.getpid(), signal.SIGTERM)
+            raise RuntimeError("t7: the run went on after SIGTERM")
+
+        try:
+            with mock.patch.object(cmd_identify, "Store", side_effect=term_then_go_on):
+                try:
+                    _paid_press(run_dir, caps)
+                    ended = "returned"
+                except SystemExit as caught:
+                    ended = f"exit {caught.code}"
+                except RuntimeError as caught:
+                    ended = str(caught)
+        finally:
+            signal.signal(signal.SIGTERM, harness_handler)
+        checks.equal(ended, "exit 143", "SIGTERM ends the run as a normal exit, 143")
+        checks.ok(not marker.exists(), "and the marker is removed")
+
+        run = runs.create("t7-marker-other")
+        other = os.getppid()
+        marker = run.directory / pipeline_routes.PID_FILE
+        marker.write_text(f"{other}\n")
+        _paid_press(run.directory, caps)
+        checks.ok(marker.exists() and marker.read_text().strip() == str(other),
+                  "a marker naming another pid is left alone")
+
+
+def _press_waiting(home: Path, name: str, cards, answers: dict):
+    """A paid press whose run is left waiting at `join`: the test-run gate keeps the join from running."""
+    from cli import cmd_identify
+
+    caps = Path(home) / f"{name}-caps"
+    _paid_caps(caps, cards)
+    run = runs.create(name)
+    _as_child(run.directory)
+    with mock.patch.dict(os.environ, {"BANCHI_HARNESS": "1"}), \
+            mock.patch.object(cmd_identify.batch, "run_batch", _paid_transport(answers)):
+        _paid_press(run.directory, caps)
+    return run
+
+
+def _run_press_with_log(run, caps: Path, answers: dict):
+    """A press run with stderr kept, for the lines a worker thread logs. Returns (code, lines, stderr)."""
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+
+    lines: list = []
+    argv = ["identify", str(caps), "--engine", "haiku", "--run-dir", str(run.directory)]
+    with quiet() as log, mock.patch.object(cmd_identify.batch, "run_batch", _paid_transport(answers)):
+        code = cmd_identify.run(cli_entry.build_parser().parse_args(argv), lines.append)
+    return code, lines, log.getvalue()
+
+
+def check_positionless_failed_card_counts_main_queue(checks: Checks) -> None:
+    """A failed card with no position is filed under its file key, and the read-back counts it: one in the main queue."""
+    from identify import images as identify_images
+
+    checks.note("")
+    checks.note("POSITIONLESS FAILED CARD — the read-back counts it, filed by its file key")
+    with isolated_home() as home, _stand_in_portal():
+        caps = Path(home) / "loose-caps"
+        _paid_caps(caps, [(5, 1)])
+        identify_images.Image.new("RGB", (64, 89), (210, 90, 40)).save(caps / "loose-001.jpg", "JPEG")
+        (caps / "loose-001.json").write_text(json.dumps({"game": "pokemon", "set_hint": "SV09"}), "utf-8")
+        run = runs.create("t7-positionless")
+        _as_child(run.directory)
+        answers = {"5/1": DUNSPARCE_PAYLOAD, "file:loose-001.jpg": None}
+        code, lines, _ = _run_press_with_log(run, caps, answers)
+        text = "\n".join(lines)
+        read_back = [line.split("in the store now: ", 1)[1] for line in lines if "in the store now: " in line]
+        checks.ok(any(line.startswith("joined ") for line in lines), "the run is joined", text)
+        checks.ok(
+            read_back == ["0 held for review, 1 in the main queue, 0 settled"],
+            "the failed positionless card reads one in the main queue after the join",
+            text,
+        )
+
+
+def check_run_dir_outside_store_is_not_joined(checks: Checks) -> None:
+    """`--run-dir` names a run folder outside the store's runs folder: that run is not joined, and the summary says why.
+
+    A run of the same name in the store is not joined in its place.
+    """
+    from cli import cmd_identify
+
+    checks.note("")
+    checks.note("RUN DIRECTORY OUTSIDE THE STORE — not joined, and the summary says why")
+    with isolated_home() as home, _stand_in_portal():
+        store_run = runs.create("t7-same-name")
+        outside = runs.create("t7-same-name", root=Path(home) / "elsewhere")
+        checks.equal(outside.directory.name, store_run.directory.name, "fixture: both runs carry one name")
+        caps = Path(home) / "outside-caps"
+        _paid_caps(caps, [(5, 1)])
+        _as_child(outside.directory)
+        with mock.patch.object(cmd_identify.batch, "run_batch", _paid_transport({"5/1": DUNSPARCE_PAYLOAD})):
+            code, lines = _paid_press(outside.directory, caps)
+        text = "\n".join(lines)
+        outside_manifest = json.loads((outside.directory / runs.MANIFEST).read_text("utf-8"))
+        store_manifest = json.loads((store_run.directory / runs.MANIFEST).read_text("utf-8"))
+        checks.ok(
+            any(line.startswith("not joined      this run directory is not in the store's runs folder") for line in lines),
+            "the summary says the run is not joined, and why",
+            text,
+        )
+        checks.ok(outside_manifest.get("joined") is not True, "the run outside the store is not joined", text)
+        checks.ok(store_manifest.get("joined") is not True, "and the same-named run in the store is not joined in its place", text)
+
+
+def check_join_lock_held_answers_running(checks: Checks) -> None:
+    """With `match.lock` held by another join of this run, `do_run_match` answers `running`, and the press says so."""
+    import fcntl
+
+    checks.note("")
+    checks.note("JOIN LOCK HELD — the run answers `running`, and the press says another join is in progress")
+    with isolated_home() as home, _stand_in_portal():
+        caps = Path(home) / "lock-caps"
+        _paid_caps(caps, [(5, 1)])
+        run = runs.create("t7-lock")
+        _as_child(run.directory)
+        with open(run.directory / "match.lock", "a+") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            code, lines, _ = _run_press_with_log(run, caps, {"5/1": DUNSPARCE_PAYLOAD})
+            answer = pipeline_routes.do_run_match(run.directory.name, {})
+        manifest = json.loads((run.directory / runs.MANIFEST).read_text("utf-8"))
+        text = "\n".join(lines)
+        checks.ok(
+            answer.get("ran") is False and answer.get("reason") == "running",
+            "do_run_match answers `running` while the lock is held",
+            repr({k: v for k, v in answer.items() if k != "summary"}),
+        )
+        checks.ok(
+            "not joined      another join of this run is already in progress" in lines,
+            "and the press says another join of this run is already in progress",
+            text,
+        )
+        checks.ok(manifest.get("joined") is not True, "and the locked press joins nothing", text)
+
+
+def check_join_refusals_say_their_reason(checks: Checks) -> None:
+    """Each refusal the join can give has its own sentence. An unexpected error is logged, not only said."""
+    import subprocess
+
+    checks.note("")
+    checks.note("JOIN REFUSALS — each refusal prints its own sentence; an unexpected error is logged")
+    with isolated_home() as home, _stand_in_portal():
+
+        def press(box: int, name: str):
+            """One press over its own box and run, so each refusal is the only thing that differs."""
+            caps = Path(home) / f"{name}-caps"
+            _paid_caps(caps, [(box, 1)])
+            run = runs.create(name)
+            _as_child(run.directory)
+            return run, _run_press_with_log(run, caps, {f"{box}/1": DUNSPARCE_PAYLOAD})
+
+        not_waiting = {"ran": False, "reason": "not_waiting", "summary": {}}
+        with mock.patch.object(pipeline_routes, "do_run_match", return_value=not_waiting):
+            _, (code, lines, _) = press(11, "t7-not-waiting")
+        checks.ok(
+            "not joined      the run is not waiting for a join: it is already joined or still being read" in lines,
+            "a run not waiting for a join says so in its own sentence",
+            "\n".join(lines),
+        )
+
+        standing = runs.create("t7-problem-stands")
+        (standing.directory / "match.json").write_text(json.dumps({
+            "at": "2026-10-22T00:00:00+00:00",
+            "problem": {"code": "tcg_export_empty", "message": "TCGplayer sent no rows for this game", "step": "fetch"},
+        }), "utf-8")
+        _as_child(standing.directory)
+        _caps = Path(home) / "problem-caps"
+        _paid_caps(_caps, [(12, 1)])
+        code, lines, _ = _run_press_with_log(standing, _caps, {"12/1": DUNSPARCE_PAYLOAD})
+        checks.ok(
+            any(line.startswith("not joined      an earlier join problem stands: TCGplayer sent no rows") for line in lines),
+            "a standing problem says so, with its message",
+            "\n".join(lines),
+        )
+
+        with mock.patch.object(subprocess, "run", side_effect=subprocess.TimeoutExpired("banchi", 1)):
+            _, (code, lines, _) = press(14, "t7-timeout")
+        checks.ok(
+            any(line.startswith("not joined      the join was refused (step_timed_out): ") for line in lines),
+            "a step that times out prints its code",
+            "\n".join(lines),
+        )
+
+        with mock.patch.object(pipeline_routes, "do_run_match", side_effect=RuntimeError("t7 boom")):
+            _, (code, lines, err) = press(15, "t7-unexpected")
+        checks.ok(
+            "identify auto-join: RuntimeError: t7 boom" in err,
+            "an unexpected error is logged to the server log, by its type and message",
+            err,
+        )
+        checks.ok(
+            any(line.startswith("not joined      the join could not start because ") for line in lines),
+            "and the press says the join could not start",
+            "\n".join(lines),
+        )
+
+
+def check_identify_export_starts_at_the_join(checks: Checks) -> None:
+    """An identify run starts no export download before its join: the one download is made by the join, on the thread that runs the join, and on no thread the run starts.
+
+    Exactly one export request reaches the portal.
+    """
+    checks.note("")
+    checks.note("EXPORT FROM THE JOIN — no download before the join, none on a thread the run starts, one at most")
+    real_match = pipeline_routes.do_run_match
+    real_export = pipeline_routes.do_pipeline_export
+    real_start = threading.Thread.start
+    events: list = []
+    started: list = []
+
+    def recording_start(self):
+        started.append(self.name)
+        return real_start(self)
+
+    def recording_match(name, payload):
+        events.append(("join", threading.current_thread().name))
+        return real_match(name, payload)
+
+    def recording_export(name, payload):
+        events.append(("export", threading.current_thread().name))
+        return real_export(name, payload)
+
+    with isolated_home() as home, _stand_in_portal() as hits:
+        caps = Path(home) / "export-from-join-caps"
+        _paid_caps(caps, [(5, 1)])
+        run = runs.create("t7-export-from-join")
+        _as_child(run.directory)
+        with mock.patch.object(threading.Thread, "start", recording_start), \
+                mock.patch.object(pipeline_routes, "do_run_match", recording_match), \
+                mock.patch.object(pipeline_routes, "do_pipeline_export", recording_export):
+            _, lines, _ = _run_press_with_log(run, caps, {"5/1": DUNSPARCE_PAYLOAD})
+        manifest = json.loads((run.directory / runs.MANIFEST).read_text("utf-8"))
+    kinds = [kind for kind, _ in events]
+    join_thread = events[0][1] if events else None
+    export_thread = events[1][1] if len(events) > 1 else None
+    checks.ok(kinds == ["join", "export"], "the join starts first, and the export is fetched from inside it", repr(events))
+    checks.ok(
+        export_thread is not None and export_thread == join_thread and export_thread not in started,
+        "the export is fetched on the join's own thread, and no thread the run starts fetches it",
+        f"events {events!r}, threads started {started!r}",
+    )
+    checks.ok(hits["export"] == 1, "exactly one export request reaches the portal", repr(hits))
+    checks.ok(manifest.get("joined") is True, "and the run is joined", "\n".join(lines))
+
+
+def check_lock_failure_is_not_running(checks: Checks) -> None:
+    """A lock failure that is not contention is not answered `running`: a `flock` that fails with EIO is an error, not "another join"."""
+    import errno
+
+    checks.note("")
+    checks.note("LOCK FAILURE, NOT CONTENTION — not answered `running`")
+    with isolated_home(), _stand_in_portal():
+        run = runs.create("t8-lock-failure")
+        with mock.patch("fcntl.flock", side_effect=OSError(errno.EIO, "t8 lock failed")) as flock, quiet():
+            try:
+                answer = pipeline_routes.do_run_match(run.directory.name, {})
+                outcome = answer.get("reason") or "answered without a reason"
+            except Exception as caught:  # noqa: BLE001 - the answer is what this check reads
+                outcome = type(caught).__name__
+    checks.ok(flock.called, "the run reaches its lock, so the failure is the lock's own", repr(flock.call_count))
+    checks.ok(outcome != "running", "a lock failure that is not contention is not answered `running`", outcome)
+
+
 # ------------------------------------------------ the token cap: thinking off, the cap's own stop
 #
 # The real `run_batch`, the real requests and the real collection run. Only the transport is a
@@ -6931,6 +7524,16 @@ CHECKS = (
     check_selection_unknown_route_keys,
     check_identify_empty_flag_refuses,
     check_empty_state_refusal_blames_no_missing_folder,
+    check_paid_run_ends_joined,
+    check_paid_run_no_export_holds_at_join,
+    check_paid_run_readback_matches_queues,
+    check_paid_run_clears_pid_marker,
+    check_positionless_failed_card_counts_main_queue,
+    check_run_dir_outside_store_is_not_joined,
+    check_join_lock_held_answers_running,
+    check_join_refusals_say_their_reason,
+    check_identify_export_starts_at_the_join,
+    check_lock_failure_is_not_running,
     check_identify_request_thinks_off_under_cap,
     check_identify_thinking_only_stop_is_named_and_counted,
     check_identify_thinking_then_text_still_parses,
