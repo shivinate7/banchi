@@ -2397,6 +2397,10 @@ def _phase(manifest: dict, live: bool) -> str:
     """
     if live:
         return "identifying"
+    # A RUN OF EMPTY SLOTS ONLY (`settle_nothing_to_join`) IS FINISHED: it has no join, emit or reconcile
+    # to wait for. The marker is the one stored fact here, because the cards' retirement lives in the store.
+    if manifest.get("nothing_to_join"):
+        return "done"
     # `joined=True` IS STRICTLY STRONGER EVIDENCE THAT IDENTIFICATION HAPPENED THAN `collected`
     # WAS EVER MEANT TO GATE ON (D188). `collected` is written only by the ordinary
     # camera->batch->collect path (`cli/cmd_identify.py`); D188 gave `join` a second entry
@@ -2475,6 +2479,8 @@ def _summary(directory: Path, names: Optional[Dict[int, str]] = None) -> dict:
         "batch_ids": manifest.get("batch_ids") or [],
         "collected": bool(manifest.get("collected")),
         "joined": bool(manifest.get("joined")),
+        # Every card was retired as an empty slot: the screen draws no join, file or compare for it.
+        "nothing_to_join": bool(manifest.get("nothing_to_join")),
         "counts": manifest.get("counts") or {},
         # THE CARDS THIS RUN WAS SUBMITTED OVER, before any join gives `counts.cards_in`. None
         # on a run written before `identify` recorded `submitted`: unknown, never zero.
@@ -8526,6 +8532,16 @@ def nothing_to_join(directory: Path) -> bool:
     )
 
 
+def settle_nothing_to_join(directory: Path) -> bool:
+    """`nothing_to_join`, and when it holds, mark the run finished (`_phase` reads the marker) so it is
+    never listed as waiting at join and the screen draws no join for it. The callers are the `identify`
+    press and `_match_locked`."""
+    if not nothing_to_join(directory):
+        return False
+    run_files.open_run(directory).set(nothing_to_join=True)
+    return True
+
+
 def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
     """What to ask TCGplayer for: the run's own claims, the game's rule, and the operator.
 
@@ -9462,7 +9478,7 @@ def _match_locked(name: str, directory: Path, payload: dict) -> dict:
     manifest = _manifest(directory)
     if _phase(manifest, _live_pid(directory) is not None) != "join":
         return {"ran": False, "reason": "not_waiting", "summary": _summary(directory)}
-    if nothing_to_join(directory):  # no export to fetch for a run of empty slots, and no problem to record
+    if settle_nothing_to_join(directory):  # no export to fetch for a run of empty slots, and no problem to record
         return {"ran": False, "reason": "nothing_to_join", "summary": _summary(directory)}
     standing = _read_match(directory) or {}
     if standing.get("problem") and not bool(payload.get("retry")):

@@ -1125,12 +1125,12 @@ def _join_now(run_dir, say) -> Optional[str]:
 
 
 def _nothing_to_join(run_dir) -> bool:
-    """True when every card of this run was retired as an empty slot (`pipeline_routes.nothing_to_join`,
-    the question `do_run_match` asks too). A failed read is False: the join then runs as it always did."""
+    """True when every card of this run was retired as an empty slot (`pipeline_routes.settle_nothing_to_join`,
+    the question `do_run_match` asks too), and the run is then marked finished. A failed read is False: the join then runs as it always did."""
     try:
         from server import pipeline_routes
 
-        return pipeline_routes.nothing_to_join(run_dir.directory)
+        return pipeline_routes.settle_nothing_to_join(run_dir.directory)
     except Exception as exc:  # noqa: BLE001 - the answers are banked already; only the skip is lost
         store_files.log_cause("identify nothing-to-join", exc)
         return False

@@ -357,6 +357,8 @@
   padding: 0 var(--bn-5) var(--bn-5) calc(var(--bn-5) + 30px + var(--bn-3));
   animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
 }
+/* A run of empty slots has no join, file or compare: its one sentence sits where the steps would, on the steps' own edge. */
+.runs-steps > .runs-step-lede { padding: var(--bn-3) var(--bn-5) var(--bn-5); border-top: 1px solid var(--bn-line); }
 .runs-step-lede {
   display: flex;
   align-items: center;

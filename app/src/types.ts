@@ -2877,6 +2877,8 @@ export type RunFile = {
 export type RunSummary = {
   run: string
   path: string
+  /** Every card in the run was retired as an empty slot: the run is finished, and has no join, file or compare. */
+  nothing_to_join?: boolean
   created_at?: string | null
   updated_at?: string | null
   capture_dir?: string | null
