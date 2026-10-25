@@ -1428,10 +1428,28 @@ def canonical_set(stock, game: str, set_name: str) -> str:
 
 
 def unread_targets(stock, store_pairs: Iterable[Tuple[str, str]]) -> List[Tuple[str, str]]:
-    """`targets_for` minus the sets the fingerprint index already holds, compared by canonical name."""
+    """`targets_for` minus the sets the index holds in full, compared by canonical name. A held set still
+    counts when the catalogue lists a printing the index has no row for. That costs one cached product-list
+    read per held set and no photo. A list that cannot be read is no work."""
     with Index() as index:
         held = {(g, n) for g, n in index.db.execute("select game, set_name from sets")}
-    return [t for t in targets_for(stock, store_pairs) if (t[0], canonical_set(stock, *t)) not in held]
+        rows: Dict[Tuple[str, str], Set[str]] = {}
+        for game, name, pid in index.db.execute("select game, set_name, product_id from vec"):
+            rows.setdefault((game, name), set()).add(pid)
+
+    def grown(game: str, canonical: str, set_name: str) -> bool:
+        try:
+            listed = stock.catalog_products(game, set_name)
+        except (RuntimeError, OSError, KeyError):  # a list that cannot be read is no work; PriceHistoryError is a RuntimeError
+            return False
+        return bool(listed) and any(p.product_id not in rows.get((game, canonical), ()) for p in listed[0])
+
+    out = []
+    for game, set_name in targets_for(stock, store_pairs):
+        canonical = canonical_set(stock, game, set_name)
+        if (game, canonical) not in held or grown(game, canonical, set_name):
+            out.append((game, set_name))
+    return out
 
 
 def prepare_pid() -> Optional[int]:

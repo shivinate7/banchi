@@ -48,6 +48,9 @@ class _Stock:
     def display_name(self, _game, _set):
         return None
 
+    def catalog_products(self, _game, _set_name):
+        return None  # models no product list: the set does not resolve, so a held set shows no gain
+
 
 class _Popen:
     calls: list = []
