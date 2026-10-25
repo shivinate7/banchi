@@ -3754,4 +3754,12 @@ test('a run of only empty slots says so in one sentence, with no join, file or c
   await expect(panel).not.toContainText('Compared')
   await expect(page.locator('.runs-detail-head')).toContainText('Empty slots')
   await expect(page.locator('.run-row').first()).toContainText('Empty slots')
+
+  /* FINISHED, NOT ON THE WAY: the row's bar is full and drawn done, and the head's pill carries the check a
+     finished state carries. The check is found by its drawn path (the kit's `check`), since the icon has no name in the DOM. */
+  const bar = page.locator('.run-row').first().locator('.runs-stagebar')
+  await expect(bar).toHaveAttribute('aria-label', 'Empty slots (6 of 6 stages done)')
+  await expect(bar).toHaveClass(/\bruns-stagebar-done\b/)
+  await expect(bar.locator(':scope > [data-state="done"]')).toHaveCount(6)
+  await expect(page.locator('.runs-detail-side .bn-pill .bn-icon path[d="M5 12l5 5 9-10"]')).toHaveCount(1)
 })
