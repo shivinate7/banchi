@@ -1423,6 +1423,22 @@ def check_send_press(checks: Checks) -> None:
             "and TCGplayer receives no write",
         )
 
+    # ------------------------------------- one press at any run count (23 runs once refused at 16)
+    with send_portal() as portal, synced_home():
+        names = [seam_run(checks, cards)[0].name for _ in range(23)]
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send({"runs": names, "confirm": True})
+        checks.equal(
+            {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]},
+            {ARTICUNO_SKU: "3", DUNSPARCE_SKU: "1"},
+            "ONE PRESS OVER 23 RUNS sends every copy once, one file, as it does over one run",
+        )
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": ["x" * 300] * 1000, "confirm": True})),
+            "too_many_runs",
+            "and a request too long for one child's argv still refuses by name",
+        )
+
     # ----------------------------------------- the double-send trim, end to end through the press
     with send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)

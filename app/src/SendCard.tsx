@@ -101,10 +101,34 @@ function refusalTitle(code: string, data?: unknown): string {
       return 'Not yet. Banchi checks TCGplayer first.'
     case 'write_refused':
       return 'The file could not be written, so nothing was sent.'
+    case 'runs_required':
+      return 'No run is picked, so nothing was sent.'
+    case 'too_many_runs':
+      return 'Too many runs for one send, so nothing was sent.'
+    case 'confirm_required':
+      return 'Banchi needs your confirmation first, so nothing was sent.'
+    case 'prices_invalid':
+    case 'moves_invalid':
+      return 'A price on this list could not be read, so nothing was sent.'
+    case 'run_name_invalid':
+    case 'no_such_run':
+      return 'A run on this list is missing or its name is not valid, so nothing was sent. Reload the list.'
+    case 'step_timed_out':
+      return 'Banchi took too long on this send, so it may not have finished. Check what is live before you send again.'
+    case 'banchi_missing':
+      return "Banchi's own tools are missing on this Mac, so nothing was sent."
+    case 'claim_unreadable':
+    case 'send_busy':
+    case 'not_sendable':
+    case 'write_split':
+      return 'Banchi could not make this send, so nothing was sent.'
     case 'answers_not_saved':
       return 'Your prices could not be saved, so nothing was sent.'
     default:
-      return 'TCGplayer did not take the send. Nothing is live, and the copies are back on the list.'
+      /* The tcg_* codes come from the far side; any other unknown code does not blame it. */
+      return code.startsWith('tcg_')
+        ? 'TCGplayer did not take the send. Nothing is live, and the copies are back on the list.'
+        : 'This send did not go through. Check what is live before you send again.'
   }
 }
 
