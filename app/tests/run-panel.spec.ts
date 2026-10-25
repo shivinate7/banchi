@@ -3738,3 +3738,20 @@ test('opening a joined free run reads no queue: its receipt is the join record',
   expect(queueReads, 'the receipt reads the run record, not GET /queues').toEqual([])
   await expect(page.locator('.runs-detail-panel')).toContainText('2 to review')
 })
+
+/* A RUN WHOSE EVERY CARD WAS AN EMPTY SLOT IS FINISHED. It has nothing to join, no file to write and nothing to
+   compare, so the panel draws one sentence where the steps would be and the pill names the state. The sentence is
+   awaited first: the negatives below also hold on the loading panel, which draws no steps either. */
+test('a run of only empty slots says so in one sentence, with no join, file or compare', async ({ page }) => {
+  const finished = { phase: 'done', nothing_to_join: true, joined: false, counts: {} }
+  await open(page, { runs: [runRow(finished)], detail: finished })
+  await openRun(page)
+
+  const panel = page.locator('.runs-detail-panel')
+  await expect(panel).toContainText('Every card was an empty slot, so there was nothing to join.')
+  await expect(panel).not.toContainText('File written')
+  await expect(panel).not.toContainText('to review')
+  await expect(panel).not.toContainText('Compared')
+  await expect(page.locator('.runs-detail-head')).toContainText('Empty slots')
+  await expect(page.locator('.run-row').first()).toContainText('Empty slots')
+})
