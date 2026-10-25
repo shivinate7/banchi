@@ -250,7 +250,7 @@ reproduce them. The recorded fingerprint makes a targeted re-read possible.
 
 At its end, every identify run, paid or free, joins itself (D321, every identify run
 joins itself at its end). The join helper in `cli/cmd_identify.py` (`_join_now`) takes the screen's automatic match: the game's
-export (a recent one is reused, else one is fetched; D166, the catalog export belongs to the game),
+export (one fetched on the same US Central day is reused, else one is fetched; D166, the catalog export belongs to the game),
 then the join. If the join does not run, the run stays at the join step. The summary says why, and says the cards are
 held until the join. A second helper in `cli/cmd_identify.py` (`_held_now`) reads the queues back for the summary. There is no
 export prefetch at run start, because no identification exists then to scope it.

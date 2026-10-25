@@ -869,6 +869,23 @@ def blank_answer(identification) -> bool:
     return not any(said.get(field) for field in ("name", "number", "printed_id", "code"))
 
 
+def retires_as_empty_slot(item: Item, held) -> bool:
+    """The one rule for retiring an empty slot, asked by the quote and by the press alike so the two
+    agree. True when the photograph is dark AND its best match over the whole pool is weak, the card is
+    one the store allows (`Inventory.can_retire_empty_slot`: captured, or filed `identified` with no
+    name), and no person has answered it: no review stand-down, parked answer or flagged saved answer.
+    `held` is a store snapshot or the open writable session. A position the store has not recorded yet
+    is captured by this press, so it counts."""
+    if item.stage != STAGE_EMPTY or not item.capture.has_position or item.unread is None:
+        return False
+    if not match.retires_empty_slot(item.unread):
+        return False
+    if item.key in held.inventory.cards and not held.inventory.can_retire_empty_slot(item.key):
+        return False
+    answered = (held.review.entries.get(item.key), held.parked.entries.get(item.key), held.cache.get(item.key))
+    return not any(a is not None and a.cleared_by_human for a in answered)
+
+
 def cached_refusal(item: Item, entry) -> Optional[str]:
     """Why this run's own parser refuses a cached answer, or None when it accepts it. The store
     cannot know a card's game; only the run holds its strategy, so only the run can judge a hit.
@@ -1074,7 +1091,7 @@ def _no_connection(run_dir) -> Optional[str]:
 
 def _join_now(run_dir, say) -> Optional[str]:
     """Join this run against an export now, by the one path the screen's automatic match takes
-    (`pipeline_routes.do_run_match`: the game's export, reused when under 900 s old (D166) or fetched,
+    (`pipeline_routes.do_run_match`: the game's export, reused when it was fetched today, US Central (D166), or fetched,
     then `banchi join`). Returns None when the run is joined, else one plain sentence saying why not;
     the run then stays at phase `join` and its match record tells the screen."""
     refused = _no_connection(run_dir)
@@ -1083,7 +1100,7 @@ def _join_now(run_dir, say) -> Optional[str]:
     try:
         from server import pipeline_routes
 
-        say("joining         fetching the game's export (reused when under 15 minutes old), then joining the run")
+        say("joining         fetching the game's export (reused when fetched today), then joining the run")
         try:
             outcome = pipeline_routes.do_run_match(run_dir.directory.name, {})
         except pipeline_routes.PipelineRefusal as refusal:
@@ -1105,6 +1122,18 @@ def _join_now(run_dir, say) -> Optional[str]:
         standing = (outcome.get("summary") or {}).get("match_problem") or {}
         return f"an earlier join problem stands: {standing.get('message') or 'see the run'}"
     return f"the join did not run ({reason or 'no reason given'})"
+
+
+def _nothing_to_join(run_dir) -> bool:
+    """True when every card of this run was retired as an empty slot (`pipeline_routes.settle_nothing_to_join`,
+    the question `do_run_match` asks too), and the run is then marked finished. A failed read is False: the join then runs as it always did."""
+    try:
+        from server import pipeline_routes
+
+        return pipeline_routes.settle_nothing_to_join(run_dir.directory)
+    except Exception as exc:  # noqa: BLE001 - the answers are banked already; only the skip is lost
+        store_files.log_cause("identify nothing-to-join", exc)
+        return False
 
 
 def _held_now(snapshot, items) -> str:
@@ -1493,7 +1522,7 @@ def _run(args, say) -> int:
             second_count = len(to_send) - match.preflight([_match_request(i) for i in to_send])["can_read"]
             share = Decimal(second_count) / Decimal(max(len(to_send), 1))
             second_cost = (_estimate(to_send) * share).quantize(Decimal("0.01"))
-    retiring = [i for i in empties if i.unread is not None and match.retires_empty_slot(i.unread)]
+    retiring = [i for i in empties if retires_as_empty_slot(i, snapshot)]
     if not empties:
         say("empty slot      0")
     elif args.dry_run and not measured:
@@ -2075,13 +2104,11 @@ def _run(args, say) -> int:
                         note=item.capture.note,
                     )
                 )
-            # RETIRED ONLY WHEN DARK AND A WEAK MATCH AGREE, and only a card nothing has been said about
-            # (`captured`): an identified or sold card is never retired here. The event names the reason
-            # and both measures, so a wrong retirement is found from the store record alone.
+            # RETIRED ONLY WHEN DARK AND A WEAK MATCH AGREE, on a card `retires_as_empty_slot` allows (the same
+            # rule the quote used). The event names the reason and both measures, so a wrong retirement is
+            # found from the store record alone.
             if (
-                item.stage == STAGE_EMPTY
-                and item.capture.has_position
-                and match.retires_empty_slot(item.unread)
+                retires_as_empty_slot(item, writable)
                 and writable.inventory.retire_empty_slot(
                     item.key, p99=round(item.unread.p99, 1), best_match=item.unread.best_match, identify_run=run_dir.name,
                 )
@@ -2165,8 +2192,9 @@ def _run(args, say) -> int:
     # and a join that cannot run (no export, a refusal) costs nothing but the next step. The report below reads
     # the queues back after it: the outcomes "wait in review" and "main queue" are the join's, so they are said
     # from what the store holds, and "held until join" when it did not run.
-    not_joined = _join_now(run_dir, say)
-    after_join = None if not_joined else store.read()
+    nothing = _nothing_to_join(run_dir)  # a run of retired empty slots has no card to join and no export to fetch
+    not_joined = None if nothing else _join_now(run_dir, say)
+    after_join = None if (nothing or not_joined) else store.read()
 
     def held_card_where(cards) -> str:
         return "held until join" if after_join is None else _held_now(after_join, cards)
@@ -2228,10 +2256,12 @@ def _run(args, say) -> int:
             + ", ".join(f"{count} {code}" for count, code in sorted(reasons.items())))
         say(f"                  in the store now: {held_card_where(second_looked)}")
     if empty_slots:
-        kept = len(empty_slots) - len(retired_empty)
+        kept = [i for i in empty_slots if i not in retired_empty]
+        # WHERE A KEPT SLOT IS IS READ BACK FROM THE QUEUES, never promised: the join files it, and when
+        # the join did not run nothing has.
         say(f"empty slot      {len(empty_slots)} photograph(s) show no card. They were not sent to the "
-            f"paid read. {len(retired_empty)} retired (dark and a weak match); {kept} go to the main "
-            f"queue as card_not_detected with their photographs.")
+            f"paid read. {len(retired_empty)} retired (dark and a weak match); {len(kept)} kept"
+            + (f" ({held_card_where(kept)})." if kept else "."))
         for item in retired_empty:
             say(f"                retired {item.key}: p99 {item.unread.p99:.1f}, best match "
                 f"{item.unread.best_match:.4f} (under {match.EMPTY_SLOT_WEAK_COSINE})")
@@ -2247,7 +2277,9 @@ def _run(args, say) -> int:
         # it gave them back, and `make submission-selftest` asserts both figures.
         say(f"claim           {released_keys} card(s) released ({claim.receipt})")
     say("")
-    if not_joined is None:
+    if nothing:
+        say("nothing to join  every card in this run was retired as an empty slot, so no export was fetched and the run has no join to wait for.")
+    elif not_joined is None:
         say(f"joined          this run is joined against the game's export. next: banchi emit {run_dir.directory}")
     else:
         say(f"not joined      {not_joined}")

@@ -3,10 +3,13 @@
 `identify.match.empty_slot` takes the 99th-percentile luminance of a photograph, at full size. Under
 `EMPTY_SLOT_P99` the slot is empty. `match.read` ranks a dark photograph for its best raw cosine and
 answers the code `empty_slot` with that luminance and that best match; it is never accepted. The
-press never sends an empty photograph to the paid read, retires a captured card only when the dark
+press never sends an empty photograph to the paid read, retires a card only when the dark
 photograph and a weak best match agree, and `cli/resolve.py` files the rest as `card_not_detected`
-with their photographs. The fixtures are synthetic images written to a temporary folder at run time,
-so no photograph is committed.
+with their photographs. The card is `captured`, or it was filed `identified` with a blank answer by a
+paid run that ran before the empty check existed, and no person has answered it (a review stand-down or
+a flag on the saved answer). A card with a name, or a person's answer, is never retired. The quote
+counts what the press then retires, and the summary claims no queue move that did not happen. The
+fixtures are synthetic images written to a temporary folder at run time, so no photograph is committed.
 
 INTERFACE ASSUMED (the builder may rename, then re-point here): `match.empty_slot(Path) -> bool`,
 `match.read(requests, index, model, aspect, log, promo_games)`, which reads `index.meta` once and
@@ -20,6 +23,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import tempfile
 from pathlib import Path
 from unittest import mock
@@ -29,7 +33,7 @@ from PIL import Image
 
 from harness.tests import Checks
 from harness.tests.home import isolated_home
-from harness.tests.t7.common import card_photo, events_for, photo_of, quiet, refusal, tree_digest, write_export
+from harness.tests.t7.common import answers, card_photo, entry, events_for, photo_of, quiet, refusal, tree_digest, write_export
 from identify import match
 
 CODE = "empty_slot"
@@ -373,7 +377,8 @@ def _caps(folder: Path, box: int, shots: dict, *, game: str = "misc", hint=None)
 
 def _reader(best_by_name: dict, seen: list):
     """Stands in for `match.read`. A dark photograph is answered `empty_slot` with its luminance and
-    the best raw cosine `best_by_name` gives its file name. A bright one is an unaccepted margin."""
+    the best raw cosine `best_by_name` gives its file name, or its position key. A bright one is an
+    unaccepted margin."""
 
     def read(requests, _index, *_a, **_k):
         out = []
@@ -383,7 +388,7 @@ def _reader(best_by_name: dict, seen: list):
             if _p99(photo) < 100:
                 result = match.Result(request.key, False, code=CODE, detail="the slot holds no card")
                 result.p99 = round(_p99(photo), 1)
-                result.best_match = best_by_name.get(photo.name)
+                result.best_match = best_by_name.get(photo.name, best_by_name.get(request.key))
                 out.append(result)
             else:
                 out.append(match.Result(request.key, False, code=match.UNREAD_MARGIN, detail="the free reader is not sure"))
@@ -392,16 +397,18 @@ def _reader(best_by_name: dict, seen: list):
     return read
 
 
-def _press(caps: Path, *, engine: str = "marqo-b", dry_run: bool = False, ready: bool = True,
-           reader=None, sent=None):
-    """One `identify` press over `caps`, in the current isolated home. Every paid request meets a stub
-    transport that refuses it (`sent` collects the custom ids asked for), and the free reader is
+def _press(caps, *, engine: str = "marqo-b", dry_run: bool = False, ready: bool = True,
+           reader=None, sent=None, keys=None):
+    """One `identify` press over `caps`, or over the stored cards `keys` names (as the screen's
+    selection does, with no capture folder), in the current isolated home. Every paid request meets a
+    stub transport that refuses it (`sent` collects the custom ids asked for), and the free reader is
     `reader`. Returns the exit code and every line the press said."""
     from cli import __main__ as cli_entry
     from cli import cmd_identify
     from identify import batch
 
-    argv = ["identify", str(caps), "--engine", engine] + (["--dry-run"] if dry_run else [])
+    select = ["--keys", ",".join(keys)] if keys else [str(caps)]
+    argv = ["identify", *select, "--engine", engine] + (["--dry-run"] if dry_run else [])
     asked: list = [] if sent is None else sent
 
     def refuse(requests, log=None, on_submit=None):
@@ -889,6 +896,231 @@ def check_failed_catalog_read_does_not_retire(checks: Checks) -> None:
     checks.ok(not paid, "and the paid read is never asked for the dark card")
 
 
+# ---------------------------------------------------------------- the legacy blank `identified` cards
+#
+# Measured on the owner's store: an earlier paid run filed seven empty-slot photographs as `identified`
+# with blank names, before the empty check existed. A free press over those keys quoted "7 would be
+# retired", retired none, and then said "7 go to the main queue as card_not_detected" with nothing queued.
+
+BLANK_ANSWER = {"name": "", "number": "", "printed_total": "", "finish": "normal", "confidence": "low"}
+
+
+def _scene(box: int, kinds: dict) -> None:
+    """One stored card per position in `kinds`, each with a dark photograph, in the state its kind names.
+
+    captured       never identified.
+    blank          an earlier paid run filed it `identified` with a blank name, saved its blank answer for
+                   the photograph, and left an open `no_catalog_row` question in review.
+    blank-none     the same, with `None` where `blank` has `""` (the stored form is unmeasured).
+    named          `identified` as Dunsparce.
+    stood-down     `blank`, and a person closed its review question through the stand-down route.
+    cache-cleared  `blank`, and a person's flag on its saved answer.
+    """
+    from identify import images
+    from store import cache as cache_mod
+    from store import master
+    from server import capture_server
+    from store.session import Store
+
+    _store_captures(box, max(kinds))
+    for position in kinds:
+        _dress_stored(box, position, DARK)
+    digests = {position: images.sha256_of(photo_of(box, position)) for position in kinds}
+    questions = {position: entry(box, position, reason="no_catalog_row", candidates=[]) for position in kinds}
+    with Store().write() as snapshot:
+        for position, kind in kinds.items():
+            key = master.position_key(box, position)
+            if kind == "captured":
+                continue
+            if kind == "named":
+                snapshot.inventory.record_identification(
+                    key, name="Dunsparce", number="120/159", printed_total="159", confidence="high",
+                    detected_finish=None, run="an-earlier-run",
+                )
+                continue
+            blank = None if kind == "blank-none" else ""
+            snapshot.inventory.record_identification(
+                key, name=blank, number=blank, printed_total=blank, confidence="low",
+                detected_finish=None, run="an-earlier-paid-run",
+            )
+            snapshot.review.upsert(questions[position])
+            saved = cache_mod.CacheEntry(
+                identification=dict(BLANK_ANSWER), photo_sha256=digests[position], prompt_fingerprint="t7-fingerprint",
+                at=cache_mod.now(), cleared_by_human=(kind == "cache-cleared"), engine=cache_mod.ENGINE_HAIKU,
+            )
+            snapshot.cache.entries[key] = saved
+    for position, kind in kinds.items():
+        if kind == "stood-down":
+            capture_server.do_review_stand_down(box, position, {"reason": "cannot_settle"})
+
+
+def _keys(box: int, kinds: dict) -> list:
+    return [f"{box}/{position}" for position in kinds]
+
+
+def _said_count(lines, which: int, pattern: str):
+    """The number the `which`-th line starting `empty slot` gives before `pattern`, or None. The quote is
+    the first such line and the summary the last; a dry run has only the quote."""
+    said = [line for line in lines if line.startswith("empty slot")]
+    found = re.search(pattern, said[which]) if said and -len(said) <= which < len(said) else None
+    return int(found.group(1)) if found else None
+
+
+def _retired_keys(keys) -> list:
+    from store import master
+
+    return [key for key in keys if _state(key) == master.RETIRED]
+
+
+def check_blank_identified_empty_slot_is_retired(checks: Checks) -> None:
+    from cli import runs
+    from store import master
+
+    checks.note("")
+    checks.note("BLANK IDENTIFIED — a paid run filed an empty slot as identified with no name; the free press retires it")
+    kinds = {1: "blank", 2: "blank-none", 3: "captured"}
+    with isolated_home():
+        _scene(7, kinds)
+        seen: list = []
+        code, _lines = _press(None, keys=_keys(7, kinds), reader=_reader({"7/1": 0.2, "7/2": 0.3, "7/3": 0.25}, seen))
+        checks.equal(code, 0, "`identify --engine marqo-b --keys 7/1,7/2,7/3` exits 0")
+        checks.equal(sorted(seen), ["7/1", "7/2", "7/3"], "all three dark photographs reached the free read")
+        checks.equal(_state("7/3"), master.RETIRED, "control: the captured card in the same press is retired")
+        run = runs.latest()
+        for key, best in (("7/1", 0.2), ("7/2", 0.3)):
+            checks.equal(_state(key), master.RETIRED,
+                         f"{key}: the dark card filed identified with a blank name and a weak match is retired")
+            retired = _retired(key)
+            checks.equal(len(retired), 1, f"{key}: one retired event names the card")
+            event = retired[0] if retired else {}
+            checks.equal(event.get("reason"), CODE, f"{key}: the event carries reason empty_slot")
+            checks.ok(isinstance(event.get("p99"), float) and event["p99"] < 100,
+                      f"{key}: the event carries the 99th-percentile luminance", f"event={event!r}")
+            checks.equal(event.get("best_match"), best, f"{key}: the event carries the best raw cosine")
+            checks.equal(event.get("identify_run"), run.directory.name if run else None,
+                         f"{key}: the event names the identify run")
+
+
+def check_a_name_or_a_persons_answer_blocks_the_retire(checks: Checks) -> None:
+    """The retire that reaches a blank `identified` card must stop at a name and at a person. Green on
+    a tree that retires nothing from `identified`; red on a tree that drops the state test."""
+    from store import master
+    from store.session import Store
+
+    checks.note("")
+    checks.note("NAMED OR ANSWERED — a card with a real name, or one a person has answered, is never retired")
+    kinds = {1: "named", 2: "stood-down", 3: "cache-cleared"}
+    with isolated_home():
+        _scene(7, kinds)
+        before = Store().read()
+        flags = (before.review.entries["7/2"].cleared_by_human, before.cache.get("7/3").cleared_by_human)
+        checks.equal(flags, (True, True), "fixture: the stand-down and the cache flag are set before the press")
+        seen: list = []
+        code, _lines = _press(None, keys=_keys(7, kinds), reader=_reader({"7/1": 0.2, "7/2": 0.2, "7/3": 0.2}, seen))
+        checks.equal(code, 0, "`identify --engine marqo-b --keys 7/1,7/2,7/3` exits 0")
+        checks.ok({"7/1", "7/2"} <= set(seen), "the named and the stood-down photographs reached the free read",
+                  f"read: {seen!r}")
+        checks.equal(_state("7/1"), master.IDENTIFIED, "the identified card with a real name stays identified")
+        checks.equal(_state("7/2"), master.IDENTIFIED, "the card a person stood down stays identified")
+        checks.equal(_state("7/3"), master.IDENTIFIED, "the card whose saved answer a person flagged stays identified")
+        checks.equal(_retired("7/1") + _retired("7/2") + _retired("7/3"), [], "and none of the three is retired")
+        after = Store().read()
+        checks.equal((after.review.entries["7/2"].cleared_by_human, after.cache.get("7/3").cleared_by_human), (True, True),
+                     "and the person's flags are left as they were")
+
+
+def check_quote_counts_what_the_press_retires(checks: Checks) -> None:
+    from store import master
+
+    checks.note("")
+    checks.note("QUOTE AND PRESS AGREE — the preflight's retire count is what the press retires, and what its summary says")
+    # 7/1 and 7/2 retire. 7/3 has a name, 7/4 has a match that is not weak, 7/5 a person stood down.
+    kinds = {1: "captured", 2: "blank", 3: "named", 4: "captured", 5: "stood-down"}
+    best = {"7/1": 0.2, "7/2": 0.25, "7/3": 0.1, "7/4": 0.8, "7/5": 0.15}
+    with isolated_home():
+        _scene(7, kinds)
+        seen: list = []
+        code, dry = _press(None, keys=_keys(7, kinds), dry_run=True, reader=_reader(best, seen))
+        checks.equal(code, 0, "`identify --engine marqo-b --dry-run` exits 0")
+        checks.equal(sorted(seen), sorted(_keys(7, kinds)), "the dry run read all five dark photographs")
+        quoted = _said_count(dry, 0, r"(\d+) would be retired")
+        code, real = _press(None, keys=_keys(7, kinds), reader=_reader(best, []))
+        checks.equal(code, 0, "`identify --engine marqo-b` exits 0")
+        retired = _retired_keys(_keys(7, kinds))
+        checks.equal(retired, ["7/1", "7/2"],
+                     "the press retires the captured and the blank identified card, and not the named, "
+                     "the not-weak or the stood-down one")
+        checks.equal(quoted, len(retired), "the dry run's `would be retired` count is the number the press retires")
+        checks.equal(_said_count(real, 0, r"(\d+) will be retired"), len(retired),
+                     "the press's own quote says the same number")
+        checks.equal(_said_count(real, -1, r"(\d+) retired"), len(retired),
+                     "and its summary says the same number")
+        checks.equal(len(_retired("7/1") + _retired("7/2")), 2, "with one retired event for each")
+        checks.equal(_state("7/4"), master.CAPTURED, "the dark card with a match that is not weak stays captured")
+
+
+def check_summary_claims_no_queue_move_that_did_not_happen(checks: Checks) -> None:
+    from store.session import Store
+
+    checks.note("")
+    checks.note("SUMMARY HONESTY — the press says a kept empty slot goes to the main queue only if it was queued")
+    kinds = {1: "captured", 2: "blank", 3: "captured"}
+    kept = ["7/1", "7/2"]
+    with isolated_home():
+        _scene(7, kinds)
+        code, lines = _press(None, keys=_keys(7, kinds), reader=_reader({"7/1": 0.8, "7/2": 0.7, "7/3": 0.2}, []))
+        checks.equal(code, 0, "`identify --engine marqo-b` exits 0")
+        checks.ok(any(line.startswith("not joined") for line in lines),
+                  "control: the join did not run under the harness, so the press queued nothing", "\n".join(lines))
+        review = Store().read().review.entries
+        queued = [key for key in kept
+                  if key in review and review[key].reason == "card_not_detected" and not review[key].cleared_by_human]
+        checks.equal(queued, [], "control: no kept empty slot holds an open card_not_detected entry")
+        report = lines[next((n for n, line in enumerate(lines) if line.startswith("identified")), 0):]
+        claims = [line for line in report
+                  if ("main queue" in line or "card_not_detected" in line) and "join" not in line.lower()]
+        checks.equal(claims, [],
+                     "the summary does not say a kept empty slot goes to the main queue when no join filed it")
+
+
+def check_retired_empty_slot_owes_no_review_answer_until_undone(checks: Checks) -> None:
+    """GUARD. An empty slot the press retired owes Review no answer: `owed_entries` leaves its question out,
+    and `entries` keeps it so the retire undo needs no second write. Undoing the retirement owes it again.
+    So a finished run of empty slots leaves nothing in the review count.
+
+    The control card stays on hand with its question, so an `owed_entries` that returned nothing at all
+    would still fail."""
+    from server import capture_server
+    from store import master
+    from store.session import Store
+
+    from harness.tests.t7.common import capture_payload
+
+    checks.note("")
+    checks.note("REVIEW OWES NOTHING FOR A RETIRED EMPTY SLOT — the entry stays in the file; the undo owes it again")
+    with isolated_home():
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(8))
+        with Store().write() as snapshot:
+            for index in (1, 2):
+                snapshot.review.upsert(entry(8, index, reason="card_not_detected"))
+            retired = snapshot.inventory.retire_empty_slot("8/1", p99=3.0, best_match=0.2, identify_run="t7-owed-run")
+        checks.ok(retired, "fixture: the empty slot is retired the way the press retires it")
+
+        def owed() -> list:
+            now = Store().read()
+            return sorted(row.position for row in now.review.owed_entries(now.inventory.cards))
+
+        read = Store().read()
+        checks.equal(read.inventory.cards["8/1"].retire_reason, master.EMPTY_SLOT, "the card left as an empty slot")
+        checks.equal(sorted(read.review.entries), ["8/1", "8/2"], "both questions stay in the review file")
+        checks.equal(owed(), ["8/2"], "Review owes the card still on hand and not the retired empty slot")
+
+        back = answers(checks, lambda: capture_server.do_retire(8, 1, {"undo": True}), "the retire undo answers")
+        checks.equal((back or {}).get("state"), master.CAPTURED, "the undo puts the card back to captured")
+        checks.equal(owed(), ["8/1", "8/2"], "and Review owes the card's question again")
+
+
 CHECKS = (
     check_empty_slot_fixtures,
     check_empty_slot_boundary,
@@ -914,4 +1146,9 @@ CHECKS = (
     check_no_listed_groups_does_not_retire,
     check_stale_model_or_unserved_game_does_not_retire,
     check_failed_catalog_read_does_not_retire,
+    check_blank_identified_empty_slot_is_retired,
+    check_a_name_or_a_persons_answer_blocks_the_retire,
+    check_quote_counts_what_the_press_retires,
+    check_summary_claims_no_queue_move_that_did_not_happen,
+    check_retired_empty_slot_owes_no_review_answer_until_undone,
 )

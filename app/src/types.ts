@@ -2877,6 +2877,8 @@ export type RunFile = {
 export type RunSummary = {
   run: string
   path: string
+  /** Every card in the run was retired as an empty slot: the run is finished, and has no join, file or compare. */
+  nothing_to_join?: boolean
   created_at?: string | null
   updated_at?: string | null
   capture_dir?: string | null
@@ -2959,11 +2961,12 @@ export type RunSummary = {
 export type RunMatchProblem = { code: string; message: string; step: 'fetch' | 'join' }
 
 /** `POST /pipeline/runs/<name>/match`. `ran` is false when the run was not waiting for a match,
- *  a match was already running, or a problem stands and no retry was asked. */
+ *  a match was already running, a problem stands and no retry was asked, or every card in the run
+ *  was retired as an empty slot, so there is nothing to join. */
 export type RunMatchAnswer = {
   ran: boolean
   ok?: boolean
-  reason?: 'not_waiting' | 'problem_stands' | 'running'
+  reason?: 'not_waiting' | 'problem_stands' | 'running' | 'nothing_to_join'
   problem?: RunMatchProblem
   summary: RunSummary
 }

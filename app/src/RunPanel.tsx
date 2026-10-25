@@ -972,6 +972,10 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 )}
               </StepCard>
 
+              {detail.nothing_to_join === true ? (
+                <p className="runs-step-lede">Every card was an empty slot, so there was nothing to join.</p>
+              ) : (
+                <>
               {/* ------------------------------------------------------------------ join */}
               <StepCard
                 n={2}
@@ -1310,6 +1314,8 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 {troubleFor(['staged'])}
                 {result('reconcile')}
               </StepCard>
+                </>
+              )}
             </div>
 
             {/* THE RUN'S OWN FILES, CLOSED (UX-020). They are the record, not the job: the owner

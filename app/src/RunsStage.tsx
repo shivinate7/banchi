@@ -41,6 +41,10 @@ export function stageOf(row: RunSummary): Stage {
   if (row.live || row.phase === 'identifying') {
     return { label: runningFor(row), tone: 'live', filled: 0, live: true, step: 0 }
   }
+  if (row.nothing_to_join === true) {
+    /* FINISHED, NOT ON THE WAY: a full bar and the done tone, because there is no join, file or compare left. */
+    return { label: 'Empty slots', tone: 'ok', filled: 6, live: false, step: 4 }
+  }
   switch (row.phase) {
     case 'ready':
       return { label: 'Pending', tone: 'default', filled: 0, live: false, step: 0 }
