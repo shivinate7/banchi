@@ -1436,10 +1436,12 @@ def unread_targets(stock, store_pairs: Iterable[Tuple[str, str]]) -> List[Tuple[
         rows: Dict[Tuple[str, str], Set[str]] = {}
         for game, name, pid in index.db.execute("select game, set_name, product_id from vec"):
             rows.setdefault((game, name), set()).add(pid)
-    products_of = getattr(stock, "catalog_products", None)  # a stock with no product list cannot show a gain
 
     def grown(game: str, canonical: str, set_name: str) -> bool:
-        listed = products_of(game, set_name) if products_of else None
+        try:
+            listed = stock.catalog_products(game, set_name)
+        except (RuntimeError, OSError, KeyError):  # a list that cannot be read is no work; PriceHistoryError is a RuntimeError
+            return False
         return bool(listed) and any(p.product_id not in rows.get((game, canonical), ()) for p in listed[0])
 
     out = []
