@@ -12,7 +12,7 @@ Plan: docs/specs/batch-script.md#47-a-run-joins-itself (web)
 
 **The run-start export prefetch is removed.** At the start of the read, it fetched the game's export in a background thread. It took its scope from identifications, and none exist at run start. The fetch was refused every time and could never work. The join now gets the export at the end of the run.
 
-**Open: the card state `read`.** The owner ruled a new card state, `read`. A card is `read` after Haiku has answered and before the join has run. It sits between `captured` and `identified`. It is ruled and not built. Until it is built, no card carries it and no screen names it. The builder checks two name clashes. T7 asserts that no history event name is a card state (D26, retired is a terminal card state). `store/master.IDENTITY_READ` already uses `read` as a value of `Card.identity_source`, a different field.
+**No `read` card state.** A card turns `identified` when the reader answers, before the join. The owner considered a `read` state between the two and dropped it. Runs join themselves at the end of the read, so a card waits in that gap only for seconds, or until a failed join, which the run names and Review lists.
 
 **Governing.**
 
