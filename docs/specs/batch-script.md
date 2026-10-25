@@ -248,7 +248,7 @@ reproduce them. The recorded fingerprint makes a targeted re-read possible.
 
 ### 4.7 A run joins itself
 
-At its end, every identify run, paid or free, joins itself (D-runs-join-themselves, every identify run
+At its end, every identify run, paid or free, joins itself (D321, every identify run
 joins itself at its end). The join helper in `cli/cmd_identify.py` (`_join_now`) takes the screen's automatic match: the game's
 export (a recent one is reused, else one is fetched; D166, the catalog export belongs to the game),
 then the join. If the join does not run, the run stays at the join step. The summary says why, and says the cards are

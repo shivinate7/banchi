@@ -1,4 +1,4 @@
-## DEBT-same-art-reader-shelved — the free number reader for same-art printings is shelved
+## DEBT100 — the free number reader for same-art printings is shelved
 
 **Two printings of one card can share their art. The free image reader cannot tell them apart. A free reader of the printed collector number would. It is not built, and the owner shelved it.** Same-art printings stay a human check in Review.
 
