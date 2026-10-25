@@ -1811,6 +1811,40 @@ def check_undated_export_is_an_unknown_day(checks: Checks) -> None:
                   "6c. and that line never prints the epoch's day or None", line or text[-300:])
 
 
+def check_a_check_holds_one_central_day(checks: Checks) -> None:
+    """A check lives in one US Central day, though the real clock passes midnight inside it.
+
+    `hermetic` pins `clock._current` to the check's first instant, so an export a check wrote before
+    00:00 is not called stale by a press after it. That was a take-off press answering `prices_stale`.
+    The probe moves the real clock past midnight: `clock.now` follows it and `clock.before_today` does
+    not. 26 hours is past the next midnight from any instant, on a 23, 24 or 25 hour day.
+    """
+    class NextDay(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return super().now(tz) + timedelta(hours=26)
+
+    held = clock._current()
+    with mock.patch.object(clock, "datetime", NextDay):
+        checks.ok(clock.central_day(clock.now()) > clock.central_day(held), "the probe moves the real clock past midnight")
+        checks.ok(not clock.before_today(held), "the check's first instant is still today, after midnight")
+        checks.equal(clock._current(), held, "the day the gate reads does not move")
+        with hermetic():
+            checks.equal(clock._current(), held, "a nested hermetic keeps the instant the check began with")
+
+    with send_portal() as portal, synced_home():
+        run, _ = seam_run(checks, [(4, 1, "Articuno", "161", None)], market={ARTICUNO_SKU: ARTICUNO_THEN})
+        _name_sets(run)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        with mock.patch.object(clock, "datetime", NextDay):
+            outcome = _send_now(run)
+        checks.ok(
+            outcome[0] == "answer",
+            "a send pressed after midnight, on an export written before it, goes and is not refused `prices_stale`",
+            repr(outcome[1:])[:300],
+        )
+
+
 CHECKS = (
     check_refresh_reaches_store_backed_runs,
     check_held_lock_is_a_recorded_skip,
@@ -1847,4 +1881,5 @@ CHECKS = (
     check_dead_path_with_no_age_is_stale,
     check_dead_path_run_is_not_sent_on_old_prices,
     check_undated_export_is_an_unknown_day,
+    check_a_check_holds_one_central_day,
 )

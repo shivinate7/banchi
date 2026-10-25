@@ -1668,17 +1668,21 @@ def check_export_fetch(checks: Checks) -> None:
                 # as a reuse that ignored the day.
                 # A minute before this reading's day began: the previous Central day, at any
                 # hour. `now - 86400` would stay on the same day across a 25-hour fall-back day.
-                stale = was_mtime - clock.seconds_into_today(datetime.fromtimestamp(was_mtime, clock.CENTRAL)) - 60
+                # The clock is pinned to the reading's own moment, as in the case below, so the
+                # check's held day (`hermetic`) cannot sit before the day this reading was taken on.
+                taken_on = datetime.fromtimestamp(was_mtime, clock.CENTRAL)
+                stale = was_mtime - clock.seconds_into_today(taken_on) - 60
                 for entry in (exports_root / "pokemon").glob("*.csv"):
                     os.utime(entry, (stale, stale))
                 was_mtime = held.stat().st_mtime
                 before_posts = posts()
-                status, raw, _ = request(
-                    port,
-                    "POST",
-                    f"/pipeline/runs/{second.directory.name}/export",
-                    payload={},
-                )
+                with mock.patch.object(clock, "_current", lambda: taken_on):
+                    status, raw, _ = request(
+                        port,
+                        "POST",
+                        f"/pipeline/runs/{second.directory.name}/export",
+                        payload={},
+                    )
                 checks.equal(
                     (json.loads(raw)["reused"], posts() - before_posts),
                     (False, 1),

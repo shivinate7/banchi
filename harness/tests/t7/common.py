@@ -26,7 +26,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from contextlib import contextmanager, redirect_stderr, redirect_stdout
+from contextlib import contextmanager, nullcontext, redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 from unittest import mock
@@ -43,7 +43,7 @@ from pipeline import join, tcgcsv
 from pipeline import skus as sku_pipeline
 from store.skus import SkuRow
 from server import capture_server, pipeline_routes, send_routes, shipping_routes
-from store import db, files, master, photos, queues
+from store import clock, db, files, master, photos, queues
 from store.session import Store
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
@@ -249,12 +249,16 @@ def hermetic():
     """One check's process-global state, put back on the way out, and the owner's `.env`
     kept out of it.
 
-    Three things leaked across checks and each is restored here:
+    Four things leak across checks or across midnight, and each is held or restored here:
     - `os.environ`. `check_history_route` ran a CLI `join`, which `envfile.load`ed the
       owner's `.env` (API keys, the store cookie) into the process for every later check.
     - `envfile`'s own state (`ENV_FILE`, `_loaded`, `_from_file`).
     - the server modules' caches (`_SETS_CACHE`, `_NEWEST_LIVE`, `_HOLDER`, `_BATCHES`,
       `_CHILDREN`, `_SEARCH_WORK_COUNTERS`), which a later check could read warm.
+    - the US Central day, which `store/clock.before_today` reads through `clock._current`. It is
+      pinned to the check's first instant, so an export the check writes before 00:00 is not stale
+      to a press after it. A check that pins its own instant patches `_current` inside this and
+      wins. A nested `hermetic` leaves an instant already held alone.
 
     `ENV_FILE` points at a file that does not exist for the check's whole run, so no check
     reads a real `.env` and a check needs no `.env` to pass, as on a fresh clone. A check
@@ -268,8 +272,10 @@ def hermetic():
     )
     saved = [dict(cache) for cache in caches]
     environ = dict(os.environ)
+    moment = clock.now()
+    day = nullcontext() if clock._current is not clock.now else mock.patch.object(clock, "_current", lambda: moment)
     try:
-        with no_env_file():
+        with no_env_file(), day:
             yield
     finally:
         os.environ.clear()
