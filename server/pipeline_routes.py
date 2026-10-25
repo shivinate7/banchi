@@ -8509,6 +8509,23 @@ def _scope_counts(directory: Path) -> Tuple[Dict[str, dict], Dict[str, dict]]:
     return by_game, catalogued
 
 
+def nothing_to_join(directory: Path) -> bool:
+    """True when every card this run holds was retired as an empty slot, so the run has no card to
+    join and no game to ask TCGplayer for. Both ways into a join ask this first: the `identify` press
+    that just retired them (`cli/cmd_identify.py`), and `do_run_match`, which the screen calls for any
+    run waiting at join. A run whose cards cannot be read, or that holds one card still on hand, is
+    not empty: the join runs as before."""
+    try:
+        cards = run_files.open_run(directory).read_identifications().get("cards") or {}
+    except run_files.RunError:
+        return False
+    held = Store().read().inventory.cards
+    return bool(cards) and all(
+        key in held and held[key].state == master.RETIRED and held[key].retire_reason == master.EMPTY_SLOT
+        for key in cards
+    )
+
+
 def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
     """What to ask TCGplayer for: the run's own claims, the game's rule, and the operator.
 
@@ -9445,6 +9462,8 @@ def _match_locked(name: str, directory: Path, payload: dict) -> dict:
     manifest = _manifest(directory)
     if _phase(manifest, _live_pid(directory) is not None) != "join":
         return {"ran": False, "reason": "not_waiting", "summary": _summary(directory)}
+    if nothing_to_join(directory):  # no export to fetch for a run of empty slots, and no problem to record
+        return {"ran": False, "reason": "nothing_to_join", "summary": _summary(directory)}
     standing = _read_match(directory) or {}
     if standing.get("problem") and not bool(payload.get("retry")):
         return {"ran": False, "reason": "problem_stands", "summary": _summary(directory)}

@@ -3020,13 +3020,26 @@ class Inventory:
         check_retire_reason(reason)
         return self._retire(key, reason)
 
+    def can_retire_empty_slot(self, key: str) -> bool:
+        """True for a card whose photograph may be retired as an empty slot: `captured`, or `identified`
+        with no name at all (an earlier paid run filed an empty slot that way, before the dark check
+        existed) and no SKU. A card with a name, a SKU or any other state never is. Whether a PERSON
+        answered the card lives in the review queue and the answer cache, which this store does not
+        hold, so the caller (`cli/cmd_identify.py`'s `retires_as_empty_slot`) tests that."""
+        card = self.cards.get(key)
+        if card is None:
+            return False
+        if card.state == CAPTURED:
+            return True
+        named = card.name or card.number or card.read_name or card.read_number
+        return card.state == IDENTIFIED and not named and card.sku is None
+
     def retire_empty_slot(self, key: str, *, p99: float, best_match: float, identify_run: str) -> bool:
-        """Retire a CAPTURED card whose photograph shows an empty slot. False, and nothing written, for
-        a missing card or one in any other state. The one caller is `cli/cmd_identify.py`, and `retire`
+        """Retire a card whose photograph shows an empty slot (see `can_retire_empty_slot`). False, and
+        nothing written, for any card it refuses. The one caller is `cli/cmd_identify.py`, and `retire`
         refuses this reason, so no route or other caller can pass it. The history line carries what was
         measured, so a wrong retirement is found from the store record alone."""
-        card = self.cards.get(key)
-        if card is None or card.state != CAPTURED:
+        if not self.can_retire_empty_slot(key):
             return False
         return self._retire(key, EMPTY_SLOT, p99=p99, best_match=best_match, identify_run=identify_run)
 
