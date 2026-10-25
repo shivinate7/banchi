@@ -182,17 +182,31 @@ const sceneTo = (page: Page, base: number) =>
     ;(window as unknown as { __scene: { base: number } }).__scene.base = b
   }, base)
 
-/** Card 1 fires and its save is held; card 2 is photographed behind it (queued, in memory). */
+/** One of the motion readout's counts (`empty`, `fires`): the screen's own tally of its verdicts. The
+ *  readout is in the page even while the Tuning panel is shut. */
+const hudCount = (page: Page, name: 'empty' | 'fires') =>
+  page.locator('.capture-motion-hud').getByText(new RegExp(`^${name} \\d+$`))
+
+/** Card 1 fires and its save is held; card 2 is photographed behind it (queued, in memory).
+ *  Each step waits for the screen's own count, never a clock: a loaded runner stretches the screen's
+ *  reading of a frame, and a fixed sleep then lets the next step (or a reload) come first. */
 async function twoCards(page: Page, wire: Awaited<ReturnType<typeof slowCapture>>): Promise<void> {
+  wire.hold() // save 1 stays out until card 2 is photographed: the stub's clock does not slow with a throttled page
   const start = control(page, 'Start dispenser')
   await expect(start).toBeEnabled({ timeout: 5_000 })
   await start.click()
   await sceneTo(page, CARD)
   await expect.poll(wire.posts, { timeout: 8_000 }).toBe(1)
-  await sceneTo(page, GAP_LUMA)
-  await page.waitForTimeout(400) // keep: let the gap register before the next card
+  // Card 2 follows at once, with no gap between: the dealer gives card 2's photo 3 s (SAVE_WAIT_MS) on the
+  // page's own clock, and a throttled page cannot stretch that. A gap that waited for its own settled
+  // verdict took a third of it, and card 2 then fired after "no photo came" and was dropped.
   await sceneTo(page, CARD - 40)
-  await page.waitForTimeout(400) // keep: card 2's fire lands behind save 1
+  await expect(hudCount(page, 'fires'), 'card 2 fires').toHaveText('fires 2')
+  // card 2 is photographed behind save 1 once the screen has kept both photos' ids (a reload reads them)
+  await expect
+    .poll(() => page.evaluate(() => (sessionStorage.getItem('banchi.session.captureId') ?? '').split(' ').filter(Boolean).length))
+    .toBe(2)
+  wire.release()
 }
 
 /* CONTRACT: when card 1's save fails twice, the screen says `Box 5, Card 1 was not saved` (its own
@@ -507,10 +521,8 @@ test('R6: while held the Capture button is disabled; after a successful Retry Ca
  *  then the dealer's no-photo stop. */
 async function dealOneEmptyStand(page: Page): Promise<void> {
   await ready(page, true)
-  const hud = page.locator('.capture-motion-hud')
-  const empty = hud.getByText(/^empty \d+$/)
   // arming on the bare stand has booked its one verdict, so the next one is the crossing's
-  await expect(empty, 'the arm-time verdict').toHaveText('empty 1')
+  await expect(hudCount(page, 'empty'), 'the arm-time verdict').toHaveText('empty 1')
   const start = control(page, 'Start dispenser')
   await expect(start).toBeEnabled({ timeout: 5_000 })
   await start.click()
@@ -519,8 +531,8 @@ async function dealOneEmptyStand(page: Page): Promise<void> {
   // something crosses the lens and the scene settles back onto the baseline: one no-card verdict
   // and no photograph. The screen's own count says so, so a crossing it photographed fails here.
   await crossLens(page)
-  await expect(empty, 'the crossing books one empty-stand verdict').toHaveText('empty 2')
-  await expect(hud.getByText(/^fires \d+$/), 'the crossing is not photographed').toHaveText('fires 0')
+  await expect(hudCount(page, 'empty'), 'the crossing books one empty-stand verdict').toHaveText('empty 2')
+  await expect(hudCount(page, 'fires'), 'the crossing is not photographed').toHaveText('fires 0')
 
   // The stop line comes 3 s (SAVE_WAIT_MS) after the dispenser's COMPLETE; the rest of this wait
   // is slack for a loaded runner. Slack cannot bring a stop line that a photograph has replaced

@@ -92,13 +92,23 @@ export async function slowCapture(
   page: Page,
   ms: number | ((post: number) => number),
   failIf: (post: number) => boolean = () => false,
-): Promise<{ posts: () => number; answered: () => number; events: () => string[]; bodies: () => string[]; sections: () => string[] }> {
+): Promise<{
+  posts: () => number
+  answered: () => number
+  events: () => string[]
+  bodies: () => string[]
+  sections: () => string[]
+  hold: () => void
+  release: () => void
+}> {
   let posts = 0
   let answered = 0
   let saved = 0 // the slot a successful save takes: failed POSTs burn none
   const events: string[] = [] // `sent:N` when POST N arrives, `answered:N` when its reply goes out
   const sections: string[] = [] // the `section` each POST asked for, '' for the box's last
   const bodies: string[] = [] // a short digest of each POST's body: the same frame resent matches itself
+  let gated = false
+  const unanswered: Array<() => void> = [] // answers `hold` is keeping back
   await page.route(/\/capture$/, (route) => {
     posts += 1
     const post = posts
@@ -114,7 +124,8 @@ export async function slowCapture(
       claimed = '?'
     }
     sections.push(claimed)
-    setTimeout(() => { // keep: the slow save held
+    const delay = typeof ms === 'number' ? ms : ms(post)
+    const answer = () => setTimeout(() => { // keep: the slow save held
       answered += 1
       events.push(`answered:${post}`)
       if (failIf(post)) {
@@ -136,9 +147,25 @@ export async function slowCapture(
           place: { box_total: index, located: true, label: `Box 5, Card ${index}` },
         }),
       })
-    }, typeof ms === 'number' ? ms : ms(post))
+    }, delay)
+    if (gated) unanswered.push(answer)
+    else answer()
   })
-  return { posts: () => posts, answered: () => answered, events: () => events.slice(), bodies: () => bodies.slice(), sections: () => sections.slice() }
+  return {
+    posts: () => posts,
+    answered: () => answered,
+    events: () => events.slice(),
+    bodies: () => bodies.slice(),
+    sections: () => sections.slice(),
+    /** Answer nothing until `release`: a POST that arrives meanwhile counts, and its `ms` starts at release.
+     *  A test that needs a later step to land while a save is out holds the answers until that step is seen,
+     *  because the stub's clock does not slow with a throttled page. */
+    hold: () => { gated = true },
+    release: () => {
+      gated = false
+      for (const answer of unanswered.splice(0)) answer()
+    },
+  }
 }
 
 export async function writes(page: Page): Promise<string[]> {
