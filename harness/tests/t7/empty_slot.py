@@ -33,7 +33,7 @@ from PIL import Image
 
 from harness.tests import Checks
 from harness.tests.home import isolated_home
-from harness.tests.t7.common import card_photo, entry, events_for, photo_of, quiet, refusal, tree_digest, write_export
+from harness.tests.t7.common import answers, card_photo, entry, events_for, photo_of, quiet, refusal, tree_digest, write_export
 from identify import match
 
 CODE = "empty_slot"
@@ -1083,6 +1083,44 @@ def check_summary_claims_no_queue_move_that_did_not_happen(checks: Checks) -> No
                      "the summary does not say a kept empty slot goes to the main queue when no join filed it")
 
 
+def check_retired_empty_slot_owes_no_review_answer_until_undone(checks: Checks) -> None:
+    """GUARD. An empty slot the press retired owes Review no answer: `owed_entries` leaves its question out,
+    and `entries` keeps it so the retire undo needs no second write. Undoing the retirement owes it again.
+    So a finished run of empty slots leaves nothing in the review count.
+
+    The control card stays on hand with its question, so an `owed_entries` that returned nothing at all
+    would still fail."""
+    from server import capture_server
+    from store import master
+    from store.session import Store
+
+    from harness.tests.t7.common import capture_payload
+
+    checks.note("")
+    checks.note("REVIEW OWES NOTHING FOR A RETIRED EMPTY SLOT — the entry stays in the file; the undo owes it again")
+    with isolated_home():
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(8))
+        with Store().write() as snapshot:
+            for index in (1, 2):
+                snapshot.review.upsert(entry(8, index, reason="card_not_detected"))
+            retired = snapshot.inventory.retire_empty_slot("8/1", p99=3.0, best_match=0.2, identify_run="t7-owed-run")
+        checks.ok(retired, "fixture: the empty slot is retired the way the press retires it")
+
+        def owed() -> list:
+            now = Store().read()
+            return sorted(row.position for row in now.review.owed_entries(now.inventory.cards))
+
+        read = Store().read()
+        checks.equal(read.inventory.cards["8/1"].retire_reason, master.EMPTY_SLOT, "the card left as an empty slot")
+        checks.equal(sorted(read.review.entries), ["8/1", "8/2"], "both questions stay in the review file")
+        checks.equal(owed(), ["8/2"], "Review owes the card still on hand and not the retired empty slot")
+
+        back = answers(checks, lambda: capture_server.do_retire(8, 1, {"undo": True}), "the retire undo answers")
+        checks.equal((back or {}).get("state"), master.CAPTURED, "the undo puts the card back to captured")
+        checks.equal(owed(), ["8/1", "8/2"], "and Review owes the card's question again")
+
+
 CHECKS = (
     check_empty_slot_fixtures,
     check_empty_slot_boundary,
@@ -1112,4 +1150,5 @@ CHECKS = (
     check_a_name_or_a_persons_answer_blocks_the_retire,
     check_quote_counts_what_the_press_retires,
     check_summary_claims_no_queue_move_that_did_not_happen,
+    check_retired_empty_slot_owes_no_review_answer_until_undone,
 )

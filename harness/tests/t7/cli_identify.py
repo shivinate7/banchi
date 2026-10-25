@@ -7530,7 +7530,8 @@ def _free_reader(best_by_key: dict):
 
 def check_run_of_only_retired_empty_slots_joins_nothing(checks: Checks) -> None:
     """A run that holds only empty slots, every one retired, has no card to join. The press opens no
-    connection to TCGplayer, records no join problem, and says plainly that there is nothing to join.
+    connection to TCGplayer, records no join problem, says plainly that there is nothing to join, and marks
+    the run finished: the manifest, the phase, the summary and the list of runs waiting at join all agree.
 
     The stand-in portal answers the Pokemon export to a Riftbound run, as TCGplayer's did in the
     incident: a press that fetches anyway meets `export_wrong_game`, which blames TCGplayer for a run
@@ -7561,11 +7562,62 @@ def check_run_of_only_retired_empty_slots_joins_nothing(checks: Checks) -> None:
         checks.ok(not any("waits at join" in line for line in lines), "and it does not leave the run waiting at join")
         problem = (pipeline_routes._read_match(run.directory) or {}).get("problem")
         checks.equal(problem, None, "and no join problem is recorded on the run")
+        # FINISHED, NOT WAITING: the press leaves the one stored fact `_phase` reads, and every reader follows it.
+        manifest = json.loads((run.directory / runs.MANIFEST).read_text("utf-8"))
+        checks.equal(manifest.get("nothing_to_join"), True, "and the run's manifest is marked nothing_to_join")
+        checks.equal(pipeline_routes._phase(manifest, False), "done", "and its phase is done, so no step waits")
+        summary = pipeline_routes._summary(run.directory)
+        checks.equal((summary.get("phase"), summary.get("nothing_to_join")), ("done", True),
+                     "and the summary the screen reads says done and nothing_to_join")
+        checks.ok(run.directory.name not in pipeline_routes._waiting_runs(), "and the run is not listed as waiting at join")
         # THE SCREEN CALLS THIS FOR ANY RUN AT THE MATCH STEP. A press that merely skipped its own join would
         # leave the run at `join` with no problem recorded, and this call would then fetch.
         before = dict(hits)
         pipeline_routes.do_run_match(run.directory.name, {})
         checks.equal(hits, before, "and the screen's later match call opens none either")
+
+
+def check_match_settles_an_unmarked_run_of_empty_slots(checks: Checks) -> None:
+    """A run whose empty slots were retired with no marker on it (retired before the marker existed, or by
+    a press that died first) waits at `join`. The screen's match call finishes it: it writes the marker,
+    answers `nothing_to_join`, and fetches nothing. Without the marker the run would wait at join for good.
+
+    The unmarked run is made by a real press and then the marker is taken off the manifest, so the cards,
+    their retirement and the identifications are exactly what a press leaves. On a tree whose press
+    writes no marker, taking it off is a no-op and this reads the run as it stands.
+    """
+    from cli import cmd_identify
+
+    checks.note("")
+    checks.note("UNMARKED EMPTY SLOTS — the match call marks the run finished, answers nothing_to_join, fetches nothing")
+    with isolated_home() as home, _stand_in_portal() as hits:
+        caps = Path(home) / "unmarked-caps"
+        _dark_caps(caps, [(9, 1), (9, 2)], game="riftbound")
+        run = runs.create("t7-unmarked-empty-slots")
+        _as_child(run.directory)
+        with _free_reader({"9/1": 0.2, "9/2": 0.3}), \
+                mock.patch.object(cmd_identify.batch, "run_batch", _paid_transport({})):
+            code, lines = _paid_press(run.directory, caps, engine="marqo-b")
+        checks.ok(code == 0, "the press exits 0", "\n".join(lines[-4:]))
+        states = [Store().read().inventory.cards[key].state for key in ("9/1", "9/2")]
+        checks.ok(states == [master.RETIRED] * 2, "control: every card was retired as an empty slot", f"states: {states!r}")
+
+        path = run.directory / runs.MANIFEST
+        manifest = json.loads(path.read_text("utf-8"))
+        manifest.pop("nothing_to_join", None)
+        files.write_json(path, manifest)
+        checks.equal(pipeline_routes._phase(manifest, False), "join", "control: unmarked, the run waits at join")
+        checks.ok(run.directory.name in pipeline_routes._waiting_runs(),
+                  "control: and it is listed as waiting, so the omission asserted below is the marker's doing")
+
+        before = dict(hits)
+        answer = answers(checks, lambda: pipeline_routes.do_run_match(run.directory.name, {}), "the match call answers")
+        checks.equal((answer or {}).get("reason"), "nothing_to_join", "the match call answers nothing_to_join")
+        checks.equal(hits, before, "and it opens no connection to TCGplayer")
+        marked = json.loads(path.read_text("utf-8"))
+        checks.equal(marked.get("nothing_to_join"), True, "and it leaves the run marked nothing_to_join")
+        checks.equal(pipeline_routes._phase(marked, False), "done", "so the run is done")
+        checks.ok(run.directory.name not in pipeline_routes._waiting_runs(), "and no longer listed as waiting at join")
 
 
 def check_retired_empty_slot_beside_a_real_card_still_joins(checks: Checks) -> None:
@@ -7591,6 +7643,9 @@ def check_retired_empty_slot_beside_a_real_card_still_joins(checks: Checks) -> N
         checks.ok(snapshot.inventory.cards["8/2"].state == master.RETIRED, "the dark card with a weak match is retired", text)
         checks.ok(hits["export"] >= 1, "the run fetched its export", text)
         checks.ok(manifest.get("joined") is True, "and is joined", text)
+        checks.ok(manifest.get("nothing_to_join") is not True, "and the run is not marked nothing_to_join: one card was on hand")
+        checks.equal(pipeline_routes._summary(run.directory).get("nothing_to_join"), False,
+                     "and its summary says nothing_to_join is false")
         kept = snapshot.review.entries.get("8/3")
         checks.ok(kept is not None and kept.reason == "card_not_detected" and not kept.cleared_by_human,
                   "and the dark card with a strong match, which the press kept, waits in review as card_not_detected", text)
@@ -7660,6 +7715,7 @@ CHECKS = (
     check_join_refusals_say_their_reason,
     check_identify_export_starts_at_the_join,
     check_run_of_only_retired_empty_slots_joins_nothing,
+    check_match_settles_an_unmarked_run_of_empty_slots,
     check_retired_empty_slot_beside_a_real_card_still_joins,
     check_join_line_names_the_same_day_rule,
     check_lock_failure_is_not_running,
