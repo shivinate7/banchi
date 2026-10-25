@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { setViewport } from './phoneSwitch'
 import type { Page } from '@playwright/test'
-import { CARD, GAP_LUMA, armMotion, control, fakeBluetooth, injectScene, slowCapture, writes } from './dispenserRig'
+import { CARD, GAP_LUMA, armMotion, control, crossLens, fakeBluetooth, injectScene, slowCapture, throttleCpu, writes } from './dispenserRig'
 
 /* THE DISPENSER'S BROWSER HALF, in a real browser against the real capture screen. The unit tier
  * (`unit/dispenser.unit.ts`) holds the loop against tcg-dealer's recorded sequences; this file
@@ -14,7 +14,8 @@ import { CARD, GAP_LUMA, armMotion, control, fakeBluetooth, injectScene, slowCap
  *
  * NO BOX IS EVER SELECTED, like `motion-live.spec.ts`: the first fire is dropped, and that drop
  * must stop dealing. The camera is a canvas stream into the screen's own video element.
- * The fake device and the camera live in `dispenserRig.ts`. */
+ * The fake device and the camera live in `dispenserRig.ts`.
+ * REPLAY A LOADED RUNNER: `DISPENSER_CPU_THROTTLE=4 npx playwright test tests/dispenser.spec.ts --repeat-each 20`. */
 
 sealEveryTest({ store: true })
 
@@ -71,6 +72,7 @@ async function stubWire(page: Page): Promise<void> {
 
 /** Camera picked, optionally a box picked, motion armed, scene injected, dispenser connected. */
 async function ready(page: Page, withBox: boolean, manual = false): Promise<void> {
+  await throttleCpu(page)
   await fakeBluetooth(page)
   await stubWire(page)
   await page.goto('/#/capture')
@@ -505,26 +507,24 @@ test('R6: while held the Capture button is disabled; after a successful Retry Ca
  *  then the dealer's no-photo stop. */
 async function dealOneEmptyStand(page: Page): Promise<void> {
   await ready(page, true)
+  const hud = page.locator('.capture-motion-hud')
+  const empty = hud.getByText(/^empty \d+$/)
+  // arming on the bare stand has booked its one verdict, so the next one is the crossing's
+  await expect(empty, 'the arm-time verdict').toHaveText('empty 1')
   const start = control(page, 'Start dispenser')
   await expect(start).toBeEnabled({ timeout: 5_000 })
   await start.click()
   await expect(control(page, 'Stop dispenser')).toBeVisible()
 
   // something crosses the lens and the scene settles back onto the baseline: one no-card verdict
-  await page.evaluate(
-    async ({ card, gap }) => {
-      const scene = (window as unknown as { __scene: { base: number } }).__scene
-      for (let i = 0; i < 8; i += 1) { // never still, so motion never fires on it
-        scene.base = i % 2 === 0 ? card : card - 80
-        await new Promise((done) => setTimeout(done, 50)) // keep: one changing frame pair
-      }
-      scene.base = gap
-    },
-    { card: CARD, gap: GAP_LUMA },
-  )
+  // and no photograph. The screen's own count says so, so a crossing it photographed fails here.
+  await crossLens(page)
+  await expect(empty, 'the crossing books one empty-stand verdict').toHaveText('empty 2')
+  await expect(hud.getByText(/^fires \d+$/), 'the crossing is not photographed').toHaveText('fires 0')
 
-  // The stop line follows the dealer's 3 s save timer, and a loaded runner stretches that timer.
-  // The case limit rises with the wait so this 30 s wait can run in full.
+  // The stop line comes 3 s (SAVE_WAIT_MS) after the dispenser's COMPLETE; the rest of this wait
+  // is slack for a loaded runner. Slack cannot bring a stop line that a photograph has replaced
+  // with "not saved", which is what the two counts above catch. The case limit leaves room for it.
   test.setTimeout(90_000)
   await expect(page.locator('.capture-controls').getByText(/no photo came/)).toBeVisible({ timeout: 30_000 })
 }

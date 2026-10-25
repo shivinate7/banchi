@@ -174,8 +174,11 @@ export async function injectScene(page: Page): Promise<void> {
     canvas.height = 360
     const context = canvas.getContext('2d')
     if (context === null) throw new Error('no 2d context')
-    const scene = { base: first }
+    // `path`: the levels the next draws take, one per draw (`crossLens`); `arrived` fires after the last
+    const scene = { base: first, path: [] as number[], arrived: null as (() => void) | null }
     const draw = () => {
+      const next = scene.path.shift()
+      if (next !== undefined) scene.base = next
       context.fillStyle = `rgb(${scene.base},${scene.base},${scene.base})`
       context.fillRect(0, 0, 640, 360)
       if (scene.base !== first) {
@@ -188,6 +191,7 @@ export async function injectScene(page: Page): Promise<void> {
           context.fillRect(0, y + 20, 640, 20)
         }
       }
+      if (next !== undefined && scene.path.length === 0) scene.arrived?.()
       window.requestAnimationFrame(draw)
     }
     draw()
@@ -195,4 +199,38 @@ export async function injectScene(page: Page): Promise<void> {
     video.srcObject = canvas.captureStream(30)
     void video.play()
   }, GAP_LUMA)
+}
+
+/* SOMETHING CROSSES THE LENS AND THE SCENE SETTLES BACK ONTO `rest`: a rise of CROSSING_LEVELS levels,
+ * then `rest`, ONE LEVEL PER DRAWN FRAME, so the pace is the frames and never a clock.
+ *
+ * THE TRAP THIS REPLACES. The screen settles on a card, and photographs it, once the picture has
+ * stood still for the machine's `stillWindow` frames. A timer flip (`setTimeout` 50 ms) held one
+ * level as long as the timer ran late, and on a loaded runner that was long enough: the card was
+ * photographed, the stubbed save failed twice, and the dealer stopped on "not saved" instead of
+ * "no photo came" (a 30 s timeout; 4 of 16 runs at DISPENSER_CPU_THROTTLE=4, 8 of 8 at 8).
+ * Here no two levels sit within CROSSING_STEP of each other, so whichever frames get through, no
+ * two in a row are alike: the picture cannot stand still until it is back on `rest`, where it
+ * books its one no-card verdict. CROSSING_STEP stays over the machine's `tHi` (8 at the seed).
+ * A two-value alternation is not the answer: the draws run at about 60 Hz and the stream delivers
+ * about 30 fps, so every other draw is the same value (motion-live.spec.ts, "THE TRAP"). */
+const CROSSING_STEP = 16
+const CROSSING_LEVELS = 10
+export async function crossLens(page: Page, rest = GAP_LUMA): Promise<void> {
+  await page.evaluate(
+    ({ rest: to, step, levels }) =>
+      new Promise<void>((done) => {
+        const scene = (window as unknown as { __scene: { path: number[]; arrived: (() => void) | null } }).__scene
+        scene.arrived = done
+        scene.path = [...Array.from({ length: levels }, (_, i) => 60 + i * step), to]
+      }),
+    { rest, step: CROSSING_STEP, levels: CROSSING_LEVELS },
+  )
+}
+
+/** `DISPENSER_CPU_THROTTLE=<n>` slows this page's CPU n-fold, to replay a case the way a loaded runner
+ *  runs it. Unset or 1 does nothing. */
+export async function throttleCpu(page: Page): Promise<void> {
+  const rate = Number(process.env.DISPENSER_CPU_THROTTLE ?? 1)
+  if (rate > 1) await (await page.context().newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate })
 }
