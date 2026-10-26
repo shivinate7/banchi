@@ -5691,6 +5691,171 @@ def check_send_skips_copy_departed_after_file(checks: Checks) -> None:
                 )
 
 
+@contextmanager
+def _sale_after_write(file_at: List[Path], sell):
+    """For the FIRST `join.write_import` call: once it returns (the file is on disk, the store lock
+    is not yet taken) record the path it wrote in `file_at`, then run `sell`."""
+    from pipeline import join as pipeline_join
+
+    real_write = pipeline_join.write_import
+
+    def write_then_sell(*args, **kwargs):
+        out = real_write(*args, **kwargs)
+        if not file_at:
+            file_at.append(Path(args[1] if len(args) > 1 else kwargs["path"]))
+            sell()
+        return out
+
+    with _patched(pipeline_join, "write_import", write_then_sell):
+        yield
+
+
+def check_send_refuses_file_ahead(checks: Checks) -> None:
+    """The SCREEN send refuses a file that is ahead of the store, and takes back only what it stamped (D273, D59, D26).
+
+    A copy sells after `emit` wrote the import file and before it took the store lock. The store skips
+    the copy (D26), so the file holds one more than `pushed`. The screen never shows `emit`'s console, so
+    a WARNING there warns nobody, and the old build pushed that file to TCGplayer with no owner step.
+    The press must instead refuse with `send_file_ahead` (409) and a plain sentence on the card (D196,
+    no path, file name or decision id in it): nothing is pushed, nothing is offered as a download, and
+    the press's claim is released.
+    `pushed` is a quantity (D7 amended) and a take-back lowers it by the receipt's copies. The receipt
+    must hold what `emit` STAMPED, not what the file lists, or the take-back also lowers the copies an
+    earlier send put out, and the next worklist offers them again (D59). An earlier send leaves one
+    Articuno copy out first, so a take-back by the file's count is not hidden by `bump` flooring at 0.
+    `emit` runs here in this process (`_run_sync` is swapped) because a patch on `write_import` cannot
+    reach the child process the route starts. Both doors, over one run and over two merged runs.
+    """
+    checks.note("")
+    checks.note("SCREEN SEND, A COPY SOLD AFTER THE FILE WAS WRITTEN — refused, nothing pushed, only the stamped copies taken back")
+    from cli import __main__ as entry
+
+    earlier = _articuno_cards([1])
+    # A BOX OF ITS OWN: `emit` stamps its run onto the cards it sends, and a run made in the same second
+    # over a box holding another run's card reads as a reused box (`box_disowns_run`).
+    later = [(4, i, "Articuno", "161", None) for i in (1, 2, 3)] + [(4, 4, "Dunsparce", "120", "normal")]
+    sold_key = master.position_key(4, 3)
+    skus = (ARTICUNO_SKU, DUNSPARCE_SKU)
+    real_run_sync = pipeline_routes._run_sync
+    write_calls = ("initializeexportcsv", "uploadexportcsv", "movetolive")
+
+    for download in (False, True):
+        for path in ("single", "merged"):
+            door = "download" if download else "send"
+            label = f"{door} door, {path} run, a copy sold after the file"
+            with _case(checks, label), send_portal() as portal, synced_home():
+                first = _press_and_age(checks, portal, earlier, {ARTICUNO_SKU: 0})
+                portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+                send_routes.do_live_check({})
+                made = [seam_run(checks, later, live={ARTICUNO_SKU: 1})[0] for _ in range(1 if path == "single" else 2)]
+                before = {sku: _pushed_count(sku) for sku in skus}
+                checks.equal(before, {ARTICUNO_SKU: 1, DUNSPARCE_SKU: 0}, f"{label}: fixture, an earlier send left one Articuno copy out")
+                for name in ("calls", "rows", "moved"):
+                    portal[name].clear()
+                file_at: List[Path] = []
+                stamped: Dict[str, int] = {}
+
+                def emit_here(argv, timeout, file_at=file_at, stamped=stamped):
+                    if not (len(argv) > 1 and argv[1] == "emit"):
+                        return real_run_sync(argv, timeout)
+                    start = {sku: _pushed_count(sku) for sku in skus}
+                    with _sale_after_write(file_at, lambda: capture_server.do_mark_sold(4, 3, {})), quiet() as said:
+                        code = entry.main(list(argv[1:]))
+                    stamped.update({sku: _pushed_count(sku) - start[sku] for sku in skus})
+                    return code, said.getvalue()
+
+                caught = None
+                with _patched(pipeline_routes, "_run_sync", emit_here):
+                    try:
+                        send_routes.do_send({"runs": [r.name for r in made], "confirm": True, "download": download})
+                    except pipeline_routes.PipelineRefusal as refusal:
+                        caught = refusal
+                in_file = _csv_quantity(file_at[0], ARTICUNO_SKU) if file_at else None
+                checks.equal(
+                    (in_file, stamped.get(ARTICUNO_SKU, 0) < (in_file or 0), Store().read().inventory.cards[sold_key].state),
+                    (3, True, master.SOLD),
+                    f"{label}: fixture, the file holds three Articuno copies, the store stamped fewer, and the sold copy stays sold",
+                )
+                checks.equal(
+                    (getattr(caught, "status", None), getattr(caught, "code", None)),
+                    (HTTPStatus.CONFLICT, "send_file_ahead"),
+                    f"{label}: THE PRESS REFUSES with 409 send_file_ahead, never sends or offers a file the store did not count",
+                )
+                message = str(caught or "")
+                checks.ok(
+                    message.rstrip().endswith(".") and len(message.split()) >= 5
+                    and not re.search(r"[A-Za-z]/|/[A-Za-z]|\.csv|\bD\d+\b|->|\s--", message),
+                    f"{label}: and the card gets a plain sentence, no path, file name or decision id: {message!r}",
+                )
+                checks.equal(
+                    ([name for name in _posts(portal) if name in write_calls], portal["rows"], portal["moved"]),
+                    ([], [], []),
+                    f"{label}: and nothing reached TCGplayer's write side",
+                )
+                receipts = [record for stamp, record in send_routes._receipts() if stamp != first]
+                checks.equal(
+                    [dict(r.get("copies") or {}) for r in receipts],
+                    [{sku: n for sku, n in stamped.items() if n}],
+                    f"{label}: and the receipt holds the copies the store stamped, not the file's count",
+                )
+                checks.equal(
+                    {sku: _pushed_count(sku) for sku in skus},
+                    before,
+                    f"{label}: and `pushed` is back to what it was, so the earlier send's copy is not offered again",
+                )
+                checks.equal(Store().read().send_claims.live(), [], f"{label}: and the refused press holds no claim")
+
+
+def check_file_ahead_names_send_dir(checks: Checks) -> None:
+    """The file-ahead warning names the folder the file was WRITTEN to (D59, D26).
+
+    With `--send-dir` (the screen's press) the import file is written to that folder, and the run's
+    folder holds none. The old warning named the run's folder, so its "do not upload that file" pointed
+    at a folder with no file in it. Read by what the line carries, as the case above it: a line that is
+    not the `->` line, says `file` or an `import*.csv` name, and names the copy. Single and merged.
+    """
+    checks.note("")
+    checks.note("FILE-AHEAD WARNING NAMES THE FOLDER THE FILE WAS WRITTEN TO — with --send-dir")
+    from cli import __main__ as entry
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+    key = master.position_key(3, 2)
+
+    for path in ("single", "merged"):
+        label = f"{path} send with --send-dir, copy sold after the file"
+        with _case(checks, label), synced_home() as home:
+            runs_sent = [seam_run(checks, cards)[0] for _ in range(1 if path == "single" else 2)]
+            send_dir = home / "own-send-dir"
+            send_dir.mkdir()
+            file_at: List[Path] = []
+            with _sale_after_write(file_at, lambda: capture_server.do_mark_sold(3, 2, {})), quiet() as said:
+                code = entry.main(["emit", *[str(r.directory) for r in runs_sent], "--send-dir", str(send_dir)])
+            text = said.getvalue()
+            checks.ok(code == 0, f"{label}: the rest of the send goes ahead", f"exit {code}\n{text}")
+            checks.equal(
+                (bool(list(send_dir.glob("import*.csv"))), [list(r.directory.glob("import*.csv")) for r in runs_sent]),
+                (True, [[]] * len(runs_sent)),
+                f"{label}: fixture, the file is in the send folder and the run folders hold none",
+            )
+            loud = [
+                line for line in text.splitlines()
+                if "->" not in line and re.search(r"\bfile\b|import[\w-]*\.csv", line, re.IGNORECASE)
+                and any(token in line for token in (key, ARTICUNO_SKU, "Articuno"))
+            ]
+            folders = (str(send_dir), str(send_dir.resolve()))
+            checks.ok(
+                bool(loud) and all(any(f in line for f in folders) for line in loud),
+                f"{label}: THE WARNING NAMES THE FOLDER THE FILE IS IN",
+                text,
+            )
+            checks.ok(
+                not any(str(r.directory) in line for r in runs_sent for line in loud),
+                f"{label}: and not a run folder that holds no file",
+                text,
+            )
+
+
 def check_schema_eleven_then_twelve(checks: Checks) -> None:
     """Two branches each took schema 11. Main's identity lane took it for `skus` and
     `cards.identity_source`. The send lane took it for `send_claims`, which is now 12.
@@ -7432,6 +7597,8 @@ CHECKS = (
     check_send_skips_gone_card,
     check_send_skips_departed_copy,
     check_send_skips_copy_departed_after_file,
+    check_send_refuses_file_ahead,
+    check_file_ahead_names_send_dir,
     check_markdown_floor,
     check_markdown_lens,
     check_markdown_push,
