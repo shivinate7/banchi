@@ -39,6 +39,9 @@ LOG = ports.machine_dir() / "demo-mirror-daily.log"
 MERGE = Path.home() / ".claude" / "bin" / "merge"
 SOURCE = Path.home() / "Developer" / "banchi"
 HERE = Path(__file__).resolve()
+LSOF_TIMEOUT = 20  # seconds; read when drop_tree runs
+TERM_GRACE_SECONDS = 2  # a worker that traps SIGTERM gets this long before SIGKILL
+REMOVE_RETRY_SECONDS = 6  # a late writer may recreate the folder; retry removal this long
 
 
 class Stop(Exception):
@@ -127,8 +130,8 @@ def main_tree():
 def cwd_pids(wt):
     """Pids (other than ours) whose working directory is wt or under it."""
     try:
-        out = subprocess.run(["lsof", "-d", "cwd", "-Fpn"], capture_output=True, text=True).stdout
-    except OSError:
+        out = subprocess.run(["lsof", "-d", "cwd", "-Fpn"], capture_output=True, text=True, timeout=LSOF_TIMEOUT).stdout
+    except (OSError, subprocess.SubprocessError):
         return []
     pids, pid, real = [], None, os.path.realpath(wt)  # lsof prints real paths (/private/var, not /var)
     for line in out.splitlines():
@@ -137,6 +140,19 @@ def cwd_pids(wt):
         elif line.startswith("n") and pid != os.getpid() and (line[1:] == real or line[1:].startswith(real + os.sep)):
             pids.append(pid)
     return pids
+
+
+def ancestors():
+    """This process's pid and its parents' up the chain, read with `ps`; a failed read ends the chain."""
+    chain, pid = {os.getpid()}, os.getppid()
+    while pid > 1 and pid not in chain:
+        chain.add(pid)
+        try:
+            pid = int(subprocess.run(["/bin/ps", "-o", "ppid=", "-p", str(pid)], capture_output=True, text=True,
+                                     timeout=LSOF_TIMEOUT).stdout)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            break
+    return chain
 
 
 def drop_tree(root, wt):
@@ -152,13 +168,16 @@ def drop_tree(root, wt):
                        cwd=root, capture_output=True, text=True)
     if j.returncode:
         note = " (janitor teardown exited %d)" % j.returncode
-    end = time.time() + 2
-    while cwd_pids(wt) and time.time() < end:
-        time.sleep(0.1)
-    for pid in cwd_pids(wt):
-        with contextlib.suppress(OSError):
-            os.kill(pid, signal.SIGKILL)
-    end = time.time() + 6
+    if j.returncode != 3:  # 3: a session still stands in the tree, so kill nothing
+        end = time.time() + TERM_GRACE_SECONDS
+        while cwd_pids(wt) and time.time() < end:
+            time.sleep(0.1)
+        keep = ancestors()
+        for pid in cwd_pids(wt):
+            if pid not in keep:
+                with contextlib.suppress(OSError):
+                    os.kill(pid, signal.SIGKILL)
+    end = time.time() + REMOVE_RETRY_SECONDS
     while True:
         sh("git", "worktree", "remove", "--force", str(wt), cwd=root, check=False)
         shutil.rmtree(wt, ignore_errors=True)
@@ -178,7 +197,7 @@ def run(dry):
         if left:
             raise Stop("%s; %s" % (e, left[0])) from e
         raise
-    except Exception:
+    except BaseException:  # also Ctrl-C: the leftover note is still worth a line
         if left:
             log(left[0])
         raise
