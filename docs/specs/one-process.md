@@ -135,6 +135,13 @@ holds the newest source mtime that the build read. Stale means any file in the a
 than that stamp, or the stamp is missing. On `up` and on every poll tick, stale means build. A quiet
 period (`QUIET_SECONDS`) debounces it, because an editor saves twice.
 
+**A restart and a build wait for an idle owner (D176).** After the quiet period, a pending
+restart or app build waits until the owner's last change (`store.files`'s `mark_activity`) is
+`serve.IDLE_SECONDS` (300 s) old. `Supervisor._held` is the one predicate for both. A hold ends
+anyway after `HOLD_CAP_SECONDS` (2 hours), and `make restart-now` ends it at once. A missing or
+unreadable activity file counts as idle. A linked worktree is never held. While a hold waits,
+`.serve/waiting` exists.
+
 **The build is a child, and the swap is atomic.** `npx vite build --outDir dist.next` runs in `app/`.
 Its output goes to the supervisor log under a `[build]` prefix. Never build into `dist/` directly.
 Vite empties its output directory before it writes. A build in place would 404 every asset for the
@@ -192,10 +199,12 @@ things keyed by origin in Chrome reset once:
 
 - **The camera grant.** D108 measured that the grant lives in the profile's content settings,
   keyed by origin. The first open at the capture port prompts again. It is one press.
-- **Every `localStorage` key** (D27): `banchi.capture.deviceId`, `banchi.capture.rotation`,
-  `banchi.theme`, `banchi.rail`, `banchi.orders.fetch-filter` and `banchi.orders.last-check`. The rig
-  re-picks its camera and rotation once. The theme and the rail reset once. There is no migration,
-  because a fallback across origins is impossible.
+- **Every `localStorage` key** (D27), ten in all: `banchi.capture.deviceId`, `banchi.capture.rotation`,
+  `banchi.theme`, `banchi.rail`, `banchi.orders.fetch-filter`, `banchi.orders.last-check`,
+  `banchi.inventory.hide-sold`, `banchi.box-recency`, `banchi.capture.setup` and
+  `banchi.capture.sections`. All ten reset once. The rig re-picks its camera and rotation. The theme
+  and the rail return to their defaults. There is no migration, because a fallback across origins
+  is impossible.
 
 `sessionStorage` is per tab. Reinstall between shifts, not mid-capture, for the `captureId`
 reason D27 names.
@@ -239,7 +248,7 @@ because only this form would want one. No such person exists, so nothing plans i
 Two presses on the owner's own machine. A session cannot do either:
 
 1. **Open the app at `http://localhost:8000`** and re-bookmark it. Expect one camera prompt and one
-   reset of the six device-local keys (§5). Do it between shifts, not mid-capture.
+   reset of the ten device-local keys (§5). Do it between shifts, not mid-capture.
 2. **Run `make lan-check` with the phone on the network.** Its rows press the capture port for the
    app.
 

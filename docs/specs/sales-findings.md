@@ -17,10 +17,11 @@ None is a data error. Each could mislead a decision.
   fixed calendar grid, and it cannot fire on a variable list of populated months. The owner ruled
   that the chart stays and its faults are marked, so a session may not fix this without asking.
   *Not re-checked: the screen has drawn bars since.*
-- **The chart rescales itself.** The geometry normalizes to the lowest and highest value in view, so
-  slope carries no absolute meaning. At two or three buckets, a reviewer saw the line draw a
-  full-height plunge or a spike and a cliff. The low bucket was the unfinished current period.
-  *Not re-checked.*
+- **The holdings line rescales itself.** `Revenue.holdingsSegments` normalizes to the lowest and
+  highest value in view, so slope carries no absolute meaning. With two or three points it draws a
+  full-height plunge or a spike. The bucket bars no longer do this: they draw `gross / bmax` from
+  zero, so a bar's height carries absolute meaning. *The bucket bars are fixed. The holdings line
+  is open.*
 - **Percent change has a zero guard and no floor.** A prior period of five cents against a current
   fifty dollars would draw as a five-figure percentage at the weight of any other figure. D278 sets
   the convention: an anchor carries one weight and a bound carries another. *Not re-checked.*

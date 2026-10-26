@@ -7,9 +7,9 @@ its price) records the safety step. `app/tests/boxmap.spec.ts` and harness test 
 numbers are stable ids, because code cites them.
 
 Sections are modular building blocks. A section is its own small object, and its divider travels
-with it. The move shows two boxes side by side, seen from above. A section drops before or after any
-section of the other box. Cards stand in a vertical row. The card nearest the operator's body is the
-last one.
+with it. The move shows the two boxes it is between, stacked at every width, seen from above. A
+section drops before or after any section of the other box. Cards stand in a vertical row. The card
+nearest the operator's body is the last one.
 
 The scope is: see every box and its sections. Move a section before or after any section of another
 box. Reorder within one box. Merge a box into another. Split a box into a new one. Single cards and
@@ -26,8 +26,8 @@ stored cards) and adds no nav row.
 ### 5.2 The overview
 
 Every box is drawn from above, as it sits on the desk. **The far back of a box, card 1, is at the
-top. The end nearest the operator, the highest number, is at the bottom.** The boxes stand side by
-side.
+top. The end nearest the operator, the highest number, is at the bottom.** The boxes stack, one
+above the next.
 
 - **The box head** shows its name and its cards on hand. No box number shows. A press opens the walk
   at that box.
@@ -46,7 +46,7 @@ side.
 ### 5.3 The move
 
 The order of acts: press "Move sections", pick the section, pick the box it goes to, and see the two
-boxes side by side. Drag the section to a gap before or after any section of the destination. The gap
+boxes stacked. Drag the section to a gap before or after any section of the destination. The gap
 under the pointer opens, and it shows the numbers the cards will have.
 
 A drop in the same box reorders its sections. A drop on "New box" splits. A merge moves every section of
@@ -117,7 +117,5 @@ nothing else has written to either box since the move. The check reads events, n
 
 ## Open
 
-- **The side-by-side view at 390.** Two columns of about 170px may hold section names. Draw it and show
-  the operator before a change.
 - **A merged-out box.** D83 (a moved card) says a box emptied by a merge cannot be reclaimed. D134 (a
   departed record is buried, not kept) may make that sentence stale. The reading awaits the owner's word.
