@@ -10,6 +10,8 @@
 
 **Two limits of the shrink guard.** First, the sidecar is rewritten after every good night. A store emptied in the middle of a week becomes the new baseline on the next good night, so the weekly roll does not refuse it. The guard catches only a drop on the night right before the roll. Second, a refused night's line in `make status` names no remedy. It reads `failed snapshot failed: RuntimeError: the store shrank by more than half`, with the counts. The way out is to delete `~/.banchi/backup-last-counts.json` (`SIDECAR` in `scripts/backup-daily.py`), which accepts a real shrink on the next night.
 
+**Two limits of the status line.** First, nothing checks that `render` in `scripts/status.py` still calls `backup()`. A lane that drops the call loses the `make status` line silently. Every status section shares this gap, and the home for a check is `check_status_sources` in `scripts/docs_audit/status_reach.py`. Second, a backup job that fails to load prints "raised:" text in `make status`, and the exit stays 0. It is not a MISSING source.
+
 **Second copy, on hold.** The Home Assistant box's 2 TB drive is the main suspect in that box's open data-corruption case (the home repo's `records/ha-green-freeze.md`). A drive health re-read on 2026-10-26 decides it. If cleared: `rsync -a --partial` over the SSH add-on already running, to `/media/banchi-backup/`, which Home Assistant's own backups skip. A nightly Mac launchd job, no `--delete`, and a weekly `rsync -c -n` check.
 
 **Not a fix.** Do not move the live store or photographs onto a network share. `fcntl.flock` and `os.replace` do not hold over SMB, and the join hashes every photograph in a box, which is slow over wifi.
