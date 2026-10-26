@@ -3265,6 +3265,60 @@ def check_send_auto_hold_unhold_survives_press_rewrite(checks: Checks) -> None:
         )
 
 
+def check_send_auto_hold_unhold_commit_fails(checks: Checks) -> None:
+    """(p) AN UNHOLD WHOSE STORE COMMIT FAILS CHANGES NOTHING: THE RECEIPT AND THE STORE LAND TOGETHER OR NOT AT ALL.
+
+    The commit of the unhold's own store write is made to fail (a disk error at COMMIT, after
+    every row was flushed). A receipt that kept `unheld` while the listing kept `held_copies`
+    would lower the next live check's judged figure, clear the count and leave the Pricing row no
+    Unhold control for copies that are still off the list. So after the failed press: no receipt
+    counts the copy `unheld`, the held count and `pushed` stand, and a forced live check still
+    holds the copy. The injection is armed for the press alone and lifted before anything is read.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (p) — an unhold whose store commit fails leaves the receipt and the store alone")
+    with _case(checks, "(p) auto-hold: unhold whose commit fails"), send_portal() as portal, synced_home():
+        _held_sku_fixture(checks, portal)
+        checks.equal(_held(ARTICUNO_SKU), 1, "PRECONDITION: one copy is held")
+        pushed_held = _pushed(ARTICUNO_SKU)
+        real_connect = db.connect
+        commits_failed: List[str] = []
+
+        class _CommitFails:
+            """The store's connection, with COMMIT refused and everything else passed through
+            (ROLLBACK included, so the real transaction is really undone, as a disk error leaves it)."""
+
+            def __init__(self, conn):
+                self._conn = conn
+
+            def execute(self, sql, *args, **kwargs):
+                if str(sql).strip().upper() == "COMMIT":
+                    commits_failed.append(str(sql))
+                    raise sqlite3.OperationalError("disk I/O error")
+                return self._conn.execute(sql, *args, **kwargs)
+
+            def __getattr__(self, name):
+                return getattr(self._conn, name)
+
+        db.connect = lambda *args, **kwargs: _CommitFails(real_connect(*args, **kwargs))
+        try:
+            answer, caught = attempt(lambda: send_routes.do_unhold(ARTICUNO_SKU, {"confirm": True}))
+        finally:
+            db.connect = real_connect
+        checks.ok(bool(commits_failed), "PRECONDITION: the unhold's store commit was really made to fail")
+        checks.ok(caught is not None, "(p) THE PRESS DOES NOT ANSWER SUCCESS over a commit that failed", repr(answer))
+        unheld = sum(int((record.get("unheld") or {}).get(ARTICUNO_SKU, 0)) for _, record in send_routes._receipts())
+        checks.equal(unheld, 0, "(p) NO RECEIPT COUNTS THE COPY UNHELD when the store never took the unhold")
+        checks.equal(_held(ARTICUNO_SKU), 1, "(p) THE HELD COUNT SURVIVES the failed unhold")
+        checks.equal(_pushed(ARTICUNO_SKU), pushed_held, "(p) pushed is not lowered by the failed unhold")
+        send_routes.do_live_check({"force": True})
+        checks.equal(
+            _held(ARTICUNO_SKU),
+            1,
+            "(p) THE NEXT CHECK STILL HOLDS THE COPY, so the Unhold control does not disappear",
+        )
+
+
 def check_send_hazards(checks: Checks) -> None:
     """The adversarial review's failures, each against the stand-in portal's own mode.
 
@@ -7284,6 +7338,7 @@ CHECKS = (
     check_send_auto_hold_unhold_not_held_again,
     check_send_auto_hold_unhold_sends_once,
     check_send_auto_hold_unhold_survives_press_rewrite,
+    check_send_auto_hold_unhold_commit_fails,
     check_send_hazards,
     check_send_review_r3,
     check_send_review_r4,
