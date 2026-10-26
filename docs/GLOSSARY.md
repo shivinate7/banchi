@@ -112,6 +112,13 @@ These words also name something else, and that use stays: the kit Button's `vari
 - **One cut-off, no labour bar.** The fixed $0.40 constants and the below-bar warning go.
   Every caller reads the store's cut-off, and Review's colour bands follow it. D9 (the
   cut-off is also the price floor) is rewritten in place.
+- **A split send writes `import-above-cut-off.csv` and `import-below-cut-off.csv`.**
+  `banchi archive sweep` keeps its name: it is the only sweep once the free reader's loop is renamed.
+- **Match state shows as text colour, never a pill.** Matched names use normal ink; read but not
+  matched use the warning colour; not read yet use muted italic. The reason (for example
+  "Set not downloaded") shows only on hover over the row.
+- **Threshold, not cut-off,** is the one price-line word (owner's preference; the table is being reworked).
+- **Named things take Title Case**: Product List, Staged File, Box ID.
 - **Route paths are wire**, and rename with their fields.
 - **The kit Button's `variant` prop stays**: it is a style, not a card.
 - **Code cards are out of scope** while the feature is dormant.
