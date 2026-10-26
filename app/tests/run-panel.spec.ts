@@ -3294,15 +3294,38 @@ const detailOf = (row: ReturnType<typeof runRow>, more: Record<string, unknown> 
   ...more,
 })
 
-/** The open run's panel answers presses: not inert, not dimmed, not marked busy. Read off the
- *  DOM's own standard states so any way of drawing a loading panel is judged the same. */
+/** The open run's panel answers presses: its header and body are not inert, not dimmed, and the
+ *  panel is not marked busy. The panel itself is never inert or dimmed: the loading state sets
+ *  `inert` on the header and the body, and dims their children (RunPanel.css, "The dim sits on the
+ *  children"), so those are the parts read. Read off the DOM's own standard states so any way of
+ *  drawing a loading panel is judged the same. */
 async function expectLive(page: Page, heading: string) {
   await expect(page.locator('.runs-detail-h')).toHaveText(heading)
   await settleMotion(page)
   const panel = page.locator('.runs-detail-panel')
-  await expect.poll(() => panel.evaluate((el) => (el as HTMLElement).inert), 'the panel is not inert').toBe(false)
+  const head = panel.locator('.runs-detail-head')
+  const body = panel.locator('.runs-detail-body')
+  await expect.poll(() => head.evaluate((el) => (el as HTMLElement).inert), 'the header is not inert').toBe(false)
+  await expect.poll(() => body.evaluate((el) => (el as HTMLElement).inert), 'the body is not inert').toBe(false)
   await expect(panel).not.toHaveAttribute('aria-busy', 'true')
-  await expect(panel).toHaveCSS('opacity', '1')
+  await expect(head).toHaveCSS('opacity', '1')
+  /* The body is `display: contents`, so its own opacity paints nothing: the dim is on its children. */
+  await expect
+    .poll(() => body.evaluate((el) => [...el.children].every((c) => getComputedStyle(c).opacity === '1')), 'no body child is dimmed')
+    .toBe(true)
+}
+
+/** The stand-in panel for a run whose answer is still on its way: header and body inert, panel
+ *  marked busy. The counterpart of `expectLive`; without it a deleted `inert` reads as live. */
+async function expectHeld(page: Page) {
+  const panel = page.locator('.runs-detail-panel')
+  await expect(panel).toHaveAttribute('aria-busy', 'true')
+  await expect
+    .poll(() => panel.locator('.runs-detail-head').evaluate((el) => (el as HTMLElement).inert), 'the header is inert')
+    .toBe(true)
+  await expect
+    .poll(() => panel.locator('.runs-detail-body').evaluate((el) => (el as HTMLElement).inert), 'the body is inert')
+    .toBe(true)
 }
 
 /* A SWITCH FROM ONE RUN TO ANOTHER, WITH NO "All runs" PRESS BETWEEN. The panel kept the old
@@ -3344,6 +3367,7 @@ test('switching straight to another run draws nothing of the old one and holds t
        loading panel wears that class too. */
     await expect(page.locator('.runs-detail-h', { hasText: 'Box 9' })).toHaveCount(0)
     await settleMotion(page)
+    await expectHeld(page)
     loadingHeight = await panelHeight()
   } finally {
     held.open()
