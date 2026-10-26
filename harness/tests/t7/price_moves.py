@@ -241,11 +241,13 @@ REFRESH_HISTORY_FAILED = {"ok": True, "steps": {"history": {"ok": False}}}
 
 class _Host:
     """What the stubbed host saw. `refuse_after` is how many SKUs it answers before it answers HTTP
-    403 to every later one (None: never). The counters live here, not on a Market, because the
-    backoff builds a second Market."""
+    403 to every later one (None: never; 0: from the very first, with no earlier success). `empty`
+    answers every SKU with a strip that holds no bucket. The counters live here, not on a Market,
+    because the backoff builds a second Market."""
 
-    def __init__(self, refuse_after=None):
+    def __init__(self, refuse_after=None, empty=False):
         self.refuse_after = refuse_after
+        self.empty = empty
         self.asked = []
         self.built = []
 
@@ -273,7 +275,7 @@ class _Host:
                         r: Series(
                             sku=sku, product_id=42, range=r, variant="Normal", condition="Near Mint",
                             language="English", total_quantity_sold=1, total_transaction_count=1,
-                            buckets=(HistoryBucket(
+                            buckets=() if host.empty else (HistoryBucket(
                                 start=date(2026, 9, 1), market=Decimal("1.00"), quantity=1, transactions=1,
                                 low=Decimal("1.00"), high=Decimal("1.00"),
                             ),),
@@ -337,6 +339,11 @@ def _said(lines, *words) -> bool:
 
 def _archived_skus() -> list:
     return sorted({b.sku for b in Store().read().archive.entries.values()})
+
+
+def _archive_note() -> dict:
+    """The `archive` step of the `#/pricing` note the job left, `{}` when it left none."""
+    return ((pricerefresh.read_status() or {}).get("steps") or {}).get("archive") or {}
 
 
 def check_daily_job_sweeps_after_refresh(checks: Checks) -> None:
@@ -429,6 +436,60 @@ def check_daily_job_sweep_stops_on_second_throttle(checks: Checks) -> None:
         checks.ok(
             _said(lines, "archive sweep", "throttl"),
             "the log says the archive sweep met a throttle and stopped", "\n".join(lines)[-400:],
+        )
+
+
+def check_daily_job_sweep_stops_on_first_refusal(checks: Checks) -> None:
+    """A host that answers HTTP 403 from the very first SKU, with no earlier success, stops the
+    sweep, and the job records `archive` as not ok (D222, D224).
+
+    NO EARLIER SUCCESS IS THE CASE `classify_refusals` leaves as an authorization guess, so the
+    sweep's throttle test (which needs a prior answer) never fires on it: every chunk is asked
+    for, 0 buckets are written, and the note used to say "Price archive swept.". EIGHT SKUS IN
+    CHUNKS OF TWO, so a sweep that never stops asks for all eight.
+    """
+    checks.note("")
+    checks.note("DAILY JOB SWEEP — a 403 from the first SKU stops it, and the note says it failed")
+    with isolated_home() as home:
+        _seed_sweep_store(SWEEP_SKUS)
+        host = _Host(refuse_after=0)
+        code, lines, error = _run_daily(home, REFRESH_OK, host)
+        note = _archive_note()
+        checks.equal(error, None, "the job ran to its end")
+        checks.ok(
+            0 < len(host.asked) < len(SWEEP_SKUS),
+            "the sweep stops: the host is asked, and never for every chunk",
+            "asked %d of %d: %s" % (len(host.asked), len(SWEEP_SKUS), host.asked),
+        )
+        checks.equal(_archived_skus(), ["OLD1"], "nothing new is archived, and the earlier bucket stays (D219)")
+        checks.equal(note.get("ok"), False, "the `archive` step of the note is not ok")
+        checks.ok(
+            note.get("message") != "Price archive swept.",
+            "the note does not say the price archive was swept", str(note),
+        )
+
+
+def check_daily_job_empty_sweep_is_not_ok(checks: Checks) -> None:
+    """A sweep that was asked for cards and wrote 0 buckets is not ok, whatever the host said.
+
+    THE HOST ANSWERS EVERY SKU WITH AN EMPTY STRIP: no refusal, no throttle, and nothing to write.
+    The note must not claim a sweep that archived nothing. An all-fresh night (nothing left to read)
+    is a different case and is not asserted here.
+    """
+    checks.note("")
+    checks.note("DAILY JOB SWEEP — a sweep that wrote 0 buckets is not ok")
+    with isolated_home() as home:
+        _seed_sweep_store(SWEEP_SKUS[:3])
+        host = _Host(empty=True)
+        code, lines, error = _run_daily(home, REFRESH_OK, host)
+        note = _archive_note()
+        checks.equal(error, None, "the job ran to its end")
+        checks.equal(sorted(host.asked), SWEEP_SKUS[:3], "the host was asked for every card")
+        checks.equal(_archived_skus(), ["OLD1"], "0 buckets are written, and the earlier bucket stays (D219)")
+        checks.equal(note.get("ok"), False, "the `archive` step of the note is not ok")
+        checks.ok(
+            note.get("message") != "Price archive swept.",
+            "the note does not say the price archive was swept", str(note),
         )
 
 
@@ -640,6 +701,8 @@ CHECKS = (
     check_daily_job_sweeps_after_refresh,
     check_daily_job_failed_refresh_skips_sweep,
     check_daily_job_sweep_stops_on_second_throttle,
+    check_daily_job_sweep_stops_on_first_refusal,
+    check_daily_job_empty_sweep_is_not_ok,
     check_price_trends_preload,
     check_trends_press_saves,
     check_older_rejoin_keeps_newer_rows,
