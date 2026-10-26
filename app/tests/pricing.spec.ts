@@ -6495,10 +6495,10 @@ test('send tiles: while the worklist loads, Download and the press cannot be pre
   await expect(page.getByText('did not take the send'), 'no refusal line while the worklist loads').toHaveCount(0)
 })
 
-/* DEBT95: THE PRICED TILE'S "N typed." IS WHAT THE PRESS SENDS. An at-cap row adds no copy, so a
-   typed price on it rides a send only as a price change, and only when the row is live at a
-   different price (`Pricing.tsx:priceChanges`). The control row is that case: the press and the
-   tile both count it. Each other row is a price the press leaves out, so the tile may not
+/* THE PRICED TILE COUNTS WHAT THE SEND CARRIES: its "N typed." is the typed prices the press
+   sends. An at-cap row adds no copy, so a typed price on it rides a send only as a price
+   change, and only when the row is live at a different price (`Pricing.tsx:priceChanges`).
+   The control row is that case: the press and the tile both count it. Each other row is a price the press leaves out, so the tile may not
    count it. */
 const AT_CAP = { at_cap: true, add_to_quantity: 0, nothing_to_add: 'Every copy in this run is already listed or has left the box.' } as const
 const CAP_LIVE = { live_before: 1, listing: { pushed: 1, staged: 0, live: 1 } }
@@ -6510,7 +6510,7 @@ const LEFT_OUT: { why: string; row: Partial<PricingSku> & { name: string }; stor
   { why: 'a stored price not typed this visit', row: KLED, stored: { '8608959': '6.50' }, typed: null },
 ]
 for (const left of LEFT_OUT) {
-  test(`DEBT95: an at-cap row with ${left.why} is left out of the send and of the priced tile`, async ({ page }) => {
+  test(`the priced tile counts what the send carries: an at-cap row with ${left.why} is not counted`, async ({ page }) => {
     await setViewport(page, { width: 1440, height: 900 })
     await open(page, {
       skus: [
