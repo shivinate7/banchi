@@ -321,10 +321,9 @@ def _write_results(payload: dict, config: str) -> Tuple[Path, bool]:
     suffix = "" if config == "none" else "-{0}".format(config)
     path = RESULTS_DIR / "t1{0}.json".format(suffix)
 
-    if payload.get("holdout_accuracy") is None and path.exists():
-        # A tune-only run (BANCHI_T1_SPLIT=tune) never scored the holdout. Its payload must not
-        # replace a committed score that did.
-        print("t1: tune-only run, holdout not scored; {0} left as it was".format(path))
+    if payload["split_requested"] != "all":
+        # A run limited to one split (BANCHI_T1_SPLIT) never scored both halves. Its payload
+        # must not become, or replace, the committed score.
         return path, False
 
     if path.exists():
@@ -737,7 +736,9 @@ def run() -> Result:
     )
     checks.note(
         "score {0} {1}".format(
-            "written to" if results_written else "unchanged, already at",
+            "written to" if results_written
+            else "NOT written (partial split run), kept at" if payload["split_requested"] != "all"
+            else "unchanged, already at",
             results_path.relative_to(RESULTS_DIR.parents[1]),
         )
     )
