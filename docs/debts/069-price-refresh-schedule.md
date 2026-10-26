@@ -1,9 +1,17 @@
-## DEBT69 — the daily price read covers listed SKUs only, and no live price is pushed automatically
+## DEBT69 — the daily price read skips some runs, "moved since listing" needs an archive bucket, and no live price is pushed automatically
 
-**Gap.** `scripts/price-refresh-daily.py` downloads the owner's own live listings once a day. `#/pricing` shows which listed items moved more than 10% since listing. Two things are not covered. A card held but not listed is in no live export, so nothing refreshes its market on a schedule. And "since listing" needs an archive bucket for the listing day. Only an archive sweep writes that bucket (DEBT32, still a press). So a listing the archive never read is counted as unchecked on the panel.
+**Gap.** `scripts/price-refresh-daily.py` runs `pipeline_routes.do_prices_refresh` once a day (D104). It downloads the owner's own live listings, fetches the catalog export once per game, re-joins every open run and reads the sales history. That prices every copy held but not listed. `#/pricing` shows which listed items moved more than 10% since listing. One thing is not covered: "since listing" needs an archive bucket for the listing day. Only an archive sweep writes that bucket (DEBT32, still a press). So a listing the archive never read is counted as unchecked on the panel.
+
+**What the morning read still misses.** Each case leaves the last good prices in place, and the note names the failed step.
+
+- A run whose last join failed waits for its own retry. The refresh does not try it again (one fetch a day, D104).
+- A run that holds several games is dropped when one game's catalog fetch fails. It joins against all its games' files or not at all.
+- If the open runs cannot be read, nothing is joined that day.
+- An unhinted Pokemon run is refused (D170), so it is not priced.
+- The note shows only the first problem of a step, not every run that failed.
 
 **Not this debt.** An automatic push of new live prices needs its own decision entry. It takes the shape of a free preflight that shows each change, then a confirm that is not a default. An unattended loop that moves live prices is the one thing here that can lose money unseen.
 
-**Outcome at risk.** A held, unlisted card is priced from a market reading as old as its last run or fetch.
+**Outcome at risk.** A listing the archive never read shows as unchecked, so a price move since listing can go unseen. A run the morning read skips is priced from its last good join.
 
-**Closes when.** A scheduled scoped catalog fetch is argued for held SKUs (it needs a set scope per game, and a Pokemon run that widens is refused), or the owner rules that listed SKUs are enough.
+**Closes when.** The archive writes the listing-day bucket without a press (DEBT32), or the owner rules that an unchecked listing is enough.

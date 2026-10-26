@@ -154,3 +154,22 @@ Six defects rode along with D225 and are fixed:
 
 Two items were questions, not defects, and they stay the owner's. Money in a table is mono, as D221
 settles it. The month chart's known faults stay, under the ruling above.
+
+## Plans, not built
+
+Three plans wait for the owner's word. Each entry holds the outcome, the recommended option and the open
+questions for the owner. Nothing here is built.
+
+### Refunds (content pending)
+
+Outcome, recommended option and open questions: pending. Section 2 holds what exists today.
+
+### Tax export (content pending)
+
+Outcome, recommended option and open questions: pending. `docs/specs/sales-findings.md` section 4 names
+the gap.
+
+### Cost basis (content pending)
+
+Outcome, recommended option and open questions: pending. `docs/specs/sales-findings.md` section 2 holds
+the standing rule that unknown basis is labeled and never blended.
