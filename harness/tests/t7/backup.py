@@ -26,12 +26,29 @@ THE CONTRACT THE BUILD MEETS. The checks are written first, so every name the bu
                               because a local folder made there never syncs and would read as a backup.
   the snapshot                SQLite's online backup from a read-only connection (`store.db.open_read_only`).
                               It takes neither the store lock nor a write, so the capture server is never
-                              waited on. It is written under a temporary name and renamed, so a failed run
-                              leaves the last good snapshot, and `inventory/` holds only `store.sqlite`.
+                              waited on. It is built OUTSIDE the destination and only the finished file is
+                              moved in, so a killed run leaves no temp or journal file there and a failed run
+                              leaves the last good snapshot.
+  two snapshots               (owner ruling) the destination keeps TWO: the nightly, `inventory/store.sqlite`,
+                              replaced every run, and the weekly, at the relative path in the job's
+                              `WEEKLY_SNAPSHOT` constant (a string; the checks read it from there). The weekly
+                              is made on the first night and then replaced only when its file's mtime is 7 days
+                              or more old, from that night's good snapshot. A night whose snapshot fails
+                              replaces neither. A night that fails only on bad files (see the copy) still
+                              has a good snapshot and replaces the nightly; the weekly on such a night is
+                              not pinned.
   the copy                    every file under `photos/` and `captures/`. A destination file with the
                               source's size and mtime is skipped, decided by `stat` alone: the job never
                               opens a destination file (an evicted iCloud file would download). It never
                               deletes in the destination, so a sold card's photograph (D89) stays.
+                              Mtimes within 2 s of each other count as equal (a synced folder rounds them);
+                              the size must still match. One file that cannot be read or stat-ed (a dangling
+                              link, no permission) does not stop the run: the rest are copied, the snapshot is
+                              made, the run ends `failed` and its reason carries the count of such files. A
+                              source with no `photos/` tree is a failed run, never `ok copied=0`.
+  the checkout                a linked worktree (`ROOT/.git` is a file) with the destination variable unset
+                              refuses: non-zero, a sentence naming the worktree, nothing written to the
+                              default destination. The main tree (`.git` a folder) runs.
   the last-run line           `<machine dir>/backup-last-run` (`~/.banchi/`, `ports.machine_dir`), one line,
                               overwritten each run: `%Y-%m-%dT%H:%M:%S ok copied=N skipped=M` or
                               `%Y-%m-%dT%H:%M:%S failed <reason>`. N and M count the files of `photos/` and
@@ -40,7 +57,8 @@ THE CONTRACT THE BUILD MEETS. The checks are written first, so every name the bu
   scripts/status.py           `backup() -> List[str]`, called by `render()`: the last-run line, or a line
                               saying no backup has run. Never an empty list. An absent last-run file is that
                               plain line and not a `MISSING` entry: status exits non-zero on those, and this
-                              job never runs in a worktree or on CI.
+                              job never runs in a worktree or on CI. A line older than 36 hours (by its own time
+                              and by the file's mtime) carries the word `stale`; a younger line does not.
 
 WHAT THE CHECKS DO NOT RUN. `--agent` is never executed: it bootstraps a real launchd job. The agent half is
 proved through the module with a fake `launchctl` first on PATH, a fake HOME and a fake checkout root.
@@ -65,6 +83,7 @@ import os
 import plistlib
 import re
 import shutil
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -81,6 +100,8 @@ from store import db, files
 SCRIPT = REPO_ROOT / "scripts" / "backup-daily.py"
 STATUS = REPO_ROOT / "scripts" / "status.py"
 LABEL = "com.banchi.backup"
+NIGHTLY = "inventory/store.sqlite"
+DAY = 86400
 #: Under the store lock's own 30 s wait, so a job that queues behind the lock is seen waiting.
 TIMEOUT = 20
 LAST_RUN = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d) (ok|failed)(?: (.*))?$")
@@ -184,25 +205,40 @@ def stat_key(path: Path) -> tuple:
     return (st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
 
 
-def dest_env():
-    """The destination-override variable, read from the job's own `DEST_ENV` constant (the allow list
-    points at the constant the code emits, never a copy). None when the job or the constant is absent."""
+def job_constant(name: str):
+    """A string constant of the job, read from its source (the allow list points at the constant the
+    code emits, never a copy). None when the job or the constant is absent."""
     try:
         tree = ast.parse(SCRIPT.read_text())
     except (OSError, SyntaxError):
         return None
     for node in tree.body:
         if (isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
-                and any(isinstance(t, ast.Name) and t.id == "DEST_ENV" for t in node.targets)):
+                and any(isinstance(t, ast.Name) and t.id == name for t in node.targets)):
             return node.value.value
     return None
 
 
-def run_job(case: Case, dest=DEFAULT) -> Ran:
+def dest_env():
+    """The destination-override variable, from the job's `DEST_ENV` constant."""
+    return job_constant("DEST_ENV")
+
+
+def weekly_rel():
+    """The weekly snapshot's path under the destination, from the job's `WEEKLY_SNAPSHOT` constant, or
+    None when the job has none or it is not a plain relative path of its own."""
+    rel = job_constant("WEEKLY_SNAPSHOT")
+    parts = Path(rel).parts if rel else ()
+    plain = parts and not Path(rel).is_absolute() and ".." not in parts and parts[0] not in ("photos", "captures")
+    return Path(*parts).as_posix() if plain and Path(*parts).as_posix() != NIGHTLY else None
+
+
+def run_job(case: Case, dest=DEFAULT, cmd=None) -> Ran:
     """The job as launchd runs it: a fresh process, a fake HOME, the source and destination named by env.
 
     HOME is overridden so `~/.banchi` and the default iCloud path land in the run folder even when the
-    build ignores the destination override. `dest=None` leaves the destination to its default.
+    build ignores the destination override. `dest=None` leaves the destination to its default. `cmd` is
+    the argument list after the interpreter, for a copy of the job in a fake checkout or a wrapper.
     """
     name = dest_env()
     if name is None:
@@ -216,7 +252,7 @@ def run_job(case: Case, dest=DEFAULT) -> Ran:
         env[name] = str(case.dest if dest is DEFAULT else dest)
     try:
         done = subprocess.run(
-            [sys.executable, str(SCRIPT)], cwd=case.root, env=env, capture_output=True, text=True, timeout=TIMEOUT,
+            [sys.executable, *(cmd or [str(SCRIPT)])], cwd=case.root, env=env, capture_output=True, text=True, timeout=TIMEOUT,
         )
     except subprocess.TimeoutExpired:
         return Ran(None, "", f"no answer in {TIMEOUT} s")
@@ -276,10 +312,10 @@ def committed_rows(path: Path) -> dict:
         conn.close()
 
 
-def snapshot_view(case: Case):
-    """(rows, integrity) of the destination snapshot, read from a copy elsewhere so reading it leaves no
+def snapshot_view(case: Case, rel: str = NIGHTLY):
+    """(rows, integrity) of a destination snapshot, read from a copy elsewhere so reading it leaves no
     `-wal` or `-shm` beside the file under test. (None, why) when it cannot be opened."""
-    snap = case.dest / "inventory" / "store.sqlite"
+    snap = case.dest / rel
     if not snap.is_file():
         return None, f"no snapshot at {snap}"
     probe = case.root / "verify" / "store.sqlite"
@@ -305,6 +341,85 @@ def remove_tree_perms(root: Path) -> None:
     for path in [root, *root.rglob("*")]:
         with contextlib.suppress(OSError):
             path.chmod(0o755 if path.is_dir() else 0o644)
+
+
+def add_row(case: Case, key: str) -> None:
+    """Commit one more row to the source store, so a snapshot made after it differs from one made before."""
+    conn = db.connect(case.src / "inventory")
+    try:
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, "added"))
+    finally:
+        conn.close()
+
+
+def store_rows(case: Case) -> dict:
+    return committed_rows(case.src / "inventory" / "store.sqlite")
+
+
+def age(path: Path, days: float) -> None:
+    """Make a destination file `days` old by its mtime, the one clock the weekly's age is read from."""
+    then = time.time_ns() - int(days * DAY * SECOND)
+    os.utime(path, ns=(then, then))
+
+
+def strays(case: Case):
+    """Destination files that are neither a copied photograph or capture nor a snapshot: a temp, `-wal`,
+    `-shm` or journal file would be one. None when the destination is not there."""
+    if not case.dest.is_dir():
+        return None
+    snapshots = {NIGHTLY, weekly_rel()}
+    return sorted(rel for rel in dest_files(case) if rel not in FILES and rel not in snapshots)
+
+
+def fake_checkout(case: Case, name: str, linked: bool) -> Path:
+    """A copy of the job inside a fake checkout, so its `ROOT` (two folders up from the script) is that folder.
+    The job and the shared installer are copies, because the job resolves its own path; the packages are
+    links to the real ones. `.git` is a file in a linked worktree and a folder in the main tree."""
+    root = case.root / name
+    (root / "scripts").mkdir(parents=True)
+    for entry in REPO_ROOT.iterdir():
+        code = entry.suffix == ".py" or (entry.is_dir() and any(c.suffix == ".py" for c in entry.iterdir()))
+        if code and entry.name != "scripts" and not entry.name.startswith("."):
+            (root / entry.name).symlink_to(entry)
+    for source in (SCRIPT, REPO_ROOT / "scripts" / "launchagent.py"):
+        shutil.copyfile(source, root / "scripts" / source.name)
+    if linked:
+        (root / ".git").write_text("gitdir: /nowhere\n")
+    else:
+        (root / ".git").mkdir()
+    return root / "scripts" / SCRIPT.name
+
+
+#: Runs the job as `__main__` with its online backup killed (SIGKILL, no `finally`) after the first page.
+KILL_MID_SNAPSHOT = """\
+import os, runpy, signal, sys
+sys.path[:0] = [{scripts!r}, {root!r}]
+from store import db
+
+real = db.open_read_only
+
+
+class Killed:
+    def __init__(self, conn):
+        self.conn = conn
+
+    def backup(self, target, **_):
+        return self.conn.backup(target, pages=1, progress=lambda *_: os.kill(os.getpid(), signal.SIGKILL))
+
+    def __getattr__(self, name):
+        return getattr(self.conn, name)
+
+
+db.open_read_only = lambda *a, **k: Killed(real(*a, **k))
+sys.argv = [{job!r}]
+runpy.run_path({job!r}, run_name="__main__")
+"""
+
+
+def run_killed_mid_snapshot(case: Case) -> Ran:
+    wrapper = case.root / "kill_mid_snapshot.py"
+    wrapper.write_text(KILL_MID_SNAPSHOT.format(scripts=str(SCRIPT.parent), root=str(REPO_ROOT), job=str(SCRIPT)))
+    return run_job(case, cmd=[str(wrapper)])
 
 
 # ------------------------------------------------------------------------------ the checks
@@ -390,8 +505,7 @@ def check_backup_snapshot_beside_an_open_writer(checks: Checks) -> None:
         "the fixture cannot tell a live-file copy from a snapshot" if not discriminates else
         ("snapshot and source differ" if rows else str(integrity)),
     )
-    listing = sorted(p.name for p in (case.dest / "inventory").iterdir()) if (case.dest / "inventory").is_dir() else None
-    checks.equal(listing, ["store.sqlite"], "the destination's inventory/ holds the one snapshot file and no -wal, -shm or temp file")
+    checks.equal(strays(case), [], "the destination holds no -wal, -shm or temp file beside the snapshots")
     checks.ok(finished and before and before == after, "the source store file and its -wal are byte for byte what they were", f"{before} / {after}")
     checks.ok(finished and survived == 5, "the writer's transaction was not disturbed: it commits after the job", str(survived))
 
@@ -406,10 +520,7 @@ def check_backup_copies_and_skips_by_stat(checks: Checks) -> None:
     expect_ok(checks, "first night: all five files copied, none skipped", first, case, copied=5, skipped=0)
     same = {rel: (dest_path.read_bytes() == FILES.get(rel)) for rel, dest_path in dest_files(case).items() if rel in FILES}
     checks.ok(len(same) == 5 and all(same.values()), "every photograph and capture is in the destination, byte for byte, under its own path")
-    checks.equal(
-        sorted(dest_files(case)), sorted([*FILES, "inventory/store.sqlite"]),
-        "and nothing else is there: no temp file, no stray",
-    )
+    checks.ok(NIGHTLY in dest_files(case) and strays(case) == [], "the snapshot is there and nothing else: no temp file, no stray", str(strays(case)))
     stats = {rel: stat_key(p) for rel, p in dest_files(case).items() if rel in FILES}
 
     second = run_job(case)
@@ -545,8 +656,8 @@ def check_backup_failed_snapshot_keeps_the_last_good_one(checks: Checks) -> None
     ran = run_job(case)
     failed = expect_failed(checks, "a store file that is not a database: exit non-zero and a failed line", ran, case)
     checks.ok(failed and good is not None and snap.is_file() and sha(snap) == good, "last night's snapshot is still there, byte for byte")
-    listing = sorted(p.name for p in (case.dest / "inventory").iterdir()) if (case.dest / "inventory").is_dir() else None
-    checks.ok(failed and listing == ["store.sqlite"], "and no half-written temp file is left beside it", str(listing))
+    left = strays(case)
+    checks.ok(failed and left == [], "and no half-written temp file is left in the destination", str(left))
     checks.ok(failed and garbage == fingerprint(case.src), "and the source store file was not touched")
 
 
@@ -740,6 +851,229 @@ def check_backup_agent_is_one_main_tree_launchd_job(checks: Checks) -> None:
               "--remove boots the label out and deletes the plist", str(after))
 
 
+@robust
+def check_backup_one_bad_file_does_not_stop_the_run(checks: Checks) -> None:
+    """Files in photos/ that cannot be read (a link whose target is gone, a file with no read permission)
+    fail the night but never stop it: the rest are copied, the store is snapshotted fresh, and the last-run
+    line says `failed` with how many files were bad. One bad file must not cost the owner the night's backup."""
+    case = Case("bad-file")
+    seed_store(case)
+    seed_files(case)
+    control = expect_ok(checks, "control: the first night is ok", run_job(case), case, copied=5, skipped=0)
+    add_row(case, "after-night-1")
+    new = "photos/ff/ff00ee330003.jpg"
+    put(case.src, new, b"\xff\xd8\xff" + b"E" * 400)
+    bad = []
+    for name in ("dd/dd0000000001.jpg", "dd/dd0000000002.jpg"):
+        link = case.src / "photos" / name
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(case.root / "gone" / name)
+        bad.append(link)
+    locked = put(case.src, "photos/ee/ee0000000003.jpg", b"\xff\xd8\xff" + b"L" * 200)
+    locked.chmod(0)
+    if os.access(locked, os.R_OK):  # running as root: the mode does not bite, so the third bad file is another dead link
+        locked.chmod(0o644)
+        locked.unlink()
+        locked.symlink_to(case.root / "gone" / "ee0000000003.jpg")
+    bad.append(locked)
+    try:
+        ran = run_job(case)
+    finally:
+        if locked.exists() and not locked.is_symlink():
+            locked.chmod(0o644)
+    failed = expect_failed(checks, "three bad files in photos/: exit non-zero and a failed line", ran, case)
+    raw = (last_run(case) or {}).get("raw") or ""
+    reason = raw.replace(str(case.root), "").replace(str(case.root.resolve()), "")
+    checks.ok(failed and re.search(rf"\b{len(bad)}\b", reason) is not None, f"and the line carries the count of bad files ({len(bad)})", repr(raw))
+    rows, integrity = snapshot_view(case)
+    checks.ok(control and rows is not None and rows == store_rows(case) and integrity == [("ok",)],
+              "and the snapshot is still made, fresh: it holds the row added since the first night", str(integrity))
+    got = dest_files(case)
+    checks.ok(control and new in got and got[new].read_bytes() == b"\xff\xd8\xff" + b"E" * 400,
+              "and the good photograph added since is copied, byte for byte")
+    checks.ok(control and all(rel in got and got[rel].read_bytes() == data for rel, data in FILES.items()),
+              "and the first night's five files are still in the destination, unchanged")
+
+
+@robust
+def check_backup_refuses_a_linked_worktree(checks: Checks) -> None:
+    """The job is for the owner's main tree. In a linked worktree (`ROOT/.git` is a file) with no destination
+    override it refuses and writes nothing to the default iCloud folder. The control runs the same fake
+    checkout as a main tree (`.git` a folder), so the refusal cannot be an import error or a missing script."""
+    case = Case("linked")
+    seed_store(case)
+    seed_files(case)
+    case.icloud_root.mkdir(parents=True)  # iCloud Drive is on, so a job that does not refuse has somewhere to write
+    target = case.icloud_root / "Banchi backup"
+    main_job = fake_checkout(case, "main-tree", linked=False)
+    linked_job = fake_checkout(case, "linked-tree", linked=True)
+    ran = run_job(case, dest=None, cmd=[str(main_job)])
+    control = expect_ok(checks, "control: from a main tree with no override, the job writes to the default folder", ran, case, copied=5, skipped=0)
+    control = control and (target / NIGHTLY).is_file()
+    checks.ok(control, "control: its snapshot is in 'Banchi backup' inside iCloud Drive")
+    if not control:
+        return
+    remove_tree(target)
+    ran = run_job(case, dest=None, cmd=[str(linked_job)])
+    said_why = re.search(r"worktree|linked", ran.out + ran.err, re.I) is not None
+    checks.ok(ran.code not in (0, None) and said_why, "from a linked worktree with no override: non-zero, and it says it is a worktree", said(ran))
+    checks.ok(not target.exists() and not any(case.icloud_root.iterdir()), "and nothing is written to the default destination")
+
+
+@robust
+def check_backup_missing_photos_tree_is_a_failure(checks: Checks) -> None:
+    """A source with no `photos/` folder (a wrong BANCHI_HOME, an unmounted drive) is a failed run. Walking
+    a folder that is not there finds nothing, which would read as `ok copied=0` and hide the loss."""
+    case = Case("no-photos")
+    seed_store(case)
+    seed_files(case)
+    control = expect_ok(checks, "control: the first night is ok", run_job(case), case, copied=5, skipped=0)
+    shutil.rmtree(case.src / "photos")
+    ran = run_job(case)
+    failed = expect_failed(checks, "a source with no photos/ tree: exit non-zero and a failed line, not ok copied=0", ran, case)
+    got = dest_files(case)
+    checks.ok(control and failed and all(rel in got for rel in FILES), "and the photographs already in the destination are still there")
+
+
+@robust
+def check_backup_status_flags_an_old_last_run(checks: Checks) -> None:
+    """`make status` must not show last month's `ok` as if it were last night's: a last-run line older than
+    36 hours carries the word `stale` (the word status.py already uses), a younger one does not. Both the
+    line's own time and the file's mtime are set, so either clock a build reads gives the same answer."""
+    case = Case("status-old")
+    spec = importlib.util.spec_from_file_location("_banchi_status_old_under_test", STATUS)
+    status = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(status)
+    raised = []
+
+    def section(hours: float) -> str:
+        then = time.time() - hours * 3600
+        case.last_run_file.parent.mkdir(parents=True, exist_ok=True)
+        case.last_run_file.write_text(f"{time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(then))} ok copied=12 skipped=34\n")
+        os.utime(case.last_run_file, (then, then))
+        try:
+            with mock.patch.dict(os.environ, {"HOME": str(case.home)}):
+                return "\n".join(status.backup())
+        except Exception as exc:  # noqa: BLE001 - no `backup` yet reads as failed lines, not a traceback
+            raised.append(f"{type(exc).__name__}: {exc}")
+            return ""
+
+    stale = lambda text: re.search(r"\bstale\b", text, re.I) is not None  # noqa: E731
+    fresh, edge, old = section(2), section(30), section(40)
+    checks.ok(not raised and "copied=12" in fresh and not stale(fresh), "a line from 2 hours ago is shown and not flagged", fresh or str(raised))
+    checks.ok(not raised and "copied=12" in edge and not stale(edge), "a line from 30 hours ago is still not flagged", edge or str(raised))
+    checks.ok(not raised and "copied=12" in old and stale(old), "a line from 40 hours ago is shown and flagged stale", old or str(raised))
+
+
+@robust
+def check_backup_mtimes_within_two_seconds_are_equal(checks: Checks) -> None:
+    """A synced folder rounds mtimes, so a destination file whose mtime is within 2 s of the source's, either
+    way, is the same file and is skipped. The size must still match and a larger gap is still a change."""
+    case = Case("mtime-slack")
+    seed_store(case)
+    seed_files(case)
+    expect_ok(checks, "first night copies the five files", run_job(case), case, copied=5, skipped=0)
+    dest = {rel: p for rel, p in dest_files(case).items() if rel in FILES}
+    ahead, behind, same = "photos/6b/6b1cf2fd0001.jpg", "photos/a0/a0aa11220002.jpg", "captures/cards/box1/0001.jpg"
+    apart, resized = "captures/cards/box1/0001.json", "captures/cards/box2/0001.jpg"
+    halves = SECOND * 3 // 2
+    os.utime(dest[ahead], ns=(T0 + halves,) * 2)
+    os.utime(dest[behind], ns=(T0 - halves,) * 2)
+    os.utime(dest[apart], ns=(T0 - 5 * SECOND,) * 2)
+    dest[resized].write_bytes(b"short")  # another size, mtime a second off
+    os.utime(dest[resized], ns=(T0 + SECOND,) * 2)
+    kept = {rel: stat_key(dest[rel]) for rel in (ahead, behind, same)}
+    ran = run_job(case)
+    expect_ok(checks, "next night: the file 5 s apart and the file of another size are copied, the three within 2 s are skipped",
+              ran, case, copied=2, skipped=3)
+    got = dest_files(case)
+    checks.ok(all(rel in got and kept[rel] == stat_key(got[rel]) for rel in kept),
+              "a destination file 1.5 s ahead, 1.5 s behind or equal is not rewritten")
+    checks.ok(all(rel in got and got[rel].read_bytes() == FILES[rel] for rel in (apart, resized)),
+              "the file 5 s apart and the file of another size hold the source's bytes again")
+
+
+@robust
+def check_backup_snapshot_is_built_outside_the_destination(checks: Checks) -> None:
+    """The destination is a synced folder: a half-written temp file or journal there would sync as if it were
+    a backup. A run killed in the middle of the online backup (SIGKILL, so no `finally` runs) leaves the
+    destination exactly as the last good night left it. The kill is simulated by a wrapper that dies after the
+    first page; the control proves the job runs through the same wrapper path when not killed."""
+    case = Case("killed")
+    seed_store(case, rows=9)
+    seed_files(case)
+    control = expect_ok(checks, "control: the first night is ok", run_job(case), case, copied=5, skipped=0)
+    nightly = case.dest / NIGHTLY
+    good = sha(nightly) if nightly.is_file() else None
+    entries = lambda: sorted(p.relative_to(case.dest).as_posix() for p in case.dest.rglob("*"))  # noqa: E731
+    before = entries()
+    add_row(case, "after-night-1")
+    ran = run_killed_mid_snapshot(case)
+    checks.ok(control and ran.code == -signal.SIGKILL, "the simulated kill bit: the job died of SIGKILL inside its online backup", said(ran))
+    after = entries()
+    checks.ok(control and ran.code == -signal.SIGKILL and after == before,
+              "the destination holds exactly what it held before: no temp file, journal or folder was left in it",
+              f"left behind: {sorted(set(after) - set(before))}")
+    checks.ok(control and good is not None and nightly.is_file() and sha(nightly) == good, "and last night's snapshot is there, byte for byte")
+    again = run_job(case)
+    expect_ok(checks, "the next normal night is ok", again, case, copied=0, skipped=5)
+    rows, integrity = snapshot_view(case)
+    checks.ok(rows is not None and rows == store_rows(case) and integrity == [("ok",)], "and its snapshot is fresh again", str(integrity))
+
+
+@robust
+def check_backup_keeps_a_nightly_and_a_weekly_snapshot(checks: Checks) -> None:
+    """Owner ruling: two store snapshots, a week apart at the widest. The nightly is replaced every run. The
+    weekly is made the first night and then replaced only when its file is 7 days old or more, from that night's
+    good snapshot. A night whose snapshot fails replaces neither. The weekly's age is its file's mtime, which
+    the case moves with `utime`; the job never opens a destination file to learn it."""
+    case = Case("weekly")
+    seed_store(case)
+    seed_files(case)
+    rel = weekly_rel()
+    checks.ok(rel is not None, "the job names the weekly snapshot's path in a WEEKLY_SNAPSHOT constant: a relative path of its own", repr(job_constant("WEEKLY_SNAPSHOT")))
+    if rel is None:
+        return
+    weekly = case.dest / rel
+    rows_of = lambda name: snapshot_view(case, name)[0]  # noqa: E731
+
+    expect_ok(checks, "night 1: ok", run_job(case), case, copied=5, skipped=0)
+    night1 = store_rows(case)
+    checks.ok(rows_of(NIGHTLY) == night1 and rows_of(rel) == night1, "night 1 makes both snapshots, each equal to the store")
+    checks.equal(strays(case), [], "and the destination holds those two and nothing else beside the five files")
+
+    add_row(case, "night-2")
+    kept = stat_key(weekly)
+    expect_ok(checks, "night 2: ok", run_job(case), case, copied=0, skipped=5)
+    checks.ok(rows_of(NIGHTLY) == store_rows(case), "night 2: the nightly is replaced, it holds night 2's row")
+    checks.ok(rows_of(rel) == night1 and kept == stat_key(weekly), "night 2: the weekly is not touched, it is a day old")
+
+    age(weekly, 6)
+    add_row(case, "night-3")
+    kept = stat_key(weekly)
+    expect_ok(checks, "night 3, the weekly 6 days old: ok", run_job(case), case, copied=0, skipped=5)
+    checks.ok(rows_of(NIGHTLY) == store_rows(case), "night 3: the nightly is replaced")
+    checks.ok(rows_of(rel) == night1 and kept == stat_key(weekly), "night 3: the weekly, 6 days old, is not touched")
+
+    age(weekly, 8)
+    add_row(case, "night-4")
+    expect_ok(checks, "night 4, the weekly 8 days old: ok", run_job(case), case, copied=0, skipped=5)
+    now, weekly_rows = store_rows(case), snapshot_view(case, rel)
+    checks.ok(rows_of(NIGHTLY) == now and weekly_rows[0] == now and weekly_rows[1] == [("ok",)],
+              "night 4: the weekly is replaced from that night's snapshot, whole, and holds every row added since night 1")
+    checks.ok(abs(time.time() - weekly.stat().st_mtime) < 300, "and the new weekly is dated now, so the next week counts from here")
+    checks.equal(strays(case), [], "and still only the two snapshots are there")
+
+    age(weekly, 8)
+    kept, last_nightly = stat_key(weekly), sha(case.dest / NIGHTLY)
+    (case.src / "inventory" / "store.sqlite").write_bytes(b"this is not a database " * 200)
+    ran = run_job(case)
+    failed = expect_failed(checks, "night 5, the store cannot be snapshotted and the weekly is due: exit non-zero and a failed line", ran, case)
+    checks.ok(failed and sha(case.dest / NIGHTLY) == last_nightly, "a failed night leaves the nightly as night 4 made it, byte for byte")
+    checks.ok(failed and kept == stat_key(weekly), "and leaves the due weekly as it was: a failed night never replaces either")
+    checks.equal(strays(case), [], "and no temp file is left")
+
+
 CHECKS = (
     check_backup_run_folder_sweep,
     check_backup_snapshot_beside_an_open_writer,
@@ -752,4 +1086,11 @@ CHECKS = (
     check_backup_writes_one_last_run_line,
     check_backup_status_shows_the_last_run,
     check_backup_agent_is_one_main_tree_launchd_job,
+    check_backup_one_bad_file_does_not_stop_the_run,
+    check_backup_refuses_a_linked_worktree,
+    check_backup_missing_photos_tree_is_a_failure,
+    check_backup_status_flags_an_old_last_run,
+    check_backup_mtimes_within_two_seconds_are_equal,
+    check_backup_snapshot_is_built_outside_the_destination,
+    check_backup_keeps_a_nightly_and_a_weekly_snapshot,
 )
