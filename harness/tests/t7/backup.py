@@ -9,7 +9,9 @@ THE CONTRACT THE BUILD MEETS. The checks are written first, so every name the bu
                               No flag: run once, exit 0 for ok and non-zero for failed.
                               `--agent [--remove]` installs or removes the launchd job.
                               Module names `LABEL = "com.banchi.backup"`, `ROOT` (the checkout) and
-                              `agent(remove)`, which calls `launchagent.agent` (`scripts/launchagent.py`).
+                              `agent(remove)`, which calls `launchagent.agent` (`scripts/launchagent.py`) and
+                              reads the module's `ROOT` when it is called, not when it is defined. The job
+                              names `launchctl` nowhere else: the shared helper is the only caller.
   make backup                 `scripts/backup-daily.py`, once, now.
   make backup-agent           `scripts/backup-daily.py --agent $(ARGS)`; `ARGS=--remove` removes it.
   BANCHI_HOME                 the source root, as `store.files.home()` (D43): `inventory/store.sqlite`,
@@ -36,7 +38,9 @@ THE CONTRACT THE BUILD MEETS. The checks are written first, so every name the bu
                               `captures/` written and skipped; the snapshot is not counted. A lock file
                               beside it is allowed; nothing else is written there.
   scripts/status.py           `backup() -> List[str]`, called by `render()`: the last-run line, or a line
-                              saying no backup has run. Never an empty list.
+                              saying no backup has run. Never an empty list. An absent last-run file is that
+                              plain line and not a `MISSING` entry: status exits non-zero on those, and this
+                              job never runs in a worktree or on CI.
 
 WHAT THE CHECKS DO NOT RUN. `--agent` is never executed: it bootstraps a real launchd job. The agent half is
 proved through the module with a fake `launchctl` first on PATH, a fake HOME and a fake checkout root.
@@ -606,8 +610,10 @@ def check_backup_status_shows_the_last_run(checks: Checks) -> None:
             raised.append(f"{type(exc).__name__}: {exc}")
             return ""
 
+    missing_before = len(getattr(status, "MISSING", []))
     with mock.patch.dict(os.environ, {"HOME": str(case.home)}):
         none = section()
+        absent_is_missing = len(getattr(status, "MISSING", [])) != missing_before
         case.last_run_file.parent.mkdir(parents=True)
         case.last_run_file.write_text("2026-10-24T03:00:12 ok copied=12 skipped=34\n")
         good = section()
@@ -626,6 +632,8 @@ def check_backup_status_shows_the_last_run(checks: Checks) -> None:
         not raised and "backup" in none.lower() and not word(none) and "copied=" not in none,
         "with no backup run yet it says so, and never reads as ok", none or str(raised),
     )
+    checks.ok(not raised and not absent_is_missing,
+              "and an absent last-run file adds no MISSING source, so `make status` stays green where the job never runs")
     tree = ast.parse(STATUS.read_text())
     render = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "render")
     called = {n.func.id for n in ast.walk(render) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
@@ -669,8 +677,18 @@ def check_backup_agent_is_one_main_tree_launchd_job(checks: Checks) -> None:
     checks.ok({"--agent", "--remove"} <= flags, "the job takes --agent and --remove")
     override = dest_env()
     checks.ok(bool(override) and override.startswith("BANCHI_"), "the destination override is a BANCHI-prefixed variable named by the job's DEST_ENV constant", repr(override))
-    if labels != [LABEL] or not helper:
-        return  # running `agent` on a script that may reach launchctl another way is not safe
+    docstrings = {
+        id(n.body[0].value) for n in ast.walk(tree)
+        if isinstance(n, (ast.Module, ast.FunctionDef, ast.ClassDef)) and n.body
+        and isinstance(n.body[0], ast.Expr) and isinstance(n.body[0].value, ast.Constant)
+    }
+    direct = sorted({
+        n.value for n in ast.walk(tree)
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) and "launchctl" in n.value and id(n) not in docstrings
+    })
+    checks.ok(not direct, "the job never names launchctl itself: only the shared helper calls it", str(direct))
+    if labels != [LABEL] or not helper or direct:
+        return  # `agent` runs below only when the helper is the sole way to launchctl; a second way could install a real job
 
     bin_dir, calls = case.root / "bin", case.root / "launchctl.calls"
     bin_dir.mkdir()
