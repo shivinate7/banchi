@@ -143,6 +143,13 @@ SOURCES = (
                "block from this output",
     },
     {
+        "path": "scripts/backup-daily.py",
+        "kind": "defs",
+        "requires": ("status_line",),
+        "why": "the nightly backup's last-run line, from the job's own status_line(). Declared "
+               "here so a rename fails the audit instead of silently deleting the backup line",
+    },
+    {
         "path": "server/ports.py",
         "kind": "file",
         "requires": (),
@@ -1059,21 +1066,12 @@ def leftovers() -> List[str]:
 
 
 def backup() -> List[str]:
-    """The nightly backup's last-run line (DEBT67), or a line saying none has run. An absent file is not a
-    MISSING source: the job never runs in a worktree or on CI, and status would exit non-zero there."""
-    try:
-        from server import ports  # the one home of ~/.banchi
-
-        line = (ports.machine_dir() / "backup-last-run").read_text().strip()
-    except OSError:
-        line = ""
-    try:
-        old = time.time() - time.mktime(time.strptime(line[:19], "%Y-%m-%dT%H:%M:%S")) > 36 * 3600
-    except ValueError:
-        old = False
-    if old:
-        line += "  (stale: older than 36 hours)"
-    return [field("backup", line or "no backup has run (`make backup`; `make backup-agent` makes it nightly)")]
+    """The nightly backup's last-run line (DEBT67), from the job's own `status_line`. A job that will not load
+    is a MISSING source, like any other sidecar."""
+    module, problem = sidecar("scripts/backup-daily.py", "_banchi_backup_daily")
+    if module is None:
+        return [field("backup", problem)]
+    return [field("backup", module.status_line())]
 
 
 SLOW_SHOWN = 5

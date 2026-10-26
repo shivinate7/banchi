@@ -67,6 +67,22 @@ def sidecar_file():
     return last_run_file().with_name(SIDECAR)
 
 
+def status_line():
+    """The last-run line for `make status`, or a line saying none has run, with a stale mark past 36 hours.
+    An absent file is not an error: the job never runs in a worktree or on CI."""
+    try:
+        line = last_run_file().read_text().strip()
+    except OSError:
+        line = ""
+    try:
+        old = time.time() - time.mktime(time.strptime(line[:19], "%Y-%m-%dT%H:%M:%S")) > 36 * 3600
+    except ValueError:
+        old = False
+    if old:
+        line += "  (stale: older than 36 hours)"
+    return line or "no backup has run (`make backup`; `make backup-agent` makes it nightly)"
+
+
 def linked():
     """A linked worktree shares ~/.banchi with every checkout (D43), so it writes nothing there but a lock."""
     return (ROOT / ".git").is_file()
