@@ -5176,7 +5176,9 @@ COMPONENTS = [
                         "outside it, on the local diff and on the PR's own diff, before the "
                         "merge tool runs. Logs one verdict line per run. `--agent` installs "
                         "the daily launchd job (main tree only), `--selftest` proves the "
-                        "fence red then green.",
+                        "fence red then green. Every exit path stops the tree's servers and "
+                        "removes its folder, and each run first removes leftover folders of "
+                        "that name.",
                 # D42 holds the standing grant to auto-merge a mirror-only PR.
                 "governed_by": ["D42", "D70", "D295"],
             },
@@ -5185,7 +5187,9 @@ COMPONENTS = [
                         "photograph its bundle names. Proves, in throwaway repos with the real "
                         "`.gitignore`, that a new `demo-assets/mirror/photos/` file is not "
                         "ignored, that the photo store's own `photos/` stays ignored, and that "
-                        "a run never merges a bundle whose photographs are not committed.",
+                        "a run never merges a bundle whose photographs are not committed. Also "
+                        "proves a run removes its throwaway worktree folder on every exit "
+                        "path, even with a background writer left in the tree.",
                 "governed_by": ["D172", "D295"],
             },
             "demo-histories.py": {

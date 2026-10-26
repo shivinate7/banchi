@@ -1102,7 +1102,7 @@ demo-record-selftest:
 demo-mirror-daily-selftest:
 	@python3 scripts/demo-mirror-daily.py --selftest
 
-# the daily mirror commits every photograph its bundle names: not ignored, photo store still ignored, no merge without them (D295, D172).
+# the daily mirror commits every photograph its bundle names (not ignored, photo store still ignored, no merge without them), and removes its throwaway worktree on every exit path (D295, D172).
 demo-mirror-daily-photos-selftest:
 	@python3 scripts/demo-mirror-daily-photos-selftest.py
 
