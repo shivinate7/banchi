@@ -1,7 +1,7 @@
 # Pricing by suggestion: one list, one rule, you confirm
 
 **STATUS: DIRECTION CHOSEN. NOT BUILT.** The owner picked this direction in a pricing ideation
-session. The owner asked for mockups and a judgement of each trigger before a build. No build
+session. The owner asked for mockups and a judgment of each trigger before a build. No build
 starts until the owner signs off a mockup.
 
 The problem: `#/pricing` has two tabs with two rule systems. Unsent cards use a rule and a
@@ -85,7 +85,7 @@ These do not wait for the model. Each can land first.
 The owner sets the floor, and it has not been the code default for months. These texts still
 present a fixed or derived figure:
 
-- `pipeline/pricing`'s module header derives the floor from a $60/hr labor bar at $0.40. It
+- `pipeline/pricing.py`'s module header derives the floor from a $60/hr labor bar at $0.40. It
   also says cheap cards leave through Bulk Lots. `pricing.THRESHOLD` and `pricing.FLOOR` are
   module defaults, and the header must say so.
 - D9 (threshold and floor) must say the owner sets the floor, and name the default as a default.
