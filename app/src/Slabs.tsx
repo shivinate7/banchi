@@ -108,10 +108,14 @@ function sorted(rows: readonly SlabRow[]): SlabRow[] {
 /* ----------------------------------------------------------------------------- refusals */
 
 const LOGIN_SENTENCE = 'Card Ladder needs you to sign in again.'
+const FAILED_SENTENCE = 'Card Ladder could not be read just now. Try again later.'
+const UNREADABLE_SENTENCE = "Card Ladder's answer could not be read. Try again later."
 const SAID: Readonly<Record<string, string>> = {
   cardladder_rate_limited: 'Card Ladder asked us to slow down. Nothing was saved. Try again tomorrow.',
   cardladder_token_missing: LOGIN_SENTENCE,
   cardladder_token_rejected: LOGIN_SENTENCE,
+  cardladder_failed: FAILED_SENTENCE,
+  cardladder_unreadable: UNREADABLE_SENTENCE,
   cert_not_found: 'Card Ladder has no slab with that cert number for that grader.',
   cert_required: 'Type a cert number first.',
   grader_unknown: 'Pick a grader from the list.',
@@ -239,19 +243,20 @@ function Reason({ said: sentence, why }: { readonly said: string; readonly why: 
 
 /** Undo's refusal: the screen's one sentence is the title. A code with a known cause gets its reason behind the title; any
  *  other code keeps the title plain, because a reason that is not true for the code is worse than none. The body is the
- *  screen's wording for the code, else the server's own sentence, so a rate limit keeps "tomorrow" on screen. */
+ *  screen's wording for the code, else the server's own sentence, so a rate limit keeps "tomorrow" on screen. The two
+ *  Card Ladder read failures keep the server's sentence: their reason is already behind the title. */
 const UNDO_SAID = 'The slab was not put back.'
 const UNDO_WHY: Readonly<Record<string, string>> = {
   cardladder_rate_limited: "Card Ladder's limit for today is used up. Try again tomorrow.",
   cardladder_token_missing: LOGIN_SENTENCE,
   cardladder_token_rejected: LOGIN_SENTENCE,
-  cardladder_failed: 'Card Ladder could not be read just now. Try again later.',
-  cardladder_unreadable: "Card Ladder's answer could not be read. Try again later.",
+  cardladder_failed: FAILED_SENTENCE,
+  cardladder_unreadable: UNREADABLE_SENTENCE,
   cert_not_found: 'Card Ladder no longer finds this slab.',
   slab_add_busy: 'Another slab is still being added. Try again when it finishes.',
 }
 function undoRefusalToast(failure: Failure) {
-  const body = SAID[failure.code] ?? failure.message
+  const body = (failure.code === 'cardladder_failed' || failure.code === 'cardladder_unreadable' ? undefined : SAID[failure.code]) ?? failure.message
   const why = UNDO_WHY[failure.code]
   return {
     kind: 'refusal' as const,

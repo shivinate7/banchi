@@ -90,7 +90,7 @@ DEBT93 the Show Held and Price Them clears have never gone red
 DEBT94 a five-digit count can wrap a tile note and grow the send bar
 DEBT95 the priced tile counts typed prices on rows the send leaves out
 DEBT96 Fulfillment still shows the owner's photo first
-DEBT97 a Card Ladder failure on Add hides its plain sentence
+DEBT97 fixed: a Card Ladder failure on Add shows its plain sentence
 DEBT98 a fully answered selection reads "The free read is not set up"
 DEBT99 the empty-slot check decodes every uncached photo at full size
 DEBT100 the free number reader for same-art printings is shelved
