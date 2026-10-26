@@ -1514,6 +1514,22 @@ def _write_and_send(
             "unknown": None,
         }
     )
+    # A COPY THAT LEFT AFTER `emit` WROTE THE FILE IS A ROW THE STORE DID NOT SEND (D59, D26). Neither
+    # door may push or offer that file. The receipt keeps only the copies `emit` stamped, so the
+    # take-back lowers `pushed` by those and no more.
+    ahead = (_json_line(console, "send_ahead") or {}).get("copies") or []
+    if ahead:
+        for item in ahead:
+            sku = str(item).split()[-1]
+            copies[sku] = copies.get(sku, 0) - 1
+        record["copies"] = {sku: n for sku, n in copies.items() if n > 0}
+        record["copies_total"] = sum(record["copies"].values())
+        _fail(
+            directory, record, "send_file_ahead",
+            "A card in this send was sold or retired while the send was being made, so nothing was "
+            "sent. The other copies are back on the list. Press Send again.",
+            HTTPStatus.CONFLICT,
+        )
     if download:
         # A DOWNLOAD HOLDS NOTHING IN FLIGHT: the file is the owner's to upload, and the live
         # check past the wait is what confirms it. The claim goes; `pushed` keeps the copies

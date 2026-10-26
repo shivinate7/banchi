@@ -329,13 +329,18 @@ def _report_file_ahead(ahead: Sequence[str], where, say) -> None:
     """A copy that left after the import file was written is still a row in it (D59, D26).
 
     The file is written before the store lock, so nothing un-writes the row. The store did not
-    send the copy, so the file holds more than `pushed`: say so, loud, with the copies."""
+    send the copy, so the file holds more than `pushed`: say so, loud, with the copies.
+    `where` is the folder the file was written to. The JSON line is what the screen send reads
+    (`server/send_routes.py:_write_and_send`), which refuses the press on it."""
     if not ahead:
         return
+    import json
+
     say("")
     say(f"WARNING          the import file in {where} lists {len(ahead)} copy(ies) the store did not send "
         f"({', '.join(ahead[:8])}{f' ... and {len(ahead) - 8} more' if len(ahead) > 8 else ''}): "
         f"do not upload that file as is")
+    say(json.dumps({"send_ahead": {"copies": list(ahead)}}))
 
 
 def _report_unstamped(missed: List[str], say, skipped: Sequence[str] = (), moved: Sequence[str] = ()) -> None:
@@ -1961,7 +1966,7 @@ def _after_single(
         f"{master.PUSHED}")
     _report_withheld(disputed_positions, say)
     _report_unstamped(list(unstamped), say, skipped, moved)
-    _report_file_ahead(ahead, run_dir.directory, say)
+    _report_file_ahead(ahead, getattr(args, "send_dir", None) or run_dir.directory, say)
     listings = ", ".join(f"{k} {v}" for k, v in stages.items() if v)
     if listings:
         say(f"listings         {listings}")
@@ -2455,7 +2460,8 @@ def _run_merged(args, say) -> int:
     # THE RUN'S EMIT RECORD NAMES THE SKUS THAT ADDED A COPY (D54), never a price-only row.
     copied = [(target, [row for row in group if row.sku not in changed and row.sku not in takes]) for target, group in written]
     return _after_merged(
-        dirs, copied, pushed, pushed_skus, queue_line, stages, say, disputed_positions, unstamped, skipped, moved, ahead
+        dirs, copied, pushed, pushed_skus, queue_line, stages, say, disputed_positions, unstamped, skipped, moved, ahead,
+        getattr(args, "send_dir", None) or dirs[-1].path(""),
     )
 
 
@@ -2559,7 +2565,7 @@ def _stamp_merged(writable, merged_plan, shipped, resolved_by_run, skipped=None,
 
 
 def _after_merged(
-    dirs, written, pushed, pushed_skus, queue_line, stages, say, disputed_positions=(), unstamped=(), skipped=(), moved=(), ahead=()
+    dirs, written, pushed, pushed_skus, queue_line, stages, say, disputed_positions=(), unstamped=(), skipped=(), moved=(), ahead=(), where=None
 ) -> int:
     """What the merged path says once its write has committed."""
     # THE RECEIPT IS PER RUN AND ADDS, NEVER SUBTRACTS (D54). Each run in the send records the
@@ -2578,7 +2584,7 @@ def _after_merged(
     say(f"pushed           {pushed} copy(ies) across {pushed_skus} SKU(s) -> {master.PUSHED}")
     _report_withheld(disputed_positions, say)
     _report_unstamped(list(unstamped), say, skipped, moved)
-    _report_file_ahead(ahead, dirs[-1].path(""), say)
+    _report_file_ahead(ahead, where or dirs[-1].path(""), say)
     listings = ", ".join(f"{k} {v}" for k, v in stages.items() if v)
     if listings:
         say(f"listings         {listings}")
