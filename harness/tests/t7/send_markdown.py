@@ -5505,6 +5505,102 @@ def check_send_skips_gone_card(checks: Checks) -> None:
     checks.equal((status, gone), (200, ["Articuno"]), "one gone card held by two runs of one send: `gone` names it once")
 
 
+def check_send_skips_departed_copy(checks: Checks) -> None:
+    """A copy that sold, was retired or moved AFTER a send planned it is skipped and named (D59, D26).
+
+    The plan is decided outside the store lock and written inside it. `_claim_or_refuse` re-reads
+    `pushed` and `staged` only, so a sale in that gap passes it, and `set_state(IDENTIFIED)` has no
+    terminal guard: the copy flipped back to `identified` and counted toward `pushed`. Each case
+    injects the departure through `_apply_guard`, which runs after the plan and before the write
+    (as F6 does), over the single-run and the merged write, and asserts the copy keeps its
+    terminal state, and that `pushed` equals the import file's `Add to Quantity` (a count is a
+    commitment that a row was written), so a skip that left the file at 3 would stay red.
+    A sold or retired copy has left the shelf, so it is also pinned at 2, and named as skipped.
+    A MOVED tombstone has a live transplant in the other box, so whether it counts is not pinned:
+    only that the tombstone stays moved and the file and the count agree.
+    """
+    import csv
+
+    checks.note("")
+    checks.note("SEND SKIPS A COPY THAT LEFT BETWEEN THE PLAN AND THE WRITE — the receipt names it")
+    from cli import __main__ as entry
+    from cli import cmd_emit
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+    key = master.position_key(3, 2)
+    leaves = {
+        "sold": (master.SOLD, lambda inv: capture_server.do_mark_sold(3, 2, {})),
+        "retired": (master.RETIRED, lambda inv: inv.retire(key, "pulled")),
+        "moved": (master.MOVED, lambda inv: inv.move_card(key, 5)),
+    }
+
+    def pushed(sku):
+        listing = Store().read().inventory.listings.get(sku)
+        return 0 if listing is None else listing.pushed
+
+    def file_quantity(text, sku):
+        """`Add to Quantity` for `sku` in the import file the send printed, None if it wrote none."""
+        targets = re.findall(r"^import\s.*->\s*(.+)$", text, re.MULTILINE)
+        if not targets or not Path(targets[-1].strip()).exists():
+            return None
+        with open(targets[-1].strip(), newline="", encoding="utf-8") as handle:
+            return sum(
+                int(row[tcgcsv.QUANTITY_COLUMN] or 0)
+                for row in csv.DictReader(handle)
+                if row[tcgcsv.SKU_COLUMN] == sku
+            )
+
+    for path in ("single", "merged"):
+        for how, (terminal, leave) in leaves.items():
+            label = f"{path} send, copy {how} before the write"
+            with _case(checks, label), synced_home():
+                first, _ = seam_run(checks, cards)
+                runs_sent = [first] if path == "single" else [first, seam_run(checks, cards)[0]]
+                real_guard = cmd_emit._apply_guard
+                seen: List[str] = []
+
+                def plan_then_leave(*args, **kwargs):
+                    if not seen:
+                        # The gap the stale check covers: the plan is decided, the write has not begun.
+                        if how == "sold":
+                            leave(None)
+                        else:
+                            with Store().write() as writable:
+                                leave(writable.inventory)
+                        seen.append(Store().read().inventory.cards[key].state)
+                    return real_guard(*args, **kwargs)
+
+                with _patched(cmd_emit, "_apply_guard", plan_then_leave), quiet() as said:
+                    code = entry.main(["emit", *[str(r.directory) for r in runs_sent]])
+                text = said.getvalue()
+                inventory = Store().read().inventory
+                checks.equal(seen, [terminal], f"{label}: fixture, the copy had left before the write began")
+                checks.ok(code == 0, f"{label}: the rest of the send goes ahead", f"exit {code}\n{text}")
+                checks.equal(
+                    inventory.cards[key].state,
+                    terminal,
+                    f"{label}: THE COPY STAYS {terminal.upper()}, never flipped back to identified",
+                )
+                checks.equal(
+                    pushed(ARTICUNO_SKU),
+                    file_quantity(text, ARTICUNO_SKU),
+                    f"{label}: and `pushed` equals the file's Add to Quantity, so the file sends no copy the store did not count",
+                )
+                if how == "moved":
+                    continue
+                checks.equal(
+                    (pushed(ARTICUNO_SKU), pushed(DUNSPARCE_SKU), file_quantity(text, DUNSPARCE_SKU)),
+                    (2, 1, 1),
+                    f"{label}: and it is not counted, while the other copies still are",
+                )
+                named = [
+                    line for line in text.splitlines()
+                    if re.search(rf"(?<![\d/]){re.escape(key)}(?![\d/])", line) and "skipped" in line.lower()
+                ]
+                checks.ok(bool(named), f"{label}: and the send names {key} as skipped", text)
+
+
 def check_schema_eleven_then_twelve(checks: Checks) -> None:
     """Two branches each took schema 11. Main's identity lane took it for `skus` and
     `cards.identity_source`. The send lane took it for `send_claims`, which is now 12.
@@ -7244,6 +7340,7 @@ CHECKS = (
     check_send_store_backed_runs,
     check_send_store_backed_follows_cards,
     check_send_skips_gone_card,
+    check_send_skips_departed_copy,
     check_markdown_floor,
     check_markdown_lens,
     check_markdown_push,
