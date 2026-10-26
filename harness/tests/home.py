@@ -51,10 +51,32 @@ def isolated_home():
                 os.environ[files.HOME_ENV] = previous
 
 
-# One temp root for this repo's test runs. A run's files live in one `<pid>-<UUID>` folder under it.
+# THE RUN-FOLDER STANDARD (test-temp-standard), for a check that needs more than an empty store:
+# one temp root, one `<pid>-<UUID>` folder per test run under it, and every temp path of the run
+# below that folder. This is the one home; no test builds its own.
 TEMP_ROOT = Path(tempfile.gettempdir()) / "banchi-test-runs"
 _RUN_NAME = re.compile(r"^\d+-[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
 _STALE_AFTER_S = 24 * 60 * 60
+
+
+def open_up(path) -> None:
+    """Make a tree the case locked read-only readable and writable again. Never follows a link."""
+    p = str(path)
+    if os.path.islink(p):
+        return
+    try:
+        os.chmod(p, 0o700)
+        if os.path.isdir(p):
+            for name in os.listdir(p):
+                open_up(os.path.join(p, name))
+    except OSError:
+        pass
+
+
+def remove_tree(path) -> None:
+    """Delete a tree, opening any folder or file a case made read-only first. Never follows a link."""
+    open_up(path)
+    shutil.rmtree(path, ignore_errors=True)
 
 
 @contextmanager
@@ -62,17 +84,26 @@ def run_folder(root=None):
     """One `<pid>-<UUID>` folder under `root` (default `TEMP_ROOT`); a test takes every temp path from it.
 
     Entering removes sibling run folders whose mtime is over a day old and keeps newer ones. Only a
-    name of that shape is touched, so a stray folder in the root survives. Leaving removes this run's
-    folder."""
+    name of that shape is touched, so a stray folder in the root survives, and a link is never
+    followed. Leaving removes this run's folder, read-only paths included."""
     root = Path(root or TEMP_ROOT)
     root.mkdir(parents=True, exist_ok=True)
     cutoff = time.time() - _STALE_AFTER_S
     for sibling in root.iterdir():
-        if _RUN_NAME.match(sibling.name) and sibling.is_dir() and sibling.stat().st_mtime < cutoff:
-            shutil.rmtree(sibling, ignore_errors=True)
+        try:
+            stale = (
+                _RUN_NAME.match(sibling.name)
+                and not sibling.is_symlink()
+                and sibling.is_dir()
+                and sibling.stat().st_mtime < cutoff
+            )
+        except OSError:  # a parallel run swept it first
+            continue
+        if stale:
+            remove_tree(sibling)
     folder = root / "{0}-{1}".format(os.getpid(), uuid.uuid4())
     folder.mkdir()
     try:
         yield folder
     finally:
-        shutil.rmtree(folder, ignore_errors=True)
+        remove_tree(folder)

@@ -1058,6 +1058,24 @@ def leftovers() -> List[str]:
     return [field("Left behind", "`make janitor` lists what a finished session left")]
 
 
+def backup() -> List[str]:
+    """The nightly backup's last-run line (DEBT67), or a line saying none has run. An absent file is not a
+    MISSING source: the job never runs in a worktree or on CI, and status would exit non-zero there."""
+    try:
+        from server import ports  # the one home of ~/.banchi
+
+        line = (ports.machine_dir() / "backup-last-run").read_text().strip()
+    except OSError:
+        line = ""
+    try:
+        old = time.time() - time.mktime(time.strptime(line[:19], "%Y-%m-%dT%H:%M:%S")) > 36 * 3600
+    except ValueError:
+        old = False
+    if old:
+        line += "  (stale: older than 36 hours)"
+    return [field("backup", line or "no backup has run (`make backup`; `make backup-agent` makes it nightly)")]
+
+
 SLOW_SHOWN = 5
 
 
@@ -1156,7 +1174,7 @@ def render() -> str:
     lines += blind_spots(mapdata)
     lines.append(field("the map", "`make map` renders docs/map.py — a package, a path, a"))
     lines.append(cont("decision id, or `--stale` for prose its file has outrun."))
-    lines += ["", "REPO"] + repo() + hooks() + guards() + ports_and_store() + leftovers()
+    lines += ["", "REPO"] + repo() + hooks() + guards() + ports_and_store() + leftovers() + backup()
     lines += ["", "SERVING"] + serving() + slow_requests()
     lines += ["", "STORE"] + store()
 
