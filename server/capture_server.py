@@ -8531,7 +8531,7 @@ def _apply_correction(
     # THE OWNER'S WORD, for both callers: a SENT card is not corrected while the old SKU still
     # has a copy live on TCGplayer, or one physical card would stand under two SKUs. Read off
     # `live` alone, so a pushed or staged copy still corrects. Before any write below.
-    # "Sent" is the store's one inference (D212): the SKU's oldest captures, as many as
+    # "Sent" is the store's one inference (D147): the SKU's oldest captures, as many as
     # `_copies_out` counts out. A live twin therefore never blocks an unsent copy.
     old_listing = snapshot.inventory.listings.get(card.sku) if card.sku else None
     sent = False
@@ -9572,18 +9572,20 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
     that route's whole first half is "which queue entry governs this answer", and a card
     holding none has nothing for it to govern.
 
-    THE OLD SKU IS RELEASED BY ONE COPY, THROUGH `Listing.release` — D34's primitive and not a
-    second one. `pushed`/`staged`/`live` are counts on a SKU, never addresses (D7 amended), so
+    ONLY A SENT COPY RELEASES THE OLD SKU, THROUGH `Listing.release` — D34's primitive and not
+    a second one. `pushed`/`staged`/`live` are counts on a SKU, never addresses (D7 amended), so
     there is no field anywhere recording "this card backed that listing" to simply clear.
-    One copy of the least-committed stage is given up, `pushed` first and then `staged`, as a
-    box losing a card gives one up.
+    A copy counts as sent when it is among the SKU's oldest captures, as many as the store
+    counts out (D147). For a sent copy, one copy of the least-committed stage is given up,
+    `pushed` first and then `staged`, as a box losing a card gives one up. An unsent copy
+    backs no listing and releases nothing.
 
     IT WAITS WHILE THE OLD SKU IS LIVE (`old_sku_still_live`, 409), on the owner's word: one
-    physical copy is never listed under two SKUs. A live copy cannot be released from here
-    because TCGplayer still shows it. The refusal reads `live` alone, never `pushed` and never
-    the committed count, and it ends by itself once a newer reading puts `live` at zero.
-    The refusal lives in `_apply_correction`, so `do_review_answer`'s `listing_disputed`
-    branch waits too.
+    physical copy is never listed under two SKUs. A sent copy cannot be released from here
+    while its SKU's `live` is 1 or more, because TCGplayer still shows it. The refusal reads
+    `live` alone, never `pushed`, and it ends by itself once a newer reading puts `live` at
+    zero. A live twin never blocks an unsent copy. The refusal lives in `_apply_correction`,
+    so `do_review_answer`'s `listing_disputed` branch waits too.
 
     THE NEW SKU GETS NO LISTING WRITE. Choosing a catalog row is not pushing one — that stays
     `emit`'s job (D54) — so nothing here touches the new SKU's `pushed`/`staged`/`live`.
