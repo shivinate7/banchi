@@ -12,8 +12,8 @@
 # demo is the scrubbed real store, docs/specs/demo.md §13): peers browse the app as if in the
 # owner's store, on a public link. What this job installs and builds is `demo-assets/mirror/` —
 # the owner's own real store, scrubbed on their own Mac by `scripts/demo-mirror.py` and committed
-# ONLY as that scrubbed output: no address ever (every street "123 Demo Way"), every buyer a
-# first name plus a last initial ("Jordan M."), and every photograph QR-cleared (a live code
+# ONLY as that scrubbed output: no address ever (every address field blank), buyers' full
+# names, and every photograph QR-cleared (a live code
 # card is a bearer instrument, D70) before this repo ever saw it. The mirror refreshes weekly
 # and on the owner's word (`make demo-mirror`). This job never reads a store —
 # `make demo-mirror-install` only copies the already-scrubbed, already-committed files into

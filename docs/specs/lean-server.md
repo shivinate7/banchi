@@ -142,7 +142,7 @@ Plan only. Nothing here is built. The home-tier spec (`docs/specs/home-assistant
 - **One process, one store, one writer** (D138, D88). The store and every photo move together. The Mac's server stops before the device's starts. Two live stores never exist.
 - **The camera and the dispenser stay in a browser** (`app/src/useCamera.ts`, `app/src/dealer.ts`, D316). Chrome gives the camera and Web Bluetooth only to a secure page: `http://localhost` or HTTPS. `http://banchi.lan:8000` is not secure, so a capture tab pointed at the device loses both. `useCamera.ts` already names this failure (`INSECURE_CONTEXT_MESSAGE`).
 - **Writes are Origin-checked** (`server/capture_server.py`, `DEFAULT_ALLOWED_ORIGINS`). Each new address the browser uses needs one entry in `BANCHI_ALLOWED_ORIGINS`.
-- **The background jobs move too.** Start at login, the daily price refresh and the demo mirror are launchd agents today (`make launch-agent`, `make price-refresh-agent`, `make demo-mirror-agent`). The free reader needs its model runtime on the device.
+- **The background jobs move too.** Start at login, the daily price refresh and the weekly demo mirror are launchd agents today (`make launch-agent`, `make price-refresh-agent`, `make demo-mirror-agent`). The free reader needs its model runtime on the device.
 
 ### Where the capture tab runs: three ways
 

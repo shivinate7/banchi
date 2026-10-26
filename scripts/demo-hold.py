@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Decide whether the demo workflow may publish (D295, docs/specs/demo.md §13).
+"""Decide whether the demo workflow may publish (D295, the public demo is the scrubbed real store; docs/specs/demo.md §13).
 
     python3 scripts/demo-hold.py --chunk demo-assets/mirror/bundle/chunk-0.json
 
@@ -9,7 +9,9 @@ current screens, and a stale recording renders blank without failing. So the wor
 the last good demo stays up. A hold is a notice and `publish=false`, never a failure, so the
 alarm job stays quiet. A chunk with no `wire` holds too: unknown is not clear.
 
-Always exits 0. Writes `publish=true|false` to the file `$GITHUB_OUTPUT` names, if set.
+Writes `publish=true|false` to the file `$GITHUB_OUTPUT` names, if set. A match or a hold exits 0.
+A chunk file that is missing or not JSON raises and exits 1 on purpose: failing closed publishes
+nothing and opens the alarm, which a silent hold would not.
 """
 import argparse
 import importlib.util

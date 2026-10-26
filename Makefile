@@ -1098,11 +1098,11 @@ sku-number-contradictions-selftest:
 demo-record-selftest:
 	$(PYTHON) scripts/demo-record-selftest.py
 
-# the daily mirror's path fence, proved red on a path outside demo-assets/mirror/, then green. No network, no store.
+# the weekly mirror's path fence, proved red on a path outside demo-assets/mirror/, then green. No network, no store.
 demo-mirror-daily-selftest:
 	@python3 scripts/demo-mirror-daily.py --selftest
 
-# the weekly mirror: buyers as first name + last initial, the wire-digest hold, a weekly launchd job, every photograph its bundle names committed (not ignored, photo store still ignored, no merge without them), and its throwaway worktree removed on every exit path (D295, D172).
+# the weekly mirror: buyers keep full names and every address field is blank, the wire-digest hold, a weekly launchd job, every photograph its bundle names committed (not ignored, photo store still ignored, no merge without them), and its throwaway worktree removed on every exit path (D295, D172).
 demo-mirror-daily-photos-selftest:
 	@python3 scripts/demo-mirror-daily-photos-selftest.py
 
@@ -1676,7 +1676,7 @@ demo-photos:
 # `D-demo-mirror`, docs/specs/demo.md §13 — supersedes `demo-seed`'s invented one below as
 # what `demo-static` publishes). `scripts/demo-mirror.py` reads a store COPY into gitignored
 # `demo-mirror/` and writes the scrubbed output to the tracked `demo-assets/mirror/`: every
-# buyer a first name + last initial, every address "123 Demo Way", a shipping export rebuilt from the
+# buyer's full name, every address field blank, a shipping export rebuilt from the
 # ledger, and every photograph QR-cleared and cropped under a 512 MB cap. THE OWNER'S STORE
 # NEVER LEAVES THIS MAC — only `demo-assets/mirror/` is committed, and CI never runs this
 # target at all: it has no store to read, and installs that committed output instead

@@ -4,12 +4,12 @@
 
 - The full mirror is fine.
 - Photos are capped at 512MB.
-- An address never appears. Every address becomes 123 Demo Way.
-- A buyer shows as first name plus last initial: "Jordan Miller" becomes "Jordan M.". A one-word name keeps that word. The initial is a Unicode letter.
+- An address never appears. Every address field is blank: street lines, city, state and ZIP.
+- A buyer shows by full real name, as the feed gave it.
 - The mirror refreshes weekly, and on the owner's word (`make demo-mirror`).
 - When the recorded wire digest differs from the tree's, the workflow holds the last good demo and publishes nothing.
 - The mechanism is option 1, below.
-- A CI check on every name and address costs more than it protects. So there is NO CI scrub check. The build itself rewrites every name and address. It ends with one plain assert.
+- A CI check on every name and address costs more than it protects. So there is NO CI scrub check. The build itself blanks every address. It ends with one plain assert.
 
 **The mechanism (the owner's "option 1").** A `make` target builds the scrubbed mirror
 LOCALLY, from a COPY of the owner's store, on the owner's own Mac. Only the scrubbed
@@ -25,17 +25,14 @@ output — the recorded bundle and the QR-cleared photographs — is committed, 
   never committed — `.gitignore` marks it beside `demo`, `app/demo` and `dist-demo`.
 - `build()` copies that snapshot into a working `BANCHI_HOME`. Then, inside one
   `Store().write()`:
-  - **Buyers.** `short_name()` cuts every order's `buyer` to the first word plus the last
-    word's initial: "Jordan Miller" is "Jordan M.", "Mary Jane Watson" is "Mary W.", and
-    "Priya" stays "Priya". Two real buyers who share a short name show as one buyer in
-    `#/orders`, which groups by name. The recorder groups by the same field, so its recorded
-    walk sets still match the screen.
+  - **Buyers.** Every order's `buyer` is kept whole, accents and all. `#/orders` groups
+    by name, and the recorder groups by the same field, folded the way the screen folds it
+    (NFKC, then lower-case), so its recorded walk sets match the screen.
   - **Addresses.** The store holds no address, email or phone at all. The one file that
     ever carries one is TCGplayer's Shipping Export, and it is not part of the store
     (D61). So `write_shipping_export()` builds a NEW one from the ledger's own Ready to
     Ship orders. Order number, date, item count and value are real. Every name is the
-    buyer's short name. Every street is "123 Demo Way". City, state and zip are
-    blank.
+    buyer's full name. Every address field is blank.
   - **Photographs.** The rule picks cards on hand first, then the rest, each by (box,
     index), until the next photograph would cross the 512 MB cap. Every one is
     QR-checked at full resolution before it is cropped, because a live code card is a
@@ -49,12 +46,10 @@ output — the recorded bundle and the QR-cleared photographs — is committed, 
   (D216). Offline makes that impossible rather than merely undesired. A read that needed
   the network answers an error and is never recorded — the same "best effort" rule the
   invented demo already follows for price histories.
-- `assert_scrubbed()` is THE ONE CHECK, per the owner's ruling above. Every `buyer` or
-  `buyerName` field in the recorded bundle must be one word, or a first word plus one
-  Unicode letter and a period. The shipping export's first and last name must read the same
-  way together. A full surname is refused. Every address-shaped field, in the bundle or the
-  shipping export, must be blank or exactly "123 Demo Way". It never prints a bad value: a
-  failure here may be a real person's name.
+- `assert_scrubbed()` is THE ONE CHECK, per the owner's ruling above. Every
+  address-shaped field in the recorded bundle, and Address1, Address2, City, State and
+  PostalCode in the shipping export, must be blank. It checks no name. It never prints a
+  bad value: a failure here may be a real person's address.
 - `commit_output()` copies the built bundle and photographs into the tracked
   `demo-assets/mirror/`. It refuses if the photographs are over the 512 MB cap.
 - `--install` is CI's only mode. It copies the committed `demo-assets/mirror/` into
@@ -100,8 +95,9 @@ wire shape moves. Chunk 0 carries the wire digest it was recorded against. The w
 `hold` job runs `scripts/demo-hold.py` and compares that digest with the tree's
 (`demo-record.py`'s `wire_digest()`). On a difference, or when the chunk records none,
 `build` and `deploy` are skipped, the last good demo stays up, and a notice names both
-digests. A hold is a skip and not a failure, so the alarm job stays quiet. The next refresh
-ends it.
+digests. A hold is a skip and not a failure, so the alarm job stays quiet. A chunk file that
+is missing or unreadable fails the job on purpose, so nothing publishes and the alarm opens.
+The next refresh ends a hold.
 
 **Amended (standing grant, weekly refresh).** Ruling: the demo's data refreshes WEEKLY and
 AUTOMATICALLY, with auto-merge. The owner can still refresh on demand with `make demo-mirror`. A mirror-only PR auto-merges on green CI through the merge tool, with

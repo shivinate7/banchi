@@ -51,7 +51,7 @@ Each row names the role in section 4 that answers it. "None" means no role here 
 | Fetching | Stock photos are hotlinked from two CDNs with no disk cache. pokemontcg.io ends on 2027-03-01. | D301, DEBT44 | R2 |
 | Fetching | The catalog image mirror is 16.7 GB, by hand only. | D15, `make catalog-mirror` | R2 |
 | Fetching | A Haiku batch is polled by a child of the server for up to an hour. | `identify.batch` | R2 |
-| Availability | The daily price refresh and demo mirror run at set times. Nothing handles a missed run. | `scripts/launchagent.py` | R3 |
+| Availability | The daily price refresh and the weekly demo mirror run at set times. Nothing handles a missed run. | `scripts/launchagent.py` | R3 |
 | Availability | When the Mac is off, the Fulfiller cannot see the pack list or where a card is. | D152 | R4 |
 | Access | The server has no auth and listens on every interface. A LAN client that sends no Origin can write or delete. | `capture_server.HOST`, D5 | R5 |
 | Access | Plain http on a LAN name is not a secure context. The Fulfiller's phone loses `crypto.randomUUID` and any camera use. | `useCamera`, `server.ts` | R5 |
@@ -117,7 +117,7 @@ One writer stays one writer (D88, D138). The Green never writes `store.sqlite`.
   the checkout.
 - **How.** Wake-on-LAN needs Ethernet, and this Mac is on Wi-Fi, so it cannot work today. The working
   path is `pmset repeat wakeorpoweron` on the Mac, with HA as the one scheduler for everything on the
-  Green. Missed-run handling (catch up on the next wake) goes into both daily scripts.
+  Green. Missed-run handling (catch up on the next wake) goes into both scheduled scripts.
 - **Cost.** Small.
 - **Touches.** `scripts/launchagent.py`, D295 (demo mirror), D176.
 

@@ -152,7 +152,7 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | File | Protects | Governs |
 | --- | --- | --- |
 | `app/tests/demo-coverage.spec.ts` | The published static demo build draws real data, photographs and controls on every screen a reviewer grades it on. | D183, D227, D271, D277, D298, D295, D301 |
-| `scripts/demo-mirror-daily-photos-selftest.py` | The daily demo mirror never publishes a bundle that names a card whose photograph it did not commit, and removes its throwaway worktree on every exit path. The public demo shows a buyer as first name plus last initial and still refuses any surname or address; a deploy holds the last good demo when the recording's wire digest differs from the tree's; the mirror refreshes weekly. | none |
+| `scripts/demo-mirror-daily-photos-selftest.py` | The daily demo mirror never publishes a bundle that names a card whose photograph it did not commit, and removes its throwaway worktree on every exit path. The public demo shows a buyer's full name and still refuses any address-shaped value; a deploy holds the last good demo when the recording's wire digest differs from the tree's; the mirror refreshes weekly. | none |
 | `scripts/demo-record-resume-selftest.py` | An interrupted demo recording resumes from its cache of answered routes instead of starting again. | D193, D295 |
 | `scripts/demo-record-selftest.py` | The demo recorder's child server never hangs on a full output pipe during a long sweep. | none |
 | `scripts/demo-record-walkplan-selftest.py` | The demo recorder picks a small walk-plan subject list and never grows it with the number of open orders. | D269 |

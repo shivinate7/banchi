@@ -4,7 +4,7 @@ The published page (`shivinate7.github.io/banchi`) is the real front end playing
 wire. `.github/workflows/demo.yml` rebuilds it on every push to `main` that touches what it is
 built from.
 
-**The published store is a mirror and not an invention (D295, §13).** `make demo-static` installs
+**The published store is a mirror and not an invention (D295, the public demo is the scrubbed real store; §13).** `make demo-static` installs
 a scrubbed recording of the owner's own real store from `demo-assets/mirror/`. `demo-seed`,
 `demo-record` and `demo` still work as a generator anyone can run on demand. They are not what
 gets published. §§2-6 and §12 describe that generator. §§1, 5-11 and 13 hold for the published
@@ -134,7 +134,7 @@ so a document fetched after a sale shows the sale.
 
 Measured, with the split: Home's first load is 8.3 MB decoded (it was 87.9 MB). Of that, the app shell
 is about 1.6 MB, the index 0.44 MB, and Home's own reads (`/pipeline/pricing` 4.2 MB, `/orders` 1.5 MB).
-The rest is 6.3 MB of data in all. The daily mirror job and the recorder's on-disk format are unchanged.
+The rest is 6.3 MB of data in all. The weekly mirror job and the recorder's on-disk format are unchanged.
 
 ## 6. `VITE_DEMO` is a build-time constant, not a runtime flag
 
@@ -302,10 +302,11 @@ carries the wire digest it was recorded against (`demo-record.py`'s `wire_digest
 digest sets `publish=true`. A different digest, or a chunk with no `wire`, sets `publish=false` and
 prints a `::notice::` naming both digests. `build` and `deploy` run only on `publish=true`, so on a
 hold the last good demo stays up. A hold is a skip and not a failure, and the alarm job opens an
-issue on a failure only. The next weekly refresh, or `make demo-mirror` by hand, records against
+issue on a failure only. A chunk file that is missing or unreadable fails `hold` on purpose (fail
+closed), so nothing publishes and the alarm does open. The next weekly refresh, or `make demo-mirror` by hand, records against
 the current wire and ends the hold.
 
-`demo-freshness` and `demo-determinism` are retired (D295). They read `app/demo/bundle.json` as
+`demo-freshness` and `demo-determinism` are retired (D295, the public demo is the scrubbed real store). They read `app/demo/bundle.json` as
 the invented seed's own recorder left it, which is not what the workflow publishes. The workflow
 installs the committed mirror, and `install()` rebuilds that file from the chunks for the coverage
 spec (§8a) to read.
@@ -357,12 +358,11 @@ The curator's QR clearance is not the gate. The commit is. A hook that matched o
 let a decodable synthetic QR JPEG into `demo-assets/extra/photos/`. §3's `qr-clear-check.py` closes
 that gap.
 
-## 13. The store is a mirror, not an invention (D295)
+## 13. The store is a mirror, not an invention (D295, the public demo is the scrubbed real store)
 
 The purpose: peers browse the app as if in the owner's store, on a public link. A full mirror is
-fine. Photos are capped at 512 MB. An address never appears; every street reads "123 Demo Way".
-A buyer shows as first name plus last initial ("Jordan Miller" is "Jordan M."), and a one-word name
-stays. D295 is the decision. This section is the mechanism.
+fine. Photos are capped at 512 MB. A buyer shows by full real name. An address never appears: every
+address field is blank. D295 is the decision. This section is the mechanism.
 
 `demo-static` depends on `demo-mirror-install`. The build step is unchanged: `VITE_DEMO=1 npx vite
 build` (§6). Every reader downstream of `app/demo/bundle.json` is unchanged too: `demoServer.ts`
@@ -381,10 +381,10 @@ Three commands, three machines:
 
 **The one check is the owner's own ruling and not a CI gate.** `demo-mirror.py`'s
 `assert_scrubbed()` runs once, on the owner's Mac, before anything is committed. It is a plain
-`assert` over the finished recording and the shipping export. Every buyer name must be one word, or
-a first word plus one Unicode letter and a period. The shipping export's `FirstName` and `LastName`
-must read the same way together. A full surname is refused. Every address field must be blank or
-exactly "123 Demo Way". The failure never prints a refused value. The workflow does not repeat it.
+`assert` over the finished recording and the shipping export. It checks no name. Every
+address-shaped field in the bundle, and the export's `Address1`, `Address2`, `City`, `State` and
+`PostalCode`, must be blank. The failure never prints a refused value. The workflow does not
+repeat it.
 
 **The mirror refreshes weekly, on the owner's word, and merges itself.** The owner can still
 refresh at any time with `make demo-mirror SOURCE=<checkout>`. `make demo-mirror-agent` installs a
@@ -392,7 +392,7 @@ launchd job on the owner's Mac (main tree only) that fires once a week, on Sunda
 fresh origin/main, runs `demo-mirror`, and stops quietly when `demo-assets/mirror/` is unchanged.
 A scrub failure or any error publishes nothing and logs why to `~/.banchi/demo-mirror-daily.log`.
 Otherwise it opens a PR from `demo/mirror-refresh` and merges it on green CI, with no word asked.
-**A PR auto-merges on green CI only under three conditions** (D295, D42). Its head is
+**A PR auto-merges on green CI only under three conditions** (D295, the public demo is the scrubbed real store; D42, main moves only by pull request). Its head is
 `demo/mirror-refresh`. This script opened it after the scrub assert and the fence. Its whole diff
 is under `demo-assets/mirror/`.
 The fence refuses a path outside it, a rename from outside, and a non-regular file. It also refuses

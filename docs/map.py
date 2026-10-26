@@ -5139,9 +5139,8 @@ COMPONENTS = [
                 "does": "builds the published demo as a scrubbed mirror of the owner's real "
                         "store (`D295`, the public demo is the scrubbed real store). Reads a "
                         "`.backup` copy of `store.sqlite` into gitignored `demo-mirror/`, "
-                        "cuts every buyer name to first name plus last initial (\"Jordan "
-                        "Miller\" is \"Jordan M.\", a one-word name stays), sets every "
-                        "address to `123 Demo Way`, crops QR-cleared photographs under a 512 MB cap, "
+                        "keeps each buyer's full name, blanks every address field, "
+                        "crops QR-cleared photographs under a 512 MB cap, "
                         "records the store offline (no network), asserts the scrub, and "
                         "commits only that scrubbed output to `demo-assets/mirror/`. "
                         "`--install` is CI's own mode: copies the committed output into "
@@ -5187,8 +5186,8 @@ COMPONENTS = [
             "demo-mirror-daily-photos-selftest.py": {
                 "does": "`make demo-mirror-daily-photos-selftest`: the weekly mirror ships every "
                         "photograph its bundle names. Also proves the demo's three rulings: buyers "
-                        "come out as first name plus last initial and `assert_scrubbed` accepts that "
-                        "form but refuses a surname or an address, `demo-hold.py` publishes on a "
+                        "keep their full names and every address field is blank, and `assert_scrubbed` "
+                        "accepts that but refuses any filled address field, `demo-hold.py` publishes on a "
                         "matching wire digest and holds on a mismatch or a missing one, and the "
                         "launchd job fires weekly. Proves, in throwaway repos with the real "
                         "`.gitignore`, that a new `demo-assets/mirror/photos/` file is not "
@@ -5202,9 +5201,10 @@ COMPONENTS = [
                 "does": "the demo workflow's hold. `--chunk <chunk-0.json>` compares the wire digest "
                         "the committed mirror was recorded against with this tree's `wire_digest()` "
                         "(`demo-record.py`). Writes `publish=true` or `publish=false` to the file "
-                        "that `GITHUB_OUTPUT` names and exits 0 either way. A mismatch, or a chunk "
-                        "with no `wire`, prints a `::notice::` naming both digests, so the last "
-                        "good demo stays up and the failure alarm stays quiet.",
+                        "that `GITHUB_OUTPUT` names. A mismatch, or a chunk with no `wire`, prints a "
+                        "`::notice::` naming both digests and exits 0, so the last good demo stays "
+                        "up and the failure alarm stays quiet. A chunk file that is missing or "
+                        "unreadable fails the job on purpose (fail closed), and the alarm opens.",
                 "governed_by": ["D295"],
             },
             "demo-histories.py": {
