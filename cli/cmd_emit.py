@@ -326,7 +326,7 @@ def _drop_departed(matches, inventory) -> List[str]:
 
 
 def _report_file_ahead(ahead: Sequence[str], where, say) -> None:
-    """A copy that left after the import file was written is still a row in it (D26).
+    """A copy that left after the import file was written is still a row in it. A send never counts a copy it did not send (D26 (retired is a terminal card state), D59 (live count is per SKU)).
 
     The file is written before the store lock, so nothing un-writes the row. The store did not
     send the copy, so the file holds more than `pushed`: say so, loud, with the copies.
