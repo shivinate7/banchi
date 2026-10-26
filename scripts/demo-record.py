@@ -809,7 +809,7 @@ def buyer_key_of(entry: dict) -> str:
     if isinstance(buyer, str):
         trimmed = re.sub(r"\s+", " ", buyer.strip())
         if trimmed != "":
-            # NFKC then lower-case, as `foldName` does; `casefold` would fold "ß" to "ss" and split a group.
+            # NFKC then lower-case, as `foldName` does; `casefold` would fold "ß" to "ss" and merge "Strauß" with "Strauss", which the screen keeps apart.
             return "name:%s" % unicodedata.normalize("NFKC", trimmed).lower()
     return "order:%s" % entry.get("key")
 
