@@ -177,6 +177,7 @@
   flex-direction: column;
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
+.runs-detail-panel[data-loading] { opacity: var(--bn-disabled); }
 .runs-detail-loading { gap: var(--bn-3); padding: var(--bn-5); }
 .runs-detail-head {
   display: flex;

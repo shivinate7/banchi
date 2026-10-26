@@ -336,10 +336,21 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
   const [runs, setRuns] = useState<readonly RunSummary[]>([])
   const [loaded, setLoaded] = useState(false)
   const [answered, setDetail] = useState<RunDetail | null>(null)
-  /* Only the open run's own answer draws. A direct switch leaves the old run's answer in state
-     until the new one lands, and a late answer for the old run (the auto-match, a step) can land
-     after the switch; the loading panel, which holds the detail's size (D313), draws meanwhile. */
-  const detail = answered !== null && answered.run === openRun ? answered : null
+  /* Only the open run's own answer is real. A direct switch leaves the old run's answer in
+     state until the new one lands, and a late answer for the old run can land after the switch. */
+  const real = answered !== null && answered.run === openRun ? answered : null
+  /* ON A SWITCH, THE PANEL ON SCREEN KEEPS ITS FRAME AND IS DRAWN FROM THE NEW RUN'S ROW, which
+     the list already holds: the same header and steps as the loaded panel, so it holds the
+     loaded size by construction (D313) and shows nothing of the old run. It is inert, because a
+     row has no manifest to act on. A first open has no panel on screen to hold, so it draws the
+     loading panel. */
+  const row = answered === null ? undefined : runs.find((r) => r.run === openRun)
+  const placeholder = useMemo<RunDetail | null>(
+    () => (row === undefined ? null : { ...row, console: '', files: [], manifest: {} }),
+    [row],
+  )
+  const detail = real ?? placeholder
+  const loading = real === null && detail !== null
 
   const [reviewBelow, setReviewBelow] = useState<'none' | 'low' | 'medium'>('low')
   const [optionsOpen, setOptionsOpen] = useState(false)
@@ -469,16 +480,16 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
      integration). A passive effect let one frame paint every step closed, and a press landing in
      that frame was then reversed when the effect opened the run's own step. */
   useLayoutEffect(() => {
-    if (detail === null) return
-    const step = COMMANDS[Math.min(stageOf(detail).step, 3)] ?? 'identify'
-    const changed = lastRun.current !== detail.run
+    if (real === null) return
+    const step = COMMANDS[Math.min(stageOf(real).step, 3)] ?? 'identify'
+    const changed = lastRun.current !== real.run
     const moved = lastStep.current !== step
-    lastRun.current = detail.run
+    lastRun.current = real.run
     lastStep.current = step
     if (!changed && !moved) return
     if (!changed && stepOutRef.current !== null) return
     setOpenStep(step)
-  }, [detail])
+  }, [real])
 
   /* ---------------------------------------------------------- D76: the export's scope */
   useEffect(() => {
@@ -841,6 +852,9 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
             className="bn-panel runs-detail-panel"
             key={detail.run}
             data-reconciled={stage !== null && stage.step === 4 ? 'true' : undefined}
+            data-loading={loading ? 'true' : undefined}
+            aria-busy={loading ? 'true' : undefined}
+            inert={loading}
           >
             <header className="runs-detail-head">
               <Button className="runs-back" variant="ghost" icon="arrowLeft" onClick={() => onOpenRun(null)}>
