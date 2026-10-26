@@ -7,7 +7,7 @@ strips for the rows still waiting (`docs/specs/stale-listings.md`, 7b). Each ste
 (`pipeline/pricerefresh.py`) that `#/pricing` shows, so a failed or partial run is on screen
 and never a silent stale state.
 
-With `--sweep` and after a good refresh, the same process runs `archive sweep --write` through
+After a good refresh (unless `--no-sweep`), the same process runs `archive sweep --write` through
 `cli.cmd_pricearchive`, at the pace the last throttle saved (D222), its lines in this job's log.
 The owner's word is "nightly, on the Mac", and "if the day is a new day when my mac is on, just get
 it done then": the sweep runs once per US Central day, in the first job run of that day (launchd
@@ -17,15 +17,15 @@ inflate it. A failed refresh skips the sweep and the log says so. A sweep that s
 throttle, a host that refused from the first sku) or asked and wrote no bucket is a failed
 `archive` step in the `#/pricing` note, still ends the job with exit 0, and the next run resumes
 without re-reading what is fresh. The job's own run lock means a refresh already running never
-reaches the sweep. `make price-refresh` is a manual read and passes no `--sweep`: it never starts
-the sweep. The launchd job installed by `--agent` passes it.
+reaches the sweep. `make price-refresh` is a manual read and passes `--no-sweep`: it never starts
+the sweep unless `ARGS=--sweep` asks. The installed launchd job passes no flag, so it sweeps.
 
 FREE, AND IT CHANGES NO PRICE AT TCGPLAYER. It reads the seller portal and the public sales history
 and writes nothing there. It calls no paid read. Pushing new live prices stays its own decision (DEBT69).
 
-  price-refresh-daily.py              run the read once now, no sweep
-  price-refresh-daily.py --sweep      run the read, then the sweep if today's has not finished
-  price-refresh-daily.py --agent [--remove]   install / remove the daily launchd job (it passes --sweep)
+  price-refresh-daily.py              run the read, then the sweep if today's has not finished
+  price-refresh-daily.py --no-sweep   run the read alone (what `make price-refresh` passes)
+  price-refresh-daily.py --agent [--remove]   install / remove the daily launchd job (it passes no flag)
 
 The installer is `scripts/launchagent.py`. `demo-mirror-daily.py` keeps its own copy because it
 sits under a standing auto-merge fence (D295); migrating it is its own PR.
@@ -52,7 +52,7 @@ def log(verdict):
 
 
 def agent(remove):
-    return launchagent.agent(LABEL, HERE, ROOT, 5, 15, LOG, remove, args=["--sweep"])
+    return launchagent.agent(LABEL, HERE, ROOT, 5, 15, LOG, remove)
 
 
 def run(sweep=True):
@@ -72,7 +72,7 @@ def run(sweep=True):
         log("archive sweep: skipped, refresh failed")
         return 1
     if not sweep:
-        log("archive sweep: not run, this run did not ask for it (--sweep)")
+        log("archive sweep: not run, this run passed --no-sweep")
         return 0
     sweep_archive(pricerefresh)
     return 0
@@ -105,7 +105,8 @@ def sweep_archive(pricerefresh):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--agent", action="store_true")
-    ap.add_argument("--sweep", action="store_true", help="also sweep the price archive, once per US Central day")
+    ap.add_argument("--sweep", action="store_true", help="the default; accepted so `make price-refresh ARGS=--sweep` reads plainly")
+    ap.add_argument("--no-sweep", action="store_true", help="read only, no archive sweep")
     ap.add_argument("--remove", action="store_true")
     a = ap.parse_args()
     if a.agent:
@@ -117,4 +118,4 @@ if __name__ == "__main__":
     except OSError:
         log("skipped: another run holds the lock")
         sys.exit(0)
-    sys.exit(run(sweep=a.sweep))
+    sys.exit(run(sweep=not a.no_sweep or a.sweep))

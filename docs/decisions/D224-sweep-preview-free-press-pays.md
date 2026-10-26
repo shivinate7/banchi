@@ -89,11 +89,11 @@ never-delete rule is unchanged. A chunk commits with `PriceArchive.upsert()`, th
 method, called more often on smaller inputs. The sweep is still a press a person can run, one
 invocation or several. The daily job also runs it, after the refresh, because the owner ruled
 that it runs nightly, on the Mac ("if the day is a new day when my mac is on, just get it done
-then"). That adds no launchd agent of its own: the installed daily job passes `--sweep`, and
+then"). That adds no launchd agent of its own: the installed daily job passes no flag, the script sweeps by default, and
 `scripts/price-refresh-daily.py` calls `cli.cmd_pricearchive` in the same process, at the pace D222
 saved. It sweeps once per US Central day, in the first run of that day, and skips when today's
 sweep finished. It has no wall-clock cap and no keep-awake, and its pace reads a monotonic clock, so
-a sleep does not inflate it. `make price-refresh` is a manual read and sweeps only with `ARGS=--sweep`.
+a sleep does not inflate it. `make price-refresh` is a manual read that passes `--no-sweep` and sweeps only with `ARGS=--sweep`.
 A failed refresh skips the sweep, and the log says so. A second throttle, a host that refused from
 the first sku, or a pass that asked and wrote no bucket stops it as a failed `archive` step and
 keeps the buckets it wrote. The job still ends 0, and the next run resumes (D222, D224). A night
