@@ -1,4 +1,4 @@
-## DEBT-unhold-death-gap — a death between an Unhold's receipt write and its store commit leaves the mark without the change
+## DEBT104 — a death between an Unhold's receipt write and its store commit leaves the mark without the change
 
 **`send_routes._unhold` and `send_routes._rehold` write the receipt's `unheld` inside the store write, before the commit.** A failed commit puts the old `unheld` back (`send_routes._receipt_undone_on_failure`, under the store's lock). Three cases are not covered. The process dies between the receipt write and the commit. The put-back fails too, for instance on the same disk error (it writes a `log_note` line). Or a writer lands between the store's lock release and the put-back.
 

@@ -88,4 +88,8 @@ DEBT94 a five-digit count can wrap a tile note and grow the send bar
 DEBT96 Fulfillment still shows the owner's photo first
 DEBT99 the empty-slot check decodes every uncached photo at full size
 DEBT100 the free number reader for same-art printings is shelved
+DEBT101 a sent copy whose SKU left the live export is refused every time
+DEBT102 a send writes its import file outside the store lock
+DEBT103 A nightly sweep that stops still ends the job with exit 0
+DEBT104 a death between an Unhold's receipt write and its store commit leaves the mark without the change
 ```

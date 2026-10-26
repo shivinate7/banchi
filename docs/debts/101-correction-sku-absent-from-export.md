@@ -1,4 +1,4 @@
-## DEBT-correction-sku-absent-from-export — a sent copy whose SKU left the live export is refused every time
+## DEBT101 — a sent copy whose SKU left the live export is refused every time
 
 **A sent copy whose SKU is missing from the live export keeps `live` at 1 or more, and the correction refuses it every time. The refusal's way out does not clear it.** This happens when the listing was deleted on TCGplayer and not zeroed.
 

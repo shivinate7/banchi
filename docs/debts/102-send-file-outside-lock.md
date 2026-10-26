@@ -1,4 +1,4 @@
-## DEBT-send-file-outside-lock — a send writes its import file outside the store lock
+## DEBT102 — a send writes its import file outside the store lock
 
 **A send plans and writes its import file, then takes the store lock to stamp. A copy that sells or is retired in that gap is skipped by the stamp, but its row is already in the file.** A send never counts a copy it did not send, so the store never counts that copy sent (D26 (retired is a terminal card state); D59 (live count is per SKU)).
 

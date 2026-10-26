@@ -1973,7 +1973,7 @@ def _receipt_undone_on_failure(undo: list):
     `undo` collected, so a receipt never keeps a mark the store did not take. The put-back takes the
     store's lock (not a store write: that commit may be what failed), re-reads the receipt and resets
     `unheld` alone, so a Take Back or Dismiss that landed since is not erased. If the put-back fails
-    too, the mark stays (DEBT-unhold-death-gap)."""
+    too, the mark stays (DEBT104)."""
     try:
         yield
     except BaseException:
@@ -2031,7 +2031,7 @@ def _unhold(sku: str, payload: dict) -> dict:
             )
         # THE RECEIPT IS WRITTEN UNDER THE STORE'S LOCK and put back if the commit fails
         # (`_receipt_undone_on_failure`). Only a death between the two, or a failed put-back, leaves
-        # `unheld` over copies still counted out: the safe side, nothing is sent twice (DEBT-unhold-death-gap).
+        # `unheld` over copies still counted out: the safe side, nothing is sent twice (DEBT104).
         # NEVER A RECEIPT WHOSE PRESS IS STILL RUNNING (`_press_running`): that press writes its
         # whole record back from memory, which would erase `unheld` and hold the copies again
         # (review F1). Every other writer of a receipt re-reads it under this lock or the store's.

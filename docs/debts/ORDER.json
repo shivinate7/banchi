@@ -64,6 +64,10 @@
     "094-tile-room-four-digit-count.md",
     "096-fulfill-stock-art.md",
     "099-empty-slot-check-decodes-all.md",
-    "100-same-art-reader-shelved.md"
+    "100-same-art-reader-shelved.md",
+    "101-correction-sku-absent-from-export.md",
+    "102-send-file-outside-lock.md",
+    "103-throttled-nightly-sweep.md",
+    "104-unhold-death-gap.md"
   ]
 }
