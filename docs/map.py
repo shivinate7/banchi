@@ -5153,7 +5153,7 @@ COMPONENTS = [
             },
             "launchagent.py": {
                 "does": "the shared launchd install and remove for a daily job on the owner's "
-                        "Mac, main tree only. `price-refresh-daily.py` calls it. "
+                        "Mac, main tree only. `price-refresh-daily.py` and `backup-daily.py` call it. "
                         "`demo-mirror-daily.py` keeps its own copy under the D295 fence; "
                         "migrating it is its own PR.",
                 "governed_by": ["D295"],
@@ -5174,6 +5174,17 @@ COMPONENTS = [
                         "and that a good refresh is swept, a failed one skipped and a second "
                         "throttle stops the sweep.",
                 "governed_by": ["D104", "D189", "D222", "D224", "D278", "D295"],
+            },
+            "backup-daily.py": {
+                "does": "the nightly copy to iCloud Drive on the owner's Mac (first copy of DEBT67): "
+                        "`photos/` and `captures/` as files, skipped by `stat` and never deleted in the "
+                        "destination, plus a SQLite online-backup snapshot of the store from a read-only "
+                        "connection. The destination is `BANCHI_BACKUP_DEST` or `Banchi backup` in "
+                        "CloudDocs, and its parent must exist. Leaves one line in `~/.banchi/backup-last-run` "
+                        "that `make status` shows. `--agent` installs the nightly launchd job (main tree "
+                        "only), `--agent --remove` removes it, through `launchagent.py`.",
+                "note": "PROVED BY T7's `backup` group (harness/tests/t7/backup.py).",
+                "governed_by": ["D43", "D88", "D89", "D172"],
             },
             "demo-mirror-daily.py": {
                 "does": "the weekly demo refresh on the owner's Mac (the owner can also run "

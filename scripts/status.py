@@ -143,6 +143,13 @@ SOURCES = (
                "block from this output",
     },
     {
+        "path": "scripts/backup-daily.py",
+        "kind": "defs",
+        "requires": ("status_line",),
+        "why": "the nightly backup's last-run line, from the job's own status_line(). Declared "
+               "here so a rename fails the audit instead of silently deleting the backup line",
+    },
+    {
         "path": "server/ports.py",
         "kind": "file",
         "requires": (),
@@ -1058,6 +1065,15 @@ def leftovers() -> List[str]:
     return [field("Left behind", "`make janitor` lists what a finished session left")]
 
 
+def backup() -> List[str]:
+    """The nightly backup's last-run line (DEBT67), from the job's own `status_line`. An absent job is a MISSING
+    source; one that raises on load prints its error here and leaves the exit at 0, like any other sidecar."""
+    module, problem = sidecar("scripts/backup-daily.py", "_banchi_backup_daily")
+    if module is None:
+        return [field("backup", problem)]
+    return [field("backup", module.status_line())]
+
+
 SLOW_SHOWN = 5
 
 
@@ -1156,7 +1172,7 @@ def render() -> str:
     lines += blind_spots(mapdata)
     lines.append(field("the map", "`make map` renders docs/map.py — a package, a path, a"))
     lines.append(cont("decision id, or `--stale` for prose its file has outrun."))
-    lines += ["", "REPO"] + repo() + hooks() + guards() + ports_and_store() + leftovers()
+    lines += ["", "REPO"] + repo() + hooks() + guards() + ports_and_store() + leftovers() + backup()
     lines += ["", "SERVING"] + serving() + slow_requests()
     lines += ["", "STORE"] + store()
 
