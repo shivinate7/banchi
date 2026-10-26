@@ -1102,7 +1102,7 @@ demo-record-selftest:
 demo-mirror-daily-selftest:
 	@python3 scripts/demo-mirror-daily.py --selftest
 
-# the daily mirror commits every photograph its bundle names (not ignored, photo store still ignored, no merge without them), and removes its throwaway worktree on every exit path (D295, D172).
+# the weekly mirror: buyers as first name + last initial, the wire-digest hold, a weekly launchd job, every photograph its bundle names committed (not ignored, photo store still ignored, no merge without them), and its throwaway worktree removed on every exit path (D295, D172).
 demo-mirror-daily-photos-selftest:
 	@python3 scripts/demo-mirror-daily-photos-selftest.py
 
@@ -1676,7 +1676,7 @@ demo-photos:
 # `D-demo-mirror`, docs/specs/demo.md §13 — supersedes `demo-seed`'s invented one below as
 # what `demo-static` publishes). `scripts/demo-mirror.py` reads a store COPY into gitignored
 # `demo-mirror/` and writes the scrubbed output to the tracked `demo-assets/mirror/`: every
-# buyer "Jane Doe N", every address "123 Demo Way", a shipping export rebuilt from the
+# buyer a first name + last initial, every address "123 Demo Way", a shipping export rebuilt from the
 # ledger, and every photograph QR-cleared and cropped under a 512 MB cap. THE OWNER'S STORE
 # NEVER LEAVES THIS MAC — only `demo-assets/mirror/` is committed, and CI never runs this
 # target at all: it has no store to read, and installs that committed output instead
@@ -1693,7 +1693,7 @@ demo-mirror:
 demo-mirror-rebuild:
 	@$(PYTHON) scripts/demo-mirror.py --home $(DEMO_HOME)
 
-# THE DAILY REFRESH (D295, demo.md §13): a launchd job on the owner's Mac, main tree only. It runs
+# THE WEEKLY REFRESH (D295, demo.md §13): a launchd job on the owner's Mac, main tree only. It runs
 # `demo-mirror` in a throwaway worktree and auto-merges a mirror-only PR on green CI. ARGS=--remove
 # takes the job out. ARGS=--dry-run is not this target's: run `python3 scripts/demo-mirror-daily.py --dry-run`.
 demo-mirror-agent:

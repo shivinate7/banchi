@@ -5137,10 +5137,11 @@ COMPONENTS = [
             },
             "demo-mirror.py": {
                 "does": "builds the published demo as a scrubbed mirror of the owner's real "
-                        "store (owner's ruling 2026-09-26, `D295`). Reads a "
+                        "store (`D295`, the public demo is the scrubbed real store). Reads a "
                         "`.backup` copy of `store.sqlite` into gitignored `demo-mirror/`, "
-                        "overwrites every buyer name to `Jane Doe N` and every address to "
-                        "`123 Demo Way`, crops QR-cleared photographs under a 512 MB cap, "
+                        "cuts every buyer name to first name plus last initial (\"Jordan "
+                        "Miller\" is \"Jordan M.\", a one-word name stays), sets every "
+                        "address to `123 Demo Way`, crops QR-cleared photographs under a 512 MB cap, "
                         "records the store offline (no network), asserts the scrub, and "
                         "commits only that scrubbed output to `demo-assets/mirror/`. "
                         "`--install` is CI's own mode: copies the committed output into "
@@ -5170,12 +5171,13 @@ COMPONENTS = [
                 "governed_by": ["D104", "D189", "D224", "D278", "D295"],
             },
             "demo-mirror-daily.py": {
-                "does": "the daily demo refresh on the owner's Mac. Cuts a throwaway worktree "
+                "does": "the weekly demo refresh on the owner's Mac (the owner can also run "
+                        "`make demo-mirror` by hand). Cuts a throwaway worktree "
                         "from origin/main, runs `make demo-mirror`, and publishes only a "
                         "change under `demo-assets/mirror/`. `fence()` refuses any path "
                         "outside it, on the local diff and on the PR's own diff, before the "
                         "merge tool runs. Logs one verdict line per run. `--agent` installs "
-                        "the daily launchd job (main tree only), `--selftest` proves the "
+                        "the weekly launchd job (main tree only), `--selftest` proves the "
                         "fence red then green. Every exit path stops the tree's servers and "
                         "removes its folder, and each run first removes leftover folders of "
                         "that name.",
@@ -5183,14 +5185,27 @@ COMPONENTS = [
                 "governed_by": ["D42", "D70", "D295"],
             },
             "demo-mirror-daily-photos-selftest.py": {
-                "does": "`make demo-mirror-daily-photos-selftest`: the daily mirror ships every "
-                        "photograph its bundle names. Proves, in throwaway repos with the real "
+                "does": "`make demo-mirror-daily-photos-selftest`: the weekly mirror ships every "
+                        "photograph its bundle names. Also proves the demo's three rulings: buyers "
+                        "come out as first name plus last initial and `assert_scrubbed` accepts that "
+                        "form but refuses a surname or an address, `demo-hold.py` publishes on a "
+                        "matching wire digest and holds on a mismatch or a missing one, and the "
+                        "launchd job fires weekly. Proves, in throwaway repos with the real "
                         "`.gitignore`, that a new `demo-assets/mirror/photos/` file is not "
                         "ignored, that the photo store's own `photos/` stays ignored, and that "
                         "a run never merges a bundle whose photographs are not committed. Also "
                         "proves a run removes its throwaway worktree folder on every exit "
                         "path, even with a background writer left in the tree.",
                 "governed_by": ["D172", "D295"],
+            },
+            "demo-hold.py": {
+                "does": "the demo workflow's hold. `--chunk <chunk-0.json>` compares the wire digest "
+                        "the committed mirror was recorded against with this tree's `wire_digest()` "
+                        "(`demo-record.py`). Writes `publish=true` or `publish=false` to the file "
+                        "that `GITHUB_OUTPUT` names and exits 0 either way. A mismatch, or a chunk "
+                        "with no `wire`, prints a `::notice::` naming both digests, so the last "
+                        "good demo stays up and the failure alarm stays quiet.",
+                "governed_by": ["D295"],
             },
             "demo-histories.py": {
                 "does": "`make demo-histories`: records every demo card's price history, all "

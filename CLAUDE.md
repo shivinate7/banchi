@@ -73,7 +73,7 @@ make demo           # seed a demo store and record the wire. Read `docs/specs/de
 make demo-seed      # the store alone. Refuses with BANCHI_HOME unset.
 make demo-record    # the bundle alone, on a throwaway server and port.
 make demo-mirror SOURCE=<checkout>  # owner's Mac only: scrub, crop, commit `demo-assets/mirror/`.
-make demo-mirror-agent  # owner's Mac, main tree only: a daily launchd job that refreshes the mirror
+make demo-mirror-agent  # owner's Mac, main tree only: a weekly launchd job that refreshes the mirror
                     #   and auto-merges a mirror-only PR on green CI (D295, the public demo is the scrubbed real store). ARGS=--remove removes it.
 make demo-mirror-install  # CI's step: install the committed scrub. No store, no network.
 make price-refresh  # ONE free download of the live listings now, over this checkout's store, and the note `#/pricing` shows. No sweep, no price change.
@@ -338,7 +338,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **Main moves by pull request. A session never commits to it and never pushes it** (D42, main moves by pull request).
   A session merges only after the owner names the act ("merge", not "ship it"). It uses
   `make merge ARGS="<n> --confirm"` with CI green, never `--admin`. One standing exception (D42, main moves by pull request):
-  the daily demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
+  the weekly demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
   Only a session that the owner names an Orchestrator may merge, and only PRs it planned and reviewed.
   The designation is never inherited. A session that is not named asks for the word every time.
   GitHub branch protection also requires `check` and `revert-guard`, with 0 reviews and `strict: false`.

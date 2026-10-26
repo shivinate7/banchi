@@ -1,13 +1,15 @@
 ## D295 — The public demo is the scrubbed real store
 
-**Owner ruling: the published demo (`shivinate7.github.io/banchi`) is a full mirror of the real store, with people scrubbed.** Before this entry, the demo showed an invented store. `scripts/demo-seed.py` writes real catalogue rows out of `fixtures/`. Which card sits in which box, what has sold, and who bought it were all made up (`docs/specs/demo.md` §2). The owner ruled six points:
+**Owner ruling: the published demo (`shivinate7.github.io/banchi`) is a full mirror of the real store, with people scrubbed. Its purpose is that peers browse the app as if in the owner's store, on a public link.** Before this entry, the demo showed an invented store. `scripts/demo-seed.py` writes real catalogue rows out of `fixtures/`. Which card sits in which box, what has sold, and who bought it were all made up (`docs/specs/demo.md` §2). The rulings:
 
 - The full mirror is fine.
 - Photos are capped at 512MB.
-- Every name becomes Jane Doe and every address becomes 123 Demo Way.
-- Buyers are numbered Jane Doe N, one stable N per distinct buyer, because `#/orders` groups by name.
+- An address never appears. Every address becomes 123 Demo Way.
+- A buyer shows as first name plus last initial: "Jordan Miller" becomes "Jordan M.". A one-word name keeps that word. The initial is a Unicode letter.
+- The mirror refreshes weekly, and on the owner's word (`make demo-mirror`).
+- When the recorded wire digest differs from the tree's, the workflow holds the last good demo and publishes nothing.
 - The mechanism is option 1, below.
-- A CI check on every name and address costs more than it protects. So there is NO CI scrub check. The build itself overwrites every name and address. It ends with one plain assert.
+- A CI check on every name and address costs more than it protects. So there is NO CI scrub check. The build itself rewrites every name and address. It ends with one plain assert.
 
 **The mechanism (the owner's "option 1").** A `make` target builds the scrubbed mirror
 LOCALLY, from a COPY of the owner's store, on the owner's own Mac. Only the scrubbed
@@ -23,14 +25,16 @@ output — the recorded bundle and the QR-cleared photographs — is committed, 
   never committed — `.gitignore` marks it beside `demo`, `app/demo` and `dist-demo`.
 - `build()` copies that snapshot into a working `BANCHI_HOME`. Then, inside one
   `Store().write()`:
-  - **Buyers.** `jane_does()` numbers every distinct buyer "Jane Doe N". Oldest first
-    order wins the lowest N. The numbering stays stable across rebuilds. Every order's
-    `buyer` field is overwritten.
+  - **Buyers.** `short_name()` cuts every order's `buyer` to the first word plus the last
+    word's initial: "Jordan Miller" is "Jordan M.", "Mary Jane Watson" is "Mary W.", and
+    "Priya" stays "Priya". Two real buyers who share a short name show as one buyer in
+    `#/orders`, which groups by name. The recorder groups by the same field, so its recorded
+    walk sets still match the screen.
   - **Addresses.** The store holds no address, email or phone at all. The one file that
     ever carries one is TCGplayer's Shipping Export, and it is not part of the store
     (D61). So `write_shipping_export()` builds a NEW one from the ledger's own Ready to
     Ship orders. Order number, date, item count and value are real. Every name is the
-    buyer's Jane Doe number. Every street is "123 Demo Way". City, state and zip are
+    buyer's short name. Every street is "123 Demo Way". City, state and zip are
     blank.
   - **Photographs.** The rule picks cards on hand first, then the rest, each by (box,
     index), until the next photograph would cross the 512 MB cap. Every one is
@@ -46,10 +50,11 @@ output — the recorded bundle and the QR-cleared photographs — is committed, 
   the network answers an error and is never recorded — the same "best effort" rule the
   invented demo already follows for price histories.
 - `assert_scrubbed()` is THE ONE CHECK, per the owner's ruling above. Every `buyer` or
-  `buyerName` field in the recorded bundle must match `^Jane Doe \d+$`. Every
-  address-shaped field, in the bundle or the shipping export, must be blank or exactly
-  "123 Demo Way". It never prints a bad value: a failure here may be a real person's
-  name.
+  `buyerName` field in the recorded bundle must be one word, or a first word plus one
+  Unicode letter and a period. The shipping export's first and last name must read the same
+  way together. A full surname is refused. Every address-shaped field, in the bundle or the
+  shipping export, must be blank or exactly "123 Demo Way". It never prints a bad value: a
+  failure here may be a real person's name.
 - `commit_output()` copies the built bundle and photographs into the tracked
   `demo-assets/mirror/`. It refuses if the photographs are over the 512 MB cap.
 - `--install` is CI's only mode. It copies the committed `demo-assets/mirror/` into
@@ -83,18 +88,26 @@ exceeds `WALK_PLAN_ORDERS` on a future rebuild is unmeasured. If it does, the re
 refuses loudly rather than guessing.
 
 **Amended (L5).** Ruling (test-audit plan, Q5): cut the old seed guards. `demo-seed`/`demo-record`/`demo` stay, a generator anyone can run on demand.
-C4 named three guards over that seed's own bundle, `app/demo/bundle.json`. The published
-mirror has never read that bundle since this entry. `demo-determinism-selftest` ran in
+C4 named three guards over that seed's own bundle. `demo-determinism-selftest` ran in
 `make check`. `demo-determinism` ran on every demo publish, `.github/workflows/demo.yml`.
-`demo-freshness` gated neither, but read the same dead bundle. All three retire together.
-`demo-determinism.py` and `demo-freshness.py` are gone from the tree. None of the three ever
-tested the mirror this entry publishes.
+`demo-freshness` gated neither. All three retire together. `demo-determinism.py` and
+`demo-freshness.py` are gone from the tree. None of the three ever tested the mirror this
+entry publishes. `--install` still writes `app/demo/bundle.json`, rebuilt from the committed
+chunks, because `app/tests/demo-coverage.spec.ts` reads one file.
 
-**Amended (standing grant, daily refresh).** Ruling: the demo's data refreshes DAILY and
-AUTOMATICALLY, with auto-merge. A mirror-only PR auto-merges on green CI through the merge tool, with
+**Amended (the hold).** The committed mirror is a recording, and a recording goes stale when a
+wire shape moves. Chunk 0 carries the wire digest it was recorded against. The workflow's
+`hold` job runs `scripts/demo-hold.py` and compares that digest with the tree's
+(`demo-record.py`'s `wire_digest()`). On a difference, or when the chunk records none,
+`build` and `deploy` are skipped, the last good demo stays up, and a notice names both
+digests. A hold is a skip and not a failure, so the alarm job stays quiet. The next refresh
+ends it.
+
+**Amended (standing grant, weekly refresh).** Ruling: the demo's data refreshes WEEKLY and
+AUTOMATICALLY, with auto-merge. The owner can still refresh on demand with `make demo-mirror`. A mirror-only PR auto-merges on green CI through the merge tool, with
 no word asked each time. The grant covers only a PR with head `demo/mirror-refresh`, opened by
 `scripts/demo-mirror-daily.py` after the scrub assert and the fence, whose whole diff is under
-`demo-assets/mirror/`. `make demo-mirror-agent` installs the daily job on the owner's Mac. The safety
+`demo-assets/mirror/`. `make demo-mirror-agent` installs the weekly job on the owner's Mac (Sunday, 04:30). The safety
 is a fence in `scripts/demo-mirror-daily.py`: it refuses to merge a PR whose diff touches any path
 outside `demo-assets/mirror/`. `assert_scrubbed` still gates publishing, and a failure or any error
 publishes nothing. The grant is recorded in D42's grant terms too.

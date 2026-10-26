@@ -291,12 +291,24 @@ A guard that matches a secret's name keeps firing on documentation and on refusa
 missing variable. Somebody then disables it. The step prints what it matched, so a real failure
 needs no local rebuild to diagnose.
 
-## 10. There is no freshness guard
+## 10. A recording that no longer covers the wire holds the last good demo
 
-Nothing derived from the demo is committed. CI builds the bundle fresh on every push to `main` that
-touches the paths `.github/workflows/demo.yml` lists. The published copy therefore cannot go stale.
-`demo-freshness` and `demo-determinism` are retired (D295): the published mirror never reads
-`app/demo/bundle.json`, so those guards tested only the invented seed's own recorder.
+The committed mirror is a recording, and a recording goes stale when a wire shape moves. A screen
+that reads a field the recording predates draws blank and fails nothing. So chunk 0 of the mirror
+carries the wire digest it was recorded against (`demo-record.py`'s `wire_digest()`, a hash of
+`types.ts` and `server.ts`).
+
+`demo.yml`'s first job, `hold`, runs `scripts/demo-hold.py --chunk <chunk-0.json>`. A matching
+digest sets `publish=true`. A different digest, or a chunk with no `wire`, sets `publish=false` and
+prints a `::notice::` naming both digests. `build` and `deploy` run only on `publish=true`, so on a
+hold the last good demo stays up. A hold is a skip and not a failure, and the alarm job opens an
+issue on a failure only. The next weekly refresh, or `make demo-mirror` by hand, records against
+the current wire and ends the hold.
+
+`demo-freshness` and `demo-determinism` are retired (D295). They read `app/demo/bundle.json` as
+the invented seed's own recorder left it, which is not what the workflow publishes. The workflow
+installs the committed mirror, and `install()` rebuilds that file from the chunks for the coverage
+spec (§8a) to read.
 
 ## 11. What republishes, and why nothing is ever queued
 
@@ -309,8 +321,9 @@ to the repository, so it cannot move `main` and is not a second way around D42.
 
 `demo.yml` triggers on a push to `main` only. A PR never runs it. Dispatch it by hand on a feature
 branch instead: `gh workflow run demo.yml --ref <branch>`. The `github-pages` environment names a
-deployment-branch policy of `main` alone (unverified from this repo). The `build` job then runs in
-full, and the environment refuses `deploy` before `actions/deploy-pages` loads.
+deployment-branch policy of `main` alone (unverified from this repo). The `hold` and `build` jobs then run
+in full (if `hold` sets `publish=false`, `build` and `deploy` are skipped, §10), and the environment
+refuses `deploy` before `actions/deploy-pages` loads.
 
 Read the `build` job's own conclusion and never the run's overall one. The run reads red because
 the environment refused `deploy`, not because anything failed. To see what got packaged, download
@@ -346,9 +359,10 @@ that gap.
 
 ## 13. The store is a mirror, not an invention (D295)
 
-The owner ruled that a full mirror is fine. Photos are capped at 512 MB. Every name reads
-"Jane Doe N", and every address reads "123 Demo Way". D295 carries every quote in full. This
-section is the mechanism. D295 is the decision.
+The purpose: peers browse the app as if in the owner's store, on a public link. A full mirror is
+fine. Photos are capped at 512 MB. An address never appears; every street reads "123 Demo Way".
+A buyer shows as first name plus last initial ("Jordan Miller" is "Jordan M."), and a one-word name
+stays. D295 is the decision. This section is the mechanism.
 
 `demo-static` depends on `demo-mirror-install`. The build step is unchanged: `VITE_DEMO=1 npx vite
 build` (§6). Every reader downstream of `app/demo/bundle.json` is unchanged too: `demoServer.ts`
@@ -367,12 +381,14 @@ Three commands, three machines:
 
 **The one check is the owner's own ruling and not a CI gate.** `demo-mirror.py`'s
 `assert_scrubbed()` runs once, on the owner's Mac, before anything is committed. It is a plain
-`assert` over the finished recording and the shipping export. Every buyer name must match
-`^Jane Doe \d+$`. Every address field must be blank or exactly "123 Demo Way". The workflow does not
-repeat it.
+`assert` over the finished recording and the shipping export. Every buyer name must be one word, or
+a first word plus one Unicode letter and a period. The shipping export's `FirstName` and `LastName`
+must read the same way together. A full surname is refused. Every address field must be blank or
+exactly "123 Demo Way". The failure never prints a refused value. The workflow does not repeat it.
 
-**The mirror refreshes daily and merges itself.** `make demo-mirror-agent` installs a launchd job
-on the owner's Mac (main tree only). `scripts/demo-mirror-daily.py` cuts a throwaway worktree from
+**The mirror refreshes weekly, on the owner's word, and merges itself.** The owner can still
+refresh at any time with `make demo-mirror SOURCE=<checkout>`. `make demo-mirror-agent` installs a
+launchd job on the owner's Mac (main tree only) that fires once a week, on Sunday at 04:30. `scripts/demo-mirror-daily.py` cuts a throwaway worktree from
 fresh origin/main, runs `demo-mirror`, and stops quietly when `demo-assets/mirror/` is unchanged.
 A scrub failure or any error publishes nothing and logs why to `~/.banchi/demo-mirror-daily.log`.
 Otherwise it opens a PR from `demo/mirror-refresh` and merges it on green CI, with no word asked.
