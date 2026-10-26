@@ -30,7 +30,7 @@ its own number.
 DEBT1 The reverse direction: two checks walk docs→code and never back
 DEBT2 The map's reach
 DEBT3 The claim chain
-DEBT4 Criteria and evidence: four ways a row goes quiet
+DEBT4 Criteria and evidence: three ways a row goes quiet
 DEBT6 T7 leaves two capture-server facts unchecked
 DEBT8 Recorded and correctly unfixed
 DEBT9 The sigil check matches text, so a renamed local walks past it
