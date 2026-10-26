@@ -675,8 +675,8 @@ def divider_index(
     of number, and the forward map sends both to the same ordinal.
 
     The forward map is not injective — every index in a run of departed slots counts the
-    same cards in front of it — so this picks one, and it picks the one `open_section`
-    would have written. **Ordinal 1 is always index 1**, even where card 1 itself has sold:
+    same cards in front of it — so this picks one: the lowest, the first record of the gap.
+    **Ordinal 1 is always index 1**, even where card 1 itself has sold:
     `check_sections` requires a layout to start at 1 because there is no card before the
     front of a box, and that is a fact about the box rather than about its contents.
 
@@ -690,8 +690,8 @@ def divider_index(
         lows = [v[0] for v in (occupied, departed) if v]
         return master.front_of_box((), min(lows) if lows else None)[0]
     if ordinal <= len(occupied):
-        # THE KEY ITSELF, NEVER `int()` OF IT (the R4 review): a placed card's key is a
-        # fraction, and cutting it moved the divider onto the card in front (D294).
+        # THE RECORD'S KEY ITSELF, NEVER `int()` OF IT (the R4 review): a placed card's key
+        # is a fraction, and cutting it moved the divider onto the card in front (D294).
         before = occupied[ordinal - 2]
         return master.as_order(min(k for k in (*occupied, *departed) if k > before))
     high = max(
