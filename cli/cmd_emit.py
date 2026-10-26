@@ -291,9 +291,8 @@ def _report_withheld(withheld: List[dict], say) -> None:
 
 
 def _state(inventory, key: str):
-    """The card's state, or None when there is no record. `getattr`: a stand-in inventory in the
-    harness has `set_state` and no `cards`."""
-    card = getattr(inventory, "cards", {}).get(key)
+    """The card's state, or None when there is no record."""
+    card = inventory.cards.get(key)
     return None if card is None else card.state
 
 
@@ -324,6 +323,19 @@ def _drop_departed(matches, inventory) -> List[str]:
                 match.committed_positions.append(position)
                 gone.append(key)
     return gone
+
+
+def _report_file_ahead(ahead: Sequence[str], where, say) -> None:
+    """A copy that left after the import file was written is still a row in it (D59, D26).
+
+    The file is written before the store lock, so nothing un-writes the row. The store did not
+    send the copy, so the file holds more than `pushed`: say so, loud, with the copies."""
+    if not ahead:
+        return
+    say("")
+    say(f"WARNING          the import file in {where} lists {len(ahead)} copy(ies) the store did not send "
+        f"({', '.join(ahead[:8])}{f' ... and {len(ahead) - 8} more' if len(ahead) > 8 else ''}): "
+        f"do not upload that file as is")
 
 
 def _report_unstamped(missed: List[str], say, skipped: Sequence[str] = (), moved: Sequence[str] = ()) -> None:
@@ -1724,12 +1736,13 @@ def run(args, say) -> int:
     }
     skipped: List[str] = []
     moved: List[str] = []
+    ahead: List[str] = []
     try:
         with store.write() as writable:
             _claim_or_refuse(writable, going, basis, args, [c.sku for c in changes], list(takes))
             pushed, pushed_skus, unstamped = _stamp_single(
                 writable, resolved, emitted, priced_flat, run_dir, sku_game, sku_source,
-                skipped, moved,
+                skipped, moved, ahead,
             )
             _record_prices(writable, changes, run_dir.name)
             queue_line = writable.queue_summary
@@ -1739,12 +1752,12 @@ def run(args, say) -> int:
         return 1
     return _after_single(
         args, say, resolved, run_dir, listed_skus, sub_skus, pushed, pushed_skus,
-        queue_line, stages, len(changes), disputed_positions, unstamped, bool(takes), skipped, moved,
+        queue_line, stages, len(changes), disputed_positions, unstamped, bool(takes), skipped, moved, ahead,
     )
 
 
 def _stamp_single(
-    writable, resolved, emitted, priced_flat, run_dir, sku_game, sku_source, skipped=None, moved=None
+    writable, resolved, emitted, priced_flat, run_dir, sku_game, sku_source, skipped=None, moved=None, ahead=None
 ):
     """The single-run write: stamp every matched copy, count the sent ones. `(pushed, skus, unstamped)`.
     `skipped` and `moved` are lists the caller passes to hear which copies left (see `_left`).
@@ -1753,6 +1766,7 @@ def _stamp_single(
     needs (identity-follows-sku.md §4.1)."""
     skipped = [] if skipped is None else skipped
     moved = [] if moved is None else moved
+    ahead = [] if ahead is None else ahead
     pushed = 0
     pushed_skus = 0
     unstamped: List[str] = []
@@ -1842,6 +1856,8 @@ def _stamp_single(
             # counted: `set_state` has no terminal guard and would flip it back to identified.
             if _left(writable.inventory, key):
                 skipped.append(key)
+                if key in live_keys:
+                    ahead.append(f"{key} {match.sku}")
                 continue
             # `set_state(key, IDENTIFIED)` rather than assigning `sku` and `condition`
             # straight onto the record, and the choice is not style. It is the only
@@ -1927,7 +1943,7 @@ def _stamp_single(
 
 def _after_single(
     args, say, resolved, run_dir, listed_skus, sub_skus, pushed, pushed_skus, queue_line, stages,
-    repriced=0, disputed_positions=(), unstamped=(), took=False, skipped=(), moved=(),
+    repriced=0, disputed_positions=(), unstamped=(), took=False, skipped=(), moved=(), ahead=(),
 ) -> int:
     """What the single-run path says once its write has committed."""
     # ONLY WHEN SOMETHING REACHED A FILE. D54: the record is created by the first emit that
@@ -1945,6 +1961,7 @@ def _after_single(
         f"{master.PUSHED}")
     _report_withheld(disputed_positions, say)
     _report_unstamped(list(unstamped), say, skipped, moved)
+    _report_file_ahead(ahead, run_dir.directory, say)
     listings = ", ".join(f"{k} {v}" for k, v in stages.items() if v)
     if listings:
         say(f"listings         {listings}")
@@ -2422,11 +2439,12 @@ def _run_merged(args, say) -> int:
     }
     skipped: List[str] = []
     moved: List[str] = []
+    ahead: List[str] = []
     try:
         with store.write() as writable:
             _claim_or_refuse(writable, going, basis, args, sorted(changed), list(takes))
             pushed, pushed_skus, unstamped = _stamp_merged(
-                writable, merged_plan, shipped, resolved_by_run, skipped, moved
+                writable, merged_plan, shipped, resolved_by_run, skipped, moved, ahead
             )
             _record_prices(writable, changes, ",".join(d.name for d in dirs))
             queue_line = writable.queue_summary
@@ -2437,14 +2455,15 @@ def _run_merged(args, say) -> int:
     # THE RUN'S EMIT RECORD NAMES THE SKUS THAT ADDED A COPY (D54), never a price-only row.
     copied = [(target, [row for row in group if row.sku not in changed and row.sku not in takes]) for target, group in written]
     return _after_merged(
-        dirs, copied, pushed, pushed_skus, queue_line, stages, say, disputed_positions, unstamped, skipped, moved
+        dirs, copied, pushed, pushed_skus, queue_line, stages, say, disputed_positions, unstamped, skipped, moved, ahead
     )
 
 
-def _stamp_merged(writable, merged_plan, shipped, resolved_by_run, skipped=None, moved=None):
-    """The merged write: stamp every copy once, count the sent ones. `(pushed, skus, unstamped)`; `skipped` and `moved` as in `_stamp_single`."""
+def _stamp_merged(writable, merged_plan, shipped, resolved_by_run, skipped=None, moved=None, ahead=None):
+    """The merged write: stamp every copy once, count the sent ones. `(pushed, skus, unstamped)`; `skipped`, `moved` and `ahead` as in `_stamp_single`."""
     skipped = [] if skipped is None else skipped
     moved = [] if moved is None else moved
+    ahead = [] if ahead is None else ahead
     pushed = 0
     pushed_skus = 0
     unstamped: List[str] = []
@@ -2490,6 +2509,11 @@ def _stamp_merged(writable, merged_plan, shipped, resolved_by_run, skipped=None,
             # THE FIVE IDENTITY KWARGS ARE GONE, exactly as in `_stamp_single` above —
             # `bind_sku` below is the one writer now, and D253's `name_corrections` read
             # retires with it.
+            if _left(writable.inventory, key):
+                skipped.append(key)
+                if key in live_keys:
+                    ahead.append(f"{key} {row.sku}")
+                continue
             if _tombstone(writable.inventory, key):
                 moved.append(key)
                 stamped = True
@@ -2535,7 +2559,7 @@ def _stamp_merged(writable, merged_plan, shipped, resolved_by_run, skipped=None,
 
 
 def _after_merged(
-    dirs, written, pushed, pushed_skus, queue_line, stages, say, disputed_positions=(), unstamped=(), skipped=(), moved=()
+    dirs, written, pushed, pushed_skus, queue_line, stages, say, disputed_positions=(), unstamped=(), skipped=(), moved=(), ahead=()
 ) -> int:
     """What the merged path says once its write has committed."""
     # THE RECEIPT IS PER RUN AND ADDS, NEVER SUBTRACTS (D54). Each run in the send records the
@@ -2554,6 +2578,7 @@ def _after_merged(
     say(f"pushed           {pushed} copy(ies) across {pushed_skus} SKU(s) -> {master.PUSHED}")
     _report_withheld(disputed_positions, say)
     _report_unstamped(list(unstamped), say, skipped, moved)
+    _report_file_ahead(ahead, dirs[-1].path(""), say)
     listings = ", ".join(f"{k} {v}" for k, v in stages.items() if v)
     if listings:
         say(f"listings         {listings}")
