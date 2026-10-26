@@ -1,7 +1,7 @@
 """T7 group: a photograph of an empty slot is read as `empty_slot`, and is never accepted or sent to the paid read.
 
-`identify.match.empty_slot` takes the 99th-percentile luminance of a photograph, at full size. Under
-`EMPTY_SLOT_P99` the slot is empty. `match.read` ranks a dark photograph for its best raw cosine and
+`identify.match.empty_slot` takes the 99th-percentile luminance of a photograph, a JPEG decoded at half
+scale (a PNG decodes in full). Under `EMPTY_SLOT_P99` the slot is empty. `match.read` ranks a dark photograph for its best raw cosine and
 answers the code `empty_slot` with that luminance and that best match; it is never accepted. The
 press never sends an empty photograph to the paid read, retires a card only when the dark
 photograph and a weak best match agree, and `cli/resolve.py` files the rest as `card_not_detected`
@@ -39,7 +39,7 @@ from identify import match
 CODE = "empty_slot"
 DARK = 20  # a uniform dark slot: its 99th percentile sits here
 CARD = 180  # a flat card face, bright enough to clear the cut
-FRAME = (1434, 1024)  # tall, the size a rig photograph is read at (full size, no downscale)
+FRAME = (1434, 1024)  # tall, the size a rig photograph is read at (the luminance read decodes a JPEG of it at half scale)
 
 
 def _jpeg(path: Path, grid: np.ndarray, quality: int = 90) -> Path:
@@ -110,8 +110,9 @@ def check_empty_slot_boundary(checks: Checks) -> None:
 
 def check_empty_slot_keeps_thin_lines(checks: Checks) -> None:
     """A dark card with 1px white lines is not an empty slot. At full size the lines keep the 99th
-    percentile at 255. A downscaled decode averages each line into the dark (about 86 at 1/4 scale),
-    which would call this card empty. This check fails on that regression."""
+    percentile at 255, and at the half-scale JPEG decode the read uses at 138, over the cut of 100.
+    A decode at 1/4 or 1/8 scale averages each line into the dark (79 and 49), which would call this
+    card empty. This check fails on that regression."""
     fn = _empty_slot_fn(checks)
     if fn is None:
         return
@@ -120,7 +121,7 @@ def check_empty_slot_keeps_thin_lines(checks: Checks) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         photo = _jpeg(Path(tmp) / "lines.jpg", grid, quality=95)
         checks.ok(fn(photo) is False, "a dark card with 1px white lines is not an empty slot",
-                  "the full-size read must keep the lines; a downscaled read would average them dark")
+                  "the read must keep the lines; a decode below half scale would average them dark")
 
 
 def check_read_names_empty_slot(checks: Checks) -> None:
