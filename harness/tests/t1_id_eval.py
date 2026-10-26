@@ -321,6 +321,11 @@ def _write_results(payload: dict, config: str) -> Tuple[Path, bool]:
     suffix = "" if config == "none" else "-{0}".format(config)
     path = RESULTS_DIR / "t1{0}.json".format(suffix)
 
+    if payload["split_requested"] != "all":
+        # A run limited to one split (BANCHI_T1_SPLIT) never scored both halves. Its payload
+        # must not become, or replace, the committed score.
+        return path, False
+
     if path.exists():
         try:
             existing = json.loads(path.read_text("utf-8"))
@@ -546,7 +551,7 @@ def run() -> Result:
         "set_hint_mode": hint_mode,
         "image_count": total,
         "set_count": len(per_set),
-        "split_requested": os.environ.get(SPLIT_ENV, "all"),
+        "split_requested": wanted or "all",
         "splits": split_stats,
         "gated_on": gated_split,
         "holdout_accuracy": gate_accuracy,
@@ -731,7 +736,9 @@ def run() -> Result:
     )
     checks.note(
         "score {0} {1}".format(
-            "written to" if results_written else "unchanged, already at",
+            "written to" if results_written
+            else "NOT written (partial split run), kept at" if payload["split_requested"] != "all"
+            else "unchanged, already at",
             results_path.relative_to(RESULTS_DIR.parents[1]),
         )
     )

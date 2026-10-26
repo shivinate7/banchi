@@ -82,8 +82,9 @@ EVERY CHECK PAIRS A NEGATIVE WITH A POSITIVE. A missing script exits 2 and touch
 "exits non-zero", "left the source alone" and "kept the destination file" for a job that does nothing. So each
 of those is asserted beside a run that reported ok and copied, or beside the recorded `failed` line.
 
-Temp files: one run folder `<pid>-<uuid>` under the repo's temp root (`harness/tests/home.py:run_folder`,
-test-temp-standard). No `TemporaryDirectory`, no `isolated_home`. The first check proves the sweep.
+Temp files: `robust` opens one run folder `<pid>-<uuid>` per check, from the repo's one helper
+(`harness/tests/home.py:run_folder`, test-temp-standard), and its exit removes it, read-only paths
+included. No `TemporaryDirectory`, no `isolated_home`. The first check proves the helper's delete.
 """
 
 from __future__ import annotations
@@ -103,12 +104,13 @@ import sqlite3
 import subprocess
 import sys
 import time
+import uuid
 from collections import namedtuple
 from pathlib import Path
 from unittest import mock
 
 from harness.tests import Checks
-from harness.tests.home import RUN_MAX_AGE, TEMP_ROOT, remove_tree, run_folder, sweep
+from harness.tests.home import TEMP_ROOT, open_up, remove_tree, run_folder
 from harness.tests.t7.common import REPO_ROOT
 from store import db, files
 
@@ -138,15 +140,24 @@ FILES = {
 # ------------------------------------------------------------------------------ fixtures
 
 
+#: The open run folder of the check now running. `robust` sets it and clears it; `Case` reads it.
+RUN_FOLDER: Path | None = None
+
+
 def robust(fn):
     """A check that raises reads as one failed line with its sentence, never as a traceback
-    that hides the rest of the group (the build may not exist yet)."""
+    that hides the rest of the group (the build may not exist yet). It also gives the check its
+    run folder, removed when the check ends, whatever the check left read-only."""
     @functools.wraps(fn)
     def run(checks: Checks) -> None:
-        try:
-            fn(checks)
-        except Exception as exc:  # noqa: BLE001
-            checks.ok(False, f"{fn.__name__} ran to the end", f"{type(exc).__name__}: {exc}")
+        global RUN_FOLDER
+        with run_folder() as RUN_FOLDER:
+            try:
+                fn(checks)
+            except Exception as exc:  # noqa: BLE001
+                checks.ok(False, f"{fn.__name__} ran to the end", f"{type(exc).__name__}: {exc}")
+            finally:
+                RUN_FOLDER = None
     return run
 
 
@@ -154,9 +165,7 @@ class Case:
     """One case's folders, all inside the run folder: a fake HOME, a source store root, a destination."""
 
     def __init__(self, name: str):
-        self.root = run_folder() / name
-        if self.root.exists():
-            remove_tree(self.root)
+        self.root = RUN_FOLDER / name
         self.home, self.src, self.dest = self.root / "home", self.root / "src", self.root / "dest"
         for folder in (self.home, self.src):
             folder.mkdir(parents=True)
@@ -355,13 +364,6 @@ def make_readonly(root: Path) -> None:
         folder.chmod(0o500)
 
 
-def remove_tree_perms(root: Path) -> None:
-    """Open a tree the case made read-only again, so the next read in the case works."""
-    for path in [root, *root.rglob("*")]:
-        with contextlib.suppress(OSError):
-            path.chmod(0o755 if path.is_dir() else 0o644)
-
-
 def add_row(case: Case, key: str) -> None:
     """Commit one more row to the source store, so a snapshot made after it differs from one made before."""
     conn = db.connect(case.src / "inventory")
@@ -490,28 +492,52 @@ def run_killed_mid_snapshot(case: Case) -> Ran:
 
 
 @robust
-def check_backup_run_folder_sweep(checks: Checks) -> None:
-    """test-temp-standard: this group's files live in one `<pid>-<uuid>` run folder, and the first
-    request of a run removes sibling folders older than a day and keeps newer ones."""
+def check_backup_run_folder_deletes_read_only_trees_and_follows_no_link(checks: Checks) -> None:
+    """test-temp-standard: this check's files live in one `<pid>-<uuid>` run folder from the repo's one
+    helper. The sweep of old siblings and the exit delete go through the same `remove_tree`, so a tree
+    the cases made read-only goes too, and a link inside it is never followed to its target.
+    (`t1_results` proves the sweep's keep rules: a new sibling and a stray name stay.)"""
     checks.note("")
     checks.note("NIGHTLY BACKUP — the group's temp files, then the job")
-    folder = run_folder()
     checks.ok(
-        folder.parent == TEMP_ROOT and re.fullmatch(rf"{os.getpid()}-[0-9a-f-]{{36}}", folder.name) is not None,
-        "the group's temp files live in one <pid>-<uuid> run folder under the repo's one temp root",
-        str(folder),
+        RUN_FOLDER.parent == TEMP_ROOT and re.fullmatch(rf"{os.getpid()}-[0-9a-f-]{{36}}", RUN_FOLDER.name) is not None,
+        "the check's temp files live in one <pid>-<uuid> run folder under the repo's one temp root",
+        str(RUN_FOLDER),
     )
-    siblings = folder / "siblings"
-    old, new = siblings / "1-old", siblings / "2-new"
+    if os.geteuid() == 0:
+        checks.note("skipped: root deletes a 0500 folder without help, so the read-only case is not built")
+        return
+    outside = RUN_FOLDER / "outside"  # not under the siblings root; only a followed link could reach it
+    (outside / "inner").mkdir(parents=True)
+    (outside / "inner" / "file").write_text("x")
+    outside.chmod(0o500)
+    siblings = RUN_FOLDER / "siblings"
+    old, new, old_link = (siblings / f"{n}-{uuid.uuid4()}" for n in (1, 2, 3))
     (old / "locked").mkdir(parents=True)
     (old / "locked" / "file").write_text("x")
+    (old / "link").symlink_to(outside)
     (old / "locked").chmod(0o500)
     new.mkdir()
-    stamp = time.time() - 2 * RUN_MAX_AGE
+    old_link.symlink_to(outside)
+    stamp = time.time() - 2 * DAY
     os.utime(old, (stamp, stamp))
-    sweep(siblings)
-    checks.ok(not old.exists() and new.exists(), "the sweep removes an old sibling, even a read-only one, and keeps a new one",
-              f"old exists={old.exists()}, new exists={new.exists()}")
+    os.utime(old_link, (stamp, stamp), follow_symlinks=False)
+    os.utime(outside, (stamp, stamp))
+    with run_folder(siblings) as mine:
+        checks.ok(not old.exists() and new.exists(), "the sweep removes an old sibling, even a read-only one, and keeps a new one",
+                  f"old exists={old.exists()}, new exists={new.exists()}")
+        checks.ok(old_link.is_symlink(), "and a link named like a run folder is left alone, not swept")
+        (mine / "locked").mkdir()
+        (mine / "locked" / "file").write_text("x")
+        (mine / "link").symlink_to(outside)
+        (mine / "locked").chmod(0o500)
+    checks.ok(not mine.exists(), "the exit removes this run's folder, even with a read-only tree in it",
+              f"exists={mine.exists()}")
+    checks.ok(
+        (outside / "inner" / "file").is_file() and outside.stat().st_mode & 0o777 == 0o500,
+        "and no delete followed a link: the link's target keeps its file and its read-only mode",
+        f"mode={oct(outside.stat().st_mode & 0o777)}",
+    )
 
 
 @robust
@@ -700,7 +726,7 @@ def check_backup_failure_is_recorded_and_harmless(checks: Checks) -> None:
             failed = expect_failed(checks, "an unwritable destination: exit non-zero and a failed line", ran, case)
             checks.ok(failed and source == fingerprint(case.src), "and the source is exactly as it was")
     finally:
-        remove_tree_perms(case.dest)
+        open_up(case.dest)
 
 
 @robust
@@ -1250,7 +1276,7 @@ def check_backup_a_linked_worktree_with_a_destination_leaves_the_machine_folder_
 
 
 CHECKS = (
-    check_backup_run_folder_sweep,
+    check_backup_run_folder_deletes_read_only_trees_and_follows_no_link,
     check_backup_snapshot_beside_an_open_writer,
     check_backup_copies_and_skips_by_stat,
     check_backup_never_deletes_in_the_destination,
