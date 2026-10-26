@@ -264,7 +264,8 @@ function windowsOf(
 /** The comparison, folded onto the order line as a trailing clause (D313: the summary never gains
  *  or loses a line). `null` says nothing: no prior period (`previousRows === null`, the All
  *  control), or nothing recorded before. `likeForLike` names a prior window
- *  already cut to the same elapsed days, so the wording says "stretch" rather than "period". */
+ *  already cut to the same elapsed length, but never past the current window's start, so on a few
+ *  days a year it is up to about 3 days shorter. The wording says "stretch" rather than "period". */
 function compareClause(current: number, previousRows: readonly Sale[] | null, likeForLike: boolean): string | null {
   if (previousRows === null) return null
   const before = likeForLike ? 'the same stretch before' : 'the period before'
