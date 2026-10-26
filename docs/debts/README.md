@@ -7,7 +7,7 @@ which exist have passed. These entries name what those checks do not cover.
 This is not a backlog to burn down on sight. An entry leaves when someone argues that it
 should, or when its gap closes. A closed entry is deleted, and history lives in version
 control. A number is never reused, so the gaps in the sequence are deleted entries: 5, 10, 12,
-13, 15, 17, 18, 21, 24, 28, 29, 35, 36, 37, 42, 45, 47, 49, 51, 52, 53, 54, 55, 56, 57, 78, 79, 80 and 81.
+13, 15, 17, 18, 21, 24, 28, 29, 35, 36, 37, 42, 45, 47, 49, 51, 52, 53, 54, 55, 56, 57, 58, 78, 79, 80 and 81.
 
 ## How to find one
 
@@ -56,7 +56,6 @@ DEBT43 the merge-speed guard counts SQLite ticks only, and a pure-Python loop is
 DEBT44 pokemontcg.io is deprecated (ends 2027-03-01), and `pipeline/stockimages.py` does not call it today
 DEBT48 code-side mechanization left open
 DEBT50 git and gh CLI traps hit from this checkout
-DEBT58 the Lane H palette record is on a branch, not in main
 DEBT59 an unreadable live submission claim has no way out on screen
 DEBT60 the demo builds with Hide unpullable forced off
 DEBT61 eight build proposals are still open
