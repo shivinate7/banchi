@@ -664,16 +664,19 @@ def check_backup_failed_snapshot_keeps_the_last_good_one(checks: Checks) -> None
 @robust
 def check_backup_default_destination_is_the_icloud_folder(checks: Checks) -> None:
     """With no override the destination is `Banchi backup` in iCloud Drive. When iCloud Drive is off its
-    folder is absent: the run fails and creates nothing, so a local folder that never syncs is never made."""
+    folder is absent: the run fails and creates nothing, so a local folder that never syncs is never made.
+    Both runs use a copy of the job in a fake main-tree checkout: the job refuses a linked worktree when the
+    destination is not overridden (see `check_backup_refuses_a_linked_worktree`)."""
     case = Case("icloud")
     seed_store(case)
     seed_files(case)
-    off = run_job(case, dest=None)
+    job = [str(fake_checkout(case, "main-tree", linked=False))]
+    off = run_job(case, dest=None, cmd=job)
     failed = expect_failed(checks, "iCloud Drive off (its folder is absent): a failed run", off, case)
     checks.ok(failed and not (case.home / "Library" / "Mobile Documents").exists(), "and no Library/Mobile Documents is made")
 
     case.icloud_root.mkdir(parents=True, exist_ok=True)
-    on = run_job(case, dest=None)
+    on = run_job(case, dest=None, cmd=job)
     ran_ok = expect_ok(checks, "iCloud Drive on: the run is ok and copies the five files", on, case, copied=5, skipped=0)
     target = case.icloud_root / "Banchi backup"
     checks.ok(ran_ok and (target / "inventory" / "store.sqlite").is_file() and (target / "photos" / "6b" / "6b1cf2fd0001.jpg").is_file(),
