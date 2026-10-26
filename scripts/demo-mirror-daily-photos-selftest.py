@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Protects: The daily demo mirror never publishes a bundle that names a card whose photograph it did not commit, and removes its throwaway worktree on every exit path.
+# Protects: The daily demo mirror never publishes a bundle that names a card whose photograph it did not commit, and removes its throwaway worktree on every exit path. The public demo shows a buyer as first name plus last initial and still refuses any surname or address; a deploy holds the last good demo when the recording's wire digest differs from the tree's; the mirror refreshes weekly.
 """The daily mirror ships every photograph its bundle names (D295, D172).
 Incident: `.gitignore`'s bare `photos` also matched demo-assets/mirror/photos/, `git add` skipped
 the new photographs without a word, and the bundle merged naming cards with no photograph.
@@ -13,13 +13,20 @@ watcher starts inside the tree and keeps rewriting that record, so removal fails
 comes back. Five cases, each through `run()`: unchanged, Stop, unexpected error, merged, and a
 background writer left in the tree. Each asserts no folder, no git registration and no admin entry
 remain.
+
+The last block, `policy_rulings()`, holds the owner's demo rulings (D295): buyer names, the
+`assert_scrubbed` check, the deploy hold and the weekly refresh. Its docstring says what each proves.
 Run: python3 scripts/demo-mirror-daily-photos-selftest.py"""
 import atexit
 import contextlib
+import csv
 import importlib.util
+import io
 import json
 import os
+import plistlib
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -660,4 +667,313 @@ if shutil.which("lsof"):
         daily.LSOF_TIMEOUT = was_timeout
 else:
     print("skip the lsof cases: no lsof on this machine")
+
+
+def policy_rulings():
+    """The owner's demo rulings (D295), each red before its build. Nothing here touches the real HOME,
+    PATH, launchd or store.
+
+      names    `demo-mirror.py`'s `build()` stores "Jordan Miller" as "Jordan M." and keeps a one-word
+               name. Run through `build()` over a tiny real store, so no function name is fixed: only
+               the stored buyer and the shipping export are read back.
+      check    `assert_scrubbed()` accepts that form, still refuses a surname or an address-shaped
+               value, and never prints a value it refused.
+      hold     `scripts/demo-hold.py --chunk PATH` is what the workflow runs. It compares the chunk's
+               `wire` with `demo-record.py`'s `wire_digest()` of this tree, exits 0 either way, appends
+               `publish=true` or `publish=false` to the file `$GITHUB_OUTPUT` names, and prints a
+               `::notice::` line naming both digests when it holds. A chunk with no `wire` holds.
+      cadence  `demo-mirror-daily.py`'s `agent()` installs a job that fires weekly:
+               `StartCalendarInterval` is ONE dict with an int `Weekday` (0 to 7), `Hour` and `Minute`.
+               Run against a fake HOME and a fake `launchctl` that is the only one on PATH.
+
+    The refusal cases in `check` pass on the old code too: they pin the check shut while the name
+    rule relaxes. The accepted-form case is the one that is red there.
+    """
+    sys.path.insert(0, str(ROOT))
+    sys.path.insert(0, str(ROOT / "scripts"))
+    address = "123 Demo Way"
+    modules, built, unique = {}, [], [0]
+
+    def fresh(label):
+        unique[0] += 1
+        d = RF / ("policy-%s-%d" % (label, unique[0]))
+        d.mkdir(parents=True)
+        return d
+
+    def need(condition, why):
+        if not condition:
+            raise AssertionError(why)
+
+    def policy(name, fn):
+        try:
+            fn()
+        except AssertionError as exc:
+            case(name, False, str(exc))
+        except Exception as exc:  # a missing function or script is a red case, not a dead run
+            case(name, False, "crashed: %s: %s" % (type(exc).__name__, exc))
+        else:
+            case(name, True, "")
+
+    def load(rel):
+        if rel not in modules:
+            spec = importlib.util.spec_from_file_location("policy_" + Path(rel).stem.replace("-", "_"), ROOT / rel)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = module
+            spec.loader.exec_module(module)
+            modules[rel] = module
+        return modules[rel]
+
+    @contextlib.contextmanager
+    def env(**values):
+        old = {k: os.environ.get(k) for k in values}
+        os.environ.update(values)
+        try:
+            yield
+        finally:
+            for key, value in old.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+    # ---- names: `build()` over three orders, no photographs, read back once
+    def build_once():
+        if built:
+            if isinstance(built[0], Exception):
+                raise built[0]
+            return built[0]
+        try:
+            demo_mirror = load("scripts/demo-mirror.py")
+            from store import Store
+            from store.orders import OrderLine, OrderRecord
+
+            base = fresh("names")
+            with env(BANCHI_HOME=str(base / "real")), Store().write() as snap:
+                snap.ledger.ingest([
+                    OrderRecord(source="tcg", number="1", placed_at="2026-01-01", status="Ready to Ship",
+                                buyer="Jordan Miller", lines=[OrderLine(sku="1", quantity=1)]),
+                    OrderRecord(source="tcg", number="2", placed_at="2026-01-02", status="Ready to Ship",
+                                buyer="Priya", lines=[OrderLine(sku="2", quantity=1)]),
+                    OrderRecord(source="tcg", number="3", placed_at="2026-01-03", status="Shipped",
+                                buyer=None, lines=[OrderLine(sku="3", quantity=1)]),
+                ])
+            snapshot = base / "snapshot"
+            snapshot.mkdir()
+            shutil.copytree(base / "real" / "inventory", snapshot / "inventory")
+            (snapshot / "SOURCE").write_text(str(base / "no-source") + "\n")
+            demo_mirror.SNAPSHOT = snapshot
+            home = base / "home"
+            with env(BANCHI_HOME=str(home)):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    demo_mirror.build(home, 1)
+                buyers = {r.number: r.buyer for r in Store().read().ledger.orders.values()}
+            with (home / "shipping-export.csv").open(newline="", encoding="utf-8") as handle:
+                shipping = {row["Order #"]: row for row in csv.DictReader(handle)}
+            built.append({"buyers": buyers, "shipping": shipping, "home": home})
+        except Exception as exc:
+            built.append(exc)
+            raise
+        return built[0]
+
+    def names_full_name_to_initial():
+        got = build_once()["buyers"].get("1")
+        need(got == "Jordan M.", "buyer 'Jordan Miller' is stored as %r, want 'Jordan M.'" % got)
+
+    def names_one_word_kept():
+        got = build_once()["buyers"].get("2")
+        need(got == "Priya", "buyer 'Priya' is stored as %r, want 'Priya'" % got)
+        need(build_once()["buyers"].get("3") is None, "an order with no buyer must stay without one")
+
+    def names_shipping_export():
+        rows = build_once()["shipping"]
+        jordan, priya = rows.get("1"), rows.get("2")
+        need(jordan is not None and priya is not None, "shipping export lacks a Ready to Ship order")
+        need((jordan["FirstName"], jordan["LastName"]) == ("Jordan", "M."),
+             "shipping name is %r %r, want 'Jordan' 'M.'" % (jordan["FirstName"], jordan["LastName"]))
+        need((priya["FirstName"], priya["LastName"]) == ("Priya", ""),
+             "shipping name is %r %r, want 'Priya' ''" % (priya["FirstName"], priya["LastName"]))
+        for row in (jordan, priya):
+            need(row["Address1"] == address and not row["Address2"]
+                 and not (row["City"] or row["State"] or row["PostalCode"]),
+                 "an address field is not blank or '123 Demo Way'")
+        text = (build_once()["home"] / "shipping-export.csv").read_text(encoding="utf-8")
+        need("Miller" not in text, "the shipping export still holds a full surname")
+
+    def names_output_passes_the_check():
+        # build()'s own output must satisfy the one check, whatever form the names take.
+        buyers = [b for b in build_once()["buyers"].values() if b]
+        bundle = fresh("chain") / "bundle.json"
+        bundle.write_text(json.dumps({"responses": {"/orders": {"body": {"orders": [{"buyer": b} for b in buyers]}}}}))
+        load("scripts/demo-mirror.py").assert_scrubbed(bundle, build_once()["home"] / "shipping-export.csv")
+
+    # ---- check: `assert_scrubbed`
+    header = ["Order #", "FirstName", "LastName", "Address1", "Address2", "City", "State", "PostalCode", "Country"]
+
+    def ship(first, last, a1=address, a2="", city="", state="", zip_=""):
+        return ["1", first, last, a1, a2, city, state, zip_, "US"]
+
+    def scrubbed(bundle, rows=()):
+        d = fresh("check")
+        (d / "bundle.json").write_text(json.dumps(bundle))
+        with (d / "shipping.csv").open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(header)
+            writer.writerows(rows)
+        try:
+            load("scripts/demo-mirror.py").assert_scrubbed(d / "bundle.json", d / "shipping.csv")
+        except (AssertionError, SystemExit) as exc:
+            return False, str(exc)
+        return True, ""
+
+    def orders_bundle(**fields):
+        return {"responses": {"/orders": {"body": {"orders": [dict(fields)]}}}}
+
+    def check_accepts_new_form():
+        # Two-word and one-word buyers under both buyer keys, an allowed address, null and blank
+        # fields, and shipping rows with and without a last initial.
+        bundle = {"responses": {"/orders": {"body": {"orders": [
+            {"buyer": "Jordan M.", "address1": address, "address2": ""},
+            {"buyerName": "Priya", "address": None},
+            {"buyer": None},
+        ]}}}}
+        accepted, message = scrubbed(bundle, [ship("Jordan", "M."), ship("Priya", "")])
+        need(accepted, "assert_scrubbed refuses first name + last initial: %s" % message)
+
+    def check_refuses_surname():
+        # Each value names more than a first name and a last initial. Each is refused under every
+        # buyer key, nested at depth, and in the shipping export. The distinct surname proves the
+        # message never echoes what it refused.
+        accepted, leaked = [], []
+        for value in ("Jordan Quimby", "Jordan Qu.", "Jordan M. Quimby", "Quimby Jordan"):
+            for key in ("buyer", "buyerName", "Buyer"):
+                ok, message = scrubbed(orders_bundle(**{key: value}))
+                if ok:
+                    accepted.append("%s=%r" % (key, value))
+                elif value.split()[-1] in message or "Quimby" in message:
+                    leaked.append(value)
+            ok, _ = scrubbed({"responses": {"/x": {"body": {"rows": [[{"deep": {"buyer": value}}]]}}}})
+            if ok:
+                accepted.append("nested %r" % value)
+        ok, message = scrubbed({"responses": {}}, [ship("Jordan", "Quimby")])
+        if ok:
+            accepted.append("shipping LastName 'Quimby'")
+        elif "Quimby" in message:
+            leaked.append("shipping LastName")
+        ok, _ = scrubbed({"responses": {}}, [ship("Jordan Quimby", "M.")])
+        if ok:
+            accepted.append("shipping FirstName 'Jordan Quimby'")
+        need(not accepted, "assert_scrubbed accepts a surname: %s" % "; ".join(accepted))
+        need(not leaked, "the failure message echoes a refused value: %s" % "; ".join(leaked))
+
+    def check_refuses_address():
+        street = "4471 Zephyr Lane"
+        accepted, leaked = [], []
+        for key in ("address", "address1", "address2", "street", "Address1"):
+            ok, message = scrubbed(orders_bundle(**{key: street}))
+            if ok:
+                accepted.append("bundle %s" % key)
+            elif "Zephyr" in message:
+                leaked.append(key)
+        ok, _ = scrubbed(orders_bundle(buyer=street))
+        if ok:
+            accepted.append("an address in the buyer field")
+        rows = {
+            "shipping Address1": ship("Jordan", "M.", a1=street),
+            "shipping Address2": ship("Jordan", "M.", a2="Apt 4"),
+            "shipping City": ship("Jordan", "M.", city="Austin"),
+            "shipping State": ship("Jordan", "M.", state="TX"),
+            "shipping PostalCode": ship("Jordan", "M.", zip_="78701"),
+        }
+        for label, row in rows.items():
+            ok, message = scrubbed({"responses": {}}, [row])
+            if ok:
+                accepted.append(label)
+            elif "Zephyr" in message or "Austin" in message or "78701" in message:
+                leaked.append(label)
+        need(not accepted, "assert_scrubbed accepts an address-shaped value: %s" % "; ".join(accepted))
+        need(not leaked, "the failure message echoes a refused value: %s" % "; ".join(leaked))
+
+    # ---- hold: the script the workflow runs
+    def hold(chunk):
+        """Returns (returncode, stdout, the GITHUB_OUTPUT file as a dict)."""
+        script = ROOT / "scripts" / "demo-hold.py"
+        need(script.is_file(), "scripts/demo-hold.py does not exist")
+        d = fresh("hold")
+        (d / "chunk-0.json").write_text(json.dumps(chunk))
+        out = d / "github-output"
+        out.write_text("")
+        # An explicit GITHUB_OUTPUT: CI sets one, and an inherited path would write into the real step.
+        run = subprocess.run([sys.executable, str(script), "--chunk", str(d / "chunk-0.json")],
+                             env=dict(os.environ, GITHUB_OUTPUT=str(out)), capture_output=True, text=True,
+                             timeout=120)
+        pairs = dict(line.split("=", 1) for line in out.read_text().splitlines() if "=" in line)
+        return run.returncode, run.stdout, pairs
+
+    def tree_digest():
+        return load("scripts/demo-record.py").wire_digest()
+
+    def hold_publishes_on_match():
+        code, stdout, out = hold({"responses": {}, "wire": tree_digest()})
+        need(code == 0, "exit %s on a match, want 0" % code)
+        need(out.get("publish") == "true", "GITHUB_OUTPUT says publish=%r on a match, want 'true'" % out.get("publish"))
+        need("::notice::" not in stdout, "a match printed a hold notice")
+
+    def hold_skips_on_mismatch():
+        recorded = "0000000000000000" if tree_digest() != "0000000000000000" else "ffffffffffffffff"
+        code, stdout, out = hold({"responses": {}, "wire": recorded})
+        need(code == 0, "exit %s on a mismatch, want 0 (a hold is not a failure)" % code)
+        need(out.get("publish") == "false",
+             "GITHUB_OUTPUT says publish=%r on a mismatch, want 'false'" % out.get("publish"))
+        need("::notice::" in stdout, "a hold printed no ::notice:: line")
+        need(recorded in stdout and tree_digest() in stdout,
+             "the hold notice must name the recorded digest and the tree's digest")
+
+    def hold_skips_without_a_recorded_digest():
+        # A recording that names no wire cannot be shown to cover this tree: unknown is not clear.
+        for label, chunk in (("no wire key", {"responses": {}}), ("empty wire", {"responses": {}, "wire": ""})):
+            code, _stdout, out = hold(chunk)
+            need(code == 0 and out.get("publish") == "false",
+                 "%s: exit %s, publish=%r, want exit 0 and publish='false'" % (label, code, out.get("publish")))
+
+    # ---- cadence: `agent()` against a fake HOME and a fake launchctl
+    def cadence_is_weekly():
+        home, fake_bin, repo = fresh("home"), fresh("bin"), fresh("repo")
+        launchctl = fake_bin / "launchctl"
+        launchctl.write_text("#!/bin/sh\nexit 0\n")
+        launchctl.chmod(launchctl.stat().st_mode | stat.S_IXUSR)
+        (repo / ".git").mkdir()
+        (repo / "scripts").mkdir()
+        with env(HOME=str(home), PATH=str(fake_bin)):
+            need(shutil.which("launchctl") == str(launchctl), "isolation failed: launchctl is not the fake one")
+            job = load("scripts/demo-mirror-daily.py")
+            job.HERE = repo / "scripts" / "demo-mirror-daily.py"
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = job.agent(False)
+            plist = home / "Library" / "LaunchAgents" / (job.LABEL + ".plist")
+            need(code == 0, "agent() returned %s against a fake launchctl" % code)
+            need(plist.is_file(), "agent() wrote no job file")
+            payload = plistlib.loads(plist.read_bytes())
+        when = payload.get("StartCalendarInterval")
+        need(isinstance(when, dict), "StartCalendarInterval is %r, want one dict" % (when,))
+        weekday = when.get("Weekday")
+        need(isinstance(weekday, int) and not isinstance(weekday, bool) and 0 <= weekday <= 7,
+             "no Weekday in %r: the job fires daily, want weekly" % (when,))
+        need(isinstance(when.get("Hour"), int) and isinstance(when.get("Minute"), int),
+             "%r lacks an Hour or a Minute" % (when,))
+        need("StartInterval" not in payload, "a StartInterval beside the calendar entry would fire more often")
+
+    policy("names: a full name is stored as first name + last initial", names_full_name_to_initial)
+    policy("names: a one-word name is kept and a missing buyer stays missing", names_one_word_kept)
+    policy("names: the shipping export carries the short name and a blank-or-demo address", names_shipping_export)
+    policy("names: build() output passes assert_scrubbed", names_output_passes_the_check)
+    policy("check: assert_scrubbed accepts first name + last initial", check_accepts_new_form)
+    policy("check: assert_scrubbed refuses a surname and never echoes it", check_refuses_surname)
+    policy("check: assert_scrubbed refuses an address-shaped value and never echoes it", check_refuses_address)
+    policy("hold: a matching digest publishes", hold_publishes_on_match)
+    policy("hold: a digest mismatch skips, exits 0, prints a notice", hold_skips_on_mismatch)
+    policy("hold: no recorded digest skips", hold_skips_without_a_recorded_digest)
+    policy("cadence: the installed job fires weekly", cadence_is_weekly)
+
+
+policy_rulings()
 sys.exit(1 if failures else 0)
