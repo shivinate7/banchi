@@ -1988,8 +1988,9 @@ def _unhold(sku: str, payload: dict) -> dict:
             raise PipelineRefusal(
                 HTTPStatus.CONFLICT, "nothing_held", "These copies were already unheld. Nothing changed."
             )
-        # THE RECEIPT FIRST, THEN THE STORE (as Take Back): a crash between leaves copies still
-        # counted out and the count cleared at the next check, which never sends one twice.
+        # THE STORE COMMITS FIRST, THEN THE RECEIPT: a failed commit leaves no `unheld` on any
+        # receipt. A crash between the two leaves the copies unheld with no mark, so the next live
+        # check holds them again and the Unhold control returns; nothing is sent twice.
         # NEVER A RECEIPT WHOSE PRESS IS STILL RUNNING (`_press_running`): that press writes its
         # whole record back from memory, which would erase `unheld` and hold the copies again
         # (review F1). Every other writer of a receipt re-reads it under this lock or the store's.
@@ -1997,7 +1998,7 @@ def _unhold(sku: str, payload: dict) -> dict:
             if not record.get("failure") and not _press_running(record) and _kept(record, sku) > 0:
                 unheld = dict(record.get("unheld") or {})
                 unheld[sku] = int(unheld.get(sku, 0)) + count
-                _write(sends_dir() / stamp, dict(record, unheld=unheld))
+                marked = (sends_dir() / stamp, dict(record, unheld=unheld))
                 break
         else:
             raise PipelineRefusal(
@@ -2007,6 +2008,7 @@ def _unhold(sku: str, payload: dict) -> dict:
             )
         moved = _bump_back(writable, {sku: count})
         entry.held_copies = 0
+    _write(*marked)
     return {"sku": sku, "moved": moved, "unheld": count, "pushed": int(entry.pushed)}
 
 

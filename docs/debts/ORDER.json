@@ -57,7 +57,6 @@
     "084-demo-chunk-size.md",
     "085-read-budget-miss-paths.md",
     "086-duplicate-homes.md",
-    "087-unhold-receipt-before-store.md",
     "088-send-bar-height-below-820.md",
     "089-send-bar-zero-runs-or-load-fail.md",
     "090-send-notice-lands-late.md",
