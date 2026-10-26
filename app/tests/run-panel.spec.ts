@@ -3265,6 +3265,58 @@ test('a poll that moves no phase leaves the step the owner opened open', async (
   await expect(head).toHaveAttribute('aria-expanded', 'true')
 })
 
+/* A SWITCH FROM ONE RUN TO ANOTHER, WITH NO "All runs" PRESS BETWEEN (DEBT61, item 3). `detail`
+ * cleared only when `openRun` went to null, so on a direct switch the old run's heading and
+ * figures stayed drawn under the new run's highlighted row until the new answer landed. The new
+ * run's answer is HELD here so the stale window is as long as the assertion needs, not one
+ * request on a fast loopback. The positive end (the new heading arrives) proves the case drove
+ * the real switch and was not passing on an empty panel. */
+test('switching straight to another run draws nothing of the old one while the new one loads', async ({
+  page,
+}) => {
+  const first = runRow({ run: '2026-08-24-box9-01' })
+  const second = runRow({
+    run: '2026-08-24-box12-01',
+    box: 12,
+    box_name: 'codes',
+    path: '/tmp/runs/2026-08-24-box12-01',
+    capture_dir: '/tmp/captures/cards/box12',
+    scope: { box: 12, whole_box: true, cards: null },
+  })
+  await open(page, { runs: [first, second] })
+
+  let release!: () => void
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  /* AFTER `open`, because the last matching route wins. Answers by the run in the path. */
+  await page.route(/\/pipeline\/runs\/[^/]+$/, async (route) => {
+    const run = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() ?? '')
+    if (run === second.run) await held
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ...(run === second.run ? second : first), console: '', files: [], manifest: {} }),
+    })
+  })
+
+  try {
+    await page.locator(`.run-row[title="${first.run}"]`).click()
+    await expect(page.locator('.runs-detail-h')).toHaveText('Box 9')
+
+    const asked = page.waitForRequest((request) => request.url().endsWith(`/pipeline/runs/${second.run}`))
+    await page.locator(`.run-row[title="${second.run}"]`).click()
+    await asked
+
+    /* NOT `.runs-detail-panel` HIDDEN: the loading panel wears that class too. The heading is
+       what carries the old run's identity, and it is absent from the loading panel. */
+    await expect(page.locator('.runs-detail-h')).not.toHaveText('Box 9')
+  } finally {
+    release()
+  }
+  await expect(page.locator('.runs-detail-h')).toHaveText('codes')
+})
+
 test('every run row waits min(i, cap) * the one shared stagger', async ({ page }) => {
   const runs = Array.from({ length: 15 }, (_, i) => runRow({ run: `2026-08-24-box9-${String(i + 1).padStart(2, '0')}` }))
   await open(page, { runs })
