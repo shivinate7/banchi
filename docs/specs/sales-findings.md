@@ -30,10 +30,11 @@ None is a data error. Each could mislead a decision.
 - **The tests leave the arithmetic unguarded.** No assertion reads the chart's rendered geometry. No
   fixture carries a gap month or an order of more than one line. The order-count de-duplication
   therefore runs only on data that cannot expose a fault in it. *Not re-checked.*
-- **Two plausible faults were never measured.** Preset comparison windows may overlap the current
-  window by one to three days when a period closes. The previous window's end comes from elapsed
-  milliseconds against a calendar-anchored start. Gross accumulates in floating point over
-  about 1,268 currency additions with no integer-cent sum. No discrepancy has been seen.
+- **One fault was measured and fixed; one was not.** The prior comparison window used to run past
+  the current window's start by up to three days when a period closed, and a sale in that overlap
+  counted in both. The prior window now ends at or before the current window's start, and
+  `app/tests/revenue.spec.ts` pins it. Gross still accumulates in floating point over about 1,268
+  currency additions with no integer-cent sum. No discrepancy has been seen.
 
 ## 2. Rules the reviews left standing
 
