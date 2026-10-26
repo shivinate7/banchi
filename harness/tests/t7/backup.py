@@ -37,7 +37,16 @@ THE CONTRACT THE BUILD MEETS. The checks are written first, so every name the bu
                               replaces neither. A night that fails only on bad files (see the copy) still
                               has a good snapshot and replaces the nightly; the weekly on such a night is
                               not pinned.
-  the copy                    every file under `photos/` and `captures/`. A destination file with the
+  the shrink guard            (DEBT67) the job keeps a SIDECAR beside the last-run line: the file named by its
+                              `SIDECAR` constant (a plain file name in the machine folder, not the last-run
+                              file and not a lock). It holds the `cards` and `boxes` row counts of the last
+                              GOOD run (one that ended `ok`) and is written by a good run only. On a night the
+                              weekly is due, a store whose `cards` or `boxes` count is MORE THAN HALF below
+                              the sidecar's (exactly half is fine) replaces neither snapshot, ends `failed`
+                              and leaves the sidecar as it was, so the next night compares to the same good
+                              run. The counts come from the sidecar and the night's store (D88), never from a
+                              file in the destination. Other nights are not pinned. No sidecar is a first night.
+  the copy                   every file under `photos/` and `captures/`. A destination file with the
                               source's size and mtime is skipped, decided by `stat` alone: the job never
                               opens a destination file (an evicted iCloud file would download). It never
                               deletes in the destination, so a sold card's photograph (D89) stays.
@@ -45,15 +54,21 @@ THE CONTRACT THE BUILD MEETS. The checks are written first, so every name the bu
                               the size must still match. One file that cannot be read or stat-ed (a dangling
                               link, no permission) does not stop the run: the rest are copied, the snapshot is
                               made, the run ends `failed` and its reason carries the count of such files. A
-                              source with no `photos/` tree is a failed run, never `ok copied=0`.
+                              folder under `photos/` that cannot be listed (no permission) counts as one such
+                              file: `os.walk` skips it unasked. A source with no `photos/` tree is a failed
+                              run, never `ok copied=0`.
   the checkout                a linked worktree (`ROOT/.git` is a file) with the destination variable unset
                               refuses: non-zero, a sentence naming the worktree, nothing written to the
-                              default destination. The main tree (`.git` a folder) runs.
+                              default destination. The main tree (`.git` a folder) runs. With the variable
+                              SET a linked worktree runs (exit 0 on a good night) but writes neither the
+                              last-run line nor the sidecar: `~/.banchi` is shared by every checkout (D43), so
+                              a test run there would overwrite the owner's real status. Its machine folder
+                              holds nothing but an optional lock afterwards.
   the last-run line           `<machine dir>/backup-last-run` (`~/.banchi/`, `ports.machine_dir`), one line,
                               overwritten each run: `%Y-%m-%dT%H:%M:%S ok copied=N skipped=M` or
                               `%Y-%m-%dT%H:%M:%S failed <reason>`. N and M count the files of `photos/` and
-                              `captures/` written and skipped; the snapshot is not counted. A lock file
-                              beside it is allowed; nothing else is written there.
+                              `captures/` written and skipped; the snapshot is not counted. A lock file and
+                              the sidecar beside it are allowed; nothing else is written there.
   scripts/status.py           `backup() -> List[str]`, called by `render()`: the last-run line, or a line
                               saying no backup has run. Never an empty list. An absent last-run file is that
                               plain line and not a `MISSING` entry: status exits non-zero on those, and this
@@ -369,6 +384,51 @@ def strays(case: Case):
         return None
     snapshots = {NIGHTLY, weekly_rel()}
     return sorted(rel for rel in dest_files(case) if rel not in FILES and rel not in snapshots)
+
+
+#: The store the shrink checks start from; each drop is measured against it.
+SIZE = {"cards": 10, "boxes": 4}
+
+
+def seed_counts(inventory: Path, cards: int, boxes: int) -> None:
+    """Make the store hold exactly this many `cards` and `boxes` rows (the real schema, D88), committed."""
+    conn = db.connect(inventory)
+    try:
+        for table, want in (("cards", cards), ("boxes", boxes)):
+            conn.execute(f"DELETE FROM {table}")
+            for i in range(want):
+                conn.execute(f"INSERT INTO {table} (key, payload) VALUES (?, ?)", (f"{table}-{i}", "{}"))
+    finally:
+        conn.close()
+
+
+def online_backup(store: Path, target: Path) -> None:
+    """A finished copy of a store, made the way the job makes its snapshot, written to `target`."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    src = db.open_read_only(store)
+    try:
+        out = sqlite3.connect(target)
+        try:
+            src.backup(out)
+        finally:
+            out.close()
+    finally:
+        src.close()
+
+
+def sidecar_name():
+    """The counts sidecar's file name, from the job's `SIDECAR` constant: a plain name of its own in the machine
+    folder, beside the last-run line. None when the job has no such constant or it is not that."""
+    name = job_constant("SIDECAR")
+    plain = name and Path(name).name == name and name != "backup-last-run" and not name.endswith(".lock")
+    return name if plain else None
+
+
+def sidecar_state(case: Case):
+    """(bytes, stat key) of the sidecar, or None when the job names none or the file is not there."""
+    name = sidecar_name()
+    path = case.home / ".banchi" / name if name else None
+    return (path.read_bytes(), stat_key(path)) if path is not None and path.is_file() else None
 
 
 def fake_checkout(case: Case, name: str, linked: bool) -> Path:
@@ -702,7 +762,8 @@ def check_backup_writes_one_last_run_line(checks: Checks) -> None:
     checks.ok(age is not None and age < 120, "the line starts with the local time of the run", repr(line.get("raw")))
     machine = case.home / ".banchi"
     others = sorted(p.name for p in machine.iterdir() if not p.name.endswith(".lock")) if machine.is_dir() else None
-    checks.equal(others, ["backup-last-run"], "a run writes one file in the machine folder, and no log, beside an optional lock")
+    wanted = sorted({"backup-last-run", sidecar_name()} - {None})
+    checks.equal(others, wanted, "a run writes the last-run file and the counts sidecar (if the job names one) in the machine folder, and no log, beside an optional lock")
 
 
 @robust
@@ -1077,6 +1138,113 @@ def check_backup_keeps_a_nightly_and_a_weekly_snapshot(checks: Checks) -> None:
     checks.equal(strays(case), [], "and no temp file is left")
 
 
+#: (table, rows it falls to from SIZE, whether the night must fail). "More than half" is strict: exactly half is fine.
+DROPS = (("cards", 4, True), ("boxes", 1, True), ("cards", 5, False), ("boxes", 2, False))
+
+
+@robust
+def check_backup_a_store_that_shrank_replaces_neither_snapshot(checks: Checks) -> None:
+    """DEBT67: a store emptied by a bug or a bad restore must not overwrite the two snapshots that could undo it.
+    On a night the weekly is due, a `cards` or `boxes` count more than half below the last good run's (kept in a
+    sidecar beside the last-run line) replaces neither snapshot, fails the night, and keeps the sidecar, so the
+    next night still compares to the last good run. Each table is dropped alone, so a guard on one fails the other.
+    The destination's nightly already holds the dropped store before the night, so a job that took its counts from
+    the destination would see no drop. Exactly half is still a good night: it replaces both and moves the sidecar."""
+    rel = weekly_rel()
+    for table, after, fails in DROPS:
+        label = f"{table} {SIZE[table]} to {after}"
+        case = Case(f"shrink-{table}-{after}")
+        seed_store(case)
+        seed_counts(case.src / "inventory", **SIZE)
+        seed_files(case)
+        expect_ok(checks, f"{label}: night 1 is ok", run_job(case), case, copied=5, skipped=0)
+        good = sidecar_state(case)
+        checks.ok(good is not None, f"{label}: a good night leaves the counts sidecar beside the last-run line", f"SIDECAR = {job_constant('SIDECAR')!r}")
+        nightly, weekly = case.dest / NIGHTLY, case.dest / rel
+        seed_counts(case.src / "inventory", **{**SIZE, table: after})
+        online_backup(case.src / "inventory" / "store.sqlite", case.root / "dropped.sqlite")
+        shutil.copyfile(case.root / "dropped.sqlite", nightly)
+        age(weekly, 8)
+        kept = (stat_key(nightly), stat_key(weekly))
+        if fails:
+            for night in (2, 3):
+                night_label = f"{label}, night {night}, the weekly 8 days old"
+                expect_failed(checks, f"{night_label}: exit non-zero and a failed line", run_job(case), case)
+                checks.ok((stat_key(nightly), stat_key(weekly)) == kept, f"{night_label}: neither snapshot is replaced")
+                checks.ok(good is not None and sidecar_state(case) == good, f"{night_label}: the sidecar is as the last good night left it")
+                checks.equal(strays(case), [], f"{night_label}: no temp file is left")
+        else:
+            expect_ok(checks, f"{label}, night 2, the weekly 8 days old: ok", run_job(case), case, copied=0, skipped=5)
+            checks.ok(stat_key(nightly) != kept[0], f"{label}: the nightly is replaced")
+            view = snapshot_view(case, rel)
+            checks.ok(view[0] == store_rows(case) and stat_key(weekly) != kept[1] and abs(time.time() - weekly.stat().st_mtime) < 300,
+                      f"{label}: the due weekly is replaced from that night's snapshot", str(view[1]))
+            now = sidecar_state(case)
+            checks.ok(good is not None and now is not None and now[0] != good[0], f"{label}: the sidecar moves to this night's counts")
+
+
+@robust
+def check_backup_an_unreadable_photo_folder_fails_the_night(checks: Checks) -> None:
+    """`os.walk` skips a folder it cannot list without a word, so a `photos/` shard with no read permission would
+    read as `ok copied=N` and hide the cards inside it. The folder counts as one bad file: the night fails, the rest
+    is copied and snapshotted, and once the folder is readable again the next night copies what was in it."""
+    case = Case("unreadable-folder")
+    seed_store(case)
+    seed_files(case)
+    control = expect_ok(checks, "control: the first night is ok", run_job(case), case, copied=5, skipped=0)
+    add_row(case, "after-night-1")
+    new = "photos/ff/ff00ee330003.jpg"
+    put(case.src, new, b"\xff\xd8\xff" + b"E" * 400)
+    hidden = "photos/dd/dd0000000001.jpg"
+    folder = put(case.src, hidden, b"\xff\xd8\xff" + b"H" * 300).parent
+    folder.chmod(0)
+    try:
+        if os.access(folder, os.R_OK):  # running as root: a mode does not bite and there is no stand-in for a folder
+            checks.ok(True, "SKIPPED, running as root: a folder with mode 0 is still readable")
+            return
+        ran = run_job(case)
+    finally:
+        folder.chmod(0o755)
+    failed = expect_failed(checks, "a photos/ subfolder with no read permission: exit non-zero and a failed line", ran, case)
+    raw = (last_run(case) or {}).get("raw") or ""
+    reason = re.sub(r"^\S+ failed", "", raw.replace(str(case.root), "").replace(str(case.root.resolve()), ""))
+    checks.ok(failed and re.search(r"\b1\b", reason) is not None, "and the line counts the folder as one bad file", repr(raw))
+    rows, integrity = snapshot_view(case)
+    checks.ok(control and rows is not None and rows == store_rows(case) and integrity == [("ok",)],
+              "and the snapshot is still made, fresh: it holds the row added since the first night", str(integrity))
+    got = dest_files(case)
+    checks.ok(control and new in got and got[new].read_bytes() == b"\xff\xd8\xff" + b"E" * 400,
+              "and the good photograph added since is copied, byte for byte")
+    checks.ok(control and all(rel in got and got[rel].read_bytes() == data for rel, data in FILES.items()),
+              "and the first night's five files are still in the destination, unchanged")
+    expect_ok(checks, "once the folder is readable again the next night is ok", run_job(case), case, copied=1, skipped=6)
+    checks.ok(hidden in dest_files(case), "and the photograph that was inside the folder is now in the destination")
+
+
+@robust
+def check_backup_a_linked_worktree_with_a_destination_leaves_the_machine_folder_alone(checks: Checks) -> None:
+    """`~/.banchi` is shared by every checkout (D43). A linked worktree may run the job against a destination of its
+    own (that is what the override is for), but a test run there must not overwrite the owner's real last-run line
+    or counts sidecar: it writes nothing to the machine folder but an optional lock. The control is the main tree
+    with a destination set, which does write the last-run line, so an empty folder below is not a wrong folder."""
+    case = Case("linked-dest")
+    seed_store(case)
+    seed_files(case)
+    main_job = fake_checkout(case, "main-tree", linked=False)
+    linked_job = fake_checkout(case, "linked-tree", linked=True)
+    control = expect_ok(checks, "control: the main tree with a destination set records its night in the machine folder",
+                        run_job(case, dest=case.root / "main-dest", cmd=[str(main_job)]), case, copied=5, skipped=0)
+    machine = case.home / ".banchi"
+    shutil.rmtree(machine, ignore_errors=True)
+    ran = run_job(case, cmd=[str(linked_job)])
+    got = dest_files(case)
+    ran_ok = checks.ok(control and ran.code == 0 and snapshot_view(case)[0] == store_rows(case)
+                       and all(rel in got and got[rel].read_bytes() == data for rel, data in FILES.items()),
+                       "a linked worktree with a destination set still runs: exit 0, the five files and the snapshot are in it", said(ran))
+    left = sorted(p.name for p in machine.iterdir() if not p.name.endswith(".lock")) if machine.is_dir() else []
+    checks.ok(ran_ok and left == [], "and it writes no last-run line and no sidecar to the machine folder", repr(left))
+
+
 CHECKS = (
     check_backup_run_folder_sweep,
     check_backup_snapshot_beside_an_open_writer,
@@ -1096,4 +1264,7 @@ CHECKS = (
     check_backup_mtimes_within_two_seconds_are_equal,
     check_backup_snapshot_is_built_outside_the_destination,
     check_backup_keeps_a_nightly_and_a_weekly_snapshot,
+    check_backup_a_store_that_shrank_replaces_neither_snapshot,
+    check_backup_an_unreadable_photo_folder_fails_the_night,
+    check_backup_a_linked_worktree_with_a_destination_leaves_the_machine_folder_alone,
 )
