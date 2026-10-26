@@ -15,6 +15,7 @@ background writer left in the tree. Each asserts no folder, no git registration 
 remain.
 Run: python3 scripts/demo-mirror-daily-photos-selftest.py"""
 import atexit
+import contextlib
 import importlib.util
 import json
 import os
@@ -53,6 +54,27 @@ while True:
         pass
     time.sleep(0.005)
 """
+# A watcher that traps SIGTERM, lives three more seconds, then writes its record once more.
+SLOW_WRITER = """import os, signal, sys, time
+p = sys.argv[1]
+died = []
+signal.signal(signal.SIGTERM, lambda *a: died.append(1))
+
+
+def put():
+    try:
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        open(p, "w").write("{}")
+    except OSError:
+        pass
+
+
+while not died:
+    put()
+    time.sleep(0.005)
+time.sleep(3)
+put()
+"""
 
 
 def sweep(root):
@@ -80,8 +102,26 @@ def stop_writers():
     writers.clear()
 
 
+locked = []  # read-only folders the cases make; opened again before the run folder goes
+
+
+def lock(path):
+    """A folder neither git nor rmtree can remove: a file inside a read-only directory."""
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "f").write_text("1")
+    path.chmod(0o555)
+    locked.append(path)
+
+
+def unlock_all():
+    for p in locked:
+        with contextlib.suppress(OSError):
+            p.chmod(0o755)
+
+
 atexit.register(shutil.rmtree, RF, ignore_errors=True)
 atexit.register(stop_writers)  # last in, first out: the writers die before their folder goes, even if a case raises
+atexit.register(unlock_all)
 
 
 def git(cwd, *a, check=True):
@@ -166,6 +206,7 @@ def daily_run():
             return real_sh(*cmd, cwd=cwd, check=check)
 
         m.sh, m.main_tree, m.clear_stale_pr, m.MERGE = sh, (lambda: clone), (lambda root: None), merge
+        m.LOG = base / "daily.log"  # a run that logs must not write the owner's real log
         try:
             m.run(False)
             outcome = "ran"
@@ -211,9 +252,21 @@ def step_changed(m, wt):
     (wt / MIRROR / "a.json").write_text("{}")
 
 
-def step_writer(m, wt):
+def step_locked(inner):
+    """Run `inner`, then leave a folder in the tree that nothing can remove."""
+    def step(m, wt):
+        lock(wt / "locked")
+        inner(m, wt)
+    return step
+
+
+def step_slow_writer(m, wt):
+    step_writer(m, wt, SLOW_WRITER)
+
+
+def step_writer(m, wt, script=WRITER):
     target = wt / "demo" / "inventory" / "match-sweep.json"
-    p = subprocess.Popen([sys.executable, "-c", WRITER, str(target)], cwd=wt, start_new_session=True)
+    p = subprocess.Popen([sys.executable, "-c", script, str(target)], cwd=wt, start_new_session=True)
     writers.append(p)
     (wt / ".serve").mkdir(exist_ok=True)
     (wt / ".serve" / "match-sweep.json").write_text(json.dumps({"pid": p.pid}))
@@ -250,7 +303,11 @@ def drive(m, origin, merge, name, step, setup=None):
             return real_sh("git", "-c", "user.name=t", "-c", "user.email=t@t", *cmd[1:], cwd=cwd)
         return real_sh(*cmd, cwd=cwd, check=check)
 
-    patch = {"sh": sh, "main_tree": lambda: clone, "clear_stale_pr": lambda root: None, "MERGE": merge}
+    def clear_stale_pr(root):  # no gh here; keep the real one's last step, so a branch a run left does not reject the next push
+        real_sh("git", "push", "origin", "--delete", m.BRANCH, cwd=root, check=False)
+
+    patch = {"sh": sh, "main_tree": lambda: clone, "clear_stale_pr": clear_stale_pr, "MERGE": merge,
+             "LOG": RF / (name + ".log")}
     saved = {k: getattr(m, k) for k in patch}
     for k, v in patch.items():
         setattr(m, k, v)
@@ -388,4 +445,72 @@ if str(outside.resolve()) not in git(clone, "worktree", "list", "--porcelain").s
     hurt.append("git no longer registers the link's target worktree")
 case("sweep: a symlink named like a stale folder is not followed", not hurt,
      "%s (run() ended %r)" % ("; ".join(hurt), outcome))
+
+
+# A tree that cannot be removed must not rewrite what the run did. The verdict is what run() returns
+# (main logs it as it stands) or the Stop it raises (main logs "stopped, nothing published: <reason>").
+def names_removal(text):
+    return "demo-mirror-daily-" in text or "remov" in text.lower()
+
+
+for name, inner, prefix in (("merged", step_changed, "merged PR 1"), ("unchanged", step_unchanged, "unchanged")):
+    outcome, _, _ = drive(daily, origin, merge_fake, "locked-" + name, step_locked(inner))
+    case("removal failure: a %s run still returns its verdict, with the failure named" % name,
+         isinstance(outcome, str) and outcome.startswith(prefix) and names_removal(outcome[len(prefix):]),
+         "run() ended %r" % (outcome,))
+outcome, _, _ = drive(daily, origin, merge_fake, "locked-stop", step_locked(step_stop))
+case("removal failure: a run that already stopped keeps its own reason", "boom" in str(outcome),
+     "run() ended %r" % (outcome,))
+
+
+def missing_setup(clone):
+    """The previous run's tree was deleted by hand: git still registers it, and holds the branch."""
+    gone = clone / ".claude" / "worktrees" / "demo-mirror-daily-1000000005"
+    git(clone, "worktree", "add", "-q", "-B", daily.BRANCH, str(gone), "HEAD")
+    shutil.rmtree(gone)
+
+
+outcome, _, clone = drive(daily, origin, merge_fake, "missing", step_unchanged, missing_setup)
+registered = [line for line in git(clone, "worktree", "list", "--porcelain").stdout.splitlines()
+              if "demo-mirror-daily" in line]
+case("a registered tree deleted by hand does not stop the next run",
+     returned("unchanged")(outcome) and not registered,
+     "run() ended %r; still registered: %s" % (outcome, registered))
+
+
+def stuck_setup(clone):
+    wts = clone / ".claude" / "worktrees"
+    lock(wts / "demo-mirror-daily-1000000011")  # cannot be removed
+    for n in ("demo-mirror-daily-1000000012", "demo-mirror-daily-1000000013"):
+        (wts / n).mkdir()
+        (wts / n / "x.json").write_text("{}")
+
+
+outcome, _, clone = drive(daily, origin, merge_fake, "stuck", step_unchanged, stuck_setup)
+wts = clone / ".claude" / "worktrees"
+untried = [n for n in ("demo-mirror-daily-1000000012", "demo-mirror-daily-1000000013") if (wts / n).exists()]
+logged = (RF / "stuck.log").read_text() if (RF / "stuck.log").exists() else ""
+case("sweep: a leftover that cannot be removed is logged, the run goes on, the others are tried",
+     returned("unchanged")(outcome) and not untried and "demo-mirror-daily-1000000011" in logged + str(outcome),
+     "run() ended %r; not removed: %s; log: %r" % (outcome, untried, logged))
+
+
+def slow_setup(clone):
+    wts = clone / ".claude" / "worktrees"
+    wts.mkdir(parents=True)
+    (wts / "demo-mirror-daily-1.bak").mkdir()
+    (wts / "demo-mirror-daily-1.bak" / "keep.txt").write_text("keep")
+    (wts / "demo-mirror-daily-x").write_text("keep")
+
+
+outcome, _, clone = drive(daily, origin, merge_fake, "slow", step_slow_writer, slow_setup)
+wts = clone / ".claude" / "worktrees"
+with contextlib.suppress(subprocess.TimeoutExpired):
+    writers[-1].wait(timeout=15)  # the worker writes its record once more, three seconds after SIGTERM
+back = ["folder %s came back after run() returned" % p.name for p in sorted(wts.glob("demo-mirror-daily-*"))
+        if p.name not in ("demo-mirror-daily-1.bak", "demo-mirror-daily-x")]
+if not ((wts / "demo-mirror-daily-1.bak" / "keep.txt").is_file() and (wts / "demo-mirror-daily-x").is_file()):
+    back.append("a name that does not match the pattern was removed")
+case("a worker that outlives SIGTERM does not bring the folder back", not back and returned("unchanged")(outcome),
+     "run() ended %r; %s" % (outcome, "; ".join(back)))
 sys.exit(1 if failures else 0)
