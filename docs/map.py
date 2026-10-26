@@ -1360,7 +1360,7 @@ COMPONENTS = [
                                        "chart states its own history starts from, off the "
                                        "buckets actually read, never the 357-day constant.",
                                 "governed_by": ["D278", "D219", "D227", "D247",
-                                                "D254"],
+                                                "D254", "D224"],
                                 "note": "Exercised by `server/pipeline_routes.py:do_product_history` "
                                         "and by `app/tests/product-history.spec.ts`. No "
                                         "network call in the archive-hit path. PROVED "
@@ -1399,7 +1399,7 @@ COMPONENTS = [
                                     "it. `build_holdings_report` is the one entry point: one "
                                     "range in, a `HoldingsReport` out.",
                                 "governed_by": ["D278", "D277", "D189", "D212", "D219", "D225",
-                                                "D236", "D247"],
+                                                "D236", "D247", "D224"],
                                 "note": "PROVED BY `make holdings-selftest`, PATH GATED "
                                         "and IN `make check` as of D247's eighteenth entry "
                                         "(owner's word, 2026-09-23) — no store on disk, no "

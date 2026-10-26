@@ -68,7 +68,9 @@ when, and (with `--sku`) one SKU's own buckets across every range it has been re
 
 THE DAILY PRICE JOB CALLS `run` TOO, on the owner's word ("nightly, on the Mac").
 `scripts/price-refresh-daily.py` runs `sweep --write` in its own process after a good refresh,
-with its log as `say`, and ends 0 when the second throttle stops the pass (this command's exit 1).
+with its log as `say`, once per US Central day, and ends 0 when this command's exit 1 stops the pass.
+Exit 1 means the pass stopped (a second throttle, or a host that refused from the first sku) or
+asked and wrote no bucket. A night with nothing left to read, or no sku, ends 0.
 No launch agent of this command's own exists (D224).
 """
 
@@ -251,7 +253,7 @@ def _sweep(args, say) -> int:
     answered_so_far = 0
     requests_baseline = 0
     backed_off_already = False
-    pass_start = time.time()
+    pass_start = time.monotonic()  # asleep is not elapsed: a Mac that slept mid-pass must not inflate the pace
     stopped_early = False
 
     for i, chunk in enumerate(chunks, start=1):
@@ -290,8 +292,18 @@ def _sweep(args, say) -> int:
         say(f"  [{i}/{len(chunks)}] {len(chunk)} sku(s) read -> {len(buckets)} bucket(s), "
             f"{len(refusals)} refused  ({done}/{len(needed)} done)")
 
+        if blocked_count and not had_signal:
+            # A 403 with no answer yet this pass is not a throttle `classify_refusals` can call
+            # one, so there is no pace to measure. Asking the next chunk would meet the same wall.
+            say("")
+            say(f"the host refused from the first sku ({blocked_count} answered HTTP 403, none "
+                "answered) — stopping this pass here. No bucket was written. Check "
+                "BANCHI_TCG_USER_AGENT, then re-run `archive sweep --write`.")
+            stopped_early = True
+            break
+
         if blocked_count and had_signal:
-            elapsed = time.time() - pass_start
+            elapsed = time.monotonic() - pass_start
             requests_made = requests_baseline + market.requests
             new_delay = archive_walk.measured_pace(requests_made, elapsed)
             say("")
@@ -386,6 +398,9 @@ def _sweep(args, say) -> int:
     say("")
     say(f"written          {total_buckets} bucket(s) folded in across up to {len(chunks)} "
         "commit(s), never deleting one this pass did not mention")
+    if not stopped_early and total_buckets == 0:
+        say("asked for sku(s) and no bucket came back — the pass wrote nothing")
+        return 1
     return 1 if stopped_early else 0
 
 

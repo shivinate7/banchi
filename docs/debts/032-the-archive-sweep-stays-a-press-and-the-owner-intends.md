@@ -1,7 +1,7 @@
-## 32 — A nightly sweep that a throttle stops still ends the job with exit 0
+## 32 — The archive sweep is scheduled, and only runs on a day the Mac is on
 
-The daily price job runs `archive sweep --write` after its refresh (D224). A second throttle stops the sweep and keeps every bucket it wrote (D222), and the job still ends 0, by the owner's default. Only the job log and a `archive` step in the `#/pricing` note's file say so. `#/pricing` draws a step's sentence only when the whole refresh failed, so on the screen a stopped night looks like a finished one.
+`banchi archive sweep` has no timer of its own (D224). The daily price job runs it, once per US Central day, in the first job run of that day, on the owner's word. launchd runs a job missed in sleep when the Mac wakes. A day the Mac stays off at the job's hour, or a job installed before `--sweep`, runs no sweep. D219 (the price archive never deletes) governs what a sweep stores. D222 (the host throttles this client) sets its pace.
 
-**Outcome at risk.** The archive stops growing on nights when the host throttles, and nobody sees it until they read the log.
+**Outcome at risk.** Price history goes unarchived on a day the Mac is off, or when the installed job lacks `--sweep`. Nothing on a screen says so beyond the `archive` step in the `#/pricing` note.
 
-**Closes when.** `#/pricing` shows the archive step's sentence when it stopped early, or the owner rules that the log is enough.
+**Closes when.** The owner rules that a missed day is fine, or the sweep moves to a host that is always on.

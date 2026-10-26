@@ -80,7 +80,7 @@ quantity. They are two kinds of observation. D227 (product history is its own ro
 11. Archive buckets are keyed so that overlapping ranges never merge. One day is a one-day bucket in
     one range and part of a seven-day bucket in another. Those are two facts (D219).
 12. The sweep costs about one second per cold name. A sweep over every sold or held name is a
-    press and not a page load.
+    press or the daily price job's run, and not a page load.
 
 ## 4. Open for the owner
 
@@ -93,5 +93,6 @@ quantity. They are two kinds of observation. D227 (product history is its own ro
    shape is wanted, a proportional fill behind each row's own value inherits the row's real scale.
 4. **Whether cost basis is ever captured, and at what grain.** The reviews agree that unknown basis
    must be labeled and never blended, whatever grain is chosen.
-5. **A scheduled archive sweep.** The owner asked for one. It reverses D278's statement that the
-   reader cannot fire on its own, and that needs its own argument.
+5. **A scheduled archive sweep.** Settled: the daily price job runs it once per US Central day, on
+   the owner's word (D224). No page or reader fires it. D278's statement that the reader cannot fire
+   on its own holds for the readers.

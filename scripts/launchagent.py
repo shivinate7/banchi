@@ -17,7 +17,7 @@ from server import ports  # noqa: E402
 machine_dir = ports.machine_dir  # the job's log lives beside the other machine state
 
 
-def agent(label, script, root, hour, minute, log, remove):
+def agent(label, script, root, hour, minute, log, remove, args=()):
     plist = Path.home() / "Library" / "LaunchAgents" / (label + ".plist")
     uid = "gui/%d" % os.getuid()
     if remove:
@@ -32,7 +32,7 @@ def agent(label, script, root, hour, minute, log, remove):
     venv = Path(root) / ".venv" / "bin" / "python"
     payload = {
         "Label": label,
-        "ProgramArguments": [str(venv if venv.exists() else sys.executable), str(script)],
+        "ProgramArguments": [str(venv if venv.exists() else sys.executable), str(script), *args],
         "WorkingDirectory": str(root),
         "StartCalendarInterval": {"Hour": hour, "Minute": minute},
         "StandardOutPath": str(Path(log).with_suffix(".out")),
