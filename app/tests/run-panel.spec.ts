@@ -3526,6 +3526,28 @@ test('a counted free quote with no index says the free read is not set up', asyn
   await expect(quote).not.toContainText('Counted by reading them now')
 })
 
+/* THE WIRE IS WHAT `cli/cmd_identify.run` PRINTS WHEN EVERY CARD IS ANSWERED: nothing to send, so it
+   never measures the free read and prints "free read 0 of 0 certain", which the server parses as
+   `second_look_measured: false`. The reader here is PREPARED (the default `matchState`), so a setup
+   sentence is a false one. */
+test('a free quote with every card already answered does not say the free read is not set up', async ({
+  page,
+}) => {
+  await open(page, {
+    toSend: 0,
+    estimate: 0,
+    cacheHits: 40,
+    free: { freeRead: 0, secondLook: 0, measured: false },
+  })
+  await atReading(page, 9, 'free')
+  await page.getByRole('button', { name: 'Check what it will read' }).click()
+  const quote = page.locator('.run-quote')
+  await expect(quote).toBeVisible()
+
+  await expect(quote).toContainText('Nothing to send')
+  await expect(quote).not.toContainText(/not set up/i)
+})
+
 test('cards the free reader cannot take are named in sentences, never by their code', async ({ page }) => {
   await open(page, {
     free: {
