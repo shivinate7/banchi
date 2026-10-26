@@ -235,7 +235,8 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   The `server concurrency` row of `make docs-audit` reads these figures.
 - **The join key is per game and normalized on both sides** (`pipeline/games.py`,
   `pipeline/join.py:number_index_key`). Never join on Product Name. D35 (Product Name join) allows it only as a last
-  resort, queued for review. `zfill` is composition only, never matching.
+  resort, when the number key finds nothing. A name that resolves to one card is listed. A name that resolves to
+  more than one queues for review. `zfill` is composition only, never matching.
 - **A run's slot numbers are not the truth. The photograph is** (D36, the store says which slot).
   `cli/resolve.py:realign` re-binds records. It refuses on ambiguity and on a reallocated box.
 - Only two columns are ever written: `Add to Quantity`, `TCG Marketplace Price`. `TCGplayer Id` is never modified.
