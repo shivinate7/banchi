@@ -217,6 +217,8 @@ sign-off on this file approves every New name below, except the rows marked UNDE
 Rename by meaning, never by word. Where one old name carries two meanings, each meaning has its
 own row. "Names with two meanings", after the tables, tells you which is which.
 
+- **Term** is a term from the tables above. "Another meaning" marks a name whose word means
+  something that no term covers, so the name moves out of the way or stays.
 - **Layer** is one of these:
   - screen: text on a screen.
   - help: command help text and the keyboard sheet.
@@ -254,6 +256,7 @@ own row. "Names with two meanings", after the tables, tells you which is which.
 | Captures stopped | screen | "Resume captures" | "Start captures again" | dealer.SAID_DROPPED | 11 |
 | Claims | screen | "Set Claims" | "Claims" | BoxOps, the claim editor title | 1 |
 | Finish | wire | `metadata_finish` | `finish` | photos.CLAIM_WIRE_NAMES | 236 |
+| Finish | stored | `metadata_finish` (a card's stored field) | `finish`, migrates | master.Card | 2 † |
 | Finish | stored | `"variant"` (the finish claim's sidecar and request key) | `"finish"`, migrates | photos.CLAIM_WIRE_NAMES; sidecar | 21 † |
 | Finish | file | `variant` (the finish ladder's module, D3) | `finish_ladder` | pipeline/variant.py | 303 |
 | Finish | code | `variant_from_flag` | `finish_from_flag` | sidecar | 12 |
@@ -262,7 +265,7 @@ own row. "Names with two meanings", after the tables, tells you which is which.
 | Finish | code | `resolvedVariant` | `resolvedFinish` | BoxBrowse | 5 |
 | Finish | code | `chosenVariant`, `setChosenVariant` | `chosenFinish`, `setChosenFinish` | BoxBrowse | 9 |
 | Finish | code | `variant` (the kit Button's prop) | keep: ruling "The kit Button's variant prop stays" | kit/Button | — |
-| Finish | file | `variant` (TCGplayer's field in fixtures/) | keep: ruling "Variant retires", which spares fixtures, and fixtures are never modified | fixtures/ | — |
+| Finish | file | `variant` (TCGplayer's field in fixtures/) | keep: CLAUDE.md, "Fixtures are never modified" | fixtures/ | — |
 | Photos Folder | CLI | `capture-dir` | `photos-dir` | cli/__main__.py | 15 |
 
 ### Read renames
@@ -282,6 +285,7 @@ own row. "Names with two meanings", after the tables, tells you which is which.
 | Read | code | `record_identification` | `record_read` | master.Inventory | 116 |
 | Read | stored | `identifications` (the cache table of reads) | `reads`, migrates | cache.Cache | 196 |
 | Read | file | `identifications.json` (a run's reads) | `reads.json`, migrates | runs.RunDir | 83 |
+| Read | code | `IDENTIFICATIONS` (the constant that names identifications.json) | `READS_FILE` | runs.IDENTIFICATIONS | 21 |
 | Read | code | `write_identifications` | `write_reads` | runs.RunDir | 47 |
 | Read | code | `read_identifications` | `load_reads` | runs.RunDir | 27 |
 | Read | code | `IdentifiedCard` | `ReadCard` | join.IdentifiedCard | 92 |
@@ -295,7 +299,8 @@ own row. "Names with two meanings", after the tables, tells you which is which.
 | Read | code | `never_identified`, `not_identified`, `unidentified` | `never_read`, `not_read`, `unread` | capture_server | 46 |
 | Read | code | `reidentify`, `reidentify_stale` | `reread`, `reread_stale` | cmd_identify | 15 |
 | Not read yet | screen | "Not Looked at Yet" | "Not read yet" | ReviewBand.COUNTS | 2 |
-| Free Reader | wire | `"marqo-b"` (engine) | `"free"`, migrates in cache rows and run manifests | cache.ENGINE_MATCHER; engines.Engine | 97 |
+| Free Reader | wire | `"marqo-b"` (engine) | `"free"` | cache.ENGINE_MATCHER; engines.Engine | 97 |
+| Free Reader | stored | `"marqo-b"` (the engine in cache rows and run manifests) | `"free"`, migrates | cache.ENGINE_MATCHER | 9 † |
 | Free Reader | code | `ENGINE_MATCHER` | `ENGINE_FREE` | cache.ENGINE_MATCHER | 18 |
 | Free Reader | code | `matcher` (meaning the Free Reader) | `free_reader` | identify/; cmd_match; server/match.py | 58 † |
 | Free Reader | file | `match` (the Free Reader's module) | `free_reader` | identify/match.py | 251 |
@@ -312,7 +317,7 @@ own row. "Names with two meanings", after the tables, tells you which is which.
 | Free Reader | stored | `"match_sweep"` (the switch's meta key) | `"free_reader_background"`, migrates | db.MATCH_SWEEP | 2 |
 | Free Reader | code | `MATCH_SWEEP` | `FREE_READER_BACKGROUND` | db.MATCH_SWEEP | 10 |
 | Free Reader | code | `match_sweep_on`, `set_match_sweep` | `free_reader_background_on`, `set_free_reader_background` | pipeline_routes | 9 |
-| Free Reader | file | `match-sweep` (.serve/match-sweep.json, .log, -inflight.json; inventory/match-sweep.lock) | `free-reader-background`, migrates | sweep | 50 |
+| Free Reader | file | `match-sweep` (inventory/match-sweep.json, .lock, -inflight.json, -tried.json, -crash.json; .serve/match-sweep.log) | `free-reader-background`, migrates | sweep | 50 |
 | Free Reader | file | `match-prepare.json` | `free-reader-prepare.json`, migrates | match.progress_path | 3 |
 | Free Reader | CLI | `match-selftest` (make target) | `free-reader-selftest` | Makefile | 29 |
 | Free Reader | code | `held_promo_games` | `unread_promo_games` | match.held_promo_games | 14 |
@@ -321,16 +326,18 @@ own row. "Names with two meanings", after the tables, tells you which is which.
 | Free Reader | code | `reread_matcher`, `rereadMatcher`, `setRereadMatcher` | `reread_free`, `rereadFree`, `setRereadFree` | RunsComposer | 41 |
 | Free Reader | code | `MATCHER_NAME_TOOLTIP` | `FREE_READER_TOOLTIP`, with the value "Marqo-B" | engines.MATCHER_NAME_TOOLTIP | 16 |
 | Free Reader | screen | "Background Match" | "Free read in background" | CaptureScreen | 8 |
-| Free Reader | screen | "Prepare matching" | "Set up free reader" | RunsComposer | 11 |
-| Free Reader | screen | "Refresh stock photos" | "Set up free reader" | RunsComposer | 1 |
+| Free Reader | screen | "Prepare matching" | "Set up Free Reader" | RunsComposer | 11 |
+| Free Reader | screen | "Refresh stock photos" | "Set up Free Reader" | RunsComposer | 1 |
 | Free Reader | screen | "Match to stock photos" | "Free Reader" | RunsComposer | 7 |
 | Free Reader | screen | "Matched Free" | "Read free" | ReviewBand.COUNTS | 2 |
 | Free Reader | screen | "Matching now" | "Reading now" | ReviewBand | 1 |
 | Free Reader | docs | "Rig switch" | "Free read in background" | CLAUDE.md; cmd_match | 5 |
 | Accepted | docs | "accuracy threshold" | "accept margin" | D2 | 2 |
 | Reader failed | wire | `aside` (cards the Free Reader crashed on) | `reader_failed` (MatchState.state already has failed) | sweep.aside; types.MatchSweep | 26 † |
+| Reader failed | stored | `"aside"` (the key in match-sweep-crash.json) | `"reader_failed"`, migrates | sweep.crash_path | 3 † |
 | Reader failed | screen | "set aside" (a Free Reader crash) | "Reader failed" | ReviewBand | 1 † |
-| Paid Reader | wire | `"haiku"` (engine) | `"paid"`, migrates in cache rows and run manifests | cache.ENGINE_HAIKU; engines.Engine | 34 |
+| Paid Reader | wire | `"haiku"` (engine) | `"paid"` | cache.ENGINE_HAIKU; engines.Engine | 34 |
+| Paid Reader | stored | `"haiku"` (the engine in cache rows and run manifests) | `"paid"`, migrates | cache.ENGINE_HAIKU | 2 † |
 | Paid Reader | CLI | `--engine haiku` | `--engine paid` | cli/__main__.py | 13 |
 | Paid Reader | code | `ENGINE_HAIKU` | `ENGINE_PAID` | cache.ENGINE_HAIKU | 18 |
 | Paid Reader | code | `HAIKU_NAME_TOOLTIP` | `PAID_READER_TOOLTIP`, with the value "Claude Haiku" | engines.HAIKU_NAME_TOOLTIP | 12 |
@@ -347,7 +354,7 @@ own row. "Names with two meanings", after the tables, tells you which is which.
 | Paid read batch | screen | "Not read" (the pill while a batch is out) | "Paid read out" | RunsStage | 1 † |
 | Paid read batch | screen | "Nothing in this send was paid" | "Nothing in this batch was paid" | RunsComposer | 1 |
 | Paid read batch | code | `to_send`, `RunSend` (the cards a Read press gives the Paid Reader) | UNDECIDED: the Post ruling covers the listing press only, and "sent to Claude" is still open | cmd_identify; types.RunSend | 82 |
-| Paid Reader | code | the prompt text that prompt_fingerprint hashes | keep: T1 pins the hash (t1_id_eval.PROMPT_FINGERPRINT), and a change needs a paid re-measurement | identify/prompt.py | — |
+| Paid Reader | code | the prompt text that prompt_fingerprint hashes | keep: the owner's brief for this map keeps it, and no recorded ruling does yet. T1 (the read-accuracy test) asserts the scored prompt is unmoved (t1_id_eval.PROMPT_FINGERPRINT), and a change needs a paid re-measurement | identify/prompt.py | — |
 | Photo Settings | code | `DEFAULT_READING` | `DEFAULT_PHOTO_SETTINGS` | RunsComposer.DEFAULT_READING | 4 |
 
 ### Match to product renames
@@ -358,8 +365,9 @@ own row. "Names with two meanings", after the tables, tells you which is which.
 | Match | help | "store-backed join" | "store-backed match" | cli/__main__.py | 2 † |
 | Match | file | `cmd_join` | `cmd_match`, after the Free Reader leaves it | cli/cmd_join.py | 134 |
 | Match | file | `join` (the Match step's module) | `match` | pipeline/join.py | 1077 |
-| Match | wire | `"join"` (run command and step; also the stored bound_by act) | `"match"`; bound_by migrates | RunsStage.COMMANDS; pipeline_routes.FREE_STEPS; master.BOUND_BY_ACTS | 150 |
-| Match | stored | `joined` (run manifest flag) | `matched`, migrates after the old manifest matched moves to read_free | cmd_join.record_join | 704 |
+| Match | wire | `"join"` (run command and step) | `"match"` | RunsStage.COMMANDS; pipeline_routes.FREE_STEPS | 150 |
+| Match | stored | `"join"` (a card's bound_by act, and the step in a run folder's match record) | `"match"`, migrates | master.BOUND_BY_ACTS; pipeline_routes._write_match | 16 † |
+| Match | stored | `joined` (run manifest flag) | `matched`, migrates after the old manifest matched moves to read_free | cmd_join.record_join | 269 † |
 | Match | code | `join_batch` | `match_batch` | join.join_batch | 104 |
 | Match | code | `record_join` | `record_match` | cmd_join.record_join | 14 |
 | Match | code | `_join_now` | `_match_now` | cmd_identify._join_now | 7 |
@@ -394,7 +402,7 @@ own row. "Names with two meanings", after the tables, tells you which is which.
 | Closed | screen | "left in place" (the reason line) | "Kept" | ReviewQueue | 3 † |
 | Closed | stored | `cleared_by_human` (answered or closed) | UNDECIDED: no glossary word covers both | queues.QueueEntry | 169 |
 | Skipped | code | `deferred` (cards skipped this sitting) | `skipped` | ReviewQueue | 8 † |
-| Review queue order | code | `sort_key` (QueueEntry.sort_key: the order of a review queue) | `queue_order`; it moves before the Sort Key takes sort_key | queues.sort_key | 18 |
+| Another meaning | code | `sort_key` (QueueEntry.sort_key: the order of a review queue) | `queue_order`; it moves before the Sort Key takes sort_key | queues.sort_key | 18 |
 
 ### Price renames
 
@@ -429,7 +437,7 @@ own row. "Names with two meanings", after the tables, tells you which is which.
 | Envelope Limit | wire | `value_at_threshold`, `VALUE_AT_THRESHOLD` | `value_at_envelope_limit`, `VALUE_AT_ENVELOPE_LIMIT` | shipping.VALUE_AT_THRESHOLD | 29 |
 | Market Price | stored | `readings`, `readings_sources` (tables) | `market_prices`, `market_price_sources`, migrates | db; readings | 567 |
 | Market Price | CLI | `banchi readings` | `banchi market-prices` | cli/__main__.py | 24 |
-| Market Price | help | "the cached market-reading table" | "the cached market price table" | cli/__main__.py | 1 † |
+| Market Price | help | "the cached market-reading table" | "the cached Market Price table" | cli/__main__.py | 1 † |
 | Market Price | file | `cmd_readings`, `readings` (the module) | `cmd_market_prices`, `market_prices` | cli/cmd_readings.py; pipeline/readings.py | 55 |
 | Market Price | code | `_readings`, `readings_for_rows`, `readings_walk` | `_market_prices`, `market_prices_for_rows`, `market_prices_walk` | pipeline_routes._readings; readings | 113 |
 | Withheld | screen | "held back" (a SKU you keep out) | "withheld" | Pricing; Gallery | 4 † |
@@ -484,6 +492,7 @@ own row. "Names with two meanings", after the tables, tells you which is which.
 | Counted as listed | screen | "Release the listing hold" | "Stop counting as listed" | BoxOps | 6 |
 | Counted as listed | code | `_listing_hold` | `_counted_as_listed` | capture_server._listing_hold | 32 |
 | Counted as listed | wire | `still_held` (release plan and receipt) | `still_counted` | master.Listing; capture_server | 23 |
+| Counted as listed | stored | `still_held` (a field of the release event in the events log) | `still_counted`, migrates | capture_server, the box release | 7 † |
 | Removed by you | stored | `held_copies` | `removed_copies`, migrates | master.Listing | 19 |
 | Removed by you | stored | `unheld` (receipt field) | `taken_back_removed`, migrates | send_routes.do_unhold | 46 |
 | Removed by you | route | `/pipeline/held/<sku>/unhold`, `/pipeline/held/<sku>/hold` | `/pipeline/removed/<sku>/take-back`, `/pipeline/removed/<sku>/undo` | send_routes.do_unhold; send_routes.do_rehold | 9 |
@@ -533,13 +542,13 @@ own row. "Names with two meanings", after the tables, tells you which is which.
 
 | Term | Layer | Name today | New name | Where | Count |
 |---|---|---|---|---|---|
-| Phone width | docs | "PHONE THRESHOLD" (a comment: the phone layout's width) | "PHONE WIDTH" | Orders | 2 † |
+| Another meaning | docs | "PHONE THRESHOLD" (a comment: the phone layout's width) | "PHONE WIDTH" | Orders | 2 † |
 | Panel | help | "queue drawer" | "queue panel" | App.SHORTCUTS | 2 |
 | Card ID | CLI | `banchi cards name` | `banchi cards ids` | cmd_cards | 3 |
 | Card ID | code | `UnnamedCard` | `NoCardId` | master.UnnamedCard | 6 |
 | Lock | code | `SubmissionClaims`, `releaseSubmission`, `ClaimRelease` (the Paid Reader's lock) | `SubmissionLocks`, `releaseSubmissionLock`, `LockRelease` | submissions; server.ts | 24 |
 | Lock | screen | "release the claim" | "release the lock" | capture_server | 2 |
-| Archive sweep | CLI | `banchi archive sweep` (the price-history sweep) | keep: ruling "banchi archive sweep keeps its name" | cmd_pricearchive | 24 |
+| Another meaning | CLI | `banchi archive sweep` (the price-history sweep) | keep: ruling "banchi archive sweep keeps its name" | cmd_pricearchive | 24 |
 | Catalog | docs | "`catalogue`" | "catalog" | docs; comments | 553 |
 | Finish | docs | "PRINTING" (Normal / Foil, TCGplayer's subTypeName) | "finish" | pricehistory | 3 |
 
@@ -652,7 +661,7 @@ checks that row like the others.
 | Old word | Names not in a row | Lines | The five largest |
 |---|---|---|---|
 | send | 142 | 770 | `send_portal`, `sendPosts`, `SENDS_NONE`, `sendSummary`, `_banner_send` |
-| identify, identification | 59 | 334 | `isIdentifier`, `IDENTIFICATIONS`, `IDENTIFY`, `MalformedIdentification`, `identify_images` |
+| identify, identification | 58 | 313 | `isIdentifier`, `IDENTIFY`, `MalformedIdentification`, `identify_images`, `identifications_for` |
 | second look | 7 | 22 | `secondLookRows`, `SECOND_LOOK_ENTRY`, `secondLook`, `check_second_look_routing`, `check_second_look_agreement` |
 | marqo, haiku | 3 | 20 | `marqo_tip`, `haiku_tip`, `check_haiku_press_never_sends_an_empty_slot` |
 | matcher | 13 | 45 | `matcher_read`, `SequenceMatcher`, `_fake_matcher`, `matcherRead`, `matcher_run` |
@@ -662,3 +671,138 @@ checks that row like the others.
 | stand down | 18 | 64 | `not_stood_down`, `onStandDownOrder`, `_reverse_stand_down`, `standDowns`, `standDownCall` |
 | held, hold | 142 | 586 | `holdNow`, `held_out`, `useHeld`, `held_sku`, `photoHeld` |
 | reading | 77 | 471 | `live_reading`, `atReading`, `card_reading`, `ThreadingHTTPServer`, `READINGS` |
+
+### Count scopes
+
+A row with a † count, a quoted value, a case-blind phrase or a pattern counts with the command below, run from the repository root. Its output has one line per counted line, so send it to a file and count that file with `wc -l`. Any other row counts with `git grep -h -w` for an identifier or `git grep -h -F` for a phrase, over the same files as the Count column says.
+
+- `metadata_finish` (Finish, stored): `git grep -h -P -e '[\x27"]metadata_finish[\x27"]' -- 'store/*'`
+- `"variant"` (Finish, stored): `git grep -h -P -e '["\x27]variant["\x27]' -- 'store/photos.py*' 'identify/sidecar.py*' 'server/capture_server.py*' 'cli/cmd_identify.py*' 'app/src*'`
+- `variant` (Finish, file): `git grep -h -P -e '(?<![\w"\x27.])variant\.[A-Za-z_]+|from pipeline import[^\n]*\bvariant\b|pipeline[/]variant\.py' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `LogoVariant`, `LOGO_VARIANTS`, `DEFAULT_VARIANT` (Finish, code): `git grep -h -P -e '\b(?:LogoVariant|LOGO_VARIANTS|DEFAULT_VARIANT)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `chosenVariant`, `setChosenVariant` (Finish, code): `git grep -h -P -e '\b(?:chosenVariant|setChosenVariant)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `identify/` (Read, file): `git grep -h -P -e '\bidentify[/]|from identify\b|import identify\b|\bidentify\.(?:match|matchconst|batch|prompt|images|sidecar|sweep|cost)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"identify"` (Read, wire): `git grep -h -P -e '["\x27]identify["\x27]' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"Identify"` (Read, screen): `git grep -h -P -e '["\x27]Identify["\x27]' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"identified"` (Read, stored): `git grep -h -P -e '["\x27]identified["\x27]' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"Identified"` (Read, screen): `git grep -h -P -e '["\x27]Identified["\x27]' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"identification_failed"` (Read, stored): `git grep -h -P -e '["\x27]identification_failed["\x27]' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `identification checks` (Card ID, help): `git grep -h -i -F -e 'identification checks' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `captured, identified, sold, retired` (Read, help): `git grep -h -F -e 'captured, identified, sold, retired' -- 'cli/__main__.py*'`
+- `` run directory from `identify` `` (Read, help): `` git grep -h -F -e 'run directory from `identify`' -- 'cli/__main__.py*' ``
+- `default: marqo-b, the free stock-photo reader` (Free Reader, help): `git grep -h -F -e 'default: marqo-b, the free stock-photo reader' -- 'cli/__main__.py*'`
+- `never_identified`, `not_identified`, `unidentified` (Read, code): `git grep -h -P -e '\b(?:never_identified|not_identified|unidentified)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `reidentify`, `reidentify_stale` (Read, code): `git grep -h -P -e '\breidentify(?:_stale)?\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"marqo-b"` (Free Reader, wire): `git grep -h -P -e 'marqo-b(?!-image)' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"marqo-b"` (Free Reader, stored): `git grep -h -P -e 'marqo-b(?!-image)' -- 'store/*' 'cli/*'`
+- `matcher` (Free Reader, code): `git grep -h -w -e 'matcher' -- 'identify*' 'cli*' 'server*' 'store*' 'pipeline/selection.py*' 'pipeline/join.py*' 'scripts/capture-gate.py*'`
+- `match` (Free Reader, file): `git grep -h -P -e 'identify[/]match\.py|from identify import[^\n]*\bmatch\b|identify\.match\b|(?<![\w"\x27.])match\.(?:status|read|Index|Request|Result|MODEL_\w+|MARGIN_MIN|FLOOR_MIN|HUB_\w+|download_model|build_index|preflight|empty_slot|retires_empty_slot|held_promo_games|progress_path|model_path|index_path|model_ready|recheck_no_photo|unreleased_sets|fetch_bytes|embed|ENGINE)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `sweep` (Free Reader, file): `git grep -h -P -e 'identify[/]sweep\.py|from identify import[^\n]*\bsweep\b|(?<![\w"\x27.])sweep\.(?:settle_inflight|clear_unexplained|aside|tried|remember_tried|EXIT_\w+|QUIET_SECONDS|run|watch|status)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `banchi match` (Free Reader, CLI): `git grep -h -P -e 'banchi match\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `do_pipeline_match`, `do_pipeline_match_sweep`, `do_pipeline_match_sweep_set`, `do_pipeline_match_prepare` (Free Reader, code): `git grep -h -P -e '\bdo_pipeline_match(?:_sweep_set|_sweep|_prepare)?\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `getMatchState`, `getMatchSweep`, `setMatchSweep`, `prepareMatch` (Free Reader, code): `git grep -h -P -e '\b(?:getMatchState|getMatchSweep|setMatchSweep|prepareMatch)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `MatchState`, `MatchSweep`, `MatchSweepDetail`, `MatchSweepCard` (Free Reader, wire): `git grep -h -P -e '\bMatch(?:State|Sweep|SweepDetail|SweepCard)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"match_sweep"` (Free Reader, stored): `git grep -h -P -e '["\x27]match_sweep["\x27]' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `match_sweep_on`, `set_match_sweep` (Free Reader, code): `git grep -h -P -e '\b(?:match_sweep_on|set_match_sweep)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"promo_held"`, `UNREAD_PROMO_HELD` (Free Reader, wire): `git grep -h -P -e 'promo_held|PROMO_HELD' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `matcher_pick`, `MatcherPick` (Free Reader, code): `git grep -h -P -e '\b(?:matcher_pick|MatcherPick)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `reread_matcher`, `rereadMatcher`, `setRereadMatcher` (Free Reader, code): `git grep -h -P -e '\b(?:reread_matcher|rereadMatcher|setRereadMatcher)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `aside` (Reader failed, wire): `git grep -h -w -e 'aside' -- 'identify/sweep.py*' 'server/pipeline_routes.py*' 'app/src/types.ts*' 'app/src/ReviewBand.tsx*' 'app/src/ReviewBandSheet.tsx*' 'cli/cmd_match.py*'`
+- `"aside"` (Reader failed, stored): `git grep -h -P -e '["\x27]aside["\x27]' -- 'identify/sweep.py*'`
+- `set aside` (Reader failed, screen): `git grep -h -F -e 'set aside' -- 'app/src/ReviewBand.tsx*' 'app/src/ReviewBandSheet.tsx*'`
+- `"haiku"` (Paid Reader, wire): `git grep -h -P -e '["\x27]haiku["\x27]' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"haiku"` (Paid Reader, stored): `git grep -h -P -e '["\x27]haiku["\x27]' -- 'store/*' 'cli/*'`
+- `"second_look_unsure"` (Paid Reader, stored): `git grep -h -P -e '["\x27]second_look_unsure["\x27]' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `second_look_held`, `second_look_main`, `second_look_parked` (Paid Reader, stored): `git grep -h -P -e '\bsecond_look_(?:held|main|parked)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `_second_look_record`, `second_looked`, `_second_look_code`, `second_look_measured`, `second_look_counts`, `_second_look_where` (Paid Reader, code): `git grep -h -P -e '\b_?second_look(?:_record|ed|_code|_measured|_counts|_where)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `second look`, `Second look` (Paid Reader, screen): `git grep -h -P -e '[Ss]econd look(?!up)' -- 'app/src*'`
+- `"Not read"` (Paid read batch, screen): `git grep -h -P -e '["\x27]Not\ read["\x27]' -- 'app/src/RunsStage.tsx*'`
+- `to_send`, `RunSend` (Paid read batch, code): `git grep -h -P -e '\bto_send\b|\bRunSend\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `store-backed join` (Match, help): `git grep -h -F -e 'store-backed join' -- 'cli/__main__.py*'`
+- `join` (Match, file): `git grep -h -P -e 'pipeline[/]join\.py|from pipeline import[^\n]*\bjoin\b|(?<![\w"\x27.)\]])join\.[A-Za-z_]+' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"join"` (Match, wire): `git grep -h -P -e '["\x27]join["\x27]' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"join"` (Match, stored): `git grep -h -P -e '["\x27]join["\x27]' -- 'store/master.py*' 'server/pipeline_routes.py*'`
+- `joined` (Match, stored): `git grep -h -w -e 'joined' -- 'cli/*' 'server/*' 'pipeline/*' 'store/*' 'app/src/*'`
+- `join_key`, `JOIN_KEY_STRATEGIES` (Match, code): `git grep -h -P -e '\b(?:join_key|JOIN_KEY_STRATEGIES)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `JoinReport`, `NotJoined`, `not_joined`, `PreJoinFailure`, `GameJoin`, `game_join` (Match, code): `git grep -h -P -e '\b(?:JoinReport|NotJoined|not_joined|PreJoinFailure|GameJoin|game_join)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `str.join`, `os.path.join`, `JoinedStr`, `JoinLiteral`, `CommaJoin` (Match, code): `git grep -h -P -e '\.join\(|\bJoinedStr\b|\bJoinLiteral\b|\bCommaJoin\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `matched` (Matched, stored): `git grep -h -P -e 'manifest\.matched\b|manifest\.get\(["\x27]matched|\[["\x27]matched["\x27]\]|["\x27]matched["\x27]:' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `matched_here`, `matched_keys` (Matched, wire): `git grep -h -P -e '\bmatched_(?:here|keys)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `listing`, `listing_differs` (Product, wire): `git grep -h -P -e '\bcard\.listing\b|\blisting_differs\b|\blistedAsFact\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `MAIN` (To Review, code): `git grep -h -P -e '\bqueues\.MAIN\b|\bMAIN = "review"' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `main queue` (To Review, CLI): `git grep -h -i -F -e 'main queue' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `held for you` (Waiting for you, screen): `git grep -h -i -F -e 'held for you' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `/review/<box>/<index>/stand-down` (Closed, route): `git grep -h -P -e '[/]stand-down' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `STAND_DOWN_REASONS`, `check_stand_down_reason`, `UnknownStandDownReason` (Closed, code): `git grep -h -P -e '\b(?:STAND_DOWN_REASONS|check_stand_down_reason|UnknownStandDownReason)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `standDown`, `undoStandDown`, `StandDownReason`, `StandDownResult`, `onStandDown`, `'stand_down'` (Closed, code): `git grep -h -P -e '\b(?:standDown|undoStandDown|StandDownReason|StandDownResult|onStandDown)\b|\x27stand_down\x27' -- 'app/src*' ':!*Orders*'`
+- `Stand down` (Closed, screen): `git grep -h -F -e 'Stand down' -- 'app/src/ReviewQueue.tsx*'`
+- `left in place` (Closed, screen): `git grep -h -F -e 'left in place' -- 'app/src*'`
+- `deferred` (Skipped, code): `git grep -h -w -e 'deferred' -- 'app/src/ReviewQueue.tsx*'`
+- `Cut-off`, `cut-off` (Threshold, screen): `git grep -h -P -e '[Cc]ut-off' -- 'app/src*'`
+- `cutoff`, `CUTOFF` (Threshold, code): `git grep -h -P -e '\bcutoff\b|\bCUTOFF\b' -- 'app/src/Pricing.tsx*' 'app/src/standing.ts*' 'app/src/PriceFacts.tsx*' 'app/src/pricingSource.ts*'`
+- `cut-off` (Threshold, docs): `git grep -h -P -e '[Cc]ut-off' -- 'docs*' 'CLAUDE.md*' 'README.md*'`
+- `below_floor`, `BELOW_FLOOR`, `REFUSED_BELOW_FLOOR` (Threshold, wire): `git grep -h -P -e '\b(?:below_floor|BELOW_FLOOR|REFUSED_BELOW_FLOOR)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `pricing.THRESHOLD`, `pricing.FLOOR` (Threshold, code): `git grep -h -P -e '\bpricing\.(?:THRESHOLD|FLOOR)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"listable"` (Threshold, wire): `git grep -h -P -e '["\x27]listable["\x27]' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"under_cut_off"` (Threshold, wire): `git grep -h -P -e '["\x27]under_cut_off["\x27]' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"sub_threshold"` (Threshold, wire): `git grep -h -P -e 'bucket[^\n]*[\x27"]sub_threshold[\x27"]|[\x27"]sub_threshold[\x27"][^\n]*bucket' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `--listed-only`, `listed_only` (Threshold, CLI): `git grep -h -P -e 'listed-only|listed_only' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `sub_threshold` (Flat Price, stored): `git grep -h -P -e 'policy[^\n]*sub_threshold|\bDEFAULT_SUB_THRESHOLD\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"floor"` (Flat Price, stored): `git grep -h -P -e '["\x27]floor["\x27]' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"match"` (At Market, stored): `git grep -h -P -e '["\x27]match["\x27]' -- 'pipeline/pricing.py*' 'pipeline/corpus.py*' 'pipeline/decisions.py*' 'cli/cmd_join.py*' 'app/src/Pricing.tsx*'`
+- `movers.THRESHOLD` (Move Size, code): `git grep -h -P -e '\bTHRESHOLD\b' -- 'pipeline/movers.py*'`
+- `THRESHOLD` (Envelope Limit, code): `git grep -h -w -e 'THRESHOLD' -- 'app/src/OrdersShipStage.tsx*'`
+- `THRESHOLD` (Threshold, code): `git grep -h -w -e 'THRESHOLD' -- 'app/src/ReviewQueue.tsx*'`
+- `PHONE THRESHOLD` (Another meaning, docs): `git grep -h -F -e 'PHONE THRESHOLD' -- 'app/src/Orders.tsx*'`
+- `value_at_threshold`, `VALUE_AT_THRESHOLD` (Envelope Limit, wire): `git grep -h -P -e '\b(?:value_at_threshold|VALUE_AT_THRESHOLD)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `readings`, `readings_sources` (Market Price, stored): `git grep -h -P -e '\breadings(?:_sources)?\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `the cached market-reading table` (Market Price, help): `git grep -h -F -e 'the cached market-reading table' -- 'cli/__main__.py*'`
+- `cmd_readings`, `readings` (Market Price, file): `git grep -h -P -e '\bcmd_readings\b|pipeline[/]readings\.py|from pipeline import[^\n]*\breadings\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `_readings`, `readings_for_rows`, `readings_walk` (Market Price, code): `git grep -h -P -e '\b(?:_readings|readings_for_rows|readings_walk)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `held back` (Withheld, screen): `git grep -h -i -F -e 'held back' -- 'app/src/Pricing.tsx*' 'app/src/Gallery.tsx*' 'app/src/standing.ts*'`
+- `--held` (Withheld, CLI): `git grep -h -P -e '--held(?![\w-])' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `list every card held back` (Withheld, help): `git grep -h -F -e 'list every card held back' -- 'cli/__main__.py*'`
+- `HOLD_SHORT`, `heldReason`, `filterHeld`, `setFilterHeld` (Withheld, code): `git grep -h -P -e '\b(?:HOLD_SHORT|heldReason|filterHeld|setFilterHeld)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `is_hold`, `hold_lost`, `_hold_before` (Withheld, code): `git grep -h -P -e '\b(?:is_hold|hold_lost|_hold_before)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `holdFor`, `setHoldFor`, `holdButtons` (Withheld, code): `git grep -h -P -e '\b(?:holdFor|setHoldFor|holdButtons)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `held` (Withheld, wire): `git grep -h -P -e 'progress\.held\b|\bheld:|[\x27"]held[\x27"]' -- 'app/src/Pricing.tsx*' 'app/src/types.ts*' 'app/tests/pricing.spec.ts*' 'app/tests/pricing-markdown.spec.ts*'`
+- `"unlisted"` (Withheld, stored): `git grep -h -P -e '["\x27]unlisted["\x27]' -- 'app/src*' 'pipeline*' 'server*'`
+- `holdings`, `held_market_cutoff`, `build_holdings_report` (On hand, code): `git grep -h -P -e '\bholdings\b|\bheld_market_cutoff\b|\bbuild_holdings_report\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `/pipeline/send`, `/pipeline/sends` (Post, route): `git grep -h -P -e '[/]pipeline[/]sends?\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `/pipeline/markdowns/<stamp>/send` (Post, route): `git grep -h -P -e 'markdowns[/][^\n]*[/]send\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `do_send`, `do_sends` (Post, code): `git grep -h -P -e '\bdo_sends?\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `sends_dir`, `SENDS_DIR` (Post, code): `git grep -h -P -e '\b(?:sends_dir|SENDS_DIR)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `read just before this send` (Post, help): `git grep -h -F -e 'read just before this send' -- 'cli/__main__.py*'`
+- `"sending"` (Post, stored): `git grep -h -P -e '["\x27]sending["\x27]' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"send"` (Post, stored): `git grep -h -P -e '["\x27]send["\x27]' -- 'server/send_routes.py*' 'app/src/SendCard.tsx*' 'app/src/types.ts*' 'app/src/standing.ts*'`
+- `sendCopies`, `sendsStatus`, `takeBackSend`, `dismissSendWarning`, `sendFileUrl`, `sendMarkdown` (Post, code): `git grep -h -P -e '\b(?:sendCopies|sendsStatus|takeBackSend|dismissSendWarning|sendFileUrl|sendMarkdown)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `SendSummary`, `SendsStatus`, `SendTrim` (Post, wire): `git grep -h -P -e '\b(?:SendSummary|SendsStatus|SendTrim)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `refresh_before_send`, `send_in_progress`, `send_unknown`, `EmptySend`, `MAX_SEND_QUANTITY`, `sendAnyway`, `lastSend` (Post, code): `git grep -h -P -e '\b(?:refresh_before_send|send_in_progress|send_unknown|EmptySend|MAX_SEND_QUANTITY|sendAnyway|lastSend)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `Send`, `Sending` (Post, screen): `git grep -h -P -e '\bSend(?:ing)?\b' -- 'app/src/SendCard.tsx*' 'app/src/RunsStage.tsx*' 'app/src/Pricing.tsx*' 'app/src/standing.ts*' 'app/src/RunPanel.tsx*' 'app/src/LiveReconcile.tsx*'`
+- `send_response`, `send_header`, `send_error`, `end_headers` (Post, code): `git grep -h -P -e '\bsend_(?:response|header|error)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `Nothing to send` (Post, screen): `git grep -h -F -e 'Nothing to send' -- 'app/src*'`
+- `SendClaim`, `SendClaims`, `SendClaimRefused` (Lock, code): `git grep -h -P -e '\bSendClaim(?:s|Refused)?\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `UnreadableClaim`, `releaseUnreadableClaim`, `restoreUnreadableClaim` (Lock, code): `git grep -h -P -e '\b(?:UnreadableClaim|releaseUnreadableClaim|restoreUnreadableClaim)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `pushed` (Counted as posted, stored): `git grep -h -w -e 'pushed' -- 'store*' 'server*' 'cli*' 'pipeline*' 'app/src*'`
+- `"Written"` (Waiting to compare, screen): `git grep -h -P -e '["\x27]Written["\x27]' -- 'app/src/RunsStage.tsx*'`
+- `still_held` (Counted as listed, stored): `git grep -h -w -e 'still_held' -- 'server/capture_server.py*'`
+- `/pipeline/held/<sku>/unhold`, `/pipeline/held/<sku>/hold` (Removed by you, route): `git grep -h -P -e '[/]pipeline[/]held[/]' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `do_unhold`, `do_rehold`, `_hold_removed`, `unholdCopies`, `reholdCopies` (Removed by you, code): `git grep -h -P -e '\b(?:do_unhold|do_rehold|_hold_removed|unholdCopies|reholdCopies)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `Unhold` (Removed by you, screen): `git grep -h -w -e 'Unhold' -- 'app/src*'`
+- `live` (Running, wire): `git grep -h -P -e 'live: boolean|\brun\.live\b|\bsummary\.live\b|\bdetail\.live\b' -- 'app/src*' 'server/pipeline_routes.py*'`
+- `readingAgo`, `readingBound`, `readingDays`, `readingExact`, `ReadingAge`, `STALE_READING_DAYS`, `staleReading` (Counted, code): `git grep -h -P -e '\b(?:readingAgo|readingBound|readingDays|readingExact|ReadingAge|STALE_READING_DAYS|staleReading)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `read {ago}`, `not read yet` (Counted, screen): `` git grep -h -P -e '\x27not read yet\x27|`read \$\{ago\}`' -- 'app/src/CardLocations.tsx*' ``
+- `banchi reconcile <run-dir>` (Compare, CLI): `git grep -h -P -e 'banchi reconcile(?! --live| --phantoms)' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `"reconcile"` (Compare, wire): `git grep -h -P -e '["\x27]reconcile["\x27]' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md' ':!*rders*'`
+- `slot` (Card 17, wire): `git grep -h -P -e '\.slot\b|\bslot:|["\x27]slot["\x27]' -- 'app/src*' 'pipeline/join.py*' 'server/capture_server.py*'`
+- `ord` (Sort Key, stored): `git grep -h -P -e '["\x27]ord["\x27]|\bord REAL\b' -- 'store*'`
+- `order` (Sort Key, wire): `git grep -h -P -e '\bcard\.order\b|\bCard\.order\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md' ':!*Fulfillment*'`
+- `order_key` (Sort Key, code): `git grep -h -P -e '(card|c|\])\.order_key\b|def order_key\(self\)' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `In stock` (On hand, screen): `git grep -h -F -e 'In stock' -- 'app/src*'`
+- `"pulled"` (Taken out, stored): `git grep -h -P -e '["\x27]pulled["\x27]' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `Removed` (Taken out, screen): `git grep -h -P -e 'label: \x27Removed\x27' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `Pulled` (Taken out, screen): `git grep -h -P -e 'label: \x27Pulled\x27' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `SubmissionClaims`, `releaseSubmission`, `ClaimRelease` (Lock, code): `git grep -h -P -e '\b(?:SubmissionClaims|releaseSubmission|ClaimRelease)\b' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `release the claim` (Lock, screen): `git grep -h -i -F -e 'release the claim' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `catalogue` (Catalog, docs): `git grep -h -i -F -e 'catalogue' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
+- `PRINTING` (Finish, docs): `git grep -h -P -e 'is the PRINTING' -- . ':!fixtures' ':!vendor' ':!demo-assets' ':!docs/GLOSSARY.md'`
