@@ -47,7 +47,7 @@ Each row names the role in section 4 that answers it. "None" means no role here 
 | Durability | `.env` holds the Anthropic key and the TCGplayer cookie on this Mac only. | `envfile.get_live` | R1, R2 |
 | Fetching | A catalog export holds one of four request slots for up to 120 s. | D104, D166 | R2 |
 | Fetching | An orders fetch is about 115 requests against a 120 a minute budget, in the request. Two presses in a minute can break the budget. An unattended fetch needs its own entry. | D91, `order_transport.fetch_open_orders` | R2 |
-| Fetching | The price-history sweep is 3,656 requests, about an hour, with no schedule. | D224, DEBT32 | R2 |
+| Fetching | The price-history sweep is 3,656 requests, about an hour, run nightly by the daily price job. | D224, DEBT32 | R2 |
 | Fetching | Stock photos are hotlinked from two CDNs with no disk cache. pokemontcg.io ends on 2027-03-01. | D301, DEBT44 | R2 |
 | Fetching | The catalog image mirror is 16.7 GB, by hand only. | D15, `make catalog-mirror` | R2 |
 | Fetching | A Haiku batch is polled by a child of the server for up to an hour. | `identify.batch` | R2 |

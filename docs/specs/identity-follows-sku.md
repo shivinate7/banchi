@@ -405,7 +405,8 @@ For a held card, the owner gives one of two answers.
   `bind_sku(current sku, bound_by=confirm)`. It releases no listing, because the SKU does not move. The history event
   is `identity_confirmed`. `{"undo": true}` returns the card to `identity_source = read` (D28's shape).
 - **The listing is the wrong card.** This is the D252 correction. It sets a new SKU. It releases the old SKU through
-  `Listing.release` (D34). It records `bound_by=correction`.
+  `Listing.release` (D34), but only for a sent copy. An unsent copy releases nothing. The correction waits while that
+  SKU is live (`old_sku_still_live`). It records `bound_by=correction`.
 
 On `#/review`, `do_review_answer` routes a `listing_disputed` answer. The card's own current SKU goes to confirm. Any
 other SKU goes to the correction. The server routes it, so no screen can pick the wrong one.

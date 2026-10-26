@@ -43,6 +43,7 @@ number traced to a sale.
 **Reopen when** Card Ladder enforces an app check or moves these callables behind a bot check.
 Also reopen when it rate-limits at a person's pace, or offers the owner a supported API.
 
-**NOT MECHANIZED until built.** The build lane adds three checks. The callable allow list is one
-constant that the client reads. A test refuses any request to `search.cardladder.com`. A test
-proves that a slab with no sale renders "no sales". A machine cannot see the ban risk.
+**Three checks hold the bounds.** The callable allow list is one constant,
+`cardladder.ALLOWED_CALLABLES`, that the client reads. `scripts/cardladder-selftest.py` refuses any
+request to `search.cardladder.com`. `app/tests/slabs.spec.ts` proves that a slab with no sale
+renders "No sales". **NOT MECHANIZED:** a machine cannot see the ban risk.

@@ -936,3 +936,25 @@ test('a tall phone keeps the full lockup, because it has the room', async ({ pag
   const lockup = await page.locator('.bn-drawer .bn-lockup').evaluate((el) => Number(el.getAttribute('width')))
   expect(lockup, 'a tall phone draws the sidebar’s own kanji 40').toBeCloseTo((40 * BLOCK.w) / BLOCK.ref, 0)
 })
+
+/* THE MAC DOCK ICON IS NOT THE MANIFEST'S. Chrome builds an installed app's `.icns` from the
+   manifest set, which reaches 1024. Safari's Add to Dock builds it from the page's
+   `<link rel="apple-touch-icon">`, and a Retina dock draws it near 512px, so a 180px file is
+   upscaled and reads soft beside Mail's. The `logo` row of `make docs-audit` checks the manifest
+   set and never looks at this link. The browser is the HTML parser and the dev server is the
+   file's reader, so a comment, a script string or a wrong path cannot fool the case, and a
+   missing file comes back as index.html and fails the PNG signature. */
+test('the apple-touch-icon is a served PNG at least 512px square', async ({ page }) => {
+  await page.goto('/')
+  const links = page.locator('link[rel~="apple-touch-icon"]')
+  await expect(links, 'index.html carries exactly one apple-touch-icon link').toHaveCount(1)
+  const href = await links.evaluate((link) => (link as HTMLLinkElement).href)
+
+  const res = await page.request.get(href)
+  expect(res.ok(), `${href} is served`).toBe(true)
+  const png = await res.body()
+  expect(png.subarray(0, 8).toString('hex'), `${href} is a PNG`).toBe('89504e470d0a1a0a')
+  const [width, height] = [png.readUInt32BE(16), png.readUInt32BE(20)]
+  expect(Math.min(width, height), `${href} is ${width}x${height}; the dock icon is built from it`)
+    .toBeGreaterThanOrEqual(512)
+})

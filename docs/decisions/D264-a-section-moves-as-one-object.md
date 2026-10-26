@@ -1,6 +1,6 @@
 ## D264 — A section moves as one object
 
-**The owner asked for a visual box map.** The owner wanted to drag sections between boxes, with their cards moving along. A section is a building block with its own divider. The map is a side-by-side bird's-eye view. The owner can drop a section before or after any section of the other box. The divider moves with its section, so the section is deleted from the source box.
+**The owner asked for a visual box map.** The owner wanted to drag sections between boxes, with their cards moving along. A section is a building block with its own divider. The map is a bird's-eye view of the boxes. The owner can drop a section before or after any section of the other box. The divider moves with its section, so the section is deleted from the source box.
 
 The spec is `docs/specs/box-map.md`. This entry records the decisions the spec builds on.
 
@@ -20,7 +20,7 @@ D83 (a card leaves a box through a third door: moved) built the move as a card-l
 
 The owner thinks of a section as one object, not as many cards. Under D83, a moved section joins the destination's last section, and an empty divider stays in the source box. So after one move, the map and the physical box disagree.
 
-D83 also says a box emptied by a merge cannot be reclaimed. The box map review read D134 (a departed record is buried, not kept) as making that sentence stale, so a merged-out box could be deleted now. That reading is proposed. It awaits the owner's word.
+A box emptied by a merge may be deleted. The owner ruled it, D134 (a departed record is buried, not kept) allows it in code, and D83 says so.
 
 ### What D83 protected, and what protects it now
 

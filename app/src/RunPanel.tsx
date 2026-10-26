@@ -335,7 +335,30 @@ type RunPanelProps = {
 export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, pageFailure }: RunPanelProps) {
   const [runs, setRuns] = useState<readonly RunSummary[]>([])
   const [loaded, setLoaded] = useState(false)
-  const [detail, setDetail] = useState<RunDetail | null>(null)
+  const [answered, setAnswered] = useState<RunDetail | null>(null)
+  /* A READ IS TAKEN ONLY FOR THE RUN OPEN NOW. A step press, a retry or the auto-match reads its
+     run back when it finishes, and the person may have moved on by then: that late answer must
+     not replace the open run's own. */
+  const openRunNow = useRef(openRun)
+  openRunNow.current = openRun
+  const setDetail = useCallback((next: RunDetail | null) => {
+    if (next === null || next.run === openRunNow.current) setAnswered(next)
+  }, [])
+  /* Only the open run's own answer is real. A direct switch leaves the old run's answer in
+     state until the new one lands, and a late answer for the old run can land after the switch. */
+  const real = answered !== null && answered.run === openRun ? answered : null
+  /* ON A SWITCH, THE PANEL ON SCREEN KEEPS ITS FRAME AND IS DRAWN FROM THE NEW RUN'S ROW, which
+     the list already holds: the same header and steps as the loaded panel, so it holds the
+     loaded size by construction (D313) and shows nothing of the old run. It is inert, because a
+     row has no manifest to act on, and it leaves out what only the manifest or the console can say. A first open has no panel on screen to hold, so it draws the
+     loading panel. */
+  const row = answered === null ? undefined : runs.find((r) => r.run === openRun)
+  const placeholder = useMemo<RunDetail | null>(
+    () => (row === undefined ? null : { ...row, console: '', files: [], manifest: {} }),
+    [row],
+  )
+  const detail = real ?? placeholder
+  const loading = real === null && detail !== null
 
   const [reviewBelow, setReviewBelow] = useState<'none' | 'low' | 'medium'>('low')
   const [optionsOpen, setOptionsOpen] = useState(false)
@@ -357,6 +380,8 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
   const [trouble, setTrouble] = useState<Trouble | null>(null)
 
   const [openStep, setOpenStep] = useState<Command | null>(null)
+  /* While the row stands in, the step open is the row's own, never the one the old run had open. */
+  const shownStep = loading && detail !== null ? (COMMANDS[Math.min(stageOf(detail).step, 3)] ?? 'identify') : openStep
   /* D145's repair, offered only where `detail.box_former` is true. Closed on every run
      switch, so it can never survive onto a healthy run under `openRun`'s own key. */
   const [rescueOpen, setRescueOpen] = useState(false)
@@ -402,7 +427,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
       await loadRuns()
       if (openRun !== null) setDetail(await getRun(openRun))
     })()
-  }, [runs, loadRuns, openRun])
+  }, [runs, loadRuns, openRun, setDetail])
 
   const retryMatch = () =>
     guard('join', async () => {
@@ -437,7 +462,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
      it is what used to be the poll's own `else` branch. */
   useEffect(() => {
     if (openRun === null) setDetail(null)
-  }, [openRun])
+  }, [openRun, setDetail])
   usePoll<RunDetail>({
     enabled: openRun !== null,
     restartKey: openRun,
@@ -465,16 +490,16 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
      integration). A passive effect let one frame paint every step closed, and a press landing in
      that frame was then reversed when the effect opened the run's own step. */
   useLayoutEffect(() => {
-    if (detail === null) return
-    const step = COMMANDS[Math.min(stageOf(detail).step, 3)] ?? 'identify'
-    const changed = lastRun.current !== detail.run
+    if (real === null) return
+    const step = COMMANDS[Math.min(stageOf(real).step, 3)] ?? 'identify'
+    const changed = lastRun.current !== real.run
     const moved = lastStep.current !== step
-    lastRun.current = detail.run
+    lastRun.current = real.run
     lastStep.current = step
     if (!changed && !moved) return
     if (!changed && stepOutRef.current !== null) return
     setOpenStep(step)
-  }, [detail])
+  }, [real])
 
   /* ---------------------------------------------------------- D76: the export's scope */
   useEffect(() => {
@@ -570,7 +595,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
         ttlMs: result.ok ? 4000 : 8000,
       })
     },
-    [openRun, loadRuns],
+    [openRun, loadRuns, setDetail],
   )
 
   const doStep = (step: 'join' | 'emit' | 'reconcile', extra: Parameters<typeof runStep>[2] = {}) =>
@@ -837,8 +862,10 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
             className="bn-panel runs-detail-panel"
             key={detail.run}
             data-reconciled={stage !== null && stage.step === 4 ? 'true' : undefined}
+            data-loading={loading ? 'true' : undefined}
+            aria-busy={loading ? 'true' : undefined}
           >
-            <header className="runs-detail-head">
+            <header className="runs-detail-head" inert={loading}>
               <Button className="runs-back" variant="ghost" icon="arrowLeft" onClick={() => onOpenRun(null)}>
                 All runs
               </Button>
@@ -879,6 +906,8 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
 
             {troubleFor(['detail'])}
 
+            {/* Inert while the row stands in, but the notice above is not: a failed read stays live. */}
+            <div className="runs-detail-body" inert={loading}>
             {!detail.joined ? null : (
               <div className="runs-figures">
                 <Stat value={count(detail.counts.cards_in)} label="Cards in" />
@@ -919,7 +948,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 state={stepState('identify')}
                 summary={summaryOf('identify')}
                 cost={identifyCost(detail, stepState('identify'))}
-                open={openStep === 'identify'}
+                open={shownStep === 'identify'}
                 onToggle={() => toggleStep('identify')}
               >
                 <div className="runs-kv-row">
@@ -937,7 +966,10 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                   {detail.usage.cost_usd != null ? (
                     <span className="bn-muted" title={costSaid(detail)}>
                       {detail.usage.cost_usd === 0 ? (
-                        freeRun(detail) ? (
+                        loading ? (
+                          /* Free or cached is the manifest's to say; the line is held, not guessed. */
+                          '\u00a0'
+                        ) : freeRun(detail) ? (
                           'Free'
                         ) : (
                           'Nothing spent — every card was already cached'
@@ -965,7 +997,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                     <span className="bn-dot bn-dot-live" /> {runningFor(detail)} — keeps running if you close this tab.
                   </p>
                 ) : null}
-                {detail.console.trim() === '' ? (
+                {loading ? null : detail.console.trim() === '' ? (
                   <p className="runs-step-lede">No log for this run.</p>
                 ) : (
                   <LogWell text={detail.console} label="What Identify printed" />
@@ -983,7 +1015,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 state={stepState('join')}
                 summary={summaryOf('join')}
                 cost={<Pill className="runs-cost-pill">Free</Pill>}
-                open={openStep === 'join'}
+                open={shownStep === 'join'}
                 onToggle={() => toggleStep('join')}
               >
                 <p className="runs-step-lede">
@@ -1278,7 +1310,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 state={stepState('emit')}
                 summary={summaryOf('emit')}
                 cost={<Pill className="runs-cost-pill">Free</Pill>}
-                open={openStep === 'emit'}
+                open={shownStep === 'emit'}
                 onToggle={() => toggleStep('emit')}
               >
 
@@ -1299,7 +1331,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 state={stepState('reconcile')}
                 summary={summaryOf('reconcile')}
                 cost={<Pill className="runs-cost-pill">Free</Pill>}
-                open={openStep === 'reconcile'}
+                open={shownStep === 'reconcile'}
                 onToggle={() => toggleStep('reconcile')}
               >
                 <p className="runs-step-lede">For a file you uploaded by hand: compare it with what TCGplayer took.</p>
@@ -1324,6 +1356,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
               <summary>Files</summary>
               <RunFiles run={detail.run} files={detail.files} only="run" />
             </details>
+            </div>
           </div>
         )}
       </section>

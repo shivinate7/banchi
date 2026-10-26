@@ -2594,11 +2594,10 @@ def check_consolidated_numbering(checks: Checks) -> None:
         capture_server.do_put_box(3, {"sections": [1, 6]})
         checks.equal(
             list(Store().read().inventory.sections_for(3)),
-            [1, 9],
-            "and a divider moved to the 6th CARD is stored at the INDEX THAT CARD SITS AT "
-            "— 9, not 6, because three cards in front of it have left. That is the index "
-            "`open_section` would have written had the operator pressed `S` there, so a "
-            "divider typed in and a divider put in at the feeder are the same number",
+            [1, 8],
+            "and a divider moved to the 6th CARD is stored at the first record after the "
+            "5th card — 8, not 6 and not 9, because departed card 8 sits in that gap and goes "
+            "into the new section",
         )
         capture_server.do_put_box(3, {"sections": before})
 

@@ -1,25 +1,14 @@
-## DEBT62 — the demo photos are about 180 MB of plain git, and the owner wants them in Git LFS
+## DEBT62 — the demo photos are about 180 MB of plain git, and the owner left them there
 
 **Symptom.** `demo-assets/` holds thousands of tracked files, about 180 MB in all. The weekly mirror moves the figure.
 The demo photos are most of the repo's bytes. Every clone, and every CI job that clones,
 downloads them.
 
-**Owner's word.** Move them to Git LFS soon.
+**Owner's ruling.** Leave it as it is. No Git LFS, and no history rewrite.
 
-**Open question.** GitHub's LFS storage and bandwidth quota, against `demo.yml` and
-`check.yml` checking the tree out on every run. The quota is UNCHECKED: no number is stated
-here, because none was verified. Read GitHub's current LFS limits for this account and plan
-first. Then count runs per month times the pulled bytes. `check.yml` needs the photos only if
-a check reads them, so also find which jobs can skip the LFS pull.
-
-**Remedy, in outline.**
-
-1. `git lfs track "demo-assets/**"`, and commit the `.gitattributes` it writes.
-2. CI checkout with `lfs: true` in the jobs that need the photos, and `lfs: false` in the
-   rest.
-3. Decide whether to rewrite history (`git lfs migrate import`). Without a rewrite the about 180 MB
-   stays in every clone's history, and only new commits shrink. With a rewrite every open
-   branch changes, and it needs the owner's word on its own.
-
-**Why not fixed now.** The quota answer decides whether LFS is cheaper than the current cost,
-and nobody has read it. A history rewrite is the owner's call.
+**If reopened.** The outline is `git lfs track "demo-assets/**"` with the `.gitattributes` it writes,
+and CI checkout with `lfs: true` only in the jobs that read the photos. GitHub's LFS storage and
+bandwidth quota is UNCHECKED: no number is stated here, because none was verified. Count runs per
+month times the pulled bytes against that quota first. Without a history rewrite
+(`git lfs migrate import`) the 180 MB stays in every clone's history, and only new commits shrink.
+A rewrite changes every open branch and needs the owner's word on its own.

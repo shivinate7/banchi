@@ -21,8 +21,8 @@ never a sweep and never a write to the archive table.
 
 NEVER WRITES. Not to `price_history`, not to `price_history_sources`, not to the corpus. A
 live fallback read is answered straight to the caller and never folded back into the archive
-— `banchi archive sweep` is the one press that does that, and it stays a press (D278's own
-statement: this reader cannot fire on its own).
+— `banchi archive sweep` is the one press that does that, and the daily price job runs it (D224);
+this reader cannot fire on its own (D278).
 
 THE SPREAD IS CARRIED PER BUCKET, NEVER COLLAPSED TO ONE NUMBER. Each archived bucket already
 holds its own `low`/`high` alongside `market`; this module passes them through rather than

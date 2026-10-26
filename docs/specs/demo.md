@@ -132,9 +132,12 @@ resolve against `import.meta.env.BASE_URL`, so `DEMO_BASE` moves them. A key the
 reads first. It also journals each card move. The journal replays over any file that lands later,
 so a document fetched after a sale shows the sale.
 
-Measured, with the split: Home's first load is 8.3 MB decoded (it was 87.9 MB). Of that, the app shell
+Measured, with the split: Home's first load is 8.32 MB decoded (it was 87.9 MB), under
+`HOME_FIRST_LOAD_BUDGET_BYTES` (8.5 MiB) in `app/tests/demo-coverage.spec.ts`. The budget sits just above
+that measurement, so lower it and never raise it. Of the 8.32 MB, the app shell
 is about 1.6 MB, the index 0.44 MB, and Home's own reads (`/pipeline/pricing` 4.2 MB, `/orders` 1.5 MB).
-The rest is 6.3 MB of data in all. The weekly mirror job and the recorder's on-disk format are unchanged.
+The rest is 6.3 MB of data in all. Home's time on a slow network is unmeasured (DEBT84). The weekly mirror
+job and the recorder's on-disk format are unchanged.
 
 ## 6. `VITE_DEMO` is a build-time constant, not a runtime flag
 
@@ -162,7 +165,7 @@ with the same `--base`, so a link that resolves in preview resolves published.
 
 ## 8. What a published page cannot do, refused by name
 
-`app/src/demoServer.ts`'s `CANNOT` table refuses seven paths, each with its reason:
+`app/src/demoServer.ts`'s `CANNOT` table refuses eight paths, each with its reason:
 
 | Path prefix | Refusal code | Reason |
 |---|---|---|
@@ -171,6 +174,7 @@ with the same `--base`, so a link that resolves in preview resolves published.
 | `/pipeline/reconcile-live` | `demo_no_export` | needs a My Pricing export from a signed-in account |
 | `/pipeline/live-export` | `demo_no_session` | needs a signed-in TCGplayer session |
 | `/orders/fetch` | `demo_no_session` | needs a signed-in TCGplayer session |
+| `/pipeline/match/prepare` | `demo_no_download` | downloads a model file and reads stock photos at the rig |
 | `/capture` | `demo_no_camera` | writes a photograph to a disk this demo has none of |
 | `/codes/scan` | `demo_no_camera` | reads QR codes off photographs on disk |
 
@@ -407,6 +411,5 @@ re-decodes every staged image for a QR before it lets a commit through (D70, D30
 
 **The walk-plan sweep records singles.** A real store's open orders make a powerset that no constant can reach: 71 open orders is 2^71 sets. Only an open order can ever be ticked. Every caller of `walkPlan` sends open keys alone (`Fulfillment.tsx`, `Orders.tsx`, D97, D220). So the recorder reads the recorded `/orders` GET and keeps the open keys. It records every single open order, plus the one full "walk all" set that every screen asks for whole. It never records a merge or a subset between. `demoServer.ts`'s `walkPlan` refuses an unrecorded set with the demo's one honest notice (D269, TXT-46) and never fabricates a plan. A partial selection (some orders, not all, not one) is the one gap this recording leaves on purpose.
 
-**Open.** `ux/stock-images` is a separate lane that may put stock image URLs on route responses.
-This section does not depend on it. Proving the mirror deterministic means reading the real store
-twice, and nothing does that yet.
+**Open.** Proving the mirror deterministic means reading the real store twice, and nothing does
+that yet.

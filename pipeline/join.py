@@ -666,21 +666,25 @@ def divider_index(
     an operator typing "section 3 starts at the 168th card" is typing a number they can see,
     and this is what turns it back into the 171 the store holds.
 
-    IT ANSWERS THE INDEX OF THE CARD THE SECTION STARTS AT, which is what `open_section`
-    already stores when the operator presses `S` at the box: that route takes no index and
-    writes `next_index`, the slot the next card will land in. So a divider typed into the
-    editor and a divider put in at the feeder come out at the same kind of number, and the
-    forward map sends both to the same ordinal.
+    IT ANSWERS THE KEY OF THE FIRST RECORD AFTER CARD `ordinal - 1`, departed or not. A
+    departed record between card `ordinal - 1` and card `ordinal` stood in front of the
+    card the section starts at, so it goes into the new section; a departed record in front
+    of card `ordinal - 1` stays in the section before. Where nothing has left, that record
+    is the card itself, which is what `open_section` stores when the operator presses `S` at
+    the box: a divider typed into the editor and one put in at the feeder are the same kind
+    of number, and the forward map sends both to the same ordinal.
 
     The forward map is not injective — every index in a run of departed slots counts the
-    same cards in front of it — so this picks one, and it picks the one `open_section`
-    would have written. **Ordinal 1 is always index 1**, even where card 1 itself has sold:
+    same cards in front of it — so this picks one: the lowest, the first record of the gap.
+    **Ordinal 1 is always index 1**, even where card 1 itself has sold:
     `check_sections` requires a layout to start at 1 because there is no card before the
     front of a box, and that is a fact about the box rather than about its contents.
 
-    PAST THE LAST CARD IT COUNTS SLOTS, mirroring `_divider`'s own unfilled-tail term: a
-    divider beyond everything captured so far is a plan, and each slot between here and
-    there will hold one card.
+    ONE PAST THE LAST CARD takes the same rule: the first departed record behind the last
+    card on hand, so a departed tail record goes into the new section. With none there, and
+    for every ordinal further out, it counts slots, mirroring `_divider`'s own unfilled-tail
+    term: a divider beyond everything captured so far is a plan, and each slot between here
+    and there will hold one card.
     """
     if ordinal <= 1:
         # The front of the box: 1, or below it where a section was placed in front of card
@@ -688,9 +692,14 @@ def divider_index(
         lows = [v[0] for v in (occupied, departed) if v]
         return master.front_of_box((), min(lows) if lows else None)[0]
     if ordinal <= len(occupied):
-        # THE KEY ITSELF, NEVER `int()` OF IT (the R4 review): a placed card's key is a
-        # fraction, and cutting it moved the divider onto the card in front (D294).
-        return master.as_order(occupied[ordinal - 1])
+        # THE RECORD'S KEY ITSELF, NEVER `int()` OF IT (the R4 review): a placed card's key
+        # is a fraction, and cutting it moved the divider onto the card in front (D294).
+        before = occupied[ordinal - 2]
+        return master.as_order(min(k for k in (*occupied, *departed) if k > before))
+    if ordinal == len(occupied) + 1:
+        tail = [k for k in departed if k > occupied[-1]]
+        if tail:
+            return master.as_order(min(tail))
     high = max(
         int(occupied[-1]) if occupied else 0,
         int(departed[-1]) if departed else 0,

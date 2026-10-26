@@ -2,11 +2,12 @@
 
 This spec holds the screen-stability rule and the mechanisms that break it. It gives one
 reusable fix pattern per mechanism, the audit's findings, and how a check enforces each class.
-It changes no product code. Fix lanes follow (§7).
+The fix lanes are built. §7 lists what was fixed and the rows still open.
 
 Governing decisions: D118 (a press changes what is on screen), D50 (feedback is the product's),
 D195 (same-role buttons share a width), D197 (a page is anchored to the shell inset). The
-`load-stability` lane's draft decision (a loading area holds its loaded size) owns class A.
+`load-stability` lane's decision, D313 (nothing on screen moves unless the person moved it; a
+loading area holds its loaded size), owns class A.
 
 ## 1. The rule
 
