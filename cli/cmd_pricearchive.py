@@ -70,7 +70,8 @@ THE DAILY PRICE JOB CALLS `run` TOO, on the owner's word ("nightly, on the Mac")
 `scripts/price-refresh-daily.py` runs `sweep --write` in its own process after a good refresh,
 with its log as `say`, once per US Central day, and ends 0 when this command's exit 1 stops the pass.
 Exit 1 means the pass stopped (a second throttle, or a host that refused from the first sku) or
-asked and wrote no bucket. A night with nothing left to read, or no sku, ends 0.
+the store was unreadable. A pass that was answered but wrote no bucket, a night with nothing left
+to read, and no sku all end 0.
 No launch agent of this command's own exists (D224).
 """
 
@@ -398,9 +399,8 @@ def _sweep(args, say) -> int:
     say("")
     say(f"written          {total_buckets} bucket(s) folded in across up to {len(chunks)} "
         "commit(s), never deleting one this pass did not mention")
-    if not stopped_early and total_buckets == 0:
-        say("asked for sku(s) and no bucket came back — the pass wrote nothing")
-        return 1
+    if total_buckets == 0 and not stopped_early:
+        say("every sku asked for was answered with no sale, so the pass wrote nothing")
     return 1 if stopped_early else 0
 
 

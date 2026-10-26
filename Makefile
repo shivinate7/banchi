@@ -1701,11 +1701,11 @@ demo-mirror-agent:
 
 # THE DAILY MARKET READ (DEBT69): one free download of the owner's own live listings, once a day, with
 # a note `#/pricing` shows. `price-refresh-agent` installs the launchd job (main tree only), ARGS=--remove
-# removes it. The installed job passes no flag, and the script sweeps by default, so its first run of each US Central
-# day also sweeps the price archive (D224). `price-refresh` runs one read now over THIS checkout's store, changes
-# no price and passes --no-sweep unless ARGS=--sweep asks.
+# removes it. The installed job passes no flag, runs at 05:15 and at login, and skips a refresh or a sweep
+# that finished today (D224). `price-refresh` runs one read now over THIS checkout's store, changes
+# no price and passes --now (refresh even if today's finished) and --no-sweep unless ARGS=--sweep asks.
 price-refresh:
-	@$(PYTHON) scripts/price-refresh-daily.py $(if $(findstring --sweep,$(ARGS)),,--no-sweep) $(ARGS)
+	@$(PYTHON) scripts/price-refresh-daily.py --now $(if $(findstring --sweep,$(ARGS)),,--no-sweep) $(ARGS)
 price-refresh-agent:
 	@python3 scripts/price-refresh-daily.py --agent $(ARGS)
 

@@ -17,7 +17,7 @@ from server import ports  # noqa: E402
 machine_dir = ports.machine_dir  # the job's log lives beside the other machine state
 
 
-def agent(label, script, root, hour, minute, log, remove, args=()):
+def agent(label, script, root, hour, minute, log, remove):
     plist = Path.home() / "Library" / "LaunchAgents" / (label + ".plist")
     uid = "gui/%d" % os.getuid()
     if remove:
@@ -32,9 +32,10 @@ def agent(label, script, root, hour, minute, log, remove, args=()):
     venv = Path(root) / ".venv" / "bin" / "python"
     payload = {
         "Label": label,
-        "ProgramArguments": [str(venv if venv.exists() else sys.executable), str(script), *args],
+        "ProgramArguments": [str(venv if venv.exists() else sys.executable), str(script)],
         "WorkingDirectory": str(root),
         "StartCalendarInterval": {"Hour": hour, "Minute": minute},
+        "RunAtLoad": True,  # a Mac that was off at the hour runs the job when it is next on
         "StandardOutPath": str(Path(log).with_suffix(".out")),
         "StandardErrorPath": str(Path(log).with_suffix(".out")),
         "EnvironmentVariables": {"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
