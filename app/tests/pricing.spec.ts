@@ -6498,20 +6498,19 @@ test('send tiles: while the worklist loads, Download and the press cannot be pre
 /* DEBT95: THE PRICED TILE'S "N typed." IS WHAT THE PRESS SENDS. An at-cap row adds no copy, so a
    typed price on it rides a send only as a price change, and only when the row is live at a
    different price (`Pricing.tsx:priceChanges`). The control row is that case: the press and the
-   tile both count it. Each other row is a typed price the press leaves out, so the tile may not
+   tile both count it. Each other row is a price the press leaves out, so the tile may not
    count it. */
 const AT_CAP = { at_cap: true, add_to_quantity: 0, nothing_to_add: 'Every copy in this run is already listed or has left the box.' } as const
 const CAP_LIVE = { live_before: 1, listing: { pushed: 1, staged: 0, live: 1 } }
-for (const left of [
-  { why: 'no live copies', row: { name: 'Wattrel', ...AT_CAP }, stored: {}, typed: '5.00' },
-  {
-    why: 'the live price typed again',
-    row: { name: 'Kled', ...AT_CAP, ...CAP_LIVE, snap: { market: '6.00', direct_low: null, low: '5.50', low_with_shipping: '6.50', now: '7.00' } },
-    stored: { '8608959': '6.50' },
-    typed: '7.00',
-  },
-]) {
-  test(`DEBT95: a typed price on an at-cap row with ${left.why} is left out of the send and of the priced tile`, async ({ page }) => {
+const KLED = { name: 'Kled', ...AT_CAP, ...CAP_LIVE, snap: { market: '6.00', direct_low: null, low: '5.50', low_with_shipping: '6.50', now: '7.00' } }
+const LEFT_OUT: { why: string; row: Partial<PricingSku> & { name: string }; stored: Record<string, string>; typed: string | null }[] = [
+  { why: 'a typed price and no live copies', row: { name: 'Wattrel', ...AT_CAP }, stored: {}, typed: '5.00' },
+  { why: 'the live price typed again', row: KLED, stored: { '8608959': '6.50' }, typed: '7.00' },
+  /* A STORED PRICE NOT TYPED THIS VISIT: live at a different price, yet only a typed price rides a send. */
+  { why: 'a stored price not typed this visit', row: KLED, stored: { '8608959': '6.50' }, typed: null },
+]
+for (const left of LEFT_OUT) {
+  test(`DEBT95: an at-cap row with ${left.why} is left out of the send and of the priced tile`, async ({ page }) => {
     await setViewport(page, { width: 1440, height: 900 })
     await open(page, {
       skus: [
@@ -6529,7 +6528,9 @@ for (const left of [
       ],
       decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: left.stored },
     })
-    for (const [name, price] of [['Dunsparce', '13.00'], [left.row.name, left.typed]] as [string, string][]) {
+    const typing: [string, string][] = [['Dunsparce', '13.00']]
+    if (left.typed !== null) typing.push([left.row.name, left.typed])
+    for (const [name, price] of typing) {
       const input = page.getByLabel(`Price for ${name}`)
       await input.fill(price)
       await input.press('Tab')
