@@ -341,6 +341,7 @@ from pipeline import orders as order_engine  # noqa: E402
 from pipeline import routing  # noqa: E402
 from pipeline import skus as sku_fill  # noqa: E402
 from pipeline import walkplan  # noqa: E402
+from cli import resolve as run_resolve  # noqa: E402
 from cli import runs as cli_runs  # noqa: E402
 from server import match  # noqa: E402
 from store import Store, db, files, master, numbers, photos, queues  # noqa: E402
@@ -8527,18 +8528,28 @@ def _apply_correction(
     must be exact" over every field `bind_sku` can touch, not only the seven this route has
     always shown on screen).
     """
-    # THE OWNER'S WORD, for both callers: a sent card is not corrected while the old SKU still
+    # THE OWNER'S WORD, for both callers: a SENT card is not corrected while the old SKU still
     # has a copy live on TCGplayer, or one physical card would stand under two SKUs. Read off
     # `live` alone, so a pushed or staged copy still corrects. Before any write below.
+    # "Sent" is the store's one inference (D212): the SKU's oldest captures, as many as
+    # `_copies_out` counts out. A live twin therefore never blocks an unsent copy.
     old_listing = snapshot.inventory.listings.get(card.sku) if card.sku else None
-    if old_listing is not None and old_listing.live >= 1:
+    sent = False
+    if old_listing is not None:
+        by_sku = run_resolve._cards_by_sku(snapshot.inventory)
+        out, _ = run_resolve._copies_out(snapshot.inventory, {}, by_sku=by_sku)
+        sent = key in run_resolve._committed_keys(
+            snapshot.inventory, {card.sku: out.get(card.sku, 0)}, by_sku=by_sku
+        )
+    if sent and old_listing.live >= 1:
         box, index = (int(part) for part in key.split("/"))
         raise BadRequest(
             HTTPStatus.CONFLICT,
             "old_sku_still_live",
             f"{join.said_place(snapshot.inventory, box, index)} still has a copy live on TCGplayer "
-            f"under its current listing. Take that listing down on TCGplayer, fetch your live "
-            f"listings again, then correct the card.",
+            f"under its current listing. Take that listing down on TCGplayer. Then on the Runs "
+            f"screen press Refresh, and in the sheet that opens press Match the store. "
+            f"Then correct again.",
         )
     full_snapshot = snapshot.inventory.identity_snapshot(key)
     previous = {
@@ -8557,7 +8568,8 @@ def _apply_correction(
         if old_entry is not None
         else None
     )
-    released: Dict[str, int] = old_entry.release(1) if old_entry is not None else {}
+    # An unsent copy backs no listing, so a twin's live copy is not given up for it.
+    released: Dict[str, int] = old_entry.release(1) if sent and old_entry is not None else {}
 
     _bind_identity(
         snapshot, key, sku, bound_by="correction", number_strategy=number_strategy,
