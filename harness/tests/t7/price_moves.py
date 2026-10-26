@@ -328,9 +328,16 @@ def _refresh_patch(refresh):
 
 
 def _refresh_stub(ok: bool = True):
-    """A refresh that leaves the step notes the real one leaves (`_prices_refresh_steps` notes each
-    step as it ends). A once-per-day guard reads those notes, and a bare answer leaves none."""
+    """A refresh that leaves the notes the real one leaves (`_prices_refresh_steps` writes the top-level
+    note through `pricerefresh.run`, then one step note as each step ends). A once-per-day guard reads
+    those notes, and a bare answer leaves none."""
+    def fetch() -> dict:
+        if not ok:
+            raise RuntimeError("the refresh stub failed")
+        return {"live_rows": 1}
+
     def refresh(*_args, **_kwargs):
+        pricerefresh.run(fetch)
         for step in ("listings", "catalog", "join", "history"):
             pricerefresh.note_step(step, ok)
         return {"ok": ok, "steps": pricerefresh.read_status()["steps"], "live": {}}
@@ -764,6 +771,28 @@ def check_daily_job_login_run_does_the_day_once(checks: Checks) -> None:
         checks.equal((e2, c2, r2), (None, 0, 1), "the next run that day refreshes again: a failed refresh is not a finished one")
 
 
+def check_manual_price_refresh_still_refreshes_after_the_day_finished(checks: Checks) -> None:
+    """`make price-refresh` downloads now, even on a day the installed job finished.
+
+    BEYOND THE OWNER'S LOGIN RULING, FROM THE COMMAND'S OWN DEFINITION: `CLAUDE.md`'s Commands block
+    says it is "ONE free download of the live listings now". The once-per-day guard is for the
+    unattended start. A guard in front of the manual press would make it log "skipped" and download
+    nothing. The argv is read off `make -n`, as `check_installed_job_sweeps_without_reinstall` reads it.
+    """
+    checks.note("")
+    checks.note("DAILY JOB — the manual press refreshes now, whatever the installed job did today")
+    manual = _make_price_refresh_argv()
+    checks.ok(manual is not None, "`make price-refresh` runs the daily job script, the argv this check reads", str(manual))
+    if manual is None:
+        return
+    with isolated_home() as home:
+        _seed_sweep_store(SWEEP_SKUS[:3])
+        c1, e1, r1 = _run_main(home, INSTALLED_JOB_ARGV, _Host(), refresh=_refresh_stub())
+        checks.equal((e1, c1, r1), (None, 0, 1), "the installed job finishes the day's refresh and sweep")
+        c2, e2, r2 = _run_main(home, manual[0], _Host(), manual[1], refresh=_refresh_stub())
+        checks.equal((e2, c2, r2), (None, 0, 1), "`make price-refresh` after that refreshes once more")
+
+
 FENCE_LABEL = (
     "the daily job calls `do_prices_refresh` (the live listings, the catalog, the join, the sales history) "
     "and the one archive sweep press (`cli.cmd_pricearchive`, D224 and DEBT32), and reaches nothing else of "
@@ -979,6 +1008,7 @@ CHECKS = (
     check_daily_job_sweep_holds_the_refresh_lock,
     check_installed_job_runs_at_login,
     check_daily_job_login_run_does_the_day_once,
+    check_manual_price_refresh_still_refreshes_after_the_day_finished,
     check_price_trends_preload,
     check_trends_press_saves,
     check_older_rejoin_keeps_newer_rows,
