@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Daily demo refresh (D295, docs/specs/demo.md §13). Owner's Mac, main tree only.
+"""Weekly demo refresh (D295, docs/specs/demo.md §13). Owner's Mac, main tree only.
 
 Cuts a throwaway worktree from fresh origin/main, runs `make demo-mirror` there, and
 publishes the result ONLY if `demo-assets/mirror/` changed and the diff touches nothing
 else. Any error: publish nothing, log why. One log line per run.
 
   demo-mirror-daily.py [--dry-run]   stop before push, print what would go out
-  demo-mirror-daily.py --agent [--remove]   install / remove the daily launchd job
+  demo-mirror-daily.py --agent [--remove]   install / remove the weekly launchd job
   demo-mirror-daily.py --selftest    the fence goes red, then green
 
 The fence is what makes the standing auto-merge grant safe: `fence()` refuses any path
@@ -228,14 +228,14 @@ def _run(dry, left):
         sh("git", "add", "--", ALLOWED, cwd=wt)
         check_photos(wt)
         sh("git", "commit", "-q", "-m",
-           "demo: daily mirror refresh\n\nDone: scrubbed mirror rebuilt.\nNext: auto-merge on green CI.", cwd=wt)
+           "demo: mirror refresh\n\nDone: scrubbed mirror rebuilt.\nNext: auto-merge on green CI.", cwd=wt)
         paths = fence_raw(sh("git", "diff", "--raw", "--no-renames", "origin/main...HEAD", cwd=wt).splitlines())
         stat = sh("git", "diff", "--shortstat", "origin/main...HEAD", cwd=wt)
         if dry:
             return "dry-run ok: would publish %d file(s), %s (mirror step %ds)" % (len(paths), stat, took)
         sh("git", "push", "-q", "origin", "HEAD:refs/heads/" + BRANCH, cwd=wt)
         url = sh("gh", "pr", "create", "--base", "main", "--head", BRANCH, "--title",
-                 "demo: daily mirror refresh", "--body", "Data-only. Auto-merges on green CI (D295).", cwd=wt)
+                 "demo: mirror refresh", "--body", "Data-only. Auto-merges on green CI (D295).", cwd=wt)
         num = url.rsplit("/", 1)[-1]
         files = json.loads(sh("gh", "api", "--paginate", "--slurp", "repos/{owner}/{repo}/pulls/%s/files" % num, cwd=wt))
         fence_pr_files([f for page in files for f in page])
@@ -271,7 +271,7 @@ def agent(remove):
         "Label": LABEL,
         "ProgramArguments": [sys.executable, str(HERE)],
         "WorkingDirectory": str(HERE.parent.parent),
-        "StartCalendarInterval": {"Hour": 4, "Minute": 30},
+        "StartCalendarInterval": {"Weekday": 0, "Hour": 4, "Minute": 30},  # launchd: 0 is Sunday
         "StandardOutPath": str(LOG.with_suffix(".out")),
         "StandardErrorPath": str(LOG.with_suffix(".out")),
         "EnvironmentVariables": {"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
@@ -281,7 +281,7 @@ def agent(remove):
         plistlib.dump(payload, f)
     subprocess.run(["launchctl", "bootout", "%s/%s" % (uid, LABEL)], capture_output=True)
     r = subprocess.run(["launchctl", "bootstrap", uid, str(plist)], capture_output=True, text=True)
-    print("bootstrap failed: " + r.stderr.strip() if r.returncode else "installed %s, daily 04:30" % LABEL)
+    print("bootstrap failed: " + r.stderr.strip() if r.returncode else "installed %s, weekly Sunday 04:30" % LABEL)
     return r.returncode
 
 

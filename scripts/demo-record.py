@@ -46,6 +46,7 @@ import subprocess
 import sys
 import threading
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -592,7 +593,7 @@ def sweep(server: Server, space: Dict[str, List[str]], work: "WorkArea"):
     # Placeholder / 101 Example St` — which is what makes it publishable at all. A real
     # export is a list of buyers' home addresses and must never reach this bundle.
     # A MIRROR BRINGS ITS OWN, written by `demo-mirror.py:write_shipping_export` from the
-    # mirror's own open orders, with every name "Jane Doe N" and every street "123 Demo Way".
+    # mirror's own open orders, with each buyer's full name and every address field blank.
     shipping = Path(str(space["home"])) / "shipping-export.csv"
     if not shipping.is_file():
         shipping = REPO_ROOT / "fixtures" / "orders-shipping.csv"
@@ -778,9 +779,8 @@ def sweep_coverage(server: Server, space: Dict[str, object], recorded: Dict[str,
     # belonging to the ~70 buyers who have an open order (measured on the real mirror,
     # 2026-09-27, CI run 36322624741: "97 cards to pick", not 305 and not 71). Grouping by
     # buyer mirrors `orderBuyers.ts:buyerKeyOf`/`foldName` exactly — the demo's own buyer
-    # field is already the scrubbed "Jane Doe N" name, one per real buyer, so grouping by it
-    # groups the same orders the real name would (`demo-mirror.py`'s own scrub, one name per
-    # distinct real buyer).
+    # field is the buyer's real name, so grouping by it groups the same orders the screen
+    # groups, and the recorded set matches.
     listed = (recorded.get("/orders", {}).get("body") or {}).get("orders") or []
     open_orders = sorted(
         str(entry["key"]) for entry in listed
@@ -803,14 +803,14 @@ def owns_a_walkable_body(entry: dict) -> bool:
 
 def buyer_key_of(entry: dict) -> str:
     """`orderBuyers.ts:buyerKeyOf`/`foldName`, restated over the wire's own order dict. The
-    demo's `buyer` field is already the scrubbed "Jane Doe N" name, one per real buyer
-    (`demo-mirror.py`'s own scrub), so grouping by it groups the same orders the real name
-    would."""
+    demo's `buyer` field is the buyer's real name (`demo-mirror.py` keeps it whole), folded
+    here as the screen folds it, so both group the same orders."""
     buyer = entry.get("buyer")
     if isinstance(buyer, str):
         trimmed = re.sub(r"\s+", " ", buyer.strip())
         if trimmed != "":
-            return "name:%s" % trimmed.casefold()
+            # NFKC then lower-case, as `foldName` does; `casefold` would fold "ß" to "ss" and merge "Strauß" with "Strauss", which the screen keeps apart.
+            return "name:%s" % unicodedata.normalize("NFKC", trimmed).lower()
     return "order:%s" % entry.get("key")
 
 
