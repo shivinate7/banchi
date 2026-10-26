@@ -5,3 +5,5 @@ The daily price job runs `archive sweep --write` after its refresh (D224). A sec
 **Outcome at risk.** The archive stops growing on nights when the host throttles, and nobody sees it until they read the job log.
 
 **Closes when.** `#/pricing` shows the archive step's sentence when it stopped early, or the owner rules that the log is enough.
+
+**Two known limits.** A pass where every sku is refused for a reason other than a 403 (offline, a server error) ends ok, so the day's sweep is spent and nothing more is read until tomorrow. A failed refresh repeats all four refresh steps at every start of the job and skips the sweep until the refresh succeeds.
