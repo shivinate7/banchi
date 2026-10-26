@@ -19,6 +19,7 @@ import json
 import os
 import plistlib
 import posixpath
+import re
 import shutil
 import subprocess
 import sys
@@ -121,9 +122,26 @@ def main_tree():
     return Path(common).parent
 
 
+def drop_tree(root, wt):
+    """Remove a throwaway tree and prove it is gone. The demo server's sweep watcher starts inside
+    the tree and rewrites its record after a removal, so stop the tree's servers first, and fall
+    back to rmtree if git leaves the folder."""
+    sh(sys.executable, str(HERE.parent / "janitor.py"), "--teardown", str(wt), cwd=root, check=False)
+    sh("git", "worktree", "remove", "--force", str(wt), cwd=root, check=False)
+    shutil.rmtree(wt, ignore_errors=True)
+    sh("git", "worktree", "prune", cwd=root, check=False)
+    if wt.exists():
+        raise Stop("could not remove %s; delete it by hand" % wt)
+
+
 def run(dry):
     root = main_tree()
-    wt = root / ".claude" / "worktrees" / ("demo-mirror-daily-%d" % time.time())
+    wts = root / ".claude" / "worktrees"
+    wt = wts / ("demo-mirror-daily-%d" % time.time())
+    # The job holds an exclusive lock, so any sibling is a leftover of a run that never reached its finally.
+    for d in wts.glob("demo-mirror-daily-*") if wts.is_dir() else []:
+        if re.fullmatch(r"demo-mirror-daily-\d+", d.name) and d != wt:
+            drop_tree(root, d)
     clear_stale_pr(root)
     sh("git", "fetch", "-q", "origin", "main", cwd=root)
     sh("git", "worktree", "add", "-q", "-B", BRANCH, str(wt), "origin/main", cwd=root)
@@ -158,8 +176,10 @@ def run(dry):
             raise Stop("merge of PR %s failed: %s" % (num, reason))
         return "merged PR %s (mirror step %ds)" % (num, took)
     finally:
-        sh("git", "worktree", "remove", "--force", str(wt), cwd=root, check=False)
-        sh("git", "branch", "-q", "-D", BRANCH, cwd=root, check=False)
+        try:
+            drop_tree(root, wt)
+        finally:
+            sh("git", "branch", "-q", "-D", BRANCH, cwd=root, check=False)
 
 
 def agent(remove):

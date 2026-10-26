@@ -1495,7 +1495,7 @@ CHECKS = (
         "target": "demo-mirror-daily-photos-selftest",
         "shard": "guards-2",
         "runs": "python3 scripts/demo-mirror-daily-photos-selftest.py",
-        "asserts": "The daily mirror ships every photograph its bundle names: a new demo-assets/mirror/photos/ file is not ignored, the photo store's own photos/ stays ignored, and a run never merges a bundle whose photographs are not committed.",
+        "asserts": "The daily mirror ships every photograph its bundle names: a new demo-assets/mirror/photos/ file is not ignored, the photo store's own photos/ stays ignored, and a run never merges a bundle whose photographs are not committed. A run also removes its throwaway worktree folder on every exit path, even with a background writer left in the tree.",
         "needs": ("python3",),
         "writes": '',
         "commit_path": False,
