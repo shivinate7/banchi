@@ -4,7 +4,8 @@
 is null. `t1_id_eval._write_results` used to write that payload over the committed
 `harness/results/t1.json`, losing the holdout score the gate reads. A tune-only payload must leave the
 committed file as it was (a refusal that raises is accepted too). A run that did score the holdout
-still writes.
+still writes, and so does one whose `BANCHI_T1_SPLIT` is set but empty: the split filter reads that as
+no filter, so `t1_id_eval.run` must record the run as a full one (`split_requested == "all"`).
 
 Every case copies the committed t1.json into a run folder and points `t1_id_eval.RESULTS_DIR` at it. The
 real `harness/results/` is never written. The last case proves `run_folder`'s sweep: an old sibling run
@@ -22,9 +23,12 @@ import os
 import shutil
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
+from harness.eval import fixtures, runcache
 from harness.tests import Checks
 from harness.tests import t1_id_eval
 from harness.tests.home import run_folder
@@ -92,6 +96,51 @@ def check_a_run_that_scored_the_holdout_is_still_written(checks: Checks) -> None
     checks.ok(wrote and stored == 0.9853, "a full run with a new holdout score is written", f"wrote={wrote} stored={stored!r}")
 
 
+@contextmanager
+def _offline_full_run(split_env: str):
+    """`t1_id_eval.run()` over two fake cards and a fake cached run, with BANCHI_T1_SPLIT=split_env.
+
+    No image, cache file or API call is touched. `_write_results` is wrapped, so the payload `run` built
+    can be read back.
+    """
+    cards = [
+        SimpleNamespace(card_id="t", split=fixtures.TUNE, set_id="s1", set_name="Set One"),
+        SimpleNamespace(card_id="h", split=fixtures.HOLDOUT, set_id="s2", set_name="Set Two"),
+    ]
+    scores = [
+        t1_id_eval.Score(card, SimpleNamespace(identification=None, status="absent", error="fake"), False, False)
+        for card in cards
+    ]
+    cached = {
+        "submitted_at": "fake",
+        "run": SimpleNamespace(
+            batch_ids=["msgbatch_fake"], failed=[], usage=SimpleNamespace(input_tokens=0, output_tokens=0)
+        ),
+    }
+    env = {t1_id_eval.SPLIT_ENV: split_env, t1_id_eval.SET_HINT_ENV: "", t1_id_eval.RARITY_ENV: ""}
+    with ExitStack() as stack:
+        stack.enter_context(mock.patch.dict(os.environ, env))
+        stack.enter_context(mock.patch.object(runcache, "forced", return_value=False))
+        stack.enter_context(mock.patch.object(runcache, "load", return_value=cached))
+        stack.enter_context(mock.patch.object(fixtures, "labels", return_value=None))
+        stack.enter_context(mock.patch.object(fixtures, "load", return_value=cards))
+        stack.enter_context(mock.patch.object(fixtures, "fixture_fingerprint", return_value="fake"))
+        stack.enter_context(mock.patch.object(t1_id_eval, "_score", new=lambda _cards, _run: scores))
+        yield stack.enter_context(mock.patch.object(t1_id_eval, "_write_results", wraps=t1_id_eval._write_results))
+
+
+def check_an_empty_split_setting_is_a_full_run_and_is_written(checks: Checks) -> None:
+    with run_folder() as folder, _results_dir_at(folder), _offline_full_run("") as write_spy:
+        t1_id_eval.run()
+        reached = write_spy.call_count == 1
+        requested = write_spy.call_args.args[0]["split_requested"] if reached else None
+        written = (folder / "t1.json").is_file()
+    if not checks.ok(reached, "run() reaches the results write with BANCHI_T1_SPLIT set but empty"):
+        return
+    checks.ok(requested == "all", "an empty BANCHI_T1_SPLIT records the run as a full one", f"split_requested={requested!r}")
+    checks.ok(written, "an empty BANCHI_T1_SPLIT full run writes its results file")
+
+
 def check_run_folder_sweeps_old_siblings_and_keeps_new_ones(checks: Checks) -> None:
     with run_folder() as outer:
         root = outer / "sweep-root"
@@ -114,5 +163,6 @@ def check_run_folder_sweeps_old_siblings_and_keeps_new_ones(checks: Checks) -> N
 CHECKS = (
     check_tune_only_write_keeps_committed_holdout_score,
     check_a_run_that_scored_the_holdout_is_still_written,
+    check_an_empty_split_setting_is_a_full_run_and_is_written,
     check_run_folder_sweeps_old_siblings_and_keeps_new_ones,
 )
