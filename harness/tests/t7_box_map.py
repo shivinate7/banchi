@@ -921,7 +921,7 @@ def check_divider_editor_keys(checks: Checks) -> None:
 
 
 def check_divider_keeps_departed_after_it(checks: Checks) -> None:
-    """DEBT40, a divider save can move a divider past departed records.
+    """D58 (a card's number counts the cards): a divider save keeps departed records after it.
 
     THE RULE: an edited start maps to the key of the FIRST RECORD at that place, departed or
     not. "That place" is the gap between card `n-1` and card `n` on hand. A departed record
@@ -937,7 +937,7 @@ def check_divider_keeps_departed_after_it(checks: Checks) -> None:
     whole box (2) or the last of the gap (5) is wrong, so the exact key is asserted.
     """
     checks.note("")
-    checks.note("DEBT40 — a divider edit keeps the departed records in front of its card")
+    checks.note("D58 — a divider edit keeps the departed records in front of its card")
     occupied, departed = (1, 3, 6, 7), (2, 4, 5)
     checks.equal(
         join.divider_index(3, occupied, departed), 4,
