@@ -69,11 +69,12 @@ THE CONTRACT THE BUILD MEETS. The checks are written first, so every name the bu
                               `%Y-%m-%dT%H:%M:%S failed <reason>`. N and M count the files of `photos/` and
                               `captures/` written and skipped; the snapshot is not counted. A lock file and
                               the sidecar beside it are allowed; nothing else is written there.
-  scripts/status.py           `backup() -> List[str]`, called by `render()`: the last-run line, or a line
-                              saying no backup has run. Never an empty list. An absent last-run file is that
-                              plain line and not a `MISSING` entry: status exits non-zero on those, and this
-                              job never runs in a worktree or on CI. A line older than 36 hours (by its own time
-                              and by the file's mtime) carries the word `stale`; a younger line does not.
+  `status_line() -> str`      a module function of the job, which `make status` prints: the last-run line, or
+                              a line saying no backup has run. Never empty. An absent last-run file is that
+                              plain line and not an error: this job never runs in a worktree or on CI. A line
+                              older than 36 hours (by its own time and by the file's mtime) carries the word
+                              `stale`; a younger line does not. The checks load the job alone: the status
+                              printer is not named here, or the harness scope would widen to what it reads.
 
 WHAT THE CHECKS DO NOT RUN. `--agent` is never executed: it bootstraps a real launchd job. The agent half is
 proved through the module with a fake `launchctl` first on PATH, a fake HOME and a fake checkout root.
@@ -115,7 +116,6 @@ from harness.tests.t7.common import REPO_ROOT
 from store import db, files
 
 SCRIPT = REPO_ROOT / "scripts" / "backup-daily.py"
-STATUS = REPO_ROOT / "scripts" / "status.py"
 LABEL = "com.banchi.backup"
 NIGHTLY = "inventory/store.sqlite"
 DAY = 86400
@@ -796,29 +796,38 @@ def check_backup_writes_one_last_run_line(checks: Checks) -> None:
     checks.equal(others, wanted, "a run writes the last-run file and the counts sidecar (if the job names one) in the machine folder, and no log, beside an optional lock")
 
 
+def status_line_under_test(name: str):
+    """The job's `status_line`, loaded alone (its `import launchagent` needs `scripts/` on the path). The caller
+    sets HOME: the last-run file is read from `~/.banchi` when the function is called."""
+    sys.path.insert(0, str(SCRIPT.parent))
+    try:
+        spec = importlib.util.spec_from_file_location(name, SCRIPT)
+        job = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(job)
+    finally:
+        sys.path.remove(str(SCRIPT.parent))
+    return job.status_line
+
+
 @robust
 def check_backup_status_shows_the_last_run(checks: Checks) -> None:
-    """`make status` prints the last-run line, and says so when no backup has run. status.py runs the
-    docs audit and probes ports, so the section function is called alone, with HOME in the run folder."""
+    """`make status` prints the last-run line, and says so when no backup has run. The job's `status_line`
+    is called alone, with HOME in the run folder."""
     case = Case("status")
-    spec = importlib.util.spec_from_file_location("_banchi_status_under_test", STATUS)
-    status = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(status)
+    status_line = status_line_under_test("_banchi_status_under_test")
     word = lambda text: re.search(r"\bok\b", text) is not None  # noqa: E731
 
     raised = []
 
     def section() -> str:
         try:
-            return "\n".join(status.backup())
-        except Exception as exc:  # noqa: BLE001 - no `backup` yet reads as failed lines, not a traceback
+            return status_line()
+        except Exception as exc:  # noqa: BLE001 - no `status_line` yet reads as failed lines, not a traceback
             raised.append(f"{type(exc).__name__}: {exc}")
             return ""
 
-    missing_before = len(getattr(status, "MISSING", []))
     with mock.patch.dict(os.environ, {"HOME": str(case.home)}):
         none = section()
-        absent_is_missing = len(getattr(status, "MISSING", [])) != missing_before
         case.last_run_file.parent.mkdir(parents=True)
         case.last_run_file.write_text("2026-10-24T03:00:12 ok copied=12 skipped=34\n")
         good = section()
@@ -826,7 +835,7 @@ def check_backup_status_shows_the_last_run(checks: Checks) -> None:
         bad = section()
 
     checks.ok(
-        not raised and all(token in good for token in ("backup", "2026-10-24T03:00:12", "copied=12", "skipped=34")) and word(good),
+        not raised and all(token in good for token in ("2026-10-24T03:00:12", "copied=12", "skipped=34")) and word(good),
         "an ok line shows its time, ok and both counts", good or str(raised),
     )
     checks.ok(
@@ -837,12 +846,6 @@ def check_backup_status_shows_the_last_run(checks: Checks) -> None:
         not raised and "backup" in none.lower() and not word(none) and "copied=" not in none,
         "with no backup run yet it says so, and never reads as ok", none or str(raised),
     )
-    checks.ok(not raised and not absent_is_missing,
-              "and an absent last-run file adds no MISSING source, so `make status` stays green where the job never runs")
-    tree = ast.parse(STATUS.read_text())
-    render = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "render")
-    called = {n.func.id for n in ast.walk(render) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
-    checks.ok("backup" in called, "`render()` calls the backup section, so `make status` prints it")
 
 
 @robust
@@ -1032,12 +1035,10 @@ def check_backup_missing_photos_tree_is_a_failure(checks: Checks) -> None:
 @robust
 def check_backup_status_flags_an_old_last_run(checks: Checks) -> None:
     """`make status` must not show last month's `ok` as if it were last night's: a last-run line older than
-    36 hours carries the word `stale` (the word status.py already uses), a younger one does not. Both the
+    36 hours carries the word `stale`, a younger one does not. Both the
     line's own time and the file's mtime are set, so either clock a build reads gives the same answer."""
     case = Case("status-old")
-    spec = importlib.util.spec_from_file_location("_banchi_status_old_under_test", STATUS)
-    status = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(status)
+    status_line = status_line_under_test("_banchi_status_old_under_test")
     raised = []
 
     def section(hours: float) -> str:
@@ -1047,8 +1048,8 @@ def check_backup_status_flags_an_old_last_run(checks: Checks) -> None:
         os.utime(case.last_run_file, (then, then))
         try:
             with mock.patch.dict(os.environ, {"HOME": str(case.home)}):
-                return "\n".join(status.backup())
-        except Exception as exc:  # noqa: BLE001 - no `backup` yet reads as failed lines, not a traceback
+                return status_line()
+        except Exception as exc:  # noqa: BLE001 - no `status_line` yet reads as failed lines, not a traceback
             raised.append(f"{type(exc).__name__}: {exc}")
             return ""
 
