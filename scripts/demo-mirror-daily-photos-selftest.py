@@ -756,6 +756,10 @@ def policy_rulings():
                                 buyer="Priya", lines=[OrderLine(sku="2", quantity=1)]),
                     OrderRecord(source="tcg", number="3", placed_at="2026-01-03", status="Shipped",
                                 buyer=None, lines=[OrderLine(sku="3", quantity=1)]),
+                    OrderRecord(source="tcg", number="4", placed_at="2026-01-04", status="Ready to Ship",
+                                buyer="Zoë Ångström", lines=[OrderLine(sku="4", quantity=1)]),
+                    OrderRecord(source="tcg", number="5", placed_at="2026-01-05", status="Ready to Ship",
+                                buyer="Mary Jane Watson", lines=[OrderLine(sku="5", quantity=1)]),
                 ])
             snapshot = base / "snapshot"
             snapshot.mkdir()
@@ -798,6 +802,16 @@ def policy_rulings():
                  "an address field is not blank or '123 Demo Way'")
         text = (build_once()["home"] / "shipping-export.csv").read_text(encoding="utf-8")
         need("Miller" not in text, "the shipping export still holds a full surname")
+
+    def names_accented_and_long_names():
+        # An accented letter and a three-word name each come out as a short name with no surname in it.
+        # The output check below then proves the check takes the scrub's own output (an accented initial).
+        got, text = build_once()["buyers"], (build_once()["home"] / "shipping-export.csv").read_text(encoding="utf-8")
+        need((got.get("4") or "").startswith("Zoë ") and "ngström" not in (got.get("4") or ""),
+             "buyer 'Zoë Ångström' is stored as %r, want 'Zoë' and an initial" % got.get("4"))
+        need((got.get("5") or "").startswith("Mary ") and "Watson" not in (got.get("5") or ""),
+             "buyer 'Mary Jane Watson' is stored as %r, want 'Mary' and no 'Watson'" % got.get("5"))
+        need("ngström" not in text and "Watson" not in text, "the shipping export still holds a full surname")
 
     def names_output_passes_the_check():
         # build()'s own output must satisfy the one check, whatever form the names take.
@@ -965,6 +979,7 @@ def policy_rulings():
     policy("names: a full name is stored as first name + last initial", names_full_name_to_initial)
     policy("names: a one-word name is kept and a missing buyer stays missing", names_one_word_kept)
     policy("names: the shipping export carries the short name and a blank-or-demo address", names_shipping_export)
+    policy("names: an accented name and a three-word name lose their surname", names_accented_and_long_names)
     policy("names: build() output passes assert_scrubbed", names_output_passes_the_check)
     policy("check: assert_scrubbed accepts first name + last initial", check_accepts_new_form)
     policy("check: assert_scrubbed refuses a surname and never echoes it", check_refuses_surname)
