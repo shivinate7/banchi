@@ -16,6 +16,7 @@ global `t1_id_eval.RESULTS_DIR`, which it reads at call time.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shutil
@@ -64,11 +65,9 @@ def check_tune_only_write_keeps_committed_holdout_score(checks: Checks) -> None:
         copy = folder / "t1.json"
         shutil.copyfile(COMMITTED, copy)
         before = copy.read_bytes()
-        with _results_dir_at(folder):
-            try:
-                t1_id_eval._write_results(_tune_only(committed), "none")
-            except (Exception, SystemExit):
-                pass  # a refusal is an accepted fix; the file must still be unchanged
+        # a refusal is an accepted fix; the file must still be unchanged
+        with _results_dir_at(folder), contextlib.suppress(Exception, SystemExit):
+            t1_id_eval._write_results(_tune_only(committed), "none")
         after = copy.read_bytes()
     checks.ok(
         after == before,
