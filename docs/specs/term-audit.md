@@ -42,8 +42,8 @@ Point: 25 clashes confirmed. Worst: "Match" covers three steps, and the free rea
  Where: RunPanel.tsx ("Join with an export…"); LiveReconcile.tsx ("My Pricing"); RunFiles.tsx ("CSV export"); pipeline_routes.py says "the Pricing tab" (TCGplayer's tab, not our #/pricing).
  Proposed: "Product list" (Filtered CSV, per game, D166: export belongs to the game); "Live listings file" (My Pricing); "Staged file" (Export From Staged); "Shipping file"; run output "Import file". TCGplayer's own button names stay as TCGplayer spells them.
  Size: medium. Screen and docs only. Code keeps `export`.
-11. **Catalog.** "Catalog" means the vendored Pokemon data, TCGplayer's product list, and the 16.7 GB image mirror. It is also spelled "catalogue".
- Where: pipeline/catalog.py; D166 ("catalog export"); app/src/server.ts matchRun ("fetch the catalogue"); CLAUDE.md `make catalog-mirror`.
+11. **Catalog.** "Catalog" means the vendored Pokemon data, TCGplayer's product list, and the 16.7 GB image mirror. It is also spelled the British way, with "-ue".
+ Where: pipeline/catalog.py; D166 ("catalog export"); app/src/server.ts matchRun (British spelling in its message); CLAUDE.md `make catalog-mirror`.
  Proposed: "Card data" = vendored data. "Product list" = TCGplayer's. "Image mirror" = mirror. One spelling: "catalog".
  Size: small. Docs and comments only. Make targets keep.
 12. **Photos.** The card photo files have 5 names; "photo" also means a stock photo.
