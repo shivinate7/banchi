@@ -959,8 +959,9 @@ export function WalkList({
 /** The press on a copy row: an icon in every row (the iconography rule, a press repeated per
  *  row), its name carrying the place so thirty rows never announce the same word. `Undo` stands
  *  only on the newest sale (`newestUndoKey`). `take` names which take this copy is being sold
- *  against (A4): the pane omits it, since `onSell` falls back to the row it is showing, but a
- *  `WalkList` row names its own take explicitly — it may not be the one the pane is on. */
+ *  against (A4): the pane passes the take it is showing, and a `WalkList` row names its own
+ *  take explicitly, since it may not be the one the pane is on. `onSell` falls back to the row
+ *  it is showing when `take` is omitted. */
 export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk; readonly copy: SearchCopy; readonly take?: WalkPlanTake; readonly hint?: string }) {
   const receipt = walk.receipts.get(copy.key)
   const busy = walk.busyCopy === copy.key

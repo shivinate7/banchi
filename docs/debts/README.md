@@ -60,24 +60,24 @@ DEBT58 the Lane H palette record is on a branch, not in main
 DEBT59 an unreadable live submission claim has no way out on screen
 DEBT60 the demo builds with Hide unpullable forced off
 DEBT61 eight build proposals are still open
-DEBT62 the demo photos are about 180 MB of plain git, and the owner wants them in Git LFS
+DEBT62 the demo photos are about 180 MB of plain git, and the owner left them there
 DEBT63 T1 has never been compared with TCGplayer Scan & Identify
-DEBT64 the collector number is not cross-checked against the local catalog
+DEBT64 the collector number's printed total is not cross-checked against the local catalog
 DEBT65 the number-corner crop is sent only on a retry
 DEBT66 no perceptual-hash cross-check on identification
 DEBT67 capture photographs exist in one place
 DEBT68 the posted-price history has no screen
-DEBT69 the daily price read covers listed SKUs only, and no live price is pushed automatically
+DEBT69 the daily price read skips some runs, "moved since listing" needs an archive bucket, and no live price is pushed automatically
 DEBT70 realized prices inform no listing rule
 DEBT71 the value of the set hint is asserted, not measured
 DEBT72 PKMNVAULT, Supabase and eBay are unbuilt
 DEBT73 the Mac dock icon has no drop shadow, and none was tried
 DEBT74 the mark's four HELD base parameters were never compared
-DEBT76 the walk's card sheet on a phone has no Mark sold
+DEBT76 the walk's card sheet on a phone sells, and no running check proves it
 DEBT77 every phone-width spec is off
 DEBT82 The Fulfiller's boxes slide once when the Pick list lands
 DEBT83 Off-screen rail tiles still cost a little per capture
-DEBT84 The public demo's first screen is heavier than its budget
+DEBT84 The public demo's first screen sits just under its byte budget, and its time on a slow network is unmeasured
 DEBT85 The read-budget check proves some routes on their miss path only
 DEBT86 Capabilities written twice that have not drifted yet
 DEBT87 an Unhold whose store write fails leaves copies off the list with no control

@@ -32,11 +32,13 @@ rarity claim still does its other two jobs (9.1). Re-enable the clause only with
 measurement that says otherwise. `BANCHI_T1_RARITY=1` is the instrument
 (`harness/tests/t1_id_eval.py`).
 
-**What has met a real card.** Nothing here. The identification measurements ran on Pokemon
-cards through a pipeline that had no `game` field. No Riftbound, One Piece or misc card has been
-photographed, identified or joined in a measured run. Every claim below about those games is a
-claim about a CSV file, not about a photograph. Whether that has changed on the owner's rig:
-unmeasured here.
+**What has met a real card.** The identification measurements ran on Pokemon cards through a
+pipeline that had no `game` field. Riftbound has met real photographs: D35 records run
+`2026-08-29-box1-01`, which held real Riftbound cards and read four of them unusably. That run
+measured no Riftbound identification accuracy. No One Piece or misc card has been photographed,
+identified or joined in a measured run. Every claim below about One Piece and misc is a claim
+about a CSV file, not about a photograph. Whether that has changed on the owner's rig: unmeasured
+here.
 
 ---
 
@@ -514,9 +516,9 @@ say which one moved the number.
 ### 9.5 Per-game finalization
 
 Riftbound and One Piece have prompts (`riftbound_card_v1`, `one_piece_card_v1`), exports and
-vocabularies. They claim no crop bands. Nothing has photographed a card of either game, so
-nothing has measured where either puts its title or its identifier. Identification accuracy for
-either game is unmeasured.
+vocabularies. They claim no crop bands. No One Piece card has been photographed. Riftbound has
+met real photographs (D35, run `2026-08-29-box1-01`), but nothing has measured where either game
+puts its title or its identifier. Identification accuracy for either game is unmeasured.
 
 ---
 
@@ -533,7 +535,8 @@ Every `finish_by_rarity` row wider than what an export stocks (section 5).
 `TR`.
 
 **Not evidence at all.** Every claim about how a Riftbound or One Piece card photographs. The
-card shapes are properties of cardboard. The crop bands are empty for exactly this reason.
+card shapes are properties of cardboard. The crop bands are empty for exactly this reason: no
+measurement of either game's photographs exists, though a Riftbound run has met real ones (D35).
 Identification accuracy for either game is unmeasured.
 
 ---

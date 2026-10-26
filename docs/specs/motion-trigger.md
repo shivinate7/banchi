@@ -21,7 +21,7 @@ machine.
 zero misses, into a real box through the full path. One designed `no-card` suppression happened at
 arm time. That clears the 50-card bar for the trigger half of Gate C. Still owed: the pipeline half
 (identify, join, emit and reconcile on a feeder-paced box) and foil under this lamp.
-The rig's measured cadence is 0.6095 s a card (`app/src/storeHistory.ts`'s `RIG_CEILING_PER_HOUR`).
+The rig's measured cadence is 0.6095 s a card.
 
 **Not validated at the rig:**
 

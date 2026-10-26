@@ -698,9 +698,9 @@ export function CardPane({ row, game, dimmed = false, preChips, postChips, queue
     >
       <CardHeroHead card={row.card} game={game} preChips={preChips} postChips={postChips} actions={actions} figures={figures} figuresPending={figuresPending} figuresEmpty={figuresEmpty} figuresNote={figuresNote} market={market} />
       {queued}
-      {/* NO `detail`, NO COPIES COLUMN: `#/orders`' walk draws where each copy is in its own column, so
-          its card pane is the head, the band and the photograph alone (same components, switched off
-          by omission, never a fork). */}
+      {/* `detail` IS THE COPIES COLUMN. `#/inventory` and the `#/orders` walk both pass it (the walk
+          hands in its copy rows). A caller that omits it gets the head, the band and the photograph
+          alone (same components, switched off by omission, never a fork). */}
       <div className="browse-band" data-photo-only={detail === undefined ? 'true' : undefined}>
         <div className="browse-shot">
           <PhotoPanel row={row} {...photo} />
