@@ -3271,7 +3271,7 @@ test('a poll that moves no phase leaves the step the owner opened open', async (
  * run's answer is HELD here so the stale window is as long as the assertion needs, not one
  * request on a fast loopback. The positive end (the new heading arrives) proves the case drove
  * the real switch and was not passing on an empty panel. */
-test('switching straight to another run draws nothing of the old one while the new one loads', async ({
+test('switching straight to another run draws nothing of the old one and holds the loaded size while the new one loads', async ({
   page,
 }) => {
   const first = runRow({ run: '2026-08-24-box9-01' })
@@ -3300,6 +3300,9 @@ test('switching straight to another run draws nothing of the old one while the n
     })
   })
 
+  const panelHeight = () => page.locator('.runs-detail-panel').evaluate((el) => el.getBoundingClientRect().height)
+  let loadingHeight = 0
+
   try {
     await page.locator(`.run-row[title="${first.run}"]`).click()
     await expect(page.locator('.runs-detail-h')).toHaveText('Box 9')
@@ -3308,13 +3311,25 @@ test('switching straight to another run draws nothing of the old one while the n
     await page.locator(`.run-row[title="${second.run}"]`).click()
     await asked
 
-    /* NOT `.runs-detail-panel` HIDDEN: the loading panel wears that class too. The heading is
-       what carries the old run's identity, and it is absent from the loading panel. */
-    await expect(page.locator('.runs-detail-h')).not.toHaveText('Box 9')
+    /* THE LOADING PANEL HAS NO HEADING, so the old run's identity is asserted ABSENT. A negated
+       text match fails on a missing element, and `.runs-detail-panel` cannot be the probe: the
+       loading panel wears that class too. */
+    await expect(page.locator('.runs-detail-h', { hasText: 'Box 9' })).toHaveCount(0)
+    await settleMotion(page)
+    loadingHeight = await panelHeight()
   } finally {
     release()
   }
   await expect(page.locator('.runs-detail-h')).toHaveText('codes')
+
+  /* NOTHING ON SCREEN MOVES UNLESS THE PERSON MOVED IT: A LOADING AREA HOLDS ITS LOADED SIZE FROM
+     THE FIRST PAINT (CLAUDE.md, "The design system"). The panel that stands in for
+     the run while it loads must be the height the run's own panel then takes, or the column under
+     it jumps when the answer lands. */
+  await settleMotion(page)
+  expect(Math.round(loadingHeight), 'the loading panel is the size of the loaded one').toBe(
+    Math.round(await panelHeight()),
+  )
 })
 
 test('every run row waits min(i, cap) * the one shared stagger', async ({ page }) => {
