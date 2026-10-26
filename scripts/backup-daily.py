@@ -9,8 +9,14 @@ the source root (`store.files.home()`, D43):
                           file (an evicted iCloud file would download). It never deletes in the
                           destination, so a sold card's photograph (D89) stays.
   inventory/store.sqlite  SQLite's online backup from a read-only connection (`store.db.open_read_only`):
-                          no store lock, no write, so the capture server is never waited on. It goes to a
-                          temporary name and is renamed, so a failed run leaves the last good snapshot.
+                          no store lock, no write, so the capture server is never waited on. It is made
+                          FIRST, in a local temp folder, and only the finished file is moved in, so a
+                          failed or killed run leaves the last good snapshot and no temp file.
+  WEEKLY_SNAPSHOT         a second snapshot, replaced from the same night's snapshot only when its file is
+                          7 days old (by mtime) or more. A night whose snapshot fails replaces neither.
+
+One file that cannot be read does not stop the run: the rest are copied and the run ends `failed` with the
+count. A source with no `photos/` tree fails. In a linked worktree the job refuses unless `DEST_ENV` is set.
 
 The destination is `DEST_ENV` if set, else the default below. Its PARENT must exist; the folder itself is
 made on the first night. A missing parent (iCloud Drive is off) is a failed run that creates nothing,
@@ -28,6 +34,7 @@ import os
 import shutil
 import sqlite3
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -40,6 +47,9 @@ DEST_ENV = "BANCHI_BACKUP_DEST"
 DEFAULT_DEST = "~/Library/Mobile Documents/com~apple~CloudDocs/Banchi backup"
 TREES = ("photos", "captures")
 SNAPSHOT = Path("inventory") / "store.sqlite"
+WEEKLY_SNAPSHOT = "inventory/store-weekly.sqlite"
+WEEK_NS = 7 * 86400 * 10**9
+SLACK_NS = 2 * 10**9  # a synced folder rounds mtimes
 
 
 def last_run_file():
@@ -52,46 +62,67 @@ def agent(remove):
 
 
 def copy_tree(source_root, dest_root):
-    """(copied, skipped). `os.stat` on the destination only; a changed file is rewritten in place, and
-    copy2 sets the mtime last, so a half-written file never matches the source and is copied again."""
-    copied = skipped = 0
+    """(copied, skipped, bad). `os.stat` on the destination only; a changed file is rewritten in place, and
+    copy2 sets the mtime last, so a half-written file never matches the source and is copied again. A file
+    that cannot be read or written is counted in `bad` and the walk goes on."""
+    if not (source_root / "photos").is_dir():
+        raise RuntimeError("the source has no photos/ folder (wrong BANCHI_HOME?): %s" % source_root)
+    copied = skipped = bad = 0
     for top in TREES:
         for folder, _, names in os.walk(source_root / top):
             for name in names:
                 src = Path(folder) / name
-                rel = src.relative_to(source_root)
-                dst = dest_root / rel
-                s = src.stat()
+                dst = dest_root / src.relative_to(source_root)
                 try:
-                    d = dst.stat()
-                    if (d.st_size, d.st_mtime_ns) == (s.st_size, s.st_mtime_ns):
-                        skipped += 1
-                        continue
-                except FileNotFoundError:
-                    pass
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dst)
-                copied += 1
-    return copied, skipped
+                    s = src.stat()
+                    try:
+                        d = dst.stat()
+                        if d.st_size == s.st_size and abs(d.st_mtime_ns - s.st_mtime_ns) < SLACK_NS:
+                            skipped += 1
+                            continue
+                    except FileNotFoundError:
+                        pass
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, dst)
+                    copied += 1
+                except OSError:
+                    bad += 1
+    return copied, skipped, bad
+
+
+def move_in(local, dst):
+    """Copy a finished local file beside `dst` and rename it over `dst`: a reader never sees half a file."""
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dst.with_name(dst.name + ".tmp")
+    try:
+        shutil.copyfile(local, tmp)
+        os.replace(tmp, dst)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def snapshot(source_root, dest_root):
     from store import db
 
-    dst = dest_root / SNAPSHOT
-    tmp = dst.with_name(dst.name + ".tmp")
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    src = db.open_read_only(source_root / SNAPSHOT)
-    try:
-        out = sqlite3.connect(tmp)
+    with tempfile.TemporaryDirectory() as folder:
+        local = Path(folder) / "store.sqlite"
+        src = db.open_read_only(source_root / SNAPSHOT)
         try:
-            src.backup(out)
+            out = sqlite3.connect(local)
+            try:
+                src.backup(out)
+            finally:
+                out.close()
         finally:
-            out.close()
-        os.replace(tmp, dst)
-    finally:
-        src.close()
-        tmp.unlink(missing_ok=True)
+            src.close()
+        move_in(local, dest_root / SNAPSHOT)
+        weekly = dest_root / WEEKLY_SNAPSHOT
+        try:
+            due = time.time_ns() - weekly.stat().st_mtime_ns >= WEEK_NS
+        except FileNotFoundError:
+            due = True
+        if due:
+            move_in(local, weekly)
 
 
 def run():
@@ -99,16 +130,26 @@ def run():
     from store import files
 
     dest = Path(os.environ.get(DEST_ENV) or DEFAULT_DEST).expanduser()
+    problems = []
     try:
         if not dest.parent.is_dir():
             raise RuntimeError("the destination's parent folder is not there (is iCloud Drive on?): %s" % dest.parent)
         dest.mkdir(exist_ok=True)
         source = files.home()
-        copied, skipped = copy_tree(source, dest)
-        snapshot(source, dest)
+        try:
+            snapshot(source, dest)
+        except Exception as exc:  # noqa: BLE001 - the photographs are copied anyway; the night still fails
+            problems.append("snapshot failed: %s: %s" % (type(exc).__name__, " ".join(str(exc).split())))
+        copied, skipped, bad = copy_tree(source, dest)
+        if bad:
+            problems.append("%d files could not be copied" % bad)
         verdict, ok = "ok copied=%d skipped=%d" % (copied, skipped), 0
+        if problems:
+            verdict, ok = "failed " + "; ".join(problems), 1
     except Exception as exc:  # noqa: BLE001 - every failure is a recorded line and a non-zero exit
         verdict, ok = "failed %s: %s" % (type(exc).__name__, " ".join(str(exc).split())), 1
+        if problems:
+            verdict += "; " + "; ".join(problems)
     line = "%s %s" % (time.strftime("%Y-%m-%dT%H:%M:%S"), verdict)
     last_run_file().write_text(line + "\n")
     print(line)
@@ -122,6 +163,9 @@ if __name__ == "__main__":
     a = ap.parse_args()
     if a.agent:
         sys.exit(agent(a.remove))
+    if (ROOT / ".git").is_file() and not os.environ.get(DEST_ENV):
+        # A linked worktree shares ~/.banchi, so even the last-run line stays unwritten.
+        sys.exit("refused: this is a linked worktree; the backup runs from the main tree (or set %s)" % DEST_ENV)
     last_run_file().parent.mkdir(parents=True, exist_ok=True)
     lock = open(last_run_file().with_suffix(".lock"), "w")  # noqa: SIM115 held for the process life
     try:

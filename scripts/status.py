@@ -1067,6 +1067,12 @@ def backup() -> List[str]:
         line = (ports.machine_dir() / "backup-last-run").read_text().strip()
     except OSError:
         line = ""
+    try:
+        old = time.time() - time.mktime(time.strptime(line[:19], "%Y-%m-%dT%H:%M:%S")) > 36 * 3600
+    except ValueError:
+        old = False
+    if old:
+        line += "  (stale: older than 36 hours)"
     return [field("backup", line or "no backup has run (`make backup`; `make backup-agent` makes it nightly)")]
 
 
