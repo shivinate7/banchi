@@ -81,12 +81,13 @@ MEASURE_MAX = 200
 # accepted 3,297 of 3,605 filed non-free cards and 4 were wrong, 1 of them human-cleared.
 FLOOR_MIN = 0.69
 TOP_N = 3
-# AN EMPTY SLOT HAS NO BRIGHT PIXEL. Measured at full size on the rig's photographs: the 99th-percentile
-# luminance (0 to 255) of seven empty-slot photographs is 75 or less, one black photograph of a retired
-# card is 4, and every other one of the 5,088 stored photographs is 127 or more (the dimmest real card).
-# The cut sits between. Read at full size (about 41 ms a photograph): a downscaled decode dilutes thin
-# bright detail and would call a dark card with fine white lines empty. PONYTAIL CEILING: a fixed
-# exposure is assumed. A rig session shot far darker than the others would send its real cards to the
+# AN EMPTY SLOT HAS NO BRIGHT PIXEL. The 100 cut was measured at FULL size on the rig's photographs: the
+# 99th-percentile luminance (0 to 255) of seven empty-slot photographs is 75 or less, one black photograph of
+# a retired card is 4, and every other one of the 5,088 stored photographs is 127 or more (the dimmest real
+# card). The cut sits between. The read is HALF scale now (a JPEG draft; 1/4 and 1/8 miss thin white lines on
+# a dark card), and half scale is UNMEASURED on rig frames: a 1px-line probe read 160 at full size and 90 at
+# half, and 5,220 demo-mirror thumbnails showed 0 flips. PONYTAIL CEILING: a fixed exposure is assumed. A rig
+# session shot far darker than the others would send its real cards to the
 # main queue as "empty", never to a wrong listing; widen with a second feature if one is ever measured.
 EMPTY_SLOT_P99 = 100
 # A DARK PHOTOGRAPH IS RETIRED ONLY WHEN THE FREE READER'S BEST MATCH IS ALSO WEAK. Best raw cosine of

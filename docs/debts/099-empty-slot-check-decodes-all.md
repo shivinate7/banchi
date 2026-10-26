@@ -4,6 +4,7 @@
 
 - **Result:** a dry run over a large new box still waits for the decode pass before it prints a quote. The pass is shorter than it was, not short.
 - **Not fixed because** the draft alone does not reach the target. On a synthetic 12 MP JPEG a decode takes 67 ms at full size and 36 ms at half scale. Entropy decoding is the floor, and a draft cannot go below it. At that rate 2,500 photographs take about 90 s. This is unmeasured on real rig photographs.
+- **Unmeasured:** the cut of 100 was measured at full size. Half scale is unmeasured on rig frames. A 1px-line probe read 160 at full size and 90 at half, and 5,220 demo-mirror thumbnails showed 0 flips. A rig frame with thin bright detail could read lower and count as an empty slot.
 - **Closes when** a measured dry run over 2,500 uncached photographs takes a few seconds. The remaining remedy is to cache the result per photograph, so each photograph is decoded once and never again. The check keeps its result on the stored photographs, with no false catch.
 - **Points to** D1 (capture is dumb, batch identifies later). The check is a free step that runs before any paid send.
 
