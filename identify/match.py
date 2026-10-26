@@ -596,13 +596,15 @@ class Result:
 
 
 def luminance_p99(photo: Path) -> Optional[float]:
-    """The photograph's 99th-percentile luminance (0 to 255), at full size, or None when it will not
-    open (the crop step names that `photo_unreadable`). The one read behind `empty_slot`."""
+    """The photograph's 99th-percentile luminance (0 to 255), or None when it will not open (the crop
+    step names that `photo_unreadable`). The one read behind `empty_slot`. A JPEG decodes at half
+    scale: 1/4 and 1/8 miss thin white lines on a dark card, and a PNG decodes in full (DEBT99)."""
     import numpy as np
     from PIL import Image
 
     try:
         with Image.open(photo) as image:
+            image.draft("L", (image.width // 2, image.height // 2))
             return float(np.percentile(np.asarray(image.convert("L")), 99))
     except Exception:
         return None

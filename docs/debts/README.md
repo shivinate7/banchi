@@ -92,6 +92,6 @@ DEBT95 the priced tile counts typed prices on rows the send leaves out
 DEBT96 Fulfillment still shows the owner's photo first
 DEBT97 a Card Ladder failure on Add hides its plain sentence
 DEBT98 a fully answered selection reads "The free read is not set up"
-DEBT99 the empty-slot check decodes every uncached photo at full size
+DEBT99 the empty-slot check still pays for an entropy decode of every uncached photo
 DEBT100 the free number reader for same-art printings is shelved
 ```
