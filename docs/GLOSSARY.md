@@ -2,123 +2,196 @@
 
 One word per meaning, in every layer: screen, help text, docs, code, wire, store and command
 line. This file is the home of the owner's terminology rulings. A word not here keeps its
-plain English meaning.
+plain English meaning. TCGplayer's own column, file and button names stay as TCGplayer spells
+them.
 
-The `retired phrases` row of `make docs-audit` reads the **Retired** column below. A retired
-phrase is an exact phrase, matched without case, never a bare word. Bare words like "read",
-"held" or "pushed" are correct in their own meaning, so the row never refuses them.
+The terms are grouped by the stage of the work, in order: capture, read, match to product,
+price, list on TCGplayer, sell and ship, and boxes. Words that every stage uses come last.
 
-## Terms
+A row with no tag is the owner's ruling. A row tagged **open** carries the recommended word for
+the owner's numbered note on the earlier draft. A row tagged **new** is proposed by this rework.
+Both wait for the owner's word.
+
+The **Retired** column holds exact phrases, matched without case, never bare words. Bare words
+like "read", "held" or "pushed" are correct in their own meaning, so a check must never refuse
+them. **NOT MECHANIZED:** no `make docs-audit` row reads this column yet. A machine would have to
+read the Retired column of every table below and refuse each phrase in screen strings, help
+text, docs and code, outside this file.
+
+## Capture
 
 | Term | Means | Not to be confused with | Retired |
 |---|---|---|---|
-| Match | The step that attaches each card to a TCGplayer product, by collector number against the product list. Button: "Match again". | Free read; the At market price rule; search | `Join again`; `Join with an export`; `Match the store` |
-| Matched | A card that has a product attached. | Identified | |
-| Not matched yet | A card with no product attached (stored identity source `read` today). | Disputed | |
-| Free reader | The on-Mac image reader that compares a photo to stock photos. Costs nothing. Switch: "Free read in background". Setup press: "Set up free reader". | Paid read | `Background Match`; `Prepare matching`; `Refresh stock photos`; `Match to stock photos`; `Rig switch` |
-| Free read | One answer from the free reader for one photo. | Paid read | |
-| Paid read | One answer from the paid Claude batch read of a photo. The tooltip says "Claude Haiku", with no version. | Identify | `Paid Look`; `second look`; `Read from the photo`; `Claude Haiku 4.5` |
-| Paid read batch | One batch of paid reads sent to Claude. Its pill while out: "Paid read out". | Send | `Nothing in this send was paid` |
-| Identify | The whole first step: free read first, then the paid read for the rest. Only the paid read costs money. | The paid read alone | `only step that spends money` |
-| Identified | The reader answered for a card. | Matched | |
-| Read | One answer for one photo, free or paid. | Market price; counted | `not read yet` |
-| Market price | A price snapshot for a product. | Read | |
-| Counted | When a listing count was last taken: "counted 3 days ago", "Not counted yet". | Read | |
-| Photo settings | The crop and size a paid read sends. | Read | |
-| Disputed | A card whose photo read argues with its bound product. | Not matched yet | |
-| Cut-off | The store's one price line (`policy.threshold`). At or above it a card earns a listing; below it the card goes out at the flat price and parks; no rule or price change may set a price under it. | Envelope limit; move size | `under the threshold` |
-| Envelope limit | The order value above which a shipment needs tracking. | Cut-off | |
-| Move size | The price change that counts a product as a mover. | Cut-off | |
-| At market | The price rule that lists at the market price. | Match | |
-| Held back | A product you chose to keep out of every send, on Pricing. | Trimmed; Reserved for order; Disputed; Counted as listed | `held for you`; `Held for order` |
-| Trimmed | Copies the send guard removed because TCGplayer already had them: "Trimmed: TCGplayer already had them". | Held back | |
-| Waiting for you | A Review card that needs your answer. | Held back | |
-| Reserved for order | A copy set aside for a buyer's order. | Held back | |
-| Counted as listed | A box's copies the store counts as listed. Button: "Stop counting as listed". It changes nothing at TCGplayer (D34, a box's holds release against its own copies). | Live | `Listing-held`; `Release the listing hold` |
-| Review | The screen, and both of its piles. | To review | |
-| To review | Review's main pile: cards that owe an answer. | Parked | `main queue` |
-| Parked | Review's low-value pile: no answer owed. | To review | |
-| Reader failed | A card no reader could answer. | Parked | |
-| Answered | A person picked an answer for a card. | Stood down | `answered, left alone` |
-| Stood down | A Review entry closed with the card unchanged. | Answered | |
-| Send | The press that sends listings live to TCGplayer. | Paid read batch; price change | |
-| Counted as sent | A copy the store has written to an import file. It may not be on TCGplayer yet. | Live | |
-| Waiting to compare | A run whose import file is written and not yet compared with the staged file. | Counted as sent | |
-| Price change | An upload that changes prices on live listings. | Send | |
-| Import file | The file a run writes for TCGplayer's import. | Product list | |
-| Product list | The game's Filtered CSV from TCGplayer, the source a Match reads. | Live listings file; staged file | |
-| Live listings file | TCGplayer's My Pricing export: what is live now. | Product list | |
-| Staged file | TCGplayer's Export From Staged file. | Import file | |
-| Shipping file | TCGplayer's shipping export of open orders. | Product list | |
-| Catalog | One spelling. | | `catalogue` |
-| Card data | The vendored Pokemon card data. | Product list | |
-| Image mirror | The local copy of card images. | Stock photo | |
-| Photos folder | `photos/`, where card photos live. | Legacy captures; screenshots | |
-| Legacy captures | `captures/cards/`, the old photo folder. | Photos folder | |
-| Stock photo | TCGplayer's product image. Always says "stock". | Card photo | |
-| Card 17 | A card's count in its box. | Collector number; key | `slot numbers are not the truth` |
-| Collector number | The number printed on the card. | Card 17 | |
-| Key | A card's stored index, which never moves. | Card 17 | |
-| Sort key | The order cards are listed in. | Order | |
-| Order | A buyer's order. | Sort key | |
-| Box | A container of cards, addressed by its unique name. | Panel | `Pick the drawer`; `Fewest drawers` |
-| Box id | A box's never-reused index (`bid`), never shown on screen. | Box name | |
-| Panel | A slide-out part of the screen, the phone's included. | Box | `queue drawer` |
-| Captured | A card state: photographed, not yet sent. | Photographed | `Cards captured`; `Sold of captured` |
+| Captured | A card state: photographed, and no reader has answered for it yet. Its name shows as Not read yet. The card leaves this state when its read is recorded. | Photographed | `Cards captured`; `Sold of captured` |
 | Photographed | The lifetime count of cards photographed. | Captured | |
-| On hand | Copies in boxes now. Bare "stock" is never used. | Photographed | `In stock`; `On Your Shelf` |
-| Product | The TCGplayer product bound to a card. | Live | `Listed as` |
-| Live | Copies on TCGplayer now. | Running; counted as listed | |
-| Running | A process that is running. | Live | |
-| Claims | Your labels on a card: game, finish, rarity, set hint. | Lock | `Set claims` |
-| Lock | A hold on a paid press so it runs once. | Claims | `release the claim` |
 | Paused | The motion trigger, turned off by you. | Captures stopped | |
 | Captures stopped | A fault halt. Button: "Start captures again". | Paused | `Captures are paused`; `Resume captures` |
-| Sold | A buyer bought it, as the order ledger records. Home's link shows this count and opens Sales. | Sold on Banchi | |
+| Photos Folder | `photos/`, where card photos live. | Legacy Captures; screenshots | |
+| Legacy Captures | `captures/cards/`, the old photo folder. | Photos Folder | |
+| Claims | Your labels on a card: game, set hint, finish, rarity and a note. | Lock | `Set claims` |
+| Finish | Normal, holo or reverse holo for Pokemon. Normal or foil for Riftbound and One Piece. A misc card has none. | Rarity; Printing | |
+| Rarity | The printed rarity, such as hyper rare. As a claim, it catches a misread (D23, a rarity claim catches misreads). | Finish | |
+
+## Read
+
+| Term | Means | Not to be confused with | Retired |
+|---|---|---|---|
+| Read (**open**: notes 1, 4) | The step that looks at each photo and says which card it shows: its name, collector number and set. Also one such answer, "a read". The Free Reader reads first. The paid read reads the cards it does not accept. Only the paid read costs money. A run then matches by itself (D321, every identify run joins itself). It replaces Identify and Identified. | Match; Counted; Market Price; Photo Settings | `only step that spends money`; `Identify it first` |
+| Not read yet | A Captured card: no reader has answered for it. Its name shows in muted italic. | Read, not matched | `Not Looked at Yet` |
+| Free Reader (**open**: note 2) | The image reader on this Mac. It compares a photo with TCGplayer's Stock Photos and reports the closest card. It costs nothing, and it cannot tell foil from normal. Switch: "Free read in background". Setup press: "Set up free reader". Its tooltip names the model. | Paid read | `Background Match`; `Prepare matching`; `Refresh stock photos`; `Match to stock photos`; `Rig switch`; `Matched Free`; `Matching now` |
+| Accepted (**new**) | The Free Reader is sure of a card: its best Stock Photo beats the next one by the accept margin and clears the score floor (`match.MARGIN_MIN`, `match.FLOOR_MIN`). Only an accepted card gets a free read. | Threshold; Matched | `accuracy threshold` |
+| Free read | One read from the Free Reader for one photo. | Paid read | |
+| Paid read (**open**: notes 2, 3) | One read of a photo by Claude, sent in a batch and paid for. It also reports the finish. The tooltip says "Claude Haiku", with no version. | Free read | `Paid Look`; `second look`; `Read from the photo`; `Claude Haiku 4.5` |
+| Paid read batch | One batch of paid reads sent to Claude. Its pill while out: "Paid read out". | List | `Nothing in this send was paid` |
+| Waiting for a paid read (**new**) | A Captured card the Free Reader tried and did not accept. The next Read press sends it to the paid read. | Reader failed; Waiting for you | |
+| Reader failed | The Free Reader crashed on this card's photo. The card leaves the background queue until the photo is taken again or the model changes. A Read press can still read it. | Waiting for a paid read | |
+| Photo Settings | The crop and size a paid read sends. | Read | |
+| Stock Photo | TCGplayer's product image. Always says "stock". | Card photo | |
+
+## Match to product
+
+| Term | Means | Not to be confused with | Retired |
+|---|---|---|---|
+| Match | The step that finds the SKU for each read card in the Product List, by its collector number. The key is per game. Product Name is only a last resort (D35, an unreadable number falls back to the name). A run matches by itself when its read ends. Free. Button: "Match again". | Read; At Market; search | `Join again`; `Join with an export`; `Match the store` |
+| Matched | A card with a SKU. Its name shows in normal ink. | Read, not matched | |
+| Read, not matched | A card with a read and no SKU. Its name shows in the warning color. The reason, such as "Set not downloaded", shows on hover. | Not read yet; Disputed | |
+| Not matched yet | A card with no SKU: not read yet, or read and not matched. | Disputed | |
+| Disputed | A card whose read (name or collector number) disagrees with its SKU. A card held on a disputed SKU keeps its read as its identity (stored `identity_source` `read`). | Not matched yet | |
+| SKU (**new**) | TCGplayer's id for one Product in one condition and finish: the `TCGplayer Id` column. A matched card carries one. | Product; Key | |
+| Product | One TCGplayer catalog card: name, set and number. A card's SKU belongs to one Product. | Live; Printing | `Listed as` |
+| Product List | The game's Filtered CSV from TCGplayer. Match reads it, and it carries the Market Price (D166, the catalog export belongs to the game). | Live Listings File; Staged File | |
+| Collector Number | The number printed on the card. | Card 17; Key | |
+| Printing | A card's appearance in one set. | Product, TCGplayer's catalog entry for it; TCGplayer's own "Printing" field, which is Finish | |
+| Review | The screen, and both of its piles. | To Review | |
+| To Review | Review's main pile: cards that owe an answer. | Parked | `main queue` |
+| Parked | Review's low-value pile: cards whose cheapest possible SKU is under the Threshold. You owe them no answer. Bulk Lots is their exit (D9). | To Review | |
+| Waiting for you | A Review card that needs your answer. A paid read waits here when it names a different printing from the Free Reader's pick, or is not sure. | Withheld; Waiting for a paid read | `held for you`; `held for review` |
+| Answered (**open**: note 7) | You picked a card's SKU from the candidates Review offered. The card is matched to it. | Closed; Skipped | |
+| Closed (**open**: note 7) | You ended a Review question without an answer. "Keep the card": it stays as it was, for one of three reasons (Wasted position, Cannot settle it, Not listing it; D37, a stand-down writes nothing). Or retire it. Can be undone. | Answered; Skipped; Retired; the camera's "Closed" on Capture | `Stand down`; `stood down`; `answered, left alone` |
+| Skipped (**new**) | A Review card you put off with S. It comes back in this sitting. | Closed | |
+
+## Price
+
+| Term | Means | Not to be confused with | Retired |
+|---|---|---|---|
+| Threshold | The store's one price line (`policy.threshold`). A card whose Market Price is at or above it is priced by the Price Rule. A card under it goes out at the Flat Price. No rule or price change may set a price under it (D9, the cut-off is also the price floor). | Envelope Limit; Move Size; Accepted | `the cut-off`; `cut-off price`; `Cut-off changed`; `Cut-off for this run`; `price floor`; `labor bar`; `listed-only`; `import-listed.csv`; `import-subthreshold.csv` |
+| Flat Price (**new**) | The one price every card under the Threshold goes out at (`policy.sub_threshold`). By default it is the Threshold. | Threshold; Market Price | |
+| Price Rule (**new**) | How the store prices a card at or above the Threshold: At Market, or a percent under or over the Market Price or TCG Low. | Price change | |
+| At Market | The Price Rule that lists at the Market Price (stored rule `match`). | Match | `Match market` |
+| Market Price | TCGplayer's Market Price for a SKU, as last downloaded (D189, the market reading is a table). | Read; Counted | |
+| Move Size | The price change that makes a Product a mover (`movers.THRESHOLD`). | Threshold | |
+| Withheld (**open**: note 6) | A SKU you chose to keep out of every List press, on Pricing, with a reason: bullish, keeping it, or a later batch. | Trimmed; Reserved for order; Disputed; Counted as listed; Removed by you | `held back` |
+| Price Book | `prices.json`, the store's one pricing answer (D86, one pricing file for the store). | Run Price Table | `no prices file yet` |
+| Run Price Table | A run's `pricing.json`. | Price Book | |
+
+## List on TCGplayer
+
+| Term | Means | Not to be confused with | Retired |
+|---|---|---|---|
+| List (**open**: note 8) | The one press that puts copies up for sale on TCGplayer. It reads what is live, trims, uploads the Import File and makes it live (D273, one press sends listings live). It may also carry price changes for cards already live. Button: "List 3 copies, change 2 prices". The warning's "List anyway" replaces "Send Anyway". | Paid read batch; Price change; Product List | `Price and send`; `Send Anyway`; `Nothing to send` |
+| Price change | A row that changes the price of a card already live, and adds no copy. The Live tab's press sends only these. | List; Price Rule | |
+| Trimmed | Copies the List press left out because TCGplayer already had them: "Trimmed: TCGplayer already had them". | Withheld; Removed by you | |
+| Counted as listed (**open**: note 8) | Copies of a SKU the store counts as at TCGplayer or on their way: written into an Import File, staged, or live. A count only; TCGplayer may differ. A box's button "Stop counting as listed" lowers it and changes nothing at TCGplayer (D34, a box's holds release against its own copies). | Live; Not found yet | `Listing-held`; `Release the listing hold` |
+| Not found yet (**new**) | Copies counted as listed that no check has found live at TCGplayer. Button: "Take them back". | Counted as listed; Removed by you | |
+| Removed by you (**new**) | Copies a check saw live that later left TCGplayer with no sale and no open order: you took them down by hand. No List press sends them again until you press "Unhold" (D273, its hand-removal rule). | Withheld; Not found yet; Taken out | |
+| Live | Copies TCGplayer holds for sale now: the last Live Listings File's figure, less the copies sold here since (D115, the reading is the export, with later sales beside it). | Running; Counted as listed | |
+| Counted | When the store last wrote a SKU's live figure: "counted 3 days ago", "Not counted yet". | Read; Market Price | |
+| Check what is live | The store against the Live Listings File. Writes the live figures. Button: "Update store counts". | Compare | `Store reconciled` |
+| Compare | A run's Import File against the Staged File. Read-only. | Check what is live | |
+| Waiting to compare | A run whose Import File is written and not yet compared with the Staged File. | Not found yet | |
+| Live beyond on hand | Products live on TCGplayer beyond the copies on hand. | Removed by you | |
+| Import File | The file a run writes for TCGplayer's import. | Product List | |
+| Staged File | TCGplayer's Export From Staged file. | Import File | |
+| Live Listings File | TCGplayer's My Pricing export: what is live now. | Product List | |
+
+## Sell and ship
+
+| Term | Means | Not to be confused with | Retired |
+|---|---|---|---|
+| Order | A buyer's order. | Sort Key | |
+| Sold | A buyer bought it, as the order ledger records. Home's sold link must show this count and open Sales. | Sold on Banchi | |
 | Sold on Banchi | The store's own sold flag on a card. It can lag a sale or be set by hand. | Sold | |
-| Sales | The order ledger, and its screen. | Sold on Banchi | |
-| Taken out | A card retired from its box. | Pull | |
+| Sales | The order ledger, and its screen. Gross only (D214, Sales shows gross, never profit). | Sold on Banchi | |
 | Pull | An order pick, which sells the copy. | Taken out | |
-| Name | The printed card name. | Card id | |
-| Card id | A card's stable id (`cid`). | Name | |
-| Price book | `prices.json`, the store's one pricing answer. | Run price table | `no prices file yet` |
-| Run price table | A run's `pricing.json`. | Price book | |
+| Reserved for order | A copy set aside for a buyer's order. | Withheld | `Held for order` |
+| Shipping File | TCGplayer's shipping export of open orders. | Product List | |
+| Envelope Limit | The order value at or above which TCGplayer requires tracking (`shipping.TRACKING_THRESHOLD`). | Threshold | |
+
+## Boxes
+
+| Term | Means | Not to be confused with | Retired |
+|---|---|---|---|
+| Box | A container of cards, shown and addressed by its unique name (D20, a box is an object with a name; D259, boxes show names only). | Panel | `Pick the drawer`; `Fewest drawers` |
+| Box Number (**new**) | A box's number inside the store (`--box N`). It is the lowest free number, so a deleted box's number is used again. Never shown. | Box ID; Card 17 | |
+| Box ID | A box's never-reused id (`bid`, `--bid N`). Runs and buried cards point to it. Never shown (D145, a box's bid is a hidden identity). | Box Number | |
+| Section (**new**) | A run of cards in a box, started by a divider. You put a divider in with S on Capture (D10, the inventory model). | Box; Card 17 | |
+| Card 17 | A card's count within its section. Card 1 is at the far back, and the count starts again at each divider. When a card ahead of it leaves, the count closes up (D260, card numbers count within a section). | Collector Number; Key | `slot numbers are not the truth` |
+| Key | A card's stored place in the store, which never moves. Shown only on a card that has left, as `B3 #27` (D92, a bare # is the count and keys wear B). | Card 17; SKU | |
+| Sort Key | A card's place in its box's order (`Card.order`, a fraction). Placing or moving a card changes it; the Key stays (D294, each card carries a fraction order key). | Order; Key | |
 | Map | The view of boxes. | | `on the Shelf`; `Deleted boxes shelf` |
-| Deleted boxes | Boxes deleted and kept for a way back. | Map | |
-| Compare | A run's import file against the staged file. Read-only. | Check what is live | |
-| Check what is live | The store against the live listings file. Writes counts. Button: "Update store counts". | Compare | `Store reconciled` |
-| Live beyond on hand | Products live on TCGplayer beyond the copies on hand. | | |
-| Printing | A card's appearance in one set. | Finish | |
-| Finish | Normal, holo or reverse holo. | Rarity | |
-| Rarity | Hyper rare, and the like: a card claim. | Finish | |
+| Deleted Boxes | Boxes deleted and kept for a way back. | Map | |
+| On hand | Copies in boxes now. Bare "stock" is never used. | Photographed; Live | `In stock`; `On Your Shelf` |
+| Retired (**new**) | A card that left its box without a sale: Taken out, Damaged, Lost or Given away. Its record stays (D26, retired is a terminal card state). | Closed; Sold; Moved | |
+| Taken out | The retire reason for a card taken out of its box by hand (stored `pulled`). | Pull | |
+| Moved (**new**) | A card that went to another box. Its old place keeps a record (D83, moved is a third way a card leaves). | Retired | |
+
+## Across the app
+
+| Term | Means | Not to be confused with | Retired |
+|---|---|---|---|
+| Name | The printed card name. | Card ID | |
+| Card ID | A card's stable id (`cid`). | Name; Key; SKU | |
+| Lock | What a Read press or a List press puts on the cards it covers while it runs, so a second press cannot pay for or list them twice (D174, a paid press claims its cards atomically). | Claims | `release the claim` |
+| Running | A process that is running. | Live | |
+| Panel | A slide-out part of the screen, the phone's included. | Box | `queue drawer` |
+| Catalog | One spelling. | | `catalogue` |
+| Card Data | The vendored Pokemon card data (D15, the catalog is vendored, not fetched). | Product List | |
+| Image Mirror | The local copy of the Card Data's card images, filled by hand (`make catalog-mirror`). The read-accuracy test (T1) reads it. | Stock Photo | |
 
 ## Words that keep another meaning
 
-These words also name something else, and that use stays: the kit Button's `variant` prop
-(a style); TCGplayer's own `variant` field in `fixtures/` (fixtures are never modified);
-`banchi archive sweep` (the price-history sweep); the search matcher of D271 (search).
+These words also name something else, and that use stays:
+
+- `variant`: the kit Button's `variant` prop (a style), and TCGplayer's own `variant` field in
+  `fixtures/` (fixtures are never modified).
+- "sweep": `banchi archive sweep`, the price-history sweep.
+- "matcher": the search matcher of D271 (every search uses one matcher).
+- "floor": the design floors (D50, feedback is the product's) and the Free Reader's score
+  floor. The price floor is the Threshold.
+- "Product": the code-card claim for the sealed product a stack came out of. Code cards are out
+  of scope while dormant.
 
 ## Rulings
 
-- Every term in the table above is the owner's ruling.
+- Every untagged term in the tables above is the owner's ruling.
+- **Open for the owner:** notes 1 and 4 (Read and Match; Identify retires), notes 2 and 3 (Free
+  Reader and paid read), note 6 (Withheld), note 7 (Answered, Closed) and note 8 (List, and
+  Counted as listed with it). The rows tagged **new** wait for the owner's word too.
 - **Every layer is renamed, in phases:** screen, help, docs, code, wire, stored values and
   command names. The phased plan lives with the orchestrator.
-- **"Variant" retires.** Finish is normal, holo or reverse holo. Rarity is hyper rare and the like.
+- **"Variant" retires.** Finish is normal, holo or reverse holo for Pokemon, and normal or foil
+  for Riftbound and One Piece. Rarity is hyper rare and the like.
 - **"Parked" and "Staged" leave the machine-word list** (`scripts/machine-words.json`),
   amending D196 (no screen text names a mechanism) and D284 (three text checks).
 - **Stored values are rewritten.** A backup and an undo are built before the first rewriting
   upgrade step. Readers accept both spellings for old run folders, the events log and sidecars.
-- **Code `join` becomes `match`**, after the free reader leaves the name `match`.
-- **One cut-off, no labour bar.** The fixed $0.40 constants and the below-bar warning go.
-  Every caller reads the store's cut-off, and Review's colour bands follow it. D9 (the
-  cut-off is also the price floor) is rewritten in place.
-- **A split send writes `import-above-cut-off.csv` and `import-below-cut-off.csv`.**
-  `banchi archive sweep` keeps its name: it is the only sweep once the free reader's loop is renamed.
-- **Match state shows as text colour, never a pill.** Matched names use normal ink; read but not
-  matched use the warning colour; not read yet use muted italic. The reason (for example
+- **Code `join` becomes `match`**, after the Free Reader leaves the name `match`.
+- **Threshold is the one price-line word.** Cut-off retires. Code names that say threshold for
+  another line rename with the code: `movers.THRESHOLD` (Move Size) and
+  `shipping.TRACKING_THRESHOLD` (Envelope Limit).
+- **One Threshold, no labor bar.** The fixed $0.40 constants and the below-bar warning go.
+  Every caller reads the store's Threshold, and Review's color bands follow it. Review's
+  parking (`routing.route`) is one such caller. D9 (the cut-off is also the price floor) is
+  rewritten in place.
+- **A split send writes `import-above-threshold.csv` and `import-below-threshold.csv`.**
+  `banchi archive sweep` keeps its name: it is the only sweep once the Free Reader's loop is renamed.
+- **Match state shows as text color, never a pill.** Matched names use normal ink; read but not
+  matched use the warning color; not read yet use muted italic. The reason (for example
   "Set not downloaded") shows only on hover over the row.
-- **Threshold, not cut-off,** is the one price-line word (owner's preference; the table is being reworked).
-- **Named things take Title Case**: Product List, Staged File, Box ID.
+- **Named things take Title Case**: Product List, Staged File, Box ID. In these tables that means
+  files, images, folders, data sets, screens, Review's piles, the Free Reader, ids and named
+  settings. Card states, acts and button
+  text keep sentence case. That boundary is **new**.
 - **Route paths are wire**, and rename with their fields.
 - **The kit Button's `variant` prop stays**: it is a style, not a card.
 - **Code cards are out of scope** while the feature is dormant.
