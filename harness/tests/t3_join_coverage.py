@@ -1705,6 +1705,35 @@ def _check_number_fold(c, sv09: join.Catalog) -> None:
         )
 
 
+def _check_blank_number_name_case(c, sv09: join.Catalog) -> None:
+    """The blank-`Number` name fallback ignores case, as the numbered name index does (DEBT61,
+    open build proposals). `Catalog._blank_number_by_name` keyed the stripped name only, so a read
+    that differed from the export's `Product Name` by case found no row.
+
+    CASE ONLY. The other `_name_compare_key` folds (accents, punctuation) are not asserted here:
+    the debt names case and nothing else. Exact lists, not "non-empty": a fold that pulled in
+    another blank-number row would be a wrong card, not a found one. The exact-case lookup is
+    asserted first so the case cannot pass on two empty answers.
+    """
+    c.equal(
+        [r[tcgcsv.SKU_COLUMN] for r in sv09.rows_for_blank_number_name(BLANK_NUMBER_NAME)],
+        [BLANK_NUMBER_SKU],
+        "blank-number name: the export's own spelling finds its one row",
+    )
+    for label, spelled in (("lower", BLANK_NUMBER_NAME.lower()), ("upper", BLANK_NUMBER_NAME.upper())):
+        c.equal(
+            [r[tcgcsv.SKU_COLUMN] for r in sv09.rows_for_blank_number_name(spelled)],
+            [BLANK_NUMBER_SKU],
+            f"blank-number name: the {label}-case spelling finds the same row as the exact one",
+        )
+    c.equal(
+        {r[tcgcsv.SKU_COLUMN] for r in sv09.candidates(_card(812, BLANK_NUMBER_NAME.lower())).rows},
+        {BLANK_NUMBER_SKU},
+        "blank-number name: a card with no number read in lower case resolves to the same row "
+        "through `candidates`, not to nothing",
+    )
+
+
 def run() -> Result:
     c = Checks()
 
@@ -1720,6 +1749,7 @@ def run() -> Result:
     )
 
     _check_number_fold(c, catalog)
+    _check_blank_number_name_case(c, catalog)
 
     # --- clean batch ------------------------------------------------------------------
     cards = _clean_batch()
