@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Protects: The daily demo mirror never publishes a bundle that names a card whose photograph it did not commit, and removes its throwaway worktree on every exit path. The public demo shows a buyer as first name plus last initial and still refuses any surname or address; a deploy holds the last good demo when the recording's wire digest differs from the tree's; the mirror refreshes weekly.
+# Protects: The daily demo mirror never publishes a bundle that names a card whose photograph it did not commit, and removes its throwaway worktree on every exit path. The public demo shows a buyer's full name and still refuses any address-shaped value; a deploy holds the last good demo when the recording's wire digest differs from the tree's; the mirror refreshes weekly.
 """The daily mirror ships every photograph its bundle names (D295, D172).
 Incident: `.gitignore`'s bare `photos` also matched demo-assets/mirror/photos/, `git add` skipped
 the new photographs without a word, and the bundle merged naming cards with no photograph.
@@ -673,11 +673,12 @@ def policy_rulings():
     """The owner's demo rulings (D295), each red before its build. Nothing here touches the real HOME,
     PATH, launchd or store.
 
-      names    `demo-mirror.py`'s `build()` stores "Jordan Miller" as "Jordan M." and keeps a one-word
-               name. Run through `build()` over a tiny real store, so no function name is fixed: only
-               the stored buyer and the shipping export are read back.
-      check    `assert_scrubbed()` accepts that form, still refuses a surname or an address-shaped
-               value, and never prints a value it refused.
+      names    `demo-mirror.py`'s `build()` keeps a buyer's full name, "Jordan Miller" stays "Jordan
+               Miller", and leaves every address field of the shipping export blank. Run through
+               `build()` over a tiny real store, so no function name is fixed: only the stored buyer
+               and the shipping export are read back.
+      check    `assert_scrubbed()` accepts a full name and still refuses an address-shaped value (a
+               street, a city, a state, a ZIP), and never prints a value it refused.
       hold     `scripts/demo-hold.py --chunk PATH` is what the workflow runs. It compares the chunk's
                `wire` with `demo-record.py`'s `wire_digest()` of this tree, exits 0 either way, appends
                `publish=true` or `publish=false` to the file `$GITHUB_OUTPUT` names, and prints a
@@ -686,12 +687,12 @@ def policy_rulings():
                `StartCalendarInterval` is ONE dict with an int `Weekday` (0 to 7), `Hour` and `Minute`.
                Run against a fake HOME and a fake `launchctl` that is the only one on PATH.
 
-    The refusal cases in `check` pass on the old code too: they pin the check shut while the name
-    rule relaxes. The accepted-form case is the one that is red there.
+    The address refusal case in `check` passes on the old code too: it pins the check shut while the
+    name rule relaxes. The full-name case is the one that is red there. `123 Demo Way` is left open: the
+    check may accept it or refuse it; the built export just has to leave Address1 blank.
     """
     sys.path.insert(0, str(ROOT))
     sys.path.insert(0, str(ROOT / "scripts"))
-    address = "123 Demo Way"
     modules, built, unique = {}, [], [0]
 
     def fresh(label):
@@ -736,7 +737,7 @@ def policy_rulings():
                 else:
                     os.environ[key] = value
 
-    # ---- names: `build()` over three orders, no photographs, read back once
+    # ---- names: `build()` over five orders, no photographs, read back once
     def build_once():
         if built:
             if isinstance(built[0], Exception):
@@ -779,42 +780,40 @@ def policy_rulings():
             raise
         return built[0]
 
-    def names_full_name_to_initial():
+    def names_full_name_kept():
         got = build_once()["buyers"].get("1")
-        need(got == "Jordan M.", "buyer 'Jordan Miller' is stored as %r, want 'Jordan M.'" % got)
+        need(got == "Jordan Miller", "buyer 'Jordan Miller' is stored as %r, want 'Jordan Miller'" % got)
 
     def names_one_word_kept():
         got = build_once()["buyers"].get("2")
         need(got == "Priya", "buyer 'Priya' is stored as %r, want 'Priya'" % got)
         need(build_once()["buyers"].get("3") is None, "an order with no buyer must stay without one")
 
+    def shipping_name(row):
+        return ("%s %s" % (row["FirstName"], row["LastName"])).strip()
+
     def names_shipping_export():
         rows = build_once()["shipping"]
-        jordan, priya = rows.get("1"), rows.get("2")
-        need(jordan is not None and priya is not None, "shipping export lacks a Ready to Ship order")
-        need((jordan["FirstName"], jordan["LastName"]) == ("Jordan", "M."),
-             "shipping name is %r %r, want 'Jordan' 'M.'" % (jordan["FirstName"], jordan["LastName"]))
-        need((priya["FirstName"], priya["LastName"]) == ("Priya", ""),
-             "shipping name is %r %r, want 'Priya' ''" % (priya["FirstName"], priya["LastName"]))
-        for row in (jordan, priya):
-            need(row["Address1"] == address and not row["Address2"]
-                 and not (row["City"] or row["State"] or row["PostalCode"]),
-                 "an address field is not blank or '123 Demo Way'")
-        text = (build_once()["home"] / "shipping-export.csv").read_text(encoding="utf-8")
-        need("Miller" not in text, "the shipping export still holds a full surname")
+        for number, want in (("1", "Jordan Miller"), ("2", "Priya")):
+            need(number in rows, "shipping export lacks Ready to Ship order %s" % number)
+            need(shipping_name(rows[number]) == want,
+                 "shipping name of order %s is %r, want %r" % (number, shipping_name(rows[number]), want))
+        need((rows["1"]["FirstName"], rows["1"]["LastName"]) == ("Jordan", "Miller"),
+             "shipping name is %r %r, want 'Jordan' 'Miller'" % (rows["1"]["FirstName"], rows["1"]["LastName"]))
+        for number, row in rows.items():
+            blank = [c for c in ("Address1", "Address2", "City", "State", "PostalCode") if row[c]]
+            need(not blank, "order %s: address field(s) not blank: %s" % (number, ", ".join(blank)))
 
     def names_accented_and_long_names():
-        # An accented letter and a three-word name each come out as a short name with no surname in it.
-        # The output check below then proves the check takes the scrub's own output (an accented initial).
-        got, text = build_once()["buyers"], (build_once()["home"] / "shipping-export.csv").read_text(encoding="utf-8")
-        need((got.get("4") or "").startswith("Zoë ") and "ngström" not in (got.get("4") or ""),
-             "buyer 'Zoë Ångström' is stored as %r, want 'Zoë' and an initial" % got.get("4"))
-        need((got.get("5") or "").startswith("Mary ") and "Watson" not in (got.get("5") or ""),
-             "buyer 'Mary Jane Watson' is stored as %r, want 'Mary' and no 'Watson'" % got.get("5"))
-        need("ngström" not in text and "Watson" not in text, "the shipping export still holds a full surname")
+        # An accented name and a three-word name come through whole, in the store and the export.
+        got, rows = build_once()["buyers"], build_once()["shipping"]
+        for number, want in (("4", "Zoë Ångström"), ("5", "Mary Jane Watson")):
+            need(got.get(number) == want, "buyer %r is stored as %r" % (want, got.get(number)))
+            need(number in rows and shipping_name(rows[number]) == want,
+                 "buyer %r is shipped as %r" % (want, shipping_name(rows[number]) if number in rows else None))
 
     def names_output_passes_the_check():
-        # build()'s own output must satisfy the one check, whatever form the names take.
+        # build()'s own output must satisfy the one check: full names, accents and all.
         buyers = [b for b in build_once()["buyers"].values() if b]
         bundle = fresh("chain") / "bundle.json"
         bundle.write_text(json.dumps({"responses": {"/orders": {"body": {"orders": [{"buyer": b} for b in buyers]}}}}))
@@ -823,7 +822,7 @@ def policy_rulings():
     # ---- check: `assert_scrubbed`
     header = ["Order #", "FirstName", "LastName", "Address1", "Address2", "City", "State", "PostalCode", "Country"]
 
-    def ship(first, last, a1=address, a2="", city="", state="", zip_=""):
+    def ship(first, last, a1="", a2="", city="", state="", zip_=""):
         return ["1", first, last, a1, a2, city, state, zip_, "US"]
 
     def scrubbed(bundle, rows=()):
@@ -842,42 +841,18 @@ def policy_rulings():
     def orders_bundle(**fields):
         return {"responses": {"/orders": {"body": {"orders": [dict(fields)]}}}}
 
-    def check_accepts_new_form():
-        # Two-word and one-word buyers under both buyer keys, an allowed address, null and blank
-        # fields, and shipping rows with and without a last initial.
+    def check_accepts_full_names():
+        # Full, one-word and accented buyers under both buyer keys, null and blank address fields,
+        # and shipping rows with a last name and without one.
         bundle = {"responses": {"/orders": {"body": {"orders": [
-            {"buyer": "Jordan M.", "address1": address, "address2": ""},
+            {"buyer": "Jordan Miller", "address1": "", "address2": None},
             {"buyerName": "Priya", "address": None},
+            {"buyer": "Zoë Ångström"},
             {"buyer": None},
         ]}}}}
-        accepted, message = scrubbed(bundle, [ship("Jordan", "M."), ship("Priya", "")])
-        need(accepted, "assert_scrubbed refuses first name + last initial: %s" % message)
-
-    def check_refuses_surname():
-        # Each value names more than a first name and a last initial. Each is refused under every
-        # buyer key, nested at depth, and in the shipping export. The distinct surname proves the
-        # message never echoes what it refused.
-        accepted, leaked = [], []
-        for value in ("Jordan Quimby", "Jordan Qu.", "Jordan M. Quimby", "Quimby Jordan"):
-            for key in ("buyer", "buyerName", "Buyer"):
-                ok, message = scrubbed(orders_bundle(**{key: value}))
-                if ok:
-                    accepted.append("%s=%r" % (key, value))
-                elif value.split()[-1] in message or "Quimby" in message:
-                    leaked.append(value)
-            ok, _ = scrubbed({"responses": {"/x": {"body": {"rows": [[{"deep": {"buyer": value}}]]}}}})
-            if ok:
-                accepted.append("nested %r" % value)
-        ok, message = scrubbed({"responses": {}}, [ship("Jordan", "Quimby")])
-        if ok:
-            accepted.append("shipping LastName 'Quimby'")
-        elif "Quimby" in message:
-            leaked.append("shipping LastName")
-        ok, _ = scrubbed({"responses": {}}, [ship("Jordan Quimby", "M.")])
-        if ok:
-            accepted.append("shipping FirstName 'Jordan Quimby'")
-        need(not accepted, "assert_scrubbed accepts a surname: %s" % "; ".join(accepted))
-        need(not leaked, "the failure message echoes a refused value: %s" % "; ".join(leaked))
+        rows = [ship("Jordan", "Miller"), ship("Priya", ""), ship("Zoë", "Ångström")]
+        accepted, message = scrubbed(bundle, rows)
+        need(accepted, "assert_scrubbed refuses a full name: %s" % message)
 
     def check_refuses_address():
         street = "4471 Zephyr Lane"
@@ -888,15 +863,12 @@ def policy_rulings():
                 accepted.append("bundle %s" % key)
             elif "Zephyr" in message:
                 leaked.append(key)
-        ok, _ = scrubbed(orders_bundle(buyer=street))
-        if ok:
-            accepted.append("an address in the buyer field")
         rows = {
-            "shipping Address1": ship("Jordan", "M.", a1=street),
-            "shipping Address2": ship("Jordan", "M.", a2="Apt 4"),
-            "shipping City": ship("Jordan", "M.", city="Austin"),
-            "shipping State": ship("Jordan", "M.", state="TX"),
-            "shipping PostalCode": ship("Jordan", "M.", zip_="78701"),
+            "shipping Address1": ship("Jordan", "Miller", a1=street),
+            "shipping Address2": ship("Jordan", "Miller", a2="Apt 4"),
+            "shipping City": ship("Jordan", "Miller", city="Austin"),
+            "shipping State": ship("Jordan", "Miller", state="TX"),
+            "shipping PostalCode": ship("Jordan", "Miller", zip_="78701"),
         }
         for label, row in rows.items():
             ok, message = scrubbed({"responses": {}}, [row])
@@ -976,13 +948,12 @@ def policy_rulings():
              "%r lacks an Hour or a Minute" % (when,))
         need("StartInterval" not in payload, "a StartInterval beside the calendar entry would fire more often")
 
-    policy("names: a full name is stored as first name + last initial", names_full_name_to_initial)
+    policy("names: a full name is kept", names_full_name_kept)
     policy("names: a one-word name is kept and a missing buyer stays missing", names_one_word_kept)
-    policy("names: the shipping export carries the short name and a blank-or-demo address", names_shipping_export)
-    policy("names: an accented name and a three-word name lose their surname", names_accented_and_long_names)
+    policy("names: the shipping export carries the full name and every address field blank", names_shipping_export)
+    policy("names: an accented name and a three-word name are kept whole", names_accented_and_long_names)
     policy("names: build() output passes assert_scrubbed", names_output_passes_the_check)
-    policy("check: assert_scrubbed accepts first name + last initial", check_accepts_new_form)
-    policy("check: assert_scrubbed refuses a surname and never echoes it", check_refuses_surname)
+    policy("check: assert_scrubbed accepts a full name", check_accepts_full_names)
     policy("check: assert_scrubbed refuses an address-shaped value and never echoes it", check_refuses_address)
     policy("hold: a matching digest publishes", hold_publishes_on_match)
     policy("hold: a digest mismatch skips, exits 0, prints a notice", hold_skips_on_mismatch)
