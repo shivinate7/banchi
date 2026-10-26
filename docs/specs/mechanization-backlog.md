@@ -342,7 +342,8 @@ entry: the row names it.
 **Mechanism, declined.** One field on `store/master.py`'s `Card`, written by `cli/cmd_emit.py`'s push loop
 beside the existing `sku` stamp. It would record that this physical copy reached an import file. The owner
 declined it: it would fix one rare case and reopen D212 (a copy is fungible). In its place, a send skips a
-copy that went terminal mid-send, and a SKU correction is refused while the old SKU is live.
+copy that went sold or retired mid-send, a copy that moved mid-send counts once, and a SKU correction is
+refused while the old SKU is live (the review queue's "listing disputed" answer included).
 
 **What no per-copy stamp catches.** The motivating case is a doubling in the store: SKUs at
 `2 x pushed - sold`, from one file uploaded twice by hand. The store never sees the second upload, so a stamp
