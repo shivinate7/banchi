@@ -1098,11 +1098,11 @@ sku-number-contradictions-selftest:
 demo-record-selftest:
 	$(PYTHON) scripts/demo-record-selftest.py
 
-# the daily mirror's path fence, proved red on a path outside demo-assets/mirror/, then green. No network, no store.
+# the weekly mirror's path fence, proved red on a path outside demo-assets/mirror/, then green. No network, no store.
 demo-mirror-daily-selftest:
 	@python3 scripts/demo-mirror-daily.py --selftest
 
-# the daily mirror commits every photograph its bundle names (not ignored, photo store still ignored, no merge without them), and removes its throwaway worktree on every exit path (D295, D172).
+# the weekly mirror: buyers keep full names and every address field is blank, the wire-digest hold, a weekly launchd job, every photograph its bundle names committed (not ignored, photo store still ignored, no merge without them), and its throwaway worktree removed on every exit path (D295, D172).
 demo-mirror-daily-photos-selftest:
 	@python3 scripts/demo-mirror-daily-photos-selftest.py
 
@@ -1676,7 +1676,7 @@ demo-photos:
 # `D-demo-mirror`, docs/specs/demo.md §13 — supersedes `demo-seed`'s invented one below as
 # what `demo-static` publishes). `scripts/demo-mirror.py` reads a store COPY into gitignored
 # `demo-mirror/` and writes the scrubbed output to the tracked `demo-assets/mirror/`: every
-# buyer "Jane Doe N", every address "123 Demo Way", a shipping export rebuilt from the
+# buyer's full name, every address field blank, a shipping export rebuilt from the
 # ledger, and every photograph QR-cleared and cropped under a 512 MB cap. THE OWNER'S STORE
 # NEVER LEAVES THIS MAC — only `demo-assets/mirror/` is committed, and CI never runs this
 # target at all: it has no store to read, and installs that committed output instead
@@ -1693,7 +1693,7 @@ demo-mirror:
 demo-mirror-rebuild:
 	@$(PYTHON) scripts/demo-mirror.py --home $(DEMO_HOME)
 
-# THE DAILY REFRESH (D295, demo.md §13): a launchd job on the owner's Mac, main tree only. It runs
+# THE WEEKLY REFRESH (D295, demo.md §13): a launchd job on the owner's Mac, main tree only. It runs
 # `demo-mirror` in a throwaway worktree and auto-merges a mirror-only PR on green CI. ARGS=--remove
 # takes the job out. ARGS=--dry-run is not this target's: run `python3 scripts/demo-mirror-daily.py --dry-run`.
 demo-mirror-agent:
@@ -1701,10 +1701,11 @@ demo-mirror-agent:
 
 # THE DAILY MARKET READ (DEBT69): one free download of the owner's own live listings, once a day, with
 # a note `#/pricing` shows. `price-refresh-agent` installs the launchd job (main tree only), ARGS=--remove
-# removes it. `price-refresh` runs one read now over THIS checkout's store. It sweeps no archive and
-# changes no price.
+# removes it. The installed job passes no flag, runs at 05:15 and at login, and skips a refresh or a sweep
+# that finished today (D224). `price-refresh` runs one read now over THIS checkout's store, changes
+# no price and passes --now (refresh even if today's finished) and --no-sweep unless ARGS=--sweep asks.
 price-refresh:
-	@$(PYTHON) scripts/price-refresh-daily.py
+	@$(PYTHON) scripts/price-refresh-daily.py --now $(if $(findstring --sweep,$(ARGS)),,--no-sweep) $(ARGS)
 price-refresh-agent:
 	@python3 scripts/price-refresh-daily.py --agent $(ARGS)
 

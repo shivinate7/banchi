@@ -35,6 +35,7 @@ def agent(label, script, root, hour, minute, log, remove):
         "ProgramArguments": [str(venv if venv.exists() else sys.executable), str(script)],
         "WorkingDirectory": str(root),
         "StartCalendarInterval": {"Hour": hour, "Minute": minute},
+        "RunAtLoad": True,  # a Mac that was off at the hour runs the job when it is next on
         "StandardOutPath": str(Path(log).with_suffix(".out")),
         "StandardErrorPath": str(Path(log).with_suffix(".out")),
         "EnvironmentVariables": {"PATH": os.environ.get("PATH", "/usr/bin:/bin")},

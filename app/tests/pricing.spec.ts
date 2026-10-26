@@ -6494,3 +6494,73 @@ test('send tiles: while the worklist loads, Download and the press cannot be pre
   expect(sendPosts(wire), 'no send is posted while the worklist loads').toHaveLength(0)
   await expect(page.getByText('did not take the send'), 'no refusal line while the worklist loads').toHaveCount(0)
 })
+
+/* THE PRICED TILE COUNTS WHAT THE SEND CARRIES: its "N typed." is the typed prices the press
+   sends. An at-cap row adds no copy, so a typed price on it rides a send only as a price
+   change, and only when the row is live at a different price (`Pricing.tsx:priceChanges`).
+   The control row is that case: the press and the tile both count it. Each other row is a price the press leaves out, so the tile may not
+   count it. */
+const AT_CAP = { at_cap: true, add_to_quantity: 0, nothing_to_add: 'Every copy in this run is already listed or has left the box.' } as const
+const CAP_LIVE = { live_before: 1, listing: { pushed: 1, staged: 0, live: 1 } }
+const KLED = { name: 'Kled', ...AT_CAP, ...CAP_LIVE, snap: { market: '6.00', direct_low: null, low: '5.50', low_with_shipping: '6.50', now: '7.00' } }
+const LEFT_OUT: { why: string; row: Partial<PricingSku> & { name: string }; stored: Record<string, string>; typed: string | null }[] = [
+  { why: 'a typed price and no live copies', row: { name: 'Wattrel', ...AT_CAP }, stored: {}, typed: '5.00' },
+  { why: 'the live price typed again', row: KLED, stored: { '8608959': '6.50' }, typed: '7.00' },
+  /* A STORED PRICE NOT TYPED THIS VISIT: live at a different price, yet only a typed price rides a send. */
+  { why: 'a stored price not typed this visit', row: KLED, stored: { '8608959': '6.50' }, typed: null },
+]
+for (const left of LEFT_OUT) {
+  test(`the priced tile counts what the send carries: an at-cap row with ${left.why} is not counted`, async ({ page }) => {
+    await setViewport(page, { width: 1440, height: 900 })
+    await open(page, {
+      skus: [
+        sku({ sku: '8608859', name: 'Articuno' }),
+        sku({
+          sku: '8608459',
+          name: 'Dunsparce',
+          ...AT_CAP,
+          ...CAP_LIVE,
+          live_before: 2,
+          snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now: '9.99' },
+          listing: { pushed: 2, staged: 0, live: 2 },
+        }),
+        sku({ sku: '8608959', ...left.row }),
+      ],
+      decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: left.stored },
+    })
+    const typing: [string, string][] = [['Dunsparce', '13.00']]
+    if (left.typed !== null) typing.push([left.row.name, left.typed])
+    for (const [name, price] of typing) {
+      const input = page.getByLabel(`Price for ${name}`)
+      await input.fill(price)
+      await input.press('Tab')
+    }
+    /* THE SEND CARRIES ONE PRICE CHANGE: Dunsparce. The other typed price is not in it. */
+    await expect(page.getByRole('button', { name: 'Send 1 SKU and 1 price change' })).toBeVisible()
+    await expect(tile(page, 'priced'), 'the tile counts what the press sends: one typed price').toContainText(/\b1 typed\./)
+  })
+}
+
+/* A ROW ASKED FOR ZERO COPIES ADDS NONE, as an at-cap row does: the tile counts its typed price
+   only when the press names it as a price change, which needs live copies at a different price. */
+const ZERO_QTY = (name: string) => `How many of the 3 copies of ${name} go in this file`
+const ZERO_LIVE = { live_before: 2, listing: { pushed: 2, staged: 0, live: 2 }, snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now: '9.99' } }
+for (const zero of [
+  { why: 'no live copies is not counted', live: {}, press: 'Send 1 SKU to TCGplayer', tile: false },
+  { why: 'live copies at a different price is counted once', live: ZERO_LIVE, press: 'Send 1 SKU and 1 price change', tile: true },
+]) {
+  test(`the priced tile counts what the send carries: a typed price on a row asked for 0 copies, with ${zero.why}`, async ({ page }) => {
+    await setViewport(page, { width: 1440, height: 900 })
+    await open(page, {
+      skus: [sku({ sku: '8608859', name: 'Articuno' }), sku({ sku: '8608459', name: 'Dunsparce', ...zero.live })],
+      decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: {} },
+    })
+    await page.getByLabel(ZERO_QTY('Dunsparce')).fill('0')
+    const price = page.getByLabel('Price for Dunsparce')
+    await price.fill('13.00')
+    await price.press('Tab')
+    await expect(page.getByRole('button', { name: zero.press })).toBeVisible()
+    if (zero.tile) await expect(tile(page, 'priced')).toContainText(/\b1 typed\./)
+    else await expect(tile(page, 'priced')).not.toContainText(/\b[1-9]\d* typed\./)
+  })
+}

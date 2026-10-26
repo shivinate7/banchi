@@ -8,17 +8,24 @@
 # same three steps `make demo-static` runs locally, from the code as it stands on main, and the
 # thing that gets published is always built from the thing it describes.
 #
-# WHAT IS SAFE TO PUBLISH, because this is the job that makes it public. AS OF `D295`
-# (docs/specs/demo.md §13), what this job installs and builds is `demo-assets/mirror/` — the
-# owner's own real store, scrubbed on their own Mac by `scripts/demo-mirror.py` and committed
-# ONLY as that scrubbed output: every buyer "Jane Doe N", every address "123 Demo Way", and
-# every photograph QR-cleared (a live code card is a bearer instrument, D70) before this repo
-# ever saw it. This job never reads a store — `make demo-mirror-install` only copies the
-# already-scrubbed, already-committed files into place — and never touches the owner's real
-# `inventory/`, which has never been in git. The recorder that made the bundle already scrubbed
-# machine-local absolute paths and refused to write one if any survived
-# (`scripts/demo_scrub.py:audit`); the grep step below re-checks the artefact this job is
-# about to publish, rather than trusting that earlier pass alone.
+# WHAT IS SAFE TO PUBLISH, because this is the job that makes it public. `D295` (the public
+# demo is the scrubbed real store, docs/specs/demo.md §13): peers browse the app as if in the
+# owner's store, on a public link. What this job installs and builds is `demo-assets/mirror/` —
+# the owner's own real store, scrubbed on their own Mac by `scripts/demo-mirror.py` and committed
+# ONLY as that scrubbed output: no address ever (every address field blank), buyers' full
+# names, and every photograph QR-cleared (a live code
+# card is a bearer instrument, D70) before this repo ever saw it. The mirror refreshes weekly
+# and on the owner's word (`make demo-mirror`). This job never reads a store —
+# `make demo-mirror-install` only copies the already-scrubbed, already-committed files into
+# place — and never touches the owner's real `inventory/`, which has never been in git. The
+# recorder that made the bundle already scrubbed machine-local absolute paths and refused to
+# write one if any survived (`scripts/demo_scrub.py:audit`); the grep step below re-checks the
+# artefact this job is about to publish, rather than trusting that earlier pass alone.
+#
+# THE HOLD. The `hold` job compares the wire digest the mirror was recorded against with this
+# tree's (`scripts/demo-hold.py`). On a difference, `build` and `deploy` are skipped, the
+# last good demo stays up, and a notice names both digests. A skip is not a failure, so the
+# alarm stays quiet.
 #
 # IT PUBLISHES AND NOTHING ELSE. No gate, no commit, no branch move — D42 keeps main moving by
 # pull request only, and a workflow that pushed would be a second way. It reads the repo and
@@ -72,7 +79,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # THE HOLD (D295). The committed mirror records the wire digest it was taken against. When this
+  # tree's digest differs, the recording may not cover the screens on main, so nothing below runs
+  # and the last good demo stays up. A hold is a notice and a skip, never a failure: `alarm`
+  # fires on a failed job only. The next weekly refresh, or `make demo-mirror` by hand, ends it.
+  hold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      publish: ${{ steps.hold.outputs.publish }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - id: hold
+        run: python3 scripts/demo-hold.py --chunk demo-assets/mirror/bundle/chunk-0.json
+
   build:
+    needs: hold
+    if: ${{ needs.hold.outputs.publish == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -245,7 +275,8 @@ jobs:
           path: dist-demo
 
   deploy:
-    needs: build
+    needs: [hold, build]
+    if: ${{ needs.hold.outputs.publish == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -308,7 +339,7 @@ jobs:
   # `issues: write` is the whole grant. To prove it red, dispatch from a branch: the
   # `github-pages` environment rejects the deploy there, so `deploy` fails.
   alarm:
-    needs: [build, deploy]
+    needs: [hold, build, deploy]
     if: ${{ always() && (github.event_name == 'push' || inputs.report_failure) && contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5

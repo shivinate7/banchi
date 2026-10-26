@@ -17,10 +17,11 @@ None is a data error. Each could mislead a decision.
   fixed calendar grid, and it cannot fire on a variable list of populated months. The owner ruled
   that the chart stays and its faults are marked, so a session may not fix this without asking.
   *Not re-checked: the screen has drawn bars since.*
-- **The chart rescales itself.** The geometry normalizes to the lowest and highest value in view, so
-  slope carries no absolute meaning. At two or three buckets, a reviewer saw the line draw a
-  full-height plunge or a spike and a cliff. The low bucket was the unfinished current period.
-  *Not re-checked.*
+- **The holdings line rescales itself.** `Revenue.holdingsSegments` normalizes to the lowest and
+  highest value in view, so slope carries no absolute meaning. With two or three points it draws a
+  full-height plunge or a spike. The bucket bars no longer do this: they draw `gross / bmax` from
+  zero, so a bar's height carries absolute meaning. *The bucket bars are fixed. The holdings line
+  is open.*
 - **Percent change has a zero guard and no floor.** A prior period of five cents against a current
   fifty dollars would draw as a five-figure percentage at the weight of any other figure. D278 sets
   the convention: an anchor carries one weight and a bound carries another. *Not re-checked.*
@@ -30,10 +31,11 @@ None is a data error. Each could mislead a decision.
 - **The tests leave the arithmetic unguarded.** No assertion reads the chart's rendered geometry. No
   fixture carries a gap month or an order of more than one line. The order-count de-duplication
   therefore runs only on data that cannot expose a fault in it. *Not re-checked.*
-- **Two plausible faults were never measured.** Preset comparison windows may overlap the current
-  window by one to three days when a period closes. The previous window's end comes from elapsed
-  milliseconds against a calendar-anchored start. Gross accumulates in floating point over
-  about 1,268 currency additions with no integer-cent sum. No discrepancy has been seen.
+- **One fault was measured and fixed; one was not.** The prior comparison window used to run past
+  the current window's start by up to three days when a period closed, and a sale in that overlap
+  counted in both. The prior window now ends at or before the current window's start, and
+  `app/tests/revenue.spec.ts` pins it. Gross still accumulates in floating point over about 1,268
+  currency additions with no integer-cent sum. No discrepancy has been seen.
 
 ## 2. Rules the reviews left standing
 
@@ -80,7 +82,7 @@ quantity. They are two kinds of observation. D227 (product history is its own ro
 11. Archive buckets are keyed so that overlapping ranges never merge. One day is a one-day bucket in
     one range and part of a seven-day bucket in another. Those are two facts (D219).
 12. The sweep costs about one second per cold name. A sweep over every sold or held name is a
-    press and not a page load.
+    press or the daily price job's run, and not a page load.
 
 ## 4. Open for the owner
 
@@ -93,5 +95,6 @@ quantity. They are two kinds of observation. D227 (product history is its own ro
    shape is wanted, a proportional fill behind each row's own value inherits the row's real scale.
 4. **Whether cost basis is ever captured, and at what grain.** The reviews agree that unknown basis
    must be labeled and never blended, whatever grain is chosen.
-5. **A scheduled archive sweep.** The owner asked for one. It reverses D278's statement that the
-   reader cannot fire on its own, and that needs its own argument.
+5. **A scheduled archive sweep.** Settled: the daily price job runs it once per US Central day, on
+   the owner's word (D224). No page or reader fires it. D278's statement that the reader cannot fire
+   on its own holds for the readers.

@@ -1536,6 +1536,7 @@ export function Pricing() {
      press adds no copy of, already live, whose TYPED price is not the live one. The server
      applies `pipeline/sendguard.py:price_changes` against a fresh read; this only gives the
      press its words. */
+  const addsNoCopy = useCallback((row: PricingSku) => row.at_cap || askedFor(row.sku) === 0, [askedFor])
   const priceChanges = useMemo(() => {
     const out: { sku: string; price: string; was: string | null }[] = []
     if (source.kind !== 'run') return out
@@ -1543,14 +1544,13 @@ export function Pricing() {
       if (!typedHere.has(row.sku)) continue
       const typed = answerFor(row)
       if (typeof typed !== 'string') continue
-      const addsNone = row.at_cap || askedFor(row.sku) === 0
       const now = liveOf(row)
-      if (!addsNone || now.copies <= 0) continue
+      if (!addsNoCopy(row) || now.copies <= 0) continue
       if (now.price !== null && Number(typed) === Number(now.price)) continue
       out.push({ sku: row.sku, price: typed, was: now.price })
     }
     return out
-  }, [rows, answerFor, askedFor, typedHere, source.kind])
+  }, [rows, answerFor, addsNoCopy, typedHere, source.kind])
 
   useEffect(() => {
     latestRows.current = rows
@@ -2702,11 +2702,14 @@ export function Pricing() {
   /* EACH TILE'S ROOM IS ITS LONGEST NOTE (D313), written before any count is known, so a count stands in.
      ponytail: four wide digits; a count past four digits can wrap a note one line past its room. */
   const ROOM_COUNT = '8888'
-  const typedPrices = rows.filter((row) => {
-    /* A HELD 'unlisted' ANSWER IS A STRING AND A HOLD, not a typed price: the held tile counts it. */
-    const answer = answerFor(row)
-    return typeof answer === 'string' && !isWithheld(answer)
-  }).length
+  /* THE TILE COUNTS WHAT THE SEND CARRIES: a price on a row that adds copies, plus the price
+     changes the press names (`priceChanges`, which owns the rule for a row that adds none). */
+  const typedPrices =
+    rows.filter((row) => {
+      /* A HELD 'unlisted' ANSWER IS A STRING AND A HOLD, not a typed price: the held tile counts it. */
+      const answer = answerFor(row)
+      return !addsNoCopy(row) && typeof answer === 'string' && !isWithheld(answer)
+    }).length + priceChanges.length
   const showRows = (picks: typeof facetPicks, held: boolean) => {
     setQuery('')
     setFilterHeld(held)

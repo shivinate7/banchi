@@ -1514,6 +1514,22 @@ def _write_and_send(
             "unknown": None,
         }
     )
+    # A COPY THAT LEFT AFTER `emit` WROTE THE FILE IS A ROW THE STORE DID NOT SEND (D59, D26). Neither
+    # door may push or offer that file. The receipt keeps only the copies `emit` stamped, so the
+    # take-back lowers `pushed` by those and no more.
+    ahead = (_json_line(console, "send_ahead") or {}).get("copies") or []
+    if ahead:
+        for item in ahead:
+            sku = str(item).split()[-1]
+            copies[sku] = copies.get(sku, 0) - 1
+        record["copies"] = {sku: n for sku, n in copies.items() if n > 0}
+        record["copies_total"] = sum(record["copies"].values())
+        _fail(
+            directory, record, "send_file_ahead",
+            "A card in this send was sold or retired while the send was being made, so nothing was "
+            "sent. The other copies are back on the list. Press Send again.",
+            HTTPStatus.CONFLICT,
+        )
     if download:
         # A DOWNLOAD HOLDS NOTHING IN FLIGHT: the file is the owner's to upload, and the live
         # check past the wait is what confirms it. The claim goes; `pushed` keeps the copies
@@ -1951,6 +1967,30 @@ def do_take_back(stamp: str, payload: dict) -> dict:
     return {"send": _summary(stamp, record, store_clock.now(), _held_stamps()), "moved": moved}
 
 
+@contextlib.contextmanager
+def _receipt_undone_on_failure(undo: list):
+    """A failure of the wrapped store write (the commit included) puts back each `unheld` that
+    `undo` collected, so a receipt never keeps a mark the store did not take. The put-back takes the
+    store's lock (not a store write: that commit may be what failed), re-reads the receipt and resets
+    `unheld` alone, so a Take Back or Dismiss that landed since is not erased. If the put-back fails
+    too, the mark stays (DEBT104)."""
+    try:
+        yield
+    except BaseException:
+        for directory, old in undo:
+            try:
+                with files.exclusive(Store().directory):
+                    record = _read(directory)
+                    if old is None:
+                        record.pop("unheld", None)
+                    else:
+                        record["unheld"] = old
+                    _write(directory, record)
+            except Exception as exc:  # the original failure is the one raised; this one is logged so a stuck mark can be found
+                files.log_note(f"unheld put-back failed for {directory.name}: {type(exc).__name__}: {exc}")
+        raise
+
+
 def do_unhold(sku: str, payload: dict) -> dict:
     """`POST /pipeline/held/<sku>/unhold` — the copies the owner removed by hand go back on the list.
 
@@ -1981,15 +2021,17 @@ def _unhold(sku: str, payload: dict) -> dict:
             "confirm_required",
             "Unholding puts the copies back on the list, so the next send offers them. Confirm it first.",
         )
-    with Store().write() as writable:
+    undo: list = []
+    with _receipt_undone_on_failure(undo), Store().write() as writable:
         entry = writable.inventory.listings.get(sku)
         count = 0 if entry is None else int(entry.held_copies)
         if count <= 0:
             raise PipelineRefusal(
                 HTTPStatus.CONFLICT, "nothing_held", "These copies were already unheld. Nothing changed."
             )
-        # THE RECEIPT FIRST, THEN THE STORE (as Take Back): a crash between leaves copies still
-        # counted out and the count cleared at the next check, which never sends one twice.
+        # THE RECEIPT IS WRITTEN UNDER THE STORE'S LOCK and put back if the commit fails
+        # (`_receipt_undone_on_failure`). Only a death between the two, or a failed put-back, leaves
+        # `unheld` over copies still counted out: the safe side, nothing is sent twice (DEBT104).
         # NEVER A RECEIPT WHOSE PRESS IS STILL RUNNING (`_press_running`): that press writes its
         # whole record back from memory, which would erase `unheld` and hold the copies again
         # (review F1). Every other writer of a receipt re-reads it under this lock or the store's.
@@ -1997,6 +2039,7 @@ def _unhold(sku: str, payload: dict) -> dict:
             if not record.get("failure") and not _press_running(record) and _kept(record, sku) > 0:
                 unheld = dict(record.get("unheld") or {})
                 unheld[sku] = int(unheld.get(sku, 0)) + count
+                undo.append((sends_dir() / stamp, record.get("unheld")))
                 _write(sends_dir() / stamp, dict(record, unheld=unheld))
                 break
         else:
@@ -2027,7 +2070,8 @@ def _rehold(sku: str, payload: dict) -> dict:
     copies = int(payload.get("copies") or 0)
     if not bool(payload.get("confirm")) or copies <= 0:
         raise PipelineRefusal(HTTPStatus.BAD_REQUEST, "confirm_required", "Name the copies and confirm to hold them again.")
-    with Store().write() as writable:
+    undo: list = []
+    with _receipt_undone_on_failure(undo), Store().write() as writable:
         entry = writable.inventory.listings.get(sku)
         if entry is None or int(entry.pushed) != int(payload.get("pushed", -1)):
             raise PipelineRefusal(
@@ -2038,6 +2082,7 @@ def _rehold(sku: str, payload: dict) -> dict:
         for stamp, record in _receipts():
             if int((record.get("unheld") or {}).get(sku, 0)) >= copies:
                 unheld = dict(record["unheld"], **{sku: int(record["unheld"][sku]) - copies})
+                undo.append((sends_dir() / stamp, record["unheld"]))
                 _write(sends_dir() / stamp, dict(record, unheld=unheld))
                 break
         else:

@@ -99,7 +99,7 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | `app/tests/order-walk.spec.ts` | Undo in the order walk stays on the newest pull and never expires on a clock. | D118, D136, D164, D252 |
 | `app/tests/orders.spec.ts` | Orders groups by buyer, walks each order, sends a pull with the pressed row's capture id, and shows all six unfillable reasons. | D91, D97, D113, D118, D132, D193, D203 |
 | `app/tests/revenue-math.spec.ts` | Sales gross is quantity times unit price over non-canceled orders, never profit, and a missing price is never a guessed zero. | D214, D225, D298 |
-| `app/tests/revenue.spec.ts` | Sales sorts, filters, cross-filters, drills down and deep-links over the orders payload, on a fixed fake clock, and its Mix view (`#/revenue?lens=mix`) keeps its state in the URL, fires no request on a press and shows its empty states. | D278, D201, D214, D217, D225, D196, D298 |
+| `app/tests/revenue.spec.ts` | Sales sorts, filters, cross-filters, drills down and deep-links over the orders payload, on a fixed fake clock, and its Mix view (`#/revenue?lens=mix`) keeps its state in the URL, fires no request on a press and shows its empty states. Its prior comparison window ends where the current window starts, so no sale counts in both. | D278, D201, D214, D217, D225, D196, D298 |
 | `app/tests/shipping-width.spec.ts` | The empty states of Shipping, Orders and Review fill the frame to one cap, centered, and Shipping's loaded lanes leave no band. | D197, D309 |
 | `app/tests/shipping.spec.ts` | The shipping export routes rows into three lanes and never reaches the capture server. | D16, D61, D63, D117, D196, D218 |
 | `app/tests/unit/formatter-homes.unit.ts` | Each app formatter (ago phrase, count word, byte size, local day key) has one home, and every screen reads it. | none |
@@ -152,7 +152,7 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | File | Protects | Governs |
 | --- | --- | --- |
 | `app/tests/demo-coverage.spec.ts` | The published static demo build draws real data, photographs and controls on every screen a reviewer grades it on. | D183, D227, D271, D277, D298, D295, D301 |
-| `scripts/demo-mirror-daily-photos-selftest.py` | The daily demo mirror never publishes a bundle that names a card whose photograph it did not commit, and removes its throwaway worktree on every exit path. | none |
+| `scripts/demo-mirror-daily-photos-selftest.py` | The weekly demo mirror never publishes a bundle that names a card whose photograph it did not commit, and removes its throwaway worktree on every exit path. The public demo shows a buyer's full name and still refuses any address-shaped value; a deploy holds the last good demo when the recording's wire digest differs from the tree's; the mirror refreshes weekly. | none |
 | `scripts/demo-record-resume-selftest.py` | An interrupted demo recording resumes from its cache of answered routes instead of starting again. | D193, D295 |
 | `scripts/demo-record-selftest.py` | The demo recorder's child server never hangs on a full output pipe during a long sweep. | none |
 | `scripts/demo-record-walkplan-selftest.py` | The demo recorder picks a small walk-plan subject list and never grows it with the number of open orders. | D269 |

@@ -7,7 +7,7 @@ which exist have passed. These entries name what those checks do not cover.
 This is not a backlog to burn down on sight. An entry leaves when someone argues that it
 should, or when its gap closes. A closed entry is deleted, and history lives in version
 control. A number is never reused, so the gaps in the sequence are deleted entries: 5, 10, 12,
-13, 15, 17, 18, 21, 24, 28, 29, 35, 36, 37, 42, 45, 47, 49, 51, 52, 53, 54, 55, 56, 57, 78, 79, 80 and 81.
+13, 15, 17, 18, 21, 24, 28, 29, 35, 36, 37, 40, 42, 45, 47, 49, 51, 52, 53, 54, 55, 56, 57, 58, 78, 79, 80, 81, 87, 95, 97 and 98.
 
 ## How to find one
 
@@ -46,41 +46,38 @@ DEBT26 The Intelligent Mail barcode encoder is written, correct against the Post
 DEBT27 `Fulfillment.tsx`'s store-wide `GET /inventory` browse is argued and left
 DEBT30 The copies panel flash guard is shelved by owner ruling
 DEBT31 The path guard never reads code, so a decision cited by path in a comment goes unchecked
-DEBT32 The archive sweep stays a press, and the owner intends to schedule it eventually
+DEBT32 The archive sweep is scheduled, and only runs on a day the Mac is on
 DEBT33 An answered queue entry can never resurface, even when it is wrong
 DEBT34 Categories and products never expire, on a membership claim this store cannot re-check on its own
 DEBT39 the public demo refuses every box map move
-DEBT40 a divider save can move a divider past departed records
 DEBT41 Pricing never offers "Make this the rule"
 DEBT43 the merge-speed guard counts SQLite ticks only, and a pure-Python loop is invisible to it
 DEBT44 pokemontcg.io is deprecated (ends 2027-03-01), and `pipeline/stockimages.py` does not call it today
 DEBT48 code-side mechanization left open
 DEBT50 git and gh CLI traps hit from this checkout
-DEBT58 the Lane H palette record is on a branch, not in main
 DEBT59 an unreadable live submission claim has no way out on screen
 DEBT60 the demo builds with Hide unpullable forced off
-DEBT61 eight build proposals are still open
-DEBT62 the demo photos are about 180 MB of plain git, and the owner wants them in Git LFS
+DEBT61 six build proposals are still open
+DEBT62 the demo photos are about 180 MB of plain git, and the owner left them there
 DEBT63 T1 has never been compared with TCGplayer Scan & Identify
-DEBT64 the collector number is not cross-checked against the local catalog
+DEBT64 the collector number's printed total is not cross-checked against the local catalog
 DEBT65 the number-corner crop is sent only on a retry
 DEBT66 no perceptual-hash cross-check on identification
 DEBT67 capture photographs exist in one place
 DEBT68 the posted-price history has no screen
-DEBT69 the daily price read covers listed SKUs only, and no live price is pushed automatically
+DEBT69 the daily price read skips some runs, "moved since listing" needs an archive bucket, and no live price is pushed automatically
 DEBT70 realized prices inform no listing rule
 DEBT71 the value of the set hint is asserted, not measured
 DEBT72 PKMNVAULT, Supabase and eBay are unbuilt
 DEBT73 the Mac dock icon has no drop shadow, and none was tried
 DEBT74 the mark's four HELD base parameters were never compared
-DEBT76 the walk's card sheet on a phone has no Mark sold
+DEBT76 the walk's card sheet on a phone sells, and no running check proves it
 DEBT77 every phone-width spec is off
 DEBT82 The Fulfiller's boxes slide once when the Pick list lands
 DEBT83 Off-screen rail tiles still cost a little per capture
-DEBT84 The public demo's first screen is heavier than its budget
+DEBT84 The public demo's first screen sits just under its byte budget, and its time on a slow network is unmeasured
 DEBT85 The read-budget check proves some routes on their miss path only
 DEBT86 Capabilities written twice that have not drifted yet
-DEBT87 an Unhold whose store write fails leaves copies off the list with no control
 DEBT88 the sticky send bar's height below an 820 column is unmeasured
 DEBT89 the send bar draws, then disappears, with zero runs or a failed load
 DEBT90 a send notice joins the bar after the worklist lands
@@ -88,10 +85,11 @@ DEBT91 the send press widens when the worklist lands
 DEBT92 the tile lead check fails a proper noun after the first word
 DEBT93 the Show Held and Price Them clears have never gone red
 DEBT94 a five-digit count can wrap a tile note and grow the send bar
-DEBT95 the priced tile counts typed prices on rows the send leaves out
 DEBT96 Fulfillment still shows the owner's photo first
-DEBT97 a Card Ladder failure on Add hides its plain sentence
-DEBT98 a fully answered selection reads "The free read is not set up"
 DEBT99 the empty-slot check decodes every uncached photo at full size
 DEBT100 the free number reader for same-art printings is shelved
+DEBT101 a sent copy whose SKU left the live export is refused every time
+DEBT102 a send writes its import file outside the store lock
+DEBT103 A nightly sweep that stops still ends the job with exit 0
+DEBT104 a death between an Unhold's receipt write and its store commit leaves the mark without the change
 ```

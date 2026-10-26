@@ -330,7 +330,7 @@ def source_names(target: Path, suffixes: Tuple[str, ...], deep: bool) -> Set[str
 
 
 # Files whose bytes are not prose. `cited_decisions` reads every mapped file looking for `D<n>`
-# and a compressed image will eventually contain those three bytes by chance — icon-180.png
+# and a compressed image will eventually contain those three bytes by chance — icon-touch-1024.png
 # "cited" D31 and icon-512.png "cited" D2 on the day they were added.
 BINARY_SUFFIXES = frozenset({
     ".png", ".jpg", ".jpeg", ".webp", ".heic", ".gif", ".avif", ".pdf",

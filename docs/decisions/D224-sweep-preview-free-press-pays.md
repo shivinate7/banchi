@@ -86,6 +86,20 @@ and archived exactly once.
 
 The schema and the key stay `(sku, range, start)` (D219). The
 never-delete rule is unchanged. A chunk commits with `PriceArchive.upsert()`, the same
-method, called more often on smaller inputs. No timer, cron or launch agent is added. The
-sweep is still a press a person runs, one invocation or several. The rule that this
-reader cannot fire by itself is untouched.
+method, called more often on smaller inputs. The sweep is still a press a person can run, one
+invocation or several. The daily job also runs it, after the refresh, because the owner ruled
+that it runs nightly, on the Mac ("if the day is a new day when my mac is on, just get it done
+then"). That adds no launchd agent of its own: the installed daily job passes no flag, the script sweeps by default, and
+`scripts/price-refresh-daily.py` calls `cli.cmd_pricearchive` in the same process, at the pace D222
+saved. The installed job carries `RunAtLoad`, so it runs at 05:15 and at login, and can start many
+times a day. Each start skips a refresh that finished today and a sweep that finished today, and
+runs whichever is left; a failed refresh or a stopped sweep is not finished. The owner reinstalls
+once for `RunAtLoad` (`make price-refresh-agent`). The sweep holds the refresh lock while it reads,
+so a "Refresh now" press mid-sweep is turned away. If the server holds that lock when the sweep
+starts, the sweep waits up to 30 minutes and then skips tonight. It has no wall-clock cap and no
+keep-awake, and its pace reads a monotonic clock, so a sleep does not inflate it. `make price-refresh`
+is a manual read that always refreshes and passes `--no-sweep`, and sweeps only with `ARGS=--sweep`.
+A failed refresh skips the sweep, and the log says so. A second throttle or a host that refused from
+the first sku stops it as a failed `archive` step and keeps the buckets it wrote. The job still ends
+0, and the next run resumes (D222, D224). A night with nothing left to read, no sku, or an answered
+pass with no sale is ok. The sweep's result is one more step in the `#/pricing` note.

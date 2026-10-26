@@ -177,6 +177,10 @@
   flex-direction: column;
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
+.runs-detail-body { display: contents; }
+/* The dim sits on the children, never on the panel: the panel's own page-in animation owns its opacity. */
+.runs-detail-panel[data-loading] > .runs-detail-head,
+.runs-detail-panel[data-loading] > .runs-detail-body > * { opacity: var(--bn-disabled); }
 .runs-detail-loading { gap: var(--bn-3); padding: var(--bn-5); }
 .runs-detail-head {
   display: flex;

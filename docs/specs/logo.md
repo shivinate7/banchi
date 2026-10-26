@@ -330,7 +330,7 @@ Section 3's geometry is untouched.
 | asset | inset? | why |
 | --- | --- | --- |
 | `app/public/icon-1024.png`, `icon-512.png`, `icon-192.png` | **yes** | the manifest set (155 of 192 is 80.73%, the rounding) |
-| `app/public/icon-180.png` | **no** | `apple-touch-icon`. iOS masks a full-bleed square itself |
+| `app/public/icon-touch-1024.png` | **no** | `apple-touch-icon`, at 1024 so Safari's Add to Dock gets a sharp Mac dock icon. iOS masks a full-bleed square itself and downsamples it |
 | `app/public/favicon.svg` | **no** | a tab icon is 16 to 32px and has no grid |
 
 The whole manifest set is inset. Chrome builds an installed app's `.icns` by resizing the

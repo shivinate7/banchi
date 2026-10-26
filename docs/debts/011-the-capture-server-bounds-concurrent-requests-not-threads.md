@@ -10,9 +10,10 @@ supervisor's drain never waits on a queued request. The wait is `files.LOCK_TIME
 refusal is `server_busy`.
 
 **The lane.** `PHOTO_SLOTS = 4` bounds a second pool with its own semaphore and its own refusal,
-`photo_busy`. It carries what needs no store lock: `GET /photo/...`, `GET /assets/...`, and the exact
-routes in `PHOTO_LANE_EXACT` (`/status`, `/queues`, `/capture/sitting`, `/games`). The cost of
-`/queues` and `/capture/sitting` on a store of 2,500 cards is unmeasured. `photo_lane_path` is the one predicate. One sorter thread peeks each
+`photo_busy`. It carries what needs no store lock. `PHOTO_LANE_PREFIXES` holds `/photo/`, `/assets/`
+and `/pipeline/match/sweep?keys=`. `PHOTO_LANE_EXACT` holds `/status`, `/queues`, `/capture/sitting`,
+`/games` and `/pipeline/match`. The cost of `/queues` and `/capture/sitting` on a store of 2,500 cards
+is unmeasured. `photo_lane_path` is the one predicate. One sorter thread peeks each
 connection's request line and picks the pool. `_dispatch` gates by the parsed path, so a wrong sort
 costs a lane and never the bound. A fault in the sorter degrades the server to the slot pool alone.
 
@@ -24,7 +25,8 @@ collapsed at 16.
 
 **The gap.** Four writers parked on the lock still hold all four slots. Every read outside the lane
 then waits for a slot. These reads are `/orders`, `/inventory`, `/inventory/<box>`, `/boxes`,
-`/search`, `/pricing`, `/graveyard` and `/pipeline/*`. Each answers with the lock held (probed on
+`/search`, `/pricing`, `/graveyard` and `/pipeline/*` except `/pipeline/match` and the keyed
+`/pipeline/match/sweep?keys=` poll. Each answers with the lock held (probed on
 a scratch store), and each waits. They stay out of the lane on purpose. They are heavy and
 GIL-bound. Sharing the photo bound with them would starve photographs. Before the lane, six looping
 `/orders` readers took photo p50 from 5 ms to 136 ms. Two fixes would close the gap. One is a third
@@ -44,8 +46,11 @@ sync. A high total with neither is the request's own work. `make status` prints 
 under SERVING. The line holds no query string and no card data.
 
 **Proof.** `harness.tests.t7.server_lanes.check_lockfree_lane` parks `REQUEST_SLOTS` real
-writers on a held store lock. It requires `/status` and each `PHOTO_LANE_EXACT` route to answer 200
-within 3 s, while a slot-pool read stays parked. It goes red with `PHOTO_LANE_EXACT` emptied.
+writers on a held store lock. It requires `/status`, `/queues`, `/capture/sitting` and `/games` to
+answer 200 within 3 s, while a slot-pool read stays parked. It goes red with `PHOTO_LANE_EXACT`
+emptied. It does not probe `/pipeline/match` or the sweep prefix under that lock.
+`harness.tests.t7.engine_pick.check_match_route_lane` proves only that `photo_lane_path` sorts
+`/pipeline/match` into the lane and `/pipeline/match/prepare` out of it.
 `check_photo_lane` proves the lane's own bound and refusal. `check_photo_lane_threads_and_faults`
 proves the lane's thread bound and the sorter's degrade. `check_request_slots` proves the slot
 bound and the in-flight order, on `/inventory`.

@@ -7,3 +7,5 @@
 **Why unfixed.** Every surface in the app draws the small cut or the lockup, so no shipped screen shows the display cut's foil. A sweep needs the owner's eye, by the method in section 7 of the spec. It has no owner today.
 
 **What would close it.** A forced-choice sweep of each value at its true display size, with the incumbent absent from the last row. Or a decision that the display cut is not worth the sweep, with the four values re-tagged LOCKED by argument.
+
+**Owner's ruling.** The owner judged the dock icon fine apart from sharpness (DEBT73, the dock icon has no drop shadow). The 1024 touch icon (D108, the dock app is an installed page) addresses sharpness. No sweep is scheduled.

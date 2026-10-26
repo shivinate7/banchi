@@ -3265,6 +3265,173 @@ def check_send_auto_hold_unhold_survives_press_rewrite(checks: Checks) -> None:
         )
 
 
+class _CommitFails:
+    """The store's connection, with COMMIT refused and everything else passed through
+    (ROLLBACK included, so the real transaction is really undone, as a disk error leaves it)."""
+
+    def __init__(self, conn, refused: List[str]):
+        self._conn = conn
+        self._refused = refused
+
+    def execute(self, sql, *args, **kwargs):
+        if str(sql).strip().upper() == "COMMIT":
+            self._refused.append(str(sql))
+            raise sqlite3.OperationalError("disk I/O error")
+        return self._conn.execute(sql, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+@contextmanager
+def _store_commit_fails(after_lock=None):
+    """Makes the COMMIT of every store write fail (a disk error at COMMIT, after every row was
+    flushed) and yields the list of commits refused. Armed for the press alone: both patches are
+    lifted on exit, before anything is read.
+
+    `after_lock`, when given, runs once, right after a failed write has released the store's lock and
+    before the next line of the press runs: the one moment a writer that takes the store's lock
+    (a Dismiss) can land between a failed write and whatever the press does about it (D273, R-S4).
+    The connection seam alone cannot reach it, because the lock is still held when COMMIT raises."""
+    real_connect, real_exclusive = db.connect, files.exclusive
+    refused: List[str] = []
+    fired: List[bool] = []
+
+    @contextmanager
+    def exclusive(directory, *args, **kwargs):
+        try:
+            with real_exclusive(directory, *args, **kwargs):
+                yield
+        except BaseException:
+            if not fired and Path(directory) == Store().directory:
+                fired.append(True)
+                after_lock()
+            raise
+
+    db.connect = lambda *args, **kwargs: _CommitFails(real_connect(*args, **kwargs), refused)
+    if after_lock is not None:
+        files.exclusive = exclusive
+    try:
+        yield refused
+    finally:
+        db.connect, files.exclusive = real_connect, real_exclusive
+
+
+def _unheld_marks() -> Dict[str, object]:
+    """Each receipt's `unheld`, by stamp: what a press that failed must leave exactly as it found it."""
+    return {stamp: record.get("unheld") for stamp, record in send_routes._receipts()}
+
+
+def check_send_auto_hold_unhold_commit_fails(checks: Checks) -> None:
+    """(p) AN UNHOLD WHOSE STORE COMMIT FAILS CHANGES NOTHING: THE RECEIPT AND THE STORE LAND TOGETHER OR NOT AT ALL.
+
+    The commit of the unhold's own store write is made to fail (a disk error at COMMIT, after
+    every row was flushed). A receipt that kept `unheld` while the listing kept `held_copies`
+    would lower the next live check's judged figure, clear the count and leave the Pricing row no
+    Unhold control for copies that are still off the list. So after the failed press: no receipt
+    counts the copy `unheld`, the held count and `pushed` stand, and a forced live check still
+    holds the copy. The injection is armed for the press alone and lifted before anything is read.
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (p) — an unhold whose store commit fails leaves the receipt and the store alone")
+    with _case(checks, "(p) auto-hold: unhold whose commit fails"), send_portal() as portal, synced_home():
+        _held_sku_fixture(checks, portal)
+        checks.equal(_held(ARTICUNO_SKU), 1, "PRECONDITION: one copy is held")
+        pushed_held = _pushed(ARTICUNO_SKU)
+        with _store_commit_fails() as commits_failed:
+            answer, caught = attempt(lambda: send_routes.do_unhold(ARTICUNO_SKU, {"confirm": True}))
+        checks.ok(bool(commits_failed), "PRECONDITION: the unhold's store commit was really made to fail")
+        checks.ok(caught is not None, "(p) THE PRESS DOES NOT ANSWER SUCCESS over a commit that failed", repr(answer))
+        unheld = sum(int((record.get("unheld") or {}).get(ARTICUNO_SKU, 0)) for _, record in send_routes._receipts())
+        checks.equal(unheld, 0, "(p) NO RECEIPT COUNTS THE COPY UNHELD when the store never took the unhold")
+        checks.equal(_held(ARTICUNO_SKU), 1, "(p) THE HELD COUNT SURVIVES the failed unhold")
+        checks.equal(_pushed(ARTICUNO_SKU), pushed_held, "(p) pushed is not lowered by the failed unhold")
+        send_routes.do_live_check({"force": True})
+        checks.equal(
+            _held(ARTICUNO_SKU),
+            1,
+            "(p) THE NEXT CHECK STILL HOLDS THE COPY, so the Unhold control does not disappear",
+        )
+
+
+def check_send_auto_hold_rehold_commit_fails(checks: Checks) -> None:
+    """(q) A RE-HOLD WHOSE STORE COMMIT FAILS LEAVES THE RECEIPT'S `unheld` AS THE UNHOLD LEFT IT.
+
+    (p) reaches the put-back only where the receipt had no `unheld` before the press. Here the
+    receipt already counts the copy unheld, because the owner pressed Unhold first. The Re-hold
+    takes the copy off that count inside its store write, and then its commit fails. The put-back
+    must set the old count back, not drop the key: a receipt that lost the mark while the store
+    kept the copy on the list would let the next check judge the copy removed a second time, hold
+    it, and lower `pushed` again (D273, R-S4).
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (q) — a re-hold whose store commit fails leaves the receipt's unheld count alone")
+    with _case(checks, "(q) auto-hold: re-hold whose commit fails"), send_portal() as portal, synced_home():
+        _held_sku_fixture(checks, portal)
+        unhold = send_routes.do_unhold(ARTICUNO_SKU, {"confirm": True})
+        pushed_unheld = _pushed(ARTICUNO_SKU)
+        before = _unheld_marks()
+        checks.equal(
+            sum(int((mark or {}).get(ARTICUNO_SKU, 0)) for mark in before.values()),
+            1,
+            "PRECONDITION: the unhold left one copy counted unheld on a receipt",
+        )
+        checks.equal(_held(ARTICUNO_SKU), 0, "PRECONDITION: the unhold cleared the held count")
+        payload = {"confirm": True, "copies": unhold["unheld"], "pushed": unhold["pushed"]}
+        with _store_commit_fails() as commits_failed:
+            answer, caught = attempt(lambda: send_routes.do_rehold(ARTICUNO_SKU, payload))
+        checks.ok(bool(commits_failed), "PRECONDITION: the re-hold's store commit was really made to fail")
+        checks.ok(caught is not None, "(q) THE PRESS DOES NOT ANSWER SUCCESS over a commit that failed", repr(answer))
+        checks.equal(_unheld_marks(), before, "(q) EVERY RECEIPT'S unheld IS WHAT IT WAS BEFORE THE PRESS")
+        checks.equal(_held(ARTICUNO_SKU), 0, "(q) THE HELD COUNT STANDS: the re-hold never landed")
+        checks.equal(_pushed(ARTICUNO_SKU), pushed_unheld, "(q) pushed is not raised by the failed re-hold")
+        send_routes.do_live_check({"force": True})
+        checks.equal(
+            _held(ARTICUNO_SKU),
+            0,
+            "(q) THE NEXT CHECK DOES NOT HOLD THE UNHELD COPY, because its unheld count stands",
+        )
+
+
+def check_send_auto_hold_put_back_keeps_dismissal(checks: Checks) -> None:
+    """(r) THE PUT-BACK AFTER A FAILED COMMIT RESETS `unheld` AND NOTHING ELSE ON THE RECEIPT.
+
+    The store's lock is free between the failed write and the put-back, so a Dismiss can land
+    there and write `dismissed_at`. A put-back that wrote the receipt back whole, as the press read
+    it, would erase that dismissal and show the owner a warning they had already read. The
+    dismissal is injected at that moment, through `_store_commit_fails`' `after_lock`
+    (D273, R-S4: a writer of a receipt re-reads it under the lock and changes its own field only).
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (r) — a dismissal that lands before the put-back survives it")
+    with _case(checks, "(r) auto-hold: a dismissal between the failed commit and the put-back"), send_portal() as portal, synced_home():
+        _held_sku_fixture(checks, portal)
+        dismissed_at = clock.now_iso()
+        landed: List[str] = []
+
+        def dismiss_lands() -> None:
+            for stamp, record in send_routes._receipts():
+                send_routes._write(send_routes.sends_dir() / stamp, dict(record, dismissed_at=dismissed_at))
+                landed.append(stamp)
+
+        with _store_commit_fails(after_lock=dismiss_lands) as commits_failed:
+            answer, caught = attempt(lambda: send_routes.do_unhold(ARTICUNO_SKU, {"confirm": True}))
+        checks.ok(bool(commits_failed), "PRECONDITION: the unhold's store commit was really made to fail")
+        checks.ok(bool(landed), "PRECONDITION: a dismissal landed after the lock was released")
+        checks.ok(caught is not None, "(r) THE PRESS DOES NOT ANSWER SUCCESS over a commit that failed", repr(answer))
+        receipts = send_routes._receipts()
+        checks.equal(
+            sum(int((record.get("unheld") or {}).get(ARTICUNO_SKU, 0)) for _, record in receipts),
+            0,
+            "(r) THE PUT-BACK STILL REMOVES THE UNHOLD'S MARK",
+        )
+        checks.equal(
+            sorted(stamp for stamp, record in receipts if record.get("dismissed_at") == dismissed_at),
+            sorted(stamp for stamp, _ in receipts),
+            "(r) THE DISMISSAL SURVIVES THE PUT-BACK on every receipt it was written to",
+        )
+
+
 def check_send_hazards(checks: Checks) -> None:
     """The adversarial review's failures, each against the stand-in portal's own mode.
 
@@ -4130,6 +4297,8 @@ def check_send_review_r3(checks: Checks) -> None:
         from cli import cmd_emit
 
         class NoRecord:
+            cards: dict = {}
+
             def set_state(self, key, state, **kw):
                 return False
 
@@ -5503,6 +5672,355 @@ def check_send_skips_gone_card(checks: Checks) -> None:
     spec = [(6, 1, "Articuno", "161", None), (6, 2, "Dunsparce", "120", "normal")]
     status, gone = gone_of([spec, spec], [(6, 1)])
     checks.equal((status, gone), (200, ["Articuno"]), "one gone card held by two runs of one send: `gone` names it once")
+
+
+def _pushed_count(sku: str) -> int:
+    """`pushed` of the SKU's listing, 0 when the store holds no listing."""
+    listing = Store().read().inventory.listings.get(sku)
+    return 0 if listing is None else listing.pushed
+
+
+def _csv_quantity(path: Path, sku: str) -> int:
+    """`Add to Quantity` for `sku` in one import file."""
+    import csv
+
+    with open(path, newline="", encoding="utf-8") as handle:
+        return sum(
+            int(row[tcgcsv.QUANTITY_COLUMN] or 0)
+            for row in csv.DictReader(handle)
+            if row[tcgcsv.SKU_COLUMN] == sku
+        )
+
+
+def _import_quantity(text: str, sku: str) -> Optional[int]:
+    """`Add to Quantity` for `sku` in the import file the send printed, None if it wrote none."""
+    targets = re.findall(r"^import\s.*->\s*(.+)$", text, re.MULTILINE)
+    if not targets or not Path(targets[-1].strip()).exists():
+        return None
+    return _csv_quantity(Path(targets[-1].strip()), sku)
+
+
+def check_send_skips_departed_copy(checks: Checks) -> None:
+    """A copy that sold, was retired or moved AFTER a send planned it is skipped and named (D59, D26).
+
+    The plan is decided outside the store lock and written inside it. `_claim_or_refuse` re-reads
+    `pushed` and `staged` only, so a sale in that gap passes it, and `set_state(IDENTIFIED)` has no
+    terminal guard: the copy flipped back to `identified` and counted toward `pushed`. Each case
+    injects the departure through `_apply_guard`, which runs after the plan and before the write
+    (as F6 does), over the single-run and the merged write, and asserts the copy keeps its
+    terminal state, and that `pushed` equals the import file's `Add to Quantity` (a count is a
+    commitment that a row was written), so a skip that left the file at 3 would stay red.
+    A sold or retired copy has left the shelf, so it is also pinned at 2, and named as skipped.
+    A MOVED tombstone has a live transplant in the other box, so whether it counts is not pinned:
+    only that the tombstone stays moved and the file and the count agree.
+    """
+    checks.note("")
+    checks.note("SEND SKIPS A COPY THAT LEFT BETWEEN THE PLAN AND THE WRITE — the receipt names it")
+    from cli import __main__ as entry
+    from cli import cmd_emit
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+    key = master.position_key(3, 2)
+    leaves = {
+        "sold": (master.SOLD, lambda inv: capture_server.do_mark_sold(3, 2, {})),
+        "retired": (master.RETIRED, lambda inv: inv.retire(key, "pulled")),
+        "moved": (master.MOVED, lambda inv: inv.move_card(key, 5)),
+    }
+
+    for path in ("single", "merged"):
+        for how, (terminal, leave) in leaves.items():
+            label = f"{path} send, copy {how} before the write"
+            with _case(checks, label), synced_home():
+                first, _ = seam_run(checks, cards)
+                runs_sent = [first] if path == "single" else [first, seam_run(checks, cards)[0]]
+                real_guard = cmd_emit._apply_guard
+                seen: List[str] = []
+
+                def plan_then_leave(*args, how=how, leave=leave, seen=seen, real_guard=real_guard, **kwargs):
+                    if not seen:
+                        # The gap the stale check covers: the plan is decided, the write has not begun.
+                        if how == "sold":
+                            leave(None)
+                        else:
+                            with Store().write() as writable:
+                                leave(writable.inventory)
+                        seen.append(Store().read().inventory.cards[key].state)
+                    return real_guard(*args, **kwargs)
+
+                with _patched(cmd_emit, "_apply_guard", plan_then_leave), quiet() as said:
+                    code = entry.main(["emit", *[str(r.directory) for r in runs_sent]])
+                text = said.getvalue()
+                inventory = Store().read().inventory
+                checks.equal(seen, [terminal], f"{label}: fixture, the copy had left before the write began")
+                checks.ok(code == 0, f"{label}: the rest of the send goes ahead", f"exit {code}\n{text}")
+                checks.equal(
+                    inventory.cards[key].state,
+                    terminal,
+                    f"{label}: THE COPY STAYS {terminal.upper()}, never flipped back to identified",
+                )
+                checks.equal(
+                    _pushed_count(ARTICUNO_SKU),
+                    _import_quantity(text, ARTICUNO_SKU),
+                    f"{label}: and `pushed` equals the file's Add to Quantity, so the file sends no copy the store did not count",
+                )
+                if how == "moved":
+                    continue
+                checks.equal(
+                    (_pushed_count(ARTICUNO_SKU), _pushed_count(DUNSPARCE_SKU), _import_quantity(text, DUNSPARCE_SKU)),
+                    (2, 1, 1),
+                    f"{label}: and it is not counted, while the other copies still are",
+                )
+                named = [
+                    line for line in text.splitlines()
+                    if re.search(rf"(?<![\d/]){re.escape(key)}(?![\d/])", line) and "skipped" in line.lower()
+                ]
+                checks.ok(bool(named), f"{label}: and the send names {key} as skipped", text)
+
+
+def check_send_skips_copy_departed_after_file(checks: Checks) -> None:
+    """A copy that sold or was retired AFTER the import file was written and BEFORE the store lock is
+    skipped, named, and the send says its file is ahead of the store (D59, D26).
+
+    THE ROW IS ALREADY IN THE FILE: nothing un-writes it. So the store keeps the copy's terminal state
+    (never flipped back to identified), does not count it in `pushed`, names it as skipped, and
+    prints a loud line that the file holds a copy the store did not send, so the person drops that
+    row before the upload. Either the file and the count agree, or that line is there.
+    The seam is the return of `join.write_import`, for the single and the merged send: the file is on
+    disk and the lock is not taken. `cmd_emit._say_takeoffs` is no seam for both: the merged send
+    says its takeoffs BEFORE it writes, so a departure there would still precede the file. The older
+    case injects through `_apply_guard`, before the write.
+    THE LINE IS READ BY WHAT IT MUST CARRY, NOT ITS WORDING: not the line that carries `->` (the file
+    was written), the word `file` or an `import*.csv` name, and the copy's position, its SKU or its name.
+    """
+    checks.note("")
+    checks.note("SEND SKIPS A COPY THAT LEFT AFTER THE FILE WAS WRITTEN — the run says the file is ahead")
+    from cli import __main__ as entry
+    from pipeline import join as pipeline_join
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+    key = master.position_key(3, 2)
+    leaves = {
+        "sold": (master.SOLD, lambda inv: capture_server.do_mark_sold(3, 2, {})),
+        "retired": (master.RETIRED, lambda inv: inv.retire(key, "pulled")),
+    }
+
+    for path in ("single", "merged"):
+        for how, (terminal, leave) in leaves.items():
+            label = f"{path} send, copy {how} after the file"
+            with _case(checks, label), synced_home():
+                first, _ = seam_run(checks, cards)
+                runs_sent = [first] if path == "single" else [first, seam_run(checks, cards)[0]]
+                real_write = pipeline_join.write_import
+                seen: List[object] = []
+
+                def write_then_leave(*args, how=how, leave=leave, seen=seen, real_write=real_write, runs_sent=runs_sent, **kwargs):
+                    out = real_write(*args, **kwargs)
+                    if not seen:
+                        # The file is on disk: read what it holds off the run folder, then the copy leaves.
+                        seen.append(sum(_csv_quantity(f, ARTICUNO_SKU) for f in runs_sent[-1].directory.glob("import*.csv")))
+                        if how == "sold":
+                            leave(None)
+                        else:
+                            with Store().write() as writable:
+                                leave(writable.inventory)
+                        seen.append(Store().read().inventory.cards[key].state)
+                    return out
+
+                with _patched(pipeline_join, "write_import", write_then_leave), quiet() as said:
+                    code = entry.main(["emit", *[str(r.directory) for r in runs_sent]])
+                text = said.getvalue()
+                inventory = Store().read().inventory
+                checks.equal(seen, [3, terminal], f"{label}: fixture, the file held all three copies when this one left")
+                checks.ok(code == 0, f"{label}: the rest of the send goes ahead", f"exit {code}\n{text}")
+                checks.equal(inventory.cards[key].state, terminal, f"{label}: THE COPY STAYS {terminal.upper()}")
+                checks.equal(
+                    (_pushed_count(ARTICUNO_SKU), _pushed_count(DUNSPARCE_SKU)),
+                    (2, 1),
+                    f"{label}: it is not counted in pushed, while the other copies still are",
+                )
+                named = [
+                    line for line in text.splitlines()
+                    if re.search(rf"(?<![\d/]){re.escape(key)}(?![\d/])", line) and "skipped" in line.lower()
+                ]
+                checks.ok(bool(named), f"{label}: and the send names {key} as skipped", text)
+                in_file, counted = _import_quantity(text, ARTICUNO_SKU), _pushed_count(ARTICUNO_SKU)
+                loud = [
+                    line for line in text.splitlines()
+                    if "->" not in line and re.search(r"\bfile\b|import[\w-]*\.csv", line, re.IGNORECASE)
+                    and any(token in line for token in (key, ARTICUNO_SKU, "Articuno"))
+                ]
+                checks.ok(
+                    in_file == counted or bool(loud),
+                    f"{label}: and the file ({in_file}) is ahead of pushed ({counted}) only with a loud line saying it",
+                    text,
+                )
+
+
+@contextmanager
+def _sale_after_write(file_at: List[Path], sell):
+    """For the FIRST `join.write_import` call: once it returns (the file is on disk, the store lock
+    is not yet taken) record the path it wrote in `file_at`, then run `sell`."""
+    from pipeline import join as pipeline_join
+
+    real_write = pipeline_join.write_import
+
+    def write_then_sell(*args, **kwargs):
+        out = real_write(*args, **kwargs)
+        if not file_at:
+            file_at.append(Path(args[1] if len(args) > 1 else kwargs["path"]))
+            sell()
+        return out
+
+    with _patched(pipeline_join, "write_import", write_then_sell):
+        yield
+
+
+def check_send_refuses_file_ahead(checks: Checks) -> None:
+    """The SCREEN send refuses a file that is ahead of the store, and takes back only what it stamped (D273, D59, D26).
+
+    A copy sells after `emit` wrote the import file and before it took the store lock. The store skips
+    the copy (D26), so the file holds one more than `pushed`. The screen never shows `emit`'s console, so
+    a WARNING there warns nobody, and the old build pushed that file to TCGplayer with no owner step.
+    The press must instead refuse with `send_file_ahead` (409) and a plain sentence on the card (D196,
+    no path, file name or decision id in it): nothing is pushed, nothing is offered as a download, and
+    the press's claim is released.
+    `pushed` is a quantity (D7 amended) and a take-back lowers it by the receipt's copies. The receipt
+    must hold what `emit` STAMPED, not what the file lists, or the take-back also lowers the copies an
+    earlier send put out, and the next worklist offers them again (D59). An earlier send leaves one
+    Articuno copy out first, so a take-back by the file's count is not hidden by `bump` flooring at 0.
+    `emit` runs here in this process (`_run_sync` is swapped) because a patch on `write_import` cannot
+    reach the child process the route starts. Both doors, over one run and over two merged runs.
+    """
+    checks.note("")
+    checks.note("SCREEN SEND, A COPY SOLD AFTER THE FILE WAS WRITTEN — refused, nothing pushed, only the stamped copies taken back")
+    from cli import __main__ as entry
+
+    earlier = _articuno_cards([1])
+    # A BOX OF ITS OWN: `emit` stamps its run onto the cards it sends, and a run made in the same second
+    # over a box holding another run's card reads as a reused box (`box_disowns_run`).
+    later = [(4, i, "Articuno", "161", None) for i in (1, 2, 3)] + [(4, 4, "Dunsparce", "120", "normal")]
+    sold_key = master.position_key(4, 3)
+    skus = (ARTICUNO_SKU, DUNSPARCE_SKU)
+    real_run_sync = pipeline_routes._run_sync
+    write_calls = ("initializeexportcsv", "uploadexportcsv", "movetolive")
+
+    for download in (False, True):
+        for path in ("single", "merged"):
+            door = "download" if download else "send"
+            label = f"{door} door, {path} run, a copy sold after the file"
+            with _case(checks, label), send_portal() as portal, synced_home():
+                first = _press_and_age(checks, portal, earlier, {ARTICUNO_SKU: 0})
+                portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+                send_routes.do_live_check({})
+                made = [seam_run(checks, later, live={ARTICUNO_SKU: 1})[0] for _ in range(1 if path == "single" else 2)]
+                before = {sku: _pushed_count(sku) for sku in skus}
+                checks.equal(before, {ARTICUNO_SKU: 1, DUNSPARCE_SKU: 0}, f"{label}: fixture, an earlier send left one Articuno copy out")
+                for name in ("calls", "rows", "moved"):
+                    portal[name].clear()
+                file_at: List[Path] = []
+                stamped: Dict[str, int] = {}
+
+                def emit_here(argv, timeout, file_at=file_at, stamped=stamped):
+                    if not (len(argv) > 1 and argv[1] == "emit"):
+                        return real_run_sync(argv, timeout)
+                    start = {sku: _pushed_count(sku) for sku in skus}
+                    with _sale_after_write(file_at, lambda: capture_server.do_mark_sold(4, 3, {})), quiet() as said:
+                        code = entry.main(list(argv[1:]))
+                    stamped.update({sku: _pushed_count(sku) - start[sku] for sku in skus})
+                    return code, said.getvalue()
+
+                caught = None
+                with _patched(pipeline_routes, "_run_sync", emit_here):
+                    try:
+                        send_routes.do_send({"runs": [r.name for r in made], "confirm": True, "download": download})
+                    except pipeline_routes.PipelineRefusal as refusal:
+                        caught = refusal
+                in_file = _csv_quantity(file_at[0], ARTICUNO_SKU) if file_at else None
+                checks.equal(
+                    (in_file, stamped.get(ARTICUNO_SKU, 0) < (in_file or 0), Store().read().inventory.cards[sold_key].state),
+                    (3, True, master.SOLD),
+                    f"{label}: fixture, the file holds three Articuno copies, the store stamped fewer, and the sold copy stays sold",
+                )
+                checks.equal(
+                    (getattr(caught, "status", None), getattr(caught, "code", None)),
+                    (HTTPStatus.CONFLICT, "send_file_ahead"),
+                    f"{label}: THE PRESS REFUSES with 409 send_file_ahead, never sends or offers a file the store did not count",
+                )
+                message = str(caught or "")
+                checks.ok(
+                    message.rstrip().endswith(".") and len(message.split()) >= 5
+                    and not re.search(r"[A-Za-z]/|/[A-Za-z]|\.csv|\bD\d+\b|->|\s--", message),
+                    f"{label}: and the card gets a plain sentence, no path, file name or decision id: {message!r}",
+                )
+                checks.equal(
+                    ([name for name in _posts(portal) if name in write_calls], portal["rows"], portal["moved"]),
+                    ([], [], []),
+                    f"{label}: and nothing reached TCGplayer's write side",
+                )
+                receipts = [record for stamp, record in send_routes._receipts() if stamp != first]
+                checks.equal(
+                    [dict(r.get("copies") or {}) for r in receipts],
+                    [{sku: n for sku, n in stamped.items() if n}],
+                    f"{label}: and the receipt holds the copies the store stamped, not the file's count",
+                )
+                checks.equal(
+                    {sku: _pushed_count(sku) for sku in skus},
+                    before,
+                    f"{label}: and `pushed` is back to what it was, so the earlier send's copy is not offered again",
+                )
+                checks.equal(Store().read().send_claims.live(), [], f"{label}: and the refused press holds no claim")
+
+
+def check_file_ahead_names_send_dir(checks: Checks) -> None:
+    """The file-ahead warning names the folder the file was WRITTEN to (D59, D26).
+
+    With `--send-dir` (the screen's press) the import file is written to that folder, and the run's
+    folder holds none. The old warning named the run's folder, so its "do not upload that file" pointed
+    at a folder with no file in it. Read by what the line carries, as the case above it: a line that is
+    not the `->` line, says `file` or an `import*.csv` name, and names the copy. Single and merged.
+    """
+    checks.note("")
+    checks.note("FILE-AHEAD WARNING NAMES THE FOLDER THE FILE WAS WRITTEN TO — with --send-dir")
+    from cli import __main__ as entry
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+    key = master.position_key(3, 2)
+
+    for path in ("single", "merged"):
+        label = f"{path} send with --send-dir, copy sold after the file"
+        with _case(checks, label), synced_home() as home:
+            runs_sent = [seam_run(checks, cards)[0] for _ in range(1 if path == "single" else 2)]
+            send_dir = home / "own-send-dir"
+            send_dir.mkdir()
+            file_at: List[Path] = []
+            with _sale_after_write(file_at, lambda: capture_server.do_mark_sold(3, 2, {})), quiet() as said:
+                code = entry.main(["emit", *[str(r.directory) for r in runs_sent], "--send-dir", str(send_dir)])
+            text = said.getvalue()
+            checks.ok(code == 0, f"{label}: the rest of the send goes ahead", f"exit {code}\n{text}")
+            checks.equal(
+                (bool(list(send_dir.glob("import*.csv"))), [list(r.directory.glob("import*.csv")) for r in runs_sent]),
+                (True, [[]] * len(runs_sent)),
+                f"{label}: fixture, the file is in the send folder and the run folders hold none",
+            )
+            loud = [
+                line for line in text.splitlines()
+                if "->" not in line and re.search(r"\bfile\b|import[\w-]*\.csv", line, re.IGNORECASE)
+                and any(token in line for token in (key, ARTICUNO_SKU, "Articuno"))
+            ]
+            folders = (str(send_dir), str(send_dir.resolve()))
+            checks.ok(
+                bool(loud) and all(any(f in line for f in folders) for line in loud),
+                f"{label}: THE WARNING NAMES THE FOLDER THE FILE IS IN",
+                text,
+            )
+            checks.ok(
+                not any(str(r.directory) in line for r in runs_sent for line in loud),
+                f"{label}: and not a run folder that holds no file",
+                text,
+            )
 
 
 def check_schema_eleven_then_twelve(checks: Checks) -> None:
@@ -7244,6 +7762,10 @@ CHECKS = (
     check_send_store_backed_runs,
     check_send_store_backed_follows_cards,
     check_send_skips_gone_card,
+    check_send_skips_departed_copy,
+    check_send_skips_copy_departed_after_file,
+    check_send_refuses_file_ahead,
+    check_file_ahead_names_send_dir,
     check_markdown_floor,
     check_markdown_lens,
     check_markdown_push,
@@ -7284,6 +7806,9 @@ CHECKS = (
     check_send_auto_hold_unhold_not_held_again,
     check_send_auto_hold_unhold_sends_once,
     check_send_auto_hold_unhold_survives_press_rewrite,
+    check_send_auto_hold_unhold_commit_fails,
+    check_send_auto_hold_rehold_commit_fails,
+    check_send_auto_hold_put_back_keeps_dismissal,
     check_send_hazards,
     check_send_review_r3,
     check_send_review_r4,

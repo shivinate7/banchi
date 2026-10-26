@@ -91,6 +91,8 @@ function refusalTitle(code: string, data?: unknown): string {
       return 'Some of these cards wait on a send TCGplayer has not confirmed, so nothing was sent.'
     case 'price_change_held':
       return 'Some of these cards wait on a price change TCGplayer has not confirmed, so nothing was sent.'
+    case 'send_file_ahead':
+      return 'A card in this send sold while it was made, so nothing was sent. Press Send again.'
     case 'send_unknown':
       return 'TCGplayer did not confirm this send. Do not send these copies again.'
     case 'send_rolled_back':

@@ -25,8 +25,8 @@ Still unexercised:
 while nothing routes to it. `make design-check` asserts that a view is on screen before it
 measures anything. It is not in `make check`, because it starts a browser and a dev server.
 
-**Reason codes.** Fifteen exist: six ladder reasons (`pipeline/variant.py`'s `LADDER_REASONS`)
-and nine routing reasons (`pipeline/routing.py`'s `ROUTING_REASONS`). `docs/DESIGN.md` requires
+**Reason codes.** Nineteen exist: six ladder reasons (`pipeline/variant.py`'s `LADDER_REASONS`)
+and thirteen routing reasons (`pipeline/routing.py`'s `ROUTING_REASONS`). `docs/DESIGN.md` requires
 each on screen as a human label with the machine string small beneath. One cannot reach the
 queue:
 

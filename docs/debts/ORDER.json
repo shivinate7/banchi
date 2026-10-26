@@ -27,13 +27,11 @@
     "033-an-answered-queue-entry-can-never-resurface-even-when-wrong.md",
     "034-the-catalogue-cache-never-expires-on-a-membership-claim.md",
     "039-the-public-demo-refuses-every-box-map-move.md",
-    "040-a-divider-save-can-move-a-divider-past-departed-records.md",
     "041-pricing-never-offers-make-this-the-rule.md",
     "043-the-merge-speed-guard-cannot-see-python-work.md",
     "044-pokemontcg-io-is-deprecated-and-this-repo-does-not-call-it.md",
     "048-code-side-mechanization-left-open.md",
     "050-git-and-gh-cli-traps.md",
-    "058-h-palettes-unlanded.md",
     "059-unreadable-claim-no-remedy.md",
     "060-demo-walk-recording.md",
     "061-advances-carryover.md",
@@ -57,7 +55,6 @@
     "084-demo-chunk-size.md",
     "085-read-budget-miss-paths.md",
     "086-duplicate-homes.md",
-    "087-unhold-receipt-before-store.md",
     "088-send-bar-height-below-820.md",
     "089-send-bar-zero-runs-or-load-fail.md",
     "090-send-notice-lands-late.md",
@@ -65,11 +62,12 @@
     "092-tile-lead-proper-noun.md",
     "093-tile-presses-guard-unproven.md",
     "094-tile-room-four-digit-count.md",
-    "095-typed-prices-count-at-cap-rows.md",
     "096-fulfill-stock-art.md",
-    "097-slab-add-refusal-hidden.md",
-    "098-answered-run-setup-line.md",
     "099-empty-slot-check-decodes-all.md",
-    "100-same-art-reader-shelved.md"
+    "100-same-art-reader-shelved.md",
+    "101-correction-sku-absent-from-export.md",
+    "102-send-file-outside-lock.md",
+    "103-throttled-nightly-sweep.md",
+    "104-unhold-death-gap.md"
   ]
 }
