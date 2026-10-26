@@ -43,7 +43,7 @@ The ranks are stable ids. They are not renumbered, so citing a rank keeps resolv
 | 30 | `ADD_TO_QUANTITY` stays a bare constant on the reprice path. | Shelved |
 | 31 | Two identify batches may not run over one box. | Shelved |
 | 32 | Realign a run's records before anything reads a position. | Shelved |
-| 33 | A copy is never offered to TCGplayer twice. | Shelved |
+| 33 | A copy is never offered to TCGplayer twice. | Declined by the owner (D59) |
 | 34 | A bare `#` on an owner-side screen is a count and never the stored index. | Shelved |
 | 35 | A spec's standing is declared in the spec. | Cut: the `work item standing` row was removed |
 | 36 | Never lower a Fulfillment floor. | Shelved |
@@ -53,7 +53,7 @@ The ranks are stable ids. They are not renumbered, so citing a rank keeps resolv
 | 40 | Register a window keydown listener in `useLayoutEffect` when its dependencies name state the handler reads. | Shelved |
 
 "Shelved" means that the mechanism's named artifact is not in the tree. Each was checked by name and by the
-recipe or function it would change. Rank 32, rank 33 and rank 37 are shelved on a weaker basis. No artifact with the named shape exists. I did not read every candidate site.
+recipe or function it would change. Rank 32 and rank 37 are shelved on a weaker basis. No artifact with the named shape exists. I did not read every candidate site.
 
 **Rank 21, partly built.** `Report.add` takes `scanned`, and `render` prints `none` for a row that
 examined nothing. `as_json` carries `scanned` and a `vacuous` flag. Whether every absence-row passes
@@ -337,20 +337,18 @@ entry: the row names it.
 
 ### Rank 33 — A copy is never offered to TCGplayer twice.
 
-**Cost:** medium.
+**Status:** declined by the owner (D59). The per-SKU count stands, with two guards.
 
-**Mechanism.** One field on `store/master.py`'s `Card`, written by `cli/cmd_emit.py`'s push loop beside
-the existing `sku` stamp. It records that this physical copy reached an import file. The committed set is then read and not inferred from a reading's silence. A sale of a marked copy ages the claim on the copy's own evidence. A copy pushed before the field exists carries no marker and falls back to
-`_copies_out`'s arithmetic. Otherwise the fix re-strands the copies it was built to release. Add a T7
-case.
+**Mechanism, declined.** One field on `store/master.py`'s `Card`, written by `cli/cmd_emit.py`'s push loop
+beside the existing `sku` stamp. It would record that this physical copy reached an import file. The owner
+declined it: it would fix one rare case and reopen D212 (a copy is fungible). In its place, a send skips a
+copy that went terminal mid-send, and a SKU correction is refused while the old SKU is live.
 
-**Catches.** A doubling in the store: SKUs at `2 x pushed - sold`, from one file uploaded twice.
-`staged` is written only by `banchi reconcile --live`, so the store cannot tell a sold-out listing
-from an import sitting in Staged. D59 named this field as its own reopening condition.
-
-**Mutation arm.** Push a SKU, mark one copy sold, re-emit: the marked copies must not be offered
-again. Delete the write from the push loop: the case goes red. The case drives the real `emit` press
-and asserts on the copies in the written file. It does not write the marker itself.
+**What no per-copy stamp catches.** The motivating case is a doubling in the store: SKUs at
+`2 x pushed - sold`, from one file uploaded twice by hand. The store never sees the second upload, so a stamp
+cannot catch it. The count `pushed = 4, live = 2` also reads two ways, "four went live and two sold" and "two
+landed and two sit in Staged". Only a reconcile tells them apart. `banchi reconcile <run> <staged export>`
+moves `pushed` to `staged`, and `--live` writes `live`.
 
 ### Rank 34 — A bare `#` on an owner-side screen is the count of cards in the box, never the stored index.
 

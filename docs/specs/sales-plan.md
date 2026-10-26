@@ -157,19 +157,38 @@ settles it. The month chart's known faults stay, under the ruling above.
 
 ## Plans, not built
 
-Three plans wait for the owner's word. Each entry holds the outcome, the recommended option and the open
-questions for the owner. Nothing here is built.
+The owner asked for plans only. Nothing in this section is built. Each entry holds the outcome, the
+recommended option and the questions that wait for the owner.
 
-### Refunds (content pending)
+### Refunds
 
-Outcome, recommended option and open questions: pending. Section 2 holds what exists today.
+- **Outcome.** Sales states TCGplayer's own refunds, and gross stops counting money given back.
+- **Recommended.** Step 0 comes first and needs no code. The owner opens one refunded order in the seller
+  portal and reports only the shape of the `refunds` and `transaction` fields. If the refund shows in the
+  order feed, widen the order allowlist for the amount only, never for reason or note text. If it does not,
+  state an OrderWand `Refund Amount` total per period, with no match to a ledger line.
+- **Touches** D113, D214 and D225.
+- **Open for the owner.** Which export carries it. Per order or per line. Partial refunds. Whether gross
+  minus refunds still counts as gross.
 
-### Tax export (content pending)
+### Tax export
 
-Outcome, recommended option and open questions: pending. `docs/specs/sales-findings.md` section 4 names
-the gap.
+- **Outcome.** One file per year that a preparer can line up against the 1099-K. It is not tax advice.
+- **Recommended.** First check whether TCGplayer's own payment reports already cover it. If they do not,
+  build a monthly summary CSV from the OrderWand export. Its columns are gross, shipping, tax, fees,
+  refunds and estimated net. An unknown value reads "unknown" and never 0. Money is integer cents. No
+  buyer column. The button sits on `#/revenue`.
+- **Touches** D214 and D193.
+- **Open for the owner.** Order date or paid date. Central time or the browser's time zone. Fee per line or
+  per order. A "Last year" tab.
 
-### Cost basis (content pending)
+### Cost basis
 
-Outcome, recommended option and open questions: pending. `docs/specs/sales-findings.md` section 2 holds
-the standing rule that unknown basis is labeled and never blended.
+- **Outcome.** Revenue gets a separate Purchases section with three figures: paid, sold and still on the
+  shelf. It is never called profit.
+- **Recommended.** Record the cost once per purchase, not per box or per card. The operator types it as a
+  sticky Purchase claim in Capture setup. Old stock is assigned by selection. An unknown cost is never $0.
+  The entity is named "purchase" because "lot" is taken.
+- **Touches** D214, D225 and D212.
+- **Open for the owner.** Whether sealed buys are purchases. The share of sold cards that have a pull link
+  (unmeasured). Fees. Whether a per-card split is needed.
