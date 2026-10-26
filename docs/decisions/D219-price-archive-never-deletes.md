@@ -83,11 +83,8 @@ into one.
 ### What this does not touch
 
 No route. No client function. No screen. `pipeline/pricehistory.py`'s fetching and parsing
-are unchanged. No timer, cron or launch agent runs this sweep on its own. The owner asked for
-a schedule and the schedule is deferred, by the owner's own word
-(`docs/specs/sales-plan.md` §4). A
-sweep firing on its own reverses D224's own statement. D224 says this reader cannot fire by
-itself. That reversal needs its own argument, which nobody has made yet.
+are unchanged. No launch agent of its own runs this sweep. The daily price job runs it after its refresh, on
+the owner's word (D224).
 
 ### Amended: a stored summary for Holdings
 

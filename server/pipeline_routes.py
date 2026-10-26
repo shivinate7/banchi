@@ -7118,7 +7118,7 @@ def do_product_history(sku: str) -> dict:
     `#/pricing`'s panel — same cache, same refusal vocabulary — and answers a `Series`-shaped
     payload with the vwap/bound/momentum that live reading actually carries. NEITHER PATH
     EVER WRITES: not to the archive, not to the corpus. `banchi archive sweep` is the one
-    press that folds a live read back into the table, and it stays a press.
+    press that folds a live read back into the table (the daily price job runs it too).
 
     `not_catalogued` is refused before either path runs — the same D22 permanent state
     `_history_for_entry` already names for `misc`.

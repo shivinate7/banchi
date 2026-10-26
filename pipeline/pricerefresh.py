@@ -22,10 +22,11 @@ import json
 import os
 import threading
 import time
+from datetime import datetime, timezone
 from typing import Callable, Iterator, Optional
 
 from pipeline import pricehistory
-from store import files
+from store import clock, files
 
 #: THE ONE SPELLING of "this row has no product to read a history for". `server/pipeline_routes.py`
 #: builds the refusal sentence from it and `preload` below counts it: a refusal that is NOT this is
@@ -142,6 +143,13 @@ def note_step(name: str, ok: bool, at: Optional[int] = None, **info) -> dict:
         note = {"at": when, "ok": bool(ok), **({"last_ok_at": last_ok} if last_ok else {}), **info}
         _write(status_path(), {**status, "steps": {**(status.get("steps") or {}), name: note}})
     return note
+
+
+def step_ok_today(name: str) -> bool:
+    """Whether step `name` last ended ok on today's US Central day (`store/clock.before_today`)."""
+    step = (read_status() or {}).get("steps", {}).get(name) or {}
+    return bool(step.get("ok") and step.get("at")) and not clock.before_today(
+        datetime.fromtimestamp(step["at"], timezone.utc))
 
 
 def note_skip(message: str) -> None:

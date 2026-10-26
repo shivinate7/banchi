@@ -566,7 +566,8 @@ COMPONENTS = [
                                             "review queue with its photograph "
                                             "(`cli/archive_review.py`, D167's own "
                                             "`Queue.upsert`), and leaves a network-shaped "
-                                            "refusal alone.",
+                                            "refusal alone. The daily price job "
+                                            "(`scripts/price-refresh-daily.py`) calls it too.",
                                     "governed_by": ["D43", "D278", "D86", "D88", "D167", "D219",
                                                     "D222", "D231", "D224",
                                                     "D254"],
@@ -1359,7 +1360,7 @@ COMPONENTS = [
                                        "chart states its own history starts from, off the "
                                        "buckets actually read, never the 357-day constant.",
                                 "governed_by": ["D278", "D219", "D227", "D247",
-                                                "D254"],
+                                                "D254", "D224"],
                                 "note": "Exercised by `server/pipeline_routes.py:do_product_history` "
                                         "and by `app/tests/product-history.spec.ts`. No "
                                         "network call in the archive-hit path. PROVED "
@@ -1398,7 +1399,7 @@ COMPONENTS = [
                                     "it. `build_holdings_report` is the one entry point: one "
                                     "range in, a `HoldingsReport` out.",
                                 "governed_by": ["D278", "D277", "D189", "D212", "D219", "D225",
-                                                "D236", "D247"],
+                                                "D236", "D247", "D224"],
                                 "note": "PROVED BY `make holdings-selftest`, PATH GATED "
                                         "and IN `make check` as of D247's eighteenth entry "
                                         "(owner's word, 2026-09-23) — no store on disk, no "
@@ -5161,13 +5162,18 @@ COMPONENTS = [
                 "does": "the daily market read on the owner's Mac: one call to "
                         "`do_prices_refresh` (the live listings, the catalog per game, a re-join of "
                         "every open run, then the Trends preload), each step leaving a note `#/pricing` "
-                        "shows. Calls no paid read and no archive sweep, and changes no price at TCGplayer. `--agent` installs "
+                        "shows. After a good refresh it runs `archive sweep --write` in the same process "
+                        "(`cli.cmd_pricearchive`, at the saved pace, a second throttle stops it with the "
+                        "buckets kept, exit 0), and adds the result to the note. Calls no paid read "
+                        "and changes no price at TCGplayer. `--agent` installs "
                         "the daily launchd job (main tree only), `--agent --remove` removes it. "
                         "The installer is `launchagent.py`'s; `demo-mirror-daily.py` keeps its own copy (D295 fence).",
                 "note": "PROVED BY T7's `price_moves` group: the note is written on success and "
                         "on refusal, and the script's own imports are asserted to reach only "
-                        "the note writer and the live fetch's module.",
-                "governed_by": ["D104", "D189", "D224", "D278", "D295"],
+                        "the note writer, the live fetch's module and the one archive sweep press, "
+                        "and that a good refresh is swept, a failed one skipped and a second "
+                        "throttle stops the sweep.",
+                "governed_by": ["D104", "D189", "D222", "D224", "D278", "D295"],
             },
             "demo-mirror-daily.py": {
                 "does": "the daily demo refresh on the owner's Mac. Cuts a throwaway worktree "
