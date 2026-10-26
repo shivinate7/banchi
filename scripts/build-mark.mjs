@@ -14,6 +14,7 @@
 //   app/src/kit/markPalettes.ts   section 9's seven locked marks
 //   app/public/favicon.svg        the small cut, bluesteel, standalone
 //   app/public/icon-<n>.png       the same drawing rasterized, --icons only
+//   app/public/icon-touch-1024.png  the apple-touch-icon, full bleed, --icons only
 //
 // D18: a generator may write, and nothing that writes may gate a commit. This is run by hand.
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -311,17 +312,19 @@ console.log(`  display bracket ${display.body.length} bytes · small bracket ${s
 // whole manifest set is inset — not just the largest — because a set that disagreed with itself
 // would pad the dock icon at one size and not at the next.
 //
-// `icon-180.png` is NOT in that set. It is the `apple-touch-icon`, and iOS applies its own mask
-// to a full-bleed square; insetting it would put the mark in a box inside a box.
+// `icon-touch-1024.png` is NOT in that set. It is the `apple-touch-icon`, and iOS applies its own
+// mask to a full-bleed square; insetting it would put the mark in a box inside a box. It is 1024
+// and not 180 because Safari's Add to Dock builds the Mac dock icon from this same link, and a
+// Retina dock draws near 512px, so a 180px file reads soft. iOS downsamples it.
 if (process.argv.includes('--icons')) {
-  const TOUCH = [180]                // apple-touch-icon — iOS masks it, so it stays full bleed
+  const TOUCH = [1024]               // apple-touch-icon — iOS masks it, so it stays full bleed
   const APP = [192, 512, 1024]       // the manifest set, and what Chrome's .icns is built from
-  const SIZES = [...TOUCH, ...APP]
+  const SIZES = [...TOUCH.map((size) => ({ size, inset: false })), ...APP.map((size) => ({ size, inset: true }))]
   const { chromium } = await import(
     pathToFileURL(resolve(ROOT, 'app/node_modules/playwright/index.mjs')).href
   )
   const browser = await chromium.launch()
-  for (const size of SIZES) {
+  for (const { size, inset } of SIZES) {
     const page = await browser.newPage({ viewport: { width: size, height: size } })
     // No page background: the tile is the icon and its corners must stay transparent, or a
     // superellipse ships inside a square. `omitBackground` is what keeps that true.
@@ -331,7 +334,7 @@ if (process.argv.includes('--icons')) {
     // The inset is applied by DRAWING SMALLER on a full-size transparent canvas rather than by
     // padding the SVG, so the mark's own geometry is untouched — section 3 locks it and nothing
     // here may redraw it.
-    const inset = APP.includes(size)
+    const file = inset ? `icon-${size}.png` : `icon-touch-${size}.png`
     await page.setContent(
       `<style>html,body{margin:0;background:transparent;width:100%;height:100%}`
       + `body{display:grid;place-items:center}svg{display:block}</style>`
@@ -339,11 +342,11 @@ if (process.argv.includes('--icons')) {
     )
     await page.waitForTimeout(200)
     await page.screenshot({
-      path: resolve(ROOT, `app/public/icon-${size}.png`),
+      path: resolve(ROOT, `app/public/${file}`),
       omitBackground: true,
     })
     await page.close()
-    console.log(`build-mark: wrote icon-${size}.png`)
+    console.log(`build-mark: wrote ${file}`)
   }
   await browser.close()
   console.log('build-mark: the PNGs are NOT committable without --no-verify (image guard).')
