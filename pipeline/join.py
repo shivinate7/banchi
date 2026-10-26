@@ -680,9 +680,11 @@ def divider_index(
     `check_sections` requires a layout to start at 1 because there is no card before the
     front of a box, and that is a fact about the box rather than about its contents.
 
-    PAST THE LAST CARD IT COUNTS SLOTS, mirroring `_divider`'s own unfilled-tail term: a
-    divider beyond everything captured so far is a plan, and each slot between here and
-    there will hold one card.
+    ONE PAST THE LAST CARD takes the same rule: the first departed record behind the last
+    card on hand, so a departed tail record goes into the new section. With none there, and
+    for every ordinal further out, it counts slots, mirroring `_divider`'s own unfilled-tail
+    term: a divider beyond everything captured so far is a plan, and each slot between here
+    and there will hold one card.
     """
     if ordinal <= 1:
         # The front of the box: 1, or below it where a section was placed in front of card
@@ -694,6 +696,10 @@ def divider_index(
         # is a fraction, and cutting it moved the divider onto the card in front (D294).
         before = occupied[ordinal - 2]
         return master.as_order(min(k for k in (*occupied, *departed) if k > before))
+    if ordinal == len(occupied) + 1:
+        tail = [k for k in departed if k > occupied[-1]]
+        if tail:
+            return master.as_order(min(tail))
     high = max(
         int(occupied[-1]) if occupied else 0,
         int(departed[-1]) if departed else 0,
