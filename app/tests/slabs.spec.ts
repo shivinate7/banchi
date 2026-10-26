@@ -885,9 +885,9 @@ for (const [name, reply, said, words] of [
   })
 }
 
-/* A Card Ladder failure on Add is a normal event, so its plain sentence is the notice's title and needs no second press
-   (DEBT97). The server's words sit behind a closed disclosure, so a title that is the generic line leaves the owner
-   with no visible reason. */
+/* Add refusals from Card Ladder say why in a sentence. A Card Ladder failure on Add is a normal event, so its plain
+   sentence is the notice's title and needs no second press. The server's words sit behind a closed disclosure, so a
+   title that is the generic line leaves the owner with no visible reason. */
 for (const [name, reply, sentence] of [
   ['a failed read', BAD_GATEWAY, /Card Ladder could not be read just now\./],
   ['an unreadable answer', UNREADABLE, /Card Ladder.*could not be read/],
