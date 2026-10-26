@@ -8,4 +8,4 @@
 
 **What would close it.** A forced-choice sweep of each value at its true display size, with the incumbent absent from the last row. Or a decision that the display cut is not worth the sweep, with the four values re-tagged LOCKED by argument.
 
-**Owner's ruling.** The owner does not want this sweep either, with the dock icon judged fine apart from sharpness (DEBT73, the dock icon has no drop shadow).
+**Owner's ruling.** The owner judged the dock icon fine apart from sharpness (DEBT73, the dock icon has no drop shadow). The 1024 touch icon (D108, the dock app is an installed page) addresses sharpness. No sweep is scheduled.

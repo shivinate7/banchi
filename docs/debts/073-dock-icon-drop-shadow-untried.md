@@ -8,4 +8,4 @@
 
 **What would close it.** A sheet shows candidate shadows at 128, 64 and 32px beside the same three system icons. The method in section 7 of the spec judges them. Then a decision on whether `build-mark.mjs` draws the shadow into the manifest icons.
 
-**Owner's ruling.** The owner judged the dock icon fine apart from sharpness and does not want the shadow sweep.
+**Owner's ruling.** The owner judged the dock icon fine apart from sharpness. The 1024 touch icon (D108, the dock app is an installed page) addresses sharpness. No shadow sweep is scheduled.
