@@ -11,7 +11,7 @@ was built from them and what is still owed.
 | 2. Refunds, layer 1 | BUILT (D225) |
 | 2. Refunds, layers 2 and 3 | NOT BUILT. Both need the owner |
 | 3. The per-product view | BUILT (D227) |
-| 4. The archive | BUILT (D219). The schedule is deferred |
+| 4. The archive | BUILT (D219). The daily price job sweeps it (D224) |
 | 5. Ride-along defects | BUILT (D225) |
 
 ## The owner's rulings
@@ -138,8 +138,8 @@ The pattern is the readings table and its adopt command. `store/pricearchive.py`
   opposite of `readings adopt`, which is a full replace.
 - **The sweep's subject is every distinct SKU that `cards` has ever recorded.** Sold and held cards
   both keep their rows (D26, D134).
-- **The schedule is deferred.** The sweep is a press that a person runs. A timer would reverse D278's
-  statement that this reader cannot fire on its own. That reversal needs its own argument.
+- **The daily price job runs the sweep after its refresh.** The owner's word is "nightly, on the Mac"
+  (D224).
 
 ## 5. Ride-along defects (BUILT)
 
@@ -154,3 +154,41 @@ Six defects rode along with D225 and are fixed:
 
 Two items were questions, not defects, and they stay the owner's. Money in a table is mono, as D221
 settles it. The month chart's known faults stay, under the ruling above.
+
+## Plans, not built
+
+The owner asked for plans only. Nothing in this section is built. Each entry holds the outcome, the
+recommended option and the questions that wait for the owner.
+
+### Refunds
+
+- **Outcome.** Sales states TCGplayer's own refunds, and gross stops counting money given back.
+- **Recommended.** Step 0 comes first and needs no code. The owner opens one refunded order in the seller
+  portal and reports only the shape of the `refunds` and `transaction` fields. If the refund shows in the
+  order feed, widen the order allowlist for the amount only, never for reason or note text. If it does not,
+  state an OrderWand `Refund Amount` total per period, with no match to a ledger line.
+- **Touches** D113, D214 and D225.
+- **Open for the owner.** Which export carries it. Per order or per line. Partial refunds. Whether gross
+  minus refunds still counts as gross.
+
+### Tax export
+
+- **Outcome.** One file per year that a preparer can line up against the 1099-K. It is not tax advice.
+- **Recommended.** First check whether TCGplayer's own payment reports already cover it. If they do not,
+  build a monthly summary CSV from the OrderWand export. Its columns are gross, shipping, tax, fees,
+  refunds and estimated net. An unknown value reads "unknown" and never 0. Money is integer cents. No
+  buyer column. The button sits on `#/revenue`.
+- **Touches** D214 and D193.
+- **Open for the owner.** Order date or paid date. Central time or the browser's time zone. Fee per line or
+  per order. A "Last year" tab.
+
+### Cost basis
+
+- **Outcome.** Revenue gets a separate Purchases section with three figures: paid, sold and still on the
+  shelf. It is never called profit.
+- **Recommended.** Record the cost once per purchase, not per box or per card. The operator types it as a
+  sticky Purchase claim in Capture setup. Old stock is assigned by selection. An unknown cost is never $0.
+  The entity is named "purchase" because "lot" is taken.
+- **Touches** D214, D225 and D212.
+- **Open for the owner.** Whether sealed buys are purchases. The share of sold cards that have a pull link
+  (unmeasured). Fees. Whether a per-card split is needed.

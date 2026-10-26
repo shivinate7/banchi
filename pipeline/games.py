@@ -173,9 +173,10 @@ PROMPT_STRATEGIES = (
     # ONE collector identifier rather than Pokemon's two halves — which is the same fact
     # their `join_key: "printed_code"` records one field down — so each has its own schema
     # asking for that string whole, its own two-finish enum read from its own entry below,
-    # and its own parser. NEITHER HAS EVER READ A CARD: no Riftbound or One Piece card has
-    # been photographed by this project, so these two names buy a WIRED path and not a
-    # measured one. See identify/prompt.py's printed-code section.
+    # and its own parser. Riftbound has met real photographs (a real run held its cards and
+    # read four unusably) but no accuracy was measured; no One Piece card has been
+    # photographed. So these two names buy a WIRED path and not a measured one.
+    # See identify/prompt.py's printed-code section.
     "riftbound_card_v1",
     "one_piece_card_v1",
     "unwritten",
@@ -607,9 +608,9 @@ GAMES = (
         # refused by name. `identify/prompt.py:RIFTBOUND_CARD_V1` asks for the identifier
         # WHOLE — one field, letter suffix and asterisk and the spaces around `//` all
         # kept — which is the same fact `join_key` above records, seen from the model's
-        # side. The prompt is WIRED and UNMEASURED: no Riftbound card has ever been
-        # photographed, so there is no accuracy figure for it and the crop bands below
-        # stay empty for exactly the same missing photograph.
+        # side. The prompt is WIRED and UNMEASURED: a real run has met Riftbound
+        # photographs, but none scored its accuracy, so there is no accuracy figure for it
+        # and the crop bands below stay empty for the same missing measurement.
         "prompt": "riftbound_card_v1",
         # `geometry/crop.py`'s bands are fractions measured on a Pokemon card. Nothing has
         # measured where a Riftbound card puts its title or its number, and a band claimed

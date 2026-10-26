@@ -83,7 +83,11 @@ same weight, on every row.
 - The actions are the foot of the row, right-aligned under BACK/FRONT, at every width. No text line shares a line
   with a 40px control, so the gap between the lines is the same on every row.
 
-## Build checklist (one Sonnet lane)
+## Build checklist (built)
+
+All nine items are built. The kit has `Meter` and `bn-dot-still`. The `browse-hero-chips` row, `data-flip` and the
+`card-locations-stats`, `card-locations-counts` and `card-locations-hidden` blocks are gone. The list below records
+what each item built.
 
 Run `make orient` on each file before editing it. Look at the result at 1440 and 820, in both themes, against the
 PNGs.
@@ -138,25 +142,27 @@ PNGs.
 
 ## The Orders walk
 
-The `#/orders` walk draws the same band and photograph through the same shared components, and
-nothing else on its right panel.
+The `#/orders` walk draws the same band, photograph and copy rows through the same shared
+components. It draws no card details section.
 
-- **The panel is the current pick alone.** It is the head (name, meta line, `Pick N of M`, `For
-  <buyer>`), the band (Stored, Live, Market) and the photograph. It draws no copy rows. The walk
-  column beside it holds each copy's address, neighbors, ruler and Mark sold. The copies list is
-  switched off by leaving out `CardPane`'s `detail`, not by a second component.
+- **The panel is the current pick.** It is the head (name, meta line, `Pick N of M`, `For
+  <buyer>`), the band (Stored, Live, Market), the photograph and the copy rows. `Orders.OrderPickPane`
+  passes `CardPane` a `detail` that holds the pick's on-hand copies, the walk's chosen copy first.
+  Each row carries its address, neighbors, ruler and Mark sold (`OrdersWalkPane.RowAction`). The
+  walk column beside it holds one line per pick: where it is, its name, `Pick N of M` and, with more
+  than one buyer, for whom. On a phone the same pane opens in a sheet.
 - **Keys, while a walk is open.** `1` to `9` mark the 1st to 9th copy of the current pick sold, in
-  the order the walk column draws them, through the same press as the button (same receipt, toast
+  the order the pane draws them, through the same press as the button (same receipt, toast
   and Undo). `←` and `→` page to the previous and next pick; the panel switches at once and the
   walk column scrolls that pick into view (smooth unless motion is reduced). A pick the Hide picked
   fold has taken off the list is skipped. No key acts in a text field, with a modifier, or under
   an open layer. A digit pressed while a sale is in flight says so.
-- **Spares.** A pick's copies the solver did not choose (`here: false`) sit folded under its line
-  in the walk column, behind a quiet 40px "N more elsewhere" press. Opened, they are the same
-  `CardLocations` rows (address, neighbor line, ruler, Mark sold), sold through the same `onSell`, so
-  the order counts them like any copy. The panel stays photo-only. The digits reach the copies at the
-  stop first, then the spares only while the fold is open, so a key cap is drawn on exactly the copies
-  a digit acts on. The fold is walk state (`openSpares`), not local to the list.
+- **Spares.** A pick's copies the solver did not choose (`here: false`) sit folded under the pane's
+  copy rows, behind a quiet 40px "N more elsewhere" press. Opened, they are more `CardLocations`
+  rows (address, neighbor line, ruler, Mark sold), sold through the same `onSell`, so the order
+  counts them like any copy. The digits reach the copies at the stop first, then the spares only
+  while the fold is open, so a key cap is drawn on exactly the copies a digit acts on. The fold is
+  walk state (`openSpares`), not local to the list.
 - **Hints.** The digit stands beside each of the current pick's Mark sold buttons, and the panel
   carries two arrow buttons with the `←` `→` caps.
 - **The band's Market** is a figure beside Live, linking to the product by SKU. `Orders` passes no

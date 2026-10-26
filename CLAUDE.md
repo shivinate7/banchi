@@ -76,8 +76,8 @@ make demo-mirror SOURCE=<checkout>  # owner's Mac only: scrub, crop, commit `dem
 make demo-mirror-agent  # owner's Mac, main tree only: a daily launchd job that refreshes the mirror
                     #   and auto-merges a mirror-only PR on green CI (D295, the public demo is the scrubbed real store). ARGS=--remove removes it.
 make demo-mirror-install  # CI's step: install the committed scrub. No store, no network.
-make price-refresh  # ONE free download of the live listings now, over this checkout's store, and the note `#/pricing` shows. No sweep, no price change.
-make price-refresh-agent  # owner's Mac, main tree only: a daily launchd job that runs it (D104 (live fetch is guarded)). ARGS=--remove removes it.
+make price-refresh  # ONE free download of the live listings now, over this checkout's store, and the note `#/pricing` shows. No price change, and no archive sweep unless ARGS=--sweep asks for one (D224 (sweep preview is free)); the script alone sweeps by default, and this target passes `--no-sweep`.
+make price-refresh-agent  # owner's Mac, main tree only: a daily launchd job that runs it and, once per US Central day, the archive sweep (D104 (live fetch is guarded), D224). ARGS=--remove removes it.
 make demo-static    # demo-mirror-install, then a static build to dist-demo/.
 make demo-preview   # serve dist-demo/ as a static host would.
 make check          # the whole suite, product first, guard self-tests last. `make explain` lists it.
@@ -235,7 +235,8 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   The `server concurrency` row of `make docs-audit` reads these figures.
 - **The join key is per game and normalized on both sides** (`pipeline/games.py`,
   `pipeline/join.py:number_index_key`). Never join on Product Name. D35 (Product Name join) allows it only as a last
-  resort, queued for review. `zfill` is composition only, never matching.
+  resort, when the number key finds nothing. A name that resolves to one card is listed. A name that resolves to
+  more than one queues for review. `zfill` is composition only, never matching.
 - **A run's slot numbers are not the truth. The photograph is** (D36, the store says which slot).
   `cli/resolve.py:realign` re-binds records. It refuses on ambiguity and on a reallocated box.
 - Only two columns are ever written: `Add to Quantity`, `TCG Marketplace Price`. `TCGplayer Id` is never modified.

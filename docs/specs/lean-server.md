@@ -1,6 +1,6 @@
 # Lean server: stock images outside Review
 
-**Status: PROPOSAL. Nothing is built.** No code, route or setting in this file exists. The owner decides which option, if any, to build.
+**Status: PROPOSAL. No option is built.** Options (a) to (e) have no code, route or setting. The owner decides which option, if any, to build. Section 2 describes what exists: `image_url` on `GET /pipeline/sets` and `GET /pipeline/pricing`, and stock-first photos on Pricing, Sets and the Orders walk.
 
 Governed by D301 (stock photos are hotlinked, never mirrored), D89 (a sold card's photo is reclaimed on purpose), D36 (the store decides a card's slot), D43 (each checkout gets its own port), D88 (SQLite is the store of record), D316 (a Capture button starts and stops the dispenser) and D42 (main moves by pull request).
 
@@ -157,7 +157,7 @@ Plan only. Nothing here is built. The home-tier spec (`docs/specs/home-assistant
 ### How the store moves
 
 1. Stop the Mac's server (`make down`, by the owner).
-2. Copy `inventory/` (store, photos, exports) and `~/.banchi` to the device. Size: unmeasured.
+2. Copy `inventory/` (store, photos, exports) and `~/.banchi` to the device. Size, measured on the owner's Mac (`docs/specs/home-assistant.md`, section 1): `store.sqlite` 126 MB and `inventory/` 733 MB, 354 MB of it the model file. The photo total is not known there: D172 recorded 4.45 GB, and the gap to the measured `captures/` is unexplained.
 3. Start the device's server. Check `make status` and one capture.
 4. Remove the Mac's start-at-login agent (`make launch-agent ARGS=--remove`), so the Mac never starts a second store.
 
@@ -167,4 +167,4 @@ Plan only. Nothing here is built. The home-tier spec (`docs/specs/home-assistant
 
 - **Which device.** Recommend a Mac mini, with way A. **Ruled: decide later.** The plan is parked.
 - **Where capture happens.** At the device (A), or at the Mac through a tunnel (B).
-- **Measure first.** Store and photo size, so the copy and the device's disk are known.
+- **Measure first.** The photo total, so the copy and the device's disk are known. The store and `inventory/` sizes are in step 2 above.

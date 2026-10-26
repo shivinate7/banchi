@@ -1,8 +1,12 @@
 # My Slabs
 
-**STATUS: SPECIFIED. Nothing is built.** Governed by D320 (My Slabs reads
+**STATUS: PARTLY BUILT.** Governed by D320 (My Slabs reads
 Card Ladder with the owner's own login). The decision carries the argument and the bounds. This
 file carries every point the owner's token can read, what each returns, and the build plan.
+Built: add, list, detail and remove (`POST /slabs`, `GET /slabs`, `GET /slabs/<grader>/<cert>`,
+`DELETE /slabs/<grader>/<cert>`), the Card Ladder client, the three store tables, the `#/slabs`
+screen and the three checks that D320 names. Not built: the daily sweep (its route and its
+launchd job) and the 4.2 buyer export. Both wait for the owner's word.
 
 ---
 
@@ -358,7 +362,11 @@ Kind: build. Platform: macOS, over the capture server.
    remove control waits for its answer, and a double press never sends a second remove.
 5. A launchd job for the daily sweep, like `make price-refresh-agent`. A Google error on the
    token exchange stops the sweep too, because the exchange host has no pace of its own.
-6. The three checks that D320 names.
+6. The three checks that D320 names. All three are built:
+   - The callable allow list is `cardladder.ALLOWED_CALLABLES`, which `Client.call` reads.
+   - `scripts/cardladder-selftest.py`'s `case_refuse_host` proves a request to
+     `search.cardladder.com` is refused before the transport.
+   - `app/tests/slabs.spec.ts` proves a slab with no sale shows "No sales".
 
 ## 7. What stays unmeasured
 

@@ -3265,6 +3265,250 @@ test('a poll that moves no phase leaves the step the owner opened open', async (
   await expect(head).toHaveAttribute('aria-expanded', 'true')
 })
 
+/* THE RUN SWITCH CASES BELOW SHARE TWO TOOLS. `gate` is an answer held until the case lets it go,
+ * so a stale window is as long as the assertion needs and not one request on a fast loopback.
+ * `answerRuns` answers `GET /pipeline/runs/<name>` per run, after `open` (the last matching route
+ * wins), and waits out `hold(run)` first when it returns a gate's promise. */
+function gate() {
+  let open!: () => void
+  const wait = new Promise<void>((resolve) => {
+    open = resolve
+  })
+  return { wait, open }
+}
+
+async function answerRuns(page: Page, bodies: Record<string, unknown>, hold: (run: string) => Promise<void> | undefined) {
+  await page.route(/\/pipeline\/runs\/[^/]+$/, async (route) => {
+    const run = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() ?? '')
+    await hold(run)
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(bodies[run]) })
+  })
+}
+
+/** The detail the server answers for a run row: the row plus its console, files and manifest. */
+const detailOf = (row: ReturnType<typeof runRow>, more: Record<string, unknown> = {}) => ({
+  ...row,
+  console: '',
+  files: [],
+  manifest: {},
+  ...more,
+})
+
+/** The open run's panel answers presses: its header and body are not inert, not dimmed, and the
+ *  panel is not marked busy. The panel itself is never inert or dimmed: the loading state sets
+ *  `inert` on the header and the body, and dims their children (RunPanel.css, "The dim sits on the
+ *  children"), so those are the parts read. Read off the DOM's own standard states so any way of
+ *  drawing a loading panel is judged the same. */
+async function expectLive(page: Page, heading: string) {
+  await expect(page.locator('.runs-detail-h')).toHaveText(heading)
+  await settleMotion(page)
+  const panel = page.locator('.runs-detail-panel')
+  const head = panel.locator('.runs-detail-head')
+  const body = panel.locator('.runs-detail-body')
+  await expect.poll(() => head.evaluate((el) => (el as HTMLElement).inert), 'the header is not inert').toBe(false)
+  await expect.poll(() => body.evaluate((el) => (el as HTMLElement).inert), 'the body is not inert').toBe(false)
+  await expect(panel).not.toHaveAttribute('aria-busy', 'true')
+  await expect(head).toHaveCSS('opacity', '1')
+  /* The body is `display: contents`, so its own opacity paints nothing: the dim is on its children. */
+  await expect
+    .poll(() => body.evaluate((el) => [...el.children].every((c) => getComputedStyle(c).opacity === '1')), 'no body child is dimmed')
+    .toBe(true)
+}
+
+/** The stand-in panel for a run whose answer is still on its way: header and body inert, panel
+ *  marked busy. The counterpart of `expectLive`; without it a deleted `inert` reads as live. */
+async function expectHeld(page: Page) {
+  const panel = page.locator('.runs-detail-panel')
+  await expect(panel).toHaveAttribute('aria-busy', 'true')
+  await expect
+    .poll(() => panel.locator('.runs-detail-head').evaluate((el) => (el as HTMLElement).inert), 'the header is inert')
+    .toBe(true)
+  await expect
+    .poll(() => panel.locator('.runs-detail-body').evaluate((el) => (el as HTMLElement).inert), 'the body is inert')
+    .toBe(true)
+}
+
+/* A SWITCH FROM ONE RUN TO ANOTHER, WITH NO "All runs" PRESS BETWEEN. The panel kept the old
+ * run's answer until the new one landed, so the old run's heading and figures stayed drawn under
+ * the new run's highlighted row. The positive end (the new heading arrives) proves the case drove
+ * the real switch and was not passing on an empty panel. */
+test('switching straight to another run draws nothing of the old one and holds the loaded size while the new one loads', async ({
+  page,
+}) => {
+  const first = runRow({ run: '2026-08-24-box9-01' })
+  const second = runRow({
+    run: '2026-08-24-box12-01',
+    box: 12,
+    box_name: 'codes',
+    path: '/tmp/runs/2026-08-24-box12-01',
+    capture_dir: '/tmp/captures/cards/box12',
+    scope: { box: 12, whole_box: true, cards: null },
+  })
+  await open(page, { runs: [first, second] })
+
+  const held = gate()
+  await answerRuns(page, { [first.run]: detailOf(first), [second.run]: detailOf(second) }, (run) =>
+    run === second.run ? held.wait : undefined,
+  )
+
+  const panelHeight = () => page.locator('.runs-detail-panel').evaluate((el) => el.getBoundingClientRect().height)
+  let loadingHeight = 0
+
+  try {
+    await page.locator(`.run-row[title="${first.run}"]`).click()
+    await expect(page.locator('.runs-detail-h')).toHaveText('Box 9')
+
+    const asked = page.waitForRequest((request) => request.url().endsWith(`/pipeline/runs/${second.run}`))
+    await page.locator(`.run-row[title="${second.run}"]`).click()
+    await asked
+
+    /* THE LOADING PANEL HAS NO HEADING, so the old run's identity is asserted ABSENT. A negated
+       text match fails on a missing element, and `.runs-detail-panel` cannot be the probe: the
+       loading panel wears that class too. */
+    await expect(page.locator('.runs-detail-h', { hasText: 'Box 9' })).toHaveCount(0)
+    await settleMotion(page)
+    await expectHeld(page)
+    loadingHeight = await panelHeight()
+  } finally {
+    held.open()
+  }
+  await expectLive(page, 'codes')
+
+  /* NOTHING ON SCREEN MOVES UNLESS THE PERSON MOVED IT: A LOADING AREA HOLDS ITS LOADED SIZE FROM
+     THE FIRST PAINT (CLAUDE.md, "The design system"). The panel that stands in for
+     the run while it loads must be the height the run's own panel then takes, or the column under
+     it jumps when the answer lands. */
+  expect(Math.round(loadingHeight), 'the loading panel is the size of the loaded one').toBe(
+    Math.round(await panelHeight()),
+  )
+})
+
+/* A LATE ANSWER FOR THE RUN JUST LEFT. A step press on run A reads A back when it finishes. If the
+ * person has moved to run B by then and B's own answer has already landed, A's late read must not
+ * take B's panel away: B stays live, with B's heading. The order is the point: B's answer first,
+ * then A's. */
+test('a late answer for the run just left does not freeze the run now open', async ({ page }) => {
+  const first = runRow({ run: '2026-08-24-box9-01' })
+  const second = runRow({
+    run: '2026-08-24-box12-01',
+    box: 12,
+    box_name: 'codes',
+    path: '/tmp/runs/2026-08-24-box12-01',
+    capture_dir: '/tmp/captures/cards/box12',
+    scope: { box: 12, whole_box: true, cards: null },
+  })
+  await open(page, { runs: [first, second] })
+
+  const slowSecond = gate()
+  const lateFirst = gate()
+  let holdFirst = false
+  await answerRuns(page, { [first.run]: detailOf(first), [second.run]: detailOf(second) }, (run) => {
+    if (run === second.run) return slowSecond.wait
+    return run === first.run && holdFirst ? lateFirst.wait : undefined
+  })
+
+  try {
+    await page.locator(`.run-row[title="${first.run}"]`).click()
+    await expect(page.locator('.runs-detail-h')).toHaveText('Box 9')
+
+    /* The Preview press reads run A back, and that read is held. */
+    holdFirst = true
+    const readBack = page.waitForRequest(
+      (request) => request.method() === 'GET' && request.url().endsWith(`/pipeline/runs/${first.run}`),
+    )
+    await page.getByRole('button', { name: 'Preview' }).click()
+    await readBack
+
+    const asked = page.waitForRequest((request) => request.url().endsWith(`/pipeline/runs/${second.run}`))
+    const answered = page.waitForResponse((response) => response.url().endsWith(`/pipeline/runs/${second.run}`))
+    answered.catch(() => undefined)
+    await page.locator(`.run-row[title="${second.run}"]`).click()
+    await asked
+
+    slowSecond.open()
+    await answered
+    await expectLive(page, 'codes')
+
+    lateFirst.open()
+    /* The toast is the last thing the press does, after it has written A's read into the panel. */
+    await expect(page.locator('.bn-toast', { hasText: 'Match finished' })).toBeVisible()
+    await expectLive(page, 'codes')
+  } finally {
+    slowSecond.open()
+    lateFirst.open()
+  }
+})
+
+/* SWITCHING BETWEEN RUNS AT DIFFERENT STAGES, the new one with a log. The panel on screen while the
+ * new run loads may say nothing the new run would not say once loaded: "No log for this run." is
+ * false over a run that has one, and "Nothing spent, every card cached" is false over a free run,
+ * which says "Free". And it holds the loaded size. Run A sits at the Identify step, so that step is
+ * the open one when run B (at Match) is chosen. */
+test('switching between runs at different stages draws no false line and holds the loaded size', async ({
+  page,
+}) => {
+  const first = runRow({ run: '2026-08-24-box9-01', phase: 'identify', collected: false })
+  const second = runRow({
+    run: '2026-08-24-box12-01',
+    box: 12,
+    box_name: 'codes',
+    path: '/tmp/runs/2026-08-24-box12-01',
+    capture_dir: '/tmp/captures/cards/box12',
+    scope: { box: 12, whole_box: true, cards: null },
+    phase: 'join',
+    usage: { cost_usd: 0 },
+  })
+  await open(page, { runs: [first, second] })
+
+  const held = gate()
+  await answerRuns(
+    page,
+    {
+      [first.run]: detailOf(first, { console: 'submitted 36 cards' }),
+      [second.run]: detailOf(second, {
+        console: 'matched 30 of 36 cards',
+        manifest: { flags: { engine: 'marqo-b' }, matched: 30 },
+      }),
+    },
+    (run) => (run === second.run ? held.wait : undefined),
+  )
+
+  const panelHeight = () => page.locator('.runs-detail-panel').evaluate((el) => el.getBoundingClientRect().height)
+  let loadingHeight = 0
+  const step = (name: string) =>
+    page
+      .locator('.runs-step')
+      .filter({ has: page.locator('.run-step-title', { hasText: new RegExp(`^${name}$`) }) })
+      .locator('.runs-step-head')
+  const answer = page.waitForResponse((response) => response.url().endsWith(`/pipeline/runs/${second.run}`))
+  answer.catch(() => undefined)
+
+  try {
+    await page.locator(`.run-row[title="${first.run}"]`).click()
+    await expect(page.locator('.runs-detail-h')).toHaveText('Box 9')
+    await expect(step('Identify')).toHaveAttribute('aria-expanded', 'true')
+
+    const asked = page.waitForRequest((request) => request.url().endsWith(`/pipeline/runs/${second.run}`))
+    await page.locator(`.run-row[title="${second.run}"]`).click()
+    await asked
+
+    /* SOFT, so one red run reports every false line and the size together. The loading panel is
+       drawn the moment the row is pressed, so a short timeout judges a state already on screen. */
+    await expect.soft(page.getByText('No log for this run.')).toHaveCount(0, { timeout: 1000 })
+    await expect.soft(page.getByText(/every card was already cached/)).toHaveCount(0, { timeout: 1000 })
+    await settleMotion(page)
+    loadingHeight = await panelHeight()
+  } finally {
+    held.open()
+  }
+  await answer
+  await expectLive(page, 'codes')
+  await expect(step('Match')).toHaveAttribute('aria-expanded', 'true')
+  expect.soft(Math.round(loadingHeight), 'the loading panel is the size of the loaded one').toBe(
+    Math.round(await panelHeight()),
+  )
+})
+
 test('every run row waits min(i, cap) * the one shared stagger', async ({ page }) => {
   const runs = Array.from({ length: 15 }, (_, i) => runRow({ run: `2026-08-24-box9-${String(i + 1).padStart(2, '0')}` }))
   await open(page, { runs })
@@ -3524,6 +3768,28 @@ test('a counted free quote with no index says the free read is not set up', asyn
   await expect(quote).toContainText('36 get a second look from the paid read')
   await expect(quote).toContainText('The free read is not set up, so every card goes to the second look.')
   await expect(quote).not.toContainText('Counted by reading them now')
+})
+
+/* THE WIRE IS WHAT `cli/cmd_identify.run` PRINTS WHEN EVERY CARD IS ANSWERED: nothing to send, so it
+   never measures the free read and prints "free read 0 of 0 certain", which the server parses as
+   `second_look_measured: false`. The reader here is PREPARED (the default `matchState`), so a setup
+   sentence is a false one. */
+test('a free quote with every card already answered does not say the free read is not set up', async ({
+  page,
+}) => {
+  await open(page, {
+    toSend: 0,
+    estimate: 0,
+    cacheHits: 40,
+    free: { freeRead: 0, secondLook: 0, measured: false },
+  })
+  await atReading(page, 9, 'free')
+  await page.getByRole('button', { name: 'Check what it will read' }).click()
+  const quote = page.locator('.run-quote')
+  await expect(quote).toBeVisible()
+
+  await expect(quote).toContainText('Nothing to send')
+  await expect(quote).not.toContainText(/not set up/i)
 })
 
 test('cards the free reader cannot take are named in sentences, never by their code', async ({ page }) => {

@@ -566,7 +566,8 @@ COMPONENTS = [
                                             "review queue with its photograph "
                                             "(`cli/archive_review.py`, D167's own "
                                             "`Queue.upsert`), and leaves a network-shaped "
-                                            "refusal alone.",
+                                            "refusal alone. The daily price job "
+                                            "(`scripts/price-refresh-daily.py`) calls it too.",
                                     "governed_by": ["D43", "D278", "D86", "D88", "D167", "D219",
                                                     "D222", "D231", "D224",
                                                     "D254"],
@@ -1359,7 +1360,7 @@ COMPONENTS = [
                                        "chart states its own history starts from, off the "
                                        "buckets actually read, never the 357-day constant.",
                                 "governed_by": ["D278", "D219", "D227", "D247",
-                                                "D254"],
+                                                "D254", "D224"],
                                 "note": "Exercised by `server/pipeline_routes.py:do_product_history` "
                                         "and by `app/tests/product-history.spec.ts`. No "
                                         "network call in the archive-hit path. PROVED "
@@ -1398,7 +1399,7 @@ COMPONENTS = [
                                     "it. `build_holdings_report` is the one entry point: one "
                                     "range in, a `HoldingsReport` out.",
                                 "governed_by": ["D278", "D277", "D189", "D212", "D219", "D225",
-                                                "D236", "D247"],
+                                                "D236", "D247", "D224"],
                                 "note": "PROVED BY `make holdings-selftest`, PATH GATED "
                                         "and IN `make check` as of D247's eighteenth entry "
                                         "(owner's word, 2026-09-23) — no store on disk, no "
@@ -5161,13 +5162,18 @@ COMPONENTS = [
                 "does": "the daily market read on the owner's Mac: one call to "
                         "`do_prices_refresh` (the live listings, the catalog per game, a re-join of "
                         "every open run, then the Trends preload), each step leaving a note `#/pricing` "
-                        "shows. Calls no paid read and no archive sweep, and changes no price at TCGplayer. `--agent` installs "
+                        "shows. After a good refresh it runs `archive sweep --write` in the same process "
+                        "(`cli.cmd_pricearchive`, at the saved pace, a second throttle stops it with the "
+                        "buckets kept, exit 0), and adds the result to the note. Calls no paid read "
+                        "and changes no price at TCGplayer. `--agent` installs "
                         "the daily launchd job (main tree only), `--agent --remove` removes it. "
                         "The installer is `launchagent.py`'s; `demo-mirror-daily.py` keeps its own copy (D295 fence).",
                 "note": "PROVED BY T7's `price_moves` group: the note is written on success and "
                         "on refusal, and the script's own imports are asserted to reach only "
-                        "the note writer and the live fetch's module.",
-                "governed_by": ["D104", "D189", "D224", "D278", "D295"],
+                        "the note writer, the live fetch's module and the one archive sweep press, "
+                        "and that a good refresh is swept, a failed one skipped and a second "
+                        "throttle stops the sweep.",
+                "governed_by": ["D104", "D189", "D222", "D224", "D278", "D295"],
             },
             "demo-mirror-daily.py": {
                 "does": "the daily demo refresh on the owner's Mac. Cuts a throwaway worktree "
@@ -5645,17 +5651,16 @@ COMPONENTS = [
                 # its letter.
                 "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12",
                                 "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28",
-                                "D29", "D58", "D33", "D34", "D36", "D37", "D41", "D43", "D45",
-                                "D77", "D86", "D183", "D138", "D54", "D55", "D56", "D61",
-                                "D278", "D63", "D65", "D69", "D67", "D70", "D76",
-                                "D277", "D83", "D87", "D88", "D89", "D90", "D91",
+                                "D29", "D33", "D34", "D36", "D37", "D41", "D43", "D45", "D54",
+                                "D55", "D56", "D58", "D61", "D63", "D65", "D67", "D69", "D70",
+                                "D76", "D77", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D97", "D100", "D103", "D104", "D108", "D109", "D113",
-                                "D115", "D260", "D121", "D132", "D134", "D137",
-                                "D145", "D164", "D166", "D168", "D172", "D174",
-                                "D189", "D191", "D192", "D193", "D196", "D203", "D212",
-                                "D213", "D219", "D231", "D225", "D227", "D251", "D252",
-                                "D258", "D259", "D262", "D264", "D294", "D261", "D271", "D273",
-                                "D298", "D299", "D301", "D320"],
+                                "D115", "D121", "D132", "D134", "D137", "D138", "D145", "D147",
+                                "D164", "D166", "D168", "D172", "D174", "D183", "D189", "D191",
+                                "D192", "D193", "D196", "D203", "D212", "D213", "D219", "D225",
+                                "D227", "D231", "D251", "D252", "D258", "D259", "D260", "D261",
+                                "D262", "D264", "D271", "D273", "D277", "D278", "D294", "D298",
+                                "D299", "D301", "D320"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -5710,8 +5715,8 @@ COMPONENTS = [
                                        "against the real portal: T7 proves every path on a "
                                        "loopback one with slow, partial, 5xx and "
                                        "rollback-refused modes.",
-                               "governed_by": ["D33", "D54", "D86", "D87", "D99", "D100", "D104",
-                                               "D105", "D273", "D174", "D269"],
+                               "governed_by": ["D26", "D33", "D54", "D59", "D86", "D87", "D99",
+                                               "D100", "D104", "D105", "D174", "D269", "D273"],
                                "tested_by": ["T7"]},
             "tcg_export.py": {
                 "does": "the outbound calls to the seller admin host, and the only place "
@@ -6132,11 +6137,11 @@ COMPONENTS = [
                                    "governed_by": ["D5", "D94", "D102"]},
             "public/manifest.webmanifest": {"does": "the web app manifest, and it does TWO jobs. It began as an icon manifest — `apple-touch-icon` pointed at an SVG, which iOS does not render, so the app had no home-screen icon at all rather than a degraded one. Since D108 it is also what makes Chrome's `Install page as app` produce a real dock app: `display: standalone`, and `launch_handler: focus-existing` so a second press on the dock icon focuses the open window instead of opening another. EVERY URL IN IT IS RELATIVE, and that is a correctness fix rather than a style: Vite rebases the `<link rel=\"manifest\">` address and copies app/public/ VERBATIM, so a site-absolute `/icon-192.png` is right at `/` and 404s under `make demo-static`'s `/banchi/` base — measured against the published demo, icons and start_url both. ITS ICON LIST IS THE macOS APP ICON SET AND NOTHING ELSE (logo.md section 17): three PNGs, all inset to Apple's 824/1024 grid, because Chrome resizes THESE into the installed app's .icns and one full-bleed entry would pad the dock icon at one size and not the next. `favicon.svg` was removed from it for exactly that reason and is still the tab icon by `<link rel=\"icon\">`. Still NO service worker and no offline story; the page is served by `make up` and there is nothing to cache.",
                                             "governed_by": ["D94", "D102", "D108"]},
-            "public/icon-180.png": {"does": "the apple-touch-icon, and the ONE raster that is NOT inset to the macOS grid (logo.md section 17) — iOS applies its own mask to a full-bleed square, so insetting would put the mark in a box inside a box. The DISPLAY cut because 180px is squarely inside the range section 3 locks for 64px and up — taper and holographic foil, not the favicon's small cut. GENERATED by `node scripts/build-mark.mjs --icons`, which needs Playwright and is deliberately behind a flag: the pre-commit image guard now QR-scans any .png staged outside captures/ (`BANCHI_QR=off` is its hatch) rather than refusing on sight, so a generated icon clears it on a clean decode with no override needed.",
+            "public/icon-touch-1024.png": {"does": "the apple-touch-icon at 1024, and the ONE raster that is NOT inset to the macOS grid (logo.md section 17) — iOS applies its own mask to a full-bleed square, so insetting would put the mark in a box inside a box. It is 1024 because Safari's Add to Dock builds the Mac dock icon from this link and a Retina dock draws near 512px; iOS downsamples it. The DISPLAY cut because 1024px is squarely inside the range section 3 locks for 64px and up — taper and holographic foil, not the favicon's small cut. GENERATED by `node scripts/build-mark.mjs --icons`, which needs Playwright and is deliberately behind a flag: the pre-commit image guard now QR-scans any .png staged outside captures/ (`BANCHI_QR=off` is its hatch) rather than refusing on sight, so a generated icon clears it on a clean decode with no override needed.",
                                     "governed_by": ["D94", "D102"]},
-            "public/icon-192.png": {"does": "the manifest's smallest icon, INSET to Apple's macOS icon grid like the rest of that set (logo.md section 17) — 155 of 192, which is 80.73% against the grid's 80.47%, the rounding. Same drawing and same generator as icon-180.png; what differs is that it is drawn smaller on a transparent canvas, because section 3 locks the tile and nothing may redraw it.",
+            "public/icon-192.png": {"does": "the manifest's smallest icon, INSET to Apple's macOS icon grid like the rest of that set (logo.md section 17) — 155 of 192, which is 80.73% against the grid's 80.47%, the rounding. Same drawing and same generator as icon-touch-1024.png; what differs is that it is drawn smaller on a transparent canvas, because section 3 locks the tile and nothing may redraw it.",
                                     "governed_by": ["D94", "D102", "D108"]},
-            "public/icon-512.png": {"does": "the manifest's middle icon, and the one place the display cut is drawn near the size it was designed for. INSET to the macOS grid (logo.md section 17): 412 of 512. Same generator as icon-180.png.",
+            "public/icon-512.png": {"does": "the manifest's middle icon, and the one place the display cut is drawn near the size it was designed for. INSET to the macOS grid (logo.md section 17): 412 of 512. Same generator as icon-touch-1024.png.",
                                     "governed_by": ["D94", "D102", "D108"]},
             "public/icon-1024.png": {"does": "the manifest's LARGEST icon, and what a Retina dock actually draws from — added 2026-09-06 with D108's dock app, because Chrome builds the installed app's .icns by resizing the manifest set and had no source above 512. INSET to Apple's grid, 824 of 1024, which is the ratio logo.md section 17 locks and `make docs-audit`'s `mac icon grid` row reconciles against `scripts/build-mark.mjs:MAC_GRID` in both directions. Measured on this Mac: Safari, Mail and Calculator all sit at exactly 80.47% and the mark used to sit at 100% — 24% wider and 55% more area than its neighbours in the dock.",
                                      "governed_by": ["D94", "D102", "D108"]},

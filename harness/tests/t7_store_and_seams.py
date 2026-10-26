@@ -194,6 +194,7 @@ from harness.tests.t7 import (  # noqa: E402
     match_audit,
     match_claim,
     empty_slot,
+    t1_results,
     drift_homes,
     drift_homes_batch2,
     orders,
@@ -277,6 +278,7 @@ CHECK_ORDER = (
     *read_budget.CHECKS,
     *manifest_merge.CHECKS,
     *second_look_counts.CHECKS,
+    *t1_results.CHECKS,
 )
 
 
