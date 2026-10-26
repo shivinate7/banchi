@@ -1654,6 +1654,117 @@ def check_correct_answer_waits_for_live(checks: Checks) -> None:
             checks.equal(sent["released"], {"pushed": 1}, "and it releases the pushed copy")
 
 
+def _disputed_card(box: int, disputed_sku: str, other_sku: str, **counts: int) -> str:
+    """One held card bound to `disputed_sku`, with an open `listing_disputed` review entry that
+    offers `other_sku`, and `disputed_sku`'s listing holding `counts`. Runs inside the caller's
+    `isolated_home()`. Returns the card's position key.
+    """
+    rows = {
+        disputed_sku: ("Jax, Icathia", "1/14"),
+        other_sku: ("Jax, Unmatched", "2/14"),
+    }
+    capture_server.do_capture(capture_payload(box))
+    key = f"{box}/1"
+    with Store().write() as snapshot:
+        for sku, (name, number) in rows.items():
+            snapshot.skus.entries[sku] = SkuRow(
+                product_line="Riftbound League of Legends Trading Card Game",
+                set_name="Origins", product_name=name, number=number,
+                rarity="Epic", condition="Near Mint", grade="Near Mint", printing=None,
+                first_seen=1_700_000_000, last_seen=1_700_000_000, source="t7-fixture", raw={},
+            )
+        snapshot.inventory.set_state(key, master.IDENTIFIED)
+        snapshot.inventory.bind_sku(
+            key, disputed_sku, bound_by="answer", skus=snapshot.skus,
+            number_strategy="printed_code",
+        )
+        snapshot.inventory.cards[key].game = "riftbound"
+        snapshot.inventory.cards[key].read_name = "Jax, Icathia"
+        listing = snapshot.inventory.listing(disputed_sku, condition="Near Mint")
+        for stage, count in counts.items():
+            listing.set(stage, count)
+        snapshot.review.upsert(
+            entry(
+                box, 1, reason=routing.LISTING_DISPUTED,
+                candidates=[
+                    {
+                        "sku": sku, "name": name, "set": "Origins", "number": number,
+                        "condition": "Near Mint", "market": "1.00", "rarity": "Epic",
+                    }
+                    for sku, (name, number) in rows.items()
+                ],
+            )
+        )
+    return key
+
+
+def check_review_answer_disputed_waits_for_live(checks: Checks) -> None:
+    """POST /review/<box>/<index>/answer on a `listing_disputed` entry — the same owner's word
+    as `check_correct_answer_waits_for_live`, through the second door. identity-follows-sku.md
+    §8.1 calls answering such an entry with another SKU "the D252 correction, unchanged in
+    meaning", so one physical copy must not stand under two SKUs here either.
+
+    TWO STORES. The old SKU live >= 1 refuses `old_sku_still_live` and writes nothing: the
+    card, the three counts and `live_as_of` as they were, the entry still open, no
+    `sku_corrected` line. The control, pushed but not live, answers.
+    """
+    checks.note("")
+    checks.note("ANSWER A DISPUTED LISTING — it waits while the old sku is live")
+
+    disputed_sku, other_sku = "7100001", "7100002"
+    answer = {"sku": other_sku, "condition": "Near Mint"}
+
+    with isolated_home():
+        key = _disputed_card(65, disputed_sku, other_sku, pushed=1, live=1)
+        before = _listing_and_card(key, disputed_sku)
+        identity_before = Store().read().inventory.identity_snapshot(key)
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(65, 1, answer),
+            "old_sku_still_live",
+            "a disputed listing answered with another sku refuses while the old sku has a "
+            "live copy",
+        )
+        checks.equal(
+            _listing_and_card(key, disputed_sku),
+            before,
+            "and it wrote nothing to the card, the three counts or `live_as_of`",
+        )
+        checks.equal(
+            Store().read().inventory.identity_snapshot(key),
+            identity_before,
+            "and every identity field is as it was",
+        )
+        checks.ok(
+            not Store().read().review.entries[key].cleared_by_human,
+            "and the entry stays open, so the question is asked again",
+        )
+        checks.ok(
+            other_sku not in Store().read().inventory.listings
+            and last_event(key).get("event") != "sku_corrected",
+            "no listing record for the other sku and no correction line in the history",
+        )
+
+    with isolated_home():
+        key = _disputed_card(66, disputed_sku, other_sku, pushed=1, live=0)
+        corrected = answers(
+            checks,
+            lambda: capture_server.do_review_answer(66, 1, answer),
+            "control: with the old sku pushed but not live the same answer succeeds",
+        )
+        if corrected is not None:
+            checks.equal(
+                (corrected.get("corrected"), corrected.get("previous_sku")),
+                (True, disputed_sku),
+                "and it is the correction, replacing the disputed sku",
+            )
+        checks.equal(
+            Store().read().inventory.cards[key].sku,
+            other_sku,
+            "the card carries the other sku",
+        )
+
+
 def check_identity_binding(checks: Checks) -> None:
     """identity-follows-sku.md, lane 3a's own coverage. Every server writer that sets a SKU
     binds through `Inventory.bind_sku` — never `set_state` with an identity kwarg — the new
@@ -7764,6 +7875,7 @@ CHECKS = (
     check_correct_answer,
     check_correct_answer_live_release,
     check_correct_answer_waits_for_live,
+    check_review_answer_disputed_waits_for_live,
     check_identity_binding,
     check_catalog_number_fields_round_trip,
     check_catalog_set_rarity_match,
