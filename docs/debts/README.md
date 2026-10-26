@@ -58,7 +58,7 @@ DEBT50 git and gh CLI traps hit from this checkout
 DEBT58 the Lane H palette record is on a branch, not in main
 DEBT59 an unreadable live submission claim has no way out on screen
 DEBT60 the demo builds with Hide unpullable forced off
-DEBT61 eight build proposals are still open
+DEBT61 six build proposals are still open
 DEBT62 the demo photos are about 180 MB of plain git, and the owner left them there
 DEBT63 T1 has never been compared with TCGplayer Scan & Identify
 DEBT64 the collector number's printed total is not cross-checked against the local catalog
