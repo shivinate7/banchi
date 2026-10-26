@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# Protects: The daily demo mirror never publishes a bundle that names a card whose photograph it did not commit, and removes its throwaway worktree on every exit path. The public demo shows a buyer's full name and still refuses any address-shaped value; a deploy holds the last good demo when the recording's wire digest differs from the tree's; the mirror refreshes weekly.
-"""The daily mirror ships every photograph its bundle names (D295, D172).
+# Protects: The weekly demo mirror never publishes a bundle that names a card whose photograph it did not commit, and removes its throwaway worktree on every exit path. The public demo shows a buyer's full name and still refuses any address-shaped value; a deploy holds the last good demo when the recording's wire digest differs from the tree's; the mirror refreshes weekly.
+"""The weekly mirror ships every photograph its bundle names (D295, D172).
 Incident: `.gitignore`'s bare `photos` also matched demo-assets/mirror/photos/, `git add` skipped
 the new photographs without a word, and the bundle merged naming cards with no photograph.
 Three cases, each red on the old code.
