@@ -335,7 +335,11 @@ type RunPanelProps = {
 export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, pageFailure }: RunPanelProps) {
   const [runs, setRuns] = useState<readonly RunSummary[]>([])
   const [loaded, setLoaded] = useState(false)
-  const [detail, setDetail] = useState<RunDetail | null>(null)
+  const [answered, setDetail] = useState<RunDetail | null>(null)
+  /* Only the open run's own answer draws. A direct switch leaves the old run's answer in state
+     until the new one lands, and a late answer for the old run (the auto-match, a step) can land
+     after the switch; the loading panel, which holds the detail's size (D313), draws meanwhile. */
+  const detail = answered !== null && answered.run === openRun ? answered : null
 
   const [reviewBelow, setReviewBelow] = useState<'none' | 'low' | 'medium'>('low')
   const [optionsOpen, setOptionsOpen] = useState(false)
