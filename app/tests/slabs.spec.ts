@@ -885,6 +885,30 @@ for (const [name, reply, said, words] of [
   })
 }
 
+/* A Card Ladder failure on Add is a normal event, so its plain sentence is the notice's title and needs no second press
+   (DEBT97). The server's words sit behind a closed disclosure, so a title that is the generic line leaves the owner
+   with no visible reason. */
+for (const [name, reply, sentence] of [
+  ['a failed read', BAD_GATEWAY, /Card Ladder could not be read just now\./],
+  ['an unreadable answer', UNREADABLE, /Card Ladder.*could not be read/],
+] as const) {
+  test(`when Add meets ${name}, the Add sheet's notice is titled with a plain Card Ladder sentence`, async ({ page }) => {
+    const wire = makeWire()
+    wire.postReply = () => reply
+    await open(page, wire)
+    await expect(dataRows(page)).toHaveCount(5)
+    const sheet = await openAdd(page)
+    await certField(sheet).fill(GENGAR.cert)
+    await addButton(sheet).click()
+    await expect.poll(() => wire.posts.length).toBe(1)
+    await expect(addButton(sheet)).toBeEnabled() // the read is over; its "reading" line shares the notice's place
+    const title = sheet.locator('.bn-notice .bn-notice-title')
+    await expect(title, 'the refusal has no title').toBeVisible()
+    await expect(title, 'the title is not the Card Ladder sentence').toHaveText(sentence)
+    await expect(sheet, 'a refusal keeps the sheet open').toBeVisible()
+  })
+}
+
 test('the Add sheet opens empty again after a refusal: no old cert, no old refusal', async ({ page }) => {
   const wire = await open(page)
   await expect(dataRows(page)).toHaveCount(5)
