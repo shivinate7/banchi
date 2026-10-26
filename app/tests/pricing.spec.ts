@@ -6540,3 +6540,27 @@ for (const left of LEFT_OUT) {
     await expect(tile(page, 'priced'), 'the tile counts what the press sends: one typed price').toContainText(/\b1 typed\./)
   })
 }
+
+/* A ROW ASKED FOR ZERO COPIES ADDS NONE, as an at-cap row does: the tile counts its typed price
+   only when the press names it as a price change, which needs live copies at a different price. */
+const ZERO_QTY = (name: string) => `How many of the 3 copies of ${name} go in this file`
+const ZERO_LIVE = { live_before: 2, listing: { pushed: 2, staged: 0, live: 2 }, snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now: '9.99' } }
+for (const zero of [
+  { why: 'no live copies is not counted', live: {}, press: 'Send 1 SKU to TCGplayer', tile: false },
+  { why: 'live copies at a different price is counted once', live: ZERO_LIVE, press: 'Send 1 SKU and 1 price change', tile: true },
+]) {
+  test(`the priced tile counts what the send carries: a typed price on a row asked for 0 copies, with ${zero.why}`, async ({ page }) => {
+    await setViewport(page, { width: 1440, height: 900 })
+    await open(page, {
+      skus: [sku({ sku: '8608859', name: 'Articuno' }), sku({ sku: '8608459', name: 'Dunsparce', ...zero.live })],
+      decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: {} },
+    })
+    await page.getByLabel(ZERO_QTY('Dunsparce')).fill('0')
+    const price = page.getByLabel('Price for Dunsparce')
+    await price.fill('13.00')
+    await price.press('Tab')
+    await expect(page.getByRole('button', { name: zero.press })).toBeVisible()
+    if (zero.tile) await expect(tile(page, 'priced')).toContainText(/\b1 typed\./)
+    else await expect(tile(page, 'priced')).not.toContainText(/\b[1-9]\d* typed\./)
+  })
+}
