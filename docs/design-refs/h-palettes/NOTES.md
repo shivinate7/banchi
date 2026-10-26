@@ -14,7 +14,7 @@ palettes comparable side by side.
 
 - **accent** — primary buttons, links, the focus ring, and the Home nav row
   (`--bn-accent*`, `--bn-line-focus`, `--bn-accent-tint*`).
-- **nav groups** — the sidebar has one ungrouped row (Home) plus three labelled
+- **nav groups** — the sidebar has one ungrouped row (Home) plus three labeled
   groups (`Workflow`, `Sell`, `Library`). Found by reading the rendered DOM
   (`.bn-nav-group`, `.bn-nav-group-label`, `.bn-nav-link[aria-current='page']`),
   never by guessing. Each group gets its own hue for its label text and its active
