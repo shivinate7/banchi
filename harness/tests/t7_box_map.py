@@ -951,6 +951,14 @@ def check_divider_keeps_departed_after_it(checks: Checks) -> None:
         join.divider_index(4, occupied, departed), 7,
         "no departed record stands in front of the fourth card, so it keeps its own key",
     )
+    checks.equal(
+        join.divider_index(5, occupied, (*departed, 8)), 8,
+        "one past the last card on hand, the divider goes in front of departed 8 (D58)",
+    )
+    checks.equal(
+        join.divider_index(5, occupied, departed), 8,
+        "and with no departed record past the last card it is the slot after the last record",
+    )
 
     with isolated_home():
         capture_server.do_create_box({"box": 1, "name": "Plain"})
