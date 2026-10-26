@@ -70,7 +70,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 from cli import resolve, runs
 from pipeline import corpus, decisions, games, join, merge, pricing, routing, sendguard, tcgcsv
@@ -290,13 +290,60 @@ def _report_withheld(withheld: List[dict], say) -> None:
         say(f"                   ... and {len(withheld) - 8} more")
 
 
-def _report_unstamped(missed: List[str], say) -> None:
-    """A copy `set_state` could not stamp (no record at its position) is named, never silent."""
+def _state(inventory, key: str):
+    """The card's state, or None when there is no record. `getattr`: a stand-in inventory in the
+    harness has `set_state` and no `cards`."""
+    card = getattr(inventory, "cards", {}).get(key)
+    return None if card is None else card.state
+
+
+def _left(inventory, key: str) -> bool:
+    """Whether the copy at `key` has sold or been retired (D26). No record is not left.
+
+    A MOVED tombstone is not: its card still exists as the transplant, so it still counts once
+    (the owner's ruling). `_stamp_*` leave its state alone instead."""
+    return _state(inventory, key) in (master.SOLD, master.RETIRED)
+
+
+def _tombstone(inventory, key: str) -> bool:
+    return _state(inventory, key) == master.MOVED
+
+
+def _drop_departed(matches, inventory) -> List[str]:
+    """Move every planned copy that has since left the shelf (sold or retired) out of the
+    send, so `add_to_quantity` and the import file both lose it (D59, D26). Returns their keys.
+
+    The plan is decided outside the store lock; a sale in the gap is invisible to it. A departed
+    copy is filed as committed, the same set `resolve` puts a copy in that has left, so the
+    rows, the count and the stamp loop all read the one answer."""
+    gone: List[str] = []
+    for match in matches:
+        for position in list(match.uncommitted_positions):
+            key = master.position_key(position.box, position.index)
+            if _left(inventory, key):
+                match.committed_positions.append(position)
+                gone.append(key)
+    return gone
+
+
+def _report_unstamped(missed: List[str], say, skipped: Sequence[str] = (), moved: Sequence[str] = ()) -> None:
+    """A copy `set_state` could not stamp (no record at its position) is named, never silent.
+    So is a copy that left the shelf between the plan and the write: skipped, not sent."""
+    def keys(names):
+        return f"{', '.join(names[:8])}{f' ... and {len(names) - 8} more' if len(names) > 8 else ''}"
+
+    if skipped:
+        say("")
+        say(f"skipped          {len(skipped)} copy(ies) left the box after the send was planned "
+            f"and were not sent: {keys(list(skipped))}")
+    if moved:
+        say("")
+        say(f"moved            {len(moved)} copy(ies) moved to another box after the send was planned; "
+            f"each still counts once and its old place stays moved: {keys(list(moved))}")
     if not missed:
         return
     say("")
-    say(f"unstamped        {len(missed)} copy(ies) could not be marked as sent: "
-        f"{', '.join(missed[:8])}{f' ... and {len(missed) - 8} more' if len(missed) > 8 else ''}")
+    say(f"unstamped        {len(missed)} copy(ies) could not be marked as sent: {keys(missed)}")
 
 
 def _queue_withheld(writable, withheld: List[dict]) -> None:
@@ -1401,6 +1448,11 @@ def run(args, say) -> int:
         say(f"REFUSING to write: {refusal}. Nothing was written.")
         return 1
     typed = _quantities_for(args)
+    # A COPY THAT SOLD AFTER THE PLAN WAS READ NEVER REACHES THE FILE (D59). Read again here, after
+    # the plan and before any row exists, so the file and the count agree.
+    snapshot = store.read()
+    planned_out = _drop_departed(resolved.matches.values(), snapshot.inventory)
+    _report_unstamped([], say, planned_out)
 
     # --------------------------------------------------- reported before any output exists
     missing = sorted(
@@ -1670,11 +1722,14 @@ def run(args, say) -> int:
         for sku in (set(listed_skus) | set(sub_skus))
         if sku in resolved.matches and resolved.matches[sku].add_to_quantity > 0
     }
+    skipped: List[str] = []
+    moved: List[str] = []
     try:
         with store.write() as writable:
             _claim_or_refuse(writable, going, basis, args, [c.sku for c in changes], list(takes))
             pushed, pushed_skus, unstamped = _stamp_single(
-                writable, resolved, emitted, priced_flat, run_dir, sku_game, sku_source
+                writable, resolved, emitted, priced_flat, run_dir, sku_game, sku_source,
+                skipped, moved,
             )
             _record_prices(writable, changes, run_dir.name)
             queue_line = writable.queue_summary
@@ -1684,15 +1739,20 @@ def run(args, say) -> int:
         return 1
     return _after_single(
         args, say, resolved, run_dir, listed_skus, sub_skus, pushed, pushed_skus,
-        queue_line, stages, len(changes), disputed_positions, unstamped, bool(takes),
+        queue_line, stages, len(changes), disputed_positions, unstamped, bool(takes), skipped, moved,
     )
 
 
-def _stamp_single(writable, resolved, emitted, priced_flat, run_dir, sku_game, sku_source):
+def _stamp_single(
+    writable, resolved, emitted, priced_flat, run_dir, sku_game, sku_source, skipped=None, moved=None
+):
     """The single-run write: stamp every matched copy, count the sent ones. `(pushed, skus, unstamped)`.
+    `skipped` and `moved` are lists the caller passes to hear which copies left (see `_left`).
 
     `sku_game` and `sku_source` are `run`'s per-SKU game and export source, which `bind_sku`
     needs (identity-follows-sku.md §4.1)."""
+    skipped = [] if skipped is None else skipped
+    moved = [] if moved is None else moved
     pushed = 0
     pushed_skus = 0
     unstamped: List[str] = []
@@ -1778,6 +1838,11 @@ def _stamp_single(writable, resolved, emitted, priced_flat, run_dir, sku_game, s
         }
         for position in match.uncommitted_positions:
             key = master.position_key(position.box, position.index)
+            # A COPY THAT LEFT BETWEEN THE LAST READ AND THIS LOCK IS NOT RELABELLED, and not
+            # counted: `set_state` has no terminal guard and would flip it back to identified.
+            if _left(writable.inventory, key):
+                skipped.append(key)
+                continue
             # `set_state(key, IDENTIFIED)` rather than assigning `sku` and `condition`
             # straight onto the record, and the choice is not style. It is the only
             # writer that returns False for a position with no record, which is what
@@ -1805,11 +1870,15 @@ def _stamp_single(writable, resolved, emitted, priced_flat, run_dir, sku_game, s
             # re-emit. The membership test is what keeps the two apart, and it is on the
             # key rather than on the index because `live_positions` is a slice of the
             # same objects — identity would work and would break the day it is rebuilt.
-            stamped = writable.inventory.set_state(
-                key,
-                master.IDENTIFIED,
-                run=run_dir.name,
-            )
+            if _tombstone(writable.inventory, key):
+                moved.append(key)
+                stamped = True
+            else:
+                stamped = writable.inventory.set_state(
+                    key,
+                    master.IDENTIFIED,
+                    run=run_dir.name,
+                )
             # THE ONE WRITER (§4.1). `bind_sku` reads `match.row` back out of
             # `writable.skus`, which the upsert above just put there, and refuses
             # `sku_unknown`/`game_mismatch` rather than writing a guess. A DISPUTING
@@ -1858,7 +1927,7 @@ def _stamp_single(writable, resolved, emitted, priced_flat, run_dir, sku_game, s
 
 def _after_single(
     args, say, resolved, run_dir, listed_skus, sub_skus, pushed, pushed_skus, queue_line, stages,
-    repriced=0, disputed_positions=(), unstamped=(), took=False,
+    repriced=0, disputed_positions=(), unstamped=(), took=False, skipped=(), moved=(),
 ) -> int:
     """What the single-run path says once its write has committed."""
     # ONLY WHEN SOMETHING REACHED A FILE. D54: the record is created by the first emit that
@@ -1875,7 +1944,7 @@ def _after_single(
     say(f"pushed           {pushed} copy(ies) across {pushed_skus} SKU(s) -> "
         f"{master.PUSHED}")
     _report_withheld(disputed_positions, say)
-    _report_unstamped(list(unstamped), say)
+    _report_unstamped(list(unstamped), say, skipped, moved)
     listings = ", ".join(f"{k} {v}" for k, v in stages.items() if v)
     if listings:
         say(f"listings         {listings}")
@@ -2128,6 +2197,12 @@ def _run_merged(args, say) -> int:
     except GuardRefused as refusal:
         say(f"REFUSING to write: {refusal}. Nothing was written.")
         return 1
+    # A COPY THAT SOLD AFTER THE PLAN WAS READ LEAVES EVERY LEG BEFORE `merge.plan` (D59).
+    snapshot = store.read()
+    planned_out = _drop_departed(
+        [match for legs in legs_by_sku.values() for match in legs], snapshot.inventory
+    )
+    _report_unstamped([], say, planned_out)
 
     choice = book.scoped_to(matched)
     say(f"send             {len(dirs)} run(s): {', '.join(d.name for d in dirs)}")
@@ -2345,11 +2420,13 @@ def _run_merged(args, say) -> int:
         for row in merged_plan.skus
         if row.sku in shipped and row.match.add_to_quantity > 0
     }
+    skipped: List[str] = []
+    moved: List[str] = []
     try:
         with store.write() as writable:
             _claim_or_refuse(writable, going, basis, args, sorted(changed), list(takes))
             pushed, pushed_skus, unstamped = _stamp_merged(
-                writable, merged_plan, shipped, resolved_by_run
+                writable, merged_plan, shipped, resolved_by_run, skipped, moved
             )
             _record_prices(writable, changes, ",".join(d.name for d in dirs))
             queue_line = writable.queue_summary
@@ -2360,12 +2437,14 @@ def _run_merged(args, say) -> int:
     # THE RUN'S EMIT RECORD NAMES THE SKUS THAT ADDED A COPY (D54), never a price-only row.
     copied = [(target, [row for row in group if row.sku not in changed and row.sku not in takes]) for target, group in written]
     return _after_merged(
-        dirs, copied, pushed, pushed_skus, queue_line, stages, say, disputed_positions, unstamped
+        dirs, copied, pushed, pushed_skus, queue_line, stages, say, disputed_positions, unstamped, skipped, moved
     )
 
 
-def _stamp_merged(writable, merged_plan, shipped, resolved_by_run):
-    """The merged write: stamp every copy once, count the sent ones. `(pushed, skus, unstamped)`."""
+def _stamp_merged(writable, merged_plan, shipped, resolved_by_run, skipped=None, moved=None):
+    """The merged write: stamp every copy once, count the sent ones. `(pushed, skus, unstamped)`; `skipped` and `moved` as in `_stamp_single`."""
+    skipped = [] if skipped is None else skipped
+    moved = [] if moved is None else moved
     pushed = 0
     pushed_skus = 0
     unstamped: List[str] = []
@@ -2411,11 +2490,15 @@ def _stamp_merged(writable, merged_plan, shipped, resolved_by_run):
             # THE FIVE IDENTITY KWARGS ARE GONE, exactly as in `_stamp_single` above —
             # `bind_sku` below is the one writer now, and D253's `name_corrections` read
             # retires with it.
-            stamped = writable.inventory.set_state(
-                key,
-                master.IDENTIFIED,
-                run=run_name,
-            )
+            if _tombstone(writable.inventory, key):
+                moved.append(key)
+                stamped = True
+            else:
+                stamped = writable.inventory.set_state(
+                    key,
+                    master.IDENTIFIED,
+                    run=run_name,
+                )
             # A DISPUTING POSITION NEVER REACHES THIS LOOP EITHER — `_withhold_disputed`
             # already pulled it out of `leg.match.positions` for every leg, before
             # `merge.plan` ever built `row` (review finding, HIGH, on 1b5c90e5).
@@ -2452,7 +2535,7 @@ def _stamp_merged(writable, merged_plan, shipped, resolved_by_run):
 
 
 def _after_merged(
-    dirs, written, pushed, pushed_skus, queue_line, stages, say, disputed_positions=(), unstamped=()
+    dirs, written, pushed, pushed_skus, queue_line, stages, say, disputed_positions=(), unstamped=(), skipped=(), moved=()
 ) -> int:
     """What the merged path says once its write has committed."""
     # THE RECEIPT IS PER RUN AND ADDS, NEVER SUBTRACTS (D54). Each run in the send records the
@@ -2470,7 +2553,7 @@ def _after_merged(
     say("")
     say(f"pushed           {pushed} copy(ies) across {pushed_skus} SKU(s) -> {master.PUSHED}")
     _report_withheld(disputed_positions, say)
-    _report_unstamped(list(unstamped), say)
+    _report_unstamped(list(unstamped), say, skipped, moved)
     listings = ", ".join(f"{k} {v}" for k, v in stages.items() if v)
     if listings:
         say(f"listings         {listings}")
