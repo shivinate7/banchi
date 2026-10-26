@@ -1,7 +1,7 @@
 """T7 group: a photograph of an empty slot is read as `empty_slot`, and is never accepted or sent to the paid read.
 
-`identify.match.empty_slot` takes the 99th-percentile luminance of a photograph, at full size. Under
-`EMPTY_SLOT_P99` the slot is empty. `match.read` ranks a dark photograph for its best raw cosine and
+`identify.match.empty_slot` takes the 99th-percentile luminance of a photograph, a JPEG decoded at half
+scale (a PNG decodes in full). Under `EMPTY_SLOT_P99` the slot is empty. `match.read` ranks a dark photograph for its best raw cosine and
 answers the code `empty_slot` with that luminance and that best match; it is never accepted. The
 press never sends an empty photograph to the paid read, retires a card only when the dark
 photograph and a weak best match agree, and `cli/resolve.py` files the rest as `card_not_detected`
@@ -29,7 +29,7 @@ from pathlib import Path
 from unittest import mock
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFile
 
 from harness.tests import Checks
 from harness.tests.home import isolated_home
@@ -39,7 +39,7 @@ from identify import match
 CODE = "empty_slot"
 DARK = 20  # a uniform dark slot: its 99th percentile sits here
 CARD = 180  # a flat card face, bright enough to clear the cut
-FRAME = (1434, 1024)  # tall, the size a rig photograph is read at (full size, no downscale)
+FRAME = (1434, 1024)  # tall, the size a rig photograph is read at (the luminance read decodes a JPEG of it at half scale)
 
 
 def _jpeg(path: Path, grid: np.ndarray, quality: int = 90) -> Path:
@@ -110,8 +110,9 @@ def check_empty_slot_boundary(checks: Checks) -> None:
 
 def check_empty_slot_keeps_thin_lines(checks: Checks) -> None:
     """A dark card with 1px white lines is not an empty slot. At full size the lines keep the 99th
-    percentile at 255. A downscaled decode averages each line into the dark (about 86 at 1/4 scale),
-    which would call this card empty. This check fails on that regression."""
+    percentile at 255, and at the half-scale JPEG decode the read uses at 138, over the cut of 100.
+    A decode at 1/4 or 1/8 scale averages each line into the dark (79 and 49), which would call this
+    card empty. This check fails on that regression."""
     fn = _empty_slot_fn(checks)
     if fn is None:
         return
@@ -120,7 +121,7 @@ def check_empty_slot_keeps_thin_lines(checks: Checks) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         photo = _jpeg(Path(tmp) / "lines.jpg", grid, quality=95)
         checks.ok(fn(photo) is False, "a dark card with 1px white lines is not an empty slot",
-                  "the full-size read must keep the lines; a downscaled read would average them dark")
+                  "the read must keep the lines; a decode below half scale would average them dark")
 
 
 def check_read_names_empty_slot(checks: Checks) -> None:
@@ -246,6 +247,73 @@ def check_dry_run_quote_leaves_the_empty_slot_out(checks: Checks) -> None:
     checks.ok(len(second) == 1 and second[0].split()[2] == "2",
               "the second-look line counts the two sent cards, not the empty slot",
               f"second look lines: {second!r}")
+
+
+def check_dry_run_does_not_decode_at_full_size(checks: Checks) -> None:
+    """DEBT99, the empty-slot check decodes every photo at full size. A dry run over uncached
+    photographs decodes none of them above a quarter of its pixels (half per side), so the quote does
+    not wait on a full decode of each. It passes with a reduced decode (a JPEG draft) or with no
+    decode at all, the two remedies the debt allows, so it pins neither.
+
+    The spy wraps `ImageFile.load` and keeps the largest frame any load of a file decoded: `draft()`
+    shrinks the size before the load, while a resize or `reduce()` after a full load still records the
+    full frame. It sees PIL, the product's one decoder. Two outcome controls keep a pass from being
+    empty: the dry run exits 0 and prints its quote, and a dark card with 1px white lines is not
+    counted as an empty slot (the dry run's own no-false-catch; `check_empty_slot_keeps_thin_lines`
+    holds the same case for `empty_slot`). A half-scale JPEG draft keeps that card's 99th percentile at
+    138 (over the cut of 100); a quarter-scale one drops it to 79.
+    """
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+
+    checks.note("")
+    checks.note("DRY-RUN DECODE — no uncached photograph is decoded at full size before the quote")
+    decoded: dict = {}  # file name -> the largest frame area any load of it decoded
+    real_load = ImageFile.ImageFile.load
+
+    def spy(self):
+        name = Path(str(self.filename)).name
+        decoded[name] = max(decoded.get(name, 0), self.size[0] * self.size[1])
+        return real_load(self)
+
+    lined = np.full(FRAME, DARK, np.uint8)
+    lined[::40, :] = 255  # one white row every 40, the thin-lines card
+    shots = {"7-001.jpg": np.full(FRAME, CARD, np.uint8), "7-002.jpg": np.full(FRAME, CARD - 40, np.uint8),
+             "7-003.jpg": lined}
+    with isolated_home() as home, mock.patch.object(ImageFile.ImageFile, "load", spy):
+        caps = Path(home) / "decode-caps"
+        caps.mkdir()
+        for position, (name, grid) in enumerate(shots.items(), 1):
+            _jpeg(caps / name, grid, quality=95)
+            (caps / name).with_suffix(".json").write_text(
+                json.dumps({"box": 7, "position": position, "game": "misc"}), "utf-8"
+            )
+        with Image.open(caps / "7-003.jpg") as probe:
+            full = probe.size[0] * probe.size[1]  # from the header, no decode
+            probe.draft("L", (probe.size[0] // 2, probe.size[1] // 2))
+            probe.convert("L")
+        checks.ok(0 < decoded.get("7-003.jpg", 0) * 4 <= full,
+                  "control: the spy reads a half-scale JPEG draft as a quarter of the pixels",
+                  f"decoded {decoded.get('7-003.jpg')!r} of {full}")
+        decoded.clear()
+        lines: list = []
+        with quiet():
+            code = cmd_identify.run(
+                cli_entry.build_parser().parse_args(["identify", str(caps), "--engine", "marqo-b", "--dry-run"]),
+                lines.append,
+            )
+    checks.equal(code, 0, "`identify --engine marqo-b --dry-run` exits 0")
+    to_send = [line for line in lines if line.startswith("to send")]
+    checks.ok(len(to_send) == 1 and to_send[0].split()[-1] == "3",
+              "control: the quote is printed and sends all three, the thin-lines card included",
+              f"to send lines: {to_send!r}")
+    empty = [line for line in lines if line.startswith("empty slot")]
+    checks.ok(all(line.split()[2] == "0" for line in empty),
+              "no photograph is counted as an empty slot, the thin-lines card least of all",
+              f"empty slot lines: {empty!r}")
+    over = {name: area for name, area in decoded.items() if area * 4 > full}
+    checks.ok(not over, "the dry run decodes no uncached photograph above a quarter of its pixels",
+              f"full-size is {full}; decoded areas over the bound: {over!r}")
 
 
 def _p99(photo: Path) -> float:
@@ -1128,6 +1196,7 @@ CHECKS = (
     check_read_names_empty_slot,
     check_haiku_press_never_sends_an_empty_slot,
     check_dry_run_quote_leaves_the_empty_slot_out,
+    check_dry_run_does_not_decode_at_full_size,
     check_dark_weak_retires_captured_card,
     check_dark_strong_stays_captured,
     check_bright_photograph_is_not_empty,
