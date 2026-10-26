@@ -171,6 +171,10 @@ These words also name something else, and that use stays:
   state `identified` are renamed in a later phase. A read is one reader's answer for one photo.
 - **The two readers are the Free Reader and the Paid Reader.** Their tooltips say "Marqo-B" and
   "Claude Haiku", with no version.
+- **Resolved** (`resolved_by_you`) is a Review card a person ended, Answered or Closed.
+- **A withheld record with no reason** stores reason `none_given`.
+- **Check What Is Live runs `banchi count-live`** (route `/pipeline/count-live`), beside the Update Store Counts button.
+- **The Paid Reader's prompt is renamed with no re-measure.** T1 (the read-accuracy test) re-pins its fingerprint; its banked score is marked as measured on the old wording.
 - **Withheld is the word for a SKU you keep out.** No meaning of "held" remains in this file.
 - **Review ends a question as Answered, Closed or Skipped.** A closed card's reason line says
   whether it was kept or retired.
@@ -353,8 +357,8 @@ own row. "Names with two meanings", after the tables, tells you which is which.
 | Paid Reader | screen | "Read from the photo" | "Paid Reader" | RunsComposer | 8 |
 | Paid read batch | screen | "Not read" (the pill while a batch is out) | "Paid read out" | RunsStage | 1 † |
 | Paid read batch | screen | "Nothing in this send was paid" | "Nothing in this batch was paid" | RunsComposer | 1 |
-| Paid read batch | code | `to_send`, `RunSend` (the cards a Read press gives the Paid Reader) | UNDECIDED: the Post ruling covers the listing press only, and "sent to Claude" is still open | cmd_identify; types.RunSend | 82 |
-| Paid Reader | code | the prompt text that prompt_fingerprint hashes | keep: the owner's brief for this map keeps it, and no recorded ruling does yet. T1 (the read-accuracy test) asserts the scored prompt is unmoved (t1_id_eval.PROMPT_FINGERPRINT), and a change needs a paid re-measurement | identify/prompt.py | — |
+| Paid read batch | code | `to_send`, `RunSend` (the cards a Read press gives the Paid Reader) | keep: the owner ruled a Paid read batch is "sent to Claude" | cmd_identify; types.RunSend | 82 |
+| Paid Reader | code | the prompt text that prompt_fingerprint hashes | rename: the owner ruled the prompt is renamed with no re-measure; T1's pinned fingerprint is re-pinned, and its banked score is marked as measured on the old wording | identify.prompt |
 | Photo Settings | code | `DEFAULT_READING` | `DEFAULT_PHOTO_SETTINGS` | RunsComposer.DEFAULT_READING | 4 |
 
 ### Match to product renames
@@ -400,7 +404,7 @@ own row. "Names with two meanings", after the tables, tells you which is which.
 | Closed | stored | `stood_down` (event) | `review_closed`, migrates (a sealed box's state is already closed) | capture_server.do_review_stand_down | 28 |
 | Closed | screen | "Stand down" (the Close dialog's group) | "Kept" | ReviewQueue | 1 † |
 | Closed | screen | "left in place" (the reason line) | "Kept" | ReviewQueue | 3 † |
-| Closed | stored | `cleared_by_human` (answered or closed) | UNDECIDED: no glossary word covers both | queues.QueueEntry | 169 |
+| Closed | stored | `cleared_by_human` (answered or closed) | `resolved_by_you` (Resolved: answered or closed) | queues.QueueEntry | 169 |
 | Skipped | code | `deferred` (cards skipped this sitting) | `skipped` | ReviewQueue | 8 † |
 | Another meaning | code | `sort_key` (QueueEntry.sort_key: the order of a review queue) | `queue_order`; it moves before the Sort Key takes sort_key | queues.sort_key | 18 |
 
@@ -447,7 +451,7 @@ own row. "Names with two meanings", after the tables, tells you which is which.
 | Withheld | code | `is_hold`, `hold_lost`, `_hold_before` (a price answer that withholds) | `is_withheld`, `withheld_lost`, `_withheld_before` | corpus.Answer | 23 |
 | Withheld | code | `holdFor`, `setHoldFor`, `holdButtons` | `withholdFor`, `setWithholdFor`, `withholdButtons` | Pricing | 18 |
 | Withheld | wire | `held` (Pricing's progress count, and the data-answer and data-tile value) | `withheld` | Pricing | 36 † |
-| Withheld | stored | `"unlisted"` (withheld with no reason) | UNDECIDED: a withheld record carries a reason, and this one has none | standing.isWithheld | 19 † |
+| Withheld | stored | `"unlisted"` (withheld with no reason) | `"withheld"` with reason `none_given` | standing.isWithheld | 19 † |
 | On hand | code | `holdings`, `held_market_cutoff`, `build_holdings_report` (a SKU with a copy on hand) | `on_hand`, `on_hand_top_price`, `build_on_hand_report` | pipeline/holdings.py | 132 |
 | On hand | wire | `held_market_readings` | `on_hand_market_prices` | pipeline_routes; types.InventoryCard | 5 |
 | On hand | route | `/pipeline/holdings-value` | `/pipeline/on-hand-value` | pipeline_routes; server.getHoldingsValue | 14 |
@@ -502,8 +506,8 @@ own row. "Names with two meanings", after the tables, tells you which is which.
 | Running | wire | `live` (a run's process is running) | `running` | types.RunSummary | 9 † |
 | Counted | code | `readingAgo`, `readingBound`, `readingDays`, `readingExact`, `ReadingAge`, `STALE_READING_DAYS`, `staleReading` | `countedAgo`, `countedBound`, `countedDays`, `countedExact`, `CountedAge`, `STALE_COUNTED_DAYS`, `staleCounted` (orderView already owns staleCount) | cardState; CardLocations | 45 |
 | Counted | screen | "read {ago}", "not read yet" (the age of a live figure) | "counted {ago}", "Not counted yet" | CardLocations.ReadingAge | 1 † |
-| Check what is live | CLI | `banchi reconcile --live` | UNDECIDED: check-live is close to the live-check route | cmd_reconcile | 17 |
-| Check what is live | route | `/pipeline/reconcile-live` | UNDECIDED, as the row above | pipeline_routes.do_reconcile_live | 11 |
+| Check what is live | CLI | `banchi reconcile --live` | `banchi count-live` | cmd_reconcile | 17 |
+| Check what is live | route | `/pipeline/reconcile-live` | `/pipeline/count-live` | pipeline_routes.do_reconcile_live | 11 |
 | Check what is live | screen | "Match the store" | "Update store counts" | LiveReconcile | 5 |
 | Check what is live | screen | "Store reconciled" | "Store counts updated" | LiveReconcile | 1 |
 | Compare | CLI | `banchi reconcile <run-dir>` | `banchi compare` | cmd_reconcile | 12 |
@@ -580,8 +584,8 @@ stays keeps its name.
   the Free Reader skips. Plain-English holds stay: a screen area that holds its size (`useHeld`,
   D313, nothing on screen moves unless the person moved it) and a held restart (`held_since`).
   Never replace "hold" as a bare word: `threshold` contains it.
-- `send`: the listing press becomes Post. The Paid Reader's batch (`to_send`, `RunSend`) is
-  UNDECIDED. The `http.server` methods (`send_response`, `send_header`, `send_error`) stay.
+- `send`: the listing press becomes Post. The Paid Reader's batch (`to_send`, `RunSend`)
+  keeps "send": it is sent to Claude. The `http.server` methods (`send_response`, `send_header`, `send_error`) stay.
 - `post` and `posting`: `post` is also an HTTP POST. D243 (a posted price is recorded once)
   already calls a price that reached an Import File a posting, in `cmd_emit`. That is the same
   meaning as Post, so the receipt phase `"posting"` agrees with it.
@@ -613,9 +617,9 @@ stays keeps its name.
   `PickRow.card_number` is the Collector Number. `EMPTY_SLOT`, `REQUEST_SLOTS`, `PHOTO_SLOTS` and
   port slots stay.
 - `live`: `RunSummary.live` becomes Running. Copies live on TCGplayer stay, and so does
-  `/pipeline/live-check`. `reconcile --live` is UNDECIDED.
+  `/pipeline/live-check`. `reconcile --live` becomes `count-live`.
 - `reconcile`: Compare (`banchi reconcile <run-dir>`, the `"reconcile"` step). `reconcile --live`
-  is UNDECIDED. `--phantoms` is Live beyond on hand. The orders backlog reconcile
+  becomes `count-live`. `--phantoms` is Live beyond on hand. The orders backlog reconcile
   (`/orders/reconcile-backlog`) stays.
 - `pushed`: Counted as posted (`Listing.pushed`). `push_to_staged` becomes `post_to_staged`. A
   local `pushed` in ReviewQueue is another word.
