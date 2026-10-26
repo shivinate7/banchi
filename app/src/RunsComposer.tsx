@@ -1493,11 +1493,14 @@ export function RunsComposer({
                       <>
                         <span>{count(quote.total.free_read)} read free</span>
                         <span>{count(quote.total.second_look)} get a second look from the paid read</span>
-                        <span>
-                          {quote.total.second_look_measured === false
-                            ? 'The free read is not set up, so every card goes to the second look.'
-                            : 'Counted by reading them now'}
-                        </span>
+                        {/* With nothing to send the reader never measures, so `measured: false` is not a setup fault. */}
+                        {quote.total.to_send === 0 ? null : (
+                          <span>
+                            {quote.total.second_look_measured === false
+                              ? 'The free read is not set up, so every card goes to the second look.'
+                              : 'Counted by reading them now'}
+                          </span>
+                        )}
                       </>
                     )}
                     {Object.entries(quote.total.unread).map(([code, n]) => (
