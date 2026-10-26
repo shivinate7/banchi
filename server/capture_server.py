@@ -8527,6 +8527,19 @@ def _apply_correction(
     must be exact" over every field `bind_sku` can touch, not only the seven this route has
     always shown on screen).
     """
+    # THE OWNER'S WORD, for both callers: a sent card is not corrected while the old SKU still
+    # has a copy live on TCGplayer, or one physical card would stand under two SKUs. Read off
+    # `live` alone, so a pushed or staged copy still corrects. Before any write below.
+    old_listing = snapshot.inventory.listings.get(card.sku) if card.sku else None
+    if old_listing is not None and old_listing.live >= 1:
+        box, index = (int(part) for part in key.split("/"))
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "old_sku_still_live",
+            f"{join.said_place(snapshot.inventory, box, index)} still has a copy live on TCGplayer "
+            f"under its current listing. Take that listing down on TCGplayer, fetch your live "
+            f"listings again, then correct the card.",
+        )
     full_snapshot = snapshot.inventory.identity_snapshot(key)
     previous = {
         "sku": card.sku,
@@ -9550,16 +9563,15 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
     THE OLD SKU IS RELEASED BY ONE COPY, THROUGH `Listing.release` — D34's primitive and not a
     second one. `pushed`/`staged`/`live` are counts on a SKU, never addresses (D7 amended), so
     there is no field anywhere recording "this card backed that listing" to simply clear.
-    What IS true is the fact D34's own release states when a box loses its copies: one fewer
-    physical card now backs whatever this SKU's counts claim, so one copy of the least-
-    committed stage — pushed first, then staged, then live — is given up, exactly as a box
-    losing a card gives one up. `pipeline/livecheck.py:compare` was read before this was
-    built (the brief's item 2): its buckets are `pushed+staged` against `live+sold`, and
-    nothing about a card's own identity moves either number on its own — only a release does.
-    Once it runs, the next `banchi reconcile --live` reads a SKU whose `claim` no longer
-    covers what TCGplayer still shows live as `beyond` (D109's own bucket): "TCGplayer's own
-    quantity for a SKU this pipeline never sent — more than it sent", which is the sentence
-    that tells the operator exactly what to go and lower.
+    One copy of the least-committed stage is given up, `pushed` first and then `staged`, as a
+    box losing a card gives one up.
+
+    IT WAITS WHILE THE OLD SKU IS LIVE (`old_sku_still_live`, 409), on the owner's word: one
+    physical copy is never listed under two SKUs. A live copy cannot be released from here
+    because TCGplayer still shows it. The refusal reads `live` alone, never `pushed` and never
+    the committed count, and it ends by itself once a newer reading puts `live` at zero.
+    The refusal lives in `_apply_correction`, so `do_review_answer`'s `listing_disputed`
+    branch waits too.
 
     THE NEW SKU GETS NO LISTING WRITE. Choosing a catalog row is not pushing one — that stays
     `emit`'s job (D54) — so nothing here touches the new SKU's `pushed`/`staged`/`live`.
@@ -9600,7 +9612,7 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
     not attempt), `not_identified` (no existing SKU to correct — that is `do_review_answer`'s
     job), `sku_required`, `sku_not_in_catalog` (`_catalog_answer`'s own D77 refusal, reused
     verbatim — no export, no run, or the SKU is not a row in it), `sku_unchanged` (the row
-    chosen is the row already on the card).
+    chosen is the row already on the card), `old_sku_still_live` (see above).
 
     IT GOES BOTH WAYS, D28's shape. `{"undo": true}` is `_reverse_correction` below, on the
     same one-control-one-window posture `do_review_answer`'s own undo takes: no clock here,
