@@ -920,6 +920,76 @@ def check_divider_editor_keys(checks: Checks) -> None:
         )
 
 
+def check_divider_keeps_departed_after_it(checks: Checks) -> None:
+    """DEBT40, a divider save can move a divider past departed records.
+
+    THE RULE: an edited start maps to the key of the FIRST RECORD at that place, departed or
+    not. "That place" is the gap between card `n-1` and card `n` on hand. A departed record
+    in that gap sits in front of card `n`, so it belongs to the section that starts there. A
+    departed record in front of card `n-1` stays in the section before.
+
+    Red before the fix: `join.divider_index` answered the key of card `n` itself, so the
+    departed records in the gap fell into the section before the divider.
+
+    The box: records 1..8, with 2, 4 and 5 sold. On hand are 1, 3, 6, 7, 8. The gap in front
+    of the third card on hand (index 6) holds departed 4 and 5, and departed 2 sits in
+    front of the second card (index 3). A fix that returns the first departed record of the
+    whole box (2) or the last of the gap (5) is wrong, so the exact key is asserted.
+    """
+    checks.note("")
+    checks.note("DEBT40 — a divider edit keeps the departed records in front of its card")
+    occupied, departed = (1, 3, 6, 7), (2, 4, 5)
+    checks.equal(
+        join.divider_index(3, occupied, departed), 4,
+        "the third card on hand sits at 6, and the divider goes in front of departed 4 and 5",
+    )
+    checks.equal(
+        join.divider_index(2, occupied, departed), 2,
+        "the second card on hand sits at 3, and the divider goes in front of departed 2",
+    )
+    checks.equal(
+        join.divider_index(4, occupied, departed), 7,
+        "no departed record stands in front of the fourth card, so it keeps its own key",
+    )
+
+    with isolated_home():
+        capture_server.do_create_box({"box": 1, "name": "Plain"})
+        with Store().write() as snapshot:
+            for index in range(1, 9):
+                snapshot.inventory.record_capture(
+                    master.Card(box=1, index=index, cid=fake_cid(f"gap-{index}"), name=f"c{index}")
+                )
+            # Stored at 7, which the screen shows as card 4. The edit to 3 below is a changed
+            # start, so it goes through `divider_index` and not through the stored key.
+            snapshot.inventory.set_sections(1, [1, 7])
+        for index in (2, 4, 5):
+            capture_server.do_mark_sold(1, index, {})
+
+        capture_server.do_put_box(1, {"sections": [1, 3]})
+
+        inv = Store().read().inventory
+        _, view = join.box_view(inv, 1)
+        checks.equal(
+            [view.at(1, index).section for index in (2, 4, 5)],
+            [1, 2, 2],
+            "departed 4 and 5 stand in the new section and departed 2 stays in the one before",
+        )
+        checks.equal(
+            list(inv.sections_for(1)), [1, 4],
+            "the divider is stored at the first record in front of the third card on hand",
+        )
+        checks.equal(
+            (_label(1, "c3"), _label(1, "c6")),
+            ("Plain, Section 1, Card 2", "Plain, Section 2, Card 1"),
+            "and the cards on hand keep the labels the typed start gave them",
+        )
+        row = next(b for b in capture_server.do_boxes()["boxes"] if b["box"] == 1)
+        checks.equal(
+            [d["start"] for d in row["sections_detail"]], [1, 3],
+            "and the editor shows the start that was typed",
+        )
+
+
 def check_delete_keeps_dividers(checks: Checks) -> None:
     """R4 review, item 2: a delete in a box nothing was placed into keeps its sections, and
     undo refuses a claim on the old key alone. Item 3: a delete clears a dead move link, and
@@ -2579,7 +2649,8 @@ CHECKS = (
     check_box_map_safety, check_run_follows_cards_out_of_deleted_box, check_unfollowable_run_promises_nothing, check_section_moves, check_order_key_migration,
     check_per_card_order, check_card_moves, check_delete_after_placement,
     check_undo_keeps_paid_answers, check_front_of_box, check_card_move_refusals,
-    check_divider_editor_keys, check_delete_keeps_dividers, check_merge_speed,
+    check_divider_editor_keys, check_divider_keeps_departed_after_it,
+    check_delete_keeps_dividers, check_merge_speed,
     check_r5_links_and_empty_sections, check_divider_anchor, check_capture_into_section,
     check_layout_batch, check_move_receipt_lines, check_empty_section_starts,
     check_s_refuses_empty_last_section,
