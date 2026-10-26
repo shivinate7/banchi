@@ -36,7 +36,7 @@ Only a bucket with a real sale draws. One exception: the bucket containing `now`
 
 ### Partial-period honesty
 
-The bucket containing `now`, when the selection reaches today, carries `inProgress: true`. It draws a small `Pill` reading "ongoing" beside its label. A half-finished month would otherwise read as a decline. The verdict does not assume that the prior window is complete. `elapsedMs` is how much of the current window has elapsed, clamped to `now`. The prior window is cut to that same length, from its own start. That reduces to the full-window comparison when the current window has fully elapsed, as in a closed custom range or all time. `compareLine` says so on screen: "So far, the period before this one made ...". The old comparison set 269 days of this year against 365 days of last year.
+The bucket containing `now`, when the selection reaches today, carries `inProgress: true`. It draws a small `Pill` reading "ongoing" beside its label. A half-finished month would otherwise read as a decline. The verdict does not assume that the prior window is complete. `elapsedMs` is how much of the current window has elapsed, clamped to `now`. The prior window is cut to that same length, from its own start, but never past the current window's start. On a few days a year it is up to about 3 days shorter. That reduces to the full-window comparison when the current window has fully elapsed, as in a closed custom range or all time. `compareLine` says so on screen: "So far, the period before this one made ...". The old comparison set 269 days of this year against 365 days of last year.
 
 ### Two defects fixed
 

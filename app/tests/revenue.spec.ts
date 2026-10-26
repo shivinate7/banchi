@@ -1,4 +1,4 @@
-// Protects: Sales sorts, filters, cross-filters, drills down and deep-links over the orders payload, on a fixed fake clock, and its Mix view (`#/revenue?lens=mix`) keeps its state in the URL, fires no request on a press and shows its empty states.
+// Protects: Sales sorts, filters, cross-filters, drills down and deep-links over the orders payload, on a fixed fake clock, and its Mix view (`#/revenue?lens=mix`) keeps its state in the URL, fires no request on a press and shows its empty states. Its prior comparison window ends where the current window starts, so no sale counts in both.
 // Governs: D278, D201, D214, D217, D225, D196, D298
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { readFileSync, existsSync } from 'node:fs'
@@ -632,6 +632,58 @@ test('the prior-period line never says "So far" about the CLOSED prior period (d
   await expect(prior).toContainText('down 50% on the same stretch before')
   await expect(page.locator('.revenue-verdict-prior')).toHaveCount(0)
 })
+
+/* ------------------------------------------- the prior window never overlaps the current one (D214) */
+
+/* The equal-length prior window is cut `previousStart + elapsedMs`. A calendar-anchored current window
+   can run longer than the one before it (March to May is 92 days, December to February is 90), so that
+   cut ran on past the current window's start and a sale in the overlap counted in both windows. Each case
+   pins a day when the period is about to close, in the rig's zone (America/Chicago), so the overlap is at
+   its widest: 3 months on May 31 overlaps by about 1.9 days, 6 months on Aug 31 by about 2.9. The
+   overlap sales sit at noon on the window's first days, inside the overlap on current code and inside
+   the current window on any correct one. The prior sale sits mid-window, so every fix keeps it.
+   Red on main until the window is fixed. */
+const OVERLAP_CASES = [
+  {
+    label: '3 months on May 31',
+    period: '3m',
+    today: '2026-06-01T02:30:00Z', // May 31, 9:30 PM in Chicago
+    prior: '2026-01-15T18:00:00+00:00',
+    overlap: [['2026-03-01T18:00:00+00:00', '20.00'], ['2026-03-02T18:00:00+00:00', '30.00']],
+    later: ['2026-04-10T17:00:00+00:00', '50.00'],
+  },
+  {
+    label: '6 months on Aug 31',
+    period: '6m',
+    today: '2026-09-01T02:30:00Z', // Aug 31, 9:30 PM in Chicago
+    prior: '2025-11-15T18:00:00+00:00',
+    overlap: [['2026-03-01T18:00:00+00:00', '20.00'], ['2026-03-02T18:00:00+00:00', '30.00'], ['2026-03-03T18:00:00+00:00', '40.00']],
+    later: ['2026-06-10T17:00:00+00:00', '10.00'],
+  },
+] as const
+
+for (const c of OVERLAP_CASES) {
+  test(`D214: the prior window ends where the current one starts, so no sale counts in both (${c.label})`, async ({ page }) => {
+    const sale = (number: string, placed_at: string, unit_price: string) =>
+      orderRow({ number, placed_at, status: 'Shipped', lines: [line({ unit_price })] })
+    await page.clock.setFixedTime(new Date(c.today))
+    await stub(page, [
+      sale('ORD-PRIOR', c.prior, '10.00'),
+      ...c.overlap.map(([at, price], i) => sale(`ORD-OVERLAP-${i}`, at, price)),
+      sale('ORD-LATER', c.later[0], c.later[1]),
+    ])
+    await open(page, `?period=${c.period}`)
+
+    const orders = c.overlap.length + 1
+    // The overlap sales and the later one are the current window: $100.00 over their orders.
+    await expect(page.locator('.revenue-summary-figure')).toContainText('$100.00')
+    // The prior window is the $10.00 sale alone, so $100.00 is up 900%. Counted in both, the overlap
+    // sales would raise the base and shrink this figure.
+    await expect(page.locator('.revenue-verdict-said')).toHaveText(
+      `${orders} orders, ${orders} copies, up 900% on the same stretch before`,
+    )
+  })
+}
 
 /* --------------------------------------------------------- then against now (D225) */
 
