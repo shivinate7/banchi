@@ -224,11 +224,13 @@ def step_writer(m, wt):
         time.sleep(0.01)
 
 
-def drive(m, origin, merge, name, step):
-    """Run m.run() over a fresh clone, `step` standing in for `make demo-mirror`.
-    Returns (outcome, what is left behind)."""
+def drive(m, origin, merge, name, step, setup=None):
+    """Run m.run() over a fresh clone, `step` standing in for `make demo-mirror`, `setup(clone)`
+    laying out what an earlier run left. Returns (outcome, what is left behind, the clone)."""
     clone = RF / name
     git(RF, "clone", "-q", str(origin), str(clone))
+    if setup:
+        setup(clone)
     real_sh = m.sh
 
     def sh(*cmd, cwd=None, check=True):
@@ -269,7 +271,7 @@ def drive(m, origin, merge, name, step):
         if "demo-mirror-daily" in line:
             left.append("git still registers it: " + line)
     left += ["admin entry .git/worktrees/%s is left" % p.name for p in sorted((clone / ".git" / "worktrees").glob("*"))]
-    return outcome, left
+    return outcome, left, clone
 
 
 # the run-folder sweep (test-temp-standard): an old sibling goes, a new one stays
@@ -307,9 +309,83 @@ for name, step, ok, want in (
     ("merged", step_changed, returned("merged PR 1"), "a 'merged PR 1' result"),
     ("background writer left in the tree", step_writer, returned("unchanged"), "an 'unchanged' result"),
 ):
-    outcome, left = drive(daily, origin, merge_fake, name.replace(" ", "-"), step)
+    outcome, left, _ = drive(daily, origin, merge_fake, name.replace(" ", "-"), step)
     stop_writers()
     if not ok(outcome):
         left.insert(0, "fixture: run() ended %r, wanted %s" % (outcome, want))
     case("worktree gone after run(): " + name, not left, "; ".join(left))
+
+# The sweep at the start of run(): leftovers of runs that never reached their finally.
+STALE = ("demo-mirror-daily-1000000001", "demo-mirror-daily-1000000002", "demo-mirror-daily-1000000003")
+KEEP = {  # names the sweep must not touch, under .claude/worktrees: the file inside a folder, or None for a file
+    "demo-mirror-daily-notes": "keep.txt",
+    "demo-mirror-daily-12.log": None,
+    "agent-x": "keep.txt",
+    "notes.txt": None,
+}
+
+
+def stale_setup(clone):
+    wts = clone / ".claude" / "worktrees"
+    wts.mkdir(parents=True)
+    git(clone, "worktree", "add", "-q", "--detach", str(wts / STALE[0]), "HEAD")  # a registered worktree
+    (wts / STALE[0] / "untracked.txt").write_text("1")
+    whole = wts / STALE[1]  # a whole tree git no longer registers
+    (whole / "node_modules" / "x").mkdir(parents=True)
+    (whole / "node_modules" / "x" / "y.js").write_text("1")
+    (whole / ".git").write_text("gitdir: /nonexistent/worktrees/gone\n")
+    (whole / "README").write_text("1")
+    (wts / STALE[2] / "demo" / "inventory").mkdir(parents=True)  # the stub a late writer leaves
+    (wts / STALE[2] / "demo" / "inventory" / "x.json").write_text("{}")
+    for n, inner in KEEP.items():
+        if inner:
+            (wts / n).mkdir()
+            (wts / n / inner).write_text("keep")
+        else:
+            (wts / n).write_text("keep")
+    (wts / "agent-x" / ".git").write_text("gitdir: /nonexistent/worktrees/agent-x\n")
+
+
+outcome, _, clone = drive(daily, origin, merge_fake, "sweep", step_unchanged, stale_setup)
+wts = clone / ".claude" / "worktrees"
+gone = ["%s is still on disk" % n for n in STALE if os.path.lexists(wts / n)]
+gone += ["git still registers it: " + line for line in git(clone, "worktree", "list", "--porcelain").stdout.splitlines()
+         if "demo-mirror-daily" in line]
+gone += ["admin entry .git/worktrees/%s is left" % p.name for p in sorted((clone / ".git" / "worktrees").glob("*"))]
+if not returned("unchanged")(outcome):
+    gone.insert(0, "fixture: run() ended %r, wanted an 'unchanged' result" % (outcome,))
+case("sweep: registered, unregistered and stub leftovers are gone after run()", not gone, "; ".join(gone))
+hurt = []
+for n, inner in KEEP.items():
+    path = wts / n / inner if inner else wts / n
+    if not path.is_file() or path.read_text() != "keep":
+        hurt.append("%s was removed or changed" % n)
+if not (wts / "agent-x" / ".git").is_file():
+    hurt.append("agent-x lost its .git file")
+case("sweep: names that do not match are untouched", not hurt, "; ".join(hurt))
+
+
+def link_setup(clone):
+    """A stale-looking name that is a symlink to another linked worktree, which has its own servers."""
+    outside = RF / "outside"
+    git(clone, "worktree", "add", "-q", "--detach", str(outside), "HEAD")
+    (outside / "keep.txt").write_text("keep")
+    (outside / "scripts" / "serve.py").write_text("open(%r, 'w').write('1')\n" % str(RF / "down-ran"))  # marker if `serve.py down` runs here
+    (clone / ".claude" / "worktrees").mkdir(parents=True)
+    (clone / ".claude" / "worktrees" / "demo-mirror-daily-1000000004").symlink_to(outside, target_is_directory=True)
+
+
+outcome, _, clone = drive(daily, origin, merge_fake, "link", step_unchanged, link_setup)
+outside = RF / "outside"
+hurt = []
+if not outside.is_dir():
+    hurt.append("the link's target folder was deleted")
+elif not (outside / "keep.txt").is_file():
+    hurt.append("files in the link's target were deleted")
+if (RF / "down-ran").exists():
+    hurt.append("`serve.py down` ran in the link's target (its servers were stopped)")
+if str(outside.resolve()) not in git(clone, "worktree", "list", "--porcelain").stdout:
+    hurt.append("git no longer registers the link's target worktree")
+case("sweep: a symlink named like a stale folder is not followed", not hurt,
+     "%s (run() ended %r)" % ("; ".join(hurt), outcome))
 sys.exit(1 if failures else 0)
