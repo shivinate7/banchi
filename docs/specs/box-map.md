@@ -25,23 +25,23 @@ stored cards) and adds no nav row.
 
 ### 5.2 The overview
 
-Every box is drawn from above, as it sits on the desk. **The far back of a box, card 1, is at the
-top. The end nearest the operator, the highest number, is at the bottom.** The boxes stack, one
-above the next.
+Every box is one row, and the rows stack, one above the next. **Sections run left to right: the far
+back of a box, card 1, is at the left, and the end nearest the operator, the highest number, is at
+the right.** "Back" and "Front" labels over the rows say which way the shelf reads. The map grows
+down as boxes are added. A long row scrolls inside its own frame, so the page never scrolls
+sideways. The owner's ruling for this layout is recorded only in a comment in `BoxShelf.css`. No
+decision entry holds it.
 
-- **The box head** shows its name and its cards on hand. No box number shows. A press opens the walk
-  at that box.
-- **One block per section.** Its height follows its count, with a floor of 44px so a small section is
-  still a target. It carries the section name (or "Section 2") and its count. Cards are drawn as a CSS
-  pattern. They are never one element per card.
-- **Departed cards leave no holes** (D58, a card's number counts the cards). Sold and moved counts go
-  in the box head.
-- **Badges appear only when true.** "Being read" shows that a card in the section has a live paid
-  reading. "3 owed" shows that open orders want copies from it.
+- **The box head** shows its name and its cards on hand. No box number shows.
+- **One block per section.** Its width follows its count against the fullest section on the shelf.
+  It has a floor of 7rem so a small section is still a target, and a ceiling of 16rem so one huge
+  section cannot push the other rows off screen. It carries the section name (or "Section 2") and
+  its count. Cards are drawn as a CSS pattern. They are never one element per card.
+- **Departed cards leave no holes** (D58, a card's number counts the cards).
 - **An empty section** (a divider with no card) is a thin dashed block, because the plastic is still in
   the box.
-- **A last column, "New box",** is a target that splits a section into a new box. A new box with no
-  name gets its stored default name.
+- **"New Box"** is a destination row while a move to a new box is open. It splits a section into a new
+  box. A new box with no name gets its stored default name.
 
 ### 5.3 The move
 
@@ -50,7 +50,8 @@ boxes stacked. Drag the section to a gap before or after any section of the dest
 under the pointer opens, and it shows the numbers the cards will have.
 
 A drop in the same box reorders its sections. A drop on "New box" splits. A merge moves every section of
-one box, in order, to the far end or the near end of another.
+one box, in order, to the far end or the near end of another. A box emptied by a merge holds only
+tombstones and may be deleted (D83, D134).
 
 - **While dragging,** the section lifts with an accent tint, and its old place shows a dashed outline. A
   section with a live paid reading cannot lift. The cursor is `not-allowed` (D50, feedback is the
@@ -114,8 +115,3 @@ nothing else has written to either box since the move. The check reads events, n
 | A stale walk or Cards to pull presses sold on a moved card | The server answers `card_moved`. The screen says where the card went, from the tombstone's `moved_to`, and refreshes. |
 | Another device changed the section since the map loaded | The write carries an aim: the count and the first and last card names. A mismatch refuses, and the map reloads. |
 | The destination is a sealed box | Refuse (D20, a box is an object). |
-
-## Open
-
-- **A merged-out box.** D83 (a moved card) says a box emptied by a merge cannot be reclaimed. D134 (a
-  departed record is buried, not kept) may make that sentence stale. The reading awaits the owner's word.
