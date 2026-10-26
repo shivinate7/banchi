@@ -3265,6 +3265,63 @@ def check_send_auto_hold_unhold_survives_press_rewrite(checks: Checks) -> None:
         )
 
 
+class _CommitFails:
+    """The store's connection, with COMMIT refused and everything else passed through
+    (ROLLBACK included, so the real transaction is really undone, as a disk error leaves it)."""
+
+    def __init__(self, conn, refused: List[str]):
+        self._conn = conn
+        self._refused = refused
+
+    def execute(self, sql, *args, **kwargs):
+        if str(sql).strip().upper() == "COMMIT":
+            self._refused.append(str(sql))
+            raise sqlite3.OperationalError("disk I/O error")
+        return self._conn.execute(sql, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+@contextmanager
+def _store_commit_fails(after_lock=None):
+    """Makes the COMMIT of every store write fail (a disk error at COMMIT, after every row was
+    flushed) and yields the list of commits refused. Armed for the press alone: both patches are
+    lifted on exit, before anything is read.
+
+    `after_lock`, when given, runs once, right after a failed write has released the store's lock and
+    before the next line of the press runs: the one moment a writer that takes the store's lock
+    (a Dismiss) can land between a failed write and whatever the press does about it (D273, R-S4).
+    The connection seam alone cannot reach it, because the lock is still held when COMMIT raises."""
+    real_connect, real_exclusive = db.connect, files.exclusive
+    refused: List[str] = []
+    fired: List[bool] = []
+
+    @contextmanager
+    def exclusive(directory, *args, **kwargs):
+        try:
+            with real_exclusive(directory, *args, **kwargs):
+                yield
+        except BaseException:
+            if not fired and Path(directory) == Store().directory:
+                fired.append(True)
+                after_lock()
+            raise
+
+    db.connect = lambda *args, **kwargs: _CommitFails(real_connect(*args, **kwargs), refused)
+    if after_lock is not None:
+        files.exclusive = exclusive
+    try:
+        yield refused
+    finally:
+        db.connect, files.exclusive = real_connect, real_exclusive
+
+
+def _unheld_marks() -> Dict[str, object]:
+    """Each receipt's `unheld`, by stamp: what a press that failed must leave exactly as it found it."""
+    return {stamp: record.get("unheld") for stamp, record in send_routes._receipts()}
+
+
 def check_send_auto_hold_unhold_commit_fails(checks: Checks) -> None:
     """(p) AN UNHOLD WHOSE STORE COMMIT FAILS CHANGES NOTHING: THE RECEIPT AND THE STORE LAND TOGETHER OR NOT AT ALL.
 
@@ -3281,30 +3338,8 @@ def check_send_auto_hold_unhold_commit_fails(checks: Checks) -> None:
         _held_sku_fixture(checks, portal)
         checks.equal(_held(ARTICUNO_SKU), 1, "PRECONDITION: one copy is held")
         pushed_held = _pushed(ARTICUNO_SKU)
-        real_connect = db.connect
-        commits_failed: List[str] = []
-
-        class _CommitFails:
-            """The store's connection, with COMMIT refused and everything else passed through
-            (ROLLBACK included, so the real transaction is really undone, as a disk error leaves it)."""
-
-            def __init__(self, conn):
-                self._conn = conn
-
-            def execute(self, sql, *args, **kwargs):
-                if str(sql).strip().upper() == "COMMIT":
-                    commits_failed.append(str(sql))
-                    raise sqlite3.OperationalError("disk I/O error")
-                return self._conn.execute(sql, *args, **kwargs)
-
-            def __getattr__(self, name):
-                return getattr(self._conn, name)
-
-        db.connect = lambda *args, **kwargs: _CommitFails(real_connect(*args, **kwargs))
-        try:
+        with _store_commit_fails() as commits_failed:
             answer, caught = attempt(lambda: send_routes.do_unhold(ARTICUNO_SKU, {"confirm": True}))
-        finally:
-            db.connect = real_connect
         checks.ok(bool(commits_failed), "PRECONDITION: the unhold's store commit was really made to fail")
         checks.ok(caught is not None, "(p) THE PRESS DOES NOT ANSWER SUCCESS over a commit that failed", repr(answer))
         unheld = sum(int((record.get("unheld") or {}).get(ARTICUNO_SKU, 0)) for _, record in send_routes._receipts())
@@ -3316,6 +3351,84 @@ def check_send_auto_hold_unhold_commit_fails(checks: Checks) -> None:
             _held(ARTICUNO_SKU),
             1,
             "(p) THE NEXT CHECK STILL HOLDS THE COPY, so the Unhold control does not disappear",
+        )
+
+
+def check_send_auto_hold_rehold_commit_fails(checks: Checks) -> None:
+    """(q) A RE-HOLD WHOSE STORE COMMIT FAILS LEAVES THE RECEIPT'S `unheld` AS THE UNHOLD LEFT IT.
+
+    (p) reaches the put-back only where the receipt had no `unheld` before the press. Here the
+    receipt already counts the copy unheld, because the owner pressed Unhold first. The Re-hold
+    takes the copy off that count inside its store write, and then its commit fails. The put-back
+    must set the old count back, not drop the key: a receipt that lost the mark while the store
+    kept the copy on the list would let the next check judge the copy removed a second time, hold
+    it, and lower `pushed` again (D273, R-S4).
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (q) — a re-hold whose store commit fails leaves the receipt's unheld count alone")
+    with _case(checks, "(q) auto-hold: re-hold whose commit fails"), send_portal() as portal, synced_home():
+        _held_sku_fixture(checks, portal)
+        unhold = send_routes.do_unhold(ARTICUNO_SKU, {"confirm": True})
+        pushed_unheld = _pushed(ARTICUNO_SKU)
+        before = _unheld_marks()
+        checks.equal(
+            sum(int((mark or {}).get(ARTICUNO_SKU, 0)) for mark in before.values()),
+            1,
+            "PRECONDITION: the unhold left one copy counted unheld on a receipt",
+        )
+        checks.equal(_held(ARTICUNO_SKU), 0, "PRECONDITION: the unhold cleared the held count")
+        payload = {"confirm": True, "copies": unhold["unheld"], "pushed": unhold["pushed"]}
+        with _store_commit_fails() as commits_failed:
+            answer, caught = attempt(lambda: send_routes.do_rehold(ARTICUNO_SKU, payload))
+        checks.ok(bool(commits_failed), "PRECONDITION: the re-hold's store commit was really made to fail")
+        checks.ok(caught is not None, "(q) THE PRESS DOES NOT ANSWER SUCCESS over a commit that failed", repr(answer))
+        checks.equal(_unheld_marks(), before, "(q) EVERY RECEIPT'S unheld IS WHAT IT WAS BEFORE THE PRESS")
+        checks.equal(_held(ARTICUNO_SKU), 0, "(q) THE HELD COUNT STANDS: the re-hold never landed")
+        checks.equal(_pushed(ARTICUNO_SKU), pushed_unheld, "(q) pushed is not raised by the failed re-hold")
+        send_routes.do_live_check({"force": True})
+        checks.equal(
+            _held(ARTICUNO_SKU),
+            0,
+            "(q) THE NEXT CHECK DOES NOT HOLD THE UNHELD COPY, because its unheld count stands",
+        )
+
+
+def check_send_auto_hold_put_back_keeps_dismissal(checks: Checks) -> None:
+    """(r) THE PUT-BACK AFTER A FAILED COMMIT RESETS `unheld` AND NOTHING ELSE ON THE RECEIPT.
+
+    The store's lock is free between the failed write and the put-back, so a Dismiss can land
+    there and write `dismissed_at`. A put-back that wrote the receipt back whole, as the press read
+    it, would erase that dismissal and show the owner a warning they had already read. The
+    dismissal is injected at that moment, through `_store_commit_fails`' `after_lock`
+    (D273, R-S4: a writer of a receipt re-reads it under the lock and changes its own field only).
+    """
+    checks.note("")
+    checks.note("SEND AUTO-HOLD (r) — a dismissal that lands before the put-back survives it")
+    with _case(checks, "(r) auto-hold: a dismissal between the failed commit and the put-back"), send_portal() as portal, synced_home():
+        _held_sku_fixture(checks, portal)
+        dismissed_at = clock.now_iso()
+        landed: List[str] = []
+
+        def dismiss_lands() -> None:
+            for stamp, record in send_routes._receipts():
+                send_routes._write(send_routes.sends_dir() / stamp, dict(record, dismissed_at=dismissed_at))
+                landed.append(stamp)
+
+        with _store_commit_fails(after_lock=dismiss_lands) as commits_failed:
+            answer, caught = attempt(lambda: send_routes.do_unhold(ARTICUNO_SKU, {"confirm": True}))
+        checks.ok(bool(commits_failed), "PRECONDITION: the unhold's store commit was really made to fail")
+        checks.ok(bool(landed), "PRECONDITION: a dismissal landed after the lock was released")
+        checks.ok(caught is not None, "(r) THE PRESS DOES NOT ANSWER SUCCESS over a commit that failed", repr(answer))
+        receipts = send_routes._receipts()
+        checks.equal(
+            sum(int((record.get("unheld") or {}).get(ARTICUNO_SKU, 0)) for _, record in receipts),
+            0,
+            "(r) THE PUT-BACK STILL REMOVES THE UNHOLD'S MARK",
+        )
+        checks.equal(
+            sorted(stamp for stamp, record in receipts if record.get("dismissed_at") == dismissed_at),
+            sorted(stamp for stamp, _ in receipts),
+            "(r) THE DISMISSAL SURVIVES THE PUT-BACK on every receipt it was written to",
         )
 
 
@@ -7339,6 +7452,8 @@ CHECKS = (
     check_send_auto_hold_unhold_sends_once,
     check_send_auto_hold_unhold_survives_press_rewrite,
     check_send_auto_hold_unhold_commit_fails,
+    check_send_auto_hold_rehold_commit_fails,
+    check_send_auto_hold_put_back_keeps_dismissal,
     check_send_hazards,
     check_send_review_r3,
     check_send_review_r4,
