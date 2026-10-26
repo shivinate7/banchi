@@ -253,11 +253,15 @@ def run_job(case: Case, dest=DEFAULT, cmd=None) -> Ran:
 
     HOME is overridden so `~/.banchi` and the default iCloud path land in the run folder even when the
     build ignores the destination override. `dest=None` leaves the destination to its default. `cmd` is
-    the argument list after the interpreter, for a copy of the job in a fake checkout or a wrapper.
+    the argument list after the interpreter, for a copy of the job in a fake checkout or a wrapper. With no
+    `cmd` the job runs from a fake main tree, so a run inside a linked worktree still takes the main-tree path.
     """
     name = dest_env()
     if name is None:
         return Ran(None, "", "scripts/backup-daily.py does not define the DEST_ENV constant")
+    if cmd is None:
+        tree = case.root / "job-tree" / "scripts" / SCRIPT.name
+        cmd = [str(tree if tree.exists() else fake_checkout(case, "job-tree", linked=False))]
     env = dict(os.environ)
     env.pop("BANCHI_SLOT_REGISTRY", None)
     env.update(HOME=str(case.home), BANCHI_HOME=str(case.src))
@@ -267,7 +271,7 @@ def run_job(case: Case, dest=DEFAULT, cmd=None) -> Ran:
         env[name] = str(case.dest if dest is DEFAULT else dest)
     try:
         done = subprocess.run(
-            [sys.executable, *(cmd or [str(SCRIPT)])], cwd=case.root, env=env, capture_output=True, text=True, timeout=TIMEOUT,
+            [sys.executable, *cmd], cwd=case.root, env=env, capture_output=True, text=True, timeout=TIMEOUT,
         )
     except subprocess.TimeoutExpired:
         return Ran(None, "", f"no answer in {TIMEOUT} s")
