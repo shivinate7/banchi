@@ -41,7 +41,7 @@ Each row names the role in section 4 that answers it. "None" means no role here 
 
 | Aspect | Problem for the owner | Evidence | Role |
 |---|---|---|---|
-| Durability | The store and every photo exist once. Error text says "restore from a backup", and nothing makes one. | DEBT67, D88 | R1 |
+| Durability | The first copy exists: `make backup` (nightly through `make backup-agent`, folder override `BANCHI_BACKUP_DEST`) copies photos and a store snapshot to iCloud Drive. The second copy on the drive is on hold. | DEBT67, D88 | R1 |
 | Durability | `price_history` is the only copy once a bucket leaves the source's 357-day window. | D219, D222 | R1 |
 | Durability | A photo reclaim deletes the sold photo with no undo. | D89 | R1 |
 | Durability | `.env` holds the Anthropic key and the TCGplayer cookie on this Mac only. | `envfile.get_live` | R1, R2 |

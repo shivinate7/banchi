@@ -78,6 +78,9 @@ make demo-mirror-agent  # owner's Mac, main tree only: a daily launchd job that 
 make demo-mirror-install  # CI's step: install the committed scrub. No store, no network.
 make price-refresh  # ONE free download of the live listings now, over this checkout's store, and the note `#/pricing` shows. No sweep, no price change.
 make price-refresh-agent  # owner's Mac, main tree only: a daily launchd job that runs it (D104 (live fetch is guarded)). ARGS=--remove removes it.
+make backup         # ONE copy now of photos/ and captures/ plus a store snapshot to the iCloud Drive folder `Banchi backup`
+                    #   (DEBT67 (capture photographs exist in one place)). `BANCHI_BACKUP_DEST` overrides the folder. Its parent must exist. Never deletes there.
+make backup-agent   # owner's Mac, main tree only: a nightly launchd job (`com.banchi.backup`) that runs it. ARGS=--remove removes it.
 make demo-static    # demo-mirror-install, then a static build to dist-demo/.
 make demo-preview   # serve dist-demo/ as a static host would.
 make check          # the whole suite, product first, guard self-tests last. `make explain` lists it.
