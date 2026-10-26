@@ -4130,6 +4130,8 @@ def check_send_review_r3(checks: Checks) -> None:
         from cli import cmd_emit
 
         class NoRecord:
+            cards: dict = {}
+
             def set_state(self, key, state, **kw):
                 return False
 
@@ -5505,6 +5507,32 @@ def check_send_skips_gone_card(checks: Checks) -> None:
     checks.equal((status, gone), (200, ["Articuno"]), "one gone card held by two runs of one send: `gone` names it once")
 
 
+def _pushed_count(sku: str) -> int:
+    """`pushed` of the SKU's listing, 0 when the store holds no listing."""
+    listing = Store().read().inventory.listings.get(sku)
+    return 0 if listing is None else listing.pushed
+
+
+def _csv_quantity(path: Path, sku: str) -> int:
+    """`Add to Quantity` for `sku` in one import file."""
+    import csv
+
+    with open(path, newline="", encoding="utf-8") as handle:
+        return sum(
+            int(row[tcgcsv.QUANTITY_COLUMN] or 0)
+            for row in csv.DictReader(handle)
+            if row[tcgcsv.SKU_COLUMN] == sku
+        )
+
+
+def _import_quantity(text: str, sku: str) -> Optional[int]:
+    """`Add to Quantity` for `sku` in the import file the send printed, None if it wrote none."""
+    targets = re.findall(r"^import\s.*->\s*(.+)$", text, re.MULTILINE)
+    if not targets or not Path(targets[-1].strip()).exists():
+        return None
+    return _csv_quantity(Path(targets[-1].strip()), sku)
+
+
 def check_send_skips_departed_copy(checks: Checks) -> None:
     """A copy that sold, was retired or moved AFTER a send planned it is skipped and named (D59, D26).
 
@@ -5519,8 +5547,6 @@ def check_send_skips_departed_copy(checks: Checks) -> None:
     A MOVED tombstone has a live transplant in the other box, so whether it counts is not pinned:
     only that the tombstone stays moved and the file and the count agree.
     """
-    import csv
-
     checks.note("")
     checks.note("SEND SKIPS A COPY THAT LEFT BETWEEN THE PLAN AND THE WRITE — the receipt names it")
     from cli import __main__ as entry
@@ -5535,22 +5561,6 @@ def check_send_skips_departed_copy(checks: Checks) -> None:
         "moved": (master.MOVED, lambda inv: inv.move_card(key, 5)),
     }
 
-    def pushed(sku):
-        listing = Store().read().inventory.listings.get(sku)
-        return 0 if listing is None else listing.pushed
-
-    def file_quantity(text, sku):
-        """`Add to Quantity` for `sku` in the import file the send printed, None if it wrote none."""
-        targets = re.findall(r"^import\s.*->\s*(.+)$", text, re.MULTILINE)
-        if not targets or not Path(targets[-1].strip()).exists():
-            return None
-        with open(targets[-1].strip(), newline="", encoding="utf-8") as handle:
-            return sum(
-                int(row[tcgcsv.QUANTITY_COLUMN] or 0)
-                for row in csv.DictReader(handle)
-                if row[tcgcsv.SKU_COLUMN] == sku
-            )
-
     for path in ("single", "merged"):
         for how, (terminal, leave) in leaves.items():
             label = f"{path} send, copy {how} before the write"
@@ -5560,7 +5570,7 @@ def check_send_skips_departed_copy(checks: Checks) -> None:
                 real_guard = cmd_emit._apply_guard
                 seen: List[str] = []
 
-                def plan_then_leave(*args, **kwargs):
+                def plan_then_leave(*args, how=how, leave=leave, seen=seen, real_guard=real_guard, **kwargs):
                     if not seen:
                         # The gap the stale check covers: the plan is decided, the write has not begun.
                         if how == "sold":
@@ -5583,14 +5593,14 @@ def check_send_skips_departed_copy(checks: Checks) -> None:
                     f"{label}: THE COPY STAYS {terminal.upper()}, never flipped back to identified",
                 )
                 checks.equal(
-                    pushed(ARTICUNO_SKU),
-                    file_quantity(text, ARTICUNO_SKU),
+                    _pushed_count(ARTICUNO_SKU),
+                    _import_quantity(text, ARTICUNO_SKU),
                     f"{label}: and `pushed` equals the file's Add to Quantity, so the file sends no copy the store did not count",
                 )
                 if how == "moved":
                     continue
                 checks.equal(
-                    (pushed(ARTICUNO_SKU), pushed(DUNSPARCE_SKU), file_quantity(text, DUNSPARCE_SKU)),
+                    (_pushed_count(ARTICUNO_SKU), _pushed_count(DUNSPARCE_SKU), _import_quantity(text, DUNSPARCE_SKU)),
                     (2, 1, 1),
                     f"{label}: and it is not counted, while the other copies still are",
                 )
@@ -5599,6 +5609,86 @@ def check_send_skips_departed_copy(checks: Checks) -> None:
                     if re.search(rf"(?<![\d/]){re.escape(key)}(?![\d/])", line) and "skipped" in line.lower()
                 ]
                 checks.ok(bool(named), f"{label}: and the send names {key} as skipped", text)
+
+
+def check_send_skips_copy_departed_after_file(checks: Checks) -> None:
+    """A copy that sold or was retired AFTER the import file was written and BEFORE the store lock is
+    skipped, named, and the send says its file is ahead of the store (D59, D26).
+
+    THE ROW IS ALREADY IN THE FILE: nothing un-writes it. So the store keeps the copy's terminal state
+    (never flipped back to identified), does not count it in `pushed`, names it as skipped, and
+    prints a loud line that the file holds a copy the store did not send, so the person drops that
+    row before the upload. Either the file and the count agree, or that line is there.
+    The seam is the return of `join.write_import`, for the single and the merged send: the file is on
+    disk and the lock is not taken. `cmd_emit._say_takeoffs` is no seam for both: the merged send
+    says its takeoffs BEFORE it writes, so a departure there would still precede the file. The older
+    case injects through `_apply_guard`, before the write.
+    THE LINE IS READ BY WHAT IT MUST CARRY, NOT ITS WORDING: not the `import ->` line, the word
+    `file`, and the copy's position, its SKU or its name.
+    """
+    checks.note("")
+    checks.note("SEND SKIPS A COPY THAT LEFT AFTER THE FILE WAS WRITTEN — the run says the file is ahead")
+    from cli import __main__ as entry
+    from pipeline import join as pipeline_join
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+    key = master.position_key(3, 2)
+    leaves = {
+        "sold": (master.SOLD, lambda inv: capture_server.do_mark_sold(3, 2, {})),
+        "retired": (master.RETIRED, lambda inv: inv.retire(key, "pulled")),
+    }
+
+    for path in ("single", "merged"):
+        for how, (terminal, leave) in leaves.items():
+            label = f"{path} send, copy {how} after the file"
+            with _case(checks, label), synced_home():
+                first, _ = seam_run(checks, cards)
+                runs_sent = [first] if path == "single" else [first, seam_run(checks, cards)[0]]
+                real_write = pipeline_join.write_import
+                seen: List[object] = []
+
+                def write_then_leave(*args, how=how, leave=leave, seen=seen, real_write=real_write, runs_sent=runs_sent, **kwargs):
+                    out = real_write(*args, **kwargs)
+                    if not seen:
+                        # The file is on disk: read what it holds off the run folder, then the copy leaves.
+                        seen.append(sum(_csv_quantity(f, ARTICUNO_SKU) for f in runs_sent[-1].directory.glob("import*.csv")))
+                        if how == "sold":
+                            leave(None)
+                        else:
+                            with Store().write() as writable:
+                                leave(writable.inventory)
+                        seen.append(Store().read().inventory.cards[key].state)
+                    return out
+
+                with _patched(pipeline_join, "write_import", write_then_leave), quiet() as said:
+                    code = entry.main(["emit", *[str(r.directory) for r in runs_sent]])
+                text = said.getvalue()
+                inventory = Store().read().inventory
+                checks.equal(seen, [3, terminal], f"{label}: fixture, the file held all three copies when this one left")
+                checks.ok(code == 0, f"{label}: the rest of the send goes ahead", f"exit {code}\n{text}")
+                checks.equal(inventory.cards[key].state, terminal, f"{label}: THE COPY STAYS {terminal.upper()}")
+                checks.equal(
+                    (_pushed_count(ARTICUNO_SKU), _pushed_count(DUNSPARCE_SKU)),
+                    (2, 1),
+                    f"{label}: it is not counted in pushed, while the other copies still are",
+                )
+                named = [
+                    line for line in text.splitlines()
+                    if re.search(rf"(?<![\d/]){re.escape(key)}(?![\d/])", line) and "skipped" in line.lower()
+                ]
+                checks.ok(bool(named), f"{label}: and the send names {key} as skipped", text)
+                in_file, counted = _import_quantity(text, ARTICUNO_SKU), _pushed_count(ARTICUNO_SKU)
+                loud = [
+                    line for line in text.splitlines()
+                    if not line.startswith("import") and re.search(r"\bfile\b", line, re.IGNORECASE)
+                    and any(token in line for token in (key, ARTICUNO_SKU, "Articuno"))
+                ]
+                checks.ok(
+                    in_file == counted or bool(loud),
+                    f"{label}: and the file ({in_file}) is ahead of pushed ({counted}) only with a loud line saying it",
+                    text,
+                )
 
 
 def check_schema_eleven_then_twelve(checks: Checks) -> None:
@@ -7341,6 +7431,7 @@ CHECKS = (
     check_send_store_backed_follows_cards,
     check_send_skips_gone_card,
     check_send_skips_departed_copy,
+    check_send_skips_copy_departed_after_file,
     check_markdown_floor,
     check_markdown_lens,
     check_markdown_push,
