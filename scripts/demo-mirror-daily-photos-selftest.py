@@ -228,10 +228,18 @@ case("daily run never ships a bundle whose photographs are not committed", not s
      "merged with %s absent from the commit (run %s)" % (seen.get("missing"), outcome))
 
 
+# The module's own waits, in seconds, which it reads when it runs. A case that cannot succeed (a folder
+# nothing can remove) takes the whole wait, so the cases shorten the ones the module exposes.
+FAST_WAITS = {"LSOF_TIMEOUT": 0.5, "REMOVE_RETRY_SECONDS": 0.5, "TERM_GRACE_SECONDS": 0.5}
+
+
 def load_daily():
     spec = importlib.util.spec_from_file_location("daily", ROOT / "scripts" / "demo-mirror-daily.py")
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
+    for k, v in FAST_WAITS.items():
+        if hasattr(m, k):
+            setattr(m, k, v)
     return m
 
 
@@ -513,4 +521,143 @@ if not ((wts / "demo-mirror-daily-1.bak" / "keep.txt").is_file() and (wts / "dem
     back.append("a name that does not match the pattern was removed")
 case("a worker that outlives SIGTERM does not bring the folder back", not back and returned("unchanged")(outcome),
      "run() ended %r; %s" % (outcome, "; ".join(back)))
+
+
+# drop_tree finds what stands in a tree with `lsof`. It must never kill a process that is running the job,
+# must leave a session alone when the janitor says one is still there, and must not hang or crash on lsof.
+def fake_here(rc):
+    """A stand-in for the module's HERE whose neighbouring janitor.py exits with `rc`."""
+    d = RF / ("fakejan-%d" % rc)
+    (d / "scripts").mkdir(parents=True, exist_ok=True)
+    (d / "scripts" / "janitor.py").write_text("import sys\nsys.exit(%d)\n" % rc)
+    return d / "scripts" / "demo-mirror-daily.py"
+
+
+def leaked_tree(name):
+    """A clone with one leftover folder in it. Returns (clone, folder)."""
+    clone = RF / name
+    git(RF, "clone", "-q", str(origin), str(clone))
+    leaked = clone / ".claude" / "worktrees" / "demo-mirror-daily-1000000099"
+    leaked.mkdir(parents=True)
+    (leaked / "x.json").write_text("{}")
+    return clone, leaked
+
+
+def standing_in(folder):
+    """A process whose working directory is `folder`, which only a kill ends."""
+    p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"], cwd=folder, start_new_session=True)
+    writers.append(p)
+    return p
+
+
+def bin_dir(name, lsof=None):
+    """A PATH holding only git, plus an lsof that runs `lsof` (a python source) when given."""
+    d = RF / name
+    d.mkdir()
+    (d / "git").symlink_to(shutil.which("git"))
+    if lsof:
+        (d / "lsof").write_text("#!%s\n%s\n" % (sys.executable, lsof))
+        (d / "lsof").chmod(0o755)
+    return d
+
+
+@contextlib.contextmanager
+def path_only(d):
+    saved = os.environ["PATH"]
+    os.environ["PATH"] = str(d)
+    try:
+        yield
+    finally:
+        os.environ["PATH"] = saved
+
+
+HOLDER = """import subprocess, sys
+sys.exit(subprocess.call([sys.executable, "-c", sys.argv[2]] + sys.argv[3:], cwd=sys.argv[1]))
+"""
+DROPPER = """import importlib.util, json, pathlib, sys
+spec = importlib.util.spec_from_file_location("daily", sys.argv[1])
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+for k, v in json.loads(sys.argv[6]).items():
+    if hasattr(m, k):
+        setattr(m, k, v)
+m.HERE = pathlib.Path(sys.argv[5])
+open(sys.argv[4], "w").write(repr(m.drop_tree(pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]))))
+"""
+
+if shutil.which("lsof"):
+    # The job's parent stands in the leaked folder (a shell the owner left there). The dropper is its child.
+    clone, leaked = leaked_tree("ancestor")
+    result = RF / "ancestor.result"
+    stuck = standing_in(leaked)
+    parent = subprocess.Popen([sys.executable, "-c", HOLDER, str(RF), DROPPER, str(ROOT / "scripts" / "demo-mirror-daily.py"),
+                               str(clone), str(leaked), str(result), str(fake_here(0)), json.dumps(FAST_WAITS)],
+                              cwd=leaked, start_new_session=True)
+    writers.append(parent)
+    code = parent.wait(timeout=120)
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        stuck.wait(timeout=5)
+    bad = []
+    if code != 0:
+        bad.append("the job's parent, standing in the folder, ended with %d (SIGKILL is -9)" % code)
+    if stuck.poll() is None:
+        bad.append("a stuck worker in the folder was left alive")
+    if leaked.exists():
+        bad.append("the folder is still there")
+    case("drop_tree kills a stuck worker but never an ancestor of the job", not bad,
+         "; ".join(bad) + " (drop_tree returned %s)" % (result.read_text() if result.exists() else "nothing"))
+
+    clone, leaked = leaked_tree("session")
+    stuck = standing_in(leaked)
+    daily.HERE, was = fake_here(3), daily.HERE  # the janitor reports a session still in the tree
+    try:
+        text = daily.drop_tree(clone, leaked)
+    except Exception as e:
+        text = e
+    finally:
+        daily.HERE = was
+    case("drop_tree leaves a worker alone when the janitor exits 3 (a session is still there)",
+         stuck.poll() is None and isinstance(text, str), "worker alive=%s, drop_tree returned %r" % (stuck.poll() is None, text))
+    stop_writers()
+
+    # A hung lsof: cwd_pids gives up after daily.LSOF_TIMEOUT (a module constant, read at call time) and answers [].
+    daily.LSOF_TIMEOUT, was_timeout = 0.5, getattr(daily, "LSOF_TIMEOUT", None)
+    hung = bin_dir("bin-hung", "import time\ntime.sleep(6)")
+    clone, leaked = leaked_tree("hung")
+    with path_only(hung):
+        t0 = time.time()
+        try:
+            got = daily.cwd_pids(leaked)
+        except Exception as e:
+            got = e
+        took = time.time() - t0
+    case("cwd_pids gives up on a hung lsof and answers no pids", got == [] and took < 3,
+         "answered %r after %.1f s with LSOF_TIMEOUT=0.5" % (got, took))
+    lock(leaked / "locked")
+    daily.HERE, was = fake_here(0), daily.HERE
+    with path_only(hung):
+        t0 = time.time()
+        try:
+            text = daily.drop_tree(clone, leaked)
+        except Exception as e:
+            text = e
+        took = time.time() - t0
+    daily.HERE = was
+    case("drop_tree with a hung lsof still returns its failure text, in bounded time",
+         isinstance(text, str) and text.startswith("could not remove") and took < 12,
+         "returned %r after %.1f s" % (text, took))
+    # no lsof at all
+    clone, leaked = leaked_tree("nolsof")
+    daily.HERE, was = fake_here(0), daily.HERE
+    with path_only(bin_dir("bin-none")):
+        try:
+            got, text = daily.cwd_pids(leaked), daily.drop_tree(clone, leaked)
+        except Exception as e:
+            got = text = e
+    daily.HERE = was
+    case("a missing lsof does not crash drop_tree", got == [] and text == "", "cwd_pids %r, drop_tree %r" % (got, text))
+    if was_timeout is not None:
+        daily.LSOF_TIMEOUT = was_timeout
+else:
+    print("skip the lsof cases: no lsof on this machine")
 sys.exit(1 if failures else 0)
