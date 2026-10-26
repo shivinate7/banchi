@@ -551,7 +551,7 @@ def run() -> Result:
         "set_hint_mode": hint_mode,
         "image_count": total,
         "set_count": len(per_set),
-        "split_requested": os.environ.get(SPLIT_ENV, "all"),
+        "split_requested": wanted or "all",
         "splits": split_stats,
         "gated_on": gated_split,
         "holdout_accuracy": gate_accuracy,
