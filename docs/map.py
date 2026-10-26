@@ -5709,8 +5709,8 @@ COMPONENTS = [
                                        "against the real portal: T7 proves every path on a "
                                        "loopback one with slow, partial, 5xx and "
                                        "rollback-refused modes.",
-                               "governed_by": ["D33", "D54", "D86", "D87", "D99", "D100", "D104",
-                                               "D105", "D273", "D174", "D269"],
+                               "governed_by": ["D26", "D33", "D54", "D59", "D86", "D87", "D99",
+                                               "D100", "D104", "D105", "D174", "D269", "D273"],
                                "tested_by": ["T7"]},
             "tcg_export.py": {
                 "does": "the outbound calls to the seller admin host, and the only place "
