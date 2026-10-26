@@ -566,7 +566,8 @@ COMPONENTS = [
                                             "review queue with its photograph "
                                             "(`cli/archive_review.py`, D167's own "
                                             "`Queue.upsert`), and leaves a network-shaped "
-                                            "refusal alone.",
+                                            "refusal alone. The daily price job "
+                                            "(`scripts/price-refresh-daily.py`) calls it too.",
                                     "governed_by": ["D43", "D278", "D86", "D88", "D167", "D219",
                                                     "D222", "D231", "D224",
                                                     "D254"],
@@ -5161,13 +5162,18 @@ COMPONENTS = [
                 "does": "the daily market read on the owner's Mac: one call to "
                         "`do_prices_refresh` (the live listings, the catalog per game, a re-join of "
                         "every open run, then the Trends preload), each step leaving a note `#/pricing` "
-                        "shows. Calls no paid read and no archive sweep, and changes no price at TCGplayer. `--agent` installs "
+                        "shows. After a good refresh it runs `archive sweep --write` in the same process "
+                        "(`cli.cmd_pricearchive`, at the saved pace, a second throttle stops it with the "
+                        "buckets kept, exit 0), and adds the result to the note. Calls no paid read "
+                        "and changes no price at TCGplayer. `--agent` installs "
                         "the daily launchd job (main tree only), `--agent --remove` removes it. "
                         "The installer is `launchagent.py`'s; `demo-mirror-daily.py` keeps its own copy (D295 fence).",
                 "note": "PROVED BY T7's `price_moves` group: the note is written on success and "
                         "on refusal, and the script's own imports are asserted to reach only "
-                        "the note writer and the live fetch's module.",
-                "governed_by": ["D104", "D189", "D224", "D278", "D295"],
+                        "the note writer, the live fetch's module and the one archive sweep press, "
+                        "and that a good refresh is swept, a failed one skipped and a second "
+                        "throttle stops the sweep.",
+                "governed_by": ["D104", "D189", "D222", "D224", "D278", "D295"],
             },
             "demo-mirror-daily.py": {
                 "does": "the daily demo refresh on the owner's Mac. Cuts a throwaway worktree "

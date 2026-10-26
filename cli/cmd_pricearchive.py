@@ -66,10 +66,10 @@ proven is not the problem.
 `show` IS READ-ONLY: how many buckets the archive holds, which ranges were last swept and
 when, and (with `--sku`) one SKU's own buckets across every range it has been read in.
 
-DELIBERATELY OUT OF SCOPE, BY THE OWNER'S WORD: any timer, cron or launch agent that fires
-this on its own. `sweep` is a press a person runs. A schedule reverses D224's own statement
-that this reader cannot fire by itself, and that reversal needs its own argument, which
-nobody has made yet.
+THE DAILY PRICE JOB CALLS `run` TOO, on the owner's word ("nightly, on the Mac").
+`scripts/price-refresh-daily.py` runs `sweep --write` in its own process after a good refresh,
+with its log as `say`, and ends 0 when the second throttle stops the pass (this command's exit 1).
+No launch agent of this command's own exists (D224).
 """
 
 from __future__ import annotations

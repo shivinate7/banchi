@@ -11,7 +11,7 @@ was built from them and what is still owed.
 | 2. Refunds, layer 1 | BUILT (D225) |
 | 2. Refunds, layers 2 and 3 | NOT BUILT. Both need the owner |
 | 3. The per-product view | BUILT (D227) |
-| 4. The archive | BUILT (D219). The schedule is deferred |
+| 4. The archive | BUILT (D219). The daily price job sweeps it (D224) |
 | 5. Ride-along defects | BUILT (D225) |
 
 ## The owner's rulings
@@ -138,8 +138,8 @@ The pattern is the readings table and its adopt command. `store/pricearchive.py`
   opposite of `readings adopt`, which is a full replace.
 - **The sweep's subject is every distinct SKU that `cards` has ever recorded.** Sold and held cards
   both keep their rows (D26, D134).
-- **The schedule is deferred.** The sweep is a press that a person runs. A timer would reverse D278's
-  statement that this reader cannot fire on its own. That reversal needs its own argument.
+- **The daily price job runs the sweep after its refresh.** The owner's word is "nightly, on the Mac"
+  (D224).
 
 ## 5. Ride-along defects (BUILT)
 

@@ -46,7 +46,7 @@ DEBT26 The Intelligent Mail barcode encoder is written, correct against the Post
 DEBT27 `Fulfillment.tsx`'s store-wide `GET /inventory` browse is argued and left
 DEBT30 The copies panel flash guard is shelved by owner ruling
 DEBT31 The path guard never reads code, so a decision cited by path in a comment goes unchecked
-DEBT32 The archive sweep stays a press, and the owner intends to schedule it eventually
+DEBT32 A nightly sweep that a throttle stops still ends the job with exit 0
 DEBT33 An answered queue entry can never resurface, even when it is wrong
 DEBT34 Categories and products never expire, on a membership claim this store cannot re-check on its own
 DEBT39 the public demo refuses every box map move

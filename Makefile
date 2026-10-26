@@ -1701,8 +1701,8 @@ demo-mirror-agent:
 
 # THE DAILY MARKET READ (DEBT69): one free download of the owner's own live listings, once a day, with
 # a note `#/pricing` shows. `price-refresh-agent` installs the launchd job (main tree only), ARGS=--remove
-# removes it. `price-refresh` runs one read now over THIS checkout's store. It sweeps no archive and
-# changes no price.
+# removes it. `price-refresh` runs one read now over THIS checkout's store, then the price archive sweep
+# (D224). It changes no price.
 price-refresh:
 	@$(PYTHON) scripts/price-refresh-daily.py
 price-refresh-agent:

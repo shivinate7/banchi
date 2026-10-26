@@ -86,6 +86,10 @@ and archived exactly once.
 
 The schema and the key stay `(sku, range, start)` (D219). The
 never-delete rule is unchanged. A chunk commits with `PriceArchive.upsert()`, the same
-method, called more often on smaller inputs. No timer, cron or launch agent is added. The
-sweep is still a press a person runs, one invocation or several. The rule that this
-reader cannot fire by itself is untouched.
+method, called more often on smaller inputs. The sweep is still a press a person can run, one
+invocation or several. The daily job also runs it, after the refresh, because the owner ruled
+that it runs nightly, on the Mac. That adds no launchd agent: it is `scripts/price-refresh-daily.py`
+calling `cli.cmd_pricearchive` in the same process, at the pace D222 saved. A failed refresh skips
+it, and the log says so. A second throttle stops it and keeps the buckets it wrote. The job still
+ends 0, and the next night resumes (D222, D224). The sweep's result is one more step in the
+`#/pricing` note.
