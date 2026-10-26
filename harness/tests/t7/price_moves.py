@@ -10,6 +10,8 @@ import ast
 import importlib.util
 import json
 import os
+import shlex
+import subprocess
 import sys
 from contextlib import contextmanager
 from datetime import date
@@ -493,6 +495,129 @@ def check_daily_job_empty_sweep_is_not_ok(checks: Checks) -> None:
         )
 
 
+def check_daily_job_second_run_same_day_skips_sweep(checks: Checks) -> None:
+    """Once today's sweep finished, a second job run on the same US Central day sweeps nothing.
+
+    `hermetic` pins the Central day for the whole check, so both runs are on one day however long
+    they take. The second run still refreshes (it is the job's first half). A sweep that STOPPED is
+    not finished: the next run that day resumes it, so "skip" is not "skip after any earlier try".
+    """
+    checks.note("")
+    checks.note("DAILY JOB SWEEP — a finished sweep is not run twice in one US Central day")
+    with isolated_home() as home:
+        _seed_sweep_store(SWEEP_SKUS[:3])
+        first, second = _Host(), _Host()
+        code1, _, error1 = _run_daily(home, REFRESH_OK, first)
+        code2, lines2, error2 = _run_daily(home, REFRESH_OK, second)
+        checks.equal((error1, code1, sorted(first.asked)), (None, 0, SWEEP_SKUS[:3]), "the first run sweeps every card")
+        checks.equal((error2, code2), (None, 0), "the second run ends with exit 0")
+        checks.equal((second.built, second.asked), ([], []), "the second run builds no Market and asks the host nothing")
+        checks.ok(
+            _said(lines2, "archive sweep", "skipped", "today"),
+            "the second run's log says the sweep was skipped because today's finished", "\n".join(lines2)[-400:],
+        )
+    with isolated_home() as home:
+        _seed_sweep_store(SWEEP_SKUS)
+        stopped, resumed = _Host(refuse_after=2), _Host()
+        _run_daily(home, REFRESH_OK, stopped)
+        _, lines, error = _run_daily(home, REFRESH_OK, resumed)
+        checks.equal(error, None, "the run after a stopped sweep ran to its end")
+        checks.ok(bool(resumed.asked), "a stopped sweep is not finished: the next run that day asks the host again", "\n".join(lines)[-400:])
+        checks.equal(
+            _archived_skus(), sorted(["OLD1"] + SWEEP_SKUS),
+            "the resumed run completes the archive for every card, and the earlier bucket stays (D219)",
+        )
+
+
+# What `launchagent.agent` on main puts in the installed job's argv after the script: nothing. An
+# owner's plist that is already loaded runs `price-refresh-daily.py` with no flag, and "nightly, on
+# the Mac" must not need a reinstall to start working.
+INSTALLED_JOB_ARGV: list = []
+
+
+def _make_price_refresh_argv():
+    """`(script arguments, environment words before the interpreter)` as `make price-refresh` runs
+    the script, read off `make -n` so a Makefile edit is seen. `None` when the recipe does not run
+    the daily script at all."""
+    shown = subprocess.run(
+        ["make", "-n", "-C", str(SCRIPT.parent.parent), "price-refresh", "ARGS="],
+        capture_output=True, text=True, check=False,
+    ).stdout
+    for line in shown.splitlines():
+        try:
+            words = shlex.split(line)
+        except ValueError:
+            continue
+        for at, word in enumerate(words):
+            if word.endswith(SCRIPT.name):
+                env = dict(w.split("=", 1) for w in words[:at] if "=" in w and w.split("=", 1)[0].isidentifier())
+                return words[at + 1:], env
+    return None
+
+
+def _run_main(home: Path, argv: list, host: _Host, env: dict = None, chunk: int = 2):
+    """The job script run as `python scripts/price-refresh-daily.py <argv>`, its `__main__` block
+    (argument parser and run lock) included: `(exit code, error, refresh calls)`. The log and the
+    lock handle are checked to be in the throwaway home. `--agent` would install a launchd job, so
+    it is refused here before anything runs."""
+    assert "--agent" not in argv, "a check never installs the owner's launchd job"
+    namespace = {"__name__": "__main__", "__file__": str(SCRIPT)}
+    code = error = None
+    with mock.patch.dict(os.environ, {"HOME": str(home), **(env or {})}), mock.patch.object(sys, "argv", [str(SCRIPT), *argv]), \
+            mock.patch.object(pipeline_routes, "do_prices_refresh", return_value=REFRESH_OK) as refresh, \
+            mock.patch.object(pricehistory, "Market", host.market()), \
+            mock.patch.object(pricehistory, "fetch_json", side_effect=AssertionError("network past the stub")), \
+            mock.patch.object(archive_walk, "CHUNK_SKUS", chunk):
+        sys.path.insert(0, str(SCRIPT.parent))
+        try:
+            exec(compile(SCRIPT.read_text(), str(SCRIPT), "exec"), namespace)  # noqa: S102 the repo's own script
+        except SystemExit as stop:
+            code = stop.code or 0
+        except Exception as exc:  # noqa: BLE001 a crash is a failed case with its own sentence
+            error = "%s: %s" % (type(exc).__name__, exc)
+        finally:
+            sys.path.remove(str(SCRIPT.parent))
+            if namespace.get("lock"):
+                namespace["lock"].close()
+        log = Path(namespace["LOG"]) if "LOG" in namespace else None
+        if log is not None and home.resolve() not in log.resolve().parents:
+            error = "the job's log is outside the throwaway home: " + str(log)
+    return code, error, refresh.call_count
+
+
+def check_installed_job_sweeps_without_reinstall(checks: Checks) -> None:
+    """The job already loaded in launchd (no flag after the script) sweeps; `make price-refresh` does not.
+
+    THE INSTALLED PLIST CANNOT BE CHANGED FROM HERE: an owner who does not reinstall keeps the argv
+    `launchagent.agent` wrote before (`INSTALLED_JOB_ARGV`). So the script's default run is the
+    nightly run. The manual press is the other way round: a read now, over this store, that starts
+    no sweep unless asked. Both go through the script's `__main__`, the way each real caller does.
+    """
+    checks.note("")
+    checks.note("DAILY JOB SWEEP — the installed job sweeps with no reinstall, the manual press does not")
+    with isolated_home() as home:
+        _seed_sweep_store(SWEEP_SKUS[:3])
+        host = _Host()
+        code, error, refreshed = _run_main(home, INSTALLED_JOB_ARGV, host)
+        checks.equal((error, code, refreshed), (None, 0, 1), "an installed job (no flag) refreshes once and ends with exit 0")
+        checks.equal(sorted(host.asked), SWEEP_SKUS[:3], "an installed job (no flag) sweeps: the host is asked for every card")
+        checks.equal(
+            _archived_skus(), sorted(["OLD1"] + SWEEP_SKUS[:3]),
+            "an installed job (no flag) commits the buckets, and the earlier bucket stays (D219)",
+        )
+    manual = _make_price_refresh_argv()
+    checks.ok(manual is not None, "`make price-refresh` runs the daily job script, the argv this check reads", str(manual))
+    if manual is None:
+        return
+    with isolated_home() as home:
+        _seed_sweep_store(SWEEP_SKUS[:3])
+        host = _Host()
+        code, error, refreshed = _run_main(home, manual[0], host, manual[1])
+        checks.equal((error, code, refreshed), (None, 0, 1), "`make price-refresh` refreshes once and ends with exit 0")
+        checks.equal((host.built, host.asked), ([], []), "`make price-refresh` starts no sweep: no Market is built, the host is asked nothing")
+        checks.equal(_archived_skus(), ["OLD1"], "`make price-refresh` archives nothing new")
+
+
 FENCE_LABEL = (
     "the daily job calls `do_prices_refresh` (the live listings, the catalog, the join, the sales history) "
     "and the one archive sweep press (`cli.cmd_pricearchive`, D224 and DEBT32), and reaches nothing else of "
@@ -703,6 +828,8 @@ CHECKS = (
     check_daily_job_sweep_stops_on_second_throttle,
     check_daily_job_sweep_stops_on_first_refusal,
     check_daily_job_empty_sweep_is_not_ok,
+    check_daily_job_second_run_same_day_skips_sweep,
+    check_installed_job_sweeps_without_reinstall,
     check_price_trends_preload,
     check_trends_press_saves,
     check_older_rejoin_keeps_newer_rows,
