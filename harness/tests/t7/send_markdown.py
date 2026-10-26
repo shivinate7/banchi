@@ -5623,8 +5623,8 @@ def check_send_skips_copy_departed_after_file(checks: Checks) -> None:
     disk and the lock is not taken. `cmd_emit._say_takeoffs` is no seam for both: the merged send
     says its takeoffs BEFORE it writes, so a departure there would still precede the file. The older
     case injects through `_apply_guard`, before the write.
-    THE LINE IS READ BY WHAT IT MUST CARRY, NOT ITS WORDING: not the `import ->` line, the word
-    `file`, and the copy's position, its SKU or its name.
+    THE LINE IS READ BY WHAT IT MUST CARRY, NOT ITS WORDING: not the line that carries `->` (the file
+    was written), the word `file` or an `import*.csv` name, and the copy's position, its SKU or its name.
     """
     checks.note("")
     checks.note("SEND SKIPS A COPY THAT LEFT AFTER THE FILE WAS WRITTEN — the run says the file is ahead")
@@ -5681,7 +5681,7 @@ def check_send_skips_copy_departed_after_file(checks: Checks) -> None:
                 in_file, counted = _import_quantity(text, ARTICUNO_SKU), _pushed_count(ARTICUNO_SKU)
                 loud = [
                     line for line in text.splitlines()
-                    if not line.startswith("import") and re.search(r"\bfile\b", line, re.IGNORECASE)
+                    if "->" not in line and re.search(r"\bfile\b|import[\w-]*\.csv", line, re.IGNORECASE)
                     and any(token in line for token in (key, ARTICUNO_SKU, "Articuno"))
                 ]
                 checks.ok(
