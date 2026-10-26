@@ -1962,13 +1962,16 @@ def _receipt_undone_on_failure(undo: list):
         yield
     except BaseException:
         for directory, old in undo:
-            with contextlib.suppress(Exception), files.exclusive(Store().directory):
-                record = _read(directory)
-                if old is None:
-                    record.pop("unheld", None)
-                else:
-                    record["unheld"] = old
-                _write(directory, record)
+            try:
+                with files.exclusive(Store().directory):
+                    record = _read(directory)
+                    if old is None:
+                        record.pop("unheld", None)
+                    else:
+                        record["unheld"] = old
+                    _write(directory, record)
+            except Exception as exc:  # the original failure is the one raised; this one is logged so a stuck mark can be found
+                files.log_note(f"unheld put-back failed for {directory.name}: {type(exc).__name__}: {exc}")
         raise
 
 
