@@ -3,9 +3,9 @@
 
 THE OWNER'S RULING (D295, the public demo is the scrubbed real store): peers browse the app
 as if in the owner's store, on a public link. A full mirror, the photograph payload capped at
-512 MB, no address ever (every street is "123 Demo Way"), and a buyer shows as first name plus
-last initial ("Jordan Miller" is "Jordan M."; a one-word name stays). This replaces the
-invented store (`demo-seed.py`) as what the published page shows. docs/specs/demo.md §13.
+512 MB, buyers' full real names, and no address ever: every address field is blank. This
+replaces the invented store (`demo-seed.py`) as what the published page shows.
+docs/specs/demo.md §13.
 
 THE OWNER'S STORE NEVER LEAVES THIS MAC. The input is a `.backup` copy under `demo-mirror/`,
 which is gitignored. What is committed is only this script's scrubbed OUTPUT, under
@@ -17,11 +17,11 @@ owner's Mac, so it installs that committed output and builds the page (`--instal
     python3 scripts/demo-mirror.py --install                        # CI: committed -> app/
 
 THE SCRUB IS BY CONSTRUCTION, NOT BY SEARCH. The order ledger holds one fact about a person,
-the buyer's display name (`store/orders.py:OrderRecord.buyer`, D193). Every one is cut to a short name.
-The store holds no address, email or phone. The one file with addresses is TCGplayer's
-shipping export, which is not in the store at all, so this script WRITES one for the mirror's
-open orders, with every street "123 Demo Way" and every city, state and zip blank. One plain
-assert over the finished bundle and that file is the only check (the owner's ruling).
+the buyer's display name (`store/orders.py:OrderRecord.buyer`, D193), and the owner's ruling
+keeps it whole. The store holds no address, email or phone. The one file with addresses is
+TCGplayer's shipping export, which is not in the store at all, so this script WRITES one for
+the mirror's open orders, with every address field blank. One plain assert over the finished
+bundle and that file is the only check (the owner's ruling).
 
 NOTHING HERE CONTACTS A NETWORK OR SPENDS MONEY. The recorder runs its server `--offline`.
 """
@@ -35,7 +35,6 @@ import importlib.util
 import io
 import json
 import os
-import re
 import shutil
 import sqlite3
 import subprocess
@@ -55,12 +54,8 @@ APP_PHOTOS = REPO_ROOT / "app" / "public" / "demo" / "photos"
 # The owner's cap on the published photographs, in bytes.
 PHOTO_BUDGET = 512 * 1024 * 1024
 
-# A buyer is "First L." or one word. The initial is a Unicode letter ([^\W\d_]), not [A-Z].
-NAME_RE = re.compile(r"\S+(?: [^\W\d_]\.)?")
-NO_BUYER = "Jane D."
-ADDRESS = "123 Demo Way"
 # The wire keys that carry a street. None exists on the wire today (`types.ts`), so the
-# assert below is also what fails if one is ever added unscrubbed.
+# assert below is also what fails if one is ever added with a value.
 ADDRESS_KEYS = {"address", "address1", "address2", "street"}
 
 # The side files a store keeps beside `store.sqlite`, copied whole. Each is catalogue or
@@ -121,23 +116,12 @@ def snapshot(source: Path) -> None:
 # ---------------------------------------------------------------------------- the people
 
 
-def short_name(buyer: Optional[str]) -> Optional[str]:
-    """"Jordan Miller" -> "Jordan M.", "Mary Jane Watson" -> "Mary W.", "Priya" -> "Priya".
-
-    First word plus the last word's first letter. A name with one word is kept as it is.
-    """
-    words = (buyer or "").split()
-    if not words:
-        return None
-    return words[0] if len(words) == 1 else "%s %s." % (words[0], words[-1][0])
-
-
 def write_shipping_export(home: Path, orders) -> int:
     """TCGplayer's shipping export for the mirror's Ready to Ship orders, scrubbed.
 
     The real export is a list of home addresses and is never read. This one is written from
     the ledger: the order's number, date, item count and value are the mirror's own, and the
-    person is the short name at "123 Demo Way". City, state and zip are blank.
+    person is the buyer's full name. Every address field is blank.
     """
     header = [
         "Order #", "FirstName", "LastName", "Address1", "Address2", "City", "State",
@@ -148,14 +132,14 @@ def write_shipping_export(home: Path, orders) -> int:
     for record in sorted(orders, key=lambda r: r.key):
         if record.status != "Ready to Ship":
             continue
-        first, _, last = (record.buyer or NO_BUYER).partition(" ")
+        first, _, last = (record.buyer or "").partition(" ")
         count = sum(max(0, int(line.quantity)) for line in record.lines)
         value = sum(
             (Decimal(str(line.unit_price or 0)) * int(line.quantity) for line in record.lines),
             Decimal("0"),
         )
         rows.append([
-            record.number, first, last, ADDRESS, "", "", "", "", "US",
+            record.number, first, last, "", "", "", "", "", "US",
             (record.placed_at or "")[:10], "0.00", "Standard (7-10 days)",
             str(count), "%.2f" % value, "0.00", "", "",
         ])
@@ -217,9 +201,6 @@ def build(home: Path, jobs: int) -> None:
     from store import Store, photos
 
     with Store().write() as snap:
-        for record in snap.ledger.orders.values():
-            record.buyer = short_name(record.buyer)
-        buyers = len({r.buyer for r in snap.ledger.orders.values() if r.buyer})
         shipped = write_shipping_export(home, snap.ledger.orders.values())
 
         # THE SELECTION RULE, under the 512 MB cap: cards still on hand first, then the rest,
@@ -260,8 +241,7 @@ def build(home: Path, jobs: int) -> None:
             kept += 1
             card.photo = str(Path(target).relative_to(home))
 
-    print("scrubbed  %d short buyer name(s): first name + last initial" % buyers)
-    print("shipping  %d Ready to Ship order(s) at %s" % (shipped, ADDRESS))
+    print("shipping  %d Ready to Ship order(s), every address field blank" % shipped)
     print("photos    %d kept, %.1f MB, %d over the cap, %d refused for a QR"
           % (kept, spent / 1048576.0, over, len(refused)))
     for key in refused:
@@ -335,17 +315,14 @@ def drop_stale_positions(bundle: Path, home: Path) -> int:
 
 
 def assert_scrubbed(bundle: Path, shipping: Path) -> None:
-    """THE ONE CHECK: every name is a first name plus a last initial (or one word) and every address is "123 Demo Way"."""
+    """THE ONE CHECK: every address field, in the bundle and the shipping export, is blank."""
     bad: List[str] = []
 
     def walk(value) -> None:
         if isinstance(value, dict):
             for key, item in value.items():
                 lowered = str(key).lower()
-                if lowered in ("buyer", "buyername") and item is not None \
-                        and not NAME_RE.fullmatch(str(item)):
-                    bad.append("buyer")
-                if lowered in ADDRESS_KEYS and item not in (None, "", ADDRESS):
+                if lowered in ADDRESS_KEYS and item not in (None, ""):
                     bad.append(lowered)
                 walk(item)
         elif isinstance(value, list):
@@ -355,13 +332,10 @@ def assert_scrubbed(bundle: Path, shipping: Path) -> None:
     walk(json.loads(bundle.read_text()))
     with shipping.open(newline="", encoding="utf-8") as handle:
         for row in csv.DictReader(handle):
-            if not NAME_RE.fullmatch(("%s %s" % (row["FirstName"], row["LastName"])).strip()):
-                bad.append("shipping name")
-            if row["Address1"] != ADDRESS or row["Address2"]:
-                bad.append("shipping address")
-            if row["City"] or row["State"] or row["PostalCode"]:
-                bad.append("shipping city/state/zip")
-    # The values are never printed: a failure here may be a real person's name.
+            for column in ("Address1", "Address2", "City", "State", "PostalCode"):
+                if row[column]:
+                    bad.append("shipping " + column)
+    # The values are never printed: a failure here may be a real person's address.
     assert not bad, "refusing: %d field(s) are not the scrubbed form: %s" % (
         len(bad), ", ".join(sorted(set(bad))))
 
