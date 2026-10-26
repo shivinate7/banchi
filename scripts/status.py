@@ -1066,8 +1066,8 @@ def leftovers() -> List[str]:
 
 
 def backup() -> List[str]:
-    """The nightly backup's last-run line (DEBT67), from the job's own `status_line`. A job that will not load
-    is a MISSING source, like any other sidecar."""
+    """The nightly backup's last-run line (DEBT67), from the job's own `status_line`. An absent job is a MISSING
+    source; one that raises on load prints its error here and leaves the exit at 0, like any other sidecar."""
     module, problem = sidecar("scripts/backup-daily.py", "_banchi_backup_daily")
     if module is None:
         return [field("backup", problem)]
