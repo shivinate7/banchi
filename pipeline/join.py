@@ -666,11 +666,13 @@ def divider_index(
     an operator typing "section 3 starts at the 168th card" is typing a number they can see,
     and this is what turns it back into the 171 the store holds.
 
-    IT ANSWERS THE INDEX OF THE CARD THE SECTION STARTS AT, which is what `open_section`
-    already stores when the operator presses `S` at the box: that route takes no index and
-    writes `next_index`, the slot the next card will land in. So a divider typed into the
-    editor and a divider put in at the feeder come out at the same kind of number, and the
-    forward map sends both to the same ordinal.
+    IT ANSWERS THE KEY OF THE FIRST RECORD AFTER CARD `ordinal - 1`, departed or not. A
+    departed record between card `ordinal - 1` and card `ordinal` stood in front of the
+    card the section starts at, so it goes into the new section; a departed record in front
+    of card `ordinal - 1` stays in the section before. Where nothing has left, that record
+    is the card itself, which is what `open_section` stores when the operator presses `S` at
+    the box: a divider typed into the editor and one put in at the feeder are the same kind
+    of number, and the forward map sends both to the same ordinal.
 
     The forward map is not injective — every index in a run of departed slots counts the
     same cards in front of it — so this picks one, and it picks the one `open_section`
@@ -690,7 +692,8 @@ def divider_index(
     if ordinal <= len(occupied):
         # THE KEY ITSELF, NEVER `int()` OF IT (the R4 review): a placed card's key is a
         # fraction, and cutting it moved the divider onto the card in front (D294).
-        return master.as_order(occupied[ordinal - 1])
+        before = occupied[ordinal - 2]
+        return master.as_order(min(k for k in (*occupied, *departed) if k > before))
     high = max(
         int(occupied[-1]) if occupied else 0,
         int(departed[-1]) if departed else 0,
