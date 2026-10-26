@@ -7,16 +7,24 @@ the order `CHECK_ORDER` runs them.
 from __future__ import annotations
 
 import ast
+import importlib.util
+import json
 import os
+import sys
+from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from unittest import mock
 
+from cli import cmd_pricearchive
 from harness.tests import Checks
 from harness.tests.t7.common import isolated_home
-from pipeline import movers, pricerefresh
+from pipeline import movers, pricearchive as archive_walk, pricehistory, pricerefresh
+from pipeline.pricehistory import Bucket as HistoryBucket, Reading as HistoryReading, Series
 from server import pipeline_routes
 from store import files
+from store.master import Card
 from store.pricearchive import Bucket
 from store.readings import KIND_LIVE, KIND_RUN, Reading, Source
 from store.session import Store
@@ -109,7 +117,8 @@ def check_price_refresh_note(checks: Checks) -> None:
 
     THE WRITE IS THE POINT: a run that fails and leaves nothing behind is the silent stale state
     this lane exists to end. The script's own imports are asserted too: it may reach the one live
-    fetch and the note writer and nothing that spends money or sweeps the archive.
+    fetch, the note writer and the one archive sweep press (`cli.cmd_pricearchive`, scheduled by the
+    owner's word, DEBT32), and nothing that spends money.
     """
     checks.note("")
     checks.note("PRICE REFRESH NOTE — a failed run is visible, the job reaches nothing paid")
@@ -147,6 +156,21 @@ def check_price_refresh_note(checks: Checks) -> None:
         daily_path_reaches(SCRIPT.read_text().replace("pipeline_routes.do_prices_refresh", "pipeline_routes.do_pipeline_export")),
         (True, {"do_pipeline_export"}),
         "the callee check reads the callee: a swapped-in paid export is seen",
+    )
+    # The scanner reads the syntax tree, so an import-looking line inside a string, a multi-line
+    # string or a comment (with comment openers and a lone quote in it) is text, never an import.
+    hidden = (
+        "\nTEXT = 'from cli.cmd_identify import run'\n"
+        'BLOCK = """\nfrom cli.cmd_identify import run  # /* // don\'t\n"""\n'
+        "# don't: import cli.cmd_identify\n"
+    )
+    checks.equal(
+        daily_path_reaches(SCRIPT.read_text() + hidden), (True, {"do_prices_refresh"}),
+        "an import inside a string, a multi-line string or a comment with a lone quote is not reached",
+    )
+    checks.equal(
+        daily_path_reaches(SCRIPT.read_text() + "\nfrom cli.cmd_identify import run\n")[0], False,
+        "a dotted `from cli.cmd_identify import run` is seen: the fence matches the package, not only the bare name",
     )
     checks.equal(
         preload_calls(), PRELOAD_ALLOWED,
@@ -201,27 +225,240 @@ def planted_helper_source() -> str:
     return source.replace("    work = do_pipeline_worklist([])", "    _planted()\n    work = do_pipeline_worklist([])", 1)
 
 
+# ------------------------------------------------------------------ the nightly archive sweep
+#
+# The owner's word is "Nightly, on the Mac" (DEBT32). The daily job runs `archive sweep --write`
+# after its refresh, in the same process, at the pace D222 saved, and stops where D222 stops.
+# THE SEAM IS `job.run()` PLUS TWO STUBS: `do_prices_refresh` (the refresh) and `pricehistory.Market`
+# (the host). The job's `say` goes to its log. Every case reads the store, the log and what the
+# stubbed host was asked, never the job's wording beyond the few words each case names.
+
+SWEEP_SKUS = ["70%02d" % n for n in range(1, 9)]
+REFRESH_OK = {"ok": True, "steps": {"history": {"ok": True}}}
+REFRESH_FAILED = {"ok": False, "steps": {}}
+REFRESH_HISTORY_FAILED = {"ok": True, "steps": {"history": {"ok": False}}}
+
+
+class _Host:
+    """What the stubbed host saw. `refuse_after` is how many SKUs it answers before it answers HTTP
+    403 to every later one (None: never). The counters live here, not on a Market, because the
+    backoff builds a second Market."""
+
+    def __init__(self, refuse_after=None):
+        self.refuse_after = refuse_after
+        self.asked = []
+        self.built = []
+
+    def market(self):
+        host = self
+
+        class StubMarket:
+            def __init__(self, cache_dir=None, fetcher=None, courtesy_delay=0.0, now=None, user_agent=""):
+                host.built.append(courtesy_delay)
+                self.requests = 0
+
+            def readings_for_rows(self, rows, ranges=(), *, product_ids=None):
+                readings, refusals = {}, {}
+                for row in rows:
+                    sku = row.get("TCGplayer Id", "")
+                    host.asked.append(sku)
+                    self.requests += len(ranges)
+                    if host.refuse_after is not None and len(host.asked) > host.refuse_after:
+                        refusals[sku] = (
+                            "https://infinite-api.tcgplayer.com/price/history/42/detailed?range=month "
+                            + archive_walk.BLOCKED_SIGNATURE + ". Set BANCHI_TCG_USER_AGENT."
+                        )
+                        continue
+                    readings[sku] = HistoryReading(sku=sku, product_id=42, series={
+                        r: Series(
+                            sku=sku, product_id=42, range=r, variant="Normal", condition="Near Mint",
+                            language="English", total_quantity_sold=1, total_transaction_count=1,
+                            buckets=(HistoryBucket(
+                                start=date(2026, 9, 1), market=Decimal("1.00"), quantity=1, transactions=1,
+                                low=Decimal("1.00"), high=Decimal("1.00"),
+                            ),),
+                        )
+                        for r in ranges
+                    })
+                return readings, refusals
+
+        return StubMarket
+
+
+def _seed_sweep_store(skus) -> None:
+    """The cards the sweep walks, and one bucket from an earlier pass for a SKU no card carries
+    (D219: a pass never deletes a bucket it did not mention)."""
+    with Store().write() as writable:
+        for n, sku in enumerate(skus, start=1):
+            writable.inventory.cards["1:%d" % n] = Card(
+                box=1, index=n, sku=sku, name="Card " + sku, number="%03d" % n, printed_total="132",
+                set_name="ME01: Mega Evolution", game="pokemon", condition="Near Mint",
+            )
+        writable.archive.upsert({"OLD1:month:2025-01-01": _bucket("OLD1", "2025-01-01", "3.00", 1)})
+
+
+@contextmanager
+def _daily_job(home: Path):
+    """The job script, loaded with HOME in the throwaway home so its log (`~/.banchi`) is never the
+    owner's. A log outside `home` is a failed case, not a write to the owner's file."""
+    with mock.patch.dict(os.environ, {"HOME": str(home)}):
+        sys.path.insert(0, str(SCRIPT.parent))
+        try:
+            spec = importlib.util.spec_from_file_location("price_refresh_daily_under_test", SCRIPT)
+            job = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(job)
+        finally:
+            sys.path.remove(str(SCRIPT.parent))
+        yield job
+
+
+def _run_daily(home: Path, refresh: dict, host: _Host, chunk: int = 2):
+    """One run of the job: `(exit code, log lines, error)`. Chunks of `chunk` SKUs so a few SKUs
+    make several commits (D224). `fetch_json` raises: a path past the stubbed market fails loudly."""
+    with _daily_job(home) as job:
+        log = Path(job.LOG)
+        if home.resolve() not in log.resolve().parents:
+            return None, [], "the job's log is outside the throwaway home: " + str(log)
+        code = error = None
+        with mock.patch.object(pipeline_routes, "do_prices_refresh", return_value=refresh), \
+                mock.patch.object(pricehistory, "Market", host.market()), \
+                mock.patch.object(pricehistory, "fetch_json", side_effect=AssertionError("network past the stub")), \
+                mock.patch.object(archive_walk, "CHUNK_SKUS", chunk):
+            try:
+                code = job.run()
+            except Exception as exc:  # noqa: BLE001 a crash is a failed case with its own sentence
+                error = "%s: %s" % (type(exc).__name__, exc)
+        return code, (log.read_text().splitlines() if log.exists() else []), error
+
+
+def _said(lines, *words) -> bool:
+    return any(all(w in line.lower() for w in words) for line in lines)
+
+
+def _archived_skus() -> list:
+    return sorted({b.sku for b in Store().read().archive.entries.values()})
+
+
+def check_daily_job_sweeps_after_refresh(checks: Checks) -> None:
+    """After a good refresh the job runs `archive sweep --write`, starting at the pace D222 saved.
+
+    WRITE ON IS READ OFF THE STORE: a preview makes no request and writes nothing (D224), so
+    buckets in the archive for every subject mean the walk ran and committed.
+    """
+    checks.note("")
+    checks.note("DAILY JOB SWEEP — a good refresh is followed by `archive sweep --write` at the saved pace")
+    with isolated_home() as home:
+        _seed_sweep_store(SWEEP_SKUS[:3])
+        archive_walk.save_pace(
+            cmd_pricearchive.market_cache_dir() / "throttle-pace.json", 0.37,
+            requests_made=800, elapsed_seconds=80, at=1,
+        )
+        host = _Host()
+        code, lines, error = _run_daily(home, REFRESH_OK, host)
+        checks.equal(error, None, "the job ran to its end")
+        checks.equal(code, 0, "a good refresh and a whole sweep end the job with exit 0")
+        checks.equal(sorted(host.asked), SWEEP_SKUS[:3], "the host was asked once for every card's SKU")
+        checks.equal(host.built, [0.37], "the one Market was built at the pace the last throttle saved (D222)")
+        checks.equal(
+            _archived_skus(), sorted(["OLD1"] + SWEEP_SKUS[:3]),
+            "write is on: every subject's buckets are committed, and the earlier bucket stays (D219)",
+        )
+        checks.equal(
+            len(Store().read().archive.entries), 1 + 3 * len(pricehistory.RANGES),
+            "one bucket per subject per range",
+        )
+        checks.ok(_said(lines, "archive sweep"), "the log has an `archive sweep` line", "\n".join(lines)[-400:])
+
+
+def check_daily_job_failed_refresh_skips_sweep(checks: Checks) -> None:
+    """A refresh that failed skips the sweep, asks the host nothing, and the log says why.
+
+    THE FAILED REFRESH'S OWN VERDICT STANDS: the job still ends with exit 1, so the sweep's
+    absence is not a quiet success. Two failures: the refresh itself, and its sales-history step
+    (the job's existing definition of a good run).
+    """
+    checks.note("")
+    checks.note("DAILY JOB SWEEP — a failed refresh skips the sweep, and the log says so")
+    for label, refresh in (("refresh failed", REFRESH_FAILED), ("sales-history step failed", REFRESH_HISTORY_FAILED)):
+        with isolated_home() as home:
+            _seed_sweep_store(SWEEP_SKUS[:3])
+            host = _Host()
+            code, lines, error = _run_daily(home, refresh, host)
+            checks.equal(error, None, "%s: the job ran to its end" % label)
+            checks.equal(code, 1, "%s: the job still ends with exit 1" % label)
+            checks.equal((host.built, host.asked), ([], []), "%s: no Market is built and the host is asked nothing" % label)
+            checks.equal(_archived_skus(), ["OLD1"], "%s: nothing new is archived" % label)
+            checks.ok(
+                _said(lines, "archive sweep", "skipped", "refresh"),
+                "%s: the log says the archive sweep was skipped because of the refresh" % label,
+                "\n".join(lines)[-400:],
+            )
+
+
+def check_daily_job_sweep_stops_on_second_throttle(checks: Checks) -> None:
+    """Two throttle answers in a row stop the sweep. What it already committed stays (D222, D224).
+
+    EIGHT SKUS IN CHUNKS OF TWO: chunk 1 is answered, chunk 2 is refused (the one backoff), chunk 3
+    is refused again (the stop). Chunk 4 is never asked for, and the job does not re-run the sweep
+    to try again. The second pace is not asserted: with no time passing it is the floor.
+    """
+    checks.note("")
+    checks.note("DAILY JOB SWEEP — a second throttle stops it, committed buckets stay")
+    with isolated_home() as home:
+        _seed_sweep_store(SWEEP_SKUS)
+        host = _Host(refuse_after=2)
+        code, lines, error = _run_daily(home, REFRESH_OK, host)
+        checks.equal(error, None, "the job ran to its end")
+        checks.equal(len(host.asked), 6, "the host was asked for chunks 1 to 3 and never for chunk 4")
+        checks.equal(len(set(host.asked)), 6, "no SKU was asked twice: the job does not retry a stopped sweep")
+        checks.equal(len(host.built), 2, "one Market at the start and one after the single backoff")
+        archived = _archived_skus()
+        checks.equal(len(archived), 3, "the archive holds chunk 1's two SKUs and the earlier bucket's SKU, nothing else")
+        checks.equal(
+            archived, sorted(["OLD1"] + host.asked[:2]),
+            "chunk 1's buckets stay in the archive, nothing from the refused chunks, and the earlier bucket stays",
+        )
+        saved = {}
+        pace_file = cmd_pricearchive.market_cache_dir() / "throttle-pace.json"
+        if pace_file.exists():
+            saved = json.loads(pace_file.read_text("utf-8"))
+        checks.ok(
+            saved.get("measured_from_requests", 0) > 0,
+            "the throttle's measured pace is saved for the next night (D222)", str(saved),
+        )
+        checks.ok(
+            _said(lines, "archive sweep", "throttl"),
+            "the log says the archive sweep met a throttle and stopped", "\n".join(lines)[-400:],
+        )
+
+
 FENCE_LABEL = (
     "the daily job calls `do_prices_refresh` (the live listings, the catalog, the join, the sales history) "
-    "and reaches nothing else of `server/`, `cli/` or `identify/`: no paid read, no sweep"
+    "and the one archive sweep press (`cli.cmd_pricearchive`, D224 and DEBT32), and reaches nothing else of "
+    "`server/`, `cli/` or `identify/`: no paid read"
 )
+
+_PACKAGES = ("cli", "identify", "pipeline", "server", "store")
 
 
 def daily_path_reaches(source: str):
-    """`(imports are exactly the note writer and the server module, the `pipeline_routes`
-    attributes the script touches)`. A callee other than `do_live_export` changes the second."""
+    """`(imports are exactly the note writer, the server module and the archive sweep press, the
+    `pipeline_routes` attributes the script touches)`. A callee other than `do_prices_refresh`
+    changes the second. A dotted `from cli.x import y` counts as `cli.x`, as `from cli import x` does."""
     tree = ast.parse(source)
     reached = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module in ("pipeline", "server", "cli", "identify", "store"):
+        if isinstance(node, ast.ImportFrom) and node.module in _PACKAGES:
             reached.update("%s.%s" % (node.module, alias.name) for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module and node.module.split(".")[0] in _PACKAGES:
+            reached.add(node.module)
         elif isinstance(node, ast.Import):
-            reached.update(a.name for a in node.names if a.name.split(".")[0] in ("cli", "identify", "pipeline", "server", "store"))
+            reached.update(a.name for a in node.names if a.name.split(".")[0] in _PACKAGES)
     touched = {
         n.attr for n in ast.walk(tree)
         if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "pipeline_routes"
     }
-    return reached == {"pipeline.pricerefresh", "server.pipeline_routes"}, touched
+    return reached == {"pipeline.pricerefresh", "server.pipeline_routes", "cli.cmd_pricearchive"}, touched
 
 
 def check_price_trends_preload(checks: Checks) -> None:
@@ -400,6 +637,9 @@ def check_older_rejoin_keeps_newer_rows(checks: Checks) -> None:
 CHECKS = (
     check_price_movers,
     check_price_refresh_note,
+    check_daily_job_sweeps_after_refresh,
+    check_daily_job_failed_refresh_skips_sweep,
+    check_daily_job_sweep_stops_on_second_throttle,
     check_price_trends_preload,
     check_trends_press_saves,
     check_older_rejoin_keeps_newer_rows,
