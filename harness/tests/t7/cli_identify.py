@@ -11,6 +11,7 @@ import http.server
 import json
 import hashlib
 import os
+import re
 import shutil
 import signal
 import tempfile
@@ -908,7 +909,8 @@ def check_correct_answer(checks: Checks) -> None:
     """POST /inventory/<box>/<index>/correct — D252.
 
     THE SCENARIO THIS ROUTE WAS BUILT FOR, off the real fixture. A card answered onto the
-    wrong catalog row, with the wrong SKU already pushed and live — `do_review_answer`'s own
+    wrong catalog row, with the wrong SKU already pushed (and not live: a live copy makes the
+    route refuse, `check_correct_answer_waits_for_live`) — `do_review_answer`'s own
     undo refuses `undo_too_late` at exactly this point, and until this route there was no
     other door. This section proves three things in order: the correction itself (the new row
     lands, the old one is released), that item 2 of the brief is answered by
@@ -942,8 +944,9 @@ def check_correct_answer(checks: Checks) -> None:
             for key in ("4/1", "4/2", "4/3"):
                 snapshot.inventory.cards[key].game = "riftbound"
                 snapshot.inventory.cards[key].run = "2026-09-23-box4-01"
-            # 4/1 — answered wrong, already pushed AND live, and IN NO QUEUE — the exact
-            # shape D28's undo refuses on and this route exists to reach anyway.
+            # 4/1 — answered wrong, already pushed and NOT live, and IN NO QUEUE — the exact
+            # shape D28's undo refuses on and this route exists to reach anyway. A live copy
+            # would stop the route, so one physical copy never stands under two SKUs.
             # DIRECT FIELD WRITE, NOT `_bind`: `rarity` must stay unset going in — the
             # same "never carried a rarity at all" shape this function's undo checks
             # elsewhere. `bind_sku` always derives `rarity` alongside `sku`/`condition`.
@@ -954,9 +957,6 @@ def check_correct_answer(checks: Checks) -> None:
             snapshot.inventory.cards["4/1"].number = old_number
             snapshot.inventory.listing(old_sku, condition="Near Mint").set(
                 master.PUSHED, 1
-            )
-            snapshot.inventory.listing(old_sku, condition="Near Mint").set(
-                master.LIVE, 1
             )
             # 4/2 — captured, never identified. Nothing here to correct.
             # 4/3 — identified, then departed. A correction there is a different question.
@@ -1043,14 +1043,14 @@ def check_correct_answer(checks: Checks) -> None:
         before_release = Store().read().inventory.listings[old_sku]
         checks.equal(
             (before_release.pushed, before_release.live),
-            (1, 1),
-            "before the correction: the wrong sku is pushed and live",
+            (1, 0),
+            "before the correction: the wrong sku is pushed and not live",
         )
 
         body = answers(
             checks,
             lambda: capture_server.do_correct_answer(4, 1, {"sku": new_sku}),
-            "the correction succeeds even though the wrong sku is pushed and live — the "
+            "the correction succeeds even though the wrong sku is pushed — the "
             "exact case do_review_answer's own undo refuses",
         )
         if body is not None:
@@ -1152,9 +1152,9 @@ def check_correct_answer(checks: Checks) -> None:
         after_release = Store().read().inventory.listings[old_sku]
         checks.equal(
             (after_release.pushed, after_release.live),
-            (0, 1),
-            "and the OLD sku gave up exactly one pushed copy — least-committed-first left "
-            "`live` untouched, because one copy was enough to cover the release",
+            (0, 0),
+            "and the OLD sku gave up exactly its one pushed copy, with no live copy left "
+            "behind for a second listing",
         )
         checks.ok(
             new_sku not in Store().read().inventory.listings,
@@ -1473,106 +1473,185 @@ def check_correct_answer(checks: Checks) -> None:
         )
 
 
+def _sent_wrong_card(home, box: int, old_sku: str, **counts: int) -> str:
+    """One identified Riftbound card bound to `old_sku`, in the run dir `do_correct_answer`
+    reads its catalog from, with `old_sku`'s listing record holding `counts` (stage name ->
+    copies). Returns the card's position key. Both D252 live-copy checks build on it.
+    """
+    run_dir = home / "runs" / f"2026-09-23-box{box}-01"
+    run_dir.mkdir(parents=True)
+    shutil.copy(RIFTBOUND_EXPORT, run_dir / "export.csv")
+    (run_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "created_at": "2026-09-23T00:00:00+00:00",
+                "joined": True,
+                "exports": {"riftbound": {"path": str(run_dir / "export.csv")}},
+            }
+        )
+    )
+    capture_server.do_capture(capture_payload(box, game="riftbound"))
+    key = f"{box}/1"
+    with Store().write() as snapshot:
+        snapshot.inventory.cards[key].game = "riftbound"
+        snapshot.inventory.cards[key].run = run_dir.name
+        snapshot.inventory.set_state(key, master.IDENTIFIED)
+        _bind(snapshot, key, old_sku, game="riftbound")
+        listing = snapshot.inventory.listing(old_sku, condition="Near Mint")
+        for stage, count in counts.items():
+            listing.set(stage, count)
+    return key
+
+
+def _listing_and_card(key: str, sku: str) -> tuple:
+    """What a refused correction must leave exactly as it found it: the card's pair and name,
+    and the old SKU's three counts with the stamp of its live reading."""
+    store = Store().read().inventory
+    card, listing = store.cards[key], store.listings[sku]
+    return (
+        (card.sku, card.condition, card.name),
+        (listing.pushed, listing.staged, listing.live, listing.live_as_of),
+    )
+
+
 def check_correct_answer_live_release(checks: Checks) -> None:
-    """POST /inventory/<box>/<index>/correct — the `live` stage of the release, and the
-    stamps a round trip must not corrupt. D252, review round 2.
+    """POST /inventory/<box>/<index>/correct — a copy that is ONLY live. D252, repealed in
+    part by the owner's word that one physical copy is never listed under two SKUs.
 
-    `Listing.release`'s own rule is least-committed-first: `pushed`, then `staged`, then
-    `live`. Every other case in `check_correct_answer` leaves `pushed` non-zero, so the
-    release never reaches past it — `_give_back_listing`'s `master.LIVE` branch has never
-    run. This fixture starts the old SKU at `pushed=0, staged=0, live=2`, so the ONE copy
-    this correction gives up has nowhere else to come from.
-
-    AND `release()` RESTAMPS `live_as_of` TO NOW WHEN IT TAKES FROM `live` — D34's own rule,
-    "an observation made now, like a sale" — so the stamp the operator's ORIGINAL live
-    reading carried is gone the moment the correction lands. The undo must not read that
-    loss as further permission to restamp AGAIN to whatever "now" happens to be when the
-    undo is pressed: `stamps` on the `sku_corrected` line carries the PRE-CORRECTION value,
-    and `_give_back_listing` puts it back verbatim once the counts are restored.
+    `Listing.release` is least-committed-first: `pushed`, then `staged`, then `live`. This
+    fixture starts the old SKU at `pushed=0, staged=0, live=2`, so the one copy a correction
+    gives up could only come from `live`. It used to. The route then freed a copy TCGplayer
+    still showed, and the card could be listed again under the new SKU. It now refuses, and the
+    old SKU's counts and the stamp of its live reading stay exactly as they were.
     """
     checks.note("")
-    checks.note("CORRECT A LISTED ANSWER — the live stage, and the stamp round trip")
+    checks.note("CORRECT A LISTED ANSWER — a live-only copy is never released")
 
     old_sku, new_sku = "8926937", "8925897"
     original_live_as_of = "2020-01-01T00:00:00+00:00"
 
     with isolated_home() as home:
-        run_dir = home / "runs" / "2026-09-23-box5-01"
-        run_dir.mkdir(parents=True)
-        shutil.copy(RIFTBOUND_EXPORT, run_dir / "export.csv")
-        (run_dir / "manifest.json").write_text(
-            json.dumps(
-                {
-                    "created_at": "2026-09-23T00:00:00+00:00",
-                    "joined": True,
-                    "exports": {"riftbound": {"path": str(run_dir / "export.csv")}},
-                }
-            )
-        )
-        capture_server.do_capture(capture_payload(5, game="riftbound"))
+        key = _sent_wrong_card(home, 5, old_sku, live=2)
         with Store().write() as snapshot:
-            snapshot.inventory.cards["5/1"].game = "riftbound"
-            snapshot.inventory.cards["5/1"].run = "2026-09-23-box5-01"
-            snapshot.inventory.set_state("5/1", master.IDENTIFIED)
-            _bind(snapshot, "5/1", old_sku, game="riftbound")
-            # `pushed` and `staged` are BOTH zero — the one copy the correction gives up can
-            # only come from `live`, which is the branch under test.
-            snapshot.inventory.listing(old_sku, condition="Near Mint").set(master.LIVE, 2)
             snapshot.inventory.listings[old_sku].live_as_of = original_live_as_of
 
-        before = Store().read().inventory.listings[old_sku]
+        before = _listing_and_card(key, old_sku)
         checks.equal(
-            (before.pushed, before.staged, before.live, before.live_as_of),
+            before[1],
             (0, 0, 2, original_live_as_of),
             "before the correction: nothing pushed or staged, two copies live, an old reading",
         )
-
-        body = answers(
+        refusal(
             checks,
             lambda: capture_server.do_correct_answer(5, 1, {"sku": new_sku}),
-            "the correction succeeds with nothing to release from pushed or staged",
+            "old_sku_still_live",
+            "the correction refuses while the old sku has a live copy, even when `live` is "
+            "the only stage a release could take from",
         )
-        if body is not None:
-            checks.equal(
-                body["released"],
-                {"live": 1},
-                "and `Listing.release` reached `live` — the branch `_give_back_listing` had "
-                "never exercised",
-            )
-
-        after_release = Store().read().inventory.listings[old_sku]
         checks.equal(
-            (after_release.pushed, after_release.staged, after_release.live),
-            (0, 0, 1),
-            "one live copy is given up, and nothing else moves",
+            _listing_and_card(key, old_sku),
+            before,
+            "and it wrote nothing: the card, the three counts and `live_as_of` (which "
+            "`release()` would have restamped to now) are exactly as they were",
+        )
+
+
+def check_correct_answer_waits_for_live(checks: Checks) -> None:
+    """POST /inventory/<box>/<index>/correct — the owner's word: a sent card's SKU is not
+    corrected while the old SKU still has that copy live on TCGplayer.
+
+    THE OUTCOME. `Listing.release` gave up one copy of the old SKU and the card was free to be
+    identified again, so one physical copy could stand under two SKUs. The route now waits for
+    TCGplayer to let the old copy go. The refusal is read off `live` and nothing else: not
+    `pushed`, not D59's committed count. A copy that is sent but not yet live can still be
+    corrected, as it always could.
+
+    THREE STORES, each fresh. Live >= 1 refuses and writes nothing. A newer reading of live 0
+    lets the same correction through, so the wait ends. A card that is pushed but not live
+    answers. Only the first goes red on the old code. The other two guard the guard against
+    being too wide: a latch, or a refusal that reads `pushed`.
+    """
+    checks.note("")
+    checks.note("CORRECT A LISTED ANSWER — it waits while the old sku is live")
+
+    old_sku, new_sku = "8926937", "8925897"
+
+    with isolated_home() as home:
+        key = _sent_wrong_card(home, 6, old_sku, pushed=1, live=1)
+        before = _listing_and_card(key, old_sku)
+        outcome = _refusal_text(
+            lambda: capture_server.do_correct_answer(6, 1, {"sku": new_sku})
         )
         checks.ok(
-            after_release.live_as_of != original_live_as_of,
-            "and `release()` restamped `live_as_of` to now — D34's own rule for a copy taken "
-            "off `live`, unchanged by this correction",
+            outcome is not None,
+            "a sent card whose old sku reads live >= 1 is refused",
+            "the correction went through",
+        )
+        code, said = outcome or ("", "")
+        checks.equal(
+            code,
+            "old_sku_still_live",
+            "and the refusal has its own code, so the screen can say what to do next",
+        )
+        place = join.said_place(Store().read().inventory, 6, 1)
+        checks.ok(
+            said.startswith(place)
+            and "TCGplayer" in said
+            and "Box 6, card 1" not in said
+            and "/inventory/" not in said
+            and "§" not in said
+            and not re.search(r"\bD\d+\b", said),
+            "and the reason is plain: it names the card's place and TCGplayer, and never the "
+            "store index, a route, a spec section or a decision id",
+            f"place: {place!r}, said: {said!r}",
+        )
+        checks.equal(
+            _listing_and_card(key, old_sku),
+            before,
+            "and it wrote nothing: card, counts and the live reading's stamp are as they were",
+        )
+        checks.ok(
+            new_sku not in Store().read().inventory.listings
+            and last_event(key).get("event") != "sku_corrected",
+            "no listing record for the new sku and no correction line in the history",
         )
 
-        undone = answers(
+    # The wait ends. A newer reading says TCGplayer holds none, the way `reconcile --live`
+    # records it: through `observe_live`, never a hand-set count. A reading dated far ahead
+    # outranks the `set()` stamp the fixture's live count carries.
+    with isolated_home() as home:
+        _sent_wrong_card(home, 7, old_sku, pushed=1, live=1)
+        with Store().write() as snapshot:
+            snapshot.inventory.listings[old_sku].observe_live(0, "2999-01-01T00:00:00+00:00")
+        checks.equal(
+            Store().read().inventory.listings[old_sku].live,
+            0,
+            "control: the newer reading took, and the old sku now reads live 0",
+        )
+        released = answers(
             checks,
-            lambda: capture_server.do_correct_answer(5, 1, {"undo": True}),
-            "the undo gives the live copy back",
+            lambda: capture_server.do_correct_answer(7, 1, {"sku": new_sku}),
+            "once a newer reading puts the old sku at live 0 the correction answers: the "
+            "wait ends, it is not a latch",
         )
-        restored = Store().read().inventory.listings[old_sku]
-        checks.equal(
-            (restored.pushed, restored.staged, restored.live),
-            (0, 0, 2),
-            "every count is restored exactly, live included",
+        if released is not None:
+            checks.equal(
+                (released["sku"], released["released"]),
+                (new_sku, {"pushed": 1}),
+                "and it gives up the one pushed copy, as it always did",
+            )
+
+    # Sent, never live. The refusal reads `live` alone, not whether anything was sent and not
+    # D59's committed count.
+    with isolated_home() as home:
+        _sent_wrong_card(home, 8, old_sku, pushed=1, live=0)
+        sent = answers(
+            checks,
+            lambda: capture_server.do_correct_answer(8, 1, {"sku": new_sku}),
+            "a sent card whose old sku is pushed but not live answers",
         )
-        checks.equal(
-            restored.live_as_of,
-            original_live_as_of,
-            "and `live_as_of` is the PRE-CORRECTION stamp, not `release()`'s restamp and not "
-            "a fresh `now` from the undo itself — a correct-then-undo round trip must not "
-            "manufacture a reading nobody took, which is exactly what `staged_stale` and "
-            "`reprice` would otherwise read as new evidence",
-        )
-        if undone is not None:
-            checks.ok(True, "and the route itself answered")
+        if sent is not None:
+            checks.equal(sent["released"], {"pushed": 1}, "and it releases the pushed copy")
 
 
 def check_identity_binding(checks: Checks) -> None:
@@ -7684,6 +7763,7 @@ CHECKS = (
     check_review_catalog,
     check_correct_answer,
     check_correct_answer_live_release,
+    check_correct_answer_waits_for_live,
     check_identity_binding,
     check_catalog_number_fields_round_trip,
     check_catalog_set_rarity_match,
