@@ -464,7 +464,7 @@ def check_daily_job_sweep_stops_on_first_refusal(checks: Checks) -> None:
         checks.equal(_archived_skus(), ["OLD1"], "nothing new is archived, and the earlier bucket stays (D219)")
         checks.equal(note.get("ok"), False, "the `archive` step of the note is not ok")
         checks.ok(
-            note.get("message") != "Price archive swept.",
+            "price archive swept" not in str(note.get("message")).lower(),
             "the note does not say the price archive was swept", str(note),
         )
 
@@ -488,7 +488,7 @@ def check_daily_job_empty_sweep_is_not_ok(checks: Checks) -> None:
         checks.equal(_archived_skus(), ["OLD1"], "0 buckets are written, and the earlier bucket stays (D219)")
         checks.equal(note.get("ok"), False, "the `archive` step of the note is not ok")
         checks.ok(
-            note.get("message") != "Price archive swept.",
+            "price archive swept" not in str(note.get("message")).lower(),
             "the note does not say the price archive was swept", str(note),
         )
 
