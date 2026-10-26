@@ -7,7 +7,7 @@ which exist have passed. These entries name what those checks do not cover.
 This is not a backlog to burn down on sight. An entry leaves when someone argues that it
 should, or when its gap closes. A closed entry is deleted, and history lives in version
 control. A number is never reused, so the gaps in the sequence are deleted entries: 5, 10, 12,
-13, 15, 17, 18, 21, 24, 28, 29, 35, 36, 37, 42, 45, 47, 49, 51, 52, 53, 54, 55, 56, 57, 78, 79, 80 and 81.
+13, 15, 17, 18, 21, 24, 28, 29, 35, 36, 37, 42, 45, 47, 49, 51, 52, 53, 54, 55, 56, 57, 78, 79, 80, 81 and 87.
 
 ## How to find one
 
@@ -80,7 +80,6 @@ DEBT83 Off-screen rail tiles still cost a little per capture
 DEBT84 The public demo's first screen sits just under its byte budget, and its time on a slow network is unmeasured
 DEBT85 The read-budget check proves some routes on their miss path only
 DEBT86 Capabilities written twice that have not drifted yet
-DEBT87 an Unhold whose store write fails leaves copies off the list with no control
 DEBT88 the sticky send bar's height below an 820 column is unmeasured
 DEBT89 the send bar draws, then disappears, with zero runs or a failed load
 DEBT90 a send notice joins the bar after the worklist lands
