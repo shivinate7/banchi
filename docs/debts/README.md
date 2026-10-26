@@ -7,7 +7,7 @@ which exist have passed. These entries name what those checks do not cover.
 This is not a backlog to burn down on sight. An entry leaves when someone argues that it
 should, or when its gap closes. A closed entry is deleted, and history lives in version
 control. A number is never reused, so the gaps in the sequence are deleted entries: 5, 10, 12,
-13, 15, 17, 18, 21, 24, 28, 29, 35, 36, 37, 40, 42, 45, 47, 49, 51, 52, 53, 54, 55, 56, 57, 78, 79, 80, 81, 87, 95 and 98.
+13, 15, 17, 18, 21, 24, 28, 29, 35, 36, 37, 40, 42, 45, 47, 49, 51, 52, 53, 54, 55, 56, 57, 78, 79, 80, 81, 87, 95, 97 and 98.
 
 ## How to find one
 
@@ -87,7 +87,6 @@ DEBT92 the tile lead check fails a proper noun after the first word
 DEBT93 the Show Held and Price Them clears have never gone red
 DEBT94 a five-digit count can wrap a tile note and grow the send bar
 DEBT96 Fulfillment still shows the owner's photo first
-DEBT97 a Card Ladder failure on Add hides its plain sentence
 DEBT99 the empty-slot check decodes every uncached photo at full size
 DEBT100 the free number reader for same-art printings is shelved
 ```
