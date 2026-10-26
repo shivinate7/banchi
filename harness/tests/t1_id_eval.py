@@ -321,6 +321,12 @@ def _write_results(payload: dict, config: str) -> Tuple[Path, bool]:
     suffix = "" if config == "none" else "-{0}".format(config)
     path = RESULTS_DIR / "t1{0}.json".format(suffix)
 
+    if payload.get("holdout_accuracy") is None and path.exists():
+        # A tune-only run (BANCHI_T1_SPLIT=tune) never scored the holdout. Its payload must not
+        # replace a committed score that did.
+        print("t1: tune-only run, holdout not scored; {0} left as it was".format(path))
+        return path, False
+
     if path.exists():
         try:
             existing = json.loads(path.read_text("utf-8"))
