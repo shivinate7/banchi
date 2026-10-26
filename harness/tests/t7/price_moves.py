@@ -10,11 +10,12 @@ import ast
 import importlib.util
 import json
 import os
+import plistlib
 import shlex
 import subprocess
 import sys
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from unittest import mock
@@ -25,7 +26,7 @@ from harness.tests.t7.common import isolated_home
 from pipeline import movers, pricearchive as archive_walk, pricehistory, pricerefresh
 from pipeline.pricehistory import Bucket as HistoryBucket, Reading as HistoryReading, Series
 from server import pipeline_routes
-from store import files
+from store import clock, files
 from store.master import Card
 from store.pricearchive import Bucket
 from store.readings import KIND_LIVE, KIND_RUN, Reading, Source
@@ -244,12 +245,14 @@ REFRESH_HISTORY_FAILED = {"ok": True, "steps": {"history": {"ok": False}}}
 class _Host:
     """What the stubbed host saw. `refuse_after` is how many SKUs it answers before it answers HTTP
     403 to every later one (None: never; 0: from the very first, with no earlier success). `empty`
-    answers every SKU with a strip that holds no bucket. The counters live here, not on a Market,
+    answers every SKU with a strip that holds no bucket. `during` is called each time the sweep asks
+    the host, so a case can look at the world mid-sweep. The counters live here, not on a Market,
     because the backoff builds a second Market."""
 
-    def __init__(self, refuse_after=None, empty=False):
+    def __init__(self, refuse_after=None, empty=False, during=None):
         self.refuse_after = refuse_after
         self.empty = empty
+        self.during = during
         self.asked = []
         self.built = []
 
@@ -262,6 +265,8 @@ class _Host:
                 self.requests = 0
 
             def readings_for_rows(self, rows, ranges=(), *, product_ids=None):
+                if host.during:
+                    host.during()
                 readings, refusals = {}, {}
                 for row in rows:
                     sku = row.get("TCGplayer Id", "")
@@ -316,6 +321,23 @@ def _daily_job(home: Path):
         yield job
 
 
+def _refresh_patch(refresh):
+    """`do_prices_refresh` stubbed: a dict is its answer, a callable is its body. The patch counts the calls."""
+    kind = {"side_effect": refresh} if callable(refresh) else {"return_value": refresh}
+    return mock.patch.object(pipeline_routes, "do_prices_refresh", **kind)
+
+
+def _refresh_stub(ok: bool = True):
+    """A refresh that leaves the step notes the real one leaves (`_prices_refresh_steps` notes each
+    step as it ends). A once-per-day guard reads those notes, and a bare answer leaves none."""
+    def refresh(*_args, **_kwargs):
+        for step in ("listings", "catalog", "join", "history"):
+            pricerefresh.note_step(step, ok)
+        return {"ok": ok, "steps": pricerefresh.read_status()["steps"], "live": {}}
+
+    return refresh
+
+
 def _run_daily(home: Path, refresh: dict, host: _Host, chunk: int = 2):
     """One run of the job: `(exit code, log lines, error)`. Chunks of `chunk` SKUs so a few SKUs
     make several commits (D224). `fetch_json` raises: a path past the stubbed market fails loudly."""
@@ -324,7 +346,7 @@ def _run_daily(home: Path, refresh: dict, host: _Host, chunk: int = 2):
         if home.resolve() not in log.resolve().parents:
             return None, [], "the job's log is outside the throwaway home: " + str(log)
         code = error = None
-        with mock.patch.object(pipeline_routes, "do_prices_refresh", return_value=refresh), \
+        with _refresh_patch(refresh), \
                 mock.patch.object(pricehistory, "Market", host.market()), \
                 mock.patch.object(pricehistory, "fetch_json", side_effect=AssertionError("network past the stub")), \
                 mock.patch.object(archive_walk, "CHUNK_SKUS", chunk):
@@ -439,6 +461,7 @@ def check_daily_job_sweep_stops_on_second_throttle(checks: Checks) -> None:
             _said(lines, "archive sweep", "throttl"),
             "the log says the archive sweep met a throttle and stopped", "\n".join(lines)[-400:],
         )
+        checks.equal(_archive_note().get("ok"), False, "a sweep that stopped is not ok in the `archive` step of the note")
 
 
 def check_daily_job_sweep_stops_on_first_refusal(checks: Checks) -> None:
@@ -471,15 +494,18 @@ def check_daily_job_sweep_stops_on_first_refusal(checks: Checks) -> None:
         )
 
 
-def check_daily_job_empty_sweep_is_not_ok(checks: Checks) -> None:
-    """A sweep that was asked for cards and wrote 0 buckets is not ok, whatever the host said.
+def check_daily_job_empty_sweep_is_ok(checks: Checks) -> None:
+    """A sweep whose every SKU answered with no sale is ok, and is not asked again that day.
 
-    THE HOST ANSWERS EVERY SKU WITH AN EMPTY STRIP: no refusal, no throttle, and nothing to write.
-    The note must not claim a sweep that archived nothing. An all-fresh night (nothing left to read)
-    is a different case and is not asserted here.
+    THE HOST ANSWERS EVERY SKU WITH AN EMPTY STRIP: no refusal, no throttle, nothing to write. A card
+    that never sold has no bucket, so it never looks fresh (freshness is read off buckets) and every
+    sweep asks for it again. A rule that called this a failure made the note red every night and sent
+    the next run back to the host. NOT OK IS A PASS THAT STOPPED: a refusal or a throttle that ended
+    it (the two cases below this one) or an unreadable store. THE STORE'S OWN PASS RECORD PROVES THE
+    FIXTURE: every card requested, none refused. An empty strip is not counted as answered there.
     """
     checks.note("")
-    checks.note("DAILY JOB SWEEP — a sweep that wrote 0 buckets is not ok")
+    checks.note("DAILY JOB SWEEP — every SKU answered, no sales: ok, and not asked twice in a day")
     with isolated_home() as home:
         _seed_sweep_store(SWEEP_SKUS[:3])
         host = _Host(empty=True)
@@ -487,11 +513,17 @@ def check_daily_job_empty_sweep_is_not_ok(checks: Checks) -> None:
         note = _archive_note()
         checks.equal(error, None, "the job ran to its end")
         checks.equal(sorted(host.asked), SWEEP_SKUS[:3], "the host was asked for every card")
+        checks.equal(
+            {(row["requested"], row["refused"]) for row in Store().read().archive.sources_payload()}, {(3, 0)},
+            "the store's pass record: 3 cards requested and none refused, so this is no refusal's case",
+        )
         checks.equal(_archived_skus(), ["OLD1"], "0 buckets are written, and the earlier bucket stays (D219)")
-        checks.equal(note.get("ok"), False, "the `archive` step of the note is not ok")
-        checks.ok(
-            "price archive swept" not in str(note.get("message")).lower(),
-            "the note does not say the price archive was swept", str(note),
+        checks.equal(note.get("ok"), True, "the `archive` step of the note is ok")
+        again = _Host()
+        _run_daily(home, REFRESH_OK, again)
+        checks.equal(
+            (again.built, again.asked), ([], []),
+            "the next run that day builds no Market and asks the host nothing: ok is what ends the day's sweep",
         )
 
 
@@ -499,8 +531,10 @@ def check_daily_job_second_run_same_day_skips_sweep(checks: Checks) -> None:
     """Once today's sweep finished, a second job run on the same US Central day sweeps nothing.
 
     `hermetic` pins the Central day for the whole check, so both runs are on one day however long
-    they take. The second run still refreshes (it is the job's first half). A sweep that STOPPED is
-    not finished: the next run that day resumes it, so "skip" is not "skip after any earlier try".
+    they take. The refresh here is a bare stub that leaves no step notes, so only the sweep's own
+    guard is under test; the refresh's guard is `check_daily_job_login_run_does_the_day_once`. A
+    sweep that STOPPED is not finished: the next run that day resumes it, so "skip" is not "skip
+    after any earlier try".
     """
     checks.note("")
     checks.note("DAILY JOB SWEEP — a finished sweep is not run twice in one US Central day")
@@ -555,16 +589,16 @@ def _make_price_refresh_argv():
     return None
 
 
-def _run_main(home: Path, argv: list, host: _Host, env: dict = None, chunk: int = 2):
+def _run_main(home: Path, argv: list, host: _Host, env: dict = None, chunk: int = 2, refresh=REFRESH_OK):
     """The job script run as `python scripts/price-refresh-daily.py <argv>`, its `__main__` block
     (argument parser and run lock) included: `(exit code, error, refresh calls)`. The log and the
     lock handle are checked to be in the throwaway home. `--agent` would install a launchd job, so
-    it is refused here before anything runs."""
+    it is refused here before anything runs. `refresh` is `_refresh_patch`'s."""
     assert "--agent" not in argv, "a check never installs the owner's launchd job"
     namespace = {"__name__": "__main__", "__file__": str(SCRIPT)}
     code = error = None
     with mock.patch.dict(os.environ, {"HOME": str(home), **(env or {})}), mock.patch.object(sys, "argv", [str(SCRIPT), *argv]), \
-            mock.patch.object(pipeline_routes, "do_prices_refresh", return_value=REFRESH_OK) as refresh, \
+            _refresh_patch(refresh) as called, \
             mock.patch.object(pricehistory, "Market", host.market()), \
             mock.patch.object(pricehistory, "fetch_json", side_effect=AssertionError("network past the stub")), \
             mock.patch.object(archive_walk, "CHUNK_SKUS", chunk):
@@ -582,7 +616,7 @@ def _run_main(home: Path, argv: list, host: _Host, env: dict = None, chunk: int 
         log = Path(namespace["LOG"]) if "LOG" in namespace else None
         if log is not None and home.resolve() not in log.resolve().parents:
             error = "the job's log is outside the throwaway home: " + str(log)
-    return code, error, refresh.call_count
+    return code, error, called.call_count
 
 
 def check_installed_job_sweeps_without_reinstall(checks: Checks) -> None:
@@ -616,6 +650,118 @@ def check_installed_job_sweeps_without_reinstall(checks: Checks) -> None:
         checks.equal((error, code, refreshed), (None, 0, 1), "`make price-refresh` refreshes once and ends with exit 0")
         checks.equal((host.built, host.asked), ([], []), "`make price-refresh` starts no sweep: no Market is built, the host is asked nothing")
         checks.equal(_archived_skus(), ["OLD1"], "`make price-refresh` archives nothing new")
+
+
+def check_daily_job_sweep_holds_the_refresh_lock(checks: Checks) -> None:
+    """While the sweep reads from the host, a refresh that starts is turned away: the sweep holds `refresh_lock`.
+
+    The "Refresh now" press on `#/pricing` shares that lock with the job. A refresh mid-sweep would be
+    a second caller on the host the sweep paces itself against. THE PROBE IS THE LOCK'S OWN
+    NON-BLOCKING TRY, made each time the host is asked: `False` is what a refresh that waits and a
+    refresh that is refused both get. `do_prices_refresh` itself is not called here: with the lock
+    free it would fetch. The job runs through its `__main__`, the way launchd runs it.
+    """
+    checks.note("")
+    checks.note("DAILY JOB SWEEP — a refresh that starts mid-sweep gets no lock, and the lock is free after")
+    with isolated_home() as home:
+        _seed_sweep_store(SWEEP_SKUS[:3])
+        probes = []
+
+        def probe() -> None:
+            with pricerefresh.refresh_lock() as held:
+                probes.append(held)
+
+        host = _Host(during=probe)
+        code, error, _ = _run_main(home, INSTALLED_JOB_ARGV, host)
+        checks.equal((error, code), (None, 0), "the job ran to its end with exit 0")
+        checks.equal(sorted(host.asked), SWEEP_SKUS[:3], "the host was asked for every card")
+        checks.ok(
+            bool(probes) and not any(probes),
+            "every refresh that tried to start while the sweep read got no lock", "tries, lock got: %s" % probes,
+        )
+        with pricerefresh.refresh_lock() as held:
+            checks.ok(held, "the lock is free again once the job has ended")
+
+
+def check_installed_job_runs_at_login(checks: Checks) -> None:
+    """The installed launchd job carries `RunAtLoad`, so a Mac that was off at 05:15 runs it at login.
+
+    THE OWNER'S WORD: "if the day is a new day when my mac is on, just get it done then". The plist
+    is what the job's own `agent(False)` writes, into the throwaway home, with `launchctl` a
+    recorder: the owner's loaded job is never touched. The case stops before installing if the
+    home is not the throwaway one. A linked worktree's `.git` is a file and makes the installer
+    refuse, so the root is a folder in the throwaway home.
+    """
+    checks.note("")
+    checks.note("DAILY JOB — the installed plist runs the job at login as well as at 05:15")
+    with isolated_home() as home, _daily_job(home) as job:
+        if not checks.equal(Path.home().resolve(), home.resolve(), "the plist goes to the throwaway home, never the owner's LaunchAgents"):
+            return
+        root = home / "main-checkout"
+        root.mkdir()
+        launchctl = mock.Mock(return_value=mock.Mock(returncode=0, stderr=""))
+        with mock.patch.object(job, "ROOT", root), mock.patch.object(job.launchagent.subprocess, "run", launchctl):
+            code = job.agent(False)
+        path = home / "Library" / "LaunchAgents" / (job.LABEL + ".plist")
+        plist = plistlib.loads(path.read_bytes()) if path.exists() else {}
+        checks.equal(code, 0, "the install ends with exit 0")
+        checks.ok(bool(plist), "the plist was written into the throwaway home", str(path))
+        checks.equal(plist.get("RunAtLoad"), True, "the plist runs the job at login (RunAtLoad)")
+        checks.ok("StartCalendarInterval" in plist, "the plist keeps its daily time")
+        checks.equal(plist.get("ProgramArguments", [])[2:], INSTALLED_JOB_ARGV, "the plist passes the flags the sweeping job is read with")
+        checks.ok(
+            bool(launchctl.call_args_list) and all(call.args[0][0] == "launchctl" for call in launchctl.call_args_list),
+            "the only commands the install ran were launchctl, and the recorder took them",
+        )
+
+
+def check_daily_job_login_run_does_the_day_once(checks: Checks) -> None:
+    """A run at login on a day whose refresh and sweep finished does nothing; a new day does both again.
+
+    THE OWNER'S WORD: "if the day is a new day when my mac is on, just get it done then". With
+    `RunAtLoad` the job can start many times a day, and each start that reached the host would be
+    a second live fetch from the seller portal and a second sweep. THE GUARD IS "FINISHED TODAY",
+    never "tried today": a failed refresh and a stopped sweep are run again by the next start.
+    The refresh and the sweep are two guards: a finished refresh is not repeated when only the sweep
+    is left, and a refresh skipped as done must not skip the sweep. The stub refresh leaves the
+    step notes the real one leaves. The day is `store/clock`'s (US Central), moved two days on for
+    the new day, so a 25-hour day or a run across midnight cannot make it flaky. Every start is
+    the installed job's own argv through the script's `__main__`.
+    """
+    checks.note("")
+    checks.note("DAILY JOB — a login run does the day's refresh and sweep once, and a new day again")
+    argv = INSTALLED_JOB_ARGV
+    with isolated_home() as home:
+        _seed_sweep_store(SWEEP_SKUS[:3])
+        first, login = _Host(), _Host()
+        c1, e1, r1 = _run_main(home, argv, first, refresh=_refresh_stub())
+        c2, e2, r2 = _run_main(home, argv, login, refresh=_refresh_stub())
+        checks.equal((e1, c1, r1, sorted(first.asked)), (None, 0, 1, SWEEP_SKUS[:3]), "the first run of the day refreshes once and sweeps every card")
+        checks.equal((e2, c2, r2), (None, 0, 0), "a run at login on that day ends with exit 0 and asks for no refresh")
+        checks.equal((login.built, login.asked), ([], []), "it builds no Market and asks the host nothing for the sweep")
+        _seed_sweep_store(SWEEP_SKUS[:4])  # one card arrived since; the other three are still fresh
+        tomorrow = clock._current() + timedelta(days=2)
+        later = _Host()
+        with mock.patch.object(clock, "_current", lambda: tomorrow):
+            c3, e3, r3 = _run_main(home, argv, later, refresh=_refresh_stub())
+        checks.equal(
+            (e3, c3, r3, later.asked), (None, 0, 1, [SWEEP_SKUS[3]]),
+            "on the next US Central day the job refreshes again and sweeps the card it has not read",
+        )
+    with isolated_home() as home:
+        _seed_sweep_store(SWEEP_SKUS)
+        stopped, login = _Host(refuse_after=2), _Host()
+        _run_main(home, argv, stopped, refresh=_refresh_stub())
+        c2, e2, r2 = _run_main(home, argv, login, refresh=_refresh_stub())
+        checks.equal((e2, c2, r2), (None, 0, 0), "refresh finished and sweep stopped: the login run asks for no new refresh")
+        checks.ok(bool(login.asked), "it still resumes the sweep that stopped: the host is asked again")
+        checks.equal(_archived_skus(), sorted(["OLD1"] + SWEEP_SKUS), "and the resumed sweep completes the archive")
+    with isolated_home() as home:
+        _seed_sweep_store(SWEEP_SKUS[:3])
+        c1, e1, r1 = _run_main(home, argv, _Host(), refresh=_refresh_stub(ok=False))
+        c2, e2, r2 = _run_main(home, argv, _Host(), refresh=_refresh_stub())
+        checks.equal((e1, c1, r1), (None, 1, 1), "a refresh that failed ends its run with exit 1")
+        checks.equal((e2, c2, r2), (None, 0, 1), "the next run that day refreshes again: a failed refresh is not a finished one")
 
 
 FENCE_LABEL = (
@@ -827,9 +973,12 @@ CHECKS = (
     check_daily_job_failed_refresh_skips_sweep,
     check_daily_job_sweep_stops_on_second_throttle,
     check_daily_job_sweep_stops_on_first_refusal,
-    check_daily_job_empty_sweep_is_not_ok,
+    check_daily_job_empty_sweep_is_ok,
     check_daily_job_second_run_same_day_skips_sweep,
     check_installed_job_sweeps_without_reinstall,
+    check_daily_job_sweep_holds_the_refresh_lock,
+    check_installed_job_runs_at_login,
+    check_daily_job_login_run_does_the_day_once,
     check_price_trends_preload,
     check_trends_press_saves,
     check_older_rejoin_keeps_newer_rows,
