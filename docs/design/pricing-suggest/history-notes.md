@@ -6,8 +6,10 @@ The owner picks one option. Owner word: yes. Open: which option?
 
 All three draw the same chart: today's `ProductChart` (market line, the low-to-high spread each
 week, the owner's sales as diamonds), with two new marks: the owner's own asking price as a
-dashed step line, and the suggestion as a dot. Each also states the sold range, "14 sold in 30
-days, $3.10 to $4.25".
+dashed step line from the day it was listed, and the suggestion as a dot. Each states the reason
+and the sold range, "14 sold in 30 days, $3.10 to $4.25", once, in the history area. The open
+row's own reason line steps aside while its history shows. The row's 30-day trend is read off
+the chart's market line, so the two agree.
 
 1. **Keep the sheet** (`history-sheet.html`). The history door opens today's `ProductSheet` over
    `ProductHistoryView`, 420px at the right, at 1440 and 820.
@@ -27,7 +29,8 @@ days, $3.10 to $4.25".
    beside the list and shows the selected row. The list takes the 820 row shape to make room.
    At 820 the panel does not fit, so the history door opens today's sheet, as in option 1.
    - Gain: the history updates as the owner moves down the list, with no press per row.
-   - Loss: the list loses its Market, Lowest and Trend columns at 1440, and the two widths
-     behave differently.
+   - Loss: at 1440 the list loses only its Trend chart. Market and Lowest, shipped stay, in the
+     line under the name, and the price source sits under the price. The two widths behave
+     differently.
    - The Up and Down arrows move the selection. A new key binding must go in `SHORTCUTS` before
      it is done.
