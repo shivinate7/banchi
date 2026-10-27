@@ -213,6 +213,7 @@ from harness.tests.t7 import (  # noqa: E402
     manifest_merge,
     second_look_counts,
     backup,
+    one_list_wire,
 )
 # `t7_box_map.py` imports these names from this module, so they stay reachable here (D264).
 from cli import resolve  # noqa: E402, F401
@@ -281,6 +282,7 @@ CHECK_ORDER = (
     *second_look_counts.CHECKS,
     *backup.CHECKS,
     *t1_results.CHECKS,
+    *one_list_wire.CHECKS,
 )
 
 
