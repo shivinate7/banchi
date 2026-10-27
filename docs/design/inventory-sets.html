@@ -3226,7 +3226,7 @@ function picker(label, count) {
   return `<button type="button" class="bn-pick" aria-haspopup="listbox" aria-expanded="false"><span class="bn-pick-label">Set</span>
     <span class="bn-pick-slot"><span class="bn-pick-value">${label}</span></span>${icon('chevronDown', 14).replace('bn-icon', 'bn-icon bn-pick-chev')}</button>`
 }
-const BASE = { style: 'line', lastTone: 'warn', dropOne: false, noneWord: false, dimEmpty: false, label: 'Not in my master set', row: false, copiesWord: 'cards' }
+const BASE = { style: 'line', lastTone: 'warn', dropOne: false, noneWord: false, dimEmpty: false, label: 'Hide my master set', row: false, copiesWord: 'copies' }
 
 function setsView(s, opts) {
   const set = s === 'all' ? { name: 'Shrouded Fable', rows: FABLE, copies: 18, of: '30 of 30', hide: 30 }
@@ -3258,14 +3258,12 @@ const STATES = [
   ['none', 'Nothing collected yet', 'A set with no master-set copy. The toggle stays in its place and hides nothing.'],
 ]
 const OPTS = [
-  { id: 'O1', title: 'The filter says what it hides: "Hide my master set", with the count it hides', render: () => `${toggle(false, 'Not in my master set', 38)} ${toggle(false, 'Hide my master set', 38)}` },
   { id: 'O2', title: 'The filter sits beside the set picker, on one row', render: (s) => `<div style="width:720px">${setsView('on', { ...BASE, row: true }).split('<div class="sets-header')[0]}</div></div>` },
   { id: 'O3', title: 'The mark sits on the image corner, not on its own line', render: () => FATES.slice(2, 8).map((r) => `<div style="width:170px">${tile(r, { ...BASE, style: 'corner' })}</div>`).join('') },
   { id: 'O4', title: 'The mark is a shape, named once in a key', render: () => `<div style="width:100%">${`<div class="sets-key"><span><i data-ring="ok"></i>In master set</span><span><i data-ring="warn"></i>Last copy</span></div>`}</div>` + FATES.slice(2, 8).map((r) => `<div style="width:170px">${tile(r, { ...BASE, style: 'shape' })}</div>`).join('') },
   { id: 'O5', title: 'Last copy in the accent tone, not amber', render: () => FATES.slice(6, 10).map((r) => `<div style="width:170px">${tile(r, { ...BASE, lastTone: 'accent' })}</div>`).join('') },
   { id: 'O6', title: 'A Last copy tile drops its "1 copy" pill', render: () => FATES.slice(8, 12).map((r) => `<div style="width:170px">${tile(r, { ...BASE, dropOne: true })}</div>`).join('') },
   { id: 'O7', title: 'A tile with no copy on hand says "None on hand" and dims its image', render: () => [FATES[7], FATES[12]].map((r) => `<div style="width:170px">${tile(r, { ...BASE, noneWord: true, dimEmpty: true })}</div>`).join('') },
-  { id: 'O8', title: 'The header counts copies as copies, so its two numbers read apart', render: () => `<div class="sets-header bn-dotline"><span>Pokemon</span><span>Paldean Fates</span><span>247 copies</span><span>38 of 190 in your master set</span></div>` },
 ]
 
 mountChrome({

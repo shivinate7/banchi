@@ -3028,7 +3028,8 @@ body { background: var(--bn-surface-2); }
 .mk-line-state[data-tone='ok'] .bn-icon { color: var(--bn-ok); }
 .mk-line-state[data-tone='warn'] .bn-icon { color: var(--bn-warn); }
 .mk-line-state[data-tone='danger'] .bn-icon { color: var(--bn-danger); }
-.mk-copy-slot .mk-line { margin-top: 0; }
+.mk-opt-body .bn-toasts { position: static; width: 380px; }
+.mk-line-presses { display: flex; flex-wrap: wrap; gap: var(--bn-2); }
 /* The take-off press is the toast's own action button. Busy keeps its box: the words go clear and a ring turns in their place. */
 .bn-toast-action { position: relative; justify-content: center; }
 .bn-toast-action[data-busy='true'] { color: transparent; pointer-events: none; }
@@ -3038,7 +3039,6 @@ body { background: var(--bn-surface-2); }
   animation: bn-spin var(--bn-t-spin) var(--bn-ease-linear) infinite;
 }
 :root[data-theme='dark'] .bn-toast-action[data-busy='true']::after { border-color: var(--bn-ink); border-right-color: transparent; }
-.bn-notice .bn-btn, .mk-copy-slot .bn-btn { position: relative; }
 .mk-frame .bn-toast { animation: none; }
 /* tokens.css and kit.css raise these under a coarse pointer; the 820 frame is an iPad. */
 .mk-frame[data-w='820'] .bn-seg-item { height: var(--bn-control-h-sm); min-width: var(--bn-control-h-sm); }
@@ -3052,7 +3052,6 @@ body { background: var(--bn-surface-2); }
 .mk-copy-place { font-family: var(--bn-font-mono); font-weight: 600; min-width: 7ch; }
 .mk-copy-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--bn-0-5); }
 .mk-copy[data-gone] .mk-copy-place { text-decoration: line-through; color: var(--bn-ink-3); }
-.mk-copy-slot { min-block-size: var(--bn-control-h-sm); display: flex; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
 .mk-walk-head { display: flex; flex-direction: column; gap: var(--bn-1); }
 .mk-walk-name { font-family: var(--bn-font-display); font-size: var(--bn-fs-2xl); font-weight: 800; }
 
@@ -3187,66 +3186,71 @@ function dialog() {
 /* What the take-off line says in each state. Every state sits in one grid cell, all but the
    current one hidden, so the receipt's box is its tallest state's from the first paint (D313). */
 const LINE = {
-  offer: { text: 'TCGplayer still lists 1 copy you no longer hold.', press: 'Take it off TCGplayer' },
-  sending: { text: 'TCGplayer still lists 1 copy you no longer hold.', press: 'Take it off TCGplayer', busy: true },
+  offer: { text: 'TCGplayer still lists 1 copy you no longer hold. Leave it, and Pricing keeps it on a list.', press: 'Take It Off TCGplayer', pricing: true },
+  sending: { text: 'TCGplayer still lists 1 copy you no longer hold. Leave it, and Pricing keeps it on a list.', press: 'Take It Off TCGplayer', busy: true },
   sent: { tone: 'ok', icon: 'check', text: 'TCGplayer accepted: 1 copy of Mimikyu ex is off. Undo lists it again at your next send.' },
-  failed: { tone: 'danger', icon: 'alert', text: 'TCGplayer did not take it, so nothing went live. The card stays in your master set.', press: 'Try again' },
+  failed: { tone: 'danger', icon: 'alert', text: 'TCGplayer did not take it, so nothing went live. It waits on Pricing, and the card stays in your master set.', press: 'Try again', pricing: true },
   matches: { tone: 'ok', icon: 'check', text: 'TCGplayer already lists only what you hold. Nothing was sent.' },
-  onway: { tone: 'info', icon: 'info', text: 'The take-off is on its way to TCGplayer.' },
-  nosession: { tone: 'warn', icon: 'alert', text: 'TCGplayer is not signed in on this machine, so 1 copy stays listed there.' },
+  onway: { tone: 'info', icon: 'info', text: 'The take-off is on its way to TCGplayer. Pricing shows it until it is done.', pricing: true },
+  nosession: { tone: 'warn', icon: 'alert', text: 'TCGplayer is not signed in, so 1 copy stays listed. It waits on Pricing until you sign in.', pricing: true },
 }
-function lineState(key, current, pressClass) {
+function lineState(key, current, pressClass, openPricing) {
   const l = LINE[key]
   const vis = key === current ? '' : ' style="visibility:hidden" aria-hidden="true"'
   const press = l.press ? `<button type="button" class="${pressClass}"${l.busy ? ' data-busy="true" aria-busy="true"' : ''}>${l.press}</button>` : ''
+  const go = openPricing && l.pricing ? `<button type="button" class="${pressClass}">Open Pricing</button>` : ''
   return `<div class="mk-line-state"${vis} data-tone="${l.tone || ''}">
-    <span class="mk-line-text">${l.icon ? icon(l.icon, 14) : ''}<span>${l.text}</span></span>${press ? `<span>${press}</span>` : ''}</div>`
+    <span class="mk-line-text">${l.icon ? icon(l.icon, 14) : ''}<span>${l.text}</span></span>${press || go ? `<span class="mk-line-presses">${press}${go}</span>` : ''}</div>`
 }
-function line(current, pressClass) {
-  return `<div class="mk-line">${Object.keys(LINE).map((k) => lineState(k, current, pressClass)).join('')}</div>`
+function line(current, pressClass, openPricing) {
+  return `<div class="mk-line">${Object.keys(LINE).map((k) => lineState(k, current, pressClass, openPricing)).join('')}</div>`
 }
-function toast(s) {
+function toast(s, openPricing) {
   return `<div class="bn-toasts" aria-live="polite"><div class="bn-toast bn-toast-receipt" role="status">
     ${icon('archive', 16).replace('bn-icon', 'bn-icon bn-toast-icon')}
     <div class="bn-toast-text"><div class="bn-toast-title">Retired: Master set</div><div class="bn-toast-body">3-12, Paldean binder.</div>
-      ${line(s, 'bn-toast-action')}</div>
+      ${line(s, 'bn-toast-action', openPricing)}</div>
     <button type="button" class="bn-toast-action">Undo<kbd class="bn-kbd">U</kbd></button>
     <button type="button" class="bn-btn bn-btn-sm bn-btn-icon bn-icon-btn bn-toast-close" aria-label="Dismiss">${icon('x', 14)}</button>
   </div></div>`
 }
-function copyRow(place, state, slot) {
+/* Option K1: the kit toast as it is today. The retire receipt keeps Undo, and the offer is a second toast with one action. */
+function twoToasts() {
+  return `<div class="bn-toasts"><div class="bn-toast bn-toast-receipt" role="status">${icon('archive', 16).replace('bn-icon', 'bn-icon bn-toast-icon')}
+    <div class="bn-toast-text"><div class="bn-toast-title">Retired: Master set</div><div class="bn-toast-body">3-12, Paldean binder.</div></div>
+    <button type="button" class="bn-toast-action">Undo<kbd class="bn-kbd">U</kbd></button>
+    <button type="button" class="bn-btn bn-btn-sm bn-btn-icon bn-icon-btn bn-toast-close" aria-label="Dismiss">${icon('x', 14)}</button></div>
+    <div class="bn-toast bn-toast-status" role="status">${icon('alert', 16).replace('bn-icon', 'bn-icon bn-toast-icon')}
+    <div class="bn-toast-text"><div class="bn-toast-title">TCGplayer still lists 1 copy of Mimikyu ex.</div><div class="bn-toast-body">Leave it, and Pricing keeps it on a list.</div></div>
+    <button type="button" class="bn-toast-action">Take It Off TCGplayer</button>
+    <button type="button" class="bn-btn bn-btn-sm bn-btn-icon bn-icon-btn bn-toast-close" aria-label="Dismiss">${icon('x', 14)}</button></div></div>`
+}
+function copyRow(place, state) {
   return `<div class="mk-copy"${state === 'retired' ? ' data-gone' : ''}><span class="mk-copy-place">${place}</span>
-    <span class="mk-copy-text"><span>${state === 'retired' ? 'Retired: Master set' : 'In the box'}</span>${slot || ''}</span>
+    <span class="mk-copy-text"><span>${state === 'retired' ? 'Retired: Master set' : 'In the box'}</span></span>
     ${state === 'retired' ? '' : `<span class="inventory-copy-actions"><button class="bn-btn bn-btn-xl bn-btn-icon bn-icon-btn" aria-label="Mark Sold">${icon('sold', 20)}</button><button class="bn-btn bn-btn-xl bn-btn-icon bn-icon-btn" aria-label="Retire">${icon('archive', 20)}</button></span>`}</div>`
 }
-function walk(s, rowSlot) {
+function walk(s) {
   return `<div class="mk-walk"><div class="mk-photo"></div><div class="mk-copies">
     <div class="mk-walk-head"><span class="bn-eyebrow"><span>021/091</span><span>Paldean Fates</span></span><span class="mk-walk-name">Mimikyu ex</span></div>
-    ${copyRow('3-12', s === 'picker' ? 'box' : 'retired', rowSlot)}${copyRow('3-27', 'box')}</div></div>`
-}
-function notice(s) {
-  const l = LINE[s]
-  const tone = l.tone === 'danger' ? 'danger' : l.tone === 'warn' ? 'warn' : l.tone === 'ok' ? 'ok' : ''
-  return `<div class="bn-notice${tone ? ' bn-notice-' + tone : ''}" role="status">${icon(tone === 'ok' ? 'check' : tone ? 'alert' : 'info', 16)}
-    <div class="bn-notice-text"><div class="bn-notice-title">Retired to your master set: Mimikyu ex, 3-12.</div><div class="bn-notice-body">${l.text}</div></div>
-    ${l.press ? `<div class="bn-notice-action"><button class="bn-btn"${l.busy ? ' data-busy="true"' : ''}>${l.press}</button><button class="bn-btn bn-btn-ghost">Undo</button></div>` : `<div class="bn-notice-action"><button class="bn-btn bn-btn-ghost">Undo</button></div>`}</div>`
+    ${copyRow('3-12', s === 'picker' ? 'box' : 'retired')}${copyRow('3-27', 'box')}</div></div>`
 }
 
 const STATES = [
   ['picker', 'The retire reasons', 'Today\'s four reasons and the new fifth, Master set. It spans the last row, so the four keep their places.'],
-  ['offer', 'Receipt: the take-off press', 'A master-set pull of a card TCGplayer still lists above what is on hand.'],
-  ['sending', 'Receipt: the press is reading and sending', 'The press reads TCGplayer first, then sends one row. The button keeps its box.'],
+  ['offer', 'Receipt: the take-off press', 'A master-set pull of a card TCGplayer still lists above what is on hand. Not pressed before the receipt fades, the take-off waits on Pricing\'s send card.'],
+  ['sending', 'Receipt: the press is reading and sending', 'The press reads TCGplayer first, then sends one row. The button keeps its box, and the receipt does not fade while it runs.'],
   ['sent', 'Receipt: taken off, accepted', 'The receipt names the card and the copies taken off, and says what Undo does now.'],
-  ['failed', 'Receipt: the take-off failed', 'Nothing went live. The retirement stands.'],
+  ['failed', 'Receipt: the take-off failed', 'Nothing went live. The retirement stands, and the take-off waits on Pricing with the same press.'],
   ['matches', 'Receipt: nothing to take off', 'The live read found no copy above what is on hand.'],
-  ['onway', 'Receipt: a take-off is already on its way', 'One take-off per card at a time, so no press.'],
-  ['nosession', 'Receipt: no TCGplayer sign-in', 'No press, one sentence.'],
+  ['onway', 'Receipt: a take-off is already on its way', 'One take-off per card at a time, so no press. Pricing lists it until a live check settles it.'],
+  ['nosession', 'Receipt: no TCGplayer sign-in', 'No press. The take-off waits on Pricing.'],
 ]
 const OPTS = [
   { id: 'R1', title: 'Master set goes first, across both columns', render: () => `<div style="width:520px">${reasons('first')}</div>` },
   { id: 'R2', title: 'Master set takes a plain half row, alone on the last row', render: () => `<div style="width:520px">${reasons('plain')}</div>` },
-  { id: 'T1', title: 'The take-off lives on the retired copy\'s row in the walk', render: (s) => `<div style="width:560px">${s === 'picker' ? '' : copyRow('3-12', 'retired', `<span class="mk-copy-slot">${line(s, 'bn-btn bn-btn-sm')}</span>`)}</div>` },
-  { id: 'T2', title: 'The take-off lives in a notice above the walk, until the next write', render: (s) => `<div style="width:720px">${s === 'picker' ? '' : notice(s)}</div>` },
+  { id: 'P1', title: 'Where the take-off waits on Pricing, the receipt also offers Open Pricing', render: (s) => s === 'picker' ? '' : `<div style="width:400px;position:relative;height:220px">${toast(LINE[s].pricing ? s : 'failed', true).replace('class="bn-toasts"', 'class="bn-toasts" style="position:absolute;right:0;bottom:0;width:380px"')}</div>` },
+  { id: 'K1', title: 'No kit change: the offer is its own toast, beside the retire receipt', render: () => `<div>${twoToasts()}</div>` },
 ]
 
 mountChrome({

@@ -7,7 +7,7 @@ a control that hides it.
 
 Deep links: `#s=off`, `#s=on`, `#s=all`, `#s=none`. Add `&w=820` for the iPad width and
 `&t=dark`, `&t=abyssal-bloom` or `&t=carnival-midway` for a theme. With no `t`, the page follows
-`prefers-color-scheme`. `&h=O1,O3` hides options.
+`prefers-color-scheme`. `&h=O3,O4` hides options.
 
 The CSS is the repo's own sheets, inlined at the time of drawing: `tokens.css`, `base.css`,
 `kit.css`, `kit/data.css`, `kit/filters.css`, `InventorySets.css`. The proposed rules are at the
@@ -16,10 +16,9 @@ end, under "PROPOSED". Stock photos are flat placeholders at 63 by 88, so the pa
 1. **The filter is the kit's `HideToggle`, under the set picker.** Gain: one filter shape on every
    screen, and it carries its count. Loss: none. Pick: yes. Its state is `?master=open` (D285,
    filter, sort and search live in the URL).
-2. **The filter's words (option O1).** The spec says "Not in my master set". `HideToggle` draws the
-   count of rows it hides, so the control reads "Not in my master set 38" while 38 rows are IN
-   the master set. "Hide my master set 38" reads true. Gain: the count and the words agree. Loss:
-   the spec's words change. Pick: O1. **Owner grant: yes.**
+2. **The filter reads "Hide my master set" (owner's ruling).** `HideToggle` draws the count of
+   rows it hides, so "Hide my master set 38" reads true where the spec's "Not in my master set 38"
+   did not. The frame draws it.
 3. **The filter beside the picker (option O2).** Gain: one row less above the grid. Loss: the spec
    says "under". Pick: under, as the spec says.
 4. **The mark has its own line, the height of a pill, on every tile.** A tile with no mark keeps
@@ -43,10 +42,8 @@ end, under "PROPOSED". Stock photos are flat placeholders at 63 by 88, so the pa
 10. **A collected row with no copy on hand (Wugtrio, Klefki).** Today's `count` helper draws
     "0 copies". Option O7 draws "None on hand" and dims the image. Loss of the dim: a dimmed tile
     looks disabled, but it still opens the walk. Pick: "0 copies", no dim.
-11. **The header count.** "38 of 190 in your master set" joins the header as its last part. The
-    part before it, "247 cards", counts copies, and "190" counts rows, so two numbers on one line
-    count different things. Option O8 says "247 copies". Pick: O8. It changes today's words only,
-    not the spec.
+11. **The header says "copies" (owner's ruling).** "247 copies" counts copies and "38 of 190 in
+    your master set" counts rows, so the two numbers read apart. The frame draws it.
 12. **The header and the toggle hold still.** The count does not change when the filter turns on.
     The picker, the toggle and the header keep their boxes between `#s=off` and `#s=on`; the
     headless check measured them.
