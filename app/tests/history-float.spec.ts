@@ -5,6 +5,7 @@ import { sealEveryTest } from './shell'
 import { setViewport } from './phoneSwitch'
 import { productHistory } from './routeFixtures'
 import { markNow, readShifts, sumOf, watchShifts } from './layoutShift'
+import { settleMotion } from './motionSettled'
 import { scanMoneyFace } from './moneyFace'
 import type { AskingPosting, ProductHistoryPayload } from '../src/types'
 
@@ -62,8 +63,11 @@ async function boxOf(loc: Locator): Promise<Box> {
   return box!
 }
 
-/* Rows 0 to 2 in page coordinates, so a scroll that Tab causes does not read as the list moving. */
+/* Rows 0 to 2 in page coordinates, so a scroll that Tab causes does not read as the list moving.
+ * Settled first: `bn-page-in` moves the page by a few px over its entry, so a read taken inside
+ * that window is a real position the page is still leaving (see `motionSettled.ts`). */
 async function listGeometry(page: Page): Promise<Box[]> {
+  await settleMotion(page)
   return page.evaluate(() =>
     [0, 1, 2].map((i) => {
       const r = document.querySelector(`[data-float-row="${i}"]`)!.getBoundingClientRect()
