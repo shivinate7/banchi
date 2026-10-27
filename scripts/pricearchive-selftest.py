@@ -40,6 +40,7 @@ from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Dict, List
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -1132,8 +1133,11 @@ def main() -> int:
         # export-shaped (`merged_export_rows_by_sku`), so it needs no mirror read.
         # A second keyword `catalog_limit: int` caps the catalog-only tail, stalest first,
         # defaulting to the module constant `CATALOG_SKUS_PER_PASS` (600); the cap never
-        # touches the revenue-ranked head. `_sweep` is driven in its preview mode below, which
-        # makes no network call, to see that its own call reaches the default cap.
+        # touches the revenue-ranked head. A SKU's staleness is its NEWEST read across its
+        # ranges, and a SKU a pass asked about counts as read at that pass even when it
+        # answered no bucket. `_sweep` is driven below with a patched `Market`, no network:
+        # in its preview mode to see its call reach the default cap, and with `--write` to see
+        # a pass leave the record that ordering reads.
         print("\n-- pipeline/pricearchive.py: rows_from_store(include_catalog=True) adds every "
               "Riftbound Near Mint SKU the skus table holds --")
         riftbound_line = "Riftbound League of Legends Trading Card Game"
@@ -1156,12 +1160,13 @@ def main() -> int:
                 source="export-tcgplayer-20260101-000000-cccccccc.csv", raw=raw,
             )
 
-        def _archive_at(snapshot, sku: str, at: int) -> None:
-            # One bucket in one range per SKU, so "the SKU's newest `at`" has one reading.
+        def _archive_at(snapshot, sku: str, at: int, range_: str = "month") -> None:
+            # One bucket, read at `at`, in one range; a SKU read in two ranges takes two calls.
             snapshot.archive.upsert({
-                _key(sku, "month", "2026-01-01"): Bucket(
-                    sku=sku, product_id=42, range="month", width_days=1, start="2026-01-01",
-                    market="5.00", quantity=1, transactions=1, low="5.00", high="5.00", at=at,
+                _key(sku, range_, "2026-01-01"): Bucket(
+                    sku=sku, product_id=42, range=range_, width_days=RANGE_WIDTH_DAYS[range_],
+                    start="2026-01-01", market="5.00", quantity=1, transactions=1,
+                    low="5.00", high="5.00", at=at,
                 ),
             })
 
@@ -1373,6 +1378,71 @@ def main() -> int:
                "the catalog tail breaks ties by SKU, never-read SKUs come before every read "
                "one, and a later read sorts after an earlier one",
                list(tie_rows))
+
+        # A SKU read in two ranges is as stale as its NEWEST read, not its oldest: the archive
+        # never deletes, so a range that stopped answering keeps its old `at` for good and
+        # would pin the SKU to the front every night. "F1" read old in `month` and new in
+        # `annual` is fresher than "O1" read once in between; "N1" was never read. By the
+        # oldest read the order would be N1, F1, O1; by SKU, F1, N1, O1.
+        with isolated_home():
+            with Store().write() as snapshot:
+                for sku in ("F1", "N1", "O1"):
+                    snapshot.skus.entries[sku] = _catalog_sku(
+                        sku, riftbound_line, f"Ranges {sku}", "Near Mint",
+                    )
+                _archive_at(snapshot, "F1", 100, "month")
+                _archive_at(snapshot, "F1", 9_000, "annual")
+                _archive_at(snapshot, "O1", 5_000, "month")
+            range_rows = archive_walk.rows_from_store(Store().read(), include_catalog=True)
+            ok(list(range_rows) == ["N1", "O1", "F1"],
+               "a SKU's staleness is its newest read across its ranges: never read, then the "
+               "single read at 5000, then the SKU last read at 9000 whatever its older range says",
+               list(range_rows))
+
+        # ROTATION. A SKU a pass asked about that answered no bucket (no sale in any range) or
+        # was refused leaves no bucket, so no `at`, and by buckets alone looks never-read every
+        # night; with 600 or more such SKUs the cap would re-ask the same silent ones forever.
+        # No existing state records "asked at T" per SKU: a bucket carries `at` only when the
+        # SKU answers, `Source` is one row per range per pass, and the pace file holds only the
+        # throttle. So this arm names no storage: it runs a real pass, `_sweep --write` over a
+        # patched `Market`, and reads the next ordering. "E1" answers empty, "B1" is refused,
+        # "O1" answers with a bucket; "N1" joins the catalog only after the pass. By SKU, "B1"
+        # and "E1" both sort before "N1", so a pass that forgets either one is caught.
+        with isolated_home():
+            with Store().write() as snapshot:
+                for sku in ("B1", "E1", "O1"):
+                    snapshot.skus.entries[sku] = _catalog_sku(
+                        sku, riftbound_line, f"Asked {sku}", "Near Mint",
+                    )
+            asked_market = RecordingMarket({
+                "O1": {"month": _series("O1", "month", date(2026, 1, 1), "5.00")},
+                "E1": {},
+            })
+            pass_lines: List[str] = []
+            with mock.patch.object(pricehistory, "Market", lambda **_kwargs: asked_market):
+                pass_status = cmd_pricearchive._sweep(
+                    SimpleNamespace(write=True), pass_lines.append,
+                )
+            ok(pass_status == 0 and asked_market.asked == {"B1", "E1", "O1"}
+               and {b.sku for b in Store().read().archive.entries.values()} == {"O1"},
+               "SETUP: the pass asked all three SKUs, and only O1 left a bucket",
+               (pass_status, asked_market.asked, pass_lines[-6:]))
+            with Store().write() as snapshot:
+                snapshot.skus.entries["N1"] = _catalog_sku(
+                    "N1", riftbound_line, "Never Asked N1", "Near Mint",
+                )
+            after_pass = archive_walk.rows_from_store(Store().read(), include_catalog=True)
+            ok(list(after_pass)[:1] == ["N1"] and set(after_pass) == {"B1", "E1", "N1", "O1"},
+               "after a pass, a SKU never asked about comes before one that was asked and "
+               "answered no bucket or was refused — the pass is what ordering reads",
+               list(after_pass))
+            capped_after_pass = archive_walk.rows_from_store(
+                Store().read(), include_catalog=True, catalog_limit=1,
+            )
+            ok(list(capped_after_pass) == ["N1"],
+               "with a cap of 1 the never-asked SKU is the one kept, so the cap moves on "
+               "instead of re-asking the same silent SKUs",
+               list(capped_after_pass))
 
         # The default cap, and that `_sweep`'s own call reaches it. 650 catalog SKUs, none
         # ever read, so the 600 that survive are the first 600 by SKU. `_sweep` without
