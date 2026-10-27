@@ -3,8 +3,8 @@
 **STATUS: MOCKUPS SIGNED OFF. BUILD MAY START.** The owner signed off the one-list mockup,
 `docs/design/pricing-suggest/list.html`, and picked the floating history card,
 `docs/design/pricing-suggest/history-float.html` (section 9c). Section 4b judges each trigger.
-The suggestion limit (25%) and the value line ($25) are drawn as placeholders; the owner sets
-both, as with the floor.
+The suggestion limit and the value line are owner settings that start at 25% and $25
+(section 5, step 3).
 
 The problem: `#/pricing` has two tabs with two rule systems. Unsent cards use a rule and a
 cut-off. Live listings use days unsold, a percent under the asking price and a dollar cap. One
@@ -103,7 +103,10 @@ recommendations.
    Shipping) matches within a few cents. It extends the measurement in DEBT41 (pricing never offers "make this the rule"). No network, no spend.
 2. **Mockups.** The one list at 1440 and 820, both themes. Show each trigger's suggestion row
    and the cap's flagged row. The owner judges each trigger from the mockups.
-3. **Name the cap and the value line.** The owner sets both numbers on the mockup.
+3. **The cap and the value line are owner settings.** They start at 25% and $25, and the owner
+   changes either in one press, as with the floor. These starting values are the orchestrator's
+   pick, not an owner ruling. At 25%, about 347 of 498 priced live listings land in Needs you on
+   day one.
 4. **Reopened, on the owner's word.** A suggestion may raise a price, up to the cap. New
    copies and live listings share one list. This reopens D107 (only the rule never raises: the
    cap is its raise ceiling), D105 (mark-downs live where prices are decided: they become rows
