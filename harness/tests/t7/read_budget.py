@@ -113,6 +113,9 @@ ROUTE_URLS = {
     "/status": "/status",
     "/inventory": "/inventory",
     "_INVENTORY_BOX_RE": "/inventory/1",
+    # The take-off's read on a card that is not a master_set pull: the fixture holds none, and a
+    # master_set card would move every box row. Budgeted on the refusal path (as DEBT85 is).
+    "_TAKE_OFF_RE": "/inventory/4/1/take-off",
     "/inventory/recent": "/inventory/recent?limit=3",
     "/inventory/history": "/inventory/history",
     "/queues": "/queues",
@@ -147,6 +150,8 @@ ROUTE_URLS = {
     "/pipeline/runs": "/pipeline/runs",
     "/pipeline/markdowns": "/pipeline/markdowns",
     "/pipeline/sends": "/pipeline/sends",
+    # Its own read, not a field on `/pipeline/sends`: it scans every retired card (master-set spec, section 5).
+    "/pipeline/sends/owed": "/pipeline/sends/owed",
     "_MARKDOWN_TABLE_RE": "/pipeline/markdowns/{table_stamp}/table",
     "_MARKDOWN_HISTORY_RE": "/pipeline/markdowns/20260101-000000/history?sku=SKU1",
     "_MARKDOWN_TRENDS_RE": "/pipeline/markdowns/20260101-000000/trends?sku=SKU1",
@@ -262,6 +267,8 @@ BUDGET = {
     '/status': {"status": 200, 'sql': 25, 'json_loads': 3, 'store_read': 1},
     '/inventory': {"status": 200, 'sql': 46, 'json_loads': 161, 'places': 1, 'store_read': 1},
     '_INVENTORY_BOX_RE': {"status": 200, 'sql': 29, 'json_loads': 51, 'records_in': 1, 'places': 1, 'store_read': 1},
+    # 409: the card at 4/1 is not a master_set pull, so the miss path. See the ROUTE_URLS row.
+    '_TAKE_OFF_RE': {"status": 409, 'sql': 11, 'json_loads': 1, 'store_read': 1},
     '/inventory/recent': {"status": 200, 'sql': 26, 'json_loads': 15, 'places': 1, 'store_read': 1},
     '/inventory/history': {"status": 200, 'sql': 12, 'store_read': 1},
     # sql 23: 20 statements that do not depend on the queued entries (the store open, both queues, the queued cards' states,
@@ -302,6 +309,8 @@ BUDGET = {
     '/pipeline/runs': {"status": 200, 'sql': 16, 'json_loads': 5, 'store_read': 1},
     '/pipeline/markdowns': {"status": 200},
     '/pipeline/sends': {"status": 200, 'sql': 44, 'store_read': 4},
+    # sql 11: the retired-card read the owed list makes. The fixture holds no master_set pull, so it lists none.
+    '/pipeline/sends/owed': {"status": 200, 'sql': 11, 'store_read': 1},
     # THE MIX ROW: one `cards` statement joined to `skus`, `readings` and `boxes` (docs/specs/sales-screen.md,
     # Mix, "Route"). `sql` is the store open's own statements plus that one, equal at S and 2S.
     '/stock/mix': {"status": 200, 'sql': 11, 'store_read': 1},

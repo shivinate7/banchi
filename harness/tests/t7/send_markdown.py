@@ -1963,6 +1963,127 @@ def check_master_take_off(checks: Checks) -> None:
         )
 
 
+def check_master_owed(checks: Checks) -> None:
+    """The owed list on the send card, and its press-all (`docs/specs/master-set.md` section 5).
+
+    `GET /pipeline/sends/owed` is `send_routes.do_owed_take_offs`; `POST /pipeline/sends/owed` is
+    `send_routes.do_press_owed_take_offs`, one confirm for every entry, each on its own receipt. An
+    entry is owed while its take-off is offered, failed or waiting on a sign-in. It leaves when the
+    take-off is on its way or sent, the listing already matches, or the retirement is undone.
+    """
+    checks.note("")
+    checks.note("MASTER-SET OWED LIST — the send card lists every owed take-off and presses them on one confirm")
+
+    def owed():
+        return send_routes.do_owed_take_offs()["owed"]
+
+    def press_all(**extra):
+        try:
+            return send_routes.do_press_owed_take_offs({"confirm": True, **extra})
+        except pipeline_routes.PipelineRefusal as caught:
+            return {"refused": caught.code}
+
+    def retire(index, reason="master_set"):
+        return capture_server.do_retire(3, index, {"reason": reason})
+
+    # ------------------------------------------------ listed, pressed, settled
+    with _case(checks, "listed, pressed, settled"), send_portal() as portal, synced_home():
+        _settled_live(checks, portal)
+        checks.equal(owed(), [], "NOTHING PULLED, NOTHING OWED")
+        retire(1, "pulled")
+        checks.equal(owed(), [], "A pulled RETIREMENT IS NOT A MASTER-SET PULL: nothing owed")
+        capture_server.do_retire(3, 1, {"undo": True})
+        calls = len(portal["calls"])
+        retire(3)
+        listed = owed()
+        checks.equal(
+            [(e["sku"], e["box"], e["index"], e["state"], e["excess"], e["failure"]) for e in listed],
+            [(ARTICUNO_SKU, 3, 3, "offered", 1, None)],
+            "A master_set PULL IS OWED, A pulled ONE IS NOT: sku, place, state, excess and failure text",
+        )
+        checks.ok(bool(listed and listed[0]["name"]), "and the entry carries the card's name")
+        checks.equal(len(portal["calls"]), calls, "THE READ OPENS NO SOCKET")
+        checks.equal(press_all(confirm=False).get("refused"), "confirm_required", "press-all needs the owner's yes")
+        portal["rows"].clear()
+        answer = press_all()
+        results = answer.get("results") or []
+        checks.equal(
+            [(r["sku"], r["box"], r["index"], (r["take_off"] or {}).get("state"), r["refused"]) for r in results],
+            [(ARTICUNO_SKU, 3, 3, "on_its_way", None)],
+            f"PRESS-ALL TAKES THE ENTRY OFF and answers per entry. Got: {answer}",
+        )
+        checks.equal(_portal_rows(portal), {ARTICUNO_SKU: "-1"}, "one row reached TCGplayer, sized by the press")
+        checks.equal(owed(), [], "AN ENTRY ON ITS WAY IS NOT OWED")
+        portal["rows"].clear()
+        checks.equal(press_all().get("results"), [], "and a second press-all presses nothing")
+        checks.ok(not portal["rows"], "so nothing is sent twice")
+        _age_receipt(results[0]["take_off"]["stamp"])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
+        send_routes.do_live_check({})
+        checks.equal(owed(), [], "AN ENTRY SENT AND SETTLED STAYS OFF THE LIST")
+
+    # ------------------------------------------------ undone, and a listing that already matches
+    with _case(checks, "undone and matching"), send_portal() as portal, synced_home():
+        _settled_live(checks, portal)
+        retire(3)
+        capture_server.do_retire(3, 3, {"undo": True})
+        checks.equal(owed(), [], "AN UNDONE RETIREMENT LEAVES THE LIST")
+        retire(3)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
+        portal["rows"].clear()
+        answer = press_all()
+        checks.equal(
+            [(r["take_off"] or {}).get("state") for r in answer.get("results") or []],
+            ["matches"],
+            "A LISTING THAT ALREADY MATCHES is answered so, and nothing is sent",
+        )
+        checks.ok(not portal["rows"], "no row reached TCGplayer")
+        checks.equal(owed(), [], "and it leaves the list, because the read settled the store's figure")
+
+    # ------------------------------------------------ a failed try stays owed
+    with _case(checks, "failed try"), send_portal() as portal, synced_home():
+        _settled_live(checks, portal)
+        retire(3)
+        portal["refuse"] = {"uploadexportcsv"}
+        failed = press_all()
+        refused = [r["refused"] for r in failed.get("results") or []]
+        checks.ok(refused and refused[0], f"TCGplayer turns the take-off away, and the entry says so: {failed}")
+        listed = owed()
+        checks.ok(
+            [e["state"] for e in listed] == ["failed"] and listed[0]["failure"],
+            f"A FAILED TRY STAYS OWED, with its failure text: {listed}",
+        )
+        portal["refuse"] = set()
+        portal["rows"].clear()
+        press_all()
+        checks.equal(_portal_rows(portal), {ARTICUNO_SKU: "-1"}, "and the next press-all tries it again")
+        checks.equal(owed(), [], "and then it is on its way")
+
+    # ------------------------------------------------ no seller session: listed, not pressable
+    with _case(checks, "no seller session"), send_portal() as portal, synced_home():
+        _settled_live(checks, portal)
+        retire(3)
+        cookie = os.environ.pop("TCGPLAYER_STORE_COOKIE", None)
+        try:
+            calls = len(portal["calls"])
+            listed = owed()
+            checks.equal(
+                [(e["state"], e["press"]) for e in listed],
+                [("no_session", False)],
+                "WITH NO SELLER SESSION the entry is listed with no press, so it shows once a sign-in exists",
+            )
+            answer = press_all()
+            checks.equal(
+                [r["refused"] for r in answer.get("results") or []],
+                ["take_off_no_session"],
+                "and press-all refuses it by name",
+            )
+            checks.equal(len(portal["calls"]), calls, "without a call to TCGplayer")
+        finally:
+            if cookie is not None:
+                os.environ["TCGPLAYER_STORE_COOKIE"] = cookie
+
+
 def check_send_take_outstanding(checks: Checks) -> None:
     """At most ONE outstanding take-off per SKU (the re-review of PR #768).
 
@@ -7931,6 +8052,7 @@ CHECKS = (
     check_send_hold_takes_off,
     check_send_take_outstanding,
     check_master_take_off,
+    check_master_owed,
     check_send_sold_since,
     check_send_sold_after_check,
     check_send_snapshot_lagging_then_newer,

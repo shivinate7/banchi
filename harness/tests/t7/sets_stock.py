@@ -34,6 +34,7 @@ from harness.tests.t7.common import (
     _spawn_server,
     request,
     answers,
+    _seed_sku_table,
     capture_payload,
     fake_cid,
     isolated_home,
@@ -353,6 +354,54 @@ def check_pipeline_sets_collected_buried(checks: Checks) -> None:
         "a buried master_set copy of a SKU still on hand in another box marks that row collected",
     )
     checks.equal(len(rows), 2, "and adds no second row for it")
+
+
+def check_pipeline_sets_buried_set_from_sku_table(checks: Checks) -> None:
+    """A buried master-set line takes its set from the SKU table (the master-set spec, section 3).
+
+    A `buried` line carries no set name, so `do_pipeline_sets` reads the set off the store's `skus`
+    entry for the line's SKU. The card's own set label here is a different set, so only the table
+    can name the row's set. The SKU is in the table, so the row sits in that set, qty 0, collected,
+    with no box."""
+    checks.note("")
+    checks.note("PIPELINE SETS — a buried master_set line takes its set from the SKU table")
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            inventory.ensure_box(1, name="Doomed box")
+            card, _ = inventory.allocate_capture(1, cid=fake_cid("buried-sku-table"))
+            card.sku = "6000101"
+            card.name = "Card 101"
+            card.number = "1"
+            card.printed_total = "10"
+            card.set_name = "Card Set Label"
+            card.game = "riftbound"
+            card.state = master.IDENTIFIED
+            _seed_sku_table(
+                snapshot,
+                [{"sku": "6000101", "set": "Table Set", "name": "Card 101", "number": "1", "condition": "Near Mint"}],
+                product_line="Riftbound League of Legends Trading Card Game",
+            )
+        capture_server.do_retire(1, 1, {"reason": master.MASTER_SET})
+        capture_server.do_delete_box(1)
+        payload = pipeline_routes.do_pipeline_sets()
+
+    in_groups = [
+        (group["set_name"], row)
+        for group in payload["groups"]
+        for row in group["cards"]
+        if row["sku"] == "6000101"
+    ]
+    checks.equal(
+        [(name, row["qty"], row["collected"], row["box"]) for name, row in in_groups],
+        [("Table Set", 0, True, None)],
+        "the buried line sits in the set the SKU table names, qty 0, collected, with no box",
+    )
+    checks.ok(
+        all(row["sku"] != "6000101" for row in payload["no_set"]),
+        "and it is not in the no-set list, which would be the line with no table entry",
+    )
 
 
 def check_stock_images(checks: Checks) -> None:
@@ -1854,6 +1903,7 @@ CHECKS = (
     check_pipeline_sets,
     check_pipeline_sets_collected,
     check_pipeline_sets_collected_buried,
+    check_pipeline_sets_buried_set_from_sku_table,
     check_stock_images,
     check_inventory_copies_stock_image,
     check_sales_stock_photo_fallback,
