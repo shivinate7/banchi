@@ -1,4 +1,4 @@
-## D-backup-one-time-guarded — The photo backup runs once, and never overwrites a good copy
+## D323 — The photo backup runs once, and never overwrites a good copy
 
 Kind: process
 Home: scripts/backup-daily.py

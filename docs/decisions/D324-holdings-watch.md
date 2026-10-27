@@ -1,7 +1,7 @@
-## D-holdings-watch — Banchi values the owner's investment holdings, then flags big lines on price signals
+## D324 — Banchi values the owner's investment holdings, then flags big lines on price signals
 
 Kind: process
-Home: docs/decisions/D-holdings-watch.md
+Home: D324
 
 **The owner ruled it** (waiting-page item 20). The mailaudit purchase roster is the owner's
 investment buys, held outside Banchi's scan-and-list flow. Banchi values those holdings at its own
