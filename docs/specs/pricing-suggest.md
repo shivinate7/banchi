@@ -55,6 +55,44 @@ was typed. Old live listings drift from market and nothing says so. The owner ca
 | Undercut by others | Low With Shipping | Yes. Stored, and read by no rule. |
 | Selling fast | 30-day market-wide units sold | Yes, for listed cards. It is market demand, not this listing's sales. A held card that is not listed gets no daily read (DEBT69, the price refresh schedule). |
 
+## 4a. How often each trigger fires
+
+A read-only count over the owner's store, from the main checkout. No network, no spend. The
+store held 914 live listings. Our asking price is known for 433 of them, and a live market
+reading for 498. Thresholds here are samples for the count, not proposals.
+
+| Trigger | Sample threshold | Fires on | Out of |
+|---|---|---|---|
+| Market moved | 10% / 15% / 25% from listing day | 307 / 233 / 140 | about 500 with a reading and a history |
+| Unsold for N days | 14 / 30 / 60 days | 901 / 745 / 0 | 914 |
+| Undercut by others | Low With Shipping 5% / 10% / 20% under ours | 5 / 4 / 4 | 254 with both prices |
+| Selling fast | 5 / 10 / 30 units sold market-wide in 30 days, ours under market | 3 / 3 / 3 | 433 |
+| Past a 25% cap | market more than 25% from our asking price | 193 | 433 |
+
+Two facts shape these numbers. The listings arrived in two waves, so most share one age, and
+the median listing is 30 days old. And `sold_here` reads 0 on every live listing, so "unsold"
+here is an upper bound: a build must read the order ledger instead.
+
+## 4b. Judgment of each trigger
+
+The owner rules on each from the mockups (`pricing-suggest/list.html`). These are the
+recommendations.
+
+- **Market moved: keep, as the main trigger.** It is the one signal with volume and meaning.
+  At 15% it fires on about half the listings with data, so the cap matters: 140 move more than
+  25% and land in Needs you. Each row says the direction and the sold range behind it.
+- **Unsold for N days: do not keep alone.** By age alone it fires on 745 of 914 at 30 days and
+  none at 60, because the waves share an age. It says "time passed", not "price is wrong". Keep
+  it as a qualifier: unsold N days AND our price above market. Then it names a real lowering.
+- **Undercut by others: keep, quiet.** It fires on 4 of 254. Low With Shipping is already
+  stored. It is cheap and rare, so it adds little noise. The row must say the price includes
+  shipping.
+- **Selling fast: fold into market moved.** It fires on 3. Its data is market-wide demand, not
+  our listing's sales, and an unlisted card gets no daily read (DEBT69, the price refresh
+  schedule). Show units sold as evidence on a market-moved raise, not as its own trigger.
+- **Outside signal: a slot, not a trigger.** A reason line such as "meta: played in a winning
+  deck" can carry a signal from outside, like the Riftbound meta research. Nothing builds it now.
+
 ## 5. Before the build
 
 1. **Measure the anchor.** A read-only count over the owner's store, from the owner's main
@@ -96,3 +134,17 @@ present a fixed or derived figure:
 - No automatic live price change. A bounded automatic mode needs its own decision.
 - No fee model. A floor computed from TCGplayer's fees needs the owner's real fee rate.
 - No bulk-lot path.
+
+## 9. More tools: open questions
+
+The owner asked for "more tools at hand". Several exist already. These questions wait on the
+owner's word.
+
+| Tool | What exists | What is missing | Recommendation |
+|---|---|---|---|
+| Price history | A trend line on each row (`PriceTrend`). The full chart on the product sheet, one press away (D278, one product view, two frames). | Nothing on the list itself beyond the trend line. | Keep the sheet. A row that grows in place breaks D313 (nothing moves unless the person moved it). |
+| Comparable sales | Per period: copies sold, sale count, lowest and highest sale price (`pipeline/pricehistory`). | Single sales. The source never gives "what the last three sold for". | Show the sold range on each suggestion, such as "14 sold in 30 days, $3.10 to $4.25". |
+| Drift alerts | `PriceMovers` flags live cards that moved more than 10% since first seen. | It is a read you open, not a prompt to act. | Fold it into the market-moved suggestion. A Home count or a notification is the owner's call. |
+| Net after fees | Nothing. Section 8 leaves out a fee model. | The owner's real fee rate. | Open. |
+| Price many rows at once | Presets on the rule. | A select-and-apply over chosen rows. | Open. |
+| Outside signals | Nothing. | A reason slot only. | Keep the slot in the mockup. Build nothing. |
