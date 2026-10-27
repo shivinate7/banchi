@@ -3464,11 +3464,9 @@ def _live_wire(snapshot: Optional[Snapshot], book: "corpus.Corpus") -> List[dict
 
     EVERYTHING IS READ OFF DISK AND THE STORE; NOTHING IS FETCHED. The asking price is the newest
     live export's (`_newest_live_listing`), the market and the lowest price with shipping are the
-    `readings` table's, and the last sale is the card state `cmd_reprice._card_facts` reads (its
-    docstring says why never the event log). A store that would not open answers no rows.
+    `readings` table's, and the last sale is the card state `cmd_reprice.last_sales` reads (the
+    docstring of `_card_facts` says why never the event log). A store that would not open answers no rows.
 
-    A LISTING WITH NO DATE AT ALL (never seen live, never sold) counts as listed today, because
-    `suggest` needs one date to count unsold days from and age unknown is not age old.
     `market_listed`, the market on the day it went live, is left out: no read of it exists here yet,
     so the market-moved trigger cannot fire on this wire.
     """
@@ -3478,7 +3476,7 @@ def _live_wire(snapshot: Optional[Snapshot], book: "corpus.Corpus") -> List[dict
         except (files.StoreError, OSError, ValueError, TypeError):
             return []
     _, live_now = _newest_live_listing()
-    _, last_sold = cmd_reprice._card_facts(snapshot.inventory)
+    last_sold = cmd_reprice.last_sales(snapshot.inventory)
     today = clock.central_day(clock.now()).isoformat()
     readings = snapshot.readings.entries
 
@@ -3495,20 +3493,19 @@ def _live_wire(snapshot: Optional[Snapshot], book: "corpus.Corpus") -> List[dict
         reading = readings.get(sku)
         kept = snapshot.inventory.listings.get(sku)
         sold = _day_of(last_sold.get(sku))
-        first = _day_of(getattr(kept, "first_seen_live", None))
         listings.append(
             {
                 "sku": sku,
                 "live": True,
                 "asking": money(asking),
                 "market": money(reading.market) if reading else None,
+                "low": money(reading.low) if reading else None,
                 "low_with_shipping": money(reading.low_with_shipping) if reading else None,
-                "first_seen_live": first or (None if sold else today),
+                "first_seen_live": _day_of(getattr(kept, "first_seen_live", None)),
                 "last_sold_at": sold,
             }
         )
-    policy = {**book.policy_for(), "limit": book.limit, "value_line": book.value_line}
-    return worklist.live_rows(listings, policy, today)
+    return worklist.live_rows(listings, book.policy_for(), today)
 
 
 def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.StockImages"] = None) -> dict:
@@ -7271,7 +7268,10 @@ def _asking_postings(sku: str) -> List[dict]:
     THE POSTINGS LEDGER ITSELF, read as `_clear_built_on` reads it. `run` is left off:
     a screen names what was asked and why, and the run name is the store's own business.
     """
-    conn = store_db.connect(files.inventory_dir())
+    try:
+        conn = store_db.open_read_only(store_db.path(files.inventory_dir()))
+    except FileNotFoundError:
+        return []
     try:
         return [
             {key: row[key] for key in ("at", "price", "source", "replaced")}
