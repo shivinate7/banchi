@@ -32,6 +32,7 @@ from decimal import Decimal
 from http import HTTPStatus
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from unittest import mock
 from harness.tests import Checks
 from cli import cmd_reprice, resolve, runs
 from pipeline import corpus, reprice, sendguard, tcgcsv
@@ -2222,11 +2223,20 @@ def check_master_take_off_mutants(checks: Checks) -> None:
             "        raise\n",
             check_master_take_off, "UNTOUCHED",
         ),
+        (
+            "settle: the take-off is taken off pushed twice", "listing.bump(master.PUSHED, -n)",
+            "listing.bump(master.PUSHED, -2 * n)", check_master_take_off,
+            "the live check settles the take-off, undo or no undo",
+        ),
     )
     for name, anchor, replacement, target, label in mutants:
         sub = Checks()
-        function = "_outstanding_takes" if "record.get" in anchor else "_master_take_off"
-        with _mutant(send_routes, function, anchor, replacement), hermetic():
+        module, function = send_routes, "_master_take_off"
+        if "record.get" in anchor:
+            function = "_outstanding_takes"
+        elif "listing.bump" in anchor:
+            function = "_lower_takes"
+        with _mutant(module, function, anchor, replacement), hermetic():
             target(sub)
         fails = [line for line in sub.lines if line.startswith("  FAIL")]
         caught = any(label in line for line in fails)
@@ -2235,6 +2245,88 @@ def check_master_take_off_mutants(checks: Checks) -> None:
             f"MUTANT {name}: {target.__name__} goes red on {label!r}",
             "" if caught else "survived, or failed on something else: " + " | ".join(fails)[:900],
         )
+
+
+def check_take_off_failure_words(checks: Checks) -> None:
+    """Every take-off failure says the retirement stands, never that copies are back on a list.
+
+    Each way a press can end known and failed is one case. The message is read at its source,
+    from `send_routes.do_master_take_off`'s refusal."""
+    checks.note("")
+    checks.note("MASTER-SET TAKE-OFF — a failed take-off's message says the retirement stands")
+
+    def failure_message(portal, refuse=None, patch_check=False):
+        capture_server.do_retire(3, 3, {"reason": "master_set"})
+        if refuse:
+            portal["refuse"] = set(refuse)
+        try:
+            if patch_check:
+                # `tcg_import._check` turning the file away, before any transaction.
+                turned_away = tcg_import.FetchRefusal(
+                    "tcg_import_bad_price", "SKU 1 is priced at 0.0, outside the range. Nothing was sent."
+                )
+                with mock.patch.object(tcg_import, "push_to_staged", side_effect=turned_away):
+                    send_routes.do_master_take_off(3, 3, {"confirm": True})
+            else:
+                send_routes.do_master_take_off(3, 3, {"confirm": True})
+        except pipeline_routes.PipelineRefusal as caught:
+            return str(caught)
+        return "no refusal"
+
+    cases = {
+        "a check refusal": {"patch_check": True},
+        "TCGplayer refusing to open the upload": {"refuse": {"initializeexportcsv"}},
+        "TCGplayer refusing the rows, rolled back": {"refuse": {"uploadexportcsv"}},
+    }
+    for label, kwargs in cases.items():
+        with _case(checks, label), send_portal() as portal, synced_home():
+            _settled_live(checks, portal)
+            message = failure_message(portal, **kwargs)
+            checks.ok(
+                "retirement stands" in message
+                and "back on the list" not in message
+                and "Nothing came off TCGplayer" in message,
+                f"{label.upper()}: the message says nothing came off and the retirement stands. Got: {message}",
+            )
+
+
+def check_press_owed_answers_every_entry(checks: Checks) -> None:
+    """An error that is not a refusal fails that entry only, and the press-all loop goes on."""
+    checks.note("")
+    checks.note("OWED TAKE-OFFS — one entry's error does not leave the rest unanswered")
+
+    entries = [
+        {"name": "Articuno", "sku": "1", "box": 3, "index": 1, "state": "offered"},
+        {"name": "Zapdos", "sku": "2", "box": 3, "index": 2, "state": "offered"},
+        {"name": "Moltres", "sku": "3", "box": 3, "index": 3, "state": "offered"},
+    ]
+    seen = []
+
+    def fake(box, index, payload):
+        seen.append(index)
+        if index == 1:
+            raise RuntimeError("boom")
+        if index == 2:
+            raise pipeline_routes.PipelineRefusal(HTTPStatus.CONFLICT, "take_off_outstanding", "already on its way")
+        return {"take_off": {"state": "on_its_way"}}
+
+    with mock.patch.object(send_routes, "_owed_entries", return_value=entries), mock.patch.object(
+        send_routes, "do_master_take_off", side_effect=fake
+    ):
+        results = send_routes.do_press_owed_take_offs({"confirm": True})["results"]
+    checks.equal(seen, [1, 2, 3], "EVERY ENTRY IS TRIED, in order, after an error")
+    checks.equal(
+        [(r["sku"], r["refused"]) for r in results],
+        [("1", "take_off_error"), ("2", "take_off_outstanding"), ("3", None)],
+        "and every entry is answered: an error is that entry's failure, a refusal its own, the rest go",
+    )
+    checks.ok(
+        results[0]["take_off"] is None
+        and results[0]["message"]
+        and "boom" not in results[0]["message"]
+        and results[2]["take_off"] == {"state": "on_its_way"},
+        "the error entry says it stopped without echoing the raw error; the sound one keeps its answer",
+    )
 
 
 def check_send_take_outstanding(checks: Checks) -> None:
@@ -8256,6 +8348,8 @@ CHECKS = (
     check_master_take_off,
     check_master_owed,
     check_master_take_off_mutants,
+    check_take_off_failure_words,
+    check_press_owed_answers_every_entry,
     check_send_sold_since,
     check_send_sold_after_check,
     check_send_snapshot_lagging_then_newer,
