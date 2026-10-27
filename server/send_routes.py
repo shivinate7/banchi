@@ -3261,9 +3261,11 @@ def do_press_owed_take_offs(payload: dict) -> dict:
             results.append(dict(said, take_off=None, refused=refusal.code, message=str(refusal)))
         except Exception as caught:  # noqa: BLE001 — one entry's error must not leave the rest unanswered
             # `_master_take_off` has already made the receipt say where it stands (`_settle`), so
-            # the entry's failure is the press's unknown, never a retry from here.
+            # the entry's failure is the press's unknown, never a retry from here. The catch can
+            # fire after a publish, so the message never says nothing was sent.
+            files.log_cause("owed take-off", caught)
             results.append(dict(said, take_off=None, refused=TAKE_OFF_ERROR,
-                                message=f"This take-off stopped on an error ({type(caught).__name__}). Check the card before pressing again."))
+                                message="Banchi could not finish this take-off. Check the card before pressing again."))
         else:
             results.append(dict(said, take_off=answer["take_off"], refused=None, message=None))
     return {"results": results}
