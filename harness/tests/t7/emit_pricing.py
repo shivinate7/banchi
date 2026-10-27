@@ -3900,9 +3900,9 @@ def check_pricing_reach(checks: Checks) -> None:
         sorted(corpus_mod.Corpus.parse(
             {"policy": {"per_run": {"r1": {"threshold": "2.00"}}}, "skus": {}}
         ).policy_for("r1").keys()),
-        ["basis", "rule", "sub_threshold", "threshold"],
+        ["basis", "limit", "rule", "sub_threshold", "threshold", "value_line"],
         "AND THE PER-RUN OVERRIDE SURVIVES ITS OTHER KEYS. `policy_for` folds the override "
-        "over a `standing` dict, so removing one member had to leave the other four alone — "
+        "over a `standing` dict, so removing one member had to leave the other five alone — "
         "`#/pricing` writes a per-run `threshold` and would lose it if the fold had been "
         "narrowed instead",
     )

@@ -417,6 +417,8 @@ class Corpus:
             "basis": self.basis,
             "sub_threshold": self.sub_threshold,
             "threshold": self.threshold,
+            "limit": self.limit,
+            "value_line": self.value_line,
         }
         return {
             key: (over[key] if over.get(key) is not None else value)

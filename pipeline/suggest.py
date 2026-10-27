@@ -34,7 +34,9 @@ MARKET_MOVED, UNSOLD, UNDERCUT_BY_OTHERS = "market_moved", "unsold", "undercut"
 
 
 def check_setting(value, default: Decimal, name: str) -> Decimal:
-    """A stored `limit` or `value_line` as a positive `Decimal`; `None` reads the default."""
+    """A stored `limit` or `value_line` as a positive `Decimal`; `None` reads the default.
+
+    A `limit` is a fraction, so it also may not pass 1 (25 would mean 2500%, never 25%)."""
     if value is None:
         return default
     try:
@@ -43,13 +45,17 @@ def check_setting(value, default: Decimal, name: str) -> Decimal:
         raise ValueError("{0} {1!r} is not a number".format(name, value)) from exc
     if not parsed.is_finite() or parsed <= 0:
         raise ValueError("{0} {1!r} must be above zero".format(name, value))
+    if name == "limit" and parsed > 1:
+        raise ValueError("limit {0!r} is a fraction: 0.25 is 25%, so it may not pass 1".format(value))
     return parsed
 
 
-def _days_unsold(listing: dict, today: date) -> int:
-    """Days since the LATER of going live and the last sale here."""
-    since = max(d for d in (listing.get("first_seen_live"), listing.get("last_sold_at")) if d)
-    return (today - date.fromisoformat(since)).days
+def _days_unsold(listing: dict, today: date) -> Optional[int]:
+    """Days since the LATER of going live and the last sale here; `None` when neither is known.
+
+    A sale stamp may carry a time, so only its date part counts."""
+    dates = [d[:10] for d in (listing.get("first_seen_live"), listing.get("last_sold_at")) if d]
+    return (today - date.fromisoformat(max(dates))).days if dates else None
 
 
 def fired(listing: dict, today: str) -> list:
@@ -62,10 +68,8 @@ def fired(listing: dict, today: str) -> list:
     listed = listing.get("market_listed")
     if pricing.has_market_data(listed) and abs(market - listed) / listed >= MOVE:
         out.append(MARKET_MOVED)
-    if (
-        _days_unsold(listing, date.fromisoformat(today)) >= UNSOLD_DAYS
-        and asking > market * (1 + PREMIUM)
-    ):
+    days = _days_unsold(listing, date.fromisoformat(today))
+    if days is not None and days >= UNSOLD_DAYS and asking > market * (1 + PREMIUM):
         out.append(UNSOLD)
     low = listing.get("low_with_shipping")
     if low is not None and low <= asking * (1 - UNDERCUT):
@@ -113,15 +117,20 @@ def _row(listing: dict, source: str, price: Optional[Decimal], reason: str) -> d
 def review(listings: list, policy: dict, today: str) -> dict:
     """Every listing in exactly one group: needs_you, suggested or at_rule."""
     rule = policy.get("rule") or "match"
+    basis = pricing.check_basis(policy.get("basis") or "market")
     floor = pricing.check_threshold(policy.get("threshold"))
     limit = check_setting(policy.get("limit"), DEFAULT_LIMIT, "limit")
     value_line = check_setting(policy.get("value_line"), DEFAULT_VALUE_LINE, "value_line")
     out = {"needs_you": [], "suggested": [], "at_rule": []}
 
     for listing in listings:
+        # The triggers and the "no market" test read Market; only the rule's price reads the basis.
         market = listing.get("market")
+        base = listing.get("low") if basis == "low" else market
         priced = (
-            pricing.list_price(market, rule, floor) if pricing.has_market_data(market) else None
+            pricing.list_price(base, rule, floor)
+            if pricing.has_market_data(market) and pricing.has_market_data(base)
+            else None
         )
 
         if not listing.get("live"):
@@ -136,8 +145,11 @@ def review(listings: list, policy: dict, today: str) -> dict:
             continue
 
         triggers = fired(listing, today)
-        # A trigger that leaves the price where it is has nothing to suggest.
-        if not triggers or priced == listing["asking"]:
+        # A trigger that leaves the price where it is has nothing to suggest. Only a market move
+        # UP may raise a price: undercut, unsold and market down mean the price is too high.
+        raises = priced is not None and priced > listing["asking"]
+        up = MARKET_MOVED in triggers and market > listing["market_listed"]
+        if not triggers or priced is None or priced == listing["asking"] or (raises and not up):
             out["at_rule"].append(_row(listing, "Live", listing.get("asking"), ""))
             continue
 
