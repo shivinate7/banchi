@@ -1,8 +1,10 @@
 // Protects: The Inventory "By set" view shows one set at a time, switches by picker, takes quantity from the server, and opens the box walk on a tap.
 // Governs: D172, D264, D285, D293, D301
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 
 import { sealEveryTest } from './shell'
+import { setViewport } from './phoneSwitch'
+import { sameBox, settleMotion } from './motionSettled'
 
 /* THE OWNER'S "BY SET" VIEW (D293). Read D293 first.
  *
@@ -37,6 +39,8 @@ type SetCard = {
   qty: number
   image_url: string | null
   printing: string | null
+  /** `master_set` (`docs/specs/master-set.md`, section 3): a retired master-set copy of this SKU is held. */
+  collected?: boolean
 }
 
 /** A `SetCard` with `image_url`/`printing` defaulted, so the cases above this one — written
@@ -145,6 +149,56 @@ async function pickSet(page: import('@playwright/test').Page, label: string): Pr
   await page.locator('.sets-picker .bn-pick').click()
   await page.locator('.bn-pick-opt', { hasText: label }).click()
 }
+
+/* THE MASTER SET ON THIS VIEW (`docs/specs/master-set.md`, section 4). Five rows in printed order:
+ * two copies and none collected (no mark); one copy and collected ("In master set"); one copy and not
+ * collected ("Last copy"); none on hand and collected ("0 copies"); three copies and not collected. */
+const MASTER_PAYLOAD = {
+  at: '2026-10-27T00:00:00+00:00',
+  groups: [
+    {
+      game: 'pokemon',
+      set_name: 'ME01: Mega Evolution',
+      cards: [
+        setCard({ sku: '8937100', cid: 'cid-bulbasaur', box: 2, name: 'Bulbasaur', number_display: '001/132', qty: 2 }),
+        setCard({ sku: '8937200', cid: 'cid-pikachu', box: 2, name: 'Pikachu', number_display: '025/132', qty: 1, collected: true }),
+        setCard({ sku: '8937370', cid: 'cid-thievul', box: 2, name: 'Thievul', number_display: '090/132', qty: 1 }),
+        setCard({ sku: '8937450', cid: 'cid-mewtwo', box: null, name: 'Mewtwo', number_display: '150/132', qty: 0, collected: true }),
+        setCard({ sku: '8937480', cid: 'cid-ditto', box: 2, name: 'Ditto', number_display: '132/132', qty: 3 }),
+      ],
+    },
+  ],
+  no_set: [],
+}
+
+/** Every row of the set is in the master set: the view's one-sentence state (section 4). */
+const ALL_COLLECTED_PAYLOAD = {
+  at: '2026-10-27T00:00:00+00:00',
+  groups: [
+    {
+      game: 'pokemon',
+      set_name: 'ME01: Mega Evolution',
+      cards: [
+        setCard({ sku: '8937200', cid: 'cid-pikachu', box: 2, name: 'Pikachu', number_display: '025/132', qty: 1, collected: true }),
+        setCard({ sku: '8937450', cid: 'cid-mewtwo', box: null, name: 'Mewtwo', number_display: '150/132', qty: 0, collected: true }),
+      ],
+    },
+  ],
+  no_set: [],
+}
+
+/** Answers `GET /pipeline/sets` with `payload` at one width and theme, and waits for the first paint of the grid. */
+async function openSetsAt(page: Page, payload: unknown, width: number, theme: 'light' | 'dark'): Promise<void> {
+  await setViewport(page, { width, height: 900 })
+  await page.emulateMedia({ colorScheme: theme })
+  await page.route(/\/pipeline\/sets$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload) }),
+  )
+  await page.goto(VIEW_ROUTE)
+  await expect(page.locator('.sets-picker .bn-pick')).toBeVisible()
+  await settleMotion(page)
+}
+
 
 test.describe('the set view', () => {
   /* `{ store: true }`: `Inventory.tsx` calls `getOrders()` on mount regardless of which view
@@ -352,4 +406,85 @@ test.describe('the set view', () => {
     // mount, the same store-wide search a person typing the name would have run.
     await expect(page.locator('.search-field-input')).toHaveValue('Unplaced Card')
   })
+
+  // ------------------------------------------ the master set (docs/specs/master-set.md, section 4)
+
+  for (const theme of ['light', 'dark'] as const) {
+    for (const width of [1440, 820]) {
+      test(`the master-set filter hides collected rows, keeps printed order, and writes ?master=open, at ${width} in ${theme}`, async ({
+        page,
+      }) => {
+        await openSetsAt(page, MASTER_PAYLOAD, width, theme)
+        const tiles = page.locator('.sets-tile')
+        const names = () => tiles.locator('.sets-tile-name').allTextContents()
+        await expect(tiles).toHaveCount(5)
+        expect(await names()).toEqual(['Bulbasaur', 'Pikachu', 'Thievul', 'Mewtwo', 'Ditto'])
+
+        // THE CONTROLS ABOVE THE GRID: the filter changes the grid under them and nothing of their own.
+        const picker = page.locator('.sets-picker')
+        const toggle = page.locator('.sets-controls .bn-hidetoggle')
+        const header = page.locator('.sets-header')
+        const before = [await picker.boundingBox(), await toggle.boundingBox(), await header.boundingBox()]
+
+        await toggle.click()
+        await page.mouse.move(0, 0)
+        await settleMotion(page)
+        await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+        await expect(tiles).toHaveCount(3)
+        expect(await names(), 'the collected rows are hidden and the rest keep their printed order').toEqual([
+          'Bulbasaur',
+          'Thievul',
+          'Ditto',
+        ])
+        await expect(page).toHaveURL(/[?&]master=open(&|$)/)
+
+        const after = [await picker.boundingBox(), await toggle.boundingBox(), await header.boundingBox()]
+        expect(after.every((box, at) => sameBox(box, before[at] ?? null)), 'the picker, toggle and header do not move').toBe(true)
+      })
+
+      test(`each tile carries one mark in words: Last copy on one copy only, In master set when collected, and 0 copies on none, at ${width} in ${theme}`, async ({
+        page,
+      }) => {
+        await openSetsAt(page, MASTER_PAYLOAD, width, theme)
+        const tile = (name: string) => page.locator('.sets-tile', { hasText: name })
+
+        await expect(tile('Thievul').locator('.sets-tile-mark')).toHaveText('Last copy')
+        await expect(tile('Pikachu').locator('.sets-tile-mark')).toHaveText('In master set')
+        await expect(tile('Pikachu')).not.toContainText('Last copy')
+        await expect(tile('Mewtwo').locator('.sets-tile-mark')).toHaveText('In master set')
+        await expect(tile('Mewtwo')).toContainText('0 copies')
+        await expect(tile('Mewtwo')).not.toContainText('Last copy')
+        // TWO OR MORE COPIES, NOT COLLECTED: no mark at all.
+        await expect(tile('Bulbasaur').locator('.sets-tile-mark')).toBeEmpty()
+        await expect(tile('Ditto').locator('.sets-tile-mark')).toBeEmpty()
+        await expect(page.locator('.sets-tile-mark', { hasText: 'Last copy' })).toHaveCount(1)
+
+        // THE MARK HAS ITS OWN LINE, THE SAME HEIGHT ON EVERY TILE: a tile with no mark keeps the empty line.
+        const heights = await page
+          .locator('.sets-tile-mark')
+          .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)))
+        expect(new Set(heights).size, `mark line heights ${heights.join(', ')}`).toBe(1)
+      })
+
+      test(`when every card of a set is collected, one sentence holds the grid, and Show every card clears the filter, at ${width} in ${theme}`, async ({
+        page,
+      }) => {
+        await openSetsAt(page, ALL_COLLECTED_PAYLOAD, width, theme)
+        const tiles = page.locator('.sets-tile')
+        await expect(tiles).toHaveCount(2)
+        await expect(page.locator('.sets-header')).toContainText('2 of 2 in your master set')
+
+        await page.locator('.sets-controls .bn-hidetoggle').click()
+        await expect(tiles).toHaveCount(0)
+        const grid = page.locator('.sets-grid')
+        await expect(grid).toContainText('Every card of this set is in your master set.')
+        await expect(grid.locator('.sets-empty')).toHaveCount(1)
+        await expect(page).toHaveURL(/[?&]master=open(&|$)/)
+
+        await page.getByRole('button', { name: 'Show every card' }).click()
+        await expect(tiles).toHaveCount(2)
+        await expect(page).not.toHaveURL(/[?&]master=/)
+      })
+    }
+  }
 })
