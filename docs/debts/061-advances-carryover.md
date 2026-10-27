@@ -21,6 +21,5 @@ Each open item was checked against the code and stays open. Item 6 has a plan an
 
    Restarts: no step needs one to pass its checks, because the harness starts its own server. The running server loads moved code only at a restart. Ask the owner for exactly two: one after step 1 to prove the method live, one after step 5. Never restart to fix a wedge (CLAUDE.md).
 7. Ruled when-touched. `CaptureScreen.tsx`, `ReviewQueue.tsx` and `BoxBrowse.tsx` each mix polling, derived state and JSX in one file. No stand-alone refactor: a lane that next edits one of them moves that screen's polling and state into a hook, so the component file holds only JSX.
-8. No Python type checker (`mypy`, `pyright`) is configured. Ruff is adopted (D82) and nobody argued the absence. The cheap first step is `mypy --strict` on one well-typed module (`store/orders.py` or `codes/qr.py`).
 
 Considered and rejected: a router library (about ten stable hash routes, and specs test them end to end), a state-management library (`app/src/server.ts` is already the one network seam) and a component library or CSS framework (styling is token-based and no drift was found).
