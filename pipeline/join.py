@@ -1882,7 +1882,9 @@ class Catalog:
                 ).append(row)
             else:
                 name = row[tcgcsv.NAME_COLUMN].strip()
-                self._blank_number_by_name.setdefault(name, []).append(row)
+                self._blank_number_by_name.setdefault(
+                    _name_compare_key(name, catalog_side=True), []
+                ).append(row)
                 key = f"name:{name}"
             seen = self._sets_by_key.setdefault(key, [])
             if set_name not in seen:
@@ -2056,7 +2058,7 @@ class Catalog:
         return list(self._by_number.get(number_index_key(key), ()))
 
     def rows_for_blank_number_name(self, name: str) -> List[tcgcsv.Row]:
-        return list(self._blank_number_by_name.get(name.strip(), ()))
+        return list(self._blank_number_by_name.get(_name_compare_key(name), ()))
 
     def rows_for_name(self, name: str) -> List[tcgcsv.Row]:
         """Every NUMBERED row whose folded name is this one. D35's last resort.
