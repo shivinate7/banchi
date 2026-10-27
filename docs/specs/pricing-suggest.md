@@ -143,7 +143,7 @@ owner's word.
 | Tool | What exists | What is missing | Recommendation |
 |---|---|---|---|
 | Price history | A trend line on each row (`PriceTrend`). The full chart on the product sheet, one press away (D278, one product view, two frames). | Nothing on the list itself beyond the trend line. | Keep the sheet. A row that grows in place breaks D313 (nothing moves unless the person moved it). |
-| Comparable sales | Per period: copies sold, sale count, lowest and highest sale price (`pipeline/pricehistory`). | Single sales. The source never gives "what the last three sold for". | Show the sold range on each suggestion, such as "14 sold in 30 days, $3.10 to $4.25". |
+| Comparable sales | Per period: copies sold, sale count, lowest and highest sale price (`pipeline/pricehistory.py`). | Single sales. The source never gives "what the last three sold for". | Show the sold range on each suggestion, such as "14 sold in 30 days, $3.10 to $4.25". |
 | Drift alerts | `PriceMovers` flags live cards that moved more than 10% since first seen. | It is a read you open, not a prompt to act. | Fold it into the market-moved suggestion. A Home count or a notification is the owner's call. |
 | Net after fees | Nothing. Section 8 leaves out a fee model. | The owner's real fee rate. | Open. |
 | Price many rows at once | Presets on the rule. | A select-and-apply over chosen rows. | Open. |
