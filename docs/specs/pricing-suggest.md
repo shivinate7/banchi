@@ -148,29 +148,39 @@ open questions:
 |---|---|---|
 | Price history | A trend line on each row (`PriceTrend`). The full chart on the product sheet, one press away (D278, one product view, two frames). | **Open: the owner decides from mockups.** Three options: keep the sheet, the row expands, a side panel. Drawn as the history files in `docs/design/pricing-suggest/`. |
 | Comparable sales | Per period: copies sold, sale count, lowest and highest sale price (`pipeline/pricehistory.py`). No single sales. | **Ruled: both.** Show the sold range on each suggestion, such as "14 sold in 30 days, $3.10 to $4.25". Also plan research into single-sale sources. A separate research lane surveys eBay, PriceCharting and Card Ladder. |
-| Drift alerts | `PriceMovers` flags live cards that moved more than 10% since first seen. | **Open.** The owner called the current read "really bad" and asked for fresh options, beyond a row, a Home line or a notification. Section 9a lists them. |
+| Drift alerts | `PriceMovers` flags live cards that moved more than 10% since first seen. | **Open.** The owner turned down the first two sets of options. Section 9a rethinks drift from the decision it serves, with a measured count. |
 | Net after fees | Nothing. Section 8 leaves out a fee model. | **Ruled: plan it.** Needs the owner's real fee rate. |
 | Price many rows at once | Presets on the rule. | **Ruled: plan it.** Select rows, apply one change, preview, confirm. |
 | Watch list | A hold watch ("alert when market is above"), printed only by the join report. | **Ruled: plan it.** It grows from the hold watch. |
 | Outside signals | Nothing. | **Ruled: plan it.** A reason slot first, for signals like the Riftbound meta research. |
 | AI-assisted tools | Nothing for pricing. | **Ruled: candidates to plan.** See section 9b. |
 
-## 9a. Drift alerts: fresh options
+## 9a. Drift alerts: what decision they serve
 
-These go to the owner as one decision. Each changes what drift is, not only where it shows.
+The owner turned down four drift options (money at stake, ride the send, a weekly session,
+explained moves): none was well thought out. Rethought from the outcome: a drift alert helps
+one decision, "should this live price change now?". A measured count over the owner's store
+answers which way it changes. Of 832 live listings with an asking price and a market price:
 
-1. **Money at stake.** Drift reads in dollars, not percent: "You are $42 under market on 19
-   listings, and $18 over on 31." Rows rank by dollars at stake, so a 40% move on a $0.30
-   card falls below a 10% move on a $40 card. One press opens those rows.
-2. **Ride the send.** Every send already opens a preview. It also offers the top drifted
-   listings, ranked by money at stake, to send with it. Nothing new to remember, and drift is
-   fixed in a step the owner already takes.
-3. **A short weekly session.** Once a week Banchi lays out a fixed, small set of the moves
-   that matter most, such as 15. The owner clears it in a few minutes, and it is done until next
-   week. A clear end, not an alert that never stops.
-4. **Explained moves.** Each drifted card gets one line on why it moved, from its history and
-   any outside signal: "Up since its set's reprint was announced", "Played in a winning deck".
-   It pairs with any of the first three.
+| Direction | Listings | Dollars, asking price against market, across copies |
+|---|---|---|
+| Under market by more than 10% (sells too cheap) | 7 | $0.46 |
+| Over market by more than 10% (does not sell) | 444 | $3,124 |
+| Over market by $5 or more a copy | 11 | $2,845 |
+
+So drift costs nothing by selling too cheap. The cost is listings priced over what buyers pay,
+and 11 cards hold most of it. The new options, one decision for the owner:
+
+1. **Cut drift as a tool.** The one list already does the job: a live listing over market
+   shows as a suggested cut, and one past the cap or at the value line lands in Needs you. The
+   11 cards land on top.
+2. **The one list, plus a line on Home.** As option 1, and Home says "11 listings priced $2,845
+   over market" with one press to them. It shows only when a card at the value line is past the
+   cap.
+3. **An expensive-card watch.** Only cards at the value line are watched, on each daily price
+   refresh. Each crossing names the card. The rest wait for the list.
+
+The pick is option 1. Some of the 11 may be held on purpose; the count cannot tell.
 
 ## 9b. AI-assisted candidates
 
