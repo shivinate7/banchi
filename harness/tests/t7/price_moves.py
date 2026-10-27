@@ -407,9 +407,14 @@ def _archived_skus() -> list:
     return sorted({b.sku for b in Store().read().archive.entries.values()})
 
 
+def _step_note(name: str) -> dict:
+    """One step of the `#/pricing` note the job left, `{}` when it left none."""
+    return ((pricerefresh.read_status() or {}).get("steps") or {}).get(name) or {}
+
+
 def _archive_note() -> dict:
     """The `archive` step of the `#/pricing` note the job left, `{}` when it left none."""
-    return ((pricerefresh.read_status() or {}).get("steps") or {}).get("archive") or {}
+    return _step_note("archive")
 
 
 def check_daily_job_sweeps_after_refresh(checks: Checks) -> None:
@@ -569,48 +574,50 @@ def check_daily_job_empty_sweep_is_ok(checks: Checks) -> None:
         )
 
 
-def check_daily_job_reads_daily_prices_after_a_good_refresh(checks: Checks) -> None:
-    """The daily TCGCSV read (`pipeline.dailyprices.run_pass`) follows a good refresh and never a failed one,
-    and neither a sweep that stops early nor `--no-sweep` stops it.
+def check_daily_job_reads_daily_prices_whatever_the_refresh_did(checks: Checks) -> None:
+    """The daily TCGCSV read (`pipeline.dailyprices.run_pass`) runs on every start of the job: after a good
+    refresh, after a failed one, after one whose sales-history step failed, over a sweep that stops early, and
+    under `--no-sweep`. The refresh does not feed it (D-tcgcsv-daily-read), so a refresh's verdict is not its.
 
     THE READ IS A STAND-IN HERE (`_daily_prices_stand_in`): its own cases, the source-update guard included,
-    are `harness/tests/t7/daily_prices.py`. What is proved is WHEN the job calls it, and that it is handed the
-    User-Agent knob's value (`pricehistory.AGENT_ENV`, the one knob, never a second). The job does not guard
-    the update itself: the read does, so every start calls it. Two failed refreshes (the refresh itself, and its
-    sales-history step) are the job's own definition of a failed run. THE STOPPED SWEEP IS A REAL ONE: eight
-    SKUs and a host that refuses from the first, as `check_daily_job_sweep_stops_on_first_refusal` builds it.
-    THE MANUAL PRESS IS READ OFF `make -n` (`_make_price_refresh_argv`): `make price-refresh` passes `--now
+    are `harness/tests/t7/daily_prices.py`. What is proved is THAT the job calls it, with the User-Agent knob's
+    value (`pricehistory.AGENT_ENV`, the one knob, never a second), and that the job's own verdict is not the
+    read's: a failed refresh still ends exit 1 and still skips the sweep, a good one ends 0. The job does not
+    guard the update itself: the read does, so every start calls it. Two failed refreshes (the refresh itself,
+    and its sales-history step) are the job's own definition of a failed run. THE STOPPED SWEEP IS A REAL ONE:
+    eight SKUs and a host that refuses from the first, as `check_daily_job_sweep_stops_on_first_refusal` builds
+    it. THE MANUAL PRESS IS READ OFF `make -n` (`_make_price_refresh_argv`): `make price-refresh` passes `--now
     --no-sweep`, and the read still follows its good refresh, with no sweep started.
     """
     checks.note("")
-    checks.note("DAILY JOB DAILY PRICES — after a good refresh, even over a stopped sweep or `--no-sweep`; never after a failed one")
+    checks.note("DAILY JOB DAILY PRICES — on every start: after a good or a failed refresh, over a stopped sweep, under `--no-sweep`")
     arms = (
-        ("good refresh", REFRESH_OK, _Host(), 1),
-        ("good refresh, the sweep stopped early", REFRESH_OK, _Host(refuse_after=0), 1),
-        ("refresh failed", REFRESH_FAILED, _Host(), 0),
-        ("sales-history step failed", REFRESH_HISTORY_FAILED, _Host(), 0),
+        ("good refresh", REFRESH_OK, _Host(), 0),
+        ("good refresh, the sweep stopped early", REFRESH_OK, _Host(refuse_after=0), 0),
+        ("refresh failed", REFRESH_FAILED, _Host(), 1),
+        ("sales-history step failed", REFRESH_HISTORY_FAILED, _Host(), 1),
     )
-    for label, refresh, host, calls in arms:
+    for label, refresh, host, exit_code in arms:
         with isolated_home() as home, mock.patch.dict(os.environ, {pricehistory.AGENT_ENV: "job-agent/1.0"}):
             _seed_sweep_store(SWEEP_SKUS)
             read = mock.Mock(return_value=DAILY_PASS_SKIPPED)
             code, lines, error = _run_daily(home, refresh, host, daily=read)
             checks.equal(error, None, "%s: the job ran to its end" % label)
-            checks.equal(read.call_count, calls, "%s: the daily read is called %d time(s)" % (label, calls))
-            if calls:
-                checks.equal(
-                    (read.call_args.kwargs if read.call_args else {}).get("user_agent"), "job-agent/1.0",
-                    "%s: the read is handed the User-Agent knob's value" % label,
-                )
+            checks.equal(read.call_count, 1, "%s: the daily read is called once" % label)
+            checks.equal(
+                (read.call_args.kwargs if read.call_args else {}).get("user_agent"), "job-agent/1.0",
+                "%s: the read is handed the User-Agent knob's value" % label,
+            )
+            checks.equal(code, exit_code, "%s: the job's own verdict is unchanged, exit %d" % (label, exit_code))
             if label.endswith("stopped early"):
                 checks.ok(
                     _said(lines, "archive sweep", "stopped early"),
                     "%s: the sweep did stop, so this arm is the independence case" % label, "\n".join(lines)[-400:],
                 )
-            if not calls:
+            if exit_code:
                 checks.equal(
                     (host.built, host.asked), ([], []),
-                    "%s: no Market is built and the host is asked nothing" % label,
+                    "%s: the sweep is still skipped: no Market is built and the host is asked nothing" % label,
                 )
     manual = _make_price_refresh_argv()
     checks.ok(manual is not None, "`make price-refresh` runs the daily job script, the argv this check reads", str(manual))
@@ -627,6 +634,35 @@ def check_daily_job_reads_daily_prices_after_a_good_refresh(checks: Checks) -> N
             "`make price-refresh`: the read is handed the User-Agent knob's value",
         )
         checks.equal((host.built, host.asked), ([], []), "`make price-refresh` still starts no sweep: no Market is built, the host is asked nothing")
+
+
+def check_daily_job_notes_each_daily_read(checks: Checks) -> None:
+    """Each pass of the daily TCGCSV read is one step on the `#/pricing` note, `daily_prices`: not ok with a
+    sentence when a group failed or the pass raised, ok when it was clean or skipped.
+
+    THE READ IS A STAND-IN (`_daily_prices_stand_in`), answering what a real pass answers (the shape is
+    `pipeline/dailyprices.py:run_pass`'s). The note is read back through `pricerefresh.read_status`, the
+    way the screen reads it. A PASS THAT RAISED (an unreadable stamp, a host that is down) is a failed pass,
+    and the job still ends exit 0: the read never fails the job.
+    """
+    checks.note("")
+    checks.note("DAILY JOB DAILY PRICES NOTE — a pass with a failed group or an error is a not-ok step with a sentence; a clean or skipped one is ok")
+    clean = {"day": "2026-10-27", "updated": "2026-10-27T03:30:00+0000", "skipped": False, "rows": 4, "failed": {}}
+    group_failed = {**clean, "rows": 3, "failed": {102: "The price service answered 'internal server error'. Try again in a moment."}}
+    arms = (
+        ("a clean pass", mock.Mock(return_value=clean), True),
+        ("a skipped pass", mock.Mock(return_value=DAILY_PASS_SKIPPED), True),
+        ("a pass with a failed group", mock.Mock(return_value=group_failed), False),
+        ("a pass that raised", mock.Mock(side_effect=pricehistory.Unreachable("The price service sent a last-updated time that could not be read.")), False),
+    )
+    for label, read, ok in arms:
+        with isolated_home() as home:
+            code, _lines, error = _run_daily(home, REFRESH_OK, _Host(), daily=read)
+            note = _step_note("daily_prices")
+            checks.equal((error, code, read.call_count), (None, 0, 1), "%s: the job ran to its end, exit 0, and called the read once" % label)
+            checks.equal(note.get("ok"), ok, "%s: the `daily_prices` step is %s" % (label, "ok" if ok else "not ok"))
+            if not ok:
+                checks.ok(bool(str(note.get("message") or "").strip()), "%s: the step carries a sentence" % label, str(note))
 
 
 def check_daily_job_second_run_same_day_skips_sweep(checks: Checks) -> None:
@@ -1100,7 +1136,8 @@ CHECKS = (
     check_daily_job_sweep_stops_on_second_throttle,
     check_daily_job_sweep_stops_on_first_refusal,
     check_daily_job_empty_sweep_is_ok,
-    check_daily_job_reads_daily_prices_after_a_good_refresh,
+    check_daily_job_reads_daily_prices_whatever_the_refresh_did,
+    check_daily_job_notes_each_daily_read,
     check_daily_job_second_run_same_day_skips_sweep,
     check_installed_job_sweeps_without_reinstall,
     check_daily_job_sweep_holds_the_refresh_lock,

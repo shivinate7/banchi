@@ -2,7 +2,8 @@
 
 Part of `harness/tests/t7_store_and_seams.py` (one verdict). `CHECKS` is this group's checks in the order
 `CHECK_ORDER` runs them. WHEN THE DAILY JOB CALLS THE READ is `harness/tests/t7/price_moves.py`'s
-`check_daily_job_reads_daily_prices_after_a_good_refresh`; this group is the read itself.
+`check_daily_job_reads_daily_prices_whatever_the_refresh_did` and `check_daily_job_notes_each_daily_read`; this
+group is the read itself.
 
 THE KEY IS THE SOURCE'S OWN UPDATE, NEVER THE CLOCK. TCGCSV refreshes once a day and says when in
 `last-updated.txt`. A read at 23:00 and another at 05:15 the next day get the same data; a key on the Central or
@@ -28,9 +29,16 @@ THE SEAMS (a builder follows these names):
       `day` is its UTC date as an ISO date, and its `updated` is the stamp. It builds its own `pricehistory.Market`
       with no cache directory (`PRICE_TTL_SECONDS` is seven days: a cached file would serve yesterday's prices as
       today's). It asks `groups(89)` and `prices(89, group)` for each group, no products and no categories. A group
-      whose prices raise `pricehistory.PriceHistoryError` is named in `failed` and the other groups go on. It writes
-      through `Store().write()` and never deletes. A pause of at least 0.1 s sits between consecutive requests, the
-      stamp's included.
+      FAILS, is named in `failed`, and the other groups go on, when its prices raise `pricehistory.PriceHistoryError`,
+      when its payload is not a dict or has no list under `results`, or when it says `"success": false`. A reply of
+      `"success": true` with `results: []` is a real, empty group: saved, never asked again for that update. It writes
+      through `Store().write()` and never deletes, ONE WRITE PER GROUP: a crash that is no `Exception` (a
+      `KeyboardInterrupt`) after a group keeps that group's rows, reaches the caller, and the next pass asks for the
+      groups left only. A pause of at least `pricehistory.COURTESY_DELAY_SECONDS` (0.1 s or more) sits between
+      consecutive requests, the stamp's included. A THROTTLE answer is a `PriceHistoryError` whose `__cause__` is a
+      `net.NetError` with status 429, as `pricehistory.fetch_json` raises it: the group fails, the wait before the
+      next request is `max(COURTESY_DELAY_SECONDS, net.retry_after(url))` through `time.sleep`, and a second throttle
+      answer in one pass stops the pass: no further group is asked for, the update stays open.
       It answers {"day": ISO date, "updated": stamp, "skipped": bool, "rows": rows written by THIS call,
       "failed": {group_id (int): message (str)}}.
       It skips (nothing asked for after the stamp, nothing written, "skipped": True) when the stamp equals the newest
@@ -43,8 +51,9 @@ THE SEAMS (a builder follows these names):
     null or absent). `DailyPrices` holds `.entries`, a `Rows` of `DailyPrice`, table `daily_prices`, key
     (product_id, sub_type, day). The snapshot attribute is `Store().read().daily_prices`.
   scripts/price-refresh-daily.py
-    after a good refresh, `from pipeline import dailyprices` then `dailyprices.run_pass(user_agent=...)`, with or
-    without `--no-sweep`.
+    on every start, whatever the refresh did (it does not feed the read) and with or without `--no-sweep`:
+    `from pipeline import dailyprices` then `dailyprices.run_pass(user_agent=...)`, and each pass is noted by
+    `pricerefresh.note_step("daily_prices", ok, message=...)`: not ok with a sentence for a failed group or a raise.
 
 Temp files follow the run-folder standard (test-temp-standard): each check opens one `<pid>-<UUID>` folder from
 `harness/tests/home.py:run_folder`, the store of each case lives inside it (`isolated_home` takes its folder from
@@ -55,8 +64,10 @@ is proved once, for the helper, by `t1_results.check_run_folder_sweeps_old_sibli
 from __future__ import annotations
 
 import functools
+import gc
 import json
 import re
+import sqlite3
 import tempfile
 from datetime import datetime
 from unittest import mock
@@ -65,6 +76,7 @@ from harness.tests import Checks
 from harness.tests.home import isolated_home, run_folder
 from pipeline import pricehistory
 from store import clock
+from store.readings import Reading
 from store.session import Store
 
 BASE = pricehistory.CATALOG_HOST + "/tcgplayer/89"
@@ -132,12 +144,17 @@ class FakeTcgcsv:
     clear it to mend the host. `urls` is every URL asked, in order. The stamp is answered as text and every other URL
     as JSON, and it answers the categories list, any category's group list and any group's products as well, so a
     pass that asks for more than it needs fails the request-list assertions below with a plain sentence, never with
-    an error from the fake. As a `fetch` it is the shape `run_pass` takes."""
+    an error from the fake. As a `fetch` it is the shape `run_pass` takes.
+
+    `groups` is the served group list. `replies` maps a group id to what its prices URL answers INSTEAD of `prices`: an
+    exception instance is raised (a `BaseException` too), anything else is returned as it is, of whatever type."""
 
     def __init__(self, prices, stamp=STAMP1, fail=()):
         self.prices = prices
         self.stamp = stamp
         self.fail = set(fail)
+        self.groups = list(GROUPS)
+        self.replies = {}
         self.urls = []
 
     def __call__(self, url, *_args, **_kwargs):
@@ -149,16 +166,28 @@ class FakeTcgcsv:
         if path == "/tcgplayer/categories":
             return {**payload, "results": [{"categoryId": 89, "name": "Riftbound"}]}
         if re.fullmatch(r"/tcgplayer/\d+/groups", path):
-            return {**payload, "results": [{"groupId": g, "name": n} for g, n in GROUPS]}
+            return {**payload, "results": [{"groupId": g, "name": n} for g, n in self.groups]}
         found = re.fullmatch(r"/tcgplayer/\d+/(\d+)/(prices|products)", path)
         if found and found.group(2) == "products":
             return {**payload, "results": []}
+        if found and int(found.group(1)) in self.replies:
+            reply = self.replies[int(found.group(1))]
+            if isinstance(reply, BaseException):
+                raise reply
+            return reply
         if found and int(found.group(1)) in self.prices:
             group = int(found.group(1))
             if group in self.fail:
                 raise pricehistory.Unreachable("The price service answered 'internal server error'. Try again in a moment.")
             return {**payload, "results": self.prices[group]}
         raise pricehistory.Unreachable("The price service answered 'not found'. Try again in a moment.")
+
+
+def throttled():
+    """What `pricehistory.fetch_json` raises for an HTTP 429: an `Unreachable` whose cause is a `net.NetError` with status 429."""
+    exc = pricehistory.Unreachable("The price service answered 'too many requests'. Try again in a moment.")
+    exc.__cause__ = pricehistory.net.NetError("The host answered with status 429.", status=429)
+    return exc
 
 
 def in_run_folder(fn):
@@ -400,12 +429,251 @@ def check_daily_prices_site_rules_user_agent_and_pause(checks: Checks) -> None:
         )
 
 
+@in_run_folder
+def check_daily_prices_unsuccessful_group_fails_and_an_empty_one_does_not(checks: Checks) -> None:
+    checks.note("")
+    checks.note("DAILY PRICES ANSWERS — `success: false` fails its group and is retried; `success: true` with no results is a real, empty group")
+    module = load(checks)
+    if module is None:
+        return
+    with isolated_home():
+        fake = FakeTcgcsv(PRICES1 | {103: []})
+        fake.groups = GROUPS + [(103, "Promos")]
+        fake.replies[102] = {"success": False, "errors": ["Internal error"], "results": []}
+        first = run(checks, module, fake, MIDDAY, "first pass")
+        if first is None:
+            return
+        checks.equal(set(first.get("failed") or {}), {102}, "the group that answered `success: false` is named in `failed`, and the empty one beside it is not")
+        checks.equal((first.get("skipped"), first.get("rows")), (False, 3), "the other groups are read: 3 rows, the empty group adding none")
+        checks.equal(sorted(table()), sorted(key + (D1,) for key in EXPECT1 if EXPECT1[key]["group_id"] == 101), "only group 101's rows are saved")
+        fake.replies.clear()
+        fake.urls.clear()
+        retry = run(checks, module, fake, LATE, "retry")
+        if retry is None:
+            return
+        checks.equal((retry.get("skipped"), retry.get("rows"), retry.get("failed")), (False, 1, {}), "the update stayed open: the retry reads the 1 row that was missing")
+        checks.equal(
+            sorted(url for url in fake.urls if url.endswith("/prices")), [BASE + "/102/prices"],
+            "the retry asked for group 102 only: the empty group is saved, not asked again",
+        )
+        fake.urls.clear()
+        third = run(checks, module, fake, LATE, "third pass")
+        if third is None:
+            return
+        checks.equal((third.get("skipped"), third.get("rows"), fake.urls), (True, 0, [STAMP_URL]), "and then the update is finished")
+
+
+MALFORMED = (
+    ("a list", ["not", "a", "dict"]),
+    ("a string", "<html>502 Bad Gateway</html>"),
+    ("null", None),
+    ("a number", 42),
+    ("results that is not a list", {"success": True, "errors": [], "results": "oops"}),
+    ("no results at all", {"success": True, "errors": []}),
+)
+
+
+@in_run_folder
+def check_daily_prices_malformed_group_payload_fails_only_that_group(checks: Checks) -> None:
+    checks.note("")
+    checks.note("DAILY PRICES MALFORMED — a payload that is not a dict, or has no list of results, fails its own group and no other")
+    module = load(checks)
+    if module is None:
+        return
+    for label, bad in MALFORMED:
+        with isolated_home():
+            fake = FakeTcgcsv(PRICES1)
+            fake.replies[102] = bad
+            first = run(checks, module, fake, MIDDAY, "%s: the pass" % label)
+            if first is None:
+                continue
+            checks.equal(
+                (set(first.get("failed") or {}), first.get("skipped"), first.get("rows")), ({102}, False, 3),
+                "%s: group 102 is named in `failed`, group 101's 3 rows are written" % label,
+            )
+            checks.equal(sorted(table()), sorted(key + (D1,) for key in EXPECT1 if EXPECT1[key]["group_id"] == 101), "%s: only group 101's rows are saved" % label)
+            fake.replies.clear()
+            fake.urls.clear()
+            retry = run(checks, module, fake, LATE, "%s: the retry" % label)
+            if retry is None:
+                continue
+            checks.equal(
+                (retry.get("rows"), retry.get("failed"), sorted(url for url in fake.urls if url.endswith("/prices"))),
+                (1, {}, [BASE + "/102/prices"]),
+                "%s: the update stayed open, and the retry asked for group 102 only" % label,
+            )
+
+
+@in_run_folder
+def check_daily_prices_each_group_is_saved_when_it_is_read(checks: Checks) -> None:
+    checks.note("")
+    checks.note("DAILY PRICES ONE WRITE PER GROUP — a crash after group one keeps group one, and the next pass asks for the rest only")
+    module = load(checks)
+    if module is None:
+        return
+    with isolated_home():
+        fake = FakeTcgcsv(PRICES1)
+        fake.replies[101] = KeyboardInterrupt()  # served second: group 102 is read and gone before it
+        crashed = False
+        try:
+            module.run_pass(fake, now=MIDDAY)
+        except KeyboardInterrupt:
+            crashed = True
+        except Exception as exc:  # noqa: BLE001 a crash is a failed case with its own sentence
+            checks.ok(False, "the pass ran", "%s: %s" % (type(exc).__name__, exc))
+            return
+        checks.ok(crashed, "a crash that is not an Exception (a KeyboardInterrupt) reaches the caller")
+        checks.equal(sorted(table()), [(2001, "Normal", D1)], "group 102, read before the crash, is saved: its 1 row is in the table")
+        fake.replies.clear()
+        fake.urls.clear()
+        retry = run(checks, module, fake, LATE, "the next pass")
+        if retry is None:
+            return
+        checks.equal((retry.get("skipped"), retry.get("rows"), retry.get("failed")), (False, 3, {}), "the next pass reads group 101's 3 rows, with no failure")
+        checks.equal(sorted(url for url in fake.urls if url.endswith("/prices")), [BASE + "/101/prices"], "and asked for group 101 only: group 102 was saved")
+        checks.equal(day_of(table(), D1), EXPECT1, "the update is whole: all 4 rows, none doubled")
+        fake.urls.clear()
+        third = run(checks, module, fake, LATE, "the third pass")
+        if third is None:
+            return
+        checks.equal((third.get("skipped"), third.get("rows"), fake.urls), (True, 0, [STAMP_URL]), "and then the update is finished")
+
+
+def wait_between(events, before, after):
+    """The seconds slept between the request for `before` and the request for `after`."""
+    first, second = events.index(("get", before)), events.index(("get", after))
+    return sum(seconds for kind, seconds in events[first + 1:second] if kind == "sleep")
+
+
+def prices_url(group):
+    return "%s/%d/prices" % (BASE, group)
+
+
+def throttled_pass(checks: Checks, module, hint: float) -> None:
+    """Four groups; 201 and 203 answer HTTP 429; `net.retry_after` says `hint` seconds after a lost call and 0 after an
+    answered one, as `pipeline/net.py` keeps it. Every request and every sleep lands in one ordered log."""
+    delay = pricehistory.COURTESY_DELAY_SECONDS
+    served = [(201, "A"), (202, "B"), (203, "C"), (204, "D")]
+    label = "Retry-After %ss" % hint
+    with isolated_home():
+        fake = FakeTcgcsv({group: [source(group + 2800, "Normal", low=0.05, mid=0.2, high=1.5, market=0.25)] for group, _ in served})
+        fake.groups = served
+        fake.replies = {201: throttled(), 203: throttled()}
+        events, state = [], {"retry_after": 0.0}
+
+        def fetch(asked):
+            events.append(("get", asked))
+            try:
+                answer = fake(asked)
+            except pricehistory.PriceHistoryError:
+                state["retry_after"] = hint
+                raise
+            state["retry_after"] = 0.0
+            return answer
+
+        with mock.patch.object(pricehistory.net, "retry_after", lambda _url: state["retry_after"]), \
+                mock.patch("time.sleep", lambda seconds: events.append(("sleep", seconds))):
+            first = run(checks, module, fetch, MIDDAY, "%s: the pass" % label)
+        if first is None:
+            return
+        asked = [url for kind, url in events if kind == "get" and url.endswith("/prices")]
+        checks.equal(
+            asked, [prices_url(201), prices_url(202), prices_url(203)],
+            "%s: group 202 is read after the first 429, and group 204 is never asked for after the second" % label,
+        )
+        if {prices_url(201), prices_url(202)} <= set(asked):
+            checks.equal(
+                round(wait_between(events, prices_url(201), prices_url(202)), 6), round(max(delay, hint), 6),
+                "%s: the wait after a 429 is max(%s, Retry-After) = %s" % (label, delay, max(delay, hint)),
+            )
+        if {prices_url(202), prices_url(203)} <= set(asked):
+            checks.ok(
+                wait_between(events, prices_url(202), prices_url(203)) >= delay,
+                "%s: an answered request is followed by the plain pause of at least %ss" % (label, delay),
+            )
+        failed = set(first.get("failed") or {})
+        checks.ok({201, 203} <= failed and 202 not in failed, "%s: both throttled groups are named in `failed`, the read one is not" % label, str(failed))
+        checks.equal((first.get("skipped"), first.get("rows"), sorted(table())), (False, 1, [(3002, "Normal", D1)]), "%s: group 202's row is saved and nothing else" % label)
+        fake.replies.clear()
+        fake.urls.clear()
+        retry = run(checks, module, fake, LATE, "%s: the next pass" % label)
+        if retry is None:
+            return
+        checks.equal(
+            (retry.get("skipped"), retry.get("rows"), retry.get("failed"), sorted(url for url in fake.urls if url.endswith("/prices"))),
+            (False, 3, {}, [prices_url(201), prices_url(203), prices_url(204)]),
+            "%s: the update stayed open, and the next pass reads the 3 groups that are missing and not group 202" % label,
+        )
+
+
+@in_run_folder
+def check_daily_prices_throttle_waits_then_stops_after_two_answers(checks: Checks) -> None:
+    checks.note("")
+    checks.note("DAILY PRICES THROTTLE — after an HTTP 429 the wait is max(delay, Retry-After); a second 429 stops the pass with the update open")
+    module = load(checks)
+    if module is None:
+        return
+    # A Retry-After longer than the delay, and one shorter: the wait is the larger of it and the delay.
+    for hint in (7.0, 0.05):
+        throttled_pass(checks, module, hint)
+
+
+@in_run_folder
+def check_daily_prices_upgrade_from_schema_15(checks: Checks) -> None:
+    checks.note("")
+    checks.note("DAILY PRICES UPGRADE — a store stamped 15 with no daily tables gets them on its next open, keeps its rows, and takes a pass")
+    module = load(checks)
+    if module is None:
+        return
+    survivor = Reading(market="1.00", at=1, source="x", kind="run")
+
+    def raw(sql, *args):
+        gc.collect()
+        conn = sqlite3.connect(Store().db_path, isolation_level=None)
+        try:
+            return conn.execute(sql, args).fetchall()
+        finally:
+            conn.close()
+
+    like = "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'daily!_price%' ESCAPE '!'"
+    with isolated_home():
+        with Store().write() as snapshot:
+            snapshot.readings.entries["555"] = survivor
+        made = sorted(name for (name,) in raw(like))
+        checks.ok("daily_prices" in made, "a store opened at the current schema has a daily_prices table", str(made))
+        gc.collect()
+        conn = sqlite3.connect(Store().db_path, isolation_level=None)
+        try:
+            for name in made:
+                conn.execute("DROP TABLE IF EXISTS %s" % name)
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', '15')")
+        finally:
+            conn.close()
+        checks.equal((raw("SELECT value FROM meta WHERE key = 'schema'"), raw(like)), ([("15",)], []), "the fixture really is schema 15: no daily table")
+        Store().read()
+        gc.collect()
+        checks.equal(
+            (sorted(name for (name,) in raw(like)), raw("SELECT value FROM meta WHERE key = 'schema'")), (made, [("16",)]),
+            "opening it creates the daily tables again and stamps it 16",
+        )
+        checks.equal(Store().read().readings.entries.get("555"), survivor, "the rows already there survive")
+        result = run(checks, module, FakeTcgcsv(PRICES1), MIDDAY, "a pass over the upgraded store")
+        if result is None:
+            return
+        checks.equal((result.get("rows"), day_of(table(), D1)), (4, EXPECT1), "and the upgraded store takes a pass: all 4 rows")
+
+
 CHECKS = (
     check_daily_prices_fake_goes_through_the_real_market,
     check_daily_prices_one_pass_writes_every_row,
     check_daily_prices_same_update_is_skipped,
     check_daily_prices_new_update_adds_rows_and_keeps_old_ones,
     check_daily_prices_failing_group_is_named_and_retried,
+    check_daily_prices_unsuccessful_group_fails_and_an_empty_one_does_not,
+    check_daily_prices_malformed_group_payload_fails_only_that_group,
+    check_daily_prices_each_group_is_saved_when_it_is_read,
+    check_daily_prices_throttle_waits_then_stops_after_two_answers,
     check_daily_prices_only_category_89_and_the_request_budget,
     check_daily_prices_site_rules_user_agent_and_pause,
+    check_daily_prices_upgrade_from_schema_15,
 )
