@@ -18,8 +18,8 @@ across four sets. Slabs have no history here at all (the `slabs` tables hold zer
 | `readings` table (`banchi readings show`, D189, the market reading is a table) | Newest market price per SKU | One reading per SKU, replaced on adopt | A cache, not history. Useless for time series. |
 | `inventory/price-trends.json` | Month and annual points for the daily price job | Same window as the archive | A copy of what the archive holds. |
 | Card Ladder (D320, My Slabs reads Card Ladder) | Slab sales, value and population | Card Ladder's own depth | Needs the owner's paid login. No slab is entered yet, so there is nothing to test. |
-| TCGCSV daily archive (tcgcsv.com) | Nightly dump of TCGplayer's whole catalog prices | Its FAQ names the first daily file; not checked by download | Market and listing prices, not individual sales. Not downloaded. |
-| PriceCharting, Cardmarket | eBay sold prices; EU marketplace prices | Years, per their sites | Different markets and fees from TCGplayer. Not downloaded. |
+| TCGCSV daily archive (tcgcsv.com) | Nightly dump of TCGplayer's whole catalog prices | Its FAQ names the first daily file; not checked by download | Market and listing prices, not individual sales. Whether it carries Riftbound is unverified. Not downloaded. |
+| PriceCharting, Cardmarket | eBay sold prices; EU marketplace prices | Unverified | Different markets and fees from TCGplayer. Not downloaded. |
 
 ## Rules fixed before any test ran
 
@@ -29,8 +29,8 @@ across four sets. Slabs have no history here at all (the `slabs` tables hold zer
 - Momentum: 4 weeks back, skip 1 week, then 4 weeks ahead. Price at least $1, at least 2
   sales in each week used. Measure each card against its own set's median move that week,
   so the shared post-release fall is not mistaken for momentum. Skip each set's first 4 weeks.
-- Score each test by rank correlation (Spearman) between signal and later move, per week, then
-  average. A 90% interval comes from resampling blocks of 5 weeks. Zero means no signal.
+- Score each test by rank correlation (Spearman, ties share a rank) between signal and later
+  move, per week, then average. A 90% interval comes from resampling blocks of 5 weeks. Zero means no signal.
 - Effective sample is weeks, not card-weeks, because cards in one set move together.
 
 ## Findings
@@ -38,7 +38,7 @@ across four sets. Slabs have no history here at all (the `slabs` tables hold zer
 ### 1. Price fall after release: real, steep and early. Its shape repeats; its depth does not.
 
 Median price as a share of the release-week price, Riftbound singles. Cards per cell are
-11 to 69.
+16 to 69.
 
 | Set | Rarity | 2 wk | 4 wk | 8 wk | 12 wk | 24 wk |
 |---|---|---|---|---|---|---|
@@ -52,10 +52,13 @@ Median price as a share of the release-week price, Riftbound singles. Cards per 
 | Vendetta | Epic | 0.55 | 0.48 | 0.30 | 0.24 | — |
 | Origins | Rare | 1.07 | 1.03 | 0.85 | 0.56 | 0.70 |
 
-- In sets 2 to 4, commons and uncommons lose about half their release-week price within
-  2 weeks, and level out near 0.4 by week 8.
-- Showcase cards fall least, and Unleashed's Showcase cards held their release price.
-- Origins, the first set, behaved differently: rares rose for 4 weeks before falling.
+- In sets 2 to 4, commons lose about half their release-week price within 2 weeks (0.47 to
+  0.57) and level out near 0.4 by week 8. Uncommons mostly follow (0.53 to 0.72 at 2 weeks).
+- Epics fall later but often further: 0.55 to 0.77 at 2 weeks, 0.24 to 0.54 by week 12.
+- Showcase cards fell least in Unleashed and Vendetta, and in Spiritforged through week 8.
+  Unleashed's Showcase cards held their release price.
+- Origins, the first set, behaved differently: rares rose for 4 weeks before falling, and its
+  Showcase cards ended lowest of its rarities.
 - Pokemon Mega Evolution (5 to 12 cards per rarity) shows the same shape: 0.43 to 0.58 by
   week 4 to 8.
 - **Did it predict?** The average of Origins and Spiritforged at week 12 forecast Unleashed and
@@ -65,7 +68,8 @@ Median price as a share of the release-week price, Riftbound singles. Cards per 
 - Presale weeks: rares sold at many times their release-week price two weeks before
   release (8 to 26 cards per set). This is suggestive only, from a few sales.
 
-**Use:** a fresh set's commons, uncommons and Epics are worth most in their first two weeks.
+**Use:** a fresh set's commons and uncommons are worth most in their first two weeks, and
+Epics in their first month.
 That is a timing rule for listing, not a price.
 
 ### 2. Momentum (singles): no usable signal
@@ -87,28 +91,31 @@ little back, and every interval crosses zero.
 Over all weeks the score was 0.07 (interval 0.01 to 0.13, 2,839 product-weeks). The first half
 scored 0.12 and the second half −0.00. It did not hold, so it is not usable.
 
-### 4. Lowest listing against market price: the one signal that predicted
+### 4. Lowest listing against market price: predicted for sealed, weak for singles
 
-Signal: the lowest listing divided by TCG Market Price. Outcome: the change in TCG Market Price
-over the next 14 days. Same SKUs each window, price at least $1.
+Signal: the lowest listing divided by TCG Market Price, from one day's file. Outcome: the
+change in TCG Market Price from the next file (one or two days later) to a file about two weeks
+on, so the two readings share no noise. Three windows that do not overlap. Price at least $1.
 
-| Window | SKUs | Score | Score after the prior 14-day move | Sealed only |
-|---|---|---|---|---|
-| 1 | 334 | 0.14 | 0.15 | 0.53 (83) |
-| 2 | 333 | 0.36 | 0.36 | 0.41 (83) |
-| 3 | 396 | 0.35 | 0.32 | 0.54 (111) |
+| Window | SKUs | All | Singles | Sealed (count) | All, after the prior move |
+|---|---|---|---|---|---|
+| 1 (20 days) | 338 | 0.20 | 0.07 | 0.29 (83) | not measured |
+| 2 (14 days) | 327 | 0.15 | −0.03 | 0.51 (83) | 0.15 |
+| 3 (13 days) | 394 | 0.31 | 0.16 | 0.52 (111) | 0.28 |
 
-- When the cheapest listing sits below the market price, the market price tends to fall
-  toward it, and the reverse. About 1 SKU in 4 has its lowest listing above market.
-- It is not just the market price snapping back: it survives removing the prior 14-day move.
+- For sealed product, when the cheapest listing sits below the market price, the market price
+  tends to fall toward it over the next two weeks, and the reverse. All three windows agree.
+- For singles the score is small and changes sign. Not usable for singles.
+- It is not the market price snapping back: it survives removing the move since the window
+  before. Only 1% to 3% of SKUs had no market move, so ties do not drive it.
 - The store's own listing was the lowest on only 6 of 428 SKUs, so this is not the store
   moving its own number.
-- **Limits:** 3 windows from about 7 weeks of files, mostly the same SKUs, all at one time of
-  year. Treat it as strong-looking but not yet proven. Only the store's own listed SKUs.
+- **Limits:** 3 windows from about 7 weeks of files, at one time of year, 83 to 111 sealed
+  SKUs. Suggestive, not proven. Only the store's own listed SKUs.
 
 ### 5. Sealed against singles from the same set: unmeasured in practice
 
-The pooled score was 0.27 over 51 set-periods in 7 sets. Per set it ran from −0.25 to 0.40,
+The pooled score was 0.27 over 51 set-periods in 7 sets. Per set it ran from −0.22 to 0.40,
 with two of six sets negative. Too few sealed products per set to separate a signal from the
 gap between sets.
 
