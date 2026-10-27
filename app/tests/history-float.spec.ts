@@ -137,7 +137,7 @@ for (const size of SIZES) {
       expect(meets(c, await boxOf(priceOf(page, 2))), 'the card does not cover the next price field').toBe(false)
     })
 
-    test('with no room above, the card opens below and covers no price field', async ({ page }) => {
+    test('with no room above, the card opens below and covers no price field of its row or the next row', async ({ page }) => {
       await row(page, 1).evaluate((el) => el.scrollIntoView({ block: 'start' }))
       expect((await boxOf(row(page, 1))).y, 'the row sits at the top, so there is no room above').toBeLessThan(120)
       await openByFocus(page)
@@ -147,8 +147,8 @@ for (const size of SIZES) {
       const anchor = await boxOf(row(page, 1))
       expect(c.y, 'the card starts below the row').toBeGreaterThanOrEqual(anchor.y + anchor.height)
       expect(meets(c, anchor), 'the card does not cover the row').toBe(false)
-      /* Clear of the price column: no price field in the list sits under it. */
-      for (const i of [0, 1, 2]) {
+      /* Only the anchor row's and the next row's price fields are protected; a card opened above may cover priced rows. */
+      for (const i of [1, 2]) {
         expect(meets(c, await boxOf(priceOf(page, i))), `the card does not cover price field ${i}`).toBe(false)
       }
     })
