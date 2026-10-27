@@ -115,6 +115,8 @@ def _card(index, name, number, total="159", metadata=None, confidence="high"):
 #
 # Only a market move UP may raise a live price. Undercut, unsold and market down may only lower it.
 # A live row whose trigger would raise its price stays at_rule at its asking price, source Live.
+# A suggestion moves in its reason's direction: a market move UP never lowers a price, so a row whose
+# rule price sits under its ask stays at_rule too.
 
 TODAY = "2026-10-27"
 
@@ -287,6 +289,21 @@ def _suggest_checks(c: Checks) -> None:
         crash or f"fired: {hit!r}",
     )
 
+    # --- a live listing with no asking price (sections 3 and 4b) -----------------------------
+    # A live listing can carry no asking price. The rule's price must not be compared to None.
+    no_ask = _listing(sku="NA", asking=None, market=Decimal("10.00"))
+    out, crash = attempt(lambda: suggest.review([no_ask], _policy(), TODAY))
+    c.ok(
+        crash == "" and groups(out, "NA") == ["at_rule"],
+        "a live listing with no asking price and a market price: review does not crash, and it is Going at the rule",
+        crash or f"review: {out!r}",
+    )
+    c.ok(
+        crash == "" and field(out, "NA", "source") == "Live" and field(out, "NA", "price") is None,
+        "and the row says source Live with no price, since there is no asking price to keep",
+        crash or f"review: {out!r}",
+    )
+
     # --- groups and prices (sections 2 and 3) ------------------------------------------------
     up = review(_listing(sku="UP", market=Decimal("11.80")))
     c.equal(groups(up, "UP"), ["suggested"], "market up 18% is a suggestion, inside the cap")
@@ -393,8 +410,9 @@ def _suggest_checks(c: Checks) -> None:
         "and the clamped move, 0.60 to 0.50, is inside the cap",
     )
 
+    # The market moved DOWN from $26.00 to $22.03, so the rule's cut is a lowering suggestion.
     priced = review(
-        _listing(sku="RL", asking=Decimal("25.00"), market_listed=Decimal("18.00"), market=Decimal("22.03")),
+        _listing(sku="RL", asking=Decimal("25.00"), market_listed=Decimal("26.00"), market=Decimal("22.03")),
         rule="undercut:5",
     )
     c.equal(
@@ -480,6 +498,24 @@ def _suggest_checks(c: Checks) -> None:
         "market up 18% with an undercut also firing still raises: the market move is the raise",
     )
     c.equal(field(both, "BO", "price"), Decimal("11.80"), "to today's market")
+
+    # A market move UP only raises. A rule price under the ask is a cut, and a cut is no suggestion
+    # under "market up": the row stays Going at the rule, at its asking price.
+    cut_up = review(_listing(sku="MU", asking=Decimal("30.00"), market=Decimal("12.00")))
+    c.equal(
+        groups(cut_up, "MU"),
+        ["at_rule"],
+        "market up 20% with the rule at 12.00 under a 30.00 ask: Going at the rule, not a cut under market up",
+    )
+    c.equal(field(cut_up, "MU", "price"), Decimal("30.00"), "and it keeps its asking price")
+    c.equal(field(cut_up, "MU", "source"), "Live", "and its source says Live")
+    cut_small = review(_listing(sku="MS", asking=Decimal("13.00"), market=Decimal("12.00")))
+    c.equal(
+        groups(cut_small, "MS"),
+        ["at_rule"],
+        "market up 20% with the rule at 12.00 under a 13.00 ask: a small cut is still no suggestion under market up",
+    )
+    c.equal(field(cut_small, "MS", "price"), Decimal("13.00"), "and it keeps its asking price")
 
     # --- no trigger, no suggestion: Going at the rule (4b) -----------------------------------
     ar = review(_listing(sku="AR", market=Decimal("11.00")))

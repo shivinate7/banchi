@@ -145,11 +145,11 @@ def review(listings: list, policy: dict, today: str) -> dict:
             continue
 
         triggers = fired(listing, today)
-        # A trigger that leaves the price where it is has nothing to suggest. Only a market move
-        # UP may raise a price: undercut, unsold and market down mean the price is too high.
-        raises = priced is not None and priced > listing["asking"]
+        # A trigger that leaves the price where it is has nothing to suggest. No asking price fires
+        # no trigger. A suggestion moves in its reason's direction: only a market move UP may raise
+        # a price, and a market move UP never lowers one.
         up = MARKET_MOVED in triggers and market > listing["market_listed"]
-        if not triggers or priced is None or priced == listing["asking"] or (raises and not up):
+        if not triggers or priced is None or priced == listing["asking"] or (priced > listing["asking"]) != up:
             out["at_rule"].append(_row(listing, "Live", listing.get("asking"), ""))
             continue
 
