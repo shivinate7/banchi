@@ -1,6 +1,9 @@
 # D138 — One process serves the product
 
-**Settled by interview. The owner wants an easier way to package this, and one server, not two.** Nothing is built under this entry. The answers below are the constraints. The ruling is what they leave standing.
+The owner wants an easier way to package this, and one server, not two. This entry was settled by interview. Nothing is built under this entry. The answers below are the constraints. The ruling is what they leave standing.
+
+Kind: build
+Plan: docs/specs/one-process.md#0-what-this-is (python)
 
 ### What the owner answered
 

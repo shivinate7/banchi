@@ -1,6 +1,6 @@
 ## DEBT61 — build proposals are still open
 
-Each open item was checked against the code and stays open. Item 6 has a plan and no build ruling.
+**What.** Build proposals carried over from earlier work are still open. Each open item was checked against the code and stays open. Item 6 has a plan and no build ruling.
 
 3. Fixed. `app/src/RunPanel.tsx` takes a run read only when it names the open run, so a late answer for the run just left never replaces the open run's. On a direct switch the panel on screen is drawn from the new run's list row, with the row's own step open and no line that needs the manifest or the console. Its header and body are inert and dimmed, and a failed read still shows its notice. A first open still draws the loading panel. Two limits are accepted for now and not fixed. (a) The stand-in leaves out the log well, so the column holds its height only when the run that lands shows no log. A switch to a run at Identify with a console grows the column once when the answer lands. (b) A step that finishes on the run just left can still set its finished card and console on the newly opened panel (`RunPanel`'s `settle`).
 4. Closed, no change. The arrow-key listeners in `app/src/BoxBrowse.tsx` and `app/src/RunsComposer.tsx` skip typing targets only. No web API reports a screen reader's browse mode. NVDA and JAWS hold arrow keys in browse mode, so the page never sees them. Neither was tried with a real screen reader (unmeasured).

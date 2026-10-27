@@ -1,5 +1,7 @@
 ## DEBT50 — git and gh CLI traps hit from this checkout
 
+**What.** The git and gh command-line tools have traps that sessions hit from this checkout, and each one is listed below.
+
 - **`git push` fails with HTTP 400 on a pack over 1 MiB, from this Mac.** Apple Git 2.39.3 switches to chunked transfer past `http.postBuffer`'s 1 MiB default, and something on the network path rejects it (`send-pack: unexpected disconnect`). An empty `git ls-remote origin` is the tell that nothing landed. Fix: `git config http.postBuffer 524288000`, per repo, and again in a fresh clone.
 - **`gh pr list --author '@me'` returns other sessions' PRs.** Every session commits as one git user and authenticates as one GitHub account. Identify a session's own PR by branch name.
 - **Never leave `main` checked out in a worktree.** It changes which local-half command `make merge` picks for every session sharing the clone.
