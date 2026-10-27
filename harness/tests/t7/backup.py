@@ -1,18 +1,21 @@
-"""T7 group: the nightly backup to the iCloud Drive folder (DEBT67, capture photographs exist in one place).
+"""T7 group: the backup to the iCloud Drive folder (DEBT67, capture photographs exist in one place).
 
 Part of `harness/tests/t7_store_and_seams.py` (one verdict). `CHECKS` is this group's checks in
 the order `CHECK_ORDER` runs them.
 
-THE CONTRACT THE BUILD MEETS. The checks are written first, so every name the build needs is pinned here:
+THE CONTRACT THE BUILD MEETS. The checks are written first, so every name the build needs is pinned here.
+A GOOD COPY IS NEVER REPLACED BY A BAD ONE: no photograph or capture in the destination is ever overwritten,
+and no damaged store snapshot is ever moved in.
 
   scripts/backup-daily.py     the job, modelled on `scripts/price-refresh-daily.py` (DEBT69).
                               No flag: run once, exit 0 for ok and non-zero for failed.
-                              `--agent [--remove]` installs or removes the launchd job.
+                              `--verify`: read-only, see "the verify run" below.
+                              `--agent [--remove]` installs or removes the launchd job (kept, not installed).
                               Module names `LABEL = "com.banchi.backup"`, `ROOT` (the checkout) and
                               `agent(remove)`, which calls `launchagent.agent` (`scripts/launchagent.py`) and
                               reads the module's `ROOT` when it is called, not when it is defined. The job
                               names `launchctl` nowhere else: the shared helper is the only caller.
-  make backup                 `scripts/backup-daily.py`, once, now.
+  make backup                 `scripts/backup-daily.py $(ARGS)`, once, now; `ARGS=--verify` checks the copy.
   make backup-agent           `scripts/backup-daily.py --agent $(ARGS)`; `ARGS=--remove` removes it.
   BANCHI_HOME                 the source root, as `store.files.home()` (D43): `inventory/store.sqlite`,
                               `photos/` (D172) and `captures/`.
@@ -29,7 +32,12 @@ THE CONTRACT THE BUILD MEETS. The checks are written first, so every name the bu
                               waited on. It is built OUTSIDE the destination and only the finished file is
                               moved in, so a killed run leaves no temp or journal file there and a failed run
                               leaves the last good snapshot.
-  two snapshots               (owner ruling) the destination keeps TWO: the nightly, `inventory/store.sqlite`,
+  the integrity check         the finished snapshot must pass `PRAGMA integrity_check` BEFORE anything is moved
+                              in (the online backup copies a damaged page without reading it). A store that
+                              fails it moves in nothing of any name: the run ends `failed`, the nightly, the
+                              weekly and the dated copy stay as the last good run left them, and the
+                              photographs are still copied. On a first run it leaves no store copy at all.
+  the snapshots               (owner ruling) the destination keeps the nightly, `inventory/store.sqlite`,
                               replaced every run, and the weekly, at the relative path in the job's
                               `WEEKLY_SNAPSHOT` constant (a string; the checks read it from there). The weekly
                               is made on the first night and then replaced only when its file's mtime is 7 days
@@ -37,6 +45,10 @@ THE CONTRACT THE BUILD MEETS. The checks are written first, so every name the bu
                               replaces neither. A night that fails only on bad files (see the copy) still
                               has a good snapshot and replaces the nightly; the weekly on such a night is
                               not pinned.
+  the dated copy              a third file, at the relative path in the job's `DATED_SNAPSHOT` constant (a
+                              string with one `%s`, filled with the local date `YYYY-MM-DD`; the checks read it
+                              from there). It is written once per local day and NEVER replaced: a second run the
+                              same day keeps the day's first copy, byte for byte, while the nightly moves on.
   the shrink guard            (DEBT67) the job keeps a SIDECAR beside the last-run line: the file named by its
                               `SIDECAR` constant (a plain file name in the machine folder, not the last-run
                               file and not a lock). It holds the `cards` and `boxes` row counts of the last
@@ -46,10 +58,16 @@ THE CONTRACT THE BUILD MEETS. The checks are written first, so every name the bu
                               and leaves the sidecar as it was, so the next night compares to the same good
                               run. The counts come from the sidecar and the night's store (D88), never from a
                               file in the destination. Other nights are not pinned. No sidecar is a first night.
-  the copy                   every file under `photos/` and `captures/`. A destination file with the
-                              source's size and mtime is skipped, decided by `stat` alone: the job never
-                              opens a destination file (an evicted iCloud file would download). It never
-                              deletes in the destination, so a sold card's photograph (D89) stays.
+  the copy                   every file under `photos/` and `captures/`. A destination file is NEVER
+                              overwritten. One that is missing is copied. One with the source's size and mtime
+                              is skipped, decided by `stat` alone: the job never opens a destination file (an
+                              evicted iCloud file would download). One that exists with another size or
+                              mtime (a re-shoot, D26, looks like this) is left untouched and counted as
+                              `differs`: the run ends `failed`, its reason carries that count as `N files differ`
+                              and says that accepting one is a manual act (delete its copy by hand), and the
+                              walk goes on, so a missing file is still copied. The differs are not forgotten:
+                              the next run fails the same way. It never deletes in the destination, so a sold
+                              card's photograph (D89) stays.
                               Mtimes within 2 s of each other count as equal (a synced folder rounds them);
                               the size must still match. One file that cannot be read or stat-ed (a dangling
                               link, no permission) does not stop the run: the rest are copied, the snapshot is
@@ -75,6 +93,14 @@ THE CONTRACT THE BUILD MEETS. The checks are written first, so every name the bu
                               older than 36 hours (by its own time and by the file's mtime) carries the word
                               `stale`; a younger line does not. The checks load the job alone: the status
                               printer is not named here, or the harness scope would widen to what it reads.
+  the verify run              `--verify`: read-only. It hashes (sha256) every source file of `photos/` and
+                              `captures/` against the destination and runs the integrity check on the newest dated
+                              copy. It prints one line with `matches=N mismatches=N missing=N` and `integrity=ok`
+                              (or `bad`), then one `mismatch <path>` or `missing <path>` line per bad file, and exits
+                              0 only when nothing mismatches, nothing is missing and the copy is `ok`. It reads
+                              destination files on purpose, so a flipped byte under an unchanged size and mtime
+                              is seen. It writes nothing: not the destination, not the machine folder, no
+                              last-run line.
 
 WHAT THE CHECKS DO NOT RUN. `--agent` is never executed: it bootstraps a real launchd job. The agent half is
 proved through the module with a fake `launchctl` first on PATH, a fake HOME and a fake checkout root.
@@ -257,20 +283,21 @@ def weekly_rel():
     return Path(*parts).as_posix() if plain and Path(*parts).as_posix() != NIGHTLY else None
 
 
-def run_job(case: Case, dest=DEFAULT, cmd=None) -> Ran:
+def run_job(case: Case, dest=DEFAULT, cmd=None, args=()) -> Ran:
     """The job as launchd runs it: a fresh process, a fake HOME, the source and destination named by env.
 
     HOME is overridden so `~/.banchi` and the default iCloud path land in the run folder even when the
     build ignores the destination override. `dest=None` leaves the destination to its default. `cmd` is
     the argument list after the interpreter, for a copy of the job in a fake checkout or a wrapper. With no
-    `cmd` the job runs from a fake main tree, so a run inside a linked worktree still takes the main-tree path.
+    `cmd` the job runs from a fake main tree, so a run inside a linked worktree still takes the main-tree path;
+    `args` are the flags after it (`--verify`).
     """
     name = dest_env()
     if name is None:
         return Ran(None, "", "scripts/backup-daily.py does not define the DEST_ENV constant")
     if cmd is None:
         tree = case.root / "job-tree" / "scripts" / SCRIPT.name
-        cmd = [str(tree if tree.exists() else fake_checkout(case, "job-tree", linked=False))]
+        cmd = [str(tree if tree.exists() else fake_checkout(case, "job-tree", linked=False)), *args]
     env = dict(os.environ)
     env.pop("BANCHI_SLOT_REGISTRY", None)
     env.update(HOME=str(case.home), BANCHI_HOME=str(case.src))
@@ -322,6 +349,16 @@ def expect_failed(checks: Checks, label: str, ran: Ran, case: Case) -> bool:
     return checks.ok(ok, label, f"exit {ran.code}, last-run {line.get('raw')!r}\n{said(ran)}")
 
 
+def expect_differs(checks: Checks, label: str, ran: Ran, case: Case, count: int) -> bool:
+    """The negative the never-overwrite rule hangs on: exit non-zero and a recorded `failed` line that carries
+    the count of files left untouched and says that accepting one is a manual act."""
+    line = last_run(case) or {}
+    raw = line.get("raw") or ""
+    named = re.search(rf"\b{count} files? differs?\b", raw) is not None and re.search(r"by hand|manual", raw, re.I) is not None
+    ok = ran.code not in (0, None) and line.get("verdict") == "failed" and named
+    return checks.ok(ok, label, f"expected {count} differing files named; exit {ran.code}, last-run {raw!r}\n{said(ran)}")
+
+
 def rows_from(conn: sqlite3.Connection) -> dict:
     """Every table's rows, order-free: the whole of what a snapshot must equal."""
     out = {}
@@ -340,13 +377,10 @@ def committed_rows(path: Path) -> dict:
         conn.close()
 
 
-def snapshot_view(case: Case, rel: str = NIGHTLY):
-    """(rows, integrity) of a destination snapshot, read from a copy elsewhere so reading it leaves no
-    `-wal` or `-shm` beside the file under test. (None, why) when it cannot be opened."""
-    snap = case.dest / rel
-    if not snap.is_file():
-        return None, f"no snapshot at {snap}"
-    probe = case.root / "verify" / "store.sqlite"
+def copy_view(snap: Path, scratch: Path):
+    """(rows, integrity) of a store file, read from a copy in `scratch` so reading it leaves no `-wal` or
+    `-shm` beside the file under test. (None, why) when it cannot be opened."""
+    probe = scratch / "store.sqlite"
     probe.parent.mkdir(exist_ok=True)
     shutil.copyfile(snap, probe)
     try:
@@ -357,6 +391,19 @@ def snapshot_view(case: Case, rel: str = NIGHTLY):
             conn.close()
     except sqlite3.Error as exc:
         return None, str(exc)
+
+
+def snapshot_view(case: Case, rel: str = NIGHTLY):
+    """(rows, integrity) of a destination snapshot. (None, why) when it is absent or cannot be opened."""
+    snap = case.dest / rel
+    if not snap.is_file():
+        return None, f"no snapshot at {snap}"
+    return copy_view(snap, case.root / "verify")
+
+
+def integrity_ok(case: Case, path: Path) -> bool:
+    """Whether a store file passes SQLite's integrity check on its own, read from a copy."""
+    return copy_view(path, case.root / "integrity")[1] == [("ok",)]
 
 
 def make_readonly(root: Path) -> None:
@@ -383,12 +430,25 @@ def age(path: Path, days: float) -> None:
     os.utime(path, ns=(then, then))
 
 
+def dated_pattern():
+    """A regex for the dated copy's path under the destination (`inventory/store-YYYY-MM-DD.sqlite`), built
+    from the job's `DATED_SNAPSHOT` constant. None when the job names none."""
+    rel = job_constant("DATED_SNAPSHOT")
+    return re.escape(rel).replace("%s", r"\d{4}-\d\d-\d\d") if rel and rel.count("%s") == 1 else None
+
+
+def dated_copies(case: Case) -> list:
+    """The dated copies in the destination, as relative paths, oldest name first."""
+    pattern = dated_pattern()
+    return sorted(rel for rel in dest_files(case) if pattern and re.fullmatch(pattern, rel))
+
+
 def strays(case: Case):
-    """Destination files that are neither a copied photograph or capture nor a snapshot: a temp, `-wal`,
-    `-shm` or journal file would be one. None when the destination is not there."""
+    """Destination files that are neither a copied photograph or capture nor a snapshot (the nightly, the weekly
+    or a dated copy): a temp, `-wal`, `-shm` or journal file would be one. None when the destination is not there."""
     if not case.dest.is_dir():
         return None
-    snapshots = {NIGHTLY, weekly_rel()}
+    snapshots = {NIGHTLY, weekly_rel(), *dated_copies(case)}
     return sorted(rel for rel in dest_files(case) if rel not in FILES and rel not in snapshots)
 
 
@@ -396,16 +456,26 @@ def strays(case: Case):
 SIZE = {"cards": 10, "boxes": 4}
 
 
-def seed_counts(inventory: Path, cards: int, boxes: int) -> None:
-    """Make the store hold exactly this many `cards` and `boxes` rows (the real schema, D88), committed."""
+def seed_counts(inventory: Path, cards: int, boxes: int, pad: int = 0) -> None:
+    """Make the store hold exactly this many `cards` and `boxes` rows (the real schema, D88), committed.
+    `pad` makes each payload that many bytes longer, so the file spans enough pages to damage one."""
+    payload = '{"x": "%s"}' % ("y" * pad) if pad else "{}"
     conn = db.connect(inventory)
     try:
         for table, want in (("cards", cards), ("boxes", boxes)):
             conn.execute(f"DELETE FROM {table}")
             for i in range(want):
-                conn.execute(f"INSERT INTO {table} (key, payload) VALUES (?, ?)", (f"{table}-{i}", "{}"))
+                conn.execute(f"INSERT INTO {table} (key, payload) VALUES (?, ?)", (f"{table}-{i}", payload))
     finally:
         conn.close()
+
+
+def damage(path: Path, page: int = 4) -> None:
+    """Overwrite eight bytes of one page of a store file: SQLite's online backup copies that page without
+    reading it, and only `PRAGMA integrity_check` notices."""
+    data = bytearray(path.read_bytes())
+    data[page * 4096:page * 4096 + 8] = b"\xff" * 8
+    path.write_bytes(bytes(data))
 
 
 def online_backup(store: Path, target: Path) -> None:
@@ -602,7 +672,9 @@ def check_backup_snapshot_beside_an_open_writer(checks: Checks) -> None:
 
 @robust
 def check_backup_copies_and_skips_by_stat(checks: Checks) -> None:
-    """Photographs and captures are copied once, an unchanged file is not rewritten, a changed one is."""
+    """Photographs and captures are copied once. An unchanged file is not rewritten, and neither is a changed one:
+    it is left as it is and fails the run (`check_backup_a_changed_source_file_never_overwrites_its_copy` takes the
+    rest of that rule)."""
     case = Case("copy")
     seed_store(case)
     seed_files(case)
@@ -625,18 +697,19 @@ def check_backup_copies_and_skips_by_stat(checks: Checks) -> None:
     put(case.src, "photos/ff/ff00ee330003.jpg", b"\xff\xd8\xff" + b"E" * 400)
     source_before = fingerprint(case.src)
     third = run_job(case)
-    expect_ok(checks, "third night, one file changed and one added: two copied, four skipped", third, case, copied=2, skipped=4)
+    failed = expect_differs(checks, "third night, one file changed and one added: exit non-zero and a failed line that names 1 differing file",
+                            third, case, 1)
     got = dest_files(case)
     checks.ok(
-        changed in got and got[changed].read_bytes() == bytes(reversed(FILES[changed])),
-        "a source file with the same size and a newer mtime replaces its copy",
+        failed and changed in got and got[changed].read_bytes() == FILES[changed] and stat_key(got[changed]) == stats[changed],
+        "a source file with the same size and a newer mtime does not replace its copy: bytes, inode, size, mtime and ctime are as they were",
     )
-    checks.ok("photos/ff/ff00ee330003.jpg" in got, "and the new photograph is copied")
+    checks.ok(failed and "photos/ff/ff00ee330003.jpg" in got, "and the new photograph is copied")
     checks.ok(
-        all(rel in stats and rel in got and stats[rel] == stat_key(got[rel]) for rel in FILES if rel != changed),
+        failed and all(rel in stats and rel in got and stats[rel] == stat_key(got[rel]) for rel in FILES if rel != changed),
         "the four unchanged files still were not rewritten",
     )
-    checks.ok(third.code == 0 and source_before == fingerprint(case.src), "the source files are as the job found them")
+    checks.ok(failed and source_before == fingerprint(case.src), "the source files are as the job found them")
 
 
 @robust
@@ -1063,7 +1136,9 @@ def check_backup_status_flags_an_old_last_run(checks: Checks) -> None:
 @robust
 def check_backup_mtimes_within_two_seconds_are_equal(checks: Checks) -> None:
     """A synced folder rounds mtimes, so a destination file whose mtime is within 2 s of the source's, either
-    way, is the same file and is skipped. The size must still match and a larger gap is still a change."""
+    way, is the same file and is skipped. The size must still match and a larger gap is still a change: a
+    differing file is left untouched and fails the run (never rewritten), and the three within 2 s are not
+    counted as differing."""
     case = Case("mtime-slack")
     seed_store(case)
     seed_files(case)
@@ -1077,15 +1152,16 @@ def check_backup_mtimes_within_two_seconds_are_equal(checks: Checks) -> None:
     os.utime(dest[apart], ns=(T0 - 5 * SECOND,) * 2)
     dest[resized].write_bytes(b"short")  # another size, mtime a second off
     os.utime(dest[resized], ns=(T0 + SECOND,) * 2)
-    kept = {rel: stat_key(dest[rel]) for rel in (ahead, behind, same)}
+    kept = {rel: stat_key(dest[rel]) for rel in (ahead, behind, same, apart, resized)}
     ran = run_job(case)
-    expect_ok(checks, "next night: the file 5 s apart and the file of another size are copied, the three within 2 s are skipped",
-              ran, case, copied=2, skipped=3)
+    failed = expect_differs(checks, "next night: the file 5 s apart and the file of another size fail the run as 2 differing files, the three within 2 s are not counted",
+                            ran, case, 2)
     got = dest_files(case)
-    checks.ok(all(rel in got and kept[rel] == stat_key(got[rel]) for rel in kept),
+    checks.ok(failed and all(rel in got and kept[rel] == stat_key(got[rel]) for rel in (ahead, behind, same)),
               "a destination file 1.5 s ahead, 1.5 s behind or equal is not rewritten")
-    checks.ok(all(rel in got and got[rel].read_bytes() == FILES[rel] for rel in (apart, resized)),
-              "the file 5 s apart and the file of another size hold the source's bytes again")
+    checks.ok(failed and all(rel in got and kept[rel] == stat_key(got[rel]) for rel in (apart, resized))
+              and got[apart].read_bytes() == FILES[apart] and got[resized].read_bytes() == b"short",
+              "the file 5 s apart and the file of another size are left as they were: not rewritten, not repaired")
 
 
 @robust
@@ -1276,6 +1352,153 @@ def check_backup_a_linked_worktree_with_a_destination_leaves_the_machine_folder_
     checks.ok(ran_ok and left == [], "and it writes no last-run line and no sidecar to the machine folder", repr(left))
 
 
+@robust
+def check_backup_a_changed_source_file_never_overwrites_its_copy(checks: Checks) -> None:
+    """DEBT67, a good copy is never replaced by a bad one. A destination file that exists with another size or
+    mtime than its source (a re-shoot, D26, looks like this) is never rewritten, whichever way it differs: the run
+    ends `failed` and names how many files it left alone, the walk goes on, and the next run fails the same way.
+    One file differs by size and one by mtime alone, so a job that compares only one of them leaves the other
+    overwritten. The control is the first run, which copies all five, so a job that did nothing cannot pass."""
+    case = Case("differs")
+    seed_store(case)
+    seed_files(case)
+    control = expect_ok(checks, "control: the first night copies the five files", run_job(case), case, copied=5, skipped=0)
+    resized, touched = "photos/a0/a0aa11220002.jpg", "captures/cards/box1/0001.jpg"
+    put(case.src, resized, FILES[resized] + b"more")  # another size
+    put(case.src, touched, FILES[touched], mtime=T0 + 60 * SECOND)  # the same bytes, a minute newer
+    new = "photos/ff/ff00ee330003.jpg"
+    put(case.src, new, b"\xff\xd8\xff" + b"E" * 400)
+    kept = {rel: (p.read_bytes(), stat_key(p)) for rel, p in dest_files(case).items() if rel in FILES}
+    source = fingerprint(case.src)
+    ran = run_job(case)
+    failed = expect_differs(checks, "two source files differ from their copies: exit non-zero and a failed line that names the count of 2",
+                            ran, case, 2)
+    got = dest_files(case)
+    checks.ok(control and failed and len(kept) == 5 and all(rel in got and (got[rel].read_bytes(), stat_key(got[rel])) == kept[rel] for rel in kept),
+              "every destination file is untouched: bytes, inode, size, mtime and ctime")
+    checks.ok(control and failed and new in got and got[new].read_bytes() == b"\xff\xd8\xff" + b"E" * 400,
+              "the walk goes on: a file missing from the destination is still copied")
+    checks.ok(failed and source == fingerprint(case.src), "the source is as the job found it")
+    again = expect_differs(checks, "the next night still fails with the same count: the differs are not forgotten", run_job(case), case, 2)
+    got = dest_files(case)
+    checks.ok(control and again and all(rel in got and (got[rel].read_bytes(), stat_key(got[rel])) == kept[rel] for rel in kept),
+              "and still leaves both copies alone")
+
+
+@robust
+def check_backup_a_damaged_store_is_refused_and_replaces_nothing(checks: Checks) -> None:
+    """DEBT67: SQLite's online backup copies a damaged page without reading it, so the finished snapshot must pass
+    `PRAGMA integrity_check` before anything is moved in. A store that fails it replaces the nightly, the weekly and
+    the dated copy with nothing, fails the run, and leaves the photographs copied. On a first run it leaves no store
+    copy of any name. The weekly is aged to be due and the fixture is shown to tell a sound store from a damaged one,
+    so a job that skipped the check, or a check that always fails, cannot pass."""
+    case = Case("damaged")
+    seed_store(case)
+    seed_counts(case.src / "inventory", cards=400, boxes=0, pad=200)  # enough pages that page 4 holds data
+    seed_files(case)
+    sound = case.root / "sound.sqlite"
+    online_backup(case.src / "inventory" / "store.sqlite", sound)
+    checks.ok(integrity_ok(case, sound), "the fixture's sound store passes the integrity check on its own")
+    control = expect_ok(checks, "control: the first night, from a sound store, is ok", run_job(case), case, copied=5, skipped=0)
+    made = dated_copies(case)
+    nightly, weekly = case.dest / NIGHTLY, case.dest / (weekly_rel() or "no-weekly")
+    kept = None
+    if control and weekly.is_file():
+        age(weekly, 8)  # the weekly is due, so a night that did not refuse would replace it
+        kept = (sha(nightly), sha(weekly), stat_key(nightly), stat_key(weekly), {rel: stat_key(case.dest / rel) for rel in made})
+    damage(case.src / "inventory" / "store.sqlite")
+    checks.ok(not integrity_ok(case, case.src / "inventory" / "store.sqlite"), "the damaged store fails the integrity check on its own")
+    new = "photos/ff/ff00ee330003.jpg"
+    put(case.src, new, b"\xff\xd8\xff" + b"E" * 400)
+    ran = run_job(case)
+    failed = expect_failed(checks, "a damaged store: exit non-zero and a failed line", ran, case)
+    checks.ok(failed and kept is not None and dated_copies(case) == made and sha(nightly) == kept[0] and sha(weekly) == kept[1]
+              and (stat_key(nightly), stat_key(weekly)) == kept[2:4] and {rel: stat_key(case.dest / rel) for rel in made} == kept[4],
+              "the nightly, the weekly and the dated copy are as the last good night left them: byte for byte, inode and mtime")
+    checks.ok(failed and (case.dest / new).is_file(), "and the photographs are still copied")
+
+    fresh = Case("damaged-first")
+    seed_store(fresh)
+    seed_counts(fresh.src / "inventory", cards=400, boxes=0, pad=200)
+    seed_files(fresh)
+    damage(fresh.src / "inventory" / "store.sqlite")
+    ran = run_job(fresh)
+    failed = expect_failed(checks, "a damaged store on a first night: exit non-zero and a failed line", ran, fresh)
+    stores = sorted(rel for rel in dest_files(fresh) if rel.startswith("inventory/"))
+    checks.ok(failed and stores == [] and all(rel in dest_files(fresh) for rel in FILES),
+              "no store copy of any name is written, while the photographs are", repr(stores))
+
+
+@robust
+def check_backup_a_dated_store_copy_is_written_once_and_never_replaced(checks: Checks) -> None:
+    """DEBT67: besides the nightly and the weekly the destination holds one copy named by the day,
+    in the job's `DATED_SNAPSHOT` path. It is written once per local day and never replaced: a second run the same
+    day keeps the day's first copy byte for byte, while the nightly (a paired positive) moves on to the new row."""
+    case = Case("dated")
+    seed_store(case)
+    seed_files(case)
+    template = job_constant("DATED_SNAPSHOT")
+    named = checks.ok(dated_pattern() is not None, "the job names the dated copy's path in a DATED_SNAPSHOT constant with one %s", repr(template))
+    day = time.strftime("%Y-%m-%d")
+    expect_ok(checks, "the first night is ok", run_job(case), case, copied=5, skipped=0)
+    after = time.strftime("%Y-%m-%d")  # a run over midnight may name either day
+    names = dated_copies(case)
+    wanted = {template % d for d in (day, after)} if named else set()
+    checks.ok(len(names) == 1 and names[0] in wanted, "it writes one store copy named by the day", repr(names))
+    if len(names) != 1:
+        return
+    rows, integrity = snapshot_view(case, names[0])
+    checks.ok(rows == store_rows(case) and integrity == [("ok",)], "and the copy is whole and holds every row")
+    first = (sha(case.dest / names[0]), stat_key(case.dest / names[0]))
+    add_row(case, "after-night-1")
+    expect_ok(checks, "a second run the same day is ok", run_job(case), case, copied=0, skipped=5)
+    checks.ok(snapshot_view(case)[0] == store_rows(case), "the second run did snapshot: the nightly holds the new row")
+    checks.ok(dated_copies(case) == names and (sha(case.dest / names[0]), stat_key(case.dest / names[0])) == first,
+              "and the day's copy is not replaced: same bytes, same inode, same mtime")
+
+
+@robust
+def check_backup_verify_flags_a_flipped_byte_and_a_missing_file(checks: Checks) -> None:
+    """DEBT67: `--verify` hashes the source against the destination, so a byte flipped under an unchanged size and
+    mtime is seen, which the default run (stat only) cannot. It exits 0 only on a clean copy, names each bad path,
+    and writes nothing. The clean copy is the paired positive: the mismatch and missing runs are the same copy
+    with one file each damaged, so an exit-2 from an unknown flag cannot pass for them."""
+    case = Case("verify")
+    seed_store(case)
+    seed_files(case)
+    control = expect_ok(checks, "control: the first night copies the five files", run_job(case), case, copied=5, skipped=0)
+    ran = run_job(case, args=["--verify"])
+    clean = checks.ok(control and ran.code == 0 and "matches=5 mismatches=0 missing=0" in ran.out and "integrity=ok" in ran.out,
+                      "on a clean copy: exit 0, five matches, no mismatch, none missing, the dated copy ok", said(ran) + ran.out)
+    flipped, gone = "photos/a0/a0aa11220002.jpg", "captures/cards/box1/0001.json"
+    path = case.dest / flipped
+    stat = path.stat()
+    data = bytearray(path.read_bytes())
+    data[10] ^= 1
+    path.write_bytes(bytes(data))
+    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns))  # the size and mtime are as they were
+    (case.dest / gone).unlink()
+    machine = case.home / ".banchi"
+
+    def state():
+        return ({rel: (p.read_bytes(), stat_key(p)) for rel, p in dest_files(case).items()},
+                {p.name: (p.read_bytes(), stat_key(p)) for p in machine.iterdir() if p.is_file() and p.suffix != ".lock"})
+    before = state()
+    ran = run_job(case, args=["--verify"])
+    checks.ok(clean and ran.code not in (0, None) and "mismatches=1" in ran.out and "missing=1" in ran.out
+              and flipped in ran.out and gone in ran.out,
+              "a flipped byte and a deleted file: exit non-zero, one mismatch and one missing, both paths named", said(ran) + ran.out)
+    checks.ok(clean and before == state(), "and verify wrote nothing: the destination and the machine folder are as they were")
+    put(case.dest, gone, FILES[gone])
+    path.write_bytes(FILES[flipped])
+    names = dated_copies(case)
+    if clean and names:
+        (case.dest / names[-1]).write_bytes(b"this is not a database " * 200)
+        ran = run_job(case, args=["--verify"])
+        checks.ok(ran.code not in (0, None) and "matches=5 mismatches=0 missing=0" in ran.out and "integrity=bad" in ran.out,
+                  "a damaged newest store copy, every file matching: exit non-zero and the copy reads bad", said(ran) + ran.out)
+
+
 CHECKS = (
     check_backup_run_folder_deletes_read_only_trees_and_follows_no_link,
     check_backup_snapshot_beside_an_open_writer,
@@ -1298,4 +1521,8 @@ CHECKS = (
     check_backup_a_store_that_shrank_replaces_neither_snapshot,
     check_backup_an_unreadable_photo_folder_fails_the_night,
     check_backup_a_linked_worktree_with_a_destination_leaves_the_machine_folder_alone,
+    check_backup_a_changed_source_file_never_overwrites_its_copy,
+    check_backup_a_damaged_store_is_refused_and_replaces_nothing,
+    check_backup_a_dated_store_copy_is_written_once_and_never_replaced,
+    check_backup_verify_flags_a_flipped_byte_and_a_missing_file,
 )
