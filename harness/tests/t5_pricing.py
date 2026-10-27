@@ -410,8 +410,9 @@ def _suggest_checks(c: Checks) -> None:
         "and the clamped move, 0.60 to 0.50, is inside the cap",
     )
 
+    # The market moved DOWN from $26.00 to $22.03, so the rule's cut is a lowering suggestion.
     priced = review(
-        _listing(sku="RL", asking=Decimal("25.00"), market_listed=Decimal("18.00"), market=Decimal("22.03")),
+        _listing(sku="RL", asking=Decimal("25.00"), market_listed=Decimal("26.00"), market=Decimal("22.03")),
         rule="undercut:5",
     )
     c.equal(
