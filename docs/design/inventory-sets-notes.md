@@ -28,7 +28,7 @@ end, under "PROPOSED". Stock photos are flat placeholders at 63 by 88, so the pa
    needs a solid ground, and it covers the card's art. Pick: no.
 6. **The mark as a shape, named once in a key (option O4).** The house rule ux-label-once says a
    status word shows once per screen. The spec says each mark is "named in words" on the tile.
-   Gain: the grid reads by colour; the key names it once. Loss: the colour alone carries meaning
+   Gain: the grid reads by color; the key names it once. Loss: the color alone carries meaning
    on the tile, so a reader must learn the key. Pick: the words, as the spec says. Taking O4 is
    **Owner grant: yes.**
 7. **Tones.** In master set is `ok` (green). Last copy is `warn` (amber). Never `live`: vermilion
