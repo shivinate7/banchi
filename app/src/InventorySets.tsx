@@ -226,26 +226,26 @@ export function InventorySets({ reloadToken = 0 }: { readonly reloadToken?: numb
   return (
     <div className="inventory-sets">
       <div className="sets-controls">
-      <div className="sets-picker">
-        <Select
-          label="Set"
-          value={current?.key ?? null}
-          placeholder="Choose a set…"
-          options={options.map((option) => ({
-            value: option.key,
-            label: option.label,
-            text: option.label,
-            count: option.count,
-          }))}
-          onChange={(next) => setSetParam(next === (options[0]?.key ?? '') ? '' : next)}
-        />
-      </div>
-      {/* The count stays when the filter is on: it is what the filter hides, so it holds still (D313). */}
-      <div>
-        <HideToggle checked={hideMaster} onChange={(next) => setMasterParam(next ? 'open' : '')} count={collected}>
-          Hide my master set
-        </HideToggle>
-      </div>
+        <div className="sets-picker">
+          <Select
+            label="Set"
+            value={current?.key ?? null}
+            placeholder="Choose a set…"
+            options={options.map((option) => ({
+              value: option.key,
+              label: option.label,
+              text: option.label,
+              count: option.count,
+            }))}
+            onChange={(next) => setSetParam(next === (options[0]?.key ?? '') ? '' : next)}
+          />
+        </div>
+        {/* The count stays when the filter is on: it is what the filter hides, so it holds still (D313). */}
+        <div>
+          <HideToggle checked={hideMaster} onChange={(next) => setMasterParam(next ? 'open' : '')} count={collected}>
+            Hide my master set
+          </HideToggle>
+        </div>
       </div>
       {current === null ? null : (
         <>
