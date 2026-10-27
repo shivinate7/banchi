@@ -115,6 +115,8 @@ def _card(index, name, number, total="159", metadata=None, confidence="high"):
 #
 # Only a market move UP may raise a live price. Undercut, unsold and market down may only lower it.
 # A live row whose trigger would raise its price stays at_rule at its asking price, source Live.
+# A suggestion moves in its reason's direction: a market move UP never lowers a price, so a row whose
+# rule price sits under its ask stays at_rule too.
 
 TODAY = "2026-10-27"
 
@@ -285,6 +287,21 @@ def _suggest_checks(c: Checks) -> None:
         crash == "" and hit == ["unsold"],
         "a sale stamped with a time counts by its date: 40 days since the sale, unsold fires",
         crash or f"fired: {hit!r}",
+    )
+
+    # --- a live listing with no asking price (sections 3 and 4b) -----------------------------
+    # A live listing can carry no asking price. The rule's price must not be compared to None.
+    no_ask = _listing(sku="NA", asking=None, market=Decimal("10.00"))
+    out, crash = attempt(lambda: suggest.review([no_ask], _policy(), TODAY))
+    c.ok(
+        crash == "" and groups(out, "NA") == ["at_rule"],
+        "a live listing with no asking price and a market price: review does not crash, and it is Going at the rule",
+        crash or f"review: {out!r}",
+    )
+    c.ok(
+        crash == "" and field(out, "NA", "source") == "Live" and field(out, "NA", "price") is None,
+        "and the row says source Live with no price, since there is no asking price to keep",
+        crash or f"review: {out!r}",
     )
 
     # --- groups and prices (sections 2 and 3) ------------------------------------------------
@@ -480,6 +497,24 @@ def _suggest_checks(c: Checks) -> None:
         "market up 18% with an undercut also firing still raises: the market move is the raise",
     )
     c.equal(field(both, "BO", "price"), Decimal("11.80"), "to today's market")
+
+    # A market move UP only raises. A rule price under the ask is a cut, and a cut is no suggestion
+    # under "market up": the row stays Going at the rule, at its asking price.
+    cut_up = review(_listing(sku="MU", asking=Decimal("30.00"), market=Decimal("12.00")))
+    c.equal(
+        groups(cut_up, "MU"),
+        ["at_rule"],
+        "market up 20% with the rule at 12.00 under a 30.00 ask: Going at the rule, not a cut under market up",
+    )
+    c.equal(field(cut_up, "MU", "price"), Decimal("30.00"), "and it keeps its asking price")
+    c.equal(field(cut_up, "MU", "source"), "Live", "and its source says Live")
+    cut_small = review(_listing(sku="MS", asking=Decimal("13.00"), market=Decimal("12.00")))
+    c.equal(
+        groups(cut_small, "MS"),
+        ["at_rule"],
+        "market up 20% with the rule at 12.00 under a 13.00 ask: a small cut is still no suggestion under market up",
+    )
+    c.equal(field(cut_small, "MS", "price"), Decimal("13.00"), "and it keeps its asking price")
 
     # --- no trigger, no suggestion: Going at the rule (4b) -----------------------------------
     ar = review(_listing(sku="AR", market=Decimal("11.00")))
