@@ -232,5 +232,29 @@
     "query": "002-64",
     "fields": { "numbers": ["002/064"] },
     "match": true
+  },
+  {
+    "note": "a One Piece printed identifier with its own hyphen matches verbatim (the owner's ruling, 2026-09-26 — the hyphen split rule never applies when a half carries a letter)",
+    "query": "OP01-001",
+    "fields": { "numbers": ["OP01-001"] },
+    "match": true
+  },
+  {
+    "note": "the same identifier, typed lower case",
+    "query": "op01-001",
+    "fields": { "numbers": ["OP01-001"] },
+    "match": true
+  },
+  {
+    "note": "the set-code half alone does not match the whole printed identifier — pre-existing, unchanged by the hyphen-split fix (there is no first/second split on a hyphen, only on a slash)",
+    "query": "OP01",
+    "fields": { "numbers": ["OP01-001"] },
+    "match": false
+  },
+  {
+    "note": "a Riftbound identifier typed with a hyphen matches verbatim too, the same rule as One Piece",
+    "query": "RGL-045",
+    "fields": { "numbers": ["RGL-045"] },
+    "match": true
   }
 ]

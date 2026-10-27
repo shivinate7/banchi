@@ -745,3 +745,40 @@ the `match.py` mutation above are what prove the rule itself.
 
 Seeded fuzz re-run after every fix: 0 false positives, 640 queries (`_FUZZ_QUERIES`
 plus 200 card-sampled).
+
+**ROUND 12, REGRESSION FIX, 2026-09-26, ON 6e658c5a.** Round 11's ruling 1 broke One
+Piece and Riftbound. `CLAUDE.md`, verbatim: "One Piece and Riftbound match the printed
+identifier verbatim." `app/tests/kit-data.spec.ts:147` caught it:
+`matchQuery('OP01-001', inBox(4, ['Luffy'], ['OP01-001']))` went from `true` to
+`false`.
+
+THE CAUSE. Round 11's own check, `_HYPHEN_BETWEEN_DIGITS`, only looks at the two
+characters TOUCHING the hyphen. In `OP01-001` those are `1` and `0`, both digits —
+the same shape as `002-64`'s own `2` and `6`. Round 11 could not tell the two apart.
+It suppressed the plain (joined) form for BOTH. `OP01-001`'s plain form is `op1001`,
+the SAME canonical string the stored card number's own canonicalization produces.
+That form stopped being offered.
+
+THE FIX. A narrower check, `_HYPHEN_ALL_DIGIT_HALVES` (`match.py`) /
+`HYPHEN_ALL_DIGIT_HALVES` (`match.ts`). It reads the ENTIRE bare string on both sides
+of the hyphen, not only the two touching characters. `002-64` and `0027-166` match it
+whole.
+`OP01-001` does not — `OP01` carries a letter. Only when the whole-string check
+matches does the hyphen-split rule suppress the plain form. Otherwise both forms stay
+offered, exactly as they did before round 11. Fixed in the same three places round 11
+touched: `server/match.py:_number_match`, `app/src/kit/match.ts:numberMatch`, and
+`server/capture_server.py:_number_candidate_forms`.
+
+Four new rows in the shared table, `app/src/kit/match.cases.json`: `OP01-001` and
+`op01-001` both match the card numbered `OP01-001`. `OP01` alone does not. This is
+PRE-EXISTING, unchanged by any round here. There is no first/second split on a
+hyphen, only on a slash. A bare set code was never a promised match for a
+hyphenated whole number. A synthetic Riftbound id, `RGL-045`, matches its own card
+verbatim, the same rule as One Piece.
+
+Mutation-proved both matchers. `match.py`: reverted to round 11's own predicate,
+cases 39 and 40 fail (case 41, the pre-existing `OP01`-alone gap, stays green either
+way — it is not this fix's subject). `match.ts`: built with esbuild and run directly,
+the same way round 11 proved it — reverting reproduces the exact regression
+(`OP01-001` against itself reads `false`), and the fix restores `true`. `002-64`
+re-checked directly against `264/300`: still `false`.

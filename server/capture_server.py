@@ -10330,20 +10330,25 @@ def _number_candidate_forms(term: str) -> set:
     CALLER hands it the same tokens the decisive step would see, not because it does any
     splitting of its own beyond the one `/` inside a single term.
 
-    THE HYPHEN SPLITS THE NUMBER, IT NEVER JOINS IT (the owner's ruling, 2026-09-25,
-    round-11 gaps review, quoted verbatim in D271: "No, a hyphen splits"). This now
-    MIRRORS `match._number_match`'s own round-11 fix exactly: `hyphen_form` only
-    differs from `bare` when a hyphen stood BETWEEN TWO DIGITS, and in that case only
-    the composed (`/`-converted) form is a candidate — never `bare` read whole, which
-    would join two digit runs the hyphen deliberately kept apart (`002-64` must never
-    read as `264`)."""
+    THE HYPHEN SPLITS THE NUMBER, IT NEVER JOINS IT — BUT ONLY BETWEEN TWO ALL-DIGIT
+    HALVES (the owner's ruling, 2026-09-25, round-11 gaps review, quoted verbatim in
+    D271: "No, a hyphen splits"; corrected 2026-09-26 after it broke One Piece and
+    Riftbound identifiers, `CLAUDE.md`'s own "match the printed identifier verbatim").
+    This MIRRORS `match._number_match`'s own round-11 fix exactly: only when
+    `match._HYPHEN_ALL_DIGIT_HALVES` matches `bare` whole (`002-64`, `0027-166`, never
+    `OP01-001` — `OP01` carries a letter) is the composed (`/`-converted) form the
+    ONLY candidate, never `bare` read whole, which would join two digit runs the
+    hyphen deliberately kept apart. Otherwise both forms stay offered, exactly as
+    before round 11 — `OP01-001` canonicalizes whole to `op1001`, the same joined
+    form the stored card number's own canonicalization produces."""
     bare = term[1:] if term.startswith("#") else term
     if not match._has_digit(bare):
         return set()
     hyphen_form = match._hyphen_to_slash(bare)
-    forms = {match.canonical_number(hyphen_form)}
-    if hyphen_form == bare:
-        forms.add(match.canonical_number(bare))
+    if hyphen_form != bare and match._HYPHEN_ALL_DIGIT_HALVES.match(bare):
+        forms = {match.canonical_number(hyphen_form)}
+    else:
+        forms = {match.canonical_number(bare), match.canonical_number(hyphen_form)}
     return {f for f in forms if match._is_number_shape(f)}
 
 

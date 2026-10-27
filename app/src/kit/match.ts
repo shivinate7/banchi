@@ -105,6 +105,16 @@ const SKU_SHAPE = /^\d{3,}$/u
 const DIGITS = /^\d+$/u
 const HAS_DIGIT = /\d/u
 const HAS_LETTER = /\p{L}/u
+/** THE HYPHEN STANDS FOR THE SLASH ONLY BETWEEN TWO ALL-DIGIT HALVES (the owner's ruling,
+ *  2026-09-26, correcting round-11's own ruling 1). `002-64` and `0027-166` are this shape.
+ *  `OP01-001` (One Piece) and any Riftbound id typed the same way are NOT: `OP01` carries a
+ *  LETTER, so its own hyphen is part of the PRINTED IDENTIFIER itself (CLAUDE.md, verbatim:
+ *  "One Piece and Riftbound match the printed identifier verbatim"), never a stand-in for a
+ *  `/`. The digit-adjacent-to-hyphen replace below cannot tell the two apart on its own —
+ *  it only looks at the two characters TOUCHING the hyphen, and both are digits in
+ *  `OP01-001` too (the `1` before it, the `0` after). This pattern checks the WHOLE bare
+ *  string on both sides. */
+const HYPHEN_ALL_DIGIT_HALVES = /^\d+-\d+$/u
 /** The punctuation a token loses at its ends. `#` and `/` survive in front (rule 4). */
 const EDGE_PUNCTUATION = /^[^\p{L}\p{N}#/]+|[^\p{L}\p{N}]+$/gu
 
@@ -169,17 +179,25 @@ function numberMatch(raw: string, row: Prepared): boolean {
   }
   const bare = raw.replace(/^#/u, '')
   if (!HAS_DIGIT.test(bare)) return false
-  // THE HYPHEN SPLITS THE NUMBER, IT NEVER JOINS IT (the owner's ruling, 2026-09-25,
-  // round-11 gaps review, quoted verbatim in D271: "No, a hyphen splits"). The second
-  // replace below folds a hyphen BETWEEN TWO DIGITS into the composed `/` it stands
-  // for. When it changes `bare` at all, that hyphen was doing exactly that job, and
-  // `bare` itself must NEVER also be read as one plain joined number —
-  // `canonicalNumber` does not split on `-`, so `002-64` canonicalized whole was
-  // `264`, joining two digit runs a hyphen deliberately kept apart. Only when there is
-  // NO such hyphen (`hyphenForm === bare`) does the plain form apply at all.
+  // THE HYPHEN SPLITS THE NUMBER, IT NEVER JOINS IT — BUT ONLY BETWEEN TWO ALL-DIGIT
+  // HALVES (the owner's ruling, 2026-09-25, round-11 gaps review, quoted verbatim in
+  // D271: "No, a hyphen splits"; corrected 2026-09-26 after it broke One Piece and
+  // Riftbound identifiers, CLAUDE.md's own "match the printed identifier verbatim").
+  // The replace below folds a hyphen BETWEEN TWO DIGITS into the composed `/` it
+  // stands for — but `OP01-001`'s hyphen sits between a `1` and a `0`, digits too,
+  // even though the WHOLE left side (`OP01`) carries a letter. `HYPHEN_ALL_DIGIT_
+  // HALVES` is the narrower check: the ENTIRE bare string, not just the two
+  // characters touching the hyphen. Only when it matches (`002-64`, `0027-166`) is
+  // `bare` read whole suppressed — `canonicalNumber` does not split on `-`, so
+  // `002-64` canonicalized whole was `264`, joining two digit runs a hyphen
+  // deliberately kept apart. `OP01-001` canonicalizes whole to `op1001` (the SAME
+  // single joined form the stored card number's own canonicalization produces — see
+  // this module's own header), and that plain form must stay offered.
   const hyphenForm = bare.replace(/(\d)-(?=\d)/gu, '$1/')
-  const forms = new Set([canonicalNumber(hyphenForm)])
-  if (hyphenForm === bare) forms.add(canonicalNumber(bare))
+  const forms =
+    hyphenForm !== bare && HYPHEN_ALL_DIGIT_HALVES.test(bare)
+      ? new Set([canonicalNumber(hyphenForm)])
+      : new Set([canonicalNumber(bare), canonicalNumber(hyphenForm)])
   for (const form of forms) {
     if (!NUMBER_SHAPE.test(form)) continue
     const whole = form.includes('/')

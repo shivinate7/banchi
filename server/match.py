@@ -82,6 +82,15 @@ _DIGITS_ONLY = re.compile(r"^[0-9]+$")
 _ZEROS_ONLY = re.compile(r"^0+$")
 _SKU_SHAPE = re.compile(r"^[0-9]{3,}$")
 _HYPHEN_BETWEEN_DIGITS = re.compile(r"([0-9])-(?=[0-9])")
+# THE HYPHEN STANDS FOR THE SLASH ONLY BETWEEN TWO ALL-DIGIT HALVES (the owner's ruling,
+# 2026-09-26, correcting round-11's own ruling 1). `002-64` and `0027-166` are this shape.
+# `OP01-001` (One Piece) and any Riftbound id typed the same way are NOT: `OP01` carries a
+# LETTER, so its own hyphen is part of the PRINTED IDENTIFIER itself (CLAUDE.md, verbatim:
+# "One Piece and Riftbound match the printed identifier verbatim"), never a stand-in for a
+# `/`. `_HYPHEN_BETWEEN_DIGITS` alone cannot tell the two apart — its own match only looks
+# at the two characters TOUCHING the hyphen, and both are digits in `OP01-001` too (the `1`
+# before it, the `0` after). This pattern checks the WHOLE bare string on both sides.
+_HYPHEN_ALL_DIGIT_HALVES = re.compile(r"^[0-9]+-[0-9]+$")
 
 
 def fold_text(value: str) -> str:
@@ -248,18 +257,25 @@ def _number_match(raw: str, numbers: Sequence[_NumberParts]) -> bool:
     bare = raw[1:] if raw.startswith("#") else raw
     if not _has_digit(bare):
         return False
-    # THE HYPHEN SPLITS THE NUMBER, IT NEVER JOINS IT (the owner's ruling, 2026-09-25,
-    # round-11 gaps review, quoted verbatim in D271: "No, a hyphen splits"). `_hyphen_
-    # to_slash` folds a hyphen BETWEEN TWO DIGITS into the composed `/` it stands for.
-    # When it changes `bare` at all, that hyphen was doing exactly that job, and `bare`
-    # itself must NEVER also be read as one plain joined number — `canonical_number`
-    # does not split on `-`, so `002-64` canonicalized whole was `264`, joining two
-    # digit runs a hyphen deliberately kept apart. Only when there is NO such hyphen
-    # (`hyphen_form == bare`) does the plain form apply at all.
+    # THE HYPHEN SPLITS THE NUMBER, IT NEVER JOINS IT — BUT ONLY BETWEEN TWO ALL-DIGIT
+    # HALVES (the owner's ruling, 2026-09-25, round-11 gaps review, quoted verbatim in
+    # D271: "No, a hyphen splits"; corrected 2026-09-26 after it broke One Piece and
+    # Riftbound identifiers, `CLAUDE.md`'s own "match the printed identifier verbatim").
+    # `_hyphen_to_slash` folds a hyphen BETWEEN TWO DIGITS into the composed `/` it
+    # stands for — but `OP01-001`'s hyphen sits between a `1` and a `0`, digits too,
+    # even though the WHOLE left side (`OP01`) carries a letter. `_HYPHEN_ALL_DIGIT_
+    # HALVES` is the narrower check: the ENTIRE bare string, not just the two
+    # characters touching the hyphen. Only when it matches (`002-64`, `0027-166`) is
+    # `bare` read whole suppressed — `canonical_number` does not split on `-`, so
+    # `002-64` canonicalized whole was `264`, joining two digit runs a hyphen
+    # deliberately kept apart. `OP01-001` canonicalizes whole to `op1001` (the SAME
+    # single joined form the stored card number's own canonicalization produces — see
+    # this module's own header), and that plain form must stay offered.
     hyphen_form = _hyphen_to_slash(bare)
-    forms = {canonical_number(hyphen_form)}
-    if hyphen_form == bare:
-        forms.add(canonical_number(bare))
+    if hyphen_form != bare and _HYPHEN_ALL_DIGIT_HALVES.match(bare):
+        forms = {canonical_number(hyphen_form)}
+    else:
+        forms = {canonical_number(bare), canonical_number(hyphen_form)}
     for form in forms:
         if not _is_number_shape(form):
             continue
