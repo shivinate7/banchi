@@ -262,7 +262,7 @@ export function InventorySets({ reloadToken = 0 }: { readonly reloadToken?: numb
                 className="sets-empty"
                 icon="layers"
                 title="Every card of this set is in your master set."
-                actions={<Button onClick={() => setMasterParam('')}>Show every card</Button>}
+                actions={<Button onClick={() => setMasterParam('')}>Show Every Card</Button>}
               />
             ) : (
               shown.map((card) => (

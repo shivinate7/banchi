@@ -229,7 +229,12 @@
 .send-owed .send-owed-cell > [data-off] { visibility: hidden; }
 .send-owed .send-owed-press { display: flex; align-items: center; gap: var(--bn-2); justify-content: flex-end; }
 /* Each entry of the open list: the name, the copies, and its own press, one thumb high. */
-.send-owed .send-names li { display: grid; grid-template-columns: minmax(0, 1fr) 5rem auto; align-items: center; gap: var(--bn-3); min-height: var(--bn-control-h-sm); }
+.send-owed .send-names li { display: grid; grid-template-columns: minmax(0, 1fr) 5rem 8.5rem; align-items: center; gap: var(--bn-3); min-height: var(--bn-control-h-sm); }
+/* The press, the pill or nothing sits in the last track at its end, so the copies column holds still when a row is answered (D313). */
+.send-owed .send-names li > :nth-child(3) { justify-self: end; }
+.send-owed-set { color: var(--bn-ink-3); margin-left: var(--bn-2); }
+/* The sentence is a block: an inline title around a grid cell breaks into two empty lines and doubles the line's height. */
+.send-owed .bn-notice-title { display: block; margin-right: 0; }
 .send-owed .send-figure { text-align: end; }
 .send-owed .send-names .bn-btn { flex: none; }
 /* The open list floats over the worklist (`.send-moves`), so the bar keeps its height. */

@@ -252,6 +252,8 @@ function OwedTakeOffsLine({
     </Button>
   )
   const pressable = owed.filter((entry) => ['offer', 'failed'].includes(viewOfEntry(entry)))
+  /* TAKE ALL COUNTS ONLY WHAT IS STILL LEFT TO PRESS: an entry that was answered is not asked again. */
+  const pressableCopies = pressable.reduce((sum, entry) => sum + ownedCopies(entry), 0)
   const said = (
     <span className="bn-sr" role="status">
       {taking === null ? '' : 'Taking it off TCGplayer…'}
@@ -287,11 +289,9 @@ function OwedTakeOffsLine({
               ),
               failed: <>TCGplayer did not take {name} off, so nothing went live. It stays on this list.</>,
               matches: <>TCGplayer already lists only the copies of {name} you hold. Nothing was sent.</>,
-              onway: <>The take-off of {name} is on its way to TCGplayer. This list drops it once Banchi has checked.</>,
+              onway: <>The take-off of {name} is on its way. This list drops it after the check.</>,
               nosession: (
-                <>
-                  TCGplayer is not signed in, so {count(copies, 'copy', 'copies')} of {name} {copies === 1 ? 'stays' : 'stay'} listed. Sign in, then press Refresh.
-                </>
+                <>TCGplayer is not signed in, so {name} stays listed. Sign in, then press Refresh.</>
               ),
             }}
           />
@@ -347,7 +347,7 @@ function OwedTakeOffsLine({
         <>
           {pressable.length === 0 ? null : (
             <Button size="sm" busy={taking === 'all'} disabled={off} onClick={() => void pressAll()}>
-              {`Take All ${total} ${total === 1 ? 'Copy' : 'Copies'} Off`}
+              {`Take All ${pressableCopies} ${pressableCopies === 1 ? 'Copy' : 'Copies'} Off`}
             </Button>
           )}
           <Button variant="quiet" size="sm" icon={open ? 'chevronUp' : 'chevronDown'} onClick={() => setOpen((on) => !on)} aria-expanded={open} words="word-only-control">
@@ -367,8 +367,9 @@ function OwedTakeOffsLine({
           const answer = answers[entryKey(entry)]
           return (
             <li key={entryKey(entry)}>
-              <span className="send-name" data-typed>
-                {entry.name || entry.sku}
+              <span className="send-name">
+                <span data-typed>{entry.name || entry.sku}</span>
+                {entry.set_name === '' ? null : <span className="send-owed-set">{entry.set_name}</span>}
               </span>
               <span className="send-figure">{count(answer !== undefined && answer.taken > 0 ? answer.taken : ownedCopies(entry), 'copy', 'copies')}</span>
               {view === 'offer' ? press(entry, 'Take It Off') : null}

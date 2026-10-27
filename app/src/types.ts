@@ -1226,6 +1226,8 @@ export type MasterTakeOff = {
  *  sign-in. One entry per SKU. `state` is `offered`, `failed` or `no_session`; `press` is false for the last. */
 export type OwedTakeOff = MasterTakeOff & {
   name: string
+  /** The card's set, or "" when the store holds none. */
+  set_name: string
   box: number
   index: number
 }
