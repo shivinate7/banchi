@@ -130,6 +130,8 @@ Two things are this repo's own, and the code names each. The splitter takes the 
 
 `scripts/guard-shell-selftest.sh` pins the false positive in four spellings and each real write above. The next edit cannot trade one for the other.
 
+`_sanctioned_outside` lists the folders outside the checkout where a write passes: `/dev`, `~/.claude`, a temp directory that is no checkout, and `~/Library/Application Support/Claude-Work/side-session-notes/`. The notes folder holds a space. Quoted and backslash-escaped spellings both pass, and a sibling folder is still refused.
+
 ### Every hatch use is logged, and the push remedy names the branch's own name
 
 The owner ruled: log and surface every `BANCHI_*=off` use. A hatch lifts its guard and prints nothing, so a run of hatch uses was invisible. `guard-shell.py --hook` sees every Bash command, so it is the one home.
