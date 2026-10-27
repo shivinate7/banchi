@@ -1222,6 +1222,26 @@ export type MasterTakeOff = {
   press: boolean
 }
 
+/** One take-off still owed (`GET /pipeline/sends/owed`): not pressed, failed, or waiting on a
+ *  sign-in. One entry per SKU. `state` is `offered`, `failed` or `no_session`; `press` is false for the last. */
+export type OwedTakeOff = MasterTakeOff & {
+  name: string
+  box: number
+  index: number
+}
+
+/** What `POST /pipeline/sends/owed` answers for one entry: its state after the press, or why the
+ *  press was refused (`refused` is the code, `message` the sentence). */
+export type OwedTakeOffResult = {
+  name: string
+  sku: string
+  box: number
+  index: number
+  take_off: MasterTakeOff | null
+  refused: string | null
+  message: string | null
+}
+
 /** What `POST /inventory/<box>/<index>/take-off` answers: the card's state, and the receipt when a row went. */
 export type MasterTakeOffAnswer = { take_off: MasterTakeOff; send?: SendSummary }
 

@@ -28,6 +28,8 @@ import type {
   QueueSnapshot,
   MasterTakeOff,
   MasterTakeOffAnswer,
+  OwedTakeOff,
+  OwedTakeOffResult,
   RetireReason,
   RetireResult,
   CatalogLookup,
@@ -1788,6 +1790,23 @@ export async function masterTakeOff(box: number, index: number): Promise<MasterT
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ confirm: true }),
   })) as MasterTakeOffAnswer
+}
+
+/** Every master_set take-off still owed, for the Pricing send card (`GET /pipeline/sends/owed`).
+ *  Opens no socket on the server. An entry leaves once it is sent and settled, the listing
+ *  matches, or the retirement is undone. */
+export async function getOwedTakeOffs(): Promise<{ owed: OwedTakeOff[] }> {
+  return (await request('/pipeline/sends/owed')) as { owed: OwedTakeOff[] }
+}
+
+/** Press every owed take-off on one confirm (`POST /pipeline/sends/owed`). Each entry has its own
+ *  live read and receipt, and is answered on its own: a refusal on one does not stop the others. */
+export async function pressOwedTakeOffs(): Promise<{ results: OwedTakeOffResult[] }> {
+  return (await request('/pipeline/sends/owed', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as { results: OwedTakeOffResult[] }
 }
 
 // ------------------------------------------------------------------ search, and the boxes

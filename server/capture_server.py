@@ -120,6 +120,10 @@
                                            it and makes it live. `download` stops at the file
     GET    /pipeline/sends                 every send's receipt, what is written and not
                                            confirmed, and whether the live check is due
+    GET    /pipeline/sends/owed            the master_set take-offs still owed (not pressed or
+                                           failed), for the send card. Opens no socket
+    POST   /pipeline/sends/owed            press every owed take-off on one confirm, each on its
+                                           own receipt, answered per entry
     POST   /pipeline/sends/<stamp>/take-back   a written file's copies back on the list
     POST   /pipeline/held/<sku>/unhold     copies the owner removed by hand go back on the list
     POST   /pipeline/held/<sku>/hold       the way back from unhold: hold those copies again
@@ -16811,6 +16815,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     HTTPStatus.OK,
                     send_routes.master_take_off_state(int(match.group(1)), int(match.group(2))),
                 )
+            if path == "/pipeline/sends/owed":
+                # The master_set take-offs still owed, for the send card. Its own read: it scans
+                # the retired cards, which `/pipeline/sends` (budgeted constant) must not. No socket.
+                return self._json(HTTPStatus.OK, send_routes.do_owed_take_offs())
             if path == "/pipeline/sends":
                 # Every send's receipt, what is written and not confirmed, and whether the
                 # live check is due. Reads a directory; opens no socket.
@@ -17264,6 +17272,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # live. Refuses without `confirm`, and refuses whole when the live read fails.
                 # `download: true` stops after the file.
                 return self._json(HTTPStatus.OK, send_routes.do_send(self._body()))
+            if path == "/pipeline/sends/owed":
+                # **LOWERS LIVE LISTINGS ON ONE CONFIRM.** Presses each owed master_set take-off
+                # on its own receipt, and answers per entry.
+                return self._json(HTTPStatus.OK, send_routes.do_press_owed_take_offs(self._body()))
             if path == "/pipeline/live-check":
                 # THE CHECK AFTER THE LAG. Runs only when a request asks: the screen's timer or
                 # its next visit. No timer runs here (the owner's Q3 ruling).
