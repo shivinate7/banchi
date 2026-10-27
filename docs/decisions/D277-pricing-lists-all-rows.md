@@ -18,7 +18,7 @@ The send itself is the entry with slug
 | Q3 | What does Send do when some rows have no price? | It sends every ready copy. The rows with no price stay on the list. |
 | Q4 | Where does the slim bar sit? | At the top and sticky at 1440 and 720. On a phone, one line pinned above the tab bar. |
 | Q5 | Where do the store rule and the cut-off live? | One line above the list, with "Change". Change opens one sheet: the rule, the cut-off, and a box's own cut-off. |
-| Q6 | How does the owner mark down live listings? | A "Live" tab on Pricing, with the same rows. The Mark-down sheet goes. |
+| Q6 | How does the owner mark down live listings? | Reopened by the owner: live listings join the one list as suggestion rows, with no Live tab (`docs/specs/pricing-suggest.md`, section 5, step 4). Until that build lands, the Live tab stands. |
 | Q7 | Does one press also send a mark-down? | Yes, one press. There is no "Put the old prices back" control. |
 | Q8 | Where does the value list go? | To Inventory, as a "by value" sort in the shared sort control. It leaves Pricing. |
 | Q9 | Does Pricing offer to make the owner's pattern the rule? | Measure the typed prices first. If most follow one pattern, Pricing offers "Make this the rule" once. |

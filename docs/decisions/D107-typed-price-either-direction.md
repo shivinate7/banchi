@@ -7,4 +7,4 @@
 - **A raise is never silent, and the money figure does not net.** `Application.raised` and `taken_on` sit beside `lowered` and `given_up`. The preview and `receipt.txt` name the count and amount on their own line, with a `^` on the row. `given_up` counts reductions only. So a file that cuts $40 and lifts $40 is not reported as free.
 - **`RAISED` stays in the vocabulary** for receipts written before, and `reason_label` renders it. A code is retired as a refusal without being deleted as a word.
 
-Reopen for a rule that proposes raises (a market-movement command), or for a raise ceiling, if a typo sends a $2 card to $2,000. TCGplayer's own validator caps at 200,000, and `server/tcg_import.py` enforces that cap. Nothing asks whether a raise is plausible.
+**Reopened by the owner for the suggestion rule.** A suggestion may propose a raise, up to the cap, and the owner confirms it with a press. The cap is the raise ceiling this entry asked for. `docs/specs/pricing-suggest.md`, section 5, step 4, holds the ruling. Until that build lands, `plan` still refuses its own raises.

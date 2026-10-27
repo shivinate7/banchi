@@ -36,9 +36,8 @@ was typed. Old live listings drift from market and nothing says so. The owner ca
 - **Every row says where its price came from**: Rule, You (typed), Floor or Suggested.
 - **Send** is one press. It sends new copies, kept suggestions and typed prices together.
   D273 (one press sends listings live) still holds.
-- A suggestion may raise a price. That reopens D107 (a typed price goes either direction, and only
-  the rule never proposes a raise). D107 already names this reopener: a market-movement rule. D107 also asks for a raise
-  ceiling, and the cap in section 1 is it.
+- A suggestion may raise a price, up to the cap. The owner reopened D107 (a typed price goes
+  either direction, and only the rule never proposes a raise) for it: section 5, step 4.
   D100 (never delete to lower a price) stands.
 
 ## 3. Groups, top to bottom
@@ -104,9 +103,11 @@ recommendations.
 2. **Mockups.** The one list at 1440 and 820, both themes. Show each trigger's suggestion row
    and the cap's flagged row. The owner judges each trigger from the mockups.
 3. **Name the cap and the value line.** The owner sets both numbers on the mockup.
-4. **Reopen decisions on the owner's word**: D107 (only the rule never raises), D105
-   (mark-downs live where prices are decided), and D277 (pricing lists all rows) answer Q6, the
-   Live tab. D103 (staleness filters, never gates) stands.
+4. **Reopened, on the owner's word.** A suggestion may raise a price, up to the cap. New
+   copies and live listings share one list. This reopens D107 (only the rule never raises: the
+   cap is its raise ceiling), D105 (mark-downs live where prices are decided: they become rows
+   of the one list) and D277 (pricing lists all rows: its Q6, the Live tab, goes). D103
+   (staleness filters, never gates) stands.
 
 ## 6. Clarity fixes that stand alone
 
