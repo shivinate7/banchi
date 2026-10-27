@@ -4456,8 +4456,8 @@ test('a hold taken now keeps its row where it is, and so does the next load', as
   await page.getByRole('button', { name: 'Keep Dunsparce off TCGplayer', exact: true }).click()
   await page.getByRole('button', { name: /Keep off TCGplayer/ }).click()
   await page.getByRole('button', { name: 'Keep it off' }).click()
-  await expect(page.locator('.pricing-row').nth(1).locator('.pricing-state')).toHaveAttribute('title', 'withheld: keeping')
-  /* ONE STATUS WORD: the caption reads Kept off TCGplayer, and the row never shows the imperative as its status. */
+  await expect(page.locator('.pricing-row').nth(1).locator('.pricing-held')).toHaveAttribute('title', 'withheld: keeping')
+  /* ONE STATUS WORD: the pill reads Kept off TCGplayer, and the row never shows the imperative as its status. */
   await expect(page.locator('.pricing-row').nth(1).locator('.pricing-held')).toContainText('Kept off TCGplayer')
   await expect(page.locator('.pricing-row').nth(1)).not.toContainText('Keep off TCGplayer')
   await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Dunsparce', 'Wattrel'])
@@ -4478,6 +4478,31 @@ test('a hold taken now keeps its row where it is, and so does the next load', as
   await settleFonts(page)
   await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Dunsparce', 'Wattrel'])
 })
+
+test('a kept-off row says Kept off TCGplayer once, so the pill and the caption do not repeat it', async ({ page }) => {
+  await open(page, {
+    skus: [sku({ sku: '1', name: 'Articuno' }), sku({ sku: '2', name: 'Dunsparce' })],
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '2': { withheld: 'keeping' } } },
+  })
+  const held = page.locator('.pricing-row', { has: page.locator('.pricing-held') })
+  await expect(held).toHaveCount(1)
+  const text = (await held.textContent()) ?? ''
+  expect(text.match(/Kept off TCGplayer/g) ?? [], 'the held row text says Kept off TCGplayer exactly once').toHaveLength(1)
+})
+
+for (const width of [1440, 820]) {
+  test(`a kept-off pill is not clipped at ${width}: its scrollWidth fits its clientWidth`, async ({ page }) => {
+    await setViewport(page, { width, height: 900 })
+    await open(page, {
+      skus: [sku({ sku: '1', name: 'Articuno' }), sku({ sku: '2', name: 'Dunsparce' })],
+      decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '2': { withheld: 'keeping' } } },
+    })
+    const pill = page.locator('.pricing-held')
+    await expect(pill).toHaveCount(1)
+    const { scroll, client } = await pill.evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }))
+    expect(scroll, `pill scrollWidth ${scroll} against clientWidth ${client}`).toBeLessThanOrEqual(client)
+  })
+}
 
 test('Kept off shows only the kept-off rows, and its count is the bar’s count', async ({ page }) => {
   await open(page, {
