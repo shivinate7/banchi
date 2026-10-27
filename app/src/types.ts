@@ -1191,7 +1191,59 @@ export type RetireResult = {
 
   /** What an undo of THIS call would put the card back to, or null when there is none. */
   restores_to: string | null
+
+  /** Only on a `master_set` retirement: whether its live copy can come off TCGplayer. Null when
+   *  the server could not read the state (the card's own GET says it again). */
+  take_off?: MasterTakeOff | null
 }
+
+/** Where a `master_set` pull's TCGplayer take-off stands (`GET /inventory/<box>/<index>/take-off`).
+ *
+ *  - `offered`     live is above what is on hand: the press is there.
+ *  - `on_its_way`  a take-off is written and no live check has settled it: no press.
+ *  - `sent`        a live check found the copy gone.
+ *  - `failed`      the last press failed or never landed (`failure` says why): the press is there again.
+ *  - `matches`     nothing is live above what is on hand. Also what a press answers when it sent nothing.
+ *  - `no_session`  no seller session on this Mac, so there is no press. */
+export type MasterTakeOffState = 'offered' | 'on_its_way' | 'sent' | 'failed' | 'matches' | 'no_session'
+
+export type MasterTakeOff = {
+  state: MasterTakeOffState
+  sku: string | null
+  /** Copies live beyond what is on hand, by the store's last reading. */
+  excess: number
+  /** Copies the take-off row removes, once a press has written one. */
+  taken_off: number
+  /** The take-off's receipt, once a press has written one. */
+  stamp: string | null
+  /** Why the last press failed. */
+  failure: string | null
+  /** True when the press should be offered: `offered` or `failed`. */
+  press: boolean
+}
+
+/** One take-off still owed (`GET /pipeline/sends/owed`): not pressed, failed, or waiting on a
+ *  sign-in. One entry per SKU. `state` is `offered`, `failed` or `no_session`; `press` is false for the last. */
+export type OwedTakeOff = MasterTakeOff & {
+  name: string
+  box: number
+  index: number
+}
+
+/** What `POST /pipeline/sends/owed` answers for one entry: its state after the press, or why the
+ *  press was refused (`refused` is the code, `message` the sentence). */
+export type OwedTakeOffResult = {
+  name: string
+  sku: string
+  box: number
+  index: number
+  take_off: MasterTakeOff | null
+  refused: string | null
+  message: string | null
+}
+
+/** What `POST /inventory/<box>/<index>/take-off` answers: the card's state, and the receipt when a row went. */
+export type MasterTakeOffAnswer = { take_off: MasterTakeOff; send?: SendSummary }
 
 /** D4's one-tap choice, as `POST /review/<box>/<index>/answer` takes it.
  *
