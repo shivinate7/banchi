@@ -4,7 +4,7 @@ printing and source update, kept from the day this table exists (D88, D219's nev
 WHY THIS TABLE EXISTS. `tcgcsv.com` once served every past day as an archive and withdrew it, so a day not read
 the day it is published is gone from the one source that gave a whole market's prices. `pipeline/dailyprices.py`
 reads the current file once per source update and offers this module what it found; the history builds from now.
-The price research in `docs/specs/sales-plan.md` reads it.
+The price-pattern research that D-tcgcsv-daily-read names is the reader; no screen reads it yet.
 
 THE KEY IS `(product_id, sub_type, day)` AND `day` IS THE SOURCE'S OWN UPDATE DATE, NEVER THE READ'S. A read at 23:00
 and another at 05:15 the next day see the same data, so a key on the day of the read would save one update twice.

@@ -76,6 +76,21 @@ def _unreadable(payload) -> Optional[str]:
     return None
 
 
+def _group_ids(listing) -> list:
+    """The usable rows of the group list, in the order served: a dict with an int-able `groupId`, once each. Any
+    other row is skipped, and a list that is no dict or has no list of results yields none."""
+    rows = listing.get("results") if isinstance(listing, dict) else None
+    ids = []
+    for row in rows if isinstance(rows, list) else ():
+        try:
+            group_id = int(row["groupId"]) if isinstance(row, dict) else None
+        except (KeyError, TypeError, ValueError):
+            continue
+        if group_id is not None and group_id not in ids:
+            ids.append(group_id)
+    return ids
+
+
 def run_pass(
     fetch: Optional[Callable[[str], object]] = None,
     *,
@@ -107,9 +122,9 @@ def run_pass(
     listing = market.get(
         f"{pricehistory.CATALOG_HOST}/tcgplayer/{CATEGORY_ID}/groups", f"tcgcsv/{CATEGORY_ID}/groups", 0
     )
-    group_ids = [int(group["groupId"]) for group in listing.get("results") or ()]
+    group_ids = _group_ids(listing)
     if not group_ids:
-        raise pricehistory.Unreachable("The price service listed no sets. Try again in a moment.")
+        raise pricehistory.Unreachable("The price service listed no sets it could be read from. Try again in a moment.")
     update = saved or Update(stamp, day, (), False, at)
     rows, done, failed, throttles = [], [], {}, 0
     for group_id in group_ids:

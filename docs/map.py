@@ -5191,7 +5191,7 @@ COMPONENTS = [
                         "buckets kept, exit 0), and adds the result to the note. Before the sweep, and "
                         "with `--no-sweep` too, and even after a failed refresh, it runs "
                         "`pipeline.dailyprices.run_pass`, which saves TCGCSV's current Riftbound "
-                        "prices once per source update and notes each pass as the `daily_prices` "
+                        "prices once per source update and notes each pass in the note file and the log, no screen, as the `daily_prices` "
                         "step (D-tcgcsv-daily-read). Calls no paid read "
                         "and changes no price at TCGplayer. `--agent` installs "
                         "the daily launchd job (main tree only), `--agent --remove` removes it. "
