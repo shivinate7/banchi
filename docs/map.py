@@ -1031,6 +1031,16 @@ COMPONENTS = [
                                    "is deliberately no policy.floor.",
                            "governed_by": ["D8", "D9", "D86", "D99"],
                            "tested_by": ["T5"]},
+            "suggest.py": {"does": "pricing by suggestion, pure over plain dicts (spec "
+                                   "docs/specs/pricing-suggest.md): `fired` names which of three "
+                                   "triggers (market moved, unsold above market, undercut with "
+                                   "shipping) fire on a live listing, and `review` sorts every "
+                                   "listing into Needs you, Suggested changes or Going at the "
+                                   "rule. The price is pricing.list_price at today's market, "
+                                   "never a second copy of the rule. `limit` and `value_line` "
+                                   "are corpus policy keys that default here.",
+                           "governed_by": ["D9"],
+                           "tested_by": ["T5"]},
             "routing.py": {"does": "which queue a card lands in — batch script v2 section 5.4. "
                                    "`NAME_DISPUTED` is the second reason here the JOIN writes "
                                    "OVER a ladder resolution that succeeded: the number found "
