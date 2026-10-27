@@ -2057,6 +2057,39 @@ def check_master_take_off(checks: Checks) -> None:
             f"Got: {again[1]}",
         )
 
+    # ------------------------------------------------ two single presses on one SKU: the second is refused
+    with _case(checks, "TWO SINGLE PRESSES RACE ON ONE SKU"), send_portal() as portal, synced_home():
+        _settled_live(checks, portal)
+        retire(3)
+        retire(2)  # two master_set pulls of one SKU, each with its own press
+        portal["rows"].clear()
+        release = threading.Event()
+        portal["hold"]["GET"] = release  # the first press stops at its live read, holding the press
+        before = len(portal["calls"])
+        answers: dict = {}
+        first = _press_thread(lambda: send_routes.do_master_take_off(3, 3, {"confirm": True}), answers, "first")
+        deadline = time.monotonic() + 20
+        while not any(kind == "GET" for kind, _ in portal["calls"][before:]) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        during = _press_thread(lambda: send_routes.do_master_take_off(3, 2, {"confirm": True}), answers, "during")
+        during.join(20)
+        checks.equal(
+            answers.get("during"), ("refused", "send_in_progress"),
+            "TWO SINGLE PRESSES RACE ON ONE SKU: a press that comes while one holds the press is refused by the lock",
+        )
+        release.set()
+        first.join(20)
+        checks.equal(answers.get("first", ("",))[0], "sent", "and the first press lands")
+        after = press(2)
+        checks.equal(
+            after.get("refused"), "take_off_outstanding",
+            "TWO SINGLE PRESSES RACE ON ONE SKU: the second press, once the first has landed, is refused by the one-outstanding check",
+        )
+        checks.equal(
+            len(portal["rows"]), 1,
+            "TWO SINGLE PRESSES RACE ON ONE SKU: only the first press's one row reached TCGplayer",
+        )
+
     # ------------------------------------------------ the route
     with _case(checks, "route"):
         checks.ok(
@@ -2068,22 +2101,23 @@ def check_master_take_off(checks: Checks) -> None:
 
 
 def check_master_owed(checks: Checks) -> None:
-    """The owed list on the send card, and its press-all (`docs/specs/master-set.md` section 5).
+    """The owed list on the send card (`docs/specs/master-set.md` section 5).
 
-    `GET /pipeline/sends/owed` is `send_routes.do_owed_take_offs`; `POST /pipeline/sends/owed` is
-    `send_routes.do_press_owed_take_offs`, one confirm for every entry, each on its own receipt. An
-    entry is owed while its take-off is offered, failed or waiting on a sign-in. It leaves when the
-    take-off is on its way or sent, the listing already matches, or the retirement is undone.
+    `GET /pipeline/sends/owed` is `send_routes.do_owed_take_offs`. Each entry is pressed on its own,
+    through `send_routes.do_master_take_off`: there is no press for all. An entry is owed while its
+    take-off is offered, failed or waiting on a sign-in. It leaves when the take-off is on its way
+    or sent, the listing already matches, or the retirement is undone.
     """
     checks.note("")
-    checks.note("MASTER-SET OWED LIST — the send card lists every owed take-off and presses them on one confirm")
+    checks.note("MASTER-SET OWED LIST — the send card lists every owed take-off, each with its own press")
 
     def owed():
         return send_routes.do_owed_take_offs()["owed"]
 
-    def press_all(**extra):
+    def press_entry():
+        """The entry's own press, or `{"refused": code}` on the refusal."""
         try:
-            return send_routes.do_press_owed_take_offs({"confirm": True, **extra})
+            return send_routes.do_master_take_off(3, 3, {"confirm": True})
         except pipeline_routes.PipelineRefusal as caught:
             return {"refused": caught.code}
 
@@ -2107,21 +2141,18 @@ def check_master_owed(checks: Checks) -> None:
         )
         checks.ok(bool(listed and listed[0]["name"]), "and the entry carries the card's name")
         checks.equal(len(portal["calls"]), calls, "THE READ OPENS NO SOCKET")
-        checks.equal(press_all(confirm=False).get("refused"), "confirm_required", "press-all needs the owner's yes")
         portal["rows"].clear()
-        answer = press_all()
-        results = answer.get("results") or []
+        answer = press_entry()
         checks.equal(
-            [(r["sku"], r["box"], r["index"], (r["take_off"] or {}).get("state"), r["refused"]) for r in results],
-            [(ARTICUNO_SKU, 3, 3, "on_its_way", None)],
-            f"PRESS-ALL TAKES THE ENTRY OFF and answers per entry. Got: {answer}",
+            (answer.get("take_off") or {}).get("state"), "on_its_way",
+            f"THE PRESS TAKES THE ENTRY OFF, and answers on its way. Got: {answer}",
         )
         checks.equal(_portal_rows(portal), {ARTICUNO_SKU: "-1"}, "one row reached TCGplayer, sized by the press")
         checks.equal(owed(), [], "AN ENTRY ON ITS WAY IS NOT OWED")
         portal["rows"].clear()
-        checks.equal(press_all().get("results"), [], "and a second press-all presses nothing")
+        checks.equal(press_entry().get("refused"), "take_off_outstanding", "and a second press on its way is refused")
         checks.ok(not portal["rows"], "so nothing is sent twice")
-        _age_receipt(results[0]["take_off"]["stamp"])
+        _age_receipt(answer["take_off"]["stamp"])
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
         send_routes.do_live_check({})
         checks.equal(owed(), [], "AN ENTRY SENT AND SETTLED STAYS OFF THE LIST")
@@ -2135,10 +2166,9 @@ def check_master_owed(checks: Checks) -> None:
         retire(3)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
         portal["rows"].clear()
-        answer = press_all()
+        answer = press_entry()
         checks.equal(
-            [(r["take_off"] or {}).get("state") for r in answer.get("results") or []],
-            ["matches"],
+            (answer.get("take_off") or {}).get("state"), "matches",
             "A LISTING THAT ALREADY MATCHES is answered so, and nothing is sent",
         )
         checks.ok(not portal["rows"], "no row reached TCGplayer")
@@ -2149,9 +2179,8 @@ def check_master_owed(checks: Checks) -> None:
         _settled_live(checks, portal)
         retire(3)
         portal["refuse"] = {"uploadexportcsv"}
-        failed = press_all()
-        refused = [r["refused"] for r in failed.get("results") or []]
-        checks.ok(refused and refused[0], f"TCGplayer turns the take-off away, and the entry says so: {failed}")
+        failed = press_entry()
+        checks.ok(failed.get("refused"), f"TCGplayer turns the take-off away, and the press says so: {failed}")
         listed = owed()
         checks.ok(
             [e["state"] for e in listed] == ["failed"] and listed[0]["failure"],
@@ -2159,8 +2188,8 @@ def check_master_owed(checks: Checks) -> None:
         )
         portal["refuse"] = set()
         portal["rows"].clear()
-        press_all()
-        checks.equal(_portal_rows(portal), {ARTICUNO_SKU: "-1"}, "and the next press-all tries it again")
+        press_entry()
+        checks.equal(_portal_rows(portal), {ARTICUNO_SKU: "-1"}, "and the next press tries it again")
         checks.equal(owed(), [], "and then it is on its way")
 
     # ------------------------------------------------ no seller session: listed, not pressable
@@ -2176,12 +2205,7 @@ def check_master_owed(checks: Checks) -> None:
                 [("no_session", False)],
                 "WITH NO SELLER SESSION the entry is listed with no press, so it shows once a sign-in exists",
             )
-            answer = press_all()
-            checks.equal(
-                [r["refused"] for r in answer.get("results") or []],
-                ["take_off_no_session"],
-                "and press-all refuses it by name",
-            )
+            checks.equal(press_entry().get("refused"), "take_off_no_session", "and the press refuses it by name")
             checks.equal(len(portal["calls"]), calls, "without a call to TCGplayer")
         finally:
             if cookie is not None:
@@ -2208,37 +2232,6 @@ def check_master_owed(checks: Checks) -> None:
             counted.call_count, 1,
             "THE OUTSTANDING SET IS READ ONCE PER LIST: two master_set pulls, one read, not one per card",
         )
-
-    # ------------------------------------------------ a press-all that read the list before a press took it
-    with _case(checks, "press-all races a press"), send_portal() as portal, synced_home():
-        _settled_live(checks, portal)
-        retire(3)
-        portal["rows"].clear()
-        release = threading.Event()
-        portal["hold"]["GET"] = release  # the single press stops at its live read, holding the press
-        before = len(portal["calls"])
-        answers: dict = {}
-        single = _press_thread(lambda: send_routes.do_master_take_off(3, 3, {"confirm": True}), answers, "single")
-        deadline = time.monotonic() + 20
-        while not any(kind == "GET" for kind, _ in portal["calls"][before:]) and time.monotonic() < deadline:
-            time.sleep(0.01)
-        snapshot = send_routes._owed_entries()
-        checks.equal(
-            [entry["sku"] for entry in snapshot],
-            [ARTICUNO_SKU],
-            "THE PRESS-ALL READS THE LIST WHILE A PRESS IS AT ITS LIVE READ: the take-off is still owed",
-        )
-        release.set()
-        single.join(20)
-        checks.equal(answers.get("single", ("", ""))[0], "sent", "and the single press lands")
-        with _replaced(send_routes, "_owed_entries", lambda: snapshot):
-            raced = press_all()
-        checks.equal(
-            [r["refused"] for r in raced.get("results") or []],
-            ["take_off_outstanding"],
-            "A PRESS-ALL THAT RACED A PRESS IS REFUSED by the one-outstanding check, once the press is free",
-        )
-        checks.equal(len(portal["rows"]), 1, "and only the single press's one row reached TCGplayer")
 
 
 def check_master_take_off_mutants(checks: Checks) -> None:
@@ -2270,8 +2263,8 @@ def check_master_take_off_mutants(checks: Checks) -> None:
             check_master_take_off, "A SECOND PRESS WHILE ONE IS OUTSTANDING",
         ),
         (
-            "guard: the one-outstanding check removed, press-all race", "if sku in _outstanding_takes():",
-            "if False:", check_master_owed, "A PRESS-ALL THAT RACED A PRESS",
+            "guard: the one-outstanding check removed, two presses race", "if sku in _outstanding_takes():",
+            "if False:", check_master_take_off, "TWO SINGLE PRESSES RACE ON ONE SKU",
         ),
         (
             "outstanding: an unknown push stops being outstanding", "if record.get(\"failure\") or record.get(\"taken_back_at\"):",
@@ -2376,45 +2369,6 @@ def check_take_off_failure_words(checks: Checks) -> None:
                 and "Nothing came off TCGplayer" in message,
                 f"{label.upper()}: the message says nothing came off and the retirement stands. Got: {message}",
             )
-
-
-def check_press_owed_answers_every_entry(checks: Checks) -> None:
-    """An error that is not a refusal fails that entry only, and the press-all loop goes on."""
-    checks.note("")
-    checks.note("OWED TAKE-OFFS — one entry's error does not leave the rest unanswered")
-
-    entries = [
-        {"name": "Articuno", "sku": "1", "box": 3, "index": 1, "state": "offered"},
-        {"name": "Zapdos", "sku": "2", "box": 3, "index": 2, "state": "offered"},
-        {"name": "Moltres", "sku": "3", "box": 3, "index": 3, "state": "offered"},
-    ]
-    seen = []
-
-    def fake(box, index, payload):
-        seen.append(index)
-        if index == 1:
-            raise RuntimeError("boom")
-        if index == 2:
-            raise pipeline_routes.PipelineRefusal(HTTPStatus.CONFLICT, "take_off_outstanding", "already on its way")
-        return {"take_off": {"state": "on_its_way"}}
-
-    with mock.patch.object(send_routes, "_owed_entries", return_value=entries), mock.patch.object(
-        send_routes, "do_master_take_off", side_effect=fake
-    ):
-        results = send_routes.do_press_owed_take_offs({"confirm": True})["results"]
-    checks.equal(seen, [1, 2, 3], "EVERY ENTRY IS TRIED, in order, after an error")
-    checks.equal(
-        [(r["sku"], r["refused"]) for r in results],
-        [("1", "take_off_error"), ("2", "take_off_outstanding"), ("3", None)],
-        "and every entry is answered: an error is that entry's failure, a refusal its own, the rest go",
-    )
-    checks.ok(
-        results[0]["take_off"] is None
-        and results[0]["message"]
-        and "boom" not in results[0]["message"]
-        and results[2]["take_off"] == {"state": "on_its_way"},
-        "the error entry says it stopped without echoing the raw error; the sound one keeps its answer",
-    )
 
 
 def check_send_take_outstanding(checks: Checks) -> None:
@@ -2628,17 +2582,6 @@ def _after_call(module, name: str, action):
         return answer
 
     setattr(module, name, hooked)
-    try:
-        yield
-    finally:
-        setattr(module, name, original)
-
-
-@contextmanager
-def _replaced(module, name: str, value):
-    """`module.name` is `value` for this block, then the real one again."""
-    original = getattr(module, name)
-    setattr(module, name, value)
     try:
         yield
     finally:
@@ -8437,7 +8380,6 @@ CHECKS = (
     check_master_owed,
     check_master_take_off_mutants,
     check_take_off_failure_words,
-    check_press_owed_answers_every_entry,
     check_send_sold_since,
     check_send_sold_after_check,
     check_send_snapshot_lagging_then_newer,

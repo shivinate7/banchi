@@ -74,16 +74,11 @@ function owedRow(over: Partial<OwedRow> & Pick<OwedRow, 'name' | 'sku' | 'box' |
   return { state, excess: 2, taken_off: 0, stamp: null, failure: null, press: state === 'offered' || state === 'failed', set_name: 'ME01: Mega Evolution', ...over }
 }
 
-/** One entry of `POST /pipeline/sends/owed`, as the server answers it when TCGplayer takes the copies. */
-function acceptedEntry(entry: OwedRow) {
+/** One press's answer, as `POST /inventory/<box>/<index>/take-off` shapes it when TCGplayer takes the entry's copies. */
+function pressAnswer(entry: OwedRow) {
   return {
-    name: entry.name,
-    sku: entry.sku,
-    box: entry.box,
-    index: entry.index,
     take_off: { state: 'on_its_way', sku: entry.sku, excess: entry.excess, taken_off: entry.excess, stamp: null, failure: null, press: false },
-    refused: null,
-    message: null,
+    send: { check_after: null },
   }
 }
 
@@ -358,10 +353,8 @@ async function open(
     savedFailures?: number
     /** The master-set take-offs still owed (`GET /pipeline/sends/owed`), one entry per SKU. Default: none owed. */
     takeOffsOwed?: OwedRow[]
-    /** Answers `POST /inventory/<box>/<index>/take-off`, one entry's press. Default: TCGplayer takes the copies. */
+    /** Answers `POST /inventory/<box>/<index>/take-off`, one entry's press. Default: TCGplayer takes that entry's copies. */
     takeOff?: (box: number, index: number) => { status: number; body: unknown }
-    /** Answers `POST /pipeline/sends/owed`, Take All. Default: TCGplayer takes every entry's copies. */
-    takeAll?: (owed: OwedRow[]) => { status: number; body: unknown }
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -415,24 +408,19 @@ async function open(
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) })
   })
 
-  /* THE MASTER-SET TAKE-OFFS STILL OWED (`docs/specs/master-set.md`, section 5): the send card's list, its Take All, and each
-     entry's own press. Newer than the shell's empty answer, so it wins for every case; each read and write lands in `wire`. */
+  /* THE MASTER-SET TAKE-OFFS STILL OWED (`docs/specs/master-set.md`, section 5): the send card's list, and each entry's own
+     press. Newer than the shell's empty answer, so it wins for every case; each read and write lands in `wire`. */
   await page.route(/\/pipeline\/sends\/owed(\?.*)?$/, async (route) => {
-    const request = route.request()
-    if (request.method() === 'GET') {
-      wire.push({ method: 'GET', path: '/pipeline/sends/owed', body: null })
-      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ owed: options.takeOffsOwed ?? [] }) })
-    }
-    wire.push({ method: 'POST', path: '/pipeline/sends/owed', body: request.postDataJSON() })
-    const answer = (options.takeAll ?? (() => ({ status: 200, body: { results: (options.takeOffsOwed ?? []).map(acceptedEntry) } })))(options.takeOffsOwed ?? [])
-    return route.fulfill({ status: answer.status, contentType: 'application/json', body: JSON.stringify(answer.body) })
+    wire.push({ method: 'GET', path: '/pipeline/sends/owed', body: null })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ owed: options.takeOffsOwed ?? [] }) })
   })
   await page.route(/\/inventory\/\d+\/\d+\/take-off$/, async (route) => {
     const request = route.request()
     const path = new URL(request.url()).pathname
     wire.push({ method: request.method(), path, body: request.postDataJSON() })
     const [box, index] = path.split('/').slice(2).map(Number) as [number, number]
-    const answer = (options.takeOff ?? (() => ({ status: 200, body: { take_off: acceptedEntry(owedRow({ name: '', sku: '', box, index })).take_off, send: { check_after: null } } })))(box, index)
+    const entry = (options.takeOffsOwed ?? []).find((row) => row.box === box && row.index === index) ?? owedRow({ name: '', sku: '', box, index })
+    const answer = (options.takeOff ?? (() => ({ status: 200, body: pressAnswer(entry) })))(box, index)
     await route.fulfill({ status: answer.status, contentType: 'application/json', body: JSON.stringify(answer.body) })
   })
 
@@ -6647,16 +6635,19 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(owed.getByRole('button', { name: /take it off tcgplayer/i })).toBeVisible()
     })
 
-    test(`several owed take-offs read as one total, one Take All, and a fold of names, at ${width} in ${theme}`, async ({ page }) => {
+    test(`several owed take-offs show a press per entry, and no Take All, at ${width} in ${theme}`, async ({ page }) => {
       await setViewport(page, { width, height: 900 })
       await page.emulateMedia({ colorScheme: theme })
       await open(page, { takeOffsOwed: [THIEVUL, PIKACHU, DITTO] })
       const owed = page.locator('.send-owed')
       await expect(page.locator(OWED_SHOWN).first()).toContainText('TCGplayer still lists 6 copies from your master set.')
-      await expect(owed.getByRole('button', { name: 'Take All 6 Copies Off' })).toBeVisible()
-      await expect(owed.getByRole('button', { name: /^Show 3 Cards$/ })).toBeVisible()
-      // THE NAMES ARE FOLDED UNTIL ASKED FOR.
+      // THE NAMES ARE FOLDED UNTIL ASKED FOR, and each name carries its own press.
       await expect(owed.locator('.send-names')).toBeHidden()
+      await owed.getByRole('button', { name: /^Show 3 Cards$/ }).click()
+      await expect(owed.locator('.send-names li')).toHaveCount(3)
+      await expect(owed.locator('.send-names li').getByRole('button', { name: 'Take It Off' })).toHaveCount(3)
+      // THERE IS NO PRESS FOR ALL: each entry comes down on its own press.
+      await expect(page.getByRole('button', { name: /take all/i })).toHaveCount(0)
     })
 
     test(`the open fold lists each entry with its own press, and the bar keeps its height, at ${width} in ${theme}`, async ({ page }) => {
@@ -6680,44 +6671,45 @@ for (const theme of ['light', 'dark'] as const) {
       expect((await bar.boundingBox())?.height, 'the bar keeps its height').toBeCloseTo(before?.height ?? -1, 0)
     })
 
-    test(`Take All answers in part: what TCGplayer took is named, and the rest stays on the list, at ${width} in ${theme}`, async ({ page }) => {
+    test(`after one entry is pressed, the head counts only the copies left, and the bar holds still, at ${width} in ${theme}`, async ({ page }) => {
       await setViewport(page, { width, height: 900 })
       await page.emulateMedia({ colorScheme: theme })
-      const wire = await open(page, {
-        takeOffsOwed: [THIEVUL, DITTO],
-        takeAll: () => ({
-          status: 200,
-          body: {
-            results: [
-              acceptedEntry(THIEVUL),
-              {
-                name: 'Ditto',
-                sku: DITTO.sku,
-                box: 2,
-                index: 3,
-                take_off: { state: 'failed', sku: DITTO.sku, excess: 3, taken_off: 0, stamp: null, failure: 'TCGplayer refused the push.', press: true },
-                refused: null,
-                message: null,
-              },
-            ],
-          },
-        }),
-      })
+      const wire = await open(page, { takeOffsOwed: [THIEVUL, PIKACHU, DITTO] })
       const owed = page.locator('.send-owed')
-      await owed.getByRole('button', { name: 'Take All 5 Copies Off' }).click()
-      await expect(page.locator(OWED_SHOWN).first()).toContainText('TCGplayer accepted 2 of 5 copies. 3 stay on this list.')
-      expect(wire.filter((call) => call.method === 'POST' && call.path === '/pipeline/sends/owed')).toHaveLength(1)
+      const bar = page.locator('.pricing-bar')
+      await owed.getByRole('button', { name: /^Show 3 Cards$/ }).click()
+      await page.mouse.move(0, 0)
+      await settleMotion(page)
+      const before = await bar.boundingBox()
+
+      const row = owed.locator('.send-names li', { hasText: 'Thievul' })
+      await row.getByRole('button', { name: 'Take It Off' }).click()
+      await expect(row.getByText('Taken off')).toBeVisible()
+      // THE PRESSED ENTRY LEAVES THE TOTAL: Pikachu's 1 and Ditto's 3 are what TCGplayer still lists.
+      await expect(page.locator(OWED_SHOWN).first()).toContainText('TCGplayer still lists 4 copies from your master set.')
+      await page.mouse.move(0, 0)
+      await settleMotion(page)
+      expect((await bar.boundingBox())?.height, 'the bar keeps its height through the press').toBeCloseTo(before?.height ?? -1, 0)
+      expect(wire.filter((call) => call.method === 'POST' && call.path === '/inventory/2/1/take-off')).toHaveLength(1)
     })
 
-    test(`Take All counts only the copies still left to press, at ${width} in ${theme}`, async ({ page }) => {
+    test(`after every entry is pressed, the head reads what TCGplayer accepted, at ${width} in ${theme}`, async ({ page }) => {
       await setViewport(page, { width, height: 900 })
       await page.emulateMedia({ colorScheme: theme })
-      // A NO-SIGN-IN ENTRY IS OWED BUT NOT PRESSABLE: its copies stay in the sentence's total and leave Take All's count.
-      const signedOut = owedRow({ name: 'Pikachu', sku: PIKACHU.sku, box: 2, index: 2, excess: 1, state: 'no_session' })
-      await open(page, { takeOffsOwed: [THIEVUL, signedOut, DITTO] })
+      const wire = await open(page, { takeOffsOwed: [THIEVUL, PIKACHU, DITTO] })
       const owed = page.locator('.send-owed')
-      await expect(page.locator(OWED_SHOWN).first()).toContainText('TCGplayer still lists 6 copies from your master set.')
-      await expect(owed.getByRole('button', { name: 'Take All 5 Copies Off', exact: true })).toBeVisible()
+      await owed.getByRole('button', { name: /^Show 3 Cards$/ }).click()
+      for (const name of ['Thievul', 'Pikachu', 'Ditto']) {
+        const row = owed.locator('.send-names li', { hasText: name })
+        await row.getByRole('button', { name: 'Take It Off' }).click()
+        await expect(row.getByText('Taken off')).toBeVisible()
+      }
+      await expect(page.locator(OWED_SHOWN).first()).toContainText('TCGplayer accepted: 6 copies are off.')
+      expect(wire.filter((call) => call.method === 'POST' && call.path.endsWith('/take-off')).map((call) => call.path)).toEqual([
+        '/inventory/2/1/take-off',
+        '/inventory/2/2/take-off',
+        '/inventory/2/3/take-off',
+      ])
     })
 
     test(`the copies column holds still when a row is answered, at ${width} in ${theme}`, async ({ page }) => {
