@@ -220,3 +220,17 @@
 .send-toggle { display: inline-grid; }
 .send-toggle > * { grid-area: 1 / 1; }
 .send-toggle > [data-hidden] { visibility: hidden; }
+
+/* THE TAKE-OFFS STILL OWED (a master-set pull TCGplayer still lists). The line is a compact notice.
+   Its sentence and its press hold every state of one entry in one grid cell, only the current one
+   visible, so the line keeps the box of its tallest state from the first paint (D313). */
+.send-owed .send-owed-cell { display: grid; }
+.send-owed .send-owed-cell > * { grid-area: 1 / 1; }
+.send-owed .send-owed-cell > [data-off] { visibility: hidden; }
+.send-owed .send-owed-press { display: flex; align-items: center; gap: var(--bn-2); justify-content: flex-end; }
+/* Each entry of the open list: the name, the copies, and its own press, one thumb high. */
+.send-owed .send-names li { display: grid; grid-template-columns: minmax(0, 1fr) 5rem auto; align-items: center; gap: var(--bn-3); min-height: var(--bn-control-h-sm); }
+.send-owed .send-figure { text-align: end; }
+.send-owed .send-names .bn-btn { flex: none; }
+/* The open list floats over the worklist (`.send-moves`), so the bar keeps its height. */
+.send-owed.send-moves .send-names { left: auto; width: min(36rem, 100%); }

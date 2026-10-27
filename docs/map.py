@@ -7523,14 +7523,14 @@ COMPONENTS = [
                         "a push (D201). Kit primitives only: Section, .bn-list/.bn-list-row, "
                         "EmptyState/Notice/Loading for the three states a fetch can be in.",
                 "governed_by": ["D31", "D67", "D172", "D196", "D201", "D221", "D258", "D264",
-                                "D285", "D293", "D301"],
+                                "D285", "D293", "D301", "D313"],
             },
             "src/InventorySets.css": {
                 "does": "layout for the set view's rows — the card number column, the "
                         "name column, and the row's own cursor. Everything else (the section "
                         "head, the count, the list frame) is the kit's own .bn-section/"
                         ".bn-list, unrepeated here.",
-                "governed_by": ["D293"],
+                "governed_by": ["D293", "D313"],
             },
             "src/BoxOps.tsx": {
                 "does": "D20's box object, made visible and editable ON THE BROWSE'S BOX HEADER "
@@ -8071,7 +8071,7 @@ COMPONENTS = [
                                          "confirmed with Take them back, and the check after the "
                                          "lag. No pipeline word reaches the screen (D196).",
                                  "governed_by": ["D86", "D99", "D105", "D273", "D118", "D196",
-                                                 "D269", "D277"]},
+                                                 "D269", "D277", "D313"]},
             "src/SendCard.css": {"does": "the send card's own rows: the press and its two quiet "
                                          "doors on one line that wraps as a unit, the download "
                                          "door, and the card lists under a notice. On a phone "
