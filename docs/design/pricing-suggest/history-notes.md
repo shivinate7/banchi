@@ -88,7 +88,7 @@ row. The row's 30-day trend is read off the chart's market line, so the two agre
 8. **What Tab reaches next.** Section 9c says Tab goes on to the next price. Today's row puts the
    history door, the lock, the next row's tick and its name between two price fields, so native
    Tab leaves the price fields, and under item 7 the card closes and opens again at each price.
-   Owner grant: yes.
+   Picked: b, the pricing session's pick, recorded in the spec, section 9c.
    - a. Native Tab, as today. Gain: no new key, every control stays on Tab. Loss: the card
      closes for four stops between prices.
    - b. The card stays open while focus is anywhere in a row of the list, and follows that row.

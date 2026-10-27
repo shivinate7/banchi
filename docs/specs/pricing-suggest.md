@@ -208,8 +208,11 @@ panel, and asked that it open by itself when a price field takes focus. Mockup:
   price column.
 - **Focus stays in the field.** A card opened by focus takes no focus, so Tab goes on to the next
   price. A card opened by the door takes focus and gives it back to the door when it closes.
-- **It closes** on Esc (focus stays in the field), on its close button, and when focus leaves the
-  list's price fields for anything but the card.
+- **It stays open while focus is in the list.** Tab passes the door, the lock, the next tick and
+  the next name between two price fields; the card stays on its row through those and moves when
+  the next price field takes focus. It closes on Esc (focus stays in the field), on its close
+  button, and when focus leaves the list for anything but the card. This close rule is the
+  pricing session's pick, reversible, read from the owner's "closes on blur".
 - **It holds its size from its first paint** while the history loads.
 
 ## 9b. AI-assisted candidates
