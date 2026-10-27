@@ -55,8 +55,8 @@ MIN_RULING_CHARS = 12
 MAX_RULINGS = 3
 
 # Exactly scripts/decision-context.py's heading regex. The em-dash separator is the half
-# scripts/docs-audit.py does NOT require — its roster regex is `^##\s+(D[1-9][0-9]{0,2})\b` —
-# so a heading rewritten to `## D57: Title` passes the audit and blanks the hook. That
+# scripts/docs-audit.py does NOT require — its roster regex is `^#\s+(D[1-9][0-9]{0,2})\b` —
+# so a heading rewritten to `# D57: Title` passes the audit and blanks the hook. That
 # asymmetry is the single most dangerous edit this rewrite can make, and it is why this
 # check exists at all.
 #
@@ -73,13 +73,13 @@ MAX_RULINGS = 3
 # dangling one wherever it is written, comment or not.
 # AND AN ID IS A SLUG UNTIL THE MERGE CLAIMS IT (D140, rewritten 2026-09-11). A branch cannot
 # allocate a number — what main will take is not knowable until the merge — so it writes
-# `## D140` and the shared merge tool substitutes at merge time. This file is
+# `# D140` and the shared merge tool substitutes at merge time. This file is
 # scanned for citations by the audit, so the two shapes are spelled once here and the id
 # bound stays docs-audit's `_ID_ANY`; widening one of the two and not the other is how the
 # three-digit ceiling went silently vacuous once already.
 _ID = r"(?:[1-9][0-9]{0,2}|-[a-z][a-z0-9]*(?:-[a-z0-9]+)+)"
-HEADING_RE = re.compile(r"^##\s+(D" + _ID + r")\s*[—-]\s*(.+)$")
-ANY_H2_RE = re.compile(r"^##\s+(D" + _ID + r")\b")
+HEADING_RE = re.compile(r"^#\s+(D" + _ID + r")\s*[—-]\s*(.+)$")
+ANY_HEADING_RE = re.compile(r"^#{1,2}\s+(D" + _ID + r")\b")
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 # Fenced blocks are lifted out BEFORE inline backticks are read, and this was a real
 # defect rather than a refinement. The inline pattern is `` `([^`]+)` ``, so a ``` fence
@@ -105,35 +105,28 @@ class Entry(NamedTuple):
 
 
 def entries(text: str) -> List[Entry]:
-    """Every `## D<n>` block, by the audit's looser regex rather than the hook's.
+    """Every `# D<n>` block, by the audit's looser regex rather than the hook's.
 
     Deliberately the LOOSE one for the HEADING: an entry whose heading no longer matches
     the hook is exactly what `--structure` has to report, and splitting on the strict
     regex would make such an entry invisible to the check written to catch it.
 
-    **An entry ends at the next `## ` of ANY kind, which is the hook's own rule and not a
-    detail.** scripts/decision-context.py stores and clears on `line.startswith("## ")`,
-    so ending only at the next `## D<n>` would hand the LAST entry every trailing section
-    in the file. Measured while this was written: D60 read 17,775 bytes against its real
-    4,976, having absorbed Deferred, Someday and the v1 bug table — which would have put
-    the final entry permanently over budget and attributed three sections' facts to it.
+    **An entry ends at the next entry heading, which is the hook's own rule and not a
+    detail.** An entry's title is an H1, so an `## ` section inside it belongs to it.
+    scripts/decision-context.py stores on the next entry heading as well. A section that
+    is not an entry would be absorbed by the entry above it, so the corpus keeps none.
     """
     found: List[Entry] = []
     lines = text.split("\n")
     starts: List[Tuple[int, str]] = []
-    stops: List[int] = []
     for number, line in enumerate(lines, start=1):
-        if not line.startswith("## "):
-            continue
-        stops.append(number)
-        match = ANY_H2_RE.match(line)
+        match = ANY_HEADING_RE.match(line)
         if match:
             starts.append((number, match.group(1)))
-    for number, ident in starts:
-        later = [stop for stop in stops if stop > number]
-        end = (later[0] - 1) if later else len(lines)
+    for index, (number, ident) in enumerate(starts):
+        end = starts[index + 1][0] - 1 if index + 1 < len(starts) else len(lines)
         body = "\n".join(lines[number - 1 : end])
-        title = lines[number - 1][3:].strip()
+        title = lines[number - 1].lstrip("#").strip()
         found.append(Entry(ident, title, number, body))
     return found
 
@@ -194,7 +187,7 @@ def check_structure(path: Path) -> List[Finding]:
                 Finding(
                     f"{name}:{entry.line}",
                     f"`{entry.ident}`'s heading does not match "
-                    f"`## <id> — <title>`. scripts/docs-audit.py accepts it and "
+                    f"`# <id> — <title>`. scripts/docs-audit.py accepts it and "
                     f"scripts/decision-context.py drops the entry, so this fails "
                     f"nowhere else.",
                 )

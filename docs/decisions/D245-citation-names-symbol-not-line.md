@@ -1,67 +1,46 @@
-## D245 — A citation names a symbol, not a line
+# D245 — A citation names a symbol, not a line
 
-**Unreadable.** A citation written `path:N` was invisible to every row in this repo. `scripts/docs_audit/paths_commands.py`'s `_CANDIDATE_RE` has no `:` in its character class. So line 884 of `docs/GATES.md` was extracted as the bare filename. The file resolved, and the `paths` row reported "references resolve". A citation could point at a line deleted weeks earlier, and the row stayed green. The row was not wrong about what it checked. It was read as checking something wider.
+A citation names a symbol, a section or a decision id, never a line number. A line number rots on the next edit to any line above it, and a citation of one reads as true when it is wrong.
+
+Kind: process
+Home: scripts/docs_audit/paths_commands.py
 
 ### The measurement, and why the obvious guard is the wrong one
 
-**Thirteen visible.** 713 line anchors were in the staged documents. 13 pointed past their target's end. Three of those targets are now index stubs of 38, 92 and 66 lines. They are the decisions, debts and gates index files, with their records split into one file each. The 13 are visible only because those three files got SHORTER.
+**Unreadable.** A citation written `path:N` was invisible to every row. `scripts/docs_audit/paths_commands.py`'s `_CANDIDATE_RE` has no `:` in its character class. So a line of `docs/GATES.md` was extracted as the bare filename. The file resolved, and the `paths` row reported "references resolve". A citation could point at a line deleted weeks earlier, and the row stayed green. The row was not wrong about what it checked. It was read as checking something wider.
+
+**Thirteen visible.** 713 line anchors were in the staged documents. 13 pointed past their target's end.
 
 **The disease is far wider.** Of 443 anchors into code, 313 name an identifier in the same sentence. Those can be checked without reading meaning. **219 of them point at the wrong line**, a rate of 69.7%. A stricter probe counted only sentences naming a bare identifier, not a path. It put the rate at 183 of 206, or 89%.
 
-The two populations differ and are NOT reconciled here. Neither definition leaves the direction in doubt. Most line anchors into code in this repo are already wrong.
+The two populations differ and are NOT reconciled here. Neither definition leaves the direction in doubt. Most line anchors into code in this repo were already wrong.
 
-Four were checked by hand, and all four were genuine. `_blank_number_by_name` was cited at line 1192 and is really at 1384. `do_pipeline_scope` was cited at 2455 and is really at 6537. `bandOf` was cited at 340 and is really at 472. `pokemon_code`, cited at 689, is absent.
+**So the obvious row is the wrong one.** A row that only asks whether line N exists would go green over 219 known-wrong citations. It would print a confident verdict while doing it. A guard that reads green over its own subject is the founding complaint here. It was the first design proposed for this work, and the measurement rejected it.
 
-**So the obvious row is the wrong one.** A row that only asks whether line N exists would go green over 219 known-wrong citations. It would print a confident verdict while doing it. That is the defect this entry exists to remove, one level up. A guard that reads green over its own subject is the founding complaint here. It was the first design proposed for this work, and the measurement rejected it.
+### What is built
 
-### What is built, and what each clause can see
+A line number rots on the next edit to any line above it. A symbol does not. `check_paths` already verified a `module.attribute` citation against `module_attributes()`. The primitive existed. The work was to move prose onto it, not to build a second reader for a form nothing can keep true.
 
-A line number rots on the next edit to any line above it. A symbol does not. `check_paths` already verified a `module.attribute` citation against `module_attributes()`. The primitive existed. The work is to move prose onto it, not to build a second reader for a form nothing can keep true.
-
-**Clause A: the line must exist.** `path:N` and `path:N-M` fail when the file is shorter. Hard fail.
-
-**Clause B: no anchor into a split-record stub.** The roster is derived from which corpus module reads a directory, not the file. It is never typed. This clause catches two citations that Clause A cannot see, both in `docs/specs/capture-server.md`. One named lines 5 to 7 of the gates index. The other named lines 11 to 15 of the debts index. Both landed on real lines holding unrelated text, because the stubs are longer than the anchors.
-
-**Clause C: a per-file ratchet.** It counts anchors per citing file, in D280's shape, because a repo-wide number is one every merge takes from somebody. Every anchor counts, resolving or not. The owner ruled to leave nothing alone.
-
-**A file the pin has never seen is held to zero.** This is where the clause departs from the STE ratchet it otherwise mirrors. That ratchet measures a ratio over prose that already exists, where a new file at its own natural rate is reasonable. This one counts an absolute number of a thing ruled to only go down. New documents are where new citations get written. Mirroring the other rule would leave the ratchet open on its own subject.
+One `line anchors` row refuses every line anchor, such as `path:N` and `path:N-M`, in a document and in a code comment, with no list and no exemption. A lane converted the last 776 anchors to symbols (D280, offender lists replace pinned counts). The row gates and writes nothing (D18).
 
 **The TypeScript reader** extends the `module.attribute` form to `.ts` and `.tsx`. Both were in `KNOWN_SUFFIXES` and so never reached the fallback. The reader works statically. Its docstring names what it cannot see: a symbol from a generic factory, a re-export, and a name assembled at run time.
+
+The row reads this entry too, so an example anchor here is written in words, never as `path:N` with a real number.
 
 ### What the row cannot see, stated rather than implied
 
 D149 ruled that a section number which resolves is not a citation that is right. No check can read what a sentence is about. D149 measured the nearest proxy at one genuine catch against three false alarms over 38 citations, and declined it.
 
-Nothing here repeals that. These clauses read SHAPE. A citation pointing at a real line whose content has moved stays invisible. That is 219 of 313 checkable code anchors today. Clause B is the one slice where shape and meaning coincide, and only because a stub's records are all somewhere else by construction. The ratchet governs the inflow. It makes no existing citation right.
+Nothing here repeals that. The row reads SHAPE. It makes a line number impossible and makes no citation right: a symbol that exists may still be the wrong one.
 
-**The rot reader is a measurement and never a gate.** It recomputes the rate each run. A number typed into this entry would rot exactly like the citations it describes.
+### The addresses D149 records
 
-**It was wrong on its first build.** It scored a citation as verified when the file's own name appeared inside the file. A citation that names line 1192 in `pipeline/join.py` contributed the token `join`. **59 of 155 hits, or 38%, were carried by nothing else.** A further 118 sentences named no real identifier and were folded into the denominator as checkable. That is D149's own closing lesson, reproduced inside the reader built to honour it. A probe that finds nothing reports nothing, and nothing reads as green. Tokens from the anchor's own path are now excluded. An arm asserts that a sentence whose only backticked span is the citation scores not-checkable.
+D149 names four addresses in the file the decisions once were. Those are a RECORD of where wrong citations stood when that file was one document. Rewriting them falsifies the record. They read as words ("the old decisions file, line 9522"), which no line-anchor shape matches. So no exemption is needed.
 
-### The exemption, and why it is four lines and not a file-level pass
+`docs/specs/capture-server.md` is cited as live authority by many sites, several of them in code. Those callers cite it by SECTION, which is the durable form.
 
-D149 names four addresses in the file the decisions once were. Those are a RECORD of where wrong citations stood when that file was one document. Rewriting them falsifies the record. They now read as words ("the old decisions file, line 9522"), which no line-anchor shape matches. So no exemption list is needed.
-
-**A file-level exemption was proposed and rejected.** Its subject was `docs/specs/capture-server.md`. That file's own header calls it "the record of a plan that ran" and says its line numbers have moved. That reads as an argument to leave it alone. It is cited as live authority by more than twenty sites, several of them in code. `pipeline/join.py` calls its section 6.3 the only label formula in the repo. `server/capture_server.py`, `geometry/__init__.py`, `harness/tests/t7_store_and_seams.py` and `scripts/lan-check.py` cite its sections as binding. Those callers cite it by SECTION, which is the durable form. All 19 of its anchors were converted.
-
-**Two were not address problems, and were not repaired as though they were.** One asserted a `docs/GATES.md` sentence that appears nowhere in this tree. The rule survives in CLAUDE.md's working agreement, already cited in the same passage. So the dead pointer was dropped rather than re-aimed at a nearby record, which would manufacture a source. The other named a debts framing rewritten away before the split. That sentence now says so, instead of naming an address no reader can use.
-
-### A measured tension, recorded and not acted on
-
-**Concision raised the error ratio.** Deleting 19 error-free words moved that file from 13.985 to 14.018 errors per thousand words. The error count held at 113 while the denominator shrank. So the concision this repo asks for and the error-rate ratchet pull in opposite directions. It fired on the first prose deletion this work made. It is recorded here for the owner's ruling rather than fixed.
+A citation that points at nothing is dropped, never re-aimed at a nearby record, which would manufacture a source.
 
 ### Proved by violating it
 
-Every clause was mutation-tested. Each was then re-tested by the orchestrator in a separate checkout, rather than accepted on a builder's report. A citation past the end goes red, and one in range goes green. A range anchor's upper bound past the end goes red. An anchor into a stub goes red, and the same number into a non-stub file goes green. A raised per-file count goes red. A lowered one is accepted silently and printed. An allow entry whose anchor resolves again goes red. Restores were made from a `.bak` copy, never `git checkout <path>`.
-
-**This entry was itself refused by the row.** Its first draft quoted three stale anchors as examples and cited D149 by path. The guard caught all four before the commit.
-
-The row gates and writes nothing. `scripts/line-anchors-pin.py --pin` is the generator. It is on no target and no hook, and a person runs it on purpose (D18).
-
-### Superseded in part — `D280`
-
-**Clause C's pin is gone. The rule stays.** A citation still names a symbol, never a line. The owner ruled to convert both of the last pins. The `line anchor ratchet` row became the `line anchor offenders` row. It fails on each anchor that the offender list does not list, by file and by anchor as written. It also fails on a stale entry, and on growth over the list at the merge-base. A new file still starts clean, unless the anchor moved out of another file. Growth is counted over the whole list, so the total of each anchor never rises and the inflow stays shut. `scripts/line-anchors.json` and `scripts/line-anchors-pin.py` are deleted.
-
-**What is kept.** Clauses A and B, the `line anchor allowlist` row, the printed rot rate, and the ruling to leave nothing alone: every anchor is listed, resolving or not.
-
-**Amended.** The owner ruled to convert and collapse. A lane converted the last 776 anchors to symbols. One `line anchors` row now refuses every `path:N` and `path:N-M`, with no list and no exemption. Clauses A, B and C, the `line anchor allowlist` row and the printed rot rate are gone. The text above is the record of how the rule was policed before.
+The audit's self-test drives `check_line_anchors` over fixtures. Each line-anchor shape goes red. A symbol, and a line written in words, go green.

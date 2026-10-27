@@ -1,4 +1,4 @@
-## D214 — Sales shows gross, never profit
+# D214 — Sales shows gross, never profit
 
 **Ruling: `#/revenue`, labeled Sales, shows gross revenue only. It never shows profit, fees or cost.** The screen reads the order ledger that already exists. Nothing here is new data.
 

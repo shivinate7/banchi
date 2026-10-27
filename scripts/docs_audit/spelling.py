@@ -63,7 +63,10 @@ SPELLING_SUFFIXES = (".py", ".ts", ".tsx", ".mjs", ".sh", ".css")
 
 MARKDOWN_SPELLING_ALLOW = ROOT / "scripts" / "markdown-spelling-allow.json"
 MARKDOWN_SPELLING_RULE = "SPELLING"
-MARKDOWN_SPELLING_EXCLUDE = "docs/gates/"
+# `docs/records.md` is the shared merge tool's generated page: it copies each record's slug and
+# opening sentence verbatim, so a slug that cannot be renamed (a migration, not a spelling) lands
+# there. The record itself is read by this row; the copy is not.
+MARKDOWN_SPELLING_EXCLUDE = ("docs/gates/", "docs/records.md")
 
 # Lower-cased identifier fragment -> why it is allowed. Matched as a substring of the whole
 # lower-cased name, so `is_catalogued`, `NotCatalogued` and `_parse_fulfilment` are covered

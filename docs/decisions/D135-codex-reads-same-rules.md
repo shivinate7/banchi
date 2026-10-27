@@ -1,4 +1,4 @@
-## D135 — Codex reads the same rules as Claude
+# D135 — Codex reads the same rules as Claude
 
 OpenAI Codex was installed in this repository before this change. It left three untracked paths in the main checkout. The first is a 117 KB `AGENTS.md`. It is `sed 's/AGENTS\.md/CLAUDE.md/g' AGENTS.md | diff - CLAUDE.md` away from `CLAUDE.md`: 139 lines of drift. It lacks `make reap`, the eight-key storage roster and D132. The second is a byte-identical copy of `.claude/skills/tcgplayer-csv/SKILL.md` at the matching path under an untracked `.agents/skills/` directory. The third is `.codex/`. It holds `config.toml` (a shell-environment policy, machine-local) and `hooks.json`. `hooks.json` holds the hooks that `.claude/settings.json` runs, by the same scripts, plus the two named in `CODEX_ONLY`. None of the three was tracked. So none of it reached a clone, a worktree or a PR. Every Codex session outside that one Mac read stale prose, a stale skill, or no hooks at all.
 

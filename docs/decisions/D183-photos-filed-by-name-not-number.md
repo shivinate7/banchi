@@ -1,4 +1,4 @@
-## D183 — Photos filed by name, not number
+# D183 — Photos filed by name, not number
 
 **A card's photograph is stored under the card's own name: `photos/<aa>/<cid>.jpg`.** `Box 3 · Section 2 · Card 17` is purely derived again. The owner ruled that the card-naming problem is a systems problem, not an outcome patch, and approved the rescope. D172 gave the card a name. This entry makes the name the filename of its bytes. That retires the work rather than defending against it.
 

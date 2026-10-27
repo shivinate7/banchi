@@ -1,4 +1,4 @@
-## D254 — Resolve a product from its SKU
+# D254 — Resolve a product from its SKU
 
 **Tier (b) reads the store-owned SKU table (D258).** Before, it merged every cached export on each call. The tier order and the ruling below stand. Only the source of tier (b)'s map changed.
 

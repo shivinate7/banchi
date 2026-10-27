@@ -1,4 +1,4 @@
-## D107 — Typed price goes either direction
+# D107 — Typed price goes either direction
 
 **A price the operator types can be raised or lowered.** Only the automatic rule never proposes a raise. `reprice apply` once refused the whole file if any typed price exceeded the live one (`raised`, fatal beside a duplicate SKU). So the screen offered a field that the command would not honor.
 

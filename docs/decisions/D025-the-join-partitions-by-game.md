@@ -1,4 +1,4 @@
-## D25 — The join partitions by game
+# D25 — The join partitions by game
 
 **The catalog join partitions by game. It reads each export's `Product Line` column and never infers the game from a filename.** Map each file to games, then invert to game to files. Each game must map to exactly one file.
 

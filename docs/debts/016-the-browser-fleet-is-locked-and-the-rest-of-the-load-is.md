@@ -1,5 +1,7 @@
 ## 16 — The browser fleet is locked and the rest of the load is not, and only one of those was measured
 
+**What.** `make design-check` runs behind a machine-wide lock and the rest of the load does not, and only the failure of two browser fleets at once was measured.
+
 D122 puts `make design-check` behind a machine-wide `flock`. Measured: two fleets (about 90 browser processes on a 15-core Mac) failed 18 cases in `shipping.spec.ts` and `run-panel.spec.ts`, and all passed on a rerun with nothing touched.
 
 Reasoned and not measured: `make harness` and `make check` need no lock. `make check` shells out to `tsc`, `eslint` and `ruff`. So two at once is a handful of single-core processes, an order of magnitude under the fleet load. Nobody has run two side by side and counted.

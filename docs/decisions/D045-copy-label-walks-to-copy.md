@@ -1,4 +1,4 @@
-## D45 — A copy's label walks to that copy
+# D45 — A copy's label walks to that copy
 
 **A copy's position label in the copies list is the control that walks the box browse to that copy, switching box if it must.** The row is not a button. It already holds `Mark sold` and the retire door, and a button inside a button is invalid markup. The walk-to is a transparent wrapper around `PositionLabel`. It looks the same as a walkable row or a look-only one. Hover and focus are scoped to `.position-slot`. It is absent on the current copy and on a pooled one (D24). It is owner-skin only.
 

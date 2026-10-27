@@ -1,4 +1,4 @@
-## D196 — No screen string names a mechanism
+# D196 — No screen string names a mechanism
 
 **The owner's ruling:** the front end has to be minimal and must never explain
 mechanism on screen. Read beside the owner's standing instruction to mechanize every rule that can be mechanized (D173), this is that instruction applied to a design rule rather than a process rule: the

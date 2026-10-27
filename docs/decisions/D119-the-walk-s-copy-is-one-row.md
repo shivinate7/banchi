@@ -1,4 +1,4 @@
-## D119 — The walk's copy is one row
+# D119 — The walk's copy is one row
 
 **`#/inventory` draws the copy the walk stands on once, as a row like every other.** The `LocationCard` hero drew it twice, about 150px apart, in two registers, and put emphasis on a copy the UI elsewhere refuses to recommend (`CardLocations.css`: the current row's rail is deliberately not "take this one").
 

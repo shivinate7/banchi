@@ -1,4 +1,4 @@
-## D251 — Name tolerance stays at 0.80
+# D251 — Name tolerance stays at 0.80
 
 **The number.** Keep `NAME_DISPUTE_SIMILARITY` at 0.80. Keep the containment escape. This
 answers D240, the join trusts a number that resolves, on its tolerance question. The owner's

@@ -1,4 +1,6 @@
-## D241 — Early catalogue check is unbuilt
+# D241 — Early catalogue check is unbuilt
+
+An early check of a card's identity against the catalog is recorded as an option and is not built.
 
 **What this records.** D239 measured a gap. 8 of 15 identification errors behind the archive's own 16 refusals cannot be caught from stored data by any rule. This store carries no independent source of truth for a set's real card list. D15 vendors the Pokemon catalogue locally. Riftbound and the newest Pokemon sets have no local mirror at all. The only earlier catch is asking the live catalogue. Today that happens months later, at sweep time.
 

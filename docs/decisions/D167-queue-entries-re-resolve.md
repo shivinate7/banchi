@@ -1,4 +1,4 @@
-## D167 — Queue entries re-resolve where they stand
+# D167 — Queue entries re-resolve where they stand
 
 **One free, re-runnable command re-resolves every open queue entry against a current export.** A card that the operator answers by hand reaches `#/pricing` without a second join. Both fix one defect. An artifact was frozen at the moment of a join, and nothing in the product could re-derive it. 513 of 565 stored entries could never see later ladder fixes (`rarity` on candidate rows, D137's Near Mint rule). `store/queues.py:upsert` is reached only by `queues.apply_run` from `cli/cmd_join.py`. A join is scoped to a run, and a run to a box. An entry whose box holds no live run stays frozen at the code that wrote it.
 

@@ -259,10 +259,10 @@ def run(ok) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         entries = Path(tmp) / "DECISIONS.md"
         entries.write_text(
-            "## D9 — One digit\n\n## D92 — Two digits\n\n"
-            f"## {past_end} — Three digits\n\n"
-            f"## {four_digits} — Four digits, which is not an id\n\n"
-            f"## {leading_zero} — A leading zero, which is not an id\n",
+            "# D9 — One digit\n\n# D92 — Two digits\n\n"
+            f"# {past_end} — Three digits\n\n"
+            f"# {four_digits} — Four digits, which is not an id\n\n"
+            f"# {leading_zero} — A leading zero, which is not an id\n",
             encoding="utf-8",
         )
 
@@ -273,7 +273,7 @@ def run(ok) -> None:
 
         slugged = Path(tmp) / "SLUGGED.md"
         unclaimed = "D" + "-an-unclaimed-entry"
-        slugged.write_text(f"## D9 — One digit\n\n## {unclaimed} — An unclaimed entry\n",
+        slugged.write_text(f"# D9 — One digit\n\n# {unclaimed} — An unclaimed entry\n",
                            encoding="utf-8")
         both = [ident for ident, _ in decision_heading_lines(slugged, "D")]
         ok(both == ["D9", unclaimed],
@@ -338,19 +338,19 @@ def run(ok) -> None:
     guard = _prose_guard()
     ok(
         guard is not None
-        and bool(guard.ANY_H2_RE.match(f"## {past_end} — Three digits"))
-        and bool(guard.HEADING_RE.match(f"## {past_end} — Three digits")),
+        and bool(guard.ANY_HEADING_RE.match(f"# {past_end} — Three digits"))
+        and bool(guard.HEADING_RE.match(f"# {past_end} — Three digits")),
         "scripts/prose-guard.py reads a three-digit heading",
     )
     ok(
-        guard is not None and not guard.ANY_H2_RE.match(f"## {four_digits} — Four digits"),
+        guard is not None and not guard.ANY_HEADING_RE.match(f"# {four_digits} — Four digits"),
         "and stops at three, like every pattern above it",
     )
 
     with tempfile.TemporaryDirectory() as tmp:
         entries = Path(tmp) / "DECISIONS.md"
         entries.write_text(
-            f"## {past_end} — Three digits\n\n**A ruling long enough to be picked up.**\n",
+            f"# {past_end} — Three digits\n\n**A ruling long enough to be picked up.**\n",
             encoding="utf-8",
         )
         context = _sibling("decision-context.py")

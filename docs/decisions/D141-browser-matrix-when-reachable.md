@@ -1,4 +1,4 @@
-## D141 — The browser matrix runs when reachable
+# D141 — The browser matrix runs when reachable
 
 **Settled 2026-09-11, on the owner's instruction, the night the account ran out of GitHub Actions minutes.** `.github/workflows/check.yml`'s `design-check` job runs on a pull request only when what the branch would land touches a file the browser suite reads. Nothing about the suite changed — not a case, not an assertion, not a shard — and nothing about a push to main changed. What changed is which pull requests pay for it, and the list that decides has a mechanical reader before it has a filter.
 

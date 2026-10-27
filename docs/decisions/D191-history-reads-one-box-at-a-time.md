@@ -1,4 +1,4 @@
-## D191 — History reads one box at a time
+# D191 — History reads one box at a time
 
 **The problem, measured on a `.backup` copy of the real store, scaled 20x.** `Store.history()` runs `SELECT id, payload FROM events ORDER BY id`, unconditionally, on every call. Measured: 16.5 ms at 12,654 events, and 345 ms at 20x (253,080 events, 20.9x). It runs inside the store's write lock, on the hottest reversal paths in the product. Those are a mark-sold press, a retirement, a review answer, and a stand-down reversal. Every one of their callers runs it unconditionally, including a plain sale or retirement (`undo=False`). Both routes' response bodies carry `"restores_to": None if undo else previous`. That tells the caller whether an undo would be offered, before they ask for one. The read is needed on every press. The waste is reading the whole store to answer it.
 

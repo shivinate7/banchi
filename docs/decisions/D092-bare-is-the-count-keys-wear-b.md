@@ -1,4 +1,4 @@
-## D92 — Bare # is the count; keys wear B
+# D92 — Bare # is the count; keys wear B
 
 **A bare `#` on an owner-side screen shows D58's count of the cards in a box, never the store key.** A key appears only with the `B<box>` sigil (D68). A departed card has no count, so it shows `B3 #27`. `slot` is what a renderer draws. `index` is what a caller addresses. `_company` sends both for each neighbor. `PlaceNeighbor.index` is sent unread, for click targets (D45).
 

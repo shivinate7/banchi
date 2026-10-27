@@ -1,4 +1,4 @@
-## D240 — Join trusts resolved numbers; gap open
+# D240 — Join trusts resolved numbers; gap open
 
 **The ask.** The owner, on seeing the SKU-contradiction check's name-agreement correction:
 apply the same correction on the paths that actually use the answer. Not only in a report

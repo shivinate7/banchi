@@ -1,4 +1,4 @@
-## D41 — An address is a rank, not a list
+# D41 — An address is a rank, not a list
 
 **A position renders as a rank: a muted two-line path with the card number beside it at size, and no separator at all.** The owner picked this from a design pass. The owner had disliked the dot theme. Six treatments were rendered against the real store. The owner picked the **terminal-dominant** address and the **census-triad** meta block.
 

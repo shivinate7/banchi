@@ -1,4 +1,4 @@
-## D201 — Routes land at top; query changes stay
+# D201 — Routes land at top; query changes stay
 
 **The bug, found on the phone shell.** Nothing in `App.tsx` or `App.css` called `scrollTo` or set `scrollTop`. `.bn-shell-main` has no `overflow` rule, so the window is the one thing that scrolls at every width this shell is verified at (1440, 820, 390). No second scroller exists to reset. `.bn-view` remounts on every route change, keyed on `path`, but a DOM remount does not move the browser's own scroll position. Scrolling `#/capture` down and then leading to `#/runs` landed on the new screen already scrolled. So did tapping `#/inventory` from a scrolled screen. At the rig's 390-wide viewport, scrolling Capture to 300px and pressing `,I` landed Inventory at `scrollY: 247` rather than `0`. Inventory has 122 cards, reliably taller than the viewport. Runs, under the shared small fixture, draws no run at all, so its scroll clamp reads `0` whether or not anything reset it. That is why the first attempt at this guard passed for the wrong reason. It was re-pointed at a route tall enough to prove the fix.
 

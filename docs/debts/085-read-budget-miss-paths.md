@@ -1,6 +1,6 @@
 ## DEBT85 — The read-budget check proves some routes on their miss path only
 
-**`harness/tests/t7/read_budget.py` budgets about 15 routes against a fixture that never reaches their hit path.** A per-card walk added to one of them stays green.
+**What.** `harness/tests/t7/read_budget.py` budgets about 15 routes against a fixture that never reaches their hit path. A per-card walk added to one of them stays green.
 
 - **404 or 409 here:** a box by name, markdown stamps, a send file, run history, the review catalog, product history, and a shipping file.
 - **Never exercised:** markdowns, sends and shipping batches. Every fixture order is open, where real stores hold most orders fulfilled.

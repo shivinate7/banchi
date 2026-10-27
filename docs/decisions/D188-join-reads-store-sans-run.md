@@ -1,4 +1,4 @@
-## D188 — Join reads the store without a run
+# D188 — Join reads the store without a run
 
 **`banchi join --keys 3/1,3/2 --export <file>` resolves cards straight off the store's own `Card` records, with no `identify` run, no `identifications.json` and no frozen snapshot to reconcile.** A run directory still works as before (`banchi join <run-dir> --export <file>`). Naming both, or neither, is refused with a named remedy. This is D180's move on the read side: a run is an immutable input, but `join` could not be re-run once its directory was gone, though every fact it needs sits on the live `Card` row.
 

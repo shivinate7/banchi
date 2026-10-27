@@ -1,4 +1,4 @@
-## D291 — Runs fold into Review
+# D291 — Runs fold into Review
 
 **The owner ruled to fold Runs into Review (RULINGS.md, Q6).** When cards wait, Review shows an "Identify N cards, ~$X" strip. Past runs sit behind a link. `#/runs` stays a route for links. Home's six-stage strip becomes five. The owner heard the counterpoint, the money press on a daily screen, and chose the fold.
 

@@ -1,4 +1,4 @@
-## D293 — Inventory has a by-set view
+# D293 — Inventory has a by-set view
 
 **The request:** a view of on-hand cards in set order, showing the quantity of each card. A tap opens the inventory screen at that card.
 

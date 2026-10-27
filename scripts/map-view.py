@@ -106,7 +106,7 @@ def gists() -> Dict[str, Tuple[str, List[str]]]:
 def entry_path(name: str) -> Optional[Path]:
     """The file holding one entry, or None.
 
-    `decisions_corpus.path_for` is the authority and it reads the `## D<id>` heading rather
+    `decisions_corpus.path_for` is the authority and it reads the `# D<id>` heading rather
     than the filename, which is why this defers to it rather than composing a name. THE
     FILENAMES ARE ZERO-PADDED — D42 is stored as `D042-main-moves-by-pull-request.md` — so a
     glob typed straight from a citation, `docs/decisions/D42-*`, matches nothing and says
@@ -292,7 +292,7 @@ def by_decision(name: str, data: Dict[str, object],
 
 
 def decisions_index() -> List[str]:
-    """One line per corpus entry, id and title, straight off its own `## D<id> — <title>`
+    """One line per corpus entry, id and title, straight off its own `# D<id> — <title>`
     heading, in manifest order.
 
     This is D60's index. It used to be hand-typed into CLAUDE.md, so it could say a title
@@ -306,9 +306,9 @@ def decisions_index() -> List[str]:
         return ["", "docs/decisions/ is not readable (scripts/decisions_corpus.py missing)."]
     # Reuses decisions_corpus's own id pattern (a number, or a claim slug) rather than a
     # second guess at it — `_ID` is what HEADING_RE is built from, and a fake match here
-    # (e.g. "## Deferred — ...") is the bug this closes: "Deferred" starts with "D" but is
+    # (e.g. "# Deferred — ...") is the bug this closes: "Deferred" starts with "D" but is
     # neither digits nor a "-slug".
-    heading_re = re.compile(r"^##\s+(D" + module._ID + r")\s*[—-]\s*(.+)$")
+    heading_re = re.compile(r"^#\s+(D" + module._ID + r")\s*[—-]\s*(.+)$")
     try:
         paths = module.files()
     except Exception:  # noqa: BLE001 - a broken corpus must not take the renderer down

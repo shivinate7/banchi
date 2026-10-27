@@ -20,7 +20,9 @@ control. A number is never reused, so the gaps in the sequence are deleted entri
 ## How to add one
 
 A branch writes `DEBT-<slug>.md` under this folder. The file starts with
-`## DEBT-<slug> — <title>`, and the branch cites it as `DEBT-<slug>`. `make merge` claims the
+`## DEBT-<slug> — <title>`. The first paragraph after that line opens with `**What.**` and one plain
+sentence that says the gap. The records page takes its gist from that sentence, and the
+shared records build fails on a debt without it. The branch cites the file as `DEBT-<slug>`. `make merge` claims the
 number, renames the file, rewrites every citation, and rewrites the index. A branch never picks
 its own number.
 

@@ -1,4 +1,6 @@
-## D319 — Every network call retries through one method
+# D319 — Every network call retries through one method
+
+Every network call goes through one retry method, and no caller writes its own retry loop.
 
 Kind: build
 Plan: docs/specs/stock-images.md#one-retry-home (python)

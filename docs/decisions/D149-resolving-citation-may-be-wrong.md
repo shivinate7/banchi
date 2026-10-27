@@ -1,4 +1,4 @@
-## D149 — A resolving citation may still be wrong
+# D149 — A resolving citation may still be wrong
 
 **Seven citations across five files named DEBT11 for a record that has only ever been in section 8.** Repaired by hand. The repair is two characters per site. This entry decides that **no `docs-audit` row will be built to catch the next one**. The measurement behind that follows.
 

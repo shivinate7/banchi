@@ -1,4 +1,4 @@
-## D73 — Screens re-read when the operator returns
+# D73 — Screens re-read when the operator returns
 
 **Two questions look alike.** `X-Banchi-Boot` (`BOOT_ID`, `noteBoot`, `onServerBoot`) answers whether the code changed. It rides traffic that exists because a restart happens while the operator works. Nothing can answer whether the data changed. A screen goes stale because nobody touches it, so it has no traffic to ride. A data-generation header is what the boot header's own design says that nothing can supply.
 

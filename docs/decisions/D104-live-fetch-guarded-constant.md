@@ -1,4 +1,4 @@
-## D104 — Live fetch is its own guarded constant
+# D104 — Live fetch is its own guarded constant
 
 **The operator's own live listings are fetched by a press at `MyInventory: True`, behind a second guarded constant apart from the catalog export's `False`.** They are two instructions about two documents.
 
