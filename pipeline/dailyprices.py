@@ -20,7 +20,9 @@ has no list under `results`, or when it says `"success": false`. A reply of `"su
 real, empty group and is saved. A FAILED GROUP LEAVES THE UPDATE UNFINISHED. The next pass for the same stamp asks
 for the group list and for the groups not yet saved, no others. A pass with no failed group finishes the update.
 
-ONE WRITE PER GROUP (D88, one transaction per write): a crash keeps every group already read. Rows are never deleted
+ONE WRITE PER PASS, at its end (D88, one transaction per write): the rows of every group that did not fail and their
+marks land together. A crash keeps no row of the pass, and the next pass for the same stamp reads every group again.
+Rows are never deleted
 (D219).
 
 ONE HTTP CLIENT. `pricehistory.fetch_json` and its text twin `fetch_text` go through `pipeline.net.request`. The
@@ -109,7 +111,7 @@ def run_pass(
     if not group_ids:
         raise pricehistory.Unreachable("The price service listed no sets. Try again in a moment.")
     update = saved or Update(stamp, day, (), False, at)
-    written, failed, throttles = 0, {}, 0
+    rows, done, failed, throttles = [], [], {}, 0
     for group_id in group_ids:
         if group_id in update.groups:
             continue
@@ -126,7 +128,7 @@ def run_pass(
         if reason:
             failed[group_id] = reason
             continue
-        rows = [
+        rows += [
             DailyPrice(
                 product_id=price.product_id, sub_type=price.printing, day=day, updated=stamp,
                 market=_text(price.market), low=_text(price.low), mid=_text(price.mid),
@@ -134,14 +136,11 @@ def run_pass(
             )
             for price in pricehistory.parse_prices(payload).values()
         ]
-        # One transaction per group: its rows and its mark land together, and a crash keeps what was read.
-        with Store().write() as snapshot:
-            update = snapshot.daily_prices.save(update, rows, [group_id], finished=False)
-        written += len(rows)
-    if not failed:
-        with Store().write() as snapshot:
-            snapshot.daily_prices.save(update, [], [], finished=True)
-    return {"day": day, "updated": stamp, "skipped": False, "rows": written, "failed": failed}
+        done.append(group_id)
+    # One transaction for the pass: every good group's rows and marks land together or not at all.
+    with Store().write() as snapshot:
+        snapshot.daily_prices.save(update, rows, done, finished=not failed)
+    return {"day": day, "updated": stamp, "skipped": False, "rows": len(rows), "failed": failed}
 
 
 def _text(price) -> Optional[str]:

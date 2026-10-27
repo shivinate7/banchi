@@ -886,7 +886,6 @@ LOOP_EXPENSIVE_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("cli/requeue.py", "catalogs_from", "read_export"),   # one export read per path the caller passed, bounded by games
     ("cli/resolve.py", "_claim_files", "read_export"),   # one export read per distinct export path, bounded by games
     ("cli/resolve.py", "_resolve", "read_export"),   # two sites, one export read per mapped path, cached in `parsed`; bounded by games
-    ("pipeline/dailyprices.py", "run_pass", "Store.write"),   # one write per group by design, so a crash keeps what was read; each write is its own transaction
     ("pipeline/pricehistory.py", "reading_for_row", "history"),   # one history read per range, and there are a fixed few ranges
     ("pipeline/pricehistory.py", "readings_for_rows", "history"),   # one history read per range, and there are a fixed few ranges
     ("pipeline/setnames.py", "known_sets", "read_export"),   # one read per CSV in the export directory, bounded by the exports kept
@@ -916,7 +915,7 @@ LOOP_EXPENSIVE_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("store/master.py", "section_tail_key", "_respace"),   # the loop is `range(2)`, a fixed two passes
     ("store/orders.py", "record_pull", "holder_of"),   # CANDIDATE: `holder_of` walks the open orders once per capture id pulled
 })
-LOOP_EXPENSIVE_EXPECTED = 37
+LOOP_EXPENSIVE_EXPECTED = 36
 
 
 # ---------------------------------------------------------------- the package's shared state

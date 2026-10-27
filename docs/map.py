@@ -1355,7 +1355,7 @@ COMPONENTS = [
                                        "product and printing under the stamp's UTC date. A failed "
                                        "group is named and left for the next pass, which asks for "
                                        "that group only, and so does one whose payload is unreadable or says "
-                                       "`success: false`. One write per group. A throttle answer is "
+                                       "`success: false`. One write per pass. A throttle answer is "
                                        "waited out, and a second one stops the pass. Uses `pricehistory`'s "
                                        "`Market`, `fetch_json` and `fetch_text`, never a second client.",
                                "governed_by": ["D88", "D219", "D-tcgcsv-daily-read"],
@@ -2155,7 +2155,7 @@ COMPONENTS = [
                                        "update day, never deleted) and `daily_price_updates` (one row "
                                        "per source stamp: the groups saved and whether every group "
                                        "was, which is what lets a pass skip). `DailyPrices.save` adds "
-                                       "a group's rows and marks the group in one `Store.write()`.",
+                                       "a pass's rows and marks its groups in one `Store.write()`.",
                                "governed_by": ["D88", "D219", "D-tcgcsv-daily-read"],
                                "note": "PROVED BY T7's `daily_prices` group."},
             "skus.py": {"does": "`skus` — one row per TCGplayer Id this repo has ever read "
