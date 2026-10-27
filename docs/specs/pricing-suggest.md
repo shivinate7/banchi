@@ -75,7 +75,7 @@ here is an upper bound: a build must read the order ledger instead.
 
 ## 4b. Judgment of each trigger
 
-The owner rules on each from the mockups (`pricing-suggest/list.html`). These are the
+The owner rules on each from the mockups (`docs/design/pricing-suggest/list.html`). These are the
 recommendations.
 
 - **Market moved: keep, as the main trigger.** It is the one signal with volume and meaning.
