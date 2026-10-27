@@ -2005,6 +2005,19 @@ def check_master_take_off(checks: Checks) -> None:
         pressed = press(3)
         stamp = (pressed.get("take_off") or {}).get("stamp")
         capture_server.do_retire(3, 3, {"undo": True})
+        # A send between the undo and the live check adds nothing: the copy still counts as sent,
+        # so the store's pushed 3 and on hand 3 leave nothing to add, and no row reaches TCGplayer.
+        portal["rows"].clear()
+        try:
+            between = send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+        except pipeline_routes.PipelineRefusal as caught:
+            between = {"refused": caught.code}
+        checks.ok(
+            between.get("refused") == "nothing_to_send" and not portal["rows"],
+            "A SEND BETWEEN THE UNDO AND THE LIVE CHECK ADDS NOTHING: refused as nothing to send, no row",
+            f"Got: {between}, rows: {_portal_rows(portal)}",
+        )
+        checks.equal(_listing_counts(), (3, 3), "and the counts stay (3, 3) until the live check settles")
         _age_receipt(stamp)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
         send_routes.do_live_check({})
@@ -2015,6 +2028,30 @@ def check_master_take_off(checks: Checks) -> None:
             _portal_rows(portal),
             {ARTICUNO_SKU: "1"},
             "NO OVER-LIST: after the settle the ordinary send adds the one copy the undo put back, not two",
+        )
+
+    # ------------------------------------------------ a re-press of rows already sent says the retirement stands
+    with _case(checks, "already sent"), send_portal() as portal, synced_home():
+        _settled_live(checks, portal)
+        retire(3)
+        first = press(3)
+        # TCGplayer still shows the copies after the wait: the take-off lapses, so nothing is outstanding.
+        _age_receipt((first.get("take_off") or {}).get("stamp"))
+        send_routes.do_live_check({})
+        portal["rows"].clear()
+        try:
+            send_routes.do_master_take_off(3, 3, {"confirm": True})
+            again = ("no refusal", "")
+        except pipeline_routes.PipelineRefusal as caught:
+            again = (caught.code, str(caught))
+        checks.equal(
+            again[0], "already_sent",
+            "A RE-PRESS OF ROWS ALREADY SENT is refused as already sent, and nothing new is sent",
+        )
+        checks.ok(
+            "retirement stands" in again[1] and "back on the list" not in again[1] and not portal["rows"],
+            "THE ALREADY-SENT TAKE-OFF SAYS THE RETIREMENT STANDS, never that the copies are back on the list",
+            f"Got: {again[1]}",
         )
 
     # ------------------------------------------------ the route
@@ -2147,6 +2184,18 @@ def check_master_owed(checks: Checks) -> None:
             if cookie is not None:
                 os.environ["TCGPLAYER_STORE_COOKIE"] = cookie
 
+    # ------------------------------------------------ two master_set pulls, one read of the outstanding set
+    with _case(checks, "outstanding read once"), send_portal() as portal, synced_home():
+        seam_run(checks, [(3, 1, "Articuno", "161", None), (3, 2, "Dunsparce", "120", "normal")])
+        retire(1)
+        retire(2)
+        with mock.patch.object(send_routes, "_outstanding_takes", wraps=send_routes._outstanding_takes) as counted:
+            owed()
+        checks.equal(
+            counted.call_count, 1,
+            "THE OUTSTANDING SET IS READ ONCE PER LIST: two master_set pulls, one read, not one per card",
+        )
+
     # ------------------------------------------------ a press-all that read the list before a press took it
     with _case(checks, "press-all races a press"), send_portal() as portal, synced_home():
         _settled_live(checks, portal)
@@ -2228,6 +2277,26 @@ def check_master_take_off_mutants(checks: Checks) -> None:
             "listing.bump(master.PUSHED, -2 * n)", check_master_take_off,
             "the live check settles the take-off, undo or no undo",
         ),
+        (
+            "undo: the copy's pushed lowered at undo time", "            card.retire_reason = None\n        else:",
+            "            card.retire_reason = None\n"
+            "            listing = snapshot.inventory.listings.get(card.sku)\n"
+            "            if listing is not None:\n"
+            "                listing.bump(master.PUSHED, -1)\n"
+            "        else:",
+            check_master_take_off, "A SEND BETWEEN THE UNDO AND THE LIVE CHECK ADDS NOTHING",
+        ),
+        (
+            "owed: the outstanding set read again for each card",
+            "outstanding = _outstanding_takes(receipts) if outstanding is None else outstanding",
+            "outstanding = _outstanding_takes(receipts)", check_master_owed,
+            "THE OUTSTANDING SET IS READ ONCE PER LIST",
+        ),
+        (
+            "already sent: the take-off says the copies are back on the list",
+            "so nothing was sent; {_back(record)}.", "so nothing was sent; the copies are back on the list.",
+            check_master_take_off, "THE ALREADY-SENT TAKE-OFF SAYS THE RETIREMENT STANDS",
+        ),
     )
     for name, anchor, replacement, target, label in mutants:
         sub = Checks()
@@ -2236,6 +2305,12 @@ def check_master_take_off_mutants(checks: Checks) -> None:
             function = "_outstanding_takes"
         elif "listing.bump" in anchor:
             function = "_lower_takes"
+        elif "card.retire_reason = None" in anchor:
+            module, function = capture_server, "do_retire"
+        elif "outstanding = _outstanding_takes(receipts)" in anchor:
+            function = "_master_state"
+        elif "so nothing was sent" in anchor:
+            function = "_push_and_publish"
         with _mutant(module, function, anchor, replacement), hermetic():
             target(sub)
         fails = [line for line in sub.lines if line.startswith("  FAIL")]
