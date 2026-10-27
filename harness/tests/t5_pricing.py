@@ -88,12 +88,19 @@ def _card(index, name, number, total="159", metadata=None, confidence="high"):
 #                                       "market_moved", "unsold", "undercut". Selling fast and
 #                                       an outside signal are not names here.
 #   review(listings, policy, today)  -> {"needs_you": rows, "suggested": rows, "at_rule": rows}
-#                                       a row is {"sku", "asking", "price", "reason"}. `price` is
-#                                       the store rule's price at today's market, clamped to the
-#                                       floor, and None with no market. `reason` is plain words,
-#                                       "" when nothing fired.
+#                                       a row is {"sku", "asking", "price", "source", "reason"}.
+#                                       `source` is "Suggested" for a live suggestion, "Live" for a
+#                                       live listing kept at its asking price, and "Rule" for a new
+#                                       copy at the rule. `price` is the store rule's price at
+#                                       today's market, clamped to the floor, and None with no
+#                                       market. `reason` is plain words, "" when nothing fired.
+#   Needs you holds only rows that would send something a person must decide: a new copy with no
+#   market, a new copy at or above the value line, or a live suggestion past the cap or at or
+#   above the value line. A live listing with no trigger, or with no market, stays in at_rule at
+#   its asking price, even at or above the value line.
 #
-# `today` is an ISO date string. A listing holds "sku", "asking", "market_listed", "market",
+# `today` is an ISO date string. A listing holds "sku", "live" (False for a new copy, whose
+# "asking" is None), "asking", "market_listed", "market",
 # "low_with_shipping", "first_seen_live" (ISO date), "last_sold_at" (ISO date from a `sold`
 # event, None if never sold), "units_sold_30d" and "outside_signal". Money is Decimal, and None
 # means unknown. Unsold days are today minus the LATER of first_seen_live and last_sold_at. The
@@ -115,6 +122,7 @@ def _listing(**over) -> dict:
     """The one fixture for a live listing. Each case overrides only the field it is about."""
     base = {
         "sku": "SUG-1",
+        "live": True,
         "asking": Decimal("10.00"),
         "market_listed": Decimal("10.00"),
         "market": Decimal("10.00"),
@@ -225,6 +233,11 @@ def _suggest_checks(c: Checks) -> None:
     )
     c.equal(fired(market=None), [], "no market today: no move can be read, nothing fires")
     c.equal(
+        fired(market=None, low_with_shipping=Decimal("9.00")),
+        [],
+        "a live listing with no market fires nothing, not even Low With Shipping 10% under ours",
+    )
+    c.equal(
         fired(market_listed=None, market=Decimal("12.00")),
         [],
         "no market on listing day: market moved cannot fire, and nothing crashes",
@@ -281,26 +294,44 @@ def _suggest_checks(c: Checks) -> None:
     c.equal(
         groups(at, "V2"),
         ["needs_you"],
-        "a card at exactly $25.00 is Needs you, even at 25% and inside the cap",
+        "a suggestion at exactly $25.00 is Needs you, even at 25% and inside the cap",
     )
     still = review(
         _listing(sku="V3", asking=Decimal("25.00"), market_listed=Decimal("25.00"), market=Decimal("25.00"))
     )
     c.equal(
         groups(still, "V3"),
-        ["needs_you"],
-        "a card at the value line with no trigger is still Needs you: section 3 groups by "
-        "the card, not by the move",
+        ["at_rule"],
+        "a live listing at the value line with no trigger stays in Going at the rule",
     )
+    c.equal(field(still, "V3", "price"), Decimal("25.00"), "and keeps its asking price")
+    c.equal(field(still, "V3", "source"), "Live", "and its source says Live")
 
     blank = review(_listing(sku="NM", market=None))
-    c.equal(groups(blank, "NM"), ["needs_you"], "no market price goes to Needs you")
-    c.equal(field(blank, "NM", "price"), None, "and with no market there is no proposed price")
+    c.equal(groups(blank, "NM"), ["at_rule"], "a live listing with no market fires nothing: Going at the rule")
+    c.equal(field(blank, "NM", "price"), Decimal("10.00"), "and keeps its asking price")
+    c.equal(field(blank, "NM", "source"), "Live", "and its source says Live")
+
+    new_blank = review(_listing(sku="NC", live=False, asking=None, market=None))
+    c.equal(groups(new_blank, "NC"), ["needs_you"], "a new copy with no market goes to Needs you")
+    c.equal(field(new_blank, "NC", "price"), None, "and with no market there is no proposed price")
     c.ok(
-        says(blank, "NM", "no market price"),
+        says(new_blank, "NC", "no market price"),
         "and the reason says there is no market price",
-        str(field(blank, "NM", "reason")),
+        str(field(new_blank, "NC", "reason")),
     )
+
+    new_high = review(_listing(sku="NH", live=False, asking=None, market=Decimal("25.00")))
+    c.equal(
+        groups(new_high, "NH"),
+        ["needs_you"],
+        "a new copy at the $25 value line goes to Needs you, with no trigger needed",
+    )
+    c.equal(field(new_high, "NH", "price"), Decimal("25.00"), "its rule price is the proposed price")
+
+    new_low = review(_listing(sku="NL", live=False, asking=None, market=Decimal("24.99")))
+    c.equal(groups(new_low, "NL"), ["at_rule"], "a new copy under the value line is Going at the rule")
+    c.equal(field(new_low, "NL", "source"), "Rule", "and its source says Rule")
 
     # --- the floor clamps the rule's price (section 2) ---------------------------------------
     floored = review(
@@ -355,11 +386,10 @@ def _suggest_checks(c: Checks) -> None:
     )
 
     # --- no trigger, no suggestion: Going at the rule (4b) -----------------------------------
-    c.equal(
-        groups(review(_listing(sku="AR", market=Decimal("11.00"))), "AR"),
-        ["at_rule"],
-        "a 10% move with no trigger stays Going at the rule",
-    )
+    ar = review(_listing(sku="AR", market=Decimal("11.00")))
+    c.equal(groups(ar, "AR"), ["at_rule"], "a 10% move with no trigger stays Going at the rule")
+    c.equal(field(ar, "AR", "price"), Decimal("10.00"), "at its asking price, not the market")
+    c.equal(field(ar, "AR", "source"), "Live", "and its source says Live")
     c.equal(
         groups(review(_listing(sku="AG", first_seen_live=_ago(90))), "AG"),
         ["at_rule"],
@@ -408,7 +438,7 @@ def _suggest_checks(c: Checks) -> None:
     mixed = review(
         _listing(sku="A"),
         _listing(sku="B", market=Decimal("11.80")),
-        _listing(sku="C", market=None),
+        _listing(sku="C", live=False, asking=None, market=None),
         _listing(sku="D", market=Decimal("12.51")),
     )
     c.equal(
