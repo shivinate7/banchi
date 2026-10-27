@@ -279,7 +279,9 @@ CHECKS = (
         "runs": "mypy --strict --follow-imports=silent store/orders.py",
         "asserts": "store/orders.py type-checks under `mypy --strict`, alone: imports are followed "
                    "silently, so only that file's own errors count. The one Python module held to a "
-                   "type checker so far (DEBT61).",
+                   "type checker so far (DEBT61). Kind: likely risk, a type slip in the ledger "
+                   "that the harness does not exercise; the owner's ruling is try-one on this "
+                   "module (waiting page, DEBT61 item 8).",
         "needs": ("venv", "mypy"),
         "writes": "",
         "commit_path": False,

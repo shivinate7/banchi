@@ -128,7 +128,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, ClassVar, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from store.rows import Rows, TableSpec
 
@@ -599,7 +599,7 @@ class Ledger:
     # `ingest` still cannot name `fulfilment`, because it is a different mapping bound to
     # a different table. A fulfilment row is one order's whole per-SKU map, which is the
     # unit `record_pull` reads and writes.
-    ORDERS: TableSpec = TableSpec(
+    ORDERS: ClassVar[TableSpec] = TableSpec(
         "orders",
         parse=lambda key, record: _parse_order(key, record),
         dump=asdict,
@@ -610,7 +610,7 @@ class Ledger:
         },
         column_names=("source", "number", "status"),
     )
-    FULFILMENT: TableSpec = TableSpec(
+    FULFILMENT: ClassVar[TableSpec] = TableSpec(
         "fulfilment",
         parse=lambda key, record: _parse_fulfilment(key, record),
         dump=lambda rows: {sku: asdict(row) for sku, row in sorted(rows.items())},
