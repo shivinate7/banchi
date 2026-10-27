@@ -541,8 +541,11 @@ COMPONENTS = [
             # `pipeline/pricearchive.py`, proved independently by `make pricearchive-selftest`.
             "cmd_pricearchive.py": {"does": "`archive sweep` builds a `Market` before it "
                                             "reads `rows_from_store(market=..., "
-                                            "refusals=...)` (sold value first, sealed "
-                                            "product folded in), prints any ledger SKU that "
+                                            "refusals=..., include_catalog=True)` (sold "
+                                            "value first, sealed product folded in, then up "
+                                            "to `CATALOG_SKUS_PER_PASS` Riftbound catalog "
+                                            "SKUs, stalest first), "
+                                            "prints any ledger SKU that "
                                             "could not be resolved to a subject, then "
                                             "previews: subject count, what the archive "
                                             "already holds, what is fresh enough to skip. "
@@ -1296,7 +1299,11 @@ COMPONENTS = [
             # `rows_from_store` names and hands `store/pricearchive.py` what came back,
             # keyed so D278's overlapping ranges never collide.
             "pricearchive.py": {"does": "`rows_from_store` reads the `cards` table for "
-                                        "every distinct, non-empty SKU, builds one "
+                                        "every distinct, non-empty SKU (and, with "
+                                        "`include_catalog`, appends up to "
+                                        "`CATALOG_SKUS_PER_PASS` Riftbound `skus` rows "
+                                        "after the revenue-ranked head, stalest first by the newest "
+                                        "bucket or `load_attempts`/`save_attempts` stamp), builds one "
                                         "export-shaped row per SKU (Product Line resolved "
                                         "through `pipeline/games.py`), and, when handed a "
                                         "`Market`, widens the subject set to sealed product "

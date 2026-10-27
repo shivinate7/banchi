@@ -72,13 +72,39 @@ is bounded by the number of Product Lines this repo catalogues — three, today.
 `cli/cmd_pricearchive.py`'s own docstring says so now. D224's larger claims are untouched:
 no re-fetch of the archived buckets themselves, commit-per-chunk, resumable.
 
+### The catalog is the third subject source
+
+`rows_from_store(include_catalog=True)` adds every Riftbound SKU in the store's `skus`
+table (the whole catalog, read from catalog exports) in Near Mint, Near Mint Foil or
+`Unopened`. Other games and worn conditions stay out. The purpose is a whole-set
+sold-price history for the price research in PR #964, not only the owner's own names.
+`Unopened` is the orchestrator's reversible pick, not an owner ruling.
+
+- `cards` and the ledger always win a SKU they answer. A ledger refusal that has an included
+  catalog row becomes a sold subject built from that row, ranked by revenue in the head. The
+  head is never capped.
+- Every other catalog SKU is the tail, after the head, stalest first: SKUs never asked about
+  and with no archived bucket, then the newest read, SKU as the tiebreak. A SKU's newest read
+  is the later of its newest bucket across all ranges and its last attempt. Newest, not
+  oldest: the archive never deletes, so a range that stops answering would pin its SKU to the
+  front for good.
+- The tail is capped at `CATALOG_SKUS_PER_PASS`. The cap bounds a pass's extra requests
+  and how long the sweep holds the refresh lock. Rotation holds because every asked SKU is
+  stamped: `archive sweep --write` records each SKU it sent a request for, answered empty or
+  refused too, in `archive-attempts.json` beside the throttle pace file. A SKU a throttle stop
+  never reached is not stamped. The stamp is the only per-SKU record of "asked", since an empty
+  answer leaves no bucket. A missing or unreadable file reads as empty.
+- `cli/cmd_pricearchive.py:_sweep` passes `include_catalog=True`, so `banchi archive sweep`
+  and the daily price job reach it. Pacing, throttle handling, resume and freshness (D222,
+  D224) are untouched.
+
 ### What this does not touch
 
 `rank_by_revenue`'s own ranking logic is unchanged. It was already handed every key
 `revenue_by_sku` can answer for (the ranking design's note). Widening the
 subject set only stops most of those keys from being discarded before they reach it.
-`chunk_rows` is unchanged. `pipeline/` still imports nothing new from `store/` beyond what
-`pricearchive.py` already imported. `fixtures/` is untouched.
+`chunk_rows` is unchanged. `pipeline/pricearchive.py` adds one import from `store/`: `files`, for the atomic write
+of the attempts file. `fixtures/` is untouched.
 
 ### The measured reach of this fix
 
