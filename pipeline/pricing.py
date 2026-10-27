@@ -1,14 +1,16 @@
-"""D9 — threshold and floor, both $0.40.
+"""D9 — threshold and floor. The owner sets the floor.
 
-Both derived from the $60/hr labor bar: a marginal pull is ~20s, and 0.8675 x $0.40
-clears it. Both configurable; neither is a magic number to be nudged by feel.
+`THRESHOLD` and `FLOOR` below are module defaults, $0.40 each, for a caller with no store
+behind it. The owner sets the floor in the store's policy (`policy.threshold`), and no
+figure here is the truth about what a card is worth. A store that has chosen nothing reads
+`pipeline/corpus.py`'s `DEFAULT_CUTOFF`, not these constants.
 
-  threshold  market >= $0.40 earns a listing. Below it the card exits through
-             TCGplayer's native Bulk Lots category, not this pipeline. THE CONSTANT
-             BELOW IS THE DEFAULT AND NOT THE ANSWER: the figure in force is
-             `pipeline/corpus.py`'s `policy.threshold`, set by the operator on
-             `#/pricing`, validated by `check_threshold` and threaded to every partition
-             through `SkuMatch.threshold`. A store that has never set one reads this.
+  threshold  market >= the cut-off earns a listing. THE CONSTANT BELOW IS THE DEFAULT AND
+             NOT THE ANSWER: the figure in force is `pipeline/corpus.py`'s
+             `policy.threshold`, set by the operator on `#/pricing`, validated by
+             `check_threshold` and threaded to every partition through
+             `SkuMatch.threshold`. Which cards below it go to TCGplayer's Bulk Lots
+             category is a later, per-card decision; see `Disposition`.
   floor      listed price = max(pricing-rule output, the cut-off) — clamps undercut rules
              in a collapsing market. IT IS THE SAME FIGURE AS THE THRESHOLD AND IS NOT A
              SECOND SETTING (D9, amended 2026-09-09): the store's cut-off is the cheapest
