@@ -2850,7 +2850,7 @@ test('a row that is both held and at the cap sinks to the deeper heading', async
     'Needs You',
     'Every copy in this run is already listed or has left the box.',
   ])
-  await expect(page.locator('.pricing-row').nth(1).locator('.pricing-state')).toHaveAttribute(
+  await expect(page.locator('.pricing-row').nth(1).locator('.pricing-held')).toHaveAttribute(
     'title',
     'withheld: keeping',
   )
