@@ -1,4 +1,4 @@
-## D50 — Interactive feedback belongs to the product
+# D50 — Interactive feedback belongs to the product
 
 **Cursor and hover feedback are set once in `base.css` for every control kind.** Each screen does not set them.
 

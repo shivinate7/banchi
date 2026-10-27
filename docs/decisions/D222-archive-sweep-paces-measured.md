@@ -1,4 +1,4 @@
-## D222 — Archive sweep paces on measurement
+# D222 — Archive sweep paces on measurement
 
 **MEASURED AGAINST THE OWNER'S REAL STORE, 2026-09-19, WITH A WORKING USER-AGENT.** 914
 SKUs, 4 ranges, 28,350 buckets written. Only 206 of 914 SKUs answered. The other 689 were

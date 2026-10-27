@@ -1,4 +1,4 @@
-## D179 — Shell mistakes are refused by resolving them
+# D179 — Shell mistakes are refused by resolving them
 
 A read-only audit asked of every written rule: has it been broken, and can a machine see it? Forty rules were mechanizable. Five are one command away from a session. Each has a measured incident. `scripts/guard-shell.py` enforces those five as a PreToolUse hook on Bash and on Write|Edit, armed in both tools' rosters (D135).
 
@@ -129,6 +129,8 @@ Two things are this repo's own, and the code names each. The splitter takes the 
 **The incident's own spelling was never refused.** The `cd` incident was `cd <main checkout> && …`, with every write after it relative. A relative target resolved against the session's cwd. The stages are now walked in order. A `cd` moves the directory that later targets resolve against. A `cd` into another checkout is refused as an act too. The Bash tool's cwd persists between calls. `npm run build` writes with no `>` for a redirect reader to see. The predicate is resolution: `git rev-parse` at the target. A temp directory, `~/.claude`, a plain directory and this checkout's own subdirectories pass. `cd -` and `cd $VAR` get no opinion. Only a different checkout is refused. The read-only forms the refusal recommends never need the `cd`. `git -C <other> <write verb>` remains a declared gap.
 
 `scripts/guard-shell-selftest.sh` pins the false positive in four spellings and each real write above. The next edit cannot trade one for the other.
+
+`_sanctioned_outside` lists the folders outside the checkout where a write passes: `/dev`, `~/.claude`, a temp directory that is no checkout, and `~/Library/Application Support/Claude-Work/side-session-notes/`. The notes folder holds a space. Quoted and backslash-escaped spellings both pass, and a sibling folder is still refused.
 
 ### Every hatch use is logged, and the push remedy names the branch's own name
 

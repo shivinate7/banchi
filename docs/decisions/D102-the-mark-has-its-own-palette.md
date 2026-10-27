@@ -1,4 +1,4 @@
-## D102 — The mark has its own palette
+# D102 — The mark has its own palette
 
 **The Banchi mark is generated from `docs/specs/logo.md`, not drawn in the app. Its palettes are the one place in `app/` outside `tokens.css` that may name a color. It is fixed dark in both themes.**
 

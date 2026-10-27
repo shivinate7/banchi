@@ -1,4 +1,4 @@
-## D288 — Repeated actions are labeled icons
+# D288 — Repeated actions are labeled icons
 
 **A common, repeated action is an icon button with a required label.** A press that spends money or cannot be undone keeps its words. The split is the cost of a misread and not frequency: Send is common too and keeps its word. The icon list is Mark sold, Undo, Retire, Edit, Delete, Copy, Download, Open, Close, Filter, Sort and any action of that kind. Words stay on Send, Identify, Stand down and any press of that kind. `docs/specs/iconography.md` carries the full rule (section 2 is the seven-step order, with the Fulfiller exemption, phone edge cases and dense-row limits), the per-lane map of every press, the icon set and its collisions.
 

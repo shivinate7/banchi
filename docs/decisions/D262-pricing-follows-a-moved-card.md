@@ -1,4 +1,4 @@
-## D262 — Pricing follows a moved card
+# D262 — Pricing follows a moved card
 
 **The owner's ruling, 2026-09-23, in the box map interview: pricing follows the card.** When a
 card moves to another box, the join follows it to its new place. The match is by the card's

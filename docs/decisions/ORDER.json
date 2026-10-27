@@ -3,7 +3,6 @@
   "split_sha256": "e5032052940c5fed2d8b7559f43c8d04743db17b9031bebeaadc139122ebc0c2",
   "split_bytes": 1471078,
   "order": [
-    "_preamble.md",
     "D001-capture-dumb-batch-identifies.md",
     "D002-identify-is-haiku-vision.md",
     "D003-variants-resolve-by-ladder.md",
@@ -257,6 +256,8 @@
     "D319-one-retry-home.md",
     "D320-my-slabs-card-ladder.md",
     "D321-runs-join-themselves.md",
-    "D322-tcgcsv-is-next-price-source.md"
+    "D322-tcgcsv-is-next-price-source.md",
+    "D323-backup-one-time-guarded.md",
+    "D324-holdings-watch.md"
   ]
 }

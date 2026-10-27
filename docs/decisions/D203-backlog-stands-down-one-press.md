@@ -1,4 +1,4 @@
-## D203 — Backlog stands down by one previewed press
+# D203 — Backlog stands down by one previewed press
 
 **Stale open orders are stood down by one explicit press, with a preview and the count in its label, over a cutoff the operator sees.** Never by a rule that runs on every fetch. `Completed - Paid` cannot join `TERMINAL_STATUSES` (`store/orders.py:is_terminal_status`), since a payment clearing does not prove a card shipped. That leaves two years of history open (513 `Completed - Paid` orders fulfilled through `#/inventory` before the orders screen existed) beside 14 live `Ready to Ship` orders.
 

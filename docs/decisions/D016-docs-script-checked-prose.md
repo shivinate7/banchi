@@ -1,4 +1,4 @@
-## D16 — Docs checked by script, prose by review
+# D16 — Docs checked by script, prose by review
 
 **Every path, target, threshold and id in the markdown is checked by a script. The prose itself is checked by a model, and only the first may block a commit.** Repo markdown carries the architecture and the reasoning behind it. Before `scripts/docs-audit.py` existed, nothing verified a line of it. Every path, `make` target, subcommand, test id, threshold, decision number and env var was true only while someone remembered it. `docs/GATES.md` makes the same argument for the harness. Without a check, *looks done* is the only signal. This entry applies the same rule to the files that tell the next session what done means.
 
@@ -12,7 +12,7 @@
 
    **A check is named, never numbered.** D17 sets this rule for the repo-map check, and it now covers all checks. Positions move. The report's labels are the names.
 
-   **A decision id names one entry.** The old single decisions file carried three entries numbered `## D50` at once: the feedback states, the Cmd-arrow nav and the photo URL. Three sessions had each taken the next free number against the same base. Every row stayed green. The cause was the reader's shape. `decision_headings` returned a set, so three headings collapsed to one. The published count was of distinct ids and read 51 over a file holding 53. The citation scan passed when a heading existed, not when exactly one did. A reader that collapses its input cannot report what it collapsed. So the list is now the primitive, and the set is derived from it.
+   **A decision id names one entry.** The old single decisions file carried three entries numbered `D50` at once: the feedback states, the Cmd-arrow nav and the photo URL. Three sessions had each taken the next free number against the same base. Every row stayed green. The cause was the reader's shape. `decision_headings` returned a set, so three headings collapsed to one. The published count was of distinct ids and read 51 over a file holding 53. The citation scan passed when a heading existed, not when exactly one did. A reader that collapses its input cannot report what it collapsed. So the list is now the primitive, and the set is derived from it.
 
    **A duplicate id blocks.** `governed_by` in `docs/map.py`, D17's decision-context hook and every `(D50)` in a comment resolve an id to an entry. With three candidates, they resolve to whichever is found first. The citation is then wrong in a way nothing can see. It points at a real heading, just not the intended one. Two headings with one id is provably wrong, however the file got that way. That is this entry's own test for mechanical.
 

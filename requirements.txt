@@ -6,6 +6,10 @@
 #       geometry/ cli/ codes/ imports it; it runs only as a subprocess from the Makefile.
 ruff==0.16.5
 
+# mypy  `make pytypes`, `--strict` over store/orders.py alone (DEBT61, owner's word: try one
+#       module). Nothing in the product imports it; it runs only as a subprocess.
+mypy==2.4.0
+
 # anthropic  T1's identification transport (Batch API). Nothing else in the repo
 #            talks to Anthropic — see identify/batch.py.
 anthropic>=0.69

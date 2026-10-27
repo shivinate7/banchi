@@ -1,4 +1,4 @@
-## D207 — All polling goes through usePoll
+# D207 — All polling goes through usePoll
 
 **`app/src/usePoll.ts` is the one polling primitive.** It pauses while `document.hidden` and ticks at once when the tab is looked at again. It backs off the idle cadence on consecutive failures instead of hammering a server that went quiet. One module-level counter shared by every `usePoll` never lets more than `REQUEST_SLOTS` (4) requests be in flight against the capture server (DEBT11: less concurrency is strictly better on this rig). Five hand-rolled timers had none of this (the run list, an open run's detail, the submission claims panel, the sidebar's `/status` poll). The primitive was unfactored and not missing. So migrating all five is the proof, and their existing specs staying green verifies it. A new spec of the hook in isolation would only prove the hook works.
 

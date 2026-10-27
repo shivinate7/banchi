@@ -1,4 +1,4 @@
-## D178 — A + prefix names what does not exist yet
+# D178 — A + prefix names what does not exist yet
 
 **A `+` in front of a path, a `make` target or a `BANCHI_` name means that the thing does not exist yet.** Three mechanical docs-audit rows verify that a named thing is real. They are the `paths` row, the make-targets row and the `env vars` row. A design document's whole job is to name what it would create. Without a marker those two things cannot both be served.
 

@@ -1,4 +1,4 @@
-## D294 — Each card carries a fraction order key
+# D294 — Each card carries a fraction order key
 
 **A card's place is an order key apart from its stored index.** `Card.order` is a number beside `Card.index`. It is in the payload and in the real column `cards.ord`. The walk, every label and every section bound read it. The stored index never moves (D10, D58).
 

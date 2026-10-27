@@ -1,4 +1,4 @@
-## D54 — Re-emit adds, never subtracts
+# D54 — Re-emit adds, never subtracts
 
 **`emit` never opens an import file for writing until it has at least one row for it.** What it writes is always the delta, the copies not already sent, and it says so. A second `emit` once overwrote the good `import-listed.csv` with a header-only file and blanked `manifest["emitted"]`, so `reconcile` refused a run that had emitted perfectly.
 

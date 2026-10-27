@@ -1,6 +1,6 @@
 ## DEBT77 — every phone-width spec is off
 
-By the owner's word, no spec that draws a page below 768px wide runs. That is all of `app/tests/phone.spec.ts`, the touch-screen block in `app/tests/gallery.spec.ts`, and every case or width in another spec that sizes the page below 768. `PHONE_SPECS_ON` in `app/tests/phoneSwitch.ts` is the one switch. No test is deleted.
+**What.** By the owner's word, no spec that draws a page below 768px wide runs. That is all of `app/tests/phone.spec.ts`, the touch-screen block in `app/tests/gallery.spec.ts`, and every case or width in another spec that sizes the page below 768. `PHONE_SPECS_ON` in `app/tests/phoneSwitch.ts` is the one switch. No test is deleted.
 
 **Outcome at risk:** a phone layout break goes unseen. CI passes a thumb target under 40px, a sideways scroll at 390, or a sheet that no longer rises from the bottom. Each reaches the owner's phone.
 

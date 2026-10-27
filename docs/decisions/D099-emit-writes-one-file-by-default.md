@@ -1,4 +1,4 @@
-## D99 — Emit writes one file by default
+# D99 — Emit writes one file by default
 
 **One press writes one import file, `import.csv`, across every run and game named.** Splits are flags, and the cut-off is the store's own configurable `policy.threshold`.
 

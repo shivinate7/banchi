@@ -1,4 +1,4 @@
-## D150 — A post-sale zero reading ages the claim
+# D150 — A post-sale zero reading ages the claim
 
 **A reading taken after a sale confirms the sale.** `pushed` has no drawdown. `cmd_emit` writes it, `cmd_reconcile` moves it to `staged`, and `cmd_join` draws `staged` down by the rise in live. So after an import lands, the claim counts copies TCGplayer already sold. The copies on hand are committed against a shelf that no longer exists. A sale is the only event that proves a sent copy left. `cli/resolve.py:_copies_out` ages the claim by the SKU's sales that the export confirms:
 

@@ -1,4 +1,4 @@
-## D29 — Identical queue entries answer as a group
+# D29 — Identical queue entries answer as a group
 
 **A queue whose entries share one reason code and offer one identical candidate may be answered as a group.** The server enforces it. Each entry offers exactly ONE candidate, its own, under one shared reason and one shared condition string.
 

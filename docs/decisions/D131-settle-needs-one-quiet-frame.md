@@ -1,4 +1,4 @@
-## D131 — Settle trigger needs one quiet frame
+# D131 — Settle trigger needs one quiet frame
 
 **The settle machine's thresholds sat under the rest, so it needs a ratchet escape and a one-quiet-frame window.** The noise tracker admits only frames already under `tLo` to its still population, so it can lower the still level and never raise it. Seeded at 4.5 it converged to 4.5 to 7 while a resting card read `d` 5 to 8 under a bright lamp (brightness jitter, |Δluma| p90 of 6 to 8 at rest against 2 to 3 earlier). The settle rule then fired on 5 of 29 cards while every readout looked normal. Bright-lamp sessions keep 9 to 18% of frames under `tLo`, against 46 to 83% earlier. A window of four never fills either. The feeder rests a card for two to four frames, with calm frames around it. 13 of 28 cards never had four consecutive frames under `tHi`. A dimmer lamp was not the fix (about 87% at worse photograph quality). "No adaptation of a stillness detector answers a scene that is never still" was wrong. The scene was still, and the detector's idea of still was wrong in the one direction its ratchet could not move.
 

@@ -1,4 +1,4 @@
-## D192 — Inventory fetches one box only
+# D192 — Inventory fetches one box only
 
 **Ruling: `#/inventory` fetches the box on screen, not the whole store.** This is the first step of the store-scaling plan. It reopens the refusal in the old `GET /boxes/<n>` comment in `server/capture_server.py`. That comment said a per-box read would be a second renderer for a caller that did not exist. The caller exists now. `#/inventory` fetched the whole store on every box switch and after every write.
 

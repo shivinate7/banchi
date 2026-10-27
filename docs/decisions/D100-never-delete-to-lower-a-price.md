@@ -1,4 +1,4 @@
-## D100 — Never delete to lower a price
+# D100 — Never delete to lower a price
 
 **A live listing's price is lowered by re-uploading the same row with a new `TCG Marketplace Price` and `Add to Quantity` of 0. Nothing is deleted at TCGplayer, and nothing has to be.** Built on the owner's request: export live inventory (cards listed and not selling), mass re-edit the prices down, and re-upload. The owner asked whether inventory must be deleted at TCGplayer in between.
 

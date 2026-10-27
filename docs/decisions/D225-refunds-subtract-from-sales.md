@@ -1,4 +1,4 @@
-## D225 — Refunds subtract from Sales
+# D225 — Refunds subtract from Sales
 
 **A reversed sale is not revenue, and a shortfall against today's market is not a loss.** Both are about what `#/revenue` admits it does not know. The plan is `docs/specs/sales-plan.md` sections 1 and 2.
 

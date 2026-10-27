@@ -1,4 +1,4 @@
-## D177 — Prices are pruned by press, never rule
+# D177 — Prices are pruned by press, never rule
 
 **Pruning `inventory/prices.json` against the cards a join can match is refused.** A prune is a preview the operator is shown, and a button the operator presses. The live-book group is separated by name and never selected by default.
 

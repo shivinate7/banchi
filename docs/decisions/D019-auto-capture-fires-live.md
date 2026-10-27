@@ -1,4 +1,4 @@
-## D19 — Auto-capture fires live, not from video
+# D19 — Auto-capture fires live, not from video
 
 **The motion trigger fires per card through the same `POST /capture` a key press uses.** Never record video and extract frames. Cutting a tape into per-card frames is the motion state machine run offline. It avoids none of the tuning. It gives up the position-to-photo binding `allocate_capture` makes inside the store lock. It also gives up undo's safety argument (the deleted photo is of a card still in hand) and the halt at the moment of failure. The 64x36 luma trace gives re-runnable tuning at a thousandth of the bytes.
 
