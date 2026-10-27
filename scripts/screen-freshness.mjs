@@ -245,6 +245,7 @@ const RECORDED = {
     'getInventorySets',
     'getPriceFacts', 'getPricesRefresh',        // spec 7b: the product sheet's prices and sales, and where Refresh now is
     'getSlabs', 'getSlabDetail',                // D320, My Slabs: the list, and one slab by grader and cert
+    'masterTakeOffState',                       // master-set.md section 5: where a pull's take-off stands
   ],
   writes: [
     'prepareMatch',                           // the free reader's one-time setup press
@@ -256,6 +257,7 @@ const RECORDED = {
     'ingestOrders', 'pullCopy', 'undoPull', 'readShippingExport', 'forgetShippingExport',
     'moveCard', 'moveCards', 'putPricingCorpus', 'emitMerged', 'reconcileLive', 'reclaimBoxPhotos',
     'markdownListings', 'applyMarkdown',
+    'masterTakeOff',                          // master-set.md section 5: a pull's TCGplayer take-off, one press
     // The mass-clear and its inverse (D168), recorded by the
     // deliberate act this table's header asks for rather than left to widen the drift it
     // already names. On their own line so a branch adding its own writes does not conflict
