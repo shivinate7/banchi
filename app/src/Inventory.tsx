@@ -4,6 +4,7 @@ import type {
   BoxRecord,
   InventoryCard,
   Listing,
+  MasterTakeOff,
   RetireReason,
   RetireResult,
   SaleResult,
@@ -32,6 +33,7 @@ import { useViewParam } from './kit/viewState'
 import { CardLocations, hiddenCopies, layoutsOf, MarkSoldButton, UndoSaleButton, clearFreshSale, markFreshSale } from './CardLocations'
 import { inTopTenth, useMarketRead, type HeroFigures } from './CardHero'
 import { InventorySets } from './InventorySets'
+import { TakeOffLine } from './TakeOffLine'
 import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
 import { sayPlace } from './position'
@@ -260,6 +262,9 @@ type Receipt = {
    *  again. The remedy then is an ordinary `moveCard`, aimed at THIS location, back to `box`
    *  (`server.ts:moveCard`'s own doc comment). */
   current?: { box: number; index: number; captureId: string | null }
+  /** MASTER-SET RETIREMENT ONLY: the card's name and where its TCGplayer take-off stands, which
+   *  the receipt's toast offers the press for (`TakeOffLine`). */
+  takeOff?: { name: string; state: MasterTakeOff }
 }
 
 const MOVE_BUILT_ON = 'move_built_on'
@@ -428,6 +433,7 @@ function InventoryWalk({
     setReceipts((held) => [receipt, ...held.filter((standing) => standing.key !== receipt.key)])
     const previous = toasts.current.get(receipt.key)
     if (previous !== undefined) dismissToast(previous)
+    const toastId = { current: 0 }
     const id = toast({
       kind: receipt.canUndo ? 'receipt' : 'status',
       icon: receipt.kind === 'sale' ? 'check' : receipt.kind === 'move' ? 'package' : 'archive',
@@ -435,7 +441,12 @@ function InventoryWalk({
       body: receiptBody(receipt.place, receipt.note),
       ttlMs: UNDO_WINDOW_MS,
       action: receipt.canUndo ? { label: 'Undo', onPress: () => void doUndoRef.current(receipt) } : undefined,
+      extra:
+        receipt.takeOff === undefined ? undefined : (
+          <TakeOffLine box={receipt.box} index={receipt.index} name={receipt.takeOff.name} start={receipt.takeOff.state} toastId={toastId} />
+        ),
     })
+    toastId.current = id
     toasts.current.set(receipt.key, id)
   }, [])
 
@@ -504,9 +515,8 @@ function InventoryWalk({
         place: sayPlace(copy.place.label ?? `pooled, ${copy.key}`),
       }
       try {
-        const reversible = canTakeBack(
-          await retireCard(copy.place.box, copy.place.index, reason),
-        )
+        const result = await retireCard(copy.place.box, copy.place.index, reason)
+        const reversible = canTakeBack(result)
         setRetired((held) => (held.includes(copy.key) ? held : [...held, copy.key]))
         holdRank(copy.key)
         remember({
@@ -515,6 +525,7 @@ function InventoryWalk({
           said: `Retired: ${reasonWord(reason)}`,
           canUndo: reversible,
           note: [renumberNote(copy.place), reversible ? null : NO_UNDO].filter(Boolean).join(' ') || null,
+          takeOff: result.take_off ? { name: selected?.card.name ?? 'this card', state: result.take_off } : undefined,
         })
         setReloads((n) => n + 1)
       } catch (err) {
@@ -536,7 +547,7 @@ function InventoryWalk({
         setBusyKey(null)
       }
     },
-    [busyKey, remember, holdRank],
+    [busyKey, remember, holdRank, selected],
   )
 
   /* D83's third door, for one copy (UX-244). UN-14 (`docs/specs/undo.md` §11.1, D28/D57
@@ -1391,7 +1402,7 @@ function MovePanel({
   )
 }
 
-/* The retire panel — a dialog whose five reasons are the write's only input. Focus lands on
+/* The retire panel — a dialog whose reasons are the write's only input. Focus lands on
  * Cancel, the one control whose accidental press costs nothing. */
 function RetirePanel({
   copy,
@@ -1451,10 +1462,12 @@ function RetirePanel({
         <p className="bn-muted">Leaves the box without a sale. The record stays.</p>
 
         <div className="inventory-retire-reasons" role="group" aria-label="Reason">
-          {RETIRE_REASONS.map(({ reason, label, said }) => (
+          {RETIRE_REASONS.map(({ reason, label, said }, at) => (
             <button
               key={reason}
               className="inventory-retire-reason"
+              /* AN ODD LAST REASON SPANS ITS ROW, so the reasons before it keep their places. */
+              data-wide={at === RETIRE_REASONS.length - 1 && RETIRE_REASONS.length % 2 === 1 ? '' : undefined}
               type="button"
               disabled={busy}
               onClick={() => onRetire(reason)}

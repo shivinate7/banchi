@@ -6480,7 +6480,7 @@ COMPONENTS = [
                                           "dismiss, which docs/DESIGN.md bans. This is where D138's "
                                           "server-restart notice went when `ServerReloaded` was "
                                           "deleted.",
-                                  "governed_by": ["D5", "D28", "D138", "D57", "D94"]},
+                                  "governed_by": ["D5", "D28", "D138", "D57", "D94", "D313"]},
             "src/kit/undo.ts": {"does": "THE ONE `U` PRIMITIVE (UN-10, `docs/specs/undo.md` §11.3): "
                                         "`useUndoHotkey` arms `U` for the newest reversible write on "
                                         "a screen, in place of five screens' own near-identical "
@@ -8047,6 +8047,19 @@ COMPONENTS = [
                                         "be grepped, and a summary is the second vocabulary that "
                                         "rule exists to refuse.",
                                 "governed_by": ["D33", "D39", "D94"]},
+            "src/takeOff.ts": {"does": "the master-set take-off's one vocabulary: where a take-off "
+                                       "stands as the screens say it (offer, sent, failed, matches, "
+                                       "onway, nosession), one card's press with every refusal read "
+                                       "as a view, and one entry of the owed list's press answered "
+                                       "the same way. Read by the retire receipt and the send card, so "
+                                       "a press has the same words wherever it is made.",
+                               "governed_by": ["D100", "D196", "D269"]},
+            "src/TakeOffLine.tsx": {"does": "the take-off line on a master-set retire receipt: Take It "
+                                            "Off TCGplayer at the pull and the answer in the same place, "
+                                            "drawn in the toast kit's changing line. The toast waits "
+                                            "while the press runs. Whatever is left undone waits on the "
+                                            "send card's owed list.",
+                                    "governed_by": ["D100", "D118", "D196", "D313"]},
             "src/SendCard.tsx": {"does": "THE SEND CARD on Pricing's send bar: one press from "
                                          "priced to live (D273). The "
                                          "press waits for the screen's own save, then one request "
