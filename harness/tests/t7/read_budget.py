@@ -288,8 +288,8 @@ BUDGET = {
     '/pricing': {"status": 200},
     '/pipeline/pricing': {"status": 200, 'sql': 50, 'json_loads': 13, 'store_read': 2, 'read_export': 3},
     '/pipeline/value': {"status": 200, 'sql': 218, 'json_loads': 170, 'store_read': 3},
-    # sql 12: the one retired-cards read behind `collected` (the master-set spec, section 3).
-    '/pipeline/sets': {"status": 200, 'sql': 12, 'store_read': 1},
+    # sql 13: the retired-cards read and the buried-lines read behind `collected` (the master-set spec, section 3).
+    '/pipeline/sets': {"status": 200, 'sql': 13, 'store_read': 1},
     '/pipeline/price-now': {"status": 200, 'sql': 23, 'json_loads': 4, 'store_read': 2},
     '/pipeline/trends-saved': {"status": 200},
     '/pipeline/movers': {"status": 200, 'sql': 11, 'json_loads': 1, 'store_read': 1},

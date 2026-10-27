@@ -4915,23 +4915,41 @@ def do_pipeline_sets(images: Optional["stockimages.StockImages"] = None) -> dict
     no_set: Dict[str, dict] = {}
 
     # THE MASTER LIST (the master-set spec, section 3): a SKU is collected when any card of it is
-    # `retired` with reason `master_set`. `retire_reason` is no indexed column, so this reads the
-    # retired cards whole. A master-set copy with no SKU cannot be on the list and adds no row.
-    # `pulled` and the other reasons never count.
-    master_set_cards = [
-        (None, None, card.sku, card.name, card.set_name, card.number,
-         master.display_number(card.number, card.printed_total) or "", card.game, None)
+    # `retired` with reason `master_set`, whatever set label that card carries. `retire_reason` is
+    # no indexed column, so this reads the retired cards whole. A master-set copy with no SKU
+    # cannot be on the list. `pulled` and the other reasons never count.
+    master_cards = [
+        (card.sku, card.name, card.set_name, card.number,
+         master.display_number(card.number, card.printed_total) or "", card.game)
         for card in inventory.cards.where(state=master.RETIRED)
         if card.retire_reason == master.MASTER_SET and card.sku
     ]
+    # A BOX'S DELETE BURIES ITS DEPARTED RECORDS (D134), so a master-set card whose box is gone
+    # survives only as a `buried` line. That line carries no set name: the SKU table answers
+    # for it, and a SKU it does not know lands in `no_set`.
+    for event in snapshot.buried():
+        if event.get("state") == master.RETIRED and event.get("retire_reason") == master.MASTER_SET and event.get("sku"):
+            entry = snapshot.skus.entries.get(str(event["sku"]))
+            number = event.get("number")
+            master_cards.append((
+                event["sku"], event.get("name"), entry.set_name if entry is not None else "",
+                number, master.display_number(number, event.get("printed_total")) or "", event.get("game"),
+            ))
+    collected_skus = {str(card[0]) for card in master_cards}
     on_hand = inventory.cards.select(
         ("box", "idx", "sku", "name", "set_name", "number", "number_display", "game", "cid"),
         state=master.IDENTIFIED,
     )
+    on_hand_skus = {str(values[2]) for _key, values in on_hand if values[2]}
+    # ONE QTY-0 ROW PER SKU, AND ONLY WHEN NO ON-HAND ROW OF THAT SKU EXISTS IN ANY BUCKET.
+    absent: Dict[str, tuple] = {}
+    for sku_, name_, set_, number_, display_, game_ in master_cards:
+        if str(sku_) not in on_hand_skus:
+            absent.setdefault(str(sku_), (None, None, sku_, name_, set_, number_, display_, game_, None))
 
     for _key, (box_raw, _idx_raw, sku_raw, name, set_name, number, number_display, game, cid), is_on_hand in (
         [(key, values, True) for key, values in on_hand]
-        + [(None, values, False) for values in master_set_cards]
+        + [(None, values, False) for values in absent.values()]
     ):
         sku = str(sku_raw) if sku_raw else None
         # THREE GROUPING RUNGS, NARROWEST WINS. A SKU is a confirmed identity, so every
@@ -4979,8 +4997,10 @@ def do_pipeline_sets(images: Optional["stockimages.StockImages"] = None) -> dict
             bucket[row_key] = row
         if is_on_hand:
             row["qty"] += 1
-        else:
-            row["collected"] = True
+
+    for bucket in (*groups.values(), no_set):
+        for row in bucket.values():
+            row["collected"] = row["sku"] in collected_skus
 
     def _cards_of(bucket: Dict[str, dict]) -> List[dict]:
         rows = sorted(bucket.values(), key=lambda row: row["_sort"])

@@ -1735,7 +1735,7 @@ async function retirement(
  * retired is a state, never a removal, so the record stays, the position stays, and the gap
  * it leaves is permanent. One copy, not one SKU, exactly as `markSold`.
  *
- * THE REASON IS REQUIRED AND IS ONE OF FOUR — the `RetireReason` union, refused server-side
+ * THE REASON IS REQUIRED AND IS ONE OF FIVE — the `RetireReason` union, refused server-side
  * as `retire_reason_invalid` outside it. It is the one fact about the departure the record
  * cannot re-derive later, which is why there is no reasonless overload of this call.
  *

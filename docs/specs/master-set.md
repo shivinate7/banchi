@@ -35,7 +35,7 @@ its receipt and its undo. Undoing the retirement takes the card back off the mas
 `GET /pipeline/sets` (`server/pipeline_routes.do_pipeline_sets`) gains one boolean per row,
 `collected`. It is true when any card with that SKU has state `retired` and `retire_reason`
 `master_set`. It is one more `cards.select` over retired cards, inside the same plain read: no
-socket, no write, no lock.
+socket, no write, no lock. `collected` is keyed by SKU across every set label. A box's delete buries its retired records (D134, a departed record is buried), so the route reads the buried `master_set` lines too: a master-set card stays collected after its box is deleted. A buried line carries no set name, so the SKU table names the set, and a SKU it does not know lands in `no_set`.
 
 A set that holds only master-set copies and no on-hand copy has no row today, because the route reads
 `identified` cards only. **The route also adds those rows, with `qty: 0` and `collected: true`**,
