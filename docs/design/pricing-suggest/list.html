@@ -38,7 +38,7 @@
 
   /* ---------- mockup-only layer: the sample ribbon, the cull strip, the "Today:" tags ---------- */
   .mock-ribbon { position: sticky; top: 0; z-index: 6; height: 40px; display: flex; align-items: center; gap: var(--bn-3);
-                 padding: 0 var(--bn-6); background: var(--bn-warn-tint); color: var(--bn-ink); font-size: var(--bn-fs-sm); font-weight: 600;
+                 padding: 0 var(--bn-6); background: linear-gradient(var(--bn-warn-tint), var(--bn-warn-tint)), var(--bn-bg); color: var(--bn-ink); font-size: var(--bn-fs-sm); font-weight: 600;
                  box-shadow: 0 1px 0 var(--bn-line); }
   .mock-ribbon .bn-pill { flex: none; }
   .cull { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); padding: var(--bn-3) var(--bn-6);
@@ -60,7 +60,7 @@
 
   /* ---------- the shell: sidebar at 1440, rail at 820 ---------- */
   .app { display: flex; align-items: stretch; }
-  .side { flex: none; width: var(--bn-sidebar-w, 236px); background: var(--bn-surface); border-right: 1px solid var(--bn-line);
+  .side { position: sticky; top: 40px; height: calc(100vh - 40px); align-self: flex-start; flex: none; width: var(--bn-sidebar-w, 236px); background: var(--bn-surface); border-right: 1px solid var(--bn-line);
           padding: var(--bn-4) var(--bn-3); display: flex; flex-direction: column; gap: var(--bn-1); }
   .frame[data-w='1440'] .side { width: 236px; }
   .frame[data-w='820'] .side { width: 64px; padding: var(--bn-4) var(--bn-3); align-items: center; }
@@ -94,7 +94,7 @@
   .set-says { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 
   /* The send bar: sticky under the ribbon, so the count and the money stay in view. */
-  .send { position: sticky; top: calc(40px + var(--bn-2)); z-index: 5;
+  .send { position: sticky; top: 40px; z-index: 5;
           display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--bn-4);
           padding: var(--bn-4) var(--bn-5); border-radius: var(--bn-r-xl); background: var(--bn-surface);
           box-shadow: var(--bn-shadow-2); }
@@ -117,7 +117,7 @@
   /* ---------- the one list: rows and group titles sit on the page's own left edge ---------- */
   .list { display: flex; flex-direction: column; }
   .cols { display: grid; column-gap: var(--bn-3);
-          grid-template-columns: 40px 36px minmax(0, 1fr) 72px 92px 96px 200px 84px 40px 40px; }
+          grid-template-columns: 40px 36px minmax(0, 1fr) 72px 92px 116px 200px 84px 40px 40px; }
   .caption { align-items: end; padding-bottom: var(--bn-2); font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-ink-3);
              letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; border-bottom: 1px solid var(--bn-line); line-height: 1.3; }
   .caption .num { text-align: right; }
@@ -140,7 +140,7 @@
   .thumb { width: 36px; aspect-ratio: 5 / 7; border-radius: var(--bn-r-xs); background: var(--bn-surface-3);
            box-shadow: inset 0 0 0 1px var(--bn-line); }
   .item { min-width: 0; display: flex; flex-direction: column; }
-  .name { min-height: 40px; display: flex; align-items: center; font-weight: 600; color: var(--bn-ink); text-decoration: none;
+  .name { min-height: 40px; min-width: 40px; display: flex; align-items: center; font-weight: 600; color: var(--bn-ink); text-decoration: none;
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap; align-self: flex-start; max-width: 100%; }
   .name:hover { text-decoration: underline; }
   /* One line; the separator is drawn before each item after the first, so a line never ends on a dot. */
@@ -205,8 +205,10 @@
   .src-inline { display: none; }
   .frame[data-w='820'] .src-inline { display: inline-flex; }
   .frame[data-w='820'] .settings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .frame[data-w='820'] .send { grid-template-columns: minmax(0, 1fr); }
-  .frame[data-w='820'] .send-press { flex: 1; }
+  .frame[data-w='820'] .send { padding: var(--bn-3) var(--bn-4); gap: var(--bn-3); }
+  .frame[data-w='820'] .send-head { display: none; }
+  .frame[data-w='820'] .send-parts { gap: 0 var(--bn-4); }
+  .frame[data-w='820'] .send-press { min-width: 0; }
   .frame[data-w='820'] .group-lede { display: block; margin: 0; width: 100%; }
   .frame[data-w='820'] .group-head { flex-wrap: wrap; }
   .frame[data-w='820'] .filters .bn-input { width: 240px; }
@@ -316,7 +318,6 @@
   }
   const svg = (n, s = 18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="${PATH[n]}"/></svg>`
   const $ = (v) => `<span class="bn-money">$${v.toFixed(2)}</span>`
-  const signed = (v) => `<span class="bn-money">${v < 0 ? '−' : '+'}$${Math.abs(v).toFixed(2)}</span>`
   const NAV = [['home', 'Home'], ['camera', 'Capture'], ['review', 'Review'], ['box', 'Inventory'], ['tag', 'Pricing'], ['truck', 'Orders'], ['chart', 'Revenue']]
 
   /* ---- the options the owner judges; one press hides one ---- */
@@ -371,6 +372,13 @@
         why: 'Selling fast: 212 sold across TCGplayer in 30 days.', tick: true, spark: [4, 4, 5, 5, 5, 5, 6, 6], pct: '+6.1%' },
     ] },
   ]
+  const FLOOR = 49
+  const rulePrice = (market) => Math.max(FLOOR, Math.floor((Math.round(market * 100) * 95 + 50) / 100)) / 100
+  for (const r of G.flatMap((g) => g.rows)) {
+    if (r.market === null || !['Rule', 'Suggested', 'Floor'].includes(r.src)) continue
+    r.price = rulePrice(r.market)
+    if (r.still) r.now = r.price
+  }
   const ROWS = G.flatMap((g) => g.rows.map((r) => Object.assign(r, { group: g })))
   ROWS.forEach((r, i) => { r.id = `r${i}` })
   const off = (r) => (r.opt && hidden.has(r.opt)) || (r.group.opt && hidden.has(r.group.opt))
@@ -433,9 +441,9 @@
     root.querySelector('[data-send-head]').textContent = `${copies(t.units)} ready to send.`
     root.querySelector('[data-send-parts]').innerHTML =
       `<span><b>${t.fresh}</b> new, listing for ${$(t.freshCash)}</span>` +
-      `<span><b>${t.up}</b> ${t.up === 1 ? 'rise' : 'rises'}, ${signed(t.upCash)}</span>` +
-      `<span><b>${t.down}</b> ${t.down === 1 ? 'fall' : 'falls'}, ${signed(t.downCash)}</span>` +
-      `<span><b>${t.typed}</b> typed by you, ${$(t.typedCash)}</span>`
+      `<span><b>${t.up}</b> ${t.up === 1 ? 'rise' : 'rises'}, up ${$(t.upCash)} in all</span>` +
+      `<span><b>${t.down}</b> ${t.down === 1 ? 'fall' : 'falls'}, down ${$(-t.downCash)} in all</span>` +
+      `<span><b>${t.typed}</b> typed by you, listing for ${$(t.typedCash)}</span>`
     root.querySelector('[data-send-press]').innerHTML = `${svg('send', 18)}Send ${copies(t.units)} to TCGplayer`
     root.querySelector('[data-count]').textContent = `${ROWS.filter((r) => !off(r) && !r.alt).length} items`
     for (const el of root.querySelectorAll('[data-opt]')) el.hidden = hidden.has(el.dataset.opt)
