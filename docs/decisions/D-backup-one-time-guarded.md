@@ -3,7 +3,7 @@
 Kind: process
 Home: scripts/backup-daily.py
 
-**The owner ruled it** (waiting-page items 60 and 60's follow-up). The backup to the iCloud Drive
+**The owner ruled it** (waiting-page item 60). The backup to the iCloud Drive
 folder `Banchi backup` runs when the owner asks, through `make backup`. No nightly job is installed:
 `make backup-agent` stays in the Commands block and is not run.
 
