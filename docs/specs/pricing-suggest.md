@@ -76,7 +76,9 @@ proposals.
 Two facts shape these numbers. The listings arrived in waves: 383 first went live on one day
 and 370 on another, and no listing is older than 45 days. So none fires at 60 days today, and
 the whole first wave crosses 60 days on one day. And `sold_here` reads 0 on every live
-listing, so "unsold" here is an upper bound: a build must read the order ledger instead.
+listing, so "unsold" here is an upper bound. That is by design: `store/master.py`'s
+`Listing.observe_live` resets `sold_here` at each newer live reading (D115, the sale counter holds
+only sales since the last reading). The unsold trigger reads the last `sold` event instead.
 
 ## 4b. Judgment of each trigger
 
@@ -231,9 +233,8 @@ review.
 |---|---|---|
 | `pricing-floor-stale-text` | Section 7: the floor text in `pipeline/pricing.py`, D9 (threshold and floor) and CLAUDE.md. | nothing |
 | `pricing-clarity-words` | Section 6, words only: "Floor" for the price line, the hold word. | nothing |
-| `sold-here-zero` | Find why `sold_here` reads 0 on every live listing, and fix the cause. | nothing |
 | `suggest-engine` | A new pure module, `suggest` in `pipeline/`: triggers, cap, value line, group and reason words. The cap and value line become policy settings. | nothing |
-| `one-list-wire` | The worklist carries live listings and their suggestions. One send takes new copies, kept suggestions and typed prices. Sole owner of `types.ts` and `server.ts`. | `suggest-engine`, `sold-here-zero` |
+| `one-list-wire` | The worklist carries live listings, their last sale (from `sold` events) and their suggestions. One send takes new copies, kept suggestions and typed prices. Sole owner of `types.ts` and `server.ts`. | `suggest-engine` |
 | `pricing-one-list` | The one list on `#/pricing`, groups on top, no Live tab. | `pricing-clarity-words`, `one-list-wire` |
 | `history-float-card` | The floating card (section 9c), with the asking-price line and the suggestion dot. | `one-list-wire` |
 | `history-float-mount` | The card's one call site in Pricing. | `pricing-one-list`, `history-float-card` |
