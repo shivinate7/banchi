@@ -31,10 +31,11 @@ THE SEAMS (a builder follows these names):
       today's). It asks `groups(89)` and `prices(89, group)` for each group, no products and no categories. A group
       FAILS, is named in `failed`, and the other groups go on, when its prices raise `pricehistory.PriceHistoryError`,
       when its payload is not a dict or has no list under `results`, or when it says `"success": false`. A reply of
-      `"success": true` with `results: []` is a real, empty group: saved, never asked again for that update. It writes
-      through `Store().write()` and never deletes, ONE WRITE PER GROUP: a crash that is no `Exception` (a
-      `KeyboardInterrupt`) after a group keeps that group's rows, reaches the caller, and the next pass asks for the
-      groups left only. A pause of at least `pricehistory.COURTESY_DELAY_SECONDS` (0.1 s or more) sits between
+      `"success": true` with `results: []` is a real, empty group: saved with the rest, never asked again for that
+      update. It writes through `Store().write()` and never deletes, ONE WRITE PER PASS, at its end: the rows of every
+      group that did not fail and the marks land together. A crash that is no `Exception` (a `KeyboardInterrupt`)
+      after a group reaches the caller and keeps NO row of that pass; the update stays open, and the next pass over
+      the same stamp reads every group again. A pause of at least `pricehistory.COURTESY_DELAY_SECONDS` (0.1 s or more) sits between
       consecutive requests, the stamp's included. A THROTTLE answer is a `PriceHistoryError` whose `__cause__` is a
       `net.NetError` with status 429, as `pricehistory.fetch_json` raises it: the group fails, the wait before the
       next request is `max(COURTESY_DELAY_SECONDS, net.retry_after(url))` through `time.sleep`, and a second throttle
@@ -505,9 +506,9 @@ def check_daily_prices_malformed_group_payload_fails_only_that_group(checks: Che
 
 
 @in_run_folder
-def check_daily_prices_each_group_is_saved_when_it_is_read(checks: Checks) -> None:
+def check_daily_prices_a_crash_keeps_nothing_of_the_pass(checks: Checks) -> None:
     checks.note("")
-    checks.note("DAILY PRICES ONE WRITE PER GROUP — a crash after group one keeps group one, and the next pass asks for the rest only")
+    checks.note("DAILY PRICES ONE WRITE PER PASS — a crash after group one keeps none of the pass, the update stays open, the next pass reads every group again")
     module = load(checks)
     if module is None:
         return
@@ -523,15 +524,20 @@ def check_daily_prices_each_group_is_saved_when_it_is_read(checks: Checks) -> No
             checks.ok(False, "the pass ran", "%s: %s" % (type(exc).__name__, exc))
             return
         checks.ok(crashed, "a crash that is not an Exception (a KeyboardInterrupt) reaches the caller")
-        checks.equal(sorted(table()), [(2001, "Normal", D1)], "group 102, read before the crash, is saved: its 1 row is in the table")
+        checks.equal(sorted(table()), [], "no row of the crashed pass is kept, group 102's included: the pass writes once, at its end")
         fake.replies.clear()
         fake.urls.clear()
+        # The same stamp: a crash leaves the update unfinished, so this is no skip, and it asks for every group again.
         retry = run(checks, module, fake, LATE, "the next pass")
         if retry is None:
             return
-        checks.equal((retry.get("skipped"), retry.get("rows"), retry.get("failed")), (False, 3, {}), "the next pass reads group 101's 3 rows, with no failure")
-        checks.equal(sorted(url for url in fake.urls if url.endswith("/prices")), [BASE + "/101/prices"], "and asked for group 101 only: group 102 was saved")
+        checks.equal((retry.get("skipped"), retry.get("rows"), retry.get("failed")), (False, 4, {}), "the next pass over the same stamp is not skipped: it reads all 4 rows, with no failure")
+        checks.equal(
+            sorted(url for url in fake.urls if url.endswith("/prices")), [BASE + "/101/prices", BASE + "/102/prices"],
+            "and asked for both groups: none was saved",
+        )
         checks.equal(day_of(table(), D1), EXPECT1, "the update is whole: all 4 rows, none doubled")
+        checks.equal(stamps_of(table(), D1), {STAMP1}, "under the one stamp")
         fake.urls.clear()
         third = run(checks, module, fake, LATE, "the third pass")
         if third is None:
@@ -671,7 +677,7 @@ CHECKS = (
     check_daily_prices_failing_group_is_named_and_retried,
     check_daily_prices_unsuccessful_group_fails_and_an_empty_one_does_not,
     check_daily_prices_malformed_group_payload_fails_only_that_group,
-    check_daily_prices_each_group_is_saved_when_it_is_read,
+    check_daily_prices_a_crash_keeps_nothing_of_the_pass,
     check_daily_prices_throttle_waits_then_stops_after_two_answers,
     check_daily_prices_only_category_89_and_the_request_budget,
     check_daily_prices_site_rules_user_agent_and_pause,
