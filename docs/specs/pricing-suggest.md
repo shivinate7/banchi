@@ -97,6 +97,9 @@ recommendations.
 - **Selling fast: fold into market moved.** It fires on 12 of 498. Its data is market-wide demand, not
   our listing's sales, and an unlisted card gets no daily read (DEBT69, the price refresh
   schedule). Show units sold as evidence on a market-moved raise, not as its own trigger.
+- **A suggestion moves in its reason's direction.** Only market moved up may raise; a market-up
+  row whose rule price is under its ask stays at its ask. Known limit: when market up fires beside
+  unsold or undercut, the lowering is dropped and the row stays at its ask, on screen.
 - **Outside signal: a slot, not a trigger.** A reason line such as "meta: played in a winning
   deck" can carry a signal from outside, like the Riftbound meta research. Nothing builds it now.
 
