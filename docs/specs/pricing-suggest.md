@@ -138,16 +138,47 @@ present a fixed or derived figure:
 - No fee model. A floor computed from TCGplayer's fees needs the owner's real fee rate.
 - No bulk-lot path.
 
-## 9. More tools: open questions
+## 9. More tools
 
-The owner asked for "more tools at hand". Several exist already. These questions wait on the
-owner's word.
+The owner asked for "more tools at hand". Several exist already. The owner's rulings and the
+open questions:
 
-| Tool | What exists | What is missing | Recommendation |
-|---|---|---|---|
-| Price history | A trend line on each row (`PriceTrend`). The full chart on the product sheet, one press away (D278, one product view, two frames). | Nothing on the list itself beyond the trend line. | Keep the sheet. A row that grows in place breaks D313 (nothing moves unless the person moved it). |
-| Comparable sales | Per period: copies sold, sale count, lowest and highest sale price (`pipeline/pricehistory.py`). | Single sales. The source never gives "what the last three sold for". | Show the sold range on each suggestion, such as "14 sold in 30 days, $3.10 to $4.25". |
-| Drift alerts | `PriceMovers` flags live cards that moved more than 10% since first seen. | It is a read you open, not a prompt to act. | Fold it into the market-moved suggestion. A Home count or a notification is the owner's call. |
-| Net after fees | Nothing. Section 8 leaves out a fee model. | The owner's real fee rate. | Open. |
-| Price many rows at once | Presets on the rule. | A select-and-apply over chosen rows. | Open. |
-| Outside signals | Nothing. | A reason slot only. | Keep the slot in the mockup. Build nothing. |
+| Tool | What exists | Status |
+|---|---|---|
+| Price history | A trend line on each row (`PriceTrend`). The full chart on the product sheet, one press away (D278, one product view, two frames). | **Open: the owner decides from mockups.** Three options: keep the sheet, the row expands, a side panel. Drawn as the history files in `docs/design/pricing-suggest/`. |
+| Comparable sales | Per period: copies sold, sale count, lowest and highest sale price (`pipeline/pricehistory.py`). No single sales. | **Ruled: both.** Show the sold range on each suggestion, such as "14 sold in 30 days, $3.10 to $4.25". Also plan research into single-sale sources. A separate research lane surveys eBay, PriceCharting and Card Ladder. |
+| Drift alerts | `PriceMovers` flags live cards that moved more than 10% since first seen. | **Open.** The owner called the current read "really bad" and asked for fresh options, beyond a row, a Home line or a notification. Section 9a lists them. |
+| Net after fees | Nothing. Section 8 leaves out a fee model. | **Ruled: plan it.** Needs the owner's real fee rate. |
+| Price many rows at once | Presets on the rule. | **Ruled: plan it.** Select rows, apply one change, preview, confirm. |
+| Watch list | A hold watch ("alert when market is above"), printed only by the join report. | **Ruled: plan it.** It grows from the hold watch. |
+| Outside signals | Nothing. | **Ruled: plan it.** A reason slot first, for signals like the Riftbound meta research. |
+| AI-assisted tools | Nothing for pricing. | **Ruled: candidates to plan.** See section 9b. |
+
+## 9a. Drift alerts: fresh options
+
+These go to the owner as one decision. Each changes what drift is, not only where it shows.
+
+1. **Money at stake.** Drift reads in dollars, not percent: "You are $42 under market on 19
+   listings, and $18 over on 31." Rows rank by dollars at stake, so a 40% move on a $0.30
+   card falls below a 10% move on a $40 card. One press opens those rows.
+2. **Ride the send.** Every send already opens a preview. It also offers the top drifted
+   listings, ranked by money at stake, to send with it. Nothing new to remember, and drift is
+   fixed in a step the owner already takes.
+3. **A short weekly session.** Once a week Banchi lays out a fixed, small set of the moves
+   that matter most, such as 15. The owner clears it in a few minutes, and it is done until next
+   week. A clear end, not an alert that never stops.
+4. **Explained moves.** Each drifted card gets one line on why it moved, from its history and
+   any outside signal: "Up since its set's reprint was announced", "Played in a winning deck".
+   It pairs with any of the first three.
+
+## 9b. AI-assisted candidates
+
+Never guess a price (CLAUDE.md, hard rules). Each candidate gives evidence or a preview. None
+sets a price without the owner's press.
+
+- **Why it moved.** Section 9a, option 4.
+- **Plain-words bulk change.** The owner types "lower every Riftbound common under $1 by 10%".
+  The tool shows the rows and the dollar change, and the owner confirms.
+- **Near matches for a card with no market price.** It lists sales of the closest printings
+  as evidence in Needs you. The owner types the price.
+- **A weekly pricing note.** One paragraph: what moved, what sold, what sits.
