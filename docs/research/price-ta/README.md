@@ -137,6 +137,9 @@ No slab history exists in this store yet.
   the store held or sold. No large free history was found: TCGCSV withdrew its archive.
   Widening this store's archive sweep to every card in a set would add one year of sales and
   volume. A daily read of TCGCSV's current prices would build a whole-set history from now on.
+- **Chosen next (the orchestrator's pick, not an owner ruling):** both, the sweep first. The
+  sweep adds every Riftbound SKU to the archive sweep. Then a daily read of TCGCSV's current
+  Riftbound prices rides the existing daily price job.
 - **More months of live exports.** Finding 4 needs a dozen or more non-overlapping windows to be
   trusted. The daily price job already collects them; time alone fixes this.
 - **More set releases.** Four Riftbound sets cannot pin how deep a new set falls. Each new
