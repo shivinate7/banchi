@@ -2821,6 +2821,9 @@ export type PricingWorklist = {
    *  newest live export lists with copies, in group order. Read off disk, nothing fetched.
    *  Optional for a recorded demo bundle that predates it; the real server always answers it. */
   live?: LiveListing[]
+  /** Set when the price settings cannot be read and no run is on disk: `live` is then empty
+   *  rather than drawn from default settings. */
+  error?: 'corpus_unreadable'
 }
 
 /** The three groups of the one list, top to bottom (`docs/specs/pricing-suggest.md`, section 3). */
@@ -4823,7 +4826,13 @@ export type SendsStatus = {
 /** A live send record the server cannot read. Only its indexed facts survive. */
 export type UnreadableClaim = { key: string; kind: string; started_at: string }
 
-export type SendAnswer = { send: SendSummary; console: string }
+export type SendAnswer = {
+  send: SendSummary
+  console: string
+  /** The SKUs of kept suggestions left out because the card is live and held (its take-off is a
+   *  row of its own). Absent when none. */
+  held?: string[]
+}
 
 export type LiveCheckAnswer = {
   ran: boolean

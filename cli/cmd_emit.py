@@ -667,6 +667,9 @@ def _named_prices(path) -> tuple:
         said = json.loads(Path(path).read_text(encoding="utf-8"))
         if isinstance(said, list):
             said = {"prices": said, "moves": []}
+        skus = [str(row["sku"]) for row in said.get("prices") or []]
+        if len(set(skus)) != len(skus):
+            raise PriceRefused("the named prices name a card twice; each card gets one price")
         prices = {
             str(row["sku"]): (str(row["price"]), None if row.get("was") in (None, "") else str(row["was"]))
             for row in said.get("prices") or []

@@ -32,6 +32,9 @@ UNDERCUT = Decimal("0.10")
 
 MARKET_MOVED, UNSOLD, UNDERCUT_BY_OTHERS = "market_moved", "unsold", "undercut"
 
+#: The `source` a worklist row carries when it is a suggestion (the screen's word for it).
+SOURCE = "Suggested"
+
 
 def check_setting(value, default: Decimal, name: str) -> Decimal:
     """A stored `limit` or `value_line` as a positive `Decimal`; `None` reads the default.
@@ -161,5 +164,5 @@ def review(listings: list, policy: dict, today: str) -> dict:
             group, reason = "needs_you", "{0}; at or above {1}".format(reason, pricing.money(value_line))
         else:
             group = "suggested"
-        out[group].append(_row(listing, "Suggested", priced, reason))
+        out[group].append(_row(listing, SOURCE, priced, reason))
     return out

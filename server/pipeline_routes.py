@@ -161,7 +161,7 @@ from pipeline import holdings  # noqa: E402
 from pipeline import movers as price_movers  # noqa: E402
 from pipeline import pricerefresh  # noqa: E402
 from pipeline import stockimages  # noqa: E402
-from store.pricearchive import RANGE_WIDTH_DAYS, PriceArchive  # noqa: E402
+from store.pricearchive import RANGE_WIDTH_DAYS, Bucket, PriceArchive  # noqa: E402
 # THE SAME RULE, AND IT IS WHY THE RATES MOVED OUT OF `cli/cmd_identify.py`. `identify/cost.py`
 # reaches `decimal` and nothing else, and `identify/__init__.py` is a docstring with no imports
 # in it, so this costs one stdlib module. The command module could not be imported for them:
@@ -3444,14 +3444,6 @@ def _unreachable(inventory: master.Inventory, review_count: int, root: Path) -> 
     }
 
 
-def _readable_corpus() -> "corpus.Corpus":
-    """The corpus, or an empty one when it cannot be read: the worklist must still draw."""
-    try:
-        return corpus.Corpus.read()
-    except (decisions.MalformedDecisions, ValueError):
-        return corpus.Corpus()
-
-
 def _day_of(stamp: Optional[str]) -> Optional[str]:
     """A store stamp as its US Central day (ISO), or None. `suggest` counts whole days."""
     moment = clock.parse(stamp)
@@ -3460,15 +3452,16 @@ def _day_of(stamp: Optional[str]) -> Optional[str]:
 
 def _market_on(archive: "PriceArchive", sku: str, day: str) -> Optional[str]:
     """The archived market on `day` (ISO) for `sku`: the `month` bucket that holds it, else the
-    `quarter` bucket, else None. One indexed read of the summary table."""
-    held = date.fromisoformat(day)
-    rows = {row.range: row.points for row in archive.summary.where(sku=sku)}
-    for range_ in ("month", "quarter"):
-        for start, market, width in rows.get(range_, ()):
-            begin = date.fromisoformat(start)
-            if begin <= held < begin + timedelta(days=width):
-                return market
-    return None
+    `quarter` bucket, else None. One indexed read of the summary table. The window rule is
+    `realized.bucket_on`'s: this only lifts the summary's points into the buckets it takes."""
+    held = [
+        Bucket(sku, 0, row.range, width, start, market, 0, 0, None, None, 0)
+        for row in archive.summary.where(sku=sku)
+        if row.range in ("month", "quarter")
+        for start, market, width in row.points
+    ]
+    found = realized.bucket_on(day, held)
+    return found.market if found else None
 
 
 def _live_wire(snapshot: Optional[Snapshot], book: "corpus.Corpus") -> List[dict]:
@@ -3585,7 +3578,14 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
     """
     root = files.runs_dir()
     if not root.is_dir():
+        # A CORPUS THAT CANNOT BE READ IS SAID, NEVER REPLACED BY THE DEFAULT POLICY: the owner's
+        # settings decide which listing is a suggestion, so defaults would draw a guess.
+        try:
+            live, unreadable = _live_wire(None, corpus.Corpus.read()), {}
+        except (decisions.MalformedDecisions, ValueError):
+            live, unreadable = [], {"error": "corpus_unreadable"}
         return {
+            **unreadable,
             "runs": [],
             "skus": [],
             "roster": [],
@@ -3594,7 +3594,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
             "threshold": None,
             "floor": None,
             "unreachable": {"captured": 0, "in_review": 0, "unjoined": [], "reallocated": []},
-            "live": _live_wire(None, _readable_corpus()),
+            "live": live,
         }
 
     names = _box_names()

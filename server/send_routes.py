@@ -84,7 +84,7 @@ from typing import Any, Callable, Dict, Iterator, List, NamedTuple, NoReturn, Op
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from cli import cmd_reprice, resolve  # noqa: E402
-from pipeline import corpus, merge, reprice, sendguard, suggest, tcgcsv  # noqa: E402
+from pipeline import corpus, decisions, merge, reprice, sendguard, suggest, tcgcsv  # noqa: E402
 from server import pipeline_routes  # noqa: E402
 from server import tcg_export  # noqa: E402
 from server import tcg_import  # noqa: E402
@@ -1257,6 +1257,13 @@ def _named_prices(payload: dict) -> List[dict]:
                 "prices_invalid",
                 "Each named price needs a TCGplayer id and a price above zero.",
             )
+        # A SKU NAMED TWICE HAS NO ONE PRICE: a dict built from the list would keep the last row.
+        if any(done["sku"] == sku for done in out):
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "prices_invalid",
+                f"{sku} is named twice in the named prices. Each card gets one price.",
+            )
         source = row.get("source")
         if source not in (None, "", postings.SUGGESTED):
             raise PipelineRefusal(
@@ -1376,6 +1383,54 @@ def _refuse_unreadable_claim() -> None:
         ) from None
 
 
+def _refuse_stale_readings(payload: dict, directories: Sequence[Path], drawn: Any, step: str) -> None:
+    """A press with no run, for kept suggestions alone, refuses `readings_stale` when a reading
+    behind one was written on an earlier US Central day (a send never prices from an export older
+    than today, the rule `refresh_before_send` holds). A press with a run is refreshed by `refresh_before_send` and needs no check here.
+    A suggestion with no reading at all is `suggestion_changed`'s to refuse, not this one's."""
+    if directories:
+        return
+    stale = sorted(
+        row["sku"]
+        for row in payload["prices"]
+        if row.get("source") == postings.SUGGESTED
+        and (reading := drawn.readings.entries.get(row["sku"])) is not None
+        and store_clock.before_today(datetime.fromtimestamp(reading.at, tz=timezone.utc))
+    )
+    if stale:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "readings_stale",
+            f"The market prices behind {', '.join(stale)} are from an earlier day, and a send needs today's. "
+            f"Nothing was {step}. Refresh the prices, then keep the suggestions again.",
+            data={"stale": stale},
+        )
+
+
+def _leave_out_held(payload: dict, directories: Sequence[Path], live_before: Dict[str, int]) -> Tuple[dict, List[str]]:
+    """`(payload, held)`: the payload without the kept suggestions on a SKU that is live and held.
+
+    A held SKU's live copies are taken off in a row of their own (`cmd_emit._takeoffs`), and a
+    price-only row beside it is what TCGplayer's "Duplicate TCGplayer Id" gate refuses. So the
+    suggestion stays out of the file, and the answer names the SKU. A typed price is the owner's
+    own choice and is never dropped here. The held test is emit's: a withheld answer with one
+    of `decisions.WITHHOLD_REASONS`."""
+    kept = {row["sku"] for row in payload["prices"] if row.get("source") == postings.SUGGESTED}
+    if not kept:
+        return payload, []
+    try:
+        hold = corpus.Corpus.read().for_run(directories[-1].name if directories else None).withheld()
+    except (OSError, ValueError):
+        return payload, []  # an unreadable corpus is `emit`'s to refuse by name, with the same answer
+    held = sorted(
+        sku for sku in kept
+        if sku in hold and hold[sku].reason in decisions.WITHHOLD_REASONS and live_before.get(sku, 0) > 0
+    )
+    if not held:
+        return payload, []
+    return dict(payload, prices=[row for row in payload["prices"] if row["sku"] not in held]), held
+
+
 def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> None:
     """Refuse a press whose kept suggestions the server does not stand behind.
 
@@ -1408,7 +1463,7 @@ def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> N
             f"Banchi could not check these suggestions because {files.plain_cause(exc)}, so nothing was {step}. Try again.",
         ) from None
     rebuilt = {
-        row["sku"]: row["price"] for row in pipeline_routes._live_wire(drawn, book) if row["source"] == "Suggested"
+        row["sku"]: row["price"] for row in pipeline_routes._live_wire(drawn, book) if row["source"] == suggest.SOURCE
     }
     names = {tcgcsv.sku_cell(row): row.get(tcgcsv.NAME_COLUMN) for row in fresh.rows}
     over = sendguard.suggestions_past_cap({s: v for s, v in kept.items() if s in rebuilt}, prices, limit, names)
@@ -1442,10 +1497,12 @@ def _send(payload: dict, directories: Sequence[Path], download: bool, refreshed:
     # The suggestions rebuild from the store as the screen drew it: the fetch below rewrites the
     # live readings, and a suggestion must not be confirmed off the very export it is sent into.
     drawn = Store().read()
+    _refuse_stale_readings(payload, directories, drawn, step)
     live_name, live_path = _fetch_live(step)
     _reconcile(live_path, step)
     live_before = _live_quantities(live_path, step)
     _refuse_past_cap(payload, live_path, step, drawn)
+    payload, held = _leave_out_held(payload, directories, live_before)
     # NO PRICE WAIT (removed in round 4). A mark-down's `reprice apply --write` writes its new
     # price into the price file, so a listing row carries the new price, never the old one.
 
@@ -1479,7 +1536,8 @@ def _send(payload: dict, directories: Sequence[Path], download: bool, refreshed:
     # receipt naming them rather than a claim nobody can see.
     _write(directory, record)
     try:
-        return _write_and_send(payload, directories, download, record, live_path, live_before)
+        answer = _write_and_send(payload, directories, download, record, live_path, live_before)
+        return dict(answer, held=held) if held else answer
     except Exception as caught:  # noqa: BLE001 — every failure after the receipt ends known
         _settle(directory, caught)
         raise
