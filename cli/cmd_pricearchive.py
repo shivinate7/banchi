@@ -185,9 +185,11 @@ def _sweep(args, say) -> int:
 
     ledger_refusals: Dict[str, str] = {}
     fallback_rows: Dict[str, dict] = {}
+    # Read once: the catalog tail, `resolve_by_sku` and every chunk's `sweep` share it.
+    export_index = archive_walk.merged_export_rows_by_sku()
     rows = archive_walk.rows_from_store(
         market=market, refusals=ledger_refusals, fallback_rows=fallback_rows,
-        include_catalog=True,
+        include_catalog=True, export_rows=export_index,
     )
     ranges = pricehistory.RANGES
     if not rows:
@@ -217,7 +219,6 @@ def _sweep(args, say) -> int:
     # (D254, owner's ruling 2026-09-23). Read once, here, so
     # every chunk's own `sweep()` call sees the same archive and the same export cache
     # rather than each chunk re-deriving `export_rows` off disk.
-    export_index = archive_walk.merged_export_rows_by_sku()
     _resolved, _verified, tiers = archive_walk.resolve_by_sku(rows, current, export_index)
     tier_counts: Dict[str, int] = {}
     for tier in tiers.values():
