@@ -53,7 +53,7 @@ not a ruling.
     Pick: as drawn.
 14. **Price source.** Each row says Rule, You, Floor or Suggested. "You" has its own tone, and a
     typed price field carries today's "your price" check. Pick: as drawn.
-15. **Two spans, each labelled.** The trend column covers 30 days ("Trend, 30 days"). A
+15. **Two spans, each labeled.** The trend column covers 30 days ("Trend, 30 days"). A
     market-moved reason covers the time since listing ("since listed"). Pick: as drawn.
 16. **Row shape.** The reason runs on its own line under the name and figures, so it fits on one
     line at 1440 and 820. At 820 the references take their own line. The name link is 40px tall.

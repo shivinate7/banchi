@@ -1,8 +1,9 @@
 # Pricing by suggestion: one list, one rule, you confirm
 
 **STATUS: DIRECTION CHOSEN. NOT BUILT.** The owner picked this direction in a pricing ideation
-session. The owner asked for mockups and a judgment of each trigger before a build. No build
-starts until the owner signs off a mockup.
+session. The one-list mockup is drawn: `docs/design/pricing-suggest/list.html`, with its notes
+and renders at 1440 and 820, light and dark. Section 4b judges each trigger. No build starts
+until the owner signs off the mockup.
 
 The problem: `#/pricing` has two tabs with two rule systems. Unsent cards use a rule and a
 cut-off. Live listings use days unsold, a percent under the asking price and a dollar cap. One
