@@ -243,7 +243,7 @@ export function InventorySets({ reloadToken = 0 }: { readonly reloadToken?: numb
         {/* The count stays when the filter is on: it is what the filter hides, so it holds still (D313). */}
         <div>
           <HideToggle checked={hideMaster} onChange={(next) => setMasterParam(next ? 'open' : '')} count={collected}>
-            Hide my master set
+            Hide your master set
           </HideToggle>
         </div>
       </div>
