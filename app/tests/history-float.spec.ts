@@ -1,0 +1,258 @@
+// Protects: The floating price-history card opens by focus or by its door, sits above its row by default, covers neither the row nor the next price field, keeps focus where its mode says, holds its size while history loads, and draws the product chart with the owner's asking step line and the suggestion dot.
+// Governs: D313, D278, D227
+import { test, expect, type Locator, type Page } from '@playwright/test'
+import { sealEveryTest } from './shell'
+import { setViewport } from './phoneSwitch'
+import { productHistory } from './routeFixtures'
+import { markNow, readShifts, sumOf, watchShifts } from './layoutShift'
+import { scanMoneyFace } from './moneyFace'
+import type { AskingPosting, ProductHistoryPayload } from '../src/types'
+
+/* THE CONTRACT THIS FILE PINS. `#/gallery` and `app/src/HistoryFloat.tsx` must match it.
+ *
+ * GALLERY. `[data-kit-section="history-float"]` on `#/gallery` holds exactly three rows, each
+ * `[data-float-row="<i>"]` with one price field `[data-float-price]` and one history door
+ * `[data-float-door]`. Row 1 is the anchor in every case, row 0 is above it and row 2 below.
+ * The price field is each row's only tab stop, so the door is `tabIndex={-1}`. Row 1 carries a
+ * suggestion, and the sales fills are non-empty, so the chart has marks to assert. The section is not the last on the gallery, so a row can scroll to the top.
+ *
+ * CARD. `[data-history-float]`, mounted only while open (closed means absent). Attributes:
+ *   data-mode       "focus" | "door"
+ *   data-placement  "above" | "below"
+ *   data-state      "loading" | "ready"
+ *   data-row        the index of the row it is anchored to
+ * A focus-opened card has no tab stop, so its close button is `tabIndex={-1}`.
+ * Its close button is `[data-history-float-close]`.
+ *
+ * PROPS (HistoryFloat.tsx). `sku`, `anchor` (the row element), `mode` ("focus" | "door"),
+ * `fills` (the owner's sales for the chart), `suggestion` (a money string, optional), `onClose`,
+ * and `restoreFocus` (the door, which takes focus back in door mode). The card loads history
+ * with `getProductHistory(sku)`, so its loading state is the gap before that answer.
+ *
+ * CHART MARKS INSIDE THE CARD. `.producthistory-chart`, `.producthistory-market-line` and
+ * `.producthistory-spread` and `.producthistory-fill-mark` come from `ProductChart`. The asking
+ * price is `[data-float="asking"]`, a dashed path with H and V runs (a step). The suggestion is
+ * `[data-float="suggestion"]`, one circle.
+ */
+
+sealEveryTest({ store: true })
+
+const GALLERY = '/#/gallery'
+const CARD = '[data-history-float]'
+const HISTORY = /\/pipeline\/products\/[^/]+\/history$/
+const SIZES = [
+  { width: 1440, height: 900 },
+  { width: 820, height: 900 },
+] as const
+
+const row = (page: Page, i: number) => page.locator(`[data-float-row="${i}"]`)
+const priceOf = (page: Page, i: number) => row(page, i).locator('[data-float-price]')
+const doorOf = (page: Page, i: number) => row(page, i).locator('[data-float-door]')
+const card = (page: Page) => page.locator(CARD)
+
+type Box = { x: number; y: number; width: number; height: number }
+
+/* Two boxes share area. Edges that only touch do not count. */
+const meets = (a: Box, b: Box) =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+
+async function boxOf(loc: Locator): Promise<Box> {
+  const box = await loc.boundingBox()
+  expect(box, 'the element has a box').not.toBeNull()
+  return box!
+}
+
+/* Rows 0 to 2 in page coordinates, so a scroll that Tab causes does not read as the list moving. */
+async function listGeometry(page: Page): Promise<Box[]> {
+  return page.evaluate(() =>
+    [0, 1, 2].map((i) => {
+      const r = document.querySelector(`[data-float-row="${i}"]`)!.getBoundingClientRect()
+      return { x: r.x, y: r.y + window.scrollY, width: r.width, height: r.height }
+    }),
+  )
+}
+
+async function openByFocus(page: Page, i = 1) {
+  await priceOf(page, i).click()
+  await expect(card(page)).toHaveAttribute('data-mode', 'focus')
+}
+
+/* Two asking postings, so the step line has a change to draw. */
+function payloadWithAsking(): ProductHistoryPayload {
+  const asking: AskingPosting[] = [
+    { at: Date.UTC(2026, 6, 20) / 1000, price: '14.00', source: 'emit', replaced: null },
+    { at: Date.UTC(2026, 7, 3) / 1000, price: '16.50', source: 'suggested', replaced: '14.00' },
+  ]
+  return { ...productHistory(), asking_postings: asking }
+}
+
+for (const size of SIZES) {
+  test.describe(`at ${size.width} wide`, () => {
+    test.beforeEach(async ({ page }) => {
+      await setViewport(page, size)
+      await watchShifts(page)
+      await page.route(HISTORY, (route) =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payloadWithAsking()) }),
+      )
+      await page.goto(GALLERY)
+      await expect(page.locator('[data-kit-section="history-float"]')).toBeVisible()
+    })
+
+    test('the card draws the product chart, the asking step line and the suggestion dot', async ({ page }) => {
+      await openByFocus(page)
+      const c = card(page)
+      await expect(c.locator('.producthistory-chart')).toHaveCount(1)
+      await expect(c.locator('.producthistory-market-line')).toHaveCount(1)
+      await expect(c.locator('.producthistory-spread').first()).toBeAttached()
+      await expect(c.locator('.producthistory-fill-mark').first()).toBeAttached()
+
+      const asking = c.locator('[data-float="asking"]')
+      await expect(asking).toHaveCount(1)
+      const dash = await asking.evaluate((el) => getComputedStyle(el).strokeDasharray)
+      expect(dash, 'the asking line is dashed').not.toBe('none')
+      const d = (await asking.getAttribute('d')) ?? ''
+      expect(d, 'the asking line is a step: M, then only H and V runs').toMatch(/^M[^A-Za-z]*(?:[HV][^A-Za-z]*)+$/)
+
+      await expect(c.locator('[data-float="suggestion"]')).toHaveCount(1)
+    })
+
+    test('by default the card opens above its row and covers neither the row nor the next price field', async ({ page }) => {
+      await row(page, 1).evaluate((el) => el.scrollIntoView({ block: 'end' }))
+      expect((await boxOf(row(page, 1))).y, 'there is room above the row').toBeGreaterThan(400)
+      await openByFocus(page)
+
+      await expect(card(page)).toHaveAttribute('data-placement', 'above')
+      const c = await boxOf(card(page))
+      const anchor = await boxOf(row(page, 1))
+      expect(c.y + c.height, 'the card ends above the row').toBeLessThanOrEqual(anchor.y)
+      expect(meets(c, anchor), 'the card does not cover the row').toBe(false)
+      expect(meets(c, await boxOf(priceOf(page, 2))), 'the card does not cover the next price field').toBe(false)
+    })
+
+    test('with no room above, the card opens below and covers no price field', async ({ page }) => {
+      await row(page, 1).evaluate((el) => el.scrollIntoView({ block: 'start' }))
+      expect((await boxOf(row(page, 1))).y, 'the row sits at the top, so there is no room above').toBeLessThan(120)
+      await openByFocus(page)
+
+      await expect(card(page)).toHaveAttribute('data-placement', 'below')
+      const c = await boxOf(card(page))
+      const anchor = await boxOf(row(page, 1))
+      expect(c.y, 'the card starts below the row').toBeGreaterThanOrEqual(anchor.y + anchor.height)
+      expect(meets(c, anchor), 'the card does not cover the row').toBe(false)
+      /* Clear of the price column: no price field in the list sits under it. */
+      for (const i of [0, 1, 2]) {
+        expect(meets(c, await boxOf(priceOf(page, i))), `the card does not cover price field ${i}`).toBe(false)
+      }
+    })
+
+    test('a card opened by focus takes no focus, and nothing in the list moves', async ({ page }) => {
+      const before = await listGeometry(page)
+      await priceOf(page, 1).click()
+      await expect(card(page)).toHaveAttribute('data-mode', 'focus')
+
+      await expect(priceOf(page, 1)).toBeFocused()
+      const focusInCard = await page.evaluate(() => !!document.activeElement?.closest('[data-history-float]'))
+      expect(focusInCard, 'focus stayed in the price field').toBe(false)
+      expect(await listGeometry(page)).toEqual(before)
+    })
+
+    test('Tab moves the card to the next row, and the list does not move', async ({ page }) => {
+      await openByFocus(page)
+      const before = await listGeometry(page)
+
+      await page.keyboard.press('Tab')
+      await expect(priceOf(page, 2)).toBeFocused()
+      await expect(card(page)).toHaveAttribute('data-row', '2')
+      await expect(card(page)).toHaveAttribute('data-mode', 'focus')
+      expect(await listGeometry(page)).toEqual(before)
+    })
+
+    test('the door opens the card and takes focus into it, and Esc gives focus back to the door', async ({ page }) => {
+      await doorOf(page, 1).click()
+      await expect(card(page)).toHaveAttribute('data-mode', 'door')
+
+      const inside = await page.evaluate(() => !!document.activeElement?.closest('[data-history-float]'))
+      expect(inside, 'focus moved into the card').toBe(true)
+
+      await page.keyboard.press('Escape')
+      await expect(card(page)).toHaveCount(0)
+      await expect(doorOf(page, 1)).toBeFocused()
+    })
+
+    test('Esc closes a card opened by focus, and the field keeps focus', async ({ page }) => {
+      await openByFocus(page)
+      await page.keyboard.press('Escape')
+      await expect(card(page)).toHaveCount(0)
+      await expect(priceOf(page, 1)).toBeFocused()
+    })
+
+    test('focus leaving the price fields closes a card opened by focus', async ({ page }) => {
+      await priceOf(page, 2).click()
+      await expect(card(page)).toHaveAttribute('data-mode', 'focus')
+
+      await page.keyboard.press('Tab')
+      await expect(card(page)).toHaveCount(0)
+    })
+
+    test('the close button closes the card and gives focus back to the door', async ({ page }) => {
+      await doorOf(page, 1).click()
+      await card(page).locator('[data-history-float-close]').click()
+      await expect(card(page)).toHaveCount(0)
+      await expect(doorOf(page, 1)).toBeFocused()
+    })
+
+    test('the card holds its size from first paint while history loads', async ({ page }) => {
+      let release!: () => void
+      const gate = new Promise<void>((done) => (release = done))
+      await page.route(HISTORY, async (route) => {
+        await gate
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payloadWithAsking()) })
+      })
+
+      const t0 = await markNow(page)
+      await priceOf(page, 1).click()
+      await expect(card(page)).toHaveAttribute('data-state', 'loading')
+      const first = await boxOf(card(page))
+
+      release()
+      await expect(card(page)).toHaveAttribute('data-state', 'ready')
+      const loaded = await boxOf(card(page))
+      expect(loaded.width, 'width holds while history loads').toBeCloseTo(first.width, 0)
+      expect(loaded.height, 'height holds while history loads').toBeCloseTo(first.height, 0)
+      const { shifts } = await readShifts(page)
+      expect(sumOf(shifts.filter((s) => s.at >= t0)), 'nothing on the page moved while history loaded').toBe(0)
+    })
+
+    test('the card draws from --bn tokens, and every price carries bn-money', async ({ page }) => {
+      await openByFocus(page)
+      /* A probe takes the token's own colour, so the card matches a token and no literal. The
+         literal ban itself is `make docs-audit`'s `raw color` row, which reads the source. */
+      const surface = await page.evaluate(() => {
+        const probe = document.createElement('div')
+        probe.style.backgroundColor = 'var(--bn-surface)'
+        document.body.appendChild(probe)
+        const want = getComputedStyle(probe).backgroundColor
+        probe.remove()
+        return { got: getComputedStyle(document.querySelector('[data-history-float]')!).backgroundColor, want }
+      })
+      expect(surface.got, 'the card surface is the --bn-surface token').toBe(surface.want)
+      /* Every dollar figure in the card is drawn in the mono face, which is what the owner sees. */
+      const face = await page.evaluate(scanMoneyFace, CARD)
+      expect(face.noView, 'the card was scanned').toBe(false)
+      expect(face.text, 'a dollar figure in the card is not drawn in mono').toEqual([])
+
+      /* And each dollar figure carries the class itself, not only the face it inherits. */
+      const bare = await card(page).evaluate((root) => {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+        const out: string[] = []
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+          const t = n.textContent ?? ''
+          if (/\$\d/.test(t) && !n.parentElement?.closest('.bn-money')) out.push(t.trim())
+        }
+        return out
+      })
+      expect(bare, 'every dollar figure in the card carries bn-money').toEqual([])
+      expect(await card(page).locator('.bn-money').count(), 'the four prices are there').toBeGreaterThanOrEqual(4)
+    })
+  })
+}

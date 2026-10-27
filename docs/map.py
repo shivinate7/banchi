@@ -10174,6 +10174,15 @@ COMPONENTS = [
                         "harness test; `make design-check` runs it.",
                 "governed_by": ["D278", "D212", "D219", "D227"],
             },
+            "tests/history-float.spec.ts": {
+                "does": "the floating price-history card on `#/gallery`'s `history-float` "
+                        "section: opens by focus or by its door, sits above its row by default "
+                        "and below when there is no room, covers neither its row nor a price "
+                        "field, takes focus only in door mode, holds its size while history "
+                        "loads, and draws the product chart with the asking step line and the "
+                        "suggestion dot, in tokens and `.bn-money`. Two sizes, 11 cases each.",
+                "governed_by": ["D313", "D278", "D227"],
+            },
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
                         "#/runs at all, that the preview asks for no write, and that the settle "
