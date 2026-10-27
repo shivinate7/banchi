@@ -46,7 +46,7 @@ so a set's master list is whole. Their `box` is null, so a tap uses the existing
 
 Inside the Sets view, under the set picker:
 
-- **A filter, "Not in my master set".** It lives in the URL, as `?master=open` (D285, filter,
+- **A filter, "Hide my master set"** (the kit toggle names what it hides). It lives in the URL, as `?master=open` (D285, filter,
   sort and search live in the URL). Off by default. On, it hides every collected row.
 - **Each tile carries one of three marks**, drawn by CSS and named in words, never a typed dot
   (D218, a typed dot is a defect):
