@@ -257,7 +257,7 @@ const RECORDED = {
     'ingestOrders', 'pullCopy', 'undoPull', 'readShippingExport', 'forgetShippingExport',
     'moveCard', 'moveCards', 'putPricingCorpus', 'emitMerged', 'reconcileLive', 'reclaimBoxPhotos',
     'markdownListings', 'applyMarkdown',
-    'masterTakeOff', 'pressOwedTakeOffs',     // master-set.md section 5: a pull's TCGplayer take-off, one press or all owed
+    'masterTakeOff',                          // master-set.md section 5: a pull's TCGplayer take-off, one press
     // The mass-clear and its inverse (D168), recorded by the
     // deliberate act this table's header asks for rather than left to widen the drift it
     // already names. On their own line so a branch adding its own writes does not conflict

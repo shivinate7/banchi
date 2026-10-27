@@ -1232,18 +1232,6 @@ export type OwedTakeOff = MasterTakeOff & {
   index: number
 }
 
-/** What `POST /pipeline/sends/owed` answers for one entry: its state after the press, or why the
- *  press was refused (`refused` is the code, `message` the sentence). */
-export type OwedTakeOffResult = {
-  name: string
-  sku: string
-  box: number
-  index: number
-  take_off: MasterTakeOff | null
-  refused: string | null
-  message: string | null
-}
-
 /** What `POST /inventory/<box>/<index>/take-off` answers: the card's state, and the receipt when a row went. */
 export type MasterTakeOffAnswer = { take_off: MasterTakeOff; send?: SendSummary }
 

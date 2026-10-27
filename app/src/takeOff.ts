@@ -1,5 +1,5 @@
 import { describeFailure, masterTakeOff, type Failure } from './server'
-import type { MasterTakeOff, OwedTakeOffResult } from './types'
+import type { MasterTakeOff } from './types'
 
 /* THE MASTER-SET TAKE-OFF'S ONE VOCABULARY (`docs/specs/master-set.md`, section 5), read by the
  * retire receipt (`TakeOffLine.tsx`) and the owed list on the send card (`SendCard.tsx`). A
@@ -54,10 +54,4 @@ export async function pressTakeOff(box: number, index: number): Promise<TakeOffO
   } catch (err) {
     return refused(describeFailure(err))
   }
-}
-
-/** One entry of `POST /pipeline/sends/owed`, answered. */
-export function outcomeOfOwed(result: OwedTakeOffResult): TakeOffOutcome {
-  if (result.take_off !== null) return afterPress(result.take_off, null)
-  return refused({ code: result.refused ?? 'unknown', message: result.message ?? '', kind: 'refusal' })
 }

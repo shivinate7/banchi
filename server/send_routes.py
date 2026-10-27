@@ -3202,7 +3202,6 @@ def _master_take_off(box: int, index: int, card) -> dict:
 # is no indexed column), and that send read is budgeted at a constant cost per call.
 
 OWED_STATES = (TAKE_OFFERED, TAKE_FAILED, TAKE_NO_SESSION)
-TAKE_OFF_ERROR = "take_off_error"  # an entry of the owed press that raised something other than a refusal
 
 
 def _owed_entries() -> List[dict]:
@@ -3240,34 +3239,3 @@ def do_owed_take_offs() -> dict:
     the store and the receipts and opens no socket. `no_session` entries are listed (with no
     press) so they show once a sign-in exists."""
     return {"owed": _owed_entries()}
-
-
-def do_press_owed_take_offs(payload: dict) -> dict:
-    """`POST /pipeline/sends/owed` — press every owed take-off on one confirm.
-
-    Each entry goes through `do_master_take_off` on its own: its own live read, its own receipt,
-    the one-outstanding-per-SKU rule. A refusal stops that entry only, and every entry is answered.
-    """
-    if payload.get("confirm") is not True:
-        raise PipelineRefusal(
-            HTTPStatus.BAD_REQUEST,
-            "confirm_required",
-            "A take-off reaches TCGplayer and lowers a live listing, so it needs your confirmation. Nothing was sent.",
-        )
-    results = []
-    for entry in _owed_entries():
-        said = {key: entry[key] for key in ("name", "sku", "box", "index")}
-        try:
-            answer = do_master_take_off(entry["box"], entry["index"], {"confirm": True})
-        except PipelineRefusal as refusal:
-            results.append(dict(said, take_off=None, refused=refusal.code, message=str(refusal)))
-        except Exception as caught:  # noqa: BLE001 — one entry's error must not leave the rest unanswered
-            # `_master_take_off` has already made the receipt say where it stands (`_settle`), so
-            # the entry's failure is the press's unknown, never a retry from here. The catch can
-            # fire after a publish, so the message never says nothing was sent.
-            files.log_cause("owed take-off", caught)
-            results.append(dict(said, take_off=None, refused=TAKE_OFF_ERROR,
-                                message="Banchi could not finish this take-off. Check the card before pressing again."))
-        else:
-            results.append(dict(said, take_off=answer["take_off"], refused=None, message=None))
-    return {"results": results}

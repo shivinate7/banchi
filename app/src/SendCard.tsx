@@ -31,10 +31,10 @@ import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react
 import type { ReactNode } from 'react'
 import { Button, Icon, IconButton, Money, Notice, Pill, Refusal, Retry } from './kit'
 import { atClockTime, clockTime, dayMonth } from './dates'
-import { describeFailure, dismissSendWarning, getOwedTakeOffs, pressOwedTakeOffs, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, takeBackSend } from './server'
+import { describeFailure, dismissSendWarning, getOwedTakeOffs, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, takeBackSend } from './server'
 import type { Failure } from './server'
 import type { EmptySend, LiveMove, OwedTakeOff, PriceChange, RefusedPrice, SendSummary, SendTrim } from './types'
-import { outcomeOfOwed, pressTakeOff, refused, viewOf, type TakeOffOutcome, type TakeOffView } from './takeOff'
+import { pressTakeOff, viewOf, type TakeOffOutcome, type TakeOffView } from './takeOff'
 import { emptySendTitle } from './standing'
 import { current as liveState, refresh as refreshLive, useLiveCheck } from './liveCheck'
 import './SendCard.css'
@@ -214,7 +214,7 @@ function OwedTakeOffsLine({
   setTaking,
 }: {
   readonly owed: readonly OwedTakeOff[]
-  /** The entry key being pressed, `all` for Take All, or null. One press runs at a time. */
+  /** The entry key being pressed, or null. One press runs at a time. */
   readonly taking: string | null
   /** A send or a download is running, so no take-off press is offered. */
   readonly locked: boolean
@@ -234,26 +234,11 @@ function OwedTakeOffsLine({
     setAnswers((held) => ({ ...held, [entryKey(entry)]: outcome }))
     setTaking(null)
   }
-  const pressAll = async () => {
-    setTaking('all')
-    try {
-      const { results } = await pressOwedTakeOffs()
-      setAnswers((held) => ({ ...held, ...Object.fromEntries(results.map((result) => [result.sku, outcomeOfOwed(result)])) }))
-    } catch (err) {
-      const outcome = refused(describeFailure(err))
-      setAnswers((held) => ({ ...held, ...Object.fromEntries(owed.map((entry) => [entryKey(entry), outcome])) }))
-    } finally {
-      setTaking(null)
-    }
-  }
   const press = (entry: OwedTakeOff, label: string, again = false) => (
     <Button size="sm" icon={again ? 'refresh' : undefined} busy={taking === entryKey(entry)} disabled={off} onClick={() => void pressOne(entry)}>
       {label}
     </Button>
   )
-  const pressable = owed.filter((entry) => ['offer', 'failed'].includes(viewOfEntry(entry)))
-  /* TAKE ALL COUNTS ONLY WHAT IS STILL LEFT TO PRESS: an entry that was answered is not asked again. */
-  const pressableCopies = pressable.reduce((sum, entry) => sum + ownedCopies(entry), 0)
   const said = (
     <span className="bn-sr" role="status">
       {taking === null ? '' : 'Taking it off TCGplayer…'}
@@ -312,20 +297,14 @@ function OwedTakeOffsLine({
     )
   }
 
-  /* SEVERAL: one line, one press for all, and a fold. Open, the list floats over the worklist
+  /* SEVERAL: one line and a fold; each entry has its own press, and there is no press for all. Open, the list floats over the worklist
      (`.send-moves`), so the bar keeps its height. */
   const total = owed.reduce((sum, entry) => sum + ownedCopies(entry), 0)
-  const accepted = owed.reduce((sum, entry) => {
-    const answer = answers[entryKey(entry)]
-    return answer?.view === 'sent' ? sum + (answer.taken > 0 ? answer.taken : ownedCopies(entry)) : sum
-  }, 0)
-  const left = owed.reduce((sum, entry) => (['matches', 'sent'].includes(viewOfEntry(entry)) ? sum : sum + ownedCopies(entry)), 0)
-  const answered = owed.some((entry) => answers[entryKey(entry)] !== undefined)
-  const mode = answered ? 'answered' : owed.every((entry) => viewOfEntry(entry) === 'nosession') ? 'nosession' : 'several'
+  const mode = owed.every((entry) => viewOfEntry(entry) === 'nosession') ? 'nosession' : 'several'
   const cards = count(owed.length, 'Card')
   return (
     <Notice
-      tone={mode === 'answered' && left === 0 ? 'ok' : 'warn'}
+      tone="warn"
       compact
       className="send-standing send-owed send-moves"
       title={
@@ -334,22 +313,11 @@ function OwedTakeOffsLine({
           states={{
             several: `TCGplayer still lists ${count(total, 'copy', 'copies')} from your master set.`,
             nosession: `TCGplayer is not signed in, so these ${count(total, 'copy', 'copies')} stay listed. Sign in, then press Refresh.`,
-            answered:
-              left === 0
-                ? accepted > 0
-                  ? `TCGplayer accepted: ${count(accepted, 'copy', 'copies')} ${accepted === 1 ? 'is' : 'are'} off.`
-                  : 'TCGplayer already lists only what you hold. Nothing was sent.'
-                : `TCGplayer accepted ${accepted} of ${count(total, 'copy', 'copies')}. ${left} ${left === 1 ? 'stays' : 'stay'} on this list.`,
           }}
         />
       }
       action={
         <>
-          {pressable.length === 0 ? null : (
-            <Button size="sm" busy={taking === 'all'} disabled={off} onClick={() => void pressAll()}>
-              {`Take All ${pressableCopies} ${pressableCopies === 1 ? 'Copy' : 'Copies'} Off`}
-            </Button>
-          )}
           <Button variant="quiet" size="sm" icon={open ? 'chevronUp' : 'chevronDown'} onClick={() => setOpen((on) => !on)} aria-expanded={open} words="word-only-control">
             {/* THE LABEL HOLDS THE WIDER OF ITS TWO STATES, as the moves list's does. */}
             <span className="send-toggle">
