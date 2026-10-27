@@ -3558,8 +3558,8 @@ function PricingRow({
       <IconButton
         ref={registerHold}
         icon={withheld ? 'unlock' : 'lock'}
-        label={withheld ? 'Release' : 'Hold Back'}
-        name={withheld ? `Release ${sku.name}` : `Hold Back ${sku.name}`}
+        label={withheld ? 'Release' : 'Keep off TCGplayer'}
+        name={withheld ? `Release ${sku.name}` : `Keep ${sku.name} off TCGplayer`}
         kbd="H"
         pressed={withheld}
         className="pricing-hold"
