@@ -103,8 +103,8 @@ sold-price history for the price research in PR #964, not only the owner's own n
 `rank_by_revenue`'s own ranking logic is unchanged. It was already handed every key
 `revenue_by_sku` can answer for (the ranking design's note). Widening the
 subject set only stops most of those keys from being discarded before they reach it.
-`chunk_rows` is unchanged. `pipeline/` still imports nothing new from `store/` beyond what
-`pricearchive.py` already imported. `fixtures/` is untouched.
+`chunk_rows` is unchanged. `pipeline/pricearchive.py` adds one import from `store/`: `files`, for the atomic write
+of the attempts file. `fixtures/` is untouched.
 
 ### The measured reach of this fix
 
