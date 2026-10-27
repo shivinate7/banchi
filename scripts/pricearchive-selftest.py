@@ -38,11 +38,13 @@ import time
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Dict, List
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from cli import cmd_pricearchive  # noqa: E402
 from harness.tests.home import isolated_home  # noqa: E402
 from pipeline import games as games_module  # noqa: E402
 from pipeline import join as join_module  # noqa: E402
@@ -1128,7 +1130,10 @@ def main() -> int:
         # `productview.row_for_sku`'s bare call and the "no market -> cards only" arm above
         # keep their answers. It is independent of `market`: a `skus` row is already
         # export-shaped (`merged_export_rows_by_sku`), so it needs no mirror read.
-        # `cli/cmd_pricearchive.py:_sweep` is NOT covered here, and must pass it.
+        # A second keyword `catalog_limit: int` caps the catalog-only tail, stalest first,
+        # defaulting to the module constant `CATALOG_SKUS_PER_PASS` (600); the cap never
+        # touches the revenue-ranked head. `_sweep` is driven in its preview mode below, which
+        # makes no network call, to see that its own call reaches the default cap.
         print("\n-- pipeline/pricearchive.py: rows_from_store(include_catalog=True) adds every "
               "Riftbound Near Mint SKU the skus table holds --")
         riftbound_line = "Riftbound League of Legends Trading Card Game"
@@ -1150,6 +1155,15 @@ def main() -> int:
                 grade=grade, printing=printing, first_seen=1, last_seen=1,
                 source="export-tcgplayer-20260101-000000-cccccccc.csv", raw=raw,
             )
+
+        def _archive_at(snapshot, sku: str, at: int) -> None:
+            # One bucket in one range per SKU, so "the SKU's newest `at`" has one reading.
+            snapshot.archive.upsert({
+                _key(sku, "month", "2026-01-01"): Bucket(
+                    sku=sku, product_id=42, range="month", width_days=1, start="2026-01-01",
+                    market="5.00", quantity=1, transactions=1, low="5.00", high="5.00", at=at,
+                ),
+            })
 
         with isolated_home():
             catalog_market = MirrorOnlyMarket(
@@ -1212,6 +1226,10 @@ def main() -> int:
                     ("999", riftbound_line, "Catalog Name For 999", "Near Mint"),
                 ):
                     snapshot.skus.entries[sku] = _catalog_sku(sku, product_line, name, condition)
+                # Staleness of the three catalog-only SKUs: "104" never read, "101" read long
+                # ago, "100" read recently. Stalest first is the REVERSE of SKU order.
+                _archive_at(snapshot, "101", 1_000)
+                _archive_at(snapshot, "100", 2_000_000)
             catalog_snapshot = Store().read()
 
             # BASELINE, true today and after: what the old code produces, and where.
@@ -1254,18 +1272,36 @@ def main() -> int:
                "that SKU's own raw row (TCGplayer Id included: readings key on it)",
                wide.get("100"))
 
-            # 2. order: every old subject first and unmoved, catalog-only SKUs after
-            old_count = len(narrow)
-            ok(list(wide)[:old_count] == list(narrow),
-               "every subject the old code produced keeps its place and comes first, "
-               "revenue-ranked as before — a catalog row never outranks a card, even a "
-               "zero-revenue one whose SKU sorts later",
+            # 2. order: the revenue-ranked head, then the catalog-only tail stalest first
+            ok(list(wide)[:4] == ["U1", "A1", "L1", "999"],
+               "the head is every old subject plus the rescued order line, revenue-ranked: "
+               "U1 is a sold SKU (50.00) so it leads, and a catalog row never outranks a "
+               "card, even a zero-revenue one whose SKU sorts later",
                list(wide))
-            ok(set(list(wide)[old_count:]) == {"100", "101", "104", "U1"}
-               and len(wide) == old_count + 4,
-               "after them come exactly the included catalog-only SKUs, each once — "
-               "the rescued order line among them, not in the revenue-ranked head",
+            ok([sku for sku in wide if sku in narrow] == list(narrow),
+               "every subject the old code produced keeps its relative order",
                list(wide))
+            ok(list(wide)[4:] == ["104", "101", "100"],
+               "after the head come exactly the included catalog-only SKUs, stalest first: "
+               "never read, then read long ago, then read recently — the reverse of SKU order",
+               list(wide))
+
+            # 2b. the cap: at most `catalog_limit` catalog-only SKUs, the stalest kept
+            try:
+                capped = archive_walk.rows_from_store(
+                    catalog_snapshot, market=catalog_market, include_catalog=True,
+                    catalog_limit=2,
+                )
+                cap_error = ""
+            except TypeError as exc:
+                capped, cap_error = {}, str(exc)
+            ok(not cap_error,
+               "rows_from_store accepts catalog_limit — the cap seam the builder exposes",
+               cap_error)
+            ok(list(capped) == ["U1", "A1", "L1", "999", "104", "101"],
+               "catalog_limit=2 keeps the never-read and the long-ago catalog SKUs and drops "
+               "the recently read one, and the sold head, rescued SKU included, is not capped",
+               list(capped))
 
             # 3. Near Mint, foil included, and sealed; worn grades stay out
             ok("101" in wide,
@@ -1286,7 +1322,7 @@ def main() -> int:
             ok(wide.get("U1", {}).get(tcgcsv_module.NAME_COLUMN) == "Catalog Name For U1"
                and "U1" not in wide_refusals,
                "an unparseable order line whose SKU has an included catalog row becomes a "
-               "subject from that row and is no longer a refusal",
+               "sold subject built from that row and is no longer a refusal",
                (wide.get("U1"), wide_refusals))
             ok("U1" in wide and "U2" in wide_refusals and "U3" in wide_refusals
                and "U2" not in wide and "U3" not in wide,
@@ -1307,13 +1343,9 @@ def main() -> int:
                {sku: wide.get(sku) for sku in narrow})
 
             # The widening needs no market: the skus row is already export-shaped.
-            no_market_wide = {}
-            try:
-                no_market_wide = archive_walk.rows_from_store(
-                    catalog_snapshot, include_catalog=True,
-                )
-            except TypeError:
-                pass
+            no_market_wide = archive_walk.rows_from_store(
+                catalog_snapshot, include_catalog=True,
+            )
             ok({"100", "101"} <= set(no_market_wide),
                "include_catalog needs no market: catalog-only SKUs arrive with none given",
                list(no_market_wide))
@@ -1323,6 +1355,50 @@ def main() -> int:
                and "101" not in archive_walk.rows_from_store(catalog_snapshot),
                "without the keyword a catalog-only SKU is never a subject — the default "
                "stays D219's cards-and-ledger set")
+
+        # The tail's tiebreaks, on a store of catalog SKUs alone. SKU order would put "T0"
+        # first; stalest-first puts the two never-read SKUs first (by SKU), then the two
+        # read at the same moment (by SKU), then "T0", read last.
+        with isolated_home():
+            with Store().write() as snapshot:
+                for sku in ("T0", "T1", "T2", "T3", "T4"):
+                    snapshot.skus.entries[sku] = _catalog_sku(
+                        sku, riftbound_line, f"Tie {sku}", "Near Mint",
+                    )
+                _archive_at(snapshot, "T3", 5_000)
+                _archive_at(snapshot, "T4", 5_000)
+                _archive_at(snapshot, "T0", 9_000)
+            tie_rows = archive_walk.rows_from_store(Store().read(), include_catalog=True)
+            ok(list(tie_rows) == ["T1", "T2", "T3", "T4", "T0"],
+               "the catalog tail breaks ties by SKU, never-read SKUs come before every read "
+               "one, and a later read sorts after an earlier one",
+               list(tie_rows))
+
+        # The default cap, and that `_sweep`'s own call reaches it. 650 catalog SKUs, none
+        # ever read, so the 600 that survive are the first 600 by SKU. `_sweep` without
+        # `--write` is its preview: no network call, the same subject line a person reads.
+        per_pass = 600
+        ok(getattr(archive_walk, "CATALOG_SKUS_PER_PASS", None) == per_pass,
+           "the default cap is the named constant CATALOG_SKUS_PER_PASS, 600",
+           getattr(archive_walk, "CATALOG_SKUS_PER_PASS", None))
+        with isolated_home():
+            with Store().write() as snapshot:
+                for number in range(650):
+                    sku = f"{number:04d}"
+                    snapshot.skus.entries[sku] = _catalog_sku(
+                        sku, riftbound_line, f"Whole Set {sku}", "Near Mint",
+                    )
+            default_rows = archive_walk.rows_from_store(Store().read(), include_catalog=True)
+            ok(set(default_rows) == {f"{number:04d}" for number in range(per_pass)},
+               "with no catalog_limit given, 600 catalog-only SKUs come back, never-read ones "
+               "in SKU order",
+               len(default_rows))
+            say_lines: List[str] = []
+            sweep_status = cmd_pricearchive._sweep(SimpleNamespace(write=False), say_lines.append)
+            subject_line = next((line for line in say_lines if "subject to this pass" in line), "")
+            ok(sweep_status == 0 and subject_line.startswith(f"{per_pass} sku(s) subject"),
+               "`archive sweep` reaches the cap: of 650 catalog SKUs it names 600 as subjects",
+               subject_line or say_lines)
 
         # --------- pipeline/productview.py: row_for_sku prefers the SKU's own skus-table row
         # (D254, identity-follows-sku.md §3.2/§5.3 lane 4) — the live-fallback path's own
