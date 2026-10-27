@@ -133,10 +133,10 @@ session is about to become the agent that reads them.
 `POST /capture`'s first line of work is deciding where a photo goes, and the repo
 currently answers that three incompatible ways:
 
-- D13, `docs/DECISIONS.md:169`: photos on Mac disk, *organized by set*.
-- D6, `docs/DECISIONS.md:86`: photos are *already position-keyed on disk*.
-- `identify/sidecar.py:26`, the code that actually reads them: box-keyed,
-  `captures/box3/0017.jpg`.
+- D13, stack: photos on Mac disk, *organized by set*.
+- D6, photo service and pull preview: photos are *already position-keyed on disk*.
+- `identify/sidecar.py`'s "FILENAME CONVENTION" paragraph, the code that actually reads
+  them: box-keyed, `captures/box3/0017.jpg`.
 
 **Ruled: box-keyed.** The reader already parses it and D6's own route,
 `GET /photo/<box>/<position>`, already assumes it. Set-keyed cannot serve that route
@@ -145,14 +145,14 @@ without a lookup the server has no table for, and it cannot exist at capture tim
 
 Two edits, one commit:
 
-- **`docs/DECISIONS.md:169`** — strike "organized by set". D13's sentence becomes:
+- **D13, stack** — strike "organized by set". D13's sentence becomes:
 
   > Inventory state is server-side JSON on the Mac, read and written through the capture
   > server, so the owner's and Fulfiller's devices share one truth. Photos on Mac disk,
   > box-keyed by capture position — see D6.
 
-- **`docs/DECISIONS.md:86`** — delete the word "already", which is false: `captures/`
-  holds an empty `ui/` and nothing else. The sentence becomes:
+- **D6, photo service and pull preview** — delete the word "already", which is false:
+  `captures/` holds an empty `ui/` and nothing else. The sentence becomes:
 
   > Photos are position-keyed on disk — this is display, not new storage.
 
@@ -174,7 +174,7 @@ Four files say otherwise:
 
 | file | current text | replacement |
 |---|---|---|
-| `docs/map.py:162` | ``"does": "T1-T6. `make harness` must exit 0 before any commit.",`` | ``"does": "T1-T6. The Stop hook runs it at every turn end; the pre-commit hook does not.",`` |
+| `docs/map.py`, `harness/` component's `does` field | ``"does": "T1-T6. `make harness` must exit 0 before any commit.",`` | ``"does": "T1-T6. The Stop hook runs it at every turn end; the pre-commit hook does not.",`` |
 | `CLAUDE.md:14` | `make harness        # all six verification tests; MUST exit 0 before any commit` | `make harness        # all six verification tests; the Stop hook runs it at turn end` |
 | `README.md:29` | ``harness/                   T1-T6. `make harness` must exit 0 before any commit.`` | ``harness/                   T1-T6. The Stop hook runs it at every turn end.`` |
 | `Makefile:20` | `T1-T6 verification tests. Must exit 0 before any commit.` | `T1-T6 verification tests. Run at turn end by the Stop hook.` |
@@ -183,12 +183,11 @@ Preserve column alignment in all four; `CLAUDE.md:14` and `README.md:29` sit ins
 blocks whose columns are load-bearing for readability, and `Makefile:20` begins with a
 tab that make requires.
 
-**Do not touch these three, which are true and say something else:**
-`docs/GATES.md:5-7` ("Nothing is 'done' until it exits 0 and you have seen the output") is
-a working rule addressed to the operator, and no hook can check the second half.
+**Do not touch these two, which are true and say something else:**
 `CLAUDE.md`'s working agreement ("Run `make harness` before you tell me something works")
-is the same rule and is also true. `harness/eval/runcache.py:3` states a cost requirement
-on the harness, not an enforcement claim.
+is a working rule addressed to the operator. No hook can check it.
+`harness/eval/runcache.py`'s own module docstring ("stays a check, not a bill") states a
+cost requirement on the harness, not an enforcement claim.
 
 **The replacement wording is itself conditional and that is accepted.** `stop-gate.sh`
 disarms on `PKMNSCAN_GATE=off`, on a missing harness target, on a missing tests directory,
@@ -197,11 +196,11 @@ fields would cost more than it buys; the script's own `--status` flag is the aut
 
 ### 3.2 — The map's one false coverage claim
 
-`docs/map.py:153` claims `store/queues.py` is `tested_by: ["T3", "T4"]`. Nothing under
+`docs/map.py`'s `store/queues.py` module entry claimed `tested_by: ["T3", "T4"]`. Nothing under
 `harness/` imports `store`.
 
 The audit cannot catch this: its repo map row validates only that the cited test id is
-registered in the harness registry (`scripts/docs-audit.py:1278`). It never checks that
+registered in the harness registry (`scripts/docs-audit.check_map`). It never checks that
 the test reaches the module. So the field is unenforced in both directions, and this
 entry would have audited clean forever.
 
@@ -212,9 +211,9 @@ exactly two silent omissions — `identify/sidecar.py` is exercised by t4 and
 
 Three edits:
 
-- **`docs/map.py:153`** — strike `tested_by` from the queues entry. Omission is the file's
-  existing convention for an uncovered module: 15 of its 25 module entries already omit
-  the field. Do not invent an `untested: True` key.
+- **`docs/map.py`'s `store/queues.py` module entry** — strike `tested_by` from it. Omission
+  is the file's existing convention for an uncovered module: 15 of its 25 module entries
+  already omit the field. Do not invent an `untested: True` key.
 - **`docs/map.py`, the `store/` component entry** — add the honest fact once, on the
   package, between `governed_by` and `modules`, matching the layout the `cli/` entry
   already uses:
@@ -232,10 +231,10 @@ Three edits:
   > above establishes — omit `tested_by` rather than invent a key for "uncovered" — still
   > holds, and `store/queues.py` and `store/cache.py` still omit it.
 
-- **`docs/map.py:75`, the status legend** — currently `built    code exists and the
-  harness covers it`. That is the sentence the false claim generalises from, and it is
-  wrong for `cli/` too. Replace with: `built    code exists. tested_by names the harness
-  tests that reach it, where any do.`
+- **`docs/map.py`'s "status: built | stub | planned" legend comment** — currently `built
+  code exists and the harness covers it`. That is the sentence the false claim
+  generalises from, and it is wrong for `cli/` too. Replace with: `built    code exists.
+  tested_by names the harness tests that reach it, where any do.`
 
 **Do not add `tested_by` to the two omissions.** The field is unvalidated either way, and
 completing it by hand builds a more detailed unenforced claim — the exact shape D17 warns
@@ -285,9 +284,12 @@ is what makes its own claim checkable.
 ### 4.2 — Two entries for `docs/DEBTS.md`
 
 Match the file's voice: heading, body, a **Cost** line, a **Why not fixed** line. Widen the
-file's framing first — its opening scopes it to the audit-retirement review, and both
-entries below come from step-5 spec work instead. `docs/DEBTS.md:11-15` re-pins it harder
-than the opening sentence does, so both need the widening or neither.
+file's framing first — its opening scoped it to the audit-retirement review. A second
+sentence in `docs/DEBTS.md` at the time this was written re-pinned that scope harder
+still. Both needed the widening, or neither did. **Both sentences are gone.** `docs/DEBTS.md`
+reads as a general framing now, in the file this session saw and in the `docs/debts/` stub
+split from later. The instruction stands as the record of what this session meant to widen.
+The two entries below still come from step-5 spec work instead.
 
 > ### The post-edit hook channel is gone, and step 7 is when it should come back
 >
@@ -311,7 +313,7 @@ than the opening sentence does, so both need the widening or neither.
 > ### `tested_by` in the repo map is an unenforced claim
 >
 > The repo map row validates only that a cited test id is registered in the harness
-> registry (`scripts/docs-audit.py:1278`). It never checks the test reaches the module.
+> registry (`scripts/docs-audit.check_map`). It never checks the test reaches the module.
 > Audited 2026-08-11: ten of eleven entries were true, one was false — `store/queues.py`
 > claimed T3 and T4 while nothing under `harness/` imports `store` at all — and two
 > modules that *are* exercised carry no entry. The false line was struck; the field is
@@ -361,7 +363,8 @@ def next_index(self, box):
     """The index allocate_capture would assign. DISPLAY ONLY — status, run reports."""
 ```
 
-The argument is already written in `store/__init__.py:22-27`: two writers each reading,
+The argument is already written in `store/__init__.py`'s "READS NEED NO LOCK; WRITES DO"
+paragraph: two writers each reading,
 each modifying, each writing back means the second silently erases the first, so the write
 re-reads inside the lock, and "re-reading is the half that actually matters". A public
 `next_index` fed back into a write is that lost update with a network round trip and a
@@ -374,8 +377,8 @@ exactly that to a card which may already be identified.
 
 **Honest limit, state it in the docstring rather than claiming a guarantee:**
 `record_capture` remains public and still takes a `Card` carrying an explicit box and
-index, because two CLI call sites depend on it — `cli/cmd_identify.py:394` and
-`cli/cmd_emit.py:191`. The safety here is that the server never calls it, not that the
+index, because two CLI call sites depend on it — `cli/cmd_identify.run` and
+`cli/cmd_emit.run`. The safety here is that the server never calls it, not that the
 seam is absent.
 
 **`capture_id` needs somewhere to live, and today there is nowhere.** `Card` has no such
@@ -515,8 +518,9 @@ The server writes; `identify/sidecar.py` reads. One-way, no test on either side,
 mismatch surfaces at identification time, which is when money is spent.
 
 **The capture root is `captures/cards/`, not `captures/`.** This matters more than it
-looks. `scripts/screenshot.sh:24` writes UI renders as `.png` into `captures/ui/`, and the
-scanner walks its root recursively and turns every photo-suffixed file it finds into a
+looks. `scripts/screenshot.sh`'s `OUT_DIR` assignment writes UI renders as `.png` into
+`captures/ui/`, and the scanner walks its root recursively and turns every photo-suffixed
+file it finds into a
 capture and therefore a paid Batch request. Rooting at `captures/` would bill every
 screenshot the first time someone ran both tools. Nothing today defines a capture-root
 constant; define one in the server module, put nothing else beneath it, and leave `ui/` as
@@ -761,8 +765,9 @@ timestamps, is visible rather than inferred.
 
 ### 6.5 — Concurrency
 
-`store/__init__.py:19-20` already rules it: the server is a second writer, not a second
-owner. Concretely — the server holds no authoritative copy of anything between requests.
+`store/__init__.py`'s "TWO WRITERS, ONE OWNER" paragraph already rules it: the server is a
+second writer, not a second owner. Concretely — the server holds no authoritative copy of
+anything between requests.
 No cache, no dirty set, no periodic flush.
 
 1. Reads take no lock, and the session's read already takes none. There is no shared mode
