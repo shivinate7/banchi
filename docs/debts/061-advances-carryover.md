@@ -9,6 +9,5 @@ Each open item was checked against the code and stays open. None is ruled to bui
 5. String-keyed `getattr` and `setattr` on card fields in `store/master.py` and `server/capture_server.py`: a typo is a silent no-op or a runtime `AttributeError`, and no tool catches it first.
 6. `server/capture_server.py` is the largest backend file, ahead of `server/pipeline_routes.py` and `pipeline/join.py`. No split is proposed.
 7. `CaptureScreen.tsx`, `ReviewQueue.tsx` and `BoxBrowse.tsx` each mix polling, derived state and JSX in one file. The direction is one hook per screen, so the component file holds only JSX.
-8. No Python type checker (`mypy`, `pyright`) is configured. Ruff is adopted (D82) and nobody argued the absence. The cheap first step is `mypy --strict` on one well-typed module (`store/orders.py` or `codes/qr.py`).
 
 Considered and rejected: a router library (about ten stable hash routes, and specs test them end to end), a state-management library (`app/src/server.ts` is already the one network seam) and a component library or CSS framework (styling is token-based and no drift was found).

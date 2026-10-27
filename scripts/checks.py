@@ -53,6 +53,8 @@ NEEDS = {
     "lsof": "lsof, which macOS ships. It is how a pid's working directory and a port's "
             "holders are read; absent, reap-selftest's port cases cannot be posed at all.",
     "sh": "any POSIX sh.",
+    "mypy": "mypy, installed by `make venv` from requirements.txt (DEBT61). MYPY_GUARD fails "
+            "loudly rather than letting the target no-op.",
     "ruff": "ruff, installed by `make venv` from requirements.txt (D82). RUFF_GUARD fails "
             "loudly rather than letting the target no-op.",
 }
@@ -270,6 +272,20 @@ CHECKS = (
         "why_off_commit_path": "",
         "gates": True,
         "governed_by": ("D58", "D68", "D92"),
+    },
+    {
+        "target": "pytypes",
+        "shard": "static",
+        "runs": "mypy --strict --follow-imports=silent store/orders.py",
+        "asserts": "store/orders.py type-checks under `mypy --strict`, alone: imports are followed "
+                   "silently, so only that file's own errors count. The one Python module held to a "
+                   "type checker so far (DEBT61).",
+        "needs": ("venv", "mypy"),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "The git hook runs a bare python3, and mypy lives in the venv.",
+        "gates": True,
+        "governed_by": ("D18",),
     },
     {
         "target": "css-var-check",
