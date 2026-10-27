@@ -1,6 +1,6 @@
 # Master set: see which cards to pull before they sell
 
-**Status: DRAFT. Nothing here is built. Rulings 7.1 and 7.3 are settled; 7.2 waits on one decision.** It extends the Sets view on `#/inventory`
+**Status: DRAFT. Nothing here is built. Every question in section 7 is ruled.** It extends the Sets view on `#/inventory`
 (D293, inventory has a by-set view). It adds no route to `ROUTES` and no nav row (D31, one
 owner-side view of stored cards).
 
@@ -62,32 +62,32 @@ Inside the Sets view, under the set picker:
 
 ## 5. A master-set copy that is already live on TCGplayer
 
-**Owner's ruling: automatic.** When a `master_set` pull leaves fewer copies on hand than
-TCGplayer has live for that SKU, the live count comes down to the on-hand count with no press.
-The owner: "adjusted down immediately for that specific item".
+**Owner's ruling: one press on the pull receipt.** The owner chose it so they know the take-off
+was sent. When a `master_set` retirement leaves the SKU live above what is on hand, the retire
+receipt offers "Take it off TCGplayer". The press is the owner's yes for that SKU. This bends
+D100 (never delete to lower a price), whose phantom ruling takes a live card off only on the
+owner's yes and builds no screen control for it. The bend covers the `master_set` reason only.
+D54 (re-emit adds, never subtracts) is not touched: it governs what `emit` writes for copies not
+yet sent.
 
-What exists to build it on, measured in code and in D100 (never delete to lower a price):
+The press follows D100's phantom take-off exactly:
 
-- A negative `Add to Quantity` is a signed delta, and TCGplayer clamps it at 0 (D100's
-  amendment, both measured). A doubled take-off cannot go below zero.
-- The hold take-off already does this for a withheld SKU (`cli/cmd_emit._Take`): sized from a
-  live read at most `cli/cmd_emit.TAKE_READ_FRESH_S` old, less copies sold since, one
-  outstanding per SKU until a live check settles it, and passed by `server/tcg_import._check`
-  only at exactly that size.
-- `server/tcg_import.push_to_staged` and `move_to_live` push it. `emit --live-guard FILE` trims
-  sends so TCGplayer never holds more copies than are here.
+- **It reads live first**, through `server/tcg_export.fetch_live`, and sizes the row as live
+  minus on hand, less copies sold since that read, never above live. At 0 or below it sends
+  nothing and says the listing already matches.
+- **One row**: `Add to Quantity` minus that excess, price unchanged, through
+  `server/tcg_import.push_to_staged` with `listing=True` and a `take_off` mapping of exactly that
+  size, then `move_to_live`. TCGplayer clamps a take-off at 0 (measured in D100), so a doubled
+  press cannot go below zero.
+- **One outstanding per SKU**, as the hold take-off has it: until a live check settles it, the
+  press is absent and the receipt says the take-off is on its way.
+- **It writes a receipt** naming the card, the copies taken off and whether TCGplayer accepted
+  them. A failed push leaves the retirement standing and says nothing went live.
+- **Undoing the retirement does not put the listing back.** The copy is on hand again and goes
+  out on the next ordinary send. A harness case proves it.
 
-**Not ruled yet: it conflicts with D100's phantom ruling.** D100 says a phantom (live above on
-hand) is cleared by a session, with a take-off sent only on the owner's yes for that SKU, and no
-screen control or send-path lane. A `master_set` pull of a live copy makes exactly such a
-phantom. D54 (re-emit adds, never subtracts) is not touched: it governs what `emit` writes for
-copies not yet sent, and D100's take-off rows already sit beside it. The orchestrator holds the
-decision on the D100 conflict. This section is rewritten when it lands.
-
-## 5a. Scope of the automatic take-off
-
-Only a `master_set` retirement triggers it. A sale marked in the app, or another retire
-reason, also leaves live above on hand. Widening the trigger is a separate question.
+The press reaches TCGplayer, so it needs the seller session the sends already use. With none, the
+receipt says so and offers no press.
 
 ## 6. Later: cards the store has never held
 
@@ -102,8 +102,9 @@ because it is the only part that needs a catalog and the network.
 
 1. **Own reason.** The master set is the `master_set` retire reason only. Old `pulled`
    retirements do not count (section 2).
-2. **Automatic take-off.** A `master_set` pull lowers live to on hand with no press. How it
-   squares with D100's phantom ruling is open (section 5).
+2. **One press on the pull receipt.** A `master_set` pull of a live card offers "Take it off
+   TCGplayer". The press is the owner's yes, bending D100 (never delete to lower a price) for
+   this reason only (section 5).
 3. **Identified only.** "Last copy" counts `identified` cards only, as the route reads today. A
    capture not yet identified does not count.
 
