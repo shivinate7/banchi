@@ -34,10 +34,15 @@ Four things are checked, in the order they can hurt you:
                         never in the sub-threshold bucket, never auto-priced, and `emit`
                         refuses until a human answers. The failure this prevents is handing
                         away a chase card at the floor because a cell was empty.
+
+Suggestions (`_suggest_checks`) pin `pipeline/suggest.py` before its build: each trigger at its
+edge, the cap and the value line, the floor clamp and the no-market refusal. They sit under T5
+and do not change T5's published Pass line.
 """
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -72,6 +77,360 @@ def _card(index, name, number, total="159", metadata=None, confidence="high"):
         metadata_finish=metadata,
         confidence=confidence,
         photo=f"captures/box{BOX}/{index:04d}.jpg",
+    )
+
+
+# --- suggestions: `pipeline/suggest.py` (docs/specs/pricing-suggest.md, sections 2, 3, 4b, 5 step 3)
+#
+# THE CONTRACT, PINNED BEFORE THE BUILD. The engine is pure over plain dicts: no DB, no network.
+#
+#   fired(listing, today)            -> list of trigger names that fire, in this order:
+#                                       "market_moved", "unsold", "undercut". Selling fast and
+#                                       an outside signal are not names here.
+#   review(listings, policy, today)  -> {"needs_you": rows, "suggested": rows, "at_rule": rows}
+#                                       a row is {"sku", "asking", "price", "reason"}. `price` is
+#                                       the store rule's price at today's market, clamped to the
+#                                       floor, and None with no market. `reason` is plain words,
+#                                       "" when nothing fired.
+#
+# `today` is an ISO date string. A listing holds "sku", "asking", "market_listed", "market",
+# "low_with_shipping", "first_seen_live" (ISO date), "last_sold_at" (ISO date from a `sold`
+# event, None if never sold), "units_sold_30d" and "outside_signal". Money is Decimal, and None
+# means unknown. Unsold days are today minus the LATER of first_seen_live and last_sold_at. The
+# engine reads no ledger, and it never reads `sold_here`, which resets at each live reading.
+#
+# A policy holds "rule", "threshold" (the floor), "limit" (a Decimal fraction: 0.25 is 25%) and
+# "value_line" (Decimal dollars). A missing `rule` means match, a missing `limit` means 0.25, and a
+# missing `value_line` means 25.
+
+TODAY = "2026-10-27"
+
+
+def _ago(days: int) -> str:
+    """The ISO date `days` before TODAY."""
+    return (date.fromisoformat(TODAY) - timedelta(days=days)).isoformat()
+
+
+def _listing(**over) -> dict:
+    """The one fixture for a live listing. Each case overrides only the field it is about."""
+    base = {
+        "sku": "SUG-1",
+        "asking": Decimal("10.00"),
+        "market_listed": Decimal("10.00"),
+        "market": Decimal("10.00"),
+        "low_with_shipping": None,
+        "first_seen_live": TODAY,
+        "last_sold_at": None,
+        "units_sold_30d": 0,
+        "outside_signal": None,
+    }
+    base.update(over)
+    return base
+
+
+def _policy(**over) -> dict:
+    """The store's policy, as `corpus.Corpus` hands it over. Each case overrides one key."""
+    base = {
+        "rule": "match",
+        "threshold": Decimal("0.40"),
+        "limit": Decimal("0.25"),
+        "value_line": Decimal("25"),
+    }
+    base.update(over)
+    return base
+
+
+def _suggest_checks(c: Checks) -> None:
+    try:
+        from pipeline import suggest
+    except ImportError as exc:
+        # A local import, so a missing engine fails these cases and no others: the rest of T5
+        # still runs and its verdict still counts.
+        c.ok(False, "pipeline/suggest.py imports", f"{type(exc).__name__}: {exc}")
+        return
+
+    def fired(**over):
+        return suggest.fired(_listing(**over), TODAY)
+
+    def review(*listings, **policy):
+        return suggest.review(list(listings), _policy(**policy), TODAY)
+
+    def groups(out, sku):
+        return sorted(g for g, rows in out.items() for r in rows if r["sku"] == sku)
+
+    def field(out, sku, key):
+        hit = next((r for rows in out.values() for r in rows if r["sku"] == sku), None)
+        return None if hit is None else hit.get(key)
+
+    def says(out, sku, words):
+        return words in str(field(out, sku, "reason") or "").lower()
+
+    # --- triggers at their edges (4b) -----------------------------------------------------
+    c.equal(
+        fired(market=Decimal("11.50")),
+        ["market_moved"],
+        "market up exactly 15% since listed fires: the edge is inclusive",
+    )
+    c.equal(fired(market=Decimal("11.49")), [], "market up 14.9% does not fire")
+    c.equal(fired(market=Decimal("8.50")), ["market_moved"], "market down exactly 15% fires too")
+    c.equal(fired(market=Decimal("8.51")), [], "market down 14.9% does not fire")
+
+    c.equal(
+        fired(first_seen_live=_ago(30), asking=Decimal("11.01")),
+        ["unsold"],
+        "unsold 30 days with the asking price 10.1% over market fires",
+    )
+    c.equal(
+        fired(first_seen_live=_ago(29), asking=Decimal("11.01")),
+        [],
+        "29 days does not fire, whatever the premium",
+    )
+    c.equal(
+        fired(first_seen_live=_ago(30), asking=Decimal("11.00")),
+        [],
+        "an asking price exactly 10% over market does not fire: the bar is MORE than 10%",
+    )
+    c.equal(
+        fired(first_seen_live=_ago(90)),
+        [],
+        "age alone never fires: 90 days since listing, asking at market",
+    )
+    c.equal(
+        fired(first_seen_live=_ago(60), last_sold_at=_ago(10), asking=Decimal("11.50")),
+        [],
+        "a sale 10 days ago restarts the count: 10 unsold days, 15% over market, does not fire",
+    )
+    c.equal(
+        fired(first_seen_live=_ago(60), last_sold_at=_ago(40), asking=Decimal("11.50")),
+        ["unsold"],
+        "unsold counts from the LATER of listing and last sale: 40 days after a sale, fires",
+    )
+
+    c.equal(
+        fired(low_with_shipping=Decimal("9.00")),
+        ["undercut"],
+        "Low With Shipping exactly 10% under our ask fires",
+    )
+    c.equal(fired(low_with_shipping=Decimal("9.01")), [], "9.9% under does not fire")
+
+    c.equal(
+        fired(units_sold_30d=40),
+        [],
+        "selling fast is not a trigger: 40 units sold market-wide moves nothing",
+    )
+    c.equal(
+        fired(outside_signal="meta: played in a winning deck"),
+        [],
+        "an outside signal is a reason slot, and nothing fires it",
+    )
+    c.equal(fired(market=None), [], "no market today: no move can be read, nothing fires")
+    c.equal(
+        fired(market_listed=None, market=Decimal("12.00")),
+        [],
+        "no market on listing day: market moved cannot fire, and nothing crashes",
+    )
+
+    # --- groups and prices (sections 2 and 3) ------------------------------------------------
+    up = review(_listing(sku="UP", market=Decimal("11.80")))
+    c.equal(groups(up, "UP"), ["suggested"], "market up 18% is a suggestion, inside the cap")
+    c.equal(
+        field(up, "UP", "price"),
+        Decimal("11.80"),
+        "a raise is allowed: 10.00 to 11.80, the match rule at today's market",
+    )
+    c.ok(
+        says(up, "UP", "market up 18% since listed"),
+        "and the reason says why, in plain words",
+        str(field(up, "UP", "reason")),
+    )
+
+    down = review(_listing(sku="DN", market=Decimal("8.50")))
+    c.equal(groups(down, "DN"), ["suggested"], "market down 15% is a lowering suggestion, inside the cap")
+    c.equal(field(down, "DN", "price"), Decimal("8.50"), "priced at today's market, lower")
+    c.ok(
+        says(down, "DN", "market down 15% since listed"),
+        "and its reason says the market went down",
+        str(field(down, "DN", "reason")),
+    )
+
+    inside = review(_listing(sku="IN", market=Decimal("12.50")))
+    past = review(_listing(sku="OUT", market=Decimal("12.51")))
+    c.equal(groups(inside, "IN"), ["suggested"], "a move of exactly 25%, the default cap, is inside it")
+    c.equal(
+        groups(past, "OUT"),
+        ["needs_you"],
+        "25.1% is past the cap: Needs you, not the one-press batch",
+    )
+    c.equal(
+        field(past, "OUT", "price"),
+        Decimal("12.51"),
+        "the Needs you row still carries its proposed price, so the owner can tick it",
+    )
+
+    under = review(
+        _listing(sku="V1", asking=Decimal("20.00"), market_listed=Decimal("20.00"), market=Decimal("24.99"))
+    )
+    at = review(
+        _listing(sku="V2", asking=Decimal("20.00"), market_listed=Decimal("20.00"), market=Decimal("25.00"))
+    )
+    c.equal(
+        groups(under, "V1"),
+        ["suggested"],
+        "a card at $24.99 is under the $25 value line, so a move inside the cap is a suggestion",
+    )
+    c.equal(
+        groups(at, "V2"),
+        ["needs_you"],
+        "a card at exactly $25.00 is Needs you, even at 25% and inside the cap",
+    )
+    still = review(
+        _listing(sku="V3", asking=Decimal("25.00"), market_listed=Decimal("25.00"), market=Decimal("25.00"))
+    )
+    c.equal(
+        groups(still, "V3"),
+        ["needs_you"],
+        "a card at the value line with no trigger is still Needs you: section 3 groups by "
+        "the card, not by the move",
+    )
+
+    blank = review(_listing(sku="NM", market=None))
+    c.equal(groups(blank, "NM"), ["needs_you"], "no market price goes to Needs you")
+    c.equal(field(blank, "NM", "price"), None, "and with no market there is no proposed price")
+    c.ok(
+        says(blank, "NM", "no market price"),
+        "and the reason says there is no market price",
+        str(field(blank, "NM", "reason")),
+    )
+
+    # --- the floor clamps the rule's price (section 2) ---------------------------------------
+    floored = review(
+        _listing(sku="FL", asking=Decimal("0.60"), market_listed=Decimal("0.80"), market=Decimal("0.20")),
+        threshold=Decimal("0.50"),
+    )
+    c.equal(
+        field(floored, "FL", "price"),
+        Decimal("0.50"),
+        "a market at $0.20 clamps to the owner's $0.50 floor: the floor wins over the rule",
+    )
+    c.equal(
+        groups(floored, "FL"),
+        ["suggested"],
+        "and the clamped move, 0.60 to 0.50, is inside the cap",
+    )
+
+    priced = review(
+        _listing(sku="RL", asking=Decimal("25.00"), market_listed=Decimal("18.00"), market=Decimal("22.03")),
+        rule="undercut:5",
+    )
+    c.equal(
+        field(priced, "RL", "price"),
+        Decimal("20.93"),
+        "the store's rule prices the suggestion at today's market: undercut:5 on $22.03 is $20.93",
+    )
+    c.equal(groups(priced, "RL"), ["suggested"], "a 16% cut from a $25.00 ask is inside the cap")
+
+    # --- the other two triggers, through review -----------------------------------------------
+    cut = review(_listing(sku="UC", low_with_shipping=Decimal("9.00"), market=Decimal("9.50")))
+    c.equal(
+        groups(cut, "UC"),
+        ["suggested"],
+        "Low With Shipping 10% under our ask fires, and the 5% move to market is inside the cap",
+    )
+    c.ok(
+        says(cut, "UC", "shipping"),
+        "and the reason says the lower price includes shipping",
+        str(field(cut, "UC", "reason")),
+    )
+
+    stale = review(_listing(sku="ST", asking=Decimal("11.50"), first_seen_live=_ago(30)))
+    c.equal(
+        field(stale, "ST", "price"),
+        Decimal("10.00"),
+        "unsold 30 days at 15% over market: the suggestion is the market, $10.00",
+    )
+    c.ok(
+        says(stale, "ST", "unsold 30 days"),
+        "and the reason names the age",
+        str(field(stale, "ST", "reason")),
+    )
+
+    # --- no trigger, no suggestion: Going at the rule (4b) -----------------------------------
+    c.equal(
+        groups(review(_listing(sku="AR", market=Decimal("11.00"))), "AR"),
+        ["at_rule"],
+        "a 10% move with no trigger stays Going at the rule",
+    )
+    c.equal(
+        groups(review(_listing(sku="AG", first_seen_live=_ago(90))), "AG"),
+        ["at_rule"],
+        "age alone leaves the listing Going at the rule",
+    )
+    c.equal(
+        groups(review(_listing(sku="SF", units_sold_30d=40)), "SF"),
+        ["at_rule"],
+        "selling fast alone leaves the listing Going at the rule",
+    )
+    c.equal(
+        groups(review(_listing(sku="OS", outside_signal="meta: played in a winning deck")), "OS"),
+        ["at_rule"],
+        "an outside signal alone leaves the listing Going at the rule",
+    )
+
+    # --- the cap and the value line are owner settings with defaults (section 5, step 3) -----
+    eighteen = _listing(sku="CAP", market=Decimal("11.80"))
+    no_cap = {k: v for k, v in _policy().items() if k != "limit"}
+    c.equal(
+        groups(suggest.review([eighteen], no_cap, TODAY), "CAP"),
+        ["suggested"],
+        "with no cap in the policy, the default 25% applies: an 18% move is a suggestion",
+    )
+    c.equal(
+        groups(review(eighteen, limit=Decimal("0.10")), "CAP"),
+        ["needs_you"],
+        "the owner lowers the cap to 10%: the same 18% move goes to Needs you",
+    )
+    valued = _listing(
+        sku="VD", asking=Decimal("20.00"), market_listed=Decimal("20.00"), market=Decimal("25.00")
+    )
+    no_value_line = {k: v for k, v in _policy().items() if k != "value_line"}
+    c.equal(
+        groups(suggest.review([valued], no_value_line, TODAY), "VD"),
+        ["needs_you"],
+        "with no value line in the policy, the default $25 applies",
+    )
+    c.equal(
+        groups(review(valued, value_line=Decimal("30")), "VD"),
+        ["suggested"],
+        "the owner moves the value line to $30: the same card is a suggestion",
+    )
+
+    # --- every listing lands in exactly one group --------------------------------------------
+    mixed = review(
+        _listing(sku="A"),
+        _listing(sku="B", market=Decimal("11.80")),
+        _listing(sku="C", market=None),
+        _listing(sku="D", market=Decimal("12.51")),
+    )
+    c.equal(
+        sum(len(rows) for rows in mixed.values()),
+        4,
+        "four listings in, four rows out, across the three groups",
+    )
+
+def _suggest_policy_checks(c: Checks) -> None:
+    # The two settings are corpus policy fields. This needs no engine, so it reports on its own
+    # even while the engine's import fails.
+    stored = corpus.Corpus.parse({"version": 1, "policy": {"limit": "0.30", "value_line": "30.00"}})
+    kept = stored.to_payload()["policy"]
+    c.ok(
+        kept.get("limit") is not None and Decimal(str(kept["limit"])) == Decimal("0.30"),
+        "the suggestion limit is a corpus policy setting, and it survives a save",
+        str(kept),
+    )
+    c.ok(
+        kept.get("value_line") is not None and Decimal(str(kept["value_line"])) == Decimal("30"),
+        "and so is the value line",
+        str(kept),
     )
 
 
@@ -644,5 +1003,8 @@ def run() -> Result:
         Decimal("20.93"),
         "the run's rule reaches the emitted price through join_batch",
     )
+
+    _suggest_policy_checks(c)
+    _suggest_checks(c)
 
     return c.result()
