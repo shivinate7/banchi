@@ -417,7 +417,7 @@ function worklistOf(skus: readonly unknown[]) {
 }
 
 /** The stored answers, by SKU, in the corpus's own shape. A press that moves live copies reads these. */
-async function stubCorpus(page: Page, prices: Record<string, string>): Promise<void> {
+async function stubCorpus(page: Page, prices: Record<string, unknown>): Promise<void> {
   await page.route(/\/pricing$/, (route) => {
     if (route.request().url().includes('/pipeline/')) return route.fallback()
     if (route.request().method() === 'PUT') return route.fulfill(answer({ ok: true, written: '/tmp/prices.json', answers: 0, revision: 'rev-2' }))
@@ -431,6 +431,15 @@ async function typePrice(page: Page, name: string, price: string): Promise<void>
   const field = page.getByRole('textbox', { name: `Price for ${name}` })
   await field.fill(price)
   await field.press('Tab')
+}
+
+/** The run the worklist names, read by the run route. Its two SKUs are the ones `worklist()` draws. */
+async function stubRun(page: Page): Promise<void> {
+  await page.route(/\/pipeline\/runs\/[^/]+$/, (route) =>
+    route.fulfill(
+      answer({ run: RUN, path: `/tmp/runs/${RUN}`, box: 7, box_name: 'Riftbound epics', live: false, phase: 'emit', joined: true, collected: true, counts: { skus: 2, cards_in: 6, queued_main: 0, queued_parked: 0 }, batch_ids: [], usage: {}, console: '', files: [], manifest: {} }),
+    ),
+  )
 }
 
 function worklist() {
@@ -846,11 +855,7 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   // THE PRICING STATE WITH A RUN TO SEND: the press names all two SKUs. Asserted drawn first.
   await page.route(PRICING_WORKLIST, (route) => route.fulfill(answer(worklist())))
   await page.route(SENDS, (route) => route.fulfill(answer(SENDS_NONE)))
-  await page.route(/\/pipeline\/runs\/[^/]+$/, (route) =>
-    route.fulfill(
-      answer({ run: RUN, path: `/tmp/runs/${RUN}`, box: 7, box_name: 'Riftbound epics', live: false, phase: 'emit', joined: true, collected: true, counts: { skus: 2, cards_in: 6, queued_main: 0, queued_parked: 0 }, batch_ids: [], usage: {}, console: '', files: [], manifest: {} }),
-    ),
-  )
+  await stubRun(page)
   await visit(page, hashOf('pricing'))
   await expect(page.getByRole('button', { name: /^Send all 2 SKUs/i }), 'the send press names two SKUs').toBeVisible()
   read(hashOf('pricing'), await page.evaluate(scanCopy))
@@ -1171,4 +1176,27 @@ test('pricing: the live tab names the price line Floor, and no rendered string s
   await expect(sheet.locator('.pricing-sheet-says', { hasText: 'The floor is' }), 'the Live settings sheet names its price line Floor').toBeVisible()
   const scan = await page.evaluate(scanCopy)
   expect(scan.text, 'no rendered text or label says cut-off').not.toMatch(/cut-off/i)
+})
+
+// THE OWNER'S HOLD HAS ONE NAME, on every state the screen draws. Its status was "Held", its filter "Show Held" and "Held N", and its
+// confirm "Hold it" (docs/specs/pricing-suggest.md section 6). The send guard's trim keeps "held back", so the owner's words are checked
+// on the screen, its attributes and the hold panel the row opens: no "Held", no "Hold it", and no "held back" while nothing was trimmed.
+test("pricing: the owner's hold is one name, and no rendered string says Held, Hold it or held back for it", async ({ page }) => {
+  await page.route(PRICING_WORKLIST, (route) => route.fulfill(answer(worklist())))
+  await page.route(SENDS, (route) => route.fulfill(answer(SENDS_NONE)))
+  await stubRun(page)
+  await stubCorpus(page, { '8608859': { withheld: 'keeping' } })
+  await visit(page, hashOf('pricing'))
+  await expect(page.locator('[data-tile="held"]'), 'the kept-off tile is drawn').toContainText('1 kept off TCGplayer')
+
+  const drawn = await page.evaluate(scanCopy)
+  const attrText = drawn.attrs.map((a) => a.value).join(' | ')
+  expect(drawn.text, 'no rendered text says Held, Hold it or held back for the owner\'s hold').not.toMatch(/\bheld\b|\bhold it\b/i)
+  expect(attrText, 'no attribute says Held, Hold it or held back for the owner\'s hold').not.toMatch(/\bheld\b|\bhold it\b/i)
+
+  await page.getByRole('button', { name: 'Keep Articuno - 162/159 off TCGplayer', exact: true }).click()
+  await expect(page.locator('.pricing-holdpanel'), 'the hold panel is drawn').toBeVisible()
+  const panel = await page.evaluate(scanCopy)
+  expect(panel.text, 'the panel confirms with Keep it off').toContain('Keep it off')
+  expect(panel.text, 'the panel never says Hold it').not.toMatch(/\bhold it\b/i)
 })

@@ -2400,7 +2400,7 @@ test('a hold writes a reason and a watch, and never a price', async ({ page }) =
   await page.getByRole('button', { name: /Bullish/ }).click()
   await page.getByLabel(/Alert when market is above/).fill('30.00')
   await page.getByLabel('Note').fill('waiting on rotation')
-  await page.getByRole('button', { name: 'Hold it' }).click()
+  await page.getByRole('button', { name: 'Keep it off' }).click()
 
   await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBeGreaterThan(0)
   expect(sentAnswers(wire)).toEqual({
@@ -2423,7 +2423,7 @@ test("finding #9 (the delta review round) — the hold toast's own Undo clears t
   await page.locator('.pricing-hold').first().click()
   await expect(page.locator('.pricing-holdpanel')).toBeVisible()
   await page.getByRole('button', { name: /Bullish/ }).click()
-  await page.getByRole('button', { name: 'Hold it' }).click()
+  await page.getByRole('button', { name: 'Keep it off' }).click()
 
   const undo = page.locator('.bn-toast').getByRole('button', { name: 'Undo' })
   await expect(undo).toBeVisible()
@@ -2491,7 +2491,7 @@ test('UN-12 (the delta review round) — a hold on a no-market-price SKU is ONE 
   await page.getByRole('button', { name: /Keep off TCGplayer/ }).click()
   await page.getByLabel('Alert when market is above').fill('9.50')
   await page.getByLabel('Note', { exact: true }).fill('waiting on a reprint')
-  await page.getByRole('button', { name: 'Hold it' }).click()
+  await page.getByRole('button', { name: 'Keep it off' }).click()
 
   await expect.poll(() => sent()?.value).toMatchObject({ withheld: expect.any(String), watch_above: '9.50', note: 'waiting on a reprint' })
   expect(sent()?.channel ?? 'price').toBe('price')
@@ -2541,7 +2541,7 @@ test('a release puts back the price the hold replaced, on its own channel', asyn
   })
   await page.locator('.pricing-hold').first().click()
   await page.getByRole('button', { name: /Keep off TCGplayer/ }).click()
-  await page.getByRole('button', { name: 'Hold it' }).click()
+  await page.getByRole('button', { name: 'Keep it off' }).click()
   await expect.poll(() => sentFor(wire, '5')?.value).toMatchObject({ before: { value: '5.16', channel: 'unknown', at: FIRST_DATE } })
 
   /* THE FIRST DATE COMES BACK TOO (the owner's ruling, "Keep the first date"). The server keeps
@@ -2568,7 +2568,7 @@ test('a price typed this visit, then held and released, is dated today, never wi
 
   await page.locator('.pricing-hold').first().click()
   await page.getByRole('button', { name: /Keep off TCGplayer/ }).click()
-  await page.getByRole('button', { name: 'Hold it' }).click()
+  await page.getByRole('button', { name: 'Keep it off' }).click()
   await expect.poll(() => sentFor(wire, '5')?.value).toMatchObject({ before: { value: '6.00' } })
   expect((sentFor(wire, '5')?.value as { before: { at?: string } }).before.at).toBeUndefined()
 
@@ -2609,7 +2609,7 @@ test('a hold stored as unlisted on the no-market channel is really released', as
   expect(sentFor(wire, '5')).toBeUndefined()
 })
 
-test('a held row says so, in both registers, and has no price field', async ({ page }) => {
+test('a kept-off row says so, in both registers, and has no price field', async ({ page }) => {
   await open(page, {
     decisions: {
       rule: 'match',
@@ -2619,7 +2619,8 @@ test('a held row says so, in both registers, and has no price field', async ({ p
   })
 
   await expect(page.locator('.pricing-row')).toHaveAttribute('data-answer', 'held')
-  await expect(page.locator('.pricing-held')).toContainText('Held')
+  /* ONE STATUS WORD FOR THE OWNER'S HOLD (spec section 6). The caption shows that status, never the imperative. */
+  await expect(page.locator('.pricing-held')).toContainText('Kept off TCGplayer')
   /* docs/DESIGN.md's human-label-large, machine-string-small rule. The machine line is the
      JSON as it sits in the file, so grepping `withheld` finds the screen, the corpus and
      the run report at once — which is the only job that line has.
@@ -4454,8 +4455,11 @@ test('a hold taken now keeps its row where it is, and so does the next load', as
   await open(page, { skus })
   await page.getByRole('button', { name: 'Keep Dunsparce off TCGplayer', exact: true }).click()
   await page.getByRole('button', { name: /Keep off TCGplayer/ }).click()
-  await page.getByRole('button', { name: 'Hold it' }).click()
+  await page.getByRole('button', { name: 'Keep it off' }).click()
   await expect(page.locator('.pricing-row').nth(1).locator('.pricing-state')).toHaveAttribute('title', 'withheld: keeping')
+  /* ONE STATUS WORD: the caption reads Kept off TCGplayer, and the row never shows the imperative as its status. */
+  await expect(page.locator('.pricing-row').nth(1).locator('.pricing-held')).toContainText('Kept off TCGplayer')
+  await expect(page.locator('.pricing-row').nth(1)).not.toContainText('Keep off TCGplayer')
   await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Dunsparce', 'Wattrel'])
   /* A HELD ROW IS RANKED BY VALUE LIKE EVERY OTHER (UX-071): it does not sink on the reload. */
   await page.route(/\/pricing$/, async (route) => {
@@ -4475,14 +4479,14 @@ test('a hold taken now keeps its row where it is, and so does the next load', as
   await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Dunsparce', 'Wattrel'])
 })
 
-test('Held shows only the held rows, and its count is the bar’s count', async ({ page }) => {
+test('Kept off shows only the kept-off rows, and its count is the bar’s count', async ({ page }) => {
   await open(page, {
     skus: [sku({ sku: '1', name: 'Articuno' }), sku({ sku: '2', name: 'Dunsparce' })],
     decisions: { rule: 'match', basis: 'market', overrides: { '2': { withheld: 'bullish' } } },
   })
   await expect(page.locator('[data-tile="held"]')).toContainText(/\b1\b/)
   await expect(page.locator('[data-tile="held"]')).not.toContainText('held back')
-  const held = page.getByRole('button', { name: 'Held 1' })
+  const held = page.getByRole('button', { name: 'Kept off 1' })
   await held.click()
   await expect(held).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('.pricing-name')).toHaveText(['Dunsparce'])
@@ -4558,9 +4562,11 @@ test('finding #2 (the Opus review round) — a hold toast\'s own Undo reverses t
 
   await page.getByRole('button', { name: 'Keep Dunsparce off TCGplayer', exact: true }).click()
   await page.getByRole('button', { name: /Keep off TCGplayer/ }).click()
-  await page.getByRole('button', { name: 'Hold it' }).click()
-  const holdToast = page.locator('.bn-toast', { hasText: 'Held Dunsparce' })
+  await page.getByRole('button', { name: 'Keep it off' }).click()
+  const holdToast = page.locator('.bn-toast', { hasText: 'Kept off TCGplayer: Dunsparce' })
   await expect(holdToast).toBeVisible()
+  /* THE TOAST'S STATUS IS THE ONE WORD; the imperative is the chip's action, not a status line. */
+  await expect(holdToast).not.toContainText('Keep off TCGplayer')
 
   /* A NEWER WRITE LANDS ON TOP OF THE STACK — the old code's toast called whatever `undoLast`
    * held by press time, which by then would be THIS one, not the hold it named. */
@@ -5147,7 +5153,8 @@ test('F3: the held count on the button and in the bar are one number, a sent row
     ],
     decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608459': { withheld: 'keeping' }, '8608460': { withheld: 'bullish' } } },
   })
-  await expect(page.getByRole('button', { name: 'Held 2' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Kept off 2' })).toBeVisible()
+  await expect(page.locator('[data-tile="held"]')).toContainText('2 kept off TCGplayer')
   await expect(page.locator('[data-tile="held"]')).toContainText(/\b2\b/)
   await expect(page.locator('[data-tile="held"]')).not.toContainText('held back')
 })
@@ -6220,7 +6227,7 @@ test('ux-wave1: the Send button does not move when the last-send warning arrives
  *   [data-tile="priced" | "held" | "ready"]  one tile each, inside the send bar, on the Unsent tab
  *   [data-tone="warn"]                        on the priced tile, while rows still need a price
  * The actions are found by their words: "Price Them" on the priced tile, and the held tile's one
- * control, which opens the existing Held filter (the `Held N` chip). Counts are read off each
+ * control, which opens the existing kept-off filter (the `Kept off N` chip). Counts are read off each
  * tile's own text. */
 const tile = (page: Page, which: 'priced' | 'held' | 'ready') => page.locator(`[data-tile="${which}"]`)
 const pricedRow = (n: number) => sku({ sku: String(200 + n), name: `Priced ${n}` })
@@ -6266,6 +6273,14 @@ test('send tiles: three tiles on the Unsent tab carry 3 ready, 19 held and 541 a
   await expect(tile(page, 'priced').locator('a, button', { hasText: /^Price Them$/ })).toHaveCount(0)
 })
 
+test('send tiles: the kept-off tile says None kept off. when no row is kept off', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { skus: [pricedRow(1)] })
+
+  await expect(tile(page, 'held')).toContainText('None kept off.')
+  await expect(tile(page, 'held')).not.toContainText('None held.')
+})
+
 test('send tiles: the priced tile turns amber and offers Price Them while rows still need a price', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   await open(page, { skus: Array.from({ length: 12 }, (_, i) => unpricedRow(i + 1)), decisions: NO_PRICE_DECISIONS })
@@ -6305,7 +6320,7 @@ test('send tiles: Price Them filters the list to the rows that owe a price', asy
   expect(names.sort()).toEqual(['Unpriced 1', 'Unpriced 2', 'Unpriced 3'])
 })
 
-test('send tiles: the held tile opens the Held filter, and the list keeps only the held rows', async ({ page }) => {
+test('send tiles: the kept-off tile opens the Kept off filter, and the list keeps only the kept-off rows', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   const sleeper = heldRow(1)
   await open(page, {
@@ -6317,7 +6332,7 @@ test('send tiles: the held tile opens the Held filter, and the list keeps only t
 
   await tile(page, 'held').locator('a, button').first().click()
 
-  await expect(page.getByRole('button', { name: 'Held 1' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: 'Kept off 1' })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('.pricing-name')).toHaveText(['Sleeper 1'])
 })
 
@@ -6460,7 +6475,7 @@ test('send tiles: a row held as unlisted is not counted in the typed figure', as
 /* THE SEARCH AND A FACET ARE NARROWED FIRST, so the press under test has something to clear.
    Articuno (Pokemon, priced) is the only row the search finds, and Riftbound is the facet, so the
    list is empty until the press runs. */
-test('send tiles: Show Held after a search and a game facet clears both, and shows every held row', async ({ page }) => {
+test('send tiles: Show kept off after a search and a game facet clears both, and shows every kept-off row', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   const sleeper = heldRow(1)
   const riftHeld = sku({ sku: '302', name: 'Sleeper Two', game: 'riftbound' })
@@ -6472,7 +6487,7 @@ test('send tiles: Show Held after a search and a game facet clears both, and sho
   await pickFilter(page, 'Game', /Riftbound/)
   await expect(page.getByText('Nothing matches')).toBeVisible()
 
-  await tile(page, 'held').locator('a, button', { hasText: /^Show Held$/ }).click()
+  await tile(page, 'held').locator('a, button', { hasText: /^Show kept off$/ }).click()
 
   await expect(page.getByRole('searchbox', { name: 'Search This List' })).toHaveValue('')
   const names = await page.locator('.pricing-name').allTextContents()
