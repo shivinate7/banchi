@@ -3444,6 +3444,73 @@ def _unreachable(inventory: master.Inventory, review_count: int, root: Path) -> 
     }
 
 
+def _readable_corpus() -> "corpus.Corpus":
+    """The corpus, or an empty one when it cannot be read: the worklist must still draw."""
+    try:
+        return corpus.Corpus.read()
+    except (decisions.MalformedDecisions, ValueError):
+        return corpus.Corpus()
+
+
+def _day_of(stamp: Optional[str]) -> Optional[str]:
+    """A store stamp as its US Central day (ISO), or None. `suggest` counts whole days."""
+    moment = clock.parse(stamp)
+    return None if moment is None else clock.central_day(moment).isoformat()
+
+
+def _live_wire(snapshot: Optional[Snapshot], book: "corpus.Corpus") -> List[dict]:
+    """The worklist's `live` rows: one per SKU the newest live export lists with copies, each
+    with its asking price, its last sale and the suggestion `suggest.review` gives it.
+
+    EVERYTHING IS READ OFF DISK AND THE STORE; NOTHING IS FETCHED. The asking price is the newest
+    live export's (`_newest_live_listing`), the market and the lowest price with shipping are the
+    `readings` table's, and the last sale is the card state `cmd_reprice._card_facts` reads (its
+    docstring says why never the event log). A store that would not open answers no rows.
+
+    A LISTING WITH NO DATE AT ALL (never seen live, never sold) counts as listed today, because
+    `suggest` needs one date to count unsold days from and age unknown is not age old.
+    `market_listed`, the market on the day it went live, is left out: no read of it exists here yet,
+    so the market-moved trigger cannot fire on this wire.
+    """
+    if snapshot is None:
+        try:
+            snapshot = Store().read()
+        except (files.StoreError, OSError, ValueError, TypeError):
+            return []
+    _, live_now = _newest_live_listing()
+    _, last_sold = cmd_reprice._card_facts(snapshot.inventory)
+    today = clock.central_day(clock.now()).isoformat()
+    readings = snapshot.readings.entries
+
+    def money(text: Optional[str]) -> Optional[Decimal]:
+        try:
+            return tcgcsv.parse_price(text or "")
+        except ArithmeticError:
+            return None
+
+    listings = []
+    for sku, (asking, copies) in sorted(live_now.items()):
+        if not copies:
+            continue
+        reading = readings.get(sku)
+        kept = snapshot.inventory.listings.get(sku)
+        sold = _day_of(last_sold.get(sku))
+        first = _day_of(getattr(kept, "first_seen_live", None))
+        listings.append(
+            {
+                "sku": sku,
+                "live": True,
+                "asking": money(asking),
+                "market": money(reading.market) if reading else None,
+                "low_with_shipping": money(reading.low_with_shipping) if reading else None,
+                "first_seen_live": first or (None if sold else today),
+                "last_sold_at": sold,
+            }
+        )
+    policy = {**book.policy_for(), "limit": book.limit, "value_line": book.value_line}
+    return worklist.live_rows(listings, policy, today)
+
+
 def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.StockImages"] = None) -> dict:
     """`GET /pipeline/pricing` — one pricing worklist over several runs (D86), and since
     D156 the standing list of EVERY COPY THE STORE HOLDS THAT TCGPLAYER
@@ -3514,6 +3581,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
             "threshold": None,
             "floor": None,
             "unreachable": {"captured": 0, "in_review": 0, "unjoined": [], "reallocated": []},
+            "live": _live_wire(None, _readable_corpus()),
         }
 
     names = _box_names()
@@ -4023,6 +4091,8 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
         # identified, one waiting in review, one in a run nobody has joined, and one in a run
         # over a reallocated drawer are each a door to another screen rather than a row here.
         "unreachable": unreachable,
+        # EVERY LIVE LISTING, with its asking price, last sale and suggestion (`_live_wire`).
+        "live": _live_wire(snapshot, book),
         # `remembered_sub_threshold` IS GONE, HERE AND FROM THE PER-RUN ROUTE (D86, amended
         # 2026-09-02). It walked up to five sibling run directories for the newest answer to a
         # question each run had to be asked separately, and offered it as a LABEL because D9
@@ -7150,6 +7220,8 @@ def do_product_history(sku: str) -> dict:
         "condition": row.get(tcgcsv.CONDITION_COLUMN),
     }
 
+    base["asking_postings"] = _asking_postings(wanted)
+
     archived = productview.archive_payload(snapshot.archive, wanted)
     if archived is not None:
         return {
@@ -7191,6 +7263,22 @@ def do_product_history(sku: str) -> dict:
         ),
         "never_sold": not reading.series,
     }
+
+
+def _asking_postings(sku: str) -> List[dict]:
+    """The prices this store has asked for one SKU, oldest first: `{at, price, source, replaced}`.
+
+    THE POSTINGS LEDGER ITSELF, read as `_clear_built_on` reads it. `run` is left off:
+    a screen names what was asked and why, and the run name is the store's own business.
+    """
+    conn = store_db.connect(files.inventory_dir())
+    try:
+        return [
+            {key: row[key] for key in ("at", "price", "source", "replaced")}
+            for row in store_db.postings_for_sku(conn, sku)
+        ]
+    finally:
+        conn.close()
 
 
 def do_product_realized(sku: str) -> dict:

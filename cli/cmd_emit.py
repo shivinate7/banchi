@@ -77,7 +77,7 @@ from pipeline import corpus, decisions, games, join, merge, pricing, routing, se
 from pipeline import skus as skus_walk
 from pathlib import Path
 
-from store import master, files, queues
+from store import master, files, postings, queues
 from store.session import Store
 
 
@@ -651,8 +651,9 @@ class PriceRefused(Exception):
 
 
 def _named_prices(path) -> tuple:
-    """`(prices, moves)` off the `--reprice-live` file. `prices` is SKU -> (price, the live price
-    the screen showed); `moves` is SKU -> the price the button said live copies move to.
+    """`(prices, moves, suggested)` off the `--reprice-live` file. `prices` is SKU -> (price, the
+    live price the screen showed); `moves` is SKU -> the price the button said live copies move
+    to; `suggested` is the set of SKUs whose price is a kept suggestion (`"source": "suggested"`).
 
     THE SCREEN'S OWN LIST (round 6, B1 and B2): the SKUs the owner typed a price for on the
     worklist, the price the button counted, and the live price the screen drew beside it. Since
@@ -677,7 +678,10 @@ def _named_prices(path) -> tuple:
             )
             for row in said.get("moves") or []
         }
-        return prices, moves
+        suggested = {
+            str(row["sku"]) for row in said.get("prices") or [] if row.get("source") == postings.SUGGESTED
+        }
+        return prices, moves, suggested
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         raise PriceRefused(f"the named prices could not be read: {exc}") from None
 
@@ -702,13 +706,23 @@ def _price_changes(args, guarded, candidates, going, floor, say):
             "--reprice-live needs --live-guard: a price change is only ever measured against "
             "what TCGplayer holds right now"
         )
-    named, told = _named_prices(args.reprice_live)
+    named, told, kept = _named_prices(args.reprice_live)
     try:
-        prices = sendguard.live_prices(tcgcsv.read_export(Path(args.live_guard)).rows)
+        export = tcgcsv.read_export(Path(args.live_guard))
+        prices = sendguard.live_prices(export.rows)
     except (OSError, ValueError, tcgcsv.MalformedCsv) as exc:
         raise PriceRefused(f"the live export's prices could not be read: {exc}") from None
+    # A KEPT SUGGESTION IS A PRICE FOR A LISTING THIS PRESS MAY HOLD NO RUN ROW FOR, so it is
+    # judged and filed on TCGplayer's own row, never on a plan row. Its price is saved nowhere,
+    # so the candidate price is the named one. A SKU TCGplayer does not list stays out of
+    # `candidates` and is refused `not_in_send`.
+    live_rows = {tcgcsv.sku_cell(row): row for row in export.rows}
+    suggested = {sku: live_rows[sku] for sku in kept if sku in live_rows and sku not in going}
+    candidates = dict(candidates)
+    for sku, row in suggested.items():
+        candidates[sku] = (row.get(tcgcsv.NAME_COLUMN), named[sku][0])
     changes, left, refused = sendguard.price_changes(
-        named, candidates, guarded["live"], prices, floor, set(going)
+        named, candidates, guarded["live"], prices, floor, set(going), suggested
     )
     moves, unnamed = sendguard.live_moves(going, told, guarded["live"], prices, floor)
     refused = list(refused) + list(unnamed)
@@ -750,7 +764,7 @@ def _record_prices(writable, changes, run) -> None:
     moves. Inside the store write that commits the press, so a refused press posts nothing."""
     for change in changes:
         writable.postings.record(
-            sku=change.sku, price=change.price, source="emit-price", run=run, replaced=change.was
+            sku=change.sku, price=change.price, source=change.source, run=run, replaced=change.was
         )
 
 
@@ -938,7 +952,8 @@ def _zero_rows_single(resolved, priced, changes, args, say):
         sku for game_join in resolved.joins.values() for sku in game_join.report.below_threshold.skus
     }
     changes = _keep_listed(changes, below, args, say)
-    wanted = {change.sku for change in changes}
+    # A KEPT SUGGESTION IS FILED FROM THE LIVE ROW (`_suggested_rows`), never from the run's.
+    wanted = {change.sku for change in changes if change.row is None}
     by_game = {}
     for game_join in resolved.joins.values():
         game = game_join.game
@@ -947,7 +962,28 @@ def _zero_rows_single(resolved, priced, changes, args, say):
             if sku in wanted and sku in priced[game]:
                 rows["sub" if sku in below else "listed"].append(_price_row(match, priced[game][sku]))
         by_game[game] = rows
+    for row in _suggested_rows(changes, set(by_game)):
+        by_game[row.game]["listed"] += merge.import_rows([row])
     return by_game, changes
+
+
+def _suggested_rows(changes, sent_games) -> list:
+    """The kept suggestions' price-only rows, shaped as `_Take` is, filed under the game of the
+    live row's Product Line. A game none of this send's runs files under has no header to write
+    under, so it refuses the press by name (`PriceRefused`) and never drops the row.
+    """
+    out = []
+    for change in changes:
+        if change.row is None:
+            continue
+        game = games.game_for_product_line(change.row.get("Product Line"))
+        if game not in sent_games:
+            raise PriceRefused(
+                f"{change.name or change.sku} ({change.sku}) is not in a game this send files, so its "
+                "suggested price has no file to ride in"
+            )
+        out.append(_Take(change.sku, change.name, game, change.price, 0, change.row))
+    return out
 
 
 def _would(match, typed) -> int:
@@ -1297,6 +1333,44 @@ def _prices_from_today(named, overrides, say) -> bool:
     return True
 
 
+def run_prices_only(args, say) -> int:
+    """`banchi emit` naming no run: the kept suggestions in `--reprice-live`, as price-only rows.
+
+    NO RUN MEANS NO PLAN, so every row is TCGplayer's own live row at Add to Quantity 0 and the
+    only judge is `_price_changes`. It needs `--live-guard` (the read each price is measured
+    against), `--reprice-live` and `--send-dir` (there is no run directory to write into). It
+    claims the SKUs at 0 copies and posts each price in one store write, as the run paths do.
+    """
+    if not (args.reprice_live and args.live_guard and getattr(args, "send_dir", None)):
+        say("emit with no run sends only named prices: it needs --live-guard, --reprice-live and --send-dir.")
+        return 1
+    try:
+        floor = pricing.check_threshold(corpus.Corpus.read().policy_for()["threshold"])
+        changes, left, moves = _price_changes(args, _apply_guard(_live_guard(args), {}, None), {}, {}, floor, say)
+    except (decisions.MalformedDecisions, pricing.InvalidThreshold, GuardRefused, PriceRefused) as refusal:
+        say(f"REFUSING to write: {refusal}. Nothing was written.")
+        return 1
+    _say_prices(changes, left, moves, args, say)
+    if not changes:
+        say(merge.NOTHING_NEW)
+        return 1
+    rows = [
+        tcgcsv.set_writable(change.row, add_to_quantity=0, marketplace_price=change.price)
+        for change in changes
+    ]
+    target = _out(None, runs.import_merged_name(None), args)
+    tcgcsv.write_csv(target, tcgcsv.CANONICAL_HEADER, rows)
+    say(f"import           {len(rows)} row(s), 0 card(s) -> {target}")
+    try:
+        with Store().write() as writable:
+            _claim_or_refuse(writable, {}, {}, args, sorted(change.sku for change in changes))
+            _record_prices(writable, changes, None)
+    except SendClaimRefused as refusal:
+        _say_claim_refusal(refusal, args, say)
+        return 1
+    return 0
+
+
 def run(args, say) -> int:
     # THE CAP IS PARSED FIRST, SO AN UNUSABLE ONE IS A SENTENCE (D7, amended 2026-09-08).
     # `_cap_for` raises `MalformedDecisions`, and the only `except` that names it wraps
@@ -1319,6 +1393,8 @@ def run(args, say) -> int:
     # every reconcile written before D86 behaves identically. `run_merged` is reached only by
     # naming more than one run, which is a thing nobody could do until now.
     named = args.run_dir if isinstance(args.run_dir, list) else [args.run_dir]
+    if not named:
+        return run_prices_only(args, say)
     if not _prices_from_today(named, args.export if len(named) == 1 else None, say):
         return 1
     if len(named) > 1:
@@ -2285,7 +2361,17 @@ def _run_merged(args, say) -> int:
         changes, {row.sku for row in merged_plan.skus if row.sub_threshold}, args, say
     )
     changed = {change.sku for change in changes}
-    rows = rows + [row for row in merged_plan.skus if row.sku in changed]
+    try:
+        suggested_rows = _suggested_rows(
+            changes, {game for resolved in resolved_by_run.values() for game in resolved.joins}
+        )
+    except PriceRefused as refusal:
+        say(f"REFUSING to write: {refusal}. Nothing was written.")
+        return 1
+    # A KEPT SUGGESTION IS FILED FROM THE LIVE ROW, so the plan's own row for that SKU stays out.
+    kept = {row.sku for row in suggested_rows}
+    rows = rows + [row for row in merged_plan.skus if row.sku in changed and row.sku not in kept]
+    rows = rows + suggested_rows
     # A HOLD TAKES ITS LIVE COPIES OFF (D100, the owner's ruling), one row per held SKU, filed
     # with the plan's rows by `_Take`'s own shape.
     takes, blocked, notes = _takeoffs(

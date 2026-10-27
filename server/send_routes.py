@@ -84,12 +84,12 @@ from typing import Any, Callable, Dict, Iterator, List, NamedTuple, NoReturn, Op
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from cli import cmd_reprice, resolve  # noqa: E402
-from pipeline import merge, reprice, sendguard, tcgcsv  # noqa: E402
+from pipeline import corpus, merge, reprice, sendguard, suggest, tcgcsv  # noqa: E402
 from server import pipeline_routes  # noqa: E402
 from server import tcg_export  # noqa: E402
 from server import tcg_import  # noqa: E402
 from server.pipeline_routes import PipelineRefusal  # noqa: E402
-from store import Store, files, master, sendclaims  # noqa: E402
+from store import Store, files, master, postings, sendclaims  # noqa: E402
 from store import clock as store_clock  # noqa: E402
 from store.submissions import proc_start  # noqa: E402
 
@@ -1196,13 +1196,21 @@ def do_send(payload: dict) -> dict:
     `split_threshold` is honoured on a download only: a send is one file.
     """
     wanted = payload.get("runs")
-    if not isinstance(wanted, list) or not wanted:
+    if not isinstance(wanted, list):
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST, "runs_required", "Send a non-empty `runs` list."
         )
     pipeline_routes.refuse_oversize_runs(wanted)
     download = bool(payload.get("download"))
     payload = dict(payload, prices=_named_prices(payload), moves=_named_moves(payload))
+    # NO RUN IS ENOUGH FOR ONE SEND ONLY: named prices that are all kept suggestions. Each is a
+    # price-only row on a listing that is already live, so there is no copy for a run to carry.
+    if not wanted and not (
+        payload["prices"] and all(row.get("source") == postings.SUGGESTED for row in payload["prices"])
+    ):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST, "runs_required", "Send a non-empty `runs` list."
+        )
     if not download and not bool(payload.get("confirm")):
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
@@ -1216,7 +1224,8 @@ def do_send(payload: dict) -> dict:
 
 
 def _named_prices(payload: dict) -> List[dict]:
-    """The price changes the SCREEN named, validated: `[{sku, price, was}]` (round 6, B1 and B2).
+    """The price changes the SCREEN named, validated: `[{sku, price, was}]` (round 6, B1 and B2),
+    each with `"source": "suggested"` when it is a kept suggestion (and no source otherwise).
 
     THE ORCHESTRATOR'S RULING ON THE OWNER'S WORDS: only a SKU the owner typed a price for on
     the worklist rides a send as a price row, and the screen sends the ones its button counted.
@@ -1248,11 +1257,19 @@ def _named_prices(payload: dict) -> List[dict]:
                 "prices_invalid",
                 "Each named price needs a TCGplayer id and a price above zero.",
             )
+        source = row.get("source")
+        if source not in (None, "", postings.SUGGESTED):
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "prices_invalid",
+                f"A named price's source is either left out or \"{postings.SUGGESTED}\".",
+            )
         out.append(
             {
                 "sku": sku,
                 "price": tcgcsv.format_price(price),
                 "was": None if was is None else tcgcsv.format_price(was),
+                **({"source": postings.SUGGESTED} if source == postings.SUGGESTED else {}),
             }
         )
     return out
@@ -1359,6 +1376,47 @@ def _refuse_unreadable_claim() -> None:
         ) from None
 
 
+def _refuse_past_cap(payload: dict, live_path: Path, step: str) -> None:
+    """Refuse a press whose kept suggestions move a live price past the owner's limit.
+
+    THE SERVER NEVER TRUSTS THE CLIENT'S PRICE: each suggestion is measured against the price in
+    the FRESH live read, and a breach names every card and refuses the whole press, before a
+    receipt exists. The limit is the owner's `policy.limit`, the one `pipeline/suggest.py` sorts by.
+    """
+    kept = {
+        row["sku"]: (row["price"], row["was"])
+        for row in payload["prices"]
+        if row.get("source") == postings.SUGGESTED
+    }
+    if not kept:
+        return
+    try:
+        limit = suggest.check_setting(corpus.Corpus.read().limit, suggest.DEFAULT_LIMIT, "limit")
+        fresh = tcgcsv.read_export(live_path)
+        prices = sendguard.live_prices(fresh.rows)
+    except (OSError, ValueError, tcgcsv.MalformedCsv) as exc:
+        files.log_cause('suggestion cap', exc)
+        raise PipelineRefusal(
+            HTTPStatus.BAD_GATEWAY,
+            "live_check_failed",
+            f"Banchi could not check these suggestions because {files.plain_cause(exc)}, so nothing was {step}. Try again.",
+        ) from None
+    names = {tcgcsv.sku_cell(row): row.get(tcgcsv.NAME_COLUMN) for row in fresh.rows}
+    over = sendguard.suggestions_past_cap(kept, prices, limit, names)
+    if not over:
+        return
+    parts = [
+        f"{note.name or note.sku}: ${note.price} is more than {int(limit * 100)}% from the ${note.live} TCGplayer shows"
+        for note in over
+    ]
+    raise PipelineRefusal(
+        HTTPStatus.CONFLICT,
+        "suggestion_past_cap",
+        f"{'; '.join(parts)}. Nothing was {step}.",
+        data={"refused": [note.as_dict() for note in over]},
+    )
+
+
 def _send(payload: dict, directories: Sequence[Path], download: bool, refreshed: Optional[dict] = None) -> dict:
     step = "written" if download else "sent"
     _refuse_unreadable_claim()
@@ -1367,6 +1425,7 @@ def _send(payload: dict, directories: Sequence[Path], download: bool, refreshed:
     live_name, live_path = _fetch_live(step)
     _reconcile(live_path, step)
     live_before = _live_quantities(live_path, step)
+    _refuse_past_cap(payload, live_path, step)
     # NO PRICE WAIT (removed in round 4). A mark-down's `reprice apply --write` writes its new
     # price into the price file, so a listing row carries the new price, never the old one.
 
@@ -1382,7 +1441,8 @@ def _send(payload: dict, directories: Sequence[Path], download: bool, refreshed:
         # (`_press_order`). This server runs one press at a time (`_press`), so it only rises.
         "pressed_ns": time.time_ns(),
         "runs": [d.name for d in directories],
-        "run": sorted(d.name for d in directories)[-1],
+        # A SEND OF KEPT SUGGESTIONS ALONE NAMES NO RUN.
+        "run": sorted(d.name for d in directories)[-1] if directories else None,
         "phase": PHASE_DECIDING,
         "holder": _holder(),
         # THE BASELINE, WRITTEN BEFORE ANY COPY IS COUNTED (the round-2 review, F4). Every SKU
