@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { describeFailure, getInventorySets, getSoldPrices, type Failure, type SoldPricesLookup, failureTone } from './server'
 import type { SetGroup, SetGroupCard } from './types'
-import { EmptyState, Loading, Money, Notice, Pill, Select } from './kit'
+import { Button, EmptyState, HideToggle, Loading, Money, Notice, Pill, Select } from './kit'
 import { patchViewQuery, useViewParam } from './kit/viewState'
 import './InventorySets.css'
 
@@ -53,11 +53,25 @@ function qtyOf(cards: readonly SetGroupCard[]): number {
  *  that is blank. */
 function openInWalk(card: SetGroupCard): void {
   if (card.box !== null) {
-    patchViewQuery({ view: null, set: null, box: String(card.box), card: card.cid })
+    patchViewQuery({ view: null, set: null, master: null, box: String(card.box), card: card.cid })
     return
   }
   const text = card.name ?? card.sku ?? card.number_display
-  patchViewQuery({ view: null, set: null, box: null, card: null, q: text })
+  patchViewQuery({ view: null, set: null, master: null, box: null, card: null, q: text })
+}
+
+/** A row is in the master set when the store holds a retired `master_set` copy of its SKU. The
+ *  demo's recorded bundle predates the field, so a missing value reads as not collected. */
+function isCollected(card: SetGroupCard): boolean {
+  return card.collected === true
+}
+
+/** The tile's one mark, in words (`docs/specs/master-set.md`, section 4). A collected row wins over
+ *  a single copy; a row of two or more copies that is not collected has none. */
+function markOf(card: SetGroupCard): { readonly tone: 'ok' | 'warn'; readonly word: string } | null {
+  if (isCollected(card)) return { tone: 'ok', word: 'In master set' }
+  if (card.qty === 1) return { tone: 'warn', word: 'Last copy' }
+  return null
 }
 
 /** THE MAIN VIEW ON THIS SCREEN, per the owner's own ask (`D301`): "if it'd be easy
@@ -78,9 +92,13 @@ function SetCardImage({ url }: { readonly url: string | null }) {
  *  price. NO LOCATION: the owner's own ruling, 2026-09-26 — a box or a shelf is what opening
  *  the card answers, never what the tile itself says. */
 function SetCardTile({ card, market }: { readonly card: SetGroupCard; readonly market: string | null }) {
+  const mark = markOf(card)
   return (
     <button type="button" className="sets-tile" onClick={() => openInWalk(card)}>
       <SetCardImage url={card.image_url} />
+      {/* THE MARK HAS ITS OWN LINE, THE HEIGHT OF A PILL, ON EVERY TILE: a tile with no mark keeps
+          the empty line, so a tile's height never depends on its mark (D313). */}
+      <span className="sets-tile-mark">{mark === null ? null : <Pill tone={mark.tone}>{mark.word}</Pill>}</span>
       <span className="sets-tile-number bn-mono">{card.number_display ?? '—'}</span>
       <span className="sets-tile-name">{card.name ?? 'Not Identified Yet'}</span>
       <span className="sets-tile-meta">
@@ -124,6 +142,9 @@ export function InventorySets({ reloadToken = 0 }: { readonly reloadToken?: numb
   const [report, setReport] = useState<Awaited<ReturnType<typeof getInventorySets>> | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [setParam, setSetParam] = useViewParam('set', '')
+  /* "HIDE MY MASTER SET" LIVES IN THE URL (D285): `?master=open`, off by default. */
+  const [masterParam, setMasterParam] = useViewParam('master', '')
+  const hideMaster = masterParam === 'open'
   const [prices, setPrices] = useState<SoldPricesLookup>({})
 
   useEffect(() => {
@@ -181,13 +202,18 @@ export function InventorySets({ reloadToken = 0 }: { readonly reloadToken?: numb
     // landed a different card list), which `?.key` alone would have missed.
   }, [current])
 
+  const collected = current === null ? 0 : current.cards.filter(isCollected).length
+  /* The filter narrows the grid and never re-sorts it: printed order holds (spec section 4). */
+  const shown = current === null ? [] : hideMaster ? current.cards.filter((card) => !isCollected(card)) : current.cards
+
   if (failure !== null) {
     return <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />
   }
   if (report === null) return <Loading shape="cards" rows={12} />
 
-  const total = qtyOf(report.groups.flatMap((group) => group.cards)) + qtyOf(report.no_set)
-  if (total === 0) {
+  /* ROWS, NOT COPIES: a set whose only rows are master-set copies with none on hand has no copy to count and is still a set. */
+  const rows = report.groups.reduce((sum, group) => sum + group.cards.length, 0) + report.no_set.length
+  if (rows === 0) {
     return (
       <EmptyState
         icon="layers"
@@ -199,35 +225,54 @@ export function InventorySets({ reloadToken = 0 }: { readonly reloadToken?: numb
 
   return (
     <div className="inventory-sets">
-      <div className="sets-picker">
-        <Select
-          label="Set"
-          value={current?.key ?? null}
-          placeholder="Choose a set…"
-          options={options.map((option) => ({
-            value: option.key,
-            label: option.label,
-            text: option.label,
-            count: option.count,
-          }))}
-          onChange={(next) => setSetParam(next === (options[0]?.key ?? '') ? '' : next)}
-        />
+      <div className="sets-controls">
+        <div className="sets-picker">
+          <Select
+            label="Set"
+            value={current?.key ?? null}
+            placeholder="Choose a set…"
+            options={options.map((option) => ({
+              value: option.key,
+              label: option.label,
+              text: option.label,
+              count: option.count,
+            }))}
+            onChange={(next) => setSetParam(next === (options[0]?.key ?? '') ? '' : next)}
+          />
+        </div>
+        {/* The count stays when the filter is on: it is what the filter hides, so it holds still (D313). */}
+        <div>
+          <HideToggle checked={hideMaster} onChange={(next) => setMasterParam(next ? 'open' : '')} count={collected}>
+            Hide my master set
+          </HideToggle>
+        </div>
       </div>
       {current === null ? null : (
         <>
           <div className="sets-header bn-dotline">
             {gameLabel(current.game) ? <span>{gameLabel(current.game)}</span> : null}
             <span>{current.label}</span>
-            <span>{count(current.count, 'card')}</span>
+            <span>{count(current.count, 'copy', 'copies')}</span>
+            {/* ROWS, NEVER THE SET'S PRINTED SIZE: the denominator is the rows this view holds. */}
+            <span>{`${collected} of ${current.cards.length} in your master set`}</span>
           </div>
           <div className="sets-grid">
-            {current.cards.map((card) => (
-              <SetCardTile
-                key={card.sku ?? `${card.name ?? ''}|${card.number_display ?? ''}`}
-                card={card}
-                market={card.sku === null ? null : prices[card.sku]?.market ?? null}
+            {shown.length === 0 ? (
+              <EmptyState
+                className="sets-empty"
+                icon="layers"
+                title="Every card of this set is in your master set."
+                actions={<Button onClick={() => setMasterParam('')}>Show Every Card</Button>}
               />
-            ))}
+            ) : (
+              shown.map((card) => (
+                <SetCardTile
+                  key={card.sku ?? `${card.name ?? ''}|${card.number_display ?? ''}`}
+                  card={card}
+                  market={card.sku === null ? null : prices[card.sku]?.market ?? null}
+                />
+              ))
+            )}
           </div>
         </>
       )}

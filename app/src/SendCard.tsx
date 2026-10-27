@@ -19,17 +19,22 @@
  *    published, and a downloaded file is not uploaded. Drawn until the owner dismisses it, and
  *    on a phone folded to one line that opens (round 5);
  *  - a MIXED press (the owner's ruling, 2026-09-24: "Allow mixed"): new copies and price
- *    changes on cards already live, named apart, "Send 3 copies and 2 price changes".
+ *    changes on cards already live, named apart, "Send 3 copies and 2 price changes";
+ *  - the master-set take-offs still owed (`docs/specs/master-set.md`, section 5): a copy pulled
+ *    for the master set that TCGplayer still lists. One line under the press, a press per card,
+ *    and one for all.
  *
  * NO PIPELINE WORD REACHES THE SCREEN (D196): not emit, not staged, not reconcile. */
 
 import { count } from './kit/dataRules'
-import { Fragment, useEffect, useId, useState } from 'react'
-import { Button, Icon, IconButton, Money, Notice, Refusal, Retry } from './kit'
+import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
+import { Button, Icon, IconButton, Money, Notice, Pill, Refusal, Retry } from './kit'
 import { atClockTime, clockTime, dayMonth } from './dates'
-import { describeFailure, dismissSendWarning, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, takeBackSend } from './server'
+import { describeFailure, dismissSendWarning, getOwedTakeOffs, pressOwedTakeOffs, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, takeBackSend } from './server'
 import type { Failure } from './server'
-import type { EmptySend, LiveMove, PriceChange, RefusedPrice, SendSummary, SendTrim } from './types'
+import type { EmptySend, LiveMove, OwedTakeOff, PriceChange, RefusedPrice, SendSummary, SendTrim } from './types'
+import { outcomeOfOwed, pressTakeOff, refused, viewOf, type TakeOffOutcome, type TakeOffView } from './takeOff'
 import { emptySendTitle } from './standing'
 import { current as liveState, refresh as refreshLive, useLiveCheck } from './liveCheck'
 import './SendCard.css'
@@ -132,6 +137,252 @@ function refusalTitle(code: string, data?: unknown): string {
         ? 'TCGplayer did not take the send. Nothing is live, and the copies are back on the list.'
         : 'This send did not go through. Check what is live before you send again.'
   }
+}
+
+/* ---------------------------------------------------------------- the take-offs still owed
+ *
+ * A master-set pull that left TCGplayer listing the copy, and was not taken off at the pull or
+ * failed, waits here (`docs/specs/master-set.md`, section 5). One entry per SKU. It leaves the
+ * list once it is sent and settled, the listing matches, or the retirement is undone. */
+
+/** The owed list, read once with the bar's first read (the bar grows under the person's eyes if
+ *  it lands later), and again when a send or a live check ends. A read that failed is not "nothing
+ *  owed": it is `failure`, and the card says it could not read. */
+export type OwedTakeOffs = {
+  readonly owed: readonly OwedTakeOff[]
+  readonly loading: boolean
+  readonly failure: Failure | null
+  readonly reload: () => void
+}
+
+export function useOwedTakeOffs(): OwedTakeOffs {
+  const [owed, setOwed] = useState<readonly OwedTakeOff[]>([])
+  const [loading, setLoading] = useState(true)
+  const [failure, setFailure] = useState<Failure | null>(null)
+  const [reads, setReads] = useState(0)
+  useEffect(() => {
+    let live = true
+    getOwedTakeOffs()
+      .then((answer) => {
+        if (!live) return
+        setOwed(answer.owed)
+        setFailure(null)
+      })
+      .catch((err: unknown) => {
+        if (live) setFailure(describeFailure(err))
+      })
+      .finally(() => {
+        if (live) setLoading(false)
+      })
+    return () => {
+      live = false
+    }
+  }, [reads])
+  const reload = useCallback(() => setReads((n) => n + 1), [])
+  return { owed, loading, failure, reload }
+}
+
+const ownedCopies = (entry: OwedTakeOff): number => Math.max(1, entry.excess)
+const entryKey = (entry: OwedTakeOff): string => entry.sku ?? `${entry.box}/${entry.index}`
+const NOTICE_TONE: Record<TakeOffView, 'warn' | 'ok' | 'danger' | 'info'> = {
+  offer: 'warn',
+  sent: 'ok',
+  failed: 'danger',
+  matches: 'ok',
+  onway: 'info',
+  nosession: 'warn',
+}
+
+/** Every state of one sentence or press in one grid cell, only the current one visible, so the
+ *  line keeps the box of its tallest state from the first paint (D313). */
+function OwedCell({ current, states }: { readonly current: string; readonly states: Readonly<Record<string, ReactNode>> }) {
+  return (
+    <div className="send-owed-cell">
+      {Object.entries(states).map(([key, node]) => (
+        <span key={key} className="send-owed-state" data-off={key === current ? undefined : 'true'} aria-hidden={key === current ? undefined : true}>
+          {node}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function OwedTakeOffsLine({
+  owed,
+  taking,
+  locked,
+  setTaking,
+}: {
+  readonly owed: readonly OwedTakeOff[]
+  /** The entry key being pressed, `all` for Take All, or null. One press runs at a time. */
+  readonly taking: string | null
+  /** A send or a download is running, so no take-off press is offered. */
+  readonly locked: boolean
+  readonly setTaking: (key: string | null) => void
+}) {
+  const [answers, setAnswers] = useState<Readonly<Record<string, TakeOffOutcome>>>({})
+  const [open, setOpen] = useState(false)
+  /* An answer stands until the list is read again, so an entry never leaves from under the person (D313). */
+  useEffect(() => setAnswers({}), [owed])
+
+  const viewOfEntry = (entry: OwedTakeOff): TakeOffView => answers[entryKey(entry)]?.view ?? viewOf(entry.state)
+  const off = taking !== null || locked
+
+  const pressOne = async (entry: OwedTakeOff) => {
+    setTaking(entryKey(entry))
+    const outcome = await pressTakeOff(entry.box, entry.index)
+    setAnswers((held) => ({ ...held, [entryKey(entry)]: outcome }))
+    setTaking(null)
+  }
+  const pressAll = async () => {
+    setTaking('all')
+    try {
+      const { results } = await pressOwedTakeOffs()
+      setAnswers((held) => ({ ...held, ...Object.fromEntries(results.map((result) => [result.sku, outcomeOfOwed(result)])) }))
+    } catch (err) {
+      const outcome = refused(describeFailure(err))
+      setAnswers((held) => ({ ...held, ...Object.fromEntries(owed.map((entry) => [entryKey(entry), outcome])) }))
+    } finally {
+      setTaking(null)
+    }
+  }
+  const press = (entry: OwedTakeOff, label: string, again = false) => (
+    <Button size="sm" icon={again ? 'refresh' : undefined} busy={taking === entryKey(entry)} disabled={off} onClick={() => void pressOne(entry)}>
+      {label}
+    </Button>
+  )
+  const pressable = owed.filter((entry) => ['offer', 'failed'].includes(viewOfEntry(entry)))
+  /* TAKE ALL COUNTS ONLY WHAT IS STILL LEFT TO PRESS: an entry that was answered is not asked again. */
+  const pressableCopies = pressable.reduce((sum, entry) => sum + ownedCopies(entry), 0)
+  const said = (
+    <span className="bn-sr" role="status">
+      {taking === null ? '' : 'Taking it off TCGplayer…'}
+    </span>
+  )
+
+  if (owed.length === 1) {
+    const entry = owed[0] as OwedTakeOff
+    const view = viewOfEntry(entry)
+    const answer = answers[entryKey(entry)]
+    const name = <span data-typed>{entry.name || 'this card'}</span>
+    const copies = ownedCopies(entry)
+    const n = answer !== undefined && answer.taken > 0 ? answer.taken : copies
+    const failure = view === 'failed' ? (answer?.failure ?? null) : null
+    const detail = view === 'failed' ? failure?.message || entry.failure || undefined : undefined
+    return (
+      <Notice
+        tone={NOTICE_TONE[view]}
+        compact
+        className={`send-standing send-owed${view === 'failed' ? ' bn-retry' : ''}`}
+        code={failure?.code}
+        detail={detail}
+        title={
+          <OwedCell
+            current={view}
+            states={{
+              offer: <>TCGplayer still lists {count(copies, 'copy', 'copies')} of {name} from your master set.</>,
+              sent: (
+                <>
+                  TCGplayer accepted: {count(n, 'copy', 'copies')} of {name} {n === 1 ? 'is' : 'are'} off.
+                  {answer?.checkAfter ? ` Banchi checks again after ${clockTime(answer.checkAfter)}.` : ''}
+                </>
+              ),
+              failed: <>TCGplayer did not take {name} off, so nothing went live. It stays on this list.</>,
+              matches: <>TCGplayer already lists only the copies of {name} you hold. Nothing was sent.</>,
+              onway: <>The take-off of {name} is on its way. This list drops it after the check.</>,
+              nosession: (
+                <>TCGplayer is not signed in, so {name} stays listed. Sign in, then press Refresh.</>
+              ),
+            }}
+          />
+        }
+        action={
+          <>
+            <OwedCell
+              current={view}
+              states={{
+                offer: <span className="send-owed-press">{press(entry, 'Take It Off TCGplayer')}</span>,
+                failed: <span className="send-owed-press">{press(entry, 'Try again', true)}</span>,
+              }}
+            />
+            {said}
+          </>
+        }
+      />
+    )
+  }
+
+  /* SEVERAL: one line, one press for all, and a fold. Open, the list floats over the worklist
+     (`.send-moves`), so the bar keeps its height. */
+  const total = owed.reduce((sum, entry) => sum + ownedCopies(entry), 0)
+  const accepted = owed.reduce((sum, entry) => {
+    const answer = answers[entryKey(entry)]
+    return answer?.view === 'sent' ? sum + (answer.taken > 0 ? answer.taken : ownedCopies(entry)) : sum
+  }, 0)
+  const left = owed.reduce((sum, entry) => (['matches', 'sent'].includes(viewOfEntry(entry)) ? sum : sum + ownedCopies(entry)), 0)
+  const answered = owed.some((entry) => answers[entryKey(entry)] !== undefined)
+  const mode = answered ? 'answered' : owed.every((entry) => viewOfEntry(entry) === 'nosession') ? 'nosession' : 'several'
+  const cards = count(owed.length, 'Card')
+  return (
+    <Notice
+      tone={mode === 'answered' && left === 0 ? 'ok' : 'warn'}
+      compact
+      className="send-standing send-owed send-moves"
+      title={
+        <OwedCell
+          current={mode}
+          states={{
+            several: `TCGplayer still lists ${count(total, 'copy', 'copies')} from your master set.`,
+            nosession: `TCGplayer is not signed in, so these ${count(total, 'copy', 'copies')} stay listed. Sign in, then press Refresh.`,
+            answered:
+              left === 0
+                ? accepted > 0
+                  ? `TCGplayer accepted: ${count(accepted, 'copy', 'copies')} ${accepted === 1 ? 'is' : 'are'} off.`
+                  : 'TCGplayer already lists only what you hold. Nothing was sent.'
+                : `TCGplayer accepted ${accepted} of ${count(total, 'copy', 'copies')}. ${left} ${left === 1 ? 'stays' : 'stay'} on this list.`,
+          }}
+        />
+      }
+      action={
+        <>
+          {pressable.length === 0 ? null : (
+            <Button size="sm" busy={taking === 'all'} disabled={off} onClick={() => void pressAll()}>
+              {`Take All ${pressableCopies} ${pressableCopies === 1 ? 'Copy' : 'Copies'} Off`}
+            </Button>
+          )}
+          <Button variant="quiet" size="sm" icon={open ? 'chevronUp' : 'chevronDown'} onClick={() => setOpen((on) => !on)} aria-expanded={open} words="word-only-control">
+            {/* THE LABEL HOLDS THE WIDER OF ITS TWO STATES, as the moves list's does. */}
+            <span className="send-toggle">
+              <span aria-hidden={open ? undefined : 'true'} data-hidden={open ? undefined : 'true'}>{`Hide ${cards}`}</span>
+              <span aria-hidden={open ? 'true' : undefined} data-hidden={open ? 'true' : undefined}>{`Show ${cards}`}</span>
+            </span>
+          </Button>
+          {said}
+        </>
+      }
+    >
+      <ul className="send-names" hidden={!open}>
+        {owed.map((entry) => {
+          const view = viewOfEntry(entry)
+          const answer = answers[entryKey(entry)]
+          return (
+            <li key={entryKey(entry)}>
+              <span className="send-name">
+                <span data-typed>{entry.name || entry.sku}</span>
+                {entry.set_name === '' ? null : <span className="send-owed-set">{entry.set_name}</span>}
+              </span>
+              <span className="send-figure">{count(answer !== undefined && answer.taken > 0 ? answer.taken : ownedCopies(entry), 'copy', 'copies')}</span>
+              {view === 'offer' ? press(entry, 'Take It Off') : null}
+              {view === 'failed' ? press(entry, 'Try again', true) : null}
+              {view === 'sent' ? <Pill tone="ok">Taken off</Pill> : null}
+              {view === 'matches' ? <Pill tone="ok">Already matches</Pill> : null}
+              {view === 'onway' ? <Pill>On its way</Pill> : null}
+            </li>
+          )
+        })}
+      </ul>
+    </Notice>
+  )
 }
 
 /** SEND THE REST: the cards the run held that the store no longer has, by last-known name. */
@@ -582,6 +833,7 @@ export function SendCard({
   settled,
   saveFailed,
   quantities,
+  owed,
   onSent,
 }: {
   /** The runs whose copies this send carries: the worklist's own list. */
@@ -603,10 +855,20 @@ export function SendCard({
   readonly saveFailed: () => boolean
   /** The per-row quantities typed for this press. */
   readonly quantities: () => Record<string, number>
+  /** The master-set take-offs still owed, read by the screen with the worklist: it draws the bar
+   *  while one is owed, even when nothing else waits to send. */
+  readonly owed: OwedTakeOffs
   /** A send or a download landed: the worklist should read again. */
   readonly onSent: () => void
 }) {
   const live = useLiveCheck()
+  const reloadOwed = owed.reload
+  /* A LIVE CHECK THAT ENDS MAY HAVE SETTLED A TAKE-OFF: read the owed list again (the answers it held leave with it). */
+  const wasChecking = useRef(false)
+  useEffect(() => {
+    if (wasChecking.current && !live.checking) reloadOwed()
+    wasChecking.current = live.checking
+  }, [live.checking, reloadOwed])
   const whyId = useId()
   const [passed, setPassed] = useState<readonly string[]>([])
   const [phase, setPhase] = useState<'idle' | 'waiting' | 'sending' | 'downloading'>('idle')
@@ -625,6 +887,8 @@ export function SendCard({
   const [armed, setArmed] = useState<string | null>(null)
   const [freed, setFreed] = useState<string | null>(null)
   const [releasing, setReleasing] = useState(false)
+  /* A TAKE-OFF PRESS RUNS (`all`, or one entry's key): the sends share one guard, so Send and Download wait for it. */
+  const [taking, setTaking] = useState<string | null>(null)
   /* A TAKE BACK OR A DISMISS THAT FAILED IS ITS OWN LINE, never the press's failure: that one
      offers "Try again", which SENDS, and says the copies are back on the list. */
   const [undoFailure, setUndoFailure] = useState<{ title: string; failure: Failure } | null>(null)
@@ -662,6 +926,7 @@ export function SendCard({
         setFailure(null)
         setConfirmed({ was: {}, moves: {} })
         onSent()
+        reloadOwed()
       } catch (err) {
         const failed = describeFailure(err)
         if (DROPPED.has(failed.code)) {
@@ -679,7 +944,7 @@ export function SendCard({
         void refreshLive()
       }
     })()
-  }, [phase, settled, saveFailed, intent, runs, split, quantities, priceChanges, liveMoves, confirmed, onSent])
+  }, [phase, settled, saveFailed, intent, runs, split, quantities, priceChanges, liveMoves, confirmed, onSent, reloadOwed])
 
   const press = (next: 'send' | 'download') => {
     setIntent(next)
@@ -736,7 +1001,7 @@ export function SendCard({
   const lastSend = (live.status?.sends ?? []).find((send) => send.kind === 'send') ?? null
   const blocking = lastSend !== null && lastSend.state === 'short' && !passed.includes(lastSend.stamp) ? lastSend : null
   const incomplete = blocking !== null
-  const busy = phase !== 'idle' || running
+  const busy = phase !== 'idle' || running || taking !== null
   /* NOTHING READY, NOTHING TO PRESS (R4 F5): with no copy and no price change the press could
      only be refused, so it is disabled until a copy is ready. */
   const empty = copies === 0 && priceChanges.length === 0
@@ -880,6 +1145,20 @@ export function SendCard({
           Refresh
         </Button>
       </div>
+
+      {/* FIRST OF THE CARD'S NOTICES, so a receipt or a refusal that comes and goes draws under it and the line never moves. */}
+      {owed.owed.length === 0 ? null : <OwedTakeOffsLine owed={owed.owed} taking={taking} locked={phase !== 'idle' || running} setTaking={setTaking} />}
+      {owed.failure === null ? null : (
+        <Retry
+          compact
+          className="send-failure"
+          title="Banchi could not read the take-offs owed."
+          code={owed.failure.code}
+          detail={owed.failure.message}
+          busy={owed.loading}
+          onRetry={owed.reload}
+        />
+      )}
 
       {!downloadOpen ? null : (
         <div className="send-download">

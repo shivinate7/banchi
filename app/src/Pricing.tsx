@@ -123,7 +123,7 @@ import type { FilterFacet, SortOption, SortValue } from './kit'
 import { dismissToast, toast } from './kit/toast'
 import { PriceMovers } from './PriceMovers'
 import './Pricing.css'
-import { SendCard } from './SendCard'
+import { SendCard, useOwedTakeOffs } from './SendCard'
 import { useLeaveWarning } from './useLeaveWarning'
 import { ABSENT_SENTENCE, AbsentPhotoNote, gameLabel, noPhotoSentence } from './CardHero'
 
@@ -2692,8 +2692,10 @@ export function Pricing() {
     barObserver.current = observer
   }, [])
 
-  /* THE WORKLIST IS STILL IN FLIGHT on the Unsent tab. */
-  const barLoading = !liveTab && loading && table === null
+  /* THE MASTER-SET TAKE-OFFS STILL OWED are read with the worklist, so the bar's first paint holds their line (D313). */
+  const owedTakeOffs = useOwedTakeOffs()
+  /* THE WORKLIST, OR THE OWED LIST, IS STILL IN FLIGHT on the Unsent tab. */
+  const barLoading = !liveTab && ((loading && table === null) || owedTakeOffs.loading)
 
   /* THE SEND BAR'S THREE TILES (the owner's Preflight pick): where pricing stands before the one
      press, from the same figures the line said. Each link shows the rows its tile counts, so it
@@ -2776,7 +2778,7 @@ export function Pricing() {
      pending and the press is the card's own, off with nothing to send, so the bar is the height it
      will be and the list lands under it, not over it. */
   const bar =
-    !liveTab && (barLoading || loaded.length > 0) ? (
+    !liveTab && (barLoading || loaded.length > 0 || owedTakeOffs.owed.length > 0) ? (
       <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send to TCGplayer" aria-busy={barLoading ? 'true' : undefined}>
         {tally}
         {barLoading ? (
@@ -2806,6 +2808,7 @@ export function Pricing() {
             settled={!dirty && !saving}
             saveFailed={saveFailed}
             quantities={quantitiesAsked}
+            owed={owedTakeOffs}
             onSent={afterSend}
           />
         )}
@@ -2995,7 +2998,15 @@ export function Pricing() {
       toolbarLabel="Which rows"
       status={hasStatus ? status : undefined}
       loading={loading && table === null && !barLoading}
-      empty={showList ? undefined : empty}
+      empty={
+        showList || empty === null || liveTab || owedTakeOffs.owed.length === 0 ? (showList ? undefined : empty) : (
+          /* A TAKE-OFF OWED KEEPS THE BAR, even with nothing else to send: the empty state sits under it. */
+          <div className="pricing-body">
+            {bar}
+            {empty}
+          </div>
+        )
+      }
     >
       <div className="pricing-body" data-live={liveTab ? 'true' : undefined}>
         {bar}

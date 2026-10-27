@@ -146,9 +146,9 @@ export function soldSince(soldHere: number | null | undefined): number {
   return figure(soldHere)
 }
 
-/* THE FOUR WAYS A CARD LEAVES WITHOUT A SALE (D26), ONE LABEL AND ONE SENTENCE EACH (UX-241).
+/* THE FIVE WAYS A CARD LEAVES WITHOUT A SALE (D26), ONE LABEL AND ONE SENTENCE EACH (UX-241).
  *
- * Inventory's Retire dialog and Review's Close dialog named the same four stored codes two ways:
+ * Inventory's Retire dialog and Review's Close dialog named the same stored codes two ways:
  * "Pulled out" beside "Pulled", "Not in a condition to sell" beside "Not sellable at the
  * condition listed". This is the one table both read. The stored code never reaches the screen
  * (D196): a screen draws `label` and `said`. */
@@ -157,6 +157,7 @@ export const RETIRE_REASONS: readonly { readonly reason: RetireReason; readonly 
   { reason: 'damaged', label: 'Damaged', said: 'Not in a condition to sell.' },
   { reason: 'lost', label: 'Lost', said: 'Gone, and not sold.' },
   { reason: 'given_away', label: 'Given away', said: 'Left as a gift or a trade.' },
+  { reason: 'master_set', label: 'Master set', said: 'Kept for your own collection.' },
 ]
 
 /** The retire reason as a person reads it: `given_away` is `Given away`. Takes `string` because
