@@ -1,6 +1,6 @@
 # Master set: see which cards to pull before they sell
 
-**Status: DRAFT. Nothing here is built.** It extends the Sets view on `#/inventory`
+**Status: DRAFT. Nothing here is built. Rulings 7.1 and 7.3 are settled; 7.2 waits on one decision.** It extends the Sets view on `#/inventory`
 (D293, inventory has a by-set view). It adds no route to `ROUTES` and no nav row (D31, one
 owner-side view of stored cards).
 
@@ -17,29 +17,27 @@ rule (it would also reopen D7, duplicates aggregate by SKU: caps live per send, 
 key). It rules out the per-SKU `keeping` withhold in `pipeline/decisions.WITHHOLD_REASONS` for
 this job too, because that withholds every copy of the SKU.
 
-## 2. The master list is the `pulled` retirements
+## 2. The master list is the `master_set` retirements
 
-There is no new store fact. **A card is in the master set when the store holds a copy of its
-SKU retired with reason `pulled`** (D26, retired is a terminal card state;
-`store/master.RETIRE_REASONS`). Pulling stays the existing retire press, with its receipt and
-its undo. Undoing the retirement takes the card back off the master list.
+**Owner's ruling: the master set gets its own retire reason.** `store/master.RETIRE_REASONS`
+gains a fifth member, `master_set`, labeled "Master set" on screen. **A card is in the master
+set when the store holds a copy of its SKU retired with reason `master_set`** (D26, retired is a
+terminal card state). Only that reason counts. The 10 Riftbound cards already retired `pulled`
+do not count. Pulling for the master set is the existing retire press with the new reason, with
+its receipt and its undo. Undoing the retirement takes the card back off the master list.
 
 - The key is the SKU, so a foil and a normal printing are two master-list entries. The Sets
   view already keys rows on the SKU (`do_pipeline_sets`) and draws `printing` on each row.
 - A card with no SKU (`sku_unknown`, D258, identity follows the SKU) cannot be on the list. It
   shows as not collected, with no badge change.
-- `pulled` already has other meanings for the owner: 10 Riftbound cards on the owner's store are
-  retired `pulled` today. They count as collected from day one. Open question 7.1 asks whether
-  that is right.
-
 ## 3. What the route adds
 
 `GET /pipeline/sets` (`server/pipeline_routes.do_pipeline_sets`) gains one boolean per row,
 `collected`. It is true when any card with that SKU has state `retired` and `retire_reason`
-`pulled`. It is one more `cards.select` over retired cards, inside the same plain read: no
+`master_set`. It is one more `cards.select` over retired cards, inside the same plain read: no
 socket, no write, no lock.
 
-A set that holds only pulled copies and no on-hand copy has no row today, because the route reads
+A set that holds only master-set copies and no on-hand copy has no row today, because the route reads
 `identified` cards only. **The route also adds those rows, with `qty: 0` and `collected: true`**,
 so a set's master list is whole. Their `box` is null, so a tap uses the existing `?q=` fallback
 (`InventorySets.openInWalk`).
@@ -60,21 +58,36 @@ Inside the Sets view, under the set picker:
   rows plus collected rows until section 6 lands. It is never shown as the set's printed size.
 - **Order stays printed order.** The filter narrows the grid. It never re-sorts it.
 - **A tap stays the ordinary walk.** Pulling happens there, through the existing retire press with
-  reason `pulled`. This draft adds no write to the Sets view.
+  reason `master_set`. This draft adds no write to the Sets view.
 
-## 5. A pulled copy that is already live on TCGplayer
+## 5. A master-set copy that is already live on TCGplayer
 
-The owner corrects it after the pull with a negative `Add to Quantity` (D100, never delete to
-lower a price). What exists today, measured in code:
+**Owner's ruling: automatic.** When a `master_set` pull leaves fewer copies on hand than
+TCGplayer has live for that SKU, the live count comes down to the on-hand count with no press.
+The owner: "adjusted down immediately for that specific item".
 
-- `banchi reconcile --phantoms <my-pricing.csv>` lists SKUs live beyond what is on hand. A
-  pulled copy is no longer on hand, so it shows there. It is read-only.
-- `emit --live-guard FILE` trims rows so TCGplayer never holds more copies than are here.
-- `cli/cmd_emit._Take` writes negative take-off rows only for withheld SKUs, not for a retired
-  copy.
+What exists to build it on, measured in code and in D100 (never delete to lower a price):
 
-So the correction path for one pulled copy is the phantoms worklist today. Open question 7.2 asks
-whether it should be one press.
+- A negative `Add to Quantity` is a signed delta, and TCGplayer clamps it at 0 (D100's
+  amendment, both measured). A doubled take-off cannot go below zero.
+- The hold take-off already does this for a withheld SKU (`cli/cmd_emit._Take`): sized from a
+  live read at most `cli/cmd_emit.TAKE_READ_FRESH_S` old, less copies sold since, one
+  outstanding per SKU until a live check settles it, and passed by `server/tcg_import._check`
+  only at exactly that size.
+- `server/tcg_import.push_to_staged` and `move_to_live` push it. `emit --live-guard FILE` trims
+  sends so TCGplayer never holds more copies than are here.
+
+**Not ruled yet: it conflicts with D100's phantom ruling.** D100 says a phantom (live above on
+hand) is cleared by a session, with a take-off sent only on the owner's yes for that SKU, and no
+screen control or send-path lane. A `master_set` pull of a live copy makes exactly such a
+phantom. D54 (re-emit adds, never subtracts) is not touched: it governs what `emit` writes for
+copies not yet sent, and D100's take-off rows already sit beside it. The orchestrator holds the
+decision on the D100 conflict. This section is rewritten when it lands.
+
+## 5a. Scope of the automatic take-off
+
+Only a `master_set` retirement triggers it. A sale marked in the app, or another retire
+reason, also leaves live above on hand. Widening the trigger is a separate question.
 
 ## 6. Later: cards the store has never held
 
@@ -85,19 +98,19 @@ catalog. It would need the TCGplayer catalog the stock photos already read
 (`pipeline/stockimages.StockImages`, D301, stock photos are hotlinked). This is a second step,
 because it is the only part that needs a catalog and the network.
 
-## 7. Open questions for the owner
+## 7. Rulings
 
-1. Do the 10 Riftbound cards already retired `pulled` count as collected, or does the master set
-   need its own reason (a fifth `RETIRE_REASONS` member, such as `master_set`)?
-2. Should the Sets view offer a one-press "take the live copy off" after a pull of a live card, or
-   is the phantoms worklist enough?
-3. Should "Last copy" also count captured copies not yet identified? Today the route reads
-   `identified` cards only, so a fresh capture of the same card does not count yet.
+1. **Own reason.** The master set is the `master_set` retire reason only. Old `pulled`
+   retirements do not count (section 2).
+2. **Automatic take-off.** A `master_set` pull lowers live to on hand with no press. How it
+   squares with D100's phantom ruling is open (section 5).
+3. **Identified only.** "Last copy" counts `identified` cards only, as the route reads today. A
+   capture not yet identified does not count.
 
 ## 8. How it is checked
 
-- Harness test T7 grows a case: one SKU with one on-hand copy and one `pulled` copy reads
-  `collected: true`. A SKU whose only copy is `pulled` reads `qty: 0`.
+- Harness test T7 grows a case: one SKU with one on-hand copy and one `master_set` copy reads
+  `collected: true`. A SKU whose only copy is `master_set` reads `qty: 0`, and a `pulled` copy reads `collected: false`.
 - An app spec at 1440 and 820, light and dark: the filter hides collected rows, and the Last copy
   mark shows on a `qty: 1` row only.
 
