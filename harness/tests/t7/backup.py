@@ -67,7 +67,9 @@ and no damaged store snapshot is ever moved in.
                               and says that accepting one is a manual act (delete its copy by hand), and the
                               walk goes on, so a missing file is still copied. The differs are not forgotten:
                               the next run fails the same way. It never deletes in the destination, so a sold
-                              card's photograph (D89) stays.
+                              card's photograph (D89) stays. A copy is written beside its place under a `.tmp`
+                              name and renamed in, so a run killed mid-copy leaves no partial file at the
+                              photograph's path for the next run to read as `differs`.
                               Mtimes within 2 s of each other count as equal (a synced folder rounds them);
                               the size must still match. One file that cannot be read or stat-ed (a dangling
                               link, no permission) does not stop the run: the rest are copied, the snapshot is
@@ -97,7 +99,10 @@ and no damaged store snapshot is ever moved in.
                               `captures/` against the destination and runs the integrity check on the newest dated
                               copy. It prints one line with `matches=N mismatches=N missing=N` and `integrity=ok`
                               (or `bad`), then one `mismatch <path>` or `missing <path>` line per bad file, and exits
-                              0 only when nothing mismatches, nothing is missing and the copy is `ok`. It reads
+                              0 only when nothing mismatches, nothing is missing and the copy is `ok`: each cause
+                              alone is a non-zero exit. A source with no `photos/` folder, or one with no file in it,
+                              is a non-zero exit that names `photos` (it holds none of the cards, so a clean bill would
+                              be false); a missing `captures/` alone is fine. It reads
                               destination files on purpose, so a flipped byte under an unchanged size and mtime
                               is seen. It writes nothing: not the destination, not the machine folder, no
                               last-run line.
@@ -526,10 +531,17 @@ def fake_checkout(case: Case, name: str, linked: bool) -> Path:
     return root / "scripts" / SCRIPT.name
 
 
-#: Runs the job as `__main__` with its online backup killed (SIGKILL, no `finally`) after the first page.
-KILL_MID_SNAPSHOT = """\
+#: Runs the job as `__main__` with one step patched to die of SIGKILL (no `finally`). `{patch}` is that step.
+KILL_WRAPPER = """\
 import os, runpy, signal, sys
 sys.path[:0] = [{scripts!r}, {root!r}]
+{patch}
+sys.argv = [{job!r}]
+runpy.run_path({job!r}, run_name="__main__")
+"""
+
+#: The online backup dies after the first page.
+KILL_MID_SNAPSHOT = """\
 from store import db
 
 real = db.open_read_only
@@ -547,15 +559,45 @@ class Killed:
 
 
 db.open_read_only = lambda *a, **k: Killed(real(*a, **k))
-sys.argv = [{job!r}]
-runpy.run_path({job!r}, run_name="__main__")
+"""
+
+#: A photograph's copy dies once 100 bytes of it are written, wherever the job is writing it. `copy2` calls
+#: `copyfile`, so this one patch catches either.
+KILL_MID_PHOTO_COPY = """\
+import shutil
+
+real_copyfile = shutil.copyfile
+
+
+def half_then_die(src, dst, *_, **__):
+    if os.sep + "photos" + os.sep in str(src):
+        with open(src, "rb") as whole, open(dst, "wb") as part:
+            part.write(whole.read(100))
+        os.kill(os.getpid(), signal.SIGKILL)
+    return real_copyfile(src, dst)
+
+
+shutil.copyfile = half_then_die
 """
 
 
-def run_killed_mid_snapshot(case: Case) -> Ran:
-    wrapper = case.root / "kill_mid_snapshot.py"
-    wrapper.write_text(KILL_MID_SNAPSHOT.format(scripts=str(SCRIPT.parent), root=str(REPO_ROOT), job=str(SCRIPT)))
+def run_killed(case: Case, patch: str) -> Ran:
+    wrapper = case.root / "kill_wrapper.py"
+    wrapper.write_text(KILL_WRAPPER.format(scripts=str(SCRIPT.parent), root=str(REPO_ROOT), job=str(SCRIPT), patch=patch))
     return run_job(case, cmd=[str(wrapper)])
+
+
+def run_killed_mid_snapshot(case: Case) -> Ran:
+    return run_killed(case, KILL_MID_SNAPSHOT)
+
+
+def flip_one_byte(path: Path) -> None:
+    """Flip one bit under an unchanged size and mtime: only a hash of the contents sees it."""
+    stat = path.stat()
+    data = bytearray(path.read_bytes())
+    data[10] ^= 1
+    path.write_bytes(bytes(data))
+    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns))
 
 
 # ------------------------------------------------------------------------------ the checks
@@ -1472,11 +1514,7 @@ def check_backup_verify_flags_a_flipped_byte_and_a_missing_file(checks: Checks) 
                       "on a clean copy: exit 0, five matches, no mismatch, none missing, the dated copy ok", said(ran) + ran.out)
     flipped, gone = "photos/a0/a0aa11220002.jpg", "captures/cards/box1/0001.json"
     path = case.dest / flipped
-    stat = path.stat()
-    data = bytearray(path.read_bytes())
-    data[10] ^= 1
-    path.write_bytes(bytes(data))
-    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns))  # the size and mtime are as they were
+    flip_one_byte(path)  # the size and mtime are as they were
     (case.dest / gone).unlink()
     machine = case.home / ".banchi"
 
@@ -1497,6 +1535,88 @@ def check_backup_verify_flags_a_flipped_byte_and_a_missing_file(checks: Checks) 
         ran = run_job(case, args=["--verify"])
         checks.ok(ran.code not in (0, None) and "matches=5 mismatches=0 missing=0" in ran.out and "integrity=bad" in ran.out,
                   "a damaged newest store copy, every file matching: exit non-zero and the copy reads bad", said(ran) + ran.out)
+
+
+@robust
+def check_backup_verify_fails_when_the_source_holds_no_photographs(checks: Checks) -> None:
+    """DEBT67: a source with no `photos/` folder (a wrong BANCHI_HOME, an unmounted drive) or an empty one holds none
+    of the cards, so a `--verify` that walks nothing and prints `mismatches=0 missing=0 integrity=ok` gives a clean
+    bill to a copy that was never compared. It exits non-zero and says `photos` is why. A missing `captures/` alone is
+    fine. The control and the last run are the same source with its photographs, which verifies clean, so a non-zero
+    exit from an unknown flag or a broken fixture cannot pass."""
+    case = Case("verify-no-photos")
+    seed_store(case)
+    seed_files(case)
+    control = expect_ok(checks, "control: the first night copies the five files", run_job(case), case, copied=5, skipped=0)
+    ran = run_job(case, args=["--verify"])
+    clean = checks.ok(control and ran.code == 0 and "matches=5 mismatches=0 missing=0" in ran.out, "control: a clean copy verifies, exit 0", said(ran) + ran.out)
+    captures, photos = case.src / "captures", case.src / "photos"
+    captures.rename(case.root / "captures-away")
+    ran = run_job(case, args=["--verify"])
+    checks.ok(clean and ran.code == 0 and "matches=2 mismatches=0 missing=0" in ran.out,
+              "a source with no captures/ folder alone still verifies: exit 0, the two photographs match", said(ran) + ran.out)
+    (case.root / "captures-away").rename(captures)
+    photos.rename(case.root / "photos-away")
+    named = lambda ran: re.search(r"\bphotos\b", ran.out + ran.err, re.I) is not None  # noqa: E731
+    photos.mkdir()
+    ran = run_job(case, args=["--verify"])
+    checks.ok(clean and ran.code not in (0, None) and named(ran), "an empty photos/ folder: exit non-zero, and the line names photos", said(ran) + ran.out)
+    photos.rmdir()
+    ran = run_job(case, args=["--verify"])
+    checks.ok(clean and ran.code not in (0, None) and named(ran), "no photos/ folder: exit non-zero, and the line names photos", said(ran) + ran.out)
+    (case.root / "photos-away").rename(photos)
+    ran = run_job(case, args=["--verify"])
+    checks.ok(clean and ran.code == 0 and "matches=5 mismatches=0 missing=0" in ran.out, "with the photographs back it verifies clean again: exit 0", said(ran) + ran.out)
+
+
+@robust
+def check_backup_verify_exit_code_follows_each_cause_alone(checks: Checks) -> None:
+    """DEBT67: `--verify` exits non-zero for a missing destination file alone and for a flipped byte alone, not only for
+    both together (either term of the exit expression keeps a run with both non-zero, so a dropped term hides there).
+    Each run names its own count and the other as 0, so the exit is the one cause's. The clean run is the paired
+    positive: exit 0."""
+    case = Case("verify-causes")
+    seed_store(case)
+    seed_files(case)
+    control = expect_ok(checks, "control: the first night copies the five files", run_job(case), case, copied=5, skipped=0)
+    ran = run_job(case, args=["--verify"])
+    clean = checks.ok(control and ran.code == 0 and "matches=5 mismatches=0 missing=0" in ran.out, "all good: exit 0", said(ran) + ran.out)
+    gone, flipped = "captures/cards/box1/0001.json", "photos/a0/a0aa11220002.jpg"
+    (case.dest / gone).unlink()
+    ran = run_job(case, args=["--verify"])
+    checks.ok(clean and ran.code not in (0, None) and "mismatches=0 missing=1" in ran.out and gone in ran.out,
+              "one destination file missing and nothing else wrong: exit non-zero", said(ran) + ran.out)
+    put(case.dest, gone, FILES[gone])
+    flip_one_byte(case.dest / flipped)
+    ran = run_job(case, args=["--verify"])
+    checks.ok(clean and ran.code not in (0, None) and "mismatches=1 missing=0" in ran.out and flipped in ran.out,
+              "one flipped byte and nothing else wrong: exit non-zero", said(ran) + ran.out)
+
+
+@robust
+def check_backup_a_killed_photo_copy_leaves_no_partial_file_at_its_path(checks: Checks) -> None:
+    """DEBT67: a copy is written beside its place under a `.tmp` name and renamed in. A run killed in the middle of a
+    photograph's copy (SIGKILL, so no `finally` runs; the wrapper writes 100 bytes of it, then dies) leaves nothing
+    half-written at that path, and the next run copies it instead of reporting the half file as `differs`. The control
+    is a first night; the kill must bite, so a patch the job's copy no longer goes through is a failed line here and
+    not a silent pass."""
+    case = Case("killed-copy")
+    seed_store(case)
+    seed_files(case)
+    control = expect_ok(checks, "control: the first night copies the five files", run_job(case), case, copied=5, skipped=0)
+    new, data = "photos/ff/ff00ee330003.jpg", b"\xff\xd8\xff" + b"E" * 400
+    put(case.src, new, data)
+    kept = {rel: (p.read_bytes(), stat_key(p)) for rel, p in dest_files(case).items() if rel in FILES}
+    ran = run_killed(case, KILL_MID_PHOTO_COPY)
+    bit = checks.ok(control and ran.code == -signal.SIGKILL, "the simulated kill bit: the job died of SIGKILL in the middle of a photograph's copy", said(ran))
+    held = case.dest / new
+    checks.ok(bit and (not held.exists() or held.read_bytes() == data), "the photograph's path holds no partial file: nothing, or the whole file",
+              f"{held.stat().st_size if held.exists() else 0} of {len(data)} bytes")
+    got = dest_files(case)
+    checks.ok(bit and len(kept) == 5 and all(rel in got and (got[rel].read_bytes(), stat_key(got[rel])) == kept[rel] for rel in kept),
+              "and the five files copied before are untouched")
+    again = expect_ok(checks, "the next normal night is ok, not `differs`: it copies the photograph", run_job(case), case, copied=1, skipped=5)
+    checks.ok(again and held.is_file() and held.read_bytes() == data, "and the photograph is there, byte for byte")
 
 
 CHECKS = (
@@ -1525,4 +1645,7 @@ CHECKS = (
     check_backup_a_damaged_store_is_refused_and_replaces_nothing,
     check_backup_a_dated_store_copy_is_written_once_and_never_replaced,
     check_backup_verify_flags_a_flipped_byte_and_a_missing_file,
+    check_backup_verify_fails_when_the_source_holds_no_photographs,
+    check_backup_verify_exit_code_follows_each_cause_alone,
+    check_backup_a_killed_photo_copy_leaves_no_partial_file_at_its_path,
 )
