@@ -9082,7 +9082,7 @@ def do_review_stand_down(box: int, index: int, payload: dict) -> dict:
     "a real defer that RECORDS A REASON". Without it the queue file would carry a population
     of dismissed cards indistinguishable from answered ones, and the instrument that decides
     whether Skip should exist at all would still not exist. `store/queues.py`'s three reasons
-    are its own vocabulary and not `master.RETIRE_REASONS`, because those four all mean the
+    are its own vocabulary and not `master.RETIRE_REASONS`, because those all mean the
     card is gone.
 
     BOTH QUEUES ARE CLEARED, for `do_review_answer`'s reason: a position can hold an open

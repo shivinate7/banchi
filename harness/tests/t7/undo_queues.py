@@ -4473,8 +4473,8 @@ def check_retire(checks: Checks) -> None:
     )
     checks.equal(
         master.RETIRE_REASONS,
-        ("pulled", "damaged", "lost", "given_away"),
-        "the reasons are a closed vocabulary, named as an allowlist so a fifth is "
+        ("pulled", "damaged", "lost", "given_away", "master_set"),
+        "the reasons are a closed vocabulary, named as an allowlist so a sixth is "
         "refused by default until it is argued for",
     )
     checks.equal(

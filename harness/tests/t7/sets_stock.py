@@ -220,6 +220,71 @@ def check_pipeline_sets(checks: Checks) -> None:
     )
 
 
+def check_pipeline_sets_collected(checks: Checks) -> None:
+    """`GET /pipeline/sets` `collected` (the master-set spec, sections 3 and 8): true when any
+    card of the SKU is `retired` with reason `master_set`. A SKU held only as a master-set copy
+    still gets a row, `qty: 0` and `box: null`. A `pulled` retirement never counts."""
+    checks.note("")
+    checks.note("PIPELINE SETS — collected (master_set retirements)")
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            inventory.ensure_box(1, name="Master box")
+            minted = 0
+
+            def put(sku, number, state, reason=None):
+                nonlocal minted
+                minted += 1
+                card, _ = inventory.allocate_capture(1, cid=fake_cid(f"collected-{minted}"))
+                card.sku = sku
+                card.name = f"Card {number}"
+                card.number = number
+                card.printed_total = "10"
+                card.set_name = "Master Set One"
+                card.game = "riftbound"
+                card.state = state
+                card.retire_reason = reason
+                return card
+
+            put("5000001", "1", master.IDENTIFIED)
+            put("5000001", "1", master.RETIRED, master.MASTER_SET)
+            put("5000002", "2", master.RETIRED, master.MASTER_SET)
+            put("5000003", "3", master.IDENTIFIED)
+            put("5000003", "3", master.RETIRED, "pulled")
+            put("5000004", "4", master.IDENTIFIED)
+
+        payload = pipeline_routes.do_pipeline_sets()
+
+    rows = {c["sku"]: c for g in payload["groups"] for c in g["cards"]}
+    row = lambda sku, *fields: tuple(rows.get(sku, {}).get(f) for f in fields)  # noqa: E731
+    checks.equal(
+        [c["number_display"] for g in payload["groups"] for c in g["cards"]],
+        ["1/10", "2/10", "3/10", "4/10"],
+        "the master-set-only SKU gets a row, in the set's printed order",
+    )
+    checks.equal(
+        row("5000001", "qty", "collected"),
+        (1, True),
+        "one on-hand copy plus one master_set copy reads qty 1 and collected true",
+    )
+    checks.equal(
+        row("5000002", "qty", "collected", "box"),
+        (0, True, None),
+        "a SKU whose only copy is master_set reads qty 0, collected true and box null",
+    )
+    checks.equal(
+        row("5000003", "qty", "collected"),
+        (1, False),
+        "a pulled copy never counts as collected",
+    )
+    checks.equal(
+        row("5000004", "collected"),
+        (False,),
+        "an on-hand SKU with no retirement reads collected false",
+    )
+
+
 def check_stock_images(checks: Checks) -> None:
     """`pipeline/stockimages.py` (`D301`) — both sources stubbed, never a socket.
 
@@ -1717,6 +1782,7 @@ def check_inventory_copies_stock_image(checks: Checks) -> None:
 
 CHECKS = (
     check_pipeline_sets,
+    check_pipeline_sets_collected,
     check_stock_images,
     check_inventory_copies_stock_image,
     check_sales_stock_photo_fallback,

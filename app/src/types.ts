@@ -607,8 +607,8 @@ export type InventoryCard = {
   state: string
   state_at: string | null
 
-  /** Why a retired copy left — one of the four the server validates (`pulled`, `damaged`,
-   *  `lost`, `given_away`) — and null on a card in any other state. Written only by
+  /** Why a retired copy left — one of the five the server validates (`pulled`, `damaged`,
+   *  `lost`, `given_away`, `master_set`) — and null on a card in any other state. Written only by
    *  `POST /inventory/<box>/<index>/retire` and cleared by its reversal; loose `string`
    *  for the reason every stored field here is — this comes off disk, and the store owns
    *  the vocabulary (D26). */
@@ -1165,12 +1165,12 @@ export type SaleResult = {
   order_effect?: 'none' | 'released' | 'filled_by_hand'
 }
 
-/** Why a retired card left (D26). The send-side union — the four words the server's
+/** Why a retired card left (D26). The send-side union — the words the server's
  *  `retire_reason_invalid` refusal enumerates — while the record's own `retire_reason`
  *  stays a loose string, the same split `BoxState` draws between what may be SET and what
  *  comes off disk. A closed vocabulary rather than free text so the history stays
  *  greppable; a card that needs a sentence gets one in `note`, through `updateCard`. */
-export type RetireReason = 'pulled' | 'damaged' | 'lost' | 'given_away'
+export type RetireReason = 'pulled' | 'damaged' | 'lost' | 'given_away' | 'master_set'
 
 /** What `POST /inventory/<box>/<index>/retire` answers, in either direction.
  *
@@ -4650,6 +4650,9 @@ export type SetGroupCard = {
    *  mid-build: several SKUs may point at one photo) and never share this — it is the
    *  one thing on the row that still tells two such rows apart. */
   printing: string | null
+  /** True when any card of this SKU is retired with reason `master_set` (master-set spec,
+   *  section 3). A row with `qty: 0` and `box: null` is a master-set copy with no copy on hand. */
+  collected: boolean
 }
 
 /** One game-and-set group, cards in the set's own printed order (server-side natural sort

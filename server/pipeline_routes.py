@@ -4914,11 +4914,24 @@ def do_pipeline_sets(images: Optional["stockimages.StockImages"] = None) -> dict
     groups: Dict[Tuple[str, str], Dict[str, dict]] = {}
     no_set: Dict[str, dict] = {}
 
-    for _key, (box_raw, _idx_raw, sku_raw, name, set_name, number, number_display, game, cid) in (
-        inventory.cards.select(
-            ("box", "idx", "sku", "name", "set_name", "number", "number_display", "game", "cid"),
-            state=master.IDENTIFIED,
-        )
+    # THE MASTER LIST (the master-set spec, section 3): a SKU is collected when any card of it is
+    # `retired` with reason `master_set`. `retire_reason` is no indexed column, so this reads the
+    # retired cards whole. A master-set copy with no SKU cannot be on the list and adds no row.
+    # `pulled` and the other reasons never count.
+    master_set_cards = [
+        (None, None, card.sku, card.name, card.set_name, card.number,
+         master.display_number(card.number, card.printed_total) or "", card.game, None)
+        for card in inventory.cards.where(state=master.RETIRED)
+        if card.retire_reason == master.MASTER_SET and card.sku
+    ]
+    on_hand = inventory.cards.select(
+        ("box", "idx", "sku", "name", "set_name", "number", "number_display", "game", "cid"),
+        state=master.IDENTIFIED,
+    )
+
+    for _key, (box_raw, _idx_raw, sku_raw, name, set_name, number, number_display, game, cid), is_on_hand in (
+        [(key, values, True) for key, values in on_hand]
+        + [(None, values, False) for values in master_set_cards]
     ):
         sku = str(sku_raw) if sku_raw else None
         # THREE GROUPING RUNGS, NARROWEST WINS. A SKU is a confirmed identity, so every
@@ -4952,6 +4965,7 @@ def do_pipeline_sets(images: Optional["stockimages.StockImages"] = None) -> dict
                 "name": name or None,
                 "number_display": number_display or None,
                 "qty": 0,
+                "collected": False,
                 # NULL FOR A `sku_unknown` ROW, WHICH HAS NO SKU TO HOLD THE FACT — the
                 # store's own table, never re-derived from a condition string here.
                 "printing": sku_entry.printing if sku_entry is not None else None,
@@ -4963,7 +4977,10 @@ def do_pipeline_sets(images: Optional["stockimages.StockImages"] = None) -> dict
                 "_sort": _natural_number_key(number),
             }
             bucket[row_key] = row
-        row["qty"] += 1
+        if is_on_hand:
+            row["qty"] += 1
+        else:
+            row["collected"] = True
 
     def _cards_of(bucket: Dict[str, dict]) -> List[dict]:
         rows = sorted(bucket.values(), key=lambda row: row["_sort"])
