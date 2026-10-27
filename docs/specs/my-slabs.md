@@ -115,11 +115,11 @@ Base: `https://firestore.googleapis.com/v1/projects/cardladder-71d53/databases/(
 - `cards`: a query on `profileId` answered 200 with no document for an archive-only card.
   Reads of `cards/{id}` and `cards/{id}/sales` for a card with a card page are unproven.
 
-### 3.8 Out of bounds
+### 3.8 Never called
 
-- `search.cardladder.com` answers a Cloudflare challenge (403), with or without the token. Banchi
-  never calls it. 3.2 and 3.3 return the sales that its `salesarchive` index would.
-- Callables that write, sync or scrape are out of bounds: `httpbuildcollectioncard`,
+- Banchi never calls `search.cardladder.com`. 3.2 and 3.3 return the sales that its
+  `salesarchive` index would.
+- Banchi never calls callables that write, sync or scrape: `httpbuildcollectioncard`,
   `httpSyncCardStats`, `httpRefreshCert`, `httpInitialSalesScrape` and the admin ones.
 
 ## 4. What the screen shows
@@ -374,8 +374,6 @@ Kind: build. Platform: macOS, over the capture server.
 - The recent-sales ratio over `estimatedValue` (4.3). It was measured over `clValue` only.
 - Whether `net`'s default attempt timeout holds for `httpprofile` (3.2), which can return about
   1,800 sales.
-- Whether Card Ladder enforces an app check on these callables later. Today none is sent, and
-  each call answers 200.
 - How long a refresh token lives before Card Ladder signs the owner out.
 - Whether a rotated public API key can be told from a bad token. Both answer a Google 4xx, and
   the client reads no body, so both read "copy it again".

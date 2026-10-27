@@ -14,17 +14,15 @@ endpoint and sends that token with each call. No refusal, log line or screen pri
 only its key's name. This is the same shape as `TCGPLAYER_STORE_COOKIE` (D216, the history host
 blocks this project's agent).
 
-**The owner accepts the ban risk.** These reads are automation of the owner's own account. Card
-Ladder can close that account for it. The owner accepts that risk. Banchi keeps the reads at a
-person's pace (the spec's pacing section) and reads only the owner's own slabs.
+**The reads are paced and scoped.** Banchi keeps the reads at a person's pace (the spec's pacing
+section) and reads only the owner's own slabs.
 
 **The reads stay inside these bounds.**
 
 - Banchi calls only the read callables that the spec lists, through one allow list. It never
   calls a callable that writes, such as `httpbuildcollectioncard`, and never writes the owner's
   Card Ladder collection.
-- Banchi never calls `search.cardladder.com`. That host answers a Cloudflare challenge, and
-  Banchi never solves or avoids a bot check, a CAPTCHA or an app check.
+- Banchi never calls `search.cardladder.com`.
 - A rate-limit answer stops the sweep for that day. Banchi never retries around it.
 - Card Ladder calls go through D319's home with idempotent=False, so a 429 is never retried.
 
@@ -40,10 +38,9 @@ against Card Ladder's own screens, not trusted from a vendor.
 **What it protects.** The owner knows each slab's current value and how it moves, with every
 number traced to a sale.
 
-**Reopen when** Card Ladder enforces an app check or moves these callables behind a bot check.
-Also reopen when it rate-limits at a person's pace, or offers the owner a supported API.
+**Reopen when** Card Ladder rate-limits at a person's pace, or offers the owner a supported API.
 
 **Three checks hold the bounds.** The callable allow list is one constant,
 `cardladder.ALLOWED_CALLABLES`, that the client reads. `scripts/cardladder-selftest.py` refuses any
 request to `search.cardladder.com`. `app/tests/slabs.spec.ts` proves that a slab with no sale
-renders "No sales". **NOT MECHANIZED:** a machine cannot see the ban risk.
+renders "No sales".
