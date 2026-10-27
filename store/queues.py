@@ -76,7 +76,7 @@ STARVATION_DAYS = 30
 # D37 — why a human waved a card off the queue without answering it.
 #
 # ITS OWN VOCABULARY RATHER THAN `master.RETIRE_REASONS`, and the difference is the whole
-# point of the feature. D26's four reasons — pulled, damaged, lost, given_away — all say the
+# point of the feature. D26's reasons — pulled, damaged, lost, given_away, master_set — all say the
 # CARD left inventory. A stand-down says the QUESTION is closed while the card stays exactly
 # where it is, in its slot, in its box, still findable and still sellable if it is ever
 # identified properly. Borrowing the retire words would have made "stop asking me" indexable
