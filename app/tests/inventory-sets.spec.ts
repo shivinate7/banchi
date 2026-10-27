@@ -481,7 +481,8 @@ test.describe('the set view', () => {
         await expect(grid.locator('.sets-empty')).toHaveCount(1)
         await expect(page).toHaveURL(/[?&]master=open(&|$)/)
 
-        await page.getByRole('button', { name: 'Show every card' }).click()
+        // TITLE CASE, exact: the control's name is part of what this case asserts.
+        await page.getByRole('button', { name: 'Show Every Card', exact: true }).click()
         await expect(tiles).toHaveCount(2)
         await expect(page).not.toHaveURL(/[?&]master=/)
       })
