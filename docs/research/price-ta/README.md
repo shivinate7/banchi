@@ -18,7 +18,7 @@ across four sets. Slabs have no history here at all (the `slabs` tables hold zer
 | `readings` table (`banchi readings show`, D189, the market reading is a table) | Newest market price per SKU | One reading per SKU, replaced on adopt | A cache, not history. Useless for time series. |
 | `inventory/price-trends.json` | Month and annual points for the daily price job | Same window as the archive | A copy of what the archive holds. |
 | Card Ladder (D320, My Slabs reads Card Ladder) | Slab sales, value and population | Card Ladder's own depth | Needs the owner's paid login. No slab is entered yet, so there is nothing to test. |
-| TCGCSV daily archive (tcgcsv.com) | Nightly copy of TCGplayer's prices for every product in 94 games, Riftbound and Pokemon included: market, lowest, median and highest listing | Daily files back to the archive's first day, per its FAQ | No sales or volume. About 1 GB for all games, per its docs; not checked by download. Its FAQ calls copyright a gray area and asks that each file be downloaded once. Not downloaded. |
+| TCGCSV (tcgcsv.com) | Nightly copy of TCGplayer's prices for every product in 94 games, Riftbound (category 89) and Pokemon (category 3) included: market, lowest, median and highest listing | Today only. Its past-days archive is withdrawn: every file answers HTTP 403 with a notice that it was removed over costs, with no workaround | The owner ruled one test file, then Riftbound's history only. The test file was refused, so nothing was downloaded. Today's prices can still be read per category, which starts a history from now. No sales or volume. |
 | PriceCharting | eBay-based prices | Its API and CSV hold current prices only; its docs say history is not supported | Paid plan; data for internal use only and purged when the plan ends. No Riftbound listed. |
 | eBay Product Research (was Terapeak) | eBay sold listings | Up to 3 years, per third-party guides | Free in Seller Hub, a screen with no export. Not usable for a backtest. |
 | Paid card APIs (PokemonPriceTracker and others) | TCGplayer, eBay and graded prices | Unclear: their own pages disagree | Pokemon only, or Riftbound unconfirmed. Monthly fee. |
@@ -134,9 +134,9 @@ No slab history exists in this store yet.
 ## What would change these answers
 
 - **A whole-market history, not just this store's SKUs.** Every result above comes from cards
-  the store held or sold. The TCGCSV daily archive is the only large free history found, and it
-  covers every Riftbound and Pokemon product. It holds listing and market prices but not sales.
-  Widening this store's archive sweep to whole sets would add one year of sales and volume.
+  the store held or sold. No large free history was found: TCGCSV withdrew its archive.
+  Widening this store's archive sweep to every card in a set would add one year of sales and
+  volume. A daily read of TCGCSV's current prices would build a whole-set history from now on.
 - **More months of live exports.** Finding 4 needs a dozen or more non-overlapping windows to be
   trusted. The daily price job already collects them; time alone fixes this.
 - **More set releases.** Four Riftbound sets cannot pin how deep a new set falls. Each new
