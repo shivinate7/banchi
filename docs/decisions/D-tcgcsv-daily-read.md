@@ -1,6 +1,9 @@
-## D-tcgcsv-daily-read — A daily read of TCGCSV builds a whole-market Riftbound price history
+# D-tcgcsv-daily-read — A daily read of TCGCSV builds a whole-market Riftbound price history
+
+Banchi saves TCGCSV's current Riftbound prices once per source update, so a whole-market price history builds from now on.
 
 Kind: build
+Home: D-tcgcsv-daily-read
 
 **The orchestrator picked it, on the owner's ask for "way more data" to backtest price patterns.**
 The pick is reversible. The owner ruled the TCGCSV source and has not ruled this job step.
