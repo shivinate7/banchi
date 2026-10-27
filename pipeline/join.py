@@ -1883,7 +1883,7 @@ class Catalog:
             else:
                 name = row[tcgcsv.NAME_COLUMN].strip()
                 self._blank_number_by_name.setdefault(
-                    _name_compare_key(name, catalog_side=True), []
+                    _name_compare_key(name), []
                 ).append(row)
                 key = f"name:{name}"
             seen = self._sets_by_key.setdefault(key, [])

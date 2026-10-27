@@ -2251,12 +2251,11 @@ def check_supervisor_recovery(checks: Checks) -> None:
 
 def card_attribute_typos(source: str) -> list:
     """Each `getattr`/`setattr`/`hasattr` in `source` that names a card field as a string literal
-    which `Card` does not declare (DEBT61, string-keyed card fields). The receiver is a name
-    `card` or `existing`, or a `["card"]` lookup; `Card`'s own fields are the one list."""
+    which `Card` does not have (DEBT61, string-keyed card fields). The receiver is a name
+    `card` or `existing`, or a `["card"]` lookup. `hasattr(master.Card, name)` is the one list, so
+    a property such as `key`, `order_key` or `days_in_state` counts. NOT COVERED: the inline-tuple
+    loop in `capture_server`'s `claims`, whose names are not a literal argument."""
     import ast
-    import dataclasses
-
-    fields = {f.name for f in dataclasses.fields(master.Card)}
 
     def is_card(node) -> bool:
         if isinstance(node, ast.Name):
@@ -2277,7 +2276,7 @@ def card_attribute_typos(source: str) -> list:
             and is_card(node.args[0])
             and isinstance(node.args[1], ast.Constant)
             and isinstance(node.args[1].value, str)
-            and node.args[1].value not in fields
+            and not hasattr(master.Card, node.args[1].value)
         ):
             found.append(node.args[1].value)
     return found
