@@ -68,8 +68,8 @@
 .hfloat-specimen { display: flex; flex-direction: column; }
 .hfloat-specimen-row {
   display: grid;
-  /* Thumb, name and price stay left of the card, whose right edge sits on the door. */
-  grid-template-columns: 40px minmax(0, 160px) 104px minmax(0, 1fr) 40px;
+  /* Mirrors `PricingRow` (Pricing.css): thumb, name, then the price column right beside the door. */
+  grid-template-columns: 40px minmax(0, 1fr) 136px 40px;
   align-items: center;
   column-gap: var(--bn-3);
   padding: var(--bn-2) 0;
@@ -79,7 +79,3 @@
 }
 .hfloat-specimen-thumb { display: flex; }
 .hfloat-specimen-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hfloat-specimen-row [data-float-door] { grid-column: 5; }
-@media (max-width: 1099.98px) {
-  .hfloat-specimen-row { grid-template-columns: 40px minmax(0, 112px) 104px minmax(0, 1fr) 40px; }
-}

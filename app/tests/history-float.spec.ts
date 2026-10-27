@@ -47,6 +47,7 @@ const CARD = '[data-history-float]'
 const HISTORY = /\/pipeline\/products\/[^/]+\/history$/
 const SIZES = [
   { width: 1440, height: 900 },
+  { width: 1200, height: 900 },
   { width: 820, height: 900 },
 ] as const
 
@@ -124,7 +125,7 @@ for (const size of SIZES) {
       await expect(c.locator('[data-float="suggestion"]')).toHaveCount(1)
     })
 
-    test('by default the card opens above its row and covers neither the row nor the next price field', async ({ page }) => {
+    test('by default the card opens above its row and never covers the anchor row or its price field', async ({ page }) => {
       await row(page, 1).evaluate((el) => el.scrollIntoView({ block: 'end' }))
       expect((await boxOf(row(page, 1))).y, 'there is room above the row').toBeGreaterThan(400)
       await openByFocus(page)
@@ -134,10 +135,11 @@ for (const size of SIZES) {
       const anchor = await boxOf(row(page, 1))
       expect(c.y + c.height, 'the card ends above the row').toBeLessThanOrEqual(anchor.y)
       expect(meets(c, anchor), 'the card does not cover the row').toBe(false)
-      expect(meets(c, await boxOf(priceOf(page, 2))), 'the card does not cover the next price field').toBe(false)
+      expect(meets(c, await boxOf(priceOf(page, 1))), 'the card does not cover the anchor price field').toBe(false)
+      /* Opened above, the card may cover the price fields of the rows above; nothing is asserted for row 0. */
     })
 
-    test('with no room above, the card opens below and covers no price field of its row or the next row', async ({ page }) => {
+    test('with no room above, the card opens below and its right edge sits left of the price column', async ({ page }) => {
       await row(page, 1).evaluate((el) => el.scrollIntoView({ block: 'start' }))
       expect((await boxOf(row(page, 1))).y, 'the row sits at the top, so there is no room above').toBeLessThan(120)
       await openByFocus(page)
@@ -147,10 +149,59 @@ for (const size of SIZES) {
       const anchor = await boxOf(row(page, 1))
       expect(c.y, 'the card starts below the row').toBeGreaterThanOrEqual(anchor.y + anchor.height)
       expect(meets(c, anchor), 'the card does not cover the row').toBe(false)
-      /* Only the anchor row's and the next row's price fields are protected; a card opened above may cover priced rows. */
+      expect(meets(c, await boxOf(priceOf(page, 1))), 'the card does not cover the anchor price field').toBe(false)
+      expect(meets(c, await boxOf(priceOf(page, 2))), 'the card does not cover the next row price field').toBe(false)
+      const next = await boxOf(priceOf(page, 2))
+      expect(c.x + c.width, 'the card right edge is left of the price column').toBeLessThanOrEqual(next.x)
+      /* At 820 the card may cover names when opened below, so nothing is asserted against names here. */
+    })
+
+    test('the next price field stays uncovered in every state that requires it, in rows 1 and 2', async ({ page }) => {
+      await row(page, 1).evaluate((el) => el.scrollIntoView({ block: 'start' }))
       for (const i of [1, 2]) {
+        await openByFocus(page, i)
+        const c = await boxOf(card(page))
         expect(meets(c, await boxOf(priceOf(page, i))), `the card does not cover price field ${i}`).toBe(false)
+        if ((await card(page).getAttribute('data-placement')) === 'below' && i < 2) {
+          expect(meets(c, await boxOf(priceOf(page, i + 1))), `opened below, the card does not cover price field ${i + 1}`).toBe(false)
+        }
+        await page.keyboard.press('Escape')
       }
+    })
+
+    test('in a short viewport the card takes the side with more room, fits the viewport and keeps Full history reachable', async ({ page }) => {
+      await row(page, 1).evaluate((el) => el.scrollIntoView({ block: 'center' }))
+      await openByFocus(page)
+      const c = await boxOf(card(page))
+      const view = page.viewportSize()!
+      expect(c.x, 'inside on the left').toBeGreaterThanOrEqual(0)
+      expect(c.y, 'inside on the top').toBeGreaterThanOrEqual(0)
+      expect(c.x + c.width, 'inside on the right').toBeLessThanOrEqual(view.width)
+      expect(c.y + c.height, 'inside on the bottom').toBeLessThanOrEqual(view.height)
+      const anchor = await boxOf(row(page, 1))
+      const roomAbove = anchor.y
+      const roomBelow = view.height - (anchor.y + anchor.height)
+      await expect(card(page)).toHaveAttribute('data-placement', roomAbove >= roomBelow ? 'above' : 'below')
+      const full = await boxOf(card(page).getByRole('button', { name: 'Full history', exact: true }))
+      expect(full.y + full.height, 'Full history is inside the viewport').toBeLessThanOrEqual(view.height)
+      expect(full.y, 'Full history is inside the viewport').toBeGreaterThanOrEqual(0)
+      expect(meets(c, await boxOf(priceOf(page, 1))), 'the card does not cover the anchor price field').toBe(false)
+    })
+
+    test("the chart's top axis label is not clipped by the chart box", async ({ page }) => {
+      await openByFocus(page)
+      await expect(card(page)).toHaveAttribute('data-state', 'ready')
+      const chart = await boxOf(card(page).locator('.hfloat-chart'))
+      const ticks = card(page).locator('.producthistory-tick-price')
+      const n = await ticks.count()
+      expect(n, 'the chart has price labels').toBeGreaterThan(0)
+      let top: Box | null = null
+      for (let i = 0; i < n; i++) {
+        const b = await boxOf(ticks.nth(i))
+        if (top === null || b.y < top.y) top = b
+      }
+      expect(top!.y, 'the top label starts inside the chart').toBeGreaterThanOrEqual(chart.y)
+      expect(top!.y + top!.height, 'the top label ends inside the chart').toBeLessThanOrEqual(chart.y + chart.height)
     })
 
     test('a card opened by focus takes no focus, and nothing in the list moves', async ({ page }) => {
