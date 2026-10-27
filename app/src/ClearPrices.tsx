@@ -17,7 +17,7 @@
  * button's own label rather than in a tooltip. That is the only reason this is not one press.
  *
  * THE SCOPE IS THE WORKLIST AND NOT THE VISIBLE ROWS, which is the one place this screen could
- * have been more literal and should not be. `#/pricing` has filter chips and a cut-off that
+ * have been more literal and should not be. `#/pricing` has filter chips and a floor that
  * re-partitions live, so "the rows on screen" is a set that moves as the operator toggles a
  * lens they may have set ten minutes ago — a destructive press whose meaning depends on a chip
  * is a press nobody can predict. The worklist is a thing with a name (*"Box 3, Box 4"*), it is
@@ -235,7 +235,7 @@ export function ClearPrices({
       <Notice tone="info" title="Left alone" className="clearprices-spares">
         <ul className="clearprices-spare-list">
           <li>
-            <strong>{holds}</strong> held back on purpose.
+            <strong>{holds}</strong> kept off TCGplayer.
           </li>
           {unpriced === 0 ? null : (
             <li>
