@@ -5183,15 +5183,19 @@ COMPONENTS = [
                 "governed_by": ["D104", "D189", "D222", "D224", "D278", "D295"],
             },
             "backup-daily.py": {
-                "does": "the nightly copy to iCloud Drive on the owner's Mac (first copy of DEBT67): "
-                        "`photos/` and `captures/` as files, skipped by `stat` and never deleted in the "
-                        "destination, plus a SQLite online-backup snapshot of the store from a read-only "
-                        "connection. The destination is `BANCHI_BACKUP_DEST` or `Banchi backup` in "
-                        "CloudDocs, and its parent must exist. Leaves one line in `~/.banchi/backup-last-run` "
-                        "that `make status` shows. `--agent` installs the nightly launchd job (main tree "
-                        "only), `--agent --remove` removes it, through `launchagent.py`.",
+                "does": "the one-time copy to iCloud Drive on the owner's Mac, run by hand "
+                        "(first copy of DEBT67; the launchd agent is not installed): `photos/` and "
+                        "`captures/` as files, never overwritten and never deleted in the destination. "
+                        "A destination file with another size or mtime is left alone and fails the "
+                        "run as `differs`. A SQLite online-backup snapshot of the store from a "
+                        "read-only connection must pass `integrity_check` before it moves in, and is "
+                        "also written once per day as `store-<date>.sqlite`. `--verify` hashes source "
+                        "against destination, read-only. The destination is `BANCHI_BACKUP_DEST` or "
+                        "`Banchi backup` in CloudDocs, and its parent must exist. Leaves one line in "
+                        "`~/.banchi/backup-last-run` that `make status` shows. `--agent` and "
+                        "`--agent --remove` stay, through `launchagent.py`.",
                 "note": "PROVED BY T7's `backup` group (harness/tests/t7/backup.py).",
-                "governed_by": ["D43", "D88", "D89", "D172"],
+                "governed_by": ["D26", "D43", "D88", "D89", "D172"],
             },
             "demo-mirror-daily.py": {
                 "does": "the weekly demo refresh on the owner's Mac (the owner can also run "

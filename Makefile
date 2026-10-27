@@ -1723,11 +1723,12 @@ price-refresh:
 price-refresh-agent:
 	@python3 scripts/price-refresh-daily.py --agent $(ARGS)
 
-# THE NIGHTLY BACKUP (DEBT67): photos/, captures/ and a SQLite snapshot of the store copied to the iCloud
-# Drive folder `Banchi backup`, never deleting there. `backup` runs one copy now over THIS checkout's
-# store. `backup-agent` installs the launchd job (owner's Mac, main tree only), ARGS=--remove removes it.
+# THE ONE-TIME BACKUP (DEBT67): photos/, captures/ and a SQLite snapshot of the store copied to the iCloud
+# Drive folder `Banchi backup`, never deleting or overwriting there. `backup` runs one copy now over THIS
+# checkout's store; ARGS=--verify checks the copy read-only. `backup-agent` installs the launchd job
+# (owner's Mac, main tree only; the owner has not installed it), ARGS=--remove removes it.
 backup:
-	@$(PYTHON) scripts/backup-daily.py
+	@$(PYTHON) scripts/backup-daily.py $(ARGS)
 backup-agent:
 	@python3 scripts/backup-daily.py --agent $(ARGS)
 
