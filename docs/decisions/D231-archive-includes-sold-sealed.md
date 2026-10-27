@@ -83,11 +83,17 @@ sold-price history for the price research in PR #964, not only the owner's own n
 - `cards` and the ledger always win a SKU they answer. A ledger refusal that has an included
   catalog row becomes a sold subject built from that row, ranked by revenue in the head. The
   head is never capped.
-- Every other catalog SKU is the tail, after the head, stalest first: SKUs with no archived
-  bucket, then the oldest per-range newest read, SKU as the tiebreak.
-- The tail is capped at `CATALOG_SKUS_PER_PASS` (600). The cap bounds a pass's extra requests
-  and how long the sweep holds the refresh lock. Stalest first rotates the whole catalog
-  across nights.
+- Every other catalog SKU is the tail, after the head, stalest first: SKUs never asked about
+  and with no archived bucket, then the newest read, SKU as the tiebreak. A SKU's newest read
+  is the later of its newest bucket across all ranges and its last attempt. Newest, not
+  oldest: the archive never deletes, so a range that stops answering would pin its SKU to the
+  front for good.
+- The tail is capped at `CATALOG_SKUS_PER_PASS`. The cap bounds a pass's extra requests
+  and how long the sweep holds the refresh lock. Rotation holds because every asked SKU is
+  stamped: `archive sweep --write` records each SKU it sent a request for, answered empty or
+  refused too, in `archive-attempts.json` beside the throttle pace file. A SKU a throttle stop
+  never reached is not stamped. The stamp is the only per-SKU record of "asked", since an empty
+  answer leaves no bucket. A missing or unreadable file reads as empty.
 - `cli/cmd_pricearchive.py:_sweep` passes `include_catalog=True`, so `banchi archive sweep`
   and the daily price job reach it. Pacing, throttle handling, resume and freshness (D222,
   D224) are untouched.

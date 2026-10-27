@@ -138,7 +138,7 @@ The pattern is the readings table and its adopt command. `store/pricearchive.py`
   opposite of `readings adopt`, which is a full replace.
 - **The sweep's subjects are three sources** (D231): every distinct SKU that `cards` has ever
   recorded (sold and held cards both keep their rows, D26, D134), every SKU the order ledger sold,
-  and up to 600 Riftbound catalog SKUs per pass, stalest first.
+  and up to `CATALOG_SKUS_PER_PASS` Riftbound catalog SKUs per pass, stalest first.
 - **The daily price job runs the sweep after its refresh.** The owner's word is "nightly, on the Mac"
   (D224).
 

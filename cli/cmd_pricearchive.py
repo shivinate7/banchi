@@ -215,6 +215,8 @@ def _sweep(args, say) -> int:
     current = _read_archive(say)
     if current is None:
         return 1
+    attempts_path = archive_walk.attempts_file()
+    attempts = archive_walk.load_attempts(attempts_path)
 
     # RESOLVED BY THE SKU, NEVER BY THE CARD'S OWN READ FIELDS FIRST
     # (D254, owner's ruling 2026-09-23). Read once, here, so
@@ -266,6 +268,11 @@ def _sweep(args, say) -> int:
             archive=current, export_rows=export_index,
         )
         all_resolved_via_ledger.extend(resolved_via_ledger)
+        # Every SKU in the chunk was sent to the market, answered or not, so each is stamped:
+        # the catalog tail orders by it (`rows_from_store`). A chunk a throttle stop never
+        # reaches is never stamped.
+        attempts.update(dict.fromkeys(chunk, int(time.time())))
+        archive_walk.save_attempts(attempts_path, attempts)
         # ONE SIGNAL, USED TWICE — whether to rewrite a 403's message and whether to treat
         # it as a throttle worth backing off for. Computed from THIS chunk's own answered
         # count too, not only earlier chunks', so a chunk that itself answers some SKUs
