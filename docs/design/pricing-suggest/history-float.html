@@ -660,7 +660,7 @@
         : `<p class="fl-none" style="height:${170 + 24}px">No price history yet. It starts with the first market price.</p>`)
       card.querySelector('[data-fl-facts]').innerHTML = D ? hxFacts(D.facts) : ''
     }
-    let open = null, mode = null
+    let open = null, mode = null, quiet = false
     const place = (row, how = mode) => {
       const was = open
       if (was) { delete was.dataset.picked; delete doorOf(was).dataset.on; fieldOf(was).classList.remove('is-focus') }
@@ -700,16 +700,17 @@
     }
     /* Closing: focus goes back to the door the card was opened from, or stays in the field. */
     const close = () => {
-      const was = open, how = mode
+      const was = open, how = mode, inCard = card.contains(document.activeElement)
       place(null)
       if (was && how === 'door') doorOf(was).focus({ preventScroll: true })
+      else if (was && inCard) { quiet = true; fieldOf(was).querySelector('input').focus({ preventScroll: true }); quiet = false }
     }
     const startName = HASH.get('state') === 'top' ? 'Iono' : 'Gardevoir ex'
     document.fonts.ready.then(() => place(rowsOf().find((r) => r.querySelector('.name').textContent === startName), 'focus'))
     f.replace = () => { if (open) open.offsetParent ? place(open) : place(null) }
     addEventListener('resize', f.replace)
     f.addEventListener('focusin', (e) => {
-      if (e.target.closest('.field')) place(e.target.closest('.row'), 'focus')
+      if (e.target.closest('.field') && !quiet) place(e.target.closest('.row'), 'focus')
     })
     f.addEventListener('focusout', (e) => {
       const to = e.relatedTarget

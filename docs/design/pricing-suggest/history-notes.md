@@ -42,7 +42,7 @@ row. The row's 30-day trend is read off the chart's market line, so the two agre
    opens a card for its row, with no scrim, and so does the row's history door. The card is 560px
    at 1440 and 384px at 820. Its chart is 520px wide at 1440 and 344px at 820, against 380px in
    today's sheet. It shows the chart and the four prices. The reason and the sold range stay on
-   the row, so each shows once. Links: `#f=1440`, `#f=820`, `#t=dark`, `#state=top`, `#fb=next`.
+   the row, so each shows once. Links: `#f=1440`, `#f=820`, `#t=dark`, `#state=top`, `#state=top&fb=next`.
    - Gain: at 1440, the widest chart of the four. The focused row, with its price, tick, reason
      and sold range, stays in view, and the rest of the list stays pressable.
    - Loss: at 820 its chart is smaller than the sheet's. The daily copies-sold bars do not fit.
@@ -73,7 +73,7 @@ row. The row's 30-day trend is read off the chart's market line, so the two agre
      and narrows to 372px. It covers the thumbs, names, meta and reason lines of the next four
      rows (Pikachu ex to Miraidon ex), and the "Suggested changes" heading. Ticks and prices stay
      clear.
-   - Fallback drawn behind `#fb=next`: the card opens below the next row instead, right edge on
+   - Fallback drawn behind `#state=top&fb=next`: the card opens below the next row instead, right edge on
      the door. Gain: the next row stays whole, name and price. Loss: it covers the prices of the
      rows after it, which breaks "clear of the price column".
    - Pick: the ruled fallback, clear of the price column. When the owner tabs on, the card moves
