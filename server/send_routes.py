@@ -1376,12 +1376,17 @@ def _refuse_unreadable_claim() -> None:
         ) from None
 
 
-def _refuse_past_cap(payload: dict, live_path: Path, step: str) -> None:
-    """Refuse a press whose kept suggestions move a live price past the owner's limit.
+def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> None:
+    """Refuse a press whose kept suggestions the server does not stand behind.
 
-    THE SERVER NEVER TRUSTS THE CLIENT'S PRICE: each suggestion is measured against the price in
-    the FRESH live read, and a breach names every card and refuses the whole press, before a
-    receipt exists. The limit is the owner's `policy.limit`, the one `pipeline/suggest.py` sorts by.
+    THE SERVER NEVER TRUSTS THE CLIENT'S PRICE. Every kept suggestion is rebuilt by the worklist's
+    own code (`pipeline_routes._live_wire`) off the store and the live export just fetched. Then,
+    in this order, before a receipt exists:
+      1. A rebuilt suggestion whose named price moves the live price past the owner's `policy.limit`
+         (the one `pipeline/suggest.py` sorts by) refuses `suggestion_past_cap`, naming each card.
+         It is measured on the price in the FRESH live read, never on the `was` the screen drew.
+      2. A named price that is not the rebuilt price, or has no rebuilt suggestion at all, refuses
+         `suggestion_changed`. A SKU with no suggestion has nothing to be past a cap of.
     """
     kept = {
         row["sku"]: (row["price"], row["was"])
@@ -1391,7 +1396,8 @@ def _refuse_past_cap(payload: dict, live_path: Path, step: str) -> None:
     if not kept:
         return
     try:
-        limit = suggest.check_setting(corpus.Corpus.read().limit, suggest.DEFAULT_LIMIT, "limit")
+        book = corpus.Corpus.read()
+        limit = suggest.check_setting(book.limit, suggest.DEFAULT_LIMIT, "limit")
         fresh = tcgcsv.read_export(live_path)
         prices = sendguard.live_prices(fresh.rows)
     except (OSError, ValueError, tcgcsv.MalformedCsv) as exc:
@@ -1401,20 +1407,31 @@ def _refuse_past_cap(payload: dict, live_path: Path, step: str) -> None:
             "live_check_failed",
             f"Banchi could not check these suggestions because {files.plain_cause(exc)}, so nothing was {step}. Try again.",
         ) from None
+    rebuilt = {
+        row["sku"]: row["price"] for row in pipeline_routes._live_wire(drawn, book) if row["source"] == "Suggested"
+    }
     names = {tcgcsv.sku_cell(row): row.get(tcgcsv.NAME_COLUMN) for row in fresh.rows}
-    over = sendguard.suggestions_past_cap(kept, prices, limit, names)
-    if not over:
-        return
-    parts = [
-        f"{note.name or note.sku}: ${note.price} is more than {int(limit * 100)}% from the ${note.live} TCGplayer shows"
-        for note in over
-    ]
-    raise PipelineRefusal(
-        HTTPStatus.CONFLICT,
-        "suggestion_past_cap",
-        f"{'; '.join(parts)}. Nothing was {step}.",
-        data={"refused": [note.as_dict() for note in over]},
-    )
+    over = sendguard.suggestions_past_cap({s: v for s, v in kept.items() if s in rebuilt}, prices, limit, names)
+    if over:
+        parts = [
+            f"{note.name or note.sku}: ${note.price} is more than {int(limit * 100)}% from the ${note.live} TCGplayer shows"
+            for note in over
+        ]
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "suggestion_past_cap",
+            f"{'; '.join(parts)}. Nothing was {step}.",
+            data={"refused": [note.as_dict() for note in over]},
+        )
+    changed = sorted(sku for sku, (price, _) in kept.items() if rebuilt.get(sku) != tcgcsv.format_price(price))
+    if changed:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "suggestion_changed",
+            f"Banchi's suggestion changed for {', '.join(names.get(sku) or sku for sku in changed)} since the list was drawn. "
+            f"Nothing was {step}. Reload the list and keep the suggestions again.",
+            data={"changed": changed},
+        )
 
 
 def _send(payload: dict, directories: Sequence[Path], download: bool, refreshed: Optional[dict] = None) -> dict:
@@ -1422,10 +1439,13 @@ def _send(payload: dict, directories: Sequence[Path], download: bool, refreshed:
     _refuse_unreadable_claim()
 
     # 1-2. THE GATE. Refuses before anything is written.
+    # The suggestions rebuild from the store as the screen drew it: the fetch below rewrites the
+    # live readings, and a suggestion must not be confirmed off the very export it is sent into.
+    drawn = Store().read()
     live_name, live_path = _fetch_live(step)
     _reconcile(live_path, step)
     live_before = _live_quantities(live_path, step)
-    _refuse_past_cap(payload, live_path, step)
+    _refuse_past_cap(payload, live_path, step, drawn)
     # NO PRICE WAIT (removed in round 4). A mark-down's `reprice apply --write` writes its new
     # price into the price file, so a listing row carries the new price, never the old one.
 

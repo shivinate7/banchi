@@ -120,7 +120,7 @@ from dataclasses import dataclass, fields as dataclass_fields
 from decimal import Decimal
 from http import HTTPStatus
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, Dict, FrozenSet, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -161,7 +161,7 @@ from pipeline import holdings  # noqa: E402
 from pipeline import movers as price_movers  # noqa: E402
 from pipeline import pricerefresh  # noqa: E402
 from pipeline import stockimages  # noqa: E402
-from store.pricearchive import RANGE_WIDTH_DAYS  # noqa: E402
+from store.pricearchive import RANGE_WIDTH_DAYS, PriceArchive  # noqa: E402
 # THE SAME RULE, AND IT IS WHY THE RATES MOVED OUT OF `cli/cmd_identify.py`. `identify/cost.py`
 # reaches `decimal` and nothing else, and `identify/__init__.py` is a docstring with no imports
 # in it, so this costs one stdlib module. The command module could not be imported for them:
@@ -3458,6 +3458,19 @@ def _day_of(stamp: Optional[str]) -> Optional[str]:
     return None if moment is None else clock.central_day(moment).isoformat()
 
 
+def _market_on(archive: "PriceArchive", sku: str, day: str) -> Optional[str]:
+    """The archived market on `day` (ISO) for `sku`: the `month` bucket that holds it, else the
+    `quarter` bucket, else None. One indexed read of the summary table."""
+    held = date.fromisoformat(day)
+    rows = {row.range: row.points for row in archive.summary.where(sku=sku)}
+    for range_ in ("month", "quarter"):
+        for start, market, width in rows.get(range_, ()):
+            begin = date.fromisoformat(start)
+            if begin <= held < begin + timedelta(days=width):
+                return market
+    return None
+
+
 def _live_wire(snapshot: Optional[Snapshot], book: "corpus.Corpus") -> List[dict]:
     """The worklist's `live` rows: one per SKU the newest live export lists with copies, each
     with its asking price, its last sale and the suggestion `suggest.review` gives it.
@@ -3467,8 +3480,9 @@ def _live_wire(snapshot: Optional[Snapshot], book: "corpus.Corpus") -> List[dict
     `readings` table's, and the last sale is the card state `cmd_reprice.last_sales` reads (the
     docstring of `_card_facts` says why never the event log). A store that would not open answers no rows.
 
-    `market_listed`, the market on the day it went live, is left out: no read of it exists here yet,
-    so the market-moved trigger cannot fire on this wire.
+    `market_listed`, the market on the day it went live, is the price archive's bucket that holds
+    `first_seen_live` (`_market_on`). A SKU with no such bucket leaves the market-moved trigger off.
+    `do_send` rebuilds every kept suggestion through this same function.
     """
     if snapshot is None:
         try:
@@ -3493,6 +3507,7 @@ def _live_wire(snapshot: Optional[Snapshot], book: "corpus.Corpus") -> List[dict
         reading = readings.get(sku)
         kept = snapshot.inventory.listings.get(sku)
         sold = _day_of(last_sold.get(sku))
+        first_seen = _day_of(getattr(kept, "first_seen_live", None))
         listings.append(
             {
                 "sku": sku,
@@ -3501,7 +3516,8 @@ def _live_wire(snapshot: Optional[Snapshot], book: "corpus.Corpus") -> List[dict
                 "market": money(reading.market) if reading else None,
                 "low": money(reading.low) if reading else None,
                 "low_with_shipping": money(reading.low_with_shipping) if reading else None,
-                "first_seen_live": _day_of(getattr(kept, "first_seen_live", None)),
+                "first_seen_live": first_seen,
+                "market_listed": money(_market_on(snapshot.archive, sku, first_seen)) if first_seen and reading else None,
                 "last_sold_at": sold,
             }
         )
