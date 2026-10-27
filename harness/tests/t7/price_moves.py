@@ -14,6 +14,7 @@ import plistlib
 import shlex
 import subprocess
 import sys
+import types
 from contextlib import contextmanager
 from datetime import date, timedelta
 from decimal import Decimal
@@ -120,8 +121,9 @@ def check_price_refresh_note(checks: Checks) -> None:
 
     THE WRITE IS THE POINT: a run that fails and leaves nothing behind is the silent stale state
     this lane exists to end. The script's own imports are asserted too: it may reach the one live
-    fetch, the note writer and the one archive sweep press (`cli.cmd_pricearchive`, scheduled by the
-    owner's word, DEBT32), and nothing that spends money.
+    fetch, the note writer, the one archive sweep press (`cli.cmd_pricearchive`, scheduled by the
+    owner's word, DEBT32) and the daily TCGCSV read (`pipeline.dailyprices`, free), and nothing that
+    spends money.
     """
     checks.note("")
     checks.note("PRICE REFRESH NOTE — a failed run is visible, the job reaches nothing paid")
@@ -156,8 +158,8 @@ def check_price_refresh_note(checks: Checks) -> None:
         daily_path_reaches(SCRIPT.read_text()), (True, {"do_prices_refresh"}), FENCE_LABEL,
     )
     checks.equal(
-        daily_path_reaches(SCRIPT.read_text().replace("pipeline_routes.do_prices_refresh", "pipeline_routes.do_pipeline_export")),
-        (True, {"do_pipeline_export"}),
+        daily_path_reaches(SCRIPT.read_text().replace("pipeline_routes.do_prices_refresh", "pipeline_routes.do_pipeline_export"))[1],
+        {"do_pipeline_export"},
         "the callee check reads the callee: a swapped-in paid export is seen",
     )
     # The scanner reads the syntax tree, so an import-looking line inside a string, a multi-line
@@ -168,7 +170,7 @@ def check_price_refresh_note(checks: Checks) -> None:
         "# don't: import cli.cmd_identify\n"
     )
     checks.equal(
-        daily_path_reaches(SCRIPT.read_text() + hidden), (True, {"do_prices_refresh"}),
+        daily_path_reaches(SCRIPT.read_text() + hidden), daily_path_reaches(SCRIPT.read_text()),
         "an import inside a string, a multi-line string or a comment with a lone quote is not reached",
     )
     checks.equal(
@@ -240,6 +242,27 @@ SWEEP_SKUS = ["70%02d" % n for n in range(1, 9)]
 REFRESH_OK = {"ok": True, "steps": {"history": {"ok": True}}}
 REFRESH_FAILED = {"ok": False, "steps": {}}
 REFRESH_HISTORY_FAILED = {"ok": True, "steps": {"history": {"ok": False}}}
+#: What `pipeline.dailyprices.run_pass` answers when its day is already finished.
+DAILY_PASS_SKIPPED = {"day": "2026-10-27", "skipped": True, "rows": 0, "failed": {}}
+
+
+@contextmanager
+def _daily_prices_stand_in(read=None):
+    """`pipeline.dailyprices.run_pass` replaced by `read` (a Mock a case counts) or, with none, by one that
+    answers "this day is finished". Yields the Mock.
+
+    A STAND-IN MODULE, NEVER A PATCH ON THE REAL ONE: it holds whether or not `pipeline/dailyprices.py` exists,
+    and it keeps the TCGCSV read out of every case that is about the refresh or the sweep (their stubbed `Market`
+    has no `groups`, and they count the Markets built). So the job reaches the read only as
+    `from pipeline import dailyprices` and `dailyprices.run_pass(...)`, looked up when it runs, and builds no
+    `Market` for it in the script itself.
+    """
+    read = read if read is not None else mock.Mock(return_value=DAILY_PASS_SKIPPED)
+    stand_in = types.SimpleNamespace(run_pass=read)
+    import pipeline
+    with mock.patch.dict(sys.modules, {"pipeline.dailyprices": stand_in}), \
+            mock.patch.object(pipeline, "dailyprices", stand_in, create=True):
+        yield read
 
 
 class _Host:
@@ -345,15 +368,16 @@ def _refresh_stub(ok: bool = True):
     return refresh
 
 
-def _run_daily(home: Path, refresh: dict, host: _Host, chunk: int = 2):
+def _run_daily(home: Path, refresh: dict, host: _Host, chunk: int = 2, daily=None):
     """One run of the job: `(exit code, log lines, error)`. Chunks of `chunk` SKUs so a few SKUs
-    make several commits (D224). `fetch_json` raises: a path past the stubbed market fails loudly."""
+    make several commits (D224). `fetch_json` raises: a path past the stubbed market fails loudly. `daily` is the
+    Mock standing in for the daily TCGCSV read (`_daily_prices_stand_in`); none means one that says its day is finished."""
     with _daily_job(home) as job:
         log = Path(job.LOG)
         if home.resolve() not in log.resolve().parents:
             return None, [], "the job's log is outside the throwaway home: " + str(log)
         code = error = None
-        with _refresh_patch(refresh), \
+        with _refresh_patch(refresh), _daily_prices_stand_in(daily), \
                 mock.patch.object(pricehistory, "Market", host.market()), \
                 mock.patch.object(pricehistory, "fetch_json", side_effect=AssertionError("network past the stub")), \
                 mock.patch.object(archive_walk, "CHUNK_SKUS", chunk):
@@ -534,6 +558,49 @@ def check_daily_job_empty_sweep_is_ok(checks: Checks) -> None:
         )
 
 
+def check_daily_job_reads_daily_prices_after_a_good_refresh(checks: Checks) -> None:
+    """The daily TCGCSV read (`pipeline.dailyprices.run_pass`) follows a good refresh and never a failed one,
+    and a sweep that stops early does not stop it.
+
+    THE READ IS A STAND-IN HERE (`_daily_prices_stand_in`): its own cases, the day guard included, are
+    `scripts/dailyprices-selftest.py`. What is proved is WHEN the job calls it, and that it is handed the
+    User-Agent knob's value (`pricehistory.AGENT_ENV`, the one knob, never a second). The job does not guard
+    the day itself: the read does, so every start calls it. Two failed refreshes (the refresh itself, and its
+    sales-history step) are the job's own definition of a failed run. THE STOPPED SWEEP IS A REAL ONE: eight
+    SKUs and a host that refuses from the first, as `check_daily_job_sweep_stops_on_first_refusal` builds it.
+    """
+    checks.note("")
+    checks.note("DAILY JOB DAILY PRICES — after a good refresh, even over a stopped sweep; never after a failed one")
+    arms = (
+        ("good refresh", REFRESH_OK, _Host(), 1),
+        ("good refresh, the sweep stopped early", REFRESH_OK, _Host(refuse_after=0), 1),
+        ("refresh failed", REFRESH_FAILED, _Host(), 0),
+        ("sales-history step failed", REFRESH_HISTORY_FAILED, _Host(), 0),
+    )
+    for label, refresh, host, calls in arms:
+        with isolated_home() as home, mock.patch.dict(os.environ, {pricehistory.AGENT_ENV: "job-agent/1.0"}):
+            _seed_sweep_store(SWEEP_SKUS)
+            read = mock.Mock(return_value=DAILY_PASS_SKIPPED)
+            code, lines, error = _run_daily(home, refresh, host, daily=read)
+            checks.equal(error, None, "%s: the job ran to its end" % label)
+            checks.equal(read.call_count, calls, "%s: the daily read is called %d time(s)" % (label, calls))
+            if calls:
+                checks.equal(
+                    (read.call_args.kwargs if read.call_args else {}).get("user_agent"), "job-agent/1.0",
+                    "%s: the read is handed the User-Agent knob's value" % label,
+                )
+            if label.endswith("stopped early"):
+                checks.ok(
+                    _said(lines, "archive sweep", "stopped early"),
+                    "%s: the sweep did stop, so this arm is the independence case" % label, "\n".join(lines)[-400:],
+                )
+            if not calls:
+                checks.equal(
+                    (host.built, host.asked), ([], []),
+                    "%s: no Market is built and the host is asked nothing" % label,
+                )
+
+
 def check_daily_job_second_run_same_day_skips_sweep(checks: Checks) -> None:
     """Once today's sweep finished, a second job run on the same US Central day sweeps nothing.
 
@@ -596,16 +663,16 @@ def _make_price_refresh_argv():
     return None
 
 
-def _run_main(home: Path, argv: list, host: _Host, env: dict = None, chunk: int = 2, refresh=REFRESH_OK):
+def _run_main(home: Path, argv: list, host: _Host, env: dict = None, chunk: int = 2, refresh=REFRESH_OK, daily=None):
     """The job script run as `python scripts/price-refresh-daily.py <argv>`, its `__main__` block
     (argument parser and run lock) included: `(exit code, error, refresh calls)`. The log and the
     lock handle are checked to be in the throwaway home. `--agent` would install a launchd job, so
-    it is refused here before anything runs. `refresh` is `_refresh_patch`'s."""
+    it is refused here before anything runs. `refresh` is `_refresh_patch`'s. `daily` is `_run_daily`'s."""
     assert "--agent" not in argv, "a check never installs the owner's launchd job"
     namespace = {"__name__": "__main__", "__file__": str(SCRIPT)}
     code = error = None
     with mock.patch.dict(os.environ, {"HOME": str(home), **(env or {})}), mock.patch.object(sys, "argv", [str(SCRIPT), *argv]), \
-            _refresh_patch(refresh) as called, \
+            _refresh_patch(refresh) as called, _daily_prices_stand_in(daily), \
             mock.patch.object(pricehistory, "Market", host.market()), \
             mock.patch.object(pricehistory, "fetch_json", side_effect=AssertionError("network past the stub")), \
             mock.patch.object(archive_walk, "CHUNK_SKUS", chunk):
@@ -794,17 +861,17 @@ def check_manual_price_refresh_still_refreshes_after_the_day_finished(checks: Ch
 
 
 FENCE_LABEL = (
-    "the daily job calls `do_prices_refresh` (the live listings, the catalog, the join, the sales history) "
-    "and the one archive sweep press (`cli.cmd_pricearchive`, D224 and DEBT32), and reaches nothing else of "
-    "`server/`, `cli/` or `identify/`: no paid read"
+    "the daily job calls `do_prices_refresh` (the live listings, the catalog, the join, the sales history), "
+    "the one archive sweep press (`cli.cmd_pricearchive`, D224 and DEBT32) and the daily TCGCSV read "
+    "(`pipeline.dailyprices`, a free public mirror), and reaches nothing else of `server/`, `cli/` or `identify/`: no paid read"
 )
 
 _PACKAGES = ("cli", "identify", "pipeline", "server", "store")
 
 
 def daily_path_reaches(source: str):
-    """`(imports are exactly the note writer, the server module and the archive sweep press, the
-    `pipeline_routes` attributes the script touches)`. A callee other than `do_prices_refresh`
+    """`(imports are exactly the note writer, the server module, the archive sweep press and the daily
+    TCGCSV read, the `pipeline_routes` attributes the script touches)`. A callee other than `do_prices_refresh`
     changes the second. A dotted `from cli.x import y` counts as `cli.x`, as `from cli import x` does."""
     tree = ast.parse(source)
     reached = set()
@@ -819,7 +886,9 @@ def daily_path_reaches(source: str):
         n.attr for n in ast.walk(tree)
         if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "pipeline_routes"
     }
-    return reached == {"pipeline.pricerefresh", "server.pipeline_routes", "cli.cmd_pricearchive"}, touched
+    return reached == {
+        "pipeline.pricerefresh", "server.pipeline_routes", "cli.cmd_pricearchive", "pipeline.dailyprices",
+    }, touched
 
 
 def check_price_trends_preload(checks: Checks) -> None:
@@ -1003,6 +1072,7 @@ CHECKS = (
     check_daily_job_sweep_stops_on_second_throttle,
     check_daily_job_sweep_stops_on_first_refusal,
     check_daily_job_empty_sweep_is_ok,
+    check_daily_job_reads_daily_prices_after_a_good_refresh,
     check_daily_job_second_run_same_day_skips_sweep,
     check_installed_job_sweeps_without_reinstall,
     check_daily_job_sweep_holds_the_refresh_lock,
