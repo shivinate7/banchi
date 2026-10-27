@@ -1,9 +1,10 @@
 # Pricing by suggestion: one list, one rule, you confirm
 
-**STATUS: DIRECTION CHOSEN. NOT BUILT.** The owner picked this direction in a pricing ideation
-session. The one-list mockup is drawn: `docs/design/pricing-suggest/list.html`, with its notes
-and renders at 1440 and 820, light and dark. Section 4b judges each trigger. No build starts
-until the owner signs off the mockup.
+**STATUS: MOCKUPS SIGNED OFF. BUILD MAY START.** The owner signed off the one-list mockup,
+`docs/design/pricing-suggest/list.html`, and picked the floating history card,
+`docs/design/pricing-suggest/history-float.html` (section 9c). Section 4b judges each trigger.
+The suggestion limit (25%) and the value line ($25) are drawn as placeholders; the owner sets
+both, as with the floor.
 
 The problem: `#/pricing` has two tabs with two rule systems. Unsent cards use a rule and a
 cut-off. Live listings use days unsold, a percent under the asking price and a dollar cap. One
@@ -146,7 +147,7 @@ open questions:
 
 | Tool | What exists | Status |
 |---|---|---|
-| Price history | A trend line on each row (`PriceTrend`). The full chart on the product sheet, one press away (D278, one product view, two frames). | **Open: the owner decides from mockups.** Three options: keep the sheet, the row expands, a side panel. Drawn as the history files in `docs/design/pricing-suggest/`. |
+| Price history | A trend line on each row (`PriceTrend`). The full chart on the product sheet, one press away (D278, one product view, two frames). | **Ruled: the floating card.** It opens by itself when a price field takes focus. Section 9c. |
 | Comparable sales | Per period: copies sold, sale count, lowest and highest sale price (`pipeline/pricehistory.py`). No single sales. | **Ruled: both.** Show the sold range on each suggestion, such as "14 sold in 30 days, $3.10 to $4.25". Also plan research into single-sale sources. A separate research lane surveys eBay, PriceCharting and Card Ladder. |
 | Drift alerts | `PriceMovers` flags live cards that moved more than 10% since first seen. | **Open.** The owner turned down the first two sets of options. Section 9a rethinks drift from the decision it serves, with a measured count. |
 | Net after fees | Nothing. Section 8 leaves out a fee model. | **Ruled: plan it.** Needs the owner's real fee rate. |
@@ -181,6 +182,25 @@ and 11 cards hold most of it. The new options, one decision for the owner:
    refresh. Each crossing names the card. The rest wait for the list.
 
 The pick is option 1. Some of the 11 may be held on purpose; the count cannot tell.
+
+## 9c. The floating history card
+
+The owner picked the floating card over the sheet, the row that opens in place and the side
+panel, and asked that it open by itself when a price field takes focus. Mockup:
+`docs/design/pricing-suggest/history-float.html`.
+
+- **It opens on focus.** A price field taking focus, by press or by Tab, opens the card for that
+  row. The history door opens it too.
+- **It follows the focused row.** Tabbing down the list moves the card to each row in turn. Nothing
+  in the list moves (D313, nothing moves unless the person moved it).
+- **It never covers the focused row or the next price field.** Opened by focus, it sits above the
+  row, over rows already priced. Where there is no room above, it opens below and clear of the
+  price column.
+- **Focus stays in the field.** A card opened by focus takes no focus, so Tab goes on to the next
+  price. A card opened by the door takes focus and gives it back to the door when it closes.
+- **It closes** on Esc (focus stays in the field), on its close button, and when focus leaves the
+  list's price fields for anything but the card.
+- **It holds its size from its first paint** while the history loads.
 
 ## 9b. AI-assisted candidates
 
