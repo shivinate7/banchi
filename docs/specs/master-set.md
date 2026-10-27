@@ -72,7 +72,7 @@ yet sent.
 
 **Owner's ruling: the press at the pull, an owed list behind it.** The retire receipt offers the
 press at once. A take-off not pressed, or one that failed, lands on an **owed list on the Pricing
-send card** (`SendCard`), with the press beside each entry. It stays there until it is sent and
+send card** (`SendCard`), with the press beside each entry. **There is no Take All** (owner's ruling: each listing comes down only on its own press). It stays there until it is sent and
 settled, or the listing already matches, or the retirement is undone. Every try is a send receipt
 in the existing outbound log (`inventory/sends/<stamp>/`, `server/send_routes.py`, read by
 `GET /pipeline/sends`), so a failure is listed and readable by a session until dismissed.
