@@ -20,7 +20,8 @@ the chart's market line, so the two agree.
    row with a 90-day chart, the reason, the sold range and the prices. At 820 the side column
    stacks under the chart.
    - Gain: the history sits beside the price it explains, with the rest of the list in view.
-   - Loss: the rows below move down by the panel's height, and a long list becomes longer.
+   - Loss: the rows below move down by the panel's height, and a long list becomes longer. The
+     daily "copies sold" bars that today's sheet draws under the market line are not drawn.
    - How it complies with D313 (nothing moves unless the person moved it): only the press moves
      the rows below, once. The pressed row keeps its place, and the panel opens under it at its
      full height in one step. No load, read or refresh opens or closes it, and the panel holds its
@@ -31,6 +32,7 @@ the chart's market line, so the two agree.
    - Gain: the history updates as the owner moves down the list, with no press per row.
    - Loss: at 1440 the list loses only its Trend chart. Market and Lowest, shipped stay, in the
      line under the name, and the price source sits under the price. The two widths behave
-     differently.
+     differently. At 1440 the panel does not draw the daily "copies sold" bars that today's sheet
+     draws.
    - The Up and Down arrows move the selection. A new key binding must go in `SHORTCUTS` before
      it is done.
