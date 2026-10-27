@@ -1,12 +1,15 @@
-## D256 — Token literals are caught by family
+# D256 — Token literals are caught by family
 
-A defect class exists. It is "literals that
-duplicate a token exactly". `css-var-check.py` cannot see it. That checker catches a `var()`
+A literal that duplicates a token exactly is a defect class, and `css-var-check.py` cannot see it.
+That checker catches a `var()`
 pointed at nothing. This defect is the opposite shape: a plain value where a `var()` belongs.
 `font-size: 22px` sits where `var(--bn-fs-2xl)` belongs. `transition: ... 480ms` sits where
 `var(--bn-t-draw)` belongs. The pixel is identical today. It stops being identical the moment
 the token moves. Nothing today says so. `scripts/token-literal-check.py` is the
 guard. This entry is its argument.
+
+Kind: process
+Home: scripts/token-literal-check.py
 
 **THE SWEEP THAT WOULD REMOVE THESE LITERALS IS NOT THIS BRANCH'S WORK.** It is a separate
 lane. It is held behind other lanes' merges. Two branches must not fight over one call site.

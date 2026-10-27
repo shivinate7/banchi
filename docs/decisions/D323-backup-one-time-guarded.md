@@ -1,4 +1,6 @@
-## D323 — The photo backup runs once, and never overwrites a good copy
+# D323 — The photo backup runs once, and never overwrites a good copy
+
+The photo backup runs once, when the owner asks, and a bad copy never replaces a good one.
 
 Kind: process
 Home: scripts/backup-daily.py

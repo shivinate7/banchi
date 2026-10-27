@@ -1,4 +1,4 @@
-## D273 — One press sends listings live
+# D273 — One press sends listings live
 
 **The owner's rulings, 2026-09-23, on the flow from captured cards to live listings.** The
 owner asked for an agent to review the whole flow in depth, not for a multiple-choice answer.

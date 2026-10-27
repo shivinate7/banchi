@@ -1,4 +1,4 @@
-## D57 — Mark sold is one press, undoable
+# D57 — Mark sold is one press, undoable
 
 **Mark sold writes on one press and the row's control becomes `Undo`.** There is no confirm on a reversible act (`docs/DESIGN.md`). A sale is the most reversible write in the product: one route, two directions, no expiry, no listing hold. The modal's photograph was redundant, since the walk draws the selected copy's photograph (D38) and a copy's label walks to any other (D45). The `Undo` has no clock. It lasts until a newer sale replaces it or the sale is built on. The sale is built on once its order ships or closes, its photograph is reclaimed, or its box is buried (`docs/specs/undo.md` section 11).
 

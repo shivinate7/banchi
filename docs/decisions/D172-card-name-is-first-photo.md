@@ -1,4 +1,4 @@
-## D172 — A card's name is its first photograph
+# D172 — A card's name is its first photograph
 
 **A card's stable identity is the sha256 of the photograph the store held when the id was issued.** The digest is read off the disk and frozen from that moment. It is never recomputed. The photograph is stored under this name now (D183). `docs/specs/stable-card-id.md` holds the plan, the measurements and the receipts. The current scope is in its §0.
 

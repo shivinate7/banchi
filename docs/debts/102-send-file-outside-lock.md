@@ -1,6 +1,6 @@
 ## DEBT102 — a send writes its import file outside the store lock
 
-**A send plans and writes its import file, then takes the store lock to stamp. A copy that sells or is retired in that gap is skipped by the stamp, but its row is already in the file.** A send never counts a copy it did not send, so the store never counts that copy sent (D26 (retired is a terminal card state); D59 (live count is per SKU)).
+**What.** A send plans and writes its import file, then takes the store lock to stamp. A copy that sells or is retired in that gap is skipped by the stamp, but its row is already in the file. A send never counts a copy it did not send, so the store never counts that copy sent (D26 (retired is a terminal card state); D59 (live count is per SKU)).
 
 - **Window:** from the send's second `store.read` to its `store.write`. It holds pricing, the file build and the prints, all on local disk.
 - **Screen send:** it refuses. `send_routes._write_and_send` reads the `send_ahead` line from `emit` and fails the press with `send_file_ahead` (409). Nothing is pushed or offered as a download. The copies the store did stamp go back on the list. No person step is left.

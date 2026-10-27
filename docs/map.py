@@ -4362,7 +4362,7 @@ COMPONENTS = [
                 "does": "Performed the split of docs/debts/ into docs/debts/, and proves "
                         "it lost nothing — split-decisions.py's chunk model applied to "
                         "docs/debts/'s plain-numbered `## <n> — <title>` headings instead "
-                        "of `## D<id>`. `--verify REF` diffs a reassembly against the "
+                        "of `# D<id>`. `--verify REF` diffs a reassembly against the "
                         "pre-split bytes; `--verify-split REF` re-establishes that later "
                         "from git; `--selftest` is the ongoing claim, run as "
                         "`make debts-selftest`. Section 15's deliberate gap (D120 closed it) "
@@ -4448,7 +4448,7 @@ COMPONENTS = [
             "prose-guard.py": {
                 "does": "D60's two guards over the four docs CLAUDE.md names. `--structure` asserts "
                         "what decision-context.py needs and cannot report for itself — a "
-                        "`## D<n> — <title>` heading, every `**bold**` closed on its own "
+                        "`# D<n> — <title>` heading, every `**bold**` closed on its own "
                         "line, and at least one ruling per entry — because that hook exits "
                         "0 on everything and degrades in silence. `--facts` diffs the hard "
                         "tokens of each entry between two versions of a file, which is the "

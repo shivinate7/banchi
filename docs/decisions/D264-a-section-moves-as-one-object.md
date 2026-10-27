@@ -1,4 +1,4 @@
-## D264 — A section moves as one object
+# D264 — A section moves as one object
 
 **The owner asked for a visual box map.** The owner wanted to drag sections between boxes, with their cards moving along. A section is a building block with its own divider. The map is a bird's-eye view of the boxes. The owner can drop a section before or after any section of the other box. The divider moves with its section, so the section is deleted from the source box.
 

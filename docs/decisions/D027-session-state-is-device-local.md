@@ -1,4 +1,4 @@
-## D27 — Session state is device-local
+# D27 — Session state is device-local
 
 **The capture screen's scratch state may live in `sessionStorage`.** `CLAUDE.md`'s ban on browser storage is about inventory. D13 puts one truth on the Mac, so two devices cannot disagree about where a card is. That rule never covered the capture screen's scratch state.
 

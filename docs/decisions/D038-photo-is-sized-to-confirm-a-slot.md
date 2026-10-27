@@ -1,4 +1,4 @@
-## D38 — Photo is sized to confirm a slot
+# D38 — Photo is sized to confirm a slot
 
 **The card photograph on `#/inventory` is sized to confirm a slot (where is this card), not to judge a card.** Judging is the review queue's job at full size, and borrowing a floor from a screen with a different job is the mistake `docs/DESIGN.md` names.
 

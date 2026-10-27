@@ -1,4 +1,4 @@
-## D271 — Every search uses one matcher
+# D271 — Every search uses one matcher
 
 **Ruling (FLT-06, FLT-04).** One forgiving matcher runs everywhere. It matches:
 

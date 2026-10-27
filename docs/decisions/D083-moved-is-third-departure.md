@@ -1,4 +1,4 @@
-## D83 — Moved is a third way a card leaves
+# D83 — Moved is a third way a card leaves
 
 **A card may leave a box by moving.** The source keeps a `moved` tombstone. The card is recorded fresh at a newly allocated index in the destination. This is D26's `retired` pattern, extended to a third destination: add a state, inherit the machinery. The cascade shape (shift every higher card down) was refused. D58 already keeps the stored index fixed while rendered ranks close up. A cascade inherits `renumber_blocked` across any sold, retired or held card. So a box sold through partway could give up almost nothing.
 

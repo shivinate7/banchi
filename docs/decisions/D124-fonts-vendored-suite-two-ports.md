@@ -1,4 +1,4 @@
-## D124 — Fonts are vendored; the suite allows two ports
+# D124 — Fonts are vendored; the suite allows two ports
 
 **Built 2026-09-08.** `app/index.html` carried a `preconnect` pair and a
 `fonts.googleapis.com` stylesheet for Inter, Manrope and JetBrains Mono. The three families are

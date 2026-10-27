@@ -1,4 +1,4 @@
-## D210 — Rescue is a press, reported in words
+# D210 — Rescue is a press, reported in words
 
 **`banchi rescue` (D145) is reached from a press, and its report is worded and never shown verbatim.** A tooltip that names a command in backticks is the "route with no control" defect in a smaller shape. The route is `POST /pipeline/runs/<name>/rescue`, mirroring `do_queue_refresh`: free, preview by default, `write` gated. It is dispatched ahead of `_RUN_STEP_RE` (`_RUN_RESCUE_RE`). The client is `rescueRun` in `app/src/server.ts`, and the control is on `RunPanel.tsx`'s header, shown only where `detail.box_former` is true. `RunRescue.tsx` is the sheet, and the `#/pricing` tooltip names no command.
 

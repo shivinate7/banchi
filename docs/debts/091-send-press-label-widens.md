@@ -1,6 +1,6 @@
 ## DEBT91 — the send press widens when the worklist lands
 
-**The send press's label grows when the worklist lands.** The pending bar's press reads "Send to TCGplayer". The loaded press reads "Send All N SKUs to TCGplayer", and it is longer with price changes or live moves. `.send-press` is `flex: 0 1 auto`.
+**What.** The send press's label grows when the worklist lands. The pending bar's press reads "Send to TCGplayer". The loaded press reads "Send All N SKUs to TCGplayer", and it is longer with price changes or live moves. `.send-press` is `flex: 0 1 auto`.
 
 - **Result:** Download and Refresh shift right at landing, and a long label can wrap them to a new line. D313 forbids a move the person did not make. This is read from the code. It is unmeasured.
 - **Not fixed because** the label's count is not known until the worklist lands.

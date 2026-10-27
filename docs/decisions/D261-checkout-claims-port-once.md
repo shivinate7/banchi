@@ -1,4 +1,4 @@
-## D261 — A checkout claims its port slot once
+# D261 — A checkout claims its port slot once
 
 **Amends D43, the port follows the store.** D43 promised that every checkout has its own ports. It delivered a hash of the path into 300 slots. A hash does not know which slots other checkouts hold. Now two things are true. A linked checkout CLAIMS a slot once, in one machine-wide registry, and keeps it. And a test run that reuses a dev server refuses to run unless that server names THIS checkout. The primary checkout is unchanged: it keeps 8000 and 5173 and claims nothing.
 

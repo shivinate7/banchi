@@ -1,4 +1,4 @@
-## D213 — The set is a stored fact
+# D213 — The set is a stored fact
 
 **AMENDED, WIDENED (`D258`).** This entry's rule covered `set_name` and `rarity`. It now covers `name`, `number` and `condition` too. Measured: 64 cards draw a name their own listing disputes, and 241 draw a number. The old premise was wrong. `name` and `number` stayed "what the model read" even after a SKU bound. They now write at bind time, from the SKU table, as `set_name` and `rarity` already did. The source moves from an export file to that table, which answers this entry's own second ground better than a file can. A row outlives its export. "The hint was never a fact" generalizes: the read was never one either. The backfill press this entry built, `cards variants`, is retired. It wrote `set_name` and `rarity` outside the one writer. `cards identity --write` now fills both through `bind_sku`, from the SKU table. The old command prints one line, writes nothing, and exits 2.
 

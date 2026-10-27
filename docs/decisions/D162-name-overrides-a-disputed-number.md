@@ -1,4 +1,4 @@
-## D162 — Name overrides a disputed number
+# D162 — Name overrides a disputed number
 
 **A review entry showed the wrong card.** A photograph plainly reads `Deathgrip`, `SFD · 163/221`. The headline was "Is this the right card at all?" The reason was `name_disputed`. The only row offered was **Blood Money 162/221**, the card the pipeline had just called wrong. Pressing `L` and typing the name the model had already read showed `Deathgrip · Spiritforged · 163/221` as the top hit.
 

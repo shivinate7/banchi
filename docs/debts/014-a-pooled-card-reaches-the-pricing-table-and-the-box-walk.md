@@ -1,5 +1,7 @@
 ## 14 — A pooled card reaches the pricing table and the box walk, and `located` suppresses the label everywhere and the photograph nowhere
 
+**What.** A pooled card reaches the pricing table and the box walk, because `located: false` hides the position label on every owner screen and the photograph on none.
+
 Code cards are dormant. This gap arms on the day one is photographed. A `pokemon_code` card (`located: False`, `catalogued: True`, `join_key: name_only`, `prompt: pokemon_code_v1` in `pipeline/games.py`) goes through `identify`, `join` and `emit` like any singles card. `cli/cmd_identify.CODE_GAME` names it. Its photograph lands in `captures/cards/box<n>/` beside every located card's.
 
 `located: false` suppresses the position label and bar on every owner screen. It suppresses the photograph on none. `PricingSku.positions` (`app/src/types.ts`) is `{box, index, label, cid?, capture_id?}`, with no `located` and no `game`. So `#/pricing` cannot filter on them. `server/pipeline_routes._relabel_positions` fixed the caption only.

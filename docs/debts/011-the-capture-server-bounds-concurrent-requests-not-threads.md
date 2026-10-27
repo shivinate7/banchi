@@ -1,5 +1,7 @@
 ## 11 — A writer parked on the store lock still holds a request slot, and the heavy lock-free reads wait behind it
 
+**What.** The capture server bounds concurrent requests and not threads, so a writer parked on the store lock still holds a request slot, and the heavy lock-free reads wait behind it.
+
 **What is bounded.** `server/capture_server.py` serves on `class CaptureServer(ThreadingHTTPServer)`
 with `request_queue_size = 128`. A `ThreadPoolExecutor` runs one request per worker. Every response
 sends `Connection: close` from `end_headers`, 304 included. A worker therefore lives for one request

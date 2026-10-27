@@ -1,4 +1,4 @@
-## D47 — Never commit a symlink leaving the repo
+# D47 — Never commit a symlink leaving the repo
 
 **A symlink that leaves the repository is destroyed on checkout elsewhere.** Git removes an ignored file or directory that stands in the way of a checkout, without asking. A committed link to another Mac's absolute path became a link to itself in the main tree and replaced the 133 MB eval-image mirror. The error (`FileExistsError` from `mkdir`) named the symptom, not the cause.
 

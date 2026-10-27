@@ -1,4 +1,4 @@
-## D68 — A departed card's label names its record
+# D68 — A departed card's label names its record
 
 **`join.departed_label` ends on the store key, spelled `B3 #96`. Every renderer draws that key in the muted register.** Two copies can share a box and a neighbor text, so the label must name the record. On the owner's store, two sold copies of `Vi, Peacekeeper` sat in box 1, at stored indices **67** and **106**. Both drew `Box 1 · departed`, with nothing to tell them apart.
 

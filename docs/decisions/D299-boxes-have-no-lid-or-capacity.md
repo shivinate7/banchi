@@ -1,7 +1,13 @@
-## D299 — Boxes have no lid or capacity
+# D299 — Boxes have no lid or capacity
+
+A box has no seal and no capacity. The owner ruled the seal out, and the capacity that the seal froze went with it.
 
 **The owner's ruling, 2026-09-25**, verbatim: "what was the point of sealed boxes? lets kill
 this".
+
+Kind: build
+Plan: docs/specs/order-flow.md#31--a-box-has-no-seal-and-no-capacity-d299 (python)
+Plan: docs/specs/order-flow.md#31--a-box-has-no-seal-and-no-capacity-d299 (web)
 
 ### Why the seal existed, and why it protects nothing now
 

@@ -1,6 +1,6 @@
 ## DEBT48 — code-side mechanization left open
 
-`docs-audit` mechanizes claims written in markdown. Four claims written in code stay open:
+**What.** `docs-audit` mechanizes claims written in markdown, and four claims written in code stay open.
 
 1. Nothing reconciles the shell-clause count in `CLAUDE.md`'s prose against `scripts/guard-shell.py`'s `CLAUSES` table. The `env names` row checks the hatch names, never the count.
 2. `scripts/reap-selftest.sh` has no arm for an UNKNOWN verdict, a real branch in the guard that decides whether to kill a process.

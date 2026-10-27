@@ -1,4 +1,4 @@
-## D301 — Stock photos are hotlinked, never mirrored
+# D301 — Stock photos are hotlinked, never mirrored
 
 The owner wants stock photos as the main view on Sets and Pricing, if they load without much lag. Several SKUs may share one stock image, and each row keeps its own label.
 

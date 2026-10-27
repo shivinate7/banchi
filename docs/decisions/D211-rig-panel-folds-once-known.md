@@ -1,4 +1,4 @@
-## D211 — Rig panel folds once setup is known
+# D211 — Rig panel folds once setup is known
 
 `app/src/CaptureScreen.tsx`'s Game, Camera, Rotation and Trigger panel is the SESSION box. Its own comment says the panel is set at rig setup and then read. It rendered all four fields expanded on every mount, whether or not the operator had a box. A walkthrough of the screen found seven settings between opening Capture and picking a box. D142 already remembers that box across sittings.
 

@@ -1,4 +1,4 @@
-## D95 — The shell is rail, palette, reference sheet
+# D95 — The shell is rail, palette, reference sheet
 
 **The owner's nav became a collapsible sidebar with a command palette over it.** The phone gets a tab bar and a drawer. The Fulfiller gets a crash page that offers no way out of his view. Built with D94. `App.tsx`'s `ROUTES` table is still the one roster, and every route is still registered in it. What changed is how a person reaches one.
 

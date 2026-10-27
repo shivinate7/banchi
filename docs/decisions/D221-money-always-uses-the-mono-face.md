@@ -1,4 +1,4 @@
-## D221 — Money always uses the mono face
+# D221 — Money always uses the mono face
 
 **The owner's ruling, 2026-09-19: mono is a font, and money in a table keeps it.**
 

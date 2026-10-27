@@ -8,23 +8,22 @@ result is checked by `--verify`, which reassembles the directory and diffs it ag
 original bytes. The diff being empty is the whole claim.
 
 THE CHUNK MODEL, which is what makes losslessness true BY CONSTRUCTION rather than by
-testing. The file is cut into chunks at every `## ` line. Every line of the original
+testing. The file is cut into chunks at every `## ` line and every entry's `# D<id>` title. Every line of the original
 belongs to exactly ONE chunk, chunks are written in order, and reassembly concatenates
 them in that order. There is no separator convention to get wrong and no text that lives
 between chunks, because a chunk boundary is a line boundary and the last line of one chunk
 is immediately followed by the first line of the next.
 
-A chunk is an ENTRY when its heading matches `## D<id>`, and a SECTION otherwise. The
+A chunk is an ENTRY when its heading matches `# D<id>`, and a SECTION otherwise. The
 three sections that are not entries — Deferred, Someday and the v1 bug table — sat
 between two entries in the original and are not decisions at all; they get their own files
 and the manifest records where they sat, so the reassembly is exact rather than
 approximately right.
 
 THE BOUNDARY RULE IS scripts/prose-guard.py's, deliberately. An entry ends at the next
-`## ` of ANY kind — not the next `## D<n>` — because that is the rule
-scripts/decision-context.py already reads by, and the two disagreeing is how D60 came to
-read 17,775 bytes against its real 4,976, having absorbed all three sections. This script
-re-derives that rule rather than importing it, and `--verify` is what keeps them honest.
+entry title or the next `## ` section of the old monolith, so a section that is not an
+entry is never absorbed into the entry above it. This script re-derives that rule rather
+than importing it, and `--verify` is what keeps them honest.
 """
 
 from __future__ import annotations
@@ -47,8 +46,8 @@ MANIFEST = "ORDER.json"
 # the number (D140), so BOTH shapes have to name a file or the claimer cannot find what it
 # must rename.
 _ID = r"(?:[1-9][0-9]{0,2}|-[a-z][a-z0-9]*(?:-[a-z0-9]+)+)"
-ENTRY_RE = re.compile(r"^##\s+(D" + _ID + r")\b")
-HEADING_RE = re.compile(r"^##\s+(D" + _ID + r")\s*[—-]\s*(.+)$")
+ENTRY_RE = re.compile(r"^#\s+(D" + _ID + r")\b")
+HEADING_RE = re.compile(r"^#\s+(D" + _ID + r")\s*[—-]\s*(.+)$")
 
 
 class Chunk(NamedTuple):
@@ -74,9 +73,10 @@ def slug(text: str, limit: int = 58) -> str:
 
 
 def chunk(text: str) -> List[Chunk]:
-    """Cut the file at every `## `. Every line lands in exactly one chunk."""
+    """Cut the file at every `## ` and entry title. Every line lands in exactly one chunk."""
     lines = text.split("\n")
-    starts = [i for i, line in enumerate(lines) if line.startswith("## ")]
+    starts = [i for i, line in enumerate(lines)
+              if line.startswith("## ") or ENTRY_RE.match(line)]
     out: List[Chunk] = []
     if not starts:
         return [Chunk("preamble", "", "", lines)]
@@ -87,7 +87,7 @@ def chunk(text: str) -> List[Chunk]:
         body = lines[start:end]
         entry = ENTRY_RE.match(body[0])
         titled = HEADING_RE.match(body[0])
-        title = titled.group(2).strip() if titled else body[0][3:].strip()
+        title = titled.group(2).strip() if titled else body[0].lstrip("#").strip()
         if entry:
             out.append(Chunk("entry", entry.group(1), title, body))
         else:
@@ -310,8 +310,7 @@ def verify_split(ref: str, before_ref: Optional[str] = None) -> int:
         # commit — the directory did not exist at the parent, so every file is new and the
         # list is 164 names long. What a reviewer needs is which ENTRIES arrived, and that is
         # a property of the text rather than of the filesystem.
-        arrived = ENTRY_RE.findall("\n".join(
-            line for line in extra.split("\n") if line.startswith("## ")))
+        arrived = re.findall(r"^#{1,2}\s+(D" + _ID + r")\b", extra, re.M)
         print(f"PRESERVED — docs/DECISIONS.md at {source_ref} ({len(before.encode('utf-8')):,} "
               f"bytes) is a byte-for-byte PREFIX of the {len(order)} files at {ref}.")
         print("            Nothing the parent held was changed, reordered or dropped.")

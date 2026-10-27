@@ -1,4 +1,4 @@
-## D285 — Filter, sort and search live in the URL
+# D285 — Filter, sort and search live in the URL
 
 **The owner's ruling, 2026-09-23 (FLT-11).** Filter memory lives in the URL, on every screen.
 A link carries it. A bookmark carries it. Back restores it.

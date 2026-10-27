@@ -1,4 +1,4 @@
-## D69 — Orders and Shipping are separate routes
+# D69 — Orders and Shipping are separate routes
 
 `#/orders` answers *which copies does this buyer get, and where in the boxes are they*, from D63's ledger. `#/shipping` answers *which envelope does this order go in*, from TCGplayer's `Orders → Export Shipping` file. These are two routes, not one screen with two modes. `app/src/App.tsx` carries NINE routes: eight are the owner's and one is the Fulfiller's. The build-order plan is discharged: the screens exist, so the transport had somewhere to arrive.
 

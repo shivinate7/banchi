@@ -1,4 +1,6 @@
-## D216 — History host answers by User-Agent
+# D216 — History host answers by User-Agent
+
+The price-history host declines this project's default User-Agent, so Banchi sends a browser User-Agent through one setting.
 
 Kind: process
 Home: server/tcg_export.py

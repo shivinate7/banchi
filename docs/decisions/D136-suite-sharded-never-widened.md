@@ -1,4 +1,4 @@
-## D136 — The suite is sharded, never widened
+# D136 — The suite is sharded, never widened
 
 **Settled on the owner's interview.** Wall-clock per PR and flake exposure are what matter. Sharding is fine, since it does not multiply runner minutes. A test that sleeps on a real clock may move to Playwright's fake clock. The post-merge run on main is skipped only when the tree it would test already passed on the PR. No assertion or asserted value changed under this entry. D16 is the test it is held to. Every change here alters how long a true statement is given to become true, or which machine says it.
 
