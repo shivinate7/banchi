@@ -26,10 +26,20 @@ THE WIRE THIS GROUP PINS (the one-list-wire lane's brief names the behaviour, no
     past the cap refuses `suggestion_past_cap`. A named price the server does not rebuild to
     the same price refuses `suggestion_changed`.
   - `do_product_history(sku)["asking_postings"]`: every posting for the SKU, oldest first.
+  - A `prices` list names each SKU once. A repeated SKU refuses `prices_invalid` at the route
+    (`send_routes._named_prices`) and raises `cmd_emit.PriceRefused` for the emit file, before
+    anything is written.
+  - A zero-run send of kept suggestions refuses `readings_stale` when a reading behind one was not
+    written on today's US Central day (the D166 rule: the export belongs to its day).
+  - A kept suggestion on a SKU that is live and held is left out of the send, and the answer names
+    that SKU under its top-level `held` key. `send.held` stays the receipt's own boolean.
+  - The worklist's no-runs branch, with a corpus that cannot be read, answers `error:
+    "corpus_unreadable"` and draws no default-policy suggestion.
 """
 
 from __future__ import annotations
 
+import json
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
@@ -47,6 +57,7 @@ from harness.tests.t7.common import (
 )
 from harness.tests.t7.price_history import _network_recorder
 from harness.tests.t7.send_markdown import _case, _live_export_priced, _seed_sync, send_portal
+from cli import cmd_emit
 from pipeline import corpus, readings
 from server import pipeline_routes, send_routes
 from store import clock, db, files, master
@@ -92,12 +103,14 @@ def _seed_readings() -> None:
         snapshot.readings.replace(*readings.collect())
 
 
-def _market_reading(sku: str, market: str, low_with_shipping: Optional[str] = None) -> None:
-    """One market reading for `sku`, written as a `readings` row. Overrides any collected one."""
+def _market_reading(sku: str, market: str, low_with_shipping: Optional[str] = None,
+                    at: Optional[int] = None) -> None:
+    """One market reading for `sku`, written as a `readings` row. Overrides any collected one.
+    `at` is its unix second; now when not given."""
     with Store().write() as snapshot:
         snapshot.readings.entries[sku] = Reading(
             market=market,
-            at=int(time.time()),
+            at=int(time.time()) if at is None else at,
             source="t7-one-list-wire",
             kind="run",
             low_with_shipping=low_with_shipping,
@@ -174,10 +187,17 @@ def _pushed(sku: str) -> int:
     return 0 if listing is None else listing.pushed
 
 
-def _typed(sku: str, price: str) -> None:
+def _typed(sku: str, value) -> None:
+    """One corpus answer for `sku`: a typed price, or a dict such as `{"withheld": "keeping"}`."""
     book = corpus.Corpus.read()
-    book.answers[sku] = corpus.Answer(value=price)
+    book.answers[sku] = corpus.Answer(value=value)
     book.write()
+
+
+def _yesterday_at() -> int:
+    """Unix seconds of noon UTC on the US Central day before today: that day, whatever the zone."""
+    day = _day(1)
+    return int(datetime(day.year, day.month, day.day, 18, tzinfo=timezone.utc).timestamp())
 
 
 def check_worklist_carries_live_listings(checks: Checks) -> None:
@@ -577,6 +597,157 @@ def check_product_history_asking_postings(checks: Checks) -> None:
             )
 
 
+def _emit_outcome(path) -> str:
+    """`"refused"` when emit's `--reprice-live` reader raises `PriceRefused`, else `"answered"`."""
+    try:
+        cmd_emit._named_prices(path)
+    except cmd_emit.PriceRefused:
+        return "refused"
+    return "answered"
+
+
+def check_send_refuses_repeated_sku_price(checks: Checks) -> None:
+    """A SKU named twice in `prices` is refused `prices_invalid`, and nothing is sent.
+
+    The probe: Dunsparce twice, a suggestion at 11.00 and a typed 19.99, against a live 10.00. A
+    dict built from the list keeps the row that came last, so the duplicate must be refused before
+    any row is built. The route's reader refuses the list on its own, and the press names a run so
+    the refusal is the duplicate's and not `runs_required`.
+    """
+    checks.note("")
+    checks.note("SEND, REPEATED SKU — one SKU named twice in `prices` is refused before anything is written")
+    probe = [
+        {"sku": DUNSPARCE_SKU, "price": "11.00", "was": "10.00", "source": "suggested"},
+        {"sku": DUNSPARCE_SKU, "price": "19.99", "was": "10.00"},
+    ]
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send: repeated SKU in prices"):
+            run_dir = _one_copy_live(checks, portal, prices={DUNSPARCE_SKU: "10.00"})
+            outcome = _outcome(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True, "prices": probe}))
+            checks.equal(outcome, ("refused", "prices_invalid"),
+                         "a SKU named twice in prices is refused prices_invalid")
+            checks.equal(_rows(portal), {}, "and TCGplayer receives no row")
+            checks.equal(_postings(DUNSPARCE_SKU), [], "and no posting is written")
+            checks.equal(_outcome(lambda: send_routes._named_prices({"prices": probe})),
+                         ("refused", "prices_invalid"),
+                         "the route's own reader refuses the same list before any row is built")
+
+
+def check_emit_repeated_sku_price_file(checks: Checks) -> None:
+    """`cmd_emit._named_prices` reads the `--reprice-live` file. A SKU named twice in it raises
+    `PriceRefused` and never keeps the last row: the same probe the route refuses."""
+    checks.note("")
+    checks.note("EMIT, REPEATED SKU — the --reprice-live file names one SKU once")
+    with run_folder() as run, isolated_home(run):
+        path = run / "reprice-live.json"
+        path.write_text(json.dumps({"prices": [
+            {"sku": DUNSPARCE_SKU, "price": "11.00", "was": "10.00", "source": "suggested"},
+            {"sku": DUNSPARCE_SKU, "price": "19.99", "was": "10.00"},
+        ]}), encoding="utf-8")
+        with _case(checks, "emit: repeated SKU in the named prices file"):
+            checks.equal(_emit_outcome(path), "refused",
+                         "emit refuses a SKU named twice in the file: PriceRefused, not the last row")
+
+
+def check_send_refuses_stale_readings(checks: Checks) -> None:
+    """A zero-run send of kept suggestions refuses `readings_stale` when a reading behind one was
+    written on an earlier US Central day. The D166 rule: an old export is refreshed first or the
+    send says why, and a suggestion is only as fresh as the reading it is drawn from.
+
+    Dunsparce's reading is yesterday's, Articuno's is today's. One stale reading refuses the press.
+    """
+    checks.note("")
+    checks.note("SEND, STALE READINGS — a suggestion drawn from an earlier day's reading is refused")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send: suggestion from an earlier day's reading"):
+            _one_copy_live(checks, portal)
+            _seed_send_suggestions()
+            _market_reading(DUNSPARCE_SKU, "2.06", "2.40", at=_yesterday_at())
+            stored = Store().read().readings.entries[DUNSPARCE_SKU].at
+            checks.ok(
+                clock.central_day(datetime.fromtimestamp(stored, tz=timezone.utc)) < clock.central_day(clock.now()),
+                "precondition: Dunsparce's reading was written on an earlier Central day",
+            )
+            outcome = _outcome(lambda: send_routes.do_send({
+                "runs": [],
+                "confirm": True,
+                "prices": [
+                    {"sku": DUNSPARCE_SKU, "price": "2.06", "was": "2.50", "source": "suggested"},
+                    {"sku": ARTICUNO_SKU, "price": "24.00", "was": "22.03", "source": "suggested"},
+                ],
+            }))
+            checks.equal(outcome, ("refused", "readings_stale"),
+                         "a zero-run send over a reading from an earlier day is refused readings_stale")
+            checks.equal(_rows(portal), {}, "and TCGplayer receives no row")
+            checks.equal(_postings(DUNSPARCE_SKU), [], "and no posting is written")
+
+
+def check_send_held_suggestion_left_out(checks: Checks) -> None:
+    """A kept suggestion on a SKU that is live and held is left out of the send. Its held take-off
+    is a row of its own (Add to Quantity below 0), and a price-only row beside it is what the
+    "Duplicate TCGplayer Id" gate refuses. The answer names the SKU under its top-level `held` key.
+
+    The press names a run: a held SKU in no selected game is `ungamed` and gets no take-off row, so
+    only a run that files Dunsparce can show the collision.
+    """
+    checks.note("")
+    checks.note("SEND, HELD — a kept suggestion on a held live SKU is left out and named under `held`")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send: kept suggestion on a held live SKU"):
+            run_dir = _one_copy_live(checks, portal)
+            _seed_send_suggestions()
+            _typed(DUNSPARCE_SKU, {"withheld": "keeping"})
+            try:
+                outcome = ("answered", send_routes.do_send({
+                    "runs": [run_dir.name],
+                    "confirm": True,
+                    "prices": [{"sku": DUNSPARCE_SKU, "price": "2.06", "was": "2.50", "source": "suggested"}],
+                }))
+            except pipeline_routes.PipelineRefusal as caught:
+                outcome = ("refused", f"{caught.code}: {caught}")
+            checks.equal(outcome[0], "answered",
+                         f"the press is answered, not refused (got {outcome[1] if outcome[0] == 'refused' else ''})")
+            if outcome[0] == "answered":
+                checks.ok(str(DUNSPARCE_SKU) in json.dumps(outcome[1].get("held"), sort_keys=True),
+                          "the answer names Dunsparce under its top-level `held` key", repr(outcome[1].get("held")))
+                checks.ok(_rows(portal).get(DUNSPARCE_SKU, ("", ""))[0] != "0",
+                          "the suggestion's price-only row (Add to Quantity 0) is left out")
+                checks.ok("suggested" not in [p["source"] for p in _postings(DUNSPARCE_SKU)],
+                          "and no suggested posting is written")
+
+
+def check_worklist_no_runs_corrupt_corpus(checks: Checks) -> None:
+    """With no run on disk and a corpus that cannot be read, the worklist says so: it answers
+    `error: "corpus_unreadable"`, and its live row draws no suggestion from the default policy.
+
+    The control: with no corpus file the default policy draws Dunsparce as suggested (unsold 60
+    days, market 2.06 under its 2.50 ask). With the file corrupt, that suggestion must not appear
+    quietly.
+    """
+    checks.note("")
+    checks.note("WORKLIST, NO RUNS, CORPUS UNREADABLE — the screen is told, and no default suggestion is drawn")
+    with run_folder() as run, isolated_home(run):
+        _write_live("20260201-000000", _live_export_priced({DUNSPARCE_SKU: 1}, {DUNSPARCE_SKU: "2.50"}))
+        _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
+        _market_reading(DUNSPARCE_SKU, "2.06", "2.40")
+        with _case(checks, "worklist, no runs: corpus unreadable"):
+            checks.ok(not files.runs_dir().is_dir(), "precondition: no run is on disk, so the no-runs branch answers")
+            control = _live_row(pipeline_routes.do_pipeline_worklist([]), DUNSPARCE_SKU) or {}
+            checks.equal(control.get("group"), "suggested",
+                         "control: with no corpus file, the default policy draws Dunsparce as suggested")
+            files.prices_path().parent.mkdir(parents=True, exist_ok=True)
+            files.prices_path().write_text("{ not json", encoding="utf-8")
+            payload = pipeline_routes.do_pipeline_worklist([])
+            row = _live_row(payload, DUNSPARCE_SKU) or {}
+            checks.equal(payload.get("error"), "corpus_unreadable",
+                         "the worklist names the corpus that cannot be read, for the screen to show")
+            checks.ok(row.get("group") != "suggested" and row.get("source") != "Suggested",
+                      "and draws no default-policy suggestion for Dunsparce", repr(row))
+
+
 CHECKS = (
     check_worklist_carries_live_listings,
     check_worklist_without_runs_reads_newest_export,
@@ -587,4 +758,9 @@ CHECKS = (
     check_send_suggestion_changed,
     check_send_empty_runs_without_prices_refused,
     check_product_history_asking_postings,
+    check_send_refuses_repeated_sku_price,
+    check_emit_repeated_sku_price_file,
+    check_send_refuses_stale_readings,
+    check_send_held_suggestion_left_out,
+    check_worklist_no_runs_corrupt_corpus,
 )
