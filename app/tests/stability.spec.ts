@@ -334,15 +334,30 @@ const L1_BURIED = [
 
 for (const width of [1440, 820]) {
   test(`held frame: pressing the Deleted boxes shelf swaps the walk once, at ${width}`, async ({ page }) => {
+    /* The buried records are read once when Browse opens, so this press has no read to hold: the
+       shelf draws from what is already here, and the swap is the only change. */
     await l1Inventory(page)
     await page.route(/\/graveyard(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ departed: L1_BURIED }) }))
-    const gate = await heldReads(page, /\/inventory\/\d+$/)
     await watchShifts(page)
     await setViewport(page, { width, height: 1000 })
     await page.goto(screen('inventory'))
     await expect(page.locator('.card-locations').first()).toBeVisible()
-    const r = await heldPress(page, gate, () => page.getByRole('button', { name: 'Records from deleted boxes' }).click())
-    expect(r.clusters, `one press, ${r.clusters} layout changes: ${describeShifts([...r.out, ...r.swap])}`).toBeLessThanOrEqual(1)
+    await settleMotion(page)
+    await afterPaint(page)
+    const from = await markNow(page)
+    await page.getByRole('button', { name: 'Records from deleted boxes' }).click()
+    await expect(page.getByRole('heading', { name: 'Thievul' })).toBeVisible()
+    await settleMotion(page)
+    await afterPaint(page)
+    await page.waitForTimeout(CLUSTER_MS * 2) // keep: a second layout change within CLUSTER_MS of the swap is a second cluster, and only elapsed time shows it
+    let clusters = 0
+    let last = -Infinity
+    const shifts = (await readShifts(page)).shifts.filter((s) => s.at >= from)
+    for (const s of shifts) {
+      if (s.at - last > CLUSTER_MS) clusters += 1
+      last = s.at
+    }
+    expect(clusters, `one press, ${clusters} layout changes: ${describeShifts(shifts)}`).toBeLessThanOrEqual(1)
   })
 
   test(`held frame: leaving the Deleted boxes shelf for a box holds the shelf until the read lands, at ${width}`, async ({ page }) => {
