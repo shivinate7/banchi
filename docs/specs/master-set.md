@@ -91,7 +91,9 @@ The press follows D100's phantom take-off exactly:
 - **It writes a receipt** naming the card, the copies taken off and whether TCGplayer accepted
   them. A failed push leaves the retirement standing and says nothing went live.
 - **Undoing the retirement does not put the listing back.** The copy is on hand again and goes
-  out on the next ordinary send. A harness case proves it.
+  out on the next ordinary send after the take-off settles. No gate holds it back: until the live
+  check settles, the copy still counts as sent, so a send in between adds nothing for it.
+  Harness cases prove both halves.
 
 The press reaches TCGplayer, so it needs the seller session the sends already use. With none, the
 receipt says so and offers no press.
