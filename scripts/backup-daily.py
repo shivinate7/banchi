@@ -111,14 +111,18 @@ def agent(remove):
     return launchagent.agent(LABEL, HERE, ROOT, 3, 30, last_run_file(), remove)
 
 
+def require_photos(source_root):
+    if not (source_root / "photos").is_dir():
+        raise RuntimeError("the source has no photos/ folder (wrong BANCHI_HOME?): %s" % source_root)
+
+
 def copy_tree(source_root, dest_root):
     """(copied, skipped, differs, bad). `os.stat` on the destination only. A destination file is never
     replaced: one whose size or mtime differs from the source's is left as it is and its path goes in
     `differs`. A missing one is copied (`move_in` keeps the mtime and renames last, so a killed run leaves
     no half file for the next run to read as a differing copy). A file that cannot be read or written
     is counted in `bad` and the walk goes on."""
-    if not (source_root / "photos").is_dir():
-        raise RuntimeError("the source has no photos/ folder (wrong BANCHI_HOME?): %s" % source_root)
+    require_photos(source_root)
     copied = skipped = 0
     differs = []
     bad = []  # os.walk skips a folder it cannot list unless asked: each one counts as a bad file
@@ -228,6 +232,9 @@ def verify(source_root, dest_root):
     """(matches, mismatches, missing, snapshot name, integrity) of the destination against the source. Read-only.
     Reads destination files on purpose, unlike the default run. A file that cannot be read, a folder that
     cannot be listed and a store copy that cannot be opened count as a mismatch, never as a match."""
+    require_photos(source_root)
+    if not any(f.is_file() for f in (source_root / "photos").rglob("*")):
+        raise RuntimeError("the source holds no files under photos/ (wrong BANCHI_HOME?): %s" % source_root)
     matches, mismatches, missing = 0, [], []
     for top in TREES:
         if not (source_root / top).is_dir():
@@ -268,7 +275,11 @@ def run_verify():
     sys.path.insert(0, str(ROOT))
     from store import files
 
-    matches, mismatches, missing, snap, integrity = verify(files.home(), destination())
+    try:
+        matches, mismatches, missing, snap, integrity = verify(files.home(), destination())
+    except RuntimeError as exc:
+        print("verify: failed: %s" % exc)
+        return 1
     print("verify: matches=%d mismatches=%d missing=%d snapshot=%s integrity=%s" % (matches, len(mismatches), len(missing), snap, integrity))
     for label, found in (("mismatch", mismatches), ("missing", missing)):
         for rel in found:
