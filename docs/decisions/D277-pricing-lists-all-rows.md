@@ -64,6 +64,14 @@ steps. The sheet opens with 92 words and a shell command (UX-017, UX-120).
 - **D7 (duplicates aggregate by SKU).** Its per-send cap is removed from beside Send. Where the
   caps live now is not ruled.
 
+### A row's price history floats over the list
+
+The owner ruled that a row's price history shows in a floating card, not a sheet. The card opens
+by itself when that row's price field takes focus, and it follows the focused row down the list.
+It never covers the focused row or the next price field, and nothing in the list moves.
+`docs/specs/pricing-suggest.md`, section 9c, holds the ruling and its behavior. Until that build
+lands, the history door opens today's product sheet.
+
 ### What is still open
 
 - The count of rows that need the owner on the real store (Q2). If it is short, the review
