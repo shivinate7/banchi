@@ -394,7 +394,7 @@
     ] },
     { g: 'suggested', title: 'Suggested changes', lede: 'Ticked rows go with the next send. Untick one to keep its live price.', rows: [
       { kind: 'live', name: 'Gardevoir ex', set: 'Scarlet and Violet', no: '086/198', market: 4.22, low: 4.35, now: 3.40, price: 4.01, src: 'Suggested', opt: 'moved',
-        why: 'Market up 18% since listed.', ev: ev(14, 3.10, 4.25), tick: true, spark: [4, 4, 5, 5, 6, 6, 7, 7], pct: '+9.8%' },
+        why: 'Market up 18% since listed.', ev: ev(14, 3.10, 4.25), tick: true, spark: [4, 4, 4, 4, 5, 6, 7, 8], pct: '+12.5%' },
       { kind: 'live', name: 'Miraidon ex', set: 'Scarlet and Violet', no: '081/198', market: 5.31, low: 5.60, now: 4.75, price: 5.04, src: 'Suggested', opt: 'moved',
         why: 'Market up 12% since listed.', ev: ev(212, 4.60, 5.80), tick: true, spark: [4, 4, 5, 5, 5, 5, 6, 6], pct: '+6.1%' },
       { kind: 'live', name: 'Arven', set: 'Obsidian Flames', no: '186/197', market: 1.99, low: 2.15, now: 2.10, price: 1.89, src: 'Suggested', opt: 'unsold',
@@ -512,8 +512,9 @@
     const m = Array.from({ length: 90 }, (_, d) => d < 50
       ? 3.58 + 0.04 * Math.sin(d / 5)
       : 3.58 + (4.22 - 3.58) * ((d - 50) / 39) + (d === 89 ? 0 : 0.03 * Math.sin(d / 3)))
-    return { m, listed: 50, sale: [30, 3.60], ask: [[15, 3.60], [50, 3.40]], now: 3.40, sug: 4.01,
-             dates: ['Jul 29', 'Sep 12', 'Oct 27'], sold: [14, 3.10, 4.25] }
+    const bars = [0, 1, 0, 0, 2, 0, 1, 0, 0, 1, 0, 3, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0]
+    return { m, bars, listed: 15, sale: [30, 3.60], ask: [[15, 3.60], [50, 3.40]], now: 3.40, sug: 4.01,
+             dates: ['Jul 29', 'Sep 12', 'Oct 27'], sold: [bars.reduce((a, b) => a + b, 0), 3.10, 4.25] }
   })()
 
   function hxChart(W, H) {
@@ -553,12 +554,17 @@
     <div><dt>Lowest, shipped</dt><dd>${$(4.35)}</dd></div><div><dt>Direct Low</dt><dd class="dash">not carried</dd></div></dl>`
   function hxBars(W) {
     const n = 30, H = 36, slot = W / n
-    const v = Array.from({ length: n }, (_, i) => [0, 1, 0, 0, 2, 0, 1, 0, 0, 1, 0, 3, 0, 1, 0, 0, 1, 0, 2, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0][i])
+    const v = HX.bars
     const bars = v.map((c, i) => `<rect x="${i * slot + 1}" y="${H - c * 10}" width="${slot - 2}" height="${c * 10}"/>`).join('')
     const line = Array.from({ length: n }, (_, i) => `${i * slot + slot / 2},${H - 4 - (i / n) * 20}`).join(' ')
     return `<svg class="hx-bars" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">${bars}<polyline points="${line}"/></svg>`
   }
-  const pickRow = (f) => [...f.querySelectorAll('.row')].find((r) => r.querySelector('.name').textContent === 'Gardevoir ex')
+  /* The open row: its reason and sold count show once, in the history area, so the row's own line steps aside. */
+  function pickRow(f) {
+    const row = [...f.querySelectorAll('.row')].find((r) => r.querySelector('.name').textContent === 'Gardevoir ex')
+    row.querySelector('.why').hidden = true
+    return row
+  }
 
   /* Today's ProductSheet over ProductHistoryView. extra: what the chart section adds. */
   function hxSheet(f, note) {
@@ -570,12 +576,13 @@
       <header class="bn-overlay-head"><span class="bn-overlay-icon">${svg('history', 18)}</span><h2 class="bn-overlay-title">Gardevoir ex</h2>
         <button class="bn-icon-btn iconb" type="button" aria-label="Close">${svg('close', 18)}</button></header>
       <div class="bn-overlay-body">
+        <section class="hx-block mark"><span class="today new">New: the reason, as in the other options</span><h3 class="hx-h">Why this suggestion</h3>${hxWhy()}</section>
         <section class="hx-block mark"><span class="today">Today: PriceFactsBlock</span><h3 class="hx-h">Prices now</h3>${hxFacts()}</section>
         <section class="hx-block"><h3 class="hx-h">Sales, last 30 days</h3>${hxSold()}${hxBars(372)}</section>
         <section class="hx-block"><p class="hx-name">Gardevoir ex</p>
           <p class="hx-pills"><span class="bn-pill bn-pill-outline">Scarlet and Violet</span><span class="bn-pill bn-pill-outline">Near Mint</span><span class="bn-pill bn-pill-ok">Read live, just now</span></p></section>
         <section class="hx-block mark"><span class="today new">New: your price line and the suggestion on the chart</span>
-          <h3 class="hx-h">Last 3 months</h3>${hxLegend()}${hxChart(380, 180)}${hxWhy()}</section>
+          <h3 class="hx-h">Last 90 days</h3>${hxLegend()}${hxChart(380, 180)}</section>
       </div>
       <footer class="bn-overlay-foot"><span class="today static">Today: ProductSheet over ProductHistoryView${note ? '. ' + note : ''}</span><span class="bn-grow"></span><button class="bn-icon-btn iconb" type="button" aria-label="Open as page" title="Open as page">${svg('external', 18)}</button></footer>
     </aside>`)
