@@ -1506,7 +1506,7 @@ export function Pricing() {
     for (const row of rows) {
       const standing = answerFor(row)
       /* A HOLD IS A FACT ABOUT THE ROW, SENT OR NOT: counted before the cap branch, so this figure
-         and the "Held" press (`held`, above) read the same rows (F3). */
+         and the "Kept off" press (`held`, above) read the same rows (F3). */
       const isHeld = isWithheld(standing)
       if (isHeld) heldCount += 1
       if (row.at_cap) {
@@ -2139,7 +2139,7 @@ export function Pricing() {
               void reholdCopies(sku.sku, done.unheld, done.pushed)
                 .then(() => {
                   reload()
-                  toast({ kind: 'ok', title: `Held ${sku.name} again` })
+                  toast({ kind: 'ok', title: `Kept ${sku.name} off TCGplayer again` })
                 })
                 .catch((err: unknown) => toast({ ...refusalToast(err, `Could not hold ${sku.name} again`) })),
           },
@@ -2184,8 +2184,8 @@ export function Pricing() {
       setHoldFor(null)
       toast({
         kind: 'receipt',
-        title: `Held ${sku.name}`,
-        body: WITHHOLD_LABELS[reason],
+        title: `Kept off TCGplayer: ${sku.name}`,
+        body: reason === 'keeping' ? undefined : WITHHOLD_LABELS[reason], // the title already says it; the chip's imperative is not a status
         ttlMs: 8000,
         action: { label: 'Undo', kbd: 'U', onPress: () => undoByIdRef.current(id) },
       })
@@ -2602,7 +2602,7 @@ export function Pricing() {
           aria-pressed={filterHeld}
           onClick={() => setFilterHeld((on) => !on)}
         >
-          {`Held ${held.length}`}
+          {`Kept off ${held.length}`}
         </Button>
       )}
     </div>
@@ -2740,16 +2740,16 @@ export function Pricing() {
   const tally = (
     <div className="pricing-tally">
       {pricedTile}
-      <Tile data-tile="held" pending={barLoading} icon="lock" tone="info" title={`${progress.held} kept off TCGplayer`} room="Not in this send. Show Held">
+      <Tile data-tile="held" pending={barLoading} icon="lock" tone="info" title={`${progress.held} kept off TCGplayer`} room="Not in this send. Show kept off">
         {progress.held > 0 ? (
           <>
             Not in this send.{' '}
             <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => showRows({}, true)}>
-              Show Held
+              Show kept off
             </Button>
           </>
         ) : (
-          'None held.'
+          'None kept off.'
         )}
       </Tile>
       <Tile
@@ -2978,7 +2978,7 @@ export function Pricing() {
             }
           />
         ) : (
-          <EmptyState icon="check" title="Everything is sent" body="Every copy is at TCGplayer, held, or has left its box." />
+          <EmptyState icon="check" title="Everything is sent" body="Every copy is at TCGplayer, kept off it, or has left its box." />
         )
 
   const showList = table !== null && (table.length > 0 || liveTab)
@@ -3230,7 +3230,8 @@ function fieldState(
   if (isWithheld(standing)) {
     // The human label is drawn; the machine string it stands for travels in the title (D86).
     const reason = heldReason(standing)
-    const label = (HOLD_SHORT as Record<string, string>)[reason] ?? ''
+    // A status, not the chip's imperative (spec section 6): the reason chip says Keep off TCGplayer, the row says Kept off TCGplayer.
+    const label = reason === 'keeping' ? 'Kept off TCGplayer' : ((HOLD_SHORT as Record<string, string>)[reason] ?? '')
     return label === '' ? null : { text: label, tone: 'quiet', title: `withheld: ${reason}` }
   }
   if (asking !== undefined && asking !== null && typeof standing === 'string') {
@@ -3497,7 +3498,7 @@ function PricingRow({
         ) : withheld ? (
           <span className="pricing-held">
             <Icon name="lock" size={13} />
-            Held
+            Kept off TCGplayer
           </span>
         ) : (
           <label className="pricing-field">
@@ -4151,7 +4152,7 @@ function HoldPanel({
           Cancel
         </Button>
         <Button variant="primary" icon="lock" onClick={() => onSet(sku, reason, watch, text)}>
-          Hold it
+          Keep it off
         </Button>
       </div>
     </div>
