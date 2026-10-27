@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Price history in the row</title>
+<!-- The mockup builds on the product's own design files, and nothing else. -->
+<link rel="stylesheet" href="../../../app/src/fonts.css" />
+<link rel="stylesheet" href="../../../app/src/tokens.css" />
+<link rel="stylesheet" href="../../../app/src/base.css" />
+<link rel="stylesheet" href="../../../app/src/kit.css" />
+<script>
+  /* Hash keys, joined by &:
+       dark | light | t=dark | t=light   theme (default: prefers-color-scheme)
+       f=1440 | f=820                    one frame, edge to edge (default: both, stacked)
+       hide=moved,unsold,...             options the owner culled (see the cull strip)
+       notes=off                         hides the "Today:" component tags */
+  const HASH = new Map(location.hash.slice(1).split('&').filter(Boolean).map((p) => {
+    const [k, v] = p.split('='); return v === undefined ? (k === 'dark' || k === 'light' ? ['t', k] : [k, '']) : [k, v]
+  }))
+  const dark = HASH.has('t') ? HASH.get('t') === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
+</script>
+<style>
+  /* Mockup-local rules. Every colour is a --bn-* token. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bn-bg); color: var(--bn-ink); font-family: var(--bn-font-ui);
+         font-size: var(--bn-fs-base); line-height: 1.5; padding: var(--bn-6); }
+  body.one { padding: 0; }
+  .frames { display: flex; flex-direction: column; gap: var(--bn-10); align-items: flex-start; }
+  .frame-cap { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3);
+               margin-bottom: var(--bn-2); letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; }
+  .frame { flex: none; background: var(--bn-bg); }
+  .frame[data-w='1440'] { width: 1440px; }
+  .frame[data-w='820'] { width: 820px; }
+  body.one .frame { width: 100%; }
+  body.one .frame-cap { display: none; }
+
+  /* ---------- mockup-only layer: the sample ribbon, the cull strip, the "Today:" tags ---------- */
+  .mock-ribbon { position: sticky; top: 0; z-index: 6; height: 40px; display: flex; align-items: center; gap: var(--bn-3);
+                 padding: 0 var(--bn-6); background: linear-gradient(var(--bn-warn-tint), var(--bn-warn-tint)), var(--bn-bg); color: var(--bn-ink); font-size: var(--bn-fs-sm); font-weight: 600;
+                 box-shadow: 0 1px 0 var(--bn-line); }
+  .mock-ribbon .bn-pill { flex: none; }
+  .cull { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); padding: var(--bn-3) var(--bn-6);
+          border-bottom: 1px dashed var(--bn-line-strong); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .cull > span { margin-right: var(--bn-2); }
+  .cull button { --btn-h: 40px; }
+  .cull button[aria-pressed='true'] { text-decoration: line-through; color: var(--bn-ink-4); }
+  .mark { position: relative; }
+  .today { position: absolute; z-index: 2; bottom: calc(100% + 2px); right: 0; padding: 0 var(--bn-1-5);
+           font-family: var(--bn-font-mono); font-size: var(--bn-fs-2xs); line-height: 16px; letter-spacing: 0.02em;
+           color: var(--bn-accent); background: var(--bn-bg); border: 1px dashed var(--bn-accent); border-radius: var(--bn-r-xs);
+           white-space: nowrap; pointer-events: none; }
+  .today.new { color: var(--bn-warn); border-color: var(--bn-warn); }
+    .frame[data-w='820'] .asof .today { bottom: auto; top: 2px; right: auto; left: calc(100% + var(--bn-2)); }
+  body.nonotes .today, body.nonotes .gone-note { display: none; }
+  .placeholder-ring { outline: 1px dashed var(--bn-warn); outline-offset: -1px; }
+  .ph { font-family: var(--bn-font-mono); font-size: var(--bn-fs-2xs); letter-spacing: var(--bn-tracking-caps);
+        text-transform: uppercase; color: var(--bn-warn); font-weight: 700; }
+
+  /* ---------- the shell: sidebar at 1440, rail at 820 ---------- */
+  .app { display: flex; align-items: stretch; }
+  .side { position: sticky; top: 40px; height: calc(100vh - 40px); align-self: flex-start; flex: none; width: var(--bn-sidebar-w, 236px); background: var(--bn-surface); border-right: 1px solid var(--bn-line);
+          padding: var(--bn-4) var(--bn-3); display: flex; flex-direction: column; gap: var(--bn-1); }
+  .frame[data-w='1440'] .side { width: 236px; }
+  .frame[data-w='820'] .side { width: 64px; padding: var(--bn-4) var(--bn-3); align-items: center; }
+  .brand { font-family: var(--bn-font-display); font-weight: 800; font-size: var(--bn-fs-lg); padding: 0 var(--bn-2) var(--bn-4); }
+  .frame[data-w='820'] .brand { padding: 0 0 var(--bn-4); }
+  .nav { height: 40px; display: flex; align-items: center; gap: var(--bn-3); padding: 0 var(--bn-2); border-radius: var(--bn-r);
+         color: var(--bn-ink-2); font-weight: 500; text-decoration: none; }
+  .nav svg { width: 20px; height: 20px; flex: none; }
+  .nav[aria-current='page'] { background: var(--bn-accent-tint); color: var(--bn-accent); font-weight: 600; }
+  .frame[data-w='820'] .nav { width: 40px; justify-content: center; padding: 0; }
+  .frame[data-w='820'] .nav span { display: none; }
+  .main { flex: 1; min-width: 0; }
+
+  /* ---------- the page ---------- */
+  .pg { padding: var(--bn-6); display: flex; flex-direction: column; gap: var(--bn-5); }
+  .pg-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--bn-4); }
+  .pg-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-h1); font-weight: 800;
+              letter-spacing: var(--bn-tracking-tight); line-height: var(--bn-lh-tight); }
+  .pg-lede { color: var(--bn-ink-3); font-size: var(--bn-fs-md); margin-top: var(--bn-1); }
+  .asof { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; }
+
+  /* The four settings the owner sets, one row of equal tiles. */
+  .settings { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--bn-3); }
+  .set { min-height: 72px; padding: var(--bn-3) var(--bn-4); border-radius: var(--bn-r-lg); background: var(--bn-surface);
+         box-shadow: inset 0 0 0 1px var(--bn-line); display: flex; flex-direction: column; gap: var(--bn-0-5);
+         text-align: left; font: inherit; color: inherit; cursor: pointer; }
+  .set:hover { background: var(--bn-surface-2); }
+  .set-top { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-2); }
+  .set-val { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; line-height: 1.2; }
+  .set-val .bn-money { font-size: inherit; }
+  .set-says { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+
+  /* The send bar: sticky under the ribbon, so the count and the money stay in view. */
+  .send { position: sticky; top: 40px; z-index: 5;
+          display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--bn-4);
+          padding: var(--bn-4) var(--bn-5); border-radius: var(--bn-r-xl); background: var(--bn-surface);
+          box-shadow: var(--bn-shadow-2); }
+  .send-says { display: flex; flex-direction: column; gap: var(--bn-1-5); min-width: 0; }
+  .send-head { font-family: var(--bn-font-display); font-size: var(--bn-fs-lg); font-weight: 800; }
+  .send-parts { display: flex; flex-wrap: wrap; gap: var(--bn-1) var(--bn-5); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
+  .send-parts b { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .send-act { display: flex; align-items: center; gap: var(--bn-2); }
+  .send-press { --btn-h: 48px; min-width: 264px; }
+
+  .gone-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); border: 1px dashed var(--bn-line-strong);
+               border-radius: var(--bn-r); padding: var(--bn-2) var(--bn-3); }
+  .gone-note b { font-family: var(--bn-font-mono); font-weight: 600; color: var(--bn-ink-2); }
+
+  .filters { display: flex; align-items: center; gap: var(--bn-2); flex-wrap: wrap; }
+  .filters .bn-input { height: 40px; width: 280px; }
+  .filters .chip { --btn-h: 40px; }
+  .filters .count { margin-left: auto; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+
+  /* ---------- the one list: rows and group titles sit on the page's own left edge ---------- */
+  .list { display: flex; flex-direction: column; }
+  .cols { display: grid; column-gap: var(--bn-3);
+          grid-template-columns: 40px 36px minmax(0, 1fr) 72px 92px 116px 200px 84px 40px 40px; }
+  .caption { align-items: end; padding-bottom: var(--bn-2); font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-ink-3);
+             letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; border-bottom: 1px solid var(--bn-line); line-height: 1.3; }
+  .caption .num { text-align: right; }
+  .group { padding-top: var(--bn-5); }
+  .group-head { display: flex; align-items: baseline; gap: var(--bn-2); padding-bottom: var(--bn-2); }
+  .group-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-h3); font-weight: 800; }
+  .group-count { font-size: var(--bn-fs-sm); font-weight: 700; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+  .group-lede { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin-left: var(--bn-2); }
+  .group[data-g='needs'] .group-title { color: var(--bn-warn); }
+  .group[data-g='first'] { margin-top: var(--bn-5); padding: var(--bn-3) 0 0; outline: 1px dashed var(--bn-warn); outline-offset: var(--bn-1); }
+  .group[hidden], .row[hidden], [data-opt][hidden] { display: none; }
+
+  /* A row is two lines: the name line with its figures, then the reason under them. */
+  .row { grid-template-rows: auto auto; align-items: center; padding: var(--bn-2) 0; border-bottom: 1px solid var(--bn-line); }
+  .row:hover { background: var(--bn-hover); }
+  .row > * { grid-row: 1 / 3; }
+  .row > .item, .row > .c-market, .row > .c-low, .row > .c-trend { grid-row: 1; }
+  .row > .why { grid-row: 2; grid-column: 3 / 7; }
+  .tick { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .thumb { width: 36px; aspect-ratio: 5 / 7; border-radius: var(--bn-r-xs); background: var(--bn-surface-3);
+           box-shadow: inset 0 0 0 1px var(--bn-line); }
+  .item { min-width: 0; display: flex; flex-direction: column; }
+  .name { min-height: 40px; min-width: 40px; display: flex; align-items: center; font-weight: 600; color: var(--bn-ink); text-decoration: none;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; align-self: flex-start; max-width: 100%; }
+  .name:hover { text-decoration: underline; }
+  /* One line; the separator is drawn before each item after the first, so a line never ends on a dot. */
+  .meta { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .meta > span + span::before { content: ''; display: inline-block; width: 3px; height: 3px; border-radius: var(--bn-r-full);
+           background: var(--bn-ink-4); margin: 0 var(--bn-2); vertical-align: middle; }
+  .meta .numb { font-family: var(--bn-font-mono); }
+  .why { font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-2); padding-top: var(--bn-0-5); }
+  .why[data-tone='warn'] { color: var(--bn-warn); }
+  .why .bn-money { font-size: inherit; }
+  .why[data-tone='warn'] .bn-money { color: inherit; }
+  .why .ev { font-weight: 400; color: var(--bn-ink-3); margin-left: var(--bn-1); }
+  .why .ev .bn-money { color: var(--bn-ink-2); font-weight: 500; }
+  .refs-inline { display: none; }
+  .ref { text-align: right; font-size: var(--bn-fs-md); }
+  .dash { color: var(--bn-ink-4); }
+
+  .trend { display: flex; align-items: center; gap: var(--bn-1-5); justify-content: flex-end; font-size: var(--bn-fs-xs);
+           font-variant-numeric: tabular-nums; color: var(--bn-ink-3); }
+  .trend svg { width: 56px; height: 20px; color: var(--bn-ink-3); }
+
+  .price { display: flex; align-items: center; justify-content: flex-end; gap: var(--bn-2); }
+  .was { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; }
+  .was .bn-money { color: var(--bn-ink-3); font-weight: 500; }
+  .to { width: 14px; height: 14px; color: var(--bn-ink-4); flex: none; }
+  .field { display: inline-flex; align-items: center; gap: 2px; height: 40px; width: 104px; padding: 0 var(--bn-2);
+           border-radius: var(--bn-r); background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-field-edge);
+           font-family: var(--bn-font-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .field > span { color: var(--bn-ink-3); }
+  .field input { all: unset; width: 100%; min-width: 0; color: var(--bn-money); }
+  .field input::placeholder { color: var(--bn-ink-4); font-family: var(--bn-font-ui); font-weight: 500; }
+  .field svg { flex: none; width: 14px; height: 14px; color: var(--bn-ok); display: none; }
+  .field:focus-within { box-shadow: inset 0 0 0 2px var(--bn-line-focus); }
+  .row[data-src='Suggested'] .field { box-shadow: inset 0 0 0 1px var(--bn-accent); background: var(--bn-accent-tint); }
+  /* A typed price: its own tone, and the field carries today's "your price" check. */
+  .row[data-src='You'] .field { box-shadow: inset 0 0 0 1px var(--bn-ok); background: var(--bn-ok-tint); }
+  .row[data-src='You'] .field svg { display: block; }
+
+  .src { justify-self: start; }
+  .src .bn-pill { height: var(--bn-pill-h-sm); }
+  .src[data-src='Suggested'] .bn-pill { color: var(--bn-pill-ink-accent); background: var(--bn-accent-tint); box-shadow: none; }
+  .src[data-src='You'] .bn-pill { color: var(--bn-pill-ink-ok); background: var(--bn-ok-tint); box-shadow: none; }
+  .src[data-src='none'] .bn-pill { color: var(--bn-ink-3); }
+  .iconb { width: 40px; height: 40px; color: var(--bn-ink-3); }
+  .iconb svg { width: 18px; height: 18px; }
+  .row.ringed { background: var(--bn-surface); }
+
+  /* ---------- 820: rail, refs fold under the name, the price cell keeps its column ---------- */
+  .frame[data-w='820'] .cols { grid-template-columns: 40px 36px minmax(0, 1fr) 176px 40px 40px; }
+  .frame[data-w='820'] .c-market, .frame[data-w='820'] .c-low, .frame[data-w='820'] .c-trend,
+  .frame[data-w='820'] .c-src { display: none; }
+  /* At 820 the price and buttons share the name line, so the reason takes the row's full width. */
+  .frame[data-w='820'] .row > .price, .frame[data-w='820'] .row > .iconb { grid-row: 1; }
+  .frame[data-w='820'] .row > .why { grid-row: 3; grid-column: 3 / -1; }
+  .frame[data-w='820'] .row > .refs-inline { grid-row: 2; grid-column: 3 / -1; }
+  .frame[data-w='820'] .row > .tick, .frame[data-w='820'] .row > .thumb { grid-row: 1 / 4; }
+  .frame[data-w='820'] .refs-inline { display: block; }
+  .frame[data-w='820'] .price { flex-direction: column; align-items: flex-end; gap: var(--bn-1); }
+  .frame[data-w='820'] .price .to { display: none; }
+  .frame[data-w='820'] .price-line { display: flex; align-items: center; gap: var(--bn-2); }
+  .price-line { display: contents; }
+  .src-inline { display: none; }
+  .frame[data-w='820'] .src-inline { display: inline-flex; }
+  .frame[data-w='820'] .settings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .frame[data-w='820'] .send { padding: var(--bn-3) var(--bn-4); gap: var(--bn-3); }
+  .frame[data-w='820'] .send-head { display: none; }
+  .frame[data-w='820'] .send-parts { gap: 0 var(--bn-4); }
+  .frame[data-w='820'] .send-press { min-width: 0; }
+  .frame[data-w='820'] .group-lede { display: block; margin: 0; width: 100%; }
+  .frame[data-w='820'] .group-head { flex-wrap: wrap; }
+  .frame[data-w='820'] .filters .bn-input { width: 240px; }
+  .frame[data-w='820'] .pg-head { flex-direction: column; align-items: flex-start; }
+
+  /* ---------- price history: shared by the three options ---------- */
+  .mock-ribbon { z-index: 70; }
+  .hx-chart { display: block; overflow: visible; }
+  .hx-chart text { font-family: var(--bn-font-ui); font-size: 10px; fill: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+  .hx-guide { stroke: var(--bn-line); stroke-width: 1; }
+  .hx-listed { stroke: var(--bn-ink-4); stroke-width: 1; stroke-dasharray: 2 3; }
+  .hx-spread { stroke: var(--bn-ink-4); stroke-width: 2; stroke-linecap: round; }
+  .hx-market { fill: none; stroke: var(--bn-ink-2); stroke-width: 1.75; stroke-linejoin: round; }
+  .hx-asking { fill: none; stroke: var(--bn-accent); stroke-width: 1.75; stroke-dasharray: 5 3; }
+  .hx-sale { fill: var(--bn-ok); stroke: var(--bn-surface); stroke-width: 1.5; }
+  .hx-suggest { fill: var(--bn-accent); stroke: var(--bn-surface); stroke-width: 2; }
+  .hx-chart text.hx-suggest-label { fill: var(--bn-accent); font-weight: 700; }
+  .hx-chart text.hx-ask-label { fill: var(--bn-accent); }
+  .hx-chart text.hx-end { fill: var(--bn-ink-2); font-weight: 600; }
+  .hx-legend { display: flex; flex-wrap: wrap; gap: var(--bn-1) var(--bn-4); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+  .hx-legend > span { display: inline-flex; align-items: center; gap: var(--bn-1-5); white-space: nowrap; }
+  .hx-sw { width: 16px; height: 0; border-top: 2px solid var(--bn-ink-2); }
+  .hx-sw.ask { border-top: 2px dashed var(--bn-accent); }
+  .hx-sw.spread { width: 2px; height: 10px; border: 0; background: var(--bn-ink-4); border-radius: 1px; }
+  .hx-sw.sale { width: 8px; height: 8px; border: 0; background: var(--bn-ok); transform: rotate(45deg); }
+  .hx-sw.sug { width: 8px; height: 8px; border: 0; background: var(--bn-accent); border-radius: var(--bn-r-full); }
+  .hx-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--bn-2) var(--bn-4); }
+  .hx-facts dt { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+  .hx-facts dd { font-size: var(--bn-fs-md); }
+  .hx-sold { font-size: var(--bn-fs-md); font-weight: 600; }
+  .hx-sold .bn-money { font-size: inherit; }
+  .hx-why { font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-2); }
+  .hx-why .bn-money { font-size: inherit; }
+  .hx-h { font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-ink-3); letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; }
+  .hx-block { display: flex; flex-direction: column; gap: var(--bn-1-5); }
+  .row[data-picked] { background: var(--bn-accent-tint); box-shadow: inset 3px 0 0 var(--bn-accent); }
+  .iconb[data-on] { color: var(--bn-accent); background: var(--bn-accent-tint); }
+
+  /* Today's sheet, drawn with the kit's own classes, held inside its frame for the mockup. */
+  .frame { position: relative; }
+  .hx-scrim.bn-scrim { position: absolute; inset: 40px 0 0 0; animation: none; }
+  .hx-sheet.bn-sheet { position: absolute; top: 40px; animation: none; display: flex; flex-direction: column; overflow: visible; }
+  .hx-sheet .bn-overlay-body { overflow: visible; display: flex; flex-direction: column; gap: var(--bn-5); }
+  .hx-sheet .hx-name { font-family: var(--bn-font-display); font-size: var(--bn-fs-h3); font-weight: 800; }
+  .hx-pills { display: flex; flex-wrap: wrap; gap: var(--bn-1-5); }
+  .hx-sheet .today.static { position: static; white-space: normal; }
+  .hx-bars rect { fill: var(--bn-line-strong); }
+  .hx-bars polyline { fill: none; stroke: var(--bn-ink-3); stroke-width: 1.5; }
+
+  .xp { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: var(--bn-5); padding: var(--bn-4) 0 var(--bn-5) 88px;
+        border-bottom: 1px solid var(--bn-line); background: var(--bn-surface); box-shadow: inset 3px 0 0 var(--bn-accent); }
+  .xp-chart { display: flex; flex-direction: column; gap: var(--bn-2); min-width: 0; }
+  .xp-side { display: flex; flex-direction: column; gap: var(--bn-4); padding-right: var(--bn-3); }
+  .xp-acts { display: flex; gap: var(--bn-2); }
+  .xp-acts .bn-btn { --btn-h: 40px; flex: 1; }
+  .xp .today { bottom: auto; top: var(--bn-1); right: var(--bn-1); }
+  .row[data-picked] { box-shadow: inset 3px 0 0 var(--bn-accent); background: var(--bn-surface); }
+  .iconb[data-on] svg { transform: none; }
+  .press-note { grid-column: 1 / -1; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); border: 1px dashed var(--bn-warn);
+                border-radius: var(--bn-r); padding: var(--bn-2) var(--bn-3); }
+  .press-note b { color: var(--bn-ink); }
+  .frame[data-w='820'] .xp { grid-template-columns: minmax(0, 1fr); padding-left: 88px; }
+  .frame[data-w='820'] .xp-side { padding-right: 0; }
+</style>
+</head>
+<body>
+<template id="page">
+  <div class="mock-ribbon"><span class="bn-pill bn-pill-warn">Sample</span>Every price, count, date and chart point on this page is a sample. None is a real price.</div>
+  <div class="cull" data-cull></div>
+  <div class="app">
+    <nav class="side" aria-label="Main" data-side></nav>
+    <div class="main">
+      <main class="pg">
+        <header class="pg-head">
+          <div>
+            <h1 class="pg-title">Pricing</h1>
+            <p class="pg-lede">One list. Every row says where its price comes from. Nothing live changes until you send.</p>
+          </div>
+          <p class="asof mark">Prices read this morning at 7:02.<span class="today">Today: PricesAsOf</span></p>
+        </header>
+
+        <section class="settings mark" aria-label="Your settings">
+          <span class="today">Today: RuleSheet (rule, floor). Limit and value line are new.</span>
+          <button class="set" type="button">
+            <span class="set-top"><span class="bn-label">Your rule</span><span class="ph">Sample</span></span>
+            <span class="set-val">Market less 5%</span>
+            <span class="set-says">New copies and live listings both price from it.</span>
+          </button>
+          <button class="set" type="button">
+            <span class="set-top"><span class="bn-label">Floor</span><span class="ph">You set it</span></span>
+            <span class="set-val"><span class="bn-money">$0.49</span></span>
+            <span class="set-says">Nothing lists for less.</span>
+          </button>
+          <button class="set placeholder-ring" type="button" data-opt="cap">
+            <span class="set-top"><span class="bn-label">Suggestion limit</span><span class="ph">Placeholder</span></span>
+            <span class="set-val">25% either way</span>
+            <span class="set-says">A bigger move waits for you in Needs you.</span>
+          </button>
+          <button class="set placeholder-ring" type="button" data-opt="value">
+            <span class="set-top"><span class="bn-label">Value line</span><span class="ph">Placeholder</span></span>
+            <span class="set-val"><span class="bn-money">$25.00</span></span>
+            <span class="set-says">A card worth this or more waits for you.</span>
+          </button>
+        </section>
+
+        <aside class="send mark" aria-label="Send to TCGplayer">
+          <span class="today">Today: SendCard, now sticky</span>
+          <div class="send-says">
+            <p class="send-head" data-send-head></p>
+            <p class="send-parts" data-send-parts></p>
+          </div>
+          <div class="send-act">
+            <button class="bn-btn bn-btn-primary bn-btn-lg send-press" type="button" data-send-press></button>
+            <button class="bn-icon-btn iconb" type="button" aria-label="Download the file" title="Download the file" data-icon="download"></button>
+          </div>
+        </aside>
+
+        <p class="gone-note">Not drawn: today's <b>PriceMovers</b> block. Its read becomes the market moved suggestions in the list below.
+          Inside each row, today's parts stay: <b>PricingThumb</b> (photo), <b>ProductLink</b> (the name, and the history door opens the same product sheet), <b>TrendCell</b> (trend), and the lock opens <b>HoldPanel</b>. New: the tick, the From chip and the reason line.</p>
+
+        <div class="filters mark">
+          <span class="today">Today: FilterBar</span>
+          <input class="bn-input" type="search" placeholder="Name, set, number or SKU" aria-label="Search this list" />
+          <button class="bn-btn chip" type="button">Game</button>
+          <button class="bn-btn chip" type="button">Set</button>
+          <button class="bn-btn chip" type="button">Market price</button>
+          <span class="count" data-count></span>
+        </div>
+
+        <div class="list mark">
+          <span class="today">Today: PricingRow, one per row</span>
+          <div class="cols caption" role="row">
+            <span>Send</span><span></span><span>Item</span>
+            <span class="num c-market">Market</span>
+            <span class="num c-low">Lowest, shipped</span>
+            <span class="num c-trend">Trend, 30 days</span>
+            <span class="num">Price</span>
+            <span class="c-src">From</span>
+            <span></span><span></span>
+          </div>
+          <div data-groups></div>
+        </div>
+      </main>
+    </div>
+  </div>
+</template>
+
+<div class="frames" id="frames"></div>
+
+<script>
+  /* ---- icons ---- */
+  const PATH = {
+    close: 'M6 6l12 12 M18 6L6 18',
+    external: 'M14 4h6v6 M20 4l-9 9 M18 14v6H4V6h6',
+    chevron: 'M6 9l6 6 6-6',
+    history: 'M3 3v18h18 M7 15l4-4 3 3 6-6',
+    lock: 'M6 11h12v9H6z M8.5 11V7.5a3.5 3.5 0 0 1 7 0V11',
+    download: 'M12 4v11 M7 10l5 5 5-5 M5 20h14',
+    send: 'M4 12l16-8-6 16-2.5-6.5z',
+    arrow: 'M4 12h14 M13 7l5 5-5 5',
+    check: 'M5 12.5l4.5 4.5L19 7',
+    home: 'M4 11l8-7 8 7v9H4z',
+    camera: 'M4 8h4l2-3h4l2 3h4v11H4z M12 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+    review: 'M5 4h14v16H5z M9 12l2 2 4-4',
+    box: 'M4 7h16v13H4z M4 7l2-3h12l2 3 M10 11h4',
+    tag: 'M3 12V4h8l10 10-8 8z M8 8h.01',
+    truck: 'M3 6h11v10H3z M14 10h4l3 3v3h-7 M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
+    chart: 'M4 20V10 M10 20V4 M16 20v-7 M22 20H2',
+  }
+  const svg = (n, s = 18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="${PATH[n]}"/></svg>`
+  const $ = (v) => `<span class="bn-money">$${v.toFixed(2)}</span>`
+  const NAV = [['home', 'Home'], ['camera', 'Capture'], ['review', 'Review'], ['box', 'Inventory'], ['tag', 'Pricing'], ['truck', 'Orders'], ['chart', 'Revenue']]
+
+  /* ---- the options the owner judges; one press hides one ---- */
+  const OPTIONS = [
+    ['moved', 'Market moved'], ['fast', 'Units sold, as evidence'], ['unsold', 'Unsold and above market'],
+    ['undercut', 'Undercut by others'], ['signal', 'Outside signal'], ['cap', 'Suggestion limit'],
+    ['value', 'Value line'],
+  ]
+  const hidden = new Set((HASH.get('hide') || '').split(',').filter(Boolean))
+
+  /* Evidence on a market-moved row: market-wide units sold and the sold range. opt 'fast' hides it. */
+  const ev = (n, lo, hi) => `<span class="ev" data-opt="fast">${n} sold on TCGplayer in 30 days, ${$(lo)} to ${$(hi)}.</span>`
+
+  /* ---- sample rows. kind: new (an unsent copy) or live (a listing). opt: the option a row shows.
+     price: the price that goes. now: the live price today. tick: null when the row has no tick. ---- */
+  const G = [
+    { g: 'needs', title: 'Needs you', lede: 'Nothing here goes until you tick it or type a price.', rows: [
+      { kind: 'new', name: 'Mew ex', set: 'Paldean Fates', no: '232/091', market: null, low: null, price: null, src: 'none',
+        why: 'No market price yet. Type a price to send it.', tone: 'warn', tick: null, spark: null },
+      { kind: 'live', name: 'Iono', set: 'Paldea Evolved', no: '254/193', market: 12.41, low: 12.95, now: 8.80, price: 12.41, src: 'Suggested', opt: 'cap',
+        why: 'Market up 41% since listed, past your 25% limit.', ev: ev(9, 11.80, 12.90), tone: 'warn', tick: false, spark: [5, 5, 6, 6, 7, 8, 9, 9], pct: '+22.4%' },
+      { kind: 'live', name: 'Pikachu ex', set: 'Surging Sparks', no: '057/191', market: 2.31, low: 2.49, now: 3.30, price: 2.31, src: 'Suggested', opt: 'cap',
+        why: 'Market down 30% since listed, past your 25% limit.', ev: ev(31, 2.05, 2.60), tone: 'warn', tick: false, spark: [9, 9, 8, 7, 6, 5, 4, 4], pct: '−18.6%' },
+      { kind: 'new', name: 'Umbreon VMAX', set: 'Evolving Skies', no: '215/203', market: 38.20, low: 39.10, price: 36.29, src: 'Rule', opt: 'value',
+        why: `Worth ${$(25)} or more. Check the price before it goes.`, tone: 'warn', tick: false, spark: [6, 6, 7, 6, 6, 7, 7, 7], pct: '+1.2%' },
+    ] },
+    { g: 'suggested', title: 'Suggested changes', lede: 'Ticked rows go with the next send. Untick one to keep its live price.', rows: [
+      { kind: 'live', name: 'Gardevoir ex', set: 'Scarlet and Violet', no: '086/198', market: 4.22, low: 4.35, now: 3.40, price: 4.01, src: 'Suggested', opt: 'moved',
+        why: 'Market up 18% since listed.', ev: ev(14, 3.10, 4.25), tick: true, spark: [4, 4, 5, 5, 6, 6, 7, 7], pct: '+9.8%' },
+      { kind: 'live', name: 'Miraidon ex', set: 'Scarlet and Violet', no: '081/198', market: 5.31, low: 5.60, now: 4.75, price: 5.04, src: 'Suggested', opt: 'moved',
+        why: 'Market up 12% since listed.', ev: ev(212, 4.60, 5.80), tick: true, spark: [4, 4, 5, 5, 5, 5, 6, 6], pct: '+6.1%' },
+      { kind: 'live', name: 'Arven', set: 'Obsidian Flames', no: '186/197', market: 1.99, low: 2.15, now: 2.10, price: 1.89, src: 'Suggested', opt: 'unsold',
+        why: `Unsold 34 days, and ${$(0.11)} above market.`, tick: true, spark: [5, 5, 5, 4, 5, 4, 4, 4], pct: '−2.1%' },
+      { kind: 'live', name: 'Roaring Moon ex', set: 'Paradox Rift', no: '124/182', market: 5.74, low: 5.49, now: 6.25, price: 5.45, src: 'Suggested', opt: 'undercut',
+        why: `Others list it from ${$(5.49)} with shipping, under your ${$(6.25)}.`, tick: true, spark: [6, 6, 5, 5, 5, 5, 5, 5], pct: '−3.4%' },
+      { kind: 'live', name: 'Dusknoir', set: 'Shrouded Fable', no: '020/064', market: 1.31, low: 1.40, now: 1.20, price: 1.34, src: 'Suggested', opt: 'signal',
+        ring: 'Placeholder: another session’s research fills this signal',
+        why: 'Played in a winning deck this week.', tick: true, spark: [3, 3, 3, 3, 4, 4, 4, 5], pct: '+9.2%' },
+    ] },
+    { g: 'rule', title: 'Going at the rule', lede: 'These go at your rule, at the floor, or at a price you typed.', rows: [
+      { kind: 'new', name: 'Pecharunt ex', set: 'Shrouded Fable', no: '039/064', market: 7.49, low: 7.80, price: 7.12, src: 'Rule', tick: null, spark: [7, 7, 7, 6, 7, 7, 7, 7], pct: '+0.4%' },
+      { kind: 'new', name: 'Bulbasaur', set: '151', no: '001/165', copies: 3, market: 0.82, low: 1.05, price: 0.78, src: 'Rule', tick: null, spark: [5, 5, 5, 5, 5, 5, 5, 5], pct: '0.0%' },
+      { kind: 'new', name: 'Nidoran', set: '151', no: '029/165', market: 0.06, low: 0.99, price: 0.49, src: 'Floor', tick: null, spark: null },
+      { kind: 'new', name: 'Professor’s Research', set: 'Scarlet and Violet', no: '189/198', market: 1.52, low: 1.69, price: 1.75, src: 'You', tick: null, spark: [5, 5, 5, 5, 4, 5, 5, 5], pct: '−0.7%' },
+      { kind: 'live', name: 'Squawkabilly ex', set: 'Paldea Evolved', no: '169/193', market: 2.98, low: 3.10, now: 2.85, price: 2.85, src: 'Rule', tick: null, still: true,
+        why: 'Live at your rule. Nothing to change.', spark: [6, 6, 6, 6, 6, 6, 6, 6], pct: '+0.3%' },
+    ] },
+  ]
+  const FLOOR = 49
+  const rulePrice = (market) => Math.max(FLOOR, Math.floor((Math.round(market * 100) * 95 + 50) / 100)) / 100
+  for (const r of G.flatMap((g) => g.rows)) {
+    if (r.market === null || !['Rule', 'Suggested', 'Floor'].includes(r.src)) continue
+    r.price = rulePrice(r.market)
+    if (r.still) r.now = r.price
+  }
+  const ROWS = G.flatMap((g) => g.rows.map((r) => Object.assign(r, { group: g })))
+  ROWS.forEach((r, i) => { r.id = `r${i}` })
+  const off = (r) => (r.opt && hidden.has(r.opt)) || (r.group.opt && hidden.has(r.group.opt))
+
+  const SRC_WORD = { Rule: 'Rule', You: 'You', Floor: 'Floor', Suggested: 'Suggested', none: 'No price yet' }
+
+  function spark(points) {
+    if (!points) return '<span class="dash">—</span>'
+    const max = Math.max(...points) + 1, min = Math.min(...points) - 1
+    const d = points.map((p, i) => `${(i / (points.length - 1)) * 56},${20 - ((p - min) / (max - min)) * 20}`).join(' ')
+    return `<svg viewBox="0 0 56 20"><polyline points="${d}" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>`
+  }
+
+  function row(r) {
+    const ref = (v) => (v === null ? '<span class="dash">—</span>' : $(v))
+    const tick = r.tick === null ? '<span></span>'
+      : `<label class="tick bn-check" title="Send this price"><input type="checkbox" data-tick="${r.id}" ${r.tick ? 'checked' : ''} aria-label="Send the new price for ${r.name}" /></label>`
+    const was = r.kind === 'live' && !r.still ? `<span class="was">Now ${$(r.now)}</span><svg class="to" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${PATH.arrow}"/></svg>` : ''
+    const what = r.kind === 'live' ? 'Live' : r.copies ? `${r.copies} new copies` : 'New'
+    const chip = `<span class="bn-pill bn-pill-outline">${SRC_WORD[r.src]}</span>`
+    return `<div class="cols row${r.ring || r.alt ? ' ringed' : ''}${r.ring ? ' placeholder-ring mark' : ''}" data-src="${r.src}" data-opt="${r.opt || ''}">
+      ${r.ring ? `<span class="today new">${r.ring}</span>` : ''}
+      ${tick}
+      <span class="thumb" aria-hidden="true"></span>
+      <div class="item">
+        <a class="name" href="#" title="Open its price history">${r.name}</a>
+        <span class="meta"><span>Near Mint</span><span>${r.set}</span><span class="numb">${r.no}</span><span>${what}</span></span>
+      </div>
+      <span class="meta refs-inline"><span>Market ${ref(r.market)}</span><span>Lowest, shipped ${ref(r.low)}</span>${r.pct ? `<span>${r.pct} in 30 days</span>` : ''}</span>
+      <span class="ref c-market">${ref(r.market)}</span>
+      <span class="ref c-low">${ref(r.low)}</span>
+      <span class="trend c-trend">${spark(r.spark)}${r.pct || ''}</span>
+      <div class="price"><span class="price-line">${was}<label class="field"><span>$</span><input type="text" inputmode="decimal" aria-label="Price for ${r.name}" value="${r.price === null ? '' : r.price.toFixed(2)}" placeholder="${r.price === null ? 'Price' : ''}" />${r.src === 'You' ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-label="Your price"><path d="${PATH.check}"/></svg>` : ''}</label></span><span class="src src-inline" data-src="${r.src}">${chip}</span></div>
+      <span class="src c-src" data-src="${r.src}">${chip}</span>
+      <button class="bn-icon-btn iconb" type="button" aria-label="Price history for ${r.name}" title="Price history">${svg('history')}</button>
+      <button class="bn-icon-btn iconb" type="button" aria-label="Keep ${r.name} off TCGplayer" title="Keep off TCGplayer">${svg('lock')}</button>
+      ${r.why ? `<span class="why" data-tone="${r.tone || ''}">${r.why}${r.ev || ''}</span>` : ''}
+    </div>`
+  }
+
+  /* ---- what one Send carries, from the rows as they stand ---- */
+  function tally() {
+    const t = { fresh: 0, freshCash: 0, up: 0, upCash: 0, down: 0, downCash: 0, typed: 0, typedCash: 0 }
+    for (const r of ROWS) {
+      if (off(r) || r.alt || r.still || r.price === null) continue
+      if (r.tick === false) continue
+      const n = r.copies || 1
+      if (r.src === 'You') { t.typed += n; t.typedCash += r.price * n }
+      else if (r.kind === 'new') { t.fresh += n; t.freshCash += r.price * n }
+      else if (r.price > r.now) { t.up += n; t.upCash += (r.price - r.now) * n }
+      else { t.down += n; t.downCash += (r.price - r.now) * n }
+    }
+    t.units = t.fresh + t.up + t.down + t.typed
+    return t
+  }
+  const copies = (n) => `${n} ${n === 1 ? 'copy' : 'copies'}`
+
+  function paint(root) {
+    const t = tally()
+    root.querySelector('[data-send-head]').textContent = `${copies(t.units)} ready to send.`
+    root.querySelector('[data-send-parts]').innerHTML =
+      `<span><b>${t.fresh}</b> new, listing for ${$(t.freshCash)}</span>` +
+      `<span><b>${t.up}</b> ${t.up === 1 ? 'rise' : 'rises'}, up ${$(t.upCash)} in all</span>` +
+      `<span><b>${t.down}</b> ${t.down === 1 ? 'fall' : 'falls'}, down ${$(-t.downCash)} in all</span>` +
+      `<span><b>${t.typed}</b> typed by you, listing for ${$(t.typedCash)}</span>`
+    root.querySelector('[data-send-press]').innerHTML = `${svg('send', 18)}Send ${copies(t.units)} to TCGplayer`
+    root.querySelector('[data-count]').textContent = `${ROWS.filter((r) => !off(r) && !r.alt).length} items`
+    for (const el of root.querySelectorAll('[data-opt]')) el.hidden = hidden.has(el.dataset.opt)
+    for (const g of root.querySelectorAll('.group')) {
+      g.hidden = g.dataset.opt !== undefined && hidden.has(g.dataset.opt)
+      g.querySelector('.group-count').textContent = [...g.querySelectorAll('.row')].filter((el) => !el.hidden).length
+    }
+  }
+
+  function cull(root) {
+    root.querySelector('[data-cull]').innerHTML = '<span>Options to judge. One press hides one.</span>' + OPTIONS.map(([k, label]) =>
+      `<button class="bn-btn bn-btn-sm" type="button" data-hide="${k}" aria-pressed="${hidden.has(k)}">${label}</button>`).join('')
+  }
+
+  function setHash() {
+    HASH.set('hide', [...hidden].join(','))
+    if (!HASH.get('hide')) HASH.delete('hide')
+    history.replaceState(null, '', '#' + [...HASH].map(([k, v]) => (v === '' ? k : `${k}=${v}`)).join('&'))
+  }
+
+
+  /* ---- the sample history: 90 days of one card, Gardevoir ex. Every point is a sample. ---- */
+  const HX = (() => {
+    const m = Array.from({ length: 90 }, (_, d) => d < 50
+      ? 3.58 + 0.04 * Math.sin(d / 5)
+      : 3.58 + (4.22 - 3.58) * ((d - 50) / 39) + (d === 89 ? 0 : 0.03 * Math.sin(d / 3)))
+    return { m, listed: 50, sale: [30, 3.60], ask: [[15, 3.60], [50, 3.40]], now: 3.40, sug: 4.01,
+             dates: ['Jul 29', 'Sep 12', 'Oct 27'], sold: [14, 3.10, 4.25] }
+  })()
+
+  function hxChart(W, H) {
+    const GL = 40, GB = 18, w = W - GL - 44, h = H - GB - 8, lo = 3.0, hi = 4.4
+    const x = (d) => GL + (d / 89) * w
+    const y = (p) => 8 + ((hi - p) / (hi - lo)) * h
+    const ticks = [hi, (hi + lo) / 2, lo].map((p) =>
+      `<line class="hx-guide" x1="${GL}" x2="${GL + w}" y1="${y(p)}" y2="${y(p)}"/><text x="${GL - 6}" y="${y(p) + 3}" text-anchor="end">$${p.toFixed(2)}</text>`).join('')
+    const dates = HX.dates.map((t, i) => `<text x="${x(i * 44.5)}" y="${H - 2}" text-anchor="${['start', 'middle', 'end'][i]}">${t}</text>`).join('')
+    let spread = ''
+    for (let d = 3; d < 90; d += 7) spread += `<line class="hx-spread" x1="${x(d)}" x2="${x(d)}" y1="${y(HX.m[d] + 0.18)}" y2="${y(HX.m[d] - 0.22)}"/>`
+    const market = HX.m.map((p, d) => `${x(d).toFixed(1)},${y(p).toFixed(1)}`).join(' ')
+    const [a0, a1] = HX.ask
+    const ask = `M${x(a0[0])} ${y(a0[1])} H${x(a1[0])} V${y(a1[1])} H${x(89)}`
+    const [sd, sp] = HX.sale
+    const dia = (cx, cy, r) => `M${cx} ${cy - r} L${cx + r} ${cy} L${cx} ${cy + r} L${cx - r} ${cy} Z`
+    return `<svg class="hx-chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Market price over 90 days, with your prices, your sale and the suggestion">
+      ${ticks}${dates}
+      <line class="hx-listed" x1="${x(HX.listed)}" x2="${x(HX.listed)}" y1="8" y2="${8 + h}"/>
+      <text x="${x(HX.listed) + 4}" y="18">Listed</text>
+      ${spread}
+      <polyline class="hx-market" points="${market}"/>
+      <path class="hx-asking" d="${ask}"/>
+      <path class="hx-sale" d="${dia(x(sd), y(sp), 5)}"/>
+      <circle class="hx-suggest" cx="${x(89)}" cy="${y(HX.sug)}" r="5"/>
+      <text class="hx-end" x="${x(89) + 8}" y="${y(HX.m[89]) + 3}">$${HX.m[89].toFixed(2)}</text>
+      <text class="hx-suggest-label" x="${x(89) + 8}" y="${y(HX.sug) + 3}">$${HX.sug.toFixed(2)}</text>
+      <text class="hx-ask-label" x="${x(89) + 8}" y="${y(HX.now) + 3}">$${HX.now.toFixed(2)}</text>
+    </svg>`
+  }
+
+  const hxLegend = () => `<p class="hx-legend"><span><i class="hx-sw"></i>Market</span><span><i class="hx-sw spread"></i>Low to high, each week</span>
+    <span><i class="hx-sw ask"></i>Your price</span><span><i class="hx-sw sale"></i>Your sale</span><span><i class="hx-sw sug"></i>Suggested</span></p>`
+  const hxSold = () => `<p class="hx-sold">${HX.sold[0]} sold in 30 days, ${$(HX.sold[1])} to ${$(HX.sold[2])}.</p>`
+  const hxWhy = () => `<p class="hx-why">Market up 18% since listed. Now ${$(HX.now)}, suggested ${$(HX.sug)}.</p>`
+  const hxFacts = () => `<dl class="hx-facts"><div><dt>Market</dt><dd>${$(4.22)}</dd></div><div><dt>Lowest</dt><dd>${$(4.29)}</dd></div>
+    <div><dt>Lowest, shipped</dt><dd>${$(4.35)}</dd></div><div><dt>Direct Low</dt><dd class="dash">not carried</dd></div></dl>`
+  function hxBars(W) {
+    const n = 30, H = 36, slot = W / n
+    const v = Array.from({ length: n }, (_, i) => [0, 1, 0, 0, 2, 0, 1, 0, 0, 1, 0, 3, 0, 1, 0, 0, 1, 0, 2, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0][i])
+    const bars = v.map((c, i) => `<rect x="${i * slot + 1}" y="${H - c * 10}" width="${slot - 2}" height="${c * 10}"/>`).join('')
+    const line = Array.from({ length: n }, (_, i) => `${i * slot + slot / 2},${H - 4 - (i / n) * 20}`).join(' ')
+    return `<svg class="hx-bars" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">${bars}<polyline points="${line}"/></svg>`
+  }
+  const pickRow = (f) => [...f.querySelectorAll('.row')].find((r) => r.querySelector('.name').textContent === 'Gardevoir ex')
+
+  /* Today's ProductSheet over ProductHistoryView. extra: what the chart section adds. */
+  function hxSheet(f, note) {
+    const row = pickRow(f)
+    row.dataset.picked = ''
+    row.querySelector('.iconb').dataset.on = ''
+    f.insertAdjacentHTML('beforeend', `<div class="hx-scrim bn-scrim"></div>
+    <aside class="hx-sheet bn-sheet bn-overlay mark" aria-label="Gardevoir ex">
+      <header class="bn-overlay-head"><span class="bn-overlay-icon">${svg('history', 18)}</span><h2 class="bn-overlay-title">Gardevoir ex</h2>
+        <button class="bn-icon-btn iconb" type="button" aria-label="Close">${svg('close', 18)}</button></header>
+      <div class="bn-overlay-body">
+        <section class="hx-block mark"><span class="today">Today: PriceFactsBlock</span><h3 class="hx-h">Prices now</h3>${hxFacts()}</section>
+        <section class="hx-block"><h3 class="hx-h">Sales, last 30 days</h3>${hxSold()}${hxBars(372)}</section>
+        <section class="hx-block"><p class="hx-name">Gardevoir ex</p>
+          <p class="hx-pills"><span class="bn-pill bn-pill-outline">Scarlet and Violet</span><span class="bn-pill bn-pill-outline">Near Mint</span><span class="bn-pill bn-pill-ok">Read live, just now</span></p></section>
+        <section class="hx-block mark"><span class="today new">New: your price line and the suggestion on the chart</span>
+          <h3 class="hx-h">Last 3 months</h3>${hxLegend()}${hxChart(380, 180)}${hxWhy()}</section>
+      </div>
+      <footer class="bn-overlay-foot"><span class="today static">Today: ProductSheet over ProductHistoryView${note ? '. ' + note : ''}</span><span class="bn-grow"></span><button class="bn-icon-btn iconb" type="button" aria-label="Open as page" title="Open as page">${svg('external', 18)}</button></footer>
+    </aside>`)
+  }
+
+  /* Option 2: the history door opens the row in place. The panel grows downward from the row. */
+  function decorate(f, w) {
+    const row = pickRow(f)
+    row.dataset.picked = ''
+    const door = row.querySelector('.iconb')
+    door.dataset.on = ''
+    door.setAttribute('aria-expanded', 'true')
+    const cw = w === '820' ? 600 : 640
+    row.insertAdjacentHTML('afterend', `<div class="xp mark" role="region" aria-label="Price history for Gardevoir ex">
+      <div class="xp-chart"><h3 class="hx-h">Last 90 days</h3>${hxLegend()}${hxChart(cw, 170)}</div>
+      <div class="xp-side">
+        <div class="hx-block"><h3 class="hx-h">Why this suggestion</h3>${hxWhy()}</div>
+        <div class="hx-block"><h3 class="hx-h">Sales, last 30 days</h3>${hxSold()}</div>
+        ${hxFacts()}
+        <div class="xp-acts"><button class="bn-btn" type="button">Close</button><button class="bn-btn" type="button">Full history</button></div>
+      </div>
+      <p class="press-note"><b>New:</b> the row opens in place. The chart is today's ProductChart, smaller. <b>The press:</b> the history door on this row. The row itself stays where it was, and the panel opens under it at its full height in one step. The rows below move down once, because of this press. Nothing else on the page moves, and no read or refresh ever opens or closes it.</p>
+    </div>`)
+  }
+
+  /* ---- build the frames ---- */
+  const one = HASH.get('f')
+  if (HASH.get('notes') === 'off') document.body.classList.add('nonotes')
+  if (one) document.body.classList.add('one')
+  const frames = document.getElementById('frames')
+  for (const w of one ? [one] : ['1440', '820']) {
+    const f = document.createElement('div')
+    f.className = 'frame'; f.dataset.w = w
+    f.innerHTML = `<p class="frame-cap">Frame ${w}</p>`
+    f.appendChild(document.getElementById('page').content.cloneNode(true))
+    f.querySelector('[data-side]').innerHTML = `<span class="brand">${w === '820' ? 'B' : 'Banchi'}</span>` + NAV.map(([i, label]) =>
+      `<a class="nav" href="#" ${label === 'Pricing' ? 'aria-current="page"' : ''} title="${label}">${svg(i, 20)}<span>${label}</span></a>`).join('')
+    f.querySelector('[data-groups]').innerHTML = G.map((g) =>
+      `<section class="group" data-g="${g.g}" ${g.opt ? `data-opt="${g.opt}"` : ''}><h2 class="group-head"><span class="group-title">${g.title}</span><span class="group-count"></span><span class="group-lede">${g.lede}</span></h2>${g.rows.map(row).join('')}</section>`).join('')
+    for (const b of f.querySelectorAll('[data-icon]')) b.innerHTML = svg(b.dataset.icon)
+    cull(f)
+    decorate(f, w)
+    frames.appendChild(f)
+  }
+  const all = () => document.querySelectorAll('.frame').forEach(paint)
+  all()
+
+  document.addEventListener('change', (e) => {
+    const id = e.target.dataset.tick
+    if (!id) return
+    ROWS.find((r) => r.id === id).tick = e.target.checked
+    document.querySelectorAll(`[data-tick="${id}"]`).forEach((el) => { el.checked = e.target.checked })
+    all()
+  })
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-hide]')
+    if (!b) return
+    const k = b.dataset.hide
+    hidden.has(k) ? hidden.delete(k) : hidden.add(k)
+    document.querySelectorAll(`[data-hide="${k}"]`).forEach((el) => el.setAttribute('aria-pressed', hidden.has(k)))
+    setHash(); all()
+  })
+</script>
+</body>
+</html>
