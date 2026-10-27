@@ -242,6 +242,9 @@ review.
 | `history-float-card` | The floating card (section 9c), with the asking-price line and the suggestion dot. | `one-list-wire` |
 | `history-float-mount` | The card's one call site in Pricing. | `pricing-one-list`, `history-float-card` |
 
+The locked pill (`.pricing-locked`) clips its text today, at 1440 and 820, in both themes; it is older
+than this work. `pricing-one-list` gives it the held pill's shape: no icon, `--bn-2` side padding.
+
 Tests that pin the two tabs (`pricing-markdown.spec.ts`, parts of `pricing.spec.ts` and
 `copy-checks.spec.ts`) are re-pointed in `pricing-one-list`, never deleted.
 
