@@ -13,7 +13,8 @@ import type { AskingPosting, ProductHistoryPayload } from '../src/types'
  *
  * GALLERY. `[data-kit-section="history-float"]` on `#/gallery` holds exactly three rows, each
  * `[data-float-row="<i>"]` with one price field `[data-float-price]` and one history door
- * `[data-float-door]`. Row 1 is the anchor in every case, row 0 is above it and row 2 below.
+ * `[data-float-door]`, and one thumb `[data-float-thumb]` (the product photo, `PricingThumb` in the
+ * mockup). Row 1 is the anchor in every case, row 0 is above it and row 2 below.
  * The price field is each row's only tab stop, so the door is `tabIndex={-1}`. Row 1 carries a
  * suggestion, and the sales fills are non-empty, so the chart has marks to assert. The section is not the last on the gallery, so a row can scroll to the top.
  *
@@ -23,7 +24,10 @@ import type { AskingPosting, ProductHistoryPayload } from '../src/types'
  *   data-state      "loading" | "ready"
  *   data-row        the index of the row it is anchored to
  * A focus-opened card has no tab stop, so its close button is `tabIndex={-1}`.
- * Its close button is `[data-history-float-close]`.
+ * Its close button is `[data-history-float-close]`. Its right edge sits on the row's history door.
+ * Its legend holds "Low to high, each week". Its heading is "Last 90 days". "Full history" is a
+ * text button (`role=button`), and its facts are four `dt` labels: Market, Lowest, Lowest,
+ * shipped, and Direct Low.
  *
  * PROPS (HistoryFloat.tsx). `sku`, `anchor` (the row element), `mode` ("focus" | "door"),
  * `fills` (the owner's sales for the chart), `suggestion` (a money string, optional), `onClose`,
@@ -257,6 +261,52 @@ for (const size of SIZES) {
       })
       expect(bare, 'every dollar figure in the card carries bn-money').toEqual([])
       expect(await card(page).locator('.bn-money').count(), 'the four prices are there').toBeGreaterThanOrEqual(4)
+    })
+
+    test("the card's right edge sits on its row's history door", async ({ page }) => {
+      await openByFocus(page)
+      const c = await boxOf(card(page))
+      const door = await boxOf(doorOf(page, 1))
+      expect(Math.abs(c.x + c.width - (door.x + door.width)), 'the card right edge is on the door right edge').toBeLessThanOrEqual(1)
+    })
+
+    test('the card covers no name of any gallery row', async ({ page }) => {
+      await openByFocus(page)
+      const c = await boxOf(card(page))
+      for (const i of [0, 1, 2]) {
+        const name = await boxOf(row(page, i).locator('.hfloat-specimen-name'))
+        expect(meets(c, name), `the card does not cover the name in row ${i}`).toBe(false)
+      }
+    })
+
+    test('the card covers no thumb of any gallery row', async ({ page }) => {
+      await openByFocus(page)
+      const c = await boxOf(card(page))
+      for (const i of [0, 1, 2]) {
+        const thumb = row(page, i).locator('[data-float-thumb]')
+        await expect(thumb, `row ${i} shows its thumb`).toHaveCount(1)
+        expect(meets(c, await boxOf(thumb)), `the card does not cover the thumb in row ${i}`).toBe(false)
+      }
+    })
+
+    test('the legend names the spread as Low to high, each week', async ({ page }) => {
+      await openByFocus(page)
+      await expect(card(page).locator('.hfloat-legend > span', { hasText: 'Low to high, each week' })).toHaveCount(1)
+    })
+
+    test('the card has a Last 90 days heading', async ({ page }) => {
+      await openByFocus(page)
+      await expect(card(page).getByRole('heading', { name: 'Last 90 days', exact: true })).toHaveCount(1)
+    })
+
+    test('Full history is a text button in the card', async ({ page }) => {
+      await openByFocus(page)
+      await expect(card(page).getByRole('button', { name: 'Full history', exact: true })).toHaveText('Full history')
+    })
+
+    test('the card shows four prices: Market, Lowest, Lowest, shipped, and Direct Low', async ({ page }) => {
+      await openByFocus(page)
+      await expect(card(page).locator('.hfloat-facts dt')).toHaveText(['Market', 'Lowest', 'Lowest, shipped', 'Direct Low'])
     })
   })
 }
