@@ -9,3 +9,5 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - No self-test pins that a `## D<n>` decision title is refused. The `decision structure` row catches it on the live corpus only.
 - An entry ends only at the next entry title, so a non-entry heading at the foot of a decision file folds into that entry (`prose-guard.py`'s `entries`, `decision-context.py`'s `decision_gists`). No file has one.
 - The records page gists: 33 open a bold run they never close, and about 45 lead with who ruled, not what (D260, D263, D273, D277, D289, D307). D138's gist is vague.
+- `guard-shell.py`'s `_sanctioned_outside`: the side-session notes folder skips the `_repo_holding` check the temp folder has, so a checkout placed under it would take writes and `cd`.
+- `guard-shell.py`'s `_resolve_target` resolves only the parent folder, so a file symlink inside a sanctioned folder that points into a checkout is written through (same on main for `~/.claude`).
