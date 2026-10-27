@@ -1,7 +1,7 @@
 # Settled decisions
 
 Each file here is one decision, named `D<number>-<slug>.md`. A glob sorts the files into
-corpus order. `ORDER.json` records that order, with the preamble first.
+corpus order. `ORDER.json` records that order.
 
 Every entry is closed. Sessions do not re-litigate an entry. To reopen one, name the entry and
 the new evidence, then wait for the owner. When a decision changes, rewrite its entry in place.
@@ -17,6 +17,6 @@ Do not append history.
 
 ## How to add one
 
-A branch writes `D-<slug>.md` under this folder. The file starts with `## D-<slug> — <title>`,
+A branch writes `D-<slug>.md` under this folder. The file starts with the title line `# D-<slug> — <title>`,
 and the branch cites it as `D-<slug>`. `make merge` claims the number, renames the file, and
 rewrites every citation. A branch never picks its own number.

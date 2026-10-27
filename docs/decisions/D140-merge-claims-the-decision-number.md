@@ -1,4 +1,4 @@
-## D140 — Merge claims the decision number
+# D140 — Merge claims the decision number
 
 **Ruled by the owner: a branch never takes a record number. The merge tool claims it, before the merge.** The owner asked why a renumber happens at all. A branch reads `origin/main`, takes the next free id, and is wrong when another branch merges first. The allocation needs what main holds, and a branch cannot have that.
 

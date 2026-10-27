@@ -1,4 +1,4 @@
-## D101 — A named problem links to its fix
+# D101 — A named problem links to its fix
 
 **A banner that names a problem must link to a control that can fix it.** `#/codes` said held codes carry no product claim and sent the operator to `#/inventory`, whose editor had no product field. A reachability rule does not catch a screen that reaches the wrong place. `product` therefore has two doors. The first is the box-level claim editor in `#/inventory`'s Manage box sheet, where every other claim is corrected and one press covers a drawer. The second is an inline correction on `#/codes`, scoped to the lane its banner describes. That is a deliberate narrow exception to the one-door habit. D31 stands: the codes control edits a claim, never a position or a state.
 

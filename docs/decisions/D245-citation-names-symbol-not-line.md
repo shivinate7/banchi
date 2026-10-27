@@ -1,4 +1,4 @@
-## D245 — A citation names a symbol, not a line
+# D245 — A citation names a symbol, not a line
 
 **Unreadable.** A citation written `path:N` was invisible to every row in this repo. `scripts/docs_audit/paths_commands.py`'s `_CANDIDATE_RE` has no `:` in its character class. So line 884 of `docs/GATES.md` was extracted as the bare filename. The file resolved, and the `paths` row reported "references resolve". A citation could point at a line deleted weeks earlier, and the row stayed green. The row was not wrong about what it checked. It was read as checking something wider.
 

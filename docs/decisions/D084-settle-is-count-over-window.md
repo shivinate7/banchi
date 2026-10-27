@@ -1,4 +1,4 @@
-## D84 — A settle is a count over a window
+# D84 — A settle is a count over a window
 
 **A settle is `stillFrames` of the last `stillWindow`, never a consecutive run, and it may only complete on a frame that is itself quiet.** A consecutive run is defeated absolutely by a two-frame alternation. That alternation is measured. A card motionless for 500 ms read `2.71 5.40 2.63 5.54 2.83 5.14 3.03 4.80 3.64 4.91`. Against a `tLo` of 4.18, that gave five runs of one and never two. The fire photographs the settle frame, so a capture must not come from a frame the machine had just called not-confidently-still. The cost is two frames of latency (about 84 ms at 24 fps). It is set against a 623 ms feeder period with about 400 ms of stillness in it. D131 narrowed the count to one quiet frame of the last three, since 2-of-3 and 3-of-5 recovered fewer cards here. Every defect sat in the first two seconds after arming. The four losses were established by looking. JPEGs downsampled to the trace's 38x28 grid matched the recorded frames at MAD 13 to 19. The orphan scenes matched at 23.7 to 30.2.
 

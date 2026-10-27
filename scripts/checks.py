@@ -521,7 +521,7 @@ CHECKS = (
                    "`ORDER.json` names is present, every markdown file present is named, no "
                    "id appears in two files, and the reassembly still ends in a newline. The "
                    "duplicate arm is the one a directory newly needs — one entry copied "
-                   "rather than moved puts `## D58` in two files, which a single document "
+                   "rather than moved puts `# D58` in two files, which a single document "
                    "could not express and nothing else would notice. It does NOT hash the "
                    "live corpus: editing an entry is the normal way this corpus changes, and "
                    "a digest over the whole thing would go red on the next decision entry "

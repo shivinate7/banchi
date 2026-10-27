@@ -1,4 +1,4 @@
-## D127 — A session stops only what it started
+# D127 — A session stops only what it started
 
 **Built after two incidents in a single session.** Both happened while cleaning up dev servers the session had launched itself.
 

@@ -1,4 +1,4 @@
-## D16 — Docs checked by script, prose by review
+# D16 — Docs checked by script, prose by review
 
 **Every path, target, threshold and id in the markdown is checked by a script. The prose itself is checked by a model, and only the first may block a commit.** Repo markdown carries the architecture and the reasoning behind it. Before `scripts/docs-audit.py` existed, nothing verified a line of it. Every path, `make` target, subcommand, test id, threshold, decision number and env var was true only while someone remembered it. `docs/GATES.md` makes the same argument for the harness. Without a check, *looks done* is the only signal. This entry applies the same rule to the files that tell the next session what done means.
 

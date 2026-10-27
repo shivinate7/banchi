@@ -1,4 +1,4 @@
-## D322 — TCGCSV is the next outside price source
+# D322 — TCGCSV is the next outside price source
 
 Kind: process
 Home: pipeline/pricehistory.py

@@ -1,4 +1,4 @@
-## D220 — Orders is Inventory's screen
+# D220 — Orders is Inventory's screen
 
 **The owner ruled that Orders takes Inventory's exact structure and layout skeleton.** The left column becomes all the orders. Selecting an order starts that order's walk at once. The operator can tick orders at the side to select several and walk them together. The order walk is sorted by density.
 

@@ -1,4 +1,4 @@
-## D155 — The section ruler leads the box
+# D155 — The section ruler leads the box
 
 **The section scale is the primary instrument of the copies row. The box strip is secondary.** Settled on the owner's two remarks about the copies list. The box view is nicer than the section view. The lens between the two scales is more noise than useful. The section scale becomes a full-width graduated 26px ruler. It has a painted fill, a pin that crosses it, and the section's own bounds written inside its two ends. The box scale becomes an 8px strip of chips, with a caret on the chip the card is in. The SVG trapezoid is deleted, with nothing drawn in its place. **The component's total height is unchanged at 73px, so no row on `#/inventory` moves by a pixel.**
 

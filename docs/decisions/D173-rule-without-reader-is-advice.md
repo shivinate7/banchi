@@ -1,4 +1,4 @@
-## D173 — A rule without a reader is advice
+# D173 — A rule without a reader is advice
 
 **A rule that can be mechanically enforced must be mechanically enforced, and a new rule is not finished until its enforcement exists or its unenforceability is argued.**
 

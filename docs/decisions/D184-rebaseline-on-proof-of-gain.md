@@ -1,4 +1,4 @@
-## D184 — Re-baseline only on proof of a gain step
+# D184 — Re-baseline only on proof of a gain step
 
 **The presence gate reads a distance from the arm-time baseline, and an auto-exposure step is a distance too, so nothing could tell the two apart.** A gain step is the baseline times one number, and a card is not. The machine re-baselines only on that proof.
 

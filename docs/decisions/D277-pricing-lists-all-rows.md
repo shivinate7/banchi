@@ -1,4 +1,4 @@
-## D277 — Pricing lists all rows, needs first
+# D277 — Pricing lists all rows, needs first
 
 **The owner's rulings, 2026-09-23, in the Pricing re-interview.** The first round of the UX
 review held Pricing back for its own interview. A deliberation walked the screen, drew a

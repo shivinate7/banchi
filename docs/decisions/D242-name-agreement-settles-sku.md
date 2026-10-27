@@ -1,4 +1,4 @@
-## D242 — Name agreement settles SKU number conflicts
+# D242 — Name agreement settles SKU number conflicts
 
 **Amended, merged into `D258`, ruling 6.** This class read "the card's own stored name and number." Once a card is bound, those are no longer the read. So this class is empty by construction. That is the outcome it protected. `cards identity`, one report, reads `read_*` against the SKU table instead. It excludes any card a human bound. The sibling class merges into the same report.
 

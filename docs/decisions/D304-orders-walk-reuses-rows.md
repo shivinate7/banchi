@@ -1,4 +1,4 @@
-## D304 — Orders walk reuses Inventory's rows
+# D304 — Orders walk reuses Inventory's rows
 
 The owner's answers to the drift findings against D220 and D274 follow. D220: Orders is inventory's screen with orders in the rail, and the walk is a mode of it. D274: Orders and Shipping are two sidebar rows with no tabs, and the walk gets the full height. This entry records only what was decided.
 

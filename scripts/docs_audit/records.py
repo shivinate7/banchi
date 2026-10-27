@@ -67,7 +67,7 @@ _ID_DIGITS = r"[1-9][0-9]{0,2}"
 #
 # NEVER NAME A LIVE SLUG IN A COMMENT OR A FIXTURE. The claim is exhaustive text replacement,
 # so an illustration that borrows a real slug is rewritten with it — this block named one and
-# came back reading "a branch writes `## D140`", and two self-test fixtures below became
+# came back reading "a branch writes `# D140`", and two self-test fixtures below became
 # assertions about the number. Compose a fixture's ids from pieces; describe a shape in prose
 # rather than spelling an id that exists.
 #
@@ -149,7 +149,7 @@ def decision_heading_lines(path: Path, letter: str) -> List[Tuple[str, int]]:
     """
     if not exists(path):
         return []
-    pattern = re.compile(r"^##\s+(" + letter + _ID_ANY + r")\b")
+    pattern = re.compile(r"^#{1,2}\s+(" + letter + _ID_ANY + r")\b")
     out: List[Tuple[str, int]] = []
     for number, line in enumerate(read(path).splitlines(), start=1):
         match = pattern.match(line)
@@ -178,10 +178,10 @@ def _corpus():
 
 
 def decision_files() -> List[Path]:
-    """Every file holding a `## D<id>` entry, in corpus order. Empty if unreadable.
+    """Every file holding a `# D<id>` entry, in corpus order. Empty if unreadable.
 
     THE COMPLEMENT, NOT `_ID_ANY`. A file is included the moment its first heading opens
-    `## D` followed by a digit or a hyphen — never by first requiring the id to already be a
+    `# D` followed by a digit or a hyphen — never by first requiring the id to already be a
     clean number or a properly-shaped SLUG. `_ID_ANY` used to gate this list directly, which
     made a MALFORMED heading (mixed case, a doubled hyphen, a digit where a segment was
     meant) invisible a step earlier than the `id claims` row's own loose/strict check could
@@ -195,7 +195,7 @@ def decision_files() -> List[Path]:
     if corpus is None:
         return []
     try:
-        head = re.compile(r"^##\s+D[0-9-]")
+        head = re.compile(r"^#{1,2}\s+D[0-9-]")
         return [p for p in corpus.files() if head.match(read(p).split("\n", 1)[0])]
     except Exception:
         return []
@@ -241,7 +241,7 @@ def decision_heading_lines_across(paths: Iterable[Path], letter: str) -> List[Tu
     newly permits and a single file never could, so the duplicate row below compares across
     the corpus rather than within one document.
     """
-    pattern = re.compile(r"^##\s+(" + letter + _ID_ANY + r")\b")
+    pattern = re.compile(r"^#{1,2}\s+(" + letter + _ID_ANY + r")\b")
     out: List[Tuple[str, Path, int]] = []
     for path in paths:
         if not exists(path):
@@ -284,7 +284,7 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
                         severity_findings.append(
                             Finding(
                                 f"{rel(path)}:{number}",
-                                f"cites D{digits}, which has no `## D{digits}` heading in "
+                                f"cites D{digits}, which has no `# D{digits}` heading in "
                                 f"docs/decisions/.",
                             )
                         )
@@ -385,7 +385,7 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
 # has taken, and a branch cannot have that: every renumber in this repo's history is one
 # branch reading `origin/main`, taking the next free id, and being wrong the moment another
 # branch merged first. Thirteen of those are recorded in D140, and D16 carries three entries
-# numbered `## D50` at once. So a branch writes a SLUG and the shared merge tool substitutes
+# numbered `# D50` at once. So a branch writes a SLUG and the shared merge tool substitutes
 # the number inside `make merge`, against main as it stands then.
 #
 # THIS ROW REPLACED `renumbered ids` AND `vacated ids`, WHICH ARE DELETED. Both existed to
@@ -408,15 +408,15 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
 
 
 # A HEADING THE ID PATTERN REJECTS IS AN ENTRY NOTHING CAN SEE, which is the failure mode a
-# new namespace brings with it: `## D-pad — Title` is one segment, so it is not an id, so the
+# new namespace brings with it: `# D-pad — Title` is one segment, so it is not an id, so the
 # heading is not an entry, so no row reports on it and no citation of it resolves. Caught by
 # reading the heading line as TEXT and asking the pattern afterwards.
-_LOOSE_SLUG_HEADING = re.compile(r"^##\s+([DC]-\S+)")
-_STRICT_SLUG_HEADING = re.compile(r"^##\s+[DC]" + _ID_SLUG + r"\b")
+_LOOSE_SLUG_HEADING = re.compile(r"^#{1,2}\s+([DC]-\S+)")
+_STRICT_SLUG_HEADING = re.compile(r"^#{1,2}\s+[DC]" + _ID_SLUG + r"\b")
 # DEBT'S OWN PAIR, ONE WORD OVER: `docs/debts/` joined the claim path (D140's scheme, the
 # owner's word), so a pending debt slug carries the identical malformed-heading risk one
 # letter's worth wider — `## DEBT-pad` is one segment and would be silently invisible to
-# the shared merge tool the same way `## D-pad` already is.
+# the shared merge tool the same way `# D-pad` already is.
 _LOOSE_SLUG_HEADING_DEBT = re.compile(r"^##\s+(DEBT-\S+)")
 _STRICT_SLUG_HEADING_DEBT = re.compile(r"^##\s+DEBT" + _ID_SLUG + r"\b")
 # NOT `\bstep `: a hyphen is a non-word character, so `\b` fires INSIDE `runs-step` and

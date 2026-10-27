@@ -1,4 +1,4 @@
-## D147 — Committed copies are the oldest captures
+# D147 — Committed copies are the oldest captures
 
 **When the store says TCGplayer holds N copies of a SKU, the N positions that stand for them are the N oldest captures. They are never in box-walk order.** `cli/resolve.py:_committed_keys` turns a per-SKU quantity into a set of positions. It picked with `copies_on_hand(sku)[:out]`, which is box-walk order. The docstring said any N would do. That is true of `len()` and false of the set subtraction. `SkuMatch.uncommitted_positions` subtracts those keys from one run's positions, so which copies are chosen decides which run may list. D7's fungibility is about physical cardboard. It says nothing about which run may send one.
 

@@ -1,4 +1,4 @@
-## D112 — Assert an unmoved measurement
+# D112 — Assert an unmoved measurement
 
 **T1 asserts that its inputs are unmoved and does not re-run the model.** The model is pinned, the responses are banked in `harness/.cache`, the labels are fixed, and the floor is a constant. Only three things can move, each with a fingerprint: the prompt, the eval set, and the arithmetic. `scorer_fingerprint()` hashes the per-card comparison, per-set aggregation, holdout split and floor. It hashes function source, not the module, so a comment edit never demands a paid measurement.
 

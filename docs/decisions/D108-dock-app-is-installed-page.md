@@ -1,4 +1,4 @@
-## D108 — The dock app is an installed web page
+# D108 — The dock app is an installed web page
 
 **The dock app is Chrome's install of the page, made real by the manifest.** Nothing is wrapped or bundled, and the capture server stays a launch agent. Chrome's *Install page as app* writes a real bundle with its own dock icon and ⌘-Tab entry, its own window (`display-mode: standalone`) and a remembered size. The camera is unchanged, because the engine is unchanged. The rig has only been proven on Chromium, and the grant lives per origin in the profile. `app/src/useCamera.ts` asks for 3840x2160 with `deviceId: {exact}`. A host that settled on 1080p would pass the 1280x720 floor and be four times worse than the rig can produce, silently.
 

@@ -1,4 +1,4 @@
-## D137 — The catalog is Near Mint by rule
+# D137 — The catalog is Near Mint by rule
 
 **Ruling: the join keeps only Near Mint and sealed rows of the catalog.** Play grades are dropped in the join, not on the wire.
 

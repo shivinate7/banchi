@@ -1,4 +1,4 @@
-## D321 — Every identify run joins itself at its end
+# D321 — Every identify run joins itself at its end
 
 Kind: build
 Plan: docs/specs/batch-script.md#47-a-run-joins-itself (python)

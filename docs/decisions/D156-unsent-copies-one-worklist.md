@@ -1,4 +1,4 @@
-## D156 — Every unsent copy is one worklist
+# D156 — Every unsent copy is one worklist
 
 **`#/pricing`'s default landing is every copy in every joined run that TCGplayer does not hold.** That covers every run and every box. The copies are priced where prices are decided, and one press that already writes one file across runs sends them.
 

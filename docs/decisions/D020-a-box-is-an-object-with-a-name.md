@@ -1,4 +1,4 @@
-## D20 — A box is an object with a name
+# D20 — A box is an object with a name
 
 **A box is an object in the store (`store/master.py:Box`). It can be created empty, named and listed.** Capacity and seal are gone (D299). Nothing divides by them (D58).
 

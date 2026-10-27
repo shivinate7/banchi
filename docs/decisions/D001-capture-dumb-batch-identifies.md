@@ -1,4 +1,4 @@
-## D1 — Capture is dumb; batch identifies later
+# D1 — Capture is dumb; batch identifies later
 
 **Capture is fast, offline and dumb; identification and pricing happen later, in batch.**
 

@@ -1,4 +1,4 @@
-## D24 — Code cards are pooled, not located
+# D24 — Code cards are pooled, not located
 
 Ruling: a code card has **no box, section or card position**. It is a count. An index is acceptable as a key. It is what the photo and sidecar are named after on disk. But it is not meaningful, because the physical cards are disposed of once the code is extracted.
 

@@ -1,6 +1,6 @@
 ## DEBT62 — the demo photos are about 180 MB of plain git, and the owner left them there
 
-**Symptom.** `demo-assets/` holds thousands of tracked files, about 180 MB in all. The weekly mirror moves the figure.
+**What.** `demo-assets/` holds thousands of tracked files, about 180 MB in all. The weekly mirror moves the figure.
 The demo photos are most of the repo's bytes. Every clone, and every CI job that clones,
 downloads them.
 

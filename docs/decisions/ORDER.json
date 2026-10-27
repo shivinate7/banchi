@@ -3,7 +3,6 @@
   "split_sha256": "e5032052940c5fed2d8b7559f43c8d04743db17b9031bebeaadc139122ebc0c2",
   "split_bytes": 1471078,
   "order": [
-    "_preamble.md",
     "D001-capture-dumb-batch-identifies.md",
     "D002-identify-is-haiku-vision.md",
     "D003-variants-resolve-by-ladder.md",

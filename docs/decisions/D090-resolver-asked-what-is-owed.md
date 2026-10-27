@@ -1,4 +1,4 @@
-## D90 — The resolver is asked what is owed
+# D90 — The resolver is asked what is owed
 
 **`Ledger.outstanding` is the quantity that reaches the engine (`_engine_order`). The raw `line.quantity` never does.** A line of 3 with one copy pulled wants 2. The raw quantity resolved a partly filled line as if nothing had been pulled. With five copies in the store, it allocated 3 picks against a line owed 2. The error is not local. `resolve_all` is a one-pass allocation over the whole open set, and its double-book guard is D69's most important property. A surplus pick takes a copy out of the pool that every other order for that SKU draws from. So a second buyer's line reads `short` over a copy the first buyer is not owed. `pipeline/orders.py:OrderLine` accepts quantity zero and refuses only negatives. So a filled line resolves as `resolved`, with its breakdown still counted. On the wire, a resolved line carries `owed` (the ledger's figure) beside `wanted` (the buyer's).
 

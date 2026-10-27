@@ -1,4 +1,4 @@
-## D180 — A press names the cards it covers
+# D180 — A press names the cards it covers
 
 **The box stops being the unit of work. `POST /pipeline/identify` and `banchi identify` take ONE SELECTION, a set of terms, each of which narrows a set of cards.** The drawer is a term in the selection. It is not what a run is made of. The owner ruled that this overtakes the cart design. The cart design's rot is recorded below, not deleted.
 

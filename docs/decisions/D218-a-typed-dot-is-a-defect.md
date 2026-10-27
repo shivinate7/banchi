@@ -1,4 +1,4 @@
-## D218 — A typed dot is a defect
+# D218 — A typed dot is a defect
 
 **The owner's ruling, 2026-09-19: "this typed dot needs to be removed everywhere it exists."**
 

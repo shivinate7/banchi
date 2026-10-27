@@ -1,6 +1,6 @@
 ## DEBT69 — the daily price read skips some runs, "moved since listing" needs an archive bucket, and no live price is pushed automatically
 
-**Gap.** `scripts/price-refresh-daily.py` runs `pipeline_routes.do_prices_refresh` once a day (D104). It downloads the owner's own live listings, fetches the catalog export once per game, re-joins every open run and reads the sales history. That prices every copy held but not listed. `#/pricing` shows which listed items moved more than 10% since listing. One thing is not covered: "since listing" needs an archive bucket for the listing day. Only an archive sweep writes that bucket (the daily job sweeps it after the refresh, D224). So a listing the archive never read is counted as unchecked on the panel.
+**What.** `scripts/price-refresh-daily.py` runs `pipeline_routes.do_prices_refresh` once a day (D104). It downloads the owner's own live listings, fetches the catalog export once per game, re-joins every open run and reads the sales history. That prices every copy held but not listed. `#/pricing` shows which listed items moved more than 10% since listing. One thing is not covered: "since listing" needs an archive bucket for the listing day. Only an archive sweep writes that bucket (the daily job sweeps it after the refresh, D224). So a listing the archive never read is counted as unchecked on the panel.
 
 **What the morning read still misses.** Each case leaves the last good prices in place, and the note names the failed step.
 

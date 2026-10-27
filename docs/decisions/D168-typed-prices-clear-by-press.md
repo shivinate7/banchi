@@ -1,4 +1,4 @@
-## D168 — Typed prices clear by press, never expiry
+# D168 — Typed prices clear by press, never expiry
 
 **A typed pricing answer stands until the operator clears it.** `#/pricing` has one control that clears many at once, scoped, counted in its own label and reversible. There is no TTL, auto-stale or expiry anywhere: the owner refused an expiry rule and asked for a mass-clear button. `older_than_days` is an argument to one call, spent by one press, and nothing runs on a clock. 269 of the owner's 407 typed prices were five days old and still pre-filling their fields.
 

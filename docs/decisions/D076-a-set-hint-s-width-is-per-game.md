@@ -1,4 +1,4 @@
-## D76 — A set hint's width is per-game
+# D76 — A set hint's width is per-game
 
 **A set filter needs the box to be unanimous, and the game decides whether to narrow at all.** D65 scoped the export by the set hints the box's cards carry. Widening is always safe. Narrowing is not. That reasoning holds, but the rule built from it counted the wrong thing.
 

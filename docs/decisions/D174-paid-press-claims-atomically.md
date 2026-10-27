@@ -1,4 +1,4 @@
-## D174 — A paid press claims its cards atomically
+# D174 — A paid press claims its cards atomically
 
 **A press claims the position keys it is about to pay to read, in the `submissions` table, and a second press is refused on intersection.** The claim is written by the command that spends, in the same `Store.write()` that recomputes what is being bought. The send list is decided about a minute before the claim (hashing 678 photographs). So two presses can both finish deciding and both believe they are first. A box number is not the guard.
 

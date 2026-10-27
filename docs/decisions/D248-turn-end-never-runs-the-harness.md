@@ -1,4 +1,4 @@
-## D248 — Turn end never runs the harness
+# D248 — Turn end never runs the harness
 
 **There is no Stop hook: nothing runs at turn end.** The harness runs on the commit path (`make check`, where D161 puts it first) and in CI only. It cost about 25 seconds on every turn, against nothing now, on the machine whose capture server and rig also run.
 

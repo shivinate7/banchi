@@ -1,4 +1,4 @@
-## D299 — Boxes have no lid or capacity
+# D299 — Boxes have no lid or capacity
 
 **The owner's ruling, 2026-09-25**, verbatim: "what was the point of sealed boxes? lets kill
 this".

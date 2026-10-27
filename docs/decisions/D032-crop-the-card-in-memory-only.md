@@ -1,4 +1,4 @@
-## D32 — Crop the card in memory only
+# D32 — Crop the card in memory only
 
 **Identification crops to the detected card at identify time, in memory, behind `--crop`.** Never on disk. A crop written at capture is irreversible once the card is back in the box. Crop at identify time also serves photos already taken, and every other consumer keeps the full frame (the review photo a human judges foil against, the pull preview, the re-shoot comparison). Detection picks the crop (`geometry.detect_card`), never a slider: card area varies 39% to 81% across a box. A refusal (`None`) sends the whole frame, and the preflight names the refusal count.
 

@@ -1,4 +1,4 @@
-## D37 — Stand-down closes a question, writes nothing
+# D37 — Stand-down closes a question, writes nothing
 
 **A stand-down closes the queued question and leaves the card unwritten.** Ambiguity never becomes a guess, and a card that can never be answered does not return every session. `POST /review/<box>/<index>/stand-down` sets `store/queues.py`'s `cleared_by_human` flag, which `Queue.upsert`, `release` and `open_entries` already honor, with a reason and nothing else.
 

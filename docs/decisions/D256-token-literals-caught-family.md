@@ -1,4 +1,4 @@
-## D256 — Token literals are caught by family
+# D256 — Token literals are caught by family
 
 A defect class exists. It is "literals that
 duplicate a token exactly". `css-var-check.py` cannot see it. That checker catches a `var()`

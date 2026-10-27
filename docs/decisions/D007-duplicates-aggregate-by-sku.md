@@ -1,4 +1,4 @@
-## D7 — Duplicate copies aggregate by SKU
+# D7 — Duplicate copies aggregate by SKU
 
 **Copies of one card and variant collapse into ONE fixture row. `Add to Quantity` = copy count.** Inventory keeps each copy as its own position with its own photo. The app maps SKU to all positions holding it.
 
