@@ -8542,7 +8542,7 @@ def settle_nothing_to_join(directory: Path) -> bool:
     return True
 
 
-def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
+def _scope_for_run(directory: Path, payload: dict, counts=None) -> Tuple[object, dict]:
     """What to ask TCGplayer for: the run's own claims, the game's rule, and the operator.
 
     THE CLAIMS THE OPERATOR ALREADY MADE ARE THE DEFAULT SCOPE (D65). A card carries its game
@@ -8571,7 +8571,7 @@ def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
       the cards      under `sets`: every card hinted and every hint resolved, or it widens.
     """
     payload_game = payload.get("game")
-    by_game, catalogued = _scope_counts(directory)
+    by_game, catalogued = counts or _scope_counts(directory)
     if not catalogued:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
@@ -8788,7 +8788,8 @@ def do_pipeline_scope(name: str, payload: dict) -> dict:
     code; every count above it still draws.
     """
     directory = _open_run(name)
-    _, catalogued = _scope_counts(directory)
+    counts = _scope_counts(directory)
+    catalogued = counts[1]
 
     games = [
         {
@@ -8809,7 +8810,7 @@ def do_pipeline_scope(name: str, payload: dict) -> dict:
     message: Optional[str] = None
     if games:
         try:
-            _, asked = _scope_for_run(directory, payload)
+            _, asked = _scope_for_run(directory, payload, counts)
         except PipelineRefusal as caught:
             # THE REFUSAL IS DATA HERE, NOT A STATUS. `game_required` over a two-game run is
             # the screen's cue to draw a picker, and `set_ids_unknown` over a stale tick is

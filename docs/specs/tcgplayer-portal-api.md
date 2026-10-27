@@ -13,8 +13,7 @@ A cookie session, and nothing else. Checked specifically for anti-forgery: the b
 three POSTs went through on the session cookie alone.
 
 So `server/tcg_export.py`'s `_cookie()` — the whole `Cookie:` header out of `.env` — is
-sufficient for every route below. **That is also the risk**: there is no second factor between
-this repo's `.env` and a route that wipes live inventory.
+sufficient for every route below.
 
 ## 2. The endpoints
 
