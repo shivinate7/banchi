@@ -26,6 +26,10 @@ import type {
   Place,
   PlaceNeighbor,
   QueueSnapshot,
+  MasterTakeOff,
+  MasterTakeOffAnswer,
+  OwedTakeOff,
+  OwedTakeOffResult,
   RetireReason,
   RetireResult,
   CatalogLookup,
@@ -1769,6 +1773,40 @@ export function retireCard(
  */
 export function undoRetire(box: number, index: number): Promise<RetireResult> {
   return retirement(box, index, { undo: true })
+}
+
+/** Where a `master_set` pull's TCGplayer take-off stands (`GET /inventory/<box>/<index>/take-off`).
+ *  Opens no socket on the server. Refused as `not_master_set` for any other card. */
+export async function masterTakeOffState(box: number, index: number): Promise<MasterTakeOff> {
+  return (await request(`/inventory/${box}/${index}/take-off`)) as MasterTakeOff
+}
+
+/** Take a `master_set` pull's excess live copies off TCGplayer (`POST /inventory/<box>/<index>/take-off`).
+ *  The press is the owner's yes. It reads what is live first and sends nothing when the listing
+ *  already matches (`take_off.state` is then `matches`). A failed push leaves the retirement standing. */
+export async function masterTakeOff(box: number, index: number): Promise<MasterTakeOffAnswer> {
+  return (await request(`/inventory/${box}/${index}/take-off`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as MasterTakeOffAnswer
+}
+
+/** Every master_set take-off still owed, for the Pricing send card (`GET /pipeline/sends/owed`).
+ *  Opens no socket on the server. An entry leaves once it is sent and settled, the listing
+ *  matches, or the retirement is undone. */
+export async function getOwedTakeOffs(): Promise<{ owed: OwedTakeOff[] }> {
+  return (await request('/pipeline/sends/owed')) as { owed: OwedTakeOff[] }
+}
+
+/** Press every owed take-off on one confirm (`POST /pipeline/sends/owed`). Each entry has its own
+ *  live read and receipt, and is answered on its own: a refusal on one does not stop the others. */
+export async function pressOwedTakeOffs(): Promise<{ results: OwedTakeOffResult[] }> {
+  return (await request('/pipeline/sends/owed', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as { results: OwedTakeOffResult[] }
 }
 
 // ------------------------------------------------------------------ search, and the boxes
