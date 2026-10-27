@@ -1,4 +1,4 @@
-## D117 — The thumb floor is 40px
+# D117 — The thumb floor is 40px
 
 **Anything a thumb presses is 40px or more.** The owner ordered the mobile build reviewed. CLAUDE.md sets two floors for this width: no horizontal page scroll at 390, and the 40px thumb floor. Neither had a reader. Look at every screen at 1440, 820 and 390. The control-height tokens raise themselves under 767px and on a coarse pointer. Do not hand-roll a mouse-sized control on a phone. Twenty-five controls hand-rolled one.
 

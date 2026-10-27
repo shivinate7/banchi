@@ -1,4 +1,4 @@
-## D152 — Rail rows share one glyph spine
+# D152 — Rail rows share one glyph spine
 
 **Every row in the collapsed 64px rail draws one glyph on one spine at x = 32 (the 8px gutter plus half of the 48px box each row draws in).** A rule that lists the children it knows about will miss one. `App.css`'s rail block folded the foot away by enumerating class names (`.bn-nav-text`, `.bn-kbd`, `.bn-nav-badge`, `.bn-side-foot-text`, `.bn-brand-chevron`). So the Fulfiller link's 14px `external` mark stayed. The row drew glyphs at x = 19 and 47. Anything the list does not name silently keeps its open-sidebar layout. `.bn-btn`'s structural rule (`> :not(.bn-icon)`) never had the defect. The fix is that shape: `.bn-nav-link > :not(:first-child)` keeps the leading glyph and nothing else.
 

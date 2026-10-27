@@ -1,6 +1,6 @@
 ## 3 — The claim chain
 
-**A capture-time claim crosses hops that nothing binds together.** `CAPTURE_CLAIM_FIELDS` in `store/master.py` binds the server side (the record upsert, the `allocate_capture` pass-through, `sidecar_payload`, `PUT_FIELDS`), and T7's `check_capture_claim_chain` iterates it. Still unbound:
+**What.** A capture-time claim crosses hops that nothing binds together. `CAPTURE_CLAIM_FIELDS` in `store/master.py` binds the server side (the record upsert, the `allocate_capture` pass-through, `sidecar_payload`, `PUT_FIELDS`), and T7's `check_capture_claim_chain` iterates it. Still unbound:
 
 - The three app-side hops, `app/src/CaptureScreen.tsx`, `app/src/types.ts` and `app/src/server.ts`. No Python constant reaches a `.tsx`, and `make typecheck` sees a field added to `types.ts`, never one omitted.
 - `cli/cmd_identify.py` builds `master.Card(...)` literally instead of through `allocate_capture`, so it carries the claim names by hand. This is the one closable hop.

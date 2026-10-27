@@ -1,4 +1,4 @@
-## D296 — Buyer list sorts six ways
+# D296 — Buyer list sorts six ways
 
 **The owner asked for more sort keys on the orders filters.** The screen offered only "placed by newest" and "placed by oldest". The owner then picked all four suggestions offered: **Dollar value, Card count, Buyer name, Fewest drawers to open.**
 

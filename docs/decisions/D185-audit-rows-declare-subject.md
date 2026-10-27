@@ -1,4 +1,4 @@
-## D185 — Every audit row declares its subject count
+# D185 — Every audit row declares its subject count
 
 **A row that examined nothing must say so.** `Report.render` printed `ok` for any empty findings list, so a row that examined 2,964 references and one that examined none looked the same (`paths 0 references resolve`, and a session quoted that run as verification). It is the repo's signature defect: a guard that cannot tell "nothing is wrong" from "nothing is known yet".
 

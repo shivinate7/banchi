@@ -1,4 +1,4 @@
-## D11 — Listings come from a catalog join
+# D11 — Listings come from a catalog join
 
 **A listing is a catalog join against the export, never a CSV written from scratch.**
 

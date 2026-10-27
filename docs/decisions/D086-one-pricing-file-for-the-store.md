@@ -1,4 +1,4 @@
-## D86 — One pricing file for the store
+# D86 — One pricing file for the store
 
 **Ruling: prices are one corpus keyed by SKU, in `inventory/prices.json`, not one file per run.** Per-run data stays per run only where it is a property of the lot.
 

@@ -1,4 +1,4 @@
-## D18 — Generators may write; writers never gate
+# D18 — Generators may write; writers never gate
 
 D16 forbids the audit writing, and it gives the reason. "An agent that can edit the docs to satisfy its own gate will do exactly that, and each edit will look reasonable." That argument is about a *path*, not about a script. D16 states it as a property of the script. That leaves a loophole wide enough to drive a build target through. A generator that rewrites a doc from a code constant is not the audit. It breaks none of D16's letter. If it runs inside the gate, it recreates D16's failure exactly. `make check` regenerates, the audit passes, nothing fails, and the doc now says whatever the code said.
 

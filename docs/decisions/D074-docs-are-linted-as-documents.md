@@ -1,4 +1,4 @@
-## D74 — Docs are linted as documents
+# D74 — Docs are linted as documents
 
 **Prose checking is scoped to what a file is, not to how much of it a session reads.** A sweep of `docs/` found two defect classes. No row of `make docs-audit` could see either one.
 

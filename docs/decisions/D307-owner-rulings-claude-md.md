@@ -1,4 +1,4 @@
-## D307 — Owner rulings CLAUDE.md points to
+# D307 — Owner rulings CLAUDE.md points to
 
 **Why this entry exists.** The owner asked for CLAUDE.md to be rewritten in place and cut to rules.
 A ruling's home is a decision entry. CLAUDE.md points at it. These rulings had no entry, so this one holds

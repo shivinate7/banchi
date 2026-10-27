@@ -1,4 +1,4 @@
-## D87 — Reconcile is store-wide and writes live
+# D87 — Reconcile is store-wide and writes live
 
 **One full TCGplayer live export settles every SKU in the store, whatever run or box it came from, and reports both directions.** The owner's ruling, after D86, is that an export of the whole live inventory reconciles across every emit and box. It does so at any time.
 

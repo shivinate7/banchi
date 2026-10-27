@@ -1,4 +1,4 @@
-## D176 — The primary checkout syncs itself
+# D176 — The primary checkout syncs itself
 
 **Settled on the owner's answer to a refuse-only proposal.** The primary checkout,
 `/Users/shivinate/Developer/banchi`, is the one directory D138 keeps a capture server alive

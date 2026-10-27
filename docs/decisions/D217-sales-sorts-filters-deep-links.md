@@ -1,4 +1,4 @@
-## D217 — Sales sorts, filters, deep-links
+# D217 — Sales sorts, filters, deep-links
 
 **Problem.** D214 built `#/revenue` as a retrospective: a verdict, a month strip, and a product table sorted by gross. The owner's complaint: it was a list of items sold, with no way to work it. The table had one sort order. The month strip drew a sparkline with `aria-hidden`, and its rows had no handler, so a click did nothing. Nothing lived in the URL, so a view could not be shared or reloaded. A product's orders were unreachable. `Sale.order` carried them until dedupe folded them into `orderCount`.
 

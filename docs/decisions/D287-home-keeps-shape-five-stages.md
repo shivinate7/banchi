@@ -1,4 +1,4 @@
-## D287 — Home keeps shape; five stages
+# D287 — Home keeps shape; five stages
 
 **Amends D121.** The owner's ruling on this lane was short and specific: keep Home as is. The Home button stays, and the "Behind that" repeats are cut. Box lists are most recent first. Boxes show names only, never a box number. Runs folds into Review, so Home's six-stage strip becomes five. The Runs tile goes, and its identify count points at Review. Do not redesign the hero. This entry records what the ruling changed in `app/src/standing.ts` and `app/src/Home.tsx`. It records nothing the ruling did not name.
 

@@ -1,4 +1,4 @@
-## D15 — The catalog is vendored, not fetched
+# D15 — The catalog is vendored, not fetched
 
 The pokemontcg.io dataset is a committed snapshot of the maintainer's own `PokemonTCG/pokemon-tcg-data` repo. Nothing calls `api.pokemontcg.io` at runtime. Zero rate limits, zero latency, zero dependency on someone else's uptime. Build-order step 9 — after Gate B, because no production code reads this data today.
 

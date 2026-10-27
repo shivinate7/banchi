@@ -1,4 +1,4 @@
-## D123 — Design to the column, not to zoom
+# D123 — Design to the column, not to zoom
 
 **Above the desk a screen asks its column width.** Browser zoom is not a density lever: it is a similarity transform (80% zoom is every length times 0.8 and every breakpoint times 1.25), so density is already solved per device and reversibly. A `banchi.density` token would only add selectivity (shrink the chrome, keep the photograph, spare the Fulfiller), and it is deferred until the owner wants that. Zoom widens the effective viewport, so it buys more stretch and not less. `#/pricing` at 1920 had the card identity 924px wide and the price field, the hero of the row (D86), 68px.
 

@@ -1,4 +1,4 @@
-## D266 — Phone drawer has one scrolling list
+# D266 — Phone drawer has one scrolling list
 
 **The owner's ruling, 2026-09-23.** On a phone, the drawer's footer items join the scrolling
 list. The footer goes. This replaces the fixed foot (the phone drawer's nav scrolls in the space above its

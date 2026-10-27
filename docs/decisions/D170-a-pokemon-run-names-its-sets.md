@@ -1,4 +1,4 @@
-## D170 — A Pokemon run names its sets
+# D170 — A Pokemon run names its sets
 
 **A game whose category cannot be fetched whole may not have its fetch chosen by cards that said nothing.** The owner ruled this.
 

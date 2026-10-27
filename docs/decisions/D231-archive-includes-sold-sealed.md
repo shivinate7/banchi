@@ -1,4 +1,4 @@
-## D231 — Archive subjects include sold and sealed
+# D231 — Archive subjects include sold and sealed
 
 **MEASURED AGAINST THE OWNER'S REAL STORE, 2026-09-20.** 539 distinct SKUs have sold.
 Together they total $66,334.71 gross (canceled excluded, D214's own rule). 270 of them

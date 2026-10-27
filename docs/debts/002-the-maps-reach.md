@@ -1,5 +1,7 @@
 ## 2 — The map's reach
 
+**What.** The file map cannot see an extensionless file, and a map entry proves a file is described, never that the description is true.
+
 - **The orphan rule cannot see an extensionless file.** `scripts/docs_audit/env_map.py:scan_plan` rejects any `source_suffixes` member that does not start with a dot. `check_hook_roster` covers `scripts/githooks/` only. An extensionless enforcement seam anywhere else needs no map entry and the row stays green.
 - **An entry proves a file is described, never that the description is true.** A `does` sentence about the wrong file passes. A stale cross-reference in prose is invisible to every row. `.json` is outside `app/`'s suffixes (it would conscript `app/package-lock.json`), so `app/package.json` has no entry.
 

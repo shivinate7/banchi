@@ -1,4 +1,6 @@
-## D322 — TCGCSV is the next outside price source
+# D322 — TCGCSV is the next outside price source
+
+TCGCSV is the next outside source of current TCGplayer prices, because it is free and needs no key.
 
 Kind: process
 Home: pipeline/pricehistory.py

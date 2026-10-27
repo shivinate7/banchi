@@ -1,4 +1,4 @@
-## D171 — Refusals must reach a reader
+# D171 — Refusals must reach a reader
 
 **A refusal nobody reads did not happen, and a status line the session wrote is not a reading.** Two shapes of one class, a reader that cannot tell "nothing is wrong" from "nothing is known yet". A commit refused by `scripts/githooks/pre-commit` had its output sent to `/dev/null`. The session then read `git log --oneline -1`, saw the previous commit, and reported "pushed", and the empty push read as success. A merge driver's printed `GREEN` was relayed as progress while two racing instances merged nothing.
 

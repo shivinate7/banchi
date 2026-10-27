@@ -1,4 +1,6 @@
-## D320 — My Slabs reads Card Ladder with the owner's own login
+# D320 — My Slabs reads Card Ladder with the owner's own login
+
+My Slabs reads each slab's value, sales and population from Card Ladder with the owner's own login, and keeps one snapshot per slab per day.
 
 Kind: build
 Plan: docs/specs/my-slabs.md#build-plan (macOS)

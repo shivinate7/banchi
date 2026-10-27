@@ -1,4 +1,6 @@
-## D276 — Palette is Go to; lists every screen
+# D276 — Palette is Go to; lists every screen
+
+The palette is renamed Go to, and it lists every screen, the off-nav ones included.
 
 **The owner's ruling, 2026-09-23.** The palette is relabelled honestly, as "Go to". It lists every
 screen, the off-nav ones included. It finds cards. The drawer and the palette hold focus, and

@@ -1,4 +1,4 @@
-## D75 — Refuse a suspect crop
+# D75 — Refuse a suspect crop
 
 **`geometry.detect_card` answers "not found" honestly and cannot answer "found the wrong thing".** So the crop path asks the frame a second question. A crop under 30% of the frame that keeps under half its detail is not cut. The whole frame is sent. The same guard covers the crop-retry path, whose number bands are cut from that rectangle. A retry from a rules-text panel would enlarge rules text and call it the collector number.
 

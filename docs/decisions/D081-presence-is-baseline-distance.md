@@ -1,4 +1,4 @@
-## D81 — Presence is a distance from the session baseline
+# D81 — Presence is a distance from the session baseline
 
 **The card-present gate compares a frame with the watch region as it stood when the trigger was armed, not with a brightness constant.** A frame is a card when it differs from that baseline by more than `presenceK` times the session's typical still-frame difference. The difference is floored at `presenceMin`. Motion detection is a frame-to-frame difference, so it is relative and cancels the light level.
 

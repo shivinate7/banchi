@@ -1,4 +1,4 @@
-## D33 — Every pipeline step is reachable from a screen
+# D33 — Every pipeline step is reachable from a screen
 
 **The four pipeline commands are reachable from a screen. Exactly one route can spend money.** This is the largest instance of `CLAUDE.md`'s route-is-not-a-feature rule in this repo. The owner asked how to push runs at box or section level from the app, get data back and manage CSVs. A session designed the screen and drew a mockup, without building it. The owner then asked why no promised UI existed. Both were correct. `./banchi identify | join | emit | reconcile` had existed since build-order step 4. It had run a 53-card run and a 544-card run. Only a person typing at a terminal could reach it.
 

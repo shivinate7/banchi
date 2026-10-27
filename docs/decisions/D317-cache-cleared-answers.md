@@ -1,4 +1,4 @@
-## D317 — The cache keeps a cleared answer
+# D317 — The cache keeps a cleared answer
 
 **The cache keeps one answer per position, and a cleared answer is permanent.** `store/cache.py` is the home. A cleared answer is a person's answer. No re-run, new prompt or changed photograph replaces it (`Cache.reusable`, `Cache.put`). A later read that disagrees is reported, and the person's answer stands. This keeps a machine from overwriting a person's work.
 

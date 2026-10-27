@@ -1,4 +1,4 @@
-## D305 — The reaper stops only its own
+# D305 — The reaper stops only its own
 
 **Built after an incident D43 did not anticipate.** An agent's own worktree vanished mid-session. It carried on inside another session's worktree. The two trees look identical from inside the wrong one. It ran `make reap ARGS=--confirm`.
 

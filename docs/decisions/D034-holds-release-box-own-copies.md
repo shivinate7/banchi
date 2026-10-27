@@ -1,4 +1,4 @@
-## D34 — Holds release against the box's own copies
+# D34 — Holds release against the box's own copies
 
 **A box's listing holds release on the operator's word, budgeted by that box's own unsold copies.** `staged` is drawn down only by a rise in live quantity, so a staged row deleted on TCGplayer never clears and the box is undeletable forever. `store/master.py:staged_stale` names that case, and a diagnostic needs a remedy.
 

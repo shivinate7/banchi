@@ -1,4 +1,6 @@
-## D324 — Banchi values the owner's investment holdings, then flags big lines on price signals
+# D324 — Banchi values the owner's investment holdings, then flags big lines on price signals
+
+Banchi values the owner's investment holdings at its own prices, then flags lines of $100 or more a unit when a price signal fires.
 
 Kind: process
 Home: D324
