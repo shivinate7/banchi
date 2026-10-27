@@ -1165,7 +1165,10 @@ test('pricing: the live tab names the price line Floor, and no rendered string s
   await stubLiveRead(page, readAt(60_000))
   await visit(page, `${hashOf('pricing')}?live`)
   await expect(page.getByRole('group', { name: 'Which live listings to show' }), 'the Live tab is drawn').toBeVisible()
-  await expect(page.getByLabel('Floor', { exact: true }), 'the rule line names its price line Floor').toBeVisible()
+  /* THE LIVE SETTINGS SHEET HOLDS THE FLOOR, so the Live tab's Change opens it first. It says what the floor is. */
+  await page.getByRole('button', { name: 'Change' }).click()
+  const sheet = page.getByRole('dialog', { name: 'What to mark down' })
+  await expect(sheet.locator('.pricing-sheet-says', { hasText: 'The floor is' }), 'the Live settings sheet names its price line Floor').toBeVisible()
   const scan = await page.evaluate(scanCopy)
   expect(scan.text, 'no rendered text or label says cut-off').not.toMatch(/cut-off/i)
 })

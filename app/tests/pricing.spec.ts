@@ -4433,6 +4433,18 @@ test('a price typed far from market gives the row its flag, and the row does not
   await expect(page.locator('.pricing-group-head')).toHaveCount(0)
 })
 
+/* THE ROW'S HOLD BUTTON IS THE OWNER'S WORD: it says Keep off TCGplayer, never Hold Back, so it reads the same as the hold panel. */
+test('a row hold button is named Keep off TCGplayer, and no row says Hold Back', async ({ page }) => {
+  await open(page, {
+    skus: [
+      sku({ sku: '1', name: 'Articuno', snap: { market: '3.00', direct_low: null, low: '2.80', low_with_shipping: '3.80', now: null } }),
+      sku({ sku: '2', name: 'Dunsparce', snap: { market: '2.00', direct_low: null, low: '1.80', low_with_shipping: '2.80', now: null } }),
+    ],
+  })
+  await expect(page.getByRole('button', { name: 'Keep Dunsparce off TCGplayer', exact: true }), 'the row hold button says Keep off TCGplayer').toBeVisible()
+  await expect(page.getByRole('button', { name: /Hold Back/ }), 'no row hold button says Hold Back').toHaveCount(0)
+})
+
 test('a hold taken now keeps its row where it is, and so does the next load', async ({ page }) => {
   const skus = [
     sku({ sku: '1', name: 'Articuno', snap: { market: '3.00', direct_low: null, low: '2.80', low_with_shipping: '3.80', now: null } }),
@@ -4440,7 +4452,7 @@ test('a hold taken now keeps its row where it is, and so does the next load', as
     sku({ sku: '3', name: 'Wattrel', snap: { market: '1.00', direct_low: null, low: '0.80', low_with_shipping: '1.80', now: null } }),
   ]
   await open(page, { skus })
-  await page.getByRole('button', { name: 'Hold Back Dunsparce', exact: true }).click()
+  await page.getByRole('button', { name: 'Keep Dunsparce off TCGplayer', exact: true }).click()
   await page.getByRole('button', { name: /Keep off TCGplayer/ }).click()
   await page.getByRole('button', { name: 'Hold it' }).click()
   await expect(page.locator('.pricing-row').nth(1).locator('.pricing-state')).toHaveAttribute('title', 'withheld: keeping')
@@ -4544,7 +4556,7 @@ test('finding #2 (the Opus review round) — a hold toast\'s own Undo reverses t
   ]
   const wire = await open(page, { skus })
 
-  await page.getByRole('button', { name: 'Hold Back Dunsparce', exact: true }).click()
+  await page.getByRole('button', { name: 'Keep Dunsparce off TCGplayer', exact: true }).click()
   await page.getByRole('button', { name: /Keep off TCGplayer/ }).click()
   await page.getByRole('button', { name: 'Hold it' }).click()
   const holdToast = page.locator('.bn-toast', { hasText: 'Held Dunsparce' })
