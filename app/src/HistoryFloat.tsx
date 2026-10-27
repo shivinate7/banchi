@@ -11,19 +11,23 @@
  * price fields is the caller's to see (`HistoryFloatSpecimen` shows how).
  *
  * NOTHING MOVES (D313). The card is `position: fixed`, so the list under it never shifts. Its
- * size is the same while the history loads: the chart box and the three facts are held, and a
+ * size is the same while the history loads: the chart box and the four prices are held, and a
  * dash stands in for a figure not read yet.
  *
- * PLACEMENT. Above the row when the viewport has room there, else below it. It aligns to the
- * row's left edge, which keeps it clear of the price column on the right (the caller's row
- * layout must leave the card's width between its left edge and the price field).
+ * THE FOUR PRICES. Market comes off the history's 90-day range. The history route carries no
+ * listing price, so Lowest, Lowest shipped and Direct Low come off `getPriceFacts` (the figures
+ * the product sheet's "Prices Now" draws). A price neither read carries shows "not carried".
+ *
+ * PLACEMENT. Above the row when the viewport has room there, else below it. Its right edge
+ * sits on the right edge of the row's `[data-float-door]` (the row itself when it has none), so
+ * the caller's row layout keeps its thumb, name and price field left of the card's width.
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { describeFailure, failureTone, getProductHistory, type Failure } from './server'
-import type { ProductHistoryPayload, ProductHistoryRange } from './types'
-import { Icon, IconButton, Money, Notice, Section } from './kit'
+import { describeFailure, failureTone, getPriceFacts, getProductHistory, type Failure } from './server'
+import type { PriceFacts, ProductHistoryPayload, ProductHistoryRange } from './types'
+import { Button, CardThumb, Icon, IconButton, Money, Notice, Section } from './kit'
 import { ProductChart, type Fill } from './ProductHistory'
 import './HistoryFloat.css'
 
@@ -68,6 +72,7 @@ export function HistoryFloat({
   const wide = useWide()
   const cardRef = useRef<HTMLElement>(null)
   const [answer, setAnswer] = useState<Answer | null>(null)
+  const [facts, setFacts] = useState<{ readonly sku: string; readonly prices: PriceFacts['prices'] } | null>(null)
   const [place, setPlace] = useState<{ top: number; left: number; side: 'above' | 'below' }>({ top: 0, left: 0, side: 'above' })
 
   // Read only this card's history. `ProductHistory.tsx:useProductHistory` also reads every order,
@@ -81,23 +86,36 @@ export function HistoryFloat({
       alive = false
     }
   }, [sku])
+  // A failed price read leaves the prices as dashes; the history read above reports its own failure.
+  useEffect(() => {
+    let alive = true
+    getPriceFacts(sku)
+      .then((f) => alive && setFacts({ sku, prices: f.prices }))
+      .catch(() => alive && setFacts({ sku, prices: null }))
+    return () => {
+      alive = false
+    }
+  }, [sku])
   const mine = answer?.sku === sku ? answer : null
   const payload = mine?.payload ?? null
   const range = payload === null ? null : pickRange(payload)
   const postings = payload?.asking_postings
-  const asking = postings?.length ? postings[postings.length - 1]!.price : null
   const suggested = suggestion === undefined ? null : Number(suggestion)
+  const read = mine !== null && facts?.sku === sku
+  const prices = read ? facts.prices : null
+  const price = (v: string | null | undefined) => (!read ? '—' : v ? <Money value={Number(v)} /> : <span className="hfloat-quiet">not carried</span>)
 
   useLayoutEffect(() => {
     const move = () => {
       const card = cardRef.current
       if (card === null) return
       const r = anchor.getBoundingClientRect()
+      const right = (anchor.querySelector('[data-float-door]') ?? anchor).getBoundingClientRect().right
       const above = r.top - GAP >= card.offsetHeight
       setPlace({
         side: above ? 'above' : 'below',
         top: above ? r.top - GAP - card.offsetHeight : r.bottom + GAP,
-        left: Math.max(EDGE, Math.min(r.left, window.innerWidth - card.offsetWidth - EDGE)),
+        left: Math.max(EDGE, Math.min(right - card.offsetWidth, window.innerWidth - card.offsetWidth - EDGE)),
       })
     }
     move()
@@ -150,8 +168,10 @@ export function HistoryFloat({
         <p className="hfloat-name">{payload?.name ?? 'Price history'}</p>
         <IconButton icon="x" label="Close" onClick={close} tabIndex={mode === 'focus' ? -1 : undefined} {...{ 'data-history-float-close': '' }} />
       </header>
+      <h3 className="hfloat-h">Last 90 days</h3>
       <p className="hfloat-legend">
         <span><i className="hfloat-sw" />Market</span>
+        <span><i className="hfloat-sw hfloat-sw-spread" />Low to high, each week</span>
         <span><i className="hfloat-sw hfloat-sw-ask" />Your price</span>
         <span><i className="hfloat-sw hfloat-sw-sale" />Your sale</span>
         <span><i className="hfloat-sw hfloat-sw-sug" />Suggested</span>
@@ -167,11 +187,12 @@ export function HistoryFloat({
       </div>
       <footer className="hfloat-foot">
         <dl className="hfloat-facts">
-          <div><dt>Market</dt><dd>{range?.latest_market ? <Money value={Number(range.latest_market)} /> : '—'}</dd></div>
-          <div><dt>Your price</dt><dd>{asking === null ? '—' : <Money value={Number(asking)} />}</dd></div>
-          <div><dt>Suggested</dt><dd>{suggested === null ? '—' : <Money value={suggested} />}</dd></div>
+          <div><dt>Market</dt><dd>{price(range?.latest_market ?? prices?.market)}</dd></div>
+          <div><dt>Lowest</dt><dd>{price(prices?.low)}</dd></div>
+          <div><dt>Lowest, shipped</dt><dd>{price(prices?.low_with_shipping)}</dd></div>
+          <div><dt>Direct Low</dt><dd>{price(prices?.direct_low)}</dd></div>
         </dl>
-        <IconButton icon="external" label="Full history" href={`#/product?sku=${encodeURIComponent(sku)}`} tabIndex={mode === 'focus' ? -1 : undefined} />
+        <Button icon="external" tabIndex={mode === 'focus' ? -1 : undefined} onClick={() => { window.location.hash = `#/product?sku=${encodeURIComponent(sku)}` }}>Full history</Button>
       </footer>
     </section>,
     document.body,
@@ -204,6 +225,7 @@ export function HistoryFloatSpecimen() {
       <div className="hfloat-specimen">
         {SPECIMEN_ROWS.map((r, i) => (
           <div key={r.sku} className="hfloat-specimen-row" data-float-row={i} ref={(el) => { rowEls.current[i] = el }}>
+            <span className="hfloat-specimen-thumb" data-float-thumb=""><CardThumb src={null} alt="" size="sm" /></span>
             <span className="hfloat-specimen-name">{r.name}</span>
             <input
               className="bn-input bn-input-mono hfloat-specimen-price"
