@@ -3215,7 +3215,9 @@ def _owed_entries() -> List[dict]:
         seen.add(card.sku)
         state = _master_state(inventory, card, receipts, session)
         if state["state"] in OWED_STATES:
-            owed.append(dict(state, name=card.name or "", box=int(card.box), index=int(card.index)))
+            owed.append(
+                dict(state, name=card.name or "", set_name=card.set_name or "", box=int(card.box), index=int(card.index))
+            )
     return owed
 
 
