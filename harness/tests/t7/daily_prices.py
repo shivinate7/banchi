@@ -4,36 +4,47 @@ Part of `harness/tests/t7_store_and_seams.py` (one verdict). `CHECKS` is this gr
 `CHECK_ORDER` runs them. WHEN THE DAILY JOB CALLS THE READ is `harness/tests/t7/price_moves.py`'s
 `check_daily_job_reads_daily_prices_after_a_good_refresh`; this group is the read itself.
 
-NO NETWORK CALL. `FakeTcgcsv` is the `pricehistory.Fetcher` shape (url in, payload out) and serves the payloads
-TCGCSV serves. It goes through the REAL `pricehistory.Market`, so URL composition and `parse_prices` are the
-module's own; the first check proves the fake is wired right and passes on any checkout. Every other check
-imports the build inside itself, so a checkout without it fails each check with its own sentence and the rest of
-T7 still runs.
+THE KEY IS THE SOURCE'S OWN UPDATE, NEVER THE CLOCK. TCGCSV refreshes once a day and says when in
+`last-updated.txt`. A read at 23:00 and another at 05:15 the next day get the same data; a key on the Central or
+UTC date of the READ would save that data twice under two dates and corrupt the history. So a pass asks for the
+stamp first, skips when it is the newest stored one and that update is finished, and otherwise stores the rows under
+the stamp's UTC date with the full stamp beside them. `now` stamps `at` and nothing else.
+
+NO NETWORK CALL. `FakeTcgcsv` serves the payloads TCGCSV serves. The JSON ones go through the REAL
+`pricehistory.Market`, so URL composition and `parse_prices` are the module's own; the first check proves the fake is
+wired right and passes on any checkout. Every other check imports the build inside itself, so a checkout without it
+fails each check with its own sentence and the rest of T7 still runs.
 
 THE SEAMS (a builder follows these names):
 
   pipeline/dailyprices.py
     run_pass(fetch=None, *, now=None, user_agent=pricehistory.USER_AGENT) -> dict
-      fetch  url -> payload. None means `pricehistory.fetch_json(url, user_agent=user_agent)`, looked up when it
-             runs: the one HTTP client, never a second.
-      now    an aware datetime, default `store.clock.now()`. The day is `store.clock.central_day(now)` as an ISO
-             date. A row's `at` is `int(now.timestamp())`.
-      It builds its own `pricehistory.Market` with no cache directory (`PRICE_TTL_SECONDS` is seven days: a cached
-      file would serve yesterday's prices as today's). It asks `groups(89)` and `prices(89, group)` for each group.
-      It asks for no products and no categories. A group whose prices raise `pricehistory.PriceHistoryError` is
-      named in `failed` and the other groups go on. It writes through `Store().write()` and never deletes.
-      It answers {"day": ISO date, "skipped": bool, "rows": rows written by THIS call,
+      fetch  url -> payload: the text (a `str`) for `last-updated.txt`, the parsed JSON for every other URL. None
+             means the module's own client: `pricehistory.fetch_json` for JSON and a text twin of it for the stamp,
+             both through `pipeline.net.request(url, headers={"User-Agent": user_agent}, ...)`, looked up when it
+             runs. One HTTP client, never a second.
+      now    an aware datetime, default `store.clock.now()`. A row's `at` is `int(now.timestamp())`.
+      It asks for `last-updated.txt` FIRST. The stamp is `text.strip()`, e.g. "2026-10-27T03:30:00+0000"; a row's
+      `day` is its UTC date as an ISO date, and its `updated` is the stamp. It builds its own `pricehistory.Market`
+      with no cache directory (`PRICE_TTL_SECONDS` is seven days: a cached file would serve yesterday's prices as
+      today's). It asks `groups(89)` and `prices(89, group)` for each group, no products and no categories. A group
+      whose prices raise `pricehistory.PriceHistoryError` is named in `failed` and the other groups go on. It writes
+      through `Store().write()` and never deletes. A pause of at least 0.1 s sits between consecutive requests, the
+      stamp's included.
+      It answers {"day": ISO date, "updated": stamp, "skipped": bool, "rows": rows written by THIS call,
       "failed": {group_id (int): message (str)}}.
-      It skips (nothing fetched, nothing written, "skipped": True) a day that is finished: a pass that ended with no
-      failed group. A same-day retry asks again only for the prices of the groups not yet saved. Whether it asks
-      for the group list again is not pinned.
+      It skips (nothing asked for after the stamp, nothing written, "skipped": True) when the stamp equals the newest
+      stored one AND that update is finished: a pass that ended with no failed group. An update with a failed group is
+      NOT finished, so the next pass, though it sees the same stamp, asks again for the prices of the groups not yet
+      saved and for no others. Whether it asks for the group list again is not pinned.
   store/dailyprices.py
-    `DailyPrice(product_id: int, sub_type: str, day: str, market, low, mid, high, direct_low, group_id: int, at: int)`,
-    the five prices `Optional[str]` as the source gives them (`str` of the number, None for null or absent).
-    `DailyPrices` holds `.entries`, a `Rows` of `DailyPrice`, table `daily_prices`, key (product_id, sub_type, day).
-    The snapshot attribute is `Store().read().daily_prices`.
+    `DailyPrice(product_id: int, sub_type: str, day: str, market, low, mid, high, direct_low, group_id: int,
+    updated: str, at: int)`, the five prices `Optional[str]` as the source gives them (`str` of the number, None for
+    null or absent). `DailyPrices` holds `.entries`, a `Rows` of `DailyPrice`, table `daily_prices`, key
+    (product_id, sub_type, day). The snapshot attribute is `Store().read().daily_prices`.
   scripts/price-refresh-daily.py
-    after a good refresh, `from pipeline import dailyprices` then `dailyprices.run_pass(user_agent=...)`.
+    after a good refresh, `from pipeline import dailyprices` then `dailyprices.run_pass(user_agent=...)`, with or
+    without `--no-sweep`.
 
 Temp files follow the run-folder standard (test-temp-standard): each check opens one `<pid>-<UUID>` folder from
 `harness/tests/home.py:run_folder`, the store of each case lives inside it (`isolated_home` takes its folder from
@@ -44,9 +55,10 @@ is proved once, for the helper, by `t1_results.check_run_folder_sweeps_old_sibli
 from __future__ import annotations
 
 import functools
+import json
 import re
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest import mock
 
 from harness.tests import Checks
@@ -56,12 +68,18 @@ from store import clock
 from store.session import Store
 
 BASE = pricehistory.CATALOG_HOST + "/tcgplayer/89"
+STAMP_URL = pricehistory.CATALOG_HOST + "/last-updated.txt"
 
-#: One US Central day, two moments in it. LATE is 04:30 UTC on the NEXT UTC date: a day read off UTC says Oct 28.
+#: Moments a pass runs, as the Mac's clock saw them. None of them is a day a row is keyed on.
 MIDDAY = datetime(2026, 10, 27, 13, 0, tzinfo=clock.CENTRAL)
-LATE = datetime(2026, 10, 27, 23, 30, tzinfo=clock.CENTRAL)
-NEXT_DAY = MIDDAY + timedelta(days=1)
-DAY, NEXT = "2026-10-27", "2026-10-28"
+LATE = datetime(2026, 10, 27, 23, 0, tzinfo=clock.CENTRAL)
+EARLY = datetime(2026, 10, 28, 5, 15, tzinfo=clock.CENTRAL)  # the next Central day, 6 hours 15 minutes after LATE
+NEXT_DAY = datetime(2026, 10, 28, 13, 0, tzinfo=clock.CENTRAL)
+
+#: The source's updates. STAMP1 is Oct 27 in UTC and Oct 26 (22:30) in Central, so a day read off the stamp's Central
+#: date is wrong too; read from NEXT_DAY, the clock says Oct 28 in either zone. Only D1 is right.
+STAMP1, D1 = "2026-10-27T03:30:00+0000", "2026-10-27"
+STAMP2, D2 = "2026-10-28T20:05:49+0000", "2026-10-28"
 
 #: Served order matters: the group that fails in the retry check comes FIRST, so a loop that stops at the first error fails.
 GROUPS = [(102, "Spiritforged"), (101, "Origins")]
@@ -79,7 +97,7 @@ def source(product_id, sub_type, omit=(), **prices):
 
 # Prices are non-zero and have no trailing zero, so their text is the same however a builder turns a number into text
 # without reformatting it: "1.5" is as given, "1.50" is not.
-DAY1 = {
+PRICES1 = {
     101: [
         source(1001, "Normal", low=0.05, mid=0.2, high=1.5, market=0.25),
         source(1001, "Foil", low=1.5, mid=3.25, high=12.75, market=2.5, direct=2.75),
@@ -93,8 +111,8 @@ EXPECT1 = {
     (1002, "Normal"): dict(group_id=101, market=None, low="0.07", mid="0.12", high="0.9", direct_low=None),
     (2001, "Normal"): dict(group_id=102, market="4.75", low="3.5", mid="4.5", high="9.99", direct_low="4.25"),
 }
-# The next day: one price moved, one product is new, the Foil and 1002 are gone from the source, 2001 moved.
-DAY2 = {
+# The next update: one price moved, one product is new, the Foil and 1002 are gone from the source, 2001 moved.
+PRICES2 = {
     101: [
         source(1001, "Normal", low=0.06, mid=0.22, high=1.4, market=0.3),
         source(1003, "Normal", low=0.5, mid=0.75, high=2.25, market=0.6),
@@ -109,18 +127,23 @@ EXPECT2 = {
 
 
 class FakeTcgcsv:
-    """The host, as a `pricehistory.Fetcher`. `fail` is the set of group ids whose prices answer an HTTP 500; clear it
-    to mend the host. `urls` is every URL asked, in order. It answers the categories list, any category's group list and
-    any group's products as well, so a pass that asks for more than it needs fails the request-list assertions below
-    with a plain sentence, never with an error from the fake."""
+    """The host. `stamp` is what `last-updated.txt` says (served with a trailing newline, as a text file may be);
+    set it, and `prices`, to publish a new update. `fail` is the set of group ids whose prices answer an HTTP 500;
+    clear it to mend the host. `urls` is every URL asked, in order. The stamp is answered as text and every other URL
+    as JSON, and it answers the categories list, any category's group list and any group's products as well, so a
+    pass that asks for more than it needs fails the request-list assertions below with a plain sentence, never with
+    an error from the fake. As a `fetch` it is the shape `run_pass` takes."""
 
-    def __init__(self, prices, fail=()):
+    def __init__(self, prices, stamp=STAMP1, fail=()):
         self.prices = prices
+        self.stamp = stamp
         self.fail = set(fail)
         self.urls = []
 
     def __call__(self, url, *_args, **_kwargs):
         self.urls.append(url)
+        if url == STAMP_URL:
+            return self.stamp + "\n"
         path = url[len(pricehistory.CATALOG_HOST):]
         payload = {"success": True, "errors": []}
         if path == "/tcgplayer/categories":
@@ -187,11 +210,15 @@ def day_of(rows, day):
     return {key[:2]: {name: row[name] for name in wanted} for key, row in rows.items() if key[2] == day}
 
 
+def stamps_of(rows, day):
+    return {row["updated"] for key, row in rows.items() if key[2] == day}
+
+
 @in_run_folder
 def check_daily_prices_fake_goes_through_the_real_market(checks: Checks) -> None:
     checks.note("")
     checks.note("DAILY PRICES FIXTURE — the fake is read by the real Market, so the checks below test the build and not the fake")
-    fake = FakeTcgcsv(DAY1)
+    fake = FakeTcgcsv(PRICES1)
     market = pricehistory.Market(fetcher=fake, courtesy_delay=0)
     checks.equal(sorted(row["groupId"] for row in market.groups(89).values()), [101, 102], "groups(89) lists both groups")
     prices = market.prices(89, 101)
@@ -201,94 +228,101 @@ def check_daily_prices_fake_goes_through_the_real_market(checks: Checks) -> None
         "prices(89, 101) parses a number, a Foil beside its Normal, and a null",
     )
     checks.equal(sorted(fake.urls), [BASE + "/101/prices", BASE + "/groups"], "the two calls asked these two URLs")
+    checks.equal(fake(STAMP_URL), STAMP1 + "\n", "the stamp is served as text")
 
 
 @in_run_folder
 def check_daily_prices_one_pass_writes_every_row(checks: Checks) -> None:
     checks.note("")
-    checks.note("DAILY PRICES 1 — one pass writes one row per product and sub type for today's US Central day, values as given")
+    checks.note("DAILY PRICES 1 — one pass writes one row per product and sub type under the source's update, values as given")
     module = load(checks)
     if module is None:
         return
     with isolated_home():
-        fake = FakeTcgcsv(DAY1)
-        result = run(checks, module, fake, LATE, "one pass")
+        fake = FakeTcgcsv(PRICES1)
+        result = run(checks, module, fake, NEXT_DAY, "one pass")
         if result is None:
             return
         rows = table()
         checks.equal(
-            (result.get("day"), result.get("skipped"), result.get("rows"), result.get("failed")),
-            (DAY, False, 4, {}),
-            "the answer: Central day %s (UTC says %s), not skipped, 4 rows, no failed group" % (DAY, NEXT),
+            (result.get("day"), result.get("updated"), result.get("skipped"), result.get("rows"), result.get("failed")),
+            (D1, STAMP1, False, 4, {}),
+            "the answer: day %s, the stamp's UTC date (the clock says %s, the stamp's Central date is 2026-10-26), the stamp, not skipped, 4 rows, no failed group"
+            % (D1, NEXT_DAY.date().isoformat()),
         )
-        checks.equal(sorted(rows), sorted(key + (DAY,) for key in EXPECT1), "one row per product and sub type, all on the Central day")
-        checks.equal(day_of(rows, DAY), EXPECT1, "every price as given, null where the source gives null or leaves the key out, the group id kept")
-        checks.equal({row["at"] for row in rows.values()}, {int(LATE.timestamp())}, "every row carries the second the pass read")
+        checks.equal(sorted(rows), sorted(key + (D1,) for key in EXPECT1), "one row per product and sub type, all on the stamp's day")
+        checks.equal(day_of(rows, D1), EXPECT1, "every price as given, null where the source gives null or leaves the key out, the group id kept")
+        checks.equal(stamps_of(rows, D1), {STAMP1}, "every row keeps the full stamp, with the file's trailing newline gone")
+        checks.equal({row["at"] for row in rows.values()}, {int(NEXT_DAY.timestamp())}, "every row carries the second the pass read")
 
 
 @in_run_folder
-def check_daily_prices_same_day_pass_is_skipped(checks: Checks) -> None:
+def check_daily_prices_same_update_is_skipped(checks: Checks) -> None:
     checks.note("")
-    checks.note("DAILY PRICES 2 — a second pass on the same day fetches nothing and writes nothing")
+    checks.note("DAILY PRICES 2 — a second pass over the same update asks for the stamp only and writes nothing, across midnight too")
     module = load(checks)
     if module is None:
         return
     with isolated_home():
-        fake = FakeTcgcsv(DAY1)
-        first = run(checks, module, fake, MIDDAY, "first pass")
+        fake = FakeTcgcsv(PRICES1)
+        first = run(checks, module, fake, LATE, "first pass")
         if first is None:
             return
-        checks.equal((first.get("skipped"), first.get("rows")), (False, 4), "the first pass of the day reads and writes 4 rows")
+        checks.equal((first.get("skipped"), first.get("rows")), (False, 4), "the first pass reads and writes 4 rows")
         before = table()
         fake.urls.clear()
-        # LATE is the same Central day as MIDDAY and the next UTC day: a guard keyed on the UTC date would read again.
-        second = run(checks, module, fake, LATE, "second pass")
+        # EARLY is the next Central day: a key on the day of the read would save these rows again under Oct 28.
+        second = run(checks, module, fake, EARLY, "second pass")
         if second is None:
             return
         checks.equal((second.get("skipped"), second.get("rows"), second.get("failed")), (True, 0, {}), "the answer says skipped, 0 rows")
-        checks.equal(fake.urls, [], "the host is asked for nothing, not even the group list")
+        checks.equal(fake.urls, [STAMP_URL], "the host is asked for the stamp and for nothing more, not even the group list")
         checks.equal(table(), before, "every row is as it was, `at` included")
 
 
 @in_run_folder
-def check_daily_prices_next_day_adds_rows_and_keeps_old_ones(checks: Checks) -> None:
+def check_daily_prices_new_update_adds_rows_and_keeps_old_ones(checks: Checks) -> None:
     checks.note("")
-    checks.note("DAILY PRICES 3 — the next day adds rows and keeps the old ones, whatever the source stopped listing")
+    checks.note("DAILY PRICES 3 — a new update adds rows and keeps the old ones, whatever the source stopped listing")
     module = load(checks)
     if module is None:
         return
     with isolated_home():
-        fake = FakeTcgcsv(DAY1)
-        if run(checks, module, fake, MIDDAY, "day one") is None:
+        fake = FakeTcgcsv(PRICES1)
+        if run(checks, module, fake, MIDDAY, "update one") is None:
             return
         day_one = table()
-        fake.prices = DAY2
+        fake.stamp, fake.prices = STAMP2, PRICES2
         fake.urls.clear()
-        result = run(checks, module, fake, NEXT_DAY, "day two")
+        result = run(checks, module, fake, NEXT_DAY, "update two")
         if result is None:
             return
         rows = table()
-        checks.equal((result.get("day"), result.get("skipped"), result.get("rows")), (NEXT, False, 3), "day two: its own day, not skipped, 3 rows")
+        checks.equal(
+            (result.get("day"), result.get("updated"), result.get("skipped"), result.get("rows")), (D2, STAMP2, False, 3),
+            "update two: its own day and stamp, not skipped, 3 rows",
+        )
         checks.equal(
             sorted(url for url in fake.urls if url.endswith("/prices")), [BASE + "/101/prices", BASE + "/102/prices"],
-            "day two asked for every group's file again: a week-long cache would hand back day one's",
+            "update two asked for every group's file again: a week-long cache would hand back update one's",
         )
-        checks.equal(day_of(rows, NEXT), EXPECT2, "day two holds day two's prices, as given")
-        checks.equal({row["at"] for key, row in rows.items() if key[2] == NEXT}, {int(NEXT_DAY.timestamp())}, "day two's rows carry day two's second")
-        checks.equal({key: row for key, row in rows.items() if key[2] == DAY}, day_one, "day one's rows are untouched, `at` included")
-        checks.ok((1001, "Foil", DAY) in rows and (1002, "Normal", DAY) in rows, "a product the source stopped listing keeps its day-one row")
+        checks.equal(day_of(rows, D2), EXPECT2, "update two holds update two's prices, as given")
+        checks.equal(stamps_of(rows, D2), {STAMP2}, "its rows keep its stamp")
+        checks.equal({row["at"] for key, row in rows.items() if key[2] == D2}, {int(NEXT_DAY.timestamp())}, "its rows carry the second of the pass that read them")
+        checks.equal({key: row for key, row in rows.items() if key[2] == D1}, day_one, "update one's rows are untouched, `at` included")
+        checks.ok((1001, "Foil", D1) in rows and (1002, "Normal", D1) in rows, "a product the source stopped listing keeps its update-one row")
         checks.equal(len(rows), len(day_one) + 3, "the table holds 4 + 3 rows: nothing deleted, nothing doubled")
 
 
 @in_run_folder
 def check_daily_prices_failing_group_is_named_and_retried(checks: Checks) -> None:
     checks.note("")
-    checks.note("DAILY PRICES 4 — a failing group is named, the others go on, the day stays open, the retry asks for the failed group only")
+    checks.note("DAILY PRICES 4 — a failing group is named, the others go on, the update stays open, the retry asks for the failed group only")
     module = load(checks)
     if module is None:
         return
     with isolated_home():
-        fake = FakeTcgcsv(DAY1, fail={102})
+        fake = FakeTcgcsv(PRICES1, fail={102})
         first = run(checks, module, fake, MIDDAY, "first pass")
         if first is None:
             return
@@ -296,38 +330,41 @@ def check_daily_prices_failing_group_is_named_and_retried(checks: Checks) -> Non
         checks.equal(set(failed), {102}, "the answer names group 102, the one that failed, and no other")
         checks.ok(all(isinstance(message, str) and message for message in failed.values()), "the answer carries a sentence for it", str(failed))
         checks.equal((first.get("skipped"), first.get("rows")), (False, 3), "the pass is not skipped and wrote the 3 rows of group 101, which was served after the failing one")
-        checks.equal(sorted(table()), sorted(key + (DAY,) for key in EXPECT1 if EXPECT1[key]["group_id"] == 101), "only group 101's rows are in the table")
+        checks.equal(sorted(table()), sorted(key + (D1,) for key in EXPECT1 if EXPECT1[key]["group_id"] == 101), "only group 101's rows are in the table")
         fake.fail.clear()
         fake.urls.clear()
+        # The stored stamp now equals the source's, and the update is still unfinished: a guard that compares stamps alone skips here.
         retry = run(checks, module, fake, LATE, "retry")
         if retry is None:
             return
-        checks.equal((retry.get("skipped"), retry.get("rows"), retry.get("failed")), (False, 1, {}), "the same-day retry is not skipped: it wrote the 1 row that was missing, with no failure")
+        checks.equal((retry.get("skipped"), retry.get("rows"), retry.get("failed")), (False, 1, {}), "the retry over the same stamp is not skipped: it wrote the 1 row that was missing, with no failure")
         checks.equal(sorted(url for url in fake.urls if url.endswith("/prices")), [BASE + "/102/prices"], "the retry asked for the failed group's file and not for group 101's again")
-        checks.equal(day_of(table(), DAY), EXPECT1, "the day is whole now: all 4 rows, none doubled")
+        checks.equal(day_of(table(), D1), EXPECT1, "the update is whole now: all 4 rows, none doubled")
+        checks.equal(stamps_of(table(), D1), {STAMP1}, "every row, the retried one too, keeps the one stamp")
         fake.urls.clear()
         third = run(checks, module, fake, LATE, "third pass")
         if third is None:
             return
-        checks.equal((third.get("skipped"), third.get("rows"), fake.urls), (True, 0, []), "a clean pass finishes the day: the third pass fetches nothing")
+        checks.equal((third.get("skipped"), third.get("rows"), fake.urls), (True, 0, [STAMP_URL]), "a clean pass finishes the update: the third pass asks for the stamp and nothing more")
 
 
 @in_run_folder
 def check_daily_prices_only_category_89_and_the_request_budget(checks: Checks) -> None:
     checks.note("")
-    checks.note("DAILY PRICES 5 — only category 89: its group list and one prices file per group, nothing else, nothing twice")
+    checks.note("DAILY PRICES 5 — only category 89: the stamp, its group list, one prices file per group, nothing else, nothing twice")
     module = load(checks)
     if module is None:
         return
     with isolated_home():
-        fake = FakeTcgcsv(DAY1)
+        fake = FakeTcgcsv(PRICES1)
         if run(checks, module, fake, MIDDAY, "the pass") is None:
             return
         categories = {url.split("/tcgplayer/")[1].split("/")[0] for url in fake.urls if "/tcgplayer/" in url}
-        checks.equal(categories, {"89"}, "every URL is under /tcgplayer/89/ (Riftbound): no categories list, no other category")
+        checks.equal(categories, {"89"}, "every URL under /tcgplayer/ is under /tcgplayer/89/ (Riftbound): no categories list, no other category")
+        checks.equal(fake.urls[:1], [STAMP_URL], "the first request is the stamp")
         checks.equal(
-            sorted(fake.urls), sorted([BASE + "/groups", BASE + "/101/prices", BASE + "/102/prices"]),
-            "exactly the group list and one prices file per group, no products call: that is the day's request budget",
+            sorted(fake.urls[1:]), sorted([BASE + "/groups", BASE + "/101/prices", BASE + "/102/prices"]),
+            "then exactly the group list and one prices file per group, no products call: that is the day's request budget",
         )
         checks.equal(len(fake.urls), len(set(fake.urls)), "no file is asked for twice in a pass")
 
@@ -340,33 +377,34 @@ def check_daily_prices_site_rules_user_agent_and_pause(checks: Checks) -> None:
     if module is None:
         return
     with isolated_home():
-        fake = FakeTcgcsv(DAY1)
+        fake = FakeTcgcsv(PRICES1)
         agents, slept = [], []
 
-        def fetch_json(url, timeout=None, user_agent=None):
-            agents.append(user_agent)
-            return fake(url)
+        def request(url, headers=None, **_kwargs):
+            agents.append((headers or {}).get("User-Agent"))
+            answer = fake(url)
+            return (answer if isinstance(answer, str) else json.dumps(answer)).encode()
 
         no_second_client = mock.patch("urllib.request.urlopen", side_effect=AssertionError("a second HTTP client was used"))
-        with mock.patch.object(pricehistory, "fetch_json", fetch_json), mock.patch("time.sleep", slept.append), no_second_client:
+        with mock.patch.object(pricehistory.net, "request", request), mock.patch("time.sleep", slept.append), no_second_client:
             try:
                 result = module.run_pass(now=MIDDAY, user_agent="banchi-test/9.9")
             except Exception as exc:  # noqa: BLE001 a crash is a failed case with its own sentence
                 checks.ok(False, "the pass ran with no fetch given", "%s: %s" % (type(exc).__name__, exc))
                 return
-        checks.equal(result.get("rows"), 4, "with no fetch given the pass reads through `pricehistory.fetch_json`: 4 rows")
+        checks.equal(result.get("rows"), 4, "with no fetch given the pass reads, the stamp included, through `pipeline.net.request`: 4 rows")
         checks.equal(set(agents), {"banchi-test/9.9"}, "every request carries the User-Agent it was handed, and there are %d of them" % len(agents))
         checks.ok(
             len(slept) >= len(fake.urls) - 1 and all(seconds >= 0.1 for seconds in slept),
-            "a pause of at least 0.1 s sits between consecutive requests", "%d requests, pauses %s" % (len(fake.urls), slept),
+            "a pause of at least 0.1 s sits between consecutive requests, the stamp's included", "%d requests, pauses %s" % (len(fake.urls), slept),
         )
 
 
 CHECKS = (
     check_daily_prices_fake_goes_through_the_real_market,
     check_daily_prices_one_pass_writes_every_row,
-    check_daily_prices_same_day_pass_is_skipped,
-    check_daily_prices_next_day_adds_rows_and_keeps_old_ones,
+    check_daily_prices_same_update_is_skipped,
+    check_daily_prices_new_update_adds_rows_and_keeps_old_ones,
     check_daily_prices_failing_group_is_named_and_retried,
     check_daily_prices_only_category_89_and_the_request_budget,
     check_daily_prices_site_rules_user_agent_and_pause,
