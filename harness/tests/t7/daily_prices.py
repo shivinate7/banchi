@@ -28,7 +28,10 @@ THE SEAMS (a builder follows these names):
       It asks for `last-updated.txt` FIRST. The stamp is `text.strip()`, e.g. "2026-10-27T03:30:00+0000"; a row's
       `day` is its UTC date as an ISO date, and its `updated` is the stamp. It builds its own `pricehistory.Market`
       with no cache directory (`PRICE_TTL_SECONDS` is seven days: a cached file would serve yesterday's prices as
-      today's). It asks `groups(89)` and `prices(89, group)` for each group, no products and no categories. A group
+      today's). It asks `groups(89)` and `prices(89, group)` for each group, no products and no categories. A row of
+      the group list with no `groupId`, or that is no dict, is skipped and the usable rows are read; a list with no
+      usable row (none, or no list at all) raises `pricehistory.PriceHistoryError`, saves nothing and leaves the
+      update open. A group
       FAILS, is named in `failed`, and the other groups go on, when its prices raise `pricehistory.PriceHistoryError`,
       when its payload is not a dict or has no list under `results`, or when it says `"success": false`. A reply of
       `"success": true` with `results: []` is a real, empty group: saved with the rest, never asked again for that
@@ -139,6 +142,9 @@ EXPECT2 = {
 }
 
 
+NO_REPLY = object()  # "answer as usual", for a fake field that may itself be set to None
+
+
 class FakeTcgcsv:
     """The host. `stamp` is what `last-updated.txt` says (served with a trailing newline, as a text file may be);
     set it, and `prices`, to publish a new update. `fail` is the set of group ids whose prices answer an HTTP 500;
@@ -148,13 +154,15 @@ class FakeTcgcsv:
     an error from the fake. As a `fetch` it is the shape `run_pass` takes.
 
     `groups` is the served group list. `replies` maps a group id to what its prices URL answers INSTEAD of `prices`: an
-    exception instance is raised (a `BaseException` too), anything else is returned as it is, of whatever type."""
+    exception instance is raised (a `BaseException` too), anything else is returned as it is, of whatever type.
+    `group_list`, once set, is what the group list answers instead of `groups`, as it is."""
 
     def __init__(self, prices, stamp=STAMP1, fail=()):
         self.prices = prices
         self.stamp = stamp
         self.fail = set(fail)
         self.groups = list(GROUPS)
+        self.group_list = NO_REPLY
         self.replies = {}
         self.urls = []
 
@@ -167,6 +175,8 @@ class FakeTcgcsv:
         if path == "/tcgplayer/categories":
             return {**payload, "results": [{"categoryId": 89, "name": "Riftbound"}]}
         if re.fullmatch(r"/tcgplayer/\d+/groups", path):
+            if self.group_list is not NO_REPLY:
+                return self.group_list
             return {**payload, "results": [{"groupId": g, "name": n} for g, n in self.groups]}
         found = re.fullmatch(r"/tcgplayer/\d+/(\d+)/(prices|products)", path)
         if found and found.group(2) == "products":
@@ -505,6 +515,56 @@ def check_daily_prices_malformed_group_payload_fails_only_that_group(checks: Che
             )
 
 
+UNUSABLE_LISTS = (
+    ("only bad rows", {"success": True, "errors": [], "results": [{"name": "No id"}, "not a dict", None, 7]}),
+    ("no rows", {"success": True, "errors": [], "results": []}),
+    ("a payload that is no dict", ["not", "a", "dict"]),
+    ("no results key", {"success": True, "errors": []}),
+)
+
+
+@in_run_folder
+def check_daily_prices_bad_group_list_rows_are_skipped_and_an_unusable_list_fails(checks: Checks) -> None:
+    checks.note("")
+    checks.note("DAILY PRICES GROUP LIST — a row with no groupId and a row that is no dict are skipped; a list with no usable row fails the pass, update open")
+    module = load(checks)
+    if module is None:
+        return
+    with isolated_home():
+        fake = FakeTcgcsv(PRICES1)
+        fake.group_list = {
+            "success": True, "errors": [],
+            "results": [{"name": "No id here"}, "not a dict", {"groupId": 101, "name": "Origins"}],
+        }
+        result = run(checks, module, fake, MIDDAY, "a list with one good row among two bad")
+        if result is not None:
+            checks.equal(
+                (result.get("skipped"), result.get("rows")), (False, 3),
+                "the good group is read and its 3 rows are saved, the bad rows skipped",
+            )
+            checks.equal(
+                sorted(url for url in fake.urls if url.endswith("/prices")), [BASE + "/101/prices"],
+                "and group 101 is the only group asked for",
+            )
+            checks.equal(sorted(table()), sorted(key + (D1,) for key in EXPECT1 if EXPECT1[key]["group_id"] == 101), "only group 101's rows are in the table")
+    for label, bad in UNUSABLE_LISTS:
+        with isolated_home():
+            fake = FakeTcgcsv(PRICES1)
+            fake.group_list = bad
+            checks.raises(pricehistory.PriceHistoryError, functools.partial(module.run_pass, fake, now=MIDDAY), "%s: the pass fails with a price-service error" % label)
+            checks.equal(sorted(table()), [], "%s: nothing is saved" % label)
+            fake.group_list = NO_REPLY
+            fake.urls.clear()
+            retry = run(checks, module, fake, LATE, "%s: the next pass, the list mended" % label)
+            if retry is None:
+                continue
+            checks.equal(
+                (retry.get("skipped"), retry.get("rows"), retry.get("failed"), sorted(url for url in fake.urls if url.endswith("/prices"))),
+                (False, 4, {}, [BASE + "/101/prices", BASE + "/102/prices"]),
+                "%s: the update stayed open, and the next pass reads both groups" % label,
+            )
+
+
 @in_run_folder
 def check_daily_prices_a_crash_keeps_nothing_of_the_pass(checks: Checks) -> None:
     checks.note("")
@@ -677,6 +737,7 @@ CHECKS = (
     check_daily_prices_failing_group_is_named_and_retried,
     check_daily_prices_unsuccessful_group_fails_and_an_empty_one_does_not,
     check_daily_prices_malformed_group_payload_fails_only_that_group,
+    check_daily_prices_bad_group_list_rows_are_skipped_and_an_unusable_list_fails,
     check_daily_prices_a_crash_keeps_nothing_of_the_pass,
     check_daily_prices_throttle_waits_then_stops_after_two_answers,
     check_daily_prices_only_category_89_and_the_request_budget,
