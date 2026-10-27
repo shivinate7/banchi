@@ -2375,11 +2375,12 @@ def _price_check(record: dict, live_prices: Dict[str, str], live_now: Dict[str, 
     }
 
 
-def _outstanding_takes() -> set:
+def _outstanding_takes(receipts: Optional[Sequence[Tuple[str, dict]]] = None) -> set:
     """The SKUs with a take-off outstanding: written (a press or a download) and neither settled
-    by a live read nor lapsed as never landed. A failed press wrote nothing that can land."""
+    by a live read nor lapsed as never landed. A failed press wrote nothing that can land.
+    A caller listing many cards passes the `receipts` it already read."""
     out: set = set()
-    for _stamp, record in _receipts():
+    for _stamp, record in _receipts() if receipts is None else receipts:
         if record.get("failure") or record.get("taken_back_at"):
             continue
         for sku in record.get("taken_off") or {}:
@@ -3007,8 +3008,10 @@ def _has_session() -> bool:
     return True
 
 
-def _master_state(inventory, card) -> dict:
-    """One master_set card's take-off, from the store and the receipts. No socket, no write."""
+def _master_state(inventory, card, receipts=None, session: Optional[bool] = None) -> dict:
+    """One master_set card's take-off, from the store and the receipts. No socket, no write.
+    The owed list passes the `receipts` and the `session` answer it read once for every card."""
+    receipts = _receipts() if receipts is None else receipts
     sku = card.sku or ""
     listing = inventory.listings.get(sku) if sku else None
     on_hand = len(inventory.copies_on_hand(sku)) if sku else 0
@@ -3019,7 +3022,7 @@ def _master_state(inventory, card) -> dict:
     mine = next(
         (
             (stamp, record)
-            for stamp, record in _receipts()
+            for stamp, record in receipts
             if sku
             and (record.get("take_off_for") or {}).get("sku") == sku
             and (record.get("take_off_for") or {}).get("retired_at") == card.state_at
@@ -3028,20 +3031,20 @@ def _master_state(inventory, card) -> dict:
     )
     record = mine[1] if mine else {}
     failure = (record.get("failure") or {}).get("message")
-    if sku and sku in _outstanding_takes():
+    lapsed = sku in (record.get("take_lapsed") or [])
+    if sku and sku in _outstanding_takes(receipts):
         state = TAKE_ON_ITS_WAY
-    elif failure:
-        state = TAKE_FAILED
-    elif sku in (record.get("take_lapsed") or []):
-        state = TAKE_FAILED
-        failure = "TCGplayer still showed the copy after the wait, so the take-off did not land."
     elif sku in (record.get("take_settled") or []):
         state = TAKE_SENT
     elif excess <= 0:
+        # A FAILED TRY THE LISTING SINCE CAUGHT UP WITH IS NOT OWED.
         state = TAKE_MATCHES
+    elif failure or lapsed:
+        state = TAKE_FAILED
+        failure = failure or "TCGplayer still showed the copy after the wait, so the take-off did not land."
     else:
         state = TAKE_OFFERED
-    if state in (TAKE_OFFERED, TAKE_FAILED) and not _has_session():
+    if state in (TAKE_OFFERED, TAKE_FAILED) and not (_has_session() if session is None else session):
         state = TAKE_NO_SESSION
     return {
         "state": state,
@@ -3177,3 +3180,71 @@ def _master_take_off(box: int, index: int, card) -> dict:
         _settle(directory, caught)
         raise
     return {"take_off": master_take_off_state(box, index), "send": answer["send"]}
+
+
+# ------------------------------------------------------- the owed list, on the Pricing send card
+#
+# A take-off not pressed, or one that failed, is OWED until it is sent and settled, the listing
+# matches, or the retirement is undone (`docs/specs/master-set.md` section 5). Its own read beside
+# `GET /pipeline/sends`, not a field on it: the owed list reads every retired card (`retire_reason`
+# is no indexed column), and that send read is budgeted at a constant cost per call.
+
+OWED_STATES = (TAKE_OFFERED, TAKE_FAILED, TAKE_NO_SESSION)
+
+
+def _owed_entries() -> List[dict]:
+    """One entry per SKU with a take-off owed, newest pull first, from one read of the store and
+    of the receipts. Two pulls of one SKU are one entry: the take-off is sized per SKU."""
+    inventory = Store().read().inventory
+    receipts = _receipts()
+    session = _has_session()
+    pulled = sorted(
+        (
+            card
+            for card in inventory.cards.where(state=master.RETIRED)
+            if card.retire_reason == master.MASTER_SET and card.sku
+        ),
+        key=lambda card: card.state_at or "",
+        reverse=True,
+    )
+    seen: set = set()
+    owed: List[dict] = []
+    for card in pulled:
+        if card.sku in seen:
+            continue
+        seen.add(card.sku)
+        state = _master_state(inventory, card, receipts, session)
+        if state["state"] in OWED_STATES:
+            owed.append(dict(state, name=card.name or "", box=int(card.box), index=int(card.index)))
+    return owed
+
+
+def do_owed_take_offs() -> dict:
+    """`GET /pipeline/sends/owed` — every master_set take-off still owed, for the send card. Reads
+    the store and the receipts and opens no socket. `no_session` entries are listed (with no
+    press) so they show once a sign-in exists."""
+    return {"owed": _owed_entries()}
+
+
+def do_press_owed_take_offs(payload: dict) -> dict:
+    """`POST /pipeline/sends/owed` — press every owed take-off on one confirm.
+
+    Each entry goes through `do_master_take_off` on its own: its own live read, its own receipt,
+    the one-outstanding-per-SKU rule. A refusal stops that entry only, and every entry is answered.
+    """
+    if payload.get("confirm") is not True:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "confirm_required",
+            "A take-off reaches TCGplayer and lowers a live listing, so it needs your confirmation. Nothing was sent.",
+        )
+    results = []
+    for entry in _owed_entries():
+        said = {key: entry[key] for key in ("name", "sku", "box", "index")}
+        try:
+            answer = do_master_take_off(entry["box"], entry["index"], {"confirm": True})
+        except PipelineRefusal as refusal:
+            results.append(dict(said, take_off=None, refused=refusal.code, message=str(refusal)))
+        else:
+            results.append(dict(said, take_off=answer["take_off"], refused=None, message=None))
+    return {"results": results}
