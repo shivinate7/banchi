@@ -358,6 +358,33 @@ judge_write "$WT" "$HOME/.claude/projects/x/memory/note.md"
 if [ $? -eq 0 ]; then ok "a memory file under the user's own ~/.claude passes"
 else bad "a write into ~/.claude was refused"; printf '%s\n' "$out" | head -4; fi
 
+# THE SIDE-SESSION NOTES FOLDER HOLDS A SPACE (`Application Support`), so each way a shell
+# spells that space is a case of its own: quoted twice over and backslash-escaped. The folder is
+# judged, never written, so the real one is untouched. The refusals beside it are what keep the
+# allowance one folder wide: a sibling, a prefix sibling and a compound that ends in the other
+# checkout. A plain Write or redirect into the other checkout is pinned above and below.
+notes="$HOME/Library/Application Support/Claude-Work/side-session-notes"
+notes_esc="$(printf '%s' "$notes" | sed 's/ /\\ /g')"
+other="$HOME/Library/Application Support/Claude-Work/other"
+other_esc="$(printf '%s' "$other" | sed 's/ /\\ /g')"
+
+judge_write "$WT" "$notes/n.md"
+if [ $? -eq 0 ]; then ok "a Write into the side-session notes folder passes"
+else bad "a Write into the notes folder was refused"; printf '%s\n' "$out" | head -4; fi
+allows "a double-quoted redirect into the notes folder"   "$WT" "echo x > \"$notes/n.md\""
+allows "a single-quoted redirect into the notes folder"   "$WT" "echo x > '$notes/n.md'"
+allows "a backslash-escaped redirect into the notes folder" "$WT" "echo x > $notes_esc/n.md"
+allows "\`tee\` with a quoted path into the notes folder" "$WT" "echo x | tee \"$notes/n.md\""
+
+judge_write "$WT" "$other/n.md"
+if [ $? -eq 2 ]; then ok "a Write into a sibling of the notes folder is refused"
+else bad "a Write into a sibling of the notes folder was allowed"; fi
+refuses "a quoted redirect into a sibling of the notes folder"      "$WT" "echo x > \"$other/n.md\""
+refuses "an escaped redirect into a sibling of the notes folder"    "$WT" "echo x > $other_esc/n.md"
+refuses "a redirect into a folder named like the notes folder plus a suffix" "$WT" "echo x > \"$notes-evil/n.md\""
+refuses "a redirect into the notes folder, then one into the other checkout" "$WT" \
+  "echo x > \"$notes/n.md\" && echo y > $tmp/main/work.py"
+
 mkdir -p "$tmp/scratch"
 judge_write "$WT" "$tmp/scratch/out.json"
 if [ $? -eq 0 ]; then ok "a scratch file in a temp directory that is no checkout passes"
