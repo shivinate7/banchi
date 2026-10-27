@@ -260,9 +260,20 @@ def _daily_prices_stand_in(read=None):
     read = read if read is not None else mock.Mock(return_value=DAILY_PASS_SKIPPED)
     stand_in = types.SimpleNamespace(run_pass=read)
     import pipeline
-    with mock.patch.dict(sys.modules, {"pipeline.dailyprices": stand_in}), \
-            mock.patch.object(pipeline, "dailyprices", stand_in, create=True):
-        yield read
+    # ONE KEY IS PUT BACK, NEVER THE WHOLE `sys.modules`: `_run_main` execs the job script in here, and a module
+    # first imported inside (`launchagent`, a lazy `server.tcg_export`) must stay, or a later import would make a
+    # second copy that a patch on the first never reaches.
+    key, absent = "pipeline.dailyprices", object()
+    saved = sys.modules.get(key, absent)
+    sys.modules[key] = stand_in
+    try:
+        with mock.patch.object(pipeline, "dailyprices", stand_in, create=True):
+            yield read
+    finally:
+        if saved is absent:
+            sys.modules.pop(key, None)
+        else:
+            sys.modules[key] = saved
 
 
 class _Host:
