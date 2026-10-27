@@ -10,7 +10,11 @@ and does the one thing this module exists to do: ask the live endpoint for every
 turn what it hands back into `store/pricearchive.py:Bucket` rows keyed the way that module
 argues they must be.
 
-THE SUBJECT IS EVERY DISTINCT SKU THE `cards` TABLE NAMES. A card keeps its `sku` for as
+THE SUBJECT SET HAS THREE SOURCES, `cards` FIRST: the `cards` table, then (given a `Market`)
+the order ledger's sealed and rescued lines, then (given `include_catalog`, which the sweep
+always passes) every Riftbound Near Mint, Near Mint Foil and Unopened SKU in the `skus`
+table — the whole set, for a whole-set sold-price history. The rest of this paragraph
+describes the first source. THE `cards` SOURCE IS EVERY DISTINCT SKU THE `cards` TABLE NAMES. A card keeps its `sku` for as
 long as it exists in the store, sold or not — D26/D134 retire a box and reclaim a sold card's
 photograph, but the record and its SKU stay (`store/master.py:STATES` includes `sold` as a
 state a card carries, never a deletion) — so "every name the owner has sold or holds" is
@@ -563,6 +567,8 @@ def rows_from_store(
     market: Optional[_MarketLike] = None,
     refusals: Optional[Dict[str, str]] = None,
     fallback_rows: Optional[Dict[str, dict]] = None,
+    *,
+    include_catalog: bool = False,
 ) -> Dict[str, dict]:
     """`sku -> export-shaped row`, one per distinct SKU this store can price a subject for,
     ORDERED BY WHAT THAT SKU HAS ACTUALLY SOLD FOR
@@ -603,6 +609,17 @@ def rows_from_store(
     `refusals`, when given, is filled in place with every ledger SKU this pass could not
     resolve and why — `CLAUDE.md`'s both-directions rule, carried past this function's own
     return shape rather than dropped at the boundary.
+
+    THE CATALOG IS THE THIRD SOURCE, LAST, WHEN `include_catalog` IS TRUE: every Riftbound
+    SKU in the store's `skus` table (`merged_export_rows_by_sku`) in a Near Mint string or
+    `Unopened` that `cards` and the ledger do not already answer, so the sweep builds a
+    whole-set sold-price history and not only the owner's own names. They are appended AFTER
+    `rank_by_revenue` has placed every older subject, then ranked among themselves — merging
+    them before the rank would let a catalog SKU outrank a card the owner holds. A `cards` or
+    ledger row always wins. A ledger refusal whose SKU has an included catalog row is no
+    longer a refusal: it is a subject from that row. Needs no `market`: a `skus` row is
+    already export-shaped. Default off, so `pipeline/productview.py:row_for_sku` and every
+    other bare caller keep D219's cards-and-ledger set.
     """
     snapshot = snapshot if snapshot is not None else Store().read()
     unranked: Dict[str, dict] = {}
@@ -630,7 +647,21 @@ def rows_from_store(
             fallback_rows.update(card_fallback)
 
     revenue = revenue_by_sku(snapshot.ledger)
-    return {sku: unranked[sku] for sku in rank_by_revenue(unranked.keys(), revenue)}
+    ranked = {sku: unranked[sku] for sku in rank_by_revenue(unranked.keys(), revenue)}
+    if include_catalog:
+        wanted = games.near_mint_conditions("riftbound") | {tcgcsv.SEALED_CONDITION}
+        tail = {
+            sku: row
+            for sku, row in merged_export_rows_by_sku(snapshot).items()
+            if sku not in ranked
+            and games.game_for_product_line(row.get(tcgcsv.PRODUCT_LINE_COLUMN, "")) == "riftbound"
+            and str(row.get(tcgcsv.CONDITION_COLUMN, "")).strip() in wanted
+        }
+        for sku in rank_by_revenue(tail.keys(), revenue):
+            ranked[sku] = tail[sku]
+            if refusals is not None:
+                refusals.pop(sku, None)
+    return ranked
 
 
 def sweep(

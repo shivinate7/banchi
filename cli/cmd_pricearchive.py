@@ -187,6 +187,7 @@ def _sweep(args, say) -> int:
     fallback_rows: Dict[str, dict] = {}
     rows = archive_walk.rows_from_store(
         market=market, refusals=ledger_refusals, fallback_rows=fallback_rows,
+        include_catalog=True,
     )
     ranges = pricehistory.RANGES
     if not rows:
