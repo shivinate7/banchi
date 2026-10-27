@@ -10,11 +10,13 @@ and does the one thing this module exists to do: ask the live endpoint for every
 turn what it hands back into `store/pricearchive.py:Bucket` rows keyed the way that module
 argues they must be.
 
-THE SUBJECT SET HAS THREE SOURCES, `cards` FIRST: the `cards` table, then (given a `Market`)
-the order ledger's sealed and rescued lines, then (given `include_catalog`, which the sweep
-always passes) every Riftbound Near Mint, Near Mint Foil and Unopened SKU in the `skus`
-table — the whole set, for a whole-set sold-price history. The rest of this paragraph
-describes the first source. THE `cards` SOURCE IS EVERY DISTINCT SKU THE `cards` TABLE NAMES. A card keeps its `sku` for as
+THE SUBJECT SET HAS THREE SOURCES, `cards` FIRST: the `cards` table, then (given a
+`Market`) the order ledger's sealed and rescued lines, then (given `include_catalog`, which
+the sweep always passes) up to `CATALOG_SKUS_PER_PASS` Riftbound Near Mint, Near Mint Foil
+and Unopened SKUs from the `skus` table, stalest first, for a whole-set sold-price history
+(D231). The rest of this paragraph describes the first source.
+
+THE `cards` SOURCE IS EVERY DISTINCT SKU THE `cards` TABLE NAMES. A card keeps its `sku` for as
 long as it exists in the store, sold or not — D26/D134 retire a box and reclaim a sold card's
 photograph, but the record and its SKU stay (`store/master.py:STATES` includes `sold` as a
 state a card carries, never a deletion) — so "every name the owner has sold or holds" is

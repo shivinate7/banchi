@@ -136,8 +136,9 @@ The pattern is the readings table and its adopt command. `store/pricearchive.py`
 - **The archive never deletes a row.** A bucket that a later sweep does not mention stays as it was.
   It may have aged out of the source, or its SKU may have fallen outside a narrower pass. This is the
   opposite of `readings adopt`, which is a full replace.
-- **The sweep's subject is every distinct SKU that `cards` has ever recorded.** Sold and held cards
-  both keep their rows (D26, D134).
+- **The sweep's subjects are three sources** (D231): every distinct SKU that `cards` has ever
+  recorded (sold and held cards both keep their rows, D26, D134), every SKU the order ledger sold,
+  and up to 600 Riftbound catalog SKUs per pass, stalest first.
 - **The daily price job runs the sweep after its refresh.** The owner's word is "nightly, on the Mac"
   (D224).
 

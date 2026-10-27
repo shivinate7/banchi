@@ -72,6 +72,26 @@ is bounded by the number of Product Lines this repo catalogues — three, today.
 `cli/cmd_pricearchive.py`'s own docstring says so now. D224's larger claims are untouched:
 no re-fetch of the archived buckets themselves, commit-per-chunk, resumable.
 
+### The catalog is the third subject source
+
+`rows_from_store(include_catalog=True)` adds every Riftbound SKU in the store's `skus`
+table (the whole catalog, read from catalog exports) in Near Mint, Near Mint Foil or
+`Unopened`. Other games and worn conditions stay out. The purpose is a whole-set
+sold-price history for the price research in PR #964, not only the owner's own names.
+`Unopened` is the orchestrator's reversible pick, not an owner ruling.
+
+- `cards` and the ledger always win a SKU they answer. A ledger refusal that has an included
+  catalog row becomes a sold subject built from that row, ranked by revenue in the head. The
+  head is never capped.
+- Every other catalog SKU is the tail, after the head, stalest first: SKUs with no archived
+  bucket, then the oldest per-range newest read, SKU as the tiebreak.
+- The tail is capped at `CATALOG_SKUS_PER_PASS` (600). The cap bounds a pass's extra requests
+  and how long the sweep holds the refresh lock. Stalest first rotates the whole catalog
+  across nights.
+- `cli/cmd_pricearchive.py:_sweep` passes `include_catalog=True`, so `banchi archive sweep`
+  and the daily price job reach it. Pacing, throttle handling, resume and freshness (D222,
+  D224) are untouched.
+
 ### What this does not touch
 
 `rank_by_revenue`'s own ranking logic is unchanged. It was already handed every key

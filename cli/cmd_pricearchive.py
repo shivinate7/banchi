@@ -193,8 +193,8 @@ def _sweep(args, say) -> int:
     )
     ranges = pricehistory.RANGES
     if not rows:
-        say("no card in this store carries a SKU, and no order-ledger line resolved to a "
-            "sealed subject either — nothing to sweep")
+        say("no card, order-ledger line or Riftbound catalog SKU in this store resolved to "
+            "a subject — nothing to sweep")
         return 0
 
     if ledger_refusals:
@@ -205,8 +205,9 @@ def _sweep(args, say) -> int:
         say("")
 
     say(f"{len(rows)} sku(s) subject to this pass, over {len(ranges)} range(s) "
-        f"({', '.join(ranges)}) — sold value first")
-    say(f"up to {len(rows) * len(ranges)} request(s) if none of it is already archived")
+        f"({', '.join(ranges)}) — sold value first, then the stalest catalog SKUs")
+    say(f"up to {len(rows) * len(ranges)} request(s) if none of it is already archived "
+        "(the catalog share is capped per pass)")
 
     if not args.write:
         return _preview(rows, ranges, say)
