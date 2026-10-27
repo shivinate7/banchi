@@ -3456,6 +3456,8 @@ body { background: var(--bn-surface-2); }
    the disclosure and the press on a second row. The frame states it for the same reason. */
 .mk-frame[data-w='820'] .bn-notice-compact { grid-template-columns: auto minmax(0, 1fr) auto; }
 .mk-frame[data-w='820'] .bn-notice-compact .bn-notice-text { grid-column: 2 / -1; min-height: 0; padding-block: 0; }
+.mk-frame[data-w='820'] .bn-notice-compact .bn-notice-said { grid-column: 2; grid-row: 2; justify-self: start; }
+.mk-frame[data-w='820'] .bn-notice-compact .bn-notice-said > summary { min-height: var(--bn-control-h-sm); }
 .mk-frame[data-w='820'] .bn-notice-compact .bn-notice-action { grid-column: 3; grid-row: 2; }
 .mk-frame .bn-page { animation: none; }
 .mk-main { min-width: 0; overflow: auto; }
@@ -3645,12 +3647,13 @@ function oneOwed(s) {
   const presses = {
     one: `<button type="button" class="bn-btn bn-btn-sm">Take It Off TCGplayer</button>`,
     sent: '',
-    failed: `<details class="bn-notice-said"><summary>What the server said</summary><div class="bn-notice-said-body"><div>TCGplayer refused the upload.</div><code class="bn-notice-code">tcg_write_refused</code></div></details>
-      <button type="button" class="bn-btn bn-btn-sm">${icon('refresh', 14)}Try again</button>`,
+    failed: `<button type="button" class="bn-btn bn-btn-sm">${icon('refresh', 14)}Try again</button>`,
   }
-  return `<div class="bn-notice bn-notice-${l.tone} bn-notice-compact send-standing send-owed" role="status">${icon(l.ic, 16)}
+  /* Where Notice and Retry put it: its own grid place, drawn only when there is something the server said. */
+  const said = s === 'failed' ? `<details class="bn-notice-said"><summary>What the server said</summary><div class="bn-notice-said-body"><div>TCGplayer refused the upload.</div><code class="bn-notice-code">tcg_write_refused</code></div></details>` : ''
+  return `<div class="bn-notice bn-notice-${l.tone} bn-notice-compact send-standing send-owed${s === 'failed' ? ' bn-retry' : ''}" role="${s === 'failed' ? 'alert' : 'status'}">${icon(l.ic, 16)}
     <div class="bn-notice-text"><div class="send-owed-cell">${cell(ONE, s, (k, v, off) => `<span${off}>${v.text}</span>`)}</div></div>
-    <div class="bn-notice-action"><div class="send-owed-cell">${cell(ONE, s, (k, v, off) => `<span class="send-owed-press"${off}>${presses[k]}</span>`)}</div></div>
+    ${said}<div class="bn-notice-action"><div class="send-owed-cell">${cell(ONE, s, (k, v, off) => `<span class="send-owed-press"${off}>${presses[k]}</span>`)}</div></div>
   </div>`
 }
 

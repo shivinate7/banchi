@@ -33,36 +33,48 @@ bar is a plain stand-in.
    says "Take It Off TCGplayer" on every row. Loss of E1: the same long label five times
    (ux-label-once). Pick: the short form.
 6. **One take-off at a time (`#s=sending`).** The pressed entry turns its ring in the press's own
-   box. Take All, each other entry, Send and Download wait, each with its reason on hover and
-   focus: the sends share one guard, and the spec allows one take-off per card outstanding.
+   box. Take All, each other entry, Send and Download are off: the sends share one guard. This is
+   how `SendCard` disables Download during a send today: the ring says what runs, and the card's
+   `bn-sr` status names it to a screen reader. The mockup's `title` gives the reason on hover
+   only, because a disabled button takes no focus. If the builder wants a visible reason, the
+   card's own pattern is `.send-why` with `aria-describedby`; that line was not drawn, and at 820
+   it may wrap the act row.
 7. **Sent (`#s=sent`): the answer shows at the press.** "TCGplayer accepted: 1 copy of Mimikyu
    ex is off. Banchi checks again after 12:52." The entry keeps its place until the page reads
    again after the check, so a live check never pulls a row out from under the person (D313).
 8. **Failed (`#s=failed`): the kit `Retry` shape.** "TCGplayer did not take Mimikyu ex off, so
    nothing went live. It stays on this list." The server's words sit behind "What the server
-   said". Try again is the same press (owner's ruling).
-9. **Every state of one entry's line sits in one grid cell; only the current one is visible.** So
-   the line keeps its box from offer to sending, sent and failed. The headless check measured the
-   bar: 173 px at 1440 and 232 px at 820 in every owed state, in all four themes.
-10. **No TCGplayer sign-in (`#s=nosession`): no take-off press, as the spec says for the
+   said", in the grid place `Notice` gives it. Try again is the same press (owner's ruling).
+9. **Every state of one entry's sentence and press sits in one grid cell; only the current one is
+   visible.** So the line keeps its box from offer to sending, sent and failed. The headless check
+   measured the bar in all seven owed states and all four themes: 173 px at 1440 and 232 px at 820
+   in each.
+10. **Not drawn: Take All's answer, and a failed entry inside the open list.** Proposal for the
+    builder: Take All is one press and one send receipt, with one row per card, so one guard
+    covers it. Its press turns its ring as an entry's does. Its answer replaces the line's
+    sentence: "TCGplayer accepted 5 of 6 copies. 1 stays on this list." A card that failed stays
+    in the list, and its press reads "Try again". The spec says every try is a receipt; whether
+    one press for six cards writes one receipt or six is the builder's question to settle in the
+    spec.
+11. **No TCGplayer sign-in (`#s=nosession`): no take-off press, as the spec says for the
     receipt.** The sentence names the fix: "Sign in, then press Refresh." Refresh is the card's
     own door, one row above. The list still opens, without presses.
-11. **No sign-in as a failed press (option N1).** `SendCard` already treats a lapsed sign-in as a
+12. **No sign-in as a failed press (option N1).** `SendCard` already treats a lapsed sign-in as a
     retryable failure: the press stays, and "Try again" answers. Gain: the same shape as a lapsed
     sign-in on a send. Loss: the press is offered when it cannot pass. Pick: no. **Owner grant:
     yes**, because the spec gives no press without a sign-in.
-12. **Owed with nothing else to send (`#s=nothing`).** Today `Pricing` draws no send bar when the
+13. **Owed with nothing else to send (`#s=nothing`).** Today `Pricing` draws no send bar when the
     worklist is empty, so the owed line would never show in the likeliest case: the owner retires
     a card when nothing waits to send. The bar stays while a take-off is owed, with the press off
     and "Nothing ready yet". "Everything is sent" stays under it; its sentence is still true.
     **Owner grant: yes**, because it changes when Pricing draws its bar.
-13. **The owed line must arrive with the bar's first read.** If it lands on a later status read,
+14. **The owed line must arrive with the bar's first read.** If it lands on a later status read,
     the bar grows under the person's eyes. The builder reads it with the worklist, or reserves its
     line while the bar is pending.
-14. **Tone.** Owed is `warn`: a listing is above what is on hand. Sent is `ok`. Failed is
+15. **Tone.** Owed is `warn`: a listing is above what is on hand. Sent is `ok`. Failed is
     `danger`, as `Retry` draws it.
-15. **At 820** every press measured 40 px or more, with the coarse-pointer heights the frame
+16. **At 820** every press and the "What the server said" summary measured 40 px or more, with the coarse-pointer heights the frame
     states. The compact notice's coarse-pointer layout (sentence on the first row, presses on the
     second) is stated in the frame for the same reason.
-16. **Not measured.** `label_once.py` read no labels, because the page draws by script. The
-    label-once read of this page is unknown.
+17. **Label once.** `label_once.py` on the rendered states found only set names in the worklist
+    stand-in, which are data. Pass.
