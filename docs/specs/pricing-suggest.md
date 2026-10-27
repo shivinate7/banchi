@@ -30,11 +30,13 @@ was typed. Old live listings drift from market and nothing says so. The owner ca
 ## 2. The model
 
 - **One list** holds new copies and live listings. The Unsent and Live tabs merge.
-- **One rule** prices both. It starts from an anchor price (section 1, measure first) and
+- **One rule** prices both. It starts from Market, the measured anchor (section 5, step 1), and
   clamps to the owner's floor.
 - **A suggestion** is a proposed price for a live listing. A trigger raises it. It carries a
   reason in words, such as "market up 18% since listed" or "unsold 30 days".
-- **Every row says where its price came from**: Rule, You (typed), Floor or Suggested.
+- **Every row says where its price came from**: Rule, You (typed), Floor, Suggested or Live. "Live"
+  marks a live listing with no reason to change: its price is the one set when it was listed. "Live"
+  is the orchestrator's pick, reversible, not an owner ruling.
 - **Send** is one press. It sends new copies, kept suggestions and typed prices together.
   D273 (one press sends listings live) still holds.
 - A suggestion may raise a price, up to the cap. The owner reopened D107 (a typed price goes
@@ -98,9 +100,12 @@ recommendations.
 
 ## 5. Before the build
 
-1. **Measure the anchor.** A read-only count over the owner's store, from the owner's main
-   checkout: per value band, the share of typed prices that each anchor (Market, Low, Low With
-   Shipping) matches within a few cents. It extends the measurement in DEBT41 (pricing never offers "make this the rule"). No network, no spend.
+1. **The anchor is Market, measured.** A read-only count of the owner's 555 typed prices against
+   the catalog export read before each was typed. Market is the nearest anchor for 410 of 419
+   under $1, 60 of 101 at $1 to $5, and 23 of 29 at $5 to $20. Low and Low With Shipping rarely
+   win. Only 6 typed prices are at $20 or more, too few to call. The store rule already starts
+   from Market, so the anchor does not change. It extends DEBT41 (pricing never offers "make
+   this the rule").
 2. **Mockups.** The one list at 1440 and 820, both themes. Show each trigger's suggestion row
    and the cap's flagged row. The owner judges each trigger from the mockups.
 3. **The cap and the value line are owner settings.** They start at 25% and $25, and the owner
@@ -216,3 +221,23 @@ sets a price without the owner's press.
 - **Near matches for a card with no market price.** It lists sales of the closest printings
   as evidence in Needs you. The owner types the price.
 - **A weekly pricing note.** One paragraph: what moved, what sold, what sits.
+
+## 10. Build lanes
+
+Each lane is its own branch. Screen lanes build from the signed-off mockups and end with a design
+review.
+
+| Lane | Goal | Depends on |
+|---|---|---|
+| `pricing-floor-stale-text` | Section 7: the floor text in `pipeline/pricing.py`, D9 (threshold and floor) and CLAUDE.md. | nothing |
+| `pricing-clarity-words` | Section 6, words only: "Floor" for the price line, the hold word. | nothing |
+| `sold-here-zero` | Find why `sold_here` reads 0 on every live listing, and fix the cause. | nothing |
+| `suggest-engine` | A new pure module, `suggest` in `pipeline/`: triggers, cap, value line, group and reason words. The cap and value line become policy settings. | nothing |
+| `one-list-wire` | The worklist carries live listings and their suggestions. One send takes new copies, kept suggestions and typed prices. Sole owner of `types.ts` and `server.ts`. | `suggest-engine`, `sold-here-zero` |
+| `pricing-one-list` | The one list on `#/pricing`, groups on top, no Live tab. | `pricing-clarity-words`, `one-list-wire` |
+| `history-float-card` | The floating card (section 9c), with the asking-price line and the suggestion dot. | `one-list-wire` |
+| `history-float-mount` | The card's one call site in Pricing. | `pricing-one-list`, `history-float-card` |
+
+Tests that pin the two tabs (`pricing-markdown.spec.ts`, parts of `pricing.spec.ts` and
+`copy-checks.spec.ts`) are re-pointed in `pricing-one-list`, never deleted.
+
