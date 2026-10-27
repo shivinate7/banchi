@@ -35,7 +35,7 @@ its receipt and its undo. Undoing the retirement takes the card back off the mas
 `GET /pipeline/sets` (`server/pipeline_routes.do_pipeline_sets`) gains one boolean per row,
 `collected`. It is true when any card with that SKU has state `retired` and `retire_reason`
 `master_set`. It is one more `cards.select` over retired cards, inside the same plain read: no
-socket, no write, no lock.
+socket, no write, no lock. `collected` is keyed by SKU across every set label. A box's delete buries its retired records (D134, a departed record is buried), so the route reads the buried `master_set` lines too: a master-set card stays collected after its box is deleted. A buried line carries no set name, so the SKU table names the set, and a SKU it does not know lands in `no_set`.
 
 A set that holds only master-set copies and no on-hand copy has no row today, because the route reads
 `identified` cards only. **The route also adds those rows, with `qty: 0` and `collected: true`**,
@@ -70,6 +70,13 @@ owner's yes and builds no screen control for it. The bend covers the `master_set
 D54 (re-emit adds, never subtracts) is not touched: it governs what `emit` writes for copies not
 yet sent.
 
+**Owner's ruling: the press at the pull, an owed list behind it.** The retire receipt offers the
+press at once. A take-off not pressed, or one that failed, lands on an **owed list on the Pricing
+send card** (`SendCard`), with the press beside each entry. It stays there until it is sent and
+settled, or the listing already matches, or the retirement is undone. Every try is a send receipt
+in the existing outbound log (`inventory/sends/<stamp>/`, `server/send_routes.py`, read by
+`GET /pipeline/sends`), so a failure is listed and readable by a session until dismissed.
+
 The press follows D100's phantom take-off exactly:
 
 - **It reads live first**, through `server/tcg_export.fetch_live`, and sizes the row as live
@@ -102,7 +109,7 @@ because it is the only part that needs a catalog and the network.
 
 1. **Own reason.** The master set is the `master_set` retire reason only. Old `pulled`
    retirements do not count (section 2).
-2. **One press on the pull receipt.** A `master_set` pull of a live card offers "Take it off
+2. **One press on the pull receipt, an owed list behind it.** A `master_set` pull of a live card offers "Take it off
    TCGplayer". The press is the owner's yes, bending D100 (never delete to lower a price) for
    this reason only (section 5).
 3. **Identified only.** "Last copy" counts `identified` cards only, as the route reads today. A

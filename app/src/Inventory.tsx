@@ -1391,7 +1391,7 @@ function MovePanel({
   )
 }
 
-/* The retire panel — a dialog whose four reasons are the write's only input. Focus lands on
+/* The retire panel — a dialog whose five reasons are the write's only input. Focus lands on
  * Cancel, the one control whose accidental press costs nothing. */
 function RetirePanel({
   copy,

@@ -1307,7 +1307,7 @@ export type AnswerOrigin = {
  *  `STAND_DOWN_REASONS` verbatim — a second friendly vocabulary is the drift D16 exists to
  *  catch, so these render beneath their labels exactly as a routing reason does.
  *
- *  DELIBERATELY NOT `RetireReason`. Those four all say the CARD left inventory; these three
+ *  DELIBERATELY NOT `RetireReason`. Those five all say the CARD left inventory; these three
  *  say the QUESTION closed while the card stayed exactly where it is. */
 export type StandDownReason = 'wasted_position' | 'cannot_settle' | 'not_listing'
 
@@ -4683,8 +4683,9 @@ export type SetGroupCard = {
    *  one thing on the row that still tells two such rows apart. */
   printing: string | null
   /** True when any card of this SKU is retired with reason `master_set` (master-set spec,
-   *  section 3). A row with `qty: 0` and `box: null` is a master-set copy with no copy on hand. */
-  collected: boolean
+   *  section 3). A row with `qty: 0` and `box: null` is a master-set copy with no copy on hand.
+   *  Optional: the recorded demo bundle predates it, and a missing value reads as false. */
+  collected?: boolean
 }
 
 /** One game-and-set group, cards in the set's own printed order (server-side natural sort
