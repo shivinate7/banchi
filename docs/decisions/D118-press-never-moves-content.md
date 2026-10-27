@@ -1,4 +1,4 @@
-## D118 — A press never moves other content
+# D118 — A press never moves other content
 
 **A control's response is the product's, not each screen's. It covers what the page does around the press.** The owner ruled that nothing on screen moves when a button is pressed, anywhere in the product. The trigger was screen shake when marking a card sold in `#/inventory`.
 

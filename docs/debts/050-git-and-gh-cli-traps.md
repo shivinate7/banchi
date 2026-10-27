@@ -1,7 +1,9 @@
 ## DEBT50 — git and gh CLI traps hit from this checkout
 
+**What.** The git and gh command-line tools have traps that sessions hit from this checkout, and each one is listed below.
+
 - **`git push` fails with HTTP 400 on a pack over 1 MiB, from this Mac.** Apple Git 2.39.3 switches to chunked transfer past `http.postBuffer`'s 1 MiB default, and something on the network path rejects it (`send-pack: unexpected disconnect`). An empty `git ls-remote origin` is the tell that nothing landed. Fix: `git config http.postBuffer 524288000`, per repo, and again in a fresh clone.
 - **`gh pr list --author '@me'` returns other sessions' PRs.** Every session commits as one git user and authenticates as one GitHub account. Identify a session's own PR by branch name.
 - **Never leave `main` checked out in a worktree.** It changes which local-half command `make merge` picks for every session sharing the clone.
 - **A hand-resolved merge conflict needs the full `make docs-audit`, never a syntax check.** Take-main's-side-and-append is right only for a pure addition of disjoint lines. A JSON array can lose a trailing comma (`docs/decisions/ORDER.json`'s last entry has none). Two sides that each reword one paragraph leave both copies, which is syntactically fine and wrong. Write one version from the canonical source.
-- **Batching reviewed PRs into one integration PR.** Two branches can claim the same `## D<n>`: un-claim both back to `## D-<slug>` first. Three branches that append a test at one point in a spec file defeat a three-way merge: rebuild the file from the base plus each branch's pure appends. A `docs/map.py` `governed_by` conflict keeps both sides' decision slugs.
+- **Batching reviewed PRs into one integration PR.** Two branches can claim the same `# D<n>`: un-claim both back to `# D-<slug>` first. Three branches that append a test at one point in a spec file defeat a three-way merge: rebuild the file from the base plus each branch's pure appends. A `docs/map.py` `governed_by` conflict keeps both sides' decision slugs.

@@ -285,7 +285,7 @@ export function standing(input: StandingInput): Standing | null {
      rather than trusting that shape blind: `open` is the one field this module is allowed to
      read (D91 — no status vocabulary in `app/`), so a resolution row is counted only where
      its own order reads `open: true` on the wire, never derived from `status` text and never
-     assumed pre-filtered. See `## D121`. */
+     assumed pre-filtered. See `# D121`. */
   /* THE SAME RULE THE ORDERS LIST FILTERS ON (`orderBuyers.ts:groupMissing`, summed by
      `missingCopies`): every missing copy on an open order, and only the open orders that miss one.
      `groupBuyers` keeps only rows that read `open: true` as open (D121). */

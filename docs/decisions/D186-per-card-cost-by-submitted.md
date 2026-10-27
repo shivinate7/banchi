@@ -1,4 +1,4 @@
-## D186 — Per-card cost divides by cards submitted
+# D186 — Per-card cost divides by cards submitted
 
 **Divide by the cards actually submitted, never the cards in the run.** A cache hit is billed nothing, so a run that served a third of itself from cache reports a per-card price a third too low. The error makes the dearer setting look cheap: cache hits accumulate on a re-joined box, and re-joins concentrate on the incumbent reading. `identify`'s preflight already prints `cache hits` and `to send` separately and estimates on the second. Measured over every run with a usage block, on submitted cards only: 2,179 input tokens a card at max-edge 900 and 2,641 at 1200 (a delta of 462, not 240, so the store-wide saving is $0.60 and not $0.36). The inflation reaches 4.26 times on one run.
 

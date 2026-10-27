@@ -1,4 +1,4 @@
-## D121 — Home states what is owed
+# D121 — Home states what is owed
 
 **Ruling: the Home lede states what is owed, ranked, with the verb in it.** The old lede read "100 cards on hand in 4 boxes · 19 sold. Every one has an address." Six replacements for it were rejected. The reason is the payload, not the presentation.
 

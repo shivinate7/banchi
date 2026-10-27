@@ -1,4 +1,4 @@
-## D145 — Box bid is a hidden identity
+# D145 — Box bid is a hidden identity
 
 A box gains a `bid`. It is an integer allocated once at the drawer's creation, never reused, and never displayed. The box NUMBER does not change in any respect. That includes `next_box_number`, which still hands out the lowest free number. Records that outlive a box (a run, a buried card) bind to the id. Every screen still says `Box 1`.
 

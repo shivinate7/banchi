@@ -1,4 +1,4 @@
-## D179 — Shell mistakes are refused by resolving them
+# D179 — Shell mistakes are refused by resolving them
 
 A read-only audit asked of every written rule: has it been broken, and can a machine see it? Forty rules were mechanizable. Five are one command away from a session. Each has a measured incident. `scripts/guard-shell.py` enforces those five as a PreToolUse hook on Bash and on Write|Edit, armed in both tools' rosters (D135).
 

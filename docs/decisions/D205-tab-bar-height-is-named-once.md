@@ -1,4 +1,4 @@
-## D205 — Tab bar height is named once
+# D205 — Tab bar height is named once
 
 **The bug.** The capture screen's shutter sat half under the phone tab bar on first paint at 390 wide. `CaptureScreen.css` sized `.capture-stage` from a hand-written 356px budget. Its own comment counted the tab bar as a flat 64px. The real bar is `calc(64px + env(safe-area-inset-bottom))`, set in `App.css`, where `.bn-tabbar` and `.bn-shell-main`'s clearance padding are both sized. That is about 98px on every phone with a home indicator, which is every phone this product ships to.
 

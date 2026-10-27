@@ -1,4 +1,4 @@
-## D39 — Run scope is a handed-off selection
+# D39 — Run scope is a handed-off selection
 
 **A run's scope is a selection: every card still owed a reading, one or more drawers, or ticked cards.** The box picker is re-answered from `GET /boxes`. The ticked selection is never re-implemented, because a second mass-select would disagree with the first about what "the selection" means. `#/runs` opens Review's runs sheet (D291).
 

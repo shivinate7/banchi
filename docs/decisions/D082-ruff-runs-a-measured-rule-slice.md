@@ -1,4 +1,4 @@
-## D82 — Ruff runs a measured rule slice
+# D82 — Ruff runs a measured rule slice
 
 **`ruff.toml` pins `target-version = "py39"` and selects exactly `E4`, `E7`, `E9`, `F`, `B` and `SIM`, never ruff's defaults.** `--fix` is never run on this codebase without a harness run after, and it is wired nowhere (D18: nothing that writes runs on the path that decides a commit). `make lint` runs ruff behind `RUFF_GUARD`, so a missing dependency fails loudly.
 

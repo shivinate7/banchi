@@ -1,4 +1,4 @@
-## D94 — Banchi names everything; --bn-* names styles
+# D94 — Banchi names everything; --bn-* names styles
 
 **Banchi names everything: the app, the repository, the checkout, the CLI, the env vars and the machine state.** Banchi (番地) is a lot number, the address of a thing. Every card in this store has an address: box, then section, then card (D58). The owner ruled that the one name goes all the way down. When a program name and a screen name disagree, each reader must translate between them. That cost is larger than the cost of one rename.
 

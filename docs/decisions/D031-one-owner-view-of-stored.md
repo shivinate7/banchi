@@ -1,4 +1,4 @@
-## D31 — One owner-side view of stored cards
+# D31 — One owner-side view of stored cards
 
 **Three routes rendered the same 767 records and the owner named it: they read as separate instances of one thing.** `#/inventory` searched by SKU and sold a copy. `#/boxes` held the registry and the layout editor, with no way into a box's contents. `#/pull` walked a box with photographs. Same store, same records, three looks. A person arrives with one question: what is in this box, and can I click it? Only the fulfilment screen answered it.
 

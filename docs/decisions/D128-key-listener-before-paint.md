@@ -1,4 +1,4 @@
-## D128 — Attach the key listener before paint
+# D128 — Attach the key listener before paint
 
 **A key press answers to what is on the screen, so a window `keydown` listener is registered in `useLayoutEffect`, never `useEffect`.** A passive effect runs after the browser paints. For one task the screen shows the new state while the attached listener is the previous render's. A press in that task is answered by the wrong render. The sheet closes mid-request, or Escape finds no field to close. A layout effect runs inside the synchronous commit, before paint, so no test evaluation or human input can interleave. `app/src/runsOverlay.ts:useOverlayFocus` (`hold`) and `app/src/CaptureScreen.tsx`'s field handler (`openField`, and `fieldPick` closes over it) both register this way.
 

@@ -1,4 +1,4 @@
-## D140 — Merge claims the decision number
+# D140 — Merge claims the decision number
 
 **Ruled by the owner: a branch never takes a record number. The merge tool claims it, before the merge.** The owner asked why a renumber happens at all. A branch reads `origin/main`, takes the next free id, and is wrong when another branch merges first. The allocation needs what main holds, and a branch cannot have that.
 
@@ -6,7 +6,7 @@
 
 ### The vocabulary is a slug, and two segments keep it out of prose
 
-**`## D140`, cited as `(D140)`, in prose, in code comments and in `governed_by`.** A branch writes `D-<slug>` for a decision, `C-<slug>` for the code-card track and `DEBT-<slug>` for a debt. The letter names the namespace and the slug names the entry. A build step has no letter. Number it by hand. The tool refuses an unclaimed `step <slug>` marker (`unclaimed` in the config).
+**`D140`, cited as `(D140)`, in prose, in code comments and in `governed_by`.** A branch writes `D-<slug>` for a decision, `C-<slug>` for the code-card track and `DEBT-<slug>` for a debt. The letter names the namespace and the slug names the entry. A build step has no letter. Number it by hand. The tool refuses an unclaimed `step <slug>` marker (`unclaimed` in the config).
 
 **Two segments minimum.** `D-pad` is one segment and is ordinary prose. Two or more segments make an id. The slug grammar is `slugRegex` in `.github/stamp.json`. The docs-audit `claim vocabulary` row reconciles it with the auditor's own.
 

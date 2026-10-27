@@ -1,4 +1,4 @@
-## D67 — Compose the card number once
+# D67 — Compose the card number once
 
 **One function per side of the wire composes the collector number, and a blank total folds.** `printed_total` arrives as `""`, not `null`, on a quarter of the store (every Riftbound card, which prints one identifier), and three copies of the composition disagreed about it and drew `198/219/`.
 

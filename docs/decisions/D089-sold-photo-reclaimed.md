@@ -1,4 +1,4 @@
-## D89 — A sold card's photo is reclaimed deliberately
+# D89 — A sold card's photo is reclaimed deliberately
 
 **`POST /boxes/<box>/photos/reclaim` deletes the photographs of a box's sold cards, keeps every record, and writes the photograph's digest onto the record before the bytes go.** Photographs measure about 1.8 MB each. `captures/` is 2.7 GB for about 1,560 cards, so 100,000 cards would be about 176 GB. If about 95% sell or go out as bulk, and are reclaimed per batch, the retained set is about 9 GB.
 

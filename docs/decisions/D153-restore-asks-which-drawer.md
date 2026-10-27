@@ -1,4 +1,4 @@
-## D153 — Restore asks which drawer
+# D153 — Restore asks which drawer
 
 **The capture screen asks which drawer it is. It stops drawing the box number everywhere else.** D145 gave a drawer an identity, so the screen can ask which drawer it is. Having asked there, it can stop drawing the number on the other rows.
 

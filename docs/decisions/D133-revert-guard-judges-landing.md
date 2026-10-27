@@ -1,4 +1,4 @@
-## D133 — Revert guard judges what a branch lands
+# D133 — Revert guard judges what a branch lands
 
 **A branch is judged by what it would land on main, not by its own commits.** A file put back to main's state is refused unless a commit on the branch names it. A keep-ours merge puts its merge-base after the commit it reverses. So `origin/main..HEAD` shows a tidy change, and only the landing diff shows the revert. `scripts/revert-audit.py branch` diffs origin/main against `git merge-tree --write-tree origin/main HEAD`. That is what the PR page shows and what the merge button does. If the merge conflicts, it falls back to the branch's diff off the merge-base and says so. A pull-request checkout on GitHub is that merge.
 

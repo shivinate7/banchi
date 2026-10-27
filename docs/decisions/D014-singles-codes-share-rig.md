@@ -1,4 +1,4 @@
-## D14 — Singles and codes share rig, not schemas
+# D14 — Singles and codes share rig, not schemas
 
 **One rig serves two tracks: singles and code cards share hardware, never schemas.**
 

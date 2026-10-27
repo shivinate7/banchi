@@ -1,4 +1,6 @@
-## D132 — Sold is folded away by default
+# D132 — Sold is folded away by default
+
+Sold cards are folded away by default on the inventory screen.
 
 **Settled on the owner's four asks about `#/inventory`.** The owner asked for four things:
 

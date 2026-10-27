@@ -1,4 +1,4 @@
-## D318 — Records keep no owner quotes
+# D318 — Records keep no owner quotes
 
 **The owner ruled it.** A record states each ruling in plain words. A record does not keep the owner's own words. A reader needs the ruling only. A quote adds tokens, and it goes stale with the ruling it described.
 

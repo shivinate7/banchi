@@ -1,4 +1,4 @@
-## D252 — A wrong answer gets a correcting route
+# D252 — A wrong answer gets a correcting route
 
 **A wrong answer that already went out cannot be undone (`undo_too_late`, D28), so a listed card gets its own correcting route, `POST /inventory/<box>/<index>/correct`.** It rebinds the SKU through `bind_sku` and never writes stored fields by hand. A departed card refuses (`card_departed`). It is not a branch on `do_review_answer`. `_answer_target` refuses `not_in_queue`, and a wrongly answered card holds no queue entry. `sku_unchanged` stays, and a sibling confirm press covers "the SKU is right and the drawn name is wrong" (D258). Undo derives the identity again and does not restore stored values.
 
