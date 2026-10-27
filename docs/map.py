@@ -8204,7 +8204,9 @@ COMPONENTS = [
                                                "`history_begins` states where the source's own "
                                                "data starts; a fill older than that is listed "
                                                "separately as having no market data at all, "
-                                               "never plotted.",
+                                               "never plotted. `ProductChart` is exported and also takes "
+                                               "the owner's asking postings (a dashed step) and "
+                                               "a suggestion (one dot) for the floating card.",
                                        "governed_by": ["D50", "D196", "D212", "D218", "D219",
                                                        "D227", "D278", "D313"],
                                        "note": "No harness test -- a Playwright spec would be "
@@ -8225,6 +8227,19 @@ COMPONENTS = [
             # questions. D8 governs it for PriceHistory.tsx's reason, and harder — a reading
             # drawn one column from the field a listing price is typed into is one keystroke
             # from becoming a price, which is why no figure here is denominated in money.
+            "src/HistoryFloat.tsx": {"does": "the floating price-history card (spec pricing-suggest "
+                                             "9c): opens above a row when a price field takes "
+                                             "focus or its history door is pressed, draws "
+                                             "`ProductHistory.tsx:ProductChart` with the "
+                                             "owner's asking step line and the suggestion dot, "
+                                             "holds its size while history loads, takes focus "
+                                             "only in door mode. Also the `#/gallery` "
+                                             "`history-float` specimen.",
+                                     "governed_by": ["D313", "D278", "D227"]},
+            "src/HistoryFloat.css": {"does": "the card at `--bn-*` tokens only: fixed, "
+                                             "fixed-height chart box, 560px wide at 1440 and "
+                                             "384px below.",
+                                     "governed_by": ["D313", "D278", "D227"]},
             "src/PriceTrend.tsx": {"does": "the trend strip in a #/pricing row: a daily and a "
                                            "weekly sparkline with a signed percentage under "
                                            "each, in a real 168px column between the card and "
