@@ -6,25 +6,33 @@ Part of `harness/tests/t7_store_and_seams.py` (one verdict). `CHECKS` is this gr
 the order `CHECK_ORDER` runs them.
 
 Protects: Every live listing reaches the pricing worklist with its asking price, its last sale
-and its suggestion; a kept suggestion rides a send as a price-only row, posted as "suggested",
-even with no run named; a suggestion past the cap is refused; the product history lists the
-SKU's asking-price postings, oldest first.
+and its suggestion; the market on the day a listing went live comes from the price archive; a
+kept suggestion rides a send as a price-only row, posted as "suggested", even with no run named;
+the server rebuilds each kept suggestion and refuses a past-cap one, or one whose price it does
+not confirm; the product history lists the SKU's asking-price postings, oldest first.
 Governs: D100, D107 (reopened for suggestions), D227, D243, D273
 
 THE WIRE THIS GROUP PINS (the one-list-wire lane's brief names the behaviour, not the names):
   - `do_pipeline_worklist(...)["live"]`: one row per SKU the newest live export lists with copies.
-    Each row carries `sku`, `asking`, `last_sold_at` (the day of the newest `sold` EVENT for the
-    SKU, or None, never `sold_here`), `group`, `price`, `source` and `reason`.
+    Each row carries `sku`, `asking`, `last_sold_at` (the day of the newest SOLD CARD for the SKU,
+    read off the card state, or None; never the sold-event log), `group`, `price`, `source` and
+    `reason`.
+  - A listing's market on its listing day (`market_listed`) is the price archive's bucket that
+    holds `first_seen_live`: the `month` bucket (one day) when there is one, else the `quarter`
+    bucket (three days). No bucket holds that day, so the market-moved trigger does not fire.
   - A `prices` row of a send may carry `"source": "suggested"`. Such a row posts with source
     "suggested". A row without it posts as "emit-price", as before.
-  - A suggested price more than the cap away from the live price refuses `suggestion_past_cap`.
+  - The server rebuilds every named suggestion with the worklist's own code. A rebuilt suggestion
+    past the cap refuses `suggestion_past_cap`. A named price the server does not rebuild to
+    the same price refuses `suggestion_changed`.
   - `do_product_history(sku)["asking_postings"]`: every posting for the SKU, oldest first.
 """
 
 from __future__ import annotations
 
+import time
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Dict, Optional
 
 from harness.tests import Checks
 from harness.tests.home import isolated_home, run_folder
@@ -32,6 +40,7 @@ from harness.tests.t7.common import (
     ARTICUNO_SKU,
     DUNSPARCE_REVERSE_SKU,
     DUNSPARCE_SKU,
+    SEAM_SKUS,
     _live_export_bytes,
     append_history,
     seam_run,
@@ -40,15 +49,18 @@ from harness.tests.t7.price_history import _network_recorder
 from harness.tests.t7.send_markdown import _case, _live_export_priced, _seed_sync, send_portal
 from pipeline import corpus, readings
 from server import pipeline_routes, send_routes
-from store import clock, db, files
-from store.pricearchive import Bucket
+from store import clock, db, files, master
+from store.pricearchive import RANGE_WIDTH_DAYS, Bucket
+from store.readings import Reading
 from store.session import Store
 
 NAME = "T7 one-list wire"
 
 # One Articuno card in box 3. Dunsparce and its reverse are live without a card here, which is the
-# case the worklist must still carry.
+# case the worklist must still carry. The send cases build on this list, so Dunsparce's sold copies
+# (for the worklist's last-sale case) are added there alone, in `DUNSPARCE_SOLD`.
 WORKLIST_CARDS = [(3, 1, "Articuno", "161", None)]
+DUNSPARCE_SOLD = [(3, 2, "Dunsparce", "120", "normal"), (3, 3, "Dunsparce", "120", "normal")]
 
 
 def _day(days_ago: int):
@@ -78,6 +90,48 @@ def _seed_readings() -> None:
     """Markets for live SKUs with no run table, read the way `#/pricing` reads them."""
     with Store().write() as snapshot:
         snapshot.readings.replace(*readings.collect())
+
+
+def _market_reading(sku: str, market: str, low_with_shipping: Optional[str] = None) -> None:
+    """One market reading for `sku`, written as a `readings` row. Overrides any collected one."""
+    with Store().write() as snapshot:
+        snapshot.readings.entries[sku] = Reading(
+            market=market,
+            at=int(time.time()),
+            source="t7-one-list-wire",
+            kind="run",
+            low_with_shipping=low_with_shipping,
+        )
+
+
+def _bucket(sku: str, range_: str, start: str, market: str) -> None:
+    """One archived `price_history` bucket, written as the archive walk writes it."""
+    with Store().write() as snapshot:
+        snapshot.archive.upsert({
+            f"{sku}:{range_}:{start}":
+                Bucket(sku, 4242, range_, RANGE_WIDTH_DAYS[range_], start, market, 5, 2, None, None, 0)
+        })
+
+
+def _sell_card(box: int, index: int, sku: str, at: str) -> None:
+    """Mark one card sold, bound to `sku` and stamped `at`. A direct write: `emit` binds a card's
+    SKU only on a send, and the sold-event log stays untouched."""
+    with Store().write() as snapshot:
+        card = snapshot.inventory.cards.get(master.position_key(box, index))
+        card.sku = sku
+        card.state = master.SOLD
+        card.state_at = at
+
+
+def _seed_send_suggestions() -> None:
+    """The market behind the two kept suggestions the send cases name, so the server's rebuild
+    agrees with their prices. Dunsparce is 2.06 and unsold 60 days (down from its 2.50). Articuno's
+    market rose 20% since it went live (up to 24.00, inside the cap)."""
+    _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
+    _market_reading(DUNSPARCE_SKU, "2.06", "2.40")
+    _set_listing(ARTICUNO_SKU, first_seen_live=_noon(_day(5)))
+    _bucket(ARTICUNO_SKU, "month", _day(5).isoformat(), "20.00")
+    _market_reading(ARTICUNO_SKU, "24.00", "24.50")
 
 
 def _live_row(payload: dict, sku: str) -> Optional[dict]:
@@ -128,14 +182,15 @@ def _typed(sku: str, price: str) -> None:
 
 def check_worklist_carries_live_listings(checks: Checks) -> None:
     """`do_pipeline_worklist` answers `live`: every SKU the newest live export lists, each with its
-    asking price, its newest SOLD EVENT's day, and the suggestion the engine gives it.
+    asking price, its newest SOLD CARD's day, and the suggestion the engine gives it.
 
     Three live SKUs, three shapes:
       Articuno   unsold 60 days and 13% over market, so a suggestion down to market. Its
-                 `sold_here_at` is a decoy two days old with no sold event behind it: the sale
-                 that counts is a sold EVENT, so there is none and the suggestion stands.
-      Dunsparce  two sold events, 50 and 10 days ago. The NEWEST one counts: ten days unsold is
-                 under the 30-day trigger, so the row stays at its asking price.
+                 `sold_here_at` is a decoy two days old with no sold card behind it: the sale
+                 that counts is a sold CARD, so there is none and the suggestion stands.
+      Dunsparce  two sold cards, 50 and 10 days ago. The NEWEST one counts: ten days unsold is
+                 under the 30-day trigger, so the row stays at its asking price. A sold event two
+                 days old is a decoy: the last sale is the card state, never the event log.
       Reverse    live without a card here, first seen 5 days ago, asking at market: at its price.
     """
     checks.note("")
@@ -143,7 +198,10 @@ def check_worklist_carries_live_listings(checks: Checks) -> None:
     with run_folder() as run, isolated_home(run):
         _seed_sync()
         with _case(checks, "worklist: live listings"):
-            seam_run(checks, WORKLIST_CARDS)
+            seam_run(checks, WORKLIST_CARDS + DUNSPARCE_SOLD)
+            _sell_card(3, 2, DUNSPARCE_SKU, _noon(_day(50)))
+            _sell_card(3, 3, DUNSPARCE_SKU, _noon(_day(10)))
+            append_history([{"at": _noon(_day(2)), "event": "sold", "sku": DUNSPARCE_SKU}])
             _write_live(
                 "20260201-000000",
                 _live_export_priced(
@@ -155,10 +213,9 @@ def check_worklist_carries_live_listings(checks: Checks) -> None:
             _set_listing(ARTICUNO_SKU, first_seen_live=_noon(_day(60)), sold_here=2, sold_here_at=_noon(_day(2)))
             _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
             _set_listing(DUNSPARCE_REVERSE_SKU, first_seen_live=_noon(_day(5)))
-            append_history([
-                {"at": _noon(_day(50)), "event": "sold", "sku": DUNSPARCE_SKU},
-                {"at": _noon(_day(10)), "event": "sold", "sku": DUNSPARCE_SKU},
-            ])
+
+            sold_dunsparce = [c for c in Store().read().inventory.in_state(master.SOLD) if c.sku == DUNSPARCE_SKU]
+            checks.equal(len(sold_dunsparce), 2, "precondition: two Dunsparce copies are sold in state")
 
             name, live_now = pipeline_routes._newest_live_listing()
             checks.ok(
@@ -185,8 +242,8 @@ def check_worklist_carries_live_listings(checks: Checks) -> None:
                     "asking": "2.50", "last_sold_at": _day(10).isoformat(), "group": "at_rule",
                     "price": "2.50", "source": "Live", "reason": "",
                 },
-                "Dunsparce: the NEWEST sold event names the last sale (ten days ago, not fifty), "
-                "so under 30 days unsold it stays at its asking price",
+                "Dunsparce: the NEWEST sold card names the last sale (ten days ago, not fifty, and "
+                "not the two-day-old event), so under 30 days unsold it stays at its asking price",
             )
             checks.equal(
                 _pinned(_live_row(payload, DUNSPARCE_REVERSE_SKU)),
@@ -223,15 +280,85 @@ def check_worklist_without_runs_reads_newest_export(checks: Checks) -> None:
             )
 
 
-def _one_copy_live(checks: Checks, portal) -> object:
-    """Articuno sent once, then live at 22.03 with Dunsparce live at 2.50 beside it. Returns the
-    run. The shared step for the send cases: each case then names its own prices."""
+def check_worklist_market_on_listing_day(checks: Checks) -> None:
+    """The market on a listing's listing day (`market_listed`) comes from the price archive: the
+    `month` bucket that holds `first_seen_live`, else the `quarter` bucket that holds it.
+
+    Three live SKUs, each asking 10.00 and at market 12.00 now (20% up), first seen 5 days ago:
+      Articuno   a month bucket for that day at 10.00 AND a quarter bucket at 8.00. The month wins,
+                 so the rise reads 20%: "market up 20% since listed", suggested at 12.00.
+      Dunsparce  a quarter bucket only, holding that day at 10.00. The fallback reads the same 20%.
+      Reverse    a month bucket for a DIFFERENT day (four days ago). No bucket holds the listing
+                 day, so the market-moved trigger does not fire: at its asking price.
+    """
+    checks.note("")
+    checks.note("WORKLIST, MARKET ON THE LISTING DAY — the archive's bucket for that day")
+    with run_folder() as run, isolated_home(run):
+        with _case(checks, "worklist: market on the listing day"):
+            day = _day(5)
+            before_day = (day - timedelta(days=1)).isoformat()
+            _write_live(
+                "20260201-000000",
+                _live_export_priced(
+                    {ARTICUNO_SKU: 1, DUNSPARCE_SKU: 1, DUNSPARCE_REVERSE_SKU: 1},
+                    {ARTICUNO_SKU: "10.00", DUNSPARCE_SKU: "10.00", DUNSPARCE_REVERSE_SKU: "10.00"},
+                ),
+            )
+            for sku in SEAM_SKUS:
+                _set_listing(sku, first_seen_live=_noon(day))
+                _market_reading(sku, "12.00", "12.50")
+            _bucket(ARTICUNO_SKU, "month", day.isoformat(), "10.00")
+            _bucket(ARTICUNO_SKU, "quarter", before_day, "8.00")
+            _bucket(DUNSPARCE_SKU, "quarter", before_day, "10.00")
+            _bucket(DUNSPARCE_REVERSE_SKU, "month", _day(4).isoformat(), "10.00")
+            archived = sorted(
+                (b.sku, b.range, b.start, b.market) for sku in SEAM_SKUS for b in Store().read().archive.for_sku(sku)
+            )
+            checks.equal(archived, sorted([
+                (ARTICUNO_SKU, "month", day.isoformat(), "10.00"),
+                (ARTICUNO_SKU, "quarter", before_day, "8.00"),
+                (DUNSPARCE_SKU, "quarter", before_day, "10.00"),
+                (DUNSPARCE_REVERSE_SKU, "month", _day(4).isoformat(), "10.00"),
+            ]), "precondition: the four archived buckets are in the store")
+
+            with _network_recorder() as attempts:
+                payload = pipeline_routes.do_pipeline_worklist([])
+            checks.equal(attempts, [], "the listing-day market is read off the archive: no network")
+
+            rose = {
+                "asking": "10.00", "last_sold_at": None, "group": "suggested", "price": "12.00",
+                "source": "Suggested", "reason": "market up 20% since listed",
+            }
+            checks.equal(
+                _pinned(_live_row(payload, ARTICUNO_SKU)), rose,
+                "Articuno: the month bucket holding the listing day names its 10.00, so the rise is "
+                "20%, not the quarter's 50%",
+            )
+            checks.equal(
+                _pinned(_live_row(payload, DUNSPARCE_SKU)), rose,
+                "Dunsparce: with no month bucket, the quarter bucket that holds the listing day "
+                "names its 10.00, so the rise is 20%",
+            )
+            checks.equal(
+                _pinned(_live_row(payload, DUNSPARCE_REVERSE_SKU)),
+                {
+                    "asking": "10.00", "last_sold_at": None, "group": "at_rule", "price": "10.00",
+                    "source": "Live", "reason": "",
+                },
+                "Reverse: a bucket for another day is not the listing day's market, so the "
+                "market-moved trigger does not fire",
+            )
+
+
+def _one_copy_live(checks: Checks, portal, *, prices: Optional[Dict[str, str]] = None) -> object:
+    """Articuno sent once, then live at 22.03 with Dunsparce live beside it. `prices` overrides a
+    live price by SKU. Returns the run. The shared step for the send cases: each case then names
+    its own prices."""
     run_dir, _ = seam_run(checks, WORKLIST_CARDS)
     portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
     send_routes.do_send({"runs": [run_dir.name], "confirm": True})
-    portal["live"] = _live_export_priced(
-        {ARTICUNO_SKU: 1, DUNSPARCE_SKU: 1}, {ARTICUNO_SKU: "22.03", DUNSPARCE_SKU: "2.50"}
-    )
+    named = {ARTICUNO_SKU: "22.03", DUNSPARCE_SKU: "2.50", **(prices or {})}
+    portal["live"] = _live_export_priced({ARTICUNO_SKU: 1, DUNSPARCE_SKU: 1}, named)
     portal["rows"].clear()
     return run_dir
 
@@ -239,7 +366,8 @@ def _one_copy_live(checks: Checks, portal) -> object:
 def check_send_takes_suggestions_with_no_run(checks: Checks) -> None:
     """A send naming only prices, `runs: []`, takes two kept suggestions as price-only rows: one
     down (Dunsparce 2.50 to 2.06, 18%) and one up (Articuno 22.03 to 24.00, 9%). Both are inside
-    the 25% cap. Each row posts with source "suggested" and the price it replaced.
+    the 25% cap, and both are what the server rebuilds from the market. Each row posts with source
+    "suggested" and the price it replaced.
     """
     checks.note("")
     checks.note("SEND, PRICES ONLY — kept suggestions ride with no run named")
@@ -247,6 +375,7 @@ def check_send_takes_suggestions_with_no_run(checks: Checks) -> None:
         _seed_sync()
         with _case(checks, "send: suggestions with no runs"):
             _one_copy_live(checks, portal)
+            _seed_send_suggestions()
             checks.equal(_pushed(ARTICUNO_SKU), 1, "precondition: Articuno's one copy is live (pushed 1)")
             outcome = _outcome(lambda: send_routes.do_send({
                 "runs": [],
@@ -275,8 +404,9 @@ def check_send_takes_suggestions_with_no_run(checks: Checks) -> None:
                 )
                 checks.equal(
                     [(p["price"], p["replaced"], p["source"]) for p in _postings(ARTICUNO_SKU)],
-                    [("24.00", "22.03", "suggested")],
-                    "the Articuno posting is source \"suggested\" and names the 22.03 it replaced",
+                    [("22.03", None, "emit"), ("24.00", "22.03", "suggested")],
+                    "the Articuno postings are the setup send's 22.03, then a source \"suggested\" "
+                    "posting that names the 22.03 it replaced",
                 )
                 checks.equal((_pushed(ARTICUNO_SKU), _pushed(DUNSPARCE_SKU)), (1, 0),
                              "a price-only row counts no copy")
@@ -295,6 +425,7 @@ def check_send_suggestion_beside_typed_price(checks: Checks) -> None:
         _seed_sync()
         with _case(checks, "send: typed beside suggested"):
             run_dir = _one_copy_live(checks, portal)
+            _seed_send_suggestions()
             _typed(ARTICUNO_SKU, "30.00")
             outcome = _outcome(lambda: send_routes.do_send({
                 "runs": [run_dir.name],
@@ -317,8 +448,8 @@ def check_send_suggestion_beside_typed_price(checks: Checks) -> None:
                 )
                 checks.equal(
                     [(p["price"], p["replaced"], p["source"]) for p in _postings(ARTICUNO_SKU)],
-                    [("30.00", "22.03", "emit-price")],
-                    "the typed price keeps source \"emit-price\"",
+                    [("22.03", None, "emit"), ("30.00", "22.03", "emit-price")],
+                    "the typed price keeps source \"emit-price\", after the setup send's 22.03",
                 )
                 checks.equal(
                     [(p["price"], p["replaced"], p["source"]) for p in _postings(DUNSPARCE_SKU)],
@@ -328,22 +459,71 @@ def check_send_suggestion_beside_typed_price(checks: Checks) -> None:
 
 
 def check_send_refuses_suggestion_past_cap(checks: Checks) -> None:
-    """A suggested price 60% above the live 2.50 is past the 25% cap. The press refuses by name,
-    and no row reaches TCGplayer and no posting is written.
+    """The engine's own suggestion for Dunsparce is 2.06 (unsold 60 days), and TCGplayer now shows
+    3.00. That is 31% from the live price, past the 25% cap. The client names the same 2.06, so the
+    server's rebuild agrees with it and refuses by name. No row reaches TCGplayer and no posting is
+    written.
     """
     checks.note("")
-    checks.note("SEND, PAST THE CAP — a suggestion beyond the cap is refused, and nothing is sent")
+    checks.note("SEND, PAST THE CAP — the server's own suggestion beyond the cap is refused, and nothing is sent")
     with run_folder() as run, isolated_home(run), send_portal() as portal:
         _seed_sync()
         with _case(checks, "send: suggestion past cap"):
+            _one_copy_live(checks, portal, prices={DUNSPARCE_SKU: "3.00"})
+            _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
+            _market_reading(DUNSPARCE_SKU, "2.06", "2.40")
+            outcome = _outcome(lambda: send_routes.do_send({
+                "runs": [],
+                "confirm": True,
+                "prices": [{"sku": DUNSPARCE_SKU, "price": "2.06", "was": "3.00", "source": "suggested"}],
+            }))
+            checks.equal(outcome, ("refused", "suggestion_past_cap"),
+                         "a suggestion past the cap is refused as suggestion_past_cap")
+            checks.equal(_rows(portal), {}, "and TCGplayer receives no row")
+            checks.equal(_postings(DUNSPARCE_SKU), [], "and no posting is written")
+
+
+def check_send_suggestion_changed(checks: Checks) -> None:
+    """The server never trusts the client's price. Two shapes, each its own press:
+
+      Changed    the engine's own suggestion for Dunsparce is 2.06. The client names 2.20: inside the
+                 cap, so the cap check alone would let it through, but not the price the server
+                 rebuilds. Refused suggestion_changed.
+      Gone       the engine has no market for Dunsparce, so it gives no suggestion. The client still
+                 names 4.00. The server rebuilds nothing to confirm, so the named price is refused
+                 suggestion_changed, not suggestion_past_cap.
+
+    Each refusal reaches no row at TCGplayer and writes no posting.
+    """
+    checks.note("")
+    checks.note("SEND, CHANGED — a named suggestion the server does not rebuild to the same price is refused")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send: named price differs from the server's suggestion"):
+            _one_copy_live(checks, portal)
+            _seed_send_suggestions()
+            outcome = _outcome(lambda: send_routes.do_send({
+                "runs": [],
+                "confirm": True,
+                "prices": [{"sku": DUNSPARCE_SKU, "price": "2.20", "was": "2.50", "source": "suggested"}],
+            }))
+            checks.equal(outcome, ("refused", "suggestion_changed"),
+                         "a named price the server's rebuild does not give is refused suggestion_changed")
+            checks.equal(_rows(portal), {}, "and TCGplayer receives no row")
+            checks.equal(_postings(DUNSPARCE_SKU), [], "and no posting is written")
+
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send: no server suggestion to confirm"):
             _one_copy_live(checks, portal)
             outcome = _outcome(lambda: send_routes.do_send({
                 "runs": [],
                 "confirm": True,
                 "prices": [{"sku": DUNSPARCE_SKU, "price": "4.00", "was": "2.50", "source": "suggested"}],
             }))
-            checks.equal(outcome, ("refused", "suggestion_past_cap"),
-                         "a suggestion past the cap is refused as suggestion_past_cap")
+            checks.equal(outcome, ("refused", "suggestion_changed"),
+                         "with no suggestion for the SKU, a named 4.00 is refused suggestion_changed, "
+                         "not suggestion_past_cap")
             checks.equal(_rows(portal), {}, "and TCGplayer receives no row")
             checks.equal(_postings(DUNSPARCE_SKU), [], "and no posting is written")
 
@@ -400,9 +580,11 @@ def check_product_history_asking_postings(checks: Checks) -> None:
 CHECKS = (
     check_worklist_carries_live_listings,
     check_worklist_without_runs_reads_newest_export,
+    check_worklist_market_on_listing_day,
     check_send_takes_suggestions_with_no_run,
     check_send_suggestion_beside_typed_price,
     check_send_refuses_suggestion_past_cap,
+    check_send_suggestion_changed,
     check_send_empty_runs_without_prices_refused,
     check_product_history_asking_postings,
 )
