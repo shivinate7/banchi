@@ -1354,9 +1354,11 @@ COMPONENTS = [
                                        "group, with a pause between requests, and saves one row per "
                                        "product and printing under the stamp's UTC date. A failed "
                                        "group is named and left for the next pass, which asks for "
-                                       "that group only. Uses `pricehistory`'s `Market`, "
-                                       "`fetch_json` and `fetch_text`, never a second client.",
-                               "governed_by": ["D88", "D219"],
+                                       "that group only, and so does one whose payload is unreadable or says "
+                                       "`success: false`. One write per group. A throttle answer is "
+                                       "waited out, and a second one stops the pass. Uses `pricehistory`'s "
+                                       "`Market`, `fetch_json` and `fetch_text`, never a second client.",
+                               "governed_by": ["D88", "D219", "D-tcgcsv-daily-read"],
                                "note": "PROVED BY T7's `daily_prices` group, no network call. "
                                        "`scripts/price-refresh-daily.py` calls it."},
             # THE PER-PRODUCT VIEW'S OWN READ (D227). Archive-first,
@@ -2153,8 +2155,8 @@ COMPONENTS = [
                                        "update day, never deleted) and `daily_price_updates` (one row "
                                        "per source stamp: the groups saved and whether every group "
                                        "was, which is what lets a pass skip). `DailyPrices.save` adds "
-                                       "a pass's rows and marks its groups in one `Store.write()`.",
-                               "governed_by": ["D88", "D219"],
+                                       "a group's rows and marks the group in one `Store.write()`.",
+                               "governed_by": ["D88", "D219", "D-tcgcsv-daily-read"],
                                "note": "PROVED BY T7's `daily_prices` group."},
             "skus.py": {"does": "`skus` — one row per TCGplayer Id this repo has ever read "
                                 "out of a cached export: the six fact cells verbatim "
@@ -5187,18 +5189,20 @@ COMPONENTS = [
                         "shows. After a good refresh it runs `archive sweep --write` in the same process "
                         "(`cli.cmd_pricearchive`, at the saved pace, a second throttle stops it with the "
                         "buckets kept, exit 0), and adds the result to the note. Before the sweep, and "
-                        "with `--no-sweep` too, it runs `pipeline.dailyprices.run_pass`, which saves "
-                        "TCGCSV's current Riftbound prices once per source update. Calls no paid read "
+                        "with `--no-sweep` too, and even after a failed refresh, it runs "
+                        "`pipeline.dailyprices.run_pass`, which saves TCGCSV's current Riftbound "
+                        "prices once per source update and notes each pass as the `daily_prices` "
+                        "step (D-tcgcsv-daily-read). Calls no paid read "
                         "and changes no price at TCGplayer. `--agent` installs "
                         "the daily launchd job (main tree only), `--agent --remove` removes it. "
                         "The installer is `launchagent.py`'s; `demo-mirror-daily.py` keeps its own copy (D295 fence).",
                 "note": "PROVED BY T7's `price_moves` group: the note is written on success and "
                         "on refusal, and the script's own imports are asserted to reach only "
                         "the note writer, the live fetch's module, the one archive sweep press and the "
-                        "daily TCGCSV read, and that the read follows a good refresh and never a failed one, "
+                        "daily TCGCSV read, and that the read runs whatever the refresh did, "
                         "and that a good refresh is swept, a failed one skipped and a second "
                         "throttle stops the sweep.",
-                "governed_by": ["D104", "D189", "D222", "D224", "D278", "D295"],
+                "governed_by": ["D104", "D189", "D222", "D224", "D278", "D295", "D-tcgcsv-daily-read"],
             },
             "backup-daily.py": {
                 "does": "the nightly copy to iCloud Drive on the owner's Mac (first copy of DEBT67): "
