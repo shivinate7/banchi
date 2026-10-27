@@ -46,7 +46,7 @@ so a set's master list is whole. Their `box` is null, so a tap uses the existing
 
 Inside the Sets view, under the set picker:
 
-- **A filter, "Not in my master set".** It lives in the URL, as `?master=open` (D285, filter,
+- **A filter, "Hide my master set"** (the kit toggle names what it hides). It lives in the URL, as `?master=open` (D285, filter,
   sort and search live in the URL). Off by default. On, it hides every collected row.
 - **Each tile carries one of three marks**, drawn by CSS and named in words, never a typed dot
   (D218, a typed dot is a defect):
@@ -91,7 +91,9 @@ The press follows D100's phantom take-off exactly:
 - **It writes a receipt** naming the card, the copies taken off and whether TCGplayer accepted
   them. A failed push leaves the retirement standing and says nothing went live.
 - **Undoing the retirement does not put the listing back.** The copy is on hand again and goes
-  out on the next ordinary send. A harness case proves it.
+  out on the next ordinary send after the take-off settles. No gate holds it back: until the live
+  check settles, the copy still counts as sent, so a send in between adds nothing for it.
+  Harness cases prove both halves.
 
 The press reaches TCGplayer, so it needs the seller session the sends already use. With none, the
 receipt says so and offers no press.
