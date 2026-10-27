@@ -3053,6 +3053,28 @@ COMPONENTS = [
                         "`scripts/docs-audit.py`'s `line anchor ratchet` row only reads "
                         "it, since that row sits on the commit path (D18).",
                 "governed_by": ["D18", "D111", "D149", "D163", "D180", "D221", "D225", "D229"]},
+            "derived_numbers.py": {
+                "does": "a named registry of tree-descriptive numbers: one pure "
+                        "`compute(root) -> int` function per figure, called by both "
+                        "`scripts/docs-audit.py`'s `derived numbers` row (read-only) and "
+                        "`scripts/derived-numbers-pin.py --write` (the writer, D18) — no "
+                        "counting logic is duplicated between them. Also carries "
+                        "`MARKER_RE`/`find_markers()`, the `<!-- derived:<name> -->` marker "
+                        "syntax a number in prose uses to name its own derivation, and the "
+                        "module's own docstring is the argument for the one rule that "
+                        "matters here: a figure recording a past event (a gate run, an "
+                        "incident measurement) may NEVER get an entry, because rewriting "
+                        "one would falsify a record rather than fix rot.",
+                "governed_by": ["D18"]},
+            "derived-numbers-pin.py": {
+                "does": "`python3 scripts/derived-numbers-pin.py --write` rewrites every "
+                        "`<!-- derived:<name> -->`-marked number in the tracked markdown "
+                        "to match `derived_numbers.py:REGISTRY[<name>].compute(ROOT)` — "
+                        "the same call the row itself makes. Contains no counting logic of "
+                        "its own. D18: a generator may write, on no `make` target and no "
+                        "hook; `git diff` is the receipt, mirroring `ste-ratchet-pin.py`'s "
+                        "own discipline exactly.",
+                "governed_by": ["D18"]},
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
                         "question under `--staged`. `--json` is the machine surface "
