@@ -1611,8 +1611,9 @@ def _push_and_publish(directory: Path, record: dict, console: str) -> dict:
             record,
             "already_sent",
             f"These exact rows went to TCGplayer in the send of {earlier}, and TCGplayer cannot "
-            f"show them yet. Sending them again would double every copy, so nothing was sent; "
-            f"the copies are back on the list.",
+            f"show them yet. Sending them again would "
+            + ("take the copies off twice" if record.get("take_off_for") else "double every copy")
+            + f", so nothing was sent; {_back(record)}.",
             HTTPStatus.CONFLICT,
         )
     rows = tcg_import.rows_from_csv(pushed_file.read_text(encoding="utf-8"))
@@ -1626,14 +1627,14 @@ def _push_and_publish(directory: Path, record: dict, console: str) -> dict:
     except tcg_import.PushFailed as failed:
         if failed.upload_id is None:
             _fail(directory, record, failed.code,
-                  f"{failed.message} Nothing is live; the copies are back on the list.")
+                  f"{failed.message} {_nothing_left(record)}")
         if failed.rolled_back:
             _fail(directory, record, failed.code, failed.message, rolled=str(failed.upload_id))
         _unknown(directory, record, "push", failed.upload_id, False, failed.message)
     except tcg_import.FetchRefusal as refusal:
         # `_check`'s refusals: the file was turned away before a transaction existed.
         _fail(directory, record, refusal.code,
-              f"{refusal.message} The copies are back on the list.")
+              f"{refusal.message} {_nothing_left(record)}")
     record["pushed"] = dict(upload.as_dict(), pushed_at=store_clock.iso(store_clock.now()))
     if int(upload.accepted or 0) <= 0:
         # TCGPLAYER TOOK NONE OF THE ROWS. There is nothing to publish; clear the upload.
@@ -1663,6 +1664,18 @@ def _push_and_publish(directory: Path, record: dict, console: str) -> dict:
     _write(directory, record)
     _release(stamp, "published")
     return {"send": _summary(stamp, record, store_clock.now()), "console": console}
+
+
+def _back(record: dict) -> str:
+    """What a refusal that left nothing at TCGplayer says stands: a take-off has no copies to put
+    back, so its retirement stands. Every failure message takes its wording from here."""
+    return "the retirement stands" if record.get("take_off_for") else "the copies are back on the list"
+
+
+def _nothing_left(record: dict) -> str:
+    if record.get("take_off_for"):
+        return f"Nothing came off TCGplayer; {_back(record)}."
+    return f"Nothing is live; {_back(record)}."
 
 
 def _try_rollback(upload_id: str) -> bool:
@@ -1712,13 +1725,8 @@ def _fail(
         message = (
             f"{message} Banchi asked TCGplayer to roll the upload back, and it said it did. "
             f"That is not proved yet: check TCGplayer's Staged list, and do not publish this "
-            f"upload there. Nothing is live; the copies are back on the list."
+            f"upload there. {_nothing_left(record)}"
         )
-    if record.get("take_off_for"):
-        # A take-off has no copies to put back, and the shared wording says they go back.
-        message = message.replace(
-            "Nothing is live; the copies are back on the list.", "Nothing came off TCGplayer; the retirement stands."
-        ).replace("the copies are back on the list", "the retirement stands")
     record["failure"] = {"code": code, "message": message}
     record["taken_back_at"] = store_clock.iso(store_clock.now())
     record["phase"] = PHASE_DONE
@@ -3008,10 +3016,14 @@ def _has_session() -> bool:
     return True
 
 
-def _master_state(inventory, card, receipts=None, session: Optional[bool] = None) -> dict:
+def _master_state(
+    inventory, card, receipts=None, session: Optional[bool] = None, outstanding: Optional[set] = None
+) -> dict:
     """One master_set card's take-off, from the store and the receipts. No socket, no write.
-    The owed list passes the `receipts` and the `session` answer it read once for every card."""
+    The owed list passes the `receipts`, the `outstanding` set and the `session` answer it read
+    once for every card."""
     receipts = _receipts() if receipts is None else receipts
+    outstanding = _outstanding_takes(receipts) if outstanding is None else outstanding
     sku = card.sku or ""
     listing = inventory.listings.get(sku) if sku else None
     on_hand = len(inventory.copies_on_hand(sku)) if sku else 0
@@ -3032,7 +3044,7 @@ def _master_state(inventory, card, receipts=None, session: Optional[bool] = None
     record = mine[1] if mine else {}
     failure = (record.get("failure") or {}).get("message")
     lapsed = sku in (record.get("take_lapsed") or [])
-    if sku and sku in _outstanding_takes(receipts):
+    if sku and sku in outstanding:
         state = TAKE_ON_ITS_WAY
     elif sku in (record.get("take_settled") or []):
         state = TAKE_SENT
@@ -3190,6 +3202,7 @@ def _master_take_off(box: int, index: int, card) -> dict:
 # is no indexed column), and that send read is budgeted at a constant cost per call.
 
 OWED_STATES = (TAKE_OFFERED, TAKE_FAILED, TAKE_NO_SESSION)
+TAKE_OFF_ERROR = "take_off_error"  # an entry of the owed press that raised something other than a refusal
 
 
 def _owed_entries() -> List[dict]:
@@ -3197,6 +3210,7 @@ def _owed_entries() -> List[dict]:
     of the receipts. Two pulls of one SKU are one entry: the take-off is sized per SKU."""
     inventory = Store().read().inventory
     receipts = _receipts()
+    outstanding = _outstanding_takes(receipts)
     session = _has_session()
     pulled = sorted(
         (
@@ -3213,7 +3227,7 @@ def _owed_entries() -> List[dict]:
         if card.sku in seen:
             continue
         seen.add(card.sku)
-        state = _master_state(inventory, card, receipts, session)
+        state = _master_state(inventory, card, receipts, session, outstanding)
         if state["state"] in OWED_STATES:
             owed.append(dict(state, name=card.name or "", box=int(card.box), index=int(card.index)))
     return owed
@@ -3245,6 +3259,11 @@ def do_press_owed_take_offs(payload: dict) -> dict:
             answer = do_master_take_off(entry["box"], entry["index"], {"confirm": True})
         except PipelineRefusal as refusal:
             results.append(dict(said, take_off=None, refused=refusal.code, message=str(refusal)))
+        except Exception as caught:  # noqa: BLE001 — one entry's error must not leave the rest unanswered
+            # `_master_take_off` has already made the receipt say where it stands (`_settle`), so
+            # the entry's failure is the press's unknown, never a retry from here.
+            results.append(dict(said, take_off=None, refused=TAKE_OFF_ERROR,
+                                message=f"This take-off stopped on an error ({type(caught).__name__}). Check the card before pressing again."))
         else:
             results.append(dict(said, take_off=answer["take_off"], refused=None, message=None))
     return {"results": results}
