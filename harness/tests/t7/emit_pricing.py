@@ -4332,14 +4332,14 @@ def _m_cases() -> Dict[str, dict]:
             says=[f"{_M_D} — under the cut-off (Dunsparce)", f"{_M_R} — {_M_LIVE}", _M_A,
                   _M_PRICE_CUT_LIVE],
             never=[_M_ONLY_CUT, _M_ASKED0],
-            route=("needs_price", ["1 card needs a price first", "1 priced card is under the cut-off",
+            route=("needs_price", ["1 card needs a price first", "1 priced card is under the floor",
                                    "TCGplayer already had every copy of 1 card"]),
             home=send2)
 
         # EVERY CARD PRICED AND UNDER THE CUT-OFF.
         add("suball/listed", market=_M_SUBALL, flags=["--listed-only"], exit=1, files={},
             says=[f"{sku} — under the cut-off" for sku in (_M_D, _M_R, _M_A)] + [_M_ONLY_CUT],
-            route=("under_cut_off", ["Every priced card on this list is under the cut-off"]),
+            route=("under_cut_off", ["Every priced card on this list is under the floor"]),
             home={"line": "send 3 copies to TCGplayer", "behind": None, "tile": "3 ready",
                   "chip": "Never sent"})
         # ONE ANSWER ON BOTH PATHS. One run exited 0 with its own sentence, and several
