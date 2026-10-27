@@ -3,7 +3,8 @@
 Mockups in this folder: `history-sheet.html`, `history-inline.html`, `history-panel.html`,
 `history-float.html`. Each one draws the one list from `list.html` with Gardevoir ex's history
 open. All chart data are samples.
-The owner picks one option. Owner word: yes. Open: which option?
+The owner picked option 4, the floating card, and asked that it open when a price field takes
+focus (`docs/specs/pricing-suggest.md` section 9c). Items 5 to 8 draw that ruling.
 
 All four draw the same chart: today's `ProductChart` (market line, the low-to-high spread each
 week, the owner's sales as diamonds), with two new marks: the owner's own asking price as a
@@ -37,21 +38,62 @@ row. The row's 30-day trend is read off the chart's market line, so the two agre
      draws.
    - The Up and Down arrows move the selection. A new key binding must go in `SHORTCUTS` before
      it is done.
-4. **A card floats over the list** (`history-float.html`). The history door opens a card under
-   its row, with no scrim. Its right edge lines up with the door. With no room below the row, it
-   opens above. The card is 560px at 1440 and 384px at 820, so it covers no name, thumb or tick
-   at either width. Its chart is 520px wide at 1440 and 344px at 820, against 380px in today's
-   sheet. It shows the chart and the four prices. The reason and the sold range stay on the row
-   above it, so each shows once.
-   - Gain: at 1440, the widest chart of the four. The pressed row, with its price, tick, reason
-     and sold range, stays in view above the card, and the rest of the list stays pressable.
-   - Loss: it covers part of the four rows under it while it is open. At 1440 that is their
-     Lowest, Trend, Price and From columns, their history doors and locks, and the end of their
-     reason lines. At 820 it is their prices, doors and locks, and the ends of their set, price
-     and reason lines. At 820 its chart is smaller than the sheet's. The daily copies-sold bars do
-     not fit.
-   - Focus moves into the card on open, and back to the history door on close. It closes on Esc,
-     on a press outside it, or on its close button. A press on another row's history door moves it
-     to that row.
+4. **A card floats over the list** (`history-float.html`). Ruled. A price field taking focus
+   opens a card for its row, with no scrim, and so does the row's history door. The card is 560px
+   at 1440 and 384px at 820. Its chart is 520px wide at 1440 and 344px at 820, against 380px in
+   today's sheet. It shows the chart and the four prices. The reason and the sold range stay on
+   the row, so each shows once. Links: `#f=1440`, `#f=820`, `#t=dark`, `#state=top`, `#fb=next`.
+   - Gain: at 1440, the widest chart of the four. The focused row, with its price, tick, reason
+     and sold range, stays in view, and the rest of the list stays pressable.
+   - Loss: at 820 its chart is smaller than the sheet's. The daily copies-sold bars do not fit.
    - How it complies with D313 (nothing moves unless the person moved it): nothing in the list
-     moves. The card lies over the list, and only a press opens, moves or closes it.
+     moves. The card lies over the list. Only the person's own focus or press opens, moves or
+     closes it.
+
+5. **Above the focused row** (default state). The card sits 8px above the focused row, over the
+   rows before it. Its right edge lines up with the row's history door, and its caret points at
+   the focused price field. The field shows the kit's input focus ring. The focused row and the
+   next row's price field (Miraidon ex) are fully clear at 1440 and 820. "Room above" ends at the
+   list's column captions, or under the sticky send bar once that bar has stuck.
+   - Gain: Tab down the list and the card follows, with the next price always in view.
+   - Loss: it covers the rows already passed. In this sample order those are the Needs you rows
+     (Mew ex to Umbreon VMAX), which are not priced yet. At 1440 it covers their Price, From,
+     door and lock columns. At 820 it covers their prices, doors and locks, and the ends of their
+     meta and reason lines.
+   - Heading: at 1440 the card misses the "Suggested changes" heading text. At 820 it covers the
+     right end of its lede, "Ticked rows go with the next send...". The title and count stay clear.
+   - Pick: this, as ruled.
+
+6. **No room above** (`#state=top`, Iono, the list's second row). The card opens 8px below the
+   row and ends 8px left of the price column, so every price field stays clear.
+   - At 1440 it is the full 560px. It covers the ends of the item column (long names such as
+     "Umbreon VMAX", meta and reason lines), and the Market, Lowest and Trend columns of the next
+     four rows, and the "Suggested changes" lede.
+   - At 820 the price column starts 428px into the list, so the card starts after the tick column
+     and narrows to 372px. It covers the thumbs, names, meta and reason lines of the next four
+     rows (Pikachu ex to Miraidon ex), and the "Suggested changes" heading. Ticks and prices stay
+     clear.
+   - Fallback drawn behind `#fb=next`: the card opens below the next row instead, right edge on
+     the door. Gain: the next row stays whole, name and price. Loss: it covers the prices of the
+     rows after it, which breaks "clear of the price column".
+   - Pick: the ruled fallback, clear of the price column. When the owner tabs on, the card moves
+     to the next row, so the name the owner needs is always the focused row's, and that stays clear.
+
+7. **Focus.** A card opened by focus takes no focus, so focus stays in the price field. A card
+   opened by the history door takes focus, and gives it back to the door when it closes. Esc
+   closes it, and focus stays where it was: in the field, or back on the door. It closes when
+   focus leaves the list's price fields for anything but the card. A press outside it closes it.
+   A press on another price field or door moves it to that row.
+
+8. **What Tab reaches next.** Section 9c says Tab goes on to the next price. Today's row puts the
+   history door, the lock, the next row's tick and its name between two price fields, so native
+   Tab leaves the price fields, and under item 7 the card closes and opens again at each price.
+   Owner grant: yes.
+   - a. Native Tab, as today. Gain: no new key, every control stays on Tab. Loss: the card
+     closes for four stops between prices.
+   - b. The card stays open while focus is anywhere in a row of the list, and follows that row.
+     It closes when focus leaves the list. Gain: no new key, no flicker. Loss: it changes 9c's
+     close rule.
+   - c. Enter in a price field moves focus to the next price field. Gain: one key, price to
+     price. Loss: a new key binding, which must go in `SHORTCUTS`.
+   - Pick: b.
