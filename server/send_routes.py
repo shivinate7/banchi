@@ -83,7 +83,7 @@ from typing import Any, Callable, Dict, Iterator, List, NamedTuple, NoReturn, Op
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from cli import cmd_reprice, resolve  # noqa: E402
+from cli import cmd_emit, cmd_reprice, resolve, runs  # noqa: E402
 from pipeline import merge, reprice, sendguard, tcgcsv  # noqa: E402
 from server import pipeline_routes  # noqa: E402
 from server import tcg_export  # noqa: E402
@@ -1714,6 +1714,11 @@ def _fail(
             f"That is not proved yet: check TCGplayer's Staged list, and do not publish this "
             f"upload there. Nothing is live; the copies are back on the list."
         )
+    if record.get("take_off_for"):
+        # A take-off has no copies to put back, and the shared wording says they go back.
+        message = message.replace(
+            "Nothing is live; the copies are back on the list.", "Nothing came off TCGplayer; the retirement stands."
+        ).replace("the copies are back on the list", "the retirement stands")
     record["failure"] = {"code": code, "message": message}
     record["taken_back_at"] = store_clock.iso(store_clock.now())
     record["phase"] = PHASE_DONE
@@ -2955,3 +2960,220 @@ def _resolve_markdown(stamp: str, live_path: Path, now: datetime) -> None:
         record["unknown"] = unknown
         pipeline_routes._write_push(directory, record)
     _release(claim, "checked")
+
+
+# ------------------------------------------------------- the master-set take-off, one press
+#
+# D100's EXCEPTION, ON THE OWNER'S WORD (`docs/specs/master-set.md` section 5): a card retired with
+# reason `master_set` that leaves its SKU live above what is on hand offers one press that sends
+# D100's phantom take-off for that SKU. The receipt is an ordinary send's (`KIND_SEND`, `copies`
+# empty, `taken_off` the size), so the digest guard, the one outstanding take-off per SKU and the
+# live check that settles it (`_settle_takes`) are the hold take-off's own. `take_off_for` marks it.
+
+TAKE_OFF_FILE = cmd_reprice.IMPORT
+
+#: What `master_take_off_state` answers, one word per sentence the screen draws.
+TAKE_OFFERED = "offered"        # live is above on hand by the store's reckoning: the press is there
+TAKE_ON_ITS_WAY = "on_its_way"  # a take-off is written and no live check has settled it
+TAKE_SENT = "sent"              # a live check found the copy gone
+TAKE_FAILED = "failed"          # the last press failed or never landed; the press is there again
+TAKE_MATCHES = "matches"        # nothing is live above on hand
+TAKE_NO_SESSION = "no_session"  # no seller session on this Mac, so there is no press
+
+
+def _master_card(box: int, index: int):
+    """The store's read and the card at this place, which must be retired with reason `master_set`."""
+    snapshot = Store().read()
+    card = snapshot.inventory.cards.get(master.position_key(box, index))
+    if card is None:
+        raise PipelineRefusal(
+            HTTPStatus.NOT_FOUND, "card_not_found", "No card at that place. A take-off is pressed on a card that exists."
+        )
+    if card.state != master.RETIRED or card.retire_reason != master.MASTER_SET:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "not_master_set",
+            "Only a card retired for the master set can be taken off TCGplayer from here. Nothing was sent.",
+        )
+    return snapshot, card
+
+
+def _has_session() -> bool:
+    """Is a seller session saved on this Mac? Opens no socket (`tcg_export._session` reads the settings)."""
+    try:
+        tcg_export._session()
+    except tcg_export.FetchRefusal:
+        return False
+    return True
+
+
+def _master_state(inventory, card) -> dict:
+    """One master_set card's take-off, from the store and the receipts. No socket, no write."""
+    sku = card.sku or ""
+    listing = inventory.listings.get(sku) if sku else None
+    on_hand = len(inventory.copies_on_hand(sku)) if sku else 0
+    excess = max(0, int(getattr(listing, "live", 0) or 0) - on_hand) if listing is not None else 0
+    # THE NEWEST RECEIPT OF THIS RETIREMENT'S TAKE-OFF, matched on the moment it was recorded
+    # (`retired_at`), so a receipt from an earlier pull of the same SKU is not this card's: a later
+    # pull is a new offer.
+    mine = next(
+        (
+            (stamp, record)
+            for stamp, record in _receipts()
+            if sku
+            and (record.get("take_off_for") or {}).get("sku") == sku
+            and (record.get("take_off_for") or {}).get("retired_at") == card.state_at
+        ),
+        None,
+    )
+    record = mine[1] if mine else {}
+    failure = (record.get("failure") or {}).get("message")
+    if sku and sku in _outstanding_takes():
+        state = TAKE_ON_ITS_WAY
+    elif failure:
+        state = TAKE_FAILED
+    elif sku in (record.get("take_lapsed") or []):
+        state = TAKE_FAILED
+        failure = "TCGplayer still showed the copy after the wait, so the take-off did not land."
+    elif sku in (record.get("take_settled") or []):
+        state = TAKE_SENT
+    elif excess <= 0:
+        state = TAKE_MATCHES
+    else:
+        state = TAKE_OFFERED
+    if state in (TAKE_OFFERED, TAKE_FAILED) and not _has_session():
+        state = TAKE_NO_SESSION
+    return {
+        "state": state,
+        "sku": sku or None,
+        "excess": excess,
+        "taken_off": int((record.get("taken_off") or {}).get(sku, 0)) if sku else 0,
+        "stamp": mine[0] if mine else None,
+        "failure": failure,
+        "press": state in (TAKE_OFFERED, TAKE_FAILED),
+    }
+
+
+def master_take_off_state(box: int, index: int) -> dict:
+    """`GET /inventory/<box>/<index>/take-off` — whether the take-off is offered, on its way, sent,
+    failed, already matching or impossible for want of a seller session."""
+    snapshot, card = _master_card(box, index)
+    return _master_state(snapshot.inventory, card)
+
+
+def do_master_take_off(box: int, index: int, payload: dict) -> dict:
+    """`POST /inventory/<box>/<index>/take-off` — take the excess live copies of a master_set card's
+    SKU off TCGplayer, on the owner's yes (`confirm`).
+
+    D100's phantom take-off, exactly: a fresh live read; the size is live minus on hand, less the
+    copies sold since that read, never above live; at 0 or below nothing is sent and the answer is
+    `matches`. Else ONE row, `Add to Quantity` minus the size, price unchanged, pushed with
+    `take_off={sku: size}` (`tcg_import._check` passes a negative only at exactly that size) and
+    made live. The store waits for the live check, as the hold take-off's does. A failed push leaves
+    the retirement standing, and the card is never touched.
+    """
+    _, card = _master_card(box, index)
+    if not card.sku:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT, "sku_unknown",
+            "This card has no TCGplayer listing to take off. Nothing was sent.",
+        )
+    if payload.get("confirm") is not True:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "confirm_required",
+            "A take-off reaches TCGplayer and lowers a live listing, so it needs your confirmation. Nothing was sent.",
+        )
+    if not _has_session():
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "take_off_no_session",
+            "TCGplayer is not signed in on this Mac, so the copy cannot be taken off from here. Nothing was sent.",
+        )
+    with _press("listing"):
+        return _master_take_off(box, index, card)
+
+
+def _master_take_off(box: int, index: int, card) -> dict:
+    """The press, once it holds the server's one press."""
+    sku, card_name, retired_at = card.sku, card.name or "", card.state_at
+    # ONE OUTSTANDING PER SKU, whichever press wrote it (a hold's or another master pull's).
+    if sku in _outstanding_takes():
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "take_off_outstanding",
+            "A take-off of this card is already on its way to TCGplayer. Nothing was sent again; "
+            "the live check says when it landed.",
+        )
+    name, path = _fetch_live("taken off")
+    _reconcile(path, "taken off")
+    held = _live_quantities(path, "taken off").get(sku, 0)
+    inventory = Store().read().inventory
+    as_of = str(runs.describe_source(path)["mtime"])
+    on_hand = len(inventory.copies_on_hand(sku))
+    size = min(held, held - on_hand - cmd_emit._sold_since(inventory, sku, as_of))
+    if size <= 0:
+        _, card = _master_card(box, index)
+        return {"take_off": dict(_master_state(inventory, card), state=TAKE_MATCHES, press=False, excess=0)}
+
+    export = tcgcsv.read_export(path)
+    row = next((r for r in export.rows if tcgcsv.sku_cell(r) == sku), None)
+    try:
+        price = sendguard.live_prices(export.rows).get(sku) or (row or {}).get(tcgcsv.PRICE_COLUMN)
+    except ValueError:
+        price = None
+    if row is None or not price:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_GATEWAY,
+            "take_off_no_price",
+            "TCGplayer shows no price for this card, so a take-off row cannot keep it. Nothing was sent.",
+        )
+
+    stamp = _new_stamp()
+    _RUNNING["stamp"] = stamp
+    directory = sends_dir() / stamp
+    try:
+        tcgcsv.write_csv(
+            directory / TAKE_OFF_FILE, export.header,
+            [tcgcsv.set_writable(row, add_to_quantity=-size, marketplace_price=price)],
+        )
+        record = {
+            "stamp": stamp,
+            "kind": KIND_SEND,
+            "at": store_clock.iso(store_clock.now()),
+            "pressed_ns": time.time_ns(),
+            "phase": PHASE_SENDING,
+            "holder": _holder(),
+            "live_export": name,
+            "live_seen": {sku: held},
+            "take_off_for": {"box": int(box), "index": int(index), "sku": sku, "retired_at": retired_at},
+            "files": [TAKE_OFF_FILE],
+            "copies": {},
+            "copies_total": 0,
+            "taken_off": {sku: size},
+            "prices": {},
+            "moves": [],
+            "names": {sku: card_name},
+            "live_before": {},
+            "sold_before": {},
+            "guard": {},
+            "gone": [],
+            "pushed": None,
+            "published_at": None,
+            "check_after": None,
+            "checked_at": None,
+            "check": None,
+            "taken_back_at": None,
+            "failure": None,
+            "unknown": None,
+        }
+        _write(directory, record)
+    except Exception:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise
+    try:
+        answer = _push_and_publish(directory, record, "")
+    except Exception as caught:  # noqa: BLE001 — every failure after the receipt ends known
+        _settle(directory, caught)
+        raise
+    return {"take_off": master_take_off_state(box, index), "send": answer["send"]}

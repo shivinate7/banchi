@@ -17,6 +17,11 @@
     POST   /inventory/<box>/<index>/sold   mark one copy sold, or put its state back
     POST   /inventory/<box>/<index>/retire mark one copy retired — it left without a sale —
                                            or put its state back (D26)
+    GET    /inventory/<box>/<index>/take-off  whether a master_set pull can come off TCGplayer:
+                                           offered, on its way, sent, failed, matching or
+                                           no seller session (D100's master-set exception)
+    POST   /inventory/<box>/<index>/take-off  take that pull's excess live copies off TCGplayer,
+                                           on the owner's confirm
     POST   /inventory/<box>/<index>/photo  re-shoot: replace the photo and sidecar in place,
                                            record untouched, allocator never involved (D26)
     POST   /inventory/<box>/<index>/remove delete one capture mid-box and slide every higher
@@ -644,6 +649,9 @@ _REVIEW_CATALOG_RE = re.compile(r"^/review/(\d+)/(\d+)/catalog$")
 _REVIEW_STAND_DOWN_RE = re.compile(r"^/review/(\d+)/(\d+)/stand-down$")
 _SOLD_RE = re.compile(r"^/inventory/(\d+)/(\d+)/sold$")
 _RETIRE_RE = re.compile(r"^/inventory/(\d+)/(\d+)/retire$")
+# D100's master-set exception (master-set.md section 5): the same longer-path shape as `_RETIRE_RE`.
+# GET reads whether the take-off is offered; POST presses it.
+_TAKE_OFF_RE = re.compile(r"^/inventory/(\d+)/(\d+)/take-off$")
 _RESHOOT_RE = re.compile(r"^/inventory/(\d+)/(\d+)/photo$")
 # D252. A different verb on a longer path than `/inventory/<box>/<index>`,
 # exactly like `_SOLD_RE` and `_RETIRE_RE` beside it, so it cannot shadow or be shadowed by the
@@ -11184,6 +11192,15 @@ def do_retire(box: int, index: int, payload: dict) -> dict:
             "card": _card_row(snapshot.inventory, box, index, card, snapshot.skus),
         }
 
+    if not undo and reason == master.MASTER_SET:
+        # THE RETIRE RECEIPT OFFERS THE TAKE-OFF (master-set.md section 5). The retirement is
+        # committed, so a state that cannot be read must not fail it: the card's GET says it again.
+        try:
+            body["take_off"] = send_routes.master_take_off_state(box, index)
+        except Exception as exc:  # noqa: BLE001
+            files.log_cause("master take-off state", exc)
+            body["take_off"] = None
+
     return body
 
 
@@ -16787,6 +16804,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # Every markdown this store has written (D100). Reads the directory and holds
                 # nothing, the way `/pipeline/runs` does.
                 return self._json(HTTPStatus.OK, pipeline_routes.do_markdowns())
+            match = _TAKE_OFF_RE.match(path)
+            if match:
+                # A master_set pull's take-off state. Reads the store and the receipts; opens no socket.
+                return self._json(
+                    HTTPStatus.OK,
+                    send_routes.master_take_off_state(int(match.group(1)), int(match.group(2))),
+                )
             if path == "/pipeline/sends":
                 # Every send's receipt, what is written and not confirmed, and whether the
                 # live check is due. Reads a directory; opens no socket.
@@ -17061,6 +17085,14 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 body = do_retire(int(match.group(1)), int(match.group(2)), self._body())
                 return self._json(HTTPStatus.OK, body)
+            match = _TAKE_OFF_RE.match(path)
+            if match:
+                # **LOWERS A LIVE LISTING ON THE OWNER'S CONFIRM.** Reads what is live first, then
+                # pushes and publishes one negative row for a master_set pull (D100's exception).
+                return self._json(
+                    HTTPStatus.OK,
+                    send_routes.do_master_take_off(int(match.group(1)), int(match.group(2)), self._body()),
+                )
             match = _RESHOOT_RE.match(path)
             if match:
                 body = do_reshoot(int(match.group(1)), int(match.group(2)), self._body())
