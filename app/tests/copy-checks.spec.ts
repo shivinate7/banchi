@@ -1158,3 +1158,14 @@ test.describe('reader: a stat caption is prose, a press stat is a label', () => 
     expect(one?.press, 'a stat label that a button holds is a press').toBe(true)
   })
 })
+
+// THE PRICE LINE IS NAMED FLOOR. The Live tab's rule line drew "Cut-off" before the words lane (docs/specs/pricing-suggest.md
+// section 6), so the name is read off the drawn input and off every rendered string on the screen.
+test('pricing: the live tab names the price line Floor, and no rendered string says cut-off', async ({ page }) => {
+  await stubLiveRead(page, readAt(60_000))
+  await visit(page, `${hashOf('pricing')}?live`)
+  await expect(page.getByRole('group', { name: 'Which live listings to show' }), 'the Live tab is drawn').toBeVisible()
+  await expect(page.getByLabel('Floor', { exact: true }), 'the rule line names its price line Floor').toBeVisible()
+  const scan = await page.evaluate(scanCopy)
+  expect(scan.text, 'no rendered text or label says cut-off').not.toMatch(/cut-off/i)
+})

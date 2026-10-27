@@ -1921,9 +1921,9 @@ test('Download writes the file, and its copies are named until they are found', 
   })
 
   /* THE SPLIT LIVES BEHIND THE DOOR, NOT BESIDE THE SEND (the Send-menu ruling). */
-  await expect(page.getByLabel('Split in two files at the cut-off')).toHaveCount(0)
+  await expect(page.getByLabel('Split in two files at the floor')).toHaveCount(0)
   await page.getByRole('button', { name: 'Download' }).click()
-  await expect(page.getByLabel('Split in two files at the cut-off')).toBeVisible()
+  await expect(page.getByLabel('Split in two files at the floor')).toBeVisible()
   await page.getByRole('button', { name: 'Write the file' }).click()
   await expect.poll(() => sendPosts(wire).length).toBe(1)
   expect(sendPosts(wire)[0]?.body).toMatchObject({ runs: [RUN], download: true })
@@ -2453,13 +2453,13 @@ test('finding #6 (the delta review round) — focusing an ALREADY-WRITTEN cut-of
     decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: {} },
   })
   await page.getByRole('button', { name: 'Change' }).click()
-  const cut = page.getByLabel('Cut-off', { exact: true })
+  const cut = page.getByLabel('Floor', { exact: true })
   await expect(cut).toHaveValue('0.49')
 
   await cut.focus()
   await cut.blur()
 
-  await expect(page.locator('.bn-toast', { hasText: 'Cut-off changed' })).toHaveCount(0)
+  await expect(page.locator('.bn-toast', { hasText: 'Floor changed' })).toHaveCount(0)
   expect(wire.filter((r) => r.method === 'PUT')).toHaveLength(0)
   /* NO GHOST UNDO ENTRY EITHER: `U` afterwards must reach nothing this no-op pushed. */
   await page.keyboard.press('Escape')
@@ -2488,7 +2488,7 @@ test('UN-12 (the delta review round) — a hold on a no-market-price SKU is ONE 
 
   await page.locator('.pricing-hold').first().click()
   await expect(page.locator('.pricing-holdpanel')).toBeVisible()
-  await page.getByRole('button', { name: /Keeping this one/ }).click()
+  await page.getByRole('button', { name: /Keep off TCGplayer/ }).click()
   await page.getByLabel('Alert when market is above').fill('9.50')
   await page.getByLabel('Note', { exact: true }).fill('waiting on a reprint')
   await page.getByRole('button', { name: 'Hold it' }).click()
@@ -2540,7 +2540,7 @@ test('a release puts back the price the hold replaced, on its own channel', asyn
     answerAt: { '5': FIRST_DATE },
   })
   await page.locator('.pricing-hold').first().click()
-  await page.getByRole('button', { name: /Keeping this one/ }).click()
+  await page.getByRole('button', { name: /Keep off TCGplayer/ }).click()
   await page.getByRole('button', { name: 'Hold it' }).click()
   await expect.poll(() => sentFor(wire, '5')?.value).toMatchObject({ before: { value: '5.16', channel: 'unknown', at: FIRST_DATE } })
 
@@ -2567,7 +2567,7 @@ test('a price typed this visit, then held and released, is dated today, never wi
   expect(sentFor(wire, '5')?.at).toBeUndefined()
 
   await page.locator('.pricing-hold').first().click()
-  await page.getByRole('button', { name: /Keeping this one/ }).click()
+  await page.getByRole('button', { name: /Keep off TCGplayer/ }).click()
   await page.getByRole('button', { name: 'Hold it' }).click()
   await expect.poll(() => sentFor(wire, '5')?.value).toMatchObject({ before: { value: '6.00' } })
   expect((sentFor(wire, '5')?.value as { before: { at?: string } }).before.at).toBeUndefined()
@@ -3427,7 +3427,7 @@ test('a send of several runs is one press over every run, with nothing beside it
      (D86) behind the double-send guard. The Send-menu ruling took the caps and the listed-only
      filter off the press, so none of them is drawn here. */
   await expect(page.getByRole('region', { name: 'Send to TCGplayer' })).toHaveCount(1)
-  await expect(page.getByRole('checkbox', { name: /above the cut-off/ })).toHaveCount(0)
+  await expect(page.getByRole('checkbox', { name: /above the floor/ })).toHaveCount(0)
   await expect(page.getByLabel('Copies to keep live at TCGplayer')).toHaveCount(0)
   await sendPress(page).click()
   await expect.poll(() => sendPosts(wire).length).toBe(1)
@@ -3485,7 +3485,7 @@ test('the standing policy is on the multi-run landing, and one press writes it o
      rewrite: the store's policy must be reachable on the landing the screen opens on, which is
      every open run and not a single picked one. */
   await page.getByRole('button', { name: 'Change' }).click()
-  const cut = page.getByLabel('Cut-off', { exact: true })
+  const cut = page.getByLabel('Floor', { exact: true })
   await expect(cut).toBeVisible()
   await cut.fill('0.40')
   await cut.press('Enter')
@@ -3545,7 +3545,7 @@ test('a store still holding two figures says so, and one press makes them agree'
   /* ONE PRESS RESOLVES IT, AND IT WRITES BOTH KEYS. Which of the two figures the operator meant
      is not a thing this screen can know, so it offers the cut-off and states what that does
      rather than choosing on their behalf. */
-  await page.getByRole('button', { name: 'Use the cut-off for both' }).click()
+  await page.getByRole('button', { name: 'Use the floor for both' }).click()
   await expect.poll(() => wire.filter((r) => r.method === 'PUT').length).toBeGreaterThan(0)
   expect(sentPolicy(wire).threshold).toBe('0.40')
   expect(sentPolicy(wire).sub_threshold).toEqual({ flat: '0.40' })
@@ -3834,7 +3834,8 @@ test('what the clear leaves alone is on the screen, not in a tooltip', async ({ 
      and a watch, and removing one puts the card back into the next emit. */
   const spares = page.locator('.clearprices-spares')
   await expect(spares).toContainText('2')
-  await expect(spares).toContainText('held back on purpose')
+  /* THE OWNER'S HOLD IS NOT THE SEND GUARD'S TRIM, so its count never reads "held back" (spec section 6). */
+  await expect(spares).not.toContainText('held back')
   await expect(spares).toContainText('no market price')
 })
 
@@ -3995,7 +3996,8 @@ test('a clear empties the fields it cleared, and offers the way back', async ({ 
   /* THE RECEIPT CARRIES THE FIGURE AND NAMES WHAT SURVIVED. */
   const toast = page.locator('.bn-toast').last()
   await expect(toast).toContainText('1 typed price cleared')
-  await expect(toast).toContainText('2 held back on purpose')
+  await expect(toast).toContainText(/\b2\b/)
+  await expect(toast).not.toContainText('held back')
 
   /* AND THE WAY BACK PUTS THE ANSWER ITSELF BACK — value and date — rather than asking for it
      to be re-typed. */
@@ -4439,7 +4441,7 @@ test('a hold taken now keeps its row where it is, and so does the next load', as
   ]
   await open(page, { skus })
   await page.getByRole('button', { name: 'Hold Back Dunsparce', exact: true }).click()
-  await page.getByRole('button', { name: /Keeping this one/ }).click()
+  await page.getByRole('button', { name: /Keep off TCGplayer/ }).click()
   await page.getByRole('button', { name: 'Hold it' }).click()
   await expect(page.locator('.pricing-row').nth(1).locator('.pricing-state')).toHaveAttribute('title', 'withheld: keeping')
   await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Dunsparce', 'Wattrel'])
@@ -4466,7 +4468,8 @@ test('Held shows only the held rows, and its count is the bar’s count', async 
     skus: [sku({ sku: '1', name: 'Articuno' }), sku({ sku: '2', name: 'Dunsparce' })],
     decisions: { rule: 'match', basis: 'market', overrides: { '2': { withheld: 'bullish' } } },
   })
-  await expect(page.locator('[data-tile="held"]')).toContainText(/\b1 held back/)
+  await expect(page.locator('[data-tile="held"]')).toContainText(/\b1\b/)
+  await expect(page.locator('[data-tile="held"]')).not.toContainText('held back')
   const held = page.getByRole('button', { name: 'Held 1' })
   await held.click()
   await expect(held).toHaveAttribute('aria-pressed', 'true')
@@ -4542,7 +4545,7 @@ test('finding #2 (the Opus review round) — a hold toast\'s own Undo reverses t
   const wire = await open(page, { skus })
 
   await page.getByRole('button', { name: 'Hold Back Dunsparce', exact: true }).click()
-  await page.getByRole('button', { name: /Keeping this one/ }).click()
+  await page.getByRole('button', { name: /Keep off TCGplayer/ }).click()
   await page.getByRole('button', { name: 'Hold it' }).click()
   const holdToast = page.locator('.bn-toast', { hasText: 'Held Dunsparce' })
   await expect(holdToast).toBeVisible()
@@ -4569,10 +4572,10 @@ test('finding #6 (the Opus review round) — Enter commits once, not twice on th
    * triggers, stacking two "Cut-off changed" toasts for one keystroke. */
   await open(page)
   await page.getByRole('button', { name: 'Change' }).click()
-  const cut = page.getByLabel('Cut-off', { exact: true })
+  const cut = page.getByLabel('Floor', { exact: true })
   await cut.fill('0.45')
   await cut.press('Enter')
-  await expect(page.locator('.bn-toast', { hasText: 'Cut-off changed' })).toHaveCount(1)
+  await expect(page.locator('.bn-toast', { hasText: 'Floor changed' })).toHaveCount(1)
 })
 
 test('finding #9/#15 (the Opus review round) — a cut-off change gets its own "Cut-off changed" toast, with Undo', async ({
@@ -4580,12 +4583,12 @@ test('finding #9/#15 (the Opus review round) — a cut-off change gets its own "
 }) => {
   const wire = await open(page)
   await page.getByRole('button', { name: 'Change' }).click()
-  const cut = page.getByLabel('Cut-off', { exact: true })
+  const cut = page.getByLabel('Floor', { exact: true })
   await cut.fill('0.45')
   await cut.press('Enter')
   await expect.poll(() => sentPolicy(wire).threshold).toBe('0.45')
 
-  const cutToast = page.locator('.bn-toast', { hasText: 'Cut-off changed' })
+  const cutToast = page.locator('.bn-toast', { hasText: 'Floor changed' })
   await expect(cutToast).toBeVisible()
   await cutToast.getByRole('button', { name: 'Undo' }).click()
   await expect(cut).toHaveValue('0.40')
@@ -4622,7 +4625,7 @@ test('the rule sheet writes the cut-off to both keys, and says how many cards it
   await page.getByRole('button', { name: 'Change' }).click()
   const sheet = page.getByRole('dialog', { name: 'Pricing rule' })
   /* THE SERVER'S OWN FIGURE FOR A STORE THAT NEVER SET ONE (D99): $0.40, not a prettier default. */
-  const cut = sheet.getByLabel('Cut-off', { exact: true })
+  const cut = sheet.getByLabel('Floor', { exact: true })
   await expect(cut).toHaveValue('0.40')
   await expect(sheet.locator('.pricing-cheap-caption')).toContainText('2 under, 1 above')
   await cut.fill('0.45')
@@ -4651,12 +4654,12 @@ test('rule panel: a run cut-off change gets a receipt, and Undo hands the run ba
   await open(page)
   await page.getByRole('button', { name: 'Change' }).click()
   const sheet = page.getByRole('dialog', { name: 'Pricing rule' })
-  await sheet.getByRole('button', { name: 'Give this run its own cut-off' }).click()
-  const receipt = page.locator('.bn-toast', { hasText: 'Cut-off changed for this run' })
+  await sheet.getByRole('button', { name: 'Give this run its own floor' }).click()
+  const receipt = page.locator('.bn-toast', { hasText: 'Floor changed for this run' })
   await expect(receipt).toBeVisible()
   await expect(sheet.getByRole('button', { name: 'Follow the store again' })).toBeVisible()
   await receipt.getByRole('button', { name: 'Undo' }).click()
-  await expect(sheet.getByRole('button', { name: 'Give this run its own cut-off' })).toBeVisible()
+  await expect(sheet.getByRole('button', { name: 'Give this run its own floor' })).toBeVisible()
 })
 
 for (const [market, listed] of [['4.00', '3.80'], ['10.00', '9.50']] as [string, string][]) {
@@ -5133,7 +5136,8 @@ test('F3: the held count on the button and in the bar are one number, a sent row
     decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608459': { withheld: 'keeping' }, '8608460': { withheld: 'bullish' } } },
   })
   await expect(page.getByRole('button', { name: 'Held 2' })).toBeVisible()
-  await expect(page.locator('[data-tile="held"]')).toContainText(/\b2 held back/)
+  await expect(page.locator('[data-tile="held"]')).toContainText(/\b2\b/)
+  await expect(page.locator('[data-tile="held"]')).not.toContainText('held back')
 })
 
 test('every pricing row waits min(i, cap) * the one shared stagger', async ({ page }) => {
@@ -6242,7 +6246,8 @@ test('send tiles: three tiles on the Unsent tab carry 3 ready, 19 held and 541 a
 
   await expect(tile(page, 'ready')).toContainText(/\b3 ready to go/)
   await expect(tile(page, 'ready')).toContainText(/\bJoins 541 listings in your store/)
-  await expect(tile(page, 'held')).toContainText(/\b19 held back/)
+  await expect(tile(page, 'held')).toContainText(/\b19\b/)
+  await expect(tile(page, 'held')).not.toContainText('held back')
   await expect(tile(page, 'held')).toContainText('Not in this send.')
   await expect(tile(page, 'priced')).toContainText('Every card is priced')
   await expect(tile(page, 'priced')).not.toHaveAttribute('data-tone', 'warn')
@@ -6295,7 +6300,8 @@ test('send tiles: the held tile opens the Held filter, and the list keeps only t
     skus: [sku({ sku: '1', name: 'Articuno' }), sleeper],
     decisions: { rule: 'match', basis: 'market', overrides: holding([sleeper]) },
   })
-  await expect(tile(page, 'held')).toContainText(/\b1 held back/)
+  await expect(tile(page, 'held')).toContainText(/\b1\b/)
+  await expect(tile(page, 'held')).not.toContainText('held back')
 
   await tile(page, 'held').locator('a, button').first().click()
 
@@ -6434,7 +6440,8 @@ test('send tiles: a row held as unlisted is not counted in the typed figure', as
     },
   })
   /* THE HELD ROW IS A HOLD, and the one typed price is the only typed price: the figure is 1. */
-  await expect(tile(page, 'held')).toContainText(/\b1 held back/)
+  await expect(tile(page, 'held')).toContainText(/\b1\b/)
+  await expect(tile(page, 'held')).not.toContainText('held back')
   await expect(tile(page, 'priced')).toContainText(/\b1 typed\./)
 })
 
