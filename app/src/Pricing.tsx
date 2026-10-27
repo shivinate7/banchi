@@ -3230,8 +3230,8 @@ function fieldState(
   if (isWithheld(standing)) {
     // The human label is drawn; the machine string it stands for travels in the title (D86).
     const reason = heldReason(standing)
-    // A status, not the chip's imperative (spec section 6): the reason chip says Keep off TCGplayer, the row says Kept off TCGplayer.
-    const label = reason === 'keeping' ? 'Kept off TCGplayer' : ((HOLD_SHORT as Record<string, string>)[reason] ?? '')
+    // The owner's hold is said once, by the pill; the caption adds only another reason's short name.
+    const label = reason === 'keeping' ? '' : ((HOLD_SHORT as Record<string, string>)[reason] ?? '')
     return label === '' ? null : { text: label, tone: 'quiet', title: `withheld: ${reason}` }
   }
   if (asking !== undefined && asking !== null && typeof standing === 'string') {
@@ -3496,8 +3496,7 @@ function PricingRow({
             {lockedWhy}
           </span>
         ) : withheld ? (
-          <span className="pricing-held">
-            <Icon name="lock" size={13} />
+          <span className="pricing-held" title={`withheld: ${heldReason(standing)}`}>
             Kept off TCGplayer
           </span>
         ) : (
