@@ -2017,7 +2017,10 @@ def check_master_take_off(checks: Checks) -> None:
             "A SEND BETWEEN THE UNDO AND THE LIVE CHECK ADDS NOTHING: refused as nothing to send, no row",
             f"Got: {between}, rows: {_portal_rows(portal)}",
         )
-        checks.equal(_listing_counts(), (3, 3), "and the counts stay (3, 3) until the live check settles")
+        checks.equal(
+            _listing_counts(), (3, 3),
+            "AN UNDO LOWERS NOTHING: THE COUNTS STAY (3, 3) UNTIL THE LIVE CHECK SETTLES",
+        )
         _age_receipt(stamp)
         portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
         send_routes.do_live_check({})
@@ -2186,11 +2189,21 @@ def check_master_owed(checks: Checks) -> None:
 
     # ------------------------------------------------ two master_set pulls, one read of the outstanding set
     with _case(checks, "outstanding read once"), send_portal() as portal, synced_home():
-        seam_run(checks, [(3, 1, "Articuno", "161", None), (3, 2, "Dunsparce", "120", "normal")])
+        # A card carries its SKU only once its run is sent, so both runs are sent and confirmed first.
+        run_dir, _ = seam_run(checks, [(3, 1, "Articuno", "161", None), (3, 2, "Dunsparce", "120", "normal")])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        _age_receipt(sent["stamp"])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1, DUNSPARCE_SKU: 1})
+        send_routes.do_live_check({})
         retire(1)
         retire(2)
         with mock.patch.object(send_routes, "_outstanding_takes", wraps=send_routes._outstanding_takes) as counted:
-            owed()
+            listed = owed()
+        checks.equal(
+            sorted(entry["sku"] for entry in listed), sorted([ARTICUNO_SKU, DUNSPARCE_SKU]),
+            "two master_set pulls are two owed entries, so the count below reads a list of two",
+        )
         checks.equal(
             counted.call_count, 1,
             "THE OUTSTANDING SET IS READ ONCE PER LIST: two master_set pulls, one read, not one per card",
@@ -2284,7 +2297,7 @@ def check_master_take_off_mutants(checks: Checks) -> None:
             "            if listing is not None:\n"
             "                listing.bump(master.PUSHED, -1)\n"
             "        else:",
-            check_master_take_off, "A SEND BETWEEN THE UNDO AND THE LIVE CHECK ADDS NOTHING",
+            check_master_take_off, "AN UNDO LOWERS NOTHING: THE COUNTS STAY (3, 3)",
         ),
         (
             "owed: the outstanding set read again for each card",
