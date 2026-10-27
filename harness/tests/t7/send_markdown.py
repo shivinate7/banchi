@@ -11,12 +11,14 @@ import errno
 import json
 import http.client
 import http.server
+import inspect
 import os
 import shutil
 import sqlite3
 import re
 import subprocess
 import tempfile
+import textwrap
 import threading
 import time
 import urllib.error
@@ -50,6 +52,7 @@ from harness.tests.t7.common import (
     capture_payload,
     command,
     error_code,
+    hermetic,
     isolated_home,
     quiet,
     request,
@@ -1953,6 +1956,66 @@ def check_master_take_off(checks: Checks) -> None:
             if cookie is not None:
                 os.environ["TCGPLAYER_STORE_COOKIE"] = cookie
 
+    # ------------------------------------------------ a copy sold after the live read is not taken off again
+    with _case(checks, "sold after the read"), send_portal() as portal, synced_home():
+        run_dir = _settled_live(checks, portal)
+        retire(3)
+        portal["rows"].clear()
+        # The sale lands between the live read and the size: on hand 2 falls to 1, and one is sold since the read.
+        with _after_call(send_routes, "_fetch_live", lambda: capture_server.do_mark_sold(3, 2, {})):
+            press(3)
+        checks.equal(
+            _portal_rows(portal),
+            {ARTICUNO_SKU: "-1"},
+            "A COPY SOLD AFTER THE LIVE READ IS NOT TAKEN OFF AGAIN: live 3, on hand 1, one sold since: one copy",
+        )
+
+    # ------------------------------------------------ a push that ends unknown leaves the card and the take-off standing
+    with _case(checks, "send unknown"), send_portal() as portal, synced_home():
+        _settled_live(checks, portal)
+        retire(3)
+        start = _listing_counts()
+        portal["published_then_5xx"] = True
+        unknown = press(3)
+        checks.equal(
+            unknown.get("refused"),
+            "send_unknown",
+            "TCGPLAYER ANSWERED 500 AFTER IT PUBLISHED: the press ends unknown",
+        )
+        card = Store().read().inventory.cards[master.position_key(3, 3)]
+        checks.equal(
+            (card.state, card.retire_reason),
+            (master.RETIRED, master.MASTER_SET),
+            "THE CARD AND ITS RETIREMENT ARE UNTOUCHED by an unknown push",
+        )
+        checks.equal(_listing_counts(), start, "and the store's counts wait for the live check")
+        checks.equal(state(3).get("state"), "on_its_way", "THE TAKE-OFF STAYS OUTSTANDING: the card reads on its way")
+        portal["rows"].clear()
+        again = press(3)
+        checks.ok(
+            again.get("refused") == "take_off_outstanding" and not portal["rows"],
+            f"and a second press is refused while the unknown take-off is outstanding. Got: {again}",
+        )
+
+    # ------------------------------------------------ an undo while the take-off is outstanding
+    with _case(checks, "undo while outstanding"), send_portal() as portal, synced_home():
+        run_dir = _settled_live(checks, portal)
+        retire(3)
+        pressed = press(3)
+        stamp = (pressed.get("take_off") or {}).get("stamp")
+        capture_server.do_retire(3, 3, {"undo": True})
+        _age_receipt(stamp)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2})
+        send_routes.do_live_check({})
+        checks.equal(_listing_counts(), (2, 2), "the live check settles the take-off, undo or no undo")
+        portal["rows"].clear()
+        send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+        checks.equal(
+            _portal_rows(portal),
+            {ARTICUNO_SKU: "1"},
+            "NO OVER-LIST: after the settle the ordinary send adds the one copy the undo put back, not two",
+        )
+
     # ------------------------------------------------ the route
     with _case(checks, "route"):
         checks.ok(
@@ -2082,6 +2145,96 @@ def check_master_owed(checks: Checks) -> None:
         finally:
             if cookie is not None:
                 os.environ["TCGPLAYER_STORE_COOKIE"] = cookie
+
+    # ------------------------------------------------ a press-all that read the list before a press took it
+    with _case(checks, "press-all races a press"), send_portal() as portal, synced_home():
+        _settled_live(checks, portal)
+        retire(3)
+        portal["rows"].clear()
+        release = threading.Event()
+        portal["hold"]["GET"] = release  # the single press stops at its live read, holding the press
+        before = len(portal["calls"])
+        answers: dict = {}
+        single = _press_thread(lambda: send_routes.do_master_take_off(3, 3, {"confirm": True}), answers, "single")
+        deadline = time.monotonic() + 20
+        while not any(kind == "GET" for kind, _ in portal["calls"][before:]) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        snapshot = send_routes._owed_entries()
+        checks.equal(
+            [entry["sku"] for entry in snapshot],
+            [ARTICUNO_SKU],
+            "THE PRESS-ALL READS THE LIST WHILE A PRESS IS AT ITS LIVE READ: the take-off is still owed",
+        )
+        release.set()
+        single.join(20)
+        checks.equal(answers.get("single", ("", ""))[0], "sent", "and the single press lands")
+        with _replaced(send_routes, "_owed_entries", lambda: snapshot):
+            raced = press_all()
+        checks.equal(
+            [r["refused"] for r in raced.get("results") or []],
+            ["take_off_outstanding"],
+            "A PRESS-ALL THAT RACED A PRESS IS REFUSED by the one-outstanding check, once the press is free",
+        )
+        checks.equal(len(portal["rows"]), 1, "and only the single press's one row reached TCGplayer")
+
+
+def check_master_take_off_mutants(checks: Checks) -> None:
+    """Each mutant of the take-off's real code is caught by the case that names it.
+
+    A mutant is ONE literal change to a real function's source (`_mutant`), run for one pass of its
+    target check on a sub-`Checks`. The pass must print a FAIL line that carries the named case's
+    label. Nothing is written to a file. The outer `min` in the size is NOT a mutant here: it never
+    binds, because the copies on hand and the copies sold are never negative, so the size is the
+    same without it.
+    """
+    checks.note("")
+    checks.note("MASTER-SET TAKE-OFF MUTANTS — one change to the real code, and the named case goes red")
+    mutants = (
+        (
+            "size: the sold term dropped", "size = min(held, held - on_hand - cmd_emit._sold_since(inventory, sku, as_of))",
+            "size = min(held, held - on_hand)", check_master_take_off, "SOLD AFTER THE LIVE READ",
+        ),
+        (
+            "size: the on-hand term dropped", "held - on_hand - cmd_emit._sold_since",
+            "held - cmd_emit._sold_since", check_master_take_off, "THE PORTAL RECEIVED ONE ROW",
+        ),
+        (
+            "size: the live read off by one", "min(held, held - on_hand",
+            "min(held, held + 1 - on_hand", check_master_take_off, "THE PORTAL RECEIVED ONE ROW",
+        ),
+        (
+            "guard: the one-outstanding check removed", "if sku in _outstanding_takes():", "if False:",
+            check_master_take_off, "A SECOND PRESS WHILE ONE IS OUTSTANDING",
+        ),
+        (
+            "guard: the one-outstanding check removed, press-all race", "if sku in _outstanding_takes():",
+            "if False:", check_master_owed, "A PRESS-ALL THAT RACED A PRESS",
+        ),
+        (
+            "outstanding: an unknown push stops being outstanding", "if record.get(\"failure\") or record.get(\"taken_back_at\"):",
+            "if record.get(\"failure\") or record.get(\"taken_back_at\") or record.get(\"unknown\"):",
+            check_master_take_off, "THE TAKE-OFF STAYS OUTSTANDING",
+        ),
+        (
+            "press failure: the retirement is cleared", "        _settle(directory, caught)\n        raise\n",
+            "        _settle(directory, caught)\n        with Store().write() as snapshot:\n"
+            "            snapshot.inventory.cards[master.position_key(box, index)].state = master.IDENTIFIED\n"
+            "        raise\n",
+            check_master_take_off, "UNTOUCHED",
+        ),
+    )
+    for name, anchor, replacement, target, label in mutants:
+        sub = Checks()
+        function = "_outstanding_takes" if "record.get" in anchor else "_master_take_off"
+        with _mutant(send_routes, function, anchor, replacement), hermetic():
+            target(sub)
+        fails = [line for line in sub.lines if line.startswith("  FAIL")]
+        caught = any(label in line for line in fails)
+        checks.ok(
+            caught,
+            f"MUTANT {name}: {target.__name__} goes red on {label!r}",
+            "" if caught else "survived, or failed on something else: " + " | ".join(fails)[:900],
+        )
 
 
 def check_send_take_outstanding(checks: Checks) -> None:
@@ -2261,6 +2414,55 @@ def _press_thread(fn, answers, index):
     thread = threading.Thread(target=go, daemon=True)
     thread.start()
     return thread
+
+
+@contextmanager
+def _mutant(module, name: str, old: str, new: str):
+    """`module.name` run with ONE literal change to its own source, for this block only.
+
+    THE MUTANT IS NEVER WRITTEN TO A FILE. The function's source is read, the anchor `old` is
+    replaced by `new`, and the result is compiled into the module's own namespace. The original
+    function object is put back on the way out. An anchor that is not found exactly once means
+    the mutant is stale, and the block refuses to run rather than prove nothing."""
+    original = getattr(module, name)
+    source = textwrap.dedent(inspect.getsource(original))
+    found = source.count(old)
+    if found != 1:
+        raise AssertionError(f"mutant of {name}: its anchor is found {found} times, not once; the mutant is stale")
+    exec(compile(source.replace(old, new), f"<mutant {name}>", "exec"), module.__dict__)
+    try:
+        yield
+    finally:
+        setattr(module, name, original)
+
+
+@contextmanager
+def _after_call(module, name: str, action):
+    """`module.name` as it is, then `action()` on the way out: the one hook that puts a sale
+    between a read and the size that follows it."""
+    original = getattr(module, name)
+
+    def hooked(*args, **kwargs):
+        answer = original(*args, **kwargs)
+        action()
+        return answer
+
+    setattr(module, name, hooked)
+    try:
+        yield
+    finally:
+        setattr(module, name, original)
+
+
+@contextmanager
+def _replaced(module, name: str, value):
+    """`module.name` is `value` for this block, then the real one again."""
+    original = getattr(module, name)
+    setattr(module, name, value)
+    try:
+        yield
+    finally:
+        setattr(module, name, original)
 
 
 @contextmanager
@@ -8053,6 +8255,7 @@ CHECKS = (
     check_send_take_outstanding,
     check_master_take_off,
     check_master_owed,
+    check_master_take_off_mutants,
     check_send_sold_since,
     check_send_sold_after_check,
     check_send_snapshot_lagging_then_newer,
