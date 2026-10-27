@@ -9,8 +9,8 @@ All four draw the same chart: today's `ProductChart` (market line, the low-to-hi
 week, the owner's sales as diamonds), with two new marks: the owner's own asking price as a
 dashed step line from the day it was listed, and the suggestion as a dot. Each states the reason
 and the sold range, "14 sold in 30 days, $3.10 to $4.25", once. In options 1 to 3 they show in
-the history area, and the open row's own reason line steps aside. In option 4 the reason stays on
-the row. The row's 30-day trend is read off the chart's market line, so the two agree.
+the history area, and the open row's own reason line steps aside. In option 4 both stay on the
+row. The row's 30-day trend is read off the chart's market line, so the two agree.
 
 1. **Keep the sheet** (`history-sheet.html`). The history door opens today's `ProductSheet` over
    `ProductHistoryView`, 420px at the right, at 1440 and 820.
@@ -37,15 +37,21 @@ the row. The row's 30-day trend is read off the chart's market line, so the two 
      draws.
    - The Up and Down arrows move the selection. A new key binding must go in `SHORTCUTS` before
      it is done.
-4. **A card floats over the list** (`history-float.html`). The history door opens a 560px card
-   under its row, with no scrim. Its right edge lines up with the door. With no room below the
-   row, it opens above. It closes on Esc, on a press outside it, or on its close button. A press
-   on another row's history door moves it to that row. It keeps this shape at 820.
-   - Gain: the widest chart of the four, 520px against the sheet's 380px. The pressed row, its
-     price, tick and reason stay in view above the card, and the rest of the list stays
-     pressable.
-   - Loss: it covers the rows under it while it is open, including their prices and ticks. The
-     daily copies-sold bars do not fit, so only the sold sentence shows. Its reason comes from
-     the row, not from the card.
+4. **A card floats over the list** (`history-float.html`). The history door opens a card under
+   its row, with no scrim. Its right edge lines up with the door. With no room below the row, it
+   opens above. The card is 560px at 1440 and 384px at 820, so it covers no name, thumb or tick
+   at either width. Its chart is 520px wide at 1440 and 344px at 820, against 380px in today's
+   sheet. It shows the chart and the four prices. The reason and the sold range stay on the row
+   above it, so each shows once.
+   - Gain: at 1440, the widest chart of the four. The pressed row, with its price, tick, reason
+     and sold range, stays in view above the card, and the rest of the list stays pressable.
+   - Loss: it covers part of the four rows under it while it is open. At 1440 that is their
+     Lowest, Trend, Price and From columns, their history doors and locks, and the end of their
+     reason lines. At 820 it is their prices, doors and locks, and the ends of their set, price
+     and reason lines. At 820 its chart is smaller than the sheet's. The daily copies-sold bars do
+     not fit.
+   - Focus moves into the card on open, and back to the history door on close. It closes on Esc,
+     on a press outside it, or on its close button. A press on another row's history door moves it
+     to that row.
    - How it complies with D313 (nothing moves unless the person moved it): nothing in the list
-     moves. The card lies over the list, and only the press opens, moves or closes it.
+     moves. The card lies over the list, and only a press opens, moves or closes it.

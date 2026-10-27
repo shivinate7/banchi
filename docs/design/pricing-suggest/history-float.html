@@ -260,16 +260,19 @@
 
   .fl { position: absolute; z-index: 20; width: 560px; display: flex; flex-direction: column; gap: var(--bn-4);
         padding: var(--bn-4) var(--bn-5) var(--bn-5); border-radius: var(--bn-r-xl); background: var(--bn-surface);
-        box-shadow: var(--bn-shadow-3), inset 0 0 0 1px var(--bn-line); }
+        box-shadow: var(--bn-shadow-3), inset 0 0 0 1px var(--bn-line); outline: none; }
+  .frame[data-w='820'] .fl { width: 384px; }
   .fl[hidden] { display: none; }
   .fl-caret { position: absolute; top: -6px; width: 12px; height: 12px; rotate: 45deg; background: var(--bn-surface);
               box-shadow: -1px -1px 0 var(--bn-line); }
   .fl[data-side='above'] .fl-caret { top: auto; bottom: -6px; box-shadow: 1px 1px 0 var(--bn-line); }
   .fl-head { display: flex; align-items: center; gap: var(--bn-3); }
   .fl-head .hx-name { flex: 1; font-family: var(--bn-font-display); font-size: var(--bn-fs-h3); font-weight: 800; }
-  .fl-row { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--bn-4); }
+  .fl-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--bn-4); }
   .fl .hx-facts { grid-template-columns: repeat(4, auto); justify-content: start; gap: var(--bn-1) var(--bn-5); }
-  .fl-acts .bn-btn { --btn-h: 40px; }
+  .frame[data-w='820'] .fl-foot { flex-direction: column; align-items: stretch; }
+  .frame[data-w='820'] .fl .hx-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fl-foot .bn-btn { --btn-h: 40px; }
   body.nonotes .press-note { display: none; }
   .press-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); border: 1px dashed var(--bn-warn);
                 border-radius: var(--bn-r); padding: var(--bn-2) var(--bn-3); }
@@ -605,26 +608,29 @@
   }
 
   /* Option 4: the history door opens a card over the list, under the pressed row. No scrim; the list stays pressable. */
-  function decorate(f) {
-    f.insertAdjacentHTML('beforeend', `<section class="fl mark" role="dialog" aria-label="Price history" data-fl hidden>
+  function decorate(f, w) {
+    const narrow = w === '820'
+    f.querySelector('.gone-note').insertAdjacentHTML('afterend', `<p class="press-note"><b>New:</b> a floating card under the pressed row.
+      <b>Width:</b> 560px at 1440, so its chart is 520px wide; 384px at 820, so its chart is 344px wide. Today's sheet draws it 380px wide.
+      The card covers no name, thumb or tick. The reason and the sold range stay on the row above the card, so each shows once. The daily copies-sold bars are left out.</p>`)
+    f.insertAdjacentHTML('beforeend', `<section class="fl mark" role="dialog" aria-label="Price history for Gardevoir ex" tabindex="-1" data-fl hidden>
       <span class="fl-caret" aria-hidden="true"></span>
-      <header class="fl-head"><span class="bn-overlay-icon">${svg('history', 18)}</span><p class="hx-name" data-fl-name>Gardevoir ex</p>
+      <header class="fl-head"><span class="bn-overlay-icon">${svg('history', 18)}</span><p class="hx-name">Gardevoir ex</p>
         <button class="bn-icon-btn iconb" type="button" aria-label="Close" data-fl-close>${svg('close', 18)}</button></header>
-      <div class="hx-block"><h3 class="hx-h">Last 90 days</h3>${hxLegend()}${hxChart(520, 170)}</div>
-      <div class="fl-row"><div class="hx-block"><h3 class="hx-h">Sales, last 30 days</h3>${hxSold()}</div>
-        <div class="fl-acts"><button class="bn-btn" type="button">${svg('external', 16)}Full history</button></div></div>
-      ${hxFacts()}
-      <p class="press-note"><b>New:</b> a floating card. It covers the rows under it, never its own row. <b>Width:</b> the card is 560px, so its chart is 520px wide, against 380px in today's sheet. It keeps this shape at 820. The reason stays on the row above the card, so it shows once. The daily copies-sold bars are left out.</p>
+      <div class="hx-block"><h3 class="hx-h">Last 90 days</h3>${hxLegend()}${hxChart(narrow ? 344 : 520, 170)}</div>
+      <div class="fl-foot">${hxFacts()}<button class="bn-btn" type="button">${svg('external', 16)}Full history</button></div>
     </section>`)
     const card = f.querySelector('[data-fl]')
     const doorOf = (row) => row.querySelector('[aria-label^="Price history"]')
     let open = null
-    /* Anchored under the row, or above it when the viewport has no room below. Right edge on the row's history door. */
+    /* Anchored under the row, or above it when the viewport has no room below. Right edge on the row's history door.
+       Focus moves into the card on open, and back to the door on close. */
     const place = (row) => {
-      if (open) { delete open.dataset.picked; delete doorOf(open).dataset.on }
+      const was = open
+      if (was) { delete was.dataset.picked; delete doorOf(was).dataset.on }
       open = row
       card.hidden = !row
-      if (!row) return
+      if (!row) { if (was) doorOf(was).focus({ preventScroll: true }); return }
       row.dataset.picked = ''
       const door = doorOf(row)
       door.dataset.on = ''
@@ -634,6 +640,7 @@
       card.style.top = `${(below ? rr.bottom + 8 : rr.top - 8 - card.offsetHeight) - fr.top}px`
       card.style.left = `${dr.right - card.offsetWidth - fr.left}px`
       card.querySelector('.fl-caret').style.left = `${card.offsetWidth - dr.width / 2 - 6}px`
+      card.focus({ preventScroll: true })
     }
     const first = [...f.querySelectorAll('.row')].find((r) => r.querySelector('.name').textContent === 'Gardevoir ex')
     document.fonts.ready.then(() => place(first))
@@ -643,7 +650,7 @@
       if (door) return place(door.closest('.row'))
       if (e.target.closest('[data-fl-close]') || !e.target.closest('[data-fl]')) place(null)
     })
-    addEventListener('keydown', (e) => { if (e.key === 'Escape') place(null) })
+    addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) place(null) })
   }
 
   /* ---- build the frames ---- */
