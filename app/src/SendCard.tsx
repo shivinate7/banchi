@@ -299,20 +299,29 @@ function OwedTakeOffsLine({
 
   /* SEVERAL: one line and a fold; each entry has its own press, and there is no press for all. Open, the list floats over the worklist
      (`.send-moves`), so the bar keeps its height. */
-  const total = owed.reduce((sum, entry) => sum + ownedCopies(entry), 0)
-  const mode = owed.every((entry) => viewOfEntry(entry) === 'nosession') ? 'nosession' : 'several'
+  /* THE TOTAL IS WHAT TCGPLAYER STILL LISTS: an entry that was taken off, or already matched, leaves it. */
+  const left = owed.reduce((sum, entry) => (['matches', 'sent'].includes(viewOfEntry(entry)) ? sum : sum + ownedCopies(entry)), 0)
+  const accepted = owed.reduce((sum, entry) => {
+    const answer = answers[entryKey(entry)]
+    return answer?.view === 'sent' ? sum + (answer.taken > 0 ? answer.taken : ownedCopies(entry)) : sum
+  }, 0)
+  const mode = left === 0 ? 'done' : owed.every((entry) => viewOfEntry(entry) === 'nosession') ? 'nosession' : 'several'
   const cards = count(owed.length, 'Card')
   return (
     <Notice
-      tone="warn"
+      tone={left === 0 ? 'ok' : 'warn'}
       compact
       className="send-standing send-owed send-moves"
       title={
         <OwedCell
           current={mode}
           states={{
-            several: `TCGplayer still lists ${count(total, 'copy', 'copies')} from your master set.`,
-            nosession: `TCGplayer is not signed in, so these ${count(total, 'copy', 'copies')} stay listed. Sign in, then press Refresh.`,
+            several: `TCGplayer still lists ${count(left, 'copy', 'copies')} from your master set.`,
+            nosession: `TCGplayer is not signed in, so these ${count(left, 'copy', 'copies')} stay listed. Sign in, then press Refresh.`,
+            done:
+              accepted > 0
+                ? `TCGplayer accepted: ${count(accepted, 'copy', 'copies')} ${accepted === 1 ? 'is' : 'are'} off.`
+                : 'TCGplayer already lists only what you hold. Nothing was sent.',
           }}
         />
       }

@@ -1,3 +1,5 @@
+**Superseded:** the owner dropped Take All. Each entry has only its own press, and this page's Take All states are superseded.
+
 # Pricing, take-offs owed: design notes
 
 Lane kind: informed. Mockup: `pricing-owed.html`. Spec: `docs/specs/master-set.md`, section 5.
