@@ -1177,19 +1177,35 @@ def main() -> int:
                             name=f"{riftbound_line} - Origins: Ledger Own Name - "
                                  "#020/298 - Near Mint",
                         ),
+                        # Order lines whose name does not parse: "U1" has an included
+                        # catalog row (rescued), "U2" has none, "U3" only a worn one.
+                        # "U1" earns the most, so a builder who ranks it into the head
+                        # by revenue puts it ahead of the old subjects.
+                        OrderLine(sku="U1", quantity=1, unit_price="50.00", name="junk"),
+                        OrderLine(sku="U2", quantity=1, unit_price="4.00", name="also junk"),
+                        OrderLine(sku="U3", quantity=1, unit_price="4.00", name="junk too"),
                     ],
                 )
                 for sku, product_line, name, condition in (
                     # catalog-only, and wanted
                     ("100", riftbound_line, "Catalog Near Mint", "Near Mint"),
                     ("101", riftbound_line, "Catalog Near Mint Foil", "Near Mint Foil"),
-                    # catalog-only, and not Near Mint
+                    # catalog-only, sealed: Unopened is an included condition (the
+                    # orchestrator's reversible pick), beside Near Mint and Near Mint Foil
+                    ("104", riftbound_line, "Catalog Booster Display", "Unopened"),
+                    # catalog-only, and worn
                     ("102", riftbound_line, "Catalog Lightly Played", "Lightly Played"),
                     ("103", riftbound_line, "Catalog Lightly Played Foil",
                      "Lightly Played Foil"),
-                    # catalog-only, and not Riftbound
+                    ("105", riftbound_line, "Catalog Damaged", "Damaged"),
+                    # catalog-only, and not Riftbound (sealed too, so Unopened is no loophole)
                     ("200", "Pokemon", "Catalog Pokemon", "Near Mint"),
                     ("300", "One Piece Card Game", "Catalog One Piece", "Near Mint"),
+                    ("106", "Pokemon", "Catalog Pokemon Box", "Unopened"),
+                    # an order line that does not parse, with a catalog row to rescue it
+                    ("U1", riftbound_line, "Catalog Name For U1", "Near Mint"),
+                    # an order line that does not parse, with only a worn catalog row
+                    ("U3", riftbound_line, "Catalog Worn Name For U3", "Lightly Played"),
                     # already covered by a card or a ledger line, under a DIFFERENT name
                     ("A1", riftbound_line, "Catalog Name For A1", "Near Mint"),
                     ("L1", riftbound_line, "Catalog Name For L1", "Near Mint"),
@@ -1199,15 +1215,23 @@ def main() -> int:
             catalog_snapshot = Store().read()
 
             # BASELINE, true today and after: what the old code produces, and where.
-            narrow = archive_walk.rows_from_store(catalog_snapshot, market=catalog_market)
+            narrow_refusals: Dict[str, str] = {}
+            narrow = archive_walk.rows_from_store(
+                catalog_snapshot, market=catalog_market, refusals=narrow_refusals,
+            )
             ok(list(narrow) == ["A1", "L1", "999"],
                "BASELINE: without the keyword the subjects are the card, the ledger-only SKU "
                "and the zero-revenue card, sold value first — no catalog-only SKU",
                list(narrow))
+            ok({"U1", "U2", "U3"} <= set(narrow_refusals),
+               "BASELINE: without the keyword the three unparseable order lines are refusals",
+               narrow_refusals)
 
+            wide_refusals: Dict[str, str] = {}
             try:
                 wide = archive_walk.rows_from_store(
-                    catalog_snapshot, market=catalog_market, include_catalog=True,
+                    catalog_snapshot, market=catalog_market, refusals=wide_refusals,
+                    include_catalog=True,
                 )
                 seam_error = ""
             except TypeError as exc:
@@ -1237,21 +1261,38 @@ def main() -> int:
                "revenue-ranked as before — a catalog row never outranks a card, even a "
                "zero-revenue one whose SKU sorts later",
                list(wide))
-            ok(set(list(wide)[old_count:]) == {"100", "101"}
-               and len(wide) == old_count + 2,
-               "after them come exactly the catalog-only Near Mint SKUs, each once",
+            ok(set(list(wide)[old_count:]) == {"100", "101", "104", "U1"}
+               and len(wide) == old_count + 4,
+               "after them come exactly the included catalog-only SKUs, each once — "
+               "the rescued order line among them, not in the revenue-ranked head",
                list(wide))
 
-            # 3. only Near Mint, foil included
+            # 3. Near Mint, foil included, and sealed; worn grades stay out
             ok("101" in wide,
                "a Near Mint Foil catalog-only SKU is added — foil counts as Near Mint")
-            ok("100" in wide and "102" not in wide and "103" not in wide,
-               "a Lightly Played catalog-only SKU is not added, foil or not",
+            ok("104" in wide and wide["104"].get(tcgcsv_module.CONDITION_COLUMN) == "Unopened",
+               "a Riftbound sealed (Unopened) catalog-only SKU is added, row carried as is",
+               wide.get("104"))
+            ok("100" in wide and not {"102", "103", "105"} & set(wide),
+               "a Lightly Played or Damaged catalog-only SKU is not added, foil or not",
                list(wide))
 
             # 4. only Riftbound
-            ok("100" in wide and "200" not in wide and "300" not in wide,
-               "a Pokemon or One Piece catalog-only SKU is not added", list(wide))
+            ok("100" in wide and not {"200", "300", "106"} & set(wide),
+               "a Pokemon or One Piece catalog-only SKU is not added, sealed or not",
+               list(wide))
+
+            # 6. an order line that does not parse is rescued by an included catalog row
+            ok(wide.get("U1", {}).get(tcgcsv_module.NAME_COLUMN) == "Catalog Name For U1"
+               and "U1" not in wide_refusals,
+               "an unparseable order line whose SKU has an included catalog row becomes a "
+               "subject from that row and is no longer a refusal",
+               (wide.get("U1"), wide_refusals))
+            ok("U1" in wide and "U2" in wide_refusals and "U3" in wide_refusals
+               and "U2" not in wide and "U3" not in wide,
+               "an unparseable order line with no catalog row, or only a worn one, stays a "
+               "refusal and is not a subject",
+               (list(wide), wide_refusals))
 
             # 5. the catalog never overrides a SKU cards or the ledger already answers
             ok(wide.get("A1", {}).get(tcgcsv_module.NAME_COLUMN) == "Card A Own Name"
