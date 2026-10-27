@@ -100,15 +100,21 @@ def _card(index, name, number, total="159", metadata=None, confidence="high"):
 #   its asking price, even at or above the value line.
 #
 # `today` is an ISO date string. A listing holds "sku", "live" (False for a new copy, whose
-# "asking" is None), "asking", "market_listed", "market",
-# "low_with_shipping", "first_seen_live" (ISO date), "last_sold_at" (ISO date from a `sold`
-# event, None if never sold), "units_sold_30d" and "outside_signal". Money is Decimal, and None
-# means unknown. Unsold days are today minus the LATER of first_seen_live and last_sold_at. The
-# engine reads no ledger, and it never reads `sold_here`, which resets at each live reading.
+# "asking" is None), "asking", "market_listed", "market", "low" (TCGplayer Low Price, which a policy
+# basis of "low" prices from), "low_with_shipping", "first_seen_live" (ISO date), "last_sold_at"
+# (an ISO date or datetime from a `sold` event, None if never sold), "units_sold_30d" and
+# "outside_signal". Money is Decimal, and None means unknown. Unsold days are today minus the LATER
+# of first_seen_live and last_sold_at, and a listing with neither is never unsold. The engine reads
+# no ledger, and it never reads `sold_here`, which resets at each live reading.
 #
-# A policy holds "rule", "threshold" (the floor), "limit" (a Decimal fraction: 0.25 is 25%) and
-# "value_line" (Decimal dollars). A missing `rule` means match, a missing `limit` means 0.25, and a
-# missing `value_line` means 25.
+# A policy holds "rule", "basis" ("market" or "low": the price the RULE reads, never the triggers
+# or the floor, which read Market), "threshold" (the floor), "limit" (a Decimal fraction: 0.25 is
+# 25%) and "value_line" (Decimal dollars). A missing `rule` means match, a missing `basis` means
+# market, a missing `limit` means 0.25, and a missing `value_line` means 25. A bad `limit` or
+# `value_line` raises ValueError.
+#
+# Only a market move UP may raise a live price. Undercut, unsold and market down may only lower it.
+# A live row whose trigger would raise its price stays at_rule at its asking price, source Live.
 
 TODAY = "2026-10-27"
 
@@ -126,6 +132,7 @@ def _listing(**over) -> dict:
         "asking": Decimal("10.00"),
         "market_listed": Decimal("10.00"),
         "market": Decimal("10.00"),
+        "low": None,
         "low_with_shipping": None,
         "first_seen_live": TODAY,
         "last_sold_at": None,
@@ -172,6 +179,13 @@ def _suggest_checks(c: Checks) -> None:
 
     def says(out, sku, words):
         return words in str(field(out, sku, "reason") or "").lower()
+
+    def attempt(call):
+        """The call's value and "", or None and the error it raised: one crash fails one check."""
+        try:
+            return call(), ""
+        except Exception as exc:
+            return None, f"raised {type(exc).__name__}: {exc}"
 
     # --- triggers at their edges (4b) -----------------------------------------------------
     c.equal(
@@ -241,6 +255,36 @@ def _suggest_checks(c: Checks) -> None:
         fired(market_listed=None, market=Decimal("12.00")),
         [],
         "no market on listing day: market moved cannot fire, and nothing crashes",
+    )
+
+    # --- dates: no listing date and no sale, and a sale stamped with a time (sections 4 and 4b) ---
+    undated = _listing(sku="ND", first_seen_live=None, last_sold_at=None, asking=Decimal("11.50"))
+    hit, crash = attempt(lambda: suggest.fired(undated, TODAY))
+    c.ok(
+        crash == "" and hit == [],
+        "a live listing with no listing date and no sale: unsold does not fire, and nothing crashes",
+        crash or f"fired: {hit!r}",
+    )
+    out, crash = attempt(lambda: suggest.review([undated], _policy(), TODAY))
+    c.ok(
+        crash == "" and groups(out, "ND") == ["at_rule"] and field(out, "ND", "source") == "Live",
+        "and review keeps it Going at the rule, source Live, and does not crash",
+        crash or f"review: {out!r}",
+    )
+    hit, crash = attempt(
+        lambda: suggest.fired(
+            _listing(
+                first_seen_live=_ago(60),
+                last_sold_at=_ago(40) + "T12:00:00+00:00",
+                asking=Decimal("11.50"),
+            ),
+            TODAY,
+        )
+    )
+    c.ok(
+        crash == "" and hit == ["unsold"],
+        "a sale stamped with a time counts by its date: 40 days since the sale, unsold fires",
+        crash or f"fired: {hit!r}",
     )
 
     # --- groups and prices (sections 2 and 3) ------------------------------------------------
@@ -385,6 +429,58 @@ def _suggest_checks(c: Checks) -> None:
         str(field(stale, "ST", "reason")),
     )
 
+    # --- a trigger never moves the price against its direction (sections 2 and 3) ----------------
+    # Only a market move UP may raise a live price. Undercut, unsold and market down may only lower it.
+    lowball = review(
+        _listing(
+            sku="UD",
+            market=Decimal("12.00"),
+            market_listed=Decimal("12.00"),
+            low_with_shipping=Decimal("8.00"),
+        )
+    )
+    c.equal(
+        groups(lowball, "UD"),
+        ["at_rule"],
+        "undercut fires, but the match rule would raise 10.00 to 12.00: Going at the rule, not a suggestion",
+    )
+    c.equal(field(lowball, "UD", "source"), "Live", "and its source says Live")
+    c.equal(field(lowball, "UD", "price"), Decimal("10.00"), "and it keeps its asking price")
+
+    far = review(
+        _listing(
+            sku="UF",
+            market=Decimal("14.00"),
+            market_listed=Decimal("14.00"),
+            low_with_shipping=Decimal("8.00"),
+        )
+    )
+    c.equal(groups(far, "UF"), ["at_rule"], "the same raise past the cap is Going at the rule, not Needs you")
+
+    marked = review(_listing(sku="UM", asking=Decimal("11.50"), first_seen_live=_ago(30)), rule="markup:20")
+    c.equal(
+        groups(marked, "UM"),
+        ["at_rule"],
+        "unsold 30 days over market, but the rule marks up to $12.00: Going at the rule, not a raise",
+    )
+    c.equal(field(marked, "UM", "price"), Decimal("11.50"), "and it keeps its asking price")
+
+    sank = review(_listing(sku="DR", asking=Decimal("9.00"), market_listed=Decimal("12.00"), market=Decimal("10.00")))
+    c.equal(
+        groups(sank, "DR"),
+        ["at_rule"],
+        "market down 17% would raise 9.00 to 10.00: Going at the rule, not a suggestion",
+    )
+    c.equal(field(sank, "DR", "price"), Decimal("9.00"), "and it keeps its asking price")
+
+    both = review(_listing(sku="BO", market=Decimal("11.80"), low_with_shipping=Decimal("8.00")))
+    c.equal(
+        groups(both, "BO"),
+        ["suggested"],
+        "market up 18% with an undercut also firing still raises: the market move is the raise",
+    )
+    c.equal(field(both, "BO", "price"), Decimal("11.80"), "to today's market")
+
     # --- no trigger, no suggestion: Going at the rule (4b) -----------------------------------
     ar = review(_listing(sku="AR", market=Decimal("11.00")))
     c.equal(groups(ar, "AR"), ["at_rule"], "a 10% move with no trigger stays Going at the rule")
@@ -434,6 +530,53 @@ def _suggest_checks(c: Checks) -> None:
         "the owner moves the value line to $30: the same card is a suggestion",
     )
 
+    # --- a bad setting is refused by name, never read as the default (section 5, step 3) ---------
+    for bad in ("25", 25, "1.5", "0", "-0.25", "nan", "text"):
+        c.raises(
+            ValueError,
+            lambda bad=bad: review(_listing(), limit=bad),
+            "review refuses a limit of {0!r}".format(bad),
+        )
+    for bad in ("0", "-5", "nan", "text"):
+        c.raises(
+            ValueError,
+            lambda bad=bad: review(_listing(), value_line=bad),
+            "review refuses a value line of {0!r}".format(bad),
+        )
+
+    # --- the stored settings reach the engine through the corpus's policy (section 5, step 3) -----
+    stored = corpus.Corpus.parse({"version": 1, "policy": {"limit": "0.30", "value_line": "30"}})
+    saved = suggest.review(
+        [
+            _listing(sku="LA", asking=Decimal("10.00"), market_listed=Decimal("10.00"), market=Decimal("12.80")),
+            _listing(sku="LB", asking=Decimal("22.00"), market_listed=Decimal("22.00"), market=Decimal("26.00")),
+        ],
+        stored.policy_for(),
+        TODAY,
+    )
+    c.equal(groups(saved, "LA"), ["suggested"], "a stored limit of 0.30 reaches review: a 28% move is a suggestion")
+    c.equal(groups(saved, "LB"), ["suggested"], "a stored value line of $30 reaches review: a $26.00 price is a suggestion")
+
+    # --- the stored basis reaches the rule and never the triggers (D9, section 5, step 3) ---------
+    lows = _listing(sku="BL", market=Decimal("12.00"), low=Decimal("11.00"))
+    c.equal(field(review(lows), "BL", "price"), Decimal("12.00"), "on the market basis the rule prices at market")
+    c.equal(
+        field(review(lows, basis="low"), "BL", "price"),
+        Decimal("11.00"),
+        "on the low basis the rule prices from Low, $11.00",
+    )
+    fresh = review(
+        _listing(sku="BN", live=False, asking=None, market=Decimal("12.00"), low=Decimal("11.00")),
+        basis="low",
+    )
+    c.equal(field(fresh, "BN", "price"), Decimal("11.00"), "a new copy on the low basis is priced from Low too")
+    quiet = review(_listing(sku="BQ", low=Decimal("8.50")), basis="low")
+    c.equal(
+        groups(quiet, "BQ"),
+        ["at_rule"],
+        "on the low basis the triggers still read Market: Low 15% under moves nothing",
+    )
+
     # --- every listing lands in exactly one group --------------------------------------------
     mixed = review(
         _listing(sku="A"),
@@ -461,6 +604,32 @@ def _suggest_policy_checks(c: Checks) -> None:
         kept.get("value_line") is not None and Decimal(str(kept["value_line"])) == Decimal("30"),
         "and so is the value line",
         str(kept),
+    )
+
+    # --- a bad setting is refused where it is read, not later (section 5, step 3) ------------------
+    for bad in ("25", 25, "1.5", "0", "-0.25", "nan", "text"):
+        c.raises(
+            ValueError,
+            lambda bad=bad: corpus.Corpus.parse({"version": 1, "policy": {"limit": bad}}),
+            "Corpus.parse refuses a limit of {0!r}".format(bad),
+        )
+    for bad in ("0", "-5", "nan", "text"):
+        c.raises(
+            ValueError,
+            lambda bad=bad: corpus.Corpus.parse({"version": 1, "policy": {"value_line": bad}}),
+            "Corpus.parse refuses a value line of {0!r}".format(bad),
+        )
+
+    # --- an old store with neither key reads the defaults (section 5, step 3) ---------------------
+    legacy = corpus.Corpus.parse({"version": 1, "policy": {"rule": "match", "threshold": "0.49"}})
+    legacy_kept = legacy.to_payload()["policy"]
+    c.ok(
+        legacy_kept.get("limit") is not None
+        and legacy_kept.get("value_line") is not None
+        and Decimal(str(legacy_kept["limit"])) == Decimal("0.25")
+        and Decimal(str(legacy_kept["value_line"])) == Decimal("25"),
+        "an old store with no limit or value line reads the defaults, 0.25 and 25",
+        str(legacy_kept),
     )
 
 
