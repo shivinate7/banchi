@@ -2252,7 +2252,8 @@ def check_supervisor_recovery(checks: Checks) -> None:
 def card_attribute_typos(source: str) -> list:
     """Each `getattr`/`setattr`/`hasattr` in `source` that names a card field as a string literal
     which `Card` does not have (DEBT61, string-keyed card fields). The receiver is a name
-    `card` or `existing`, or a `["card"]` lookup. `hasattr(master.Card, name)` is the one list, so
+    `card` or `existing`, or a `["card"]` lookup. `Card`'s dataclass fields (a field with no default, such as
+    `box` or `index`, leaves no class attribute) or `hasattr(master.Card, name)` are the one list, so
     a property such as `key`, `order_key` or `days_in_state` counts. NOT COVERED: the inline-tuple
     loop in `capture_server`'s `claims`, whose names are not a literal argument."""
     import ast
@@ -2276,6 +2277,7 @@ def card_attribute_typos(source: str) -> list:
             and is_card(node.args[0])
             and isinstance(node.args[1], ast.Constant)
             and isinstance(node.args[1].value, str)
+            and node.args[1].value not in master.Card.__dataclass_fields__
             and not hasattr(master.Card, node.args[1].value)
         ):
             found.append(node.args[1].value)
@@ -2292,7 +2294,8 @@ def check_card_field_strings(checks: Checks) -> None:
     checks.equal(
         card_attribute_typos(
             'getattr(card, "gme", None)\nsetattr(existing, "set_hnt", 1)\n'
-            'hasattr(target["card"], "sku")\ngetattr(card, "game")\ngetattr(entry, "anything")'
+            'hasattr(target["card"], "sku")\ngetattr(card, "box")\nsetattr(card, "index", 1)\n'
+            'getattr(card, "key")\ngetattr(card, "game")\ngetattr(entry, "anything")'
         ),
         ["gme", "set_hnt"],
         "seeded source: the two typos are found, a real field and a non-card receiver are not",
