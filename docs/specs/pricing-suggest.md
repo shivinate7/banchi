@@ -58,21 +58,23 @@ was typed. Old live listings drift from market and nothing says so. The owner ca
 
 ## 4a. How often each trigger fires
 
-A read-only count over the owner's store, from the main checkout. No network, no spend. The
-store held 914 live listings. Our asking price is known for 433 of them, and a live market
-reading for 498. Thresholds here are samples for the count, not proposals.
+A read-only count over the owner's store and the newest live export, from the main checkout. No
+network, no spend. The store held 914 live listings. The export gives our asking price for 901
+of them. A live market reading exists for 498. Thresholds here are samples for the count, not
+proposals.
 
 | Trigger | Sample threshold | Fires on | Out of |
 |---|---|---|---|
-| Market moved | 10% / 15% / 25% from listing day | 307 / 233 / 140 | about 500 with a reading and a history |
-| Unsold for N days | 14 / 30 / 60 days | 901 / 745 / 0 | 914 |
-| Undercut by others | Low With Shipping 5% / 10% / 20% under ours | 5 / 4 / 4 | 254 with both prices |
-| Selling fast | 5 / 10 / 30 units sold market-wide in 30 days, ours under market | 3 / 3 / 3 | 433 |
-| Past a 25% cap | market more than 25% from our asking price | 193 | 433 |
+| Market moved | 10% / 15% / 25% from listing day | 316 / 244 / 149 | 480 with a reading and a history |
+| Unsold for N days | 14 / 30 / 45 / 60 days | 901 / 745 / 383 / 0 | 914 |
+| Undercut by others | Low With Shipping 5% / 10% / 20% under ours | 24 / 20 / 15 | 498 with both prices |
+| Selling fast | 5 / 10 / 30 units sold market-wide in 30 days, ours under market | 12 / 12 / 10 | 498 |
+| Past a 25% cap | market more than 25% from our asking price | 347 | 498 |
 
-Two facts shape these numbers. The listings arrived in two waves, so most share one age, and
-the median listing is 30 days old. And `sold_here` reads 0 on every live listing, so "unsold"
-here is an upper bound: a build must read the order ledger instead.
+Two facts shape these numbers. The listings arrived in waves: 383 first went live on one day
+and 370 on another, and no listing is older than 45 days. So none fires at 60 days today, and
+the whole first wave crosses 60 days on one day. And `sold_here` reads 0 on every live
+listing, so "unsold" here is an upper bound: a build must read the order ledger instead.
 
 ## 4b. Judgment of each trigger
 
@@ -80,15 +82,15 @@ The owner rules on each from the mockups (`docs/design/pricing-suggest/list.html
 recommendations.
 
 - **Market moved: keep, as the main trigger.** It is the one signal with volume and meaning.
-  At 15% it fires on about half the listings with data, so the cap matters: 140 move more than
-  25% and land in Needs you. Each row says the direction and the sold range behind it.
-- **Unsold for N days: do not keep alone.** By age alone it fires on 745 of 914 at 30 days and
-  none at 60, because the waves share an age. It says "time passed", not "price is wrong". Keep
+  At 15% it fires on about half the listings with data, so the cap matters: 149 move more than
+  25% from listing day, and 347 sit more than 25% from market now. Those land in Needs you. Each row says the direction and the sold range behind it.
+- **Unsold for N days: do not keep alone.** By age alone it fires on 745 of 914 at 30 days, and
+  a whole wave crosses any threshold on the same day. It says "time passed", not "price is wrong". Keep
   it as a qualifier: unsold N days AND our price above market. Then it names a real lowering.
-- **Undercut by others: keep, quiet.** It fires on 4 of 254. Low With Shipping is already
+- **Undercut by others: keep, quiet.** It fires on 20 of 498 at 10%. Low With Shipping is already
   stored. It is cheap and rare, so it adds little noise. The row must say the price includes
   shipping.
-- **Selling fast: fold into market moved.** It fires on 3. Its data is market-wide demand, not
+- **Selling fast: fold into market moved.** It fires on 12 of 498. Its data is market-wide demand, not
   our listing's sales, and an unlisted card gets no daily read (DEBT69, the price refresh
   schedule). Show units sold as evidence on a market-moved raise, not as its own trigger.
 - **Outside signal: a slot, not a trigger.** A reason line such as "meta: played in a winning
