@@ -48,6 +48,7 @@ from typing import List, Optional
 
 from store import db, files
 from store.cache import Cache
+from store.dailyprices import DailyPrices
 from store.master import Inventory
 from store.orders import Ledger
 from store.pricearchive import PriceArchive
@@ -104,6 +105,9 @@ class Snapshot:
     # THE SLABS THE OWNER TRACKS, their daily snapshots and the sales seen (D320). Bound like
     # `readings`, so a slab write commits in the one `Store.write()` transaction.
     slabs: Slabs
+    # TCGCSV's current Riftbound prices, one row per source update (`store/dailyprices.py`). Bound like
+    # `archive`, so a pass commits a group's rows and its mark in one `Store.write()` transaction.
+    daily_prices: DailyPrices
 
     def queue(self, name: str) -> Queue:
         return self.review if name == MAIN else self.parked
@@ -138,6 +142,8 @@ class Snapshot:
             self.slabs.snapshots,
             self.slabs.sales,
             self.slabs.links,
+            self.daily_prices.entries,
+            self.daily_prices.updates,
         ]
 
 
@@ -197,6 +203,10 @@ class Store:
                 snapshots=bound(Slabs.SNAPSHOTS, "slab_snapshots"),
                 sales=bound(Slabs.SALES, "slab_sales"),
                 links=bound(Slabs.LINKS, "slab_sale_links"),
+            ),
+            daily_prices=DailyPrices(
+                entries=bound(DailyPrices.ENTRIES, "daily_prices"),
+                updates=bound(DailyPrices.UPDATES, "daily_price_updates"),
             ),
             # NOT `bound()` — nothing to load, only to append to, exactly like
             # `snapshot.inventory.events` beside it. A read-only `Store.read()` snapshot gets

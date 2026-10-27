@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""Daily market read (DEBT69), then the price archive sweep (D224, DEBT32). Owner's Mac, main tree only.
+"""Daily market read (DEBT69), the daily TCGCSV read, then the price archive sweep (D224, DEBT32). Owner's Mac, main tree only.
 
 Runs `server/pipeline_routes.py:do_prices_refresh` once: the owner's live listings (the one live
 fetch D104 made), the catalog export per game, a re-join of every open run, then the Trends
 strips for the rows still waiting (`docs/specs/stale-listings.md`, 7b). Each step leaves a note
 (`pipeline/pricerefresh.py`) that `#/pricing` shows, so a failed or partial run is on screen
 and never a silent stale state.
+
+After a good refresh, the same process saves TCGCSV's current Riftbound prices once per source update
+(`pipeline.dailyprices`, free, no sweep needed: `--no-sweep` and `make price-refresh` run it too). Its own check
+skips an update already saved, so every start may call it. A failure there is logged and never stops the sweep or
+changes the exit code.
 
 After a good refresh (unless `--no-sweep`), the same process runs `archive sweep --write` through
 `cli.cmd_pricearchive`, at the pace the last throttle saved (D222), its lines in this job's log.
@@ -83,11 +88,31 @@ def run(sweep=True, now=False):
         if not (answer["ok"] and (answer["steps"].get("history") or {}).get("ok")):
             log("archive sweep: skipped, refresh failed")
             return 1
+    read_daily_prices()
     if not sweep:
         log("archive sweep: not run, this run passed --no-sweep")
         return 0
     sweep_archive(pricerefresh)
     return 0
+
+
+def read_daily_prices():
+    """One pass of the daily TCGCSV read, its result in the job log. The User-Agent is the sweep's own knob."""
+    from cli import cmd_pricearchive
+    from pipeline import dailyprices
+
+    try:
+        answer = dailyprices.run_pass(user_agent=cmd_pricearchive._user_agent())
+    except Exception as exc:  # noqa: BLE001 the read is free and retried at the next start; it never fails the job
+        log("daily prices: failed (%s: %s)" % (type(exc).__name__, exc))
+        return
+    if answer["skipped"]:
+        log("daily prices: skipped, the update of %s is already saved" % answer["updated"])
+    else:
+        log("daily prices: %d rows saved for %s, %d group(s) failed%s" % (
+            answer["rows"], answer["day"], len(answer["failed"]),
+            " (%s)" % ", ".join(map(str, sorted(answer["failed"]))) if answer["failed"] else "",
+        ))
 
 
 def sweep_archive(pricerefresh):
