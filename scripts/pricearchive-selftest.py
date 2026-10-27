@@ -58,7 +58,7 @@ from store.master import Card  # noqa: E402
 from store.orders import OrderLine, OrderRecord  # noqa: E402
 from store.pricearchive import RANGE_WIDTH_DAYS, Bucket, PriceArchive, Source, _key  # noqa: E402
 from store.session import Store  # noqa: E402
-from store.skus import SkuRow  # noqa: E402
+from store.skus import SkuRow, split_condition  # noqa: E402
 
 PASS = 0
 FAIL = 0
@@ -1120,6 +1120,168 @@ def main() -> int:
             ok(archive_walk.merged_export_rows_by_sku() == {},
                "MUTATION GUARD: a store whose `skus` table is empty answers an empty "
                "map rather than raising")
+
+        # ------- rows_from_store(include_catalog=True): the whole Riftbound catalog as subjects
+        #
+        # THE SEAM THIS ARM ASSUMES (the builder may rename it, then re-point this arm): a
+        # keyword `include_catalog: bool = False` on `rows_from_store`. Default OFF, so
+        # `productview.row_for_sku`'s bare call and the "no market -> cards only" arm above
+        # keep their answers. It is independent of `market`: a `skus` row is already
+        # export-shaped (`merged_export_rows_by_sku`), so it needs no mirror read.
+        # `cli/cmd_pricearchive.py:_sweep` is NOT covered here, and must pass it.
+        print("\n-- pipeline/pricearchive.py: rows_from_store(include_catalog=True) adds every "
+              "Riftbound Near Mint SKU the skus table holds --")
+        riftbound_line = "Riftbound League of Legends Trading Card Game"
+
+        def _catalog_sku(sku: str, product_line: str, name: str, condition: str) -> SkuRow:
+            raw = {
+                tcgcsv_module.SKU_COLUMN: sku,
+                tcgcsv_module.PRODUCT_LINE_COLUMN: product_line,
+                tcgcsv_module.SET_COLUMN: "Origins",
+                tcgcsv_module.NAME_COLUMN: name,
+                tcgcsv_module.NUMBER_COLUMN: f"{sku}/298",
+                tcgcsv_module.RARITY_COLUMN: "Rare",
+                tcgcsv_module.CONDITION_COLUMN: condition,
+            }
+            grade, printing = split_condition(condition)
+            return SkuRow(
+                product_line=product_line, set_name="Origins", product_name=name,
+                number=raw[tcgcsv_module.NUMBER_COLUMN], rarity="Rare", condition=condition,
+                grade=grade, printing=printing, first_seen=1, last_seen=1,
+                source="export-tcgplayer-20260101-000000-cccccccc.csv", raw=raw,
+            )
+
+        with isolated_home():
+            catalog_market = MirrorOnlyMarket(
+                categories={riftbound_line: 1}, groups_by_category={1: RIFTBOUND_GROUPS},
+            )
+            with Store().write() as snapshot:
+                # "A1" earns, "L1" earns but has only an order line, "999" is a card that
+                # earned nothing. "999" sorts AFTER the catalog-only SKUs "100" and "101" as
+                # a string, so a builder who merges catalog rows in BEFORE `rank_by_revenue`
+                # interleaves them with it — this fixture is what catches that.
+                snapshot.inventory.cards["1:1"] = Card(
+                    box=1, index=1, sku="A1", name="Card A Own Name", number="010/298",
+                    set_name="Origins", game="riftbound", condition="Near Mint",
+                )
+                snapshot.inventory.cards["1:2"] = Card(
+                    box=1, index=2, sku="999", name="Card Z Own Name", number="011/298",
+                    set_name="Origins", game="riftbound", condition="Near Mint",
+                )
+                snapshot.ledger.orders["ebay:catalog"] = OrderRecord(
+                    source="ebay", number="catalog", status="Open",
+                    lines=[
+                        OrderLine(sku="A1", quantity=2, unit_price="5.00"),
+                        OrderLine(
+                            sku="L1", quantity=1, unit_price="3.00",
+                            name=f"{riftbound_line} - Origins: Ledger Own Name - "
+                                 "#020/298 - Near Mint",
+                        ),
+                    ],
+                )
+                for sku, product_line, name, condition in (
+                    # catalog-only, and wanted
+                    ("100", riftbound_line, "Catalog Near Mint", "Near Mint"),
+                    ("101", riftbound_line, "Catalog Near Mint Foil", "Near Mint Foil"),
+                    # catalog-only, and not Near Mint
+                    ("102", riftbound_line, "Catalog Lightly Played", "Lightly Played"),
+                    ("103", riftbound_line, "Catalog Lightly Played Foil",
+                     "Lightly Played Foil"),
+                    # catalog-only, and not Riftbound
+                    ("200", "Pokemon", "Catalog Pokemon", "Near Mint"),
+                    ("300", "One Piece Card Game", "Catalog One Piece", "Near Mint"),
+                    # already covered by a card or a ledger line, under a DIFFERENT name
+                    ("A1", riftbound_line, "Catalog Name For A1", "Near Mint"),
+                    ("L1", riftbound_line, "Catalog Name For L1", "Near Mint"),
+                    ("999", riftbound_line, "Catalog Name For 999", "Near Mint"),
+                ):
+                    snapshot.skus.entries[sku] = _catalog_sku(sku, product_line, name, condition)
+            catalog_snapshot = Store().read()
+
+            # BASELINE, true today and after: what the old code produces, and where.
+            narrow = archive_walk.rows_from_store(catalog_snapshot, market=catalog_market)
+            ok(list(narrow) == ["A1", "L1", "999"],
+               "BASELINE: without the keyword the subjects are the card, the ledger-only SKU "
+               "and the zero-revenue card, sold value first — no catalog-only SKU",
+               list(narrow))
+
+            try:
+                wide = archive_walk.rows_from_store(
+                    catalog_snapshot, market=catalog_market, include_catalog=True,
+                )
+                seam_error = ""
+            except TypeError as exc:
+                wide, seam_error = {}, str(exc)
+            ok(not seam_error,
+               "rows_from_store accepts include_catalog — the seam the builder exposes",
+               seam_error)
+
+            # 1. a catalog-only Riftbound SKU is a subject, with an export-shaped row
+            raw_100 = catalog_snapshot.skus.entries["100"].raw
+            row_100 = wide.get("100", {})
+            ok("100" in wide and all(
+                row_100.get(column) == raw_100[column] for column in (
+                    tcgcsv_module.SKU_COLUMN, tcgcsv_module.PRODUCT_LINE_COLUMN,
+                    tcgcsv_module.SET_COLUMN, tcgcsv_module.NAME_COLUMN,
+                    tcgcsv_module.NUMBER_COLUMN, tcgcsv_module.CONDITION_COLUMN,
+                )
+            ),
+               "a Riftbound SKU only the skus table holds is a subject, its row built from "
+               "that SKU's own raw row (TCGplayer Id included: readings key on it)",
+               wide.get("100"))
+
+            # 2. order: every old subject first and unmoved, catalog-only SKUs after
+            old_count = len(narrow)
+            ok(list(wide)[:old_count] == list(narrow),
+               "every subject the old code produced keeps its place and comes first, "
+               "revenue-ranked as before — a catalog row never outranks a card, even a "
+               "zero-revenue one whose SKU sorts later",
+               list(wide))
+            ok(set(list(wide)[old_count:]) == {"100", "101"}
+               and len(wide) == old_count + 2,
+               "after them come exactly the catalog-only Near Mint SKUs, each once",
+               list(wide))
+
+            # 3. only Near Mint, foil included
+            ok("101" in wide,
+               "a Near Mint Foil catalog-only SKU is added — foil counts as Near Mint")
+            ok("100" in wide and "102" not in wide and "103" not in wide,
+               "a Lightly Played catalog-only SKU is not added, foil or not",
+               list(wide))
+
+            # 4. only Riftbound
+            ok("100" in wide and "200" not in wide and "300" not in wide,
+               "a Pokemon or One Piece catalog-only SKU is not added", list(wide))
+
+            # 5. the catalog never overrides a SKU cards or the ledger already answers
+            ok(wide.get("A1", {}).get(tcgcsv_module.NAME_COLUMN) == "Card A Own Name"
+               and wide.get("L1", {}).get(tcgcsv_module.NAME_COLUMN) == "Ledger Own Name"
+               and wide.get("999", {}).get(tcgcsv_module.NAME_COLUMN) == "Card Z Own Name",
+               "a SKU a card or an order line already answers keeps that row, not the "
+               "catalog's differently named one",
+               {sku: wide.get(sku, {}).get(tcgcsv_module.NAME_COLUMN)
+                for sku in ("A1", "L1", "999")})
+            ok(bool(wide) and all(wide.get(sku) == row for sku, row in narrow.items()),
+               "every old subject's row is identical to the one the old code built",
+               {sku: wide.get(sku) for sku in narrow})
+
+            # The widening needs no market: the skus row is already export-shaped.
+            no_market_wide = {}
+            try:
+                no_market_wide = archive_walk.rows_from_store(
+                    catalog_snapshot, include_catalog=True,
+                )
+            except TypeError:
+                pass
+            ok({"100", "101"} <= set(no_market_wide),
+               "include_catalog needs no market: catalog-only SKUs arrive with none given",
+               list(no_market_wide))
+
+            # GUARD, true today and after: the default is unchanged.
+            ok("100" not in archive_walk.rows_from_store(catalog_snapshot)
+               and "101" not in archive_walk.rows_from_store(catalog_snapshot),
+               "without the keyword a catalog-only SKU is never a subject — the default "
+               "stays D219's cards-and-ledger set")
 
         # --------- pipeline/productview.py: row_for_sku prefers the SKU's own skus-table row
         # (D254, identity-follows-sku.md §3.2/§5.3 lane 4) — the live-fallback path's own
