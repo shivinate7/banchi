@@ -3464,7 +3464,9 @@ def _market_on(archive: "PriceArchive", sku: str, day: str) -> Optional[str]:
     return found.market if found else None
 
 
-def _live_wire(snapshot: Optional[Snapshot], book: "corpus.Corpus") -> List[dict]:
+def _live_wire(
+    snapshot: Optional[Snapshot], book: "corpus.Corpus", images: "Optional[stockimages.StockImages]" = None
+) -> List[dict]:
     """The worklist's `live` rows: one per SKU the newest live export lists with copies, each
     with its asking price, its last sale and the suggestion `suggest.review` gives it.
 
@@ -3472,6 +3474,10 @@ def _live_wire(snapshot: Optional[Snapshot], book: "corpus.Corpus") -> List[dict
     live export's (`_newest_live_listing`), the market and the lowest price with shipping are the
     `readings` table's, and the last sale is the card state `cmd_reprice.last_sales` reads (the
     docstring of `_card_facts` says why never the event log). A store that would not open answers no rows.
+
+    Each row also carries the card's `name`, `set_name`, `market` and `low`, off that same `readings`
+    row, and `image_url`: the resolver's answer for the reading's set and the export row's game and
+    number (`None` with no `images`, as on the unsent rows).
 
     `market_listed`, the market on the day it went live, is the price archive's bucket that holds
     `first_seen_live` (`_market_on`). A SKU with no such bucket leaves the market-moved trigger off.
@@ -3483,6 +3489,7 @@ def _live_wire(snapshot: Optional[Snapshot], book: "corpus.Corpus") -> List[dict
         except (files.StoreError, OSError, ValueError, TypeError):
             return []
     _, live_now = _newest_live_listing()
+    cells = _NEWEST_LIVE.get("cells") or {}
     last_sold = cmd_reprice.last_sales(snapshot.inventory)
     today = clock.central_day(clock.now()).isoformat()
     readings = snapshot.readings.entries
@@ -3501,9 +3508,14 @@ def _live_wire(snapshot: Optional[Snapshot], book: "corpus.Corpus") -> List[dict
         kept = snapshot.inventory.listings.get(sku)
         sold = _day_of(last_sold.get(sku))
         first_seen = _day_of(getattr(kept, "first_seen_live", None))
+        line, number = cells.get(sku, ("", ""))
+        set_name = reading.set_name if reading else None
         listings.append(
             {
                 "sku": sku,
+                "name": reading.name if reading else None,
+                "set_name": set_name,
+                "image_url": stock_image_url(images, game_registry.game_for_product_line(line), set_name, number),
                 "live": True,
                 "asking": money(asking),
                 "market": money(reading.market) if reading else None,
@@ -3581,7 +3593,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
         # A CORPUS THAT CANNOT BE READ IS SAID, NEVER REPLACED BY THE DEFAULT POLICY: the owner's
         # settings decide which listing is a suggestion, so defaults would draw a guess.
         try:
-            live, unreadable = _live_wire(None, corpus.Corpus.read()), {}
+            live, unreadable = _live_wire(None, corpus.Corpus.read(), images), {}
         except (decisions.MalformedDecisions, ValueError):
             live, unreadable = [], {"error": "corpus_unreadable"}
         return {
@@ -4039,6 +4051,13 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
     )
     unreachable["reallocated"] = reallocated
 
+    # EACH NEW COPY'S GROUP, THE ENGINE'S OWN: `suggest.review` for a listing that is not live.
+    groups = worklist.new_copy_groups(
+        list(merged.values()), book.policy_for(), clock.central_day(clock.now()).isoformat()
+    )
+    for sku, row in merged.items():
+        row["group"] = groups[sku]
+
     # THE STOCK IMAGE, RESOLVED FRESH ON EVERY READ AND NEVER PERSISTED (`D301`).
     # `sku_row`/`_pricing_table` do not carry this field — adding it there would bake a
     # hotlinked CDN URL into `pricing.json`, a file this repo otherwise never rewrites, and
@@ -4105,7 +4124,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
         # over a reallocated drawer are each a door to another screen rather than a row here.
         "unreachable": unreachable,
         # EVERY LIVE LISTING, with its asking price, last sale and suggestion (`_live_wire`).
-        "live": _live_wire(snapshot, book),
+        "live": _live_wire(snapshot, book, images),
         # `remembered_sub_threshold` IS GONE, HERE AND FROM THE PER-RUN ROUTE (D86, amended
         # 2026-09-02). It walked up to five sibling run directories for the newest answer to a
         # question each run had to be asked separately, and offered it as a LABEL because D9
@@ -5518,10 +5537,12 @@ def _newest_live_listing() -> Tuple[Optional[str], Dict[str, Tuple[Optional[str]
         except ValueError:
             header_ok = False
         listing: Dict[str, Tuple[Optional[str], Optional[int]]] = {}
+        cells: Dict[str, Tuple[str, str]] = {}
         for row in rows:
             sku = tcgcsv.sku_cell(row)
             if not sku:
                 continue
+            cells.setdefault(sku, (row.get(tcgcsv.PRODUCT_LINE_COLUMN, ""), row.get(tcgcsv.NUMBER_COLUMN, "")))
             try:
                 price = tcgcsv.parse_price(str(row.get(tcgcsv.PRICE_COLUMN) or ""))
             except ArithmeticError:
@@ -5539,7 +5560,7 @@ def _newest_live_listing() -> Tuple[Optional[str], Dict[str, Tuple[Optional[str]
                 copies,
             )
         _NEWEST_LIVE.clear()
-        _NEWEST_LIVE.update({"name": str(newest), "listing": listing})
+        _NEWEST_LIVE.update({"name": str(newest), "listing": listing, "cells": cells})
     return newest.name, dict(_NEWEST_LIVE["listing"])  # type: ignore[arg-type]
 
 
