@@ -454,7 +454,7 @@ All three are built. D26 is the state `retired`. D29's group answer is
 
 `retired` is a terminal card state, `sold`'s sibling. A card is pulled out, damaged, lost or
 given away. It keeps its record and its permanent gap. It carries a reason from
-`RETIRE_REASONS`: `pulled`, `damaged`, `lost` or `given_away`. The sale route refuses a
+`RETIRE_REASONS`: `pulled`, `damaged`, `lost`, `given_away` or `master_set`. The sale route refuses a
 retired card, so `_state_before_sale` never meets one.
 
 **The name is `retired` and never `removed`.** `removed` is a history event name. Undo appends

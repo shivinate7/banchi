@@ -6491,7 +6491,7 @@ COMPONENTS = [
                                           "dismiss, which docs/DESIGN.md bans. This is where D138's "
                                           "server-restart notice went when `ServerReloaded` was "
                                           "deleted.",
-                                  "governed_by": ["D5", "D28", "D138", "D57", "D94"]},
+                                  "governed_by": ["D5", "D28", "D138", "D57", "D94", "D313"]},
             "src/kit/undo.ts": {"does": "THE ONE `U` PRIMITIVE (UN-10, `docs/specs/undo.md` §11.3): "
                                         "`useUndoHotkey` arms `U` for the newest reversible write on "
                                         "a screen, in place of five screens' own near-identical "
@@ -7534,14 +7534,14 @@ COMPONENTS = [
                         "a push (D201). Kit primitives only: Section, .bn-list/.bn-list-row, "
                         "EmptyState/Notice/Loading for the three states a fetch can be in.",
                 "governed_by": ["D31", "D67", "D172", "D196", "D201", "D221", "D258", "D264",
-                                "D285", "D293", "D301"],
+                                "D285", "D293", "D301", "D313"],
             },
             "src/InventorySets.css": {
                 "does": "layout for the set view's rows — the card number column, the "
                         "name column, and the row's own cursor. Everything else (the section "
                         "head, the count, the list frame) is the kit's own .bn-section/"
                         ".bn-list, unrepeated here.",
-                "governed_by": ["D293"],
+                "governed_by": ["D293", "D313"],
             },
             "src/BoxOps.tsx": {
                 "does": "D20's box object, made visible and editable ON THE BROWSE'S BOX HEADER "
@@ -8058,6 +8058,19 @@ COMPONENTS = [
                                         "be grepped, and a summary is the second vocabulary that "
                                         "rule exists to refuse.",
                                 "governed_by": ["D33", "D39", "D94"]},
+            "src/takeOff.ts": {"does": "the master-set take-off's one vocabulary: where a take-off "
+                                       "stands as the screens say it (offer, sent, failed, matches, "
+                                       "onway, nosession), one card's press with every refusal read "
+                                       "as a view, and one entry of the owed list's press answered "
+                                       "the same way. Read by the retire receipt and the send card, so "
+                                       "a press has the same words wherever it is made.",
+                               "governed_by": ["D100", "D196", "D269"]},
+            "src/TakeOffLine.tsx": {"does": "the take-off line on a master-set retire receipt: Take It "
+                                            "Off TCGplayer at the pull and the answer in the same place, "
+                                            "drawn in the toast kit's changing line. The toast waits "
+                                            "while the press runs. Whatever is left undone waits on the "
+                                            "send card's owed list.",
+                                    "governed_by": ["D100", "D118", "D196", "D313"]},
             "src/SendCard.tsx": {"does": "THE SEND CARD on Pricing's send bar: one press from "
                                          "priced to live (D273). The "
                                          "press waits for the screen's own save, then one request "
@@ -8069,7 +8082,7 @@ COMPONENTS = [
                                          "confirmed with Take them back, and the check after the "
                                          "lag. No pipeline word reaches the screen (D196).",
                                  "governed_by": ["D86", "D99", "D105", "D273", "D118", "D196",
-                                                 "D269", "D277"]},
+                                                 "D269", "D277", "D313"]},
             "src/SendCard.css": {"does": "the send card's own rows: the press and its two quiet "
                                          "doors on one line that wraps as a unit, the download "
                                          "door, and the card lists under a notice. On a phone "
