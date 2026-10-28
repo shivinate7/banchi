@@ -2310,7 +2310,14 @@ export type ProductHistoryPayload = {
   ranges: ProductHistoryRange[]
   history_begins: string | null
   never_sold: boolean
+  /** The prices this store has asked for the SKU, oldest first. Optional for a server
+   *  or a recorded demo bundle that predates it; the real server always answers it. */
+  asking_postings?: AskingPosting[]
 }
+
+/** One row of the postings ledger: `at` is a Unix second, `source` names the press that wrote
+ *  it (`emit`, `emit-price`, `suggested`, `reprice`), `replaced` the price it superseded. */
+export type AskingPosting = { at: number; price: string; source: string; replaced: string | null }
 
 /** One sale against the archived market on its date (`GET /pipeline/products/<sku>/realized`,
  *  DEBT70). Dates and money only: the server drops every buyer field while parsing. */
@@ -2852,6 +2859,31 @@ export type PricingWorklist = {
   floor: string | null
   /** Optional, for a server that predates it; the deck draws nothing when it is absent. */
   unreachable?: Unreachable
+  /** EVERY LIVE LISTING with its asking price, last sale and suggestion — one row per SKU the
+   *  newest live export lists with copies, in group order. Read off disk, nothing fetched.
+   *  Optional for a recorded demo bundle that predates it; the real server always answers it. */
+  live?: LiveListing[]
+  /** Set when the price settings cannot be read and no run is on disk: `live` is then empty
+   *  rather than drawn from default settings. */
+  error?: 'corpus_unreadable'
+}
+
+/** The three groups of the one list, top to bottom (`docs/specs/pricing-suggest.md`, section 3). */
+export type LiveGroup = 'needs_you' | 'suggested' | 'at_rule'
+
+/** One live listing as `PricingWorklist.live` carries it. Money is the export's two-decimal
+ *  string, `null` where there is none. `last_sold_at` is the US Central day (YYYY-MM-DD) of the
+ *  newest sale of the SKU, off the card state, or `null`. `price` is the suggested price when
+ *  `source` is `Suggested`, and the asking price when it is `Live`. `reason` is a sentence,
+ *  empty when nothing fired. */
+export type LiveListing = {
+  sku: string
+  asking: string | null
+  last_sold_at: string | null
+  group: LiveGroup
+  price: string | null
+  source: 'Rule' | 'Live' | 'Suggested'
+  reason: string
 }
 
 /** WHICH DRAWER THIS RUN'S CARDS TURNED OUT TO BE IN — derived from the cards, never from the
@@ -4801,8 +4833,11 @@ export type SendSummary = {
 }
 
 /** One price change the screen names to a send: the price the button counts, and the live
- *  price the row drew beside it. The server sends no price it was not named (round 6). */
-export type PriceChange = { sku: string; price: string; was: string | null }
+ *  price the row drew beside it. The server sends no price it was not named (round 6).
+ *  `source: 'suggested'` marks a kept suggestion: it posts as "suggested", may ride a send that
+ *  names no run, and is refused `suggestion_past_cap` when it moves the live price past the
+ *  owner's limit. Leave `source` out for a typed price. */
+export type PriceChange = { sku: string; price: string; was: string | null; source?: 'suggested' }
 
 /** Live copies a listing row moves, as the button names them: the new copy carries Banchi's
  *  stored price, and every live copy of the card moves with it (the owner's ruling, round 7). */
@@ -4837,7 +4872,13 @@ export type SendsStatus = {
 /** A live send record the server cannot read. Only its indexed facts survive. */
 export type UnreadableClaim = { key: string; kind: string; started_at: string }
 
-export type SendAnswer = { send: SendSummary; console: string }
+export type SendAnswer = {
+  send: SendSummary
+  console: string
+  /** The SKUs of kept suggestions left out because the card is live and held (its take-off is a
+   *  row of its own). Absent when none. */
+  held?: string[]
+}
 
 export type LiveCheckAnswer = {
   ran: boolean
