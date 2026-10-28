@@ -48,9 +48,9 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { describeFailure, getOrders, getProductHistory, getProductRealized, search, type Failure, failureTone } from './server'
-import type { OrderLineWire, OrderRow, ProductHistoryPayload, ProductHistoryRange, RealizedPayload, SearchGroup } from './types'
+import type { AskingPosting, OrderLineWire, OrderRow, ProductHistoryPayload, ProductHistoryRange, RealizedPayload, SearchGroup } from './types'
 import {
-  Chip, DidYouMean, EmptyState, IconButton, Loading, Money, Notice, Page, Pill, Sep, Sheet,
+  Chip, DidYouMean, EmptyState, IconButton, Loading, Money, MONEY_CLASS, Notice, Page, Pill, Sep, Sheet,
   registerSheet, sheetHref, type SheetHostProps, type SheetProps,
 } from './kit'
 import { SearchField } from './SearchField'
@@ -73,7 +73,7 @@ function isCanceled(status: string | null): boolean {
   return (status ?? '').trim().toLowerCase() === 'canceled'
 }
 
-type Fill = {
+export type Fill = {
   readonly at: Date
   readonly orderNumber: string
   readonly quantity: number
@@ -133,8 +133,25 @@ function timeScale(fromMs: number, toMs: number, w: number): (ms: number) => num
 
 const GUTTER_L = 52
 const GUTTER_B = 20
+/** Room at the right for the end labels, held only when the chart carries an asking line or a
+ *  suggestion, so the page's own chart keeps its viewBox. */
+const GUTTER_R = 52
 
-function ProductChart({ range, fills, w = 640, h = 160 }: { range: ProductHistoryRange; fills: readonly Fill[]; w?: number; h?: number }) {
+/** The owner's asking price as a step: from the price in force at the left edge (or the first
+ *  posting inside the range), a level run to each later posting, a vertical to its new price,
+ *  then on to the right edge. Only H and V runs, never a slope between two postings. */
+function askingStep(postings: readonly AskingPosting[], fromMs: number, toMs: number, x: (ms: number) => number, y: (price: number) => number): { d: string; now: number } | null {
+  const sorted = postings.map((p) => ({ ms: p.at * 1000, price: Number(p.price) })).filter((p) => Number.isFinite(p.price)).sort((a, b) => a.ms - b.ms)
+  const inForce = sorted.filter((p) => p.ms <= fromMs).pop()
+  const later = sorted.filter((p) => p.ms > fromMs && p.ms < toMs)
+  const first = inForce ?? later.shift()
+  if (first === undefined) return null
+  let d = `M${x(Math.max(first.ms, fromMs)).toFixed(1)} ${y(first.price).toFixed(1)}`
+  for (const p of later) d += ` H${x(p.ms).toFixed(1)} V${y(p.price).toFixed(1)}`
+  return { d: `${d} H${x(toMs).toFixed(1)}`, now: (later.pop() ?? first).price }
+}
+
+export function ProductChart({ range, fills, w = 640, h = 160, asking, suggestion }: { range: ProductHistoryRange; fills: readonly Fill[]; w?: number; h?: number; asking?: readonly AskingPosting[]; suggestion?: number | null }) {
   const parsed = useMemo(() => {
     const starts = range.points.map((p) => (p.at ? new Date(p.at).getTime() : null))
     const knownStarts = starts.filter((v): v is number => v !== null)
@@ -149,6 +166,8 @@ function ProductChart({ range, fills, w = 640, h = 160 }: { range: ProductHistor
     const prices = [
       ...range.points.flatMap((p) => [p.market, p.low, p.high].map((v) => (v === null ? null : Number(v)))),
       ...relevant.map((f) => f.unitPrice),
+      ...(asking ?? []).map((p) => Number(p.price)),
+      ...(suggestion == null ? [] : [suggestion]),
     ].filter((v): v is number => v !== null && Number.isFinite(v))
     if (prices.length === 0) return null
     const lo = Math.min(...prices)
@@ -157,7 +176,7 @@ function ProductChart({ range, fills, w = 640, h = 160 }: { range: ProductHistor
     const x = timeScale(fromMs, toMs, w)
     const y = (price: number) => h - ((price - lo) / span) * (h - 8) - 4
     return { fromMs, toMs, x, y, relevant, lo, hi }
-  }, [range, fills, w, h])
+  }, [range, fills, w, h, asking, suggestion])
 
   if (parsed === null) {
     return <div className="producthistory-chart-empty">No priced buckets in this range.</div>
@@ -165,6 +184,8 @@ function ProductChart({ range, fills, w = 640, h = 160 }: { range: ProductHistor
   const { x, y, relevant, lo, hi, fromMs, toMs } = parsed
   const priceTicks = [lo, (lo + hi) / 2, hi]
   const dateTicks = [fromMs, (fromMs + toMs) / 2, toMs]
+  const step = asking ? askingStep(asking, fromMs, toMs, x, y) : null
+  const gutterR = asking || suggestion != null ? GUTTER_R : 0
 
   const marketByIndex = range.points.map((p) => (p.market === null ? null : Number(p.market)))
   const runs = sparkSegments(marketByIndex, w, h) // index-spaced runs, re-mapped to time x below
@@ -189,7 +210,7 @@ function ProductChart({ range, fills, w = 640, h = 160 }: { range: ProductHistor
   return (
     <svg
       className="producthistory-chart"
-      viewBox={`${-GUTTER_L} 0 ${w + GUTTER_L} ${h + GUTTER_B}`}
+      viewBox={`${-GUTTER_L} 0 ${w + GUTTER_L + gutterR} ${h + GUTTER_B}`}
       role="img"
       aria-label={`${RANGE_LABEL[range.range] ?? range.range} market buckets, with the owner's own sales marked`}
     >
@@ -198,7 +219,7 @@ function ProductChart({ range, fills, w = 640, h = 160 }: { range: ProductHistor
       {priceTicks.map((v, i) => (
         <g key={`pt-${i}`}>
           <line className="producthistory-guide" x1={0} x2={w} y1={y(v)} y2={y(v)} />
-          <text className="producthistory-tick producthistory-tick-price" x={-6} y={y(v)} textAnchor="end" dominantBaseline="middle">{money(v)}</text>
+          <text className={`producthistory-tick producthistory-tick-price ${MONEY_CLASS}`} x={-6} y={y(v)} textAnchor="end" dominantBaseline="middle">{money(v)}</text>
         </g>
       ))}
       {dateTicks.map((ms, i) => (
@@ -239,12 +260,26 @@ function ProductChart({ range, fills, w = 640, h = 160 }: { range: ProductHistor
       {relevant.map((f, i) => (
         <path
           key={`fill-${i}`}
-          className="producthistory-fill-mark"
+          className={`producthistory-fill-mark ${MONEY_CLASS}`}
           d={diamond(x(f.at.getTime()), y(f.unitPrice), 5)}
         >
           <title>{`${saleDate(f.at)} — ${f.quantity} sold at ${money(f.unitPrice)}`}</title>
         </path>
       ))}
+      {/* THE OWNER'S ASKING PRICE, a dashed step, and the SUGGESTION, one dot at the right edge
+          with its figure beside it. Both are the owner's own, so neither is a market mark. */}
+      {step !== null && (
+        <>
+          <path className="producthistory-asking" data-float="asking" d={step.d} />
+          <text className={`producthistory-tick producthistory-tick-end ${MONEY_CLASS}`} x={w + 8} y={y(step.now) + 3}>{money(step.now)}</text>
+        </>
+      )}
+      {suggestion != null && (
+        <>
+          <circle className="producthistory-suggestion" data-float="suggestion" cx={w} cy={y(suggestion)} r={5} />
+          <text className={`producthistory-tick producthistory-tick-end producthistory-tick-suggest ${MONEY_CLASS}`} x={w + 8} y={y(suggestion) + 3}>{money(suggestion)}</text>
+        </>
+      )}
     </svg>
   )
 }

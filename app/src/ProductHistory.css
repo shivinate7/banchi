@@ -245,3 +245,10 @@
 .producthistory-tick { fill: var(--bn-ink-3); font-size: var(--bn-fs-2xs); }
 /* Mirrors .bn-money's face (the fill stays ink-3): the kit's Money renders a span, which is invalid inside SVG <text>. */
 .producthistory-tick-price { font-family: var(--bn-font-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* THE OWNER'S ASKING PRICE, a dashed accent step, and the SUGGESTION, one accent dot. Both are
+   the owner's own marks, so both take the accent the fills already use (the floating card). */
+.producthistory-asking { fill: none; stroke: var(--bn-accent); stroke-width: 1.75; stroke-dasharray: 5 3; }
+.producthistory-suggestion { fill: var(--bn-accent); stroke: var(--bn-surface); stroke-width: 2; }
+.producthistory-tick-end { fill: var(--bn-ink-2); }
+.producthistory-tick-suggest { fill: var(--bn-accent); font-weight: 700; }
