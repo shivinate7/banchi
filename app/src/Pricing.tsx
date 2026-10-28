@@ -3166,7 +3166,7 @@ export function Pricing() {
           readView ? (
             <EmptyState icon="tag" title="Nothing live in that read" body="Every row TCGplayer returned was sold out." />
           ) : (
-            <EmptyState icon="check" title="Everything is sent" body="Every copy is at TCGplayer, kept off it, or has left its box." />
+            <EmptyState icon="check" title="Nothing to Price Yet" body="Every copy is at TCGplayer, kept off it, or has left its box." />
           )
         ) : (
           <>
@@ -3331,7 +3331,7 @@ export function Pricing() {
         cut={cut}
         note={note !== null && note.sku === '' ? note.text : null}
         onApplyCut={stamp === null ? null : applyCut}
-        onPreset={stamp === null ? null : applyPreset}
+        onPreset={applyPreset}
         onRead={(ask, file) => void readLive(ask, file)}
       />
 
@@ -4094,7 +4094,7 @@ function LiveSheet({
       </div>
       {onPreset === null ? null : (
         <div className="pricing-sheet-part">
-          <h3 className="pricing-sheet-head">Price every listing you have not typed</h3>
+          <h3 className="pricing-sheet-head">{onApplyCut === null ? 'Rule for new prices' : 'Price every listing you have not typed'}</h3>
           <div className="pricing-sheet-presets">
             {PRESETS.map((preset) => (
               <Button key={preset.key} size="sm" onClick={() => onPreset(preset.key)}>
