@@ -352,10 +352,10 @@ Nothing downstream can catch it.
 | Condition | Destination |
 |---|---|
 | Resolved cleanly, confidence `medium` or `high` | Listed, unless the row was reached by name (next row). |
-| Row found by name because the number could not be read (D35) | **Main queue if the row is at least $0.40, parked if below. Never listed on the name alone.** `join_batch` rewrites the resolution to `REVIEW` before routing and keeps the chosen row. The entry then carries one candidate under one shared reason, which is D29's group-answer eligibility. Rung 0 is exempt: a card a human has answered is listed on that answer. |
-| Confidence `low`, resolved market at least $0.40 | **Main review queue.** A wrong listing on a $12 card ships the wrong card to a buyer, which is worse than a tap. |
-| Confidence `low`, resolved market under $0.40 | **Parked** in the low-value queue. Not listed, not dropped, never in the main queue. |
-| Ladder to review (D3 reasons) | Main queue if the cheapest candidate row is at least $0.40, parked if below. |
+| Row found by name because the number could not be read (D35) | **Main queue if the row is at least the cut-off, parked if below it. Never listed on the name alone.** `join_batch` rewrites the resolution to `REVIEW` before routing and keeps the chosen row. The entry then carries one candidate under one shared reason, which is D29's group-answer eligibility. Rung 0 is exempt: a card a human has answered is listed on that answer. |
+| Confidence `low`, resolved market at least the cut-off | **Main review queue.** A wrong listing on a $12 card ships the wrong card to a buyer, which is worse than a tap. |
+| Confidence `low`, resolved market under the cut-off | **Parked** in the low-value queue. Not listed, not dropped, never in the main queue. |
+| Ladder to review (D3 reasons) | Main queue if the cheapest candidate row is at least the cut-off, parked if below it. |
 | No catalog row, or identification failed | **Main queue, sorted last.** No price is not a low price. A misread secret rare is exactly this case. |
 | Matched row with blank or $0.00 market price | **`no_market_data`. Never auto-priced, never swept into the sub-threshold flat price.** A missing price is an unknown price. Handing away a $40 chase card at the floor is the failure this prevents. |
 
@@ -404,8 +404,8 @@ going rate, and does not chase one desperate seller. D8 names Market as the pric
 check uses it too, so one number does both jobs. `--basis=low` switches to `TCG Low Price`, for a box you
 want gone.
 
-The threshold check always uses `TCG Market Price`, whatever the basis. D9 says market at or above $0.40
-earns a listing. That is a statement about value, not about pricing strategy.
+The threshold check always uses `TCG Market Price`, whatever the basis. D9 says market at or above the
+owner's cut-off earns a listing. That is a statement about value, not about pricing strategy.
 
 ### 6.2 Order of operations
 
@@ -414,11 +414,11 @@ price = clamp_floor( round_2dp_half_up( rule(basis_price) ) )
 ```
 
 Round to two decimals, half up. Then clamp to the floor, in that order, so rounding can never push a price
-under it. Floor and threshold are both $0.40 by default. They are one figure, not two defaults that agree
-(D9). The operator's `policy.threshold` in `inventory/prices.json` does three jobs. It earns a listing. It
+under it. The owner sets the floor, and it is the store's cut-off. The floor and the threshold are one figure,
+not two defaults that agree (D9). A store that has set nothing reads `pipeline/corpus.py`'s `DEFAULT_CUTOFF`, $0.49. The operator's `policy.threshold` in `inventory/prices.json` does three jobs. It earns a listing. It
 sets the price the cheap half goes out at. It is the price below which nothing goes out. `SkuMatch.list_price`
-clamps at `SkuMatch.threshold`. `pipeline/pricing.py`'s `THRESHOLD` and `FLOOR` are what a store that never
-set one reads.
+clamps at `SkuMatch.threshold`. `pipeline/pricing.py`'s `THRESHOLD` and `FLOOR` ($0.40 each) are module defaults
+for a caller with no store behind it.
 
 There is deliberately no `policy.floor`. A floor above the cut-off makes the join price a card the cut-off
 calls listable above its own market. A floor below it undercuts the price the cheap half already goes out at.
@@ -593,7 +593,7 @@ catches an import that was staged and never moved live.
 | `--dry-run` (join) | off | preview both queues, write nothing |
 | `--basis` | `market` | `market` \| `low` |
 | `--rule` | `match` | `inventory/prices.json` `policy.rule`, seeded by the flag on the first join of an empty corpus (D86) |
-| threshold and floor | $0.40 and $0.40 | D9, `pipeline/pricing.py`. One figure. Both follow `policy.threshold` when it is set (D99) |
+| threshold and floor | $0.49 and $0.49 (`DEFAULT_CUTOFF`) | D9. The owner sets it as `policy.threshold`. One figure. `pipeline/pricing.py`'s $0.40 is only the default for a caller with no store (D99) |
 | `--cap N` (emit) | none | D7: a ceiling on copies live per SKU, asked for per send |
 | `--quantity SKU=N` (emit) | none | D7: a send quantity per card, this press only. Composes with `--cap` to the tighter |
 | cards per section | no default | D10: dividers are declared, never assumed |

@@ -48,6 +48,10 @@ The lens already has an address — `#/pricing?markdown=<stamp>`, which can be b
 
 **Nothing on the wire moved.** No route, no payload, no shape. `server/pipeline_routes.py` is untouched by this entry.
 
+### Reopened: one list
+
+The owner reopened this entry. Mark-downs become suggestion rows in Pricing's one list, beside new copies, and no separate sheet or tab holds them. `docs/specs/pricing-suggest.md`, section 5, step 4, holds the ruling. Until that build lands, the sheet stays as written above.
+
 ### What would reopen this
 
 *The operator wanting the reconcile on `#/pricing` too* would be them saying the two sheets are one piece of work after all. That is theirs to say. *A third writer of `inventory/prices.json` in one tab* is the other case. At that point, a digest passed hand to hand between components stops scaling. The corpus wants a subscription rather than a prop.
