@@ -419,7 +419,7 @@ jobs:
       - name: Install
         run: npm ci --prefix app
 
-      - uses: shivinate7/claude-settings/actions/code-check@c71b22ef87f8c95170210f79417b08317dd6891f
+      - uses: shivinate7/claude-settings/actions/code-check@a065acdb63f7b801967193dbf985dbd968d51a47
         with:
           base: ${{ github.event.pull_request.base.sha || github.event.before }}
 
