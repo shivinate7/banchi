@@ -216,7 +216,7 @@ def _card_facts(inventory):
     sale is invisible reads as "never sold" — which is the exact input this command marks a
     price down on.
     """
-    oldest, sold = {}, {}
+    oldest = {}
     for card in inventory.cards.values():
         sku = getattr(card, "sku", None)
         if not sku:
@@ -231,11 +231,23 @@ def _card_facts(inventory):
             # stays None, and with no sighting either `_before` refuses it as `too_young`,
             # which is the honest answer for a row nothing can date.
             oldest.setdefault(sku, None)
-        if getattr(card, "state", None) == master.SOLD:
-            at = getattr(card, "state_at", None)
-            if at and (sku not in sold or str(at) > sold[sku]):
-                sold[sku] = str(at)
-    return oldest, sold
+    return oldest, last_sales(inventory)
+
+
+def last_sales(inventory):
+    """Per SKU: the newest sale, off the sold CARDS (the state's index, not a walk of every card).
+
+    THE ONE HOME OF "WHEN DID THIS SKU LAST SELL": `_card_facts` above and the pricing worklist's
+    live rows (`server/pipeline_routes.py:_live_wire`) both read it, for the reason `_card_facts`
+    gives for preferring cards to the event log.
+    """
+    sold = {}
+    for card in inventory.in_state(master.SOLD):
+        sku = getattr(card, "sku", None)
+        at = getattr(card, "state_at", None)
+        if sku and at and (sku not in sold or str(at) > sold[sku]):
+            sold[sku] = str(at)
+    return sold
 
 
 def _listing_facts(inventory):

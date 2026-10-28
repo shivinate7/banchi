@@ -34,14 +34,29 @@ def no_env_file(directory=None):
 
 
 @contextmanager
-def isolated_home():
+def _home_folder(root):
+    """The folder a home is made in: a fresh `home` under `root` (a run folder, which its own
+    `run_folder` removes), or a system temporary directory when no root is given."""
+    if root is None:
+        with tempfile.TemporaryDirectory() as tmp:
+            yield Path(tmp)
+    else:
+        home = Path(root) / "home"
+        home.mkdir(parents=True, exist_ok=True)
+        yield home
+
+
+@contextmanager
+def isolated_home(root=None):
     """A whole store in a temporary directory, with no settings file, restored on the way out.
 
-    Restores the previous value rather than deleting the key: other tests share this process.
+    `root`, when given, is a run folder from `run_folder()` (test-temp-standard): the home is
+    made under it and nothing here removes it. Restores the previous value rather than deleting
+    the key: other tests share this process.
     """
     previous = os.environ.get(files.HOME_ENV)
-    with tempfile.TemporaryDirectory() as tmp, no_env_file(tmp):
-        os.environ[files.HOME_ENV] = tmp
+    with _home_folder(root) as tmp, no_env_file(tmp):
+        os.environ[files.HOME_ENV] = str(tmp)
         try:
             yield Path(tmp)
         finally:
