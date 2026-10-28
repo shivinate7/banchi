@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Sourced by each guard's self-test: the refusal log's well-formedness check, written once.
 # `refusal_line_ok <log> <rule> [<session>]`: the log holds exactly ONE line, with five
 # TAB-separated fields — ISO time, `<rule>`, a snippet of at most 80 characters, `<session>`
