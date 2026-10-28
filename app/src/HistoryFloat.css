@@ -1,0 +1,81 @@
+/* The floating price-history card (HistoryFloat.tsx). Fixed, so the list under it never moves;
+   every size is held, so it does not change while the history loads (D313). */
+.hfloat {
+  position: fixed;
+  z-index: 40;
+  box-sizing: border-box;
+  width: 384px;
+  max-width: calc(100vw - 16px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+  padding: var(--bn-4) var(--bn-5) var(--bn-4);
+  border-radius: var(--bn-r-xl);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-3), inset 0 0 0 1px var(--bn-line);
+  outline: none;
+}
+@media (min-width: 1100px) {
+  .hfloat { width: 560px; }
+}
+.hfloat-h { margin: 0 0 calc(var(--bn-3) * -1); font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-ink-3); letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; }
+.hfloat-head { display: flex; align-items: center; gap: var(--bn-3); }
+.hfloat-name {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-h3);
+  font-weight: 800;
+}
+.hfloat-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bn-1) var(--bn-4);
+  margin: 0;
+  min-height: 16px;
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+}
+.hfloat-legend > span { display: inline-flex; align-items: center; gap: var(--bn-1-5); white-space: nowrap; }
+.hfloat-sw { display: inline-block; width: 16px; height: 0; border-top: 2px solid var(--bn-ink-2); }
+.hfloat-sw-ask { border-top: 2px dashed var(--bn-accent); }
+.hfloat-sw-spread { width: 2px; height: 10px; border: 0; background: var(--bn-ink-4); border-radius: 1px; }
+.hfloat-sw-sale { width: 8px; height: 8px; border: 0; background: var(--bn-accent); transform: rotate(45deg); }
+.hfloat-sw-sug { width: 8px; height: 8px; border: 0; background: var(--bn-accent); border-radius: var(--bn-r-full); }
+/* The chart's box is its viewBox's height, held before the history arrives. The top price label
+   is centred near the plot's top edge, so part of its line rises above the viewBox: the padding
+   is one label's font size, so it holds the label at any font, and the SVG draws into it. */
+.hfloat-chart { box-sizing: content-box; height: 140px; padding-top: var(--bn-fs-2xs); overflow: hidden; }
+.hfloat-chart .producthistory-chart { height: 100%; overflow: visible; }
+.hfloat-none { margin: 0; color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.hfloat-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--bn-4); min-height: 40px; }
+.hfloat-facts { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--bn-1) var(--bn-4); margin: 0; }
+.hfloat-quiet { color: var(--bn-ink-4); font-size: var(--bn-fs-sm); }
+.hfloat-foot .bn-btn { --btn-h: 40px; flex: none; }
+@media (min-width: 1100px) {
+  .hfloat-chart { height: 180px; }
+  /* Equal columns, so a figure arriving never moves its neighbour (D313). */
+  .hfloat-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--bn-1) var(--bn-3); }
+}
+.hfloat-facts dt { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.hfloat-facts dd { display: flex; align-items: baseline; height: 24px; margin: 0; font-size: var(--bn-fs-md); }
+
+/* The gallery specimen: a name, a price field and the door, one row each. */
+.hfloat-specimen { display: flex; flex-direction: column; }
+.hfloat-specimen-row {
+  display: grid;
+  /* Mirrors `PricingRow` (Pricing.css): thumb, name, then the price column right beside the door. */
+  grid-template-columns: 40px minmax(0, 1fr) 136px 40px;
+  align-items: center;
+  column-gap: var(--bn-3);
+  padding: var(--bn-2) 0;
+  border-bottom: 1px solid var(--bn-line);
+  /* Scrolled to the top, a row stays clear of the gallery's sticky index bar. */
+  scroll-margin-top: calc(var(--bn-topbar-h, 0px) + 72px);
+}
+.hfloat-specimen-thumb { display: flex; }
+.hfloat-specimen-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
