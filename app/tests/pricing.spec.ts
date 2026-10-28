@@ -198,6 +198,13 @@ function sku(over: Partial<PricingSku> = {}): PricingSku {
   return { ...base, ...over }
 }
 
+/** STUB: the server will send each NEW COPY's group on the wire, as the field `group`, with the
+ *  same values as `LiveListing.group` (`needs_you`, `suggested`, `at_rule`). `PricingSku` has no
+ *  such field yet, so the fixture states the wire the one list reads: the screen draws the group
+ *  it is told and works out none of its own (the value line is the server's: $25, not the $5 of
+ *  the tabbed screen). A case that stubs it names the group it expects the row in. */
+const inGroup = (row: PricingSku, group: LiveListing['group']): PricingSku => ({ ...row, group }) as PricingSku
+
 /* SPEC 7B FIXTURES (`docs/specs/stale-listings.md`, section 7b). THE WIRE SHAPES BELOW ARE THE
  * SPEC'S WORDS AND NOTHING MORE, each in one helper so a build that names a field differently
  * edits one place:
@@ -2815,9 +2822,9 @@ test('the reason a row adds nothing is a heading, composed by the CLIENT, verbat
      headings — the three the join composes have three different remedies and are never merged
      into one bucket of leftovers. */
   const heads = page.locator('.pricing-group-head')
-  await expect(heads).toHaveCount(2)
-  await expect(heads.nth(0).locator('.pricing-group-why')).toHaveText(pending)
-  await expect(heads.nth(1).locator('.pricing-group-why')).toHaveText(/^Nothing to add this run\.$/)
+  /* THE ONE LIST ALWAYS DRAWS ITS THREE GROUPS, EMPTY OR NOT, and the server's sentences follow them. */
+  await expect(heads).toHaveCount(5)
+  await expect(heads.locator('.pricing-group-why')).toHaveText(['Needs you', 'Suggested changes', 'Going at the rule', pending, 'Nothing to add this run.'])
   await expect(page.locator('.pricing-row .pricing-why')).toHaveCount(0)
 
   /* THE FALSE SENTENCE BY NAME, so a client that starts composing again is caught even if it
@@ -2841,7 +2848,7 @@ test('a row that adds nothing sinks to the bottom of its section, under its head
 }) => {
   await open(page, {
     skus: [
-      sku({ sku: '8608859', name: 'Articuno' }),
+      inGroup(sku({ sku: '8608859', name: 'Articuno' }), 'needs_you'),
       sku({
         sku: '8608459',
         name: 'Dunsparce',
@@ -2849,16 +2856,19 @@ test('a row that adds nothing sinks to the bottom of its section, under its head
         add_to_quantity: 0,
         nothing_to_add: 'Every copy in this run is already listed or has left the box.',
       }),
-      sku({ sku: '8608659', name: 'Wattrel' }),
+      inGroup(sku({ sku: '8608659', name: 'Wattrel' }), 'needs_you'),
     ],
   })
 
   await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Wattrel', 'Dunsparce'])
 
-  /* THE HEADING IS OVER THE ROWS IT NAMES: the two rows worth $5 or more need the owner (D277,
-     Q2), and the row that adds nothing falls under the server's own sentence, last. */
+  /* THE HEADING IS OVER THE ROWS IT NAMES: the two rows the server puts under Needs you (stubbed
+     `group`), and the row that adds nothing falls under the server's own sentence, last, after the
+     other two groups, which are drawn empty. */
   await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
-    'Needs You',
+    'Needs you',
+    'Suggested changes',
+    'Going at the rule',
     'Every copy in this run is already listed or has left the box.',
   ])
   const lastGroup = page.locator('.pricing-group').last()
@@ -2883,7 +2893,7 @@ test('a row that adds nothing sinks to the bottom of its section, under its head
 test('a row that is both held and at the cap sinks to the deeper heading', async ({ page }) => {
   await open(page, {
     skus: [
-      sku({ sku: '8608859', name: 'Articuno' }),
+      inGroup(sku({ sku: '8608859', name: 'Articuno' }), 'needs_you'),
       sku({
         sku: '8608459',
         name: 'Dunsparce',
@@ -2901,7 +2911,9 @@ test('a row that is both held and at the cap sinks to the deeper heading', async
   })
 
   await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
-    'Needs You',
+    'Needs you',
+    'Suggested changes',
+    'Going at the rule',
     'Every copy in this run is already listed or has left the box.',
   ])
   await expect(page.locator('.pricing-row').nth(1).locator('.pricing-held')).toHaveAttribute(
@@ -4432,11 +4444,12 @@ test('the screen is on its own route, on the kit page, and draws the run it was 
 test('the rows that need the owner come first, each with its reason, and the rest by value', async ({ page }) => {
   await open(page, {
     skus: [
-      sku({ sku: '1', name: 'Cheap on the cut-off', snap: { market: '0.30', direct_low: null, low: '0.20', low_with_shipping: '1.20', now: null }, bucket: 'sub_threshold' }),
-      sku({ sku: '2', name: 'Ordinary', snap: { market: '2.00', direct_low: null, low: '1.80', low_with_shipping: '2.80', now: null } }),
-      sku({ sku: '3', name: 'Drifted', snap: { market: '1.00', direct_low: null, low: '0.90', low_with_shipping: '1.90', now: null } }),
-      sku({ sku: '4', name: 'Dear', snap: { market: '12.00', direct_low: null, low: '11.00', low_with_shipping: '12.50', now: null } }),
-      sku({ sku: '5', name: 'Unpriced', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } }),
+      inGroup(sku({ sku: '1', name: 'Cheap on the cut-off', snap: { market: '0.30', direct_low: null, low: '0.20', low_with_shipping: '1.20', now: null }, bucket: 'sub_threshold' }), 'at_rule'),
+      inGroup(sku({ sku: '2', name: 'Ordinary', snap: { market: '2.00', direct_low: null, low: '1.80', low_with_shipping: '2.80', now: null } }), 'at_rule'),
+      inGroup(sku({ sku: '3', name: 'Drifted', snap: { market: '1.00', direct_low: null, low: '0.90', low_with_shipping: '1.90', now: null } }), 'needs_you'),
+      /* DEAR is worth the value line ($25) or more, which is why the server puts it under Needs you. */
+      inGroup(sku({ sku: '4', name: 'Dear', snap: { market: '30.00', direct_low: null, low: '29.00', low_with_shipping: '30.50', now: null } }), 'needs_you'),
+      inGroup(sku({ sku: '5', name: 'Unpriced', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } }), 'needs_you'),
     ],
     decisions: {
       rule: 'match',
@@ -4450,9 +4463,10 @@ test('the rows that need the owner come first, each with its reason, and the res
   /* Q2's three reasons, and the order: no market price first, then by value. The card at the
      cut-off is the floor at work, not a drift, so it is not flagged (the call in the decision
      entry). */
-  await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText(['Needs You', 'Ready'])
+  await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText(['Needs you', 'Suggested changes', 'Going at the rule'])
   await expect(page.locator('.pricing-group').nth(0).locator('.pricing-name')).toHaveText(['Unpriced', 'Dear', 'Drifted'])
-  await expect(page.locator('.pricing-group').nth(1).locator('.pricing-name')).toHaveText(['Ordinary', 'Cheap on the cut-off'])
+  await expect(page.locator('.pricing-group').nth(1).locator('.pricing-name')).toHaveText([])
+  await expect(page.locator('.pricing-group').nth(2).locator('.pricing-name')).toHaveText(['Ordinary', 'Cheap on the cut-off'])
   /* ONLY A DRIFTED PRICE STILL DRAWS A REASON (the owner's review and add-on, 2026-09-26): "No
      market price" repeats the Market column's own "—", and "Worth $5 or more" repeats the
      Market figure two columns over, so neither draws here. A row's place in "Needs you" is
@@ -4460,7 +4474,7 @@ test('the rows that need the owner come first, each with its reason, and the res
   const flags = page.locator('.pricing-group').nth(0).locator('.pricing-flag')
   await expect(flags).toHaveCount(1)
   await expect(flags.nth(0)).toHaveText('100% over market')
-  await expect(page.locator('.pricing-group').nth(1).locator('.pricing-flag')).toHaveCount(0)
+  await expect(page.locator('.pricing-group').nth(2).locator('.pricing-flag')).toHaveCount(0)
   /* THE BAR NAMES WHAT STAYS BACK (Q3). */
   await expect(page.locator('[data-tile="priced"]')).toContainText(/\b1 need a price/)
   /* AND ITS COPIES ARE NOT READY (the delta review, R3-1): four rows of three copies go, the
@@ -4485,7 +4499,8 @@ test('a price typed far from market gives the row its flag, and the row does not
   /* THE CHIP APPEARS ON THE ROW; THE ORDER WAS TAKEN ON ARRIVAL (D118, D181). */
   await expect(page.locator('.pricing-row').nth(1).locator('.pricing-flag')).toHaveText('350% over market')
   await expect(page.locator('.pricing-name')).toHaveText(['First', 'Second'])
-  await expect(page.locator('.pricing-group-head')).toHaveCount(0)
+  /* THE ORDER IS UNCHANGED AND THE ONE LIST STILL DRAWS ITS THREE GROUPS. */
+  await expect(page.locator('.pricing-group-head')).toHaveCount(3)
 })
 
 /* THE ROW'S HOLD BUTTON IS THE OWNER'S WORD: it says Keep off TCGplayer, never Hold Back, so it reads the same as the hold panel. */
@@ -5149,14 +5164,15 @@ test('F3: the name search finds a card by any words of it, in any order, and by 
 })
 
 test('F3: the price sort orders within each heading, and a row with no price goes last', async ({ page }) => {
-  await open(page, { skus: FILTER_SKUS })
+  /* STUBBED GROUPS: the server puts Articuno and Poro Snax under Needs you and the other two at the rule. */
+  await open(page, { skus: FILTER_SKUS.map((row) => inGroup(row, row.sku === '8608859' || row.sku === '9000002' ? 'needs_you' : 'at_rule')) })
   await pickFilter(page, 'Sort', /^Market price/)
   /* HIGH TO LOW is the first pick. "Needs you" holds Articuno and Poro Snax and "Ready" the other
      two; the sort runs inside each, so it never crosses that line, and Poro Snax (no market
      price) goes last in its own group. */
   const names = await page.locator('.pricing-row .pricing-name').allInnerTexts()
   expect(firstWords(names)).toEqual(['Articuno', 'Poro', 'Annie', 'Dunsparce'])
-  await expect(page.locator('.pricing-group-head .pricing-group-why').first()).toHaveText('Needs You')
+  await expect(page.locator('.pricing-group-head .pricing-group-why').first()).toHaveText('Needs you')
 })
 
 test('F3: the game filter and the set filter each narrow the list, and together with a search they combine', async ({ page }) => {
@@ -5853,15 +5869,18 @@ const LEFT_BOX_ROWS = [
   { sku: '958', name: 'Rsix', market: '0.90', low: '0.70', on_hand: 3 },
 ]
 const handOf = (name: string) => LEFT_BOX_ROWS.find((row) => row.name === name)!.on_hand
+/** The group the fixture stubs for a row (the server's word on the wire, as `group`): $5 and over
+ *  stands for the rows that need the owner, so the two halves the cases below read keep their rows. */
+const leftBoxGroup = (row: { market: string }): LiveListing['group'] => (Number(row.market) >= 5 ? 'needs_you' : 'at_rule')
 /** What the default order draws, from the fixture: market high to low, then left-box rows after the rest,
- *  inside each of the two groups ($5 and over needs the owner). */
+ *  inside each of the three groups (Suggested changes is drawn and empty). */
 function leftBoxExpected(): [string, string[]][] {
   const byMarket = [...LEFT_BOX_ROWS].sort((a, b) => Number(b.market) - Number(a.market))
-  const group = (needs: boolean) => {
-    const rows = byMarket.filter((row) => (Number(row.market) >= 5) === needs)
+  const group = (which: LiveListing['group']) => {
+    const rows = byMarket.filter((row) => leftBoxGroup(row) === which)
     return [...rows.filter((row) => row.on_hand > 0), ...rows.filter((row) => row.on_hand === 0)].map((row) => row.name)
   }
-  return [['Needs You', group(true)], ['Ready', group(false)]]
+  return [['Needs you', group('needs_you')], ['Suggested changes', []], ['Going at the rule', group('at_rule')]]
 }
 async function openLeftBox(page: Page): Promise<void> {
   await setViewport(page, { width: 1440, height: 900 })
@@ -5869,6 +5888,7 @@ async function openLeftBox(page: Page): Promise<void> {
     worklist: {
       runs: [{ run: RUN, box: 7, box_name: 'Box 7', skus: LEFT_BOX_ROWS.length }],
       skus: LEFT_BOX_ROWS.map((row) => ({
+        group: leftBoxGroup(row),
         ...sku({
           sku: row.sku,
           name: row.name,
@@ -6858,10 +6878,13 @@ for (const theme of ['light', 'dark'] as const) {
  * the words and controls the mockup draws (the reason line, "Price for <name>", "Send the new
  * price for <name>"), never by a class the mockup does not name.
  * ---------------------------------------------------------------------------------------------- */
-const ONE_LIST_LIVE: LiveListing[] = [
-  { sku: '9000001', asking: '8.80', last_sold_at: null, group: 'needs_you', price: '12.41', source: 'Suggested', reason: 'Market up 41% since listed, past your 25% limit.' },
-  { sku: '9000002', asking: '3.40', last_sold_at: '2026-10-20', group: 'suggested', price: '4.01', source: 'Suggested', reason: 'Market up 18% since listed.' },
-  { sku: '9000003', asking: '2.85', last_sold_at: null, group: 'at_rule', price: '2.85', source: 'Live', reason: '' },
+/** STUB: each live listing also carries `name`, `set_name`, `market`, `low` and `image_url` (the wire lane's
+ *  names), so a row draws from the worklist alone, with no second read. `LiveListing` has no such fields yet. */
+type LiveStub = LiveListing & { name: string; set_name: string; market: string | null; low: string | null; image_url: string | null }
+const ONE_LIST_LIVE: LiveStub[] = [
+  { sku: '9000001', name: 'Iono', set_name: 'Paldea Evolved', image_url: null, market: '12.41', low: '12.95', asking: '8.80', last_sold_at: null, group: 'needs_you', price: '12.41', source: 'Suggested', reason: 'Market up 41% since listed, past your 25% limit.' },
+  { sku: '9000002', name: 'Gardevoir ex', set_name: 'Scarlet and Violet', image_url: null, market: '4.22', low: '4.35', asking: '3.40', last_sold_at: '2026-10-20', group: 'suggested', price: '4.01', source: 'Suggested', reason: 'Market up 18% since listed.' },
+  { sku: '9000003', name: 'Pecharunt ex', set_name: 'Shrouded Fable', image_url: null, market: '3.01', low: '3.10', asking: '2.85', last_sold_at: null, group: 'at_rule', price: '2.85', source: 'Live', reason: '' },
 ]
 
 const GROUP_TITLES = ['Needs you', 'Suggested changes', 'Going at the rule'] as const
@@ -6960,6 +6983,163 @@ test('one list: after a send lands the screen re-reads the worklist, and the sen
   await expect.poll(() => reads.length, 'the worklist is read again once the send has landed').toBeGreaterThan(before)
   await expect(page.getByText('Market up 18% since listed.'), 'the sent suggestion no longer reads as a suggestion').toHaveCount(0)
   await fieldHolding(listGroup(page, 'Going at the rule'), '4.01')
+})
+
+/* AN EMPTY GROUP STILL DRAWS, as the mockup's own `paint` draws it: the title, a count of 0 and the group's
+ * sentence, and no row. The mockup hides a group only for the compare group a press culls. */
+test('one list: with no live listing the three groups still draw, an empty one with a count of 0 and its sentence', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { skus: [inGroup(sku(), 'at_rule')] })
+  const heads = page.getByRole('heading', { name: /^(Needs you|Suggested changes|Going at the rule)\b/ })
+  await expect(heads).toHaveCount(3)
+  await expect(heads.nth(0)).toHaveText(/^Needs you\s*0\s*Nothing here goes until you tick it or type a price\.$/)
+  await expect(heads.nth(1)).toHaveText(/^Suggested changes\s*0\s*Ticked rows go with the next send\. Untick one to keep its live price\.$/)
+  await expect(heads.nth(2)).toHaveText(/^Going at the rule\s*1\s*These go at your rule, at the floor, or at a price you typed\.$/)
+  await expect(page.getByRole('heading', { name: /^(Ready|Needs You)\b/ }), 'the tabbed screen headings are gone').toHaveCount(0)
+})
+
+/* THE VALUE LINE ($25, the policy's own) IS THE SERVER'S: a new copy's group arrives on the wire (stubbed `group`) and the
+ * screen draws it. $25.00 or more is Needs you, never Going at the rule; $24.99 and the old $5 line mean nothing here. */
+test('one list: a new copy worth $25 or more is under Needs you, never under Going at the rule', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const priced = (name: string, market: string) => sku({ sku: name, name, snap: { ...sku().snap, market } })
+  await open(page, {
+    live: ONE_LIST_LIVE,
+    skus: [
+      inGroup(priced('Umbreon VMAX', '38.20'), 'needs_you'),
+      inGroup(priced('On the line', '25.00'), 'needs_you'),
+      inGroup(priced('Just under', '24.99'), 'at_rule'),
+      inGroup(priced('Pecharunt', '7.49'), 'at_rule'),
+    ],
+  })
+  const needs = listGroup(page, 'Needs you')
+  const atRule = listGroup(page, 'Going at the rule')
+  for (const name of ['Umbreon VMAX', 'On the line']) {
+    await expect(needs.getByRole('textbox', { name: `Price for ${name}` }), `${name} needs the owner`).toHaveCount(1)
+    await expect(atRule.getByRole('textbox', { name: `Price for ${name}` }), `${name} is not going at the rule`).toHaveCount(0)
+    /* UNTICKED, like every Needs you row (list-notes, item 9). */
+    await expect(needs.getByRole('checkbox', { name: `Send the new price for ${name}` })).not.toBeChecked()
+  }
+  for (const name of ['Just under', 'Pecharunt']) {
+    await expect(atRule.getByRole('textbox', { name: `Price for ${name}` }), `${name} goes at the rule`).toHaveCount(1)
+    await expect(needs.getByRole('textbox', { name: `Price for ${name}` })).toHaveCount(0)
+  }
+})
+
+/* ONE SOURCE: a live row draws its name, market and lowest price from the worklist's own listing (stubbed `name`,
+ * `market`, `low`). The screen reads no mark-down read at mount for them. */
+test('one list: live rows draw name, market and low from the worklist, with no mark-down read', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const reads: string[] = []
+  await page.route(/\/pipeline\/markdowns/, async (route) => {
+    reads.push(new URL(route.request().url()).pathname)
+    await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'refused', message: 'not asked for' } }) })
+  })
+  await open(page, { live: ONE_LIST_LIVE })
+  const row = (name: string, group: (typeof GROUP_TITLES)[number]) =>
+    listGroup(page, group).locator('.pricing-row', { has: page.getByRole('textbox', { name: `Price for ${name}` }) })
+  const iono = row('Iono', 'Needs you')
+  await expect(iono.getByText('Iono', { exact: true })).toBeVisible()
+  await expect(iono).toContainText('$12.41')
+  await expect(iono).toContainText('$12.95')
+  await expect(row('Gardevoir ex', 'Suggested changes')).toContainText('$4.22')
+  await expect(row('Gardevoir ex', 'Suggested changes')).toContainText('$4.35')
+  await expect(row('Pecharunt ex', 'Going at the rule')).toContainText('$3.10')
+  expect(reads, 'no call to the mark-down reads').toEqual([])
+})
+
+/* THE FROM PILLS AND THE SEND BAR, as the mockup draws them (list.html: `SRC_WORD`, `row`, `paint`). */
+test('one list: each row says where its price comes from, and the send bar counts each kind', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const unpriced = { market: null, direct_low: null, low: null, low_with_shipping: null, now: null }
+  await open(page, {
+    live: ONE_LIST_LIVE,
+    skus: [
+      inGroup(sku({ sku: 'new1', name: 'Bulbasaur', add_to_quantity: 3, copies: 3 }), 'at_rule'),
+      inGroup(sku({ sku: 'new2', name: 'Mew ex', bucket: 'no_market_data', snap: unpriced }), 'needs_you'),
+    ],
+  })
+  const pill = (group: (typeof GROUP_TITLES)[number], name: string) =>
+    listGroup(page, group).locator('.pricing-row', { has: page.getByRole('textbox', { name: `Price for ${name}` }) })
+  await expect(pill('Needs you', 'Mew ex').getByText('No price yet', { exact: true })).toBeVisible()
+  await expect(pill('Going at the rule', 'Bulbasaur').getByText('Rule', { exact: true })).toBeVisible()
+  await expect(pill('Needs you', 'Iono').getByText('Suggested', { exact: true })).toBeVisible()
+  await expect(pill('Suggested changes', 'Gardevoir ex').getByText('Suggested', { exact: true })).toBeVisible()
+  /* A LIVE ROW SHOWS ITS PRICE NOW BEFORE THE ARROW ("Now $8.80"). */
+  await expect(pill('Needs you', 'Iono')).toContainText('Now $8.80')
+
+  /* THE BAR: copies in all, then new, rises, falls and typed, each with its total. Ticked: 3 new at the rule ($22.03 each) and the one suggestion. */
+  const bar = page.getByRole('complementary', { name: 'Send to TCGplayer' })
+  await expect(bar).toContainText('4 copies ready to send.')
+  await expect(bar).toContainText('3 new, listing for $66.09')
+  await expect(bar).toContainText('1 rise, up $0.61 in all')
+  await expect(bar).toContainText('0 falls, down')
+  await expect(bar).toContainText('0 typed by you, listing for')
+  await expect(page.getByRole('button', { name: 'Send 4 copies to TCGplayer' })).toBeVisible()
+  /* A TICK CHANGES THE FIGURES AT ONCE: Iono's rise ($8.80 to $12.41) joins. */
+  await listGroup(page, 'Needs you').getByRole('checkbox', { name: 'Send the new price for Iono' }).check()
+  await expect(bar).toContainText('5 copies ready to send.')
+  await expect(bar).toContainText('2 rises, up $4.22 in all')
+  /* A TYPED PRICE has its own pill and its own line. */
+  const typed = page.getByRole('textbox', { name: 'Price for Pecharunt ex' })
+  await typed.fill('3.10')
+  await typed.press('Tab')
+  await expect(pill('Going at the rule', 'Pecharunt ex').getByText('You', { exact: true })).toBeVisible()
+  await expect(bar).toContainText('6 copies ready to send.')
+  await expect(bar).toContainText('1 typed by you, listing for $3.10')
+  await expect(page.getByRole('button', { name: 'Send 6 copies to TCGplayer' })).toBeVisible()
+})
+
+/* THE OWNER REOPENED MARK-DOWNS (pricing-suggest spec, section 5, step 4): THEY ARE SUGGESTION ROWS OF THE ONE LIST, and no sheet or tab holds them. An old link,
+ * `?markdown=<stamp>`, lands on the one list: its three groups, no tab bar, none of the sheet's own controls. */
+test('one list: a ?markdown= link lands on the one list and opens no second surface', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const applies: string[] = []
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  const at = new Date(Date.now() - 60_000).toISOString()
+  const stamp = '20260924-093000'
+  const asked = { days: 7, rule: 'undercut:10' }
+  await page.route(/\/pipeline\/markdowns$/, (route) => route.fulfill(json({ markdowns: [{ stamp, at, asked, source: null, skus: 1, files: [] }] })))
+  await page.route(/\/pipeline\/markdowns\/[^/]+\/(apply|push)$/, (route) => {
+    applies.push(new URL(route.request().url()).pathname)
+    return route.fulfill(json({}))
+  })
+  await page.route(/\/pipeline\/markdowns\/[^/]+\/table$/, (route) =>
+    route.fulfill(
+      json({ stamp, at, asked, counts: { considered: 1, offered: 1, deferred: 0, refused: 0 }, source: {}, skus: [], says: {}, unpriceable: [], floor: '0.49', stale_after_s: 86400 }),
+    ),
+  )
+  await open(page, { live: ONE_LIST_LIVE })
+  await page.goto(`/#/pricing?markdown=${stamp}`)
+  await expect(listGroup(page, 'Needs you').getByText('Market up 41% since listed, past your 25% limit.')).toBeVisible()
+  await expect(listGroup(page, 'Suggested changes').getByText('Market up 18% since listed.')).toBeVisible()
+  await expect(page.getByRole('heading', { name: /^Going at the rule\b/ })).toBeVisible()
+  await expect(page.locator('.pricing-tabs'), 'no tab bar').toHaveCount(0)
+  await expect(page.getByRole('heading', { name: /^(No market price|With a market price)\b/ }), 'no sheet headings').toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Mark down \d+/ }), 'no mark-down sheet control').toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Send .* to TCGplayer$/i }), 'one send press').toHaveCount(1)
+  expect(applies, 'the sheet applies and pushes nothing').toEqual([])
+})
+
+/* NO USER-VISIBLE TEXT SAYS "run" OR "box" (owner ruling). Neither the mockup nor the spec gives words for these
+ * two empty states, so this pins only what they must not say; the builder picks the sentence. */
+const NO_RUN_OR_BOX = /\b(runs?|box(es)?)\b/i
+test('one list: the empty state with nothing read and nothing to send says neither "run" nor "box"', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  /* STUBBED SO THE CASE READS THE WORDS, not the wire: the one-source case above is the one that forbids this call. */
+  await page.route(/\/pipeline\/markdowns$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ markdowns: [] }) }))
+  await open(page, { noRun: true, runs: [], skus: [] })
+  const empty = page.locator(`${VIEW} .bn-empty`)
+  await expect(empty).toBeVisible()
+  expect(await empty.innerText()).not.toMatch(NO_RUN_OR_BOX)
+})
+
+test('one list: the empty state after every copy is sent says neither "run" nor "box"', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { skus: [] })
+  const empty = page.locator(`${VIEW} .bn-empty`)
+  await expect(empty).toBeVisible()
+  expect(await empty.innerText()).not.toMatch(NO_RUN_OR_BOX)
 })
 
 /* THE HELD PILL KEEPS ITS FLEX, AT BOTH WIDTHS AND IN BOTH THEMES (spec section 10): the pill never grows or shrinks inside its column. */

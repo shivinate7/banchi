@@ -965,7 +965,8 @@ test('a card with no market price is never marked down, and leads the list for t
   await open(page, {
     skus: [
       live({ sku: '8608859', name: 'Articuno' }),
-      live({
+      /* STUB: the server's word on the row's group, as the field `group` (values of `LiveListing.group`). */
+      { ...live({
         sku: '9000001',
         name: 'Kai Sa',
         asking: '6000.0000',
@@ -974,12 +975,12 @@ test('a card with no market price is never marked down, and leads the list for t
         skip: 'no_market',
         proposed: null,
         row: { 'TCG Market Price': '' },
-      }),
+      }), group: 'needs_you' } as MarkdownSku,
     ],
     counts: { considered: 2, offered: 1, deferred: 0, refused: 1 },
   })
   const groups = page.locator('.pricing-group-head')
-  await expect(groups.first()).toContainText('No market price')
+  await expect(groups.first()).toContainText('Needs you')
   await expect(page.getByRole('textbox', { name: 'Price for Kai Sa' })).toHaveAttribute('placeholder', '6000.00')
   await page.getByRole('button', { name: 'Mark down 1' }).click()
   await expect(page.getByRole('textbox', { name: 'Price for Kai Sa' })).toHaveValue('')
@@ -1101,14 +1102,14 @@ function liveLeftBoxExpected(): [string, string[]][] {
     const rows = byMarket.filter((row) => (row.market === null) === needs)
     return [...rows.filter((row) => row.on_hand > 0), ...rows.filter((row) => row.on_hand === 0)].map((row) => row.name)
   }
-  return [['No market price', group(true)], ['With a market price', group(false)]]
+  return [['Needs you', group(true)], ['Suggested changes', []], ['Going at the rule', group(false)]]
 }
 async function openLiveLeftBox(page: Page): Promise<void> {
   await setViewport(page, { width: 1440, height: 900 })
   await open(page, {
     skus: LEFT_BOX_LIVE.map((row) =>
       // `on_hand` is not on `MarkdownSku` yet: the cast is the fixture stating the wire the rule needs.
-      ({ ...live({ sku: row.sku, name: row.name, market: row.market, row: { 'TCG Market Price': row.market ?? '' } as Record<string, string> }), on_hand: row.on_hand }) as MarkdownSku,
+      ({ ...live({ sku: row.sku, name: row.name, market: row.market, row: { 'TCG Market Price': row.market ?? '' } as Record<string, string> }), on_hand: row.on_hand, group: row.market === null ? 'needs_you' : 'at_rule' }) as MarkdownSku,
     ),
   })
   await expect(page.locator('.pricing-row')).toHaveCount(LEFT_BOX_LIVE.length)
@@ -1132,7 +1133,7 @@ test('7b-29: one list, All lens: a row with every copy gone sorts below every ro
 test('7b-29: one list: the Market header sort ignores the left-box rule', async ({ page }) => {
   await openLiveLeftBox(page)
   await liveHead(page).click()
-  const [, names] = (await liveGroups(page)).find(([head]) => head === 'With a market price')!
+  const [, names] = (await liveGroups(page)).find(([head]) => head === 'Going at the rule')!
   const market = (name: string) => Number(LEFT_BOX_LIVE.find((row) => row.name === name)!.market)
   expect(names.map(market)).toEqual([...names.map(market)].sort((a, b) => b - a))
   const hands = names.map(liveHandOf)
