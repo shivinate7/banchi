@@ -227,8 +227,8 @@ change, changed by hand. Anything subtler is a refusal and never a guess.
 ### The price histories are recorded once, on the owner's Mac
 
 Every price history this product draws comes from `infinite-api.tcgplayer.com`. That host refuses
-the honest User-Agent (D216). The owner allows the browser signature from the owner's own machine
-only. So CI never fetches a history. `make demo-histories` records them on the owner's Mac, when the
+the project's default User-Agent and answers a browser User-Agent (D216). Only the owner's Mac sets
+`BANCHI_TCG_USER_AGENT`. So CI never fetches a history. `make demo-histories` records them on the owner's Mac, when the
 owner chooses:
 
     BANCHI_TCG_USER_AGENT="<the browser's User-Agent>" make demo-histories

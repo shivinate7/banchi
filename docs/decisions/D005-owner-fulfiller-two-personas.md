@@ -1,4 +1,4 @@
-## D5 — Owner and Fulfiller are two personas
+# D5 — Owner and Fulfiller are two personas
 
 **Two personas share one store: the owner processes, a family member fulfills.**
 

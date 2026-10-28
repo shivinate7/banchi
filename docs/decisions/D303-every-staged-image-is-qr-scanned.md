@@ -1,4 +1,4 @@
-## D303 — Every staged image is QR-scanned
+# D303 — Every staged image is QR-scanned
 
 The owner's ruling, 2026-09-27: every image gets the QR scan.
 

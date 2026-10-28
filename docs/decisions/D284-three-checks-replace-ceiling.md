@@ -1,4 +1,4 @@
-## D284 — Three checks replace the word ceiling
+# D284 — Three checks replace the word ceiling
 
 **The rule.** The owner, 2026-09-23: kill the pinned word ceilings. His own words: "I think we need to kill ceilings and instead just use a different way." He did not want a stagnant static pin. This entry replaces the pinned ceiling and its mechanism, `app/tests/copy-budget.spec.ts`. See its own "Superseded" note for what carries over.
 

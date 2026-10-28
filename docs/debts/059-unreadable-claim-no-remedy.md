@@ -1,6 +1,6 @@
 ## DEBT59 — an unreadable live submission claim has no way out on screen
 
-A live send claim that will not parse is drawn and released by key on Pricing's send card. `send_routes.do_release_unreadable` releases it and `do_restore_unreadable` undoes that. Until then it blocks every press.
+**What.** A live send claim that will not parse is drawn and released by key on Pricing's send card. `send_routes.do_release_unreadable` releases it and `do_restore_unreadable` undoes that. Until then it blocks every press.
 
 A live submission claim (the paid identify press) has no such way out. `Submissions.live` and `Submissions.overlap` raise `StoreError`. That is correct: a money path must not skip a live claim. The press pre-check refuses with `claim_unreadable`. `_claim_rows` and `do_pipeline_waiting` in `server/pipeline_routes.py` raise too, so Runs cannot draw the list. The app offers no release, so recovery is a hand repair of the row. It has never occurred on the real store (unmeasured beyond that).
 

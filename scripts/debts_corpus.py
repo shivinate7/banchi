@@ -105,7 +105,7 @@ def path_for(ident: str) -> Optional[Path]:
 
 
 def idents() -> List[str]:
-    """Every entry number, in corpus order. The preamble is not an entry."""
+    """Every entry number, in corpus order."""
     out = []
     for path in files():
         match = HEADING_RE.match(path.read_text(encoding="utf-8").split("\n", 1)[0])

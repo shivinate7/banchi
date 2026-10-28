@@ -783,12 +783,12 @@ def _storage_sites() -> Tuple[Dict[str, Dict[str, List[str]]], List[Finding]]:
 
 
 def _decision_entry(number: int) -> Optional[Tuple[str, str]]:
-    """(repo-relative path, text) of the entry whose heading is `## D<n> — …`, or None.
+    """(repo-relative path, text) of the entry whose heading is `# D<n> — …`, or None.
 
     FOUND BY HEADING AND NEVER BY FILENAME. A claim renames the file (D140), so a path
     typed here would go stale at the next merge while still pointing at a real document.
     """
-    pattern = re.compile(rf"^##\s+D{number}\s+—", re.M)
+    pattern = re.compile(rf"^#\s+D{number}\s+—", re.M)
     for path in decision_files():
         text = read(path)
         if pattern.search(text):
@@ -821,7 +821,7 @@ def _session_fence_findings(session: Dict[str, List[str]]) -> List[Finding]:
     if found is None:
         return [Finding(
             "docs/decisions/",
-            "no entry headed `## D27 — …`, and it is what publishes the `sessionStorage` "
+            "no entry headed `# D27 — …`, and it is what publishes the `sessionStorage` "
             "carve-out's roster. Renumbered, renamed past the heading grammar, or gone — "
             "either way this leg is reconciling nothing.",
         )]

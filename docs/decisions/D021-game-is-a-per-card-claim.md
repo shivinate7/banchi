@@ -1,4 +1,4 @@
-## D21 — Game is a per-card claim
+# D21 — Game is a per-card claim
 
 **The game is a per-card claim made on the capture screen, never a mode set on the app shell.** Four capture choices — `pokemon`, `riftbound`, `one_piece`, `pokemon_code` — and the picker sits beside Box, Set hint and Finish.
 

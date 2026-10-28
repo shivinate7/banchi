@@ -1,4 +1,4 @@
-## D253 — Listing needs name and number agreeing
+# D253 — Listing needs name and number agreeing
 
 **AMENDED IN ONE PART, KEPT IN SUBSTANCE (`D258`).** The agreement rule
 stands. D162's release and the replay stand too. `JoinReport.name_corrections` retires, and so

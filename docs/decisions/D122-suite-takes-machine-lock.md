@@ -1,4 +1,4 @@
-## D122 — The suite takes a machine-wide lock
+# D122 — The suite takes a machine-wide lock
 
 **Built 2026-09-07, after a session spent two re-runs on failures that were not in its code.**
 In the `magical-kalam-0230c3` worktree a full `make design-check` reported

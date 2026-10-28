@@ -1,4 +1,4 @@
-## D195 — Stacked same-role buttons share a width
+# D195 — Stacked same-role buttons share a width
 
 **Ruling: buttons of the same role in the same sector share a width. Make it a guard, and correct every instance in the app.** Read beside D50, this is a fourth thing `base.css` cannot supply. It has the same shape as D118's stability floor. It is a rule about the relationship between controls, not about one control's paint. So a stylesheet cannot carry it. A guard has to look at the rendered page.
 

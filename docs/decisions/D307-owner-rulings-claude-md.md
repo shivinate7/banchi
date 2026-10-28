@@ -1,4 +1,4 @@
-## D307 — Owner rulings CLAUDE.md points to
+# D307 — Owner rulings CLAUDE.md points to
 
 **Why this entry exists.** The owner asked for CLAUDE.md to be rewritten in place and cut to rules.
 A ruling's home is a decision entry. CLAUDE.md points at it. These rulings had no entry, so this one holds
@@ -22,17 +22,19 @@ The local directory is `~/Developer/banchi`. The GitHub repository is `shivinate
 GitHub Pages followed the rename. `.github/workflows/demo.yml` derives `DEMO_BASE` from the repository name.
 The Makefile's own default is a stale fallback for a hand-run build, by design.
 
-**Merge needs an Orchestrator that the owner named.** A session merges only after the owner names the act.
-Only a session that the owner has called an Orchestrator may merge. It may merge only PRs it planned and reviewed.
-It merges only through `make merge ARGS="<n> --confirm"`, with CI green, and never with `--admin`.
-The owner names it per turn. The designation is never inherited. It is never assumed from the shape of the work.
-`make merge` carries a needed rebase and force-push on a branch nobody else holds.
-It is never carried over from an earlier session. It replaced a standing grant. D42 (main moves by PR) holds the rest.
+**Merge needs an Orchestrator that the owner named.** One session the owner names Orchestrator batches every
+reviewed lane the owner set out, across all sessions, into one integration branch and merges it under its
+standing grant. A lane session hands the Orchestrator each reviewed lane branch with its head commit and review
+verdict. A lane session never builds an integration branch, opens an integration PR, marks a PR ready or merges.
+The Orchestrator merges only through `make merge ARGS="<n> --confirm"`, with CI green, and never with `--admin`.
+`make merge` never rebases or force-pushes, and a moved head stops it.
+The designation is never inherited, never carried over from an earlier session and never assumed from the shape
+of the work. D42 (main moves by PR) holds the rest.
 
-**Model tiers.** Opus is for planning, for a builder that redesigns a whole flow, and for a hard merge.
-Every review is Sonnet. An Opus review needs the orchestrator to ask the owner first and get a yes.
-Sonnet builds every ordinary screen lane and fix round by default. An Opus lane is said in one line first,
-and raised only on the owner's word in `.claude/settings.local.json`.
+**Model tiers.** Sonnet is the default and the ceiling. Plan, the built-in advisor, the designer, the design
+reviewer and a builder's third try run Opus. Reviewers run Sonnet from round 2; round 1 uses the role's model.
+Any other Opus needs the owner's grant. An Opus lane is said in one line first, and any other Opus lane is raised
+only on the owner's grant in `.claude/settings.local.json`.
 
 **A builder commits and pushes its branch after every pass, even when a check is red.**
 Each commit message ends with a `Done:` line and a `Next:` line.

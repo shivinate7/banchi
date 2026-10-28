@@ -31,7 +31,7 @@ from pipeline import join
 # hand-built candidate seed the table first, through the real fold).
 from pipeline import skus as sku_pipeline
 from server import capture_server
-from store import db, files, master
+from store import db, files, master, photos
 from store.session import Store
 from scripts import serve
 from harness.tests.t7.common import (
@@ -2249,7 +2249,76 @@ def check_supervisor_recovery(checks: Checks) -> None:
     )
 
 
+def card_attribute_typos(source: str) -> list:
+    """Each `getattr`/`setattr`/`hasattr` in `source` that names a card field as a string literal
+    which `Card` does not have (DEBT61, string-keyed card fields). The receiver is a name
+    `card` or `existing`, or a `["card"]` lookup. `Card`'s dataclass fields (a field with no default, such as
+    `box` or `index`, leaves no class attribute) or `hasattr(master.Card, name)` are the one list, so
+    a property such as `key`, `order_key` or `days_in_state` counts. NOT COVERED: the inline-tuple
+    loop in `capture_server`'s `claims`, whose names are not a literal argument."""
+    import ast
+
+    def is_card(node) -> bool:
+        if isinstance(node, ast.Name):
+            return node.id in ("card", "existing")
+        return (
+            isinstance(node, ast.Subscript)
+            and isinstance(node.slice, ast.Constant)
+            and node.slice.value == "card"
+        )
+
+    found = []
+    for node in ast.walk(ast.parse(source)):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in ("getattr", "setattr", "hasattr")
+            and len(node.args) >= 2
+            and is_card(node.args[0])
+            and isinstance(node.args[1], ast.Constant)
+            and isinstance(node.args[1].value, str)
+            and node.args[1].value not in master.Card.__dataclass_fields__
+            and not hasattr(master.Card, node.args[1].value)
+        ):
+            found.append(node.args[1].value)
+    return found
+
+
+def check_card_field_strings(checks: Checks) -> None:
+    """A string naming a card field must be a field `Card` declares (DEBT61, string-keyed card
+    fields). A typo in `getattr(card, "gme", None)` is a silent default, and in `setattr` a silent
+    new attribute. The seeded source proves the scanner goes red on a typo and stays quiet on a
+    real field; the repo files and the name lists must then come out clean."""
+    checks.note("")
+    checks.note("CARD FIELD STRINGS — every name is a declared Card field")
+    checks.equal(
+        card_attribute_typos(
+            'getattr(card, "gme", None)\nsetattr(existing, "set_hnt", 1)\n'
+            'hasattr(target["card"], "sku")\ngetattr(card, "box")\nsetattr(card, "index", 1)\n'
+            'getattr(card, "key")\ngetattr(card, "game")\ngetattr(entry, "anything")'
+        ),
+        ["gme", "set_hnt"],
+        "seeded source: the two typos are found, a real field and a non-card receiver are not",
+    )
+    for rel in ("store/master.py", "server/capture_server.py"):
+        checks.equal(
+            card_attribute_typos((REPO_ROOT / rel).read_text()), [],
+            f"{rel}: every literal card field in getattr, setattr and hasattr is declared on Card",
+        )
+    declared = set(master.Card.__annotations__)
+    for label, names in (
+        ("IDENTITY_FIELDS", master.IDENTITY_FIELDS),
+        ("CAPTURE_CLAIM_FIELDS", master.CAPTURE_CLAIM_FIELDS),
+        ("CLAIM_WIRE_NAMES keys", tuple(photos.CLAIM_WIRE_NAMES)),
+    ):
+        checks.equal(
+            sorted(set(names) - declared), [],
+            f"{label}: every name is a declared Card field",
+        )
+
+
 CHECKS = (
+    check_card_field_strings,
     check_allocator,
     check_next_index_sql,
     check_boxes_and_listings,

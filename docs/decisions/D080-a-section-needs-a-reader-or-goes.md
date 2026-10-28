@@ -1,4 +1,4 @@
-## D80 — A section needs a reader or goes
+# D80 — A section needs a reader or goes
 
 **The map was never stale in the part anybody checked. That is the finding.** `docs/map.py` took 75 commits in one day. `git blame` on the map's own lines for each of its 155 module entries, against that file's last commit, gives this result. **142 of 155 entries were written at or after the file they describe last moved.** The worst gap was 17 days. The `repo map` row was green throughout, at 166 entries. No other prose in this repo is maintained that well.
 
@@ -23,7 +23,7 @@
 
 **Amended: the same rule holds for decisions, and the view was one argument short.** `make map ARGS=D42` said what D42 governs. Nothing said what D42 says. Reading an entry took a glob, and the glob is a trap. The filenames are zero-padded. A glob written from the cited id, `D42-*`, against a file named `D042-...`, matches nothing. It does not error, so a reader concludes the entry is missing. The `paths` row caught that same glob written out in this paragraph. That is the defect arriving a second way. `ARGS="D42 --full"` prints the entry verbatim. The plain view now names the path. **The entry goes out whole and is never summarised.** An entry is the argument. A rendered digest of an argument is what D60 already refuses.
 
-**The padding is not the defect, and renaming the 213 entry files was declined.** `ls` sorts text, not numbers, so an unpadded listing would read out of order. No code reads an id off a filename. `decisions_corpus.path_for` resolves an id by the `## D<id>` heading. That lets a claim rename a file without breaking a citation. A rename would trade a working listing order for a working glob. Having to know about the padding was the defect. Naming the path removes it.
+**The padding is not the defect, and renaming the 213 entry files was declined.** `ls` sorts text, not numbers, so an unpadded listing would read out of order. No code reads an id off a filename. `decisions_corpus.path_for` resolves an id by the `# D<id>` heading. That lets a claim rename a file without breaking a citation. A rename would trade a working listing order for a working glob. Having to know about the padding was the defect. Naming the path removes it.
 
 **`--stale` reports what no audit row can, and is deliberately not one.** It is the blame measurement above, run on demand. A note written to outlive a refactor is not a defect. So `--stale` ranks suspicion and never fails. It is the reasoning that keeps `views exposure` advisory, one step further out.
 

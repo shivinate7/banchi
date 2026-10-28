@@ -1,4 +1,4 @@
-## D142 — Setup outlives the browser
+# D142 — Setup outlives the browser
 
 **Ruling: the capture setup persists on the device, not per browser session.** The owner gave four instructions in one message. Three concern memory. One concerns what a box is called.
 

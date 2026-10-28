@@ -1,4 +1,4 @@
-## D306 — .worktreeinclude carries local env files
+# D306 — .worktreeinclude carries local env files
 
 **Settled 2026-09-28, on the owner's ruling.** Amends the Makefile's old `worktree-setup` argument that `.env` is deliberately not copied (a secret copied around a disk ends up somewhere nobody tracks, and T1 does not need it once the cache is warm).
 

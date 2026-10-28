@@ -1,4 +1,4 @@
-## D234 — Archive reads the composed card number
+# D234 — Archive reads the composed card number
 
 **THE CAUSE, IN ONE SENTENCE.** `pipeline/pricearchive.py:rows_from_store` built its
 synthetic export row from the bare `cards.number` alone. It never read the composed

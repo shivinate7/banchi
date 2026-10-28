@@ -1,4 +1,4 @@
-## D65 — Export request names its own scope
+# D65 — Export request names its own scope
 
 **One press fetches the export and joins.** The request names a category and a set from the box's own claims (game, set hint). So the file is complete within that scope by construction. Name the scope and never judge a fetched file.
 

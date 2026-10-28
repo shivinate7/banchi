@@ -1,4 +1,4 @@
-## D300 — Capture fills the picked section
+# D300 — Capture fills the picked section
 
 **The owner's ruling.** Capture fills the section the operator picks. If the operator is in section 1 and captures away, section 1 keeps growing. If the operator selects section 2, the capture fills section 2, like a subbox.
 

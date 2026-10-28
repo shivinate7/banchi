@@ -1,4 +1,4 @@
-## D280 — Offender lists replace pinned counts
+# D280 — Offender lists replace pinned counts
 
 **Ruling: no pinned count survives in the docs audit. Each rule keeps its reader and gains a shrinking list of offenders.** The owner retired D284's word ceiling, because a pin that no person moves goes stale. D284 carried out that ruling. The owner then applied it to the other pinned counts. This entry replaces them all. It supersedes the ratchet parts of D218 and D60. Each of those entries names what stays.
 

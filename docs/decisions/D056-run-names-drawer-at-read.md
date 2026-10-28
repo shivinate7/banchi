@@ -1,4 +1,4 @@
-## D56 — A run names its drawer at read time
+# D56 — A run names its drawer at read time
 
 **Every run on the wire carries `box` and `box_name`, joined from the registry at read time and never written into the run directory.** Built 2026-08-30, from the owner looking at `#/pricing`'s run picker: it needed the name they gave the box, not just the date and the raw number.
 

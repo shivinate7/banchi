@@ -141,7 +141,7 @@ export function sendCounts(pricing: PricingWorklist, book: PricingCorpus): { rea
 }
 
 /** What a run owes, read off its CODES and never its sentences (R4, the coordinator's ruling):
- *  cards left out for want of a price, with their count; the cut-off price unset, which stops
+ *  cards left out for want of a price, with their count; the floor price unset, which stops
  *  the whole run; files that cannot be read; or only the first send. */
 export function owesOf(owed: readonly OwedReason[]): {
   priceCards: number
@@ -171,12 +171,12 @@ export function emptySendTitle(empty: EmptySend): string {
   const capped = empty.capped ?? 0
   if (price > 0 && cut === 0 && live === 0 && capped === 0) return 'Every card on this list needs a price first, so nothing was sent.'
   if (cut > 0 && price === 0 && live === 0 && capped === 0) {
-    return 'Every priced card on this list is under the cut-off, and this send lists only the cards above it, so nothing was sent.'
+    return 'Every priced card on this list is under the floor, and this send lists only the cards above it, so nothing was sent.'
   }
   const said = ['Nothing was sent.']
   if (price > 0) said.push(`${price} ${price === 1 ? 'card needs' : 'cards need'} a price first.`)
   if (cut > 0) {
-    said.push(`${cut} priced ${cut === 1 ? 'card is' : 'cards are'} under the cut-off, and this send lists only the cards above it.`)
+    said.push(`${cut} priced ${cut === 1 ? 'card is' : 'cards are'} under the floor, and this send lists only the cards above it.`)
   }
   if (live > 0) {
     const names = empty.live_names.slice(0, 5).join(', ') + (empty.live_names.length > 5 ? ` and ${empty.live_names.length - 5} more` : '')
@@ -285,7 +285,7 @@ export function standing(input: StandingInput): Standing | null {
      rather than trusting that shape blind: `open` is the one field this module is allowed to
      read (D91 — no status vocabulary in `app/`), so a resolution row is counted only where
      its own order reads `open: true` on the wire, never derived from `status` text and never
-     assumed pre-filtered. See `## D121`. */
+     assumed pre-filtered. See `# D121`. */
   /* THE SAME RULE THE ORDERS LIST FILTERS ON (`orderBuyers.ts:groupMissing`, summed by
      `missingCopies`): every missing copy on an open order, and only the open orders that miss one.
      `groupBuyers` keeps only rows that read `open: true` as open (D121). */
@@ -304,7 +304,7 @@ export function standing(input: StandingInput): Standing | null {
      behind the line says the counts may be off. Counting none instead let a store with only
      unpriced cards fall through to Clear on a read that failed. */
   const needsPrice = counts === null ? null : counts.needsPrice
-  /* A run whose own reason stops the whole send (the cut-off price unset), apart from a card
+  /* A run whose own reason stops the whole send (the floor price unset), apart from a card
      left out for want of a price and from a run that only waits on the send. */
   const blocked =
     pricing === null
@@ -315,7 +315,7 @@ export function standing(input: StandingInput): Standing | null {
 
   /* BEHIND THE LINE: only what the spine does not already draw (the home lane's cut,
      2026-09-24). A failed read of typed prices, and the send rank's cards owing a price or
-     runs owing a cut-off (b-pricing R4, R6-4, R8-1). The spine's own figures (to pull, to
+     runs owing a floor (b-pricing R4, R6-4, R8-1). The spine's own figures (to pull, to
      review, runs to price, parked) never repeat here. THE FAILED-READ NOTE RIDES EVERY RANK
      THAT DRAWS BEHIND THE LINE, ranks 5 and 6 too, which draw their own list (R8 review, LOW
      note a). */
@@ -415,7 +415,7 @@ export function standing(input: StandingInput): Standing | null {
          owes a price does not stop it (Q3), so it is named behind the line, never in front. */
   if (readyCopies > 0) {
     add(needsPrice, needsPrice === 1 ? 'card needs a price' : 'cards need a price', needsPrice > 0)
-    add(blocked, blocked === 1 ? 'run needs its cut-off price' : 'runs need their cut-off price', blocked > 0)
+    add(blocked, blocked === 1 ? 'run needs its floor price' : 'runs need their floor price', blocked > 0)
     return {
       key: 'send',
       tone: 'warn',
@@ -440,7 +440,7 @@ export function standing(input: StandingInput): Standing | null {
       say:
         needsPrice > 0
           ? [t(' — price '), n(needsPrice), t(needsPrice === 1 ? ' card.' : ' cards.')]
-          : [t(' — set the cut-off price for '), n(blocked), t(blocked === 1 ? ' run.' : ' runs.')],
+          : [t(' — set the floor price for '), n(blocked), t(blocked === 1 ? ' run.' : ' runs.')],
       href: '#/pricing',
       kbd: ',P',
       behind,

@@ -1,4 +1,4 @@
-## D109 — A price belongs to a listing
+# D109 — A price belongs to a listing
 
 **Built on the owner's instruction, after the measurement settled the question.** Four agents had been set against it. The operator asked two things. Is pricing hampered by its coupling to inventory and runs? Can Banchi act as a courier for prices it did not originate?
 

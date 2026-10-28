@@ -79,12 +79,6 @@
         "neighbours"
       ]
     },
-    "docs/decisions/*-citation-names-symbol-not-line.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "honour"
-      ]
-    },
     "docs/decisions/*-departed-label-names-record.md": {
       "lane": "docs-sweep",
       "SPELLING": [

@@ -1698,6 +1698,30 @@ img.bn-crop[data-cropped='true'] {
    which is exactly how round 2's review measured the dismiss glyph at 1.83:1 in light: the
    OLD `.bn-icon-face` wrapper set its own fixed colour a level deeper than `color: inherit`
    here could reach. There is no such wrapper to fight now. */
+/* A line inside a toast that changes in place (`ToastLine`): every state in one grid cell, so the
+   toast keeps the tallest state's box. A press inside it is the toast's own action button; while
+   it runs its words go clear and a ring turns in their place, so it keeps its box. */
+.bn-toast-line { display: grid; margin-top: var(--bn-2); font-size: var(--bn-fs-sm); }
+.bn-toast-line-state { grid-area: 1 / 1; display: flex; flex-direction: column; align-items: flex-start; gap: var(--bn-2); }
+.bn-toast-line-state[data-off] { visibility: hidden; }
+.bn-toast-line-text { display: flex; align-items: flex-start; gap: var(--bn-1-5); }
+.bn-toast-line-text .bn-icon { flex: none; margin-top: var(--bn-0-5); }
+.bn-toast-line-state[data-tone='ok'] .bn-icon { color: var(--bn-ok); }
+.bn-toast-line-state[data-tone='warn'] .bn-icon { color: var(--bn-warn); }
+.bn-toast-line-state[data-tone='danger'] .bn-icon { color: var(--bn-danger); }
+.bn-toast-action { position: relative; justify-content: center; }
+.bn-toast-action[data-busy='true'] { color: transparent; pointer-events: none; }
+.bn-toast-action[data-busy='true']::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--bn-bg);
+  border-right-color: transparent;
+  animation: bn-spin var(--bn-t-spin) var(--bn-ease-linear) infinite;
+}
+:root[data-theme='dark'] .bn-toast-action[data-busy='true']::after { border-color: var(--bn-ink); border-right-color: transparent; }
 .bn-toast-close { flex: none; color: inherit; opacity: 0.6; }
 .bn-toast-close:hover { opacity: 1; background: rgba(255, 255, 255, 0.12); }
 .bn-toast-drain {

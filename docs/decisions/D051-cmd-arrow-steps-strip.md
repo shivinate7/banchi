@@ -1,4 +1,4 @@
-## D51 — Cmd-arrow steps the strip in drawn order
+# D51 — Cmd-arrow steps the strip in drawn order
 
 **Cmd-left and Cmd-right step to the previous and next route, in the order the nav draws them.** The ring never wraps.
 

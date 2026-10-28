@@ -1,4 +1,4 @@
-## D161 — Check the product before its guards
+# D161 — Check the product before its guards
 
 **`make check` runs 23 targets and stops at the first failing one. Eleven of the 23 were the guards' own selftests, sitting ahead of every check on the product.** `reap-selftest` was twelfth. `lint`, `vale`, `typecheck`, `screen-freshness`, `sigil-check` and `ignore-check` were all behind it. A red in a guard's own selftest meant that six checks on the actual code never ran. The terminal reported a failure, not an absence.
 

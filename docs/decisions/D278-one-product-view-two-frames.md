@@ -1,4 +1,4 @@
-## D278 — One product view, two frames
+# D278 — One product view, two frames
 
 **This amends D227.** The owner ruled HYBRID, from the interview. The options were A: link every name to the route. B: fold every view into one sheet, and retire the route. H: one component, two frames. The recommendation was H, and the owner picked H.
 

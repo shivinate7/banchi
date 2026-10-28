@@ -52,7 +52,7 @@ make reap           # stop what THIS session started, nothing else. Previews. AR
 make janitor-install # retired: claude-settings' install.sh owns the user's Claude bin directory. Copies nothing.
 make merge          # claude-settings' shared merge tool (D140, merge claims the decision number), config in
                     #   `.github/stamp.json`. ARGS=<n> previews. ARGS="<n> --confirm" merges, and claims record
-                    #   numbers first. The owner names the session an Orchestrator first, per turn. It runs
+                    #   numbers first. The owner's named Orchestrator runs it under its standing grant. It runs
                     #   from any checkout, not only the PR's branch. It never rebases or force-pushes:
                     #   a moved head stops it, so rebase by hand and run it again.
 make janitor        # claude-settings' sweep (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep"): what a finished session left behind. Previews. ARGS=--confirm reaps.
@@ -76,11 +76,11 @@ make demo-mirror SOURCE=<checkout>  # owner's Mac only: scrub, crop, commit `dem
 make demo-mirror-agent  # owner's Mac, main tree only: a weekly launchd job that refreshes the mirror
                     #   and auto-merges a mirror-only PR on green CI (D295, the public demo is the scrubbed real store). ARGS=--remove removes it.
 make demo-mirror-install  # CI's step: install the committed scrub. No store, no network.
-make price-refresh  # ONE free download of the live listings now, over this checkout's store, and the note `#/pricing` shows. No price change, and no archive sweep unless ARGS=--sweep asks for one (D224 (sweep preview is free)); the script alone sweeps by default, and this target passes `--no-sweep`.
+make price-refresh  # ONE free download of the live listings now, over this checkout's store, and the note `#/pricing` shows, then the free daily TCGCSV read (D325 (A daily read of TCGCSV builds)). No price change, and no archive sweep unless ARGS=--sweep asks for one (D224 (sweep preview is free)); the script alone sweeps by default, and this target passes `--no-sweep`.
 make price-refresh-agent  # owner's Mac, main tree only: a daily launchd job that runs it and, once per US Central day, the archive sweep (D104 (live fetch is guarded), D224). ARGS=--remove removes it.
-make backup         # ONE copy now of photos/ and captures/ plus a store snapshot to the iCloud Drive folder `Banchi backup`
+make backup         # ONE copy now of photos/ and captures/ plus a store snapshot to the iCloud Drive folder `Banchi backup`. Never overwrites there. ARGS=--verify checks it read-only
                     #   (DEBT67 (capture photographs exist in one place)). `BANCHI_BACKUP_DEST` overrides the folder. Its parent must exist. Never deletes there.
-make backup-agent   # owner's Mac, main tree only: a nightly launchd job (`com.banchi.backup`) that runs it. ARGS=--remove removes it.
+make backup-agent   # owner's Mac, main tree only: a nightly launchd job (`com.banchi.backup`) that runs it. The backup is one-time; the agent is not installed. ARGS=--remove removes it.
 make demo-static    # demo-mirror-install, then a static build to dist-demo/.
 make demo-preview   # serve dist-demo/ as a static host would.
 make check          # the whole suite, product first, guard self-tests last. `make explain` lists it.
@@ -229,12 +229,12 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 
 ## Things you will get wrong without being told
 
-- **The capture server is threaded and not yours to restart.** It is `class CaptureServer(ThreadingHTTPServer)` in
+- **The capture server is threaded. Restart it only after the owner says yes.** It is `class CaptureServer(ThreadingHTTPServer)` in
   `server/capture_server.py`, with `request_queue_size = 128` and `CaptureHandler.timeout = 15`.
   `REQUEST_SLOTS = 4` bounds executing requests. `PHOTO_SLOTS = 4` bounds `/photo/` and `/assets/`
   GETs and the cheap lock-free reads in `PHOTO_LANE_EXACT`, `/status` first (refusal `photo_busy`). The pool is safe over HTTP/1.1 only because every response sends
   `Connection: close` (DEBT11, a parked writer still holds a request slot). A burst of clients kills it. Run the full
-  suite once, at the end. Never `make up ARGS=--restart`, `make down` or `make up` to fix a wedge.
+  suite once, at the end. Ask the owner before `make up ARGS=--restart`, `make down` or `make up`, and name the reason.
   The `server concurrency` row of `make docs-audit` reads these figures.
 - **The join key is per game and normalized on both sides** (`pipeline/games.py`,
   `pipeline/join.py:number_index_key`). Never join on Product Name. D35 (Product Name join) allows it only as a last
@@ -274,7 +274,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **The catalog export belongs to the game, not the drawer** (D166, the catalog export is a property of the game). It lands in `inventory/.exports/<game>/`.
   A covering export downloaded on the same US Central day is reused. `refresh: true` forces a new one; 900 s (`REFRESH_DEBOUNCE_S`) is only the double-press guard on a finished "Refresh now".
 - **The pricing answer is one file, keyed by SKU** (D86, one file for the store): `pipeline/corpus.py` over
-  `inventory/prices.json`. `policy.threshold` is also the floor. `sub_threshold` defaults to $0.49 (D9, threshold and floor).
+  `inventory/prices.json`. `policy.threshold` is also the floor, and the owner sets it. Its default is $0.49 (`pipeline/corpus.py:DEFAULT_CUTOFF`). `sub_threshold` also defaults to $0.49, a default and not the floor (D9, threshold and floor).
   `banchi prices adopt` migrates legacy run files. `join` and `emit` refuse over an unadopted one.
 - **The store of record is one SQLite file** (D88, SQLite and one transaction per write). `inventory.json` is
   legacy and read by nothing.
@@ -340,11 +340,13 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **A screen answers to the system.** `--bn-*` tokens only, checked at 1440 and 820, light and dark.
   `docs/DESIGN.md` is the record. The `design tokens` row of `make docs-audit` locks every name and hex both ways.
 - **Main moves by pull request. A session never commits to it and never pushes it** (D42, main moves by pull request).
-  A session merges only after the owner names the act ("merge", not "ship it"). It uses
-  `make merge ARGS="<n> --confirm"` with CI green, never `--admin`. One standing exception (D42, main moves by pull request):
+  One session the owner names Orchestrator batches every reviewed lane the owner set out, across all sessions, into one integration branch
+  and merges it under its standing grant. Any other merge happens only on the owner's named act ("merge", not "ship it"),
+  and the Orchestrator runs it. A lane session never merges. It hands the Orchestrator each reviewed lane branch with its
+  head commit and review verdict, and never builds an integration branch, opens an integration PR or marks a PR ready.
+  The designation is never inherited. A merge uses `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
+  One standing exception (D42, main moves by pull request):
   the weekly demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
-  Only a session that the owner names an Orchestrator may merge, and only PRs it planned and reviewed.
-  The designation is never inherited. A session that is not named asks for the word every time.
   GitHub branch protection also requires `check` and `revert-guard`, with 0 reviews and `strict: false`.
   It catches the remote half. The local hook is the only cover for a local fast-forward.
   `scripts/githooks/reference-transaction` and `scripts/githooks/pre-push` refuse, armed by `make hooks`.
@@ -360,10 +362,9 @@ Use bold labels in one quoted block, never a code fence. Start with the point. N
 - Run `make harness` before you say something works. Give the verdict, never the output.
 - Screen work: experience is everything (D307, rulings CLAUDE.md carried). Run a design pass
   before you build. Review the built screen against it before you call it done.
-- Reserve Opus for planning, for a builder redesigning a whole flow, and for resolving a hard merge.
-  Every review is Sonnet. An Opus review needs the orchestrator to ask the owner first and get a yes.
-  Sonnet builds every ordinary screen lane and fix round by default. Say an Opus lane in one line first.
-  Raise it only on the owner's word, in `.claude/settings.local.json`.
+- Sonnet is the default and the ceiling. Plan, the built-in advisor, the designer, the design reviewer and a builder's
+  third try run Opus. Reviewers run Sonnet from round 2; round 1 uses the role's model. Any other Opus needs the owner's
+  grant. Say an Opus lane in one line first. Raise any other Opus lane only on the owner's grant, in `.claude/settings.local.json`.
 - A builder commits and pushes its branch after every pass, even red. Each commit message ends with `Done:` and
   `Next:` lines, so a lane resumes from its branch alone.
 - Read `docs/decisions/` before you propose an architecture change (`scripts/decision-context.py` finds the entry,

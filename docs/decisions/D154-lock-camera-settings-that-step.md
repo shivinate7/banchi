@@ -1,4 +1,4 @@
-## D154 — Lock camera settings that step
+# D154 — Lock camera settings that step
 
 **The camera's automatic functions are inputs to the trigger's arithmetic, and the ones that step are locked.** Every threshold is a multiple of something the session measures (D81). Presence is the distance from the watch region at arming. `tLo` and `tHi` ride the session's median still-frame difference. A setting that moves between rigs is absorbed. A setting that moves during a run moves the baseline the thresholds derived from. Nothing reports it, and no constant in `motion.ts` can defend against it. So a camera setting is a repo fact with a measured reason per row and a reader. The rig is a Sony RX100 VII over micro-HDMI into a Cam Link 4K. The settings, derivations and checklist are in `docs/specs/motion-trigger.md` section 4. `scripts/score-trace.py camera` re-derives every figure. The figures were measured before `harness/traces/` was cut to ten. Where a rule rests on one, it is marked unmeasured.
 

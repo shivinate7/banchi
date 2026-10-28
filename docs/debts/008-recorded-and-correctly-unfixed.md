@@ -1,6 +1,6 @@
 ## 8 — Recorded and correctly unfixed
 
-No work proposed. Each item is a gap a green run does not show.
+**What.** Each item below is a known gap that a green run does not show, and no work is proposed on any of them.
 
 - **Supervisor drain window.** A request accepted but not yet inside `_dispatch` is uncounted by the drain (D138, `scripts/serve.py`). The window is microseconds. Closing it means reimplementing `handle_one_request`.
 - **No rollback after a bad restart.** `scripts/serve.py` refuses to restart into a file that does not `compile()`. An `ImportError` or module-scope `NameError` still kills the new child with the last-good process already gone. Containment is the fast-failure cap: after five quick deaths it stops respawning. A rollback needs the socket-passing design D138 rejects for v1.

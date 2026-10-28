@@ -1,4 +1,4 @@
-## D58 — A card's number counts cards, not slots
+# D58 — A card's number counts cards, not slots
 
 **A card's number counts the cards in the box.** Selling one makes the card behind it take that number on every screen. The owner's instruction: when cards are marked sold, the slot is not left empty. The cards before it move up one.
 

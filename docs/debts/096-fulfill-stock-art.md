@@ -1,6 +1,6 @@
 ## DEBT96 — Fulfillment still shows the owner's photo first
 
-**The owner ruled that Fulfillment shows the catalog image first, with the owner's own photo one press away** (lean-server spec, section 6, Q2 and Q6). `#/fulfillment` still shows the capture photo (`previewUrl`) first.
+**What.** The owner ruled that Fulfillment shows the catalog image first, with the owner's own photo one press away (lean-server spec, section 6, Q2 and Q6). `#/fulfillment` still shows the capture photo (`previewUrl`) first.
 
 - **Ruled change.** Stock image first. One press, 40px or more and labeled in a sentence, loads the real photo. A card with no stock image shows the real photo. The image box holds its size across the swap (D313, nothing moves unless the person moved it). Which cards and orders a pull holds does not change.
 - **Where.** `app/src/Fulfillment.tsx` and `Fulfillment.css`. The stock URL comes from `pipeline/stockimages.StockImages`, the same path the Orders walk reads (`image_url ?? photoUrl` in `OrdersWalkPane`). If the Fulfillment wire lacks `image_url`, add it in the existing route and `app/src/types.ts`.

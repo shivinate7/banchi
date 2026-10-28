@@ -1,4 +1,4 @@
-## D272 — One page width, one scaffold
+# D272 — One page width, one scaffold
 
 **This amends D197.** D197 fixed the left edge and let the width vary by screen. This removes the second half. There is one page width, 1600 px, and every screen must stay competent at every narrower width. The owner ruled both points.
 

@@ -1,6 +1,6 @@
 ## DEBT76 — the walk's card sheet on a phone sells, and no running check proves it
 
-On a phone, a tap on a walk row opens the card in a sheet. The sheet draws `Orders.OrderPickPane`,
+**What.** On a phone, a tap on a walk row opens the card in a sheet. The sheet draws `Orders.OrderPickPane`,
 the same pane the desk draws. That pane passes `detail` to `CardHero.CardPane`. `detail` holds the
 copy rows, and each row carries `OrdersWalkPane.RowAction`, so Mark sold is in the sheet. The gap
 this entry first recorded, a sheet with no Mark sold, is fixed in code.

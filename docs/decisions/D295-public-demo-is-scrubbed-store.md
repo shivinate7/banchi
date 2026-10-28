@@ -1,4 +1,4 @@
-## D295 — The public demo is the scrubbed real store
+# D295 — The public demo is the scrubbed real store
 
 **Owner ruling: the published demo (`shivinate7.github.io/banchi`) is a full mirror of the real store, with people scrubbed. Its purpose is that peers browse the app as if in the owner's store, on a public link.** Before this entry, the demo showed an invented store. `scripts/demo-seed.py` writes real catalogue rows out of `fixtures/`. Which card sits in which box, what has sold, and who bought it were all made up (`docs/specs/demo.md` §2). The rulings:
 

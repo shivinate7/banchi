@@ -1,4 +1,4 @@
-## D8 — The Filtered CSV export is the price source
+# D8 — The Filtered CSV export is the price source
 
 **Pricing comes from the TCGplayer Filtered CSV export and from no external API.**
 

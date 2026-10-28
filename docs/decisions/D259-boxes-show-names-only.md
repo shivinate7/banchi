@@ -1,4 +1,4 @@
-## D259 — Boxes show names only
+# D259 — Boxes show names only
 
 **The owner's ruling: a box is labeled by its name, never by its number.** Box numbers are internal index values. The count of boxes may show. A box with no name gets count+1 as its default name.
 

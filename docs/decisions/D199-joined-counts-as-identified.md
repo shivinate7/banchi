@@ -1,4 +1,4 @@
-## D199 — Joined counts as identified
+# D199 — Joined counts as identified
 
 **A run's phase reads `joined` as sufficient evidence that identification happened.** `server/pipeline_routes.py:_phase` gated every stage past `ready` and `identify` on `manifest.get("collected")` alone, and `collected` is written only by the camera, batch and collect path. A store-backed join (D188) writes `joined: True`, real `counts.skus` and a `pricing.json`, and never `collected`. So the run panel badged such a run "Not started" beside 42 joined SKUs, because the badge and the SKU stats were gated on different fields.
 

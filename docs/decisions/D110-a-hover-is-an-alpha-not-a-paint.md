@@ -1,4 +1,4 @@
-## D110 — A hover is an alpha, not a paint
+# D110 — A hover is an alpha, not a paint
 
 **A hover is an alpha over its ground, so one name is one perceived step on every ground.** `--bn-hover` is white at 4% in dark and ink at 3% in light. An opaque hover has to know what it sits on, and a stylesheet rule does not. `--bn-surface-3` painted over the sidebar, the page and a panel measures ΔL* 8.67, 7.70 and 4.00. The sidebar's step reads as selection, and it competes with the accent tint two rows below. The alpha measures 3.61, 4.22 and 4.51. On the page ground the old value was lighter than the ground and effectively invisible. Judge steps in CIE L*, not hex. D50 settles the principle that feedback is the product's, and this is the value it lacked.
 

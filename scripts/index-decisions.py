@@ -15,7 +15,7 @@ therefore not on the commit path. The corpus's own non-vacuity floor (`corpus_is
 generator that also gated could satisfy itself, which is the exact failure D16 is written
 against.
 
-THE HEADING IS THE SOURCE. An entry's id and title come from its own `## D<id> — <title>`
+THE HEADING IS THE SOURCE. An entry's id and title come from its own `# D<id> — <title>`
 line, never from the filename: a slug is lossy, truncated to 58 characters and sometimes
 disambiguated with a numeric suffix, and it is a convenience for a human running `ls`.
 
@@ -33,7 +33,7 @@ INDEX — no rendered view has replaced it yet, so `rewrite_index` still regener
 claim time. `IndexSpec` below is the one difference between the two corpora: which corpus
 module to load, which directory/manifest it owns, which file holds the index block (or would,
 for decisions, if anything still read it), and whether the id CAPTURED FROM THE HEADING
-already carries its own letter (a decision's does: `## D<n>` captures `D<n>`) or needs one
+already carries its own letter (a decision's does: `# D<n>` captures `D<n>`) or needs one
 prefixed onto it (a debt's does not: `## 188` — or, once claimed through this scheme,
 `## DEBT<n>` — captures a bare number either way, and the index always wants `DEBT<n>`).
 `DECISION_SPEC` is every call site's default, so no existing caller's behaviour moves.
@@ -63,9 +63,9 @@ class IndexSpec(NamedTuple):
     line_re: re.Pattern         # matches one index line, for `locate`
 
 
-# `## D<n> — Title` or `## D-<slug> — Title` — the captured id already carries its `D`,
+# `# D<n> — Title` or `# D-<slug> — Title` — the captured id already carries its `D`,
 # because a decision's HEADING IS its citation form (D160's own shape, unchanged here).
-DECISION_HEADING_RE = re.compile(r"^##\s+(D" + _ID + r")\s*[—-]\s*(.+)$")
+DECISION_HEADING_RE = re.compile(r"^#\s+(D" + _ID + r")\s*[—-]\s*(.+)$")
 DECISION_LINE_RE = re.compile(r"^D" + _ID + r"\s")
 DECISION_SPEC = IndexSpec("decisions_corpus.py", "docs/decisions", "CLAUDE.md",
                           DECISION_HEADING_RE, DECISION_LINE_RE)

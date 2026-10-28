@@ -1,4 +1,4 @@
-## D239 — Four stored-data identity checks
+# D239 — Four stored-data identity checks
 
 **AMENDED (`D258`).** These four checks built their name and number
 from a card's own stored fields. Those fields now follow the bound SKU, not the read, once a

@@ -1,4 +1,4 @@
-## D260 — Card numbers count within a section
+# D260 — Card numbers count within a section
 
 **The owner's rulings on how the owner finds a card.** Three rulings, one subject:
 the place of a card as the hand uses it.

@@ -1,4 +1,4 @@
-## D36 — The store decides a card's slot
+# D36 — The store decides a card's slot
 
 **A re-join of box 2 wrote all 47 queue entries one position off.** Every entry carried the right read with its neighbor's slot, photograph and label. On screen, `Wally's Compassion` sat over a photograph of an Inteleon. The queue was restored from a backup taken minutes earlier. It was caught before it was answered. Built immediately after D35, because applying D35 exposed it.
 

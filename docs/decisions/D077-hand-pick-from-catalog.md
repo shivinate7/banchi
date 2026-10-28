@@ -1,4 +1,4 @@
-## D77 — Hand-pick from the catalog on any entry
+# D77 — Hand-pick from the catalog on any entry
 
 **Any queue entry may be answered from the export on the owner's ask (`L`).** It is never offered unasked. The test for whether a person may overrule the pipeline cannot be "the pipeline offered nothing". It cannot, because a misread number joins a real key that belongs to a different card, confidently, with candidates on screen. `rarity_claim_mismatch` fires correctly there and the screen offered only the wrong card's rows.
 

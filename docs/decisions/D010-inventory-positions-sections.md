@@ -1,4 +1,4 @@
-## D10 — Inventory model: positions, sections, stack
+# D10 — Inventory model: positions, sections, stack
 
 **A card gets a sequential position at capture, and positions are never renumbered.** Location is Box N, Section N, Card N. Sold cards leave permanent gaps.
 

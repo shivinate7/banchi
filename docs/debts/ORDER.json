@@ -3,7 +3,6 @@
   "split_sha256": "28af4ab2861f9a96ae344865e1e218836eac2d5a423d1555d5afc48d53afe422",
   "split_bytes": 174502,
   "order": [
-    "_preamble.md",
     "001-the-reverse-direction-two-checks-walk-docs-code.md",
     "002-the-maps-reach.md",
     "003-the-claim-chain.md",
@@ -68,6 +67,7 @@
     "101-correction-sku-absent-from-export.md",
     "102-send-file-outside-lock.md",
     "103-throttled-nightly-sweep.md",
-    "104-unhold-death-gap.md"
+    "104-unhold-death-gap.md",
+    "notes.md"
   ]
 }

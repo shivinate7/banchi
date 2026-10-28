@@ -1,5 +1,7 @@
 ## 6 — T7 leaves two capture-server facts unchecked
 
+**What.** T7 never opens twenty connections against the capture server's accept backlog, and never starts the server under a bare interpreter.
+
 - **Twenty-way contention.** T7 runs two and four simultaneous captures, matching D5's two devices. Twenty-way is what found `request_queue_size` at its default of 5 (8 served, 12 reset by the OS). The `accept backlog` row of `make docs-audit` (`scripts/docs_audit/code_invariants.py`) pins `request_queue_size = 128` as text. No leg opens 20 connections.
 - **The bare-interpreter start.** `make server` runs `$(PYTHON)`. T7 imports the module under the interpreter that runs the harness, so it cannot see a dependency added outside the standard library.
 

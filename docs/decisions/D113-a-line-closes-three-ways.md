@@ -1,4 +1,4 @@
-## D113 — A line closes three ways
+# D113 — A line closes three ways
 
 **An order line could not close when the store had never seen its SKU.** The owner found orders they could not close. The owner was right. The cause was bigger than those three orders.
 

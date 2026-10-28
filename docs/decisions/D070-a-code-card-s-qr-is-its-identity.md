@@ -1,4 +1,4 @@
-## D70 — A code card's QR is its identity
+# D70 — A code card's QR is its identity
 
 **The redemption code is the QR's payload, so identification on this track is free.** `codes/qr.py` decodes locally at the rig's 3840x2160 (140 of 140 possible frames, zero mis-reads, 87 ms each). A mis-read sells a stranger something that does not work, and a refusal costs a re-shoot, so the harness asserts zero and never a rate. Three cases are unrecoverable and return nothing: a QR under about 40 px, a 3.5 px defocus, and glare that clips the symbol.
 

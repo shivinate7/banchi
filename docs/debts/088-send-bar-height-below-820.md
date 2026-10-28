@@ -1,6 +1,6 @@
 ## DEBT88 — the sticky send bar's height below an 820 column is unmeasured
 
-**The send bar's height below an 820 column is unmeasured.** At about 700 wide, the tiles wrap to 2+1, so the sticky bar grows by one tile row. Its height is unmeasured.
+**What.** The send bar's height below an 820 column is unmeasured. At about 700 wide, the tiles wrap to 2+1, so the sticky bar grows by one tile row. Its height is unmeasured.
 
 - **Result:** a taller sticky bar stays on screen at about 700 wide. No measure says how much of the list it leaves.
 - **Not fixed because** the phone-width specs are off (DEBT77, every phone-width spec is off). No spec runs the layout below 820, so the height has no check.

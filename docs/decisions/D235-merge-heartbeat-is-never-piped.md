@@ -1,4 +1,4 @@
-## D235 — Merge heartbeat is never piped
+# D235 — Merge heartbeat is never piped
 
 **A pipe hides the heartbeat, so guard clause 9 refuses it, and a wait that can no longer succeed stops.** `make merge` looked hung twice when it was correct: `check.yml` takes four to five minutes, and five to ten minutes of waiting is the job working. `CHECK_DEADLINE_SECONDS = 45 * 60`, `CHECK_HEARTBEAT_SECONDS = 60` and `CHECK_POLL_SECONDS = 10` are unchanged, a red run still refuses, and absence is still never a pass.
 
