@@ -485,10 +485,10 @@ test('the cut-off is the run\'s own control, and on a lens it is spent by a pres
      offered here: a lens is not a lot, so there is no run to give one (D101). */
   await page.getByRole('button', { name: 'Change' }).click()
   const sheet = page.getByRole('dialog', { name: 'What to mark down' })
-  await expect(sheet.getByRole('button', { name: 'Give this run its own cut-off' })).toHaveCount(0)
+  await expect(sheet.getByRole('button', { name: 'Give this run its own floor' })).toHaveCount(0)
 
-  const press = sheet.getByRole('button', { name: /at the cut-off/ })
-  await expect(press).toHaveText('Price 1 at the cut-off')
+  const press = sheet.getByRole('button', { name: /at the floor/ })
+  await expect(press).toHaveText('Price 1 at the floor')
 
   /* ADDRESSED BY CARD AND NEVER BY INDEX: the cut-off MOVES a row between the sections, which
      is the whole point of the partition, so an index here would assert against wherever the
@@ -501,7 +501,7 @@ test('the cut-off is the run\'s own control, and on a lens it is spent by a pres
      untouched: a press that priced the whole book would be a bulk write nobody asked for. */
   await expect(cheap).toHaveValue('0.49')
   await expect(dear).toHaveValue('')
-  await expect(press).toHaveText('Price 0 at the cut-off')
+  await expect(press).toHaveText('Price 0 at the floor')
   await expect(press).toBeDisabled()
 
   /* ONE ACT, ONE REVERSAL, on the receipt. The per-SKU undo stack is ten deep (D28), so a press

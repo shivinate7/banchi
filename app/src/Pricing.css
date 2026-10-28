@@ -348,7 +348,17 @@
   max-width: 100%;
 }
 .pricing-locked { background: var(--bn-surface-2); color: var(--bn-ink-3); }
-.pricing-held { background: var(--bn-warn-tint); color: var(--bn-ink-2); font-weight: 600; }
+/* The held pill's words may wrap to a second line inside the 128px column, so a wider font never
+   clips them. Two lines of --bn-fs-sm at --bn-lh-snug fit the pill's fixed height, so the row stays still. */
+.pricing-held {
+  padding: 0 var(--bn-2);
+  background: var(--bn-warn-tint);
+  color: var(--bn-ink-2);
+  font-weight: 600;
+  white-space: normal;
+  text-align: center;
+  line-height: var(--bn-lh-snug);
+}
 /* THE NOTE NEVER MOVES THE PILL (D118, and the owner's review, 2026-09-26): `.pricing-price`
    reserves ONE FIXED HEIGHT for every answer state — locked, held, typed, suggested — so the
    pill (or the field) always starts at the same top edge whether or not a note draws under
