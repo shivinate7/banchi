@@ -238,6 +238,9 @@ export function HistoryFloatSpecimen() {
             <span className="hfloat-specimen-thumb" data-float-thumb=""><CardThumb src={null} alt="" size="sm" /></span>
             <span className="hfloat-specimen-name">{r.name}</span>
             <input
+              type="text"
+              name="float-price"
+              autoComplete="off"
               className="bn-input bn-input-mono hfloat-specimen-price"
               aria-label={`Price for ${r.name}`}
               defaultValue={r.price}
