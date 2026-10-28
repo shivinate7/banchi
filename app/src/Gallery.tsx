@@ -6,6 +6,7 @@ import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
 import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
+import { HistoryFloatSpecimen } from './HistoryFloat'
 import {
   Button, Chip, ConfirmSheet, EmptyState, Icon, IconButton, Kbd, Loading, Lockup, Logo, Modal, Money, Notice, Page, PageUndo, Pill, Popover, Refusal, ReloadButton, Retry, Slot,
   KeyHint, Meter, Section, SectionPicker, Segmented, Select, Sheet, Stat, StatusSlot, Tile, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
@@ -1635,6 +1636,8 @@ export function Gallery() {
               </Spec>
             </div>
           </Section>
+
+          <HistoryFloatSpecimen />
 
           <Section id="kit-locations" data-kit-section="locations" className="kit-section" title="Card locations" lede="One card and every row shape it draws, for the owner and for the Fulfiller.">
             <div className="kit-stack">
