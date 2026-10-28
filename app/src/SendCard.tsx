@@ -31,7 +31,7 @@ import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react
 import type { ReactNode } from 'react'
 import { Button, Icon, IconButton, Money, Notice, Pill, Refusal, Retry } from './kit'
 import { atClockTime, clockTime, dayMonth } from './dates'
-import { describeFailure, dismissSendWarning, getOwedTakeOffs, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, takeBackSend } from './server'
+import { describeFailure, dismissSendWarning, getOwedTakeOffs, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, sendSuggestions, takeBackSend } from './server'
 import type { Failure } from './server'
 import type { EmptySend, LiveMove, OwedTakeOff, PriceChange, RefusedPrice, SendSummary, SendTrim } from './types'
 import { pressTakeOff, viewOf, type TakeOffOutcome, type TakeOffView } from './takeOff'
@@ -806,6 +806,7 @@ export function SendCard({
   copies,
   skus,
   priceChanges = [],
+  listed = [],
   liveMoves = [],
   settled,
   saveFailed,
@@ -822,6 +823,10 @@ export function SendCard({
   /** Cards already live whose typed price this press changes (the mixed send). The server
    *  decides against a fresh read; this is the worklist's count, for the button's words. */
   readonly priceChanges?: readonly PriceChange[]
+  /** Price changes on listings that are already live and add no copy: each kept suggestion (marked
+   *  `source: 'suggested'`) and each price typed on one. They ride the same press, and name it
+   *  "to TCGplayer" once there is one. */
+  readonly listed?: readonly PriceChange[]
   /** Live copies this press's listing rows move to their stored price (the owner's ruling,
    *  round 7), off the same fresh read. The button names them, and the server refuses a move it
    *  was not told of. */
@@ -891,14 +896,18 @@ export function SendCard({
     setPhase(download ? 'downloading' : 'sending')
     void (async () => {
       try {
-        const prices = priceChanges.map((change) =>
+        const prices = [...priceChanges, ...listed].map((change) =>
           change.sku in confirmed.was ? { ...change, was: confirmed.was[change.sku] ?? null } : change,
         )
         const moves = [
           ...liveMoves.filter((move) => !(move.sku in confirmed.moves)),
           ...Object.values(confirmed.moves),
         ]
-        const answer = await sendCopies(runs, { download, splitThreshold: download && split, quantities: quantities(), prices, moves })
+        /* KEPT SUGGESTIONS ALONE NEED NO RUN: each is a price-only row on a listing that is already live. */
+        const answer =
+          !download && runs.length === 0 && moves.length === 0 && prices.length > 0 && prices.every((one) => one.source === 'suggested')
+            ? await sendSuggestions(prices)
+            : await sendCopies(runs, { download, splitThreshold: download && split, quantities: quantities(), prices, moves })
         setSent(answer.send)
         setFailure(null)
         setConfirmed({ was: {}, moves: {} })
@@ -921,7 +930,7 @@ export function SendCard({
         void refreshLive()
       }
     })()
-  }, [phase, settled, saveFailed, intent, runs, split, quantities, priceChanges, liveMoves, confirmed, onSent, reloadOwed])
+  }, [phase, settled, saveFailed, intent, runs, split, quantities, priceChanges, listed, liveMoves, confirmed, onSent, reloadOwed])
 
   const press = (next: 'send' | 'download') => {
     setIntent(next)
@@ -981,7 +990,7 @@ export function SendCard({
   const busy = phase !== 'idle' || running || taking !== null
   /* NOTHING READY, NOTHING TO PRESS (R4 F5): with no copy and no price change the press could
      only be refused, so it is disabled until a copy is ready. */
-  const empty = copies === 0 && priceChanges.length === 0
+  const empty = copies === 0 && priceChanges.length === 0 && listed.length === 0
   /* THE PRESS KEEPS ITS WORDS WHILE IT RUNS (round 9, D118: a press changes what is on the
      screen, never where the rest of it is). Its label named the live copies on two lines at a
      phone width and became one short line under the finger, so the sticky bar shrank and the
@@ -1005,7 +1014,9 @@ export function SendCard({
                 <MovesPhrase moves={liveMoves} />
               </>
             )
-          : priceChanges.length > 0
+          : listed.length > 0
+            ? `Send ${pressCarries(skus, copies ?? 0, priceChanges.length + listed.length)} to TCGplayer`
+            : priceChanges.length > 0
             ? `Send ${pressCarries(skus, copies ?? 0, priceChanges.length)}`
             : copies !== null && copies > 0
               ? `Send ${pressCarries(skus, copies, 0)} to TCGplayer`

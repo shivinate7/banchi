@@ -26,6 +26,7 @@
 
 import type { IconName } from './kit'
 import type {
+  LiveListing,
   MarkdownSku,
   MarkdownTable,
   MergedSku,
@@ -281,6 +282,68 @@ export function markdownSource(
   }
 }
 
+/** One live listing of the worklist as the row draws it: the newest read's own entry for that SKU when
+ *  it holds one (name, market, lowest, the set), the asking price from the worklist either way. A
+ *  listing the read does not hold is drawn with no market and a plain name, never a guessed one: the
+ *  wire carries no name for it. */
+function listedRow(listing: LiveListing, entry: MarkdownSku | undefined): MergedSku {
+  const named: MarkdownSku = entry ?? {
+    sku: listing.sku,
+    standing: 'offered',
+    skip: null,
+    name: `Listing ${listing.sku}`,
+    condition: '',
+    live: 0,
+    asking: listing.asking,
+    market: null,
+    above_market: null,
+    at_risk: '0.00',
+    proposed: null,
+    presets: {},
+    cut: null,
+    given_up: null,
+    owned_since: null,
+    listed_since: null,
+    held_here: false,
+    last_sold: null,
+    priced_at: null,
+    row: {},
+  }
+  const row = asRow(named)
+  return { ...row, snap: { ...row.snap, now: listing.asking } }
+}
+
+/** The one list's source: the worklist's new copies, then its live listings, one row per SKU.
+ *
+ *  A SKU that is both a new copy and a live listing is drawn once, as the new copy: its row already
+ *  carries what is live (`live_now`) and the price change a send names. The newest read, when there
+ *  is one, only lends the live rows their name, market and lowest price, and says which of them
+ *  TCGplayer takes no price for. Which group a live row sits in is the server's word
+ *  (`LiveListing.group`) and is never worked out here. */
+export function oneListSource(
+  work: PricingWorklist | null,
+  run: string | null,
+  sections: readonly SectionSpec[],
+  fetchers: {
+    history: (run: string, sku: string) => Promise<PriceHistoryPayload>
+    trends: (run: string, skus: string[]) => Promise<TrendsPayload>
+  },
+  table: MarkdownTable | null,
+): { source: PricingSource; listed: ReadonlyMap<string, LiveListing> } {
+  const base = runSource(work, run, sections, fetchers)
+  const copies = new Set(base.rows.map((row) => row.sku))
+  const entries = new Map((table?.skus ?? []).map((entry) => [entry.sku, entry]))
+  const listed = new Map<string, LiveListing>()
+  const rows: MergedSku[] = [...base.rows]
+  for (const listing of work?.live ?? []) {
+    if (copies.has(listing.sku) || listed.has(listing.sku)) continue
+    listed.set(listing.sku, listing)
+    rows.push(listedRow(listing, entries.get(listing.sku)))
+  }
+  const locked = lockedOf(table)
+  return { source: { ...base, rows, locked: (sku: string) => locked.get(sku) ?? null }, listed }
+}
+
 /** The runs named on the hash. `run` repeats rather than carrying a comma list. */
 export function runsInHash(): string[] {
   return query().getAll('run').filter((name) => name !== '')
@@ -302,13 +365,6 @@ export function runsInHash(): string[] {
 export function markdownInHash(): string | null {
   const stamp = query().get('markdown') ?? ''
   return /^\d{8}-\d{6}$/.test(stamp) ? stamp : null
-}
-
-/** Whether the hash asks for the Live tab (D277, Q6): `?live`, or a markdown stamp. The tab
- *  with no stamp yet opens the newest read, or says there is none. */
-export function liveInHash(): boolean {
-  const asked = query()
-  return asked.has('live') || markdownInHash() !== null
 }
 
 function query(): URLSearchParams {
