@@ -1383,13 +1383,12 @@ def _refuse_unreadable_claim() -> None:
         ) from None
 
 
-def _refuse_stale_readings(payload: dict, directories: Sequence[Path], drawn: Any, step: str) -> None:
-    """A press with no run, for kept suggestions alone, refuses `readings_stale` when a reading
-    behind one was written on an earlier US Central day (a send never prices from an export older
-    than today, the rule `refresh_before_send` holds). A press with a run is refreshed by `refresh_before_send` and needs no check here.
-    A suggestion with no reading at all is `suggestion_changed`'s to refuse, not this one's."""
-    if directories:
-        return
+def _refuse_stale_readings(payload: dict, drawn: Any, step: str) -> None:
+    """A press with kept suggestions refuses `readings_stale` when a reading behind one was written
+    on an earlier US Central day (a send never prices from an export older than today). It
+    holds with or without a run: `refresh_before_send` refreshes only an old export, never the
+    reading behind a suggestion. A suggestion with no reading at all is `suggestion_changed`'s to
+    refuse, not this one's."""
     stale = sorted(
         row["sku"]
         for row in payload["prices"]
@@ -1497,7 +1496,7 @@ def _send(payload: dict, directories: Sequence[Path], download: bool, refreshed:
     # The suggestions rebuild from the store as the screen drew it: the fetch below rewrites the
     # live readings, and a suggestion must not be confirmed off the very export it is sent into.
     drawn = Store().read()
-    _refuse_stale_readings(payload, directories, drawn, step)
+    _refuse_stale_readings(payload, drawn, step)
     live_name, live_path = _fetch_live(step)
     _reconcile(live_path, step)
     live_before = _live_quantities(live_path, step)
@@ -1540,7 +1539,20 @@ def _send(payload: dict, directories: Sequence[Path], download: bool, refreshed:
         return dict(answer, held=held) if held else answer
     except Exception as caught:  # noqa: BLE001 — every failure after the receipt ends known
         _settle(directory, caught)
+        if held and isinstance(caught, PipelineRefusal) and caught.code == "nothing_to_send":
+            _name_held(caught, held, _names(live_path))
         raise
+
+
+def _name_held(refusal: PipelineRefusal, held: List[str], names: Dict[str, str]) -> None:
+    """A press left empty by held suggestions names the held cards, and carries them under the
+    same top-level `held` key the answer of a press that sent carries."""
+    one = len(held) == 1
+    refusal.args = (
+        f"{refusal.args[0]} {', '.join(names.get(sku) or sku for sku in held)} "
+        f"{'is' if one else 'are'} held, so {'its' if one else 'their'} suggested price stayed out of this send.",
+    )
+    refusal.data = dict(refusal.data or {}, held=held)
 
 
 def _write_and_send(
