@@ -4,7 +4,8 @@
 
 ### The owner's rulings
 
-1. **Store the buyer's display name only.** Address, email, payment, the transaction
+1. **Store the buyer's display name.** D326 (the TCGTracking pipe) widens this: every field the
+   TCGplayer order import returns is kept, the address and tracking included. Until that lane lands, address, email, payment, the transaction
    breakdown and tracking stay excluded. They stay excluded by the same allowlist mechanism D63 and D69 already
    built. Nothing about how PII is kept OUT changes. One field moves from the excluded side
    of the line to the kept side.

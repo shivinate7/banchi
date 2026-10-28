@@ -42,3 +42,6 @@ docs/specs/ui-research.md  # Deleted in the record prune (the owner's ruling: an
 docs/DECISIONS.md  # Deleted in the record prune (the single-file decision, debt and code-card records became folders and a spec section; history lives in version control). Decision entries name it as it was and are kept as that record.
 docs/DEBTS.md  # Deleted in the record prune (the single-file decision, debt and code-card records became folders and a spec section; history lives in version control). Decision entries name it as it was and are kept as that record.
 docs/plans/  # The generated docs/records.md names this folder in its intro line. The shared records tool writes that page for every repo, and Banchi keeps its plans under docs/specs/.
+server/tcgtracking.py  # Named before it is built: the order-pipeline spec's T4 names it as the client's one home. Delete this line when the lane lands it.
+harness/tests/t7/labels.py  # Named before it is built: the order-pipeline spec's T4 Done line. Delete this line when the lane lands it.
+BANCHI_TCGTRACKING_URL  # Named before it is built: the test seam in the order-pipeline spec's T4. Delete this line when the lane lands it.
