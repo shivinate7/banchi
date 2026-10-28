@@ -81,6 +81,15 @@ async function listGeometry(page: Page): Promise<Box[]> {
   )
 }
 
+/* Row 1 at a fixed distance from the viewport top, away from both edges. The sticky banner slot
+ * (`.bn-banner-slot`) covers the bottom 144px when a banner shows, and Playwright answers a covered
+ * click by scrolling the row somewhere else, which flips the placement the case set up. */
+async function placeRow(page: Page, top: number) {
+  await row(page, 1).evaluate((el, t) => window.scrollBy({ top: el.getBoundingClientRect().top - t, behavior: 'instant' }), top)
+  await settleMotion(page)
+  expect(Math.abs((await boxOf(row(page, 1))).y - top), `row 1 sits ${top}px from the top`).toBeLessThanOrEqual(2)
+}
+
 async function openByFocus(page: Page, i = 1) {
   await priceOf(page, i).click()
   await expect(card(page)).toHaveAttribute('data-mode', 'focus')
@@ -126,7 +135,7 @@ for (const size of SIZES) {
     })
 
     test('by default the card opens above its row and never covers the anchor row or its price field', async ({ page }) => {
-      await row(page, 1).evaluate((el) => el.scrollIntoView({ block: 'end' }))
+      await placeRow(page, 600)
       expect((await boxOf(row(page, 1))).y, 'there is room above the row').toBeGreaterThan(400)
       await openByFocus(page)
 
@@ -140,7 +149,7 @@ for (const size of SIZES) {
     })
 
     test('with no room above, the card opens below and its right edge sits left of the price column', async ({ page }) => {
-      await row(page, 1).evaluate((el) => el.scrollIntoView({ block: 'start' }))
+      await placeRow(page, 100)
       expect((await boxOf(row(page, 1))).y, 'the row sits at the top, so there is no room above').toBeLessThan(120)
       await openByFocus(page)
 
@@ -157,7 +166,7 @@ for (const size of SIZES) {
     })
 
     test('the next price field stays uncovered in every state that requires it, in rows 1 and 2', async ({ page }) => {
-      await row(page, 1).evaluate((el) => el.scrollIntoView({ block: 'start' }))
+      await placeRow(page, 100)
       for (const i of [1, 2]) {
         await openByFocus(page, i)
         const c = await boxOf(card(page))
@@ -315,7 +324,12 @@ for (const size of SIZES) {
     })
 
     test("the card's right edge sits on its row's history door", async ({ page }) => {
+      /* The door edge is the above placement's rule. Below, the card sits left of the price column (the
+       * case above), so put row 1 low enough that there is room above, whatever the load position. */
+      await placeRow(page, 600)
+      expect((await boxOf(row(page, 1))).y, 'there is room above the row').toBeGreaterThan(400)
       await openByFocus(page)
+      await expect(card(page)).toHaveAttribute('data-placement', 'above')
       const c = await boxOf(card(page))
       const door = await boxOf(doorOf(page, 1))
       expect(Math.abs(c.x + c.width - (door.x + door.width)), 'the card right edge is on the door right edge').toBeLessThanOrEqual(1)
