@@ -277,18 +277,11 @@ refusal message and log line. It has named failure codes. It has a control that 
 presses. The order host's cookie session is the admin portal's and does not transfer, so what
 carries over is the shape and not the auth.
 
-### The TCGTracking pipe: the owner's rulings
+### The TCGTracking pipe: the owner's rulings (D-tcgtracking-pipe)
 
-The owner's rulings (waiting-page items 102, 103 and 104):
-
-- **Banchi's server holds the TCGTracking key and calls TCGTracking itself.** No browser
-  extension sits in the middle. The key and the shipper number are read on the server only.
-  They never reach the browser and are never logged.
-- **T4 and T5 are one lane.** Labels and the tracking read-back are built together.
-- **One read-only tracking lookup was granted, and it found a gap.** The main checkout's `.env`
-  holds `TCG_TRACKING_KEY` and no shipper number. TCGTracking requires both the `X-API-Key`
-  header and the `X-Shipper-Number` header, so no call was made. The owner supplies the
-  shipper number before anything reaches the live host.
+D-tcgtracking-pipe (the server calls TCGTracking) holds the rulings. Banchi's server holds the
+key and calls TCGTracking itself. T4 and T5 are one lane. The main checkout's `.env` holds
+`TCG_TRACKING_KEY` and no shipper number, so no live call can run until the owner adds it.
 
 TCGTracking's API is `POST /orders`, which creates a label and is paid after an account's
 first 100 orders. `GET /orders/track` looks up status by tracking number or by
