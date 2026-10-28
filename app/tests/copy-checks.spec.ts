@@ -889,10 +889,12 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   await expect(page.getByRole('button', { name: /^Send all 2 SKUs, 5 live copies move to new prices$/i }), 'the press names the moved copies').toBeVisible()
   read(hashOf('pricing'), await page.evaluate(scanCopy))
 
-  // THE EMPTY WORKLIST: nothing to price yet, and the button that opens the Live tab. Asserted drawn first.
+  // THE EMPTY WORKLIST: nothing to price yet. Live listings are rows of the one list, so there is no tab to open and no button for one. Asserted drawn first.
   await page.route(PRICING_WORKLIST, (route) => route.fulfill(answer(worklistOf([]))))
   await visit(page, hashOf('pricing'))
-  await expect(page.getByRole('button', { name: /^Price your live listings$/i }), 'the empty worklist offers the Live tab').toBeVisible()
+  await expect(page.locator('main.pricing'), 'the empty worklist draws the screen').toBeVisible()
+  await expect(page.locator('.pricing-tabs'), 'the empty worklist draws no tab bar').toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Price your live listings$/i }), 'the empty worklist offers no tab to open').toHaveCount(0)
   read(hashOf('pricing'), await page.evaluate(scanCopy))
 
   // THE ORDERS STAND-DOWN PRESSES. A line no copy can reach (`no_copies_on_hand`) draws `Already sent it` and `It isn't shipping`;
@@ -919,19 +921,19 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   await expect(page.getByRole('heading', { name: /^3-day$/i }), 'the quarter range draws its heading').toBeVisible()
   read(PRODUCT_SKU_ROUTE, await page.evaluate(scanCopy))
 
-  // THE LIVE TAB WITH A FRESH READ: `Read Again` is drawn, and the lens chips carry their counts. Asserted drawn first.
+  // THE ONE LIST WITH A FRESH READ: `Read Again` is drawn, and the lens chips carry their counts. Asserted drawn first.
   await stubLiveRead(page, readAt(60_000))
-  await visit(page, `${hashOf('pricing')}?live`)
-  await expect(page.getByRole('group', { name: 'Which live listings to show' }), 'the Live tab draws its lens chips').toBeVisible()
+  await visit(page, hashOf('pricing'))
+  await expect(page.getByRole('group', { name: 'Which live listings to show' }), 'the one list draws its lens chips').toBeVisible()
   await expect(page.getByRole('button', { name: /^read again$/i }), 'a fresh read draws its Read Again press').toBeVisible()
-  read(`${hashOf('pricing')}?live`, await page.evaluate(scanCopy))
+  read(hashOf('pricing'), await page.evaluate(scanCopy))
 
-  // THE LIVE TAB WITH A STALE READ: the read is older than a day, so the chips drop their counts, and its bar offers Read Again in place of Send.
+  // THE ONE LIST WITH A STALE READ: the read is older than a day, so the chips drop their counts, and its bar offers Read Again in place of Send.
   await stubLiveRead(page, readAt(3 * DAY_MS))
-  await visit(page, `${hashOf('pricing')}?live`)
+  await visit(page, hashOf('pricing'))
   await expect(page.getByRole('button', { name: /^not selling$/i }), 'a stale read draws its chips without counts').toBeVisible()
   await expect(page.getByRole('region', { name: 'Send these prices' }).getByRole('button', { name: /^read again$/i }), 'a stale read offers Read Again in its bar').toBeVisible()
-  read(`${hashOf('pricing')}?live`, await page.evaluate(scanCopy))
+  read(hashOf('pricing'), await page.evaluate(scanCopy))
 
   const casingTotal = reads.reduce((sum, one) => sum + one.casing, 0)
   expect(casingTotal, `the sweep read ${casingTotal} labels, under the floor of ${CASING_FLOOR}`).toBeGreaterThan(CASING_FLOOR)
@@ -1164,13 +1166,13 @@ test.describe('reader: a stat caption is prose, a press stat is a label', () => 
   })
 })
 
-// THE PRICE LINE IS NAMED FLOOR. The Live tab's rule line drew "Cut-off" before the words lane (docs/specs/pricing-suggest.md
+// THE PRICE LINE IS NAMED FLOOR. The one list's rule line drew "Cut-off" before the words lane (docs/specs/pricing-suggest.md
 // section 6), so the name is read off the drawn input and off every rendered string on the screen.
-test('pricing: the live tab names the price line Floor, and no rendered string says cut-off', async ({ page }) => {
+test('pricing: the one list names the price line Floor, and no rendered string says cut-off', async ({ page }) => {
   await stubLiveRead(page, readAt(60_000))
-  await visit(page, `${hashOf('pricing')}?live`)
-  await expect(page.getByRole('group', { name: 'Which live listings to show' }), 'the Live tab is drawn').toBeVisible()
-  /* THE LIVE SETTINGS SHEET HOLDS THE FLOOR, so the Live tab's Change opens it first. It says what the floor is. */
+  await visit(page, hashOf('pricing'))
+  await expect(page.getByRole('group', { name: 'Which live listings to show' }), 'the one list is drawn').toBeVisible()
+  /* THE LIVE SETTINGS SHEET HOLDS THE FLOOR, so the one list's Change opens it first. It says what the floor is. */
   await page.getByRole('button', { name: 'Change' }).click()
   const sheet = page.getByRole('dialog', { name: 'What to mark down' })
   await expect(sheet.locator('.pricing-sheet-says', { hasText: 'The floor is' }), 'the Live settings sheet names its price line Floor').toBeVisible()
