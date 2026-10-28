@@ -478,7 +478,8 @@ def build_parser() -> argparse.ArgumentParser:
     # ONE RUN OR SEVERAL (D86). `nargs="+"` rather than a `--runs` flag, because the argument
     # has always been the run and a send of one must keep reading exactly as it did — every
     # existing invocation, harness case and doc line is a list of one.
-    emit.add_argument("run_dir", nargs="+")
+    # `*` for one case: a send of kept suggestions alone names no run (`cmd_emit.run_prices_only`).
+    emit.add_argument("run_dir", nargs="*")
     emit.add_argument(
         "--listed-only",
         action="store_true",

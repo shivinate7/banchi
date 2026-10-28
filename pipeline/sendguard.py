@@ -32,12 +32,12 @@ the store's cards and the matches, and prints what this returns.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
 from pipeline import tcgcsv
-from store import master
+from store import master, postings
 
 
 @dataclass(frozen=True)
@@ -180,6 +180,10 @@ def report(export: str, checked: int, trimmed: Sequence[Trim]) -> dict:
 # ------------------------------------------------------------------- the price-only rows
 
 
+#: The posting source of a typed price on a live card (`store/postings.py`).
+SOURCE_PRICE = "emit-price"
+
+
 @dataclass(frozen=True)
 class PriceChange:
     """One card already live at TCGplayer whose typed price this send changes, adding no copy.
@@ -195,6 +199,11 @@ class PriceChange:
     name: str
     price: str
     was: Optional[str]
+    #: The posting's source (`store/postings.py`): `SOURCE_PRICE` for a typed price,
+    #: `postings.SUGGESTED` for a kept suggestion. Not on the wire (`as_dict`).
+    source: str = SOURCE_PRICE
+    #: A kept suggestion has no run row, so it carries the live export's own row for the file.
+    row: Optional[Mapping[str, str]] = field(default=None, compare=False, repr=False)
 
     def as_dict(self) -> dict:
         return {"sku": self.sku, "name": self.name, "price": self.price, "was": self.was}
@@ -231,6 +240,7 @@ REFUSED_BELOW_FLOOR = "below_floor"    # under the store's floor, the mark-down 
 REFUSED_NOT_IN_SEND = "not_in_send"    # the button named a card this press does not price
 REFUSED_MOVE_UNNAMED = "move_unnamed"  # a listing row would move live copies the button did not name
 REFUSED_MOVE_COUNT = "move_count"      # the button named another count of live copies than TCGplayer holds
+REFUSED_PAST_CAP = "past_cap"          # a kept suggestion moves the live price past the owner's limit
 
 
 @dataclass(frozen=True)
@@ -259,6 +269,7 @@ def price_changes(
     prices: Mapping[str, Optional[str]],
     floor,
     adding: Iterable[str] = (),
+    suggested: Optional[Mapping[str, Mapping[str, str]]] = None,
 ) -> tuple:
     """The price-only rows one send carries: `(changes, left, refused)`.
 
@@ -285,7 +296,12 @@ def price_changes(
 
     A REFUSAL STOPS THE WHOLE PRESS, by name, before a file exists. A LEFT row is named and
     the press goes on.
+
+    `suggested` is SKU -> the live export's row, for the named prices that are kept suggestions.
+    Such a row is judged as a typed one is (its `candidates` entry is its own price, since a
+    suggestion is saved nowhere), and its change carries `postings.SUGGESTED` and that row.
     """
+    suggested = suggested or {}
     changes: List[PriceChange] = []
     left: List[PriceNote] = []
     refused: List[PriceNote] = []
@@ -315,8 +331,33 @@ def price_changes(
         elif now != shown:
             refused.append(PriceNote(why=REFUSED_LIVE_MOVED, **note))
         else:
-            changes.append(PriceChange(sku=sku, name=str(name or ""), price=plan, was=now))
+            kept = {"source": postings.SUGGESTED, "row": suggested[sku]} if sku in suggested else {}
+            changes.append(PriceChange(sku=sku, name=str(name or ""), price=plan, was=now, **kept))
     return changes, left, refused
+
+
+def suggestions_past_cap(
+    named: Mapping[str, tuple],
+    prices: Mapping[str, Optional[str]],
+    limit: Decimal,
+    names: Mapping[str, str],
+) -> List[PriceNote]:
+    """The kept suggestions that move TCGplayer's price by more than `limit` (a fraction).
+
+    THE CAP `pipeline/suggest.py:review` SORTS BY, MEASURED ON THE PRICE TCGPLAYER SHOWS NOW AND
+    NEVER ON THE `was` THE SCREEN DREW. `review` needs a market to price from and a send has none,
+    so its cap is the part that can be re-checked. `named` is SKU -> (price, was). A SKU TCGplayer
+    shows no price for is not judged here; `price_changes` leaves or refuses it.
+    """
+    out: List[PriceNote] = []
+    for sku in sorted(named):
+        now = prices.get(sku)
+        if not now or Decimal(now) <= 0:
+            continue
+        price = tcgcsv.format_price(named[sku][0])
+        if abs(Decimal(price) - Decimal(now)) / Decimal(now) > limit:
+            out.append(PriceNote(sku, str(names.get(sku) or ""), REFUSED_PAST_CAP, price=price, live=now))
+    return out
 
 
 @dataclass(frozen=True)

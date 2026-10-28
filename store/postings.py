@@ -36,8 +36,9 @@ file the press went on to write to disk — `emit`'s `pushed` gate and `reprice 
 `--write` gate are also this module's gate, because a proposal an operator edited and
 discarded, or a run that refused before a single byte was written, was never posted and is
 not this table's business to remember. `source` names which press wrote the row (`emit`,
-`emit-merged`, `reprice`, and `emit-price` for a send's price-only row on a live card, which
-carries the live price it replaced), `run` names which run or worklist decided it, and `replaced`
+`emit-merged`, `reprice`, `emit-price` for a send's price-only row on a live card, which
+carries the live price it replaced, and `suggested` for the same row when it is a kept
+suggestion rather than a typed price or the rule), `run` names which run or worklist decided it, and `replaced`
 carries the price this posting is known to have superseded when the caller already has that
 value in hand — `reprice apply` always does (the worklist's own `was` column); `emit` does
 not track a prior asking price at all, so its rows carry `replaced=None` rather than a
@@ -53,6 +54,10 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from typing import List, Optional
+
+#: `source` of a price-only row that is a kept suggestion (`pipeline/suggest.py`). The wire word
+#: `source: "suggested"` on a named price is this same string.
+SUGGESTED = "suggested"
 
 
 @dataclass
