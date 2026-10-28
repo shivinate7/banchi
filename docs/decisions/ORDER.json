@@ -259,6 +259,7 @@
     "D322-tcgcsv-is-next-price-source.md",
     "D323-backup-one-time-guarded.md",
     "D324-holdings-watch.md",
-    "D325-tcgcsv-daily-read.md"
+    "D325-tcgcsv-daily-read.md",
+    "D326-tcgtracking-pipe.md"
   ]
 }
