@@ -46,20 +46,20 @@
 .hfloat-sw-spread { width: 2px; height: 10px; border: 0; background: var(--bn-ink-4); border-radius: 1px; }
 .hfloat-sw-sale { width: 8px; height: 8px; border: 0; background: var(--bn-accent); transform: rotate(45deg); }
 .hfloat-sw-sug { width: 8px; height: 8px; border: 0; background: var(--bn-accent); border-radius: var(--bn-r-full); }
-/* The chart's box is its viewBox's height, held before the history arrives. */
-.hfloat-chart { height: 180px; overflow: hidden; }
-.hfloat-chart .producthistory-chart { height: 100%; }
+/* The chart's box is its viewBox's height, held before the history arrives. The top price label
+   is centred near the plot's top edge, so part of its line rises above the viewBox: the padding
+   is one label's font size, so it holds the label at any font, and the SVG draws into it. */
+.hfloat-chart { box-sizing: content-box; height: 140px; padding-top: var(--bn-fs-2xs); overflow: hidden; }
+.hfloat-chart .producthistory-chart { height: 100%; overflow: visible; }
 .hfloat-none { margin: 0; color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
 .hfloat-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--bn-4); min-height: 40px; }
-.hfloat-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--bn-1) var(--bn-5); margin: 0; }
+.hfloat-facts { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--bn-1) var(--bn-4); margin: 0; }
 .hfloat-quiet { color: var(--bn-ink-4); font-size: var(--bn-fs-sm); }
 .hfloat-foot .bn-btn { --btn-h: 40px; flex: none; }
-@media (max-width: 1099.98px) {
-  .hfloat-foot { flex-direction: column; align-items: stretch; }
-}
 @media (min-width: 1100px) {
+  .hfloat-chart { height: 180px; }
   /* Equal columns, so a figure arriving never moves its neighbour (D313). */
-  .hfloat-facts { flex: 1; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--bn-1) var(--bn-3); }
+  .hfloat-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--bn-1) var(--bn-3); }
 }
 .hfloat-facts dt { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .hfloat-facts dd { display: flex; align-items: baseline; height: 24px; margin: 0; font-size: var(--bn-fs-md); }

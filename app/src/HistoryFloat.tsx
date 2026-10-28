@@ -18,9 +18,11 @@
  * listing price, so Lowest, Lowest shipped and Direct Low come off `getPriceFacts` (the figures
  * the product sheet's "Prices Now" draws). A price neither read carries shows "not carried".
  *
- * PLACEMENT. Above the row when the viewport has room there, else below it. Its right edge
- * sits on the right edge of the row's `[data-float-door]` (the row itself when it has none), so
- * the caller's row layout keeps its thumb, name and price field left of the card's width.
+ * PLACEMENT. Above the row when the viewport has room there, else on the side with more room,
+ * held inside the viewport. Wholly above the row, its right edge sits on the row's
+ * `[data-float-door]` (the row itself when it has none). Anywhere else it may overlap a price
+ * column, its own row's or the next row's, so its right edge sits left of the row's
+ * `[data-float-price]`, read off the real row and never a fixed offset.
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -35,8 +37,10 @@ export type HistoryFloatMode = 'focus' | 'door'
 
 const GAP = 8
 const EDGE = 8
-/** The plot width that makes the chart's viewBox as wide as the card's inner width, per card width. */
-const PLOT = { wide: 416, narrow: 240 } as const
+/** Per card width: the plot width that makes the chart's viewBox as wide as the card's inner
+ * width, and the plot height (`.hfloat-chart`'s height less the chart's 20px date gutter). The
+ * narrow card is shorter, so it fits above a row in the middle of a 900px viewport. */
+const PLOT = { wide: { w: 416, h: 160 }, narrow: { w: 240, h: 120 } } as const
 const WIDE_QUERY = '(min-width: 1100px)'
 
 function useWide(): boolean {
@@ -110,12 +114,18 @@ export function HistoryFloat({
       const card = cardRef.current
       if (card === null) return
       const r = anchor.getBoundingClientRect()
-      const right = (anchor.querySelector('[data-float-door]') ?? anchor).getBoundingClientRect().right
-      const above = r.top - GAP >= card.offsetHeight
+      const h = card.offsetHeight
+      const w = card.offsetWidth
+      const clear = r.top - GAP - EDGE >= h
+      const above = clear || (r.bottom + GAP + h + EDGE > window.innerHeight && r.top >= window.innerHeight - r.bottom)
+      const right = clear
+        ? (anchor.querySelector('[data-float-door]') ?? anchor).getBoundingClientRect().right
+        : (anchor.querySelector('[data-float-price]') ?? anchor).getBoundingClientRect().left - GAP
+      const top = above ? r.top - GAP - h : r.bottom + GAP
       setPlace({
         side: above ? 'above' : 'below',
-        top: above ? r.top - GAP - card.offsetHeight : r.bottom + GAP,
-        left: Math.max(EDGE, Math.min(right - card.offsetWidth, window.innerWidth - card.offsetWidth - EDGE)),
+        top: Math.max(EDGE, Math.min(top, window.innerHeight - h - EDGE)),
+        left: Math.max(EDGE, Math.min(right - w, window.innerWidth - w - EDGE)),
       })
     }
     move()
@@ -182,7 +192,7 @@ export function HistoryFloat({
         ) : range === null ? (
           state === 'ready' ? <p className="hfloat-none">No price history has been read for this card yet.</p> : null
         ) : (
-          <ProductChart range={range} fills={fills} w={wide ? PLOT.wide : PLOT.narrow} asking={postings} suggestion={suggested} />
+          <ProductChart range={range} fills={fills} {...(wide ? PLOT.wide : PLOT.narrow)} asking={postings} suggestion={suggested} />
         )}
       </div>
       <footer className="hfloat-foot">
