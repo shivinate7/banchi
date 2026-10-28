@@ -29,19 +29,8 @@
     "store/orders.py"
   ],
   "exclude": [
-    "vendor/",
-    "demo-assets/",
-    "fixtures/",
     "app/src/fonts/",
     "geometry/model/dfine_card_640.onnx",
-    "scripts/matcher-parity-reference.npz",
-    "docs/design-refs/h-palettes/abyssalBloom-",
-    "docs/design-refs/h-palettes/carnivalMidway-",
-    "docs/design-refs/h-palettes/championship-",
-    "docs/design-refs/h-palettes/driftKing-",
-    "docs/design-refs/h-palettes/kaijuAlert-",
-    "docs/design-refs/h-palettes/lanternDistrict-",
-    "docs/design-refs/h-palettes/overclock-",
-    "docs/design-refs/h-palettes/solarTemple-"
+    "scripts/matcher-parity-reference.npz"
   ]
 }
