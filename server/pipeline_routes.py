@@ -120,7 +120,7 @@ from dataclasses import dataclass, fields as dataclass_fields
 from decimal import Decimal
 from http import HTTPStatus
 from pathlib import Path
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, FrozenSet, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
