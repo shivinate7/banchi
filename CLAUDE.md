@@ -340,13 +340,13 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **A screen answers to the system.** `--bn-*` tokens only, checked at 1440 and 820, light and dark.
   `docs/DESIGN.md` is the record. The `design tokens` row of `make docs-audit` locks every name and hex both ways.
 - **Main moves by pull request. A session never commits to it and never pushes it** (D42, main moves by pull request).
-  A session merges only after the owner names the act ("merge", not "ship it"). It uses
-  `make merge ARGS="<n> --confirm"` with CI green, never `--admin`. One standing exception (D42, main moves by pull request):
-  the weekly demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
   One session the owner names Orchestrator batches every reviewed lane, across all sessions, into one integration branch
-  and merges it under its standing grant. A lane session hands the Orchestrator each reviewed lane branch with its head
-  commit and review verdict. It never builds an integration branch, opens an integration PR, marks a PR ready or merges.
-  The designation is never inherited.
+  and merges it under its standing grant. Any other merge happens only on the owner's named act ("merge", not "ship it"),
+  and the Orchestrator runs it. A lane session never merges. It hands the Orchestrator each reviewed lane branch with its
+  head commit and review verdict, and never builds an integration branch, opens an integration PR or marks a PR ready.
+  The designation is never inherited. A merge uses `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
+  One standing exception (D42, main moves by pull request):
+  the weekly demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
   GitHub branch protection also requires `check` and `revert-guard`, with 0 reviews and `strict: false`.
   It catches the remote half. The local hook is the only cover for a local fast-forward.
   `scripts/githooks/reference-transaction` and `scripts/githooks/pre-push` refuse, armed by `make hooks`.

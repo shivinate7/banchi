@@ -51,7 +51,7 @@ So `make hooks` copies the tracked hooks into `<git-common-dir>/hooks-armed`. It
 
 **What is given up: the copy can go stale.** A new worktree gets handed the per-worktree override again. Neither can be closed by a check without lying. The tracked file legitimately differs between branches. So *installed does not match this tree* is a fact, never a fault. It must never gate a commit. `make status` reports both instead. It reads NOT ARMED whenever the effective path is not the install. No hook prints a reminder. `post-merge` and `post-checkout` were removed on the owner's word.
 
-### A session may perform the merge when the owner says the word
+### The Orchestrator performs the merge when the owner says the word
 
 An owner amendment. The sentence that changes is *the owner merges it on GitHub*. Only that sentence changes. The two hooks, and what they refuse and why, are untouched.
 
@@ -117,11 +117,13 @@ At `prepared`, the hook asks `git merge-base --is-ancestor "$new" refs/remotes/o
 
 ### The word
 
+**A merge outside the Orchestrator's standing grant (below) needs the word, and the Orchestrator runs it. A lane session never merges.**
+
 **The word comes from the owner in the conversation, and it applies to one instruction.** It is not a standing grant, a mode, or an inference. It has the same shape as D33's `confirm` field one register down. That route refuses without an explicit field, because the next step costs money. This refuses without an explicit instruction, because the next step is the branch every other session is cut from.
 
 **The test is whether the owner NAMED THE ACT, not whether they matched a phrase.** A past paragraph said *"merge to main" is the word*. A session read that literally and hesitated over a bare **"Merge"**. The word is the verb itself, as a direct instruction. *Merge it* and *merge the PR* count too. Approval that never names the act does not count: *ship it*, *land it*, *looks good*, or an approving review. **The line is naming the operation versus expressing satisfaction with the work.** A phrase list is a worse instrument. A session that matches on phrases balks at a plain instruction. It can also be walked into a merge by anyone who says five particular words.
 
-**The merge is one operation, performed whole. A session does not stop between the halves to ask again.** The owner asked for this correction after a session merged on GitHub, reported that local main had not moved, and waited. That session read the entry correctly, which is what made it a defect here. The word covers both halves: `gh pr merge`, then the fast-forward. If the second half refuses or cannot run, the session reports it as the incomplete operation it is. It does not re-ask as though permission were missing.
+**The merge is one operation, performed whole. The Orchestrator does not stop between the halves to ask again.** The owner asked for this correction after a session merged on GitHub, reported that local main had not moved, and waited. That session read the entry correctly, which is what made it a defect here. The word covers both halves: `gh pr merge`, then the fast-forward. If the second half refuses or cannot run, the Orchestrator reports it as the incomplete operation it is. It does not re-ask as though permission were missing.
 
 **What the word does not license:** a direct push, a force push, `git branch -f`, `git update-ref`, or a merge of a PR the owner did not name. A hook refuses all four. The word unlocks none of them.
 

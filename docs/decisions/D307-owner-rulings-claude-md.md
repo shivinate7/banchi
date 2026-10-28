@@ -28,7 +28,7 @@ A lane session hands it each reviewed lane branch with its head commit and revie
 integration branch, opens an integration PR, marks a PR ready or merges.
 It merges only through `make merge ARGS="<n> --confirm"`, with CI green, and never with `--admin`.
 The designation is never inherited. It is never assumed from the shape of the work.
-`make merge` carries a needed rebase and force-push on a branch nobody else holds.
+`make merge` never rebases or force-pushes, and a moved head stops it.
 It is never carried over from an earlier session. D42 (main moves by PR) holds the rest.
 
 **Model tiers.** Sonnet is the default and the ceiling. Plan, the designer, the design reviewer and a builder's
