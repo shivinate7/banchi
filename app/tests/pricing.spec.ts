@@ -53,6 +53,35 @@ type Wire = { method: string; path: string; body: unknown }
 /** `GET /pipeline/sends` for a store that has sent nothing. */
 const SENDS_NONE = { sends: [], unconfirmed: { copies: 0, stamps: [] }, due: false, check_at: null, now: '2026-09-24T12:00:00+00:00' }
 
+/** One master-set take-off still owed, as `GET /pipeline/sends/owed` lists it: the take-off's own fields, with its card
+ *  (`OwedTakeOff`, `app/src/types.ts`). `press` follows the state: a press is offered for `offered` and `failed` only. */
+type OwedRow = {
+  name: string
+  sku: string
+  box: number
+  index: number
+  state: 'offered' | 'failed' | 'no_session' | 'on_its_way' | 'matches' | 'sent'
+  excess: number
+  taken_off: number
+  stamp: string | null
+  failure: string | null
+  press: boolean
+  /** The card's set, or "" when the store holds none (`OwedTakeOff.set_name`). */
+  set_name: string
+}
+function owedRow(over: Partial<OwedRow> & Pick<OwedRow, 'name' | 'sku' | 'box' | 'index'>): OwedRow {
+  const state = over.state ?? 'offered'
+  return { state, excess: 2, taken_off: 0, stamp: null, failure: null, press: state === 'offered' || state === 'failed', set_name: 'ME01: Mega Evolution', ...over }
+}
+
+/** One press's answer, as `POST /inventory/<box>/<index>/take-off` shapes it when TCGplayer takes the entry's copies. */
+function pressAnswer(entry: OwedRow) {
+  return {
+    take_off: { state: 'on_its_way', sku: entry.sku, excess: entry.excess, taken_off: entry.excess, stamp: null, failure: null, press: false },
+    send: { check_after: null },
+  }
+}
+
 /** One send receipt as `server/send_routes.py:_summary` shapes it. */
 function sendSummary(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -322,6 +351,10 @@ async function open(
     refresh?: Record<string, unknown>
     /** SPEC 7B. The first N reads of `trends-saved` fail with a 500, as a restarted server would. */
     savedFailures?: number
+    /** The master-set take-offs still owed (`GET /pipeline/sends/owed`), one entry per SKU. Default: none owed. */
+    takeOffsOwed?: OwedRow[]
+    /** Answers `POST /inventory/<box>/<index>/take-off`, one entry's press. Default: TCGplayer takes that entry's copies. */
+    takeOff?: (box: number, index: number) => { status: number; body: unknown }
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -373,6 +406,22 @@ async function open(
     wire.push({ method: 'POST', path: '/pipeline/live-check', body })
     const answer = (options.liveCheck ?? (() => ({ ran: true, checked: [] })))(body)
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) })
+  })
+
+  /* THE MASTER-SET TAKE-OFFS STILL OWED (`docs/specs/master-set.md`, section 5): the send card's list, and each entry's own
+     press. Newer than the shell's empty answer, so it wins for every case; each read and write lands in `wire`. */
+  await page.route(/\/pipeline\/sends\/owed(\?.*)?$/, async (route) => {
+    wire.push({ method: 'GET', path: '/pipeline/sends/owed', body: null })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ owed: options.takeOffsOwed ?? [] }) })
+  })
+  await page.route(/\/inventory\/\d+\/\d+\/take-off$/, async (route) => {
+    const request = route.request()
+    const path = new URL(request.url()).pathname
+    wire.push({ method: request.method(), path, body: request.postDataJSON() })
+    const [box, index] = path.split('/').slice(2).map(Number) as [number, number]
+    const entry = (options.takeOffsOwed ?? []).find((row) => row.box === box && row.index === index) ?? owedRow({ name: '', sku: '', box, index })
+    const answer = (options.takeOff ?? (() => ({ status: 200, body: pressAnswer(entry) })))(box, index)
+    await route.fulfill({ status: answer.status, contentType: 'application/json', body: JSON.stringify(answer.body) })
   })
 
   /* THE RUN'S OWN DETAIL, for the files and the phase. Note the ORDER of these route
@@ -6563,4 +6612,174 @@ for (const zero of [
     if (zero.tile) await expect(tile(page, 'priced')).toContainText(/\b1 typed\./)
     else await expect(tile(page, 'priced')).not.toContainText(/\b[1-9]\d* typed\./)
   })
+}
+
+// ------------------------------- the master-set take-offs owed, on the send card (docs/specs/master-set.md, section 5)
+
+/** The owed line's visible sentence or press: every state of the line is in the DOM, only the current one is shown. */
+const OWED_SHOWN = '.send-owed .send-owed-state:not([data-off])'
+
+const THIEVUL = owedRow({ name: 'Thievul', sku: '8937370', box: 2, index: 1, excess: 2 })
+const PIKACHU = owedRow({ name: 'Pikachu', sku: '8937200', box: 2, index: 2, excess: 1 })
+const DITTO = owedRow({ name: 'Ditto', sku: '8937480', box: 2, index: 3, excess: 3 })
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [1440, 820]) {
+    test(`one owed take-off reads as one line, with its own press, at ${width} in ${theme}`, async ({ page }) => {
+      await setViewport(page, { width, height: 900 })
+      await page.emulateMedia({ colorScheme: theme })
+      await open(page, { takeOffsOwed: [THIEVUL] })
+      const owed = page.locator('.send-owed')
+      await expect(owed).toHaveCount(1)
+      await expect(page.locator(OWED_SHOWN).first()).toContainText('TCGplayer still lists 2 copies of Thievul from your master set.')
+      await expect(owed.getByRole('button', { name: /take it off tcgplayer/i })).toBeVisible()
+    })
+
+    test(`several owed take-offs show a press per entry, and no Take All, at ${width} in ${theme}`, async ({ page }) => {
+      await setViewport(page, { width, height: 900 })
+      await page.emulateMedia({ colorScheme: theme })
+      await open(page, { takeOffsOwed: [THIEVUL, PIKACHU, DITTO] })
+      const owed = page.locator('.send-owed')
+      await expect(page.locator(OWED_SHOWN).first()).toContainText('TCGplayer still lists 6 copies from your master set.')
+      // THE NAMES ARE FOLDED UNTIL ASKED FOR, and each name carries its own press.
+      await expect(owed.locator('.send-names')).toBeHidden()
+      await owed.getByRole('button', { name: /^Show 3 Cards$/ }).click()
+      await expect(owed.locator('.send-names li')).toHaveCount(3)
+      await expect(owed.locator('.send-names li').getByRole('button', { name: 'Take It Off' })).toHaveCount(3)
+      // THERE IS NO PRESS FOR ALL: each entry comes down on its own press.
+      await expect(page.getByRole('button', { name: /take all/i })).toHaveCount(0)
+    })
+
+    test(`the open fold lists each entry with its own press, and the bar keeps its height, at ${width} in ${theme}`, async ({ page }) => {
+      await setViewport(page, { width, height: 900 })
+      await page.emulateMedia({ colorScheme: theme })
+      await open(page, { takeOffsOwed: [THIEVUL, PIKACHU, DITTO] })
+      const owed = page.locator('.send-owed')
+      const bar = page.locator('.pricing-bar')
+      const before = await bar.boundingBox()
+
+      await owed.getByRole('button', { name: /^Show 3 Cards$/ }).click()
+      await expect(owed.locator('.send-names')).toBeVisible()
+      await expect(owed.locator('.send-names li')).toHaveCount(3)
+      await expect(owed.getByRole('button', { name: /^Hide 3 Cards$/ })).toBeVisible()
+      await expect(owed.locator('.send-names li').getByRole('button', { name: 'Take It Off' })).toHaveCount(3)
+      // EACH ENTRY NAMES ITS SET, beside the card.
+      await expect(owed.locator('.send-names li .send-owed-set')).toHaveText(['ME01: Mega Evolution', 'ME01: Mega Evolution', 'ME01: Mega Evolution'])
+      await page.mouse.move(0, 0)
+      await settleMotion(page)
+      // THE OPEN LIST FLOATS OVER THE WORKLIST: the bar is the height it was.
+      expect((await bar.boundingBox())?.height, 'the bar keeps its height').toBeCloseTo(before?.height ?? -1, 0)
+    })
+
+    test(`after one entry is pressed, the head counts only the copies left, and the bar holds still, at ${width} in ${theme}`, async ({ page }) => {
+      await setViewport(page, { width, height: 900 })
+      await page.emulateMedia({ colorScheme: theme })
+      const wire = await open(page, { takeOffsOwed: [THIEVUL, PIKACHU, DITTO] })
+      const owed = page.locator('.send-owed')
+      const bar = page.locator('.pricing-bar')
+      await owed.getByRole('button', { name: /^Show 3 Cards$/ }).click()
+      await page.mouse.move(0, 0)
+      await settleMotion(page)
+      const before = await bar.boundingBox()
+
+      const row = owed.locator('.send-names li', { hasText: 'Thievul' })
+      await row.getByRole('button', { name: 'Take It Off' }).click()
+      await expect(row.getByText('Taken off')).toBeVisible()
+      // THE PRESSED ENTRY LEAVES THE TOTAL: Pikachu's 1 and Ditto's 3 are what TCGplayer still lists.
+      await expect(page.locator(OWED_SHOWN).first()).toContainText('TCGplayer still lists 4 copies from your master set.')
+      await page.mouse.move(0, 0)
+      await settleMotion(page)
+      expect((await bar.boundingBox())?.height, 'the bar keeps its height through the press').toBeCloseTo(before?.height ?? -1, 0)
+      expect(wire.filter((call) => call.method === 'POST' && call.path === '/inventory/2/1/take-off')).toHaveLength(1)
+    })
+
+    test(`after every entry is pressed, the head reads what TCGplayer accepted, at ${width} in ${theme}`, async ({ page }) => {
+      await setViewport(page, { width, height: 900 })
+      await page.emulateMedia({ colorScheme: theme })
+      const wire = await open(page, { takeOffsOwed: [THIEVUL, PIKACHU, DITTO] })
+      const owed = page.locator('.send-owed')
+      await owed.getByRole('button', { name: /^Show 3 Cards$/ }).click()
+      for (const name of ['Thievul', 'Pikachu', 'Ditto']) {
+        const row = owed.locator('.send-names li', { hasText: name })
+        await row.getByRole('button', { name: 'Take It Off' }).click()
+        await expect(row.getByText('Taken off')).toBeVisible()
+      }
+      await expect(page.locator(OWED_SHOWN).first()).toContainText('TCGplayer accepted: 6 copies are off.')
+      expect(wire.filter((call) => call.method === 'POST' && call.path.endsWith('/take-off')).map((call) => call.path)).toEqual([
+        '/inventory/2/1/take-off',
+        '/inventory/2/2/take-off',
+        '/inventory/2/3/take-off',
+      ])
+    })
+
+    test(`the copies column holds still when a row is answered, at ${width} in ${theme}`, async ({ page }) => {
+      await setViewport(page, { width, height: 900 })
+      await page.emulateMedia({ colorScheme: theme })
+      const wire = await open(page, { takeOffsOwed: [THIEVUL, PIKACHU, DITTO] })
+      const owed = page.locator('.send-owed')
+      await owed.getByRole('button', { name: /^Show 3 Cards$/ }).click()
+      const copies = () =>
+        owed.locator('.send-names li .send-figure').evaluateAll((els) =>
+          els.map((el) => {
+            const box = el.getBoundingClientRect()
+            return [Math.round(box.x), Math.round(box.width)]
+          }),
+        )
+      await settleMotion(page)
+      const before = await copies()
+
+      const row = owed.locator('.send-names li', { hasText: 'Thievul' })
+      await row.getByRole('button', { name: 'Take It Off' }).click()
+      await expect(row.getByText('Taken off')).toBeVisible()
+      await page.mouse.move(0, 0)
+      await settleMotion(page)
+      expect(await copies(), 'the copies column does not move when the press answers').toEqual(before)
+      expect(wire.filter((call) => call.method === 'POST' && call.path === '/inventory/2/1/take-off')).toHaveLength(1)
+    })
+
+    test(`a failed take-off offers Try again, and the press goes to its own card, at ${width} in ${theme}`, async ({ page }) => {
+      await setViewport(page, { width, height: 900 })
+      await page.emulateMedia({ colorScheme: theme })
+      const wire = await open(page, { takeOffsOwed: [owedRow({ name: 'Thievul', sku: THIEVUL.sku, box: 2, index: 1, state: 'failed', failure: 'TCGplayer did not take it.' })] })
+      await expect(page.locator(OWED_SHOWN).first()).toContainText('TCGplayer did not take Thievul off, so nothing went live.')
+      const again = page.locator('.send-owed').getByRole('button', { name: 'Try again' })
+      await expect(again).toBeVisible()
+      await settleMotion(page)
+      // THE LINE RESERVES ITS BOX: the answer that follows the press is no taller than the failure it replaces.
+      const failedHeight = (await page.locator('.send-owed').boundingBox())?.height ?? -1
+      await again.click()
+      await expect(page.locator(OWED_SHOWN).first()).toContainText('TCGplayer accepted: 2 copies of Thievul are off.')
+      await settleMotion(page)
+      expect((await page.locator('.send-owed').boundingBox())?.height, 'the owed line keeps its height through the press').toBeCloseTo(failedHeight, 0)
+      expect(wire.filter((call) => call.method === 'POST' && call.path === '/inventory/2/1/take-off')).toHaveLength(1)
+    })
+
+    test(`no sign-in offers no press on the owed line, at ${width} in ${theme}`, async ({ page }) => {
+      await setViewport(page, { width, height: 900 })
+      await page.emulateMedia({ colorScheme: theme })
+      await open(page, { takeOffsOwed: [owedRow({ name: 'Thievul', sku: THIEVUL.sku, box: 2, index: 1, state: 'no_session' })] })
+      const owed = page.locator('.send-owed')
+      await expect(page.locator(OWED_SHOWN).first()).toContainText('TCGplayer is not signed in, so Thievul stays listed. Sign in, then press Refresh.')
+      await expect(owed.getByRole('button', { name: /take it off|try again/i })).toHaveCount(0)
+    })
+
+    test(`a take-off owed alone keeps the send bar, with no card to send, at ${width} in ${theme}`, async ({ page }) => {
+      await setViewport(page, { width, height: 900 })
+      await page.emulateMedia({ colorScheme: theme })
+      await open(page, { skus: [], takeOffsOwed: [THIEVUL] })
+      await expect(page.locator('.pricing-bar')).toBeVisible()
+      await expect(page.locator(OWED_SHOWN).first()).toContainText('TCGplayer still lists 2 copies of Thievul from your master set.')
+    })
+
+    test(`with nothing owed and nothing to send there is no send bar, once the owed list has been read, at ${width} in ${theme}`, async ({
+      page,
+    }) => {
+      await setViewport(page, { width, height: 900 })
+      await page.emulateMedia({ colorScheme: theme })
+      const wire = await open(page, { skus: [], takeOffsOwed: [] })
+      // THE ABSENCE IS ONLY A FACT ONCE THE LIST HAS BEEN ASKED FOR: a bar that never read it could not be told apart from one that did.
+      await expect.poll(() => wire.some((call) => call.method === 'GET' && call.path === '/pipeline/sends/owed')).toBe(true)
+      await expect(page.locator('.pricing-bar')).toHaveCount(0)
+    })
+  }
 }

@@ -4,7 +4,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test'
 import type { GameRegistry, ResolvedOrder } from '../src/types'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
-import { afterPaint, settleMotion, settled, whatMoved } from './motionSettled'
+import { afterPaint, sameBox, settleMotion, settled, whatMoved } from './motionSettled'
 import { iconTip } from './iconTooltip'
 import { phoneOff, setViewport } from './phoneSwitch'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
@@ -750,6 +750,10 @@ type OpenOptions = {
   /** Answers every `/photo` GET with this body, and reports each URL asked (the crop query). */
   photoBody?: string
   onPhoto?: (url: string) => void
+  /** Answers `POST /inventory/<box>/<index>/retire` (a Retire press that is submitted, not only opened). */
+  retire?: (box: number, index: number, body: unknown) => { status: number; body: unknown }
+  /** Answers `POST /inventory/<box>/<index>/take-off`, the receipt's press. A case that holds the press open awaits its own gate. */
+  takeOff?: (box: number, index: number) => Promise<{ status: number; body: unknown }>
 }
 
 async function open(
@@ -795,6 +799,30 @@ async function open(
       body: JSON.stringify(answer.body),
     })
   })
+
+  /* A RETIRE PRESS AND ITS TAKE-OFF (`docs/specs/master-set.md`, section 5). Registered only for a case that answers them,
+     so every other case still meets the seal for a retirement it did not ask for. */
+  if (options.retire !== undefined) {
+    const retire = options.retire
+    await page.route(/\/inventory\/\d+\/\d+\/retire$/, async (route) => {
+      const request = route.request()
+      const body = request.postDataJSON() as unknown
+      record(request.method(), request.url(), body)
+      const path = new URL(request.url()).pathname.split('/')
+      const answer = retire(Number(path[2]), Number(path[3]), body)
+      await route.fulfill({ status: answer.status, contentType: 'application/json', body: JSON.stringify(answer.body) })
+    })
+  }
+  if (options.takeOff !== undefined) {
+    const takeOff = options.takeOff
+    await page.route(/\/inventory\/\d+\/\d+\/take-off$/, async (route) => {
+      const request = route.request()
+      record(request.method(), request.url(), request.postDataJSON())
+      const path = new URL(request.url()).pathname.split('/')
+      const answer = await takeOff(Number(path[2]), Number(path[3]))
+      await route.fulfill({ status: answer.status, contentType: 'application/json', body: JSON.stringify(answer.body) })
+    })
+  }
 
   await page.route(/\/inventory\/\d+\/\d+\/remove$/, async (route) => {
     const request = route.request()
@@ -2450,6 +2478,181 @@ test('the retirement keeps its panel, because the reason is the write', async ({
   await expect(page.getByRole('dialog')).toBeVisible()
   await expect(page.locator('.inventory-retire-reasons')).toBeVisible()
 })
+
+// ----------------------------------- the master set: a fifth reason, and the receipt's take-off line
+// (docs/specs/master-set.md, sections 4 and 5)
+
+/** One `MasterTakeOff` answer, as `server.ts` types it. `press` is true only where a press is offered. */
+const TAKE = (state: string, over: Record<string, unknown> = {}) => ({
+  state,
+  sku: '8937200',
+  excess: 2,
+  taken_off: 0,
+  stamp: null,
+  failure: null,
+  press: state === 'offered' || state === 'failed',
+  ...over,
+})
+
+/** What `POST /inventory/<box>/<index>/retire` answers for a `master_set` pull: reversible, with its take-off. */
+function masterPull(take: Record<string, unknown>): { status: number; body: unknown } {
+  return {
+    status: 200,
+    body: {
+      position: '2/1',
+      box: 2,
+      index: 1,
+      undone: false,
+      state: 'retired',
+      previous_state: 'identified',
+      reason: 'master_set',
+      restores_to: 'identified',
+      listing: null,
+      card: null,
+      take_off: take,
+    },
+  }
+}
+
+/** Retire CARD_1 for the master set: the Retire control, then the fifth reason. */
+async function pullForMasterSet(page: Page): Promise<void> {
+  await copyRow(page, CARD_1).getByRole('button', { name: 'Retire' }).click()
+  await page.locator('.inventory-retire-reason', { hasText: 'Master set' }).click()
+}
+
+/** The take-off press's answer when TCGplayer accepts the copies: the card's state and the check the send names. */
+const ACCEPTED = {
+  status: 200,
+  body: { take_off: TAKE('on_its_way', { taken_off: 2, press: false }), send: { check_after: '2026-10-27T13:00:00+00:00' } },
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [1440, 820]) {
+    test(`the retire dialog offers five reasons, and Master set spans the last row, at ${width} in ${theme}`, async ({ page }) => {
+      await setViewport(page, { width, height: 900 })
+      await page.emulateMedia({ colorScheme: theme })
+      await open(page)
+      await copyRow(page, CARD_1).getByRole('button', { name: 'Retire' }).click()
+
+      const reasons = page.locator('.inventory-retire-reason')
+      await expect(reasons).toHaveCount(5)
+      await expect(reasons.nth(4)).toContainText('Master set')
+      await expect(reasons.nth(4)).toContainText('Kept for your own collection.')
+      // ONLY THE ODD LAST REASON IS WIDE: the four before it keep their places, two to a row.
+      await expect(reasons.nth(4)).toHaveAttribute('data-wide', '')
+      expect(await reasons.nth(3).getAttribute('data-wide')).toBeNull()
+      // THE SPAN: Master set starts the row at the left edge and is wider than one column.
+      const first = await reasons.nth(0).boundingBox()
+      const last = await reasons.nth(4).boundingBox()
+      expect(first && last, 'both reasons are drawn').toBeTruthy()
+      expect(last!.x, 'Master set starts at the left edge of its row').toBeCloseTo(first!.x, 0)
+      expect(last!.y, 'Master set sits on a row of its own').toBeGreaterThan(first!.y)
+      expect(last!.width, 'Master set spans the whole row').toBeGreaterThan(first!.width * 1.5)
+    })
+
+    for (const [answer, take] of [
+      ['sent', ACCEPTED],
+      ['failed', { status: 200, body: { take_off: TAKE('failed', { failure: 'TCGplayer refused the push.' }) } }],
+    ] as const) {
+      test(`the receipt's toast and its Undo keep still through offer, a held press, and ${answer}, at ${width} in ${theme}`, async ({
+        page,
+      }) => {
+        await setViewport(page, { width, height: 900 })
+        await page.emulateMedia({ colorScheme: theme })
+        let release!: () => void
+        const held = new Promise<void>((done) => {
+          release = done
+        })
+        await open(page, BOXES, STORE, () => PRICING, SALE, {
+          retire: () => masterPull(TAKE('offered')),
+          takeOff: async () => {
+            await held
+            return take
+          },
+        })
+        await pullForMasterSet(page)
+
+        const toast = receiptToast(page)
+        const press = toast.getByRole('button', { name: /take it off tcgplayer/i })
+        await expect(press).toBeVisible()
+        await settleMotion(page)
+        const offer = [await toast.boundingBox(), await toast.getByRole('button', { name: 'Undo' }).boundingBox()]
+
+        await press.click()
+        await expect(toast.locator('.bn-toast-line-state:not([data-off]) .bn-toast-action[data-busy="true"]')).toHaveCount(1)
+        await settleMotion(page)
+        const busy = [await toast.boundingBox(), await toast.getByRole('button', { name: 'Undo' }).boundingBox()]
+
+        release()
+        await expect(toast.locator('.bn-toast-line-state:not([data-off])')).toContainText(
+          answer === 'sent' ? 'TCGplayer accepted: 2 copies' : 'TCGplayer did not take it',
+        )
+        await settleMotion(page)
+        const answered = [await toast.boundingBox(), await toast.getByRole('button', { name: 'Undo' }).boundingBox()]
+
+        expect(busy.every((box, at) => sameBox(box, offer[at] ?? null)), 'the press leaves the toast and Undo where they were').toBe(true)
+        expect(answered.every((box, at) => sameBox(box, offer[at] ?? null)), `the ${answer} answer leaves the toast and Undo where they were`).toBe(true)
+      })
+    }
+
+    test(`the toast outlives its 20 seconds while the take-off press runs, and the answer then stands for a full window, at ${width} in ${theme}`, async ({
+      page,
+    }) => {
+      await setViewport(page, { width, height: 900 })
+      await page.emulateMedia({ colorScheme: theme })
+      // THE CLOCK IS FAKED AND ONLY EVER ADVANCED (see `brand.spec.ts`): it keeps real pace until a `runFor` jumps it.
+      await page.clock.install()
+      let release!: () => void
+      const held = new Promise<void>((done) => {
+        release = done
+      })
+      await open(page, BOXES, STORE, () => PRICING, SALE, {
+        retire: () => masterPull(TAKE('offered')),
+        takeOff: async () => {
+          await held
+          return ACCEPTED
+        },
+      })
+      await pullForMasterSet(page)
+      const toast = receiptToast(page)
+      await toast.getByRole('button', { name: /take it off tcgplayer/i }).click()
+      await expect(toast.locator('.bn-toast-line-state:not([data-off]) .bn-toast-action[data-busy="true"]')).toHaveCount(1)
+
+      // THE WINDOW IS 20 SECONDS (UNDO_WINDOW_MS, Inventory.tsx). A press still running past it keeps the toast.
+      await page.clock.runFor(25_000)
+      await expect(toast).toHaveCount(1)
+      await expect(toast.locator('.bn-toast-line-state:not([data-off]) .bn-toast-action[data-busy="true"]')).toHaveCount(1)
+
+      release()
+      await expect(toast.locator('.bn-toast-line-state:not([data-off])')).toContainText('TCGplayer accepted: 2 copies')
+      // THE ANSWER STANDS FOR A FULL WINDOW FROM ITS OWN ANSWER: 19 seconds on, it is still there...
+      await page.clock.runFor(19_000)
+      await expect(toast).toHaveCount(1)
+      // ...and two seconds on, it has faded.
+      await page.clock.runFor(2_000)
+      await expect(toast).toHaveCount(0)
+    })
+
+    for (const [state, sentence] of [
+      ['matches', 'TCGplayer already lists only what you hold.'],
+      ['on_its_way', 'The take-off is on its way to TCGplayer.'],
+      ['no_session', 'TCGplayer is not signed in'],
+    ] as const) {
+      test(`a master-set pull whose take-off is ${state} offers no press on the receipt, at ${width} in ${theme}`, async ({ page }) => {
+        await setViewport(page, { width, height: 900 })
+        await page.emulateMedia({ colorScheme: theme })
+        // NO `takeOff` HANDLER: a press that did reach the server would meet the seal and fail the case.
+        await open(page, BOXES, STORE, () => PRICING, SALE, { retire: () => masterPull(TAKE(state, { press: false })) })
+        await pullForMasterSet(page)
+
+        const toast = receiptToast(page)
+        await expect(toast.locator('.bn-toast-line-state:not([data-off])')).toContainText(sentence)
+        await expect(toast.getByRole('button', { name: /take it off|try again/i })).toHaveCount(0)
+        await expect(toast.getByRole('button', { name: 'Undo' })).toBeVisible()
+      })
+    }
+  }
+}
 
 /* WHOLE PHOTOGRAPH, NEVER A CROP: BOTH INVENTORY PHOTOGRAPHS DRAW THE WHOLE IMAGE. `cover` cut the card's bottom edge, where
  * its number and rarity sit. A fit that never clips is the cheap check; reading the card's edge

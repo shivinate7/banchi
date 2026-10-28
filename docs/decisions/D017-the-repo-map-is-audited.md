@@ -1,4 +1,4 @@
-## D17 — The repo map is audited
+# D17 — The repo map is audited
 
 Two questions kept costing a full search to answer. They were: *what is built and what is TBD*, and *which settled decisions govern the file I am about to edit*. Both were already answered in prose. `docs/GATES.md` has the build order, and this file has the rulings. But prose has to be read whole before it can be trusted. The first question alone cost a subagent sweep and roughly 285k tokens in one session.
 

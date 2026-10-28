@@ -185,13 +185,16 @@ def _sweep(args, say) -> int:
 
     ledger_refusals: Dict[str, str] = {}
     fallback_rows: Dict[str, dict] = {}
+    # Read once: the catalog tail, `resolve_by_sku` and every chunk's `sweep` share it.
+    export_index = archive_walk.merged_export_rows_by_sku()
     rows = archive_walk.rows_from_store(
         market=market, refusals=ledger_refusals, fallback_rows=fallback_rows,
+        include_catalog=True, export_rows=export_index,
     )
     ranges = pricehistory.RANGES
     if not rows:
-        say("no card in this store carries a SKU, and no order-ledger line resolved to a "
-            "sealed subject either — nothing to sweep")
+        say("no card, order-ledger line or Riftbound catalog SKU in this store resolved to "
+            "a subject — nothing to sweep")
         return 0
 
     if ledger_refusals:
@@ -202,8 +205,9 @@ def _sweep(args, say) -> int:
         say("")
 
     say(f"{len(rows)} sku(s) subject to this pass, over {len(ranges)} range(s) "
-        f"({', '.join(ranges)}) — sold value first")
-    say(f"up to {len(rows) * len(ranges)} request(s) if none of it is already archived")
+        f"({', '.join(ranges)}) — sold value first, then the stalest catalog SKUs")
+    say(f"up to {len(rows) * len(ranges)} request(s) if none of it is already archived "
+        "(the catalog share is capped per pass)")
 
     if not args.write:
         return _preview(rows, ranges, say)
@@ -211,12 +215,13 @@ def _sweep(args, say) -> int:
     current = _read_archive(say)
     if current is None:
         return 1
+    attempts_path = archive_walk.attempts_file()
+    attempts = archive_walk.load_attempts(attempts_path)
 
     # RESOLVED BY THE SKU, NEVER BY THE CARD'S OWN READ FIELDS FIRST
     # (D254, owner's ruling 2026-09-23). Read once, here, so
     # every chunk's own `sweep()` call sees the same archive and the same export cache
     # rather than each chunk re-deriving `export_rows` off disk.
-    export_index = archive_walk.merged_export_rows_by_sku()
     _resolved, _verified, tiers = archive_walk.resolve_by_sku(rows, current, export_index)
     tier_counts: Dict[str, int] = {}
     for tier in tiers.values():
@@ -263,6 +268,11 @@ def _sweep(args, say) -> int:
             archive=current, export_rows=export_index,
         )
         all_resolved_via_ledger.extend(resolved_via_ledger)
+        # Every SKU in the chunk was sent to the market, answered or not, so each is stamped:
+        # the catalog tail orders by it (`rows_from_store`). A chunk a throttle stop never
+        # reaches is never stamped.
+        attempts.update(dict.fromkeys(chunk, int(time.time())))
+        archive_walk.save_attempts(attempts_path, attempts)
         # ONE SIGNAL, USED TWICE — whether to rewrite a 403's message and whether to treat
         # it as a throttle worth backing off for. Computed from THIS chunk's own answered
         # count too, not only earlier chunks', so a chunk that itself answers some SKUs

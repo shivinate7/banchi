@@ -1,6 +1,6 @@
 ## DEBT90 — a send notice joins the bar after the worklist lands
 
-**A send notice can join the send bar after it first draws.** The pending bar in `Pricing.tsx` draws no notice. `SendCard` and its first `GET /pipeline/sends` start only when the worklist lands. A notice stands for a day after a checked send (`STANDS_MS`), and for any open, short or unreadable receipt.
+**What.** A send notice can join the send bar after it first draws. The pending bar in `Pricing.tsx` draws no notice. `SendCard` and its first `GET /pipeline/sends` start only when the worklist lands. A notice stands for a day after a checked send (`STANDS_MS`), and for any open, short or unreadable receipt.
 
 - **Result:** with a standing notice, the sticky bar grows at landing, or one round trip later when the send status is cold, and the list moves down. D313 forbids a move the person did not make (nothing on screen moves unless the person moved it).
 - **Not fixed because** reading the sends early puts a fifth read at mount, past the Pricing mount budget of four (`app/tests/request-budget.spec.ts`). Main drew the whole bar at landing, so the notice move is not new.

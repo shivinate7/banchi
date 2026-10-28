@@ -1,4 +1,4 @@
-## D238 — Archive refusals go to review
+# D238 — Archive refusals go to review
 
 **`banchi archive sweep`'s own refusals now route to the standing review queue.** `cli/archive_review.py` is the new module. Its only write primitive is `store/queues.py:Queue.upsert` (D167). No new queue exists, and no new file format exists. `CLAUDE.md` requires the route. An ambiguity goes to the review queue with its photo. It is never guessed at, and it is never dropped silently.
 

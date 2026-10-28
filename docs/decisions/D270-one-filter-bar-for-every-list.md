@@ -1,4 +1,4 @@
-## D270 — One filter bar for every list
+# D270 — One filter bar for every list
 
 **One filter bar, `kit/filters.tsx:FilterBar`, serves every filtered list.** It is built on Capture's own picker pattern (kit-data's `Select`, `FilterChips` and `SortControl`). It opens the kit's own panel and never opens the OS menu. It is search plus one `Filters` trigger with a count badge, at every width. It carries any facet a screen hands it, in any order.
 

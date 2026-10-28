@@ -53,6 +53,8 @@ NEEDS = {
     "lsof": "lsof, which macOS ships. It is how a pid's working directory and a port's "
             "holders are read; absent, reap-selftest's port cases cannot be posed at all.",
     "sh": "any POSIX sh.",
+    "mypy": "mypy, installed by `make venv` from requirements.txt (DEBT61). MYPY_GUARD fails "
+            "loudly rather than letting the target no-op.",
     "ruff": "ruff, installed by `make venv` from requirements.txt (D82). RUFF_GUARD fails "
             "loudly rather than letting the target no-op.",
 }
@@ -270,6 +272,22 @@ CHECKS = (
         "why_off_commit_path": "",
         "gates": True,
         "governed_by": ("D58", "D68", "D92"),
+    },
+    {
+        "target": "pytypes",
+        "shard": "static",
+        "runs": "mypy --strict --follow-imports=silent store/orders.py",
+        "asserts": "store/orders.py type-checks under `mypy --strict`, alone: imports are followed "
+                   "silently, so only that file's own errors count. The one Python module held to a "
+                   "type checker so far (DEBT61). Kind: likely risk, a type slip in the ledger "
+                   "that the harness does not exercise; the owner's ruling is try-one on this "
+                   "module (waiting page, DEBT61 item 8).",
+        "needs": ("venv", "mypy"),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "The git hook runs a bare python3, and mypy lives in the venv.",
+        "gates": True,
+        "governed_by": ("D18",),
     },
     {
         "target": "css-var-check",
@@ -521,7 +539,7 @@ CHECKS = (
                    "`ORDER.json` names is present, every markdown file present is named, no "
                    "id appears in two files, and the reassembly still ends in a newline. The "
                    "duplicate arm is the one a directory newly needs — one entry copied "
-                   "rather than moved puts `## D58` in two files, which a single document "
+                   "rather than moved puts `# D58` in two files, which a single document "
                    "could not express and nothing else would notice. It does NOT hash the "
                    "live corpus: editing an entry is the normal way this corpus changes, and "
                    "a digest over the whole thing would go red on the next decision entry "

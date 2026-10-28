@@ -1,4 +1,4 @@
-## D158 — Refuse where the damage is
+# D158 — Refuse where the damage is
 
 **The primary checkout is where the damage lands, so the refusal is on serving there and not on the git command.** An earlier design, written after `/Users/shivinate/Developer/banchi` — the primary checkout, the one D138 keeps
 a supervisor alive out of over the owner's real store — was found standing on

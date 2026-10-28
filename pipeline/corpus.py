@@ -57,7 +57,7 @@ from pathlib import Path
 from decimal import Decimal, InvalidOperation
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from pipeline import decisions as decisions_mod, pricing
+from pipeline import decisions as decisions_mod, pricing, suggest
 
 FILENAME = "prices.json"
 
@@ -164,6 +164,10 @@ class Corpus:
     #: `pipeline/pricing.py`'s constant while this key said $0.29, and 293 hand-priced live
     #: listings were refused `below_floor` on the way to the upload.
     threshold: object = DEFAULT_CUTOFF
+    #: The suggestion limit (a fraction: 0.25 is 25%) and the value line (dollars), owner settings
+    #: that `pipeline/suggest.py` reads. Strings, like `threshold`. The defaults live there.
+    limit: object = str(suggest.DEFAULT_LIMIT)
+    value_line: object = str(suggest.DEFAULT_VALUE_LINE)
     answers: Dict[str, Answer] = field(default_factory=dict)
     #: run name -> the policy keys that run overrides. Empty for every run that takes the
     #: standing policy, which is expected to be almost all of them.
@@ -214,6 +218,8 @@ class Corpus:
         # discarded like the two above, but a MISSING key is the store that has never set one
         # and reads `DEFAULT_CUTOFF`, where a present-and-unusable one is refused by name.
         pricing.check_threshold(policy.get("threshold"))
+        suggest.check_setting(policy.get("limit"), suggest.DEFAULT_LIMIT, "limit")
+        suggest.check_setting(policy.get("value_line"), suggest.DEFAULT_VALUE_LINE, "value_line")
         # THE STANDING CAP IS RETIRED, AND A STORE THAT STILL HOLDS ONE IS REFUSED BY NAME
         # (D7, amended 2026-09-08). Ignoring the key would silently UNCAP a store that had
         # asked to be bounded — the same defect D86 refuses a legacy `decisions.json` for,
@@ -249,6 +255,10 @@ class Corpus:
                 if policy.get("threshold") is None
                 else str(policy["threshold"]).strip()
             ),
+            limit=str(suggest.DEFAULT_LIMIT if policy.get("limit") is None else policy["limit"]).strip(),
+            value_line=str(
+                suggest.DEFAULT_VALUE_LINE if policy.get("value_line") is None else policy["value_line"]
+            ).strip(),
             answers=answers,
             overrides={
                 str(name): dict(over)
@@ -290,6 +300,8 @@ class Corpus:
             # `policy.threshold` to draw the control, and a key that appears only once
             # somebody has changed it is a control that cannot draw its own current value.
             "threshold": self.threshold,
+            "limit": self.limit,
+            "value_line": self.value_line,
         }
         if self.overrides:
             policy["per_run"] = self.overrides
@@ -405,6 +417,8 @@ class Corpus:
             "basis": self.basis,
             "sub_threshold": self.sub_threshold,
             "threshold": self.threshold,
+            "limit": self.limit,
+            "value_line": self.value_line,
         }
         return {
             key: (over[key] if over.get(key) is not None else value)

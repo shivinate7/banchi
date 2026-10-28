@@ -1,4 +1,4 @@
-## D215 — CI runs only reachable browser specs
+# D215 — CI runs only reachable browser specs
 
 **`scripts/browser-scope.py specs` maps a change to the specs it can reach, at run time and never from a typed list.** D141 asks whether a change reaches a browser at all. This narrows which spec files a running matrix loads. It fails open in every direction. A gate that quietly narrows is worse than one that does not narrow, since the green is believed either way. Measured over 30 merged PRs, it would narrow 6 of 30. The median saving is 0 specs, so it is a small lever beside the worker count (D136).
 

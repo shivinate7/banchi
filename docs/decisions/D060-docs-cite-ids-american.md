@@ -1,4 +1,4 @@
-## D60 — Docs cite; identifiers use American spelling
+# D60 — Docs cite; identifiers use American spelling
 
 **The referenced docs are read on demand, not loaded in full. Their prose is dense American technical English.** The owner ruled that the prose be rewritten denser.
 
@@ -42,7 +42,7 @@ Measured at **94 paragraphs over 600 bytes, 77,811 bytes**, across 433 cross-ref
 
 **Breaking the hook is silent, and breaking the audit is loud. So the silent half needs a guard.** `scripts/prose-guard.py` is that guard. It is wired into `scripts/docs-audit.py` as the `decision structure` row.
 
-These are frozen, because a parser reads them. The `## D<n> — <title>` heading, with its dash separator. `docs/GATES.md`'s seven pass-criteria sentences, word for word. Its `### Tn` headings. Its `Gate X … PASSED` heading lines, and every line there beginning with a digit and a period. `docs/DESIGN.md`'s `## Tokens` heading, with the first fenced block under it, and its two parenthesized reason-code lists.
+These are frozen, because a parser reads them. The `# D<n> — <title>` title line, with its dash separator. `docs/GATES.md`'s seven pass-criteria sentences, word for word. Its `### Tn` headings. Its `Gate X … PASSED` heading lines, and every line there beginning with a digit and a period. `docs/DESIGN.md`'s `## Tokens` heading, with the first fenced block under it, and its two parenthesized reason-code lists.
 
 **Three phrasings fail a commit, and they are easy to write by accident.** A sentence naming an audit row by its position rather than its label. An unbalanced fence, which reclassifies every later prose line as code. And an ordinary English phrase beginning *make* placed inside backticks, which reads as a Makefile target.
 

@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status restart-now map explain harness harness-1 harness-2 harness-3 harness-part check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint typecheck unit venv launch-config worktree-setup worktree-provision-selftest worktree-create-selftest session-teardown-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent backup backup-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
+.PHONY: help status restart-now map explain harness harness-1 harness-2 harness-3 harness-part check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint pytypes typecheck unit venv launch-config worktree-setup worktree-provision-selftest worktree-create-selftest session-teardown-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent backup backup-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -58,6 +58,11 @@ VENV_GUARD = @[ ! -x .venv/bin/python ] || [ -f .venv/.deps-stamp -a ! requireme
 # ruff (D82) is a requirements.txt entry, not a system binary — same reasoning as NPM_GUARD:
 # a lint target that silently no-ops without it would let `make check` go green having
 # checked nothing.
+MYPY_GUARD = @$(PYTHON) -m mypy --version >/dev/null 2>&1 || { \
+	echo "mypy is not installed in $(PYTHON)."; \
+	echo "  Fix: make venv"; \
+	exit 1; }
+
 RUFF_GUARD = @$(PYTHON) -m ruff --version >/dev/null 2>&1 || { \
 	echo "ruff is not installed in $(PYTHON)."; \
 	echo "  Fix: make venv"; \
@@ -1596,6 +1601,15 @@ lint:
 	$(RUFF_GUARD)
 	@$(PYTHON) -m ruff check .
 
+# mypy --strict over store/orders.py, the one Python module held to a type checker (DEBT61, the
+# owner's word: try one module). `--follow-imports=silent` reports only that file's own errors; the
+# rest of the tree is untyped and stays unchecked. Nothing is added to the next module until this
+# one has run clean for a while.
+pytypes:
+	$(VENV_GUARD)
+	$(MYPY_GUARD)
+	@$(PYTHON) -m mypy --strict --follow-imports=silent store/orders.py
+
 # The unit tier (docs/TESTS.md): Playwright's runner, no browser, no dev server.
 unit:
 	$(NPM_GUARD)
@@ -1709,11 +1723,12 @@ price-refresh:
 price-refresh-agent:
 	@python3 scripts/price-refresh-daily.py --agent $(ARGS)
 
-# THE NIGHTLY BACKUP (DEBT67): photos/, captures/ and a SQLite snapshot of the store copied to the iCloud
-# Drive folder `Banchi backup`, never deleting there. `backup` runs one copy now over THIS checkout's
-# store. `backup-agent` installs the launchd job (owner's Mac, main tree only), ARGS=--remove removes it.
+# THE ONE-TIME BACKUP (DEBT67): photos/, captures/ and a SQLite snapshot of the store copied to the iCloud
+# Drive folder `Banchi backup`, never deleting or overwriting there. `backup` runs one copy now over THIS
+# checkout's store; ARGS=--verify checks the copy read-only. `backup-agent` installs the launchd job
+# (owner's Mac, main tree only; the owner has not installed it), ARGS=--remove removes it.
 backup:
-	@$(PYTHON) scripts/backup-daily.py
+	@$(PYTHON) scripts/backup-daily.py $(ARGS)
 backup-agent:
 	@python3 scripts/backup-daily.py --agent $(ARGS)
 

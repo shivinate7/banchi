@@ -167,11 +167,14 @@ MATCH_SWEEP = "match_sweep"
 # `slab_snapshots`, `slab_sales` and `slab_sale_links` (`store/slabs.py`). Purely additive, `_add_readings`'s case
 # exactly: four tables nothing older has, so there is nothing to backfill, and an empty set
 # is the correct state for an upgraded store because no slab was ever read before.
+# SIXTEEN, FOR THE DAILY TCGCSV READ (`store/dailyprices.py`). `_add_daily_prices` adds `daily_prices` and
+# `daily_price_updates`: `_add_slabs`'s case, tables nothing older has. An upgraded store's history starts empty
+# because the source's past days are withdrawn and no build could have read them.
 # NO VERSION FOR `cards_run` AND `events_event`. `_add_run_event_indexes` creates them
 # (`cards.select(run=...)`, `events_named`) in `_upgrade` on every upgrade and in
 # `_ensure_run_event_indexes` on every open at the current version, so a store stamped 14
 # gains them without a bump, which `harness/tests/t7/send_markdown.py` pins at 15.
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
 LEGACY_INVENTORY = "inventory.json"
@@ -264,6 +267,10 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     ),
     "slab_sales": ("date",),
     "slab_sale_links": ("slab",),
+    # `store/dailyprices.py`: TCGCSV's current prices, one row per (product, printing, source day), never
+    # cleared, and the accounting of which source updates were read whole.
+    "daily_prices": ("product_id", "sub_type", "day", "group_id", "updated"),
+    "daily_price_updates": ("updated", "day", "finished", "at"),
 }
 
 # Columns stored as REAL. `ord`, the order key (D294), is a fraction, and TEXT affinity would
@@ -273,7 +280,7 @@ _REAL = {"ord"}
 _INTEGER = {
     "box", "bid", "idx", "pushed", "staged", "live", "cleared_by_human", "pid", "at", "skus",
     "product_id", "width_days", "quantity", "transactions", "requested", "answered", "refused",
-    "first_seen", "last_seen", "cl_confidence", "estimated_confidence",
+    "first_seen", "last_seen", "cl_confidence", "estimated_confidence", "group_id", "finished",
 }
 
 _INDEXES = (
@@ -573,6 +580,8 @@ def _upgrade(
                 _add_price_history_summary(conn)  # D219, amended 2026-09-28
             if stored < 15:
                 _add_slabs(conn)             # D320
+            if stored < 16:
+                _add_daily_prices(conn)      # the daily TCGCSV read
             _add_run_event_indexes(conn)
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
@@ -1079,6 +1088,14 @@ def _add_slabs(conn: sqlite3.Connection) -> None:
         conn.execute(_ddl(table, TABLES[table]))
     conn.execute("CREATE INDEX IF NOT EXISTS slab_snapshots_cert ON slab_snapshots(cert)")
     conn.execute("CREATE INDEX IF NOT EXISTS slab_sale_links_slab ON slab_sale_links(slab)")
+
+
+def _add_daily_prices(conn: sqlite3.Connection) -> None:
+    """Schema 16: `daily_prices` and `daily_price_updates` (`store/dailyprices.py`).
+
+    `_add_slabs`'s case: two tables nothing older has, so nothing to backfill."""
+    for table in ("daily_prices", "daily_price_updates"):
+        conn.execute(_ddl(table, TABLES[table]))
 
 
 def _add_captured_at_index(conn: sqlite3.Connection) -> None:

@@ -10,7 +10,13 @@ and does the one thing this module exists to do: ask the live endpoint for every
 turn what it hands back into `store/pricearchive.py:Bucket` rows keyed the way that module
 argues they must be.
 
-THE SUBJECT IS EVERY DISTINCT SKU THE `cards` TABLE NAMES. A card keeps its `sku` for as
+THE SUBJECT SET HAS THREE SOURCES, `cards` FIRST: the `cards` table, then (given a
+`Market`) the order ledger's sealed and rescued lines, then (given `include_catalog`, which
+the sweep always passes) up to `CATALOG_SKUS_PER_PASS` Riftbound Near Mint, Near Mint Foil
+and Unopened SKUs from the `skus` table, stalest first, for a whole-set sold-price history
+(D231). The rest of this paragraph describes the first source.
+
+THE `cards` SOURCE IS EVERY DISTINCT SKU THE `cards` TABLE NAMES. A card keeps its `sku` for as
 long as it exists in the store, sold or not — D26/D134 retire a box and reclaim a sold card's
 photograph, but the record and its SKU stay (`store/master.py:STATES` includes `sold` as a
 state a card carries, never a deletion) — so "every name the owner has sold or holds" is
@@ -58,6 +64,7 @@ D222):
 
 from __future__ import annotations
 
+import contextlib
 import json
 import time
 from decimal import Decimal, InvalidOperation
@@ -65,6 +72,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Protocol, Tuple
 
 from pipeline import games, join, tcgcsv
+from store import files
 from store import orders as order_store
 from store.pricearchive import RANGE_WIDTH_DAYS, Bucket, PriceArchive, Source, _key
 from store.session import Store
@@ -74,6 +82,13 @@ from store.session import Store
 # whole pass (D222). Not tuned to network throughput; `measured_pace`
 # below is what answers "how fast", this only answers "how much unwritten work at once".
 CHUNK_SKUS = 20
+
+# At most this many catalog-only SKUs (`rows_from_store(include_catalog=True)`) join one pass.
+# The whole Riftbound catalog is thousands of SKUs and each costs a request per range, so
+# an unbounded tail would let one nightly refresh run for hours while it holds the refresh
+# lock. The tail is ordered stalest first, so the cap rotates through the whole catalog
+# across nights: never-asked SKUs first, then the longest unasked or unread.
+CATALOG_SKUS_PER_PASS = 600
 
 # How long a SKU's own buckets are trusted fresh enough that a RESUMED SWEEP skips it
 # (D224), NEVER `pipeline/pricehistory.py:HISTORY_TTL_SECONDS` — that
@@ -563,6 +578,11 @@ def rows_from_store(
     market: Optional[_MarketLike] = None,
     refusals: Optional[Dict[str, str]] = None,
     fallback_rows: Optional[Dict[str, dict]] = None,
+    *,
+    include_catalog: bool = False,
+    catalog_limit: int = CATALOG_SKUS_PER_PASS,
+    export_rows: Optional[Dict[str, tcgcsv.Row]] = None,
+    attempts: Optional[Dict[str, int]] = None,
 ) -> Dict[str, dict]:
     """`sku -> export-shaped row`, one per distinct SKU this store can price a subject for,
     ORDERED BY WHAT THAT SKU HAS ACTUALLY SOLD FOR
@@ -580,7 +600,8 @@ def rows_from_store(
     machinery — a SKU with no ledger line at all simply has no entry here, silently, since
     "no fallback exists" is not itself a refusal of anything this function was asked for.
 
-    THE SUBJECT SET IS TWO SOURCES, `cards` FIRST. A FULL-TABLE `select`, NOT `.values()` —
+    THE SUBJECT SET IS TWO SOURCES, `cards` FIRST, AND A THIRD, THE CATALOG TAIL BELOW, WHEN
+    ASKED FOR. A FULL-TABLE `select`, NOT `.values()` —
     `select` hands back only the six columns this needs as plain tuples, never a `Card`
     object per row (a per-row `Card` object over a table-wide walk is the cost, avoided
     the same way `cli/cmd_reprice.py` and `cli/resolve.py` already avoid it elsewhere in
@@ -603,6 +624,26 @@ def rows_from_store(
     `refusals`, when given, is filled in place with every ledger SKU this pass could not
     resolve and why — `CLAUDE.md`'s both-directions rule, carried past this function's own
     return shape rather than dropped at the boundary.
+
+    THE CATALOG IS THE THIRD SOURCE, LAST, WHEN `include_catalog` IS TRUE: every Riftbound
+    SKU in the store's `skus` table (`merged_export_rows_by_sku`, or `export_rows` when the
+    caller has already read it) in a Near Mint string or `Unopened`, so the sweep builds a
+    whole-set sold-price history and not only the owner's own names. A `cards` or ledger row
+    always wins over a catalog row. A ledger refusal whose SKU has an included catalog row is
+    no longer a refusal: it is a sold subject built from that row, and ranks by revenue in the
+    head with the other sold SKUs. The head is never capped. Every other catalog SKU forms the
+    tail, appended after the head (merging it before `rank_by_revenue` would let a catalog
+    SKU outrank a card the owner holds), STALEST FIRST: a SKU never asked about and with no
+    archived bucket, then by the newest of its bucket `at` across every range and its last
+    attempt in `load_attempts`, SKU as the tiebreak. NEWEST, NOT OLDEST: the archive never
+    deletes, so a range that stopped answering keeps its old `at` for good and would pin the
+    SKU to the front every night. The attempt stamp covers a SKU that answered no bucket or
+    was refused: it leaves no `at`, so by buckets alone it would look never-read every night
+    and the cap would re-ask the same silent SKUs. At most `catalog_limit` of them
+    (`CATALOG_SKUS_PER_PASS`). `attempts` is that stamp table when the caller has it; omitted,
+    it is read from `attempts_file()`. Needs no `market`: a `skus` row is already export-shaped.
+    Default off, so `pipeline/productview.py:row_for_sku` and every other bare caller keep
+    D219's cards-and-ledger set.
     """
     snapshot = snapshot if snapshot is not None else Store().read()
     unranked: Dict[str, dict] = {}
@@ -615,6 +656,7 @@ def rows_from_store(
         unranked[sku] = _export_row(sku, name, number, set_name, condition, game, number_key)
     card_skus = set(unranked.keys())
 
+    ledger_refusals: Dict[str, str] = {}
     if market is not None:
         ledger_rows, ledger_refusals = ledger_subject_rows(
             snapshot.ledger, unranked.keys(), market
@@ -629,8 +671,39 @@ def rows_from_store(
             )
             fallback_rows.update(card_fallback)
 
+    tail: Dict[str, dict] = {}
+    if include_catalog:
+        wanted = games.near_mint_conditions("riftbound") | {tcgcsv.SEALED_CONDITION}
+        if export_rows is None:
+            export_rows = merged_export_rows_by_sku(snapshot)
+        for sku, row in export_rows.items():
+            if (
+                sku not in unranked
+                and str(row.get(tcgcsv.CONDITION_COLUMN, "")).strip() in wanted
+                and games.game_for_product_line(row.get(tcgcsv.PRODUCT_LINE_COLUMN, ""))
+                == "riftbound"
+            ):
+                tail[sku] = row
+        for sku in [sku for sku in ledger_refusals if sku in tail]:
+            unranked[sku] = tail.pop(sku)
+            del ledger_refusals[sku]
+            if refusals is not None:
+                refusals.pop(sku, None)
+
     revenue = revenue_by_sku(snapshot.ledger)
-    return {sku: unranked[sku] for sku in rank_by_revenue(unranked.keys(), revenue)}
+    ranked = {sku: unranked[sku] for sku in rank_by_revenue(unranked.keys(), revenue)}
+    if tail:
+        index = freshness_index(snapshot.archive.entries.values())
+        if attempts is None:
+            attempts = load_attempts(attempts_file())
+
+        def staleness(sku: str) -> Tuple[int, int, str]:
+            newest = max(max(index.get(sku, {}).values(), default=0), attempts.get(sku, 0))
+            return (1, newest, sku) if newest else (0, 0, sku)
+
+        for sku in sorted(tail, key=staleness)[:catalog_limit]:
+            ranked[sku] = tail[sku]
+    return ranked
 
 
 def sweep(
@@ -939,3 +1012,26 @@ def save_pace(
         temporary.replace(path)
     except OSError:
         pass
+
+
+def attempts_file() -> Path:
+    """Where `save_attempts` keeps its table: the pace file's folder, `.market-cache`. The
+    CLI's `market_cache_dir` names the same folder; this module may not import `cli`."""
+    return files.inventory_dir() / ".market-cache" / "archive-attempts.json"
+
+
+def load_attempts(path: Path) -> Dict[str, int]:
+    """`sku -> the time a pass last sent a request for it`, answered or not. A missing or
+    unreadable file is an empty table, never an error: the worst case is a SKU asked twice."""
+    try:
+        asked = json.loads(path.read_text("utf-8"))["asked"]
+        return {str(sku): int(at) for sku, at in asked.items()}
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return {}
+
+
+def save_attempts(path: Path, attempts: Dict[str, int]) -> None:
+    """Persist the whole table, atomically. Same contract as `save_pace`: a table that
+    cannot be written makes the next order staler, never wrong, so `OSError` is swallowed."""
+    with contextlib.suppress(OSError):
+        files.write_atomic(path, json.dumps({"asked": attempts}).encode("utf-8"))

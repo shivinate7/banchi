@@ -541,8 +541,11 @@ COMPONENTS = [
             # `pipeline/pricearchive.py`, proved independently by `make pricearchive-selftest`.
             "cmd_pricearchive.py": {"does": "`archive sweep` builds a `Market` before it "
                                             "reads `rows_from_store(market=..., "
-                                            "refusals=...)` (sold value first, sealed "
-                                            "product folded in), prints any ledger SKU that "
+                                            "refusals=..., include_catalog=True)` (sold "
+                                            "value first, sealed product folded in, then up "
+                                            "to `CATALOG_SKUS_PER_PASS` Riftbound catalog "
+                                            "SKUs, stalest first), "
+                                            "prints any ledger SKU that "
                                             "could not be resolved to a subject, then "
                                             "previews: subject count, what the archive "
                                             "already holds, what is fresh enough to skip. "
@@ -1031,6 +1034,16 @@ COMPONENTS = [
                                    "is deliberately no policy.floor.",
                            "governed_by": ["D8", "D9", "D86", "D99"],
                            "tested_by": ["T5"]},
+            "suggest.py": {"does": "pricing by suggestion, pure over plain dicts (spec "
+                                   "docs/specs/pricing-suggest.md): `fired` names which of three "
+                                   "triggers (market moved, unsold above market, undercut with "
+                                   "shipping) fire on a live listing, and `review` sorts every "
+                                   "listing into Needs you, Suggested changes or Going at the "
+                                   "rule. The price is pricing.list_price at today's market, "
+                                   "never a second copy of the rule. `limit` and `value_line` "
+                                   "are corpus policy keys that default here.",
+                           "governed_by": ["D9"],
+                           "tested_by": ["T5"]},
             "routing.py": {"does": "which queue a card lands in — batch script v2 section 5.4. "
                                    "`NAME_DISPUTED` is the second reason here the JOIN writes "
                                    "OVER a ladder resolution that succeeded: the number found "
@@ -1296,7 +1309,11 @@ COMPONENTS = [
             # `rows_from_store` names and hands `store/pricearchive.py` what came back,
             # keyed so D278's overlapping ranges never collide.
             "pricearchive.py": {"does": "`rows_from_store` reads the `cards` table for "
-                                        "every distinct, non-empty SKU, builds one "
+                                        "every distinct, non-empty SKU (and, with "
+                                        "`include_catalog`, appends up to "
+                                        "`CATALOG_SKUS_PER_PASS` Riftbound `skus` rows "
+                                        "after the revenue-ranked head, stalest first by the newest "
+                                        "bucket or `load_attempts`/`save_attempts` stamp), builds one "
                                         "export-shaped row per SKU (Product Line resolved "
                                         "through `pipeline/games.py`), and, when handed a "
                                         "`Market`, widens the subject set to sealed product "
@@ -1346,6 +1363,21 @@ COMPONENTS = [
                                         "for an already-fresh SKU, and D-pricehistory-"
                                         "resolves-by-sku's three tiers, each with its own "
                                         "mutation guard."},
+            # THE DAILY TCGCSV READ. TCGCSV withdrew its past-days archive, so a whole-market
+            # price history builds only by saving the current file once per source update.
+            "dailyprices.py": {"does": "`run_pass` asks `last-updated.txt` first and skips when "
+                                       "that update is already saved whole. Otherwise it reads "
+                                       "Riftbound's (category 89) group list and one prices file per "
+                                       "group, with a pause between requests, and saves one row per "
+                                       "product and printing under the stamp's UTC date. A failed "
+                                       "group is named and left for the next pass, which asks for "
+                                       "that group only, and so does one whose payload is unreadable or says "
+                                       "`success: false`. One write per pass. A throttle answer is "
+                                       "waited out, and a second one stops the pass. Uses `pricehistory`'s "
+                                       "`Market`, `fetch_json` and `fetch_text`, never a second client.",
+                               "governed_by": ["D88", "D219", "D325"],
+                               "note": "PROVED BY T7's `daily_prices` group, no network call. "
+                                       "`scripts/price-refresh-daily.py` calls it."},
             # THE PER-PRODUCT VIEW'S OWN READ (D227). Archive-first,
             # live-fallback only when `store/pricearchive.py` has never seen the SKU at all.
             # Never writes — a sweep is still a press, never this route.
@@ -2134,6 +2166,15 @@ COMPONENTS = [
             # THE STORE-OWNED SKU TABLE (identity-follows-sku.md §3.2, lane 0 — owner's
             # ruling, 2026-09-24: "yes I'd been saying we build this"). `price_history`'s
             # shape and not `readings`'s: never a full replace, never a delete.
+            # THE DAILY TCGCSV READ'S TABLES. `price_history`'s never-delete rule, keyed on the
+            # source's own update date and never the date of the read.
+            "dailyprices.py": {"does": "`daily_prices` (one row per product, printing and source "
+                                       "update day, never deleted) and `daily_price_updates` (one row "
+                                       "per source stamp: the groups saved and whether every group "
+                                       "was, which is what lets a pass skip). `DailyPrices.save` adds "
+                                       "a pass's rows and marks its groups in one `Store.write()`.",
+                               "governed_by": ["D88", "D219", "D325"],
+                               "note": "PROVED BY T7's `daily_prices` group."},
             "skus.py": {"does": "`skus` — one row per TCGplayer Id this repo has ever read "
                                 "out of a cached export: the six fact cells verbatim "
                                 "(`product_line`, `set_name`, `product_name`, `number`, "
@@ -4355,7 +4396,7 @@ COMPONENTS = [
                 "does": "Performed the split of docs/debts/ into docs/debts/, and proves "
                         "it lost nothing — split-decisions.py's chunk model applied to "
                         "docs/debts/'s plain-numbered `## <n> — <title>` headings instead "
-                        "of `## D<id>`. `--verify REF` diffs a reassembly against the "
+                        "of `# D<id>`. `--verify REF` diffs a reassembly against the "
                         "pre-split bytes; `--verify-split REF` re-establishes that later "
                         "from git; `--selftest` is the ongoing claim, run as "
                         "`make debts-selftest`. Section 15's deliberate gap (D120 closed it) "
@@ -4441,7 +4482,7 @@ COMPONENTS = [
             "prose-guard.py": {
                 "does": "D60's two guards over the four docs CLAUDE.md names. `--structure` asserts "
                         "what decision-context.py needs and cannot report for itself — a "
-                        "`## D<n> — <title>` heading, every `**bold**` closed on its own "
+                        "`# D<n> — <title>` heading, every `**bold**` closed on its own "
                         "line, and at least one ruling per entry — because that hook exits "
                         "0 on everything and degrades in silence. `--facts` diffs the hard "
                         "tokens of each entry between two versions of a file, which is the "
@@ -5164,27 +5205,36 @@ COMPONENTS = [
                         "every open run, then the Trends preload), each step leaving a note `#/pricing` "
                         "shows. After a good refresh it runs `archive sweep --write` in the same process "
                         "(`cli.cmd_pricearchive`, at the saved pace, a second throttle stops it with the "
-                        "buckets kept, exit 0), and adds the result to the note. Calls no paid read "
+                        "buckets kept, exit 0), and adds the result to the note. Before the sweep, and "
+                        "with `--no-sweep` too, and even after a failed refresh, it runs "
+                        "`pipeline.dailyprices.run_pass`, which saves TCGCSV's current Riftbound "
+                        "prices once per source update and notes each pass in the note file and the log, no screen, as the `daily_prices` "
+                        "step (D325). Calls no paid read "
                         "and changes no price at TCGplayer. `--agent` installs "
                         "the daily launchd job (main tree only), `--agent --remove` removes it. "
                         "The installer is `launchagent.py`'s; `demo-mirror-daily.py` keeps its own copy (D295 fence).",
                 "note": "PROVED BY T7's `price_moves` group: the note is written on success and "
                         "on refusal, and the script's own imports are asserted to reach only "
-                        "the note writer, the live fetch's module and the one archive sweep press, "
+                        "the note writer, the live fetch's module, the one archive sweep press and the "
+                        "daily TCGCSV read, and that the read runs whatever the refresh did, "
                         "and that a good refresh is swept, a failed one skipped and a second "
                         "throttle stops the sweep.",
-                "governed_by": ["D104", "D189", "D222", "D224", "D278", "D295"],
+                "governed_by": ["D104", "D189", "D222", "D224", "D278", "D295", "D325"],
             },
             "backup-daily.py": {
-                "does": "the nightly copy to iCloud Drive on the owner's Mac (first copy of DEBT67): "
-                        "`photos/` and `captures/` as files, skipped by `stat` and never deleted in the "
-                        "destination, plus a SQLite online-backup snapshot of the store from a read-only "
-                        "connection. The destination is `BANCHI_BACKUP_DEST` or `Banchi backup` in "
-                        "CloudDocs, and its parent must exist. Leaves one line in `~/.banchi/backup-last-run` "
-                        "that `make status` shows. `--agent` installs the nightly launchd job (main tree "
-                        "only), `--agent --remove` removes it, through `launchagent.py`.",
+                "does": "the one-time copy to iCloud Drive on the owner's Mac, run by hand "
+                        "(first copy of DEBT67; the launchd agent is not installed): `photos/` and "
+                        "`captures/` as files, never overwritten and never deleted in the destination. "
+                        "A destination file with another size or mtime is left alone and fails the "
+                        "run as `differs`. A SQLite online-backup snapshot of the store from a "
+                        "read-only connection must pass `integrity_check` before it moves in, and is "
+                        "also written once per day as `store-<date>.sqlite`. `--verify` hashes source "
+                        "against destination, read-only. The destination is `BANCHI_BACKUP_DEST` or "
+                        "`Banchi backup` in CloudDocs, and its parent must exist. Leaves one line in "
+                        "`~/.banchi/backup-last-run` that `make status` shows. `--agent` and "
+                        "`--agent --remove` stay, through `launchagent.py`.",
                 "note": "PROVED BY T7's `backup` group (harness/tests/t7/backup.py).",
-                "governed_by": ["D43", "D88", "D89", "D172"],
+                "governed_by": ["D26", "D43", "D88", "D89", "D172"],
             },
             "demo-mirror-daily.py": {
                 "does": "the weekly demo refresh on the owner's Mac (the owner can also run "
@@ -6480,7 +6530,7 @@ COMPONENTS = [
                                           "dismiss, which docs/DESIGN.md bans. This is where D138's "
                                           "server-restart notice went when `ServerReloaded` was "
                                           "deleted.",
-                                  "governed_by": ["D5", "D28", "D138", "D57", "D94"]},
+                                  "governed_by": ["D5", "D28", "D138", "D57", "D94", "D313"]},
             "src/kit/undo.ts": {"does": "THE ONE `U` PRIMITIVE (UN-10, `docs/specs/undo.md` §11.3): "
                                         "`useUndoHotkey` arms `U` for the newest reversible write on "
                                         "a screen, in place of five screens' own near-identical "
@@ -7523,14 +7573,14 @@ COMPONENTS = [
                         "a push (D201). Kit primitives only: Section, .bn-list/.bn-list-row, "
                         "EmptyState/Notice/Loading for the three states a fetch can be in.",
                 "governed_by": ["D31", "D67", "D172", "D196", "D201", "D221", "D258", "D264",
-                                "D285", "D293", "D301"],
+                                "D285", "D293", "D301", "D313"],
             },
             "src/InventorySets.css": {
                 "does": "layout for the set view's rows — the card number column, the "
                         "name column, and the row's own cursor. Everything else (the section "
                         "head, the count, the list frame) is the kit's own .bn-section/"
                         ".bn-list, unrepeated here.",
-                "governed_by": ["D293"],
+                "governed_by": ["D293", "D313"],
             },
             "src/BoxOps.tsx": {
                 "does": "D20's box object, made visible and editable ON THE BROWSE'S BOX HEADER "
@@ -8047,6 +8097,19 @@ COMPONENTS = [
                                         "be grepped, and a summary is the second vocabulary that "
                                         "rule exists to refuse.",
                                 "governed_by": ["D33", "D39", "D94"]},
+            "src/takeOff.ts": {"does": "the master-set take-off's one vocabulary: where a take-off "
+                                       "stands as the screens say it (offer, sent, failed, matches, "
+                                       "onway, nosession), one card's press with every refusal read "
+                                       "as a view, and one entry of the owed list's press answered "
+                                       "the same way. Read by the retire receipt and the send card, so "
+                                       "a press has the same words wherever it is made.",
+                               "governed_by": ["D100", "D196", "D269"]},
+            "src/TakeOffLine.tsx": {"does": "the take-off line on a master-set retire receipt: Take It "
+                                            "Off TCGplayer at the pull and the answer in the same place, "
+                                            "drawn in the toast kit's changing line. The toast waits "
+                                            "while the press runs. Whatever is left undone waits on the "
+                                            "send card's owed list.",
+                                    "governed_by": ["D100", "D118", "D196", "D313"]},
             "src/SendCard.tsx": {"does": "THE SEND CARD on Pricing's send bar: one press from "
                                          "priced to live (D273). The "
                                          "press waits for the screen's own save, then one request "
@@ -8058,7 +8121,7 @@ COMPONENTS = [
                                          "confirmed with Take them back, and the check after the "
                                          "lag. No pipeline word reaches the screen (D196).",
                                  "governed_by": ["D86", "D99", "D105", "D273", "D118", "D196",
-                                                 "D269", "D277"]},
+                                                 "D269", "D277", "D313"]},
             "src/SendCard.css": {"does": "the send card's own rows: the press and its two quiet "
                                          "doors on one line that wraps as a unit, the download "
                                          "door, and the card lists under a notice. On a phone "

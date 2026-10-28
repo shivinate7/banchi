@@ -4,7 +4,14 @@
 
 .inventory-sets { display: flex; flex-direction: column; gap: var(--bn-4); }
 
-.sets-picker { max-width: 22rem; }
+.sets-controls { display: flex; flex-direction: column; align-items: flex-start; gap: var(--bn-3); }
+
+.sets-picker { max-width: 22rem; width: 100%; }
+
+/* ONE LINE FOR THE MARK, THE HEIGHT OF A PILL, ON EVERY TILE (D313). */
+.sets-tile-mark { min-block-size: var(--bn-pill-h); display: flex; }
+
+.sets-empty { grid-column: 1 / -1; }
 
 .sets-header {
   font-size: var(--bn-fs-sm);

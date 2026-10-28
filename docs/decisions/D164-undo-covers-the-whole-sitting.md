@@ -1,4 +1,4 @@
-## D164 — Undo covers the whole sitting
+# D164 — Undo covers the whole sitting
 
 **Two figures on the capture screen were filtered by `shot.card.box === box`.** That compares against the CURRENT value of the Box field. One of the two decides what a keypress DELETES.
 

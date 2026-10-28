@@ -1,6 +1,6 @@
 ## DEBT70 — realized prices inform no listing rule
 
-**Gap.** `#/product` shows what this seller got for a product against the archived market on each sale date (`GET /pipeline/products/<sku>/realized`, `pipeline/realized.py`). It is a read-only diagnostic. Nothing prices, lists or re-prices from it.
+**What.** `#/product` shows what this seller got for a product against the archived market on each sale date (`GET /pipeline/products/<sku>/realized`, `pipeline/realized.py`). It is a read-only diagnostic. Nothing prices, lists or re-prices from it.
 
 **How it is fed.** The server reads an OrderWand sales export in place, from the path in `BANCHI_SALES_EXPORT`. With none set, the screen says so and reads nothing. The file holds buyer names. `read_sales` drops every column but nine at parse time. No copy of the file, and no buyer value, belongs in the tree, a fixture or a log.
 

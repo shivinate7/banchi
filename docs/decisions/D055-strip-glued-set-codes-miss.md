@@ -1,4 +1,4 @@
-## D55 — Strip glued set codes only after a miss
+# D55 — Strip glued set codes only after a miss
 
 **A set code the model glued onto the number (`UNL - 120/219`, `UNL / 120/219`) is removed by its shape, and only after the exact key has missed.** The read was right about the card and wrong about the field, and the separator is arbitrary (`•` and `-` in one box). Enumerating separators loses, and `rsplit("/")` over `120/219` yields `219`, another card's identifier.
 

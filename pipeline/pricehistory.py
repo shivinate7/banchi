@@ -976,7 +976,7 @@ def _worth_retrying(exc: PriceHistoryError) -> bool:
 def fetch_json(
     url: str, timeout: float = ATTEMPT_TIMEOUT_SECONDS, user_agent: str = USER_AGENT
 ) -> Dict:
-    """GET a URL and parse JSON. THE ONLY IMPURE FUNCTION IN THIS MODULE.
+    """GET a URL and parse JSON. THE ONLY IMPURE FUNCTION IN THIS MODULE, with `fetch_text`.
 
     Everything above is a pure function of a payload and everything below takes this as an
     argument, so the harness reaches all of it with a committed fixture and never a socket.
@@ -998,6 +998,29 @@ def fetch_json(
     errors into this module's three and prints one stderr line per final failure, never one per
     attempt. `_monotonic` and `_sleep` are handed in, looked up here at call time.
     """
+    body = _get(url, timeout, user_agent)
+    try:
+        return json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        print(f"price service {url}: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        raise Unreachable("The price service sent back something that could not be read. Try again in a moment.") from exc
+
+
+def fetch_text(
+    url: str, timeout: float = ATTEMPT_TIMEOUT_SECONDS, user_agent: str = USER_AGENT
+) -> str:
+    """`fetch_json`'s twin for a text file (tcgcsv's `last-updated.txt`): the same request, errors and User-Agent
+    knob, the body decoded as UTF-8 and stripped of its trailing newline."""
+    body = _get(url, timeout, user_agent)
+    try:
+        return body.decode("utf-8").strip()
+    except UnicodeDecodeError as exc:
+        print(f"price service {url}: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        raise Unreachable("The price service sent back something that could not be read. Try again in a moment.") from exc
+
+
+def _get(url: str, timeout: float, user_agent: str) -> bytes:
+    """The one request both fetchers make, its errors turned into this module's three."""
     try:
         body = net.request(url, headers={"User-Agent": user_agent}, timeout=timeout, clock=_monotonic, sleep=_sleep)
     except net.Offline as exc:
@@ -1024,11 +1047,7 @@ def fetch_json(
         reason = http.client.responses.get(exc.status, "an error")
         print(f"price service {url}: HTTP {exc.status} {reason}", file=sys.stderr, flush=True)
         raise Unreachable(f"The price service answered '{reason.lower()}'. Try again in a moment.") from exc
-    try:
-        return json.loads(body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        print(f"price service {url}: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
-        raise Unreachable("The price service sent back something that could not be read. Try again in a moment.") from exc
+    return body
 
 
 Fetcher = Callable[[str], Dict]

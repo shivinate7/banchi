@@ -1,4 +1,4 @@
-## D43 — Each checkout gets its own port
+# D43 — Each checkout gets its own port
 
 **Every checkout derives its own dev and capture ports from its own path, because every checkout already has its own store.** `store/files.py:home()` has always defaulted to `REPO_ROOT`, the checkout the code runs from. So each git worktree has its own `inventory/`, `runs/` and `captures/`. The capture server's port was the constant `8000` in all of them. `app/src/server.ts` asked for `http://localhost:8000` whichever tree served it.
 

@@ -1,4 +1,4 @@
-## D63 — Order sync writes only the feed's map
+# D63 — Order sync writes only the feed's map
 
 **The order ledger (`store/orders.py`, one record per `{source}:{order_number}`) has two top-level maps.** `orders` is what the feed said and is replaced wholesale on every sync. `fulfilment` is what we did, and `ingest` cannot reach it. The resolver's answer (which copies fill a line) is recomputed on every read, because it is true of one snapshot (D36). An order happened outside this machine, cannot be re-derived, and is stored.
 

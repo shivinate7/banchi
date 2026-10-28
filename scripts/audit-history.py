@@ -87,7 +87,7 @@ AUDIT_DATA = ["scripts/machine-words.json", "scripts/machine-words-allow.json"]
 # tree says nothing about drift: `git archive` omits every gitignored path, which is what
 # produced phantom harness/images/ findings in the hand-run version of this.
 #
-# Kept literal on purpose. An earlier draft also swallowed "no `## D<n>` heading", which
+# Kept literal on purpose. An earlier draft also swallowed "no `# D<n>` heading", which
 # silently zeroed the decision-ids-in-code row — a citation pointing at a decision that
 # did not exist yet is the check WORKING, and the hand classification scored two of them.
 # Widening this regex costs real catches, and costs them invisibly.

@@ -1,4 +1,4 @@
-## D91 — Order fetch counts by status first
+# D91 — Order fetch counts by status first
 
 **The fetch walks the search pages whole and counts by the status string TCGplayer gave each order.** Only the statuses the operator ticks are detailed.
 

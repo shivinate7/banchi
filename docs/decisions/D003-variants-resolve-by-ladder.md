@@ -1,4 +1,4 @@
-## D3 — Variants resolve by a fixed ladder
+# D3 — Variants resolve by a fixed ladder
 
 **Normal, reverse holo and holo resolve per card down a fixed ladder. Rung 0 does not infer.**
 

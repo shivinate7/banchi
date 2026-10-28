@@ -1,4 +1,4 @@
-## D59 — Live count is per SKU
+# D59 — Live count is per SKU
 
 **The live cap is measured against one quantity: what TCGplayer holds for this SKU.** It is never a count of the positions one run sees. Each reading carries the time it was taken.
 

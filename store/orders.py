@@ -128,7 +128,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, ClassVar, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from store.rows import Rows, TableSpec
 
@@ -462,7 +462,7 @@ class OrderRecord:
     def wanted(self) -> int:
         return sum(max(0, int(line.quantity)) for line in self.lines)
 
-    def line_for(self, sku) -> Optional[OrderLine]:
+    def line_for(self, sku: Any) -> Optional[OrderLine]:
         wanted = str(sku).strip()
         for line in self.lines:
             if str(line.sku).strip() == wanted:
@@ -470,7 +470,7 @@ class OrderRecord:
         return None
 
     @property
-    def _content(self) -> tuple:
+    def _content(self) -> Tuple[Any, ...]:
         """What `ingest` compares to decide whether the feed said anything new.
 
         Every feed-owned field and nothing else. `first_seen` and `changed_at` are excluded
@@ -501,7 +501,7 @@ class OrderRecord:
         )
 
 
-def _parse_order(key, record) -> Optional[OrderRecord]:
+def _parse_order(key: Any, record: Any) -> Optional[OrderRecord]:
     """One order from its stored record, or None for one that will not construct.
     `__annotations__` filtering at both levels — see `Ledger.parse`."""
     if str(key).startswith("_") or not isinstance(record, dict):
@@ -521,7 +521,7 @@ def _parse_order(key, record) -> Optional[OrderRecord]:
         return None
 
 
-def _parse_fulfilment(key, per_sku) -> Optional[Dict[str, LineProgress]]:
+def _parse_fulfilment(key: Any, per_sku: Any) -> Optional[Dict[str, LineProgress]]:
     """One order's per-SKU progress map, or None where nothing constructs."""
     if str(key).startswith("_") or not isinstance(per_sku, dict):
         return None
@@ -599,7 +599,7 @@ class Ledger:
     # `ingest` still cannot name `fulfilment`, because it is a different mapping bound to
     # a different table. A fulfilment row is one order's whole per-SKU map, which is the
     # unit `record_pull` reads and writes.
-    ORDERS = TableSpec(
+    ORDERS: ClassVar[TableSpec] = TableSpec(
         "orders",
         parse=lambda key, record: _parse_order(key, record),
         dump=asdict,
@@ -610,7 +610,7 @@ class Ledger:
         },
         column_names=("source", "number", "status"),
     )
-    FULFILMENT = TableSpec(
+    FULFILMENT: ClassVar[TableSpec] = TableSpec(
         "fulfilment",
         parse=lambda key, record: _parse_fulfilment(key, record),
         dump=lambda rows: {sku: asdict(row) for sku, row in sorted(rows.items())},
@@ -627,7 +627,7 @@ class Ledger:
     # ------------------------------------------------------------------ (de)serialising
 
     @classmethod
-    def parse(cls, payload: Optional[dict]) -> "Ledger":
+    def parse(cls, payload: Optional[Dict[str, Any]]) -> "Ledger":
         """Rebuild from JSON, dropping every field the dataclasses do not declare.
 
         `__annotations__` FILTERING AT ALL THREE LEVELS, and the reason is the one
@@ -659,7 +659,7 @@ class Ledger:
             fulfilment=Rows(cls.FULFILMENT, objects=fulfilment),
         )
 
-    def to_payload(self) -> dict:
+    def to_payload(self) -> Dict[str, Any]:
         return {
             "version": VERSION,
             "orders": {key: asdict(record) for key, record in sorted(self.orders.items())},
@@ -788,23 +788,25 @@ class Ledger:
 
     # -------------------------------------------------------------------- the fulfilment
 
-    def progress(self, key: str, sku) -> LineProgress:
+    def progress(self, key: str, sku: Any) -> LineProgress:
         """This line's progress, creating an empty one only when asked to WRITE.
 
         Read-only callers want `recorded` below, which invents nothing. This one is the
         writer's accessor and is why `to_payload` prunes: a `fulfilment` entry that exists
         because somebody looked at it is a row claiming a pull that never happened.
         """
-        return self.fulfilment.setdefault(str(key), {}).setdefault(str(sku).strip(), LineProgress())
+        line: LineProgress = self.fulfilment.setdefault(str(key), {}).setdefault(str(sku).strip(), LineProgress())
+        return line
 
-    def recorded(self, key: str, sku) -> LineProgress:
+    def recorded(self, key: str, sku: Any) -> LineProgress:
         """This line's progress, or an empty one that is NOT stored. Never writes."""
-        return self.fulfilment.get(str(key), {}).get(str(sku).strip(), LineProgress())
+        line: LineProgress = self.fulfilment.get(str(key), {}).get(str(sku).strip(), LineProgress())
+        return line
 
-    def fulfilled(self, key: str, sku) -> int:
+    def fulfilled(self, key: str, sku: Any) -> int:
         return int(self.recorded(key, sku).fulfilled)
 
-    def outstanding(self, key: str, sku) -> int:
+    def outstanding(self, key: str, sku: Any) -> int:
         """How many copies this line still owes. Floors at zero — see `over` below."""
         record = self.orders.get(str(key))
         line = record.line_for(sku) if record else None
@@ -812,7 +814,7 @@ class Ledger:
             return 0
         return max(0, int(line.quantity) - self.fulfilled(key, sku))
 
-    def over(self, key: str, sku) -> int:
+    def over(self, key: str, sku: Any) -> int:
         """How many copies beyond the order this line has recorded. Normally zero.
 
         `record_pull` REFUSES TO CREATE THIS and this property still exists, because the
@@ -843,7 +845,7 @@ class Ledger:
                     return (key, sku)
         return None
 
-    def record_pull(self, key: str, sku, capture_ids: Sequence[str]) -> int:
+    def record_pull(self, key: str, sku: Any, capture_ids: Sequence[str]) -> int:
         """Record physical copies against one line. Returns how many were NEWLY recorded.
 
         IDEMPOTENT BY CONSTRUCTION rather than by a caller checking first: a capture id
@@ -928,7 +930,7 @@ class Ledger:
         stored.at = now()
         return len(fresh)
 
-    def forget_pull(self, key: str, sku, capture_ids: Sequence[str]) -> int:
+    def forget_pull(self, key: str, sku: Any, capture_ids: Sequence[str]) -> int:
         """Take copies back off a line. Returns how many were actually removed.
 
         `record_pull`'s reversal and nothing wider. It removes only ids that are recorded
@@ -960,14 +962,14 @@ class Ledger:
 
     # ------------------------------------------------------------------- the hand-fill
 
-    def _line_or_raise(self, key: str, sku):
+    def _line_or_raise(self, key: str, sku: Any) -> OrderLine:
         """The line `key`/`sku` names, or the refusal saying which half was wrong.
 
         Lifted out of `record_pull` rather than copied into the three writers below: the two
         refusals are the same two, and a second spelling of `UnknownOrderLine`'s message is
         a second thing to keep true.
         """
-        record = self.orders.get(str(key))
+        record: Optional[OrderRecord] = self.orders.get(str(key))
         if record is None:
             raise UnknownOrder(f"{str(key)!r} is not in this ledger")
         line = record.line_for(sku)
@@ -978,7 +980,7 @@ class Ledger:
             )
         return line
 
-    def record_fill(self, key: str, sku, count: int, reason: str) -> int:
+    def record_fill(self, key: str, sku: Any, count: int, reason: str) -> int:
         """Close `count` copies of a line with NO physical card behind them. Returns `count`.
 
         THE WRITE `record_pull` CANNOT MAKE, AND THE ONE THREE REAL ORDERS NEEDED. That
@@ -1031,7 +1033,7 @@ class Ledger:
         stored.at = now()
         return count
 
-    def forget_fill(self, key: str, sku, count: int) -> int:
+    def forget_fill(self, key: str, sku: Any, count: int) -> int:
         """Take `count` hand-filled copies back off a line. Returns how many were removed.
 
         `record_fill`'s reversal, and it can only reach `by_hand`. A line carrying two pulled
@@ -1063,7 +1065,7 @@ class Ledger:
 
     # ------------------------------------------------------------- the operator's claim
 
-    def declare_kind(self, key: str, sku, kind: Optional[str]) -> None:
+    def declare_kind(self, key: str, sku: Any, kind: Optional[str]) -> None:
         """Record what the OPERATOR says this line is. `None` withdraws the claim.
 
         IT LIVES IN THIS MAP AND NOT ON `OrderLine`, and that is the header's own argument
@@ -1094,11 +1096,11 @@ class Ledger:
             return
         self.progress(key, sku).kind = claimed
 
-    def declared_kind(self, key: str, sku) -> Optional[str]:
+    def declared_kind(self, key: str, sku: Any) -> Optional[str]:
         """The operator's claim about this line, or None. Never the feed's."""
         return self.recorded(key, sku).kind
 
-    def _drop_if_empty(self, key: str, sku) -> None:
+    def _drop_if_empty(self, key: str, sku: Any) -> None:
         """Delete a row that has come to record nothing, and the order's map with it.
 
         CALLED BY EVERY REVERSAL, and it is not tidiness. A stand-down that is undone would
@@ -1119,7 +1121,7 @@ class Ledger:
         if not rows:
             del self.fulfilment[key]
 
-    def close_line(self, key: str, sku, reason: str) -> bool:
+    def close_line(self, key: str, sku: Any, reason: str) -> bool:
         """Stand one line down: it needs nothing further from this store. Returns whether
         anything moved.
 
@@ -1155,7 +1157,7 @@ class Ledger:
         del line
         return True
 
-    def reopen_line(self, key: str, sku) -> bool:
+    def reopen_line(self, key: str, sku: Any) -> bool:
         """Undo a stand-down. Returns whether anything moved.
 
         `close_line`'s reversal and nothing wider — it cannot touch a count, so reopening a
@@ -1244,7 +1246,7 @@ class Ledger:
             out, key=lambda r: (r.placed_at is None, r.placed_at or "", r.key)
         )
 
-    def open_quantity(self, sku) -> int:
+    def open_quantity(self, sku: Any) -> int:
         """Copies of this SKU that open orders still owe: the sale TCGplayer has made that a
         card in a box does not yet show (`server/send_routes._sku_snapshot` subtracts it from the
         shelf). A terminal status owes nothing, a stood-down line owes nothing, and a pulled

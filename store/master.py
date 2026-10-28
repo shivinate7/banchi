@@ -111,7 +111,7 @@ IDENTIFIED = "identified"
 SOLD = "sold"
 
 # `sold`'s sibling (D26): this copy left inventory WITHOUT a sale — pulled out, damaged,
-# lost or given away. Terminal like `sold`: the record stays, the position stays, and the
+# lost, given away or pulled into the master set. Terminal like `sold`: the record stays, the position stays, and the
 # gap it leaves is permanent (D10). Before it existed the only ways to record such a card
 # were a sale record that lies or the mid-box delete D10 forbids.
 #
@@ -200,9 +200,11 @@ def departed_among(cards, positions) -> set:
     }
 
 # Why a retired card left (D26). Required of every retirement and never inferred: it is the
-# one fact about the departure the record cannot re-derive later, and the four are a closed
+# one fact about the departure the record cannot re-derive later, and the five are a closed
 # vocabulary so the history stays greppable — free text would be a second `note`.
-RETIRE_REASONS = ("pulled", "damaged", "lost", "given_away")
+# `master_set` marks a card pulled into the owner's master set (the master-set spec, section 2).
+MASTER_SET = "master_set"
+RETIRE_REASONS = ("pulled", "damaged", "lost", "given_away", MASTER_SET)
 # The reason of a retirement no person chose: `cli/cmd_identify.py` retires a captured card whose photograph
 # shows an empty slot, through `Inventory.retire_empty_slot` alone. Not a `RETIRE_REASONS` member, because
 # that tuple is what a person may pick, what the retire route accepts and what `Inventory.retire` takes.

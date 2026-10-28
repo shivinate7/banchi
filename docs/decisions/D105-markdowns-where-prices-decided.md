@@ -1,4 +1,4 @@
-## D105 — Markdowns live where prices are decided
+# D105 — Markdowns live where prices are decided
 
 **The stale-listing markdown sheet opens from `#/pricing`'s header, not `#/runs`'s.** Moved on the owner's objection that the sheet should simply live in pricing.
 
@@ -47,6 +47,10 @@ The lens already has an address — `#/pricing?markdown=<stamp>`, which can be b
 **D100 §5's placement**, which `docs/specs/stale-listings.md` records. The sheet is a modal and not a route — that half stands. Which screen hosts the modal is what changed, and the reason it changed is that D100's stated reason for the host was kinship of implementation.
 
 **Nothing on the wire moved.** No route, no payload, no shape. `server/pipeline_routes.py` is untouched by this entry.
+
+### Reopened: one list
+
+The owner reopened this entry. Mark-downs become suggestion rows in Pricing's one list, beside new copies, and no separate sheet or tab holds them. `docs/specs/pricing-suggest.md`, section 5, step 4, holds the ruling. Until that build lands, the sheet stays as written above.
 
 ### What would reopen this
 

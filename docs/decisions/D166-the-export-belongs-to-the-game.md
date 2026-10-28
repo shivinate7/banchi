@@ -1,4 +1,4 @@
-## D166 — The export belongs to the game
+# D166 — The export belongs to the game
 
 **Measured from the owner's `runs/` after the store was re-joined.** Seven Riftbound catalog fetches went out in nine minutes. Five went out inside eighteen seconds. Five of the seven downloaded bytes this machine already had.
 

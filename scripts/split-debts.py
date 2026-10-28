@@ -17,7 +17,7 @@ IDS ARE PLAIN NUMBERS, NOT `D<n>`. A debts entry is `## <n> — <title>`, so its
 citation rewrite settles on repo-wide (see the stub, `docs/DEBTS.md`). Filenames are
 `<zero-padded n>-<slug>.md`, the same convention `split-decisions.py` uses without the `D`.
 
-SECTION 15 IS A DELIBERATE GAP (see the preamble) and is not a number this script invents:
+SECTION 15 IS A DELIBERATE GAP (see the README) and is not a number this script invents:
 the chunker only ever emits chunks for numbers that have a `## ` heading, so 15 simply does
 not appear in `docs/debts/`, exactly as it does not appear as a heading in the source file.
 """

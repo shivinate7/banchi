@@ -1,4 +1,4 @@
-## D35 — Unreadable numbers fall back to the name
+# D35 — Unreadable numbers fall back to the name
 
 **The owner found it by asking why the review queue held cards that did not need review.** It held 46 entries, every one `no_catalog_row`, every one with **zero candidate rows**. They could not be answered, only skipped. `POST /review/<box>/<index>/answer` refuses an entry with no candidates as `no_candidates`.
 

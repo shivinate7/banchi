@@ -76,11 +76,11 @@ make demo-mirror SOURCE=<checkout>  # owner's Mac only: scrub, crop, commit `dem
 make demo-mirror-agent  # owner's Mac, main tree only: a weekly launchd job that refreshes the mirror
                     #   and auto-merges a mirror-only PR on green CI (D295, the public demo is the scrubbed real store). ARGS=--remove removes it.
 make demo-mirror-install  # CI's step: install the committed scrub. No store, no network.
-make price-refresh  # ONE free download of the live listings now, over this checkout's store, and the note `#/pricing` shows. No price change, and no archive sweep unless ARGS=--sweep asks for one (D224 (sweep preview is free)); the script alone sweeps by default, and this target passes `--no-sweep`.
+make price-refresh  # ONE free download of the live listings now, over this checkout's store, and the note `#/pricing` shows, then the free daily TCGCSV read (D325 (A daily read of TCGCSV builds)). No price change, and no archive sweep unless ARGS=--sweep asks for one (D224 (sweep preview is free)); the script alone sweeps by default, and this target passes `--no-sweep`.
 make price-refresh-agent  # owner's Mac, main tree only: a daily launchd job that runs it and, once per US Central day, the archive sweep (D104 (live fetch is guarded), D224). ARGS=--remove removes it.
-make backup         # ONE copy now of photos/ and captures/ plus a store snapshot to the iCloud Drive folder `Banchi backup`
+make backup         # ONE copy now of photos/ and captures/ plus a store snapshot to the iCloud Drive folder `Banchi backup`. Never overwrites there. ARGS=--verify checks it read-only
                     #   (DEBT67 (capture photographs exist in one place)). `BANCHI_BACKUP_DEST` overrides the folder. Its parent must exist. Never deletes there.
-make backup-agent   # owner's Mac, main tree only: a nightly launchd job (`com.banchi.backup`) that runs it. ARGS=--remove removes it.
+make backup-agent   # owner's Mac, main tree only: a nightly launchd job (`com.banchi.backup`) that runs it. The backup is one-time; the agent is not installed. ARGS=--remove removes it.
 make demo-static    # demo-mirror-install, then a static build to dist-demo/.
 make demo-preview   # serve dist-demo/ as a static host would.
 make check          # the whole suite, product first, guard self-tests last. `make explain` lists it.
@@ -229,12 +229,12 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 
 ## Things you will get wrong without being told
 
-- **The capture server is threaded and not yours to restart.** It is `class CaptureServer(ThreadingHTTPServer)` in
+- **The capture server is threaded. Restart it only after the owner says yes.** It is `class CaptureServer(ThreadingHTTPServer)` in
   `server/capture_server.py`, with `request_queue_size = 128` and `CaptureHandler.timeout = 15`.
   `REQUEST_SLOTS = 4` bounds executing requests. `PHOTO_SLOTS = 4` bounds `/photo/` and `/assets/`
   GETs and the cheap lock-free reads in `PHOTO_LANE_EXACT`, `/status` first (refusal `photo_busy`). The pool is safe over HTTP/1.1 only because every response sends
   `Connection: close` (DEBT11, a parked writer still holds a request slot). A burst of clients kills it. Run the full
-  suite once, at the end. Never `make up ARGS=--restart`, `make down` or `make up` to fix a wedge.
+  suite once, at the end. Ask the owner before `make up ARGS=--restart`, `make down` or `make up`, and name the reason.
   The `server concurrency` row of `make docs-audit` reads these figures.
 - **The join key is per game and normalized on both sides** (`pipeline/games.py`,
   `pipeline/join.py:number_index_key`). Never join on Product Name. D35 (Product Name join) allows it only as a last
@@ -274,7 +274,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **The catalog export belongs to the game, not the drawer** (D166, the catalog export is a property of the game). It lands in `inventory/.exports/<game>/`.
   A covering export downloaded on the same US Central day is reused. `refresh: true` forces a new one; 900 s (`REFRESH_DEBOUNCE_S`) is only the double-press guard on a finished "Refresh now".
 - **The pricing answer is one file, keyed by SKU** (D86, one file for the store): `pipeline/corpus.py` over
-  `inventory/prices.json`. `policy.threshold` is also the floor. `sub_threshold` defaults to $0.49 (D9, threshold and floor).
+  `inventory/prices.json`. `policy.threshold` is also the floor, and the owner sets it. Its default is $0.49 (`pipeline/corpus.py:DEFAULT_CUTOFF`). `sub_threshold` also defaults to $0.49, a default and not the floor (D9, threshold and floor).
   `banchi prices adopt` migrates legacy run files. `join` and `emit` refuse over an unadopted one.
 - **The store of record is one SQLite file** (D88, SQLite and one transaction per write). `inventory.json` is
   legacy and read by nothing.

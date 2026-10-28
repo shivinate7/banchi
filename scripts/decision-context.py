@@ -113,6 +113,7 @@ def decision_gists(path: Optional[Path] = None, prefix: str = "D") -> Dict[str, 
         body = read(path)
     gists: Dict[str, Tuple[str, List[str]]] = {}
     current: Optional[str] = None
+    level = 0
     title = ""
     bolds: List[str] = []
 
@@ -125,13 +126,16 @@ def decision_gists(path: Optional[Path] = None, prefix: str = "D") -> Dict[str, 
         # a session editing a file its branch's own unclaimed entry governs must be shown
         # that entry — which is the one moment it is least likely to be remembered.
         heading = re.match(
-            r"^##\s+(" + prefix + r"(?:[1-9][0-9]{0,2}|-[a-z][a-z0-9]*(?:-[a-z0-9]+)+))"
+            r"^(#{1,2})\s+(" + prefix + r"(?:[1-9][0-9]{0,2}|-[a-z][a-z0-9]*(?:-[a-z0-9]+)+))"
             r"\s*[—-]\s*(.+)$", line)
         if heading:
             store()
-            current, title, bolds = heading.group(1), heading.group(2).strip(), []
+            level = len(heading.group(1))
+            current, title, bolds = heading.group(2), heading.group(3).strip(), []
             continue
-        if line.startswith("## ") and current:
+        # A decision's title is an H1 and ends at the next entry heading; a track file such
+        # as code-cards.md heads each entry with an H2 and ends at the next `## `.
+        if level == 2 and line.startswith("## ") and current:
             store()
             current, title, bolds = None, "", []
             continue
