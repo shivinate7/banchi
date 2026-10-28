@@ -750,6 +750,39 @@ def check_send_held_suggestion_left_out(checks: Checks) -> None:
                           "and no suggested posting is written")
 
 
+def check_send_zero_run_only_held_suggestion_refuses_naming_it(checks: Checks) -> None:
+    """A zero-run send whose only row is a kept suggestion on a held live SKU has nothing left to
+    send. It stays refused `nothing_to_send`, but the refusal carries the same top-level `held` key
+    the run path's answer carries, naming the SKU, and its sentence names the card (Dunsparce),
+    not the SKU id. Nothing is sent and no posting is written."""
+    checks.note("")
+    checks.note("SEND, ZERO RUNS, ONLY A HELD SUGGESTION — refused nothing_to_send, with `held` and the card's name")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send, no runs: the only kept suggestion is on a held live SKU"):
+            _one_copy_live(checks, portal)
+            _seed_send_suggestions()
+            _typed(DUNSPARCE_SKU, {"withheld": "keeping"})
+            try:
+                outcome = ("answered", send_routes.do_send({
+                    "runs": [],
+                    "confirm": True,
+                    "prices": [{"sku": DUNSPARCE_SKU, "price": "2.06", "was": "2.50", "source": "suggested"}],
+                }))
+            except pipeline_routes.PipelineRefusal as caught:
+                outcome = ("refused", caught)
+            checks.equal(outcome[0] == "refused" and outcome[1].code, "nothing_to_send",
+                         "the press is refused nothing_to_send")
+            if outcome[0] == "refused":
+                refusal = outcome[1]
+                checks.ok(str(DUNSPARCE_SKU) in json.dumps((refusal.data or {}).get("held"), sort_keys=True),
+                          "the refusal carries the SKU under its top-level `held` key", repr(refusal.data))
+                checks.ok("Dunsparce" in str(refusal) and str(DUNSPARCE_SKU) not in str(refusal),
+                          "and its sentence names the card, not the SKU id", str(refusal))
+            checks.equal(_rows(portal), {}, "and TCGplayer receives no row")
+            checks.equal(_postings(DUNSPARCE_SKU), [], "and no posting is written")
+
+
 def check_worklist_no_runs_corrupt_corpus(checks: Checks) -> None:
     """With no run on disk and a corpus that cannot be read, the worklist says so: it answers
     `error: "corpus_unreadable"`, and its live row draws no suggestion from the default policy.
@@ -794,5 +827,6 @@ CHECKS = (
     check_send_refuses_stale_readings,
     check_send_with_run_refuses_stale_readings,
     check_send_held_suggestion_left_out,
+    check_send_zero_run_only_held_suggestion_refuses_naming_it,
     check_worklist_no_runs_corrupt_corpus,
 )
