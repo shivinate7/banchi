@@ -270,6 +270,7 @@ def price_changes(
     floor,
     adding: Iterable[str] = (),
     suggested: Optional[Mapping[str, Mapping[str, str]]] = None,
+    kept: Optional[Iterable[str]] = None,
 ) -> tuple:
     """The price-only rows one send carries: `(changes, left, refused)`.
 
@@ -297,11 +298,14 @@ def price_changes(
     A REFUSAL STOPS THE WHOLE PRESS, by name, before a file exists. A LEFT row is named and
     the press goes on.
 
-    `suggested` is SKU -> the live export's row, for the named prices that are kept suggestions.
-    Such a row is judged as a typed one is (its `candidates` entry is its own price, since a
-    suggestion is saved nowhere), and its change carries `postings.SUGGESTED` and that row.
+    `suggested` is SKU -> the live export's row, for the named prices that have no plan row (a
+    kept suggestion, or a typed price sent with no run). Such a row is judged as a typed one is
+    (its `candidates` entry is its own price, since it is saved nowhere) and its change carries
+    that row. Its change is also `postings.SUGGESTED` when the SKU is in `kept` (all of
+    `suggested` when `kept` is not given).
     """
     suggested = suggested or {}
+    kept_skus = set(suggested) if kept is None else set(kept)
     changes: List[PriceChange] = []
     left: List[PriceNote] = []
     refused: List[PriceNote] = []
@@ -331,8 +335,10 @@ def price_changes(
         elif now != shown:
             refused.append(PriceNote(why=REFUSED_LIVE_MOVED, **note))
         else:
-            kept = {"source": postings.SUGGESTED, "row": suggested[sku]} if sku in suggested else {}
-            changes.append(PriceChange(sku=sku, name=str(name or ""), price=plan, was=now, **kept))
+            extra = {"row": suggested[sku]} if sku in suggested else {}
+            if sku in kept_skus:
+                extra["source"] = postings.SUGGESTED
+            changes.append(PriceChange(sku=sku, name=str(name or ""), price=plan, was=now, **extra))
     return changes, left, refused
 
 

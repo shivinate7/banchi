@@ -689,7 +689,7 @@ def _named_prices(path) -> tuple:
         raise PriceRefused(f"the named prices could not be read: {exc}") from None
 
 
-def _price_changes(args, guarded, candidates, going, floor, say):
+def _price_changes(args, guarded, candidates, going, floor, say, no_run=False):
     """`(changes, left, moves)`: the price-only rows this press writes, the named prices it
     leaves out, and the live copies its listing rows move, or empties when it asked for none
     (`--reprice-live`).
@@ -720,12 +720,14 @@ def _price_changes(args, guarded, candidates, going, floor, say):
     # so the candidate price is the named one. A SKU TCGplayer does not list stays out of
     # `candidates` and is refused `not_in_send`.
     live_rows = {tcgcsv.sku_cell(row): row for row in export.rows}
-    suggested = {sku: live_rows[sku] for sku in kept if sku in live_rows and sku not in going}
+    # A PRESS WITH NO RUN HAS NO PLAN ROW FOR ANY NAMED PRICE: a typed one is judged on the live
+    # row as a suggestion is, and still posts as a typed price.
+    suggested = {sku: live_rows[sku] for sku in (named if no_run else kept) if sku in live_rows and sku not in going}
     candidates = dict(candidates)
     for sku, row in suggested.items():
         candidates[sku] = (row.get(tcgcsv.NAME_COLUMN), named[sku][0])
     changes, left, refused = sendguard.price_changes(
-        named, candidates, guarded["live"], prices, floor, set(going), suggested
+        named, candidates, guarded["live"], prices, floor, set(going), suggested, kept
     )
     moves, unnamed = sendguard.live_moves(going, told, guarded["live"], prices, floor)
     refused = list(refused) + list(unnamed)
@@ -1349,7 +1351,7 @@ def run_prices_only(args, say) -> int:
         return 1
     try:
         floor = pricing.check_threshold(corpus.Corpus.read().policy_for()["threshold"])
-        changes, left, moves = _price_changes(args, _apply_guard(_live_guard(args), {}, None), {}, {}, floor, say)
+        changes, left, moves = _price_changes(args, _apply_guard(_live_guard(args), {}, None), {}, {}, floor, say, no_run=True)
     except (decisions.MalformedDecisions, pricing.InvalidThreshold, GuardRefused, PriceRefused) as refusal:
         say(f"REFUSING to write: {refusal}. Nothing was written.")
         return 1
