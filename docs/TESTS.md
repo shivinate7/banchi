@@ -69,7 +69,7 @@ None.
 | --- | --- | --- |
 | `app/tests/live-reconcile.spec.ts` | The store-wide reconcile against a live export is reachable from a screen, previews without writing, and settles only after the preview answers. | D33, D87, D118, D174, D218 |
 | `app/tests/photo-cache.spec.ts` | Home, Review and Pricing ask for each photograph by card name and version, never by box slot. | D26, D172 |
-| `app/tests/pricing-markdown.spec.ts` | The Pricing Live tab reprices live TCGplayer listings and leaves the run-based Pricing flow untouched. | D28, D278, D103, D107, D118, D218, D273, D277 |
+| `app/tests/pricing-markdown.spec.ts` | The one list on Pricing reprices live TCGplayer listings and leaves the new-copy flow untouched. | D28, D278, D103, D107, D118, D218, D273, D277 |
 | `app/tests/pricing.spec.ts` | Pricing shows every unsent copy, writes only what the owner sets, and sends only what the Send bar says. | D86, D59, D278, D277, D118, D218 |
 | `app/tests/product-history.spec.ts` | The product history draws market prices and the owner's own sales as two different shapes, and leaves the deep link cleanly. | D278, D227 |
 | `app/tests/run-panel.spec.ts` | The pipeline (identify, join, emit, reconcile) is reachable from a screen, and the button that spends money does not exist until the free preview answers. | D32, D33, D36, D56, D65, D174, D180, D291 |

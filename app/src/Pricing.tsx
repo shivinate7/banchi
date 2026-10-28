@@ -132,8 +132,8 @@ import { ABSENT_SENTENCE, AbsentPhotoNote, gameLabel, noPhotoSentence } from './
  *
  * Every row, the rows that need the owner on top, then the rest by value (Q1, Q2). One slim bar
  * holds Send, sticky at the top on a desk and pinned above the tab bar on a phone (Q4). The rule
- * and the floor are one line with "Change" (Q5). Mark-downs are the Live tab, same rows, one
- * press (Q6, Q7). The value list is an Inventory sort now (Q8). Every product name opens the one
+ * and the floor are one line with "Change" (Q5). New copies and live listings are rows of one list under three groups, sent in one
+ * press (Q6, Q7; the pricing-suggest spec, section 2). The value list is an Inventory sort now (Q8). Every product name opens the one
  * product view (D278), which is where the old drawer went.
  *
  * The client performs no arithmetic on money beyond the comparisons that pick a flag: every
@@ -2811,7 +2811,7 @@ export function Pricing() {
 
   /* THE MASTER-SET TAKE-OFFS STILL OWED are read with the worklist, so the bar's first paint holds their line (D313). */
   const owedTakeOffs = useOwedTakeOffs()
-  /* THE WORKLIST, OR THE OWED LIST, IS STILL IN FLIGHT on the Unsent tab. */
+  /* THE WORKLIST, OR THE OWED LIST, IS STILL IN FLIGHT on the one list. */
   const barLoading = !readView && ((loading && table === null) || owedTakeOffs.loading)
 
   /* THE SEND BAR'S THREE TILES (the owner's Preflight pick): where pricing stands before the one
