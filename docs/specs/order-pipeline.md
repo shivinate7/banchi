@@ -277,6 +277,25 @@ refusal message and log line. It has named failure codes. It has a control that 
 presses. The order host's cookie session is the admin portal's and does not transfer, so what
 carries over is the shape and not the auth.
 
+### The TCGTracking pipe: the owner's rulings
+
+The owner's rulings (waiting-page items 102, 103 and 104):
+
+- **Banchi's server holds the TCGTracking key and calls TCGTracking itself.** No browser
+  extension sits in the middle. The key and the shipper number are read on the server only.
+  They never reach the browser and are never logged.
+- **T4 and T5 are one lane.** Labels and the tracking read-back are built together.
+- **One read-only tracking lookup was granted, and it found a gap.** The main checkout's `.env`
+  holds `TCG_TRACKING_KEY` and no shipper number. TCGTracking requires both the `X-API-Key`
+  header and the `X-Shipper-Number` header, so no call was made. The owner supplies the
+  shipper number before anything reaches the live host.
+
+TCGTracking's API is `POST /orders`, which creates a label and is paid after an account's
+first 100 orders. `GET /orders/track` looks up status by tracking number or by
+`source_order_id`, the TCGplayer order number. `GET /orders/{id}/pdf` re-renders a label.
+There are no webhooks. **No endpoint marks a TCGplayer order shipped.** So T5's premise below,
+that tcgtracking owns mark-shipped, is unverified. Who marks shipped is the owner's fact to give.
+
 ### T4 — the envelope, and the money gate. NOT BUILT
 
 The tcgtracking call for the sub-$50 lane, under **D33's gate verbatim**. It has a free
@@ -381,8 +400,9 @@ the reason does not. `check_no_insurance` runs over the row's own keys on the wa
 Recorded so that a green harness and a confident table are not mistaken for evidence.
 
 - **The tcgtracking API has never been called from this repo.** `TCG_TRACKING_KEY` is in the
-  main checkout's `.env`. Every response shape is documentation-verified. The rate limit, the
-  free tier and the per-label price are claims from outside this tree.
+  main checkout's `.env`, and the shipper number the API also requires is not. Every response
+  shape is documentation-verified. The rate limit (250 a minute), the free tier (100 orders)
+  and the per-label price (shown only in the TCGTracking dashboard) are claims from outside this tree.
 - **Unknown: whether Pirate Ship accepts the CSV that `pipeline/pirateship.py` emits.** Their
   importer maps columns on the far side of a seam that no committed fixture can hold. It is
   the same standing as harness T6's synthetic composites. It is why `Name` is pre-joined and
