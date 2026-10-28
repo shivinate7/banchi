@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from pipeline import pricing, tcgcsv
+from pipeline import pricing, suggest, tcgcsv
 
 # The three buckets a row can land in, and the names the screen switches on. Re-exported
 # rather than restated by callers: `app/src/types.ts:PricingSku.bucket` is the same three.
@@ -134,3 +134,36 @@ def sku_row(match, game: str, bucket: str, listing: Optional[dict]) -> dict:
         ],
         "listing": None if listing is None else dict(listing),
     }
+
+
+#: The groups of the one list, top to bottom (`docs/specs/pricing-suggest.md`, section 3).
+LIVE_GROUPS = ("needs_you", "suggested", "at_rule")
+
+
+def live_rows(listings: list, policy: dict, today: str) -> list:
+    """The `live` rows of the pricing worklist: every live listing with its suggestion.
+
+    `suggest.review` decides the group, price, source and reason; this flattens its groups, top
+    to bottom, into plain wire rows and puts the listing's last sale beside them (`review` does
+    not carry it). Money leaves as the two-decimal strings the export uses, `None` where there
+    is none. `listings` and `policy` are `suggest.review`'s own.
+    """
+    sold = {one["sku"]: one.get("last_sold_at") for one in listings}
+    reviewed = suggest.review(listings, policy, today)
+    return [
+        {
+            "sku": row["sku"],
+            "asking": _money(row["asking"]),
+            "last_sold_at": sold[row["sku"]],
+            "group": group,
+            "price": _money(row["price"]),
+            "source": row["source"],
+            "reason": row["reason"],
+        }
+        for group in LIVE_GROUPS
+        for row in reviewed[group]
+    ]
+
+
+def _money(value) -> Optional[str]:
+    return None if value is None else tcgcsv.format_price(value)
