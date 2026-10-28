@@ -29,8 +29,6 @@
     "store/orders.py"
   ],
   "exclude": [
-    "app/src/fonts/",
-    "geometry/model/dfine_card_640.onnx",
-    "scripts/matcher-parity-reference.npz"
+    "app/src/fonts/"
   ]
 }
