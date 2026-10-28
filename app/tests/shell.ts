@@ -351,6 +351,13 @@ async function stubShell(page: Page, cards: number): Promise<void> {
   await page.route(/\/pipeline\/sends$/, (route) =>
     json(route, { sends: [], unconfirmed: { copies: 0, stamps: [] }, due: false, check_at: null, now: '2026-09-24T12:00:00+00:00' }),
   )
+  /* THE OWED TAKE-OFFS (`docs/specs/master-set.md`, section 5). `#/pricing` reads them with the worklist, on
+   *  arrival, so every Pricing case needs an answer. Nothing owed is the shared one; a spec about the owed
+   *  list registers its own handler, which is newer and wins. Only the read is answered here: a press is a
+   *  write, and an unstubbed write is named by the seal. */
+  await page.route(/\/pipeline\/sends\/owed(\?.*)?$/, (route) =>
+    route.request().method() === 'GET' ? json(route, { owed: [] }) : route.fallback(),
+  )
   /* UN-2: `CaptureScreen` reads this once, on mount, to rebuild a sitting a reload emptied.
      The shared answer is a closed, empty one — nothing to hydrate — so a spec that never
      meant to be about the capture strip still draws it exactly as before. A spec about the

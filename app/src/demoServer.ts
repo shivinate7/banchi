@@ -815,6 +815,9 @@ function read(path: string): unknown {
   if (route === '/pipeline/price-facts') {
     return { sku: params.get('sku') ?? '', name: null, at: null, through: null, prices: null, shelf: null, days: [], facts: {} }
   }
+  /* No master-set take-off is owed on a published page: the frozen store pulls nothing for the master
+   * set, and a take-off reaches TCGplayer. The answer the real server gives when none waits. */
+  if (route === '/pipeline/sends/owed') return { owed: [] }
   /* The background reader is off in the demo: the answer the real server gives when it is not swept. */
   if (route === '/pipeline/match/sweep') {
     return params.has('keys')

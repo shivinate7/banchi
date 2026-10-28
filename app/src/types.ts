@@ -607,8 +607,8 @@ export type InventoryCard = {
   state: string
   state_at: string | null
 
-  /** Why a retired copy left — one of the four the server validates (`pulled`, `damaged`,
-   *  `lost`, `given_away`) — and null on a card in any other state. Written only by
+  /** Why a retired copy left — one of the five the server validates (`pulled`, `damaged`,
+   *  `lost`, `given_away`, `master_set`) — and null on a card in any other state. Written only by
    *  `POST /inventory/<box>/<index>/retire` and cleared by its reversal; loose `string`
    *  for the reason every stored field here is — this comes off disk, and the store owns
    *  the vocabulary (D26). */
@@ -1165,12 +1165,12 @@ export type SaleResult = {
   order_effect?: 'none' | 'released' | 'filled_by_hand'
 }
 
-/** Why a retired card left (D26). The send-side union — the four words the server's
+/** Why a retired card left (D26). The send-side union — the words the server's
  *  `retire_reason_invalid` refusal enumerates — while the record's own `retire_reason`
  *  stays a loose string, the same split `BoxState` draws between what may be SET and what
  *  comes off disk. A closed vocabulary rather than free text so the history stays
  *  greppable; a card that needs a sentence gets one in `note`, through `updateCard`. */
-export type RetireReason = 'pulled' | 'damaged' | 'lost' | 'given_away'
+export type RetireReason = 'pulled' | 'damaged' | 'lost' | 'given_away' | 'master_set'
 
 /** What `POST /inventory/<box>/<index>/retire` answers, in either direction.
  *
@@ -1191,7 +1191,49 @@ export type RetireResult = {
 
   /** What an undo of THIS call would put the card back to, or null when there is none. */
   restores_to: string | null
+
+  /** Only on a `master_set` retirement: whether its live copy can come off TCGplayer. Null when
+   *  the server could not read the state (the card's own GET says it again). */
+  take_off?: MasterTakeOff | null
 }
+
+/** Where a `master_set` pull's TCGplayer take-off stands (`GET /inventory/<box>/<index>/take-off`).
+ *
+ *  - `offered`     live is above what is on hand: the press is there.
+ *  - `on_its_way`  a take-off is written and no live check has settled it: no press.
+ *  - `sent`        a live check found the copy gone.
+ *  - `failed`      the last press failed or never landed (`failure` says why): the press is there again.
+ *  - `matches`     nothing is live above what is on hand. Also what a press answers when it sent nothing.
+ *  - `no_session`  no seller session on this Mac, so there is no press. */
+export type MasterTakeOffState = 'offered' | 'on_its_way' | 'sent' | 'failed' | 'matches' | 'no_session'
+
+export type MasterTakeOff = {
+  state: MasterTakeOffState
+  sku: string | null
+  /** Copies live beyond what is on hand, by the store's last reading. */
+  excess: number
+  /** Copies the take-off row removes, once a press has written one. */
+  taken_off: number
+  /** The take-off's receipt, once a press has written one. */
+  stamp: string | null
+  /** Why the last press failed. */
+  failure: string | null
+  /** True when the press should be offered: `offered` or `failed`. */
+  press: boolean
+}
+
+/** One take-off still owed (`GET /pipeline/sends/owed`): not pressed, failed, or waiting on a
+ *  sign-in. One entry per SKU. `state` is `offered`, `failed` or `no_session`; `press` is false for the last. */
+export type OwedTakeOff = MasterTakeOff & {
+  name: string
+  /** The card's set, or "" when the store holds none. */
+  set_name: string
+  box: number
+  index: number
+}
+
+/** What `POST /inventory/<box>/<index>/take-off` answers: the card's state, and the receipt when a row went. */
+export type MasterTakeOffAnswer = { take_off: MasterTakeOff; send?: SendSummary }
 
 /** D4's one-tap choice, as `POST /review/<box>/<index>/answer` takes it.
  *
@@ -1275,7 +1317,7 @@ export type AnswerOrigin = {
  *  `STAND_DOWN_REASONS` verbatim — a second friendly vocabulary is the drift D16 exists to
  *  catch, so these render beneath their labels exactly as a routing reason does.
  *
- *  DELIBERATELY NOT `RetireReason`. Those four all say the CARD left inventory; these three
+ *  DELIBERATELY NOT `RetireReason`. Those five all say the CARD left inventory; these three
  *  say the QUESTION closed while the card stayed exactly where it is. */
 export type StandDownReason = 'wasted_position' | 'cannot_settle' | 'not_listing'
 
@@ -4650,6 +4692,10 @@ export type SetGroupCard = {
    *  mid-build: several SKUs may point at one photo) and never share this — it is the
    *  one thing on the row that still tells two such rows apart. */
   printing: string | null
+  /** True when any card of this SKU is retired with reason `master_set` (master-set spec,
+   *  section 3). A row with `qty: 0` and `box: null` is a master-set copy with no copy on hand.
+   *  Optional: the recorded demo bundle predates it, and a missing value reads as false. */
+  collected?: boolean
 }
 
 /** One game-and-set group, cards in the set's own printed order (server-side natural sort

@@ -34,6 +34,7 @@ from harness.tests.t7.common import (
     _spawn_server,
     request,
     answers,
+    _seed_sku_table,
     capture_payload,
     fake_cid,
     isolated_home,
@@ -217,6 +218,189 @@ def check_pipeline_sets(checks: Checks) -> None:
         11,
         "on-hand qty sums to exactly the identified cards planted: 3 Spiritforged SKUs + "
         "1 extra RICH copy + 3 Origins + 1 sku_unknown + 2 blanks + 1 no-set = 11",
+    )
+
+
+def check_pipeline_sets_collected(checks: Checks) -> None:
+    """`GET /pipeline/sets` `collected` (the master-set spec, sections 3 and 8): true when any
+    card of the SKU is `retired` with reason `master_set`. A SKU held only as a master-set copy
+    still gets a row, `qty: 0` and `box: null`. A `pulled` retirement never counts."""
+    checks.note("")
+    checks.note("PIPELINE SETS — collected (master_set retirements)")
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            inventory.ensure_box(1, name="Master box")
+            minted = 0
+
+            def put(sku, number, state, reason=None, set_name="Master Set One"):
+                nonlocal minted
+                minted += 1
+                card, _ = inventory.allocate_capture(1, cid=fake_cid(f"collected-{minted}"))
+                card.sku = sku
+                card.name = f"Card {number}"
+                card.number = number
+                card.printed_total = "10"
+                card.set_name = set_name
+                card.game = "riftbound"
+                card.state = state
+                card.retire_reason = reason
+                return card
+
+            put("5000001", "1", master.IDENTIFIED)
+            put("5000001", "1", master.RETIRED, master.MASTER_SET)
+            put("5000002", "2", master.RETIRED, master.MASTER_SET)
+            put("5000003", "3", master.IDENTIFIED)
+            put("5000003", "3", master.RETIRED, "pulled")
+            put("5000004", "4", master.IDENTIFIED)
+            # TWO LABELS FOR ONE SKU: the on-hand copy and the master_set copy name different
+            # sets, and a third SKU is on hand in a set while its master_set copy has none.
+            put("5000005", "5", master.IDENTIFIED, set_name="Alpha")
+            put("5000005", "5", master.RETIRED, master.MASTER_SET, set_name="Alpha: X")
+            put("5000006", "6", master.IDENTIFIED)
+            put("5000006", "6", master.RETIRED, master.MASTER_SET, set_name="")
+
+        payload = pipeline_routes.do_pipeline_sets()
+
+    all_rows = [c for g in payload["groups"] for c in g["cards"]] + payload["no_set"]
+    rows = {c["sku"]: c for c in all_rows}
+    row = lambda sku, *fields: tuple(rows.get(sku, {}).get(f) for f in fields)  # noqa: E731
+    checks.equal(
+        sorted(c["sku"] for c in all_rows),
+        sorted(["5000001", "5000002", "5000003", "5000004", "5000005", "5000006"]),
+        "one row per SKU across every set label and the no-set list: no phantom qty-0 row "
+        "beside an on-hand row",
+    )
+    checks.equal(
+        (row("5000005", "qty", "collected"), row("5000006", "qty", "collected")),
+        ((1, True), (1, True)),
+        "collected is keyed by SKU across labels: an on-hand copy under one set label and a "
+        "master_set copy under another, or under a blank one, still reads collected",
+    )
+    checks.equal(
+        [c["number_display"] for g in payload["groups"] if g["set_name"] == "Master Set One" for c in g["cards"]],
+        ["1/10", "2/10", "3/10", "4/10", "6/10"],
+        "the master-set-only SKU gets a row, in the set's printed order",
+    )
+    checks.equal(
+        row("5000001", "qty", "collected"),
+        (1, True),
+        "one on-hand copy plus one master_set copy reads qty 1 and collected true",
+    )
+    checks.equal(
+        row("5000002", "qty", "collected", "box"),
+        (0, True, None),
+        "a SKU whose only copy is master_set reads qty 0, collected true and box null",
+    )
+    checks.equal(
+        row("5000003", "qty", "collected"),
+        (1, False),
+        "a pulled copy never counts as collected",
+    )
+    checks.equal(
+        row("5000004", "collected"),
+        (False,),
+        "an on-hand SKU with no retirement reads collected false",
+    )
+
+
+def check_pipeline_sets_collected_buried(checks: Checks) -> None:
+    """A master-set card stays collected after its box is deleted (the master-set spec, section
+    3). D134 buries a departed record as a `buried` history line when its box goes, and the
+    record leaves the cards table, so the route reads those lines too."""
+    checks.note("")
+    checks.note("PIPELINE SETS — collected survives a deleted box")
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            inventory.ensure_box(1, name="Doomed box")
+            inventory.ensure_box(2, name="Kept box")
+            minted = 0
+
+            def put(box, sku, number):
+                nonlocal minted
+                minted += 1
+                card, _ = inventory.allocate_capture(box, cid=fake_cid(f"buried-{minted}"))
+                card.sku = sku
+                card.name = f"Card {number}"
+                card.number = number
+                card.printed_total = "10"
+                card.set_name = "Master Set One"
+                card.game = "riftbound"
+                card.state = master.IDENTIFIED
+                return card
+
+            put(1, "6000001", "1")
+            put(1, "6000002", "2")
+            put(2, "6000002", "2")
+        capture_server.do_retire(1, 1, {"reason": master.MASTER_SET})
+        capture_server.do_retire(1, 2, {"reason": master.MASTER_SET})
+        capture_server.do_delete_box(1)
+        payload = pipeline_routes.do_pipeline_sets()
+
+    rows = {c["sku"]: c for g in payload["groups"] for c in g["cards"]}
+    rows.update({c["sku"]: c for c in payload["no_set"]})
+    checks.equal(
+        (rows.get("6000001", {}).get("qty"), rows.get("6000001", {}).get("collected"),
+         rows.get("6000001", {}).get("box")),
+        (0, True, None),
+        "a buried master_set copy with no copy on hand still reads qty 0 and collected true",
+    )
+    checks.equal(
+        (rows.get("6000002", {}).get("qty"), rows.get("6000002", {}).get("collected")),
+        (1, True),
+        "a buried master_set copy of a SKU still on hand in another box marks that row collected",
+    )
+    checks.equal(len(rows), 2, "and adds no second row for it")
+
+
+def check_pipeline_sets_buried_set_from_sku_table(checks: Checks) -> None:
+    """A buried master-set line takes its set from the SKU table (the master-set spec, section 3).
+
+    A `buried` line carries no set name, so `do_pipeline_sets` reads the set off the store's `skus`
+    entry for the line's SKU. The card's own set label here is a different set, so only the table
+    can name the row's set. The SKU is in the table, so the row sits in that set, qty 0, collected,
+    with no box."""
+    checks.note("")
+    checks.note("PIPELINE SETS — a buried master_set line takes its set from the SKU table")
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            inventory.ensure_box(1, name="Doomed box")
+            card, _ = inventory.allocate_capture(1, cid=fake_cid("buried-sku-table"))
+            card.sku = "6000101"
+            card.name = "Card 101"
+            card.number = "1"
+            card.printed_total = "10"
+            card.set_name = "Card Set Label"
+            card.game = "riftbound"
+            card.state = master.IDENTIFIED
+            _seed_sku_table(
+                snapshot,
+                [{"sku": "6000101", "set": "Table Set", "name": "Card 101", "number": "1", "condition": "Near Mint"}],
+                product_line="Riftbound League of Legends Trading Card Game",
+            )
+        capture_server.do_retire(1, 1, {"reason": master.MASTER_SET})
+        capture_server.do_delete_box(1)
+        payload = pipeline_routes.do_pipeline_sets()
+
+    in_groups = [
+        (group["set_name"], row)
+        for group in payload["groups"]
+        for row in group["cards"]
+        if row["sku"] == "6000101"
+    ]
+    checks.equal(
+        [(name, row["qty"], row["collected"], row["box"]) for name, row in in_groups],
+        [("Table Set", 0, True, None)],
+        "the buried line sits in the set the SKU table names, qty 0, collected, with no box",
+    )
+    checks.ok(
+        all(row["sku"] != "6000101" for row in payload["no_set"]),
+        "and it is not in the no-set list, which would be the line with no table entry",
     )
 
 
@@ -1717,6 +1901,9 @@ def check_inventory_copies_stock_image(checks: Checks) -> None:
 
 CHECKS = (
     check_pipeline_sets,
+    check_pipeline_sets_collected,
+    check_pipeline_sets_collected_buried,
+    check_pipeline_sets_buried_set_from_sku_table,
     check_stock_images,
     check_inventory_copies_stock_image,
     check_sales_stock_photo_fallback,

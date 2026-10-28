@@ -18,7 +18,7 @@ The send itself is the entry with slug
 | Q3 | What does Send do when some rows have no price? | It sends every ready copy. The rows with no price stay on the list. |
 | Q4 | Where does the slim bar sit? | At the top and sticky at 1440 and 720. On a phone, one line pinned above the tab bar. |
 | Q5 | Where do the store rule and the cut-off live? | One line above the list, with "Change". Change opens one sheet: the rule, the cut-off, and a box's own cut-off. |
-| Q6 | How does the owner mark down live listings? | A "Live" tab on Pricing, with the same rows. The Mark-down sheet goes. |
+| Q6 | How does the owner mark down live listings? | Reopened by the owner: live listings join the one list as suggestion rows, with no Live tab (`docs/specs/pricing-suggest.md`, section 5, step 4). Until that build lands, the Live tab stands. |
 | Q7 | Does one press also send a mark-down? | Yes, one press. There is no "Put the old prices back" control. |
 | Q8 | Where does the value list go? | To Inventory, as a "by value" sort in the shared sort control. It leaves Pricing. |
 | Q9 | Does Pricing offer to make the owner's pattern the rule? | Measure the typed prices first. If most follow one pattern, Pricing offers "Make this the rule" once. |
@@ -63,6 +63,14 @@ steps. The sheet opens with 92 words and a shell command (UX-017, UX-120).
 - **D156 (every unsent copy is one worklist).** Kept. The default is still everything unsent.
 - **D7 (duplicates aggregate by SKU).** Its per-send cap is removed from beside Send. Where the
   caps live now is not ruled.
+
+### A row's price history floats over the list
+
+The owner ruled that a row's price history shows in a floating card, not a sheet. The card opens
+by itself when that row's price field takes focus, and it follows the focused row down the list.
+It never covers the focused row or the next price field, and nothing in the list moves.
+`docs/specs/pricing-suggest.md`, section 9c, holds the ruling and its behavior. Until that build
+lands, the history door opens today's product sheet.
 
 ### What is still open
 

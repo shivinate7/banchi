@@ -11,5 +11,6 @@ decimals, the floor clamp applied *after* rounding, the threshold always read fr
 - **The floor asserted here is the STORE'S, not the module constant** (D9, amended).
   The case uses a market price between the two figures. Only that shape tells them apart.
   At a stored cut-off of `$0.29`, a `$0.32` card lists at `$0.32`.
-  At the `$0.40` default, the same row clamps to `$0.40` and is not listable.
+  At a cut-off of `$0.40`, the same row clamps to `$0.40` and is not listable. The owner sets the floor.
+  `$0.40` is `pipeline/pricing.py`'s module default for a caller with no store, and a store with none set reads `$0.49`.
   It is a regression case, not a parameter sweep. The owner's store sat at `$0.29` for a week while every clamp read `$0.40`.

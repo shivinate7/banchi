@@ -76,7 +76,7 @@ make demo-mirror SOURCE=<checkout>  # owner's Mac only: scrub, crop, commit `dem
 make demo-mirror-agent  # owner's Mac, main tree only: a weekly launchd job that refreshes the mirror
                     #   and auto-merges a mirror-only PR on green CI (D295, the public demo is the scrubbed real store). ARGS=--remove removes it.
 make demo-mirror-install  # CI's step: install the committed scrub. No store, no network.
-make price-refresh  # ONE free download of the live listings now, over this checkout's store, and the note `#/pricing` shows. No price change, and no archive sweep unless ARGS=--sweep asks for one (D224 (sweep preview is free)); the script alone sweeps by default, and this target passes `--no-sweep`.
+make price-refresh  # ONE free download of the live listings now, over this checkout's store, and the note `#/pricing` shows, then the free daily TCGCSV read (D325 (A daily read of TCGCSV builds)). No price change, and no archive sweep unless ARGS=--sweep asks for one (D224 (sweep preview is free)); the script alone sweeps by default, and this target passes `--no-sweep`.
 make price-refresh-agent  # owner's Mac, main tree only: a daily launchd job that runs it and, once per US Central day, the archive sweep (D104 (live fetch is guarded), D224). ARGS=--remove removes it.
 make backup         # ONE copy now of photos/ and captures/ plus a store snapshot to the iCloud Drive folder `Banchi backup`. Never overwrites there. ARGS=--verify checks it read-only
                     #   (DEBT67 (capture photographs exist in one place)). `BANCHI_BACKUP_DEST` overrides the folder. Its parent must exist. Never deletes there.
@@ -274,7 +274,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **The catalog export belongs to the game, not the drawer** (D166, the catalog export is a property of the game). It lands in `inventory/.exports/<game>/`.
   A covering export downloaded on the same US Central day is reused. `refresh: true` forces a new one; 900 s (`REFRESH_DEBOUNCE_S`) is only the double-press guard on a finished "Refresh now".
 - **The pricing answer is one file, keyed by SKU** (D86, one file for the store): `pipeline/corpus.py` over
-  `inventory/prices.json`. `policy.threshold` is also the floor. `sub_threshold` defaults to $0.49 (D9, threshold and floor).
+  `inventory/prices.json`. `policy.threshold` is also the floor, and the owner sets it. Its default is $0.49 (`pipeline/corpus.py:DEFAULT_CUTOFF`). `sub_threshold` also defaults to $0.49, a default and not the floor (D9, threshold and floor).
   `banchi prices adopt` migrates legacy run files. `join` and `emit` refuse over an unadopted one.
 - **The store of record is one SQLite file** (D88, SQLite and one transaction per write). `inventory.json` is
   legacy and read by nothing.
