@@ -5057,5 +5057,3 @@ export type SlabDetail = {
   ladder: Array<{ grade: string; label: string; cl_value: string | null; cl_confidence: number | null }>
   note: 'no sales' | null
 }
-
-export const RED_PROOF_TSC: number = 'red proof'

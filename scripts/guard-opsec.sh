@@ -117,5 +117,3 @@ if [ -n "$verdict" ]; then
 fi
 
 exit 0
-
-red_proof_unused=1

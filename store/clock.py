@@ -55,5 +55,3 @@ def seconds_into_today(now: Optional[datetime] = None) -> int:
     moment = (now or _current()).astimezone(CENTRAL)
     start = moment.replace(hour=0, minute=0, second=0, microsecond=0)
     return int((moment.astimezone(timezone.utc) - start.astimezone(timezone.utc)).total_seconds())
-
-_RED_PROOF_MYPY: int = "red proof"

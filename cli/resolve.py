@@ -2934,5 +2934,3 @@ def cheapest_of(rows) -> Optional[Decimal]:
     return routing.cheapest(
         [tcgcsv.parse_price(r[tcgcsv.MARKET_PRICE_COLUMN]) for r in rows]
     )
-
-_RED_PROOF_RUFF = _undefined_red_proof_name
