@@ -1,4 +1,4 @@
-# D-tcgtracking-pipe — Banchi's server calls TCGTracking for labels and tracking, in one lane
+# D326 — Banchi's server calls TCGTracking for labels and tracking, in one lane
 
 Banchi's server holds the TCGTracking key and calls TCGTracking itself, both to create envelope labels and to read tracking back.
 

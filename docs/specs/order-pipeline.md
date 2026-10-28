@@ -277,9 +277,9 @@ refusal message and log line. It has named failure codes. It has a control that 
 presses. The order host's cookie session is the admin portal's and does not transfer, so what
 carries over is the shape and not the auth.
 
-### The TCGTracking pipe: the owner's rulings (D-tcgtracking-pipe)
+### The TCGTracking pipe: the owner's rulings (D326)
 
-D-tcgtracking-pipe (the server calls TCGTracking) holds the rulings. Banchi's server holds the
+D326 (the server calls TCGTracking) holds the rulings. Banchi's server holds the
 key and calls TCGTracking itself. T4 and T5 are one lane. The main checkout's `.env` holds
 `TCG_TRACKING_KEY` and no shipper number, so no live call can run until the owner adds it.
 
