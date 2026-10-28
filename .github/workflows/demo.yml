@@ -157,7 +157,9 @@ jobs:
       # libraries, so the shared action installs only the browser and caches it by the pinned
       # Playwright version. It owns the setup; do not re-add a cache or an apt step here.
       # `npm-ci` is off because the Install step above already ran `npm ci --prefix app`.
-      - uses: shivinate7/claude-settings/actions/playwright-setup@3bebbd34804b8b37b59a8a788465ed63b2b0580b
+      - name: Install the browser
+        timeout-minutes: 5
+        uses: shivinate7/claude-settings/actions/playwright-setup@3bebbd34804b8b37b59a8a788465ed63b2b0580b
         with:
           package-dir: app
           npm-ci: 'false'
