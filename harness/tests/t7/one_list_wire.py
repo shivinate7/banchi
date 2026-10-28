@@ -313,61 +313,60 @@ def check_worklist_market_on_listing_day(checks: Checks) -> None:
     """
     checks.note("")
     checks.note("WORKLIST, MARKET ON THE LISTING DAY — the archive's bucket for that day")
-    with run_folder() as run, isolated_home(run):
-        with _case(checks, "worklist: market on the listing day"):
-            day = _day(5)
-            before_day = (day - timedelta(days=1)).isoformat()
-            _write_live(
-                "20260201-000000",
-                _live_export_priced(
-                    {ARTICUNO_SKU: 1, DUNSPARCE_SKU: 1, DUNSPARCE_REVERSE_SKU: 1},
-                    {ARTICUNO_SKU: "10.00", DUNSPARCE_SKU: "10.00", DUNSPARCE_REVERSE_SKU: "10.00"},
-                ),
-            )
-            for sku in SEAM_SKUS:
-                _set_listing(sku, first_seen_live=_noon(day))
-                _market_reading(sku, "12.00", "12.50")
-            _bucket(ARTICUNO_SKU, "month", day.isoformat(), "10.00")
-            _bucket(ARTICUNO_SKU, "quarter", before_day, "8.00")
-            _bucket(DUNSPARCE_SKU, "quarter", before_day, "10.00")
-            _bucket(DUNSPARCE_REVERSE_SKU, "month", _day(4).isoformat(), "10.00")
-            archived = sorted(
-                (b.sku, b.range, b.start, b.market) for sku in SEAM_SKUS for b in Store().read().archive.for_sku(sku)
-            )
-            checks.equal(archived, sorted([
-                (ARTICUNO_SKU, "month", day.isoformat(), "10.00"),
-                (ARTICUNO_SKU, "quarter", before_day, "8.00"),
-                (DUNSPARCE_SKU, "quarter", before_day, "10.00"),
-                (DUNSPARCE_REVERSE_SKU, "month", _day(4).isoformat(), "10.00"),
-            ]), "precondition: the four archived buckets are in the store")
+    with run_folder() as run, isolated_home(run), _case(checks, "worklist: market on the listing day"):
+        day = _day(5)
+        before_day = (day - timedelta(days=1)).isoformat()
+        _write_live(
+            "20260201-000000",
+            _live_export_priced(
+                {ARTICUNO_SKU: 1, DUNSPARCE_SKU: 1, DUNSPARCE_REVERSE_SKU: 1},
+                {ARTICUNO_SKU: "10.00", DUNSPARCE_SKU: "10.00", DUNSPARCE_REVERSE_SKU: "10.00"},
+            ),
+        )
+        for sku in SEAM_SKUS:
+            _set_listing(sku, first_seen_live=_noon(day))
+            _market_reading(sku, "12.00", "12.50")
+        _bucket(ARTICUNO_SKU, "month", day.isoformat(), "10.00")
+        _bucket(ARTICUNO_SKU, "quarter", before_day, "8.00")
+        _bucket(DUNSPARCE_SKU, "quarter", before_day, "10.00")
+        _bucket(DUNSPARCE_REVERSE_SKU, "month", _day(4).isoformat(), "10.00")
+        archived = sorted(
+            (b.sku, b.range, b.start, b.market) for sku in SEAM_SKUS for b in Store().read().archive.for_sku(sku)
+        )
+        checks.equal(archived, sorted([
+            (ARTICUNO_SKU, "month", day.isoformat(), "10.00"),
+            (ARTICUNO_SKU, "quarter", before_day, "8.00"),
+            (DUNSPARCE_SKU, "quarter", before_day, "10.00"),
+            (DUNSPARCE_REVERSE_SKU, "month", _day(4).isoformat(), "10.00"),
+        ]), "precondition: the four archived buckets are in the store")
 
-            with _network_recorder() as attempts:
-                payload = pipeline_routes.do_pipeline_worklist([])
-            checks.equal(attempts, [], "the listing-day market is read off the archive: no network")
+        with _network_recorder() as attempts:
+            payload = pipeline_routes.do_pipeline_worklist([])
+        checks.equal(attempts, [], "the listing-day market is read off the archive: no network")
 
-            rose = {
-                "asking": "10.00", "last_sold_at": None, "group": "suggested", "price": "12.00",
-                "source": "Suggested", "reason": "market up 20% since listed",
-            }
-            checks.equal(
-                _pinned(_live_row(payload, ARTICUNO_SKU)), rose,
-                "Articuno: the month bucket holding the listing day names its 10.00, so the rise is "
-                "20%, not the quarter's 50%",
-            )
-            checks.equal(
-                _pinned(_live_row(payload, DUNSPARCE_SKU)), rose,
-                "Dunsparce: with no month bucket, the quarter bucket that holds the listing day "
-                "names its 10.00, so the rise is 20%",
-            )
-            checks.equal(
-                _pinned(_live_row(payload, DUNSPARCE_REVERSE_SKU)),
-                {
-                    "asking": "10.00", "last_sold_at": None, "group": "at_rule", "price": "10.00",
-                    "source": "Live", "reason": "",
-                },
-                "Reverse: a bucket for another day is not the listing day's market, so the "
-                "market-moved trigger does not fire",
-            )
+        rose = {
+            "asking": "10.00", "last_sold_at": None, "group": "suggested", "price": "12.00",
+            "source": "Suggested", "reason": "market up 20% since listed",
+        }
+        checks.equal(
+            _pinned(_live_row(payload, ARTICUNO_SKU)), rose,
+            "Articuno: the month bucket holding the listing day names its 10.00, so the rise is "
+            "20%, not the quarter's 50%",
+        )
+        checks.equal(
+            _pinned(_live_row(payload, DUNSPARCE_SKU)), rose,
+            "Dunsparce: with no month bucket, the quarter bucket that holds the listing day "
+            "names its 10.00, so the rise is 20%",
+        )
+        checks.equal(
+            _pinned(_live_row(payload, DUNSPARCE_REVERSE_SKU)),
+            {
+                "asking": "10.00", "last_sold_at": None, "group": "at_rule", "price": "10.00",
+                "source": "Live", "reason": "",
+            },
+            "Reverse: a bucket for another day is not the listing day's market, so the "
+            "market-moved trigger does not fire",
+        )
 
 
 def _one_copy_live(checks: Checks, portal, *, prices: Optional[Dict[str, str]] = None) -> object:
