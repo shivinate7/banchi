@@ -52,7 +52,7 @@ make reap           # stop what THIS session started, nothing else. Previews. AR
 make janitor-install # retired: claude-settings' install.sh owns the user's Claude bin directory. Copies nothing.
 make merge          # claude-settings' shared merge tool (D140, merge claims the decision number), config in
                     #   `.github/stamp.json`. ARGS=<n> previews. ARGS="<n> --confirm" merges, and claims record
-                    #   numbers first. The owner names the session an Orchestrator first, per turn. It runs
+                    #   numbers first. The owner's named Orchestrator runs it under its standing grant. It runs
                     #   from any checkout, not only the PR's branch. It never rebases or force-pushes:
                     #   a moved head stops it, so rebase by hand and run it again.
 make janitor        # claude-settings' sweep (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep"): what a finished session left behind. Previews. ARGS=--confirm reaps.
@@ -343,8 +343,10 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   A session merges only after the owner names the act ("merge", not "ship it"). It uses
   `make merge ARGS="<n> --confirm"` with CI green, never `--admin`. One standing exception (D42, main moves by pull request):
   the weekly demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
-  Only a session that the owner names an Orchestrator may merge, and only PRs it planned and reviewed.
-  The designation is never inherited. A session that is not named asks for the word every time.
+  One session the owner names Orchestrator batches every reviewed lane, across all sessions, into one integration branch
+  and merges it under its standing grant. A lane session hands the Orchestrator each reviewed lane branch with its head
+  commit and review verdict. It never builds an integration branch, opens an integration PR, marks a PR ready or merges.
+  The designation is never inherited.
   GitHub branch protection also requires `check` and `revert-guard`, with 0 reviews and `strict: false`.
   It catches the remote half. The local hook is the only cover for a local fast-forward.
   `scripts/githooks/reference-transaction` and `scripts/githooks/pre-push` refuse, armed by `make hooks`.
@@ -360,9 +362,8 @@ Use bold labels in one quoted block, never a code fence. Start with the point. N
 - Run `make harness` before you say something works. Give the verdict, never the output.
 - Screen work: experience is everything (D307, rulings CLAUDE.md carried). Run a design pass
   before you build. Review the built screen against it before you call it done.
-- Reserve Opus for planning, for a builder redesigning a whole flow, and for resolving a hard merge.
-  Every review is Sonnet. An Opus review needs the orchestrator to ask the owner first and get a yes.
-  Sonnet builds every ordinary screen lane and fix round by default. Say an Opus lane in one line first.
+- Sonnet is the default and the ceiling. Plan, the designer, the design reviewer and a builder's third try run Opus.
+  Reviewers run Sonnet. Any other Opus needs the owner's grant. Say an Opus lane in one line first.
   Raise it only on the owner's word, in `.claude/settings.local.json`.
 - A builder commits and pushes its branch after every pass, even red. Each commit message ends with `Done:` and
   `Next:` lines, so a lane resumes from its branch alone.

@@ -133,7 +133,7 @@ At `prepared`, the hook asks `git merge-base --is-ancestor "$new" refs/remotes/o
 
 **"The word" above is still per-PR by default. This is the one exception, and it is scoped, not a repeal.** After being asked twice to name the act for PR #349, the owner gave the orchestrating session a standing permission to merge. That names the act once for a whole batch, instead of once per PR in it.
 
-**The grant is to the ORCHESTRATING session, and only for PRs it stood behind.** It covers a PR only when that session put the PR's plan to the owner and reviewed its diff. It never covers a worker or a peer session merging a PR of its own. Those still need the word, as above. It is exercised only through `make merge ARGS="<n> --confirm"`. It runs from a checkout standing on the PR's own branch, only once CI is green, and never with `--admin`. A later session re-asks. That includes a new orchestrator, or the same one returned to a fresh batch. The grant does not carry forward on its own.
+**The grant is to the one session the owner names Orchestrator.** It batches every reviewed lane, across all sessions, into one integration branch and merges it. It covers only work the owner set out and a reviewer cleared. A lane session hands the Orchestrator each reviewed lane branch with its head commit and review verdict. It never builds an integration branch, opens an integration PR, marks a PR ready or merges. The grant is exercised only through `make merge ARGS="<n> --confirm"`, only once CI is green, and never with `--admin`. The designation is never inherited. A later session re-asks, a new Orchestrator included.
 
 ### A standing grant to the weekly demo refresh
 

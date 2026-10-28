@@ -22,17 +22,18 @@ The local directory is `~/Developer/banchi`. The GitHub repository is `shivinate
 GitHub Pages followed the rename. `.github/workflows/demo.yml` derives `DEMO_BASE` from the repository name.
 The Makefile's own default is a stale fallback for a hand-run build, by design.
 
-**Merge needs an Orchestrator that the owner named.** A session merges only after the owner names the act.
-Only a session that the owner has called an Orchestrator may merge. It may merge only PRs it planned and reviewed.
+**Merge needs an Orchestrator that the owner named.** One session the owner names Orchestrator batches every
+reviewed lane, across all sessions, into one integration branch and merges it under its standing grant.
+A lane session hands it each reviewed lane branch with its head commit and review verdict. It never builds an
+integration branch, opens an integration PR, marks a PR ready or merges.
 It merges only through `make merge ARGS="<n> --confirm"`, with CI green, and never with `--admin`.
-The owner names it per turn. The designation is never inherited. It is never assumed from the shape of the work.
+The designation is never inherited. It is never assumed from the shape of the work.
 `make merge` carries a needed rebase and force-push on a branch nobody else holds.
-It is never carried over from an earlier session. It replaced a standing grant. D42 (main moves by PR) holds the rest.
+It is never carried over from an earlier session. D42 (main moves by PR) holds the rest.
 
-**Model tiers.** Opus is for planning, for a builder that redesigns a whole flow, and for a hard merge.
-Every review is Sonnet. An Opus review needs the orchestrator to ask the owner first and get a yes.
-Sonnet builds every ordinary screen lane and fix round by default. An Opus lane is said in one line first,
-and raised only on the owner's word in `.claude/settings.local.json`.
+**Model tiers.** Sonnet is the default and the ceiling. Plan, the designer, the design reviewer and a builder's
+third try run Opus. Reviewers run Sonnet. Any other Opus needs the owner's grant. An Opus lane is said in one
+line first, and raised only on the owner's word in `.claude/settings.local.json`.
 
 **A builder commits and pushes its branch after every pass, even when a check is red.**
 Each commit message ends with a `Done:` line and a `Next:` line.
