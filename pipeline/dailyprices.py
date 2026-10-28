@@ -2,7 +2,7 @@
 
 WHY. `tcgcsv.com` withdrew its past-days archive, so a whole-market price history can only be built by reading the
 current file each day and keeping it. This pass is that read. Riftbound is category 89. FREE, public, no key, and it
-changes nothing at TCGplayer. The decision is D-tcgcsv-daily-read; no screen reads the rows yet.
+changes nothing at TCGplayer. The decision is D325; no screen reads the rows yet.
 
 THE KEY IS THE SOURCE'S OWN UPDATE, NEVER THE CLOCK. TCGCSV refreshes once a day and says when in
 `last-updated.txt`. A pass fetches that stamp first and stops there when it is a finished update already saved. Rows

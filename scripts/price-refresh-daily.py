@@ -8,7 +8,7 @@ strips for the rows still waiting (`docs/specs/stale-listings.md`, 7b). Each ste
 and never a silent stale state.
 
 On every start, whatever the refresh did, the same process saves TCGCSV's current Riftbound prices once per
-source update (`pipeline.dailyprices`, D-tcgcsv-daily-read): the refresh does not feed it, `--no-sweep` and
+source update (`pipeline.dailyprices`, D325): the refresh does not feed it, `--no-sweep` and
 `make price-refresh` run it too, and its own check skips an update already saved. Each pass is the `daily_prices`
 step of the note file, not ok when a group failed or the pass raised, and a line in this log. No screen shows it.
 It never changes the exit code and never stops the sweep.

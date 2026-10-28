@@ -577,7 +577,7 @@ def check_daily_job_empty_sweep_is_ok(checks: Checks) -> None:
 def check_daily_job_reads_daily_prices_whatever_the_refresh_did(checks: Checks) -> None:
     """The daily TCGCSV read (`pipeline.dailyprices.run_pass`) runs on every start of the job: after a good
     refresh, after a failed one, after one whose sales-history step failed, over a sweep that stops early, and
-    under `--no-sweep`. The refresh does not feed it (D-tcgcsv-daily-read), so a refresh's verdict is not its.
+    under `--no-sweep`. The refresh does not feed it (D325), so a refresh's verdict is not its.
 
     THE READ IS A STAND-IN HERE (`_daily_prices_stand_in`): its own cases, the source-update guard included,
     are `harness/tests/t7/daily_prices.py`. What is proved is THAT the job calls it, with the User-Agent knob's
