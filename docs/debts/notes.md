@@ -11,3 +11,9 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - The records page gists: 33 open a bold run they never close, and about 45 lead with who ruled, not what (D260, D263, D273, D277, D289, D307). D138's gist is vague.
 - `guard-shell.py`'s `_sanctioned_outside`: the side-session notes folder skips the `_repo_holding` check the temp folder has, so a checkout placed under it would take writes and `cd`.
 - `guard-shell.py`'s `_resolve_target` resolves only the parent folder, so a file symlink inside a sanctioned folder that points into a checkout is written through (same on main for `~/.claude`).
+- The one-list send (`server/send_routes.py`): with runs on disk and a corrupt `prices.json`, `pipeline_routes.do_pipeline_worklist` still draws default-policy suggestions and sets no `error`. The send then refuses `live_check_failed`, so no wrong price goes out.
+- `readings_stale` has no cure for a SKU whose newest market reading came from an old run table, since the live export carries no market for it. Its named remedy cannot fix that case.
+- The `readings_stale` sentence names bare SKU ids, where `suggestion_changed` and the held refusal name cards. `postings.SUGGESTED` and `suggest.SOURCE` are two constants for nearly one thing.
+- `send_routes._refuse_stale_readings`'s docstring, and the docstring of the T7 case `check_send_with_run_refuses_stale_readings`, say `refresh_before_send` never touches a suggestion's reading. When the refresh runs, its live fetch rewrites those readings. Wording only.
+- `send_routes._send`: the `nothing_to_send` branch re-parses the live CSV through `_names`. A file deleted mid-press turns the 409 into a 500.
+- `send_routes._name_held`: a refusal carries `held` at `error.data.held`, a sent answer at top level. No client reads either yet. A held suggestion dropped from a press refused `under_cut_off` or `needs_price` is not named; nothing is sent then.
