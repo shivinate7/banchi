@@ -85,7 +85,7 @@ function refusalTitle(code: string, data?: unknown): string {
     case 'needs_price':
       return 'Every card on this list needs a price first, so nothing was sent.'
     case 'under_cut_off':
-      return 'Every priced card on this list is under the cut-off, and this send lists only the cards above it, so nothing was sent.'
+      return 'Every priced card on this list is under the floor, and this send lists only the cards above it, so nothing was sent.'
     case 'nothing_to_send':
       return 'Nothing to send. Every copy on this list is already at TCGplayer or held back.'
     case 'already_sent':
@@ -1141,7 +1141,7 @@ export function SendCard({
         <div className="send-download">
           <label className="bn-check">
             <input type="checkbox" checked={split} onChange={(event) => setSplit(event.currentTarget.checked)} />
-            <span>Split in two files at the cut-off</span>
+            <span>Split in two files at the floor</span>
           </label>
           <Button icon="download" busy={phase === 'downloading'} disabled={busy} onClick={() => press('download')}>
             {/* THE PRESS KEEPS ITS WORDS WHILE IT RUNS (D118, b-runs round 9): `busy` draws the

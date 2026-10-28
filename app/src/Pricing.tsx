@@ -131,7 +131,7 @@ import { ABSENT_SENTENCE, AbsentPhotoNote, gameLabel, noPhotoSentence } from './
  *
  * Every row, the rows that need the owner on top, then the rest by value (Q1, Q2). One slim bar
  * holds Send, sticky at the top on a desk and pinned above the tab bar on a phone (Q4). The rule
- * and the cut-off are one line with "Change" (Q5). Mark-downs are the Live tab, same rows, one
+ * and the floor are one line with "Change" (Q5). Mark-downs are the Live tab, same rows, one
  * press (Q6, Q7). The value list is an Inventory sort now (Q8). Every product name opens the one
  * product view (D278), which is where the old drawer went.
  *
@@ -230,8 +230,8 @@ const SNAPS: { key: string; field: keyof PricingSku['snap']; says: string }[] = 
 /* The section list is passed to the source. It stays here beside `PRESETS`, which
    `scripts/docs-audit.py`'s `pricing presets` row reads out of THIS FILE by path. */
 const SECTIONS: SectionSpec[] = [
-  { bucket: 'listable', title: 'Above the cut-off', icon: 'tag', note: () => '' },
-  { bucket: 'sub_threshold', title: 'Under the cut-off', icon: 'minus', note: () => '' },
+  { bucket: 'listable', title: 'Above the floor', icon: 'tag', note: () => '' },
+  { bucket: 'sub_threshold', title: 'Under the floor', icon: 'minus', note: () => '' },
   { bucket: 'no_market_data', title: 'No market price', icon: 'alert', note: () => '' },
 ]
 const LIVE_SECTIONS: SectionSpec[] = SECTIONS.slice(0, 2)
@@ -245,7 +245,7 @@ function priceable(text: string): boolean {
   return /^\d+(\.\d{1,2})?$/.test(text.trim())
 }
 
-/** The store's standing cut-off — a default, not a silent write (the owner, 2026-09-03). */
+/** The store's standing floor — a default, not a silent write (the owner, 2026-09-03). */
 const STORE_DEFAULT_CUT = '0.49'
 
 /** Money as integer cents, or null where the text is not a figure. */
@@ -270,7 +270,7 @@ function liveLens(standing: string | undefined): 'offered' | 'refused' {
 /** Which kind of live listing the Live tab shows (the owner's ruling, 2026-09-26): '' is both. */
 type LiveKind = '' | 'singles' | 'sealed'
 
-/** THE CHEAP-CARD PRICE AS IT STANDS ON DISK, where it is not the cut-off — `null` where the two
+/** THE CHEAP-CARD PRICE AS IT STANDS ON DISK, where it is not the floor — `null` where the two
  *  agree. A store written under the old two-figure model can say both at once, and one press
  *  resolves it, because every commit here writes both keys. */
 function strandedFlat(doc: DecisionsDocument, cut: string): string | null {
@@ -286,8 +286,8 @@ function writtenCut(policy: Record<string, unknown> | undefined): string | null 
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
 }
 
-/** Which bucket a row is in AT A GIVEN CUT-OFF: `pipeline/pricing.py:is_listable` in the client's
- *  terms. Typing on a row moves nothing; only the cut-off, a policy figure, re-partitions. */
+/** Which bucket a row is in AT A GIVEN FLOOR: `pipeline/pricing.py:is_listable` in the client's
+ *  terms. Typing on a row moves nothing; only the floor, a policy figure, re-partitions. */
 function bucketAt(sku: PricingSku, cut: string): PricingSku['bucket'] {
   if (sku.bucket === 'no_market_data') return sku.bucket
   const market = cents(sku.snap.market)
@@ -331,7 +331,7 @@ function withRunPolicy(book: PricingCorpus, run: string, patch: Record<string, u
 /** Short labels for the hold reasons; the full sentence is drawn beneath the chips. */
 const HOLD_SHORT: Record<WithholdReason, string> = {
   bullish: 'Bullish',
-  keeping: 'Keeping this one',
+  keeping: 'Keep off TCGplayer',
   next_batch: 'A later batch',
 }
 
@@ -576,7 +576,7 @@ function flagOf(row: PricingSku, standing: unknown, locked: boolean, cut: string
     return typeof standing === 'string' ? null : { kind: 'no-market', text: 'No market price', tone: 'danger' }
   }
   const typed = typeof standing === 'string' ? cents(standing) : null
-  /* THE CUT-OFF IS NOT A DRIFT. A card worth less than the cut-off lists AT the cut-off (D99), so
+  /* THE FLOOR IS NOT A DRIFT. A card worth less than the floor lists AT the floor (D99), so
      a typed price equal to it is the floor doing its job: nothing can list lower. Flagging it
      would put every cheap card on top, which is the opposite of "zero attention per card". */
   const floor = cents(cut)
@@ -1126,7 +1126,7 @@ export function Pricing() {
   )
   const doc = useMemo(() => corpusAsDoc(book, run), [book, run])
 
-  /* THE CUT-OFF IN FORCE, in `pipeline/corpus.py:policy_for`'s order: this run's own figure,
+  /* THE FLOOR IN FORCE, in `pipeline/corpus.py:policy_for`'s order: this run's own figure,
      then the store's, then the server's copy of the store's (which is the only true answer for
      a store that never set one), then the default. */
   const storeCut = writtenCut(book?.policy)
@@ -1178,9 +1178,9 @@ export function Pricing() {
     )
   }, [])
 
-  /** Set the STORE-WIDE cut-off. BOTH KEYS, ALWAYS: the line and what the half below it lists at
+  /** Set the STORE-WIDE floor. BOTH KEYS, ALWAYS: the line and what the half below it lists at
    *  are one figure (the owner, 2026-09-03), so this screen has no way to write one alone.
-   *  UN-13 (finding #15, `docs/specs/undo.md` §11.10): a cut-off change is a reversal too, so
+   *  UN-13 (finding #15, `docs/specs/undo.md` §11.10): a floor change is a reversal too, so
    *  it gets the same "<subject> undone" toast every other write on this screen gets. */
   const setCut = useCallback((figure: string) => {
     /* FINDING #6 (the delta review round): a no-op guard, only when the STORED policy already
@@ -1196,7 +1196,7 @@ export function Pricing() {
     if (storedThreshold === figure && storedFlatValue === figure) return
     recordUndo(
       { kind: 'cutoff', before: { threshold: book?.policy?.threshold, sub_threshold: book?.policy?.sub_threshold } },
-      'Cut-off changed',
+      'Floor changed',
       `The store-wide rule now reads ${figure}.`,
     )
     setBook((current) =>
@@ -1213,8 +1213,8 @@ export function Pricing() {
       const was = book?.policy?.per_run?.[run]
       recordUndo(
         { kind: 'runcut', run, before: { threshold: writtenCut(was) ?? undefined, sub_threshold: was?.['sub_threshold'] as never } },
-        figure === undefined ? 'Run follows the store cut-off' : 'Cut-off changed for this run',
-        figure === undefined ? 'This run now uses the store-wide cut-off.' : `This run's cut-off now reads ${figure}.`,
+        figure === undefined ? 'Run follows the store floor' : 'Floor changed for this run',
+        figure === undefined ? 'This run now uses the store-wide floor.' : `This run's floor now reads ${figure}.`,
       )
       const patch =
         figure === undefined
@@ -1298,7 +1298,7 @@ export function Pricing() {
     return by
   }, [sheet])
 
-  /* THE LIST IS PARTITIONED AT THE CUT-OFF THIS SCREEN IS SHOWING, and the Live lens filter
+  /* THE LIST IS PARTITIONED AT THE FLOOR THIS SCREEN IS SHOWING, and the Live lens filter
      composes with it (D103). */
   const partitioned = useMemo(
     () =>
@@ -1506,7 +1506,7 @@ export function Pricing() {
     for (const row of rows) {
       const standing = answerFor(row)
       /* A HOLD IS A FACT ABOUT THE ROW, SENT OR NOT: counted before the cap branch, so this figure
-         and the "Held" press (`held`, above) read the same rows (F3). */
+         and the "Kept off" press (`held`, above) read the same rows (F3). */
       const isHeld = isWithheld(standing)
       if (isHeld) heldCount += 1
       if (row.at_cap) {
@@ -1805,7 +1805,7 @@ export function Pricing() {
     [rows, table, answerFor, source, book, recordUndo],
   )
 
-  /** The live rows a cut-off press would move: under the line, and nobody answered them. */
+  /** The live rows a floor press would move: under the line, and nobody answered them. */
   const cheapRows = useMemo(
     () =>
       rows.filter((row) => {
@@ -1892,7 +1892,7 @@ export function Pricing() {
     })
   }, [ruleRows, book])
 
-  /** Write the cut-off onto every unanswered live row under it, in ONE press and ONE undo. Live
+  /** Write the floor onto every unanswered live row under it, in ONE press and ONE undo. Live
    *  tab only: a run's cheap half is priced by policy at the send (D9). */
   const applyCut = useCallback(() => {
     const price = cut.trim()
@@ -1915,8 +1915,8 @@ export function Pricing() {
     setTypedHere((held) => new Set([...held, ...moved]))
     toast({
       kind: 'receipt',
-      title: `${moved.length} ${moved.length === 1 ? 'row' : 'rows'} priced at the cut-off`,
-      body: 'Every live row under the cut-off that you had not answered.',
+      title: `${moved.length} ${moved.length === 1 ? 'row' : 'rows'} priced at the floor`,
+      body: 'Every live row under the floor that you had not answered.',
       action: {
         label: 'Undo',
         onPress: () => {
@@ -2068,7 +2068,7 @@ export function Pricing() {
   const undoByIdRef = useRef(undoById)
   undoByIdRef.current = undoById
 
-  /* THE CHEAP ROWS FOLLOW THE CUT-OFF on a run: the field shows what the send will write. */
+  /* THE CHEAP ROWS FOLLOW THE FLOOR on a run: the field shows what the send will write. */
   useEffect(() => {
     if (!source.proposes) return
     for (const row of rows) {
@@ -2139,7 +2139,7 @@ export function Pricing() {
               void reholdCopies(sku.sku, done.unheld, done.pushed)
                 .then(() => {
                   reload()
-                  toast({ kind: 'ok', title: `Held ${sku.name} again` })
+                  toast({ kind: 'ok', title: `Kept ${sku.name} off TCGplayer again` })
                 })
                 .catch((err: unknown) => toast({ ...refusalToast(err, `Could not hold ${sku.name} again`) })),
           },
@@ -2184,8 +2184,8 @@ export function Pricing() {
       setHoldFor(null)
       toast({
         kind: 'receipt',
-        title: `Held ${sku.name}`,
-        body: WITHHOLD_LABELS[reason],
+        title: `Kept off TCGplayer: ${sku.name}`,
+        body: reason === 'keeping' ? undefined : WITHHOLD_LABELS[reason], // the title already says it; the chip's imperative is not a status
         ttlMs: 8000,
         action: { label: 'Undo', kbd: 'U', onPress: () => undoByIdRef.current(id) },
       })
@@ -2393,7 +2393,7 @@ export function Pricing() {
         body:
           result.holds === 0
             ? 'Those rows go back to the rule. Nothing at TCGplayer changed.'
-            : `Those rows go back to the rule. ${result.holds} held back on purpose ${result.holds === 1 ? 'was' : 'were'} left alone, and nothing at TCGplayer changed.`,
+            : `Those rows go back to the rule. ${result.holds} kept off TCGplayer ${result.holds === 1 ? 'was' : 'were'} left alone, and nothing at TCGplayer changed.`,
         action: {
           label: 'Undo',
           onPress: () => {
@@ -2602,13 +2602,13 @@ export function Pricing() {
           aria-pressed={filterHeld}
           onClick={() => setFilterHeld((on) => !on)}
         >
-          {`Held ${held.length}`}
+          {`Kept off ${held.length}`}
         </Button>
       )}
     </div>
   )
 
-  /* THE RULE LINE (D277, Q5): what the rule does and the cut-off, once, with "Change". */
+  /* THE RULE LINE (D277, Q5): what the rule does and the floor, once, with "Change". */
   const readAgain = () =>
     void readLive(
       {
@@ -2654,9 +2654,9 @@ export function Pricing() {
   ) : (
     <p className="pricing-rule-line">
       <span>
-        {/* F5 verbiage cut: "Nothing lists under the cut-off" restated the number that
+        {/* F5 verbiage cut: "Nothing lists under the floor" restated the number that
             follows it — the dollar figure plus "floor" says the same thing (the data rule
-            keeps the percentage and the cut-off, only the words around them shrink). */}
+            keeps the percentage and the floor, only the words around them shrink). */}
         {ruleWords(doc)}, <Money value={Number(cut)} /> floor.
       </span>
       <Button size="sm" variant="quiet" onClick={() => setRuleOpen(true)}>
@@ -2742,16 +2742,16 @@ export function Pricing() {
   const tally = (
     <div className="pricing-tally">
       {pricedTile}
-      <Tile data-tile="held" pending={barLoading} icon="lock" tone="info" title={`${progress.held} held back`} room="Not in this send. Show Held">
+      <Tile data-tile="held" pending={barLoading} icon="lock" tone="info" title={`${progress.held} kept off TCGplayer`} room="Not in this send. Show kept off">
         {progress.held > 0 ? (
           <>
             Not in this send.{' '}
             <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => showRows({}, true)}>
-              Show Held
+              Show kept off
             </Button>
           </>
         ) : (
-          'None held.'
+          'None kept off.'
         )}
       </Tile>
       <Tile
@@ -2981,7 +2981,7 @@ export function Pricing() {
             }
           />
         ) : (
-          <EmptyState icon="check" title="Everything is sent" body="Every copy is at TCGplayer, held, or has left its box." />
+          <EmptyState icon="check" title="Everything is sent" body="Every copy is at TCGplayer, kept off it, or has left its box." />
         )
 
   const showList = table !== null && (table.length > 0 || liveTab)
@@ -3241,7 +3241,8 @@ function fieldState(
   if (isWithheld(standing)) {
     // The human label is drawn; the machine string it stands for travels in the title (D86).
     const reason = heldReason(standing)
-    const label = (HOLD_SHORT as Record<string, string>)[reason] ?? ''
+    // The owner's hold is said once, by the pill; the caption adds only another reason's short name.
+    const label = reason === 'keeping' ? '' : ((HOLD_SHORT as Record<string, string>)[reason] ?? '')
     return label === '' ? null : { text: label, tone: 'quiet', title: `withheld: ${reason}` }
   }
   if (asking !== undefined && asking !== null && typeof standing === 'string') {
@@ -3506,9 +3507,8 @@ function PricingRow({
             {lockedWhy}
           </span>
         ) : withheld ? (
-          <span className="pricing-held">
-            <Icon name="lock" size={13} />
-            Held
+          <span className="pricing-held" title={`withheld: ${heldReason(standing)}`}>
+            Kept off TCGplayer
           </span>
         ) : (
           <label className="pricing-field">
@@ -3569,8 +3569,8 @@ function PricingRow({
       <IconButton
         ref={registerHold}
         icon={withheld ? 'unlock' : 'lock'}
-        label={withheld ? 'Release' : 'Hold Back'}
-        name={withheld ? `Release ${sku.name}` : `Hold Back ${sku.name}`}
+        label={withheld ? 'Release' : 'Keep off TCGplayer'}
+        name={withheld ? `Release ${sku.name}` : `Keep ${sku.name} off TCGplayer`}
         kbd="H"
         pressed={withheld}
         className="pricing-hold"
@@ -3602,7 +3602,7 @@ function BigMoney({ value, onCommit, label }: { value: string; onCommit: (next: 
    * store's own $0.40 floor into a field already reading '0.40' and asserts one PUT lands.
    * Telling "the operator re-typed what was already there" from "this field's default
    * happens to match" needs a `written` flag this component has no way to hold — Pricing
-   * never re-derived one after the rebuild took `BigMoney` down to its single cut-off call
+   * never re-derived one after the rebuild took `BigMoney` down to its single floor call
    * site. The double-commit is the real defect (finding #6's own repro); the no-op guard
    * was this round's own regression, caught by the pricing.spec.ts run below. */
   const justCommitted = useRef(false)
@@ -3655,7 +3655,7 @@ function BigMoney({ value, onCommit, label }: { value: string; onCommit: (next: 
   )
 }
 
-/** THE ONE "CHANGE" SHEET (D277, Q5): the rule, the cut-off, and a run's own cut-off. */
+/** THE ONE "CHANGE" SHEET (D277, Q5): the rule, the floor, and a run's own floor. */
 function RuleSheet({
   open,
   onClose,
@@ -3707,11 +3707,11 @@ function RuleSheet({
       <SettingsFigures title="Overview">
         <SettingsCensus label="Rule" value={ruleName} />
         <SettingsCensus
-          label="Cut-off"
+          label="Floor"
           value={<Money value={Number(cut)} />}
-          help="The cut-off and the floor are one figure: cards worth less list at it, and nothing lists lower."
+          help="Cards worth less list at the floor, and nothing lists lower."
         />
-        <SettingsCensus label="Priced" value={above} help="Cards worth the cut-off or more, which the rule prices." />
+        <SettingsCensus label="Priced" value={above} help="Cards worth the floor or more, which the rule prices." />
       </SettingsFigures>
 
       <SettingsGroup title="New cards" note="How a new card is priced">
@@ -3804,23 +3804,23 @@ function RuleSheet({
 
       <section className="pricing-sheet-part" aria-labelledby="pricing-cut-head">
         <h3 className="pricing-sheet-head" id="pricing-cut-head">
-          The cut-off{overridden ? ', this run only' : ''}
+          The floor{overridden ? ', this run only' : ''}
         </h3>
         <div className="pricing-cheap-figure">
-          <BigMoney value={cut} onCommit={onCut} label={overridden ? 'Cut-off for this run' : 'Cut-off'} />
+          <BigMoney value={cut} onCommit={onCut} label={overridden ? 'Floor for this run' : 'Floor'} />
           <span className="pricing-cheap-caption">
             Cards worth less list at this price. {under} under, {above} above.
           </span>
         </div>
         {stranded === null ? null : (
-          <Notice tone="warn" compact title="Cards under the cut-off still list at a second, older price." className="pricing-stranded">
+          <Notice tone="warn" compact title="Cards under the floor still list at a second, older price." className="pricing-stranded">
             {Number.isFinite(Number(stranded)) ? (
               <span>
                 That price is <Money value={Number(stranded)} />.{' '}
               </span>
             ) : null}
             <Button size="sm" variant="quiet" onClick={() => onCut(cut)}>
-              Use the cut-off for both
+              Use the floor for both
             </Button>
           </Notice>
         )}
@@ -3833,7 +3833,7 @@ function RuleSheet({
               </Button>
             ) : (
               <Button size="sm" variant="quiet" onClick={() => onRunCut(cut)}>
-                Give this run its own cut-off
+                Give this run its own floor
               </Button>
             )}
           </p>
@@ -3951,12 +3951,12 @@ function LiveSheet({
             ))}
             {onApplyCut === null ? null : (
               <Button size="sm" onClick={onApplyCut} disabled={cheap === 0}>
-                {`Price ${cheap} at the cut-off`}
+                {`Price ${cheap} at the floor`}
               </Button>
             )}
           </div>
           <p className="pricing-sheet-says">
-            The cut-off is <Money value={Number(cut)} />.
+            The floor is <Money value={Number(cut)} />.
           </p>
           {note === null ? null : <p className="pricing-sheet-bad">{note}</p>}
         </div>
@@ -4162,7 +4162,7 @@ function HoldPanel({
           Cancel
         </Button>
         <Button variant="primary" icon="lock" onClick={() => onSet(sku, reason, watch, text)}>
-          Hold it
+          Keep it off
         </Button>
       </div>
     </div>

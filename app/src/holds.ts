@@ -35,7 +35,7 @@ export type WithholdReason = (typeof WITHHOLD_REASONS)[number]
  *  `inventory/prices.json` to the run report. */
 export const WITHHOLD_LABELS: Record<WithholdReason, string> = {
   bullish: 'Bullish — waiting for the price to move',
-  keeping: 'Keeping this one',
+  keeping: 'Keep off TCGplayer',
   next_batch: 'Listing it in a later batch',
 }
 
