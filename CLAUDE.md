@@ -340,7 +340,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **A screen answers to the system.** `--bn-*` tokens only, checked at 1440 and 820, light and dark.
   `docs/DESIGN.md` is the record. The `design tokens` row of `make docs-audit` locks every name and hex both ways.
 - **Main moves by pull request. A session never commits to it and never pushes it** (D42, main moves by pull request).
-  One session the owner names Orchestrator batches every reviewed lane, across all sessions, into one integration branch
+  One session the owner names Orchestrator batches every reviewed lane the owner set out, across all sessions, into one integration branch
   and merges it under its standing grant. Any other merge happens only on the owner's named act ("merge", not "ship it"),
   and the Orchestrator runs it. A lane session never merges. It hands the Orchestrator each reviewed lane branch with its
   head commit and review verdict, and never builds an integration branch, opens an integration PR or marks a PR ready.
@@ -362,9 +362,9 @@ Use bold labels in one quoted block, never a code fence. Start with the point. N
 - Run `make harness` before you say something works. Give the verdict, never the output.
 - Screen work: experience is everything (D307, rulings CLAUDE.md carried). Run a design pass
   before you build. Review the built screen against it before you call it done.
-- Sonnet is the default and the ceiling. Plan, the designer, the design reviewer and a builder's third try run Opus.
-  Reviewers run Sonnet. Any other Opus needs the owner's grant. Say an Opus lane in one line first.
-  Raise it only on the owner's word, in `.claude/settings.local.json`.
+- Sonnet is the default and the ceiling. Plan, the built-in advisor, the designer, the design reviewer and a builder's
+  third try run Opus. Reviewers run Sonnet from round 2; round 1 uses the role's model. Any other Opus needs the owner's
+  grant. Say an Opus lane in one line first. Raise any other Opus lane only on the owner's word, in `.claude/settings.local.json`.
 - A builder commits and pushes its branch after every pass, even red. Each commit message ends with `Done:` and
   `Next:` lines, so a lane resumes from its branch alone.
 - Read `docs/decisions/` before you propose an architecture change (`scripts/decision-context.py` finds the entry,
