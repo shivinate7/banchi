@@ -209,6 +209,8 @@ panel, and asked that it open by itself when a price field takes focus. Mockup:
 - **It never covers the focused row or the next price field.** Opened by focus, it sits above the
   row, over rows already priced. Where there is no room above, it opens below and clear of the
   price column.
+- **Known limit.** At 820, with no room above and the card opened below and left of the price
+  column, it can cover the focused row's thumb and name. No test pins this.
 - **Focus stays in the field.** A card opened by focus takes no focus, so Tab goes on to the next
   price. A card opened by the door takes focus and gives it back to the door when it closes.
 - **It stays open while focus is in the list.** Tab passes the door, the lock, the next tick and
