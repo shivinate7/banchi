@@ -312,11 +312,11 @@ jobs:
   # matrix, so one failed, cancelled or skipped shard changes its result) must be `success`, or
   # `skipped` with an explicit reason: `browser-scope` answered `false` (no browser can reach
   # the change) or `already-passed` answered `true` (this tree went green on a pull request).
-  # Any other `skipped`, `failure` or `cancelled` fails. `records` must be `success`, never skipped.
+  # Any other `skipped`, `failure` or `cancelled` fails. `records` and `code-check` must be `success`, never skipped.
   # ponytail: the smallest in-repo gate;
   # it can move to claude-settings' `actions/all-jobs-passed` once that is merged.
   check:
-    needs: [ci-check, ci-static, design-check, already-passed, browser-scope, records]
+    needs: [ci-check, ci-static, design-check, already-passed, browser-scope, records, code-check]
     if: ${{ always() && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -329,11 +329,13 @@ jobs:
           SCOPE_RUN: ${{ needs.browser-scope.outputs.run }}
           ALREADY_PASSED: ${{ needs.already-passed.outputs.skip }}
           RECORDS: ${{ needs.records.result }}
+          CODE: ${{ needs.code-check.result }}
         run: |
           echo "shards: ${SHARDS}; browser matrix: ${BROWSER} (scope run=${SCOPE_RUN}, already-passed skip=${ALREADY_PASSED})"
           [ "${SHARDS}" = "success" ] || { echo "a shard did not succeed"; exit 1; }
           [ "${STATIC}" = "success" ] || { echo "the static checks did not succeed"; exit 1; }
           [ "${RECORDS}" = "success" ] || { echo "the record-number check did not succeed: ${RECORDS}"; exit 1; }
+          [ "${CODE}" = "success" ] || { echo "the code check did not succeed: ${CODE}"; exit 1; }
           [ "${BROWSER}" = "success" ] && exit 0
           if [ "${BROWSER}" = "skipped" ] && { [ "${SCOPE_RUN}" = "false" ] || [ "${ALREADY_PASSED}" = "true" ]; }; then
             echo "browser matrix skipped on purpose"; exit 0
@@ -383,6 +385,43 @@ jobs:
         with:
           mode: check
           config: .github/stamp.json
+
+  # THE SHARED CODE CHECK (claude-settings' `actions/code-check`). One type check and one bug lint
+  # per language, read from that action's own table: ruff and mypy --strict for Python, tsc for
+  # each tracked tsconfig.json, ShellCheck for shell. It fails on a tracked file whose language
+  # has no row, so a new language is argued in the shared table and never slips in unchecked.
+  # `.code-check.json` holds the two lists the action reads. `mypy_modules` only grows: it starts
+  # as the modules that pass --strict today. `exclude` only shrinks and names vendored or
+  # generated files alone, never first-party code. Its own job and not a `scripts/checks.py`
+  # entry, for the reason `design-check` gives above: it is no `make check` target. It BLOCKS a
+  # merge through `check`, which lists it in `needs`, the same way `records` does.
+  # `npm ci` because tsc reads app/'s types from app/node_modules.
+  code-check:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install
+        run: npm ci --prefix app
+
+      - uses: shivinate7/claude-settings/actions/code-check@c71b22ef87f8c95170210f79417b08317dd6891f
+        with:
+          base: ${{ github.event.pull_request.base.sha || github.event.before }}
 
   # THE WORKFLOWS' OWN LINT. zizmor reads `.github/workflows/` and `.github/dependabot.yml` for unpinned actions, persisted
   # checkout tokens, template injection and over-broad permissions. Pinned to one version so a
@@ -666,7 +705,7 @@ jobs:
   # a week of red nights is one issue and not seven. `issues: write` is the whole grant: the
   # job checks nothing out and reads its verdict from `needs`. A skipped job is not a failure.
   nightly-alarm:
-    needs: [ci-check, ci-static, revert-guard, zizmor, design-check, records]
+    needs: [ci-check, ci-static, revert-guard, zizmor, design-check, records, code-check]
     if: ${{ always() && !github.event.pull_request.draft && (github.event_name == 'schedule' || inputs.report_failure) && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
