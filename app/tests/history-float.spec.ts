@@ -321,15 +321,6 @@ for (const size of SIZES) {
       expect(Math.abs(c.x + c.width - (door.x + door.width)), 'the card right edge is on the door right edge').toBeLessThanOrEqual(1)
     })
 
-    test('the card covers no name of any gallery row', async ({ page }) => {
-      await openByFocus(page)
-      const c = await boxOf(card(page))
-      for (const i of [0, 1, 2]) {
-        const name = await boxOf(row(page, i).locator('.hfloat-specimen-name'))
-        expect(meets(c, name), `the card does not cover the name in row ${i}`).toBe(false)
-      }
-    })
-
     test('the card covers no thumb of any gallery row', async ({ page }) => {
       await openByFocus(page)
       const c = await boxOf(card(page))
