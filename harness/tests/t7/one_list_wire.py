@@ -1188,6 +1188,51 @@ def check_live_no_market_needs_you(checks: Checks) -> None:
             row = _live_row(pipeline_routes.do_pipeline_worklist([]), DUNSPARCE_SKU) or {}
             checks.equal(row.get("group", "<no row>"), expected,
                          f"{label}: a live listing with copies is filed under {expected}")
+def check_send_typed_price_with_no_run(checks: Checks) -> None:
+    """PENDING THE OWNER'S WORD. A typed price on a live listing, sent with no new copy and so no
+    run, is answered and goes out under the checks a kept suggestion meets: a reading from today
+    (`readings_stale`) and a price within the cap of the live price (`suggestion_past_cap`, the
+    one cap check; the code is the lane's to keep or rename with this case). Today every such
+    press is refused `runs_required`.
+
+    Articuno is live at 22.03. Three presses, each its own home:
+      24.00, reading from today    answered: a price-only row, posted "emit-price", replacing 22.03
+      24.00, reading from yesterday  refused readings_stale; no row, no posting
+      40.00, reading from today    refused suggestion_past_cap (82% from 22.03); no row, no posting
+    """
+    checks.note("")
+    checks.note("SEND, TYPED PRICE ONLY — a live listing's typed price needs no run, and meets the same checks")
+
+    def press(price: str, *, reading_at: Optional[int]):
+        with run_folder() as run, isolated_home(run), send_portal() as portal:
+            _seed_sync()
+            _one_copy_live(checks, portal)
+            _market_reading(ARTICUNO_SKU, "22.03", "22.98", at=reading_at)
+            _typed(ARTICUNO_SKU, price)
+            outcome = _outcome(lambda: send_routes.do_send({
+                "runs": [],
+                "confirm": True,
+                "prices": [{"sku": ARTICUNO_SKU, "price": price, "was": "22.03"}],
+            }))
+            return outcome, _rows(portal), [(p["price"], p["replaced"], p["source"]) for p in _postings(ARTICUNO_SKU)]
+
+    with _case(checks, "send: typed price, no run, fresh reading"):
+        outcome, rows, postings = press("24.00", reading_at=None)
+        checks.equal(outcome[0] if outcome[0] == "refused" else "answered", "answered",
+                     f"a typed price alone is answered, not refused (got {outcome[1] if outcome[0] == 'refused' else ''})")
+        checks.equal(rows, {ARTICUNO_SKU: ("0", "24.00")}, "it goes out as a price-only row at the typed price")
+        checks.equal(postings, [("22.03", None, "emit"), ("24.00", "22.03", "emit-price")],
+                     "and posts as \"emit-price\", naming the 22.03 it replaced")
+    with _case(checks, "send: typed price, no run, reading from yesterday"):
+        outcome, rows, postings = press("24.00", reading_at=_yesterday_at())
+        checks.equal(outcome, ("refused", "readings_stale"),
+                     "a typed price over a reading from an earlier day is refused readings_stale")
+        checks.equal((rows, postings), ({}, [("22.03", None, "emit")]), "and nothing reaches TCGplayer or the postings")
+    with _case(checks, "send: typed price, no run, past the cap"):
+        outcome, rows, postings = press("40.00", reading_at=None)
+        checks.equal(outcome, ("refused", "suggestion_past_cap"),
+                     "a typed price more than the cap from the live price is refused suggestion_past_cap")
+        checks.equal((rows, postings), ({}, [("22.03", None, "emit")]), "and nothing reaches TCGplayer or the postings")
 
 
 CHECKS = (
@@ -1214,4 +1259,5 @@ CHECKS = (
     check_live_capped_reason_names_the_cap,
     check_markdown_table_carries_group,
     check_live_no_market_needs_you,
+    check_send_typed_price_with_no_run,
 )
