@@ -1,4 +1,4 @@
-## D105 — Markdowns live where prices are decided
+# D105 — Markdowns live where prices are decided
 
 **The stale-listing markdown sheet opens from `#/pricing`'s header, not `#/runs`'s.** Moved on the owner's objection that the sheet should simply live in pricing.
 

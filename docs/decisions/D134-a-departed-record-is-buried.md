@@ -1,4 +1,4 @@
-## D134 — A departed record is buried
+# D134 — A departed record is buried
 
 **Settled by the owner.** A whole-box merge (D83) carries only the on-hand cards. It left sold and retired records behind, in a box that D10 ruling 3 would then refuse to delete forever. The owner wants a history log, and a screen to read it, because a graveyard is worth having for data. The owner also wants the photographs deleted with the box.
 

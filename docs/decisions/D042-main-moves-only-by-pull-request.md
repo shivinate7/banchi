@@ -1,4 +1,4 @@
-## D42 — Main moves only by pull request
+# D42 — Main moves only by pull request
 
 **`main` moves only by a merged pull request. Two local git hooks enforce it.** Main moved under live worktrees twice in one day. A commit authored on one session's branch was fast-forwarded into main. Three other sessions were working on branches cut from it. A commit was also pushed straight to `origin/main`. `f5dcc2b` was pushed straight to `origin/main` during the session that wrote this entry. `origin/main`'s reflog is five consecutive `update by push`. Nothing in the repo said a session may not do that, and nothing checked.
 

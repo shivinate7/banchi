@@ -147,3 +147,10 @@ export async function settled(page: Page, tries = 40): Promise<Record<string, st
   }
   return last
 }
+
+/* THE SAME BOX BEFORE AND AFTER, for "does not move": half a pixel of rounding, never more. A box that is
+ * `null` (not drawn) is never the same as one that is. Shared by every case that asks a control to hold still. */
+export type BoxRect = { x: number; y: number; width: number; height: number } | null
+
+export const sameBox = (a: BoxRect, b: BoxRect): boolean =>
+  a !== null && b !== null && Math.abs(a.x - b.x) <= 0.5 && Math.abs(a.y - b.y) <= 0.5 && Math.abs(a.width - b.width) <= 0.5 && Math.abs(a.height - b.height) <= 0.5

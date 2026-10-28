@@ -4997,11 +4997,42 @@ def do_pipeline_sets(images: Optional["stockimages.StockImages"] = None) -> dict
     groups: Dict[Tuple[str, str], Dict[str, dict]] = {}
     no_set: Dict[str, dict] = {}
 
-    for _key, (box_raw, _idx_raw, sku_raw, name, set_name, number, number_display, game, cid) in (
-        inventory.cards.select(
-            ("box", "idx", "sku", "name", "set_name", "number", "number_display", "game", "cid"),
-            state=master.IDENTIFIED,
-        )
+    # THE MASTER LIST (the master-set spec, section 3): a SKU is collected when any card of it is
+    # `retired` with reason `master_set`, whatever set label that card carries. `retire_reason` is
+    # no indexed column, so this reads the retired cards whole. A master-set copy with no SKU
+    # cannot be on the list. `pulled` and the other reasons never count.
+    master_cards = [
+        (card.sku, card.name, card.set_name, card.number,
+         master.display_number(card.number, card.printed_total) or "", card.game)
+        for card in inventory.cards.where(state=master.RETIRED)
+        if card.retire_reason == master.MASTER_SET and card.sku
+    ]
+    # A BOX'S DELETE BURIES ITS DEPARTED RECORDS (D134), so a master-set card whose box is gone
+    # survives only as a `buried` line. That line carries no set name: the SKU table answers
+    # for it, and a SKU it does not know lands in `no_set`.
+    for event in snapshot.buried():
+        if event.get("state") == master.RETIRED and event.get("retire_reason") == master.MASTER_SET and event.get("sku"):
+            entry = snapshot.skus.entries.get(str(event["sku"]))
+            number = event.get("number")
+            master_cards.append((
+                event["sku"], event.get("name"), entry.set_name if entry is not None else "",
+                number, master.display_number(number, event.get("printed_total")) or "", event.get("game"),
+            ))
+    collected_skus = {str(card[0]) for card in master_cards}
+    on_hand = inventory.cards.select(
+        ("box", "idx", "sku", "name", "set_name", "number", "number_display", "game", "cid"),
+        state=master.IDENTIFIED,
+    )
+    on_hand_skus = {str(values[2]) for _key, values in on_hand if values[2]}
+    # ONE QTY-0 ROW PER SKU, AND ONLY WHEN NO ON-HAND ROW OF THAT SKU EXISTS IN ANY BUCKET.
+    absent: Dict[str, tuple] = {}
+    for sku_, name_, set_, number_, display_, game_ in master_cards:
+        if str(sku_) not in on_hand_skus:
+            absent.setdefault(str(sku_), (None, None, sku_, name_, set_, number_, display_, game_, None))
+
+    for _key, (box_raw, _idx_raw, sku_raw, name, set_name, number, number_display, game, cid), is_on_hand in (
+        [(key, values, True) for key, values in on_hand]
+        + [(None, values, False) for values in absent.values()]
     ):
         sku = str(sku_raw) if sku_raw else None
         # THREE GROUPING RUNGS, NARROWEST WINS. A SKU is a confirmed identity, so every
@@ -5035,6 +5066,7 @@ def do_pipeline_sets(images: Optional["stockimages.StockImages"] = None) -> dict
                 "name": name or None,
                 "number_display": number_display or None,
                 "qty": 0,
+                "collected": False,
                 # NULL FOR A `sku_unknown` ROW, WHICH HAS NO SKU TO HOLD THE FACT — the
                 # store's own table, never re-derived from a condition string here.
                 "printing": sku_entry.printing if sku_entry is not None else None,
@@ -5046,7 +5078,12 @@ def do_pipeline_sets(images: Optional["stockimages.StockImages"] = None) -> dict
                 "_sort": _natural_number_key(number),
             }
             bucket[row_key] = row
-        row["qty"] += 1
+        if is_on_hand:
+            row["qty"] += 1
+
+    for bucket in (*groups.values(), no_set):
+        for row in bucket.values():
+            row["collected"] = row["sku"] in collected_skus
 
     def _cards_of(bucket: Dict[str, dict]) -> List[dict]:
         rows = sorted(bucket.values(), key=lambda row: row["_sort"])
@@ -8646,7 +8683,7 @@ def settle_nothing_to_join(directory: Path) -> bool:
     return True
 
 
-def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
+def _scope_for_run(directory: Path, payload: dict, counts=None) -> Tuple[object, dict]:
     """What to ask TCGplayer for: the run's own claims, the game's rule, and the operator.
 
     THE CLAIMS THE OPERATOR ALREADY MADE ARE THE DEFAULT SCOPE (D65). A card carries its game
@@ -8675,7 +8712,7 @@ def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
       the cards      under `sets`: every card hinted and every hint resolved, or it widens.
     """
     payload_game = payload.get("game")
-    by_game, catalogued = _scope_counts(directory)
+    by_game, catalogued = counts or _scope_counts(directory)
     if not catalogued:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
@@ -8892,7 +8929,8 @@ def do_pipeline_scope(name: str, payload: dict) -> dict:
     code; every count above it still draws.
     """
     directory = _open_run(name)
-    _, catalogued = _scope_counts(directory)
+    counts = _scope_counts(directory)
+    catalogued = counts[1]
 
     games = [
         {
@@ -8913,7 +8951,7 @@ def do_pipeline_scope(name: str, payload: dict) -> dict:
     message: Optional[str] = None
     if games:
         try:
-            _, asked = _scope_for_run(directory, payload)
+            _, asked = _scope_for_run(directory, payload, counts)
         except PipelineRefusal as caught:
             # THE REFUSAL IS DATA HERE, NOT A STATUS. `game_required` over a two-game run is
             # the screen's cue to draw a picker, and `set_ids_unknown` over a stale tick is

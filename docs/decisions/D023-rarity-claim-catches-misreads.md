@@ -1,4 +1,4 @@
-## D23 — Rarity claim catches confident misreads
+# D23 — Rarity claim catches confident misreads
 
 **The capture screen's multi-select rarity claim, scoped by game, does four jobs.**
 

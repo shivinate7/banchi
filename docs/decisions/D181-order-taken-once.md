@@ -1,4 +1,4 @@
-## D181 — Order is taken once; a sale keeps it
+# D181 — Order is taken once; a sale keeps it
 
 **Ruling: `#/inventory` holds the order still under a search. A sale does not re-rank the list. A press retakes the order.** The ranking is right. Only its timing is wrong. The list is recomputed from the copies still on hand. Marking one copy sold re-ranks the list the operator is working down.
 

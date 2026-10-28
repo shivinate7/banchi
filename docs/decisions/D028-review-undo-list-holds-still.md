@@ -1,4 +1,4 @@
-## D28 — Review answers undo; list holds still
+# D28 — Review answers undo; list holds still
 
 **The review answer gets a twenty-second undo, and the candidate list stops moving between cards.** The review queue's irreversible action had fewer guards than the product's reversible one, which is backwards.
 

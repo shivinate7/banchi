@@ -13,6 +13,9 @@
   /* Hash keys, joined by &:
        dark | light | t=dark | t=light   theme (default: prefers-color-scheme)
        f=1440 | f=820                    one frame, edge to edge (default: both, stacked)
+       state=top                         the focused row is the list's second row, with no room above
+                                         (default: Gardevoir ex's price field has focus, mid-list)
+       fb=next                           with no room above, the card opens under the next row instead
        hide=moved,unsold,...             options the owner culled (see the cull strip)
        notes=off                         hides the "Today:" component tags */
   const HASH = new Map(location.hash.slice(1).split('&').filter(Boolean).map((p) => {
@@ -173,7 +176,9 @@
   .field input { all: unset; width: 100%; min-width: 0; color: var(--bn-money); }
   .field input::placeholder { color: var(--bn-ink-4); font-family: var(--bn-font-ui); font-weight: 500; }
   .field svg { flex: none; width: 14px; height: 14px; color: var(--bn-ok); display: none; }
-  .field:focus-within { box-shadow: inset 0 0 0 2px var(--bn-line-focus); }
+  /* The kit's input focus look: an accent edge and a halo. It outranks the source tones below. */
+  .frame .row .field:focus-within, .frame .row .field.is-focus {
+    box-shadow: inset 0 0 0 2px var(--bn-accent), 0 0 0 3px var(--bn-accent-tint-2); }
   .row[data-src='Suggested'] .field { box-shadow: inset 0 0 0 1px var(--bn-accent); background: var(--bn-accent-tint); }
   /* A typed price: its own tone, and the field carries today's "your price" check. */
   .row[data-src='You'] .field { box-shadow: inset 0 0 0 1px var(--bn-ok); background: var(--bn-ok-tint); }
@@ -266,6 +271,8 @@
   .fl-caret { position: absolute; top: -6px; width: 12px; height: 12px; rotate: 45deg; background: var(--bn-surface);
               box-shadow: -1px -1px 0 var(--bn-line); }
   .fl[data-side='above'] .fl-caret { top: auto; bottom: -6px; box-shadow: 1px 1px 0 var(--bn-line); }
+  .fl-caret[hidden] { display: none; }
+  .fl-none { display: flex; align-items: center; color: var(--bn-ink-3); }
   .fl-head { display: flex; align-items: center; gap: var(--bn-3); }
   .fl-head .hx-name { flex: 1; font-family: var(--bn-font-display); font-size: var(--bn-fs-h3); font-weight: 800; }
   .fl-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--bn-4); }
@@ -533,35 +540,50 @@
       : 3.58 + (4.22 - 3.58) * ((d - 50) / 39) + (d === 89 ? 0 : 0.03 * Math.sin(d / 3)))
     const bars = [0, 1, 0, 0, 2, 0, 1, 0, 0, 1, 0, 3, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0]
     return { m, bars, listed: 15, sale: [30, 3.60], ask: [[15, 3.60], [50, 3.40]], now: 3.40, sug: 4.01,
+             lo: 3.0, hi: 4.4, sp: [0.18, 0.22], facts: [4.22, 4.29, 4.35],
              dates: ['Jul 29', 'Sep 12', 'Oct 27'], sold: [bars.reduce((a, b) => a + b, 0), 3.10, 4.25] }
   })()
 
-  function hxChart(W, H) {
-    const GL = 40, GB = 18, w = W - GL - 44, h = H - GB - 8, lo = 3.0, hi = 4.4
+  /* Any other row's history: a sample of the same shape, from the row's own prices. Flat, then a move to
+     today's market. A live row was listed at its live price. A row with no market price has no history. */
+  function hxFor(r) {
+    if (r.name === 'Gardevoir ex') return HX
+    if (r.market === null) return null
+    const end = r.market, live = r.kind === 'live', start = live ? r.now : end, k = end / 4
+    const m = Array.from({ length: 90 }, (_, d) => d < 50 ? start + 0.01 * k * Math.sin(d / 5)
+      : start + (end - start) * ((d - 50) / 39) + (d === 89 ? 0 : 0.0075 * k * Math.sin(d / 3)))
+    const sp = [0.045 * end, 0.055 * end]
+    const vals = [...m.map((v) => v + sp[0]), ...m.map((v) => v - sp[1]), r.price, start]
+    return { m, sp, listed: live ? 15 : null, sale: live ? [30, start] : null, ask: live ? [[15, start], [50, start]] : null,
+             now: live ? r.now : null, sug: r.price, dates: HX.dates,
+             lo: Math.floor(Math.min(...vals) * 10) / 10, hi: Math.ceil(Math.max(...vals) * 10) / 10,
+             facts: [end, Math.round((end + r.low) * 50) / 100, r.low] }
+  }
+
+  function hxChart(W, H, D = HX) {
+    const GL = 40, GB = 18, w = W - GL - 44, h = H - GB - 8, lo = D.lo, hi = D.hi
     const x = (d) => GL + (d / 89) * w
     const y = (p) => 8 + ((hi - p) / (hi - lo)) * h
     const ticks = [hi, (hi + lo) / 2, lo].map((p) =>
       `<line class="hx-guide" x1="${GL}" x2="${GL + w}" y1="${y(p)}" y2="${y(p)}"/><text x="${GL - 6}" y="${y(p) + 3}" text-anchor="end">$${p.toFixed(2)}</text>`).join('')
-    const dates = HX.dates.map((t, i) => `<text x="${x(i * 44.5)}" y="${H - 2}" text-anchor="${['start', 'middle', 'end'][i]}">${t}</text>`).join('')
+    const dates = D.dates.map((t, i) => `<text x="${x(i * 44.5)}" y="${H - 2}" text-anchor="${['start', 'middle', 'end'][i]}">${t}</text>`).join('')
     let spread = ''
-    for (let d = 3; d < 90; d += 7) spread += `<line class="hx-spread" x1="${x(d)}" x2="${x(d)}" y1="${y(HX.m[d] + 0.18)}" y2="${y(HX.m[d] - 0.22)}"/>`
-    const market = HX.m.map((p, d) => `${x(d).toFixed(1)},${y(p).toFixed(1)}`).join(' ')
-    const [a0, a1] = HX.ask
-    const ask = `M${x(a0[0])} ${y(a0[1])} H${x(a1[0])} V${y(a1[1])} H${x(89)}`
-    const [sd, sp] = HX.sale
+    for (let d = 3; d < 90; d += 7) spread += `<line class="hx-spread" x1="${x(d)}" x2="${x(d)}" y1="${y(D.m[d] + D.sp[0])}" y2="${y(D.m[d] - D.sp[1])}"/>`
+    const market = D.m.map((p, d) => `${x(d).toFixed(1)},${y(p).toFixed(1)}`).join(' ')
     const dia = (cx, cy, r) => `M${cx} ${cy - r} L${cx + r} ${cy} L${cx} ${cy + r} L${cx - r} ${cy} Z`
+    const end = D.m[89], sugY = Math.abs(y(D.sug) - y(end)) < 11 ? y(end) + (D.sug < end ? 11 : -11) : y(D.sug)
     return `<svg class="hx-chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Market price over 90 days, with your prices, your sale and the suggestion">
       ${ticks}${dates}
-      <line class="hx-listed" x1="${x(HX.listed)}" x2="${x(HX.listed)}" y1="8" y2="${8 + h}"/>
-      <text x="${x(HX.listed) + 4}" y="18">Listed</text>
+      ${D.listed === null ? '' : `<line class="hx-listed" x1="${x(D.listed)}" x2="${x(D.listed)}" y1="8" y2="${8 + h}"/>
+      <text x="${x(D.listed) + 4}" y="18">Listed</text>`}
       ${spread}
       <polyline class="hx-market" points="${market}"/>
-      <path class="hx-asking" d="${ask}"/>
-      <path class="hx-sale" d="${dia(x(sd), y(sp), 5)}"/>
-      <circle class="hx-suggest" cx="${x(89)}" cy="${y(HX.sug)}" r="5"/>
-      <text class="hx-end" x="${x(89) + 8}" y="${y(HX.m[89]) + 3}">$${HX.m[89].toFixed(2)}</text>
-      <text class="hx-suggest-label" x="${x(89) + 8}" y="${y(HX.sug) + 3}">$${HX.sug.toFixed(2)}</text>
-      <text class="hx-ask-label" x="${x(89) + 8}" y="${y(HX.now) + 3}">$${HX.now.toFixed(2)}</text>
+      ${D.ask ? `<path class="hx-asking" d="M${x(D.ask[0][0])} ${y(D.ask[0][1])} H${x(D.ask[1][0])} V${y(D.ask[1][1])} H${x(89)}"/>` : ''}
+      ${D.sale ? `<path class="hx-sale" d="${dia(x(D.sale[0]), y(D.sale[1]), 5)}"/>` : ''}
+      <circle class="hx-suggest" cx="${x(89)}" cy="${y(D.sug)}" r="5"/>
+      <text class="hx-end" x="${x(89) + 8}" y="${y(end) + 3}">$${end.toFixed(2)}</text>
+      <text class="hx-suggest-label" x="${x(89) + 8}" y="${sugY + 3}">$${D.sug.toFixed(2)}</text>
+      ${D.now === null ? '' : `<text class="hx-ask-label" x="${x(89) + 8}" y="${y(D.now) + 3}">$${D.now.toFixed(2)}</text>`}
     </svg>`
   }
 
@@ -569,8 +591,8 @@
     <span><i class="hx-sw ask"></i>Your price</span><span><i class="hx-sw sale"></i>Your sale</span><span><i class="hx-sw sug"></i>Suggested</span></p>`
   const hxSold = () => `<p class="hx-sold">${HX.sold[0]} sold in 30 days, ${$(HX.sold[1])} to ${$(HX.sold[2])}.</p>`
   const hxWhy = () => `<p class="hx-why">Market up 18% since listed. Now ${$(HX.now)}, suggested ${$(HX.sug)}.</p>`
-  const hxFacts = () => `<dl class="hx-facts"><div><dt>Market</dt><dd>${$(4.22)}</dd></div><div><dt>Lowest</dt><dd>${$(4.29)}</dd></div>
-    <div><dt>Lowest, shipped</dt><dd>${$(4.35)}</dd></div><div><dt>Direct Low</dt><dd class="dash">not carried</dd></div></dl>`
+  const hxFacts = (F = HX.facts) => `<dl class="hx-facts"><div><dt>Market</dt><dd>${$(F[0])}</dd></div><div><dt>Lowest</dt><dd>${$(F[1])}</dd></div>
+    <div><dt>Lowest, shipped</dt><dd>${$(F[2])}</dd></div><div><dt>Direct Low</dt><dd class="dash">not carried</dd></div></dl>`
   function hxBars(W) {
     const n = 30, H = 36, slot = W / n
     const v = HX.bars
@@ -607,50 +629,100 @@
     </aside>`)
   }
 
-  /* Option 4: the history door opens a card over the list, under the pressed row. No scrim; the list stays pressable. */
+  /* Option 4, as ruled: a card floats over the list, with no scrim. A price field taking focus opens it for that
+     row, and so does the row's history door. It sits above the row, over the rows before it. With no room above,
+     it opens below the row and left of the price column (fb=next: below the next row instead). */
   function decorate(f, w) {
-    const narrow = w === '820'
-    f.querySelector('.gone-note').insertAdjacentHTML('afterend', `<p class="press-note"><b>New:</b> a floating card under the pressed row.
+    const narrow = w === '820', GAP = 8, W = narrow ? 384 : 560
+    f.querySelector('.gone-note').insertAdjacentHTML('afterend', `<p class="press-note"><b>New:</b> a floating card that opens when a price field takes focus, and from the history door.
+      It sits above the focused row, so the row and the next price stay clear. With no room above, it opens below the row and left of the price column.
       <b>Width:</b> 560px at 1440, so its chart is 520px wide; 384px at 820, so its chart is 344px wide. Today's sheet draws it 380px wide.
-      The card covers no name, thumb or tick. The reason and the sold range stay on the row above the card, so each shows once. The daily copies-sold bars are left out.</p>`)
-    f.insertAdjacentHTML('beforeend', `<section class="fl mark" role="dialog" aria-label="Price history for Gardevoir ex" tabindex="-1" data-fl hidden>
+      The reason and the sold range stay on the row, so each shows once. The daily copies-sold bars are left out.</p>`)
+    f.insertAdjacentHTML('beforeend', `<section class="fl mark" role="dialog" tabindex="-1" data-fl hidden>
       <span class="fl-caret" aria-hidden="true"></span>
-      <header class="fl-head"><span class="bn-overlay-icon">${svg('history', 18)}</span><p class="hx-name">Gardevoir ex</p>
+      <header class="fl-head"><span class="bn-overlay-icon">${svg('history', 18)}</span><p class="hx-name" data-fl-name></p>
         <button class="bn-icon-btn iconb" type="button" aria-label="Close" data-fl-close>${svg('close', 18)}</button></header>
-      <div class="hx-block"><h3 class="hx-h">Last 90 days</h3>${hxLegend()}${hxChart(narrow ? 344 : 520, 170)}</div>
-      <div class="fl-foot">${hxFacts()}<button class="bn-btn" type="button">${svg('external', 16)}Full history</button></div>
+      <div class="hx-block" data-fl-chart></div>
+      <div class="fl-foot"><span data-fl-facts></span><button class="bn-btn" type="button">${svg('external', 16)}Full history</button></div>
     </section>`)
-    const card = f.querySelector('[data-fl]')
+    const card = f.querySelector('[data-fl]'), caret = card.querySelector('.fl-caret')
+    const rowsOf = () => [...f.querySelectorAll('.row')].filter((r) => r.offsetParent)
     const doorOf = (row) => row.querySelector('[aria-label^="Price history"]')
-    let open = null
-    /* Anchored under the row, or above it when the viewport has no room below. Right edge on the row's history door.
-       Focus moves into the card on open, and back to the door on close. */
-    const place = (row) => {
-      const was = open
-      if (was) { delete was.dataset.picked; delete doorOf(was).dataset.on }
-      open = row
-      card.hidden = !row
-      if (!row) { if (was) doorOf(was).focus({ preventScroll: true }); return }
-      row.dataset.picked = ''
-      const door = doorOf(row)
-      door.dataset.on = ''
-      const fr = f.getBoundingClientRect(), rr = row.getBoundingClientRect(), dr = door.getBoundingClientRect()
-      const below = rr.bottom + 8 + card.offsetHeight <= innerHeight
-      card.dataset.side = below ? 'below' : 'above'
-      card.style.top = `${(below ? rr.bottom + 8 : rr.top - 8 - card.offsetHeight) - fr.top}px`
-      card.style.left = `${dr.right - card.offsetWidth - fr.left}px`
-      card.querySelector('.fl-caret').style.left = `${card.offsetWidth - dr.width / 2 - 6}px`
-      card.focus({ preventScroll: true })
+    const fieldOf = (row) => row.querySelector('.field')
+    const dataOf = (row) => ROWS.find((r) => r.name === row.querySelector('.name').textContent)
+    const fill = (row, width) => {
+      const r = dataOf(row), D = hxFor(r)
+      card.style.width = `${width}px`
+      card.setAttribute('aria-label', `Price history for ${r.name}`)
+      card.querySelector('[data-fl-name]').textContent = r.name
+      card.querySelector('[data-fl-chart]').innerHTML = `<h3 class="hx-h">Last 90 days</h3>` + (D
+        ? hxLegend() + hxChart(width - 40, 170, D)
+        : `<p class="fl-none" style="height:${170 + 24}px">No price history yet. It starts with the first market price.</p>`)
+      card.querySelector('[data-fl-facts]').innerHTML = D ? hxFacts(D.facts) : ''
     }
-    const first = [...f.querySelectorAll('.row')].find((r) => r.querySelector('.name').textContent === 'Gardevoir ex')
-    document.fonts.ready.then(() => place(first))
-    addEventListener('resize', () => open && place(open))
-    f.addEventListener('click', (e) => {
-      const door = e.target.closest('[aria-label^="Price history"]')
-      if (door) return place(door.closest('.row'))
-      if (e.target.closest('[data-fl-close]') || !e.target.closest('[data-fl]')) place(null)
+    let open = null, mode = null, quiet = false
+    const place = (row, how = mode) => {
+      const was = open
+      if (was) { delete was.dataset.picked; delete doorOf(was).dataset.on; fieldOf(was).classList.remove('is-focus') }
+      open = row; mode = row ? how : null
+      card.hidden = !row
+      if (!row) return
+      row.dataset.picked = ''
+      if (how === 'door') doorOf(row).dataset.on = ''
+      else fieldOf(row).classList.add('is-focus')
+      const fr = f.getBoundingClientRect(), rr = row.getBoundingClientRect(), dr = doorOf(row).getBoundingClientRect()
+      const pr = row.querySelector('.price').getBoundingClientRect(), fd = fieldOf(row).getBoundingClientRect()
+      /* Room above ends at the list's column captions, or under the sticky send bar once that bar has stuck. */
+      const ceiling = Math.max(f.querySelector('.caption').getBoundingClientRect().bottom, f.querySelector('.send').getBoundingClientRect().bottom)
+      fill(row, W)
+      let side = rr.top - GAP - card.offsetHeight >= ceiling ? 'above' : 'below', top, left, width = W
+      if (side === 'above') { top = rr.top - GAP - card.offsetHeight; left = dr.right - W }
+      else if (HASH.get('fb') === 'next') {
+        const next = rowsOf()[rowsOf().indexOf(row) + 1] || row
+        top = next.getBoundingClientRect().bottom + GAP; left = dr.right - W
+      } else {
+        /* Below, and clear of the price column. Where that leaves less than the card's width, the card starts
+           after the tick column and narrows. */
+        const tick = row.querySelector('.tick, :scope > span:first-child').getBoundingClientRect()
+        left = Math.max(pr.left - GAP - W, tick.right + GAP)
+        width = pr.left - GAP - left
+        if (width !== W) fill(row, width)
+        top = rr.bottom + GAP
+      }
+      card.dataset.side = side
+      card.style.top = `${top - fr.top}px`
+      card.style.left = `${left - fr.left}px`
+      /* The caret points at what opened the card, when that sits over the card's span. */
+      const at = how === 'door' ? dr.left + dr.width / 2 : fd.left + fd.width / 2
+      caret.hidden = at < left + 16 || at > left + width - 16
+      caret.style.left = `${at - left - 6}px`
+      if (how === 'door') card.focus({ preventScroll: true })
+    }
+    /* Closing: focus goes back to the door the card was opened from, or stays in the field. */
+    const close = () => {
+      const was = open, how = mode, inCard = card.contains(document.activeElement)
+      place(null)
+      if (was && how === 'door') doorOf(was).focus({ preventScroll: true })
+      else if (was && inCard) { quiet = true; fieldOf(was).querySelector('input').focus({ preventScroll: true }); quiet = false }
+    }
+    const startName = HASH.get('state') === 'top' ? 'Iono' : 'Gardevoir ex'
+    document.fonts.ready.then(() => place(rowsOf().find((r) => r.querySelector('.name').textContent === startName), 'focus'))
+    f.replace = () => { if (open) open.offsetParent ? place(open) : place(null) }
+    addEventListener('resize', f.replace)
+    f.addEventListener('focusin', (e) => {
+      if (e.target.closest('.field') && !quiet) place(e.target.closest('.row'), 'focus')
     })
-    addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) place(null) })
+    f.addEventListener('focusout', (e) => {
+      const to = e.relatedTarget
+      if (mode === 'focus' && !(to && (to.closest('.field') || to.closest('[data-fl]')))) place(null)
+    })
+    f.addEventListener('click', (e) => {
+      const door = e.target.closest('.row [aria-label^="Price history"]')
+      if (door) return place(door.closest('.row'), 'door')
+      if (e.target.closest('[data-fl-close]')) return close()
+      if (open && !e.target.closest('[data-fl]') && !e.target.closest('.field')) place(null)
+    })
+    f.addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) close() })
   }
 
   /* ---- build the frames ---- */
@@ -689,6 +761,7 @@
     hidden.has(k) ? hidden.delete(k) : hidden.add(k)
     document.querySelectorAll(`[data-hide="${k}"]`).forEach((el) => el.setAttribute('aria-pressed', hidden.has(k)))
     setHash(); all()
+    document.querySelectorAll('.frame').forEach((f) => f.replace())
   })
 </script>
 </body>

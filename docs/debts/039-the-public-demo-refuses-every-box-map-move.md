@@ -1,6 +1,6 @@
 ## 39 — the public demo refuses every box map move
 
-**The gap.** The public demo has a stub server (`app/src/demoServer.ts`) with no handler for the box map
+**What.** The public demo has a stub server (`app/src/demoServer.ts`) with no handler for the box map
 routes. The Shelf's confirm is `POST /boxes/sections/move-batch` (`moveSectionsBatch` in
 `app/src/BoxShelf.tsx`), and its undo is `POST /boxes/sections/undo`. The older
 `POST /boxes/<box>/sections/move` and `POST /boxes/<box>/cards/move` have no handler either. So a move pressed on the demo's Shelf is refused.

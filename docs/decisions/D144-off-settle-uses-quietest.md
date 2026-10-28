@@ -1,4 +1,4 @@
-## D144 — Off-settle cards use the quietest frame
+# D144 — Off-settle cards use the quietest frame
 
 **A card that will not settle is photographed off the quietest frame it manages, and there is one trigger only.** A stall is a card. Under a feeder a soft photograph beats none. The card is about to be replaced. `U` undoes a bad one in one press. A lost card surfaces weeks later in a box that does not match its run.
 

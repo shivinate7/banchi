@@ -44,10 +44,11 @@ import contextlib
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from store import db, files
 from store.cache import Cache
+from store.dailyprices import DailyPrices
 from store.master import Inventory
 from store.orders import Ledger
 from store.pricearchive import PriceArchive
@@ -104,6 +105,12 @@ class Snapshot:
     # THE SLABS THE OWNER TRACKS, their daily snapshots and the sales seen (D320). Bound like
     # `readings`, so a slab write commits in the one `Store.write()` transaction.
     slabs: Slabs
+    # EVERY `buried` EVENT, READ ON THIS SNAPSHOT'S OWN CONNECTION (D134): one indexed statement at
+    # the same moment as the tables, where `Store.buried()` opens a second connection.
+    buried: Callable[[], List[dict]]
+    # TCGCSV's current Riftbound prices, one row per source update (`store/dailyprices.py`). Bound like
+    # `archive`, so a pass commits a group's rows and its mark in one `Store.write()` transaction.
+    daily_prices: DailyPrices
 
     def queue(self, name: str) -> Queue:
         return self.review if name == MAIN else self.parked
@@ -138,6 +145,8 @@ class Snapshot:
             self.slabs.snapshots,
             self.slabs.sales,
             self.slabs.links,
+            self.daily_prices.entries,
+            self.daily_prices.updates,
         ]
 
 
@@ -198,11 +207,16 @@ class Store:
                 sales=bound(Slabs.SALES, "slab_sales"),
                 links=bound(Slabs.LINKS, "slab_sale_links"),
             ),
+            daily_prices=DailyPrices(
+                entries=bound(DailyPrices.ENTRIES, "daily_prices"),
+                updates=bound(DailyPrices.UPDATES, "daily_price_updates"),
+            ),
             # NOT `bound()` — nothing to load, only to append to, exactly like
             # `snapshot.inventory.events` beside it. A read-only `Store.read()` snapshot gets
             # one too, empty and unused: nothing here ever calls `.record()` on it, since
             # nothing writes through a lock-free snapshot.
             postings=Postings(),
+            buried=lambda: db.events_named(conn, "buried"),
         )
 
     def read(self) -> Snapshot:

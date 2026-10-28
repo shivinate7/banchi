@@ -1,6 +1,6 @@
 ## DEBT86 — Capabilities written twice that have not drifted yet
 
-**A whole-repo sweep found capabilities with more than one implementation whose copies still agree.** The hard rule "one home per capability" covers them. The server, pipeline and identify copies are closed. The app copies are next.
+**What.** A whole-repo sweep found capabilities with more than one implementation whose copies still agree. The hard rule "one home per capability" covers them. The server, pipeline and identify copies are closed. The app copies are next.
 
 - **App:**
   - Percent formats in PriceMovers, PriceTrend and Revenue.

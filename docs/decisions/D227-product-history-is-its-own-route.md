@@ -1,4 +1,4 @@
-## D227 — Product history is its own route
+# D227 — Product history is its own route
 
 **THE VIEW.** One page per product, deep-linkable. It shows what that product has been
 selling for. It marks the owner's own sales on it. `docs/specs/sales-plan.md` section 3

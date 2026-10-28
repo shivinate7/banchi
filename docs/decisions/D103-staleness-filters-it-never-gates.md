@@ -1,4 +1,4 @@
-## D103 — Staleness filters; it never gates
+# D103 — Staleness filters; it never gates
 
 **`#/pricing` draws the operator's whole live inventory from a My Pricing export. The staleness terms are a filter over it.** They are not a decision taken before the data arrives. The operator wanted the live export on the same pricing UI as the runs path, which has the charts, the load-prices flow and familiar controls. A spreadsheet was rejected. That UI was wired to runs, and a live export is not a run.
 

@@ -1,4 +1,4 @@
-## D189 — The market reading is a table
+# D189 — The market reading is a table
 
 **A live recomputation became a cache. The arbitration did not change.** `server/pipeline_routes.py:_readings()` used to walk every run's `runs/<n>/pricing.json` and the newest file under `inventory/.live` on every `GET /pipeline/value`. It compared the two sources on a clock and returned `sku -> the newest market price this machine has read for it`. `pipeline/readings.py:collect()` runs the same newest-wins comparison over the same two sources, so which reading wins did not move. What moved is when: from every request, to one explicit press, `banchi readings adopt --write`. That folds the result into a new `readings` table in `inventory/store.sqlite` (D88). `_readings()` is now a plain `SELECT` against it.
 

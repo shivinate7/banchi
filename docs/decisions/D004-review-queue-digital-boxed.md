@@ -1,4 +1,4 @@
-## D4 — Review queue is digital; cards stay boxed
+# D4 — Review queue is digital; cards stay boxed
 
 **The review queue is digital, and the physical card never leaves its box.**
 

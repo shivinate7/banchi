@@ -1,4 +1,4 @@
-## D97 — Copy map ranks, never picks
+# D97 — Copy map ranks, never picks
 
 **An order line draws every box that holds the ordered card. It ranks the boxes by free copies and recommends without making the choice.** The design on `#/orders` came from the owner. The owner's rule: the best option holds the most of the unit in one box, and within one box, in one section. The walk does not pick.
 

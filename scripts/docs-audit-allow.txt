@@ -41,3 +41,4 @@ scripts/heartbeat.py  # Retired 2026-09-27 per owner's ruling (test-audit plan Q
 docs/specs/ui-research.md  # Deleted in the record prune (the owner's ruling: an abandoned RECORDED, NOT BUILT spec is deleted). A decision entry names it as a file it measured, and is kept as that record.
 docs/DECISIONS.md  # Deleted in the record prune (the single-file decision, debt and code-card records became folders and a spec section; history lives in version control). Decision entries name it as it was and are kept as that record.
 docs/DEBTS.md  # Deleted in the record prune (the single-file decision, debt and code-card records became folders and a spec section; history lives in version control). Decision entries name it as it was and are kept as that record.
+docs/plans/  # The generated docs/records.md names this folder in its intro line. The shared records tool writes that page for every repo, and Banchi keeps its plans under docs/specs/.

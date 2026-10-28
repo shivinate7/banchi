@@ -1,4 +1,4 @@
-## D115 — Reading is the export; later sales beside it
+# D115 — Reading is the export; later sales beside it
 
 **`live` holds the export's reading and nothing else.** `sold_here` counts copies sold here since that reading, `sold_here_at` dates the newest, and the figure every screen draws is `live_estimate`, the difference floored at zero. `reconcile --live` clears the counter when it adopts a reading taken after the sales, instead of racing it. Marking sold and reconciling can be done in either order and give the same answer.
 

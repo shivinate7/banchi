@@ -26,6 +26,9 @@ import type {
   Place,
   PlaceNeighbor,
   QueueSnapshot,
+  MasterTakeOff,
+  MasterTakeOffAnswer,
+  OwedTakeOff,
   RetireReason,
   RetireResult,
   CatalogLookup,
@@ -1735,7 +1738,7 @@ async function retirement(
  * retired is a state, never a removal, so the record stays, the position stays, and the gap
  * it leaves is permanent. One copy, not one SKU, exactly as `markSold`.
  *
- * THE REASON IS REQUIRED AND IS ONE OF FOUR — the `RetireReason` union, refused server-side
+ * THE REASON IS REQUIRED AND IS ONE OF FIVE — the `RetireReason` union, refused server-side
  * as `retire_reason_invalid` outside it. It is the one fact about the departure the record
  * cannot re-derive later, which is why there is no reasonless overload of this call.
  *
@@ -1769,6 +1772,30 @@ export function retireCard(
  */
 export function undoRetire(box: number, index: number): Promise<RetireResult> {
   return retirement(box, index, { undo: true })
+}
+
+/** Where a `master_set` pull's TCGplayer take-off stands (`GET /inventory/<box>/<index>/take-off`).
+ *  Opens no socket on the server. Refused as `not_master_set` for any other card. */
+export async function masterTakeOffState(box: number, index: number): Promise<MasterTakeOff> {
+  return (await request(`/inventory/${box}/${index}/take-off`)) as MasterTakeOff
+}
+
+/** Take a `master_set` pull's excess live copies off TCGplayer (`POST /inventory/<box>/<index>/take-off`).
+ *  The press is the owner's yes. It reads what is live first and sends nothing when the listing
+ *  already matches (`take_off.state` is then `matches`). A failed push leaves the retirement standing. */
+export async function masterTakeOff(box: number, index: number): Promise<MasterTakeOffAnswer> {
+  return (await request(`/inventory/${box}/${index}/take-off`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as MasterTakeOffAnswer
+}
+
+/** Every master_set take-off still owed, for the Pricing send card (`GET /pipeline/sends/owed`).
+ *  Opens no socket on the server. An entry leaves once it is sent and settled, the listing
+ *  matches, or the retirement is undone. */
+export async function getOwedTakeOffs(): Promise<{ owed: OwedTakeOff[] }> {
+  return (await request('/pipeline/sends/owed')) as { owed: OwedTakeOff[] }
 }
 
 // ------------------------------------------------------------------ search, and the boxes

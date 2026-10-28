@@ -1,4 +1,4 @@
-## D236 — Unsold stock is valued by SKU
+# D236 — Unsold stock is valued by SKU
 
 **Unsold stock is valued by SKU off the price-history archive, one range at a time, and never merged into sold's figure (D225 is the sold-versus-now feature, and each is its own section).** It is a fourth Sales section.
 

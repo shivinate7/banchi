@@ -461,6 +461,12 @@ def _sanctioned_outside(target: str) -> str:
     dot_claude = _real(str(Path.home() / ".claude"))
     if _under(target, dot_claude):
         return "the user's own ~/.claude — memory and settings"
+    # The folder holds a space. `_under` compares resolved strings, so quoted and
+    # backslash-escaped spellings both reach it already unquoted by `shell_parse`.
+    notes = _real(str(Path.home() / "Library" / "Application Support" / "Claude-Work"
+                      / "side-session-notes"))
+    if _under(target, notes):
+        return "the side-session notes folder — notes saved outside any checkout"
     for root in _temp_roots():
         if _under(target, root):
             holder = _repo_holding(target)

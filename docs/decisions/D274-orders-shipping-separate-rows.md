@@ -1,4 +1,6 @@
-## D274 — Orders and Shipping get separate rows
+# D274 — Orders and Shipping get separate rows
+
+Orders and Shipping are two sidebar rows with no tab strip between them, and the walk gets the screen's full height.
 
 **The owner's ruling, on the round-two findings:**
 

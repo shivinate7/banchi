@@ -1,4 +1,4 @@
-## D2 — Identification is Haiku vision, end to end
+# D2 — Identification is Haiku vision, end to end
 
 **Identification is Claude Haiku vision over the Batch API, owned end to end. The owner picks the engine for each run, Haiku or marqo-b.** The default pick is the free read.
 

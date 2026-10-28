@@ -1,4 +1,4 @@
-## D125 — Photos crop to the card on screen
+# D125 — Photos crop to the card on screen
 
 **Photographs crop to the card only where they locate or price a card.** Only two screens do that: the Home hero and the pricing worklist's row thumbnails. The mechanism is `kit/index.tsx:cropStyle`, `.bn-crop` and `POST /pipeline/crop-preview`. The whole frame stays on the screens that judge a card or check the rig. Those are `#/review` and the capture screen's undo thumbnail. `#/review`'s loupe maps the pointer to a natural pixel with no letterbox arithmetic. The undo thumbnail shows a card drifting out of the stand. The owner walked a box with the crop on four more screens and ruled it off there. A clipping is measurable. A moving photograph is felt, and the feeling is what gets used. `#/pricing`'s drawer states `object-fit: cover` in `Pricing.css` (D38's answer). Inheriting the kit's `contain` drew bars of ground down each side.
 

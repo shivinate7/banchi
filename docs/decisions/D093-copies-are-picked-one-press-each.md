@@ -1,4 +1,4 @@
-## D93 — Copies are picked one press each
+# D93 — Copies are picked one press each
 
 **Which copies of an order line are taken is chosen off the copies panel, one press per copy, in any box.** The machine ranks and the person reaches. The resolver's picks stay the default, so the common case costs no press. `resolve_all` still allocates over the whole open set in one pass, so two orders cannot name one card.
 

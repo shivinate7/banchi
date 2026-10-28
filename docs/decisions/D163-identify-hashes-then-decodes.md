@@ -1,4 +1,4 @@
-## D163 — Identify hashes first, decodes on a miss
+# D163 — Identify hashes first, decodes on a miss
 
 **The cache key is the photograph's digest. So `identify` computes the digest first and decodes only cache misses.** It used to run `geometry.detect_card` and `images.prepare` over every photograph before it asked the store whether the answer was already known. The cache's own question is `Cache.reusable(key, photo_sha256)`. The decode was never an input to it. The order is now hash, cache, refuse, prepare. Every photograph is hashed, and the store is asked. A card that names a game with no registry entry is refused by name. Only the rest is cropped and downscaled. Hashing takes 0.687 ms a photograph, against about 115 ms for `detect_card` plus `prepare` (167 times as slow). Hashing all 2,535 photographs (4.4 GB) takes 2.89 seconds, so a store-wide press is affordable. The submitted set is unchanged.
 

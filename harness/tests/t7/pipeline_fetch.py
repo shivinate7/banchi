@@ -3146,6 +3146,42 @@ def check_batch_create_is_never_retried(checks: Checks) -> None:
         )
 
 
+def check_scope_preview_reads_identifications_once(checks: Checks) -> None:
+    """One `GET .../scope` reads the run's identifications once (DEBT61, open build proposals).
+
+    `do_pipeline_scope` counted the cards through `_scope_counts`, then `_scope_for_run` called
+    `_scope_counts` again, so one press read the same file (or the store, for a store-backed run)
+    twice. The spy sits on `Run.read_identifications`, the one reader `_scope_counts` goes through,
+    and on the class because `open_run` builds a fresh `Run` per call. It wraps the scope call
+    alone, so the fixture's own reads are not counted.
+
+    `games` is asserted non-empty: with no game to ask for, `_scope_for_run` is never entered and
+    the count is one for the wrong reason.
+    """
+    checks.note("")
+    checks.note("SCOPE PREVIEW — the identifications are read once")
+    with isolated_home():
+        run, _ = seam_run(checks, [(1, 1, "Dunsparce", "120", None)], join=False)
+        original = runs.Run.read_identifications
+        reads = []
+
+        def spy(self):
+            reads.append(self.directory.name)
+            return original(self)
+
+        with mock.patch.object(runs.Run, "read_identifications", spy):
+            answer = pipeline_routes.do_pipeline_scope(run.name, {})
+    checks.equal(
+        [(g["game"], g["cards"]) for g in answer["games"]],
+        [("pokemon", 1)],
+        "fixture: the scope answer counts the run's one card, so the second counter was entered",
+    )
+    checks.equal(
+        len(reads), 1,
+        f"one scope preview reads the run's identifications once, not once per counter: {reads}",
+    )
+
+
 CHECKS = (
     check_crop_preview,
     check_export_fetch,
@@ -3160,4 +3196,5 @@ CHECKS = (
     check_net_portal_write_that_drops_is_not_unreachable,
     check_tcg_export_reads_retry_through_the_one_home,
     check_batch_create_is_never_retried,
+    check_scope_preview_reads_identifications_once,
 )

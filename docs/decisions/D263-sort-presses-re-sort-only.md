@@ -1,4 +1,4 @@
-## D263 — Sort presses re-sort; nothing else jumps
+# D263 — Sort presses re-sort; nothing else jumps
 
 **The owner's rulings, 2026-09-23, in the UX review interview.** Three rulings about when a list
 may change its order.

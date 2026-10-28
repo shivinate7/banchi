@@ -1,4 +1,4 @@
-## D120 — One brand at every width
+# D120 — One brand at every width
 
 **Built on the owner's instruction, after they asked what the mobile build gets wrong.**
 The rebuild put the lockup in the desktop sidebar
