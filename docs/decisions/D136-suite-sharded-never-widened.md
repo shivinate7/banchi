@@ -1,6 +1,6 @@
 # D136 — The suite is sharded, never widened
 
-**Settled on the owner's interview.** A timing failure under machine load is never a reason to cut, weaken or malform finished work so a test passes; fix the test's clock or its wait instead. Wall-clock per PR and flake exposure are what matter. Sharding is fine, since it does not multiply runner minutes. A test that sleeps on a real clock may move to Playwright's fake clock. The post-merge run on main is skipped only when the tree it would test already passed on the PR. No assertion or asserted value changed under this entry. D16 is the test it is held to. Every change here alters how long a true statement is given to become true, or which machine says it.
+**Settled on the owner's interview.** A timing failure under machine load is never a reason to cut, weaken or malform finished work so a test passes; fix the test's clock or its wait instead. A simulator or browser that crashes in a session means that session runs slower on the current load: one full suite at a time. Wall-clock per PR and flake exposure are what matter. Sharding is fine, since it does not multiply runner minutes. A test that sleeps on a real clock may move to Playwright's fake clock. The post-merge run on main is skipped only when the tree it would test already passed on the PR. No assertion or asserted value changed under this entry. D16 is the test it is held to. Every change here alters how long a true statement is given to become true, or which machine says it.
 
 ### What it cost, measured before anything moved
 
