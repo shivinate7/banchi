@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""Daily market read (DEBT69), then the price archive sweep (D224, DEBT32). Owner's Mac, main tree only.
+"""Daily market read (DEBT69), the daily TCGCSV read, then the price archive sweep (D224, DEBT32). Owner's Mac, main tree only.
 
 Runs `server/pipeline_routes.py:do_prices_refresh` once: the owner's live listings (the one live
 fetch D104 made), the catalog export per game, a re-join of every open run, then the Trends
 strips for the rows still waiting (`docs/specs/stale-listings.md`, 7b). Each step leaves a note
 (`pipeline/pricerefresh.py`) that `#/pricing` shows, so a failed or partial run is on screen
 and never a silent stale state.
+
+On every start, whatever the refresh did, the same process saves TCGCSV's current Riftbound prices once per
+source update (`pipeline.dailyprices`, D-tcgcsv-daily-read): the refresh does not feed it, `--no-sweep` and
+`make price-refresh` run it too, and its own check skips an update already saved. Each pass is the `daily_prices`
+step of the note file, not ok when a group failed or the pass raised, and a line in this log. No screen shows it.
+It never changes the exit code and never stops the sweep.
 
 After a good refresh (unless `--no-sweep`), the same process runs `archive sweep --write` through
 `cli.cmd_pricearchive`, at the pace the last throttle saved (D222), its lines in this job's log.
@@ -67,27 +73,65 @@ def agent(remove):
 def run(sweep=True, now=False):
     sys.path.insert(0, str(ROOT))
     from pipeline import pricerefresh
-    from server import pipeline_routes
 
-    if not now and all(pricerefresh.step_ok_today(name) for name in REFRESH_STEPS):
-        log("refresh: skipped, today's refresh finished")
-    else:
-        answer = pipeline_routes.do_prices_refresh()
-        if answer.get("running"):
-            pricerefresh.note_skip("Skipped: another refresh is running.")
-            log("skipped: another refresh is running")
-            return 0
-        for name, step in (pricerefresh.read_status() or {}).get("steps", {}).items():
-            extra = {key: value for key, value in step.items() if key not in ("at", "ok")}
-            log("%s: %s %s" % (name, "ok" if step.get("ok") else "failed", extra))
-        if not (answer["ok"] and (answer["steps"].get("history") or {}).get("ok")):
-            log("archive sweep: skipped, refresh failed")
-            return 1
+    stopped = refresh(pricerefresh, now)
+    read_daily_prices(pricerefresh)
+    if stopped is not None:
+        return stopped
     if not sweep:
         log("archive sweep: not run, this run passed --no-sweep")
         return 0
     sweep_archive(pricerefresh)
     return 0
+
+
+def refresh(pricerefresh, now):
+    """The refresh, unless today's finished. `None` when the sweep may follow, else the job's exit code."""
+    from server import pipeline_routes
+
+    if not now and all(pricerefresh.step_ok_today(name) for name in REFRESH_STEPS):
+        log("refresh: skipped, today's refresh finished")
+        return None
+    answer = pipeline_routes.do_prices_refresh()
+    if answer.get("running"):
+        pricerefresh.note_skip("Skipped: another refresh is running.")
+        log("skipped: another refresh is running")
+        return 0
+    for name, step in (pricerefresh.read_status() or {}).get("steps", {}).items():
+        extra = {key: value for key, value in step.items() if key not in ("at", "ok")}
+        log("%s: %s %s" % (name, "ok" if step.get("ok") else "failed", extra))
+    if not (answer["ok"] and (answer["steps"].get("history") or {}).get("ok")):
+        log("archive sweep: skipped, refresh failed")
+        return 1
+    return None
+
+
+def read_daily_prices(pricerefresh):
+    """One pass of the daily TCGCSV read: a line in the job log and the `daily_prices` step of the note. The
+    User-Agent is the sweep's own knob. A raise is a not-ok step and never fails the job."""
+    from cli import cmd_pricearchive
+    from pipeline import dailyprices
+
+    try:
+        answer = dailyprices.run_pass(user_agent=cmd_pricearchive._user_agent())
+    except Exception as exc:  # noqa: BLE001 the read is free and retried at the next start; it never fails the job
+        log("daily prices: failed (%s: %s)" % (type(exc).__name__, exc))
+        pricerefresh.note_step("daily_prices", False, message="Daily prices could not be read. The next run tries again.")
+        return
+    failed = answer["failed"]
+    if answer["skipped"]:
+        log("daily prices: skipped, the update of %s is already saved" % answer["updated"])
+        message = "Daily prices for %s are already saved." % answer["day"]
+    else:
+        log("daily prices: %d rows saved for %s, %d group(s) failed%s" % (
+            answer["rows"], answer["day"], len(failed),
+            " (%s)" % ", ".join(map(str, sorted(failed))) if failed else "",
+        ))
+        message = (
+            "Daily prices saved with %d set(s) missing; the next run asks for them." % len(failed) if failed
+            else "Daily prices saved: %d rows for %s." % (answer["rows"], answer["day"])
+        )
+    pricerefresh.note_step("daily_prices", not failed, message=message)
 
 
 def sweep_archive(pricerefresh):

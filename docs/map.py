@@ -1353,6 +1353,21 @@ COMPONENTS = [
                                         "for an already-fresh SKU, and D-pricehistory-"
                                         "resolves-by-sku's three tiers, each with its own "
                                         "mutation guard."},
+            # THE DAILY TCGCSV READ. TCGCSV withdrew its past-days archive, so a whole-market
+            # price history builds only by saving the current file once per source update.
+            "dailyprices.py": {"does": "`run_pass` asks `last-updated.txt` first and skips when "
+                                       "that update is already saved whole. Otherwise it reads "
+                                       "Riftbound's (category 89) group list and one prices file per "
+                                       "group, with a pause between requests, and saves one row per "
+                                       "product and printing under the stamp's UTC date. A failed "
+                                       "group is named and left for the next pass, which asks for "
+                                       "that group only, and so does one whose payload is unreadable or says "
+                                       "`success: false`. One write per pass. A throttle answer is "
+                                       "waited out, and a second one stops the pass. Uses `pricehistory`'s "
+                                       "`Market`, `fetch_json` and `fetch_text`, never a second client.",
+                               "governed_by": ["D88", "D219", "D-tcgcsv-daily-read"],
+                               "note": "PROVED BY T7's `daily_prices` group, no network call. "
+                                       "`scripts/price-refresh-daily.py` calls it."},
             # THE PER-PRODUCT VIEW'S OWN READ (D227). Archive-first,
             # live-fallback only when `store/pricearchive.py` has never seen the SKU at all.
             # Never writes — a sweep is still a press, never this route.
@@ -2141,6 +2156,15 @@ COMPONENTS = [
             # THE STORE-OWNED SKU TABLE (identity-follows-sku.md §3.2, lane 0 — owner's
             # ruling, 2026-09-24: "yes I'd been saying we build this"). `price_history`'s
             # shape and not `readings`'s: never a full replace, never a delete.
+            # THE DAILY TCGCSV READ'S TABLES. `price_history`'s never-delete rule, keyed on the
+            # source's own update date and never the date of the read.
+            "dailyprices.py": {"does": "`daily_prices` (one row per product, printing and source "
+                                       "update day, never deleted) and `daily_price_updates` (one row "
+                                       "per source stamp: the groups saved and whether every group "
+                                       "was, which is what lets a pass skip). `DailyPrices.save` adds "
+                                       "a pass's rows and marks its groups in one `Store.write()`.",
+                               "governed_by": ["D88", "D219", "D-tcgcsv-daily-read"],
+                               "note": "PROVED BY T7's `daily_prices` group."},
             "skus.py": {"does": "`skus` — one row per TCGplayer Id this repo has ever read "
                                 "out of a cached export: the six fact cells verbatim "
                                 "(`product_line`, `set_name`, `product_name`, `number`, "
@@ -5171,16 +5195,21 @@ COMPONENTS = [
                         "every open run, then the Trends preload), each step leaving a note `#/pricing` "
                         "shows. After a good refresh it runs `archive sweep --write` in the same process "
                         "(`cli.cmd_pricearchive`, at the saved pace, a second throttle stops it with the "
-                        "buckets kept, exit 0), and adds the result to the note. Calls no paid read "
+                        "buckets kept, exit 0), and adds the result to the note. Before the sweep, and "
+                        "with `--no-sweep` too, and even after a failed refresh, it runs "
+                        "`pipeline.dailyprices.run_pass`, which saves TCGCSV's current Riftbound "
+                        "prices once per source update and notes each pass in the note file and the log, no screen, as the `daily_prices` "
+                        "step (D-tcgcsv-daily-read). Calls no paid read "
                         "and changes no price at TCGplayer. `--agent` installs "
                         "the daily launchd job (main tree only), `--agent --remove` removes it. "
                         "The installer is `launchagent.py`'s; `demo-mirror-daily.py` keeps its own copy (D295 fence).",
                 "note": "PROVED BY T7's `price_moves` group: the note is written on success and "
                         "on refusal, and the script's own imports are asserted to reach only "
-                        "the note writer, the live fetch's module and the one archive sweep press, "
+                        "the note writer, the live fetch's module, the one archive sweep press and the "
+                        "daily TCGCSV read, and that the read runs whatever the refresh did, "
                         "and that a good refresh is swept, a failed one skipped and a second "
                         "throttle stops the sweep.",
-                "governed_by": ["D104", "D189", "D222", "D224", "D278", "D295"],
+                "governed_by": ["D104", "D189", "D222", "D224", "D278", "D295", "D-tcgcsv-daily-read"],
             },
             "backup-daily.py": {
                 "does": "the one-time copy to iCloud Drive on the owner's Mac, run by hand "
