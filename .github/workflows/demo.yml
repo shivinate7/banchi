@@ -152,49 +152,15 @@ jobs:
       - name: Prove the QR refusal still refuses
         run: python3 scripts/demo-record.py --self-test
 
-      - name: Cache the browser
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      # NO APT STEP, ON PURPOSE. `playwright install --with-deps` runs apt, and apt has hung on
+      # the runner's slow Ubuntu mirror. The runner image already carries the browser's system
+      # libraries, so the shared action installs only the browser and caches it by the pinned
+      # Playwright version. It owns the setup; do not re-add a cache or an apt step here.
+      # `npm-ci` is off because the Install step above already ran `npm ci --prefix app`.
+      - uses: shivinate7/claude-settings/actions/playwright-setup@3bebbd34804b8b37b59a8a788465ed63b2b0580b
         with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('app/package-lock.json') }}
-
-      # THE CAUSE OF THE INSTALL HANGS (this job runs the same install as check.yml's design-check job, where the stall was measured: 12 of 120 installs took over 120 s, median 19 s, with the browser cache a hit): the browser
-      # cache is fine, but `--with-deps` runs `apt-get install` for ~32 MB of font and mesa
-      # packages, and the runner's azure.archive.ubuntu.com mirror sometimes serves them at
-      # ~100 kB/s. The log stops at a `Get:N` line. This cache holds those .debs so a shard only
-      # downloads what the mirror updated since (apt ignores a cached .deb whose version is stale).
-      # `actions/cache` never overwrites a key, so the key carries the ISO week and the runner
-      # image: each week saves a fresh set, seeded from the last one through `restore-keys`.
-      - name: Name this week's apt cache
-        id: apt-week
-        run: echo "key=$(date -u +%G-W%V)-${ImageVersion:-none}" >> "$GITHUB_OUTPUT"
-
-      - name: Cache the apt packages
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/apt-archives
-          key: playwright-apt-${{ runner.os }}-${{ steps.apt-week.outputs.key }}
-          restore-keys: |
-            playwright-apt-${{ runner.os }}-
-
-      - name: Install chromium
-        timeout-minutes: 5
-        working-directory: app
-        # BANDAID, ON TOP OF THE CACHE ABOVE: a mirror stall still costs one try. `timeout 120`
-        # kills the stalled npx, but its `sudo apt-get` child lives on and holds the dpkg lock.
-        # The retry stops that child, and the drop-in makes apt wait up to 60 s on the lock
-        # itself (Playwright runs apt-get as root, which reads /etc/apt/apt.conf.d).
-        run: |
-          echo 'DPkg::Lock::Timeout "60";' | sudo tee /etc/apt/apt.conf.d/99lock-timeout
-          sudo mkdir -p /var/cache/apt/archives
-          sudo cp -n ~/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
-          timeout 120 npx playwright install --with-deps chromium || {
-            sudo pkill -x apt-get || true
-            sudo pkill -x dpkg || true
-            timeout 120 npx playwright install --with-deps chromium
-          }
-          mkdir -p ~/apt-archives
-          cp -n /var/cache/apt/archives/*.deb ~/apt-archives/ 2>/dev/null || true
+          package-dir: app
+          npm-ci: 'false'
 
       - name: Prove the built demo draws what reviewers grade
         working-directory: app
@@ -288,7 +254,8 @@ jobs:
     steps:
       - id: deploy
         # NODE 20, LIKE EVERY OTHER PIN IN THIS REPO, AND THE DATE IS 2026-09-23.
-        # Every `uses:` line here and in `check.yml` targets the Node 20 runtime.
+        # Every `uses:` line here and in `check.yml` targets the Node 20 runtime, except the
+        # shared Playwright action's inner `actions/cache` step, whose runtime is unmeasured.
         # GitHub force-runs them on Node 24 and prints a deprecation annotation on every
         # run; both workflows pass and have passed throughout. This step gets the comment
         # because it is the only one that CANNOT be proven before it is merged — the
