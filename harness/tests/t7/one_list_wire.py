@@ -684,6 +684,37 @@ def check_send_refuses_stale_readings(checks: Checks) -> None:
             checks.equal(_postings(DUNSPARCE_SKU), [], "and no posting is written")
 
 
+def check_send_with_run_refuses_stale_readings(checks: Checks) -> None:
+    """A send that NAMES A RUN refuses `readings_stale` too, the same as a zero-run send of the same row.
+
+    `refresh_before_send` refreshes only the run's export, and that export is from today here, so it
+    does nothing. It never touches the market reading behind a kept suggestion. Dunsparce's reading
+    is yesterday's: the suggestion would go out at a price from an earlier day's market.
+    """
+    checks.note("")
+    checks.note("SEND WITH A RUN, STALE READINGS — a suggestion from an earlier day's reading is refused")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send with a run: suggestion from an earlier day's reading"):
+            run_dir = _one_copy_live(checks, portal)
+            _seed_send_suggestions()
+            _market_reading(DUNSPARCE_SKU, "2.06", "2.40", at=_yesterday_at())
+            stored = Store().read().readings.entries[DUNSPARCE_SKU].at
+            checks.ok(
+                clock.central_day(datetime.fromtimestamp(stored, tz=timezone.utc)) < clock.central_day(clock.now()),
+                "precondition: Dunsparce's reading was written on an earlier Central day",
+            )
+            outcome = _outcome(lambda: send_routes.do_send({
+                "runs": [run_dir.name],
+                "confirm": True,
+                "prices": [{"sku": DUNSPARCE_SKU, "price": "2.06", "was": "2.50", "source": "suggested"}],
+            }))
+            checks.equal(outcome, ("refused", "readings_stale"),
+                         "a send naming a run, over a reading from an earlier day, is refused readings_stale")
+            checks.equal(_rows(portal), {}, "and TCGplayer receives no row")
+            checks.equal(_postings(DUNSPARCE_SKU), [], "and no posting is written")
+
+
 def check_send_held_suggestion_left_out(checks: Checks) -> None:
     """A kept suggestion on a SKU that is live and held is left out of the send. Its held take-off
     is a row of its own (Add to Quantity below 0), and a price-only row beside it is what the
@@ -761,6 +792,7 @@ CHECKS = (
     check_send_refuses_repeated_sku_price,
     check_emit_repeated_sku_price_file,
     check_send_refuses_stale_readings,
+    check_send_with_run_refuses_stale_readings,
     check_send_held_suggestion_left_out,
     check_worklist_no_runs_corrupt_corpus,
 )
