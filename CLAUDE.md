@@ -364,7 +364,7 @@ Use bold labels in one quoted block, never a code fence. Start with the point. N
   before you build. Review the built screen against it before you call it done.
 - Sonnet is the default and the ceiling. Plan, the built-in advisor, the designer, the design reviewer and a builder's
   third try run Opus. Reviewers run Sonnet from round 2; round 1 uses the role's model. Any other Opus needs the owner's
-  grant. Say an Opus lane in one line first. Raise any other Opus lane only on the owner's word, in `.claude/settings.local.json`.
+  grant. Say an Opus lane in one line first. Raise any other Opus lane only on the owner's grant, in `.claude/settings.local.json`.
 - A builder commits and pushes its branch after every pass, even red. Each commit message ends with `Done:` and
   `Next:` lines, so a lane resumes from its branch alone.
 - Read `docs/decisions/` before you propose an architecture change (`scripts/decision-context.py` finds the entry,

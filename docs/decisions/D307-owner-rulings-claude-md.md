@@ -34,7 +34,7 @@ of the work. D42 (main moves by PR) holds the rest.
 **Model tiers.** Sonnet is the default and the ceiling. Plan, the built-in advisor, the designer, the design
 reviewer and a builder's third try run Opus. Reviewers run Sonnet from round 2; round 1 uses the role's model.
 Any other Opus needs the owner's grant. An Opus lane is said in one line first, and any other Opus lane is raised
-only on the owner's word in `.claude/settings.local.json`.
+only on the owner's grant in `.claude/settings.local.json`.
 
 **A builder commits and pushes its branch after every pass, even when a check is red.**
 Each commit message ends with a `Done:` line and a `Next:` line.
