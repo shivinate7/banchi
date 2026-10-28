@@ -2976,6 +2976,17 @@ export async function sendCopies(
   })) as SendAnswer
 }
 
+/**
+ * One press of kept suggestions alone: each is a price-only row on a listing that is already
+ * live, so no run is named. Every price is marked `source: 'suggested'`, which is what lets the
+ * server accept an empty `runs`, post it as "suggested", and measure it against the owner's
+ * limit on the live price it reads itself (refused `suggestion_past_cap`).
+ * **This changes what buyers pay.**
+ */
+export async function sendSuggestions(prices: readonly PriceChange[]): Promise<SendAnswer> {
+  return sendCopies([], { prices: prices.map((price) => ({ ...price, source: 'suggested' as const })) })
+}
+
 /** Every send's receipt, what is written and not confirmed, and whether the live check is due. */
 export async function sendsStatus(): Promise<SendsStatus> {
   return (await request('/pipeline/sends')) as SendsStatus

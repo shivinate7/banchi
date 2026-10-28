@@ -29,7 +29,7 @@ export interface MoneyFaceResult {
  *  module-level `const` is not part of the function's own `toString()`, so the browser
  *  would see `MONEY_RE is not defined` the moment this ran — measured the first time this
  *  file was built. */
-export function scanMoneyFace(): MoneyFaceResult {
+export function scanMoneyFace(root: string | void): MoneyFaceResult {
   // `$1.23`, `$66,334.71`, `+$1.20`, `−$0.35` (U+2212, `moneySigned`'s own minus),
   // `-$1.20` (a plain hyphen, in case a value was typed rather than formatted), and a WHOLE-
   // DOLLAR figure, `$50` or `$1,200`, which prose uses ("under $50") and `money.ts` never
@@ -48,7 +48,8 @@ export function scanMoneyFace(): MoneyFaceResult {
   const MONO_FACE = 'jetbrains mono'
 
   const empty: MoneyFaceResult = { text: [], fields: [], noView: true }
-  const view = document.querySelector('.bn-view')
+  // `page.evaluate(scanMoneyFace)` passes no root, so the page view is the default.
+  const view = document.querySelector(typeof root === 'string' ? root : '.bn-view')
   if (!view) return empty
 
   function visible(el: Element): boolean {
