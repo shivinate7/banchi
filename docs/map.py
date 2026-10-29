@@ -1,6 +1,6 @@
 """The repo, as data. One Read answers "what is built, what is TBD, what governs this file".
 
-Written because that question kept costing a subagent sweep and a quarter-million tokens to
+Written because that question kept costing an agent sweep and a quarter-million tokens to
 re-derive from prose that already knew the answer. `docs/GATES.md` has the build order,
 `docs/decisions/` has the rulings, `README.md` has the layout — but all three are prose,
 and prose has to be read in full before it can be trusted.
@@ -2770,7 +2770,7 @@ COMPONENTS = [
                         "root, and `_ownership_verdict` decides whether THIS caller — read from "
                         "`CLAUDE_CODE_SESSION_ID` — may stop a pid tagged that way. A bare "
                         "`--confirm` from the top-level session is D127's original sweep, "
-                        "untouched; the same bare `--confirm` from a subagent stops only pids "
+                        "untouched; the same bare `--confirm` from an agent stops only pids "
                         "tagged with its OWN session id, and an explicit `pid:`/`port:`/"
                         "`match:` may still take an UNTAGGED pid but never one tagged to another "
                         "session, for either caller.",

@@ -47,7 +47,7 @@ make up             # the server, detached, one process. ARGS=--restart bounces 
                     #   Refuses on a primary checkout off main. BANCHI_SERVE_MAIN=off overrides.
 make restart-now    # ends a held auto-restart and app build at once (D176 (the primary checkout syncs): they wait for 5 idle minutes, 2 hours at most). Ask the owner first; only while one waits.
 make reap           # stop what THIS session started, nothing else. Previews. ARGS="--confirm",
-                    #   "port:N --confirm", "match:X --confirm" or "pid:N --confirm". A subagent's bare
+                    #   "port:N --confirm", "match:X --confirm" or "pid:N --confirm". An agent's bare
                     #   --confirm stops only its own session's pids (D305, the reaper stops only its own).
 make janitor-install # retired: claude-settings' install.sh owns the user's Claude bin directory. Copies nothing.
 make merge          # claude-settings' shared merge tool (D140, merge claims the decision number), config in
