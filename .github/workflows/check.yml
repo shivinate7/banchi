@@ -381,7 +381,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - uses: shivinate7/claude-settings/actions/stamp@3bebbd34804b8b37b59a8a788465ed63b2b0580b
+      - uses: shivinate7/claude-settings/actions/stamp@1cc47f015bdaf073d8cb0f043a988c28d09aa3e1
         with:
           mode: check
           config: .github/stamp.json
@@ -419,7 +419,7 @@ jobs:
       - name: Install
         run: npm ci --prefix app
 
-      - uses: shivinate7/claude-settings/actions/code-check@c71b22ef87f8c95170210f79417b08317dd6891f
+      - uses: shivinate7/claude-settings/actions/code-check@1cc47f015bdaf073d8cb0f043a988c28d09aa3e1
         with:
           base: ${{ github.event.pull_request.base.sha || github.event.before }}
 
