@@ -47,12 +47,12 @@ make up             # the server, detached, one process. ARGS=--restart bounces 
                     #   Refuses on a primary checkout off main. BANCHI_SERVE_MAIN=off overrides.
 make restart-now    # ends a held auto-restart and app build at once (D176 (the primary checkout syncs): they wait for 5 idle minutes, 2 hours at most). Ask the owner first; only while one waits.
 make reap           # stop what THIS session started, nothing else. Previews. ARGS="--confirm",
-                    #   "port:N --confirm", "match:X --confirm" or "pid:N --confirm". A subagent's bare
+                    #   "port:N --confirm", "match:X --confirm" or "pid:N --confirm". An agent's bare
                     #   --confirm stops only its own session's pids (D305, the reaper stops only its own).
 make janitor-install # retired: claude-settings' install.sh owns the user's Claude bin directory. Copies nothing.
 make merge          # claude-settings' shared merge tool (D140, merge claims the decision number), config in
                     #   `.github/stamp.json`. ARGS=<n> previews. ARGS="<n> --confirm" merges, and claims record
-                    #   numbers first. The owner's named Orchestrator runs it under its standing grant. It runs
+                    #   numbers first. The repo's batch runner runs it under its standing grant. It runs
                     #   from any checkout, not only the PR's branch. It never rebases or force-pushes:
                     #   a moved head stops it, so rebase by hand and run it again.
 make janitor        # claude-settings' sweep (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep"): what a finished session left behind. Previews. ARGS=--confirm reaps.
@@ -340,11 +340,12 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **A screen answers to the system.** `--bn-*` tokens only, checked at 1440 and 820, light and dark.
   `docs/DESIGN.md` is the record. The `design tokens` row of `make docs-audit` locks every name and hex both ways.
 - **Main moves by pull request. A session never commits to it and never pushes it** (D42, main moves by pull request).
-  One session the owner names Orchestrator batches every reviewed lane the owner set out, across all sessions, into one integration branch
-  and merges it under its standing grant. Any other merge happens only on the owner's named act ("merge", not "ship it"),
-  and the Orchestrator runs it. A lane session never merges. It hands the Orchestrator each reviewed lane branch with its
-  head commit and review verdict, and never builds an integration branch, opens an integration PR or marks a PR ready.
-  The designation is never inherited. A merge uses `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
+  The session the owner names as the repo's batch runner (claude-settings decision session-tiers) holds the standing merge grant. It batches every reviewed
+  lane the owner set out, across all sessions, into one integration branch, waits on its CI, merges it under that grant and
+  archives the finished lanes. The coordinator starts lanes and talks with the owner. Any other merge happens only on the
+  owner's named act ("merge", not "ship it"), and the batch runner runs it. A lane session never merges. It hands the batch
+  runner each reviewed lane branch with its head commit and review verdict, and never builds an integration branch, opens
+  an integration PR or marks a PR ready. The designation is never inherited. A later session re-asks, a new batch runner included. A merge uses `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
   One standing exception (D42, main moves by pull request):
   the weekly demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
   GitHub branch protection also requires `check` and `revert-guard`, with 0 reviews and `strict: false`.
@@ -362,9 +363,10 @@ Use bold labels in one quoted block, never a code fence. Start with the point. N
 - Run `make harness` before you say something works. Give the verdict, never the output.
 - Screen work: experience is everything (D307, rulings CLAUDE.md carried). Run a design pass
   before you build. Review the built screen against it before you call it done.
-- Sonnet is the default and the ceiling. Plan, the built-in advisor, the designer, the design reviewer and a builder's
-  third try run Opus. Reviewers run Sonnet from round 2; round 1 uses the role's model. Any other Opus needs the owner's
-  grant. Say an Opus lane in one line first. Raise any other Opus lane only on the owner's grant, in `.claude/settings.local.json`.
+- A lane session runs Opus (claude-settings decision session-tiers). The agents it starts follow `agent-model-cap`:
+  Sonnet is the default and the ceiling. Plan, the built-in advisor, the designer, the design reviewer and a builder's
+  third try run Opus. Reviewers run Sonnet from round 2; round 1 uses the role's model. Any other Opus agent needs the
+  owner's grant. Say an Opus agent in one line first, and raise it only on the owner's grant, in `.claude/settings.local.json`.
 - A builder commits and pushes its branch after every pass, even red. Each commit message ends with `Done:` and
   `Next:` lines, so a lane resumes from its branch alone.
 - Read `docs/decisions/` before you propose an architecture change (`scripts/decision-context.py` finds the entry,
