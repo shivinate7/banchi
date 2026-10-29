@@ -340,12 +340,12 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **A screen answers to the system.** `--bn-*` tokens only, checked at 1440 and 820, light and dark.
   `docs/DESIGN.md` is the record. The `design tokens` row of `make docs-audit` locks every name and hex both ways.
 - **Main moves by pull request. A session never commits to it and never pushes it** (D42, main moves by pull request).
-  The repo's batch runner (claude-settings decision session-tiers) holds the standing merge grant. It batches every reviewed
+  The session the owner names as the repo's batch runner (claude-settings decision session-tiers) holds the standing merge grant. It batches every reviewed
   lane the owner set out, across all sessions, into one integration branch, waits on its CI, merges it under that grant and
   archives the finished lanes. The coordinator starts lanes and talks with the owner. Any other merge happens only on the
   owner's named act ("merge", not "ship it"), and the batch runner runs it. A lane session never merges. It hands the batch
   runner each reviewed lane branch with its head commit and review verdict, and never builds an integration branch, opens
-  an integration PR or marks a PR ready. The grant is never inherited: a session holds it only while it is the batch runner. A merge uses `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
+  an integration PR or marks a PR ready. The designation is never inherited. A later session re-asks, a new batch runner included. A merge uses `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
   One standing exception (D42, main moves by pull request):
   the weekly demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
   GitHub branch protection also requires `check` and `revert-guard`, with 0 reviews and `strict: false`.
