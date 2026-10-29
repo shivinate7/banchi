@@ -1079,11 +1079,12 @@ CODEX_ONLY = frozenset({
 })
 
 #: The value each file pins for `GUARD_SHELL_SKIP` on a `scripts/guard-shell.py` hook: Claude
-#: Code's Bash entry skips the three clauses the shared layer owns, every other entry sets it
-#: empty so an inherited value never narrows a guard. The triples below drop the prefix, so a
+#: Code's Bash entry skips the four clauses the shared layer owns, its Write|Edit entry skips the
+#: one clause it runs (`tree`), every Codex entry sets it empty so an inherited value never narrows a guard. The triples below drop the prefix, so a
 #: pin that drifts is its own finding, not a hook mismatch.
 _SKIP_ENV = re.compile(r"^GUARD_SHELL_SKIP=(\S*)\s+")
-CLAUDE_BASH_SKIP = "checkout,stash,reset"
+CLAUDE_BASH_SKIP = "checkout,stash,reset,tree"
+CLAUDE_EDIT_SKIP = "tree"
 
 #: The one hook Claude Code runs narrowed by an environment prefix, and Codex runs bare. The
 #: row expects the prefix on the Claude entry and its absence on the Codex entry.
@@ -1227,7 +1228,7 @@ def check_codex_hooks(report: Report) -> None:
                     if "scripts/guard-shell.py" not in command:
                         continue
                     found = _SKIP_ENV.match(command)
-                    want = CLAUDE_BASH_SKIP if label == "claude" and matcher == "Bash" else ""
+                    want = {"Bash": CLAUDE_BASH_SKIP, "Write|Edit": CLAUDE_EDIT_SKIP}.get(matcher, "") if label == "claude" else ""
                     if not found or found.group(1) != want:
                         findings.append(
                             Finding(
