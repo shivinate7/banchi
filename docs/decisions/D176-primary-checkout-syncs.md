@@ -230,7 +230,7 @@ standing behind another guard, with nothing able to reach it.
   verdict is a sentence about a guard rather than one.
   **This one is kept**: it guards the prohibition the ruling is most absolute about.
   `primary_checkout`'s obvious refactor, deriving the path from `--git-common-dir`, does not
-  generalize to a `--separate-git-dir` checkout. So this test is what still holds if that changes.
+  generalise to a `--separate-git-dir` checkout. So this test is what still holds if that changes.
   Given a subject by taking away what stands in front of it: `primary_checkout` is neutered to
   hand back a linked worktree, and the sync must still refuse to act on it.
 - **`--ff-only` was redundant with the ancestry predicate**, which refuses a diverged main before
