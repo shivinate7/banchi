@@ -134,7 +134,7 @@ at a temporary directory, so nothing here touches the real inventory.
   string. A literal zero is written into a bucket that sold nothing. **The buckets arrive
   NEWEST FIRST.** The arithmetic is asserted against small literal buckets whose answer is
   computable in the assertion's own label. This is because a real series' VWAP is a number
-  nobody can check by hand. Also, a fixture cannot tell a correct weighted mean from a
+  nobody can check by hand, and a fixture cannot tell a correct weighted mean from a
   plausible one.
 
   **The case that would otherwise fail silently is the bucket order.** It is why the real
@@ -288,11 +288,11 @@ at a temporary directory, so nothing here touches the real inventory.
   one case.
   **The guard those measurements justified is retired** (D65). D65 names
   the scope, so the positive check `export_scope_incomplete` is the whole guard. Also, the
-  delta's first-fetch refusal cost every run an acknowledgement and a second download. The
+  delta's first-fetch refusal cost every run an acknowledgment and a second download. The
   three cases went with it. What the section proves instead is that a re-fetch of identical
   bytes lands on the file the run already holds. It also proves that the receipt carries the
-  last joined export's rows and SKUs beside the new file's, per game. The comparison refuses
-  nothing.
+  last joined export's rows and SKUs beside the new file's, per game. It refuses nothing on
+  the comparison.
 
   **What it CANNOT prove, said here so a green run is not misread**: whether TCGplayer's WAF
   accepts this client when the request carries a real session. Measured unauthenticated, the
@@ -357,8 +357,8 @@ at a temporary directory, so nothing here touches the real inventory.
   So the remaining gap is narrower and worth stating exactly: the fixtures are still
   invented, and Gate B's run of one lot produced exactly one reason code. **Box 2 produced a
   second, and this bullet denied it until 2026-08-25.** `no_catalog_row` has stood in the live
-  queue as 47 real entries with zero candidates. This is the case D35 (unreadable numbers use
-  the name) was written for. It is also the case that `wasted_position` in D37 (stand-down
+  queue as 47 real entries with zero candidates. This is the case D35 (unreadable numbers
+  fall back to name) was written for. It is also the case that `wasted_position` in D37 (stand-down
   closes a question, writes nothing) was measured against. Both decisions landed in this repo
   on the strength of it. The count was stale too: the roster is fourteen, not twelve. So **two of fourteen have
   met a real card**, and nothing has exercised `set_ambiguous`, `low_confidence` or the other
