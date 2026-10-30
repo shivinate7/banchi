@@ -305,7 +305,7 @@ jobs:
           BANCHI_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
         run: make ci-check-static
 
-  # THE REQUIRED CHECK IS `all-jobs-passed` (claude-settings decision same-check-kinds). One check,
+  # THE CHECK PROTECTION IS TO REQUIRE IS `all-jobs-passed` (claude-settings decision same-check-kinds). One check,
   # built on the shared action: it fails when any job it `needs` failed, was cancelled or was
   # SKIPPED, so a job that quietly does not run can never read as green. That is why every needed
   # job below runs on every non-draft event, and says "nothing to do" from inside its steps rather

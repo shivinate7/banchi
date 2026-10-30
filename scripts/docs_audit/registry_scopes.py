@@ -1515,6 +1515,18 @@ def _rollup_findings(where: str, text: str, files: Dict[str, str],
                 f"`{name}` has the job-level `if: {value}`. A needed job that skips fails\n"
                 f"  `{ROLLUP_JOB}`: keep only the draft guard here and gate the steps instead.")))
 
+    # `continue-on-error` turns a failed job or step into a success, so the rollup would read green
+    # over it. Only a literal `false` is allowed: an expression or `true` can hide a failure.
+    watched = needed_jobs + [ROLLUP_JOB] + (["check"] if "check" in names else [])
+    for name in watched:
+        for line in _job_lines(jobs, name) or []:
+            match = re.match(r"^\s*(?:-\s+)?continue-on-error:(?:\s+(.*))?$", line)
+            if match and _yaml_value(match.group(1) or "").lower() != "false":
+                out.append((where, (
+                    f"`{name}` sets `continue-on-error: {_yaml_value(match.group(1) or '')}`, which turns a failure\n"
+                    f"  into a success the rollup cannot see. Only `false` is allowed on a job `{ROLLUP_JOB}` reads.")))
+                break
+
     # The alias reads the rollup and nothing else, or it is a second required check with its own
     # wiring, which is the defect the rollup exists to remove.
     if "check" in names:
