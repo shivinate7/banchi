@@ -395,7 +395,8 @@ jobs:
   # as the modules that pass --strict today. `exclude` only shrinks and names vendored or
   # generated files alone, never first-party code. Its own job and not a `scripts/checks.py`
   # entry, for the reason `design-check` gives above: it is no `make check` target. It BLOCKS a
-  # merge through `check`, which lists it in `needs`, the same way `records` does.
+  # merge through `all-jobs-passed`, which lists it in `needs` and fails unless it succeeded, the
+  # same way `records` does.
   # `npm ci` because tsc reads app/'s types from app/node_modules.
   code-check:
     if: ${{ !github.event.pull_request.draft }}

@@ -1286,6 +1286,40 @@ def _yaml_value(raw: str) -> str:
     return text
 
 
+def _flow_scalar(raw: str) -> str:
+    """One value up to the `,` or `}` that ends it inside a flow mapping. A `,` or `}` inside a
+    quoted value or inside `${{ }}` is text. A block-style value has neither, so it comes back whole."""
+    text = raw.lstrip()
+    i = 0
+    if text[:1] in ("'", '"'):
+        quote = text[0]
+        i = 1
+        while i < len(text):
+            if text[i] == "\\" and quote == '"':
+                i += 2
+                continue
+            if text[i] == quote:
+                if quote == "'" and text[i + 1:i + 2] == "'":
+                    i += 2
+                    continue
+                i += 1
+                break
+            i += 1
+    depth = 0
+    while i < len(text):
+        if text.startswith("${{", i):
+            depth += 1
+            i += 3
+        elif text.startswith("}}", i) and depth:
+            depth -= 1
+            i += 2
+        elif text[i] in ",}" and depth == 0:
+            return text[:i]
+        else:
+            i += 1
+    return text
+
+
 def _blank_block_scalars(text: str) -> List[str]:
     """The lines of `text`, with the body of every block scalar (`run: |`, `if: >-`) emptied.
     The header line stays, so a reader can still see that the value is a block. Line numbers are
@@ -1517,13 +1551,17 @@ def _rollup_findings(where: str, text: str, files: Dict[str, str],
 
     # `continue-on-error` turns a failed job or step into a success, so the rollup would read green
     # over it. Only a literal `false` is allowed: an expression or `true` can hide a failure.
+    # A flow-style step (`- { name: x, continue-on-error: true }`) puts the key after `{` or `,`.
     watched = needed_jobs + [ROLLUP_JOB] + (["check"] if "check" in names else [])
     for name in watched:
         for line in _job_lines(jobs, name) or []:
-            match = re.match(r"^\s*(?:-\s+)?continue-on-error:(?:\s+(.*))?$", line)
-            if match and _yaml_value(match.group(1) or "").lower() != "false":
+            if line.lstrip().startswith("#"):
+                continue
+            match = re.search(r"(?:^\s*(?:-\s+)?|[{,]\s*)continue-on-error:(?:\s+(.*))?$", line)
+            value = _yaml_value(_flow_scalar(match.group(1) or "")) if match else ""
+            if match and value.lower() != "false":
                 out.append((where, (
-                    f"`{name}` sets `continue-on-error: {_yaml_value(match.group(1) or '')}`, which turns a failure\n"
+                    f"`{name}` sets `continue-on-error: {value}`, which turns a failure\n"
                     f"  into a success the rollup cannot see. Only `false` is allowed on a job `{ROLLUP_JOB}` reads.")))
                 break
 
