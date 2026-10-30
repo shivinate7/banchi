@@ -594,6 +594,43 @@ jobs:
         "continue-on-error: false on a needed job is not a finding",
         NOT_BUILT if got is None else str(got),
     )
+    # THE SPELLINGS THE LINE READER DID NOT SEE. A flow-style step (`- { ... }`) puts its keys after
+    # the `- {`, so a reader that matches only a line that starts with the key misses them. The
+    # expression and quoted forms are plain values, and each must still be a finding.
+    red(
+        "continue-on-error: true inside a single-line flow step on a needed job is a finding",
+        "      - run: make design-check",
+        "      - { name: x, continue-on-error: true, run: make design-check }",
+        "continue-on-error",
+    )
+    red(
+        "continue-on-error first in a single-line flow step on a needed job is a finding",
+        "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4",
+        "      - { continue-on-error: true, uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 }",
+        "continue-on-error",
+    )
+    red(
+        "continue-on-error as an expression on a needed job is a finding",
+        "  ci-static:\n    if: ${{ !github.event.pull_request.draft }}",
+        "  ci-static:\n    if: ${{ !github.event.pull_request.draft }}\n    continue-on-error: ${{ matrix.x }}",
+        "continue-on-error",
+    )
+    red(
+        "continue-on-error quoted as 'true' on a needed job is a finding",
+        "  records:\n    if: ${{ !github.event.pull_request.draft }}",
+        "  records:\n    if: ${{ !github.event.pull_request.draft }}\n    continue-on-error: 'true'",
+        "continue-on-error",
+    )
+    got = findings_for(FIXTURE.replace(
+        "      - run: make design-check",
+        "      - { name: x, run: make design-check, continue-on-error: false }",
+        1,
+    ))
+    ok(
+        got is not None and got == [],
+        "continue-on-error: false inside a flow step on a needed job is not a finding",
+        NOT_BUILT if got is None else str(got),
+    )
     got = findings_for(FIXTURE, excluded={**WANTED, "ghost-job": "renamed away"})
     ok(
         got is not None and any("`ghost-job`" in m for _, m in got),
