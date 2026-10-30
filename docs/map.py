@@ -5566,6 +5566,27 @@ COMPONENTS = [
         "governed_by": ["D16"],
     },
     {
+        "path": "docs/todo.md",
+        "status": "built",
+        "does": "the shared todo list: tasks a session caught and did not do, one line each. "
+                "Known gaps stay in docs/debts/.",
+        "governed_by": [],
+    },
+    {
+        "path": "docs/plans/README.md",
+        "status": "built",
+        "does": "the plans folder's short index: a plan holds the open lanes for work "
+                "too big for one pull request, one file per plan. None open.",
+        "governed_by": [],
+    },
+    {
+        "path": ".claude/rules/README.md",
+        "status": "built",
+        "does": "the shared rules-folder note, copied verbatim from claude-settings. Its "
+                "paths frontmatter keeps it out of every session's context.",
+        "governed_by": [],
+    },
+    {
         "path": "docs/specs/home-assistant.md",
         "status": "tbd",
         "does": "PROPOSAL, nothing built: the home tier. The always-on HA Green, its 2 TB drive, "
