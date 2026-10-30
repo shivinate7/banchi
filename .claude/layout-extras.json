@@ -6,7 +6,7 @@
     "codes": {"path": "codes"},
     "demo-assets": {"path": "demo-assets"},
     "design-refs": {"path": "docs/design-refs"},
-    "gates": {"path": "docs/gates"},
+    "harness-contract": {"path": "docs/gates"},
     "research": {"path": "docs/research"},
     "fixtures": {"path": "fixtures"},
     "geometry": {"path": "geometry"},
