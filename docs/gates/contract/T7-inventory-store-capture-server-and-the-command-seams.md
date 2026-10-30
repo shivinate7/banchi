@@ -291,8 +291,8 @@ at a temporary directory, so nothing here touches the real inventory.
   delta's first-fetch refusal cost every run an acknowledgment and a second download. The
   three cases went with it. What the section proves instead is that a re-fetch of identical
   bytes lands on the file the run already holds. It also proves that the receipt carries the
-  last joined export's rows and SKUs beside the new file's, per game. It refuses nothing on
-  the comparison.
+  last joined export's rows and SKUs beside the new file's, per game, and that the comparison
+  refuses nothing.
 
   **What it CANNOT prove, said here so a green run is not misread**: whether TCGplayer's WAF
   accepts this client when the request carries a real session. Measured unauthenticated, the
@@ -316,7 +316,7 @@ at a temporary directory, so nothing here touches the real inventory.
   as both halves, because the first alone is satisfied by a ledger that stores nothing.
 
   **Six mutations were observed failing first, each through the assertion that owns it.**
-  They were fulfillment moved inside the replaced record (7 red), `changed_at` restamped
+  They were `fulfilment` moved inside the replaced record (7 red), `changed_at` restamped
   unconditionally (2), and the pull's dedup dropped (1). They were also `holder_of` not
   consulted (1), the nested `__annotations__` filter removed (1), and capture ids stored as
   position keys (7). **Three of them first failed by ABORTING the block rather than naming

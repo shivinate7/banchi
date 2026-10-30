@@ -212,9 +212,9 @@ is the module's own failure.
 **It may never be pointed at this clone.** That is stronger here than for the self-tests around it,
 because the subject of a sync is the *primary* tree, which on this machine is the live rig.
 
-`scripts/serve-selftest.py` gains the end-to-end shape only it can show. It is a real supervisor, in a
+`scripts/serve-selftest.py` gains the end-to-end shape only it can show. The shape is a real supervisor, in a
 real parked checkout with an origin, coming **up** on main at `origin/main` with nothing typed.
-It still refuses when that tree has an uncommitted tracked edit.
+That supervisor still refuses when that tree has an uncommitted tracked edit.
 
 **Twenty-one mutations. Eighteen caught and three surviving; then 21 of 21, none surviving.** Each
 arm deletes or inverts one guard. These are the linked-worktree test, the untracked filter, every refusal,

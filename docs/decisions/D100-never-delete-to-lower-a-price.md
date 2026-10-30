@@ -34,7 +34,7 @@ So the failure mode is not exotic and is not hypothetical. **It is one extra pre
 
 **The worklist is in full export shape and carries `Add to Quantity` 0, so uploading it by mistake is harmless.** That is the property the shape was chosen for: every file this feature writes is safe to upload, whichever one the operator grabs.
 
-**Both halves preview by default**, which is `banchi prices adopt`'s rule and one more. `apply --write` is the last press before bytes leave for a marketplace, and the file it writes cannot be un-uploaded.
+**Both halves preview by default.** That is `banchi prices adopt`'s rule, with one added reason: `apply --write` is the last press before bytes leave for a marketplace, and the file it writes cannot be un-uploaded.
 
 ### "Not selling" is three terms and one of them is a proxy, and the proxy says so on every report
 
@@ -84,7 +84,7 @@ The markdown is off the operator's own live price, which is `TCG Marketplace Pri
 
 **And the whole thing is scoped to what one export says.** A listing on a SKU this store never held is reported and never touched, which is right. It means that a person selling through two channels gets no help here with the other one.
 
-**What would reopen this.** *The first upload*, whose answers belong in the spec's section 6. *A listing age this store can read.* The store would populate `live_as_of` on a first sighting, or record a `first_listed_at` when `emit` pushes. The third term would then stop being a proxy, and the report's header paragraph would go away. *A reason column in the worklist*, at the cost named above. *An importer that rejects a zero-quantity row*, which would make the whole design unbuildable in this shape and is the one outcome the 649 rows argue hardest against.
+**What would reopen this.** *The first upload*, whose answers belong in the spec's section 6. *A listing age this store can read.* That means populating `live_as_of` on a first sighting, or recording a `first_listed_at` when `emit` pushes. The third term would then stop being a proxy, and the report's header paragraph would go away. *A reason column in the worklist*, at the cost named above. *An importer that rejects a zero-quantity row*, which would make the whole design unbuildable in this shape and is the one outcome the 649 rows argue hardest against.
 
 ### Amended: a dollar cap on the rule, and no mark-down without a market price
 

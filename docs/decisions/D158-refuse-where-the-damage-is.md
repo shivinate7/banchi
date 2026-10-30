@@ -60,8 +60,8 @@ at exactly the four moments code is adopted and nowhere else:
 - **the reload** (`_restart_for`) — the observed case, a tree moving under a live supervisor;
 - **the re-exec** — the same arm, and see the order below;
 - **the build** (`_check_app`) — because the two watch sets are independent by design per D138
-  (one process serves the product). A branch touching only `app/src` reaches no other arm, while
-  being exactly what a person sees.
+  (one process serves the product), and because a branch touching only `app/src` reaches no
+  other arm. Such a branch is exactly what a person sees.
 
 Plus `do_up`'s preflight, so `make up` refuses with a status rather than a ten-second timeout.
 
