@@ -92,8 +92,8 @@
 # the green is believed — scripts/githooks/pre-commit says the same of its own armed copy.
 # `make docs-audit`'s `browser scope` row reconciles the list against what the suite genuinely
 # depends on, in both directions, and fails the commit when they drift. AND THE GATE FAILS OPEN:
-# `design-check`'s `if:` reads `!= 'false'` under `!cancelled()`, so a classifier that errors, a
-# job that never ran and an empty output all RUN the matrix. Only an explicit `false` skips.
+# `design-check`'s `gate` step reads `!= 'false'`, and the job runs under `always()`, so a
+# classifier that errors, a job that never ran and an empty output all RUN the matrix. Only an explicit `false` skips.
 #
 # D122's MACHINE-WIDE LOCK IS NOT A HAZARD HERE AND IS NOT DISARMED FOR IT. A runner is one
 # checkout with one suite, so `browsers.lock` is uncontended and taken in the same breath it is
@@ -113,7 +113,7 @@ on:
   # out without having to remember to look.
   push:
     branches: [main]
-  # THE NIGHTLY FULL RUN (the required-checks entry in docs/decisions/, D136). `check` fails
+  # THE NIGHTLY FULL RUN (the required-checks entry in docs/decisions/, D136). `all-jobs-passed` fails
   # on a red browser matrix; this run still re-checks main at night and flags the owner with an issue. It runs every check and every browser shard: no path scope skips
   # anything on a schedule or a dispatch (see the scope hatches on the steps below).
   schedule:
@@ -557,8 +557,8 @@ jobs:
     # lookup or a broken classifier is not a reason to test less (the browser-scope entry in
     # docs/decisions/). THREE GATES, EACH SKIPPING ONLY ON ITS OWN EXPLICIT ANSWER, computed once
     # by the `gate` step; every later step carries it. The same answer shrinks the matrix to one
-    # shard when it is "skip", so a skip starts one runner and not twelve. The matrix and the
-    # container below spell the gate out again, because a step's output cannot reach them.
+    # shard when it is "skip", so a skip starts one runner and not twelve. The matrix below spells
+    # the gate out again, because a step's output cannot reach it.
     if: ${{ always() && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     # the long sitting (monthly, or a dispatch that asks) puts a 16-minute case on one shard
@@ -566,9 +566,12 @@ jobs:
     # The official image, by tag and digest. Chromium is preinstalled at the version the pin
     # needs (the "Image matches" step enforces it). `--ipc=host` is Playwright's own advice for
     # Chromium in a container.
-    # On a skip the expression yields no container, so the job does not pull the image to run
-    # no step.
-    container: ${{ needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' && needs.ci-static.result == 'success' && fromJSON('{"image":"mcr.microsoft.com/playwright:v1.58.0-noble@sha256:35c7d48b4ccaf3aca5018f5f1bf7f50c7da7d61d176c530741f4f2e9ca336c34","options":"--ipc=host"}') || null }}
+    # A SKIP STILL PULLS THIS IMAGE. A `container:` written as an expression that yields none on a
+    # skip was tried and zizmor refuses it (`unpinned-images` cannot read an image inside
+    # `fromJSON`), so the pin stays literal and a skipped job pays the pull and runs no step.
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.0-noble@sha256:35c7d48b4ccaf3aca5018f5f1bf7f50c7da7d61d176c530741f4f2e9ca336c34
+      options: --ipc=host
     strategy:
       fail-fast: false
       matrix:
