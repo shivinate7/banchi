@@ -18,7 +18,7 @@ That question is what this entry exists to answer, and the answer is measured ra
 
 So the failure mode is not exotic and is not hypothetical. **It is one extra press on a file sitting in this repo.** A markdown push that carried the copy count again would do it to every row it touched.
 
-**The remedy is not a rule to remember. `pipeline/reprice.py:ADD_TO_QUANTITY` is a module constant — not a parameter, not a default, not reachable from a flag — so the quantity is not a variable anywhere on this path.** It is written explicitly on every row rather than left as the export found it, because a column left alone is a column nobody is asserting. Also, `tcgcsv.check_only_writable_changed` runs over every row on the way out. A worklist handed back carrying `Add to Quantity` 4 on every row still produces an upload carrying 0, and T7 asserts exactly that.
+**The remedy is not a rule to remember. `pipeline/reprice.py:ADD_TO_QUANTITY` is a module constant — not a parameter, not a default, not reachable from a flag — so the quantity is not a variable anywhere on this path.** It is written explicitly on every row rather than left as the export found it, for two reasons. A column left alone is a column nobody is asserting. And `tcgcsv.check_only_writable_changed` runs over every row on the way out. A worklist handed back carrying `Add to Quantity` 4 on every row still produces an upload carrying 0, and T7 asserts exactly that.
 
 ### The upload is built from the manifest's bytes, and the operator's file is an instruction sheet
 
@@ -66,7 +66,7 @@ The markdown is off the operator's own live price, which is `TCG Marketplace Pri
 
 `apply --write` writes each new price into `inventory/prices.json`, per D86 (one pricing file for the store). **Without it the next `emit` over another copy of the same card re-lists at the rule price and quietly undoes the markdown.** The marked-down price is the store's price for that SKU from then on, not a property of one file. `pipeline/corpus.py` is untouched: `Answer` already carries a value and a time, and nothing here needed a field it did not have.
 
-### It wanted a route on D86's precedent, and it is a modal on `#/runs` instead
+### It wanted a route on the precedent of D86 (one pricing file for the store), and it is a modal on `#/runs` instead
 
 **It is a worklist the operator sits in over three presses, with a file leaving the machine in the middle of it and coming back.** That is exactly what earned `#/pricing` a route, and it is not what `#/runs`' own lede describes when it names the four pipeline commands. So `#/markdown` was built, and then measured out.
 
@@ -84,7 +84,7 @@ The markdown is off the operator's own live price, which is `TCG Marketplace Pri
 
 **And the whole thing is scoped to what one export says.** A listing on a SKU this store never held is reported and never touched, which is right. It means that a person selling through two channels gets no help here with the other one.
 
-**What would reopen this.** *The first upload*, whose answers belong in the spec's section 6. *A listing age this store can read.* Populate `live_as_of` on a first sighting, or record a `first_listed_at` when `emit` pushes. The third term then stops being a proxy, and the report's header paragraph goes away. *A reason column in the worklist*, at the cost named above. *An importer that rejects a zero-quantity row*, which would make the whole design unbuildable in this shape and is the one outcome the 649 rows argue hardest against.
+**What would reopen this.** *The first upload*, whose answers belong in the spec's section 6. *A listing age this store can read.* The store would populate `live_as_of` on a first sighting, or record a `first_listed_at` when `emit` pushes. The third term would then stop being a proxy, and the report's header paragraph would go away. *A reason column in the worklist*, at the cost named above. *An importer that rejects a zero-quantity row*, which would make the whole design unbuildable in this shape and is the one outcome the 649 rows argue hardest against.
 
 ### Amended: a dollar cap on the rule, and no mark-down without a market price
 

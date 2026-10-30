@@ -1,6 +1,6 @@
 # D158 — Refuse where the damage is
 
-**The primary checkout is where the damage lands, so the refusal is on serving there and not on the git command.** The primary checkout is the one that D138 (one process serves the product) keeps a supervisor alive out of over the owner's real store. An earlier design was written after `/Users/shivinate/Developer/banchi` was found standing on
+**The primary checkout is where the damage lands, so the refusal is on serving there and not on the git command.** The primary checkout, `/Users/shivinate/Developer/banchi`, is the one that D138 (one process serves the product) keeps a supervisor alive out of over the owner's real store. An earlier design was written after `/Users/shivinate/Developer/banchi` was found standing on
 `claude/env-key-rotation` with three live sessions in it. It shipped warnings at three moments
 and ruled that **a warning is the ceiling**.
 

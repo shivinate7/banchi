@@ -22,9 +22,9 @@ main going *stale*, because `git pull`, `git merge` and `git rebase` are not swi
 genuinely separate questions here. It is also why the readers that matter are the ones that run when
 main **moves**: `scripts/serve.py`'s four adoption moments, which tick once a second.
 
-### D42 does not forbid this, and the reason is its own allow rule 3
+### D42 (main moves only by pull request) does not forbid this, and the reason is its own allow rule 3
 
-D42 is *"main moves by pull request"*, enforced by `scripts/githooks/reference-transaction` and
+D42 (main moves only by pull request) is the sentence *"main moves by pull request"*, enforced by `scripts/githooks/reference-transaction` and
 `scripts/githooks/pre-push`. **The sentence is not repealed and the hooks are not touched.** What
 this entry claims is narrower: the move made here is one that hook has permitted since the day it
 was written. Its header reads:
@@ -58,7 +58,7 @@ directions: the sync's fast-forward goes through, **and** a `git branch -f main 
 there is still refused. An arm proving only the first would pass against a hook permitting
 everything.
 
-### Which part of D42's argument does not reach this case
+### Which part of the argument in D42 (main moves only by pull request) does not reach this case
 
 **The caution in D42 (main moves only by pull request) was written against a specific hazard, which that entry records at length:** main
 moving under three live worktrees on 2026-08-29, twice in one day. The harm was that every session
