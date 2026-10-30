@@ -551,6 +551,49 @@ jobs:
         "  check:\n    runs-on: ubuntu-latest",
         "`check` has no `needs:`",
     )
+    # CONTINUE-ON-ERROR HIDES A FAILURE FROM THE ROLLUP. A failed step or job that cannot fail its
+    # job reads green to the action, so it is a finding on a needed job, on one of its steps, on the
+    # rollup itself, and on the alias. `continue-on-error: false` is the default and is not one.
+    red(
+        "continue-on-error on a needed job is a finding that names it",
+        "  ci-static:\n    if: ${{ !github.event.pull_request.draft }}",
+        "  ci-static:\n    if: ${{ !github.event.pull_request.draft }}\n    continue-on-error: true",
+        "continue-on-error",
+    )
+    red(
+        "continue-on-error on a step of a needed job is a finding that names it",
+        "      - run: make design-check",
+        "      - run: make design-check\n        continue-on-error: true",
+        "continue-on-error",
+    )
+    red(
+        "continue-on-error on the all-jobs-passed job is a finding that names it",
+        "    timeout-minutes: 5\n    steps:\n      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@",
+        "    timeout-minutes: 5\n    continue-on-error: true\n    steps:\n      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@",
+        "continue-on-error",
+    )
+    red(
+        "continue-on-error on the all-jobs-passed step is a finding that names it",
+        "      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n        with:",
+        "      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n        continue-on-error: true\n        with:",
+        "continue-on-error",
+    )
+    red(
+        "continue-on-error on the check alias is a finding that names it",
+        "  check:\n    needs: [all-jobs-passed]",
+        "  check:\n    needs: [all-jobs-passed]\n    continue-on-error: true",
+        "continue-on-error",
+    )
+    got = findings_for(FIXTURE.replace(
+        "  ci-static:\n    if: ${{ !github.event.pull_request.draft }}",
+        "  ci-static:\n    if: ${{ !github.event.pull_request.draft }}\n    continue-on-error: false",
+        1,
+    ))
+    ok(
+        got is not None and got == [],
+        "continue-on-error: false on a needed job is not a finding",
+        NOT_BUILT if got is None else str(got),
+    )
     got = findings_for(FIXTURE, excluded={**WANTED, "ghost-job": "renamed away"})
     ok(
         got is not None and any("`ghost-job`" in m for _, m in got),
