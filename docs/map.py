@@ -5566,6 +5566,13 @@ COMPONENTS = [
         "governed_by": ["D16"],
     },
     {
+        "path": "docs/todo.md",
+        "status": "built",
+        "does": "the shared todo list: tasks a session caught and did not do, one line each. "
+                "Known gaps stay in docs/debts/.",
+        "governed_by": [],
+    },
+    {
         "path": "docs/specs/home-assistant.md",
         "status": "tbd",
         "does": "PROPOSAL, nothing built: the home tier. The always-on HA Green, its 2 TB drive, "
