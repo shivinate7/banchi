@@ -1,7 +1,7 @@
 # D176 — The primary checkout syncs itself
 
 **Settled on the owner's answer to a refuse-only proposal.** The primary checkout,
-`/Users/shivinate/Developer/banchi`, is the one directory D138 keeps a capture server alive
+`/Users/shivinate/Developer/banchi`, is the one directory D138 (one process serves the product) keeps a capture server alive
 out of at login over the real store. A guard that only refused was offered. The owner was asked whether the primary checkout is mechanically kept on `main` at `origin/main`. The owner ruled
 that both parts sync, since this is a one-person checkout.
 
@@ -10,8 +10,8 @@ three moments something in this repository already knows main may have moved.
 
 ### The two parts are two defects and each has been observed alone
 
-**Part 1 — the tree stands on `main`.** D158's incident: that directory on
-`claude/env-key-rotation`, three live sessions in it. D158's: `claude/debts-citation-repair`,
+**Part 1 — the tree stands on `main`.** The incident in D158 (refuse where the damage is): that directory on
+`claude/env-key-rotation`, three live sessions in it. The second incident in D158: `claude/debts-citation-repair`,
 merged as #282 and already behind `origin/main`, with four.
 
 **Part 2 — `refs/heads/main` is at `refs/remotes/origin/main`.** `make status` reported
@@ -19,12 +19,12 @@ merged as #282 and already behind `origin/main`, with four.
 
 **Neither subsumes the other.** A branch switch shows the tree going *off* main and never shows
 main going *stale*, because `git pull`, `git merge` and `git rebase` are not switches. That is why "on main" and "at origin/main" are
-genuinely separate questions here, and why the readers that matter are the ones that run when
+genuinely separate questions here. It is also why the readers that matter are the ones that run when
 main **moves**: `scripts/serve.py`'s four adoption moments, which tick once a second.
 
-### D42 does not forbid this, and the reason is its own allow rule 3
+### D42 (main moves only by pull request) does not forbid this, and the reason is its own allow rule 3
 
-D42 is *"main moves by pull request"*, enforced by `scripts/githooks/reference-transaction` and
+D42 (main moves only by pull request) is the sentence *"main moves by pull request"*, enforced by `scripts/githooks/reference-transaction` and
 `scripts/githooks/pre-push`. **The sentence is not repealed and the hooks are not touched.** What
 this entry claims is narrower: the move made here is one that hook has permitted since the day it
 was written. Its header reads:
@@ -50,35 +50,35 @@ and the code that is that rule:
 
 A fast-forward to `origin/main` satisfies that predicate by construction.
 **So this decides who runs an already-permitted move, and not which moves run.**
-Which is the same sentence D42's own amendment uses about `make merge`: *"It arms nothing."*
+Which is the same sentence the amendment to D42 (main moves only by pull request) uses about `make merge`: *"It arms nothing."*
 
 **Checked rather than cited.** `scripts/sync-selftest.py` installs that exact hook file in a
-throwaway clone via `core.hooksPath`, `BANCHI_MAIN` deliberately unset, and asserts both
+throwaway clone via `core.hooksPath`, `BANCHI_MAIN` deliberately unset. It asserts both
 directions: the sync's fast-forward goes through, **and** a `git branch -f main <a local commit>`
 there is still refused. An arm proving only the first would pass against a hook permitting
 everything.
 
-### Which part of D42's argument does not reach this case
+### Which part of the argument in D42 (main moves only by pull request) does not reach this case
 
-**D42's caution was written against a specific hazard, which that entry records at length:** main
+**The caution in D42 (main moves only by pull request) was written against a specific hazard, which that entry records at length:** main
 moving under three live worktrees on 2026-08-29, twice in one day. The harm was that every session
 cut from main was silently on a different history from the one their tree reported.
 
 **That hazard is not this one, on two counts.** This moves main only in the **primary** checkout,
-and only to a commit `origin` already carries — so no worktree's history is invented and no
-session's base changes behind it; a linked worktree's `refs/heads/<branch>` is not touched at all.
+and only to a commit `origin` already carries. So no worktree's history is invented and no
+session's base changes behind it. A linked worktree's `refs/heads/<branch>` is not touched at all.
 And there is **one developer**, which is the owner's own framing: the coordination problem that
 caution is about does not exist on this machine.
 
-**What D42 was protecting, and what still protects it.** It protected main from carrying a commit
-that had not been through a pull request. Every guard that does that is untouched: `pre-push`
-refuses a push to main, GitHub has required a PR since 2026-09-06 with `enforce_admins` true, and
-`reference-transaction` still refuses a local move to a commit origin lacks — including one this
+**What D42 (main moves only by pull request) was protecting, and what still protects it.** It protected main from carrying a commit
+that had not been through a pull request. Every guard that does that is untouched. `pre-push`
+refuses a push to main. GitHub has required a PR since 2026-09-06 with `enforce_admins` true.
+`reference-transaction` still refuses a local move to a commit origin lacks. That includes one this
 module would make, because **it deliberately does not pass `BANCHI_MAIN=off` to git.** If the
 hook ever refuses this file's move, that is a finding and not a thing to route around.
 
 **This is CLAUDE.md's own rule applied to a settled decision's scope rather than its conclusion:**
-a settled decision is an argument, not an authority. D158's ceiling is named as reopened below, in
+a settled decision is an argument, not an authority. The ceiling of D158 (refuse where the damage is) is named as reopened below, in
 the words D158 used to reopen D158's.
 
 ### The fast-forward-only test is this module's own, and rule 3 is not enough
@@ -89,7 +89,7 @@ A primary checkout whose main is *ahead* of origin — a commit made there direc
 `BANCHI_MAIN=off` makes possible — would be silently rewound by anything that merely trusted
 the hook.
 
-So there is a second predicate, and it is why this module can be trusted with a ref D42 protects:
+So there is a second predicate, and it is why this module can be trusted with a ref D42 (main moves only by pull request) protects:
 **`refs/heads/main` must be an ancestor of `refs/remotes/origin/main`.** True exactly when the move
 is a fast-forward; false when main is ahead and false when it has diverged, and both refuse.
 **Never a merge, never a reset, never `--force`.** Both shapes get their own arm — different
@@ -98,10 +98,10 @@ repository states reached different ways, and one predicate covering both is wor
 ### What is built: one module, three callers, and the refusal kept as the fallback
 
 `scripts/primary_sync.py`. Stdlib plus `server.ports`, the budget `scripts/serve.py`'s header sets
-for anything the supervisor imports — and it is in `SELF_FILES`, because a supervisor that had
+for anything the supervisor imports. It is also in `SELF_FILES`, because a supervisor that had
 re-read `serve.py` but not the module it decides with would be running half of one version.
 
-- **`scripts/serve.py`'s four adoption moments** — spawn, reload, re-exec, build. D158 made these
+- **`scripts/serve.py`'s four adoption moments** — spawn, reload, re-exec, build. D158 (refuse where the damage is) made these
   refuse; they **sync first and refuse only if the sync declines**. The refusal is not weakened:
   every D158 arm is still green, because that fixture has no `origin` to sync to and the module
   answers `not-subject` for a clone with none.
@@ -119,8 +119,8 @@ re-read `serve.py` but not the module it decides with would be running half of o
   `local_plan`'s first branch — main checked out in no worktree, the ordinary state of a clone
   with ~30 worktrees on branches — moves `refs/heads/main` with a refspec while standing in no
   tree. So the merge completed, main was current, and the primary checkout was still parked.
-  **That is D158's exact state, reached by the command whose job is to leave everything tidy.**
-  It is its own half, and **it never changes the merge's exit status** — a rig that would not sync
+  **That is the exact state of D158 (refuse where the damage is), reached by the command whose job is to leave everything tidy.**
+  It is its own half, and **it never changes the merge's exit status**. A rig that would not sync
   because somebody has uncommitted work in it is a message, not a failed merge.
 
 ### The restart that follows a sync waits for an idle owner
@@ -140,14 +140,14 @@ The owner ruled that a main move never restarts the server or rebuilds the app w
   cap or skip) lets the restart and the build go together.
 - **A missing or unreadable activity file counts as idle.** The recovery does not depend on the state it
   recovers.
-- **Never held:** a crash respawn, `stop()`, and `make up ARGS=--restart`. The D158 check stays first in
+- **Never held:** a crash respawn, `stop()`, and `make up ARGS=--restart`. The D158 (refuse where the damage is) check stays first in
   `_restart_for`. `make status` shows a waiting restart.
 - **A linked worktree never holds** (`ports.is_linked_worktree`). The owner's idle rule covers only the primary's server.
 
 ### What it must never do, each one a refusal with a self-test arm
 
 - **A linked worktree is never the subject.** The test is `server/ports.py:is_linked_worktree`,
-  **called and not respelled** — D158's rule, which D158 restates, and for its reason: that
+  **called and not respelled** — the rule of D158 (refuse where the damage is), which D158 restates, and for its reason: that
   question has exactly one answer in this repo, and a fourth spelling is a fourth place to write
   it backwards. Asserted from *inside* a worktree, which is where `make merge` and a SessionStart
   hook both reach this.
@@ -179,8 +179,8 @@ The owner ruled that a main move never restarts the server or rebuilds the app w
 `scripts/reap.py:hook`'s rule and its reason: *"a guard that blocks every shell command when
 `lsof` is missing or its own parser throws is a guard somebody switches off inside a day."*
 
-**Open:** any unexpected exception answers `not-subject`, silently. Three callers run this unasked,
-and a bug in it must cost a sync that did not happen — never a session that will not start or a rig
+**Open:** any unexpected exception answers `not-subject`, silently. Three callers run this unasked.
+A bug in it must cost a sync that did not happen, never a session that will not start or a rig
 that will not come up. It exits 0 for a refusal for the same reason.
 
 **Closed:** a fact it needs and cannot read — the worktree list, `git status`, HEAD, whether any
@@ -198,26 +198,26 @@ defect is not the operator's business, and its inability to read their tree very
 
 **It is the first hatch here that turns an act off rather than permitting one.** Every other stands
 between a person and something they meant to do; this one acts on their behalf. So what a reader
-wants from it is not *do it anyway* but *stop doing it* — which is why it is on the refusals too:
-a refusal is the mechanism announcing itself, and the next question is how to stop being asked.
+wants from it is not *do it anyway* but *stop doing it*. That is why it is on the refusals too.
+A refusal is the mechanism announcing itself, and the next question is how to stop being asked.
 
 ### Proved by violating it, and mutation-tested
 
 `scripts/sync-selftest.py`, `make sync-selftest`, in `make check` and `ci-check` and
-**never in the git hook** — D18: it writes, and what it writes are branch switches and ref moves.
-Throwaway clones with real bare origins and real linked worktrees, and
+**never in the git hook** — D18 (writers never gate): it writes, and what it writes are branch switches and ref moves.
+The self-test uses throwaway clones with real bare origins and real linked worktrees. It has
 **no mock of git and no patched `primary_checkout`**, except in the two arms whose whole subject
 is the module's own failure.
 
-**It may never be pointed at this clone** — stronger here than for the self-tests around it,
+**It may never be pointed at this clone.** That is stronger here than for the self-tests around it,
 because the subject of a sync is the *primary* tree, which on this machine is the live rig.
 
-`scripts/serve-selftest.py` gains the end-to-end shape only it can show: a real supervisor, in a
-real parked checkout with an origin, coming **up** on main at `origin/main` with nothing typed,
-and still refusing when that tree has an uncommitted tracked edit.
+`scripts/serve-selftest.py` gains the end-to-end shape only it can show. It is a real supervisor, in a
+real parked checkout with an origin, coming **up** on main at `origin/main` with nothing typed.
+It still refuses when that tree has an uncommitted tracked edit.
 
 **Twenty-one mutations. Eighteen caught and three surviving; then 21 of 21, none surviving.** Each
-arm deletes or inverts one guard: the linked-worktree test, the untracked filter, every refusal,
+arm deletes or inverts one guard. These are the linked-worktree test, the untracked filter, every refusal,
 the ancestry predicate, `--ff-only`, the orphan reader, both fail-closed directions, the fail-open
 arm, the hatch, `confirm`, and each part alone.
 
@@ -226,11 +226,11 @@ standing behind another guard, with nothing able to reach it.
 
 - **The linked-worktree test could not decide anything**, because `subject` comes from
   `primary_checkout`, which returns the primary tree.
-  **D158's own sweep deleted a line in exactly that position** — a line that cannot change a
+  **The sweep in D158 (refuse where the damage is) deleted a line in exactly that position** — a line that cannot change a
   verdict is a sentence about a guard rather than one.
-  **This one is kept**: it guards the prohibition the ruling is most absolute about, and
-  `primary_checkout`'s obvious refactor — deriving the path from `--git-common-dir` — does not
-  generalise to a `--separate-git-dir` checkout, so this test is what still holds if that changes.
+  **This one is kept**: it guards the prohibition the ruling is most absolute about.
+  `primary_checkout`'s obvious refactor, deriving the path from `--git-common-dir`, does not
+  generalise to a `--separate-git-dir` checkout. So this test is what still holds if that changes.
   Given a subject by taking away what stands in front of it: `primary_checkout` is neutered to
   hand back a linked worktree, and the sync must still refuse to act on it.
 - **`--ff-only` was redundant with the ancestry predicate**, which refuses a diverged main before
@@ -243,24 +243,24 @@ standing behind another guard, with nothing able to reach it.
   no local `main` — and with the gate deleted it prints a `not-a-fast-forward` refusal on every
   session start of every pull request. That arm exists now.
 
-**All three are the finding D158 recorded about its own sweep, arriving again**: a gate no other
+**All three are the finding D158 (refuse where the damage is) recorded about its own sweep, arriving again**: a gate no other
 arm can reach is a gate nothing is watching.
 
 **A third half broke a neighbour's fixture, and how it broke it is the finding.**
-The retired merge self-test parked its primary checkout on `feature` for nearly every arm, so the
-new rig half SUCCEEDED in the first local-half arm, switched that tree onto main — and the footgun
-arm two sections later then found main checked out in a worktree, correctly picked the pull form,
-and failed an assertion about the refspec form that had nothing wrong with it.
-**Four arms red for one state change three sections earlier** — the hardest kind of fixture
+The retired merge self-test parked its primary checkout on `feature` for nearly every arm. So the
+new rig half SUCCEEDED in the first local-half arm, and switched that tree onto main. The footgun
+arm two sections later then found main checked out in a worktree and correctly picked the pull
+form. It failed an assertion about the refspec form that had nothing wrong with it.
+**Four arms red for one state change three sections earlier.** This is the hardest kind of fixture
 failure to read, and it
 was invisible in the exit code: `make check > log; echo $?` reports the redirect's status, so the
 suite looked green. The arms that assert the LOCAL half now pin `BANCHI_SYNC=off` and keep
-meaning what they meant; the rig half has a section of its own, including that a dirty rig is
-refused by name **while main still advances** — the merge is not failed by it.
+meaning what they meant. The rig half has a section of its own, including that a dirty rig is
+refused by name **while main still advances**. The merge is not failed by it.
 
 **And one finding from the fixture is worth more than the arms it fixed.** `build_clone` did not
-build the state it was asked for: `seedwork` is the repository the bare origin was cloned *from*,
-so it has no `origin` remote, `git push -q origin main` failed silently, and every fixture's
+build the state it was asked for. `seedwork` is the repository the bare origin was cloned *from*,
+so it has no `origin` remote. That is why `git push -q origin main` failed silently, and every fixture's
 `refs/heads/main` was already *at* `refs/remotes/origin/main`. Four arms were green on that,
 including "main is fast-forwarded to origin/main" — true before the call.
 **A fixture that quietly fails to build the state under test is unreportable by design**, so
@@ -271,18 +271,18 @@ subject"*.
 
 **A primary checkout whose `origin/main` is stale.** The sync does **not** fetch by default: two
 of its three callers are a SessionStart hook and a once-a-second supervisor tick, where a hanging
-network call is the whole cost. Neither needs one — `make merge` fetches before it moves anything,
-so the `origin/main` this clone holds is current when it matters, and `--fetch` is there for a
+network call is the whole cost. Neither needs one. `make merge` fetches before it moves anything,
+so the `origin/main` this clone holds is current when it matters. `--fetch` is there for a
 person who wants to ask first.
 **So a rig left untouched is synced to the last `origin/main` anybody fetched, not the true one.**
 
-**A branch cut before this exists, on the login path.** D158 names the same hole for the same
+**A branch cut before this exists, on the login path.** D158 (refuse where the damage is) names the same hole for the same
 reason and it is unchanged: that branch's `serve.py` carries no sync, launchd runs it, and it
 serves. It shrinks on its own as branches are cut and merged.
 
 **It does not decide that the tree should be put back.** It decides that the tree the rig is
-served out of is put back **when that can be done losing nothing**, which is a narrower claim, and
-every case where it cannot is a refusal above with an arm under it.
+served out of is put back **when that can be done losing nothing**. That is a narrower claim. Every
+case where it cannot is a refusal above with an arm under it.
 
 **A second restart inside one release can skip the wait.** `Supervisor.released` stays set while
 `pending` or `app_pending` is not empty. A syntax-error retry, or a second batch of changes on the
