@@ -471,7 +471,7 @@ ci-check:
 # CI RUNS `ci-check` AS PARALLEL SHARDS (D161, amended): the serial job took 600s on run
 # 36509895299. Each entry's `shard` field in scripts/checks.py names its shard, product first,
 # the guards' self-tests last, balanced by the times that run measured. `revert-guard` has no
-# shard: the standalone required `revert-guard` job runs it, and `ci-check` runs it locally.
+# shard: the `revert-guard` job runs it, one of the jobs `all-jobs-passed` rolls up, and `ci-check` runs it locally.
 ci-check-product:
 	@$(call RUN_CHECKS,product)
 

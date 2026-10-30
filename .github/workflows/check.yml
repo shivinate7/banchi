@@ -92,8 +92,8 @@
 # the green is believed — scripts/githooks/pre-commit says the same of its own armed copy.
 # `make docs-audit`'s `browser scope` row reconciles the list against what the suite genuinely
 # depends on, in both directions, and fails the commit when they drift. AND THE GATE FAILS OPEN:
-# `design-check`'s `if:` reads `!= 'false'` under `!cancelled()`, so a classifier that errors, a
-# job that never ran and an empty output all RUN the matrix. Only an explicit `false` skips.
+# `design-check`'s `gate` step reads `!= 'false'`, and the job runs under `always()`, so a
+# classifier that errors, a job that never ran and an empty output all RUN the matrix. Only an explicit `false` skips.
 #
 # D122's MACHINE-WIDE LOCK IS NOT A HAZARD HERE AND IS NOT DISARMED FOR IT. A runner is one
 # checkout with one suite, so `browsers.lock` is uncontended and taken in the same breath it is
@@ -113,7 +113,7 @@ on:
   # out without having to remember to look.
   push:
     branches: [main]
-  # THE NIGHTLY FULL RUN (the required-checks entry in docs/decisions/, D136). `check` fails
+  # THE NIGHTLY FULL RUN (the required-checks entry in docs/decisions/, D136). `all-jobs-passed` fails
   # on a red browser matrix; this run still re-checks main at night and flags the owner with an issue. It runs every check and every browser shard: no path scope skips
   # anything on a schedule or a dispatch (see the scope hatches on the steps below).
   schedule:
@@ -305,42 +305,44 @@ jobs:
           BANCHI_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
         run: make ci-check-static
 
-  # THE REQUIRED CHECK. The ruleset names `check`, so this job keeps that name and passes only
-  # when every shard passed AND the browser matrix passed or was skipped ON PURPOSE.
-  # `if: always()` because a job that `needs` a red job is otherwise SKIPPED, and a skipped
-  # required check reads as not run. A shard result must be `success`. `design-check` (the whole
-  # matrix, so one failed, cancelled or skipped shard changes its result) must be `success`, or
-  # `skipped` with an explicit reason: `browser-scope` answered `false` (no browser can reach
-  # the change) or `already-passed` answered `true` (this tree went green on a pull request).
-  # Any other `skipped`, `failure` or `cancelled` fails. `records` and `code-check` must be `success`, never skipped.
-  # ponytail: the smallest in-repo gate;
-  # it can move to claude-settings' `actions/all-jobs-passed` once that is merged.
-  check:
-    needs: [ci-check, ci-static, design-check, already-passed, browser-scope, records, code-check]
+  # THE CHECK PROTECTION IS TO REQUIRE IS `all-jobs-passed` (claude-settings decision same-check-kinds). One check,
+  # built on the shared action: it fails when any job it `needs` failed, was cancelled or was
+  # SKIPPED, so a job that quietly does not run can never read as green. That is why every needed
+  # job below runs on every non-draft event, and says "nothing to do" from inside its steps rather
+  # than from a job-level `if:`. The `all jobs passed` row of `make docs-audit` reads this wiring:
+  # the needs list against the jobs, the pin against every other claude-settings pin, and the
+  # job-level `if:` of each needed job. `if: always()` because a job that `needs` a red job is
+  # otherwise skipped, and a skipped required check reads as green; the draft guard keeps a draft
+  # at zero runner starts.
+  # NOT needed, on purpose (the row's EXCLUDED list holds each reason): `check` (the alias below),
+  # `design-check-passed` (a recorder that skips on purpose) and `nightly-alarm` (a reporter that
+  # skips unless something failed).
+  all-jobs-passed:
+    needs: [ci-check, ci-static, revert-guard, records, code-check, zizmor, already-passed, browser-scope, design-check]
     if: ${{ always() && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 2
     steps:
-      - name: every shard succeeded and the browser matrix passed or was skipped on purpose
+      - uses: shivinate7/claude-settings/actions/all-jobs-passed@1cc47f015bdaf073d8cb0f043a988c28d09aa3e1 # main, 2026-10-29
+        with:
+          needs: ${{ toJSON(needs) }}
+
+  # A THIN ALIAS FOR THE OLD NAME. Branch protection still names `check` until the owner flips it
+  # to `all-jobs-passed`, and a protection that names a check no job reports blocks every merge.
+  # This job passes exactly when the rollup does. It goes in a follow-up after the flip, together
+  # with its entry in the row's EXCLUDED list (claude-settings decision same-check-kinds).
+  check:
+    needs: [all-jobs-passed]
+    if: ${{ always() && !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: the rollup succeeded
         env:
-          SHARDS: ${{ needs.ci-check.result }}
-          STATIC: ${{ needs.ci-static.result }}
-          BROWSER: ${{ needs.design-check.result }}
-          SCOPE_RUN: ${{ needs.browser-scope.outputs.run }}
-          ALREADY_PASSED: ${{ needs.already-passed.outputs.skip }}
-          RECORDS: ${{ needs.records.result }}
-          CODE: ${{ needs.code-check.result }}
+          ROLLUP: ${{ needs.all-jobs-passed.result }}
         run: |
-          echo "shards: ${SHARDS}; browser matrix: ${BROWSER} (scope run=${SCOPE_RUN}, already-passed skip=${ALREADY_PASSED})"
-          [ "${SHARDS}" = "success" ] || { echo "a shard did not succeed"; exit 1; }
-          [ "${STATIC}" = "success" ] || { echo "the static checks did not succeed"; exit 1; }
-          [ "${RECORDS}" = "success" ] || { echo "the record-number check did not succeed: ${RECORDS}"; exit 1; }
-          [ "${CODE}" = "success" ] || { echo "the code check did not succeed: ${CODE}"; exit 1; }
-          [ "${BROWSER}" = "success" ] && exit 0
-          if [ "${BROWSER}" = "skipped" ] && { [ "${SCOPE_RUN}" = "false" ] || [ "${ALREADY_PASSED}" = "true" ]; }; then
-            echo "browser matrix skipped on purpose"; exit 0
-          fi
-          echo "the browser matrix did not pass: ${BROWSER}"; exit 1
+          echo "all-jobs-passed: ${ROLLUP}"
+          [ "${ROLLUP}" = "success" ] || { echo "the rollup did not succeed"; exit 1; }
 
   # D133's guard as its own check on the PR, so a refusal reads as what it is rather than as one
   # red line inside ninety seconds of `make ci-check` (which runs it too, as `revert-guard`).
@@ -368,9 +370,8 @@ jobs:
   # THE RECORD NUMBERS, CHECKED, NEVER WRITTEN. The shared merge tool (`merge`, claude-settings)
   # claims a record's number on the pull request branch before the merge, so main never holds a
   # pending one. Mode `check` refuses a number a branch wrote by hand and, on main, any pending
-  # record. `contents: read` only. It BLOCKS a merge through `check`, which lists it in `needs`
-  # and fails unless it succeeded, on the owner's ruling. The ruleset still names `check` and
-  # `revert-guard`; `zizmor` stays non-blocking.
+  # record. `contents: read` only. It BLOCKS a merge through `all-jobs-passed`, which lists it in
+  # `needs` and fails unless it succeeded, on the owner's ruling.
   records:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
@@ -381,7 +382,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - uses: shivinate7/claude-settings/actions/stamp@1cc47f015bdaf073d8cb0f043a988c28d09aa3e1
+      - uses: shivinate7/claude-settings/actions/stamp@1cc47f015bdaf073d8cb0f043a988c28d09aa3e1 # main, 2026-10-29
         with:
           mode: check
           config: .github/stamp.json
@@ -394,7 +395,8 @@ jobs:
   # as the modules that pass --strict today. `exclude` only shrinks and names vendored or
   # generated files alone, never first-party code. Its own job and not a `scripts/checks.py`
   # entry, for the reason `design-check` gives above: it is no `make check` target. It BLOCKS a
-  # merge through `check`, which lists it in `needs`, the same way `records` does.
+  # merge through `all-jobs-passed`, which lists it in `needs` and fails unless it succeeded, the
+  # same way `records` does.
   # `npm ci` because tsc reads app/'s types from app/node_modules.
   code-check:
     if: ${{ !github.event.pull_request.draft }}
@@ -419,14 +421,14 @@ jobs:
       - name: Install
         run: npm ci --prefix app
 
-      - uses: shivinate7/claude-settings/actions/code-check@1cc47f015bdaf073d8cb0f043a988c28d09aa3e1
+      - uses: shivinate7/claude-settings/actions/code-check@1cc47f015bdaf073d8cb0f043a988c28d09aa3e1 # main, 2026-10-29
         with:
           base: ${{ github.event.pull_request.base.sha || github.event.before }}
 
   # THE WORKFLOWS' OWN LINT. zizmor reads `.github/workflows/` and `.github/dependabot.yml` for unpinned actions, persisted
   # checkout tokens, template injection and over-broad permissions. Pinned to one version so a
-  # release cannot turn this red on its own. NOT a required check: the ruleset names `check`
-  # and `revert-guard` only.
+  # release cannot turn this red on its own. It is a needed job of `all-jobs-passed`, so a red
+  # zizmor blocks a merge; it passes when no workflow file changed.
   #
   # IT RUNS ONLY WHEN A WORKFLOW FILE CHANGED, on the owner's word. The first step diffs the
   # landed commit against its first parent (a PR checkout is GitHub's merge of the branch into
@@ -458,12 +460,13 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: pipx run zizmor==1.30.1 .github/workflows .github/dependabot.yml
 
-  # HAS THIS TREE ALREADY PASSED? Asked on a push to main only (D136), on the owner's word. A
-  # PR or a dispatch skips this job, its `skip` output is empty, and `design-check` reads an
-  # empty output as "run the matrix". `actions: read` is what listing artifacts through the
-  # API needs; nothing here writes.
+  # HAS THIS TREE ALREADY PASSED? Asked on a push to main only (D136), on the owner's word. The
+  # job itself runs on every non-draft event, because `all-jobs-passed` fails on a skipped need;
+  # its steps run on a push alone. A PR or a dispatch runs no step, its `skip` output is empty,
+  # and `design-check` reads an empty output as "run the matrix". `actions: read` is what
+  # listing artifacts through the API needs; nothing here writes.
   already-passed:
-    if: ${{ github.event_name == 'push' && !github.event.pull_request.draft }}
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -472,12 +475,14 @@ jobs:
     outputs:
       skip: ${{ steps.lookup.outputs.skip }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - if: github.event_name == 'push'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
       - name: Look the tree up
         id: lookup
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -547,36 +552,57 @@ jobs:
   # still worth their verdict.
   design-check:
     needs: [already-passed, browser-scope, ci-static]
-    # THREE GATES, EACH SKIPPING ONLY ON ITS OWN EXPLICIT ANSWER. `!cancelled()` replaces the
-    # implicit `success()`, so a gate job that FAILED releases the matrix instead of skipping
-    # it — a broken lookup or a broken classifier is not a reason to test less (the browser-scope entry in docs/decisions/). Until
-    # this line, a failed `already-passed` skipped the matrix; now it runs it.
-    if: ${{ !cancelled() && !github.event.pull_request.draft && needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' && needs.ci-static.result == 'success' }}
+    # THE JOB RUNS ON EVERY NON-DRAFT EVENT AND DECIDES INSIDE, because `all-jobs-passed` fails on
+    # a skipped need (claude-settings decision same-check-kinds). `always()` replaces the implicit
+    # `success()`, so a gate job that FAILED releases the matrix instead of skipping it: a broken
+    # lookup or a broken classifier is not a reason to test less (the browser-scope entry in
+    # docs/decisions/). THREE GATES, EACH SKIPPING ONLY ON ITS OWN EXPLICIT ANSWER, computed once
+    # by the `gate` step; every later step carries it. The same answer shrinks the matrix to one
+    # shard when it is "skip", so a skip starts one runner and not twelve. The matrix below spells
+    # the gate out again, because a step's output cannot reach it.
+    if: ${{ always() && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     # the long sitting (monthly, or a dispatch that asks) puts a 16-minute case on one shard
     timeout-minutes: ${{ (github.event.schedule == '47 4 1 * *' || inputs.long_sitting) && 40 || 20 }}
     # The official image, by tag and digest. Chromium is preinstalled at the version the pin
     # needs (the "Image matches" step enforces it). `--ipc=host` is Playwright's own advice for
     # Chromium in a container.
+    # A SKIP STILL PULLS THIS IMAGE. A `container:` written as an expression that yields none on a
+    # skip was tried and zizmor refuses it (`unpinned-images` cannot read an image inside
+    # `fromJSON`), so the pin stays literal and a skipped job pays the pull and runs no step.
     container:
       image: mcr.microsoft.com/playwright:v1.58.0-noble@sha256:35c7d48b4ccaf3aca5018f5f1bf7f50c7da7d61d176c530741f4f2e9ca336c34
       options: --ipc=host
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        shard: ${{ fromJSON(needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' && needs.ci-static.result == 'success' && '[1,2,3,4,5,6,7,8,9,10,11,12]' || '[1]') }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      # The first step. Fail-open: only an explicit answer skips (`already-passed` says `true`,
+      # `browser-scope` says `false`, or `ci-static` did not succeed). An empty output, a failed
+      # gate job and a missing job all RUN the matrix.
+      - name: Does the browser matrix run?
+        id: gate
+        env:
+          RUN: ${{ needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' && needs.ci-static.result == 'success' }}
+        run: |
+          echo "browser matrix runs: ${RUN}"
+          echo "run=${RUN}" >> "$GITHUB_OUTPUT"
+
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: app/package-lock.json
 
       - name: Install
+        if: steps.gate.outputs.run == 'true'
         run: npm ci --prefix app
 
       # THE BROWSER COMES WITH THE IMAGE (the job's `container:`), so there is no browser cache,
@@ -586,6 +612,7 @@ jobs:
       # shard when the two differ: an older image cannot find its browser, a newer one would
       # silently run a different Chromium.
       - name: Image matches the Playwright pin
+        if: steps.gate.outputs.run == 'true'
         run: |
           pin="$(node -p "require('./app/package.json').devDependencies['@playwright/test']")"
           tag="$(grep -oE 'mcr.microsoft.com/playwright:v[0-9.]+' .github/workflows/check.yml | head -1 | sed 's/.*:v//')"
@@ -601,6 +628,7 @@ jobs:
       # where both resolve to DejaVu Sans. The runner also carries Lato, which no stylesheet
       # names. Two small packages, one retry for a mirror stall.
       - name: Install make and DejaVu
+        if: steps.gate.outputs.run == 'true'
         timeout-minutes: 5
         run: |
           install() { timeout 60 apt-get -o Acquire::Retries=3 update -qq && timeout 60 apt-get -o Acquire::Retries=3 install -y -qq --no-install-recommends make fonts-dejavu-core; }
@@ -623,6 +651,7 @@ jobs:
       # `--shard` split by case count left one shard at about 513 s and another at 306 s.
       # An empty shard (a narrowed list smaller than the shard count) has nothing to run.
       - name: make design-check
+        if: steps.gate.outputs.run == 'true'
         env:
           SPECS: ${{ needs.browser-scope.outputs.specs != 'all' && needs.browser-scope.outputs.specs || '' }}
           SHARD: ${{ matrix.shard }}
@@ -639,7 +668,7 @@ jobs:
 
       # Every full-suite run keeps each shard's per-file seconds, for `browser-scope.py shard-refresh` (a narrowed run times only some specs, so it keeps none).
       - name: Keep the shard's timings
-        if: ${{ always() && needs.browser-scope.outputs.specs == 'all' }}
+        if: ${{ always() && steps.gate.outputs.run == 'true' && needs.browser-scope.outputs.specs == 'all' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: design-check-times-${{ matrix.shard }}
@@ -655,7 +684,7 @@ jobs:
       # worth a download, and the one-test flake this exists for is diagnosable from nothing else —
       # it has never reproduced on the rig. Open one with `npx playwright show-trace <zip>`.
       - name: Keep the failing cases' traces
-        if: failure()
+        if: ${{ failure() && steps.gate.outputs.run == 'true' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           # Per shard, or the second red shard's upload collides with the first's.
@@ -675,9 +704,12 @@ jobs:
   # later push to main reading that record as "this tree was fully tested" would be wrong.
   # A full run (the ordinary case: most branches touch a shared surface or an unmapped file)
   # still writes it exactly as before this landed.
+  # THE MATRIX MUST HAVE REALLY RUN. `design-check` now ends green when its gate skipped every
+  # step, so its result alone proves nothing: this job also reads the three gate answers, and
+  # records only when none of them said skip.
   design-check-passed:
-    needs: [design-check, browser-scope]
-    if: ${{ !github.event.pull_request.draft && github.event_name != 'push' && needs.browser-scope.outputs.partial != 'true' }}
+    needs: [design-check, browser-scope, already-passed, ci-static]
+    if: ${{ !github.event.pull_request.draft && github.event_name != 'push' && needs.design-check.result == 'success' && needs.browser-scope.outputs.run != 'false' && needs.already-passed.outputs.skip != 'true' && needs.ci-static.result == 'success' && needs.browser-scope.outputs.partial != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

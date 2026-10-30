@@ -96,6 +96,7 @@ from .records import (
     check_numbered_record_growth,
 )
 from .registry_scopes import (
+    check_all_jobs_passed,
     check_audit_invocation,
     check_browser_scope,
     check_check_registry,
@@ -256,6 +257,7 @@ ROWS: Tuple[AuditRow, ...] = (
     AuditRow("typed interpunct", 1, check_typed_interpunct, ()),
     AuditRow("suite lock", 2, check_suite_lock, ()),
     AuditRow("browser scope", 1, check_browser_scope, ()),
+    AuditRow("all jobs passed", 1, check_all_jobs_passed, ()),
     AuditRow("spec map", 2, check_spec_map, ()),
     AuditRow("serve scope", 1, check_serve_scope, ()),
     AuditRow("guard scope", 1, check_guard_scope, ()),
