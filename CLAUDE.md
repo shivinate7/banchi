@@ -52,7 +52,7 @@ make reap           # stop what THIS session started, nothing else. Previews. AR
 make janitor-install # retired: claude-settings' install.sh owns the user's Claude bin directory. Copies nothing.
 make merge          # claude-settings' shared merge tool (D140, merge claims the decision number), config in
                     #   `.github/stamp.json`. ARGS=<n> previews. ARGS="<n> --confirm" merges, and claims record
-                    #   numbers first. The repo's batch runner runs it under its standing grant. It runs
+                    #   numbers first. The batch runner runs it under the coordinator's standing grant. It runs
                     #   from any checkout, not only the PR's branch. It never rebases or force-pushes:
                     #   a moved head stops it, so rebase by hand and run it again.
 make janitor        # claude-settings' sweep (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep"): what a finished session left behind. Previews. ARGS=--confirm reaps.
@@ -340,14 +340,14 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **A screen answers to the system.** `--bn-*` tokens only, checked at 1440 and 820, light and dark.
   `docs/DESIGN.md` is the record. The `design tokens` row of `make docs-audit` locks every name and hex both ways.
 - **Main moves by pull request. A session never commits to it and never pushes it** (D42, main moves by pull request).
-  The session the owner names as the repo's batch runner (claude-settings decision session-tiers) holds the standing merge grant. It batches every reviewed
+  The batch runner, the session the coordinator starts and tags `cs-build:batch-runner` (claude-settings decision session-tiers), runs merges under the coordinator's standing merge grant and holds none of its own. It batches every reviewed
   lane the owner set out, across all sessions, into one integration branch, waits on its CI, merges it under that grant and
   archives the finished lanes. The coordinator starts lanes and talks with the owner. Any other merge happens only on the
   owner's named act ("merge", not "ship it"), and the batch runner runs it. The coordinator also holds a standing merge grant
   (owner, 2026-10-29 16:47 CDT, "for now"; claude-settings decision standing-merge-grant). It merges on green checks and a done review.
   It never asks the owner to merge. The owner withdraws the grant in chat. A lane session never merges. It hands the batch
   runner each reviewed lane branch with its head commit and review verdict. It never builds an integration branch, opens
-  an integration PR or marks a PR ready. The designation is never inherited. A later session re-asks, a new batch runner included. A merge uses `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
+  an integration PR or marks a PR ready. A session's role comes from its own `cs-build` tag (claude-settings decision session-tiers). A merge uses `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
   One standing exception (D42, main moves by pull request):
   the weekly demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
   GitHub branch protection has 0 reviews and `strict: false`. The one check it is to require is `all-jobs-passed`,
