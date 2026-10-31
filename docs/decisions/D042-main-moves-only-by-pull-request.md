@@ -117,7 +117,7 @@ At `prepared`, the hook asks `git merge-base --is-ancestor "$new" refs/remotes/o
 
 ### The word
 
-**A merge outside the batch runner's standing grant (below) needs the word, and the batch runner runs it. A lane session never merges.**
+**A merge outside the coordinator's standing grant (below) needs the word, and the batch runner runs it. A lane session never merges.**
 
 **The word comes from the owner in the conversation, and it applies to one instruction.** It is not a standing grant, a mode, or an inference. It has the same shape as D33's `confirm` field one register down. That route refuses without an explicit field, because the next step costs money. This refuses without an explicit instruction, because the next step is the branch every other session is cut from.
 
@@ -131,11 +131,11 @@ At `prepared`, the hook asks `git merge-base --is-ancestor "$new" refs/remotes/o
 
 **Why this is safe to grant, and was not safe to assume.** The owner's consent was never missing. What was missing was any record that consent was required, and any mechanism that noticed its absence. Both now exist. So an explicit instruction is a decision, not a default.
 
-### A standing grant to the batch runner
+### The coordinator's standing grant, run by the batch runner
 
-**"The word" above is still per-PR by default. This is the one exception, and it is scoped, not a repeal.** After being asked twice to name the act for PR #349, the owner gave the batch runner a standing grant to merge. That names the act once for a whole batch, instead of once per PR in it.
+**"The word" above is still per-PR by default. This is the one exception, and it is scoped, not a repeal.** After being asked twice to name the act for PR #349, the owner gave a standing grant to merge. claude-settings decision standing-merge-grant now holds it: the coordinator holds the grant, and the batch runner runs merges under it. That names the act once for a whole batch, instead of once per PR in it.
 
-**The grant is to the one session the owner names as the repo's batch runner.** claude-settings decision session-tiers names the tiers. The batch runner owns the integration batch, the CI waits, the merge tool runs and archiving finished lanes. The coordinator starts lanes and talks with the owner. The batch runner batches every reviewed lane the owner set out, across all sessions, into one integration branch and merges it. A lane session hands the batch runner each reviewed lane branch with its head commit and review verdict. It never builds an integration branch, opens an integration PR, marks a PR ready or merges. The grant is exercised only through `make merge ARGS="<n> --confirm"`, only once CI is green, and never with `--admin`. The designation is never inherited. A later session re-asks, a new batch runner included.
+**The batch runner is the session the coordinator starts and tags `cs-build:batch-runner`, and it holds no grant of its own** (claude-settings decision session-tiers). The batch runner owns the integration batch, the CI waits, the merge tool runs and archiving finished lanes. The coordinator starts lanes and talks with the owner. The batch runner batches every reviewed lane the owner set out, across all sessions, into one integration branch and merges it. A lane session hands the batch runner each reviewed lane branch with its head commit and review verdict. It never builds an integration branch, opens an integration PR, marks a PR ready or merges. The grant is exercised only through `make merge ARGS="<n> --confirm"`, only once CI is green, and never with `--admin`. A session's role comes from its own `cs-build` tag.
 
 ### A standing grant to the weekly demo refresh
 

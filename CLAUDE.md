@@ -343,7 +343,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   The batch runner, the session the coordinator starts and tags `cs-build:batch-runner` (claude-settings decision session-tiers), runs merges under the coordinator's standing merge grant and holds none of its own. It batches every reviewed
   lane the owner set out, across all sessions, into one integration branch, waits on its CI, merges it under that grant and
   archives the finished lanes. The coordinator starts lanes and talks with the owner. Any other merge happens only on the
-  owner's named act ("merge", not "ship it"), and the batch runner runs it. The coordinator also holds a standing merge grant
+  owner's named act ("merge", not "ship it"), and the batch runner runs it. The coordinator holds the standing merge grant
   (owner, 2026-10-29 16:47 CDT, "for now"; claude-settings decision standing-merge-grant). It merges on green checks and a done review.
   It never asks the owner to merge. The owner withdraws the grant in chat. A lane session never merges. It hands the batch
   runner each reviewed lane branch with its head commit and review verdict. It never builds an integration branch, opens
