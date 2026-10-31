@@ -22,16 +22,15 @@ The local directory is `~/Developer/banchi`. The GitHub repository is `shivinate
 GitHub Pages followed the rename. `.github/workflows/demo.yml` derives `DEMO_BASE` from the repository name.
 The Makefile's own default is a stale fallback for a hand-run build, by design.
 
-**Merge needs a batch runner that the owner named.** claude-settings decision session-tiers names the tiers. The batch
+**Merge runs through the batch runner.** claude-settings decision session-tiers names the tiers. The batch
 runner owns the integration batch, the CI waits, the merge tool runs and archiving finished lanes. The coordinator
-starts lanes and talks with the owner. The session the owner names as the repo's batch runner batches every reviewed lane the owner set out, across all
-sessions, into one integration branch and merges it under its standing grant. A lane session hands the batch runner
+starts lanes and talks with the owner. The batch runner, the session the coordinator starts and tags `cs-build:batch-runner`, batches every reviewed lane the owner set out, across all
+sessions, into one integration branch and merges it under the coordinator's standing grant. A lane session hands the batch runner
 each reviewed lane branch with its head commit and review verdict. A lane session never builds an integration branch,
 opens an integration PR, marks a PR ready or merges.
 The batch runner merges only through `make merge ARGS="<n> --confirm"`, with CI green, and never with `--admin`.
 `make merge` never rebases or force-pushes, and a moved head stops it.
-The designation is never inherited, never carried over from an earlier session and never assumed from the shape
-of the work. D42 (main moves by PR) holds the rest.
+A session's role comes from its own `cs-build` tag (claude-settings decision session-tiers). D42 (main moves by PR) holds the rest.
 
 **Model tiers.** A lane session runs Opus (claude-settings decision session-tiers). The agents it starts follow
 `agent-model-cap`. Sonnet is the default and the ceiling. Plan, the built-in advisor, the designer, the design
