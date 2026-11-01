@@ -1387,8 +1387,8 @@ skip_cli_write "$SKIPS" "$WT" "$tmp/main/work.py"
 echo ""
 echo "  the configured hooks: a write to a path in no checkout"
 
-# THE REAL HOOK COMMANDS, read from each tool's own config: the shared layer's guard owns this
-# clause for Claude Code, and Codex runs no shared guard. Run from the repo's own root, as each tool does.
+# THE REAL HOOK COMMANDS, read from each tool's own config: Claude Code skips this clause on the
+# owner's ruling (D179), and Codex runs no shared guard. Run from the repo's own root, as each tool does.
 CONF_ROOT="$(cd "$HERE/.." && pwd)"
 conf_cmd() {   # conf_cmd <config> <matcher> -> the guard-shell hook command for that matcher
   python3 - "$CONF_ROOT/$1" "$2" <<'PY'

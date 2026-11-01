@@ -3439,7 +3439,7 @@ COMPONENTS = [
                         "shell form "
                         "skirts it. ONE HATCH PER CLAUSE, so no clause can be disarmed by the "
                         "switch that guards another. Claude Code sets `GUARD_SHELL_SKIP="
-                        "checkout,stash,reset,tree` on Bash and `tree` on Write|Edit (`--skip` is an alias) because the shared layer owns those four; "
+                        "checkout,stash,reset,tree` on Bash and `tree` on Write|Edit (`--skip` is an alias): the shared layer owns checkout, stash and reset, and refuses a write naming a path in another checkout (D179); "
                         "Codex runs all seven. Fails OPEN on "
                         "its own bugs, including a missing `shell_parse.py`, and an operand it "
                         "cannot resolve is REPORTED rather than passed silently.",
