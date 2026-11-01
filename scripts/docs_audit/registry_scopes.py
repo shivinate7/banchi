@@ -1012,21 +1012,45 @@ def browser_gate_findings(text: str) -> List[Tuple[str, str]]:
     if design is None:
         out.append((where, "has no `design-check` job for the scope to gate."))
     elif job is not None:
+        # Comment lines never count: a comment that quotes the gate is not the gate.
+        design = "\n".join(ln for ln in design.split("\n") if not ln.lstrip().startswith("#"))
         needs = re.search(r"^\s*needs:.*?(?=^\s*(?:if|runs-on):)", design, re.M | re.S)
         if needs is None or job not in needs.group(0):
             out.append((where, f"`design-check` does not `need` `{job}`, so its answer is not waited for."))
         cond = re.search(r"^\s*if:\s*(.+)$", design, re.M)
-        answer = f"needs.{job}.outputs.run"
-        if cond is None or f"{answer} != 'false'" not in cond.group(1):
+        if cond is None or not re.search(r"always\(\)|!cancelled\(\)", cond.group(1)):
             out.append((where, (
-                f"`design-check`'s `if:` does not read `{answer} != 'false'`.\n"
-                "  That spelling is the fail-open one: a classifier that errored, a job that\n"
-                "  never ran and an empty output all RUN the matrix. `== 'true'` would skip it\n"
-                "  on every one of those, silently (D141).")))
-        if cond is not None and "!cancelled()" not in cond.group(1):
-            out.append((where, (
-                "`design-check`'s `if:` has no `!cancelled()`, so GitHub prepends `success()`\n"
+                "`design-check`'s job-level `if:` has no `always()`, so GitHub prepends `success()`\n"
                 "  and a FAILED gate job skips the matrix instead of releasing it.")))
+        # The gate is the job's first step, and the one place the three answers are read.
+        answer = f"needs.{job}.outputs.run"
+        steps = re.split(r"^      - ", design.split("\n    steps:\n", 1)[-1], flags=re.M)[1:]
+        gate = next((s for s in steps if re.search(r"^\s*id:\s*gate\s*$", s, re.M)), None)
+        if gate is None:
+            out.append((where, (
+                "`design-check` has no step with `id: gate`, so nothing computes the three answers\n"
+                "  once and the steps below it each decide for themselves.")))
+        else:
+            if f"{answer} != 'false'" not in gate:
+                out.append((where, (
+                    f"`design-check`'s gate step does not read `{answer} != 'false'`.\n"
+                    "  That spelling is the fail-open one: a classifier that errored, a job that\n"
+                    "  never ran and an empty output all RUN the matrix. `== 'true'` would skip it\n"
+                    "  on every one of those, silently (D141).")))
+            if steps and steps[0] is not gate:
+                out.append((where, "`design-check`'s gate is not its first step, so a step before it runs unconditionally."))
+            ungated = [s.split("\n", 1)[0].strip() or "a step" for s in steps
+                       if s is not gate and "steps.gate.outputs.run" not in s]
+            if ungated:
+                out.append((where, (
+                    f"`design-check` has {len(ungated)} step(s) that do not read the gate, first: `{ungated[0]}`.\n"
+                    "  On a skip it would run anyway, in a job meant to do nothing.")))
+        # The matrix spells the gate out too, so a skip starts one runner and not twelve.
+        matrix = re.search(r"^\s*shard:\s*(.+)$", design, re.M)
+        if matrix is not None and f"{answer} != 'false'" not in matrix.group(1):
+            out.append((where, (
+                f"`design-check`'s matrix does not read `{answer} != 'false'`, so it would not shrink\n"
+                "  to one shard on the same answer the gate gives, or would on a different one.")))
 
     passed = _yaml_job_block(text, "design-check-passed")
     if passed is not None:
@@ -1035,6 +1059,16 @@ def browser_gate_findings(text: str) -> List[Tuple[str, str]]:
             out.append((where, (
                 "`design-check-passed` runs on a skipped matrix, so a tree no browser saw\n"
                 "  would earn D136's pass record and skip the matrix on main too.")))
+        # `design-check` ends green when its gate skipped every step, so its result alone is not
+        # proof the matrix ran. The record reads the same three answers the gate read.
+        if job is not None and cond is not None:
+            wanted = ("needs.design-check.result == 'success'", f"needs.{job}.outputs.run != 'false'",
+                      "needs.already-passed.outputs.skip != 'true'", "needs.ci-static.result == 'success'")
+            missing = [w for w in wanted if w not in cond.group(1)]
+            if missing:
+                out.append((where, (
+                    f"`design-check-passed`'s `if:` does not read `{missing[0]}`, so a matrix its\n"
+                    "  gate skipped would earn a pass record (the skipped matrix reads green).")))
     return out
 
 
@@ -1180,6 +1214,406 @@ def check_browser_scope(report: Report) -> None:
     report.add("browser scope", MECHANICAL, findings,
                f"{len(scope)} entries cover {len(seen)} derived dependencies, read fail-open",
                scanned=len(scope))
+
+
+# ---- THE REQUIRED CHECK'S WIRING (the `all jobs passed` row) --------------------------------
+#
+# Protection requires ONE check, `all-jobs-passed`, built on claude-settings' shared action
+# (claude-settings decision same-check-kinds). The action fails a needed job that failed, was
+# cancelled or was SKIPPED, so the only way to make it lie is to wire it wrong: leave a job out of
+# `needs`, give a needed job a job-level `if:` that skips it, drop `always()` so a red need skips
+# the rollup itself, or pin the action to a different commit than every other claude-settings
+# action. Each of those reads green on the day it lands and wrong on the day it matters.
+#
+# The reader is `all_jobs_passed_findings`, pure over the workflow texts and the stamp, so the
+# self-test mutates one defect at a time. It reads a workflow the way the rest of this file does,
+# as lines, never through a YAML library, and it blanks block scalars first so a `run: |` body that
+# quotes a `uses:` line is not read as one.
+
+ROLLUP_JOB = "all-jobs-passed"
+ROLLUP_ACTION = "shivinate7/claude-settings/actions/all-jobs-passed"
+_CLAUDE_SETTINGS_USES_RE = re.compile(r"^shivinate7/claude-settings/actions/([\w-]+)@(\S+)$")
+_FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+STAMP_FILE = ROOT / ".github" / "stamp.json"
+
+#: The one job-level `if:` a needed job may carry besides none at all: the draft guard, with or
+#: without `always()`. Anything else can skip the job, and a skipped need fails the rollup.
+_DRAFT_GUARD = "${{ !github.event.pull_request.draft }}"
+_ALWAYS_DRAFT_GUARD = "${{ always() && !github.event.pull_request.draft }}"
+
+#: Jobs the rollup does not need, each with its reason. A job missing here AND from the rollup's
+#: `needs` is a finding, so a new job cannot quietly sit outside the required check.
+EXCLUDED = {
+    "check": "a thin alias for the old required name; it reads the rollup and is deleted after protection flips",
+    "design-check-passed": "a recorder: it skips on purpose unless the browser matrix really ran",
+    "nightly-alarm": "a reporter: it skips unless a nightly run failed, and a skip is its normal answer",
+}
+
+_BLOCK_HEADER_RE = re.compile(r"^[|>][+-]?[0-9]?[+-]?$")
+_KEY_LINE_RE = re.compile(r"^(\s*(?:-\s+)*)([\w.-]+):(?:\s+(.*))?$")
+
+
+def _yaml_value(raw: str) -> str:
+    """One scalar as a reader of the key would take it: a quoted value is its inside, and a
+    trailing ` # comment` is cut. A `#` with no space before it is text, a `#` inside a quote or
+    inside `${{ }}` is text, and a lone quote after the comment starts is part of the comment."""
+    text = raw.strip()
+    if text[:1] in ("'", '"'):
+        quote = text[0]
+        i = 1
+        while i < len(text):
+            if text[i] == "\\" and quote == '"':
+                i += 2
+                continue
+            if text[i] == quote:
+                if quote == "'" and text[i + 1:i + 2] == "'":
+                    i += 2
+                    continue
+                rest = text[i + 1:].strip()
+                if rest == "" or rest.startswith("#"):
+                    return text[1:i]
+                break
+            i += 1
+        return text
+    depth = 0
+    for i, ch in enumerate(text):
+        if text.startswith("${{", i):
+            depth += 1
+        elif text.startswith("}}", i) and depth:
+            depth -= 1
+        elif ch == "#" and depth == 0 and (i == 0 or text[i - 1] in " \t"):
+            return text[:i].rstrip()
+    return text
+
+
+def _flow_scalar(raw: str) -> str:
+    """One value up to the `,` or `}` that ends it inside a flow mapping. A `,` or `}` inside a
+    quoted value or inside `${{ }}` is text. A block-style value has neither, so it comes back whole."""
+    text = raw.lstrip()
+    i = 0
+    if text[:1] in ("'", '"'):
+        quote = text[0]
+        i = 1
+        while i < len(text):
+            if text[i] == "\\" and quote == '"':
+                i += 2
+                continue
+            if text[i] == quote:
+                if quote == "'" and text[i + 1:i + 2] == "'":
+                    i += 2
+                    continue
+                i += 1
+                break
+            i += 1
+    depth = 0
+    while i < len(text):
+        if text.startswith("${{", i):
+            depth += 1
+            i += 3
+        elif text.startswith("}}", i) and depth:
+            depth -= 1
+            i += 2
+        elif text[i] in ",}" and depth == 0:
+            return text[:i]
+        else:
+            i += 1
+    return text
+
+
+def _blank_block_scalars(text: str) -> List[str]:
+    """The lines of `text`, with the body of every block scalar (`run: |`, `if: >-`) emptied.
+    The header line stays, so a reader can still see that the value is a block. Line numbers are
+    kept: a finding names a line it can find again."""
+    out: List[str] = []
+    in_block = False
+    key_indent = 0
+    for line in text.split("\n"):
+        if in_block:
+            indent = len(line) - len(line.lstrip())
+            if line.strip() == "" or indent > key_indent:
+                out.append("")
+                continue
+            in_block = False
+        out.append(line)
+        if line.lstrip().startswith("#"):
+            continue
+        match = _KEY_LINE_RE.match(line)
+        if match and match.group(3) is not None and _BLOCK_HEADER_RE.match(_yaml_value(match.group(3))):
+            in_block = True
+            key_indent = len(match.group(1))
+    return out
+
+
+def _jobs_block(text: str) -> List[str]:
+    """The lines under the top-level `jobs:` key, block scalars blanked. `on:` triggers such as
+    `push` and `schedule` sit at the same indent as jobs and are not under it."""
+    lines = _blank_block_scalars(text)
+    out: List[str] = []
+    inside = False
+    for line in lines:
+        if not inside:
+            inside = re.match(r"^jobs:\s*(?:#.*)?$", line) is not None
+            continue
+        if re.match(r"^[A-Za-z_]", line):
+            break
+        out.append(line)
+    return out
+
+
+_JOB_KEY_RE = re.compile(r"^  ([A-Za-z_][\w-]*):\s*(?:#.*)?$")
+
+
+def _job_names(jobs: List[str]) -> List[str]:
+    return [m.group(1) for m in (_JOB_KEY_RE.match(line) for line in jobs) if m]
+
+
+def _job_lines(jobs: List[str], name: str) -> Optional[List[str]]:
+    out: List[str] = []
+    inside = False
+    for line in jobs:
+        key = _JOB_KEY_RE.match(line)
+        if key:
+            if inside:
+                break
+            inside = key.group(1) == name
+        if inside:
+            out.append(line)
+    return out if inside else None
+
+
+def _job_field(job: List[str], key: str) -> Optional[str]:
+    """A job-level scalar (indent 4), read as `_yaml_value` reads it; None when absent."""
+    for line in job:
+        match = re.match(r"^    " + re.escape(key) + r":(?:\s+(.*))?$", line)
+        if match:
+            return _yaml_value(match.group(1) or "")
+    return None
+
+
+def _job_needs(job: List[str]) -> Optional[List[str]]:
+    for i, line in enumerate(job):
+        match = re.match(r"^    needs:(?:\s+(.*))?$", line)
+        if not match:
+            continue
+        value = _yaml_value(match.group(1) or "")
+        if value.startswith("["):
+            return [part.strip().strip("'\"") for part in value.strip("[]").split(",") if part.strip()]
+        if value:
+            return [value]
+        names: List[str] = []
+        for follow in job[i + 1:]:
+            item = re.match(r"^\s+-\s+(\S.*)$", follow)
+            if not item:
+                break
+            names.append(_yaml_value(item.group(1)))
+        return names
+    return None
+
+
+def _rollup_step(job: List[str]) -> Tuple[Optional[str], List[str]]:
+    """The step of `job` that runs the rollup action: its `uses:` value and its lines."""
+    for i, line in enumerate(job):
+        match = re.match(r"^(\s*)(?:-\s+)?uses:\s+(\S.*)$", line)
+        if not match:
+            continue
+        value = _yaml_value(match.group(2))
+        if not value.startswith(ROLLUP_ACTION + "@"):
+            continue
+        start = i
+        while start > 0 and not re.match(r"^\s*-\s", job[start]):
+            start -= 1
+        dash = len(job[start]) - len(job[start].lstrip())
+        end = i + 1
+        while end < len(job):
+            indent = len(job[end]) - len(job[end].lstrip())
+            if job[end].strip() and indent <= dash:
+                break
+            end += 1
+        return value, job[start:end]
+    return None, []
+
+
+def all_jobs_passed_findings(files: Dict[str, str], stamp: Optional[str],
+                             excluded: Optional[Dict[str, str]] = None) -> List[Tuple[str, str]]:
+    """The required check's wiring, as (where, message) pairs. `files` maps each workflow's
+    repo-relative path to its text, and must hold `check.yml`; `stamp` is the text of the stamp
+    config or None. Pure, so `--self-test` can mutate one defect at a time."""
+    excluded = EXCLUDED if excluded is None else excluded
+    out: List[Tuple[str, str]] = []
+    where = rel(CHECK_WORKFLOW)
+    text = files.get(where)
+    if text is None:
+        out.append((where, "does not exist or cannot be read, so nothing wires the required check."))
+    else:
+        out.extend(_rollup_findings(where, text, files, excluded))
+    out.extend(_stamp_findings(stamp))
+    return out
+
+
+def _rollup_findings(where: str, text: str, files: Dict[str, str],
+                     excluded: Dict[str, str]) -> List[Tuple[str, str]]:
+    out: List[Tuple[str, str]] = []
+    jobs = _jobs_block(text)
+    names = _job_names(jobs)
+    for name in sorted(set(excluded) - set(names)):
+        out.append((where, (
+            f"EXCLUDED names `{name}`, which is not a job here. A job that was renamed or deleted\n"
+            "  leaves an exclusion that excuses whatever takes the name next.")))
+
+    rollup = _job_lines(jobs, ROLLUP_JOB)
+    if rollup is None:
+        out.append((where, (
+            f"has no `{ROLLUP_JOB}` job, so protection has no single check to require and a job\n"
+            "  that does not run reads as green.")))
+        return out
+
+    # The rollup runs under always(), or a red need skips it and a skipped check reads green.
+    cond = _job_field(rollup, "if")
+    if cond is None:
+        out.append((where, (
+            f"`{ROLLUP_JOB}` has no job-level `if:`. Without `always()` GitHub skips it when a\n"
+            "  needed job fails, and a skipped required check reads as green.")))
+    elif " ".join(cond.split()) != _ALWAYS_DRAFT_GUARD:
+        out.append((where, (
+            f"`{ROLLUP_JOB}` has the job-level `if: {cond}`, and it must be exactly\n"
+            f"  `{_ALWAYS_DRAFT_GUARD}`: `always()` so a red need cannot skip it, the draft guard\n"
+            "  so a draft starts no runner.")))
+
+    # Its one step: the shared action, at a full commit sha, handed `toJSON(needs)`.
+    uses, step = _rollup_step(rollup)
+    pin: Optional[str] = None
+    if uses is None:
+        out.append((where, (
+            f"`{ROLLUP_JOB}` does not run `{ROLLUP_ACTION}`. A rollup that runs something\n"
+            "  else is not the contract the shared action tests.")))
+    else:
+        pin = uses.split("@", 1)[1]
+        if not _FULL_SHA_RE.match(pin):
+            out.append((where, (
+                f"`{ROLLUP_JOB}` pins the action to `{pin}`, which is not a 40-character commit sha.\n"
+                "  A tag moves and a branch moves; the check that gates every merge does not.")))
+        with_needs = None
+        in_with = False
+        for line in step:
+            if re.match(r"^\s+with:\s*$", line):
+                in_with = True
+                continue
+            if in_with:
+                match = re.match(r"^\s+needs:(?:\s+(.*))?$", line)
+                if match:
+                    with_needs = _yaml_value(match.group(1) or "")
+                    break
+        if with_needs is None:
+            out.append((where, (
+                f"`{ROLLUP_JOB}` passes no `needs:` to the action, so it has nothing to check\n"
+                "  and passes on an empty list.")))
+        elif "toJSON(needs)" not in with_needs:
+            out.append((where, (
+                f"`{ROLLUP_JOB}` passes `needs: {with_needs}`, and the action reads `${{{{ toJSON(needs) }}}}`.")))
+
+    # Every claude-settings action is pinned to the rollup's commit, here and in every workflow.
+    if pin is not None:
+        for path, body in sorted(files.items()):
+            for line in _blank_block_scalars(body):
+                match = re.match(r"^\s*(?:-\s+)?uses:\s+(\S.*)$", line)
+                found = _CLAUDE_SETTINGS_USES_RE.match(_yaml_value(match.group(1))) if match else None
+                if found and found.group(1) != ROLLUP_JOB and found.group(2) != pin:
+                    out.append((path, (
+                        f"uses `{found.group(1)}` at `{found.group(2)}`, and `{ROLLUP_JOB}` is pinned to `{pin}`.\n"
+                        "  One shared repository, one commit: a second pin is a second version of the gate.")))
+
+    # `needs` is exactly the jobs that are not excluded. The two reads agree both ways.
+    needed_jobs = [name for name in names if name != ROLLUP_JOB and name not in excluded]
+    needs = _job_needs(rollup) or []
+    for name in needed_jobs:
+        if name not in needs:
+            out.append((where, (
+                f"`{ROLLUP_JOB}` does not need `{name}`, so a red or skipped `{name}` cannot fail the\n"
+                "  required check. Add it to `needs`, or to EXCLUDED with a reason.")))
+    for name in needs:
+        if name in excluded:
+            out.append((where, (
+                f"`{ROLLUP_JOB}` needs `{name}`, which is excluded: {excluded[name]}.")))
+        elif name not in names:
+            out.append((where, f"`{ROLLUP_JOB}` needs `{name}`, which is not a job here."))
+
+    # A needed job that can skip itself fails the rollup on the days it skips. It runs on every
+    # non-draft event and says "nothing to do" from inside its steps.
+    for name in needed_jobs:
+        job = _job_lines(jobs, name) or []
+        value = _job_field(job, "if")
+        if value is None:
+            continue
+        if " ".join(value.split()) not in (_DRAFT_GUARD, _ALWAYS_DRAFT_GUARD):
+            out.append((where, (
+                f"`{name}` has the job-level `if: {value}`. A needed job that skips fails\n"
+                f"  `{ROLLUP_JOB}`: keep only the draft guard here and gate the steps instead.")))
+
+    # `continue-on-error` turns a failed job or step into a success, so the rollup would read green
+    # over it. Only a literal `false` is allowed: an expression or `true` can hide a failure.
+    # A flow-style step (`- { name: x, continue-on-error: true }`) puts the key after `{` or `,`.
+    watched = needed_jobs + [ROLLUP_JOB] + (["check"] if "check" in names else [])
+    for name in watched:
+        for line in _job_lines(jobs, name) or []:
+            if line.lstrip().startswith("#"):
+                continue
+            match = re.search(r"(?:^\s*(?:-\s+)?|[{,]\s*)continue-on-error:(?:\s+(.*))?$", line)
+            value = _yaml_value(_flow_scalar(match.group(1) or "")) if match else ""
+            if match and value.lower() != "false":
+                out.append((where, (
+                    f"`{name}` sets `continue-on-error: {value}`, which turns a failure\n"
+                    f"  into a success the rollup cannot see. Only `false` is allowed on a job `{ROLLUP_JOB}` reads.")))
+                break
+
+    # The alias reads the rollup and nothing else, or it is a second required check with its own
+    # wiring, which is the defect the rollup exists to remove.
+    if "check" in names:
+        alias_needs = _job_needs(_job_lines(jobs, "check") or [])
+        if alias_needs is None:
+            out.append((where, f"`check` has no `needs:`, so it passes without reading `{ROLLUP_JOB}`."))
+        elif alias_needs != [ROLLUP_JOB]:
+            out.append((where, (
+                f"`check` needs [{', '.join(alias_needs)}], and the alias may need only [{ROLLUP_JOB}].")))
+    return out
+
+
+def _stamp_findings(stamp: Optional[str]) -> List[Tuple[str, str]]:
+    where = rel(STAMP_FILE)
+    unknown = (where, (
+        "the required check is unknown: the stamp config is missing or is not JSON this row can\n"
+        "  read, so nothing says which check the merge tool waits for."))
+    if stamp is None:
+        return [unknown]
+    try:
+        merge = json.loads(stamp).get("merge", {})
+        required = merge.get("requiredChecks") if isinstance(merge, dict) else None
+    except (ValueError, AttributeError):
+        return [unknown]
+    if required == "protection" or required == [ROLLUP_JOB]:
+        return []
+    return [(where, (
+        f"`merge.requiredChecks` is {json.dumps(required)}. It must be \"protection\" (read what branch\n"
+        f"  protection requires) or exactly [\"{ROLLUP_JOB}\"], or the merge tool waits on another check."))]
+
+
+def check_all_jobs_passed(report: Report) -> None:
+    """`check.yml`'s rollup against its jobs, its pin and the stamp config (claude-settings
+    decision same-check-kinds).
+
+    MECHANICAL: a job missing from `needs`, a needed job with a skipping `if:` and a second pin are
+    each present or absent in the text. The row cannot read what branch protection names on
+    GitHub; it reads the repo's own half of that answer.
+    """
+    files: Dict[str, str] = {}
+    for path in glob_files(ROOT / ".github" / "workflows", "*.yml"):
+        files[rel(path)] = read(path)
+    if exists(CHECK_WORKFLOW):
+        files[rel(CHECK_WORKFLOW)] = read(CHECK_WORKFLOW)
+    stamp = read(STAMP_FILE) if exists(STAMP_FILE) else None
+    findings = [Finding(where, message) for where, message in all_jobs_passed_findings(files, stamp)]
+    report.add("all jobs passed", MECHANICAL, findings,
+               f"{ROLLUP_JOB} needs every job but {len(EXCLUDED)} excluded, read both ways",
+               scanned=len(files))
 
 
 def _spec_map_should_run() -> bool:

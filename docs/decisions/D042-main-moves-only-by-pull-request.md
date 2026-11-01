@@ -51,7 +51,7 @@ So `make hooks` copies the tracked hooks into `<git-common-dir>/hooks-armed`. It
 
 **What is given up: the copy can go stale.** A new worktree gets handed the per-worktree override again. Neither can be closed by a check without lying. The tracked file legitimately differs between branches. So *installed does not match this tree* is a fact, never a fault. It must never gate a commit. `make status` reports both instead. It reads NOT ARMED whenever the effective path is not the install. No hook prints a reminder. `post-merge` and `post-checkout` were removed on the owner's word.
 
-### The orchestrator performs the merge when the owner says the word
+### The batch runner performs the merge when the owner says the word
 
 An owner amendment. The sentence that changes is *the owner merges it on GitHub*. Only that sentence changes. The two hooks, and what they refuse and why, are untouched.
 
@@ -117,13 +117,13 @@ At `prepared`, the hook asks `git merge-base --is-ancestor "$new" refs/remotes/o
 
 ### The word
 
-**A merge outside the orchestrator's standing grant (below) needs the word, and the orchestrator runs it. A lane session never merges.**
+**A merge outside the coordinator's standing grant (below) needs the word, and the batch runner runs it. A lane session never merges.**
 
 **The word comes from the owner in the conversation, and it applies to one instruction.** It is not a standing grant, a mode, or an inference. It has the same shape as D33's `confirm` field one register down. That route refuses without an explicit field, because the next step costs money. This refuses without an explicit instruction, because the next step is the branch every other session is cut from.
 
 **The test is whether the owner NAMED THE ACT, not whether they matched a phrase.** A past paragraph said *"merge to main" is the word*. A session read that literally and hesitated over a bare **"Merge"**. The word is the verb itself, as a direct instruction. *Merge it* and *merge the PR* count too. Approval that never names the act does not count: *ship it*, *land it*, *looks good*, or an approving review. **The line is naming the operation versus expressing satisfaction with the work.** A phrase list is a worse instrument. A session that matches on phrases balks at a plain instruction. It can also be walked into a merge by anyone who says five particular words.
 
-**The merge is one operation, performed whole. The orchestrator does not stop between the halves to ask again.** The owner asked for this correction after a session merged on GitHub, reported that local main had not moved, and waited. That session read the entry correctly, which is what made it a defect here. The word covers both halves: `gh pr merge`, then the fast-forward. If the second half refuses or cannot run, the orchestrator reports it as the incomplete operation it is. It does not re-ask as though permission were missing.
+**The merge is one operation, performed whole. The batch runner does not stop between the halves to ask again.** The owner asked for this correction after a session merged on GitHub, reported that local main had not moved, and waited. That session read the entry correctly, which is what made it a defect here. The word covers both halves: `gh pr merge`, then the fast-forward. If the second half refuses or cannot run, the batch runner reports it as the incomplete operation it is. It does not re-ask as though permission were missing.
 
 **What the word does not license:** a direct push, a force push, `git branch -f`, `git update-ref`, or a merge of a PR the owner did not name. A hook refuses all four. The word unlocks none of them.
 
@@ -131,15 +131,15 @@ At `prepared`, the hook asks `git merge-base --is-ancestor "$new" refs/remotes/o
 
 **Why this is safe to grant, and was not safe to assume.** The owner's consent was never missing. What was missing was any record that consent was required, and any mechanism that noticed its absence. Both now exist. So an explicit instruction is a decision, not a default.
 
-### A standing grant to the orchestrator
+### The coordinator's standing grant, run by the batch runner
 
-**"The word" above is still per-PR by default. This is the one exception, and it is scoped, not a repeal.** After being asked twice to name the act for PR #349, the owner gave the orchestrator a standing grant to merge. That names the act once for a whole batch, instead of once per PR in it.
+**"The word" above is still per-PR by default. This is the one exception, and it is scoped, not a repeal.** After being asked twice to name the act for PR #349, the owner gave a standing grant to merge. claude-settings decision standing-merge-grant now holds it: the coordinator holds the grant, and the batch runner runs merges under it. That names the act once for a whole batch, instead of once per PR in it.
 
-**The grant is to the one session the owner names as orchestrator.** It batches every reviewed lane the owner set out, across all sessions, into one integration branch and merges it. A lane session hands the orchestrator each reviewed lane branch with its head commit and review verdict. It never builds an integration branch, opens an integration PR, marks a PR ready or merges. The grant is exercised only through `make merge ARGS="<n> --confirm"`, only once CI is green, and never with `--admin`. The designation is never inherited. A later session re-asks, a new orchestrator included.
+**The batch runner is the session the coordinator starts and tags `cs-build:batch-runner`, and it holds no grant of its own** (claude-settings decision session-tiers). The batch runner owns the integration batch, the CI waits, the merge tool runs and archiving finished lanes. The coordinator starts lanes and talks with the owner. The batch runner batches every reviewed lane the owner set out, across all sessions, into one integration branch and merges it. A lane session hands the batch runner each reviewed lane branch with its head commit and review verdict. It never builds an integration branch, opens an integration PR, marks a PR ready or merges. The grant is exercised only through `make merge ARGS="<n> --confirm"`, only once CI is green, and never with `--admin`. A session's role comes from its own `cs-build` tag.
 
 ### A standing grant to the weekly demo refresh
 
-**One more exception, scoped to a path.** The owner ruled that the demo mirror refreshes weekly with auto-merge (D295, the public demo is the scrubbed real store). A PR merges through the merge tool once CI is green. No word is asked, and no orchestrator is named. Three conditions hold. Its head is `demo/mirror-refresh`. `scripts/demo-mirror-daily.py` opened it after the scrub assert and the fence. Its whole diff is under `demo-assets/mirror/`. `scripts/demo-mirror-daily.py` fences it: it refuses to merge when the diff touches any other path, and it never uses `--admin`. Any other PR keeps the rules above.
+**One more exception, scoped to a path.** The owner ruled that the demo mirror refreshes weekly with auto-merge (D295, the public demo is the scrubbed real store). A PR merges through the merge tool once CI is green. No word is asked, and no batch runner is needed. Three conditions hold. Its head is `demo/mirror-refresh`. `scripts/demo-mirror-daily.py` opened it after the scrub assert and the fence. Its whole diff is under `demo-assets/mirror/`. `scripts/demo-mirror-daily.py` fences it: it refuses to merge when the diff touches any other path, and it never uses `--admin`. Any other PR keeps the rules above.
 
 ### The escape hatch and the evidence
 
@@ -149,6 +149,6 @@ At `prepared`, the hook asks `git merge-base --is-ancestor "$new" refs/remotes/o
 
 **What it does not cover:** one machine's clone. A push from anywhere else, a commit in a different clone, and the GitHub web editor are all outside it. Those are the exact gap branch protection would close.
 
-**Amended.** The premise here was that the server-side guard was not for sale. That went false, twice over. Both are done, not hypothetical. Branch protection requires `check` and `revert-guard`. And `gh api /repos/shivinate7/banchi` answers `"private": false`. The repository is public, on the owner's own separate decision. The subscription this entry's opening measurement paid to avoid is no longer the question. Server-side rulesets exist and are required now.
+**Amended.** The premise here was that the server-side guard was not for sale. That went false, twice over. Both are done, not hypothetical. Branch protection is on. The one check it is to require is `all-jobs-passed`, which rolls up every job, `revert-guard` included (claude-settings decision same-check-kinds). `check` is its alias; a follow-up deletes it after the owner flips protection to the rollup (same-check-kinds). The list protection holds changes only by that flip. And `gh api /repos/shivinate7/banchi` answers `"private": false`. The repository is public, on the owner's own separate decision. The subscription this entry's opening measurement paid to avoid is no longer the question. Server-side rulesets exist and are required now.
 
 What this protected, main moving from inside this clone unreviewed, is caught remotely too. A required check on a PR is the server-side gate this entry once could not buy. **What the two local hooks still cover is the one thing a required check cannot see: a local ref move that never goes through `git push`.** `reference-transaction` catches a fast-forward, a rebase, or a `branch -f` of `refs/heads/main`, before any network call exists to gate. `pre-push` is now the redundant one. A direct push it refuses would also fail remotely. It stays, because a local guard costs nothing to keep. The local guard's ground is narrower now. It is not "the only gate there is". It is "the one gate a `git update-ref` never reaches."

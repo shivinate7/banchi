@@ -1,4 +1,23 @@
 {
-  "kinds": {},
+  "kinds": {
+    "app": {"path": "app"},
+    "cli": {"path": "cli"},
+    "code-card-fork": {"path": "code-card-fork"},
+    "codes": {"path": "codes"},
+    "demo-assets": {"path": "demo-assets"},
+    "design-refs": {"path": "docs/design-refs"},
+    "harness-contract": {"path": "docs/gates"},
+    "research": {"path": "docs/research"},
+    "fixtures": {"path": "fixtures"},
+    "geometry": {"path": "geometry"},
+    "harness": {"path": "harness"},
+    "identify": {"path": "identify"},
+    "pipeline": {"path": "pipeline"},
+    "scripts": {"path": "scripts"},
+    "server": {"path": "server"},
+    "store": {"path": "store"},
+    "vendor": {"path": "vendor"}
+  },
+  "rolled-out": true,
   "waiting-page": "https://claude.ai/artifact/6NU1FeyGMvhyrQr7ga3tQe"
 }

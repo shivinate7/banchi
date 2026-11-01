@@ -5,7 +5,8 @@
 # Every ten minutes it lists open, non-draft pull requests whose head commit has no real `check` run
 # and whose last update is over five minutes old, and comments once per head commit (a hidden
 # marker in the comment is the memory). Nothing is cancelled, re-run or pushed: the remedy is a
-# person's (push an empty commit, or close and reopen). It reads the API only; no checkout, no
+# person's (`gh workflow run check.yml --ref <branch>` dispatches the run, or `gh pr ready --undo`
+# then `gh pr ready` fires `ready_for_review`; never an empty commit). It reads the API only; no checkout, no
 # third-party action.
 name: dropped-start-alarm
 
@@ -35,8 +36,8 @@ jobs:
         run: |
           now=$(date -u +%s)
           gh api "repos/${REPO}/pulls?state=open&per_page=100" \
-            --jq '.[] | select(.draft | not) | [.number, .head.sha, .updated_at] | @tsv' |
-          while IFS=$'\t' read -r number sha updated; do
+            --jq '.[] | select(.draft | not) | [.number, .head.sha, .updated_at, .head.ref] | @tsv' |
+          while IFS=$'\t' read -r number sha updated ref; do
             age=$(( now - $(date -u -d "${updated}" +%s) ))
             [ "${age}" -gt 300 ] || continue
             # A real run is one that did not skip: a draft's run skips every job.
@@ -48,7 +49,7 @@ jobs:
               continue
             fi
             body="${marker}
-          No \`check\` run has started for \`${sha:0:7}\`, five minutes after the last update. GitHub may have dropped the pull request event. Push an empty commit, or close and reopen the pull request."
+          No \`check\` run has started for \`${sha:0:7}\`, five minutes after the last update. GitHub may have dropped the pull request event. Dispatch the run with \`gh workflow run check.yml --ref ${ref}\`, or mark the pull request a draft and ready again (\`gh pr ready ${number} --undo\`, then \`gh pr ready ${number}\`)."
             gh api --method POST "repos/${REPO}/issues/${number}/comments" -f body="${body}" > /dev/null
             echo "flagged #${number} at ${sha}"
           done
