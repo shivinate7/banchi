@@ -339,12 +339,20 @@ def _route_prose_findings() -> List[Finding]:
     return out
 
 
-# CLAUDE.md's "Codex reads this same file" paragraph names these four links.
+# CLAUDE.md's "Codex reads this same file" paragraph and its "Folder rules" section name these
+# links. Codex reads no `.claude/rules/`, so each rule file's folder holds an `AGENTS.md` link to it.
 AGENT_LINKS: Tuple[Tuple[str, str], ...] = (
     ("AGENTS.md", "CLAUDE.md"),
     (".agents/skills", "../.claude/skills"),
     ("code-card-fork/AGENTS.md", "CLAUDE.md"),
     ("code-card-fork/CLAUDE.md", "../CLAUDE.md"),
+    ("app/AGENTS.md", "../.claude/rules/app.md"),
+    ("server/AGENTS.md", "../.claude/rules/server.md"),
+    ("pipeline/AGENTS.md", "../.claude/rules/pipeline.md"),
+    ("store/AGENTS.md", "../.claude/rules/pipeline.md"),
+    ("cli/AGENTS.md", "../.claude/rules/pipeline.md"),
+    ("identify/AGENTS.md", "../.claude/rules/pipeline.md"),
+    ("codes/AGENTS.md", "../.claude/rules/code-cards.md"),
 )
 
 
@@ -357,11 +365,13 @@ def check_agent_links(report: Report) -> None:
             findings.append(Finding(link, f"is not a symlink; CLAUDE.md says it links to `{target}`."))
         elif os.readlink(path) != target:
             findings.append(Finding(link, f"links to `{os.readlink(path)}`; CLAUDE.md says `{target}`."))
+        elif not path.exists():
+            findings.append(Finding(link, f"links to `{target}`, which does not exist."))
     report.add(
         "agent links",
         MECHANICAL,
         findings,
-        f"{len(AGENT_LINKS)} relative symlinks resolve to CLAUDE.md or .claude/skills",
+        f"{len(AGENT_LINKS)} relative symlinks resolve to CLAUDE.md, .claude/skills or .claude/rules",
         scanned=len(AGENT_LINKS),
     )
 

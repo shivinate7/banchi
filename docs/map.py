@@ -5587,6 +5587,30 @@ COMPONENTS = [
         "governed_by": [],
     },
     {
+        "path": ".claude/rules/app.md",
+        "status": "built",
+        "does": "the front end's rules (screens, design system, shell, verifying a screen), moved out of CLAUDE.md. Loads when a file under app/ is read. Codex reaches it through app/AGENTS.md.",
+        "governed_by": ["D135", "D275"],
+    },
+    {
+        "path": ".claude/rules/server.md",
+        "status": "built",
+        "does": "the capture server's concurrency figures, read by the `server concurrency` row. Loads when a file under server/ is read.",
+        "governed_by": ["D135"],
+    },
+    {
+        "path": ".claude/rules/pipeline.md",
+        "status": "built",
+        "does": "the join, pricing, emit, store and box rules, moved out of CLAUDE.md. Loads when a file under pipeline/, store/, cli/, identify/ or server/ is read.",
+        "governed_by": ["D135", "D35", "D86", "D88"],
+    },
+    {
+        "path": ".claude/rules/code-cards.md",
+        "status": "built",
+        "does": "the dormant code-card feature's four rules. Loads when a file under codes/ or the code-card spec is read.",
+        "governed_by": ["D135", "D248"],
+    },
+    {
         "path": "docs/specs/home-assistant.md",
         "status": "tbd",
         "does": "PROPOSAL, nothing built: the home tier. The always-on HA Green, its 2 TB drive, "

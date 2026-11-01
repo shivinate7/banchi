@@ -1,0 +1,1 @@
+../.claude/rules/server.md
