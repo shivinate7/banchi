@@ -87,7 +87,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "GUARD_SHELL_SKIP=tree"
+            "command": "GUARD_SHELL_SKIP=tree scripts/guard-shell.py --hook"
           }
         ]
       }
