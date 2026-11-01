@@ -1385,6 +1385,48 @@ skip_cli_write "$SKIPS" "$WT" "$tmp/main/work.py"
 [ $? -eq 2 ] && ok "with --skip, a write outside the checkout is still refused" || bad "--skip let a write outside the checkout through"
 
 echo ""
+echo "  the configured hooks: a write to a path in no checkout"
+
+# THE REAL HOOK COMMANDS, read from each tool's own config: Claude Code skips this clause on the
+# owner's ruling (D179), and Codex runs no shared guard. Run from the repo's own root, as each tool does.
+CONF_ROOT="$(cd "$HERE/.." && pwd)"
+conf_cmd() {   # conf_cmd <config> <matcher> -> the guard-shell hook command for that matcher
+  python3 - "$CONF_ROOT/$1" "$2" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+for entry in data["hooks"]["PreToolUse"]:
+    if entry.get("matcher") != sys.argv[2]:
+        continue
+    for h in entry["hooks"]:
+        if "scripts/guard-shell.py" in h["command"]:
+            print(h["command"]); sys.exit(0)
+sys.exit(1)
+PY
+}
+# Under $HOME, since a temp directory is sanctioned already: the path is judged, never written.
+nowhere="$HOME/banchi-selftest-no-checkout/n.md"
+conf_write() {   # conf_write <config> <cwd> <file_path>
+  local c; c="$(conf_cmd "$1" "Write|Edit")" || return 99
+  out="$(CWD="$2" TARGET="$3" python3 -c 'import json,os; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"file_path":os.environ["TARGET"]}}))' \
+        | (cd "$CONF_ROOT" && eval "$c") 2>&1)"
+  return $?
+}
+conf_bash() {   # conf_bash <config> <cwd> <command>
+  local c; c="$(conf_cmd "$1" "Bash")" || return 99
+  out="$(CWD="$2" CMD="$3" python3 -c 'import json,os; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":os.environ["CMD"]}}))' \
+        | (cd "$CONF_ROOT" && eval "$c") 2>&1)"
+  return $?
+}
+conf_write .claude/settings.json "$WT" "$nowhere"
+[ $? -eq 0 ] && ok "Claude Code: a Write to a path in no checkout is not refused here" || bad "Claude Code: a Write to a path in no checkout was refused"
+conf_bash .claude/settings.json "$WT" "echo x > \"$nowhere\""
+[ $? -eq 0 ] && ok "Claude Code: a redirect to a path in no checkout is not refused here" || bad "Claude Code: a redirect to a path in no checkout was refused"
+conf_write .codex/hooks.json "$WT" "$nowhere"
+[ $? -eq 2 ] && ok "Codex: a Write to a path in no checkout is still refused" || bad "Codex: a Write to a path in no checkout was allowed"
+conf_bash .codex/hooks.json "$WT" "echo x > \"$nowhere\""
+[ $? -eq 2 ] && ok "Codex: a redirect to a path in no checkout is still refused" || bad "Codex: a redirect to a path in no checkout was allowed"
+
+echo ""
 echo "  the refusal log"
 . "$LIBDIR/refusal-log-assert.sh"
 rl="$tmp/refusals.log"
