@@ -3,7 +3,7 @@ paths:
   - "codes/**"
   - "code-card-fork/**"
   - "docs/specs/code-cards.md"
-  - "app/src/Codes.*"
+  - "app/src/Codes.tsx"
 ---
 
 # Code cards

@@ -211,13 +211,35 @@ def _gloss_after(rest: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
-RULE_FILES_DIR = ROOT / ".claude" / "rules"
-RULE_FILE_FLOOR = 4  # non-vacuity: app, server, pipeline and code-cards. Lower it only when one is deleted on purpose.
-
-
 def rule_files() -> List[Path]:
     """Each path-scoped rule file, the README excluded: the prose that moved out of `CLAUDE.md`."""
-    return [p for p in glob_files(RULE_FILES_DIR, "*.md") if p.name != "README.md"]
+    return [p for p in glob_files(ROOT / ".claude" / "rules", "*.md") if p.name != "README.md"]
+
+
+_FOLDER_RULES_RE = re.compile(r"^## Folder rules\n(.*?)(?=^## |\Z)", re.M | re.S)
+
+
+def folder_rule_roster_findings(text: str, files: Sequence[Path]) -> List[Finding]:
+    """`CLAUDE.md`'s `## Folder rules` section against the rule files on disk, both ways.
+
+    The roster is what keeps a deleted or unnamed rule file from leaving this row's gloss
+    check reading nothing and printing `ok`.
+    """
+    section = _FOLDER_RULES_RE.search(text)
+    named = set(re.findall(r"`([a-z][a-z-]*\.md)`", section.group(1))) if section else set()
+    on_disk = {p.name for p in files}
+    found: List[Finding] = []
+    for name in sorted(named - on_disk):
+        found.append(Finding(
+            "CLAUDE.md",
+            f"`## Folder rules` names `{name}` and `.claude/rules/{name}` does not exist. Its prose "
+            "is gone from every reader here. Restore the file or drop the name."))
+    for name in sorted(on_disk - named):
+        found.append(Finding(
+            f".claude/rules/{name}",
+            "is a rule file that `CLAUDE.md`'s `## Folder rules` section does not name. A session "
+            "reading root `CLAUDE.md` cannot tell the rule exists."))
+    return found
 
 
 def bare_id_findings(text: str, where: str = "CLAUDE.md") -> List[Finding]:
@@ -319,13 +341,7 @@ def check_rule_enforcement(report: Report) -> None:
     folder_rules = rule_files()
     for rule_file in folder_rules:
         findings.extend(bare_id_findings(read(rule_file), rel(rule_file)))
-    if len(folder_rules) < RULE_FILE_FLOOR:
-        findings.append(Finding(
-            ".claude/rules",
-            f"holds {len(folder_rules)} rule files where {RULE_FILE_FLOOR} are pinned. A rule file "
-            "was deleted or moved, and its prose left this row's gloss check. Lower "
-            "`RULE_FILE_FLOOR` deliberately if one went on purpose.",
-        ))
+    findings.extend(folder_rule_roster_findings(text, folder_rules))
 
     prose_only: List[str] = []
     for line, block in blocks:

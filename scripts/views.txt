@@ -127,7 +127,7 @@ review        http://localhost:5173/#/review  .review,.bn-title
 # WHAT IT COSTS IS NAMED, because it is a real loss and not a free win: `#/inventory` is the
 # densest screen in the product — three columns at 1440, a stack at 390 — and it is now the
 # only owner screen with no automated render. Verify it by hand at the three widths in both
-# themes, the way CLAUDE.md's `## Verifying a screen` prescribes. Pointing `make screenshot`
+# themes, the way `.claude/rules/app.md`'s `## Verifying a screen` prescribes. Pointing `make screenshot`
 # back at it re-arms the leak. `docs/debts/` section 14 has the trace and the ruling.
 
 # The pipeline, on its own route since 2026-08-29 (D39). Worth its own render for the reason

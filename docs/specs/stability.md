@@ -195,7 +195,7 @@ Top five by impact (size × how often × whose screen):
 
 ## 5. Enforcement
 
-**Standing rule (for CLAUDE.md, The design system):** *Nothing on screen moves unless the
+**Standing rule (for `.claude/rules/app.md`, The design system):** *Nothing on screen moves unless the
 person moved it, or it is the direct result of their own press at that spot. A read, a timer, a
 font, an image, a scrollbar, a banner or a toast never moves content (this spec).*
 

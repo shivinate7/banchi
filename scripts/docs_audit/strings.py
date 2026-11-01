@@ -363,7 +363,7 @@ def check_no_mechanism_on_screen(report: Report) -> None:
     uses for its own undercount, and for the identical reason: what is missed
     understates the defect, never invents one.
 
-    `Notice`'s own `code` prop is deliberately NOT extracted — CLAUDE.md's Register
+    `Notice`'s own `code` prop is deliberately NOT extracted — `.claude/rules/app.md`'s Register
     section says outright that "the pipeline's own string stays available on hover and in
     the run log", which is precisely what that prop is for. A session widening this row's
     attribute list to catch `code` too would be re-litigating that sentence, not fixing a
