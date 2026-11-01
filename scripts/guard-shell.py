@@ -9,8 +9,10 @@ work. So these seven are mechanical. Their numbers are stable ids: 3 (`gh api -f
 (`ln -s` over a path) are retired on the owner's word, and nothing renumbers.
 
 CLAUDE CODE RUNS THIS WITH `GUARD_SHELL_SKIP=checkout,stash,reset,tree` (`--skip` is an alias). The shared layer's guard
-(`claude-settings/hooks/guard.py`, rule 1, shared-tree) owns clauses 1, 2, 7 and 8 there, so the
-Claude-side copy is cut on the owner's word. Codex runs no shared guard and runs all seven.
+(`claude-settings/hooks/guard.py`, rule 1, shared-tree) owns clauses 1, 7 and 8 there, and the
+part of clause 2 that writes into another checkout of this clone. A write to a path in no checkout,
+and a bare `cd` into another checkout, pass there. The Claude-side copy is cut on the owner's word
+(D179). Codex runs no shared guard and runs all seven.
 
     1. `git checkout <path>` / `git restore <path>` over a file with uncommitted changes
        2026-09-06: three mutation cases used `sed -i.bak` and the fourth used
