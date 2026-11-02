@@ -25,11 +25,19 @@ already running: no timer, no watcher.
 
 **Two halves, because a script cannot read the database.** ArtifactData is a Claude tool call, not
 an API a script can reach. So Claude reads, and the script normalizes and scans. The script sorts
-keys and writes fixed indentation, so an unchanged page makes no diff.
+keys and writes fixed indentation, so an unchanged database makes no diff. `meta.json` keeps every
+`meta` document, `page.checked` included: a wake that re-measures the page changes it, and commits.
+
+**The writer reads the diff before it commits.** No pattern catches text the owner ruled out of the
+repo, such as a closed item that restates a concern the owner asked to omit. The writer edits or
+deletes that item on the page first. This is why the first export is not in the pull request that
+built the tool: one closed item restated such a concern.
 
 **The scan.** This repo is public. Before it writes, the script scans every key and string for
-tokens (GitHub, Anthropic and other `sk-` keys, AWS, Slack, JWT, bearer), private keys, password or
-key values, cookies, email addresses, phone numbers and street addresses. A hit writes nothing and
+tokens (GitHub, Anthropic and other `sk-` keys, Stripe, Google, AWS, Slack, JWT, bearer and basic
+auth), private keys, any name ending in key, token, secret, password or cookie set to a value of 8 or
+more characters (a `.env` line), cookies, email addresses, phone numbers, street addresses, PO boxes
+and city, state and ZIP lines. A hit writes nothing and
 names the kind and the field, never the text. The writer removes it from the page and reads again.
 `make waiting-export-selftest` proves the scan red on each fake kind and green on a clean export.
 **NOT MECHANIZED:** a buyer's name with no address beside it. A pattern cannot tell a buyer's name

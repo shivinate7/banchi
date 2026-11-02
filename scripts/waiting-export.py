@@ -35,21 +35,23 @@ COLLECTIONS = ("items", "answers", "groups", "meta")
 # A hit names the kind and where, never the matched text.
 PATTERNS = (
     ("github token", r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_\w{20,})"),
-    ("api key", r"\bsk-(?:ant-)?[A-Za-z0-9_-]{20,}"),
+    ("api key", r"\b(?:sk-(?:ant-)?[A-Za-z0-9_-]{20,}|[sr]k_live_[A-Za-z0-9]{10,}|AIza[\w-]{30,})"),
     ("aws key", r"\bAKIA[0-9A-Z]{16}\b"),
     ("slack token", r"\bxox[abprs]-[A-Za-z0-9-]{10,}"),
     ("jwt", r"\beyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}"),
     ("private key", r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
-    ("bearer token", r"(?i)\bbearer\s+[\w.~+/=-]{20,}"),
+    ("bearer token", r"(?i)\b(?:bearer|basic)\s+[\w.~+/=-]{20,}"),
+    # No leading \b: a .env name such as TCG_TRACKING_KEY ends the word on `_`, not before it.
     ("password or key value",
-     r"(?i)\b(?:password|passwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token)"
-     r"\s*[:=]\s*['\"]?[^\s'\"<>]{6,}"),
+     r"(?i)(?:password|passwd|secret|key|token|cookie|clearance)"
+     r"\s*[:=]\s*['\"]?[^\s'\"<>]{8,}"),
     ("cookie", r"(?i)(?:\bset-cookie\s*:|\bcookie\s*:\s*\w+=|\b(?:sessionid|csrftoken|sid)=[\w%.-]{16,})"),
     ("email address", r"[\w.+-]+@[A-Za-z0-9-]+\.[A-Za-z0-9.-]*[A-Za-z]"),
-    ("phone number", r"(?<![\w.-])\(?\d{3}\)?[-. ]\d{3}[-. ]\d{4}(?![\w.-])"),
+    ("phone number", r"(?<![\w.-])(?:\+1[-. ]?)?\(?\d{3}\)?[-. ]\d{3}[-. ]\d{4}(?![\w.-])"),
     ("street address",
-     r"\b\d{1,6}\s+(?:[A-Z][a-z]+\s+){1,3}"
-     r"(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Dr|Drive|Ln|Lane|Ct|Court|Pl|Place|Way)\b"),
+     r"(?i)\b\d{1,6}\s+(?:[nsew]\.?\s+)?(?:[a-z0-9]+\s+){1,3}"
+     r"(?:st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|ct|court|pl|place)\b"
+     r"|\bP\.?O\.? Box \d+|\b[A-Z][a-z]+, [A-Z]{2} \d{5}\b"),
 )
 COMPILED = tuple((name, re.compile(rx)) for name, rx in PATTERNS)
 
@@ -91,7 +93,7 @@ def render(docs: dict) -> str:
 
 def export(scratch: Path, records: Path, url: str) -> int:
     data = read_folder(scratch)
-    data["meta"] = {"page": data["meta"].get("page", {}), "source": url}
+    data["meta"] = {"documents": data["meta"], "source": url}
     hits: List[str] = []
     for name in COLLECTIONS:
         scan(data[name], name, hits)
@@ -144,7 +146,10 @@ def selftest() -> int:
         if red_records.exists():
             failures.append("a stopped export still wrote files")
         for label, text in (("email", "mail a@b.co"), ("private key", "-----BEGIN RSA PRIVATE KEY-----"),
-                            ("address", "ship to 12 Elm Street"), ("password", "password: hunter22")):
+                            ("address", "ship to 12 Elm Street"), ("password", "password: hunter22"),
+                            (".env line", "TCG_TRACKING_KEY=" + "a1" * 8),
+                            ("upper-case address", "123 N MAIN ST APT 4"),
+                            ("city line", "Austin, TX 78701"), ("phone", "+1-512-555-0142")):
             if export(fixture(tmp_path / label.replace(" ", "-"), text), tmp_path / "x", "u") != 1:
                 failures.append(f"a fake {label} did not stop the export")
 

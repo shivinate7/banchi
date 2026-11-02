@@ -5597,8 +5597,10 @@ COMPONENTS = [
                 "Written only by `scripts/waiting-export.py`, never by hand, so any account "
                 "can read the page's questions and answers from the repo.",
         "governed_by": ["D-waiting-page-export"],
-        "note": "No per-file entries: this component declares no source_suffixes, so the "
-                "orphan rule does not scan it, the same arrangement `fixtures/` uses.",
+        "note": "Only its README until the page writer's first export, after it removes the one closed "
+                "item that restates a concern the owner ruled out of the repo. No per-file "
+                "entries: this component declares no source_suffixes, so the orphan rule does "
+                "not scan it, the same arrangement `fixtures/` uses.",
     },
     {
         "path": ".claude/rules/README.md",
