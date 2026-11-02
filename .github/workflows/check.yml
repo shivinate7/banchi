@@ -323,7 +323,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - uses: shivinate7/claude-settings/actions/all-jobs-passed@1cc47f015bdaf073d8cb0f043a988c28d09aa3e1 # main, 2026-10-29
+      - uses: shivinate7/claude-settings/actions/all-jobs-passed@17492e58853703168d025128a2da315e9936ee90 # main, 2026-11-01
         with:
           needs: ${{ toJSON(needs) }}
 
@@ -382,7 +382,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - uses: shivinate7/claude-settings/actions/stamp@1cc47f015bdaf073d8cb0f043a988c28d09aa3e1 # main, 2026-10-29
+      - uses: shivinate7/claude-settings/actions/stamp@17492e58853703168d025128a2da315e9936ee90 # main, 2026-11-01
         with:
           mode: check
           config: .github/stamp.json
@@ -421,7 +421,7 @@ jobs:
       - name: Install
         run: npm ci --prefix app
 
-      - uses: shivinate7/claude-settings/actions/code-check@1cc47f015bdaf073d8cb0f043a988c28d09aa3e1 # main, 2026-10-29
+      - uses: shivinate7/claude-settings/actions/code-check@17492e58853703168d025128a2da315e9936ee90 # main, 2026-11-01
         with:
           base: ${{ github.event.pull_request.base.sha || github.event.before }}
 
