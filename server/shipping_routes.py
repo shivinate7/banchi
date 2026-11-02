@@ -1,47 +1,66 @@
 """The ONE module in this server that holds a buyer's name and street address.
 
-`server/tcg_export.py` is a separate file because the secret never leaves it. This file is
-separate for the mirror-image reason: it is the only module in this server that ever holds a
+`server/tcg_export.py` is a separate file because the TCGplayer secret never leaves it. This
+file is separate for the mirror-image reason: it is the only module in this server that holds a
 buyer's real name and real street address, and the only one that emits them. An operator
 reading the routes wants ONE file to check when they ask "where does the PII go", and a
 reviewer changing a handler wants to know they are inside that file rather than beside it.
-Everything here reads an export the operator uploaded, routes it into three lanes, and hands
-back an import CSV; nothing here writes a file, opens a socket, reads a key, starts a child,
-or takes the store lock.
+It reads an export the operator uploaded, routes it into three lanes, hands back a Pirate Ship
+import CSV for the parcel lane, and buys TCGTracking labels for the envelope lane. Its
+network calls go through `server/tcgtracking.py`, which alone holds the TCGTracking key and
+host. Its store writes are the label rows in `store/orders.Ledger`'s `labels`.
 
 TWO COSTS, RECORDED RATHER THAN DISCOVERED:
 
   **The batch table lives in this process's memory only.** So two devices do not share a
-  batch — the phone that read the export cannot download the import file from the laptop —
-  and a server restart drops every one of them. `make up` reloads the capture server on any
-  Python edit under `server/`, so an edit during a session is a restart, and the refusal for
-  a batch that is gone says so in those words rather than reading as a bug.
+  batch, and a server restart drops every one of them. `make up` reloads the capture server on
+  any Python edit under `server/`, so an edit during a session is a restart, and the refusal
+  for a batch that is gone says so in those words rather than reading as a bug. A batch holds
+  the rendered parcel `blob`, the `parcels` it was rendered from and the envelope-lane
+  `envelope` shipments, for at most `BATCH_TTL_SECONDS`, and a Forget drops them at once.
+  The blob touches no disk on the way to the browser (`pirateship.render` returns bytes).
 
-  **D61's rule that buyer PII passes through and is NOT persisted is what
-  `pirateship.render` returning BYTES rather than a path exists to make possible, and this
-  module must not undo it.** The rendered import lives in this dict for at most
-  `BATCH_TTL_SECONDS`, is handed to the operator's browser, and touches no disk on the way.
-  A cache directory, a temp file, a run-directory artefact or a log line carrying a row
-  would each be the persistence that decision refuses — and each would be one line to add
-  here, which is why the prohibition is written down beside the code rather than only in the
-  entry.
+  **A label row is kept** (D326 lifts D61's rule that buyer PII is not stored, for what
+  TCGTracking returns): the whole answer, the label PDF, the insurance switch and the last scan.
+  The demo-mirror scrub drops every row (`scripts/demo-mirror.py`). The batch itself is still
+  never written anywhere.
 
-BUILT 2026-09-05 — `POST /shipping/batches/<batch>/stamps` (T2b). It fills Pirate Ship's
-three Rubber Stamp columns from the order ledger, so the label in the operator's hand IS the
-pick instruction. Both of the reasons this header gave for there being no code here are
-spent: the `store.orders.OrderRecord -> pipeline.orders.Order` adapter the order branch also
-needed is `server/capture_server.py:_engine_order`, whose own docstring calls itself THE ONLY
-ADAPTER, so the two-branches-one-file collision D69 warned of cannot happen any more; and
-D63's maps stopped being empty on 2026-09-02, when twenty real orders with real SKUs were
-fetched into the owner's ledger, so the control has something to answer.
+THE LABEL ROUTES (D326, T4 and T5). Every shape below is the contract the screen reads.
 
-  **THIS MODULE STILL HOLDS NO STORE AND COMPOSES NO LABEL, and both halves are the seam.**
-  `do_shipping_stamps` takes a `locate` callable and hands it ORDER NUMBERS — which it
-  already has, and which are not a buyer's anything — and gets back strings. It never sees a
-  `Snapshot`, an `Inventory` or a `Ledger`, so the file an operator reads to answer "where
-  does the PII go" did not grow a second subject. The strings come from
-  `pipeline/join.py:Position` by way of `_Places`, which is the one label formula in this
-  repo; the closing note below says why a second one here would be a defect.
+  POST /shipping/batches/BATCH/labels
+    {"preview": true}
+        -> 200 {"count": int, "envelope_size": "10", "fee_note": str,
+                "orders": [{"order", "eligible": bool, "reason": str, "insured": false}]}
+        Free: no request to TCGTracking, no store write. `count` is the eligible orders.
+        An order held back (parcel lane, unjudged) says why in `reason`.
+    {"confirm": true, "orders": [order, ...], "insured": [order, ...]}   (`insured` optional)
+        -> 200 {"made": [{"order", "tracking_number", "insured"}],
+                "existing": [{"order"}], "refused": [{"order", "code"}], "partial": bool}
+        Spends. One create per order, one at a time. It stops at the first 401, 400 or 429:
+        that order is `refused` with its code, `partial` is true when any label was made, and
+        the orders after it are untouched. A replay lands in `existing`.
+    400 `labels_confirm_missing`: no `confirm: true`, so nothing is bought.
+    400 `labels_order_ineligible`: a confirmed order is not eligible in this batch. The whole
+        press is refused before any create, and `error.data.ineligible` lists each order and why.
+    A missing key, a missing shipper number or a refused host answers its `tracking_` code as a
+        whole-request error, with no request sent and no store write.
+
+  GET /shipping/labels
+    -> 200 {"labels": [{"order", "tracking_number", "insured": bool,
+                        "scan": null | {"status": str | null, "at": str}}]}
+        Read from the store. It carries no PDF bytes.
+
+  GET /shipping/labels/ORDER/pdf
+    -> 200 the stored label bytes as application/pdf, with no request to TCGTracking;
+       404 `label_not_found` when the order has no label row.
+
+  POST /shipping/labels/scans   body {}
+    -> 200 {"checked": int, "found": int, "not_found": [order, ...]}
+        One lookup per label row, stored on the row. A 404 from TCGTracking is that row's
+        status (`tracking_not_found`) and never a failed press. A missing key answers its code.
+
+THE ELIGIBLE ORDERS are the batch's envelope-lane orders. A parcel-lane order is labelled in
+Pirate Ship. An unjudged order is held back with its reason and is never defaulted into a lane.
 """
 
 from __future__ import annotations

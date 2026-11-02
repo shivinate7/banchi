@@ -5955,41 +5955,41 @@ COMPONENTS = [
             "shipping_routes.py": {
                 "does": "the shipping seam (D69's second route): POST /shipping/batches reads "
                         "TCGplayer's Orders -> Export Shipping CSV into D61's three lanes and "
-                        "renders a Pirate Ship import file, GET .../file?name= hands those "
-                        "bytes to the browser, and DELETE .../<batch> drops the batch now "
-                        "rather than in half an hour. THE ONLY MODULE IN THIS SERVER THAT EVER "
+                        "renders a Pirate Ship import file for the parcel lane, GET .../file?name= "
+                        "hands those bytes to the browser, and DELETE .../<batch> drops the batch "
+                        "now rather than in half an hour. THE ONLY MODULE IN THIS SERVER THAT "
                         "HOLDS A BUYER'S REAL NAME AND STREET ADDRESS, AND THE ONLY ONE THAT "
                         "EMITS THEM — its own file for the mirror image of tcg_export.py's "
                         "reason, so 'where does the PII go' has one file to check. The batch "
-                        "table is an OrderedDict in this process's memory with a "
-                        "half-hour TTL and a four-batch cap; it touches no disk, which is what "
-                        "D61's pass-through-and-do-not-persist rule requires and what "
-                        "pipeline/pirateship.py returning bytes rather than a path exists to "
-                        "make possible. The batch id is 128 random bits because the file route "
-                        "is a GET and therefore not behind the origin gate. Two devices do not "
-                        "share a batch and a server restart drops every one — recorded rather "
-                        "than discovered, because make up reloads on any Python edit here. "
-                        "Nothing in it writes a file, opens a socket, reads a key, starts a "
-                        "child or takes the store lock. POST .../stamps is BUILT as of "
-                        "2026-09-05 — `do_shipping_stamps`, a client function, and a control "
-                        "on #/shipping, because a route is not a feature. Its blocker was an "
-                        "empty order ledger and the 2026-09-03 pulls cleared it. The wire "
-                        "already carried `stamp` per row and `stamps` per batch as nulls, so "
-                        "it changed no type and no component, exactly as predicted. MEASURED "
-                        "on the 20 real orders: 12 fit the three label corners and 8 do not, "
-                        "so a stamp register that stops per box is the reopening condition.",
+                        "table is an OrderedDict in this process's memory with a half-hour TTL "
+                        "and a four-batch cap; the batch holds the parcel blob, the parcels and "
+                        "the envelope-lane shipments, and touches no disk. The batch id is 128 "
+                        "random bits because the file route is a GET and therefore not behind "
+                        "the origin gate. Two devices do not share a batch and a server restart "
+                        "drops every one. POST .../stamps fills the three Rubber Stamp corners "
+                        "from the ledger. THE LABEL ROUTES (D326, T4 and T5): POST "
+                        ".../<batch>/labels previews for free and, on a confirm, buys one "
+                        "TCGTracking label per envelope-lane order through tcgtracking.py, "
+                        "claiming each order in the store before its create so a double press "
+                        "or a reload buys once; GET /shipping/labels lists the label rows; "
+                        "GET /shipping/labels/<order>/pdf serves the stored label; POST "
+                        "/shipping/labels/scans stores each label's scan status. It opens the "
+                        "store for the label rows only, never across a network call.",
                 # D61 is the lanes, the abstention, the weight and the PII rule; D63 is the
                 # ledger the stamps route reads; D69 is why the lane got a surface of its own
                 # rather than a badge on the order screen; D69 is the route. D58 is the stored
                 # index the stamps route speaks — its labels are `join.Position`'s, joined with
                 # " / " and never " · ", which would make a card boundary read as a section one.
-                "governed_by": ["D58", "D61", "D63", "D69"],
+                # D326 is the label routes and lifts D61's no-store rule for TCGTracking's answers;
+                # D33 is the money gate on a confirm; D88 is one Store.write per change.
+                "governed_by": ["D33", "D58", "D61", "D63", "D69", "D88", "D326"],
                 "tested_by": ["T7"],
                 "note": "T7 reaches it because that test imports the `server` package, and "
-                        "every refusal path is exercisable with no network. WHAT T7 CANNOT "
-                        "PROVE is that Pirate Ship's importer accepts the file this renders — "
-                        "that is on the far side of a seam no committed fixture can hold, and "
-                        "it is one upload by the owner.",
+                        "every refusal path is exercisable with no network; the label routes run "
+                        "against a loopback fake of TCGTracking (harness/tests/t7/labels.py). "
+                        "WHAT T7 CANNOT PROVE is that Pirate Ship's importer accepts the file "
+                        "this renders, or that the live TCGTracking answers as the fake does — "
+                        "both are on the far side of a seam no committed fixture can hold.",
             },
             "slabs_routes.py": {
                 "does": "the My Slabs routes: POST /slabs adds a slab by cert (Card Ladder reads "
