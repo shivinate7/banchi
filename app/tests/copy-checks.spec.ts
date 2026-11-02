@@ -383,6 +383,9 @@ function worklistSku(sku: string, name: string) {
       { box: 7, index: 3, label: 'Box 7, Section 1, Card 3' },
     ],
     listing: null,
+    /* THE SERVER NAMES A GROUP ON EVERY NEW COPY (`worklist.new_copy_groups`); a copy that arrives with none files under Needs You and
+       waits for a tick, so a stub without one never draws `Send all`. */
+    group: 'at_rule',
     in: [{ run: RUN, add_to_quantity: 3 }],
     claimed_add: 3,
     over_cap: false,
