@@ -8,8 +8,8 @@ the order `CHECK_ORDER` runs them.
 Protects: Every live listing reaches the pricing worklist with its asking price, its last sale
 and its suggestion; the market on the day a listing went live comes from the price archive; a
 kept suggestion rides a send as a price-only row, posted as "suggested", even with no run named;
-the server rebuilds each kept suggestion and refuses a past-cap one, or one whose price it does
-not confirm; the product history lists the SKU's asking-price postings, oldest first.
+the server rebuilds each kept suggestion and refuses a past-cap one unless the send marks that row
+ticked, or one whose price it does not confirm; the product history lists the SKU's asking-price postings, oldest first.
 Governs: D100, D107 (reopened for suggestions), D227, D243, D273
 
 THE WIRE THIS GROUP PINS (the one-list-wire lane's brief names the behaviour, not the names):
@@ -27,7 +27,8 @@ THE WIRE THIS GROUP PINS (the one-list-wire lane's brief names the behaviour, no
   - A `prices` row of a send may carry `"source": "suggested"`. Such a row posts with source
     "suggested". A row without it posts as "emit-price", as before.
   - The server rebuilds every named suggestion with the worklist's own code. A rebuilt suggestion
-    past the cap refuses `suggestion_past_cap`. A named price the server does not rebuild to
+    past the cap refuses `suggestion_past_cap`, unless the send marks that row `"ticked": true` (a boolean on the
+    row; a bigger move shows apart and needs a tick). A named price the server does not rebuild to
     the same price refuses `suggestion_changed`.
   - `do_product_history(sku)["asking_postings"]`: every posting for the SKU, oldest first.
   - A `prices` list names each SKU once. A repeated SKU refuses `prices_invalid` at the route
@@ -487,6 +488,19 @@ def check_send_suggestion_beside_typed_price(checks: Checks) -> None:
                 )
 
 
+def _past_cap_world(checks: Checks, portal) -> None:
+    """Dunsparce live at 3.00, unsold 60 days, with a market of 2.06. The engine's own suggestion is 2.06: 31% from the live
+    price, past the 25% cap. The shared step for every past-the-cap case."""
+    _one_copy_live(checks, portal, prices={DUNSPARCE_SKU: "3.00"})
+    _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
+    _market_reading(DUNSPARCE_SKU, "2.06", "2.40")
+
+
+def _past_cap_row(**fields) -> dict:
+    """The one kept past-cap suggestion `_past_cap_world` rebuilds. `fields` adds to the row, such as `ticked`."""
+    return {"sku": DUNSPARCE_SKU, "price": "2.06", "was": "3.00", "source": "suggested", **fields}
+
+
 def check_send_refuses_suggestion_past_cap(checks: Checks) -> None:
     """The engine's own suggestion for Dunsparce is 2.06 (unsold 60 days), and TCGplayer now shows
     3.00. That is 31% from the live price, past the 25% cap. The client names the same 2.06, so the
@@ -498,18 +512,92 @@ def check_send_refuses_suggestion_past_cap(checks: Checks) -> None:
     with run_folder() as run, isolated_home(run), send_portal() as portal:
         _seed_sync()
         with _case(checks, "send: suggestion past cap"):
-            _one_copy_live(checks, portal, prices={DUNSPARCE_SKU: "3.00"})
-            _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
-            _market_reading(DUNSPARCE_SKU, "2.06", "2.40")
-            outcome = _outcome(lambda: send_routes.do_send({
-                "runs": [],
-                "confirm": True,
-                "prices": [{"sku": DUNSPARCE_SKU, "price": "2.06", "was": "3.00", "source": "suggested"}],
-            }))
+            _past_cap_world(checks, portal)
+            outcome = _outcome(lambda: send_routes.do_send({"runs": [], "confirm": True, "prices": [_past_cap_row()]}))
             checks.equal(outcome, ("refused", "suggestion_past_cap"),
                          "a suggestion past the cap is refused as suggestion_past_cap")
             checks.equal(_rows(portal), {}, "and TCGplayer receives no row")
             checks.equal(_postings(DUNSPARCE_SKU), [], "and no posting is written")
+
+
+def check_send_past_cap_needs_a_tick(checks: Checks) -> None:
+    """A bigger move shows apart and needs a tick (`docs/specs/pricing-suggest.md`, the cap row). The server accepts a
+    past-cap suggestion only when the send marks THAT row `"ticked": true`; the field is a boolean on the row. Three presses,
+    each its own case, on the world `check_send_refuses_suggestion_past_cap` builds:
+
+      Ticked     `ticked: true`. The 2.06 goes to TCGplayer as a price-only row, posted "suggested", replacing 3.00.
+      Not ticked `ticked: false`, or no `ticked` at all, or a truthy value that is not a boolean: refused
+                 `suggestion_past_cap`. No row reaches TCGplayer and no posting is written.
+      One tick   two past-cap rows, one ticked: the tick frees its own row alone. The refusal names the other row only.
+    """
+    checks.note("")
+    checks.note("SEND, PAST THE CAP, TICKED — a past-cap suggestion rides only when its own row is ticked")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send: ticked past-cap suggestion"):
+            _past_cap_world(checks, portal)
+            outcome = _outcome(lambda: send_routes.do_send({"runs": [], "confirm": True, "prices": [_past_cap_row(ticked=True)]}))
+            checks.equal(
+                outcome[0] if outcome[0] == "refused" else "answered",
+                "answered",
+                f"a ticked past-cap suggestion is answered, not refused (got {outcome[1] if outcome[0] == 'refused' else ''})",
+            )
+            if outcome[0] == "answered":
+                checks.equal(_rows(portal), {DUNSPARCE_SKU: ("0", "2.06")},
+                             "it goes to TCGplayer as a price-only row: Add to Quantity 0, at its price")
+                checks.equal(
+                    [(p["price"], p["replaced"], p["source"]) for p in _postings(DUNSPARCE_SKU)],
+                    [("2.06", "3.00", "suggested")],
+                    "and posts as \"suggested\", naming the 3.00 it replaced",
+                )
+
+    # `refusals` holds the codes a build may answer with. A tick that is not a boolean may be refused as a malformed price
+    # (`prices_invalid`) rather than as past the cap; it may never send.
+    for label, fields, refusals in (
+        ("ticked false", {"ticked": False}, ("suggestion_past_cap",)),
+        ("ticked absent", {}, ("suggestion_past_cap",)),
+        ("ticked is the text \"true\"", {"ticked": "true"}, ("suggestion_past_cap", "prices_invalid")),
+    ):
+        with run_folder() as run, isolated_home(run), send_portal() as portal:
+            _seed_sync()
+            with _case(checks, f"send: past-cap suggestion, {label}"):
+                _past_cap_world(checks, portal)
+                outcome = _outcome(lambda: send_routes.do_send({"runs": [], "confirm": True, "prices": [_past_cap_row(**fields)]}))
+                checks.ok(
+                    outcome[0] == "refused" and outcome[1] in refusals,
+                    f"{label}: refused as {' or '.join(refusals)}",
+                    f"answered: {outcome}",
+                )
+                checks.equal(_rows(portal), {}, f"{label}: TCGplayer receives no row")
+                checks.equal(_postings(DUNSPARCE_SKU), [], f"{label}: no posting is written")
+
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send: two past-cap suggestions, one ticked"):
+            _past_cap_world(checks, portal)
+            # The reverse holofoil is live at 4.00 beside it, unsold 60 days, market 2.60: a second suggestion 35% below its price.
+            portal["live"] = _live_export_priced(
+                {ARTICUNO_SKU: 1, DUNSPARCE_SKU: 1, DUNSPARCE_REVERSE_SKU: 1},
+                {ARTICUNO_SKU: "22.03", DUNSPARCE_SKU: "3.00", DUNSPARCE_REVERSE_SKU: "4.00"},
+            )
+            _set_listing(DUNSPARCE_REVERSE_SKU, first_seen_live=_noon(_day(60)))
+            _market_reading(DUNSPARCE_REVERSE_SKU, "2.60", "2.90")
+            try:
+                send_routes.do_send({
+                    "runs": [],
+                    "confirm": True,
+                    "prices": [
+                        _past_cap_row(ticked=True),
+                        {"sku": DUNSPARCE_REVERSE_SKU, "price": "2.60", "was": "4.00", "source": "suggested"},
+                    ],
+                })
+                refused = None
+            except pipeline_routes.PipelineRefusal as caught:
+                refused = (caught.code, [note["sku"] for note in (caught.data or {}).get("refused") or []])
+            checks.equal(refused, ("suggestion_past_cap", [DUNSPARCE_REVERSE_SKU]),
+                         "the unticked row is refused by name and the ticked row is not named")
+            checks.equal(_rows(portal), {}, "and TCGplayer receives no row, ticked or not")
+            checks.equal((_postings(DUNSPARCE_SKU), _postings(DUNSPARCE_REVERSE_SKU)), ([], []), "and no posting is written")
 
 
 def check_send_suggestion_changed(checks: Checks) -> None:
@@ -1109,6 +1197,7 @@ CHECKS = (
     check_send_takes_suggestions_with_no_run,
     check_send_suggestion_beside_typed_price,
     check_send_refuses_suggestion_past_cap,
+    check_send_past_cap_needs_a_tick,
     check_send_suggestion_changed,
     check_send_empty_runs_without_prices_refused,
     check_product_history_asking_postings,
