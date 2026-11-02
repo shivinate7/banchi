@@ -329,6 +329,35 @@ def test_read_refuses_unreadable_kept_rows() -> None:
        "the error names the short row: its file line, its row number or its product id", str(exc))
 
 
+def test_read_names_the_file_line() -> None:
+    for label, total in (("a lone $", "$"), ("a lone comma", ","), ("a negative", "-1.00"),
+                         ("a negative in dollars", "$-2.50"), ("NaN", "NaN")):
+        exc = raised(roster_csv(line(EMBER, total=total)))
+        ok(isinstance(exc, ValueError) and str(exc).startswith("roster line 2:"),
+           f"an amount of {label} is refused at file line 2", repr(exc))
+    # A quoted name that holds a newline makes the first row span file lines 2 and 3.
+    exc = raised(roster_csv(line({**EMBER, "name": "Ember\nWisp"}), line(FOX, total="")))
+    ok(isinstance(exc, ValueError) and str(exc).startswith("roster line 4:"),
+       "the file line is counted across a quoted newline", repr(exc))
+
+
+def test_verb_refuses_an_unreadable_roster() -> None:
+    """The roster is read before the store is opened, so an empty file stands in for the store."""
+    with run_folder() as folder:
+        roster_path = folder / "roster.csv"
+        roster_path.write_text(roster_csv(line(EMBER, total="$")), encoding="utf-8")
+        store_path = folder / "store.sqlite"
+        store_path.write_bytes(b"")
+        said: list = []
+        try:
+            code = cmd_holdingsroster.run(
+                types.SimpleNamespace(csv=str(roster_path), store=str(store_path)), said.append)
+        except Exception as exc:  # noqa: BLE001 - a traceback is a failed case, not the end of the run
+            code = repr(exc)
+    ok(code == 1 and len(said) == 1 and said[0].startswith("roster line 2:"),
+       "the verb says one message that starts with the file line, and returns 1", f"{code} {said}")
+
+
 def test_privacy() -> None:
     rows = [
         line(EMBER, qty=2, total="6.00"), line(FOX, qty=1, total="2.00"),
@@ -572,6 +601,7 @@ def main() -> int:
     print("pipeline/rosterholdings.py:")
     for case in (
         test_read_keeps_tcg_purchases_only, test_read_refuses_unreadable_kept_rows,
+        test_read_names_the_file_line, test_verb_refuses_an_unreadable_roster,
         test_privacy, test_name_fold, test_ambiguous,
         test_unmatched_roster_side, test_unmatched_store_side, test_printing_pick,
         test_sealed_product_prices_from_its_unopened_sku, test_verb_reads_a_store_and_writes_nothing,
