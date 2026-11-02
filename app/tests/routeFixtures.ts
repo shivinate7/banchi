@@ -4,6 +4,7 @@ import { stubStore } from './shell'
 import type {
   CodeEntry,
   CodeLedger,
+  LiveListing,
   MatchState,
   OrderRow,
   OrdersPayload,
@@ -926,7 +927,7 @@ export function pricingRow(
  *  corpus is registered first, because `/\/pricing$/` also matches the worklist's path and the
  *  newest handler wins. `extra` appends that many more listable rows after the two, each with
  *  its own SKU, name and place, for a case that walks a long list. */
-export async function seedPopulatedPricing(page: Page, extra = 0): Promise<void> {
+export async function seedPopulatedPricing(page: Page, extra = 0, live?: LiveListing[] | (() => LiveListing[])): Promise<void> {
   await page.route(/\/pricing$/, (route) =>
     route.fulfill({
       status: 200,
@@ -957,9 +958,46 @@ export async function seedPopulatedPricing(page: Page, extra = 0): Promise<void>
         asked: [],
         threshold: '0.49',
         floor: '0.49',
+        ...(live === undefined ? {} : { live: typeof live === 'function' ? live() : live }),
       }),
     }),
   )
+}
+
+/** One send receipt as `server/send_routes.py:_summary` shapes it. */
+export function sendSummary(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    stamp: '20260924-120000',
+    kind: 'send',
+    state: 'waiting',
+    at: '2026-09-24T12:00:00+00:00',
+    copies: 3,
+    prices: 0,
+    price_check: null,
+    rows: 2,
+    published_at: '2026-09-24T12:00:05+00:00',
+    check_after: '2026-09-24T12:15:05+00:00',
+    checked_at: null,
+    check: null,
+    trimmed: [],
+    trimmed_copies: 0,
+    accepted: 2,
+    turned_away: 0,
+    failure: null,
+    unknown: null,
+    held: false,
+    takeable: 0,
+    take_back_after: null,
+    files: ['import.csv'],
+    taken_back_at: null,
+    warning: null,
+    prices_left: [],
+    moves: [],
+    ...over,
+    /* THE SERVER SAYS `staged` WHENEVER `unknown.staged` DOES (`_maybe_staged`), and also for a
+       press that died mid-push with no `unknown` (round 6, S2). A case names it only for that. */
+    staged: over.staged ?? Boolean((over.unknown as { staged?: boolean } | null | undefined)?.staged),
+  }
 }
 
 /* ------------------------------------------------------------------------- #/slabs */

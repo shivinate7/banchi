@@ -16,7 +16,7 @@ import type {
   TrendsPayload,
 } from '../src/types'
 import { setViewport } from './phoneSwitch'
-import { payloadOf, productHistory } from './routeFixtures'
+import { payloadOf, productHistory, sendSummary } from './routeFixtures'
 import { HEAD_CENTER_PX, headOffsets, valueMeasures, VALUE_CENTER_PX, KEPT_LEFT_PX, KEPT_RIGHT_ZERO } from './shell'
 
 /* THE PRICING SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
@@ -81,42 +81,6 @@ function pressAnswer(entry: OwedRow) {
   return {
     take_off: { state: 'on_its_way', sku: entry.sku, excess: entry.excess, taken_off: entry.excess, stamp: null, failure: null, press: false },
     send: { check_after: null },
-  }
-}
-
-/** One send receipt as `server/send_routes.py:_summary` shapes it. */
-function sendSummary(over: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    stamp: '20260924-120000',
-    kind: 'send',
-    state: 'waiting',
-    at: '2026-09-24T12:00:00+00:00',
-    copies: 3,
-    prices: 0,
-    price_check: null,
-    rows: 2,
-    published_at: '2026-09-24T12:00:05+00:00',
-    check_after: '2026-09-24T12:15:05+00:00',
-    checked_at: null,
-    check: null,
-    trimmed: [],
-    trimmed_copies: 0,
-    accepted: 2,
-    turned_away: 0,
-    failure: null,
-    unknown: null,
-    held: false,
-    takeable: 0,
-    take_back_after: null,
-    files: ['import.csv'],
-    taken_back_at: null,
-    warning: null,
-    prices_left: [],
-    moves: [],
-    ...over,
-    /* THE SERVER SAYS `staged` WHENEVER `unknown.staged` DOES (`_maybe_staged`), and also for a
-       press that died mid-push with no `unknown` (round 6, S2). A case names it only for that. */
-    staged: over.staged ?? Boolean((over.unknown as { staged?: boolean } | null | undefined)?.staged),
   }
 }
 

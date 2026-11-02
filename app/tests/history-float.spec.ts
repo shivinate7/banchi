@@ -1,4 +1,4 @@
-// Protects: The floating price-history card opens by focus or by its door, sits above its row by default, covers neither the row nor the next price field, keeps focus where its mode says, holds its size while history loads, and draws the product chart with the owner's asking step line and the suggestion dot. Its name carries the full card name as a title. On `#/pricing` it opens above the focused row, follows that row when the list above changes, and stays open while focus is in the list. It reads a row's history and prices once, only for the row where focus rests, and tries a failed sales read again on the next open. Esc closes it and leaves focus in the price field.
+// Protects: The floating price-history card opens by focus or by its door, sits above its row by default, covers neither the row nor the next price field, keeps focus where its mode says, holds its size while history loads, and draws the product chart with the owner's asking step line and the suggestion dot. Its name carries the full card name as a title. On `#/pricing` it opens above the focused row, follows that row when the list above changes, and stays open while focus is in the list. It reads a row's history and prices once, only for the row where focus rests, and tries a failed sales read again on the next open. A send ends its kept reads, so the next open reads again, and a read begun before the send is not served after it. With no room above a row it opens below, inside the list, ending 8px left of the price column and clear of the sidebar or rail, and opened above it never overlaps the Send bar. Its title names the row whose price field has focus. Esc closes it and leaves focus in the price field.
 // Governs: D313, D278, D227
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
@@ -7,8 +7,8 @@ import { productHistory } from './routeFixtures'
 import { markNow, readShifts, sumOf, watchShifts } from './layoutShift'
 import { afterPaint, settleMotion } from './motionSettled'
 import { scanMoneyFace } from './moneyFace'
-import { seedPopulatedPricing, order, line, payloadOf } from './routeFixtures'
-import type { AskingPosting, ProductHistoryPayload } from '../src/types'
+import { seedPopulatedPricing, order, line, payloadOf, sendSummary } from './routeFixtures'
+import type { AskingPosting, LiveListing, ProductHistoryPayload } from '../src/types'
 
 /* THE CONTRACT THIS FILE PINS. `#/gallery` and `app/src/HistoryFloat.tsx` must match it.
  *
@@ -158,6 +158,14 @@ function payloadWithAsking(): ProductHistoryPayload {
     { at: Date.UTC(2026, 7, 3) / 1000, price: '16.50', source: 'suggested', replaced: '14.00' },
   ]
   return { ...productHistory(), asking_postings: asking }
+}
+
+/* The same history once the owner's price has gone out: one more asking posting, inside the chart's range, so the
+ * step line gains a step (a `V` run) the line before it did not have. */
+function payloadAfterSend(): ProductHistoryPayload {
+  const before = payloadWithAsking()
+  const posting: AskingPosting = { at: Date.UTC(2026, 7, 28, 12) / 1000, price: '17.25', source: 'suggested', replaced: '16.50' }
+  return { ...before, asking_postings: [...(before.asking_postings ?? []), posting] }
 }
 
 for (const size of SIZES) {
@@ -482,6 +490,14 @@ async function skuOfRow(page: Page, i: number): Promise<string> {
   return decodeURIComponent(sku!)
 }
 
+/** A live listing whose suggestion starts ticked (Suggested changes). A worklist that carries one draws the Send bar,
+ * which `seedPopulatedPricing` alone does not. */
+const LIVE_SKU = '8609901'
+const liveListing = (over: Partial<LiveListing> = {}): LiveListing => ({
+  sku: LIVE_SKU, name: 'Gardevoir ex', set_name: 'Scarlet and Violet', image_url: null, market: '4.22', low: '4.35',
+  asking: '3.40', last_sold_at: null, group: 'suggested', price: '4.01', source: 'Suggested', reason: 'Market up 18% since listed.', ...over,
+})
+
 for (const size of SIZES) {
   test.describe(`#/pricing at ${size.width} wide`, () => {
     let asked: string[]
@@ -555,6 +571,101 @@ for (const size of SIZES) {
       /* Focus leaves the list for something that is not the card: the search box above it. */
       await page.getByRole('searchbox', { name: 'Search This List' }).focus()
       await expect(card(page)).toHaveCount(0)
+    })
+  })
+}
+
+/* ---- `#/pricing`: WHERE THE CARD SITS AGAINST THE SHELL (mockup `history-float.html`, items 5 and 6; spec 9c) ----
+ *
+ * The gallery rows carry `data-float-price` and `data-float-door`, and the card reads its placement off them. A
+ * pricing row must carry them too (its price column and its history door, or the card has nothing to sit beside)
+ * and the card must keep clear of the one other fixed thing over the list, the sticky Send bar.
+ *
+ * NO ROOM ABOVE: the card opens below the row, inside the list, and ends 8px left of the row's price column. It
+ * never reaches the sidebar (1440) or the rail (1200 and 820). "Price column" is the cell the caption's Price sits
+ * over or the field in it: the card's right edge is at the cell's left less 8px or at the field's left less 8px.
+ *
+ * THE BAR: "room above" ends under the Send bar once it has stuck at the top of the viewport. The card above a row
+ * never overlaps the bar; a row with no room under the bar opens it below (the first case); a row with room under it
+ * opens it above (the second case, which passes today and keeps a fix from always opening below).
+ *
+ * Ten rows and one live listing (11), so the page scrolls far enough to put a row at any height. */
+for (const size of SIZES) {
+  test.describe(`#/pricing card placement at ${size.width} wide`, () => {
+    const GAP_PX = 8
+    const barOf = (page: Page) => page.locator('.pricing-bar')
+    test.beforeEach(async ({ page }) => {
+      await setViewport(page, size)
+      await seedPopulatedPricing(page, 8, () => [liveListing()])
+      await page.route(HISTORY, (route) =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payloadWithAsking()) }),
+      )
+      await page.goto(PRICING)
+      await expect(page.locator('.pricing-row')).toHaveCount(11)
+      await settleMotion(page)
+    })
+
+    /* Row `i` at `top` px from the viewport top, with the Send bar stuck above it. */
+    async function putRowAt(page: Page, i: number, top: number) {
+      await listRow(page, i).evaluate((el, t) => window.scrollBy({ top: el.getBoundingClientRect().top - t, behavior: 'instant' }), top)
+      await settleMotion(page)
+      expect(Math.abs((await boxOf(listRow(page, i))).y - top), `row ${i} sits ${top}px from the top`).toBeLessThanOrEqual(2)
+      expect((await boxOf(barOf(page))).y, 'the Send bar has stuck at the top').toBeLessThanOrEqual(1)
+    }
+
+    /* The card is one height whoever it is for (it holds its size while history loads), so one open measures it. */
+    async function cardHeight(page: Page): Promise<number> {
+      await listPrice(page, 0).focus()
+      await expect(card(page)).toHaveAttribute('data-mode', 'focus')
+      const { height } = await boxOf(card(page))
+      await page.keyboard.press('Escape')
+      await expect(card(page)).toHaveCount(0)
+      await listPrice(page, 0).blur()
+      return height
+    }
+
+    test('with no room above, the card opens below the row, inside the list, and ends 8px left of the price column', async ({ page }) => {
+      await putRowAt(page, 5, 150)
+      await listPrice(page, 5).focus()
+      await expect(card(page)).toHaveAttribute('data-mode', 'focus')
+      await expect(card(page)).toHaveAttribute('data-placement', 'below')
+
+      const c = await boxOf(card(page))
+      const side = await boxOf(page.locator('aside.bn-side'))
+      const list = await boxOf(page.locator('.pricing-list'))
+      expect.soft(meets(c, side), `the card (x ${Math.round(c.x)}) does not cover the sidebar or the rail (to x ${Math.round(side.x + side.width)})`).toBe(false)
+      expect.soft(c.x, 'the card sits inside the list').toBeGreaterThanOrEqual(list.x)
+      const cell = await boxOf(listRow(page, 5).locator('.pricing-price'))
+      const field = await boxOf(listPrice(page, 5))
+      const right = c.x + c.width
+      expect.soft(right, 'the card ends no nearer than 8px to the price field').toBeLessThanOrEqual(field.x - GAP_PX + 1)
+      expect.soft(right, 'the card ends 8px left of the price column, not further').toBeGreaterThanOrEqual(cell.x - GAP_PX - 1)
+    })
+
+    test('a card opened above a row never overlaps the Send bar: with no room under the bar it opens below', async ({ page }) => {
+      const h = await cardHeight(page)
+      /* Room above by the viewport alone (the row is `h` + 16 + 20 from the top), none under the 100px-plus bar. */
+      await putRowAt(page, 5, h + 2 * GAP_PX + 20)
+      await listPrice(page, 5).focus()
+      await expect(card(page)).toHaveAttribute('data-mode', 'focus')
+
+      const c = await boxOf(card(page))
+      const bar = await boxOf(barOf(page))
+      expect(meets(c, bar), `the card (y ${Math.round(c.y)} to ${Math.round(c.y + c.height)}) does not overlap the Send bar (to y ${Math.round(bar.y + bar.height)})`).toBe(false)
+      expect(meets(c, await boxOf(listRow(page, 5))), 'the card does not cover the row').toBe(false)
+      expect(meets(c, await boxOf(listPrice(page, 5))), 'the card does not cover the price field').toBe(false)
+    })
+
+    test('with room above under the Send bar, the card opens above the row and clear of the bar', async ({ page }) => {
+      const h = await cardHeight(page)
+      const bar = await boxOf(barOf(page))
+      /* Stuck, the bar ends at its own height. */
+      await putRowAt(page, 5, bar.height + h + 2 * GAP_PX + 40)
+      await listPrice(page, 5).focus()
+      await expect(card(page)).toHaveAttribute('data-mode', 'focus')
+      await expect(card(page)).toHaveAttribute('data-placement', 'above')
+      const c = await boxOf(card(page))
+      expect(meets(c, await boxOf(barOf(page))), 'the card does not overlap the Send bar').toBe(false)
     })
   })
 }
@@ -662,5 +773,128 @@ test.describe('#/pricing card reads', () => {
     await page.keyboard.press('Escape')
     await expect(card(page)).toHaveCount(0)
     await expect(listPrice(page, 1), 'Esc leaves focus in the price field').toBeFocused()
+  })
+
+  /* THE TITLE NAMES THE ROW WHOSE PRICE FIELD HAS FOCUS. The block's history stub above answers `productHistory()`
+   * for every SKU, so its title reads "Volcanion" over any row: the stub, not the card. This stub answers each SKU
+   * with the name of the row that SKU belongs to, which is what the server does, so a title that names another row
+   * is the card's. While the next row reads, the title is the quiet "Price history" and never the row left behind. */
+  test("the card's title names the row whose price field has focus, and never the row focus left", async ({ page }) => {
+    const names = new Map<string, string>()
+    for (const i of [0, 1, 2]) names.set(await skuOfRow(page, i), (await listRow(page, i).locator('a.pricing-name').innerText()).trim())
+    await page.route(HISTORY, (route) => {
+      const sku = skuOfRead(route.request().url())
+      reads.history.push(sku)
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...productHistory(), sku, name: names.get(sku) }) })
+    })
+    const title = card(page).locator('.hfloat-name')
+
+    await listPrice(page, 0).click()
+    await cardLoaded(page)
+    const [first, second] = [await skuOfRow(page, 0), await skuOfRow(page, 1)]
+    await expect(title, 'row 0 has focus, so the card names row 0').toHaveText(names.get(first)!)
+    await expect(card(page)).toHaveAttribute('aria-label', `Price history for ${names.get(first)}`)
+
+    await page.keyboard.press('ArrowDown')
+    await expect(listPrice(page, 1)).toBeFocused()
+    expect(await title.textContent(), 'row 1 has focus, so the card does not name row 0 while row 1 reads').not.toBe(names.get(first))
+    await cardLoaded(page)
+    await expect(title, 'row 1 has focus, so the card names row 1').toHaveText(names.get(second)!)
+    await expect(card(page)).toHaveAttribute('aria-label', `Price history for ${names.get(second)}`)
+  })
+
+  /* A SEND ENDS EVERY READ BEFORE IT (`server.ts:request`: a write bumps `writeGen`, clears the shared reads, and a read
+   * is kept only when no write came while it ran). The card's own kept reads are no exception: what a card read before
+   * the owner's price went out is the old store, so the next open reads again and draws the new one.
+   *
+   * X is a live listing whose kept suggestion rides the send alone (`runs: []`, a ticked price). Its history answers
+   * step line A until the send lands and step line B after it (B has one more step, so its `d` has a `V` run). The
+   * price read answers one Lowest before the send and another after it. Both stubs answer with what they held WHEN
+   * THE READ ARRIVED, so a read held open across the send still carries the old store. The case reloads the page
+   * over the block's own setup, so the worklist carries X. */
+  test.describe('after a send', () => {
+    const X = LIVE_SKU
+    const listing = liveListing
+    let answer: ProductHistoryPayload
+    let lowest: string
+    let sends: number
+    let hold: Promise<void> | null
+    const rowX = (page: Page) => page.locator('.pricing-row', { has: page.locator(`a.pricing-name[href*="sku=${X}"]`) })
+    const priceX = (page: Page) => rowX(page).getByRole('textbox', { name: /^Price for / })
+    const stepsOf = async (page: Page) => ((await card(page).locator('[data-float="asking"]').getAttribute('d')) ?? '').match(/V/g)?.length ?? 0
+    const lowestOf = (page: Page) => card(page).locator('.hfloat-facts div', { has: page.locator('dt', { hasText: /^Lowest$/ }) }).locator('dd')
+
+    test.beforeEach(async ({ page }) => {
+      answer = payloadWithAsking()
+      lowest = '1.11'
+      sends = 0
+      hold = null
+      await seedPopulatedPricing(page, 8, () => [sends === 0 ? listing() : listing({ asking: '4.01', group: 'at_rule', source: 'Live', reason: '' })])
+      await page.route(HISTORY, async (route) => {
+        const body = JSON.stringify(answer)
+        reads.history.push(skuOfRead(route.request().url()))
+        await hold
+        await route.fulfill({ status: 200, contentType: 'application/json', body })
+      })
+      await page.route(/\/pipeline\/price-facts/, (route) => {
+        reads.facts.push(skuOfRead(route.request().url()))
+        const prices = { market: '1.31', low: lowest, low_with_shipping: null, direct_low: null }
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sku: X, name: null, at: null, through: null, prices, shelf: null, days: [], facts: null }) })
+      })
+      await page.route(/\/pipeline\/send$/, (route) => {
+        sends++
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ send: sendSummary({ copies: 0, prices: 1 }), console: '' }) })
+      })
+      await page.reload()
+      await expect(page.locator('.pricing-row')).toHaveCount(11)
+      await settleMotion(page)
+    })
+
+    /* The screen's own send: X's suggestion starts ticked, the press sends it alone, and the worklist is read again with X still on it. */
+    const sendTheNewPrice = async (page: Page) => {
+      await expect(rowX(page).getByRole('checkbox', { name: /^Send the new price for / })).toBeChecked()
+      await page.getByRole('button', { name: /^Send .* to TCGplayer$/i }).click()
+      await expect.poll(() => sends, 'the send went out').toBe(1)
+      await expect(page.getByText('Market up 18% since listed.'), 'the worklist was read again, and X is on it at the sent price').toHaveCount(0)
+      await expect(rowX(page)).toHaveCount(1)
+    }
+
+    /* THE OPEN AFTER THE SEND: focus comes back to X's price field, the card reads again and draws what the store holds now. */
+    const reopenedAfterSend = async (page: Page) => {
+      await priceX(page).click()
+      await expect(card(page)).toHaveAttribute('data-mode', 'focus')
+      await cardLoaded(page)
+      await afterPaint(page)
+      expect(readsOf(reads.history, X), 'the open after the send read the history again').toBe(2)
+      expect(await stepsOf(page), 'the card draws the line the store holds now (B, one step), not the one read before the send (A, none)').toBe(1)
+    }
+
+    test('the open after a send reads the history and the prices again, and draws what they now say', async ({ page }) => {
+      await priceX(page).click()
+      await answered(page, X)
+      expect(await stepsOf(page), 'before the send the card draws line A').toBe(0)
+      await expect(lowestOf(page)).toHaveText('$1.11')
+
+      await sendTheNewPrice(page)
+      answer = payloadAfterSend()
+      lowest = '2.22'
+      await reopenedAfterSend(page)
+      expect(readsOf(reads.facts, X), 'the open after the send read the prices again').toBe(2)
+      await expect(lowestOf(page), 'the card draws the Lowest the store holds now').toHaveText('$2.22')
+    })
+
+    test('a history read begun before a send and landing after it is not served to the next open', async ({ page }) => {
+      let release!: () => void
+      hold = new Promise<void>((done) => (release = done))
+      await priceX(page).click()
+      await expect.poll(() => readsOf(reads.history, X), 'the first history read is out and held').toBe(1)
+
+      await sendTheNewPrice(page)
+      answer = payloadAfterSend()
+      hold = null
+      release()
+      await afterPaint(page)
+      await reopenedAfterSend(page)
+    })
   })
 })
