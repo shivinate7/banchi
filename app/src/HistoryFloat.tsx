@@ -60,6 +60,25 @@ function pickRange(payload: ProductHistoryPayload): ProductHistoryRange | null {
   return payload.ranges.find((r) => r.range === 'quarter') ?? payload.ranges[0] ?? null
 }
 
+/** How long focus must rest on a row before its card reads (D278: no request per arrow key). Held
+ * ArrowDown repeats about every 30 ms, and a quick tapping walk steps every 100 to 150 ms, so 250 ms
+ * skips both and still starts the read before the owner has looked at the card. */
+const REST_MS = 250
+
+/** One read per sku for the life of the page: a revisit, or a revisit while the read is in flight,
+ * sends nothing. A failed read leaves the cache so the next open tries again. */
+const histories = new Map<string, Promise<ProductHistoryPayload>>()
+const priceReads = new Map<string, Promise<PriceFacts['prices']>>()
+function once<T>(cache: Map<string, Promise<T>>, sku: string, read: (sku: string) => Promise<T>): Promise<T> {
+  let p = cache.get(sku)
+  if (p === undefined) {
+    p = read(sku)
+    cache.set(sku, p)
+    p.catch(() => cache.delete(sku))
+  }
+  return p
+}
+
 type Answer = { readonly sku: string; readonly payload: ProductHistoryPayload | null; readonly failure: Failure | null }
 
 export function HistoryFloat({
@@ -81,24 +100,23 @@ export function HistoryFloat({
   const [place, setPlace] = useState<{ top: number; left: number; side: 'above' | 'below' }>({ top: 0, left: 0, side: 'above' })
 
   // Read only this card's history. `ProductHistory.tsx:useProductHistory` also reads every order,
-  // and the caller already hands this card its fills.
+  // and the caller already hands this card its fills. The reads wait for focus to rest (`REST_MS`)
+  // unless both are already held. A failed price read leaves the prices as dashes; the history
+  // read reports its own failure.
   useEffect(() => {
     let alive = true
-    getProductHistory(sku)
-      .then((payload) => alive && setAnswer({ sku, payload, failure: null }))
-      .catch((error) => alive && setAnswer({ sku, payload: null, failure: describeFailure(error) }))
+    const held = histories.has(sku) && priceReads.has(sku)
+    const timer = window.setTimeout(() => {
+      once(histories, sku, getProductHistory)
+        .then((payload) => alive && setAnswer({ sku, payload, failure: null }))
+        .catch((error) => alive && setAnswer({ sku, payload: null, failure: describeFailure(error) }))
+      once(priceReads, sku, (s) => getPriceFacts(s).then((f) => f.prices))
+        .then((prices) => alive && setFacts({ sku, prices }))
+        .catch(() => alive && setFacts({ sku, prices: null }))
+    }, held ? 0 : REST_MS)
     return () => {
       alive = false
-    }
-  }, [sku])
-  // A failed price read leaves the prices as dashes; the history read above reports its own failure.
-  useEffect(() => {
-    let alive = true
-    getPriceFacts(sku)
-      .then((f) => alive && setFacts({ sku, prices: f.prices }))
-      .catch(() => alive && setFacts({ sku, prices: null }))
-    return () => {
-      alive = false
+      window.clearTimeout(timer)
     }
   }, [sku])
   const mine = answer?.sku === sku ? answer : null
@@ -110,10 +128,22 @@ export function HistoryFloat({
   const prices = read ? facts.prices : null
   const price = (v: string | null | undefined) => (!read ? '—' : v ? <Money value={Number(v)} /> : <span className="hfloat-quiet">not carried</span>)
 
+  const close = () => {
+    onClose()
+    if (mode === 'door') restoreFocus?.focus({ preventScroll: true })
+  }
+  const closeRef = useRef(close)
+  closeRef.current = close
+
   useLayoutEffect(() => {
     const move = () => {
       const card = cardRef.current
       if (card === null) return
+      // The row went away (a sale, a filter): there is nothing to sit beside, so close.
+      if (!anchor.isConnected) {
+        closeRef.current()
+        return
+      }
       const r = anchor.getBoundingClientRect()
       const h = card.offsetHeight
       const w = card.offsetWidth
@@ -147,12 +177,6 @@ export function HistoryFloat({
     if (mode === 'door') cardRef.current?.focus({ preventScroll: true })
   }, [mode])
 
-  const close = () => {
-    onClose()
-    if (mode === 'door') restoreFocus?.focus({ preventScroll: true })
-  }
-  const closeRef = useRef(close)
-  closeRef.current = close
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeRef.current()

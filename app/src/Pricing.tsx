@@ -1871,9 +1871,11 @@ export function Pricing() {
     if (float === null || ordersAsked.current) return
     ordersAsked.current = true
     // A failed read leaves the chart without sale marks; the card draws the rest.
-    getOrders().then((payload) => setOrders(payload.orders)).catch(() => {})
+    // It also clears the ask, so the next open tries again.
+    getOrders().then((payload) => setOrders(payload.orders)).catch(() => { ordersAsked.current = false })
   }, [float])
-  const floatFills = useMemo(() => (float === null ? [] : fillsFor(float.sku, orders)), [float, orders])
+  const floatSku = float?.sku
+  const floatFills = useMemo(() => (floatSku === undefined ? [] : fillsFor(floatSku, orders)), [floatSku, orders])
   const floatRow = float === null ? undefined : rows.find((one) => one.sku === float.sku)
   const floatSuggestion = floatRow === undefined ? '' : suggestionFor(floatRow)
 
@@ -2483,7 +2485,8 @@ export function Pricing() {
         const standing = answerFor(sku)
         event.currentTarget.value = typeof standing === 'string' ? standing : source.proposes ? suggestionFor(sku) : ''
         touched.current.delete(sku.sku)
-        event.currentTarget.blur()
+        // Esc closes the card and focus stays in the field (spec 9c).
+        setFloat(null)
         return
       }
       if (key === 'ArrowDown' || key === 'ArrowUp') {
