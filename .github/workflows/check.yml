@@ -323,7 +323,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - uses: shivinate7/claude-settings/actions/all-jobs-passed@1cc47f015bdaf073d8cb0f043a988c28d09aa3e1 # main, 2026-10-29
+      - uses: shivinate7/claude-settings/actions/all-jobs-passed@17492e58853703168d025128a2da315e9936ee90 # main, 2026-11-01
         with:
           needs: ${{ toJSON(needs) }}
 
@@ -382,7 +382,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - uses: shivinate7/claude-settings/actions/stamp@1cc47f015bdaf073d8cb0f043a988c28d09aa3e1 # main, 2026-10-29
+      - uses: shivinate7/claude-settings/actions/stamp@17492e58853703168d025128a2da315e9936ee90 # main, 2026-11-01
         with:
           mode: check
           config: .github/stamp.json
@@ -421,7 +421,7 @@ jobs:
       - name: Install
         run: npm ci --prefix app
 
-      - uses: shivinate7/claude-settings/actions/code-check@1cc47f015bdaf073d8cb0f043a988c28d09aa3e1 # main, 2026-10-29
+      - uses: shivinate7/claude-settings/actions/code-check@17492e58853703168d025128a2da315e9936ee90 # main, 2026-11-01
         with:
           base: ${{ github.event.pull_request.base.sha || github.event.before }}
 
@@ -571,7 +571,7 @@ jobs:
     # skip was tried and zizmor refuses it (`unpinned-images` cannot read an image inside
     # `fromJSON`), so the pin stays literal and a skipped job pays the pull and runs no step.
     container:
-      image: mcr.microsoft.com/playwright:v1.58.0-noble@sha256:35c7d48b4ccaf3aca5018f5f1bf7f50c7da7d61d176c530741f4f2e9ca336c34
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
       options: --ipc=host
     strategy:
       fail-fast: false
