@@ -1277,6 +1277,8 @@ def _named_prices(payload: dict) -> List[dict]:
                 "price": tcgcsv.format_price(price),
                 "was": None if was is None else tcgcsv.format_price(was),
                 **({"source": postings.SUGGESTED} if source == postings.SUGGESTED else {}),
+                # The tick on a past-cap suggestion: the boolean `true` only, never a truthy stand-in.
+                **({"ticked": True} if row.get("ticked") is True else {}),
             }
         )
     return out
@@ -1439,6 +1441,7 @@ def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> N
       1. A rebuilt suggestion whose named price moves the live price past the owner's `policy.limit`
          (the one `pipeline/suggest.py` sorts by) refuses `suggestion_past_cap`, naming each card.
          It is measured on the price in the FRESH live read, never on the `was` the screen drew.
+         A row the send marks `ticked` (spec: a bigger move needs a tick) is not refused.
       2. A named price that is not the rebuilt price, or has no rebuilt suggestion at all, refuses
          `suggestion_changed`. A SKU with no suggestion has nothing to be past a cap of.
     """
@@ -1465,7 +1468,10 @@ def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> N
         row["sku"]: row["price"] for row in pipeline_routes._live_wire(drawn, book) if row["source"] == suggest.SOURCE
     }
     names = {tcgcsv.sku_cell(row): row.get(tcgcsv.NAME_COLUMN) for row in fresh.rows}
-    over = sendguard.suggestions_past_cap({s: v for s, v in kept.items() if s in rebuilt}, prices, limit, names)
+    ticked = {row["sku"] for row in payload["prices"] if row.get("ticked") is True}
+    over = sendguard.suggestions_past_cap(
+        {s: v for s, v in kept.items() if s in rebuilt and s not in ticked}, prices, limit, names
+    )
     if over:
         parts = [
             f"{note.name or note.sku}: ${note.price} is more than {int(limit * 100)}% from the ${note.live} TCGplayer shows"

@@ -47,7 +47,7 @@ BOTH ARE ORDINARY D88 TABLES: bound into `Snapshot` like `readings`, flushed ins
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, NamedTuple, Optional, Tuple
+from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 from store.rows import Rows, TableSpec
 
@@ -298,6 +298,13 @@ class PriceArchive:
         rows = self.summary.where(sku=str(sku))
         points = [Point(*p) for row in rows if row.range == range_ for p in row.points]
         return bool(rows), points
+
+    def summaries(self, skus: Sequence[str], ranges: Sequence[str]) -> Dict[str, List[Summary]]:
+        """SKU -> its summary rows of `ranges`, for many SKUs in one keyed read (`Rows.load`)
+        rather than one `where` per SKU. A SKU with none maps to an empty list."""
+        keys = {sku: [_summary_key(str(sku), r) for r in ranges] for sku in skus}
+        self.summary.load(key for wanted in keys.values() for key in wanted)
+        return {sku: [row for row in map(self.summary.get, wanted) if row is not None] for sku, wanted in keys.items()}
 
     # -------------------------------------------------------------------------- writing
 
