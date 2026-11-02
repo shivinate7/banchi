@@ -144,7 +144,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # SIX SHARDS IN PARALLEL, MEASURED AT 140 TO 297s EACH (`timeout-minutes` IS 9 MIN, THE SLOWEST MEASURED SHARD 297s), AND ONE JOB NAMED `all-jobs-passed` THAT ANSWERS FOR THEM (owner's word,
+  # SIX SHARDS IN PARALLEL, MEASURED PER SHARD (D136 HOLDS THE FIGURES AND THE `timeout-minutes` CAP), AND ONE JOB NAMED `all-jobs-passed` THAT ANSWERS FOR THEM (owner's word,
   # 2026-09-28; D161, amended). The serial `make ci-check` took 600s on run 36509895299. The
   # shards' recipes together are exactly `ci-check`'s, and `make docs-audit`'s `check registry`
   # row fails when they are not. Each shard installs the same way and keeps D161's order, product
@@ -755,7 +755,7 @@ jobs:
     needs: [ci-check, ci-static, revert-guard, records, code-check, zizmor, already-passed, browser-scope, design-check, design-check-passed, all-jobs-passed, nightly-alarm]
     if: ${{ !cancelled() && github.event_name == 'pull_request' && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 2   # provisional: a comment post takes seconds; 60 would pass the merge deadline of 45
     permissions:
       contents: read
       pull-requests: write
