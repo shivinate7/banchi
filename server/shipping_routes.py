@@ -927,7 +927,8 @@ def _make_one(order: str, shipment: shipping.Shipment, insured: bool, stop: thre
 
 
 def _confirm(batch: str, held: _Batch, payload: dict) -> Dict[str, Any]:
-    orders = _orders_named(payload.get("orders"), "orders")
+    _write_held()
+    orders =_orders_named(payload.get("orders"), "orders")
     insured = set(_orders_named(payload.get("insured") or [], "insured"))
     if not orders:
         raise ShippingRefusal(HTTPStatus.BAD_REQUEST, "labels_orders_invalid", "Orders names no order.")
@@ -956,7 +957,6 @@ def _confirm(batch: str, held: _Batch, payload: dict) -> Dict[str, Any]:
     existing: List[dict] = []
     refused: List[dict] = []
     left_over: List[dict] = []
-    _write_held()
     stop = threading.Event()
     with _PRESS_LOCK:
         _PRESSES.setdefault(batch, []).append(stop)
