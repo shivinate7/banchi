@@ -378,6 +378,21 @@ def _guarded(check):
     return run
 
 
+@contextlib.contextmanager
+def _sealed(opened):
+    """Every network entry point replaced by one that fails the case and notes the call in `opened`."""
+    from pipeline import net
+
+    def forbidden(*args, **kwargs):
+        opened.append(args)
+        raise AssertionError("a network call was made")
+
+    with mock.patch.object(net, "open", forbidden), \
+            mock.patch.object(urllib.request, "urlopen", forbidden), \
+            mock.patch.object(socket, "create_connection", forbidden):
+        yield
+
+
 def _client(checks):
     """`server.tcgtracking`, or a FAIL line and None while the module does not exist."""
     try:
@@ -961,19 +976,12 @@ def check_labels_default_host(checks: Checks) -> None:
     """The default TCGTracking host is refused under `BANCHI_HARNESS` or `CI`, and a plain
     http host that is not loopback is refused always. No socket is opened for either: the
     network entry points are replaced by ones that fail the case."""
-    from pipeline import net
-
     checks.note("")
     checks.note("TCGTRACKING HOST GUARD: the default host under BANCHI_HARNESS or CI, and non-loopback http (D326)")
     tt = _client(checks)
     if tt is None:
         return
     opened = []
-
-    def forbidden(*args, **kwargs):
-        opened.append(args)
-        raise AssertionError("a network call was made")
-
     base = {"TCG_TRACKING_KEY": SENTINEL, "TCG_TRACKING_SHIPPER_NUMBER": SHIPPER}
     cases = (
         ({"BANCHI_HARNESS": "1"}, None, "the default host under BANCHI_HARNESS"),
@@ -981,10 +989,7 @@ def check_labels_default_host(checks: Checks) -> None:
         ({}, "http://tcgtracking.invalid", "a non-loopback http host, outside the harness and CI"),
     )
     for env, url, label in cases:
-        with mock.patch.dict(os.environ, {**base, **env}), \
-                mock.patch.object(net, "open", forbidden), \
-                mock.patch.object(urllib.request, "urlopen", forbidden), \
-                mock.patch.object(socket, "create_connection", forbidden):
+        with mock.patch.dict(os.environ, {**base, **env}), _sealed(opened):
             for name in ("BANCHI_HARNESS", "CI", "BANCHI_TCGTRACKING_URL"):
                 if name not in env:
                     os.environ.pop(name, None)
