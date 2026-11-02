@@ -29,13 +29,14 @@ THE LABEL ROUTES (D326, T4 and T5). Every shape below is the contract the screen
 
   POST /shipping/batches/BATCH/labels
     {"preview": true}
-        -> 200 {"count": int, "envelope_size": "10", "fee_note": str,
+        -> 200 {"count": int, "envelope_size": "10", "envelope": "#10 envelope", "fee_note": str,
                 "key_present": bool, "shipper_present": bool,
                 "orders": [{"order", "eligible": bool, "reason": str, "insured": false}]}
         Free: no request to TCGTracking, no store write. `count` is the eligible orders.
+        `envelope_size` is the API's code for the size and `envelope` is its readable label.
         `key_present` and `shipper_present` say whether the settings file holds each, never its
         value. `reason` is a fixed code. An eligible order is `envelope`. A held-back order is
-        `parcel` (labelled in Pirate Ship), `needs_a_look` (unjudged), `no_full_street` (the
+        `parcel` (labeled in Pirate Ship), `needs_a_look` (unjudged), `no_full_street` (the
         export row lacks a street, city, state or postal code) or `already_labelled` (it has a
         label row; the confirm still answers it as `existing`).
     {"confirm": true, "orders": [order, ...], "insured": [order, ...]}   (`insured` optional)
@@ -47,7 +48,7 @@ THE LABEL ROUTES (D326, T4 and T5). Every shape below is the contract the screen
     400 `labels_confirm_missing`: no `confirm: true`, so nothing is bought.
     400 `labels_order_ineligible`: a confirmed order is parcel, unjudged, short of a full street
         or not in this batch (`not_in_batch`). The whole press is refused before any create, and
-        `error.data.ineligible` lists each order with its reason code. An already labelled order
+        `error.data.ineligible` lists each order with its reason code. An already labeled order
         is not ineligible: it is answered as `existing`.
     A missing key, a missing shipper number or a refused host answers its `tracking_` code as a
         whole-request error, with no request sent and no store write.
@@ -70,7 +71,7 @@ THE LABEL ROUTES (D326, T4 and T5). Every shape below is the contract the screen
         One lookup per label row, stored on the row. A 404 from TCGTracking is that row's
         status (`tracking_not_found`) and never a failed press. A missing key answers its code.
 
-THE ELIGIBLE ORDERS are the batch's envelope-lane orders. A parcel-lane order is labelled in
+THE ELIGIBLE ORDERS are the batch's envelope-lane orders. A parcel-lane order is labeled in
 Pirate Ship. An unjudged order is held back with its reason and is never defaulted into a lane.
 """
 
@@ -643,10 +644,10 @@ REASON_ENVELOPE = "envelope"
 REASON_PARCEL = "parcel"
 REASON_NEEDS_A_LOOK = "needs_a_look"
 REASON_NO_FULL_STREET = "no_full_street"
-REASON_ALREADY_LABELLED = "already_labelled"
+REASON_ALREADY_LABELED = "already_labelled"
 REASON_NOT_IN_BATCH = "not_in_batch"
-# What a confirm may name: an already labelled order is answered `existing`, not refused.
-_CONFIRMABLE = (REASON_ENVELOPE, REASON_ALREADY_LABELLED)
+# What a confirm may name: an already labeled order is answered `existing`, not refused.
+_CONFIRMABLE = (REASON_ENVELOPE, REASON_ALREADY_LABELED)
 
 # A label needs all of these on the export row.
 _STREET_CELLS = ("Address1", "City", "State", "PostalCode")
@@ -689,8 +690,8 @@ def _orders_named(raw: Any, field_name: str) -> List[str]:
     return list(dict.fromkeys(item.strip() for item in raw))
 
 
-def _verdict(held: _Batch, order: str, labelled: Sequence[str]) -> str:
-    """The reason code for one order: `envelope` when it can be labelled now, else why not."""
+def _verdict(held: _Batch, order: str, labeled: Sequence[str]) -> str:
+    """The reason code for one order: `envelope` when it can be labeled now, else why not."""
     row = next((row for row in held.rows if row["order"] == order), None)
     if row is None:
         return REASON_NOT_IN_BATCH
@@ -701,7 +702,7 @@ def _verdict(held: _Batch, order: str, labelled: Sequence[str]) -> str:
     shipment = next((s for s in held.envelope if s.order == order), None)
     if shipment is None or not all(shipment.cells.get(cell, "").strip() for cell in _STREET_CELLS):
         return REASON_NO_FULL_STREET
-    return REASON_ALREADY_LABELLED if order in labelled else REASON_ENVELOPE
+    return REASON_ALREADY_LABELED if order in labeled else REASON_ENVELOPE
 
 
 def _label_body(shipment: shipping.Shipment, insured: bool) -> Dict[str, Any]:
@@ -729,15 +730,16 @@ def _label_body(shipment: shipping.Shipment, insured: bool) -> Dict[str, Any]:
 
 
 def _preview(held: _Batch) -> Dict[str, Any]:
-    labelled = list(Store().read().ledger.labels)
+    labeled = list(Store().read().ledger.labels)
     orders = []
     for row in held.rows:
-        reason = _verdict(held, str(row["order"]), labelled)
+        reason = _verdict(held, str(row["order"]), labeled)
         orders.append({"order": row["order"], "eligible": reason == REASON_ENVELOPE, "reason": reason, "insured": False})
     key_present, shipper_present = tcgtracking.presence()
     return {
         "count": sum(1 for order in orders if order["eligible"]),
         "envelope_size": tcgtracking.ENVELOPE_SIZE,
+        "envelope": "#{} envelope".format(tcgtracking.ENVELOPE_SIZE),
         "fee_note": FEE_NOTE,
         "key_present": key_present,
         "shipper_present": shipper_present,
@@ -757,7 +759,7 @@ def _label_pdf(answer: Dict[str, Any]) -> bytes:
 
 def _make_one(order: str, shipment: shipping.Shipment, insured: bool) -> Optional[dict]:
     """Make one order's label. Returns the receipt entry for `made`, or None when the order is
-    already labelled or in flight. Raises TrackingRefused with no claim left behind.
+    already labeled or in flight. Raises TrackingRefused with no claim left behind.
 
     THE STORE LOCK IS NEVER HELD ACROSS A CALL: the claim is one `Store.write`, the create runs
     outside it, and the answer is a second `Store.write`. `REQUEST_SLOTS` is four.
@@ -792,8 +794,8 @@ def _confirm(held: _Batch, payload: dict) -> Dict[str, Any]:
             "labels_insured_unlisted",
             "Insured names an order that is not in orders: {}.".format(", ".join(sorted(insured - set(orders)))),
         )
-    labelled = list(Store().read().ledger.labels)
-    verdicts = {order: _verdict(held, order, labelled) for order in orders}
+    labeled = list(Store().read().ledger.labels)
+    verdicts = {order: _verdict(held, order, labeled) for order in orders}
     ineligible = [{"order": o, "reason": v} for o, v in verdicts.items() if v not in _CONFIRMABLE]
     if ineligible:
         # THE WHOLE PRESS, before any create: a confirm that lists an order the preview held back is a
