@@ -1074,6 +1074,33 @@ def check_markdown_table_carries_group(checks: Checks) -> None:
                      "an unreadable corpus leaves `group` absent on every row, and the rows still come")
 
 
+def check_live_no_market_needs_you(checks: Checks) -> None:
+    """A live listing with copies and no market price is `needs_you` on `/pipeline/pricing`'s `live`
+    wire: the spec's first group is "No market price, a move past the cap, or a card at or above the
+    value line", and it holds for a listing that is live as much as for a new copy.
+
+    One Dunsparce listing, first seen 5 days ago so no trigger fires, asking 2.60, in four shapes:
+    a blank market, a zero market, no reading row at all (each `needs_you`), and a market of 2.60,
+    which stays `at_rule` and keeps the rule honest about the other direction.
+    """
+    checks.note("")
+    checks.note("WORKLIST, LIVE LISTING WITH NO MARKET PRICE — needs you")
+    for label, market, expected in (
+        ("blank market", "", "needs_you"),
+        ("zero market", "0.00", "needs_you"),
+        ("no reading", None, "needs_you"),
+        ("market present", "2.60", "at_rule"),
+    ):
+        with run_folder() as run, isolated_home(run), _case(checks, f"worklist no market: {label}"):
+            _write_live("20260201-000000", _live_export_priced({DUNSPARCE_SKU: 1}, {DUNSPARCE_SKU: "2.60"}))
+            _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(5)))
+            if market is not None:
+                _market_reading(DUNSPARCE_SKU, market)
+            row = _live_row(pipeline_routes.do_pipeline_worklist([]), DUNSPARCE_SKU) or {}
+            checks.equal(row.get("group", "<no row>"), expected,
+                         f"{label}: a live listing with copies is filed under {expected}")
+
+
 CHECKS = (
     check_worklist_carries_live_listings,
     check_worklist_without_runs_reads_newest_export,
@@ -1096,4 +1123,5 @@ CHECKS = (
     check_worklist_group_follows_rule_price,
     check_live_capped_reason_names_the_cap,
     check_markdown_table_carries_group,
+    check_live_no_market_needs_you,
 )
