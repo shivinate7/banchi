@@ -225,7 +225,7 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     "fulfilment": (),
     # D326: the TCGTracking labels, one row per TCGplayer order number. Added WITHOUT a version bump:
     # see `_add_labels`.
-    "labels": (),
+    "labels": ("pdf_token",),
     # D174: the cards a live run has claimed and is about to pay to read.
     # `keys` is the claim itself and is NOT a column — it is a set, and a column holds one
     # value; the intersection is computed in Python over the handful of live rows, which is
@@ -317,6 +317,8 @@ _INDEXES = (
     ("slab_snapshots", "cert"),
     # D320: `Slabs.sales_for` reads one slab's links by key, never a scan of `slab_sales`.
     ("slab_sale_links", "slab"),
+    # D326: `GET /shipping/labels/<pdf_token>/pdf` reads one label row by its token, never a scan of `labels`.
+    ("labels", "pdf_token"),
 )
 
 # D172'S TWO INDEXES, DELIBERATELY NOT IN `_INDEXES` BECAUSE NEITHER IS A PLAIN ONE.
@@ -1112,6 +1114,7 @@ def _add_labels(conn: sqlite3.Connection) -> None:
     that is opened by an older build keeps the table and that build reads nothing from it.
     """
     conn.execute(_ddl("labels", TABLES["labels"]))
+    conn.execute("CREATE INDEX IF NOT EXISTS labels_pdf_token ON labels(pdf_token)")
 
 
 def _ensure_labels(

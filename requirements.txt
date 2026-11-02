@@ -52,6 +52,12 @@ zxing-cpp==2.3.0
 #              the holdout was measured on (57 ms a photograph, CPU).
 onnxruntime==1.30.0
 
+# pypdf  the combined label file (D326): `GET /shipping/batches/<batch>/labels/pdf` joins the stored
+#        label PDFs. Pure Python, no system library, and the newest release that passes the checks;
+#        it is imported inside that handler only, so a server run without the venv answers a named
+#        refusal there and nothing else.
+pypdf==6.21.4
+
 # Deliberately absent:
 #   requests   stdlib urllib covers both fetches this repo makes — pokemontcg.io, and
 #              D65's TCGplayer Filtered Export in server/tcg_export.py; one fewer

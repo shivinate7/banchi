@@ -126,9 +126,10 @@ and a photograph cannot.
 
 from __future__ import annotations
 
+import secrets
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Any, ClassVar, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, ClassVar, Container, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from store.rows import Rows, TableSpec
 
@@ -549,9 +550,14 @@ class LabelRow:
     `answer` is TCGTracking's whole create answer minus `pdf_base64`, which is `pdf` (base64) so
     it is not stored twice. `scan` is the last scan lookup: `{"at": ..., "answer": {...}}`, or
     `{"at": ..., "status": "tracking_not_found"}` for a lookup that found nothing.
+
+    `pdf_token` is 128 random bits, drawn when the row is claimed and kept through the answer. The
+    label PDF is fetched by it and never by order number: a GET is outside the origin gate and the
+    label holds an address, so the name must not be guessable. It is an indexed column.
     """
 
     order: str
+    pdf_token: Optional[str] = None
     claim: Optional[str] = None
     answer: Optional[Dict[str, Any]] = None
     pdf: Optional[str] = None
@@ -669,8 +675,8 @@ class Ledger:
         "labels",
         parse=lambda key, record: _parse_label(key, record),
         dump=asdict,
-        columns=lambda record: {},
-        column_names=(),
+        columns=lambda record: {"pdf_token": record.pdf_token},
+        column_names=("pdf_token",),
     )
 
     def __post_init__(self) -> None:
@@ -739,17 +745,18 @@ class Ledger:
 
     # ------------------------------------------------------------------------- the labels
 
-    def claim_label(self, order: str, marker: str) -> bool:
+    def claim_label(self, order: str, marker: str, in_flight: Container[str]) -> bool:
         """Take `order` for a create, or say it is not ours to take (D326).
 
-        False when a label is already made, or when THIS process already holds the claim (a
-        press in flight). A claim written by another process is replaced: that press died, and a
-        retried create is safe because TCGTracking dedups on `source_order_id`.
+        False when a label is already made, or when a press in THIS process is still making it
+        (`in_flight` names those orders). Any other claim is replaced: a claim from another process
+        belongs to a press that died, and so does one of this process's whose release write
+        failed. A retried create is safe because TCGTracking dedups on `source_order_id`.
         """
         row = self.labels.get(order)
-        if row is not None and (row.made or row.claim == marker):
+        if row is not None and (row.made or (row.claim == marker and order in in_flight)):
             return False
-        self.labels[order] = LabelRow(order=order, claim=marker)
+        self.labels[order] = LabelRow(order=order, pdf_token=secrets.token_hex(16), claim=marker)
         return True
 
     def release_label(self, order: str, marker: str) -> None:
@@ -759,8 +766,10 @@ class Ledger:
             del self.labels[order]
 
     def record_label(self, order: str, answer: Dict[str, Any], pdf: str, insured: bool) -> LabelRow:
-        """Replace the claim with the made label."""
-        row = LabelRow(order=order, answer=answer, pdf=pdf, insured=insured, made_at=now())
+        """Replace the claim with the made label, keeping the claim's `pdf_token`."""
+        held = self.labels.get(order)
+        token = (held.pdf_token if held is not None else None) or secrets.token_hex(16)
+        row = LabelRow(order=order, pdf_token=token, answer=answer, pdf=pdf, insured=insured, made_at=now())
         self.labels[order] = row
         return row
 

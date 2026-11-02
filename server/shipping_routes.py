@@ -45,6 +45,9 @@ THE LABEL ROUTES (D326, T4 and T5). Every shape below is the contract the screen
         Spends. One create per order, one at a time. It stops at the first 401, 400 or 429:
         that order is `refused` with its code, `partial` is true when any label was made, and
         the orders after it are untouched. A replay lands in `existing`.
+        The receipt also holds `stopped`: null, or `{"made": int, "left_over": [{"order"}]}` when a
+        stop ended the press (below). `made` there is the count made before the stop, and
+        `partial` is true when a label was made and any order was left over.
     400 `labels_confirm_missing`: no `confirm: true`, so nothing is bought.
     400 `labels_order_ineligible`: a confirmed order is parcel, unjudged, short of a full street
         or not in this batch (`not_in_batch`). The whole press is refused before any create, and
@@ -53,8 +56,22 @@ THE LABEL ROUTES (D326, T4 and T5). Every shape below is the contract the screen
     A missing key, a missing shipper number or a refused host answers its `tracking_` code as a
         whole-request error, with no request sent and no store write.
 
+  POST /shipping/batches/BATCH/labels/stop   body {}
+    -> 200 {"batch", "stopping": int}
+        Ends the confirms running on this batch after the create in flight: that create finishes and
+        its label is kept (a label is never voided), and the orders after it are left over, in the
+        receipt of that confirm. `stopping` is how many confirms were running. A stop with none
+        running changes nothing and leaves no mark, so the next confirm is not stopped.
+
+  GET /shipping/batches/BATCH/labels/pdf
+    -> 200 one application/pdf: the stored labels of this batch's labelled orders, in batch
+       order, each with its own pages. No request to TCGTracking.
+       404 `no_such_batch` when the batch is gone, 404 `labels_none_made` when none is labelled,
+       409 `labels_merge_unavailable` when the server runs without the pypdf package, and 502
+       `label_unreadable` when a stored label is not a PDF.
+
   GET /shipping/labels
-    -> 200 {"labels": [{"order", "status": "made" | "pending", "tracking_number", "insured": bool,
+    -> 200 {"labels": [{"order", "pdf_token", "status": "made" | "pending", "tracking_number", "insured": bool,
                         "made_at": str | null, "scanned_at": str | null, "checked_at": str | null,
                         "scan": null | {"status": str | null, "at": str}}]}
         Read from the store. It carries no PDF bytes. `pending` is a claim with no answer yet
@@ -62,9 +79,12 @@ THE LABEL ROUTES (D326, T4 and T5). Every shape below is the contract the screen
         time of the latest scan event in the track answer, else null. `checked_at` is when
         Banchi last asked TCGTracking for the scan.
 
-  GET /shipping/labels/ORDER/pdf
+  GET /shipping/labels/PDF_TOKEN/pdf
     -> 200 the stored label bytes as application/pdf, with no request to TCGTracking;
-       404 `label_not_found` when the order has no label row.
+       404 `label_not_found` when no label row owns the token. `pdf_token` is 32 hex characters
+       drawn at random for each row (128 bits) and listed above. An ORDER NUMBER there is a 404,
+       for the same reason the batch file route takes a batch id: a GET is outside the origin
+       gate, and the label holds a buyer's address, so its name may not be guessable.
 
   POST /shipping/labels/scans   body {}
     -> 200 {"checked": int, "found": int, "not_found": [order, ...]}
@@ -78,6 +98,7 @@ Pirate Ship. An unjudged order is held back with its reason and is never default
 from __future__ import annotations
 
 import base64
+import io
 import os
 import re
 import secrets
@@ -632,6 +653,15 @@ def do_shipping_forget(batch: str) -> dict:
 # process's belongs to a press that died, and `Ledger.claim_label` retries it.
 PROCESS_MARK = "{}:{}".format(os.getpid(), secrets.token_hex(4))
 
+# Orders a create of THIS process is making now. `Ledger.claim_label` reads it, so a claim of this
+# process whose release write failed is retried and does not block until a restart.
+_IN_FLIGHT: set = set()
+# Batch id -> the stop flags of the confirms running on it. A stop sets them and creates none.
+_PRESS_LOCK = threading.Lock()
+_PRESSES: Dict[str, List[threading.Event]] = {}
+
+_TOKEN = re.compile(r"[0-9a-f]{32}")
+
 _LABEL_FIELDS: Tuple[str, ...] = ("preview", "confirm", "orders", "insured")
 
 FEE_NOTE = (
@@ -765,7 +795,9 @@ def _make_one(order: str, shipment: shipping.Shipment, insured: bool) -> Optiona
     outside it, and the answer is a second `Store.write`. `REQUEST_SLOTS` is four.
     """
     with Store().write() as snap:
-        took = snap.ledger.claim_label(order, PROCESS_MARK)
+        took = snap.ledger.claim_label(order, PROCESS_MARK, _IN_FLIGHT)
+        if took:
+            _IN_FLIGHT.add(order)
     if not took:
         return None
     done = False
@@ -778,12 +810,15 @@ def _make_one(order: str, shipment: shipping.Shipment, insured: bool) -> Optiona
         done = True
         return {"order": order, "tracking_number": answer.get("tracking_number"), "insured": insured}
     finally:
-        if not done:
-            with Store().write() as snap:
-                snap.ledger.release_label(order, PROCESS_MARK)
+        try:
+            if not done:
+                with Store().write() as snap:
+                    snap.ledger.release_label(order, PROCESS_MARK)
+        finally:
+            _IN_FLIGHT.discard(order)
 
 
-def _confirm(held: _Batch, payload: dict) -> Dict[str, Any]:
+def _confirm(batch: str, held: _Batch, payload: dict) -> Dict[str, Any]:
     orders = _orders_named(payload.get("orders"), "orders")
     insured = set(_orders_named(payload.get("insured") or [], "insured"))
     if not orders:
@@ -812,19 +847,39 @@ def _confirm(held: _Batch, payload: dict) -> Dict[str, Any]:
     made: List[dict] = []
     existing: List[dict] = []
     refused: List[dict] = []
-    for order in orders:
-        try:
-            entry = _make_one(order, envelope[order], order in insured)
-        except tcgtracking.TrackingRefused as exc:
-            # STOP AT THE FIRST ERROR. A 401 or a 429 on the third order will be the same on the
-            # fourth, and creates are paid. The orders after it are untouched.
-            refused.append({"order": order, "code": exc.code})
-            break
-        if entry is None:
-            existing.append({"order": order})
-        else:
-            made.append(entry)
-    return {"made": made, "existing": existing, "refused": refused, "partial": bool(made and refused)}
+    left_over: List[dict] = []
+    stop = threading.Event()
+    with _PRESS_LOCK:
+        _PRESSES.setdefault(batch, []).append(stop)
+    try:
+        for at, order in enumerate(orders):
+            if stop.is_set():
+                # Checked between orders only, so the create in flight finishes and is kept.
+                left_over = [{"order": rest} for rest in orders[at:]]
+                break
+            try:
+                entry = _make_one(order, envelope[order], order in insured)
+            except tcgtracking.TrackingRefused as exc:
+                # STOP AT THE FIRST ERROR. A 401 or a 429 on the third order will be the same on the
+                # fourth, and creates are paid. The orders after it are untouched.
+                refused.append({"order": order, "code": exc.code})
+                break
+            if entry is None:
+                existing.append({"order": order})
+            else:
+                made.append(entry)
+    finally:
+        with _PRESS_LOCK:
+            _PRESSES[batch].remove(stop)
+            if not _PRESSES[batch]:
+                del _PRESSES[batch]
+    return {
+        "made": made,
+        "existing": existing,
+        "refused": refused,
+        "partial": bool(made and (refused or left_over)),
+        "stopped": {"made": len(made), "left_over": left_over} if left_over else None,
+    }
 
 
 def do_shipping_labels(batch: str, payload: dict) -> dict:
@@ -839,7 +894,44 @@ def do_shipping_labels(batch: str, payload: dict) -> dict:
             "labels_confirm_missing",
             "Nothing was bought: a label press needs a confirm after the preview.",
         )
-    return _confirm(held, payload)
+    return _confirm(str(batch), held, payload)
+
+
+def do_shipping_labels_stop(batch: str, payload: dict) -> dict:
+    """The stop route for a batch: end the confirms running on it after the create in flight.
+    With none running it sets nothing, so it leaves no mark."""
+    _only(payload, ())
+    with _PRESS_LOCK:
+        running = list(_PRESSES.get(str(batch), ()))
+    for flag in running:
+        flag.set()
+    return {"batch": str(batch), "stopping": len(running)}
+
+
+def do_shipping_labels_pdf(batch: str) -> Tuple[bytes, str, str]:
+    """The combined file route for a batch: its stored labels as one PDF. Never calls TCGTracking.
+    A batch that is gone refuses before the store is read."""
+    held = _recall(batch)
+    ledger = Store().read().ledger
+    labels = [ledger.labels.get(order) for order in dict.fromkeys(str(row["order"]) for row in held.rows)]
+    blobs = [base64.b64decode(label.pdf) for label in labels if label is not None and label.made and label.pdf]
+    if not blobs:
+        raise ShippingRefusal(HTTPStatus.NOT_FOUND, "labels_none_made", "No label has been made for this batch.")
+    try:
+        import pypdf  # lazy: `make server` may run without the venv, and only this route needs it
+    except ImportError:
+        raise ShippingRefusal(
+            HTTPStatus.CONFLICT, "labels_merge_unavailable", "This server cannot join label files. Run it from the venv."
+        ) from None
+    writer = pypdf.PdfWriter()
+    try:
+        for blob in blobs:
+            writer.append(pypdf.PdfReader(io.BytesIO(blob)))
+    except pypdf.errors.PyPdfError:
+        raise ShippingRefusal(HTTPStatus.BAD_GATEWAY, "label_unreadable", "A stored label could not be read as a PDF.") from None
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue(), "application/pdf", "labels-{}.pdf".format(_safe_name(batch))
 
 
 def _scanned_at(scan: Optional[dict]) -> Optional[str]:
@@ -872,6 +964,7 @@ def do_shipping_labels_list() -> dict:
         "labels": [
             {
                 "order": row.order,
+                "pdf_token": row.pdf_token,
                 "status": "made" if row.made else "pending",
                 "tracking_number": (row.answer or {}).get("tracking_number"),
                 "insured": row.insured,
@@ -885,12 +978,14 @@ def do_shipping_labels_list() -> dict:
     }
 
 
-def do_shipping_label_pdf(order: str) -> Tuple[bytes, str, str]:
-    """`GET /shipping/labels/<order>/pdf` — the stored label: bytes, content type, a safe file name."""
-    row = Store().read().ledger.labels.get(str(order))
+def do_shipping_label_pdf(token: str) -> Tuple[bytes, str, str]:
+    """The stored label for a `pdf_token`: bytes, content type, a safe file name. An order number
+    is no key: only the random token finds a row, by one indexed read."""
+    found = Store().read().ledger.labels.where(pdf_token=token) if _TOKEN.fullmatch(token) else []
+    row = found[0] if found else None
     if row is None or not row.made or not row.pdf:
         raise ShippingRefusal(HTTPStatus.NOT_FOUND, "label_not_found", "No label has been made for that order.")
-    return base64.b64decode(row.pdf), "application/pdf", "label-{}.pdf".format(_safe_name(order))
+    return base64.b64decode(row.pdf), "application/pdf", "label-{}.pdf".format(_safe_name(row.order))
 
 
 def do_shipping_labels_scans(payload: dict) -> dict:

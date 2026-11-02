@@ -811,10 +811,12 @@ _SHIPPING_FILE_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/file$")
 # collide however they are ordered.
 _SHIPPING_STAMPS_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/stamps$")
 _SHIPPING_ITEM_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})$")
-# D326's labels. The preview and the confirm are one POST on the batch. The pdf is read by order
-# number, percent-decoded by the route.
+# D326's labels. The preview and the confirm are one POST on the batch. A stored pdf is read by its
+# random token and the combined file by batch; neither takes an order number.
 _SHIPPING_LABELS_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/labels$")
 _SHIPPING_LABEL_PDF_RE = re.compile(r"^/shipping/labels/([^/]+)/pdf$")
+_SHIPPING_BATCH_LABELS_PDF_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/labels/pdf$")
+_SHIPPING_BATCH_LABELS_STOP_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/labels/stop$")
 # One slab, by grader and cert. Both are percent-decoded by the route. `/slabs/sweep` matches nothing: the owner deferred the sweep.
 _SLABS_ITEM_RE = re.compile(r"^/slabs/([^/]+)/([^/]+)$")
 
@@ -16980,7 +16982,17 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     kind,
                     (("Content-Disposition", 'attachment; filename="pirateship-import.csv"'),),
                 )
-            # D326's label list and the stored label. The pdf holds a buyer's address, so it is never cached.
+            # D326's combined label file for a batch, the label list and the stored label. A pdf holds a
+            # buyer's address, so it is never cached.
+            match = _SHIPPING_BATCH_LABELS_PDF_RE.match(path)
+            if match:
+                blob, kind, name = shipping_routes.do_shipping_labels_pdf(match.group(1))
+                return self._send(
+                    HTTPStatus.OK,
+                    blob,
+                    kind,
+                    (("Content-Disposition", 'inline; filename="{}"'.format(name)), ("Cache-Control", "no-store")),
+                )
             if path == "/shipping/labels":
                 return self._json(HTTPStatus.OK, shipping_routes.do_shipping_labels_list())
             match = _SHIPPING_LABEL_PDF_RE.match(path)
@@ -17515,6 +17527,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 return self._json(
                     HTTPStatus.OK, shipping_routes.do_shipping_labels(match.group(1), self._body())
+                )
+            match = _SHIPPING_BATCH_LABELS_STOP_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK, shipping_routes.do_shipping_labels_stop(match.group(1), self._body())
                 )
             # T5: one press, one scan lookup per made label. On demand, never on a timer.
             if path == "/shipping/labels/scans":
