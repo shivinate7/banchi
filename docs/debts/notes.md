@@ -17,5 +17,6 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - `send_routes._refuse_stale_readings`'s docstring, and the docstring of the T7 case `check_send_with_run_refuses_stale_readings`, say `refresh_before_send` never touches a suggestion's reading. When the refresh runs, its live fetch rewrites those readings. Wording only.
 - `send_routes._send`: the `nothing_to_send` branch re-parses the live CSV through `_names`. A file deleted mid-press turns the 409 into a 500.
 - `send_routes._name_held`: a refusal carries `held` at `error.data.held`, a sent answer at top level. No client reads either yet. A held suggestion dropped from a press refused `under_cut_off` or `needs_price` is not named; nothing is sent then.
+- check.yml comments, D136 and D141 still cite DEBT8's one-in-thirteen Escape rate; measured 0 of 19 (DEBT-escape-runner-red). D136's premise awaits the owner.
 - The T7 contract's `Pass` line must equal `PASS_CRITERIA` in `harness/tests/t7_store_and_seams.py`, and that string runs 36 words. The line carries an `ste-disable-next-line STE001` comment. Shorten the string, then the line, and drop the comment.
 - `.github/workflows/check.yml`: the "Image matches" step compares the Playwright image tag only, not its digest. A wrong digest fails loudly at browser launch.
