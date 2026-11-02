@@ -5599,13 +5599,15 @@ def check_cli_refusals(checks: Checks) -> None:
     # `readings`'s — so a SKU an export no longer lists keeps its row.
     checks.equal(
         sorted(entry.COMMANDS),
-        ["archive", "boxes", "cards", "emit", "identify", "join", "match", "prices", "queue",
-         "readings", "reconcile", "reprice", "rescue", "scan", "skus"],
+        ["archive", "boxes", "cards", "emit", "holdings-roster", "identify", "join", "match",
+         "prices", "queue", "readings", "reconcile", "reprice", "rescue", "scan", "skus"],
         # `boxes` IS THE FOURTEENTH (D259): `boxes names` gives every
         # unnamed box its stored default name. Previews by default; `--write` is one transaction.
         # `match` IS THE FIFTEENTH (D2, the owner picks the engine): `match status` is free and
         # `match prepare` is the free reader's one-time setup. Nothing starts it but the owner's press.
-        "fifteen commands are registered, and only fifteen",
+        # `holdings-roster` IS THE SIXTEENTH (D324, Banchi values the owner's investment holdings): a
+        # one-off, read-only value report of a roster CSV.
+        "sixteen commands are registered, and only sixteen",
     )
 
     # No command may read stdin. Asserted against the source of every module the dispatch

@@ -21,3 +21,6 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - No `scope` job: scope lives in make targets, env vars and the browser-scope job, and skips at steps; a restructure is lane-sized.
 - `registry_scopes._scan_shard_steps` (and main's `workflow_shards` before it) read a shard target named after the word make anywhere in a `run:` block, so a `cd app` line that runs one, or an echo that names one, is read as a shard step. No such step exists now.
 - `.github/workflows/check.yml`: the "Image matches" step compares the Playwright image tag only, not its digest. A wrong digest fails loudly at browser launch.
+- `scripts/waiting-export.py` scan false alarms, each costing one reword before an export: `key=str.lower`, `idempotency key: 8f3a2c91`, `TOKEN=xxxxxxxxxx`, "Round 3 Review Lane", `react@19.0.0-rc`, and a phone-shaped run of digits.
+- `pipeline/rosterholdings.py`'s `read_roster`: a bad roster row that spans lines is named by its last line, a missing header column gets an error with no line, and an amount of `-0` reads as `Decimal('-0')`.
+- `pipeline/rosterholdings.py` has its own `SkuRow`, beside `store/skus.py`'s; the totals line shows one price date, the newest, so an older price on another line is not shown.

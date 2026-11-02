@@ -370,7 +370,7 @@ COMPONENTS = [
                                             "D87", "D100", "D145", "D172", "D189", "D210",
                                             "D213", "D219", "D239", "D242",
                                             "D259",
-                                            "D273"],
+                                            "D273", "D324"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -465,6 +465,16 @@ COMPONENTS = [
             # THE BACKFILL PRESS OVER EVERY EXPORT ALREADY ON DISK (identity-follows-sku.md
             # §3.2, lane 0). `store/skus.py`'s never-delete argument means this is a FOLD
             # onto whatever the table already holds, never `readings adopt`'s full replace.
+            "cmd_holdingsroster.py": {
+                "does": "`banchi holdings-roster <csv>` — the owner's investment roster valued at "
+                        "this store's prices (D324). One-off and read-only: opens the store "
+                        "through `store/db.py:open_read_only` (or `--store PATH`), reads the "
+                        "`skus` rows and `price_history` through their `TableSpec` parse, and "
+                        "prints `pipeline/rosterholdings.py`'s report. A malformed roster "
+                        "prints the reason and exits 1. No screen, on D324's word.",
+                "governed_by": ["D324"],
+                "tested_by": [],
+            },
             "cmd_skus.py": {"does": "`banchi skus adopt` runs `pipeline/skus.py:fill` "
                                     "against an in-memory copy of the table for a preview, "
                                     "or against the real, lock-held snapshot on `--write` — "
@@ -1413,6 +1423,19 @@ COMPONENTS = [
             # (D212); quantity is the `cards` table's own state, never the marketplace
             # mirror. The series source is the archive (D219), one range at a time,
             # never merged (D278).
+            "rosterholdings.py": {
+                "does": "`read_roster` keeps a roster CSV's TCG purchases that are not canceled "
+                        "and drops every counterparty column at read, counting the rest by "
+                        "reason. `build_roster_report` joins each line to a product on "
+                        "`pipeline/join.py`'s set and name folds, then prices a matched line "
+                        "from the one Near Mint SKU of its finish with a latest `month` market "
+                        "(`PriceArchive.for_sku` only). Every kept line lands in exactly one "
+                        "of priced, unpriced, ambiguous or unmatched; the report names product "
+                        "ids, counts and money only. Sits beside `holdings.py`, which values "
+                        "the store's own stock.",
+                "governed_by": ["D324"],
+                "note": "PROVED BY `make rosterholdings-selftest`, PATH GATED (D247).",
+            },
             "holdings.py": {"does": "`on_hand_quantities`/`on_hand_names` walk the `cards` "
                                     "table once for every SKU not in `TERMINAL_STATES`. "
                                     "`sealed_excluded_count` counts a distinct ledger SKU "
@@ -3301,6 +3324,16 @@ COMPONENTS = [
                         "`getHoldingsValue`.",
                 "governed_by": ["D18", "D278", "D277", "D189", "D212", "D219", "D236", "D247"],
             },
+            "rosterholdings-selftest.py": {
+                "does": "proves pipeline/rosterholdings.py against a roster CSV string, a "
+                        "SKU list and a PriceArchive built in the file (`D324`) — no store "
+                        "on disk, no network. Covers the TCG-purchase filter and excluded "
+                        "counts, the privacy floor, the folded set and name join, ambiguous "
+                        "and unmatched lines on both sides, the Near Mint printing pick, one "
+                        "bucket per kept line, and the report's opening lines and coverage "
+                        "line. PATH GATED (`D247`).",
+                "governed_by": ["D247", "D324"],
+            },
             "reap-selftest.sh": {
                 "does": "proves reap.py by pointing it at processes it must not kill. A "
                         "throwaway checkout, a throwaway sibling standing in for "
@@ -3665,6 +3698,17 @@ COMPONENTS = [
                                             "directory, because the runner installs no browser "
                                             "binaries. Never in the git hook: D18, it writes.",
                                     "governed_by": ["D16", "D18"]},
+            "waiting-export.py": {
+                "does": "turns the waiting page's database, read by the page writer with "
+                        "ArtifactData `list` and `out_dir` into a scratch folder, into "
+                        "`docs/waiting/`'s four files. Scans every string for tokens, keys, "
+                        "passwords, cookies, emails, phone numbers and street addresses "
+                        "first, and writes nothing on a hit. `--calls` prints the page URL "
+                        "and the reads to make. `--selftest` is `make waiting-export-selftest`: "
+                        "red on a fake token, email, key, address and password, green on a "
+                        "clean export, and no rewrite when nothing changed.",
+                "governed_by": ["D327", "D18"],
+            },
             "port-agreement.py": {
                 "does": "proves `server/ports.py` and `app/devPort.ts` still answer the same "
                         "numbers. One algorithm in two languages that cannot import each "
@@ -5002,18 +5046,17 @@ COMPONENTS = [
                 # Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D7", "D16", "D17", "D18", "D25", "D26", "D36", "D42", "D43",
-                                "D47", "D180", "D138", "D54", "D58", "D60", "D278", "D63", "D65",
-                                "D67", "D68", "D74", "D76", "D80", "D82", "D83", "D86",
-                                "D87", "D88", "D89", "D92", "D104", "D122", "D123", "D127",
-                                "D133", "D135", "D137", "D158", "D140", "D141",
-                                "D23", "D149", "D277", "D160", "D162", "D166", "D167",
-                                "D171", "D172", "D173", "D176", "D178", "D183", "D189", "D212",
-                                "D213", "D215", "D219", "D222", "D231", "D224", "D225",
-                                "D227", "D280", "D234", "D236", "D239", "D240",
-                                "D242", "D243", "D247", "D252", "D253", "D254",
-                                "D256", "D261", "D271", "D275", "D193", "D269", "D295", "D301",
-                                "D320", "D196"],
+                "governed_by": ["D7", "D16", "D17", "D18", "D23", "D25", "D26", "D36", "D42", "D43",
+                                "D47", "D54", "D58", "D60", "D63", "D65", "D67", "D68", "D74",
+                                "D76", "D80", "D82", "D83", "D86", "D87", "D88", "D89", "D92",
+                                "D104", "D122", "D123", "D127", "D133", "D135", "D137", "D138",
+                                "D140", "D141", "D149", "D158", "D160", "D162", "D166", "D167",
+                                "D171", "D172", "D173", "D176", "D178", "D180", "D183", "D189",
+                                "D193", "D196", "D212", "D213", "D215", "D219", "D222", "D224",
+                                "D225", "D227", "D231", "D234", "D236", "D239", "D240", "D242",
+                                "D243", "D247", "D252", "D253", "D254", "D256", "D261", "D269",
+                                "D271", "D275", "D277", "D278", "D280", "D295", "D301", "D320", "D324",
+                                "D327"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -5578,6 +5621,19 @@ COMPONENTS = [
         "does": "the plans folder's short index: a plan holds the open lanes for work "
                 "too big for one pull request, one file per plan. None open.",
         "governed_by": [],
+    },
+    {
+        "path": "docs/waiting/",
+        "status": "built",
+        "does": "the waiting page's database as a committed record: items.json, "
+                "answers.json, groups.json and meta.json, each keyed by document id. "
+                "Written only by `scripts/waiting-export.py`, never by hand, so any account "
+                "can read the page's questions and answers from the repo.",
+        "governed_by": ["D327"],
+        "note": "Only its README until the page writer's first export, after it removes the one closed "
+                "item that restates a concern the owner ruled out of the repo. No per-file "
+                "entries: this component declares no source_suffixes, so the orphan rule does "
+                "not scan it, the same arrangement `fixtures/` uses.",
     },
     {
         "path": ".claude/rules/README.md",

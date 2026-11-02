@@ -277,38 +277,60 @@ refusal message and log line. It has named failure codes. It has a control that 
 presses. The order host's cookie session is the admin portal's and does not transfer, so what
 carries over is the shape and not the auth.
 
-### The TCGTracking pipe: the owner's rulings (D326)
+### The TCGTracking pipe (D326)
 
-D326 (the server calls TCGTracking) holds the rulings. Banchi's server holds the
-key and calls TCGTracking itself. T4 and T5 are one lane. The main checkout's `.env` holds
-`TCG_TRACKING_KEY` and no shipper number, so no live call can run until the owner adds it.
+D326 (the server calls TCGTracking) holds the owner's rulings. This section is the build.
 
-TCGTracking's API is `POST /orders`, which creates a label and is paid after an account's
-first 100 orders. `GET /orders/track` looks up status by tracking number or by
-`source_order_id`, the TCGplayer order number. `GET /orders/{id}/pdf` re-renders a label.
-There are no webhooks. **No endpoint marks a TCGplayer order shipped.** So T5's premise below,
-that tcgtracking owns mark-shipped, is unverified. Who marks shipped is the owner's fact to give.
+**TCGTracking's API.** `POST /orders` creates a label and returns its PDF. It is paid after an
+account's first 100 orders, and answers `duplicate` for a `source_order_id` it has seen.
+`GET /orders/track` reads status and scan events. `GET /orders/{id}/pdf` re-renders a label.
+There are no webhooks and no quote call. No documented call voids a label or marks a TCGplayer
+order shipped. The create answer's tracking number is masked.
 
-### T4 — the envelope, and the money gate. NOT BUILT
+**The address comes from the Export Shipping file**, which `#/shipping` already reads. It
+carries every field a label needs, so labels do not wait on the order transport's `detail`
+call. `shipping_routes` keeps the envelope-lane shipments it parses today and drops after.
 
-The tcgtracking call for the sub-$50 lane, under **D33's gate verbatim**. It has a free
-preflight, and the count and the premium are on screen. It has an explicit `confirm`. The
-spending control is **absent** until the preflight has answered. This is the second route in
-this repo that can spend money.
+### T4 — labels, under the money gate. NOT BUILT
 
-**Done:** harness T7 asserts the refusal without `confirm`, and that replaying one order id
-creates nothing.
+- **One home for the client:** `server/tcgtracking.py`. Calls go through `pipeline/net.open`
+  (D319, one retry home). A create is `idempotent=False` and follows no redirect. The key and
+  the shipper number are read at call time with `envfile.get_live`, and the key appears in no
+  answer, refusal, log or store row. `BANCHI_TCGTRACKING_URL` is the test seam, https or
+  loopback only, and the default host is refused under `BANCHI_HARNESS` or `CI`. Each failure is
+  a named refusal: key missing, shipper missing, rejected (401), invalid (400), rate limited
+  (429). A 500 that carries an order id means the label was bought.
+- **The ledger keeps a label row per order** in `store/orders.Ledger`: TCGTracking's whole
+  answer, the label PDF, the insurance switch and the scan status, written in one `Store.write`
+  (D88). A claim is written before each create and its answer right after, so a crash loses no
+  paid label, and a reload never buys twice. The demo-mirror scrub drops these rows.
+- **The preview is free** and shows the count of orders it will label, the orders held back
+  and why, the envelope size, each order's insurance switch (off by default), and "fee per your
+  TCGTracking account". **The confirm is absent until the preview answers**, and takes the
+  preview's order list. Creates run one at a time. The press stops at the first error and
+  returns a partial receipt.
+- **The screen** is the Envelope lane on `#/shipping`: Make labels, then the receipt with one
+  print file and a reprint per order, then a Labels list read from the store. `#/orders` may
+  show a status word only (D69). `#/fulfillment` does not change.
 
-### T5 — closing the loop. NOT BUILT
+**Done:** harness T7 (`harness/tests/t7/labels.py`) runs against a loopback fake that counts
+creates: no confirm makes 0, a replay 0, a double press 1, a parcel-lane order 0, a missing key
+or shipper 0 requests, a 429 mid-run a partial receipt, and a sentinel key leaks nowhere.
+`app/tests/shipping.spec.ts` asserts the confirm is absent before the preview.
 
-Tracking read back and emitted as TCGplayer's Import Shipping Info CSV. T2's byte rules already
-govern the file. The order id that T2 carries into Pirate Ship is what makes the match
-possible.
+### T5 — tracking back. NOT BUILT
 
-**banchi never writes order status back to TCGplayer.** tcgtracking owns mark-shipped, and two
-authors on one shipment is D34's problem twice. The two endpoints that would do it were seen on
-the wire. They are recorded once, in `server/order_transport.py`'s WHAT IS DELIBERATELY NOT
-BUILT block. Read them there. That module cites this section by number for the ruling.
+**Check scans** is one press that calls `GET /orders/track` for each order with a label row and
+stores the answer. On demand only, never on a timer. Scan status shows on `#/shipping` and as a
+status word on `#/orders`.
+
+**The owner marks orders shipped on TCGplayer, as today** (D326). The two TCGplayer write
+endpoints stay unbuilt, recorded in `server/order_transport.py`'s WHAT IS DELIBERATELY NOT BUILT
+block. Who writes tracking back is decided after the first live lookup shows whether the
+tracking number comes back whole.
+
+**Live first, in order:** the owner's shipper number beside the key; one free lookup on an
+order already shipped through TCGTracking; one paid label and its replay, on its own grant.
 
 ### T6 — the order drives the walk. SUPERSEDED, and deleted (D97 amended)
 

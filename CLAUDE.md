@@ -124,6 +124,7 @@ make catalog-mirror # fills the image mirror (about 16.7 GB). ARGS=--dry-run sam
 ./banchi prices   adopt [--write] | show [--held]  # the price corpus. Adopt folds legacy decisions.json in.
 ./banchi readings adopt [--write] | show           # the market-reading table. --write fully replaces both tables, and refuses over no source or a malformed pricing.json.
 ./banchi skus     adopt [--write]                  # the store-owned SKU table. Never a full replace.
+./banchi holdings-roster <csv> [--store F]         # the owner's investment roster at this store's prices (D324 (Banchi values investment holdings)). Read-only, no screen.
 ./banchi archive  sweep [--write] | show [--sku ID]  # price-history archive. Previews with no network.
 ./banchi queue    refresh [--export <file.csv>] [--write]  # re-resolve every open queue entry.
 ./banchi reconcile <run-dir> <staged-export.csv>   # one import against one Export From Staged.
@@ -375,6 +376,8 @@ Use bold labels in one quoted block, never a code fence. Start with the point. N
 - Read `docs/decisions/` before you propose an architecture change (`scripts/decision-context.py` finds the entry,
   `make map ARGS=--decisions` indexes them). Reopen one only by citing it and waiting for the owner's word.
 - Design work is repo work. Land it in `docs/specs/` or the decision that owns it in the same session, or declare it abandoned.
+- The waiting page's writer exports the page's data to `docs/waiting/` at each wake and before any republish
+  (D327, the waiting page is a committed record). `scripts/waiting-export.py --calls` prints the reads.
 - When compacting, keep the fixture schema facts, every `make` command and the modified-file list.
 
 ### Writing a brief
