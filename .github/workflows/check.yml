@@ -227,7 +227,16 @@ jobs:
         env:
           BANCHI_GUARD_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
           BANCHI_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
-        run: make ${{ matrix.target }}
+          TARGET: ${{ matrix.target }}
+        # A SKIP SHOWS AND NEVER FAILS. The shard's own exit code is kept (`rc`). The count reads the
+        # markers the tools already print (`scripts/ci-skip-count.sh` is the one home of the reader).
+        run: |
+          set -o pipefail
+          log="$RUNNER_TEMP/make-$TARGET.log"
+          rc=0
+          make "$TARGET" 2>&1 | tee "$log" || rc=$?
+          scripts/ci-skip-count.sh "$TARGET" "$log"
+          exit "$rc"
 
   # The static targets run alone so `design-check` can wait for them and not for the slowest shard.
   ci-static:
@@ -303,7 +312,14 @@ jobs:
         env:
           BANCHI_GUARD_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
           BANCHI_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
-        run: make ci-check-static
+        # A SKIP SHOWS AND NEVER FAILS, as in the matrix step above: the job's exit code is make's.
+        run: |
+          set -o pipefail
+          log="$RUNNER_TEMP/make-ci-check-static.log"
+          rc=0
+          make ci-check-static 2>&1 | tee "$log" || rc=$?
+          scripts/ci-skip-count.sh ci-check-static "$log"
+          exit "$rc"
 
   # THE CHECK PROTECTION IS TO REQUIRE IS `all-jobs-passed` (claude-settings decision same-check-kinds). One check,
   # built on the shared action: it fails when any job it `needs` failed, was cancelled or was
@@ -665,6 +681,17 @@ jobs:
             exit 0
           fi
           make design-check PW_ARGS="--workers=2 $files"
+
+      # A SKIP SHOWS AND NEVER FAILS. The reporter's verdict file holds the shard's skipped count
+      # (the `list` reporter's own `N skipped` line sits in the stream above). No file means no spec
+      # ran or the run died, which is unknown here and not zero.
+      - name: Count the shard's skipped cases
+        if: ${{ always() && steps.gate.outputs.run == 'true' }}
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          n="$(python3 -c "import json; print(json.load(open('.serve/design-check.json')).get('counts', {}).get('skipped', 'unknown'))" 2>/dev/null || echo 'unknown (no verdict file)')"
+          echo "skipped in design-check shard $SHARD: $n" | tee -a "$GITHUB_STEP_SUMMARY"
 
       # Every full-suite run keeps each shard's per-file seconds, for `browser-scope.py shard-refresh` (a narrowed run times only some specs, so it keeps none).
       - name: Keep the shard's timings
