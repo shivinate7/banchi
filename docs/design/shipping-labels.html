@@ -4251,6 +4251,34 @@ body { background: var(--bn-surface-2); }
 }
 .labels-row > * { display: inline-flex; align-items: center; }
 .bn-skeleton-text .bn-money { color: transparent; }
+/* Held back, one line per reason: the sentence, then the orders it covers. */
+.labels-held-ids { display: flex; flex-wrap: wrap; gap: var(--bn-0-5) var(--bn-3); }
+.labels-held-ids .labels-id { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.labels-card-title { display: grid; }
+.labels-card-meta { display: grid; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+/* A reprint that failed says so in the scan line's own place. */
+.labels-scan-cell { min-width: 0; }
+.labels-act .mk-cell > * { justify-self: stretch; display: grid; }
+.labels-fail { color: var(--bn-danger); }
+.labels-scan { display: flex; align-items: center; min-width: 0; }
+
+/* ===== mockup chrome: the Sample banner and the Today and New tags ===== */
+.mk-sample { max-width: 1440px; margin-bottom: var(--bn-2); padding: var(--bn-2) var(--bn-3); border-radius: var(--bn-r); background: var(--bn-warn-tint); color: var(--bn-ink); font-size: var(--bn-fs-sm); font-weight: 600; }
+.mk-frame [data-part] { outline: 1.5px dashed var(--bn-line-strong); outline-offset: 3px; }
+.mk-frame [data-part][data-mk='new'] { outline-color: var(--bn-accent); }
+.mk-frame [data-part]:not(.bn-sheet) { position: relative; }
+.mk-frame [data-part]::before {
+  content: attr(data-part); position: absolute; z-index: 5; top: 0; right: 0; transform: translateY(-60%);
+  padding: 0 var(--bn-1); border-radius: var(--bn-r-sm); background: var(--bn-surface);
+  border: 1px dashed var(--bn-line-strong); color: var(--bn-ink-3);
+  font: 600 var(--bn-fs-xs) / 1.5 var(--bn-font-ui); pointer-events: none; white-space: nowrap;
+}
+.mk-frame .bn-sheet[data-part]::before { top: var(--bn-1); right: 64px; transform: none; }
+.mk-frame [data-part][data-mk='new']::before { border-color: var(--bn-accent); color: var(--bn-accent); }
+.mk-strike { text-decoration: line-through; }
+/* A tag on a small inline part is the outline alone; the banner names the two outlines. */
+.mk-frame [data-part].mk-inline::before { display: none; }
+
 </style>
 </head>
 <body>
@@ -4429,7 +4457,8 @@ function apply() {
   const hidden = new Set(h.h)
   const stage = document.getElementById('mk-stage')
   const st = states.find(([id]) => id === s)
-  stage.innerHTML = `<p class="mk-caption"><b>${st[1]}.</b> ${st[2] || ''}</p>
+  stage.innerHTML = `<p class="mk-sample">Sample. No figure on this page is real: every name, order number, value, date and scan is made up. A dashed grey outline marks what exists today; a dashed accent outline marks what this design adds.</p>
+    <p class="mk-caption"><b>${st[1]}.</b> ${st[2] || ''}</p>
     <div class="mk-frame" data-w="${w}">${sideHtml(current)}<div class="mk-main">${render(s, w, hidden)}</div></div>
     <section class="mk-options"><h2>Options</h2>${options.map((o) => `<div class="mk-opt" data-opt="${o.id}"${hidden.has(o.id) ? ' hidden' : ''}>
       <div class="mk-opt-head"><b>${o.id}</b><span>${o.title}</span><button type="button" data-hide="${o.id}">Hide this option</button></div>
@@ -4445,44 +4474,64 @@ const ENV = [
   ['1A2B3C4D-0E61F2-0A1B3', 3, 4.12], ['1A2B3C4D-17C0D4-0B2C4', 1, 1.05], ['1A2B3C4D-2B9E31-0C3D5', 6, 11.4],
   ['1A2B3C4D-3D02A7-0D4E6', 2, 2.3], ['1A2B3C4D-4F18B9-0E5F7', 4, 7.85], ['1A2B3C4D-50A3CE-0F608', 1, 0.62],
   ['1A2B3C4D-61B4DF-10719', 2, 3.1], ['1A2B3C4D-72C5E0-1182A', 9, 24.5], ['1A2B3C4D-83D6F1-1293B', 1, 1.99],
-  ['1A2B3C4D-94E702-13A4C', 3, 5.2], ['1A2B3C4D-A5F813-14B5D', 2, 2.75], ['1A2B3C4D-B60924-15C6E', 31, 38.9],
+  ['1A2B3C4D-94E702-13A4C', 3, 5.2], ['1A2B3C4D-A5F813-14B5D', 2, 2.75], ['1A2B3C4D-B60924-15C6E', 8, 18.9],
   ['1A2B3C4D-C71A35-16D7F', 1, 0.89], ['1A2B3C4D-D82B46-17E80', 5, 9.6], ['1A2B3C4D-E93C57-18F91', 2, 4.4],
   ['1A2B3C4D-FA4D68-190A2', 1, 2.05],
 ]
-/* Held back, each with one sentence. The reasons are proposals: the spec names none. */
-const HELD = {
-  6: 'The export has no full street address for this order.',
-  11: '31 cards is more than one envelope holds.',
-}
-const TO_LABEL = ENV.map((o, i) => [...o, i]).filter((o) => HELD[o[3]] === undefined)
 const PARCEL = [['1A2B3C4D-0C77A1-2A0B1', 12, 64.2], ['1A2B3C4D-1D88B2-2B1C2', 3, 52.0], ['1A2B3C4D-2E99C3-2C2D3', 7, 58.75]]
 const UNJUDGED = [['1A2B3C4D-3FAAD4-2D3E4', 'No value on the row, so the threshold cannot be asked.']]
+/* The envelope order the export gives no full street address. */
+const NO_ADDRESS = 6
+const TO_LABEL = ENV.map((o, i) => [...o, i]).filter((o) => o[3] !== NO_ADDRESS)
 
-/* The row's answer: every word in one cell, so a row keeps its box from the preview to the receipt. */
+/* Held back: one sentence per reason, keyed by the preview row's `reason`. The four codes are
+   proposals; the contract pins only that a held-back row carries a reason. */
+const n1 = (n, one, many) => (n === 1 ? one : many)
+const HELD_WHY = {
+  parcel_lane: (n) => `${n} ${n1(n, 'order goes', 'orders go')} in a parcel, so ${n1(n, 'it ships', 'they ship')} with the Pirate Ship file.`,
+  unjudged: (n) => `${n} ${n1(n, 'order needs', 'orders need')} a look first. Banchi cannot tell envelope from parcel.`,
+  address_incomplete: (n) => `${n} ${n1(n, 'order has', 'orders have')} no full street address in the export. Fix it on TCGplayer, then read the export again.`,
+  label_exists: (n) => `${n} ${n1(n, 'order has', 'orders have')} a label already, so ${n1(n, 'it is', 'they are')} not bought twice.`,
+}
+function heldFor(s) {
+  const groups = [
+    ['parcel_lane', PARCEL.map((o) => o[0])],
+    ['unjudged', UNJUDGED.map((o) => o[0])],
+    ['address_incomplete', [ENV[NO_ADDRESS][0]]],
+  ]
+  if (s === 'again') groups.unshift(['label_exists', TO_LABEL.slice(0, 6).map((o) => o[0])])
+  return groups
+}
+
+/* The row's answer: every word in one cell, so a row keeps its size from the preview to the receipt. */
 const ROW_WORD = {
   none: '',
-  waiting: pill('Waiting', '', 'clock'),
-  making: `<span class="bn-pill bn-pill-accent"><span class="bn-dot bn-dot-live"></span>Making</span>`,
   made: pill('Made', 'ok', 'check'),
-  already: pill('Already Made', '', 'check'),
   refused: pill('Refused', 'danger', 'alert'),
   untried: pill('Not Tried', ''),
-  reprint: btn('Reprint', { size: 'sm', variant: 'quiet' }),
+  reprint: reprintBtn('idle'),
 }
-/* The scan words. Unmeasured: the label service's own status vocabulary is not in the repo. */
+/* Reprint: one press per order, against the per-order label file. Three states in one cell. */
+function reprintBtn(state, id = '') {
+  if (state === 'failed') return btn('Try Again', { size: 'sm', variant: 'quiet', ic: 'refresh', extra: ` aria-describedby="why-${id}"` })
+  return btn('Reprint', { size: 'sm', variant: 'quiet', ic: 'printer', busy: state === 'opening', disabled: state === 'opening', extra: id ? ` aria-label="Reprint the label for order ${id}"` : '' })
+}
+/* The scan words. Each maps from the label service's own status word; that vocabulary is
+   unmeasured until the first live lookup. */
 const SCAN_WORD = {
   unchecked: pill('Not Checked', ''),
   none: pill('No Scan Yet', ''),
   moving: pill('On Its Way', 'accent'),
   delivered: pill('Delivered', 'ok', 'check'),
   held: pill('Held Up', 'warn', 'alert'),
+  unclear: pill('Unclear', 'warn', 'info'),
 }
 
 function head() {
   return `<header class="bn-head bn-page-head"><div class="bn-head-text"><h1 class="bn-title">${icon('truck', 22)}Shipping</h1></div></header>`
 }
 function exportCard() {
-  return `<section class="bn-panel shipping-file-card" aria-label="The export that was read">
+  return `<section class="bn-panel shipping-file-card" aria-label="The export that was read" data-mk="today" data-part="Today: the export">
     <span class="shipping-file-icon" aria-hidden="true">${icon('list', 18)}</span>
     <div class="shipping-file-text"><span class="bn-label">Export loaded</span><span class="shipping-file-title">orders-shipping.csv</span>
       <span class="shipping-file-meta"><span>20 orders</span><span>kept 28 min</span></span></div>
@@ -4490,7 +4539,7 @@ function exportCard() {
   </section>`
 }
 function pirateCard() {
-  return `<section class="bn-panel shipping-ship" aria-label="The Pirate Ship import">
+  return `<section class="bn-panel shipping-ship" aria-label="The Pirate Ship import" data-mk="today" data-part="Today: Pirate Ship">
     <span class="shipping-file-icon shipping-file-icon-accent" aria-hidden="true">${icon('download', 18)}</span>
     <div class="shipping-file-text"><span class="bn-label">Pirate Ship import</span>
       <span class="shipping-file-row"><span class="shipping-file-name">pirateship-orders-shipping.csv</span><span class="shipping-file-size">2 KB</span></span>
@@ -4498,16 +4547,15 @@ function pirateCard() {
     <div class="shipping-file-actions">${btn('Locations', { ic: 'pin' })}<a class="bn-btn bn-btn-primary shipping-file shipping-download">${icon('download', 16)}<span>Download</span><span class="shipping-download-count">3 orders</span></a></div>
   </section>`
 }
-/* The Make Labels step. Its title and meta each hold their box across the card's states. */
-function labelsCard(s, busy) {
-  const made = s === 'labels' || s === 'nofile'
-  const title = made ? '14 of 16 have a label' : '16 orders need a label'
-  const meta = made ? '2 are held back. Make Labels says why.' : 'None has a label yet.'
-  return `<section class="bn-panel shipping-ship labels-card" aria-label="Envelope labels">
+/* The Make Labels step. Its title and meta each hold their space across the card's states. */
+function labelsCard(s) {
+  const made = s === 'labels' || s === 'checking' || s === 'reprint'
+  const title = cell({ before: '16 orders need a label', after: '15 of 16 have a label' }, made ? 'after' : 'before', 'labels-card-title')
+  const meta = cell({ before: 'None has a label yet.', after: '1 is held back. Make Labels says why.' }, made ? 'after' : 'before', 'labels-card-meta')
+  return `<section class="bn-panel shipping-ship labels-card" aria-label="Envelope labels" id="labels-card" data-mk="new" data-part="New: envelope labels">
     <span class="shipping-file-icon" aria-hidden="true">${icon('mail', 18)}</span>
-    <div class="shipping-file-text"><span class="bn-label">Envelope labels</span>
-      <span class="labels-card-title">${title}</span><span class="shipping-file-meta">${meta}</span></div>
-    <div class="shipping-file-actions">${btn('Make Labels', { ic: 'mail', busy, disabled: busy })}</div>
+    <div class="shipping-file-text"><span class="bn-label">Envelope labels</span>${title}${meta}</div>
+    <div class="shipping-file-actions">${btn('Make Labels', { ic: 'mail' })}</div>
   </section>`
 }
 function laneCol(lane, label, says, rows, folded) {
@@ -4523,10 +4571,10 @@ function laneCol(lane, label, says, rows, folded) {
     ${folded ? '' : `<ol class="shipping-list">${items}</ol>`}</section>`
 }
 function lanes(folded) {
-  return `<p class="shipping-quality-legend">${icon('check', 11)} Certain ${icon('circle', 11)} Inferred</p>
+  return `<div data-mk="today" data-part="Today: the three lanes"><p class="shipping-quality-legend">${icon('check', 11)} Certain ${icon('circle', 11)} Inferred</p>
     <div class="shipping-lanes" role="group" aria-label="The three lanes">
       ${laneCol('envelope', 'Envelope', 'Light', ENV, folded)}${laneCol('parcel', 'Parcel', 'Heavy', PARCEL, folded)}${laneCol('unjudged', 'Needs a Look', 'Manual', UNJUDGED, folded)}
-    </div>`
+    </div></div>`
 }
 
 /* ---- the Labels list, read from the store ---- */
@@ -4539,20 +4587,23 @@ const LABELS = [
   ['1A2B3C4D-ADF453-0C452', 'Oct 23', 'delivered', 'Delivered Oct 26', false],
 ]
 function labelsSection(s) {
-  const checked = s === 'labels'
+  const checked = s === 'labels' || s === 'reprint'
   const checking = s === 'checking'
   const line = {
     before: 'Scans were last checked yesterday at 4:10 PM.',
     after: 'Checked just now. 3 labels moved since the last check.',
   }
-  const rows = LABELS.map(([id, made, word, scan, ins]) => {
+  const reprintOf = (i) => (s !== 'reprint' ? 'idle' : i === 0 ? 'opening' : i === 3 ? 'failed' : 'idle')
+  const rows = LABELS.map(([id, made, word, scan, ins], i) => {
     const shown = checked ? word : word === 'none' ? 'unchecked' : word
+    const r = reprintOf(i)
+    const said = { idle: scan, opening: scan, failed: `<span class="labels-fail" id="why-${id}">Banchi could not open this label's file. Nothing was bought.</span>` }
     return `<li class="labels-item"><span class="labels-id">${id}</span><span class="labels-made">Made ${made}</span>
       <span class="labels-word">${cell(SCAN_WORD, shown)}</span>
-      <span class="labels-scan">${scan}${ins ? `<span class="bn-pill bn-pill-outline labels-ins">Insured</span>` : ''}</span>
-      <span class="labels-act">${btn('Reprint', { size: 'sm', variant: 'quiet' })}</span></li>`
+      <span class="labels-scan">${cell(said, r, 'labels-scan-cell')}${ins ? `<span class="bn-pill bn-pill-outline labels-ins">Insured</span>` : ''}</span>
+      <span class="labels-act">${cell({ idle: reprintBtn('idle', id), opening: reprintBtn('opening', id), failed: reprintBtn('failed', id) }, r)}</span></li>`
   }).join('')
-  return `<section class="bn-section labels-section" aria-label="Labels">
+  return `<section class="bn-section labels-section" aria-label="Labels" id="labels-list" data-mk="new" data-part="New: Labels">
     <div class="bn-section-head"><h2 class="bn-section-title">Labels <span class="bn-section-count">7</span></h2>
       <div class="bn-section-actions">${btn('Check Scans', { busy: checking, disabled: checking })}</div></div>
     <p class="labels-checked">${cell(line, checked ? 'after' : 'before')}</p>
@@ -4568,100 +4619,112 @@ function sw(on, disabled, id) {
   return `<input type="checkbox" role="switch" class="labels-switch" aria-label="Insure order ${id}"${on ? ' checked' : ''}${disabled ? ' disabled' : ''}>`
 }
 function rowWordFor(s, i) {
-  if (s === 'progress') return i < 5 ? 'made' : i === 5 ? 'making' : 'waiting'
+  if (s === 'progress') return i < 5 ? 'made' : 'none'
   if (s === 'receipt') return 'reprint'
   if (s === 'partial') return i < 6 ? 'reprint' : i === 6 ? 'refused' : 'untried'
   return 'none'
 }
-function sheet(s, hidden) {
+const SHEET_STATES = ['reading', 'preview', 'again', 'nokey', 'progress', 'receipt', 'partial']
+function sheet(s) {
   const reading = s === 'reading'
-  const nokey = s === 'nokey'
   const running = s === 'progress'
   const answered = s === 'receipt' || s === 'partial'
-  const n = TO_LABEL.length
-  const insured = (i) => i === 2 && s !== 'preview' && !reading && !nokey
-  const rows = TO_LABEL.map(([id, cards, value], i) => `<li class="labels-row">
+  const list = s === 'again' ? TO_LABEL.slice(6) : TO_LABEL
+  const n = list.length
+  const insured = (i) => i === 2 && !['preview', 'again', 'reading'].includes(s)
+  const rows = list.map(([id, cards, value], i) => `<li class="labels-row">
       <span class="labels-id">${sk(reading, id)}</span>
       <span class="labels-num">${sk(reading, cards)}</span><span class="labels-num">${sk(reading, money(value))}</span>
-      <span>${reading || nokey ? '' : sw(insured(i), running || answered, id)}</span>
+      <span>${reading ? '' : sw(insured(i), running || answered, id)}</span>
       <span>${cell(ROW_WORD, rowWordFor(s, i))}</span>
     </li>`).join('')
+  const held = heldFor(s)
+  const heldCount = held.reduce((sum, [, ids]) => sum + ids.length, 0)
+  const fee = '<p class="labels-fee">Fee per your TCGTracking account.</p>'
   /* The summary: every state's block in one cell, so the list under it never moves. */
   const summary = {
-    preview: `<div class="bn-stat-row">${stat(n, 'to label')}${stat(2, 'held back')}</div>
-      <dl class="bn-kv"><dt>Envelope</dt><dd>#10 letter</dd></dl>
-      <p class="labels-fee">Fee per your TCGTracking account.</p>`,
-    reading: `<div class="bn-stat-row">${stat(sk(true, '14'), 'to label')}${stat(sk(true, '2'), 'held back')}</div>
+    preview: `<div class="bn-stat-row">${stat(n, 'to label')}${stat(heldCount, 'held back')}</div>
+      <dl class="bn-kv"><dt>Envelope</dt><dd>#10 letter</dd></dl>${fee}`,
+    again: `<div class="bn-stat-row">${stat(n, 'to label')}${stat(heldCount, 'held back')}</div>
+      <dl class="bn-kv"><dt>Envelope</dt><dd>#10 letter</dd></dl>${fee}`,
+    reading: `<div class="bn-stat-row">${stat(sk(true, '15'), 'to label')}${stat(sk(true, '5'), 'held back')}</div>
       <dl class="bn-kv"><dt>Envelope</dt><dd>${sk(true, '#10 letter')}</dd></dl>
       <p class="labels-fee">Counting the orders. Nothing is bought yet.</p>`,
-    nokey: notice('danger', 'alert', 'Banchi has no label account on this Mac, so it cannot make labels. Nothing was bought.', { said: 'The label key is not set in the server environment.', code: 'tcgtracking_key_missing', action: btn('Try Again', { size: 'sm', ic: 'refresh' }) }),
-    progress: `<div class="bn-progress"><span style="width:${(5 / n) * 100}%"></span></div>
-      <p class="labels-progress-line">5 of ${n} made. One at a time, in this order.</p>
-      <p class="labels-fee">Fee per your TCGTracking account.</p>`,
-    receipt: notice('ok', 'check', `${n - 1} labels made. 1 order had one already, so it was not bought twice.`),
-    partial: notice('warn', 'alert', 'Stopped after 6 labels. The label service asked Banchi to wait, so 1 was refused and 7 were not tried. Make the Other 8 makes only those, and the 6 made are not bought twice.', { said: 'Too many requests. Retry after 60 seconds.', code: 'tcgtracking_rate_limited' }),
+    nokey: notice('danger', 'alert', 'Nothing was bought. Banchi has no TCGTracking key on this Mac. Add it to Banchi\'s settings file, then press Make 15 Labels again.', { said: 'The label key is not set on the server.', code: 'tracking_key_missing' }),
+    progress: `<div class="bn-progress" role="progressbar" aria-valuenow="5" aria-valuemin="0" aria-valuemax="${n}" aria-label="Labels made"><span style="width:${(5 / n) * 100}%"></span></div>
+      <p class="labels-progress-line">5 of ${n} made. They are made one at a time, top to bottom.</p>${fee}`,
+    receipt: notice('ok', 'check', `${n} labels made. Print them all now, or reprint one later from the Labels list.`),
+    partial: notice('warn', 'alert', 'Stopped after 6 labels. TCGTracking asked Banchi to slow down, so 1 was refused and 8 were not tried. Make the Other 9 asks for those only. The 6 made are not bought twice.', { said: 'Too many requests. Retry after 60 seconds.', code: 'tracking_rate_limited' }),
   }
+  const make = (k) => btn(`Make ${k} Labels`, { variant: 'primary', ic: 'mail' })
   const foot = {
-    preview: `${btn(`Make ${n} Labels`, { variant: 'primary', ic: 'mail' })}${btn('Cancel', { variant: 'ghost' })}`,
-    reading: `<span class="bn-slot" aria-hidden="true"><span class="bn-slot-ghost">${btn(`Make ${n} Labels`, { variant: 'primary', ic: 'mail' })}</span></span>${btn('Cancel', { variant: 'ghost' })}`,
-    nokey: `${btn('Close', { variant: 'ghost' })}`,
+    preview: `${make(n)}${btn('Cancel', { variant: 'ghost' })}`,
+    again: `${make(n)}${btn('Cancel', { variant: 'ghost' })}`,
+    reading: `<span class="bn-slot" aria-hidden="true"><span class="bn-slot-ghost">${make(n)}</span></span>${btn('Cancel', { variant: 'ghost' })}`,
+    nokey: `${make(n)}${btn('Cancel', { variant: 'ghost' })}`,
     progress: `${btn('Stop After This Label', { ic: 'pause' })}`,
     receipt: `${btn(`Print All ${n} Labels`, { variant: 'primary', ic: 'printer' })}${btn('Close', { variant: 'ghost' })}`,
-    partial: `${btn('Print All 6 Labels', { variant: 'primary', ic: 'printer' })}${btn('Make the Other 8', { ic: 'mail' })}${btn('Close', { variant: 'ghost' })}`,
+    partial: `${btn('Print All 6 Labels', { variant: 'primary', ic: 'printer' })}${btn('Make the Other 9', { ic: 'mail' })}${btn('Close', { variant: 'ghost' })}`,
   }
-  const held = `<div class="labels-group"><h3 class="labels-group-title">Held Back</h3><ul class="labels-held">
-    ${Object.entries(HELD).map(([i, why]) => `<li><span class="labels-id">${ENV[i][0]}</span><span class="labels-why">${why}</span></li>`).join('')}</ul></div>`
+  const heldHtml = `<div class="labels-group" id="labels-held"><h3 class="labels-group-title">Held Back</h3><ul class="labels-held">
+    ${held.map(([code, ids]) => `<li><span class="labels-why">${HELD_WHY[code](ids.length)}</span><span class="labels-held-ids">${ids.map((id) => `<span class="labels-id">${id}</span>`).join('')}</span></li>`).join('')}</ul></div>`
   return `<div class="bn-scrim"></div>
-    <div class="bn-sheet bn-overlay labels-sheet" role="dialog" aria-modal="true" aria-label="Make Labels">
+    <div class="bn-sheet bn-overlay labels-sheet" role="dialog" aria-modal="true" aria-label="Make Labels" data-mk="new" data-part="New: Make Labels">
       <div class="bn-overlay-head"><span class="bn-overlay-icon">${icon('mail', 18)}</span><h2 class="bn-overlay-title">Make Labels</h2>
-        ${iconBtn('x', 'Close', running ? ' disabled title="Labels are being made. Stop After This Label ends the run."' : '')}</div>
+        ${iconBtn('x', 'Close', running ? ' disabled title="Labels are being made. Stop After This Label ends it."' : '')}</div>
       <div class="bn-overlay-body labels-sheet-body">
-        <div class="labels-summary-cell">${Object.entries(summary).map(([k, v]) => `<div class="labels-summary"${k === s ? '' : ' data-off aria-hidden="true"'}>${v}</div>`).join('')}</div>
-        ${nokey ? '' : `<div class="labels-group"><h3 class="labels-group-title">To Label</h3>
+        <div class="labels-summary-cell" id="labels-summary">${SHEET_STATES.map((k) => `<div class="labels-summary"${k === s ? '' : ' data-off aria-hidden="true"'}>${summary[k]}</div>`).join('')}</div>
+        <div class="labels-group"><h3 class="labels-group-title">To Label</h3>
           <div class="labels-rows-head"><span>Order</span><span>Cards</span><span>Value</span><span>Insure</span><span></span></div>
-          <ul class="labels-rows">${rows}</ul></div>`}
-        ${nokey ? '' : held}
+          <ul class="labels-rows">${rows}</ul></div>
+        ${heldHtml}
       </div>
-      <div class="bn-overlay-foot"><div class="labels-foot">${Object.entries(foot).map(([k, v]) => `<div${k === s ? '' : ' data-off aria-hidden="true"'}>${v}</div>`).join('')}</div></div>
+      <div class="bn-overlay-foot"><div class="labels-foot" id="labels-foot">${SHEET_STATES.map((k) => `<div${k === s ? '' : ' data-off aria-hidden="true"'}>${foot[k]}</div>`).join('')}</div></div>
     </div>`
 }
 
-function page(s, w, hidden) {
-  const sheetOpen = ['reading', 'preview', 'nokey', 'progress', 'receipt', 'partial'].includes(s)
+function page(s) {
+  const sheetOpen = SHEET_STATES.includes(s)
   let body
   if (s === 'nofile') {
     body = `<div class="bn-empty-frame shipping-empty">
-      <label class="shipping-drop"><span class="shipping-drop-art" aria-hidden="true">${icon('upload', 24)}</span>
+      <label class="shipping-drop" data-mk="today" data-part="Today: the drop"><span class="shipping-drop-art" aria-hidden="true">${icon('upload', 24)}</span>
         <span class="shipping-drop-title">Drop the Export Shipping file here</span>
         <span class="shipping-drop-body">or <span class="shipping-drop-link">choose it</span>. It comes from TCGplayer's Orders → Export Shipping.</span></label>
-      <p class="shipping-empty-note">Nothing is saved, and the file is forgotten after 30 minutes. No buyer info shows here, only in the file you download.</p>
+      <p class="shipping-empty-note mk-strike" data-mk="today" data-part="Today: no longer true">Nothing is saved, and the file is forgotten after 30 minutes. No buyer info shows here, only in the file you download.</p>
+      <p class="shipping-empty-note" data-mk="new" data-part="New: the note" id="nofile-note">Banchi keeps each envelope order's address to make its label. The file itself is forgotten after 30 minutes.</p>
       </div>${labelsSection(s)}`
   } else {
-    const showLabels = ['receipt', 'partial', 'labels', 'checking'].includes(s)
-    body = `<div class="shipping-files labels-files">${exportCard()}${labelsCard(s, false)}${pirateCard()}</div>
-      ${lanes(s === 'labels' || s === 'checking')}${showLabels ? labelsSection(s) : ''}`
+    const showLabels = ['receipt', 'partial', 'labels', 'checking', 'reprint'].includes(s)
+    body = `<div class="shipping-files labels-files">${exportCard()}${labelsCard(s)}${pirateCard()}</div>
+      ${lanes(['labels', 'checking', 'reprint'].includes(s))}${showLabels ? labelsSection(s) : ''}`
   }
   return `<div class="bn-page" data-bn-page="">${head()}<div class="bn-page-body"><div class="shipping-stage">${body}</div></div></div>
-    ${sheetOpen ? sheet(s, hidden) : ''}`
+    ${sheetOpen ? sheet(s) : ''}`
 }
 
 const STATES = [
   ['rest', 'Envelope lane at rest', 'An export is read. The file row gains the Envelope labels card, between the export and the Pirate Ship import, in lane order. Make Labels is free: it opens the preview and buys nothing.'],
-  ['reading', 'Preview, reading', 'The sheet opens at once and counts. The confirm is absent: its slot holds the button\'s box with nothing in it, so the foot does not grow when the preview answers.'],
-  ['preview', 'Preview, answered', 'Free. The count to label, the orders held back each with one sentence, the envelope, a per-order insurance switch (all off), and the fee line. Only now does the confirm exist, and it carries the count.'],
-  ['nokey', 'Preview, refused before any spend', 'The preview finds no label account, so it shows no confirm and no list. Try Again reads again once the key is set.'],
-  ['progress', 'Making, order by order', 'One at a time, top to bottom. Each row\'s answer lands in its own fixed cell. Close is off while it runs; Stop After This Label ends it cleanly and gives a partial receipt.'],
-  ['receipt', 'Receipt, all done', 'Made and already made, as two figures. One print file for every label in this run, and a Reprint on each order.'],
-  ['partial', 'Receipt, stopped early', 'The press stopped at the first refusal. Made, refused and not tried are three figures. Make the Other 8 opens a new preview over the rest only.'],
-  ['labels', 'Labels list, after Check Scans', 'The person folded the three lanes. The Labels list is read from the store and sits last, so a label that lands moves nothing above it. Check Scans is free and on demand. Its answer lands on the line under the title, in a box that line held from the first paint. The order of rows does not change on a check.'],
-  ['checking', 'Labels list, checking', 'The press turns its ring in its own box. The rows keep their words until the answer lands.'],
-  ['nofile', 'No export read, labels in the store', 'The export is forgotten after 30 minutes. The Labels list is read from the store, so scans are checked on a later day with no file read.'],
+  ['reading', 'Preview, reading', 'The sheet opens at once and counts. The confirm is absent: an empty slot the size of the button holds its place, so the foot does not grow when the preview answers.'],
+  ['preview', 'Preview, answered', 'Free. The count to label, the orders held back grouped by reason with one sentence each, the envelope, a per-order insurance switch (all off), and the fee line. Only now does the confirm exist, and it carries the count.'],
+  ['again', 'Preview, after a stop', 'Make the Other 9 opens this preview again. The 6 made are held back with their own sentence, so the confirm names 9.'],
+  ['nokey', 'Confirm refused before any spend', 'The press found no TCGTracking key. Nothing was bought, and the same press tries again once the key is set.'],
+  ['progress', 'Making, order by order', 'One at a time, top to bottom. A row turns Made when its label shows in the store\'s label list, read during this press only. Close is off while labels are made; Stop After This Label ends it cleanly and gives a partial receipt.'],
+  ['receipt', 'Receipt, all made', 'One print file for every label of this press, and a Reprint on each order.'],
+  ['partial', 'Receipt, stopped early', 'The press stopped at the first refusal. Made, refused and not tried show on each row. Make the Other 9 opens a new preview over the rest only.'],
+  ['labels', 'Labels list, after Check Scans', 'The person folded the three lanes. The Labels list is read from the store and sits last, so a label that lands moves nothing above it. Check Scans is free and on demand. Its answer lands on the line under the title, in a line held from the first paint. The order of rows does not change on a check.'],
+  ['checking', 'Labels list, checking', 'The press turns its ring in its own place. The rows keep their words until the answer lands.'],
+  ['reprint', 'Reprint, opening and failed', 'Reprint reads one order\'s stored label file and opens it to print. It costs nothing. The first row is opening; the fourth could not open its file, says so in its own line, and offers Try Again in the same place.'],
+  ['nofile', 'No export read, labels in the store', 'The export is forgotten after 30 minutes. The Labels list is read from the store, so scans are checked on a later day with no file read. The old note is no longer true and is struck.'],
 ]
 
 const OPTS = [
   { id: 'P1', title: 'The preview as an inline panel under the Envelope labels card, not a sheet', render: () => `<div style="width:900px">
-    <div class="bn-panel bn-panel-pad"><div class="labels-summary">${'<div class="bn-stat-row">' + stat(14, 'to label') + stat(2, 'held back') + '</div><p class="labels-fee">Fee per your TCGTracking account.</p>'}</div>
-    <p class="labels-fee">The panel opens in the page and pushes the lanes down by the height of 14 rows. The sheet keeps the page still.</p></div></div>` },
+    <div class="bn-panel bn-panel-pad"><div class="labels-summary">${'<div class="bn-stat-row">' + stat(15, 'to label') + stat(5, 'held back') + '</div><p class="labels-fee">Fee per your TCGTracking account.</p>'}</div>
+    <p class="labels-fee">The panel opens in the page and pushes the lanes down by the height of 15 rows. The sheet keeps the page still.</p></div></div>` },
+  { id: 'H1', title: 'Held back as one row per order, each with its own sentence', render: () => `<div style="width:520px"><ul class="labels-held">${PARCEL.map((o) => `<li><span class="labels-id">${o[0]}</span><span class="labels-why">Goes in a parcel, so it ships with the Pirate Ship file.</span></li>`).join('')}</ul>
+    <p class="labels-fee">The same sentence three times over, and more with every parcel order.</p></div>` },
+  { id: 'Q1', title: 'Progress by one confirm per order, sent by the screen in turn', render: () => `<div style="width:560px"><p class="labels-fee">Each press answers for its own order, so each row lands from its own answer, and Stop is the screen not sending the next one. No new field is needed. The loss: the stop at the first error is then the screen's logic, a second home beside the server's, and closing the tab stops the labels half made.</p></div>` },
   { id: 'C1', title: 'Make Labels as the primary button, Download as default', render: () => `<div style="width:900px;display:flex;gap:8px">${btn('Make Labels', { variant: 'primary', ic: 'mail' })}${btn('Download', { ic: 'download' })}</div>` },
   { id: 'W1', title: 'A label word on each envelope-lane row too', render: () => `<div style="width:360px"><ol class="shipping-list"><li class="shipping-row shipping-row-envelope"><div class="shipping-row-top"><span class="shipping-order">1A2B3C4D-0E61F2-0A1B3</span>${pill('Made', 'ok', 'check')}</div></li></ol>
     <p class="labels-fee">The word then shows twice on one screen, once here and once in Labels.</p></div>` },
