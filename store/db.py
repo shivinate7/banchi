@@ -1970,6 +1970,24 @@ class SqliteSource:
             ).fetchall()
         return [(row[0], row[1]) for row in found]
 
+    def payloads(self, keys: Sequence[str]) -> Iterable[Tuple[str, str]]:
+        """`(key, payload)` for the named keys that exist, whole rows, in one indexed `key IN`
+        query per chunk. A chunk is this connection's own bound-variable limit (250,000 on the
+        SQLite Python 3.12 ships), not `pluck`'s 500, so a caller's statement count stays flat
+        in its key count far past any live listing count (T7 read budget, rule 8)."""
+        where, params = self._where({})
+        joiner = " AND " if where else " WHERE "
+        size = self.conn.getlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER) - len(params)
+        found: list = []
+        for start in range(0, len(keys), size):
+            chunk = list(keys[start : start + size])
+            marks = ",".join("?" * len(chunk))
+            found += self.conn.execute(
+                f"SELECT key, payload FROM {self.table}{where}{joiner}key IN ({marks})",
+                params + chunk,
+            ).fetchall()
+        return found
+
     def high_water(
         self, column: str, equals: Dict[str, Any], unreadable: Sequence[str]
     ) -> Tuple[int, bool]:

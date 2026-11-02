@@ -27,6 +27,7 @@ from cli import (  # noqa: E402
     cmd_match,
     cmd_cards,
     cmd_emit,
+    cmd_holdingsroster,
     cmd_identify,
     cmd_join,
     cmd_pricearchive,
@@ -657,6 +658,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     readings_sub.add_parser("show", help="what the table holds, and which files it last read")
 
+    # ------------------------------------------------------------------- holdings-roster
+    #
+    # D324: the owner's investment roster at this store's prices. One-off, read-only, no screen
+    # (`docs/specs/holdings-roster.md`).
+    holdings_roster = sub.add_parser(
+        "holdings-roster",
+        help="value an investment roster CSV at this store's prices. Free, read-only.",
+    )
+    holdings_roster.add_argument("csv", help="the roster export")
+    holdings_roster.add_argument(
+        "--store", help="a store sqlite file to read instead of this checkout's own"
+    )
+
     # ----------------------------------------------------------------------------- skus
     #
     # THE STORE-OWNED SKU TABLE (docs/specs/identity-follows-sku.md §3.2, lane 0 — owner's
@@ -823,6 +837,7 @@ COMMANDS = {
     "prices": cmd_prices.run,
     "readings": cmd_readings.run,
     "skus": cmd_skus.run,
+    "holdings-roster": cmd_holdingsroster.run,
     "archive": cmd_pricearchive.run,
     "queue": cmd_queue.run,
     "reprice": cmd_reprice.run,

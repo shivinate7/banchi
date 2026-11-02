@@ -763,6 +763,30 @@ CHECKS = (
                         ),
     },
     {
+        "target": "rosterholdings-selftest",
+        "shard": "guards-1",
+        "runs": "python3 scripts/rosterholdings-selftest.py",
+        "asserts": "pipeline/rosterholdings.py against an in-memory roster CSV, SKU list and "
+                   "archive (D324) — no store on disk, no network. Only TCG purchases that "
+                   "are not canceled are kept, with excluded rows counted by reason; no "
+                   "seller, account, order id or url reaches a line or the report text; set "
+                   "and name join on the folded keys; two products under one key are "
+                   "ambiguous and never valued; an unmatched line is listed by product id on "
+                   "both sides; the price is the one Near Mint SKU of the right finish with a "
+                   "month market, else unpriced as no_price or printing; every kept line is "
+                   "in exactly one bucket; the report opens with the two unknown-units lines "
+                   "and carries a priced X of N lines coverage line.",
+        "needs": ("python3",),
+        "writes": "nothing — the roster is a string, the SKUs a list and the PriceArchive "
+                  "is built in memory, never a store on disk.",
+        "commit_path": False,
+        "why_off_commit_path": "Not D18 — this self-test writes nothing. Off the commit "
+                               "path for the same reason as holdings-selftest beside it: "
+                               "PATH GATED into `make check` alone (D247), never the hook.",
+        "gates": True,
+        "governed_by": ("D247", "D324"),
+    },
+    {
         "target": "identity-checks-selftest",
         "shard": "guards-1",
         "runs": "python3 scripts/identity-checks-selftest.py",

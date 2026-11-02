@@ -194,6 +194,9 @@ function sku(over: Partial<PricingSku> = {}): PricingSku {
       { box: 7, index: 3, label: 'Box 7, Section 1, Card 3' },
     ],
     listing: null,
+    /* THE SERVER NAMES A GROUP ON EVERY NEW COPY (`worklist.new_copy_groups`), so the fixture does too: a case about a row going at the rule
+       says so by default, and a case about a row that arrives with none passes `group: undefined`. */
+    group: 'at_rule',
   }
   return { ...base, ...over }
 }
@@ -4839,15 +4842,49 @@ test('rule panel: a newer rule change retires the older toast, so Undo cannot cl
   await expect.poll(() => sentPolicy(wire).rule).toBe('undercut:5')
 })
 
+/** One row of a saved read, as `GET /pipeline/markdowns/<stamp>/table` lists it: a listing the read judged. */
+function readRow(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    sku: '8608859',
+    standing: 'offered',
+    skip: null,
+    name: 'Articuno - 161/159',
+    condition: 'Near Mint Holofoil',
+    live: 3,
+    asking: '20.0000',
+    market: '22.03',
+    above_market: '-9',
+    at_risk: '60.00',
+    proposed: '18.00',
+    cut: '2.00',
+    given_up: '6.00',
+    owned_since: '2026-08-01T00:00:00.000+00:00',
+    presets: { market_match: '22.03', market_undercut_5: '20.93', low_undercut_1: '19.79' },
+    listed_since: null,
+    held_here: true,
+    last_sold: null,
+    priced_at: null,
+    on_hand: 3,
+    row: { 'TCGplayer Id': '8608859', 'Product Line': 'Pokemon', 'Set Name': 'SV: Prismatic Evolutions', 'Product Name': 'Articuno', 'TCG Market Price': '22.03', 'TCG Low Price': '21.98', 'Total Quantity': '3', 'Add to Quantity': '0' },
+    ...over,
+  }
+}
+
+type OpenOptions = NonNullable<Parameters<typeof open>[1]>
+
 /** THE ONE LIST WITH A SAVED READ. The lens chips draw only with a read's sheet, and this spec's `open` stubs no sheet, so the
- *  one list is opened here with one read of one listing. The read is taken a minute ago, so the chips carry their counts. */
-async function openLiveWithRead(page: Page): Promise<void> {
-  await open(page)
+ *  one list is opened here with one read of the rows `read` names (one listing by default). The read is taken a minute ago, so the
+ *  chips carry their counts. `open` is the options of `open` above, for a case that needs a worklist of its own. The read lands
+ *  beside the worklist because the hash changes after the first load, which is how a visit comes back to the screen. */
+async function openLiveWithRead(page: Page, options: { open?: OpenOptions; read?: Record<string, unknown>[] } = {}): Promise<Wire[]> {
+  const wire = await open(page, options.open)
+  const read = options.read ?? [readRow()]
+  const offered = read.filter((one) => one['standing'] === 'offered').length
   const at = new Date(Date.now() - 60_000).toISOString()
   const asked = { days: 7, rule: 'undercut:10' }
   const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   await page.route(/\/pipeline\/markdowns$/, (route) =>
-    route.fulfill(json({ markdowns: [{ stamp: '20260924-093000', at, asked, source: null, skus: 1, files: [] }] })),
+    route.fulfill(json({ markdowns: [{ stamp: '20260924-093000', at, asked, source: null, skus: read.length, files: [] }] })),
   )
   await page.route(/\/pipeline\/markdowns\/[^/]+\/table$/, (route) =>
     route.fulfill(
@@ -4855,33 +4892,9 @@ async function openLiveWithRead(page: Page): Promise<void> {
         stamp: '20260924-093000',
         at,
         asked,
-        counts: { considered: 1, offered: 1, deferred: 0, refused: 0 },
+        counts: { considered: read.length, offered, deferred: 0, refused: read.length - offered },
         source: {},
-        skus: [
-          {
-            sku: '8608859',
-            standing: 'offered',
-            skip: null,
-            name: 'Articuno - 161/159',
-            condition: 'Near Mint Holofoil',
-            live: 3,
-            asking: '20.0000',
-            market: '22.03',
-            above_market: '-9',
-            at_risk: '60.00',
-            proposed: '18.00',
-            cut: '2.00',
-            given_up: '6.00',
-            owned_since: '2026-08-01T00:00:00.000+00:00',
-            presets: { market_match: '22.03', market_undercut_5: '20.93', low_undercut_1: '19.79' },
-            listed_since: null,
-            held_here: true,
-            last_sold: null,
-            priced_at: null,
-            on_hand: 3,
-            row: { 'TCGplayer Id': '8608859', 'Product Line': 'Pokemon', 'Set Name': 'SV: Prismatic Evolutions', 'Product Name': 'Articuno', 'TCG Market Price': '22.03', 'TCG Low Price': '21.98', 'Total Quantity': '3', 'Add to Quantity': '0' },
-          },
-        ],
+        skus: read,
         says: {},
         unpriceable: [],
         floor: '0.49',
@@ -4894,6 +4907,7 @@ async function openLiveWithRead(page: Page): Promise<void> {
   /* ONE LIST, NO TAB BAR: the read's rows are rows of the list the screen opened on. */
   await expect(page.locator('.pricing-tabs')).toHaveCount(0)
   await expect(page.getByRole('group', { name: 'Which live listings to show' })).toBeVisible()
+  return wire
 }
 
 /** The Market −5% example line in the rule panel, read from the one list's rule line, then the panel closed. */
@@ -5221,10 +5235,24 @@ test('F3: a filter narrows the view only, and the Send press carries every row',
 })
 
 /* D313: A FILTER ON AND OFF MOVES NOTHING ABOVE THE LIST. The press names every SKU, so no note
-   mounts; what the filter bar and the send bar draw stays where it was. */
+   mounts; what the filter bar and the send bar draw stays where it was. The rows inside the list do
+   move, because the person asked for fewer of them, so only a shift that moves the list's own start
+   or anything before it counts (`watchShifts`'s `top`). */
+const LIST_TOP = 'main.pricing .pricing-list'
+
+/** The layout shifts in the half second after `press`: all of them, and those at or above `LIST_TOP`. */
+async function shiftsAfter(page: Page, press: () => Promise<void>): Promise<{ all: number; above: number; says: string }> {
+  const from = await markNow(page)
+  await press()
+  await page.waitForTimeout(600) // keep: shifts are read over the 500ms window after the press
+  const inWindow = (await readShifts(page)).shifts.filter((sh) => sh.at >= from - 100 && sh.at < from + 500)
+  const above = inWindow.filter((sh) => sh.above > 0)
+  return { all: sumOf(inWindow), above: sumOf(above), says: describeShifts(above) }
+}
+
 for (const width of [1440, 820]) {
   test(`D313: a filter on and off moves nothing at ${width}`, async ({ page }) => {
-    await watchShifts(page)
+    await watchShifts(page, { top: LIST_TOP })
     await setViewport(page, { width, height: 900 })
     await open(page, { skus: FILTER_SKUS })
     await settleFonts(page)
@@ -5232,13 +5260,46 @@ for (const width of [1440, 820]) {
     await afterPaint(page)
     const search = page.getByRole('searchbox', { name: 'Search This List' })
     for (const [text, rows] of [['dunsparce', 1], ['', 4]] as const) {
-      const from = await markNow(page)
-      await search.fill(text)
-      await expect(page.locator('.pricing-row')).toHaveCount(rows)
-      await page.waitForTimeout(600) // keep: shifts are read over the 500ms window after the filter
-      const inWindow = (await readShifts(page)).shifts.filter((sh) => sh.at >= from - 100 && sh.at < from + 500)
-      expect(sumOf(inWindow), `the filter moved ${describeShifts(inWindow)}`).toBeLessThan(0.0005)
+      const seen = await shiftsAfter(page, async () => {
+        await search.fill(text)
+        await expect(page.locator('.pricing-row')).toHaveCount(rows)      })
+      expect(seen.above, `the filter moved ${seen.says}`).toBeLessThan(0.0005)
     }
+  })
+}
+
+/* THE CHECK ABOVE IS ONLY WORTH ITS GREEN IF IT GOES RED ON THE DEFECT IT GUARDS, and stays quiet on the rows the person moved.
+   Each case does the same filter press and then moves one thing by hand: the filter bar, a note that mounts between the bar and
+   the list, and a row inside the list. The first two must count above the list. The third must not, though the browser saw it. */
+for (const [what, counts] of [
+  ['the filter bar', true],
+  ['a note mounted above the list', true],
+  ['a row inside the list', false],
+] as const) {
+  test(`D313: the check ${counts ? 'sees' : 'ignores'} ${what} moving with a filter press`, async ({ page }) => {
+    await watchShifts(page, { top: LIST_TOP })
+    await setViewport(page, { width: 1440, height: 900 })
+    await open(page, { skus: FILTER_SKUS })
+    await settleFonts(page)
+    await settleMotion(page)
+    await afterPaint(page)
+    const search = page.getByRole('searchbox', { name: 'Search This List' })
+    const seen = await shiftsAfter(page, async () => {
+      await search.fill('dunsparce')
+      await expect(page.locator('.pricing-row')).toHaveCount(1)
+      await page.evaluate((move) => {
+        if (move === 'the filter bar') (document.querySelector('.pricing-filterbar') as HTMLElement).style.marginTop = '14px'
+        else if (move === 'a row inside the list') (document.querySelector('.pricing-row') as HTMLElement).style.marginTop = '20px'
+        else {
+          const note = document.createElement('div')
+          note.style.height = '28px'
+          document.querySelector('.pricing-list')?.before(note)
+        }
+      }, what)
+    })
+    expect(seen.all, `${what} moved, and the browser saw it`).toBeGreaterThanOrEqual(0.0005)
+    if (counts) expect(seen.above, `${what} is at or above the list's start`).toBeGreaterThanOrEqual(0.0005)
+    else expect(seen.above, `${what} is inside the list: ${seen.says}`).toBeLessThan(0.0005)
   })
 }
 
@@ -5892,7 +5953,6 @@ async function openLeftBox(page: Page): Promise<void> {
     worklist: {
       runs: [{ run: RUN, box: 7, box_name: 'Box 7', skus: LEFT_BOX_ROWS.length }],
       skus: LEFT_BOX_ROWS.map((row) => ({
-        group: leftBoxGroup(row),
         ...sku({
           sku: row.sku,
           name: row.name,
@@ -5900,6 +5960,7 @@ async function openLeftBox(page: Page): Promise<void> {
           add_to_quantity: row.on_hand,
           snap: { market: row.market, direct_low: null, low: row.low, low_with_shipping: null, now: null },
         }),
+        group: leftBoxGroup(row),
         on_hand: row.on_hand,
         in: [{ run: RUN, add_to_quantity: row.on_hand }],
         claimed_add: row.on_hand,
@@ -7145,6 +7206,170 @@ test('one list: the empty state after every copy is sent says neither "run" nor 
   const empty = page.locator(`${VIEW} .bn-empty`)
   await expect(empty).toBeVisible()
   expect(await empty.innerText()).not.toMatch(NO_RUN_OR_BOX)
+})
+
+/* ------------------------------------------------------------------------------------------------
+ * THE ONE LIST, REVIEW ROUND 1: what the screen shows about a row is what the press sends. Each case below reads the Send bar's
+ * figures and the body posted to the send route together, since a figure and a body that disagree are the defect.
+ * ---------------------------------------------------------------------------------------------- */
+type OneListSend = { runs: string[]; confirm?: boolean; quantities?: Record<string, number>; prices?: { sku: string; price: string; was: string | null; source?: string; ticked?: boolean }[] }
+const sentBody = (wire: Wire[], at = 0) => sendPosts(wire)[at]?.body as OneListSend
+const oneListSend = (page: Page) => page.getByRole('button', { name: /^Send .* to TCGplayer$/i })
+const sendFigures = (page: Page) => page.getByRole('complementary', { name: 'Send to TCGplayer' })
+
+/* A HOLD BEATS A TYPED PRICE. The owner types a price on a live row, then keeps the card off TCGplayer: the hold is the later word, so the row
+ * draws held, the Send figures count it as kept off and not as typed, and the press carries neither the price nor the row. */
+test('one list: a hold on a live row beats the price typed on it, in the row, the figures and the body', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const wire = await open(page, { live: ONE_LIST_LIVE })
+  const typed = page.getByRole('textbox', { name: 'Price for Pecharunt ex' })
+  await typed.fill('3.10')
+  await typed.press('Tab')
+  const bar = sendFigures(page)
+  await expect(bar).toContainText('1 typed by you, listing for $3.10')
+  await expect(bar).toContainText('5 copies ready to send.')
+
+  await page.getByRole('button', { name: 'Keep Pecharunt ex off TCGplayer', exact: true }).click()
+  await page.getByRole('button', { name: 'Keep it off' }).click()
+  await expect(page.locator('.pricing-row', { hasText: 'Pecharunt ex' }).locator('.pricing-held'), 'the row draws held').toBeVisible()
+  await expect(bar).toContainText('0 typed by you')
+  await expect(bar).toContainText('4 copies ready to send.')
+  await expect(bar).toContainText('1 kept off TCGplayer, not in this send')
+
+  await oneListSend(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  const body = sentBody(wire)
+  expect((body.prices ?? []).find((one) => one.sku === '9000003'), 'the held row is not sent').toBeUndefined()
+  expect(JSON.stringify(body), 'the typed price is not sent').not.toContain('3.10')
+  expect((body.prices ?? []).map((one) => one.sku), 'the kept suggestion still goes').toEqual(['9000002'])
+})
+
+/* KEPT SUGGESTIONS SEND ALONE. With no run in the link and every copy already at TCGplayer, the ticked suggestions are the whole press: the body names them
+ * with their `source` and the press is not turned away for having no cards picked. The stub answers as the server does: an empty `runs` is enough only when
+ * every named price is a kept suggestion (`runs_required`). Two states reach the same press: the worklist loads no run, and the worklist still lists a run whose
+ * rows are all at TCGplayer (a joined run never emitted stays open). Typed prices on live rows with no new copy are an open question for the owner and are not
+ * asserted here. */
+for (const [state, worklist] of [
+  ['the worklist loads no run', { runs: [], skus: [] }],
+  ['the worklist still lists a run whose rows are all at TCGplayer', { skus: [sku({ sku: 'capped', name: 'Capped', at_cap: true, add_to_quantity: 0, nothing_to_add: 'every copy is already at TCGplayer' })] }],
+] as [string, OpenOptions][]) {
+  test(`one list: with no run in the link and no new copy, the ticked suggestions send alone, and ${state}`, async ({ page }) => {
+    await setViewport(page, { width: 1440, height: 900 })
+    const wire = await open(page, {
+      noRun: true,
+      ...worklist,
+      live: ONE_LIST_LIVE,
+      send: (body) => {
+        const prices = (body.prices ?? []) as { source?: string }[]
+        const suggestionsAlone = prices.length > 0 && prices.every((one) => one.source === 'suggested')
+        return (body.runs as string[]).length === 0 && !suggestionsAlone
+          ? { status: 400, code: 'runs_required' }
+          : { status: 200, body: { send: sendSummary({ copies: 0, prices: prices.length }), console: '' } }
+      },
+    })
+    await expect(sendFigures(page)).toContainText('1 copy ready to send.')
+    await oneListSend(page).click()
+    await expect.poll(() => sendPosts(wire).length).toBe(1)
+    expect(sentBody(wire).prices, 'the ticked suggestion is named, with its source').toEqual([{ sku: '9000002', price: '4.01', was: '3.40', source: 'suggested' }])
+    await expect(page.getByText('No cards are picked, so nothing was sent.'), 'the press is not refused for having no cards picked').toHaveCount(0)
+  })
+}
+
+/* THE CHIPS NARROW WHAT IS DRAWN AND NEVER WHAT IS SENT. The newest read lands beside the worklist, and it judges only some of the live listings. A chip
+ * (Not Selling, Passed Over, Singles, Sealed) files a listing under what the read said of it, so a listing the read did not judge is under none of them, and
+ * no chip takes a ticked suggestion out of the Send figures or the body. Gardevoir ex is ticked and missing from the read; Roaring Moon is ticked and in it. */
+const BESIDE_READ: LiveStub[] = [
+  ...ONE_LIST_LIVE,
+  { sku: '9000004', name: 'Roaring Moon', set_name: 'Paradox Rift', image_url: null, market: '6.10', low: '6.20', asking: '5.00', last_sold_at: null, group: 'suggested', price: '6.00', source: 'Suggested', reason: 'Market up 20% since listed.' },
+]
+test('one list: a chip never files a listing the read did not judge, and never takes a ticked suggestion out of the send', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const wire = await openLiveWithRead(page, {
+    open: { live: BESIDE_READ },
+    read: [readRow({ sku: '9000004', name: 'Roaring Moon', standing: 'offered' }), readRow({ sku: '9000003', name: 'Pecharunt ex', standing: 'refused' })],
+  })
+  const lens = (name: RegExp) => page.getByRole('group', { name: 'Which live listings to show' }).getByRole('button', { name })
+  const kind = (name: string) => page.getByRole('group', { name: 'Singles or sealed' }).getByRole('button', { name, exact: true })
+  const bar = sendFigures(page)
+  const gardevoir = page.getByRole('textbox', { name: 'Price for Gardevoir ex' })
+  const sendsAsBefore = async (said: string) => {
+    await expect(bar, said).toContainText('5 copies ready to send.')
+    await expect(bar, said).toContainText('3 new, listing for $66.09')
+    await expect(bar, said).toContainText('2 rises, up $1.61 in all')
+  }
+  await expect(lens(/^Passed Over 1$/), 'the read judged one listing as passed over').toBeVisible()
+  await expect(gardevoir, 'drawn with no chip pressed').toHaveCount(1)
+  await sendsAsBefore('with no chip pressed')
+
+  for (const [said, chip, reset, filesIt] of [
+    ['Not Selling', lens(/^Not Selling/), lens(/^All/), true],
+    ['Passed Over', lens(/^Passed Over/), lens(/^All/), false],
+    ['Singles', kind('Singles'), kind('Both'), false],
+    ['Sealed', kind('Sealed'), kind('Both'), true],
+  ] as const) {
+    await chip.click()
+    await expect(chip, `${said} is pressed`).toHaveAttribute('aria-pressed', 'true')
+    if (!filesIt) await expect(gardevoir, `a listing the read did not judge is not drawn under ${said}`).toHaveCount(0)
+    await sendsAsBefore(`under ${said}`)
+    await reset.click()
+    await expect(reset).toHaveAttribute('aria-pressed', 'true')
+  }
+
+  await kind('Sealed').click()
+  await oneListSend(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  expect((sentBody(wire).prices ?? []).map((one) => one.sku).sort(), 'both ticked suggestions go under a chip').toEqual(['9000002', '9000004'])
+})
+
+/* A NEW COPY WITH NO GROUP WAITS FOR THE OWNER. The server names a group on every new copy; a row that arrives without one is not
+ * known to be safe to send, so it files under Needs You, unticked, and the press carries none of its copies until it is ticked. */
+test('one list: a new copy with no group on the wire files under Needs You and does not send without a tick', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const wire = await open(page, { live: ONE_LIST_LIVE, skus: [sku({ sku: 'plain', name: 'Plain', group: undefined })] })
+  const needs = listGroup(page, 'Needs You')
+  await expect(needs.getByRole('textbox', { name: 'Price for Plain', exact: true }), 'filed under Needs You').toHaveCount(1)
+  await expect(listGroup(page, 'Going at the Rule').getByRole('textbox', { name: 'Price for Plain', exact: true }), 'not going at the rule').toHaveCount(0)
+  await expect(needs.getByRole('checkbox', { name: 'Send the new price for Plain', exact: true })).not.toBeChecked()
+  await expect(sendFigures(page)).toContainText('1 copy ready to send.')
+  await oneListSend(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  expect(sentBody(wire).quantities?.['plain'] ?? 0, 'none of its copies ride the press').toBe(0)
+})
+
+/* A PAST-CAP SUGGESTION KEEPS ITS TICK. Iono's move is past the owner's limit, so it sits under Needs You unticked and is not in the body at all. Once the
+ * owner ticks it, the body carries the row with `ticked: true`, which is how the server knows the owner said yes to a move past the limit. */
+test('one list: a past-cap suggestion is left out unticked, and carries ticked: true once the owner ticks it', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const wire = await open(page, { live: ONE_LIST_LIVE })
+  await oneListSend(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  expect((sentBody(wire, 0).prices ?? []).find((one) => one.sku === '9000001'), 'unticked, the row is not in the body').toBeUndefined()
+
+  await listGroup(page, 'Needs You').getByRole('checkbox', { name: 'Send the new price for Iono' }).check()
+  await expect(oneListSend(page)).toBeEnabled()
+  await oneListSend(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(2)
+  expect((sentBody(wire, 1).prices ?? []).find((one) => one.sku === '9000001'), 'ticked, the row is in the body with its tick').toMatchObject({
+    price: '12.41',
+    was: '8.80',
+    source: 'suggested',
+    ticked: true,
+  })
+})
+
+/* LABELS TAKE TITLE CASE (docs/DESIGN.md R5). Neither string below is a sentence (`isSentence` needs a closing . ? or !), so each is a label: a sheet heading and an
+ * empty state's title. The copy sweep does not open the mark-down sheet or reach this empty state, so the exact case is matched here. */
+test('R5: the mark-down sheet heading over the rule presets takes Title Case', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await openLiveWithRead(page)
+  await page.getByRole('button', { name: 'Read settings' }).click()
+  await expect(page.getByRole('dialog', { name: 'What to mark down' }).getByRole('heading', { name: 'Rule for New Prices', exact: true })).toBeVisible()
+})
+
+test('R5: the empty pick title takes Title Case', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { skus: [] })
+  await expect(page.locator(`${VIEW} .bn-empty`).getByText('Nothing to Price in That Pick', { exact: true })).toBeVisible()
 })
 
 /* THE HELD PILL KEEPS ITS FLEX, AT BOTH WIDTHS AND IN BOTH THEMES (spec section 10): the pill never grows or shrinks inside its column. */
