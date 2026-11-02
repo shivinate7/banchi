@@ -12,7 +12,7 @@ and `&t=dark` (or `abyssal-bloom`, `carnival-midway`). With no `t`, the page fol
 
 Component: `OrdersShipStage.ShipStage`, the Ship stage of the Orders hub at `#/shipping`. The CSS
 is the repo's own sheets, inlined at the time of drawing, with `Shipping.css`. The proposed rules
-are at the end, under "PROPOSED". A dashed grey outline marks what exists today; a dashed accent
+are at the end, under "PROPOSED". A dashed gray outline marks what exists today; a dashed accent
 outline marks what this design adds.
 
 ## The step
@@ -89,10 +89,12 @@ outline marks what this design adds.
     9 opens a new preview over the rest only (`#s=again`), where the 6 made are held back with
     their own sentence.
 14. **Reprint, against `GET /shipping/labels/<order>/pdf`.** It sits at the end of each made row on
-    the receipt and on each row of the Labels list. Words: "Reprint", with the printer icon; its
-    name to a screen reader is "Reprint the label for order N". States, all in one cell, so the
-    row keeps its size (`#s=reprint`):
-    - idle: "Reprint";
+    the receipt and on each row of the Labels list. It is an icon button, the printer icon, 40 px:
+    the word "Reprint" on fifteen rows is the same label fifteen times (the house rule: a label
+    shows once on a screen). Its tooltip is "Reprint", and its name to a screen reader is "Reprint
+    the label for order N". Loss: the act is one hover from its word; Print All, in words, sits
+    under the same rows. States, all in one cell, so the row keeps its size (`#s=reprint`):
+    - idle: the printer icon;
     - opening: the ring turns in the button's own place until the file answers, then the file
       opens in a new tab, where the browser prints it;
     - failed: the scan line's place says "Banchi could not open this label's file. Nothing was

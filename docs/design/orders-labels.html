@@ -653,7 +653,7 @@
 
   /* ---- what a palette may recolor beyond the neutrals -------------------------------
      Each default reproduces today's rule, so light and dark paint exactly as before and only
-     a `data-palette` block below moves them. Nav slots 2-4 are the three labelled groups
+     a `data-palette` block below moves them. Nav slots 2-4 are the three labeled groups
      (Workflow, Sell, Library) in `App.css`; Home keeps the primary accent. */
   --bn-nav-label-2: var(--bn-ink-3);
   --bn-nav-label-3: var(--bn-ink-3);
@@ -3037,7 +3037,7 @@ img.bn-crop[data-cropped='true'] {
   /* THE UNLABELLED UTILITY GOES LAST ON A PHONE (D117). A header's actions are written primary-
      last and right-aligned, so on a desktop the icon-only Reload lands at the LEFT of a cluster
      that ends in the primary — which reads as a utility beside it. The phone header is left-
-     aligned, so the same source order put a bare, unlabelled glyph at the head of the row, ahead
+     aligned, so the same source order put a bare, unlabeled glyph at the head of the row, ahead
      of `Identify a box` and `Reconcile`. Four screens drew it that way: Runs, Review, Codes and
      Pricing. `order` and not a reordering of the JSX, because the source order is correct at the
      width it was written for and the DOM order is what a screen reader follows. */
@@ -5275,7 +5275,7 @@ function apply() {
   const hidden = new Set(h.h)
   const stage = document.getElementById('mk-stage')
   const st = states.find(([id]) => id === s)
-  stage.innerHTML = `<p class="mk-sample">Sample. No figure on this page is real: every name, order number, value, date and scan is made up. A dashed grey outline marks what exists today; a dashed accent outline marks what this design adds.</p>
+  stage.innerHTML = `<p class="mk-sample">Sample. No figure on this page is real: every name, order number, value, date and scan is made up. A dashed gray outline marks what exists today; a dashed accent outline marks what this design adds.</p>
     <p class="mk-caption"><b>${st[1]}.</b> ${st[2] || ''}</p>
     <div class="mk-frame" data-w="${w}">${sideHtml(current)}<div class="mk-main">${render(s, w, hidden)}</div></div>
     <section class="mk-options"><h2>Options</h2>${options.map((o) => `<div class="mk-opt" data-opt="${o.id}"${hidden.has(o.id) ? ' hidden' : ''}>
@@ -5302,7 +5302,7 @@ function labelPill(word, extra = '') {
   return `<span class="bn-pill${w.tone ? ' bn-pill-' + w.tone : ''}"${extra || ' id="label-word"'}>${w.ic ? icon(w.ic, 12) : ''}${w.label}</span>`
 }
 function countPill(made, of) {
-  return `<span class="bn-pill" id="label-word">${made} of ${of} labelled</span>`
+  return `<span class="bn-pill" id="label-word">${made} of ${of} labeled</span>`
 }
 const BUYERS = [
   ['Robin Example', 1, '3 sold'], ['Sam Placeholder', 3, '2'], ['Kai Sample', 1, '5 sold'], ['Ari Fictional', 1, '4'],
@@ -5392,7 +5392,7 @@ const STATES = [
   ['moving', 'On its way', 'The last Check Scans on Shipping found a scan. The word is the only label fact on this screen; dates, scans and reprints stay on Shipping.'],
   ['delivered', 'Delivered', 'The last check found the delivery.'],
   ['held', 'Held up', 'No new scan for 3 days, or the label service named a problem. Warn tone, so it reads apart from the calm words.'],
-  ['several', 'A buyer with several orders', 'Each order has its own word, so the buyer panel counts instead: 2 of 3 labelled. Held up anywhere wins over the count, as one word naming that order count.'],
+  ['several', 'A buyer with several orders', 'Each order has its own word, so the buyer panel counts instead: 2 of 3 labeled. Held up anywhere wins over the count, as one word naming that order count.'],
   ['parcel', 'Parcel order', 'Parcel orders ship through Pirate Ship, which Banchi does not read back, so they draw no label word.'],
   ['manage', 'Manage, the buyer\'s orders', 'Each order\'s detail line gains its label word after its status. An order with no label keeps today\'s line.'],
   ['order', 'Manage, one order', 'The order\'s own head: lane, status, then the label word, in the side row that already holds pills.'],

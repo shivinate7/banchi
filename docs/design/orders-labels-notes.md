@@ -31,7 +31,7 @@ filter bar, the walk and the card pane are plain stand-ins: this design does not
    `.orders-panel-facts`, `#s=made` to `#s=held`). The status pill and the word are wrapped
    together, so the figures keep their line. Tones: "On its way" accent, "Delivered" ok, "Held
    up" warn with the alert icon, "Label made" plain.
-5. **A buyer with several orders: a count, not a word** (`#s=several`). "2 of 3 labelled". If any
+5. **A buyer with several orders: a count, not a word** (`#s=several`). "2 of 3 labeled". If any
    order is held up, the panel says "1 held up" in warn instead, because that is the one to act
    on. When every order has a label and none is held up, the panel shows the word of the order
    furthest behind.

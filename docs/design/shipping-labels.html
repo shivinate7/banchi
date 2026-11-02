@@ -653,7 +653,7 @@
 
   /* ---- what a palette may recolor beyond the neutrals -------------------------------
      Each default reproduces today's rule, so light and dark paint exactly as before and only
-     a `data-palette` block below moves them. Nav slots 2-4 are the three labelled groups
+     a `data-palette` block below moves them. Nav slots 2-4 are the three labeled groups
      (Workflow, Sell, Library) in `App.css`; Home keeps the primary accent. */
   --bn-nav-label-2: var(--bn-ink-3);
   --bn-nav-label-3: var(--bn-ink-3);
@@ -3037,7 +3037,7 @@ img.bn-crop[data-cropped='true'] {
   /* THE UNLABELLED UTILITY GOES LAST ON A PHONE (D117). A header's actions are written primary-
      last and right-aligned, so on a desktop the icon-only Reload lands at the LEFT of a cluster
      that ends in the primary — which reads as a utility beside it. The phone header is left-
-     aligned, so the same source order put a bare, unlabelled glyph at the head of the row, ahead
+     aligned, so the same source order put a bare, unlabeled glyph at the head of the row, ahead
      of `Identify a box` and `Reconcile`. Four screens drew it that way: Runs, Review, Codes and
      Pricing. `order` and not a reordering of the JSX, because the source order is correct at the
      width it was written for and the DOM order is what a screen reader follows. */
@@ -4258,7 +4258,7 @@ body { background: var(--bn-surface-2); }
 .labels-card-meta { display: grid; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 /* A reprint that failed says so in the scan line's own place. */
 .labels-scan-cell { min-width: 0; }
-.labels-act .mk-cell > * { justify-self: stretch; display: grid; }
+.labels-act .mk-cell > *, .labels-row .mk-cell > * { justify-self: end; }
 .labels-fail { color: var(--bn-danger); }
 .labels-scan { display: flex; align-items: center; min-width: 0; }
 
@@ -4457,7 +4457,7 @@ function apply() {
   const hidden = new Set(h.h)
   const stage = document.getElementById('mk-stage')
   const st = states.find(([id]) => id === s)
-  stage.innerHTML = `<p class="mk-sample">Sample. No figure on this page is real: every name, order number, value, date and scan is made up. A dashed grey outline marks what exists today; a dashed accent outline marks what this design adds.</p>
+  stage.innerHTML = `<p class="mk-sample">Sample. No figure on this page is real: every name, order number, value, date and scan is made up. A dashed gray outline marks what exists today; a dashed accent outline marks what this design adds.</p>
     <p class="mk-caption"><b>${st[1]}.</b> ${st[2] || ''}</p>
     <div class="mk-frame" data-w="${w}">${sideHtml(current)}<div class="mk-main">${render(s, w, hidden)}</div></div>
     <section class="mk-options"><h2>Options</h2>${options.map((o) => `<div class="mk-opt" data-opt="${o.id}"${hidden.has(o.id) ? ' hidden' : ''}>
@@ -4514,7 +4514,9 @@ const ROW_WORD = {
 /* Reprint: one press per order, against the per-order label file. Three states in one cell. */
 function reprintBtn(state, id = '') {
   if (state === 'failed') return btn('Try Again', { size: 'sm', variant: 'quiet', ic: 'refresh', extra: ` aria-describedby="why-${id}"` })
-  return btn('Reprint', { size: 'sm', variant: 'quiet', ic: 'printer', busy: state === 'opening', disabled: state === 'opening', extra: id ? ` aria-label="Reprint the label for order ${id}"` : '' })
+  /* Icon only: the word would show on every row (one label per screen). Its name and its tooltip say Reprint. */
+  const busy = state === 'opening' ? ' data-busy="true" aria-busy="true" disabled' : ''
+  return `<button type="button" class="bn-btn bn-btn-icon bn-icon-btn" title="Reprint" aria-label="Reprint the label${id ? ' for order ' + id : ''}"${busy}>${icon('printer', 16)}</button>`
 }
 /* The scan words. Each maps from the label service's own status word; that vocabulary is
    unmeasured until the first live lookup. */
