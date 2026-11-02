@@ -892,7 +892,7 @@ def check_suite_lock(report: Report) -> None:
 # AND THE WIRING IS READ, because a list nothing consults is a list. The workflow must run the
 # classifier from some job, `design-check` must need that job and read its answer in the
 # FAIL-OPEN spelling — `!= 'false'` under `!cancelled()` — the `on:` block may carry no path
-# filter (that would gate `check`, `revert-guard` and `already-passed` too, which D141
+# filter (that would gate `ci-check`, `revert-guard` and `already-passed` too, which D141
 # forbids), and `design-check-passed` may not run on a skipped matrix, or a tree no browser
 # saw would earn D136's pass record.
 #
@@ -1004,7 +1004,7 @@ def browser_gate_findings(text: str) -> List[Tuple[str, str]]:
         out.append((where, "has no `on:` block."))
     elif re.search(r"^\s*paths(?:-ignore)?:", on, re.M):
         out.append((where, (
-            "the `on:` block carries a `paths` filter. That gates EVERY job — `check`,\n"
+            "the `on:` block carries a `paths` filter. That gates EVERY job — `ci-check`,\n"
             "  `revert-guard` and `already-passed` included — and D141 scopes the browser\n"
             "  matrix alone. The filter is `browser-scope`'s output, read by one job's `if:`.")))
 
@@ -1244,9 +1244,9 @@ _ALWAYS_DRAFT_GUARD = "${{ always() && !github.event.pull_request.draft }}"
 #: Jobs the rollup does not need, each with its reason. A job missing here AND from the rollup's
 #: `needs` is a finding, so a new job cannot quietly sit outside the required check.
 EXCLUDED = {
-    "check": "a thin alias for the old required name; it reads the rollup and is deleted after protection flips",
     "design-check-passed": "a recorder: it skips on purpose unless the browser matrix really ran",
     "nightly-alarm": "a reporter: it skips unless a nightly run failed, and a skip is its normal answer",
+    "ci-done": "the last job: it reads every other job's result and comments on a red pull request run; it needs the rollup, so the rollup cannot need it",
 }
 
 _BLOCK_HEADER_RE = re.compile(r"^[|>][+-]?[0-9]?[+-]?$")
@@ -1552,7 +1552,7 @@ def _rollup_findings(where: str, text: str, files: Dict[str, str],
     # `continue-on-error` turns a failed job or step into a success, so the rollup would read green
     # over it. Only a literal `false` is allowed: an expression or `true` can hide a failure.
     # A flow-style step (`- { name: x, continue-on-error: true }`) puts the key after `{` or `,`.
-    watched = needed_jobs + [ROLLUP_JOB] + (["check"] if "check" in names else [])
+    watched = needed_jobs + [ROLLUP_JOB]
     for name in watched:
         for line in _job_lines(jobs, name) or []:
             if line.lstrip().startswith("#"):
@@ -1564,16 +1564,6 @@ def _rollup_findings(where: str, text: str, files: Dict[str, str],
                     f"`{name}` sets `continue-on-error: {value}`, which turns a failure\n"
                     f"  into a success the rollup cannot see. Only `false` is allowed on a job `{ROLLUP_JOB}` reads.")))
                 break
-
-    # The alias reads the rollup and nothing else, or it is a second required check with its own
-    # wiring, which is the defect the rollup exists to remove.
-    if "check" in names:
-        alias_needs = _job_needs(_job_lines(jobs, "check") or [])
-        if alias_needs is None:
-            out.append((where, f"`check` has no `needs:`, so it passes without reading `{ROLLUP_JOB}`."))
-        elif alias_needs != [ROLLUP_JOB]:
-            out.append((where, (
-                f"`check` needs [{', '.join(alias_needs)}], and the alias may need only [{ROLLUP_JOB}].")))
     return out
 
 

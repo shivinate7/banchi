@@ -36,10 +36,10 @@
 # platform that ever looked. That is not a platform bug and it was not fixed with a tolerance —
 # `BoxBrowse.css` reserves the key's width now — but a second platform is what found it.
 #
-# IT IS A SEPARATE JOB, NOT A STEP IN `check`. A chromium install is a real cost and the two
-# failures should be attributable to different things — a red `check` is a claim about the tree,
+# IT IS A SEPARATE JOB, NOT A STEP IN `ci-check`. A chromium install is a real cost and the two
+# failures should be attributable to different things — a red `ci-check` is a claim about the tree,
 # a red `design-check` is a claim about what a browser draws. The two run in parallel, so a red
-# `check` still lands in about ninety seconds; this one takes twelve to fifteen minutes and is
+# `ci-check` still lands in about ninety seconds; this one takes twelve to fifteen minutes and is
 # the last word rather than the first. And it stays out of `make check` and `make ci-check` for
 # the reason the Makefile already gives: it starts a browser and a dev server, which is a
 # different weight of check. It therefore gets no `scripts/checks.py` entry either — `check
@@ -61,8 +61,8 @@
 # below records a green PR run as an artifact named for that tree, `already-passed` looks the
 # name up on the push, and the browser matrix runs on main only when nothing is found — which
 # is precisely the case the paragraph above is about: main moved between the PR's test and
-# the merge, and the tree that landed is one no browser has seen. The `check` job and
-# demo.yml run on every push to main as before. What the old coverage was actually worth is
+# the merge, and the tree that landed is one no browser has seen. The `ci-check` shards, the other
+# jobs and demo.yml run on every push to main as before. What the old coverage was actually worth is
 # worth saying: the `concurrency` group below cancelled four main runs between 2026-09-07 and
 # 2026-09-11, every time two merges landed inside fifteen minutes, so the post-merge verdict
 # was already partial. No write to git, no commit status, nothing D42 forbids — an artifact
@@ -144,7 +144,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # SIX SHARDS IN PARALLEL, MEASURED AT 140 TO 297s EACH (`timeout-minutes` IS 9 MIN, THE SLOWEST MEASURED SHARD 297s), AND ONE JOB NAMED `check` THAT ANSWERS FOR THEM (owner's word,
+  # SIX SHARDS IN PARALLEL, MEASURED PER SHARD (D136 HOLDS THE FIGURES AND THE `timeout-minutes` CAP), AND ONE JOB NAMED `all-jobs-passed` THAT ANSWERS FOR THEM (owner's word,
   # 2026-09-28; D161, amended). The serial `make ci-check` took 600s on run 36509895299. The
   # shards' recipes together are exactly `ci-check`'s, and `make docs-audit`'s `check registry`
   # row fails when they are not. Each shard installs the same way and keeps D161's order, product
@@ -154,7 +154,7 @@ jobs:
     name: ci-check (${{ matrix.target }})
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
-    timeout-minutes: 9
+    timeout-minutes: 14
     strategy:
       fail-fast: false
       matrix:
@@ -314,9 +314,9 @@ jobs:
   # job-level `if:` of each needed job. `if: always()` because a job that `needs` a red job is
   # otherwise skipped, and a skipped required check reads as green; the draft guard keeps a draft
   # at zero runner starts.
-  # NOT needed, on purpose (the row's EXCLUDED list holds each reason): `check` (the alias below),
-  # `design-check-passed` (a recorder that skips on purpose) and `nightly-alarm` (a reporter that
-  # skips unless something failed).
+  # NOT needed, on purpose (the row's EXCLUDED list holds each reason): `design-check-passed` (a
+  # recorder that skips on purpose), `nightly-alarm` (a reporter that skips unless something
+  # failed) and `ci-done` (the last job; it reads the rollup's needs and reports a red run).
   all-jobs-passed:
     needs: [ci-check, ci-static, revert-guard, records, code-check, zizmor, already-passed, browser-scope, design-check]
     if: ${{ always() && !github.event.pull_request.draft }}
@@ -326,23 +326,6 @@ jobs:
       - uses: shivinate7/claude-settings/actions/all-jobs-passed@17492e58853703168d025128a2da315e9936ee90 # main, 2026-11-01
         with:
           needs: ${{ toJSON(needs) }}
-
-  # A THIN ALIAS FOR THE OLD NAME. Branch protection still names `check` until the owner flips it
-  # to `all-jobs-passed`, and a protection that names a check no job reports blocks every merge.
-  # This job passes exactly when the rollup does. It goes in a follow-up after the flip, together
-  # with its entry in the row's EXCLUDED list (claude-settings decision same-check-kinds).
-  check:
-    needs: [all-jobs-passed]
-    if: ${{ always() && !github.event.pull_request.draft }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    steps:
-      - name: the rollup succeeded
-        env:
-          ROLLUP: ${{ needs.all-jobs-passed.result }}
-        run: |
-          echo "all-jobs-passed: ${ROLLUP}"
-          [ "${ROLLUP}" = "success" ] || { echo "the rollup did not succeed"; exit 1; }
 
   # D133's guard as its own check on the PR, so a refusal reads as what it is rather than as one
   # red line inside ninety seconds of `make ci-check` (which runs it too, as `revert-guard`).
@@ -761,3 +744,22 @@ jobs:
           else
             gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
           fi
+
+  # THE LAST JOB. A run with a red job sends no "all checks done" wake to the session that waits
+  # on the pull request. This job posts one comment when any job ended red or cancelled, and that
+  # comment is the wake. It needs every other job, runs on a pull request that is not a draft,
+  # and posts nothing on a green run. `!cancelled()` and not `always()`: a superseded run is
+  # cancelled and posts nothing. The action is pinned to the same commit as every other
+  # claude-settings action here (the `all jobs passed` row of `make docs-audit` holds that).
+  ci-done:
+    needs: [ci-check, ci-static, revert-guard, records, code-check, zizmor, already-passed, browser-scope, design-check, design-check-passed, all-jobs-passed, nightly-alarm]
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2   # provisional: a comment post takes seconds; 60 would pass the merge deadline of 45
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: shivinate7/claude-settings/actions/ci-done-comment@17492e58853703168d025128a2da315e9936ee90 # main, 2026-11-01
+        with:
+          needs: ${{ toJSON(needs) }}
