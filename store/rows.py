@@ -369,7 +369,7 @@ class Rows(MutableMapping):
 
     def load(self, keys: Iterable) -> None:
         """Read every one of `keys` not yet known into this mapping, in one indexed query per
-        500 keys, so a caller about to `.get` each key pays for them once and not per key. A key
+        chunk of the source's bound-variable limit (`SqliteSource.payloads`), so a caller about to `.get` each key pays for them once and not per key. A key
         the source does not hold is remembered as absent, as a `.get` miss would be."""
         if self._complete:
             return
