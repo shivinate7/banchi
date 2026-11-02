@@ -1244,9 +1244,9 @@ _ALWAYS_DRAFT_GUARD = "${{ always() && !github.event.pull_request.draft }}"
 #: Jobs the rollup does not need, each with its reason. A job missing here AND from the rollup's
 #: `needs` is a finding, so a new job cannot quietly sit outside the required check.
 EXCLUDED = {
-    "check": "a thin alias for the old required name; it reads the rollup and is deleted after protection flips",
     "design-check-passed": "a recorder: it skips on purpose unless the browser matrix really ran",
     "nightly-alarm": "a reporter: it skips unless a nightly run failed, and a skip is its normal answer",
+    "ci-done": "the last job: it reads every other job's result and comments on a red pull request run; it needs the rollup, so the rollup cannot need it",
 }
 
 _BLOCK_HEADER_RE = re.compile(r"^[|>][+-]?[0-9]?[+-]?$")
