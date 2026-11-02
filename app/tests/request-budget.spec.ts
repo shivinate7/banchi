@@ -156,7 +156,7 @@ async function instrument(page: Page): Promise<Watch> {
     hold,
     close: () => { gate = new Promise<void>((r) => { open_ = r }) },
     release: () => open_(),
-    holdFirst: () => page.route(() => true, holdRead),
+    holdFirst: async () => { await page.route(() => true, holdRead) },
     /* a new page starts from nothing: what the last page left open is not this page's */
     reset: () => { open.clear() },
     openCount: () => open.size,
