@@ -23,7 +23,78 @@ from .dispatch import UNDISPATCHED, check_dispatch
 from .env_map import _consumer_block, _map_sections
 from .hygiene import ROSTER_MARK, ROUTE_HASH, _balanced, expected_rosters
 from . import registry_scopes
-from .registry_scopes import workflow_shards, INVOKERS, UNIT_COMMAND, check_audit_invocation, check_check_registry, fleet_scripts
+from .registry_scopes import workflow_shards, workflow_step_problems, INVOKERS, UNIT_COMMAND, check_audit_invocation, check_check_registry, fleet_scripts
+
+_DRAFT = "${{ !github.event.pull_request.draft }}"
+# The counted-skip shape written out as literal lines. A change to SKIP_COUNT_STEP must show up
+# here as a red case, never as a silent re-pin of the expectation.
+_STATIC_STEP = [
+    "set -o pipefail",
+    'log="$RUNNER_TEMP/make-ci-check-static.log"',
+    "rc=0",
+    'make ci-check-static 2>&1 | tee "$log" || rc=$?',
+    'scripts/ci-skip-count.sh ci-check-static "$log"',
+    'exit "$rc"',
+]
+_MATRIX_STEP = [
+    "set -o pipefail",
+    'log="$RUNNER_TEMP/make-$TARGET.log"',
+    "rc=0",
+    'make "$TARGET" 2>&1 | tee "$log" || rc=$?',
+    'scripts/ci-skip-count.sh "$TARGET" "$log"',
+    'exit "$rc"',
+]
+
+
+def _wf(body, step_keys="", job_if=_DRAFT, inline=None) -> str:
+    """A workflow with one matrix job (target `a`) and a `ci-static` job holding one step."""
+    run = ("        run: " + inline + "\n") if inline else (
+        "        run: |\n" + "".join("          " + ln + "\n" for ln in body))
+    return ("jobs:\n  m:\n    strategy:\n      matrix:\n        target: [a]\n"
+            "  ci-static:\n    if: " + job_if + "\n    runs-on: x\n    steps:\n      - name: make ci-check-static\n"
+            + step_keys + run)
+
+
+def _shard_step_cases(ok) -> None:
+    """A shard's `run:` must be the one counted-skip shape; anything else is a finding, and a
+    block that is not that shape is no shard. Each case is a way a red run could read green."""
+    def swap(old, new):
+        return [new if ln == old else ln for ln in _STATIC_STEP]
+    make = _STATIC_STEP[3]
+    cases = [
+        ("the exact step shape is a shard and no problem", _STATIC_STEP, {"a", "ci-check-static"}, False),
+        ("blank and comment lines inside the block are allowed, a lone quote in one included",
+         ["# don't stop", ""] + _STATIC_STEP + ["# end"], {"a", "ci-check-static"}, False),
+        ("`|| true` in place of `|| rc=$?` is a problem and no shard", swap(make, make.replace("|| rc=$?", "|| true")), {"a"}, True),
+        ('`exit 0` in place of `exit "$rc"` is a problem', swap('exit "$rc"', "exit 0"), {"a"}, True),
+        ("an extra line is a problem", _STATIC_STEP + ["echo done"], {"a"}, True),
+        ("a second make line after the exit is a problem", _STATIC_STEP + [make], {"a"}, True),
+        ("a make line inside `if false` is a problem", swap(make, "if false; then " + make + "; fi"), {"a"}, True),
+        ("a make line inside a heredoc is a problem", ["cat <<'EOF'"] + _STATIC_STEP + ["EOF"], {"a"}, True),
+        ("a comment opener in a quoted string does not hide a line",
+         _STATIC_STEP + ['msg="# make ci-check-static"'], {"a"}, True),
+        ("a make line inside a multi-line quoted string is a problem and no shard",
+         ['msg="start', "make ci-check-static", 'end"'], {"a"}, True),
+        ("a trailing comment on the make line is a problem", swap(make, make + " # || true"), {"a"}, True),
+        ("an echo that names the make line is a problem and no shard",
+         ['echo "# make ci-check-static"'], {"a"}, True),
+        ("the matrix step's own shape is no problem", _MATRIX_STEP, {"a"}, False),
+        ("the matrix step with `|| true` is a problem",
+         [ln.replace("|| rc=$?", "|| true") for ln in _MATRIX_STEP], {"a"}, True),
+    ]
+    for label, body, shards, problem in cases:
+        text = _wf(body)
+        got = (workflow_shards(text), bool(workflow_step_problems(text)))
+        ok(got == (shards, problem), label, str(got))
+    for label, text in (
+        ("a job `if: false` is a problem and no shard", _wf(_STATIC_STEP, job_if="false")),
+        ("a step `if:` is a problem", _wf(_STATIC_STEP, step_keys="        if: false\n")),
+        ("a step `continue-on-error` is a problem", _wf(_STATIC_STEP, step_keys="        continue-on-error: true\n")),
+        ("a step `shell:` is a problem", _wf(_STATIC_STEP, step_keys="        shell: bash {0}\n")),
+        ("an inline `run: make ci-check-static` in a job is a problem and no shard", _wf([], inline="make ci-check-static")),
+    ):
+        got = (workflow_shards(text), bool(workflow_step_problems(text)))
+        ok(got == ({"a"}, True), label, str(got))
 
 
 def run(ok) -> None:
@@ -38,20 +109,23 @@ def run(ok) -> None:
        "the exact unit command is not a fleet, and a bare `playwright test` is", "")
     ok(fleet_scripts({"sneaky": UNIT_COMMAND + " && playwright test"}) == ["sneaky"],
        "a fleet chained after the unit command is still a fleet", "")
-    ok(workflow_shards("matrix:\n  target: [a, b]\n    run: make ci-check-static\n") == {"a", "b", "ci-check-static"},
-       "a real `run:` line counts as a shard", "")
-    ok(workflow_shards("matrix:\n  target: [a]\n    # run: make ci-check-static\n") == {"a"},
-       "a commented `run:` line is not a shard", "")
-    block = ("jobs:\n  s:\n    steps:\n      - name: x\n        run: |\n          set -o pipefail\n"
-             "          make ci-check-static 2>&1 | tee \"$log\" || rc=$?\n          exit \"$rc\"\n")
+    inline = "matrix:\n  target: [a, b]\n    run: make ci-check-static\n"
+    ok(workflow_shards(inline) == {"a", "b"} and bool(workflow_step_problems(inline)),
+       "a bare inline `run: make ci-check-static` adds no shard and is a problem", "")
+    commented = "matrix:\n  target: [a]\n    # run: make ci-check-static\n"
+    ok(workflow_shards(commented) == {"a"} and not workflow_step_problems(commented),
+       "a commented `run:` line is not a shard and no problem", "")
+    block = ("jobs:\n  s:\n    steps:\n      - name: x\n        run: |\n"
+             + "".join("          " + ln + "\n" for ln in _STATIC_STEP))
     ok(workflow_shards("matrix:\n  target: [a]\n" + block) == {"a", "ci-check-static"},
-       "a make line inside a multi-line `run: |` block counts as a shard", "")
+       "the exact counted-skip step, as a `run: |` block, is a shard", "")
     ok(workflow_shards("matrix:\n  target: [a]\n" + block.replace("make ci-check-static", "echo ci-check-static")) == {"a"},
        "a block with no make line is not a shard", "")
     ok(workflow_shards("matrix:\n  target: [a]\n" + block.replace("make ci-check-static", "# make ci-check-static")) == {"a"},
        "a commented make line inside a block is not a shard", "")
     ok(workflow_shards("matrix:\n  target: [a]\n" + block + "      - name: y\n        run: echo done\n          make ci-check-other\n") == {"a", "ci-check-static"},
        "text after the block's own indent is not read as the block", "")
+    _shard_step_cases(ok)
     report = Report()
     check_audit_invocation(report)
     by_label = {row.check: row.findings for row in report.checks}
