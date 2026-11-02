@@ -20,4 +20,5 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - check.yml comments, D136 and D141 still cite DEBT8's one-in-thirteen Escape rate; measured 0 of 19 (DEBT-escape-runner-red). D136's premise awaits the owner.
 - The T7 contract's `Pass` line must equal `PASS_CRITERIA` in `harness/tests/t7_store_and_seams.py`, and that string runs 36 words. The line carries an `ste-disable-next-line STE001` comment. Shorten the string, then the line, and drop the comment.
 - No `scope` job: scope lives in make targets, env vars and the browser-scope job, and skips at steps; a restructure is lane-sized.
+- `registry_scopes._scan_shard_steps` (and main's `workflow_shards` before it) read a shard target named after the word make anywhere in a `run:` block, so a `cd app` line that runs one, or an echo that names one, is read as a shard step. No such step exists now.
 - `.github/workflows/check.yml`: the "Image matches" step compares the Playwright image tag only, not its digest. A wrong digest fails loudly at browser launch.
