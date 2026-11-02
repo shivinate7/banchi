@@ -5,6 +5,11 @@ paths:
   - "cli/**"
   - "identify/**"
   - "server/**"
+  - "harness/**"
+  - "app/src/Pricing.tsx"
+  - "app/src/CaptureScreen.tsx"
+  - "app/src/BoxOps.tsx"
+  - "app/src/BoxBrowse.tsx"
 ---
 
 # The pipeline and the store

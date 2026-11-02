@@ -153,7 +153,8 @@ Its rules are in `.claude/rules/code-cards.md`.
 ## Things you will get wrong without being told
 
 - **The capture server is threaded. Restart it only after the owner says yes.** Ask the owner before
-  `make up ARGS=--restart`, `make down` or `make up`, and name the reason. Its concurrency figures and the
+  `make up ARGS=--restart`, `make down` or `make up`, and name the reason. Run the full suite once, at the end.
+  Its concurrency figures and the
   `server concurrency` row of `make docs-audit` are in `.claude/rules/server.md`.
 - Only two columns are ever written: `Add to Quantity`, `TCG Marketplace Price`. `TCGplayer Id` is never modified.
 - **Batch API, not sequential calls.** Model: `claude-haiku-5-5`.

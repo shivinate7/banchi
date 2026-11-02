@@ -4,6 +4,8 @@ paths:
   - "code-card-fork/**"
   - "docs/specs/code-cards.md"
   - "app/src/Codes.tsx"
+  - "cli/cmd_scan.py"
+  - "server/codes_routes.py"
 ---
 
 # Code cards

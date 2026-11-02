@@ -347,13 +347,33 @@ AGENT_LINKS: Tuple[Tuple[str, str], ...] = (
     ("code-card-fork/AGENTS.md", "CLAUDE.md"),
     ("code-card-fork/CLAUDE.md", "../CLAUDE.md"),
     ("app/AGENTS.md", "../.claude/rules/app.md"),
-    ("server/AGENTS.md", "../.claude/rules/server.md"),
     ("pipeline/AGENTS.md", "../.claude/rules/pipeline.md"),
     ("store/AGENTS.md", "../.claude/rules/pipeline.md"),
     ("cli/AGENTS.md", "../.claude/rules/pipeline.md"),
     ("identify/AGENTS.md", "../.claude/rules/pipeline.md"),
     ("codes/AGENTS.md", "../.claude/rules/code-cards.md"),
 )
+
+
+# A folder two rule files govern cannot link both, so its `AGENTS.md` is a real file: the bodies
+# of those rule files, frontmatter stripped, in this order, joined by one blank line.
+AGENT_COMPOSED: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
+    ("server/AGENTS.md", (".claude/rules/server.md", ".claude/rules/pipeline.md")),
+)
+
+
+def composed_agents_text(sources: Tuple[str, ...]) -> Optional[str]:
+    """The text a composed `AGENTS.md` must hold, or None when a source is missing."""
+    bodies: List[str] = []
+    for source in sources:
+        path = ROOT / source
+        if not exists(path):
+            return None
+        text = read(path)
+        if text.startswith("---\n"):
+            text = text.split("\n---\n", 1)[1] if "\n---\n" in text else text
+        bodies.append(text.strip("\n"))
+    return "\n\n".join(bodies) + "\n"
 
 
 def check_agent_links(report: Report) -> None:
@@ -367,12 +387,25 @@ def check_agent_links(report: Report) -> None:
             findings.append(Finding(link, f"links to `{os.readlink(path)}`; CLAUDE.md says `{target}`."))
         elif not path.exists():
             findings.append(Finding(link, f"links to `{target}`, which does not exist."))
+    for link, sources in AGENT_COMPOSED:
+        path = ROOT / link
+        want = composed_agents_text(sources)
+        if want is None:
+            findings.append(Finding(link, f"is composed from {', '.join(sources)}, and one does not exist."))
+        elif path.is_symlink() or not exists(path):
+            findings.append(Finding(link, "must be a real file holding the bodies of " + ", ".join(sources) + "."))
+        elif read(path) != want:
+            findings.append(Finding(
+                link,
+                "differs from the bodies of " + ", ".join(sources) + " (frontmatter stripped, joined by "
+                "one blank line). Codex reads only this file in that folder, so it would act on a stale copy."))
     report.add(
         "agent links",
         MECHANICAL,
         findings,
-        f"{len(AGENT_LINKS)} relative symlinks resolve to CLAUDE.md, .claude/skills or .claude/rules",
-        scanned=len(AGENT_LINKS),
+        f"{len(AGENT_LINKS)} relative symlinks resolve to CLAUDE.md, .claude/skills or .claude/rules; "
+        f"{len(AGENT_COMPOSED)} composed file matches its sources",
+        scanned=len(AGENT_LINKS) + len(AGENT_COMPOSED),
     )
 
 

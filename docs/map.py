@@ -5575,7 +5575,7 @@ COMPONENTS = [
     {
         "path": ".claude/rules/README.md",
         "status": "built",
-        "does": "the shared rules-folder note, copied verbatim from claude-settings. Its "
+        "does": "the rules-folder note: where a folder rule lives and who checks the roster. Its "
                 "paths frontmatter keeps it out of every session's context.",
         "governed_by": [],
     },

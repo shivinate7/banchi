@@ -1791,7 +1791,7 @@ img.bn-crop[data-cropped='true'] {
    the same mistake being made and shipped — "a phone lift written before the base rules at the
    same specificity, dead on arrival" — and it cost two controls in that sheet.
    ================================================================================ */
-/* THE THUMB FLOOR, IN THE KIT (D117). CLAUDE.md: "anything a thumb presses is 40px or more.
+/* THE THUMB FLOOR, IN THE KIT (D117). `.claude/rules/app.md`: "anything a thumb presses is 40px or more.
    The control-height tokens raise themselves under 767px and on a coarse pointer, so do not
    hand-roll a mouse-sized control on a phone." These four hand-rolled one anyway — they carry a
    literal height rather than reading `--bn-control-h*`, so the token's own lift never reached
