@@ -6,7 +6,7 @@ TCGTracking). The frame draws my pick. The Options panel under it draws each alt
 each has a control that hides it. The Orders half is `orders-labels.html`.
 
 Deep links: `#s=rest`, `#s=reading`, `#s=preview`, `#s=again`, `#s=nokey`, `#s=progress`,
-`#s=receipt`, `#s=partial`, `#s=labels`, `#s=checking`, `#s=reprint`, `#s=nofile`. Add `&w=820`
+`#s=stopping`, `#s=stopped`, `#s=receipt`, `#s=partial`, `#s=labels`, `#s=checking`, `#s=reprint`, `#s=nofile`. Add `&w=820`
 and `&t=dark` (or `abyssal-bloom`, `carnival-midway`). With no `t`, the page follows
 `prefers-color-scheme`. `&h=P1,H1` hides options. Images: `shipping-labels/<state>-<width>-<theme>.png`.
 
@@ -40,54 +40,60 @@ outline marks what this design adds.
 7. **Pick (b): held back is one line per reason, with the orders it covers under it** (option H1
    is one row per order). Gain: three parcel orders read as one sentence, not the same sentence
    three times. Loss: a single order's reason is one step from its number. The sentences, keyed
-   by the preview row's `reason`; the four codes are my proposal:
-   - `parcel_lane`: "3 orders go in a parcel, so they ship with the Pirate Ship file."
-   - `unjudged`: "1 order needs a look first. Banchi cannot tell envelope from parcel."
-   - `address_incomplete`: "1 order has no full street address in the export. Fix it on
+   by the preview row's `reason` code:
+   - `parcel`: "3 orders go in a parcel, so they ship with the Pirate Ship file."
+   - `needs_a_look`: "1 order needs a look first. Banchi cannot tell envelope from parcel."
+   - `no_full_street`: "1 order has no full street address in the export. Fix it on
      TCGplayer, then read the export again."
-   - `label_exists`: "6 orders have a label already, so they are not bought twice." (`#s=again`)
+   - `already_labelled`: "6 orders have a label already, so they are not bought twice." (`#s=again`)
 
    An unknown code shows "This order cannot get a label here." with the code behind "What the
    server said".
-8. **A refused confirm says that nothing was bought, then the fix** (`#s=nokey`). The preview
-   makes no request, so a missing key shows only at the confirm. The five sentences:
-   - `tracking_key_missing`: "Nothing was bought. Banchi has no TCGTracking key on this Mac. Add
-     it to Banchi's settings file, then press Make 15 Labels again."
-   - `tracking_shipper_missing`: "Nothing was bought. Banchi has no shipper number for your
-     TCGTracking account. Add it to Banchi's settings file, then press Make 15 Labels again."
+8. **No key or no shipper number: the preview says why, and the confirm is absent**
+   (`#s=nokey`). The preview carries `key_present` and `shipper_present`; when either is false,
+   the summary says so and the foot offers Read Again, the free preview again:
+   - no key: "Banchi has no TCGTracking key on this Mac, so it cannot buy labels. Add the key to
+     Banchi's settings file, then press Read Again. Nothing is bought."
+   - no shipper number: "Banchi has no shipper number for your TCGTracking account, so it cannot
+     buy labels. Add it to Banchi's settings file, then press Read Again. Nothing is bought."
+
+   The confirm can still be refused, if the settings change between the two presses. The
+   sentences then:
+   - `tracking_key_missing` or `tracking_shipper_missing`: the two sentences above, opening with
+     "Nothing was bought."
    - `tracking_auth_rejected`: "Nothing was bought. TCGTracking did not accept the key. Check it
      in your TCGTracking account, then press Make 15 Labels again."
    - `tracking_invalid`: on that order's row, "Refused"; in the receipt, "TCGTracking refused
      this order's details, so no label was bought for it."
    - `tracking_rate_limited`: the partial receipt's sentence (`#s=partial`).
 
-   Each puts the server's words behind "What the server said". Better: the preview names a
-   missing key or shipper, so the confirm stays absent (needs wire field, below).
+   Each puts the server's words behind "What the server said".
 
 ## Making the labels
 
 9. **Pick (a): progress is read from the store's label list during the press.** While the
    confirm is open, the screen reads `GET /shipping/labels` once a second and stops when the
-   confirm answers. A row turns Made when its order is in that list with TCGTracking's answer.
-   These reads happen only during the person's own press; scans are never read on a timer. The
-   contract does not say whether a claim (written before each create) shows in that list. If it
-   does with no mark, "Made" would light before the label is bought, and go blank again on a
-   refusal. So the list must leave claims out or mark them (needs wire field, below); without
-   one of the two, "Made" during the press is unproven. A mark also gives a "Making" word on the
-   current row, not drawn. Option Q1 sends one confirm per order instead: no new field, but the
+   confirm answers. Each label row carries `status`, `pending` or `made`. A `pending` row says
+   "Making" (the live dot), and only a `made` row says "Made", so "Made" never lights before the
+   label is bought. These reads happen only during the person's own press; scans are never read
+   on a timer. Option Q1 sends one confirm per order instead: no new field, but the
    stop at the first error becomes a second home in the screen. Pick: the list read.
 10. **Close is off while labels are made, with its reason on hover.** The receipt must land on
     the sheet that asked for it. A disabled button takes no focus, so the builder ties the reason
     to the button with `aria-describedby`, as `pricing-owed-notes.md` item 6 does.
-11. **Stop After This Label ends the press cleanly and gives a partial receipt.** The house rule
-    is that long work shows a Stop. Fifteen creates, one at a time, take more than a few
-    seconds. The contract has no stop (needs wire field, below). If no stop lands, the builder
-    leaves the button out and Close stays off until the receipt.
+11. **Stop After This Label sends `POST /shipping/batches/<b>/labels/stop`.** The house rule is
+    that long work shows a Stop; fifteen creates, one at a time, take more than a few seconds.
+    Pressed (`#s=stopping`), it turns its ring in its own place and the line says "Stopping once
+    the label being made is done." The label being made finishes, so nothing is left half
+    bought. The confirm then answers with the stopped receipt (`#s=stopped`): "Stopped after 6
+    labels, as you asked. 9 were not tried. Make the Other 9 asks for those only, and the 6 made
+    are not bought twice." Info tone, not warn: nothing went wrong.
 
 ## The receipt
 
 12. **All made (`#s=receipt`): one sentence, Print All 15 Labels, and Reprint on each row.**
-    Print All needs one combined file (needs wire field, below). Option R1 drops Reprint from the
+    Print All opens `GET /shipping/batches/<b>/labels/pdf`, one file with every label made from
+    this export so far, in a new tab where the browser prints it. Option R1 drops Reprint from the
     receipt.
 13. **Stopped early (`#s=partial`): made, refused and not tried show on each row.** Make the Other
     9 opens a new preview over the rest only (`#s=again`), where the 6 made are held back with
@@ -110,7 +116,9 @@ outline marks what this design adds.
 ## Tracking back
 
 15. **The Labels list is read from the store and sits last on the page** (spec T5). The sample
-    list shows 7 rows only; its figures do not add up with the card's. A label that
+    list shows 7 rows only; its figures do not add up with the card's. "Made Oct 25" reads
+    `made_at`, "Last scan" and "Held Up" by days read `scanned_at`, and "Scans were last checked"
+    reads `checked_at`. A label that
     lands moves nothing above it. Delivered labels fold under "Show 12 Delivered" (option F1 shows
     every label). The list is on the page with no export read (`#s=nofile`).
 16. **Check Scans is one press, on demand.** Its answer lands on the line under the title, in a
@@ -128,8 +136,8 @@ outline marks what this design adds.
 
 19. **The no-export note is no longer true** (`ShipStage`, the note under the drop). It says
     "Nothing is saved". After D326 the store keeps each envelope order's address and its label.
-    New: "Banchi keeps each envelope order's address to make its label. The file itself is
-    forgotten after 30 minutes." **Owner grant: yes**, because it changes a sentence the owner
+    New: "Banchi keeps each envelope order's address, so it can make the label. The file is
+    forgotten after 30 minutes. No buyer info shows here." **Owner grant: yes**, because it changes a sentence the owner
     reads as a promise.
 
 ## Kit gaps (described, not built)
@@ -144,13 +152,5 @@ outline marks what this design adds.
 
 ## Needs wire field (the contract does not carry these)
 
-- `envelope` on the preview: the envelope size the summary shows.
-- key and shipper presence on the preview: so the confirm is absent when it would be refused.
-- claims left out of the listing, or a claim mark on a listing row: so "Made" during the press
-  is true, and "Making" can show.
-- a stop for the confirm: for Stop After This Label.
-- a combined label file for a list of orders: for Print All.
-- `made_at` on a listing row: for "Made Oct 25".
-- a scan time on the stored scan answer, and `checked_at` per row: for "Last scan", "Held Up" by
-  days, and "Scans were last checked".
-- the `reason` codes in item 7: the contract pins only that a held-back row has a reason.
+- `envelope` on the preview: the envelope size the summary shows. Without it, the builder leaves
+  the Envelope line out.

@@ -50,5 +50,5 @@ filter bar, the walk and the card pane are plain stand-ins: this design does not
 12. **Nothing here acts.** The owner still marks orders shipped on TCGplayer (D326 item 108), and
     Reprint and Check Scans stay on Shipping. The word is the only label fact on Orders.
 
-Needs wire field: none beyond Shipping's. The word reads the listing's order, label row and stored
-scan answer, which the contract carries.
+Needs wire field: none. The word reads the listing's order, its `status` and its stored scan
+answer. A `pending` row draws no word: only a `made` label is a label.

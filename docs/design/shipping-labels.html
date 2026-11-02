@@ -4488,18 +4488,18 @@ const TO_LABEL = ENV.map((o, i) => [...o, i]).filter((o) => o[3] !== NO_ADDRESS)
    proposals; the contract pins only that a held-back row carries a reason. */
 const n1 = (n, one, many) => (n === 1 ? one : many)
 const HELD_WHY = {
-  parcel_lane: (n) => `${n} ${n1(n, 'order goes', 'orders go')} in a parcel, so ${n1(n, 'it ships', 'they ship')} with the Pirate Ship file.`,
-  unjudged: (n) => `${n} ${n1(n, 'order needs', 'orders need')} a look first. Banchi cannot tell envelope from parcel.`,
-  address_incomplete: (n) => `${n} ${n1(n, 'order has', 'orders have')} no full street address in the export. Fix it on TCGplayer, then read the export again.`,
-  label_exists: (n) => `${n} ${n1(n, 'order has', 'orders have')} a label already, so ${n1(n, 'it is', 'they are')} not bought twice.`,
+  parcel: (n) => `${n} ${n1(n, 'order goes', 'orders go')} in a parcel, so ${n1(n, 'it ships', 'they ship')} with the Pirate Ship file.`,
+  needs_a_look: (n) => `${n} ${n1(n, 'order needs', 'orders need')} a look first. Banchi cannot tell envelope from parcel.`,
+  no_full_street: (n) => `${n} ${n1(n, 'order has', 'orders have')} no full street address in the export. Fix it on TCGplayer, then read the export again.`,
+  already_labelled: (n) => `${n} ${n1(n, 'order has', 'orders have')} a label already, so ${n1(n, 'it is', 'they are')} not bought twice.`,
 }
 function heldFor(s) {
   const groups = [
-    ['parcel_lane', PARCEL.map((o) => o[0])],
-    ['unjudged', UNJUDGED.map((o) => o[0])],
-    ['address_incomplete', [ENV[NO_ADDRESS][0]]],
+    ['parcel', PARCEL.map((o) => o[0])],
+    ['needs_a_look', UNJUDGED.map((o) => o[0])],
+    ['no_full_street', [ENV[NO_ADDRESS][0]]],
   ]
-  if (s === 'again') groups.unshift(['label_exists', TO_LABEL.slice(0, 6).map((o) => o[0])])
+  if (s === 'again') groups.unshift(['already_labelled', TO_LABEL.slice(0, 6).map((o) => o[0])])
   return groups
 }
 
@@ -4507,6 +4507,7 @@ function heldFor(s) {
 const ROW_WORD = {
   none: '',
   made: pill('Made', 'ok', 'check'),
+  making: `<span class="bn-pill bn-pill-accent"><span class="bn-dot bn-dot-live"></span>Making</span>`,
   refused: pill('Refused', 'danger', 'alert'),
   untried: pill('Not Tried', ''),
   reprint: reprintBtn('idle'),
@@ -4621,16 +4622,17 @@ function sw(on, disabled, id) {
   return `<input type="checkbox" role="switch" class="labels-switch" aria-label="Insure order ${id}"${on ? ' checked' : ''}${disabled ? ' disabled' : ''}>`
 }
 function rowWordFor(s, i) {
-  if (s === 'progress') return i < 5 ? 'made' : 'none'
+  if (s === 'progress' || s === 'stopping') return i < 5 ? 'made' : i === 5 ? 'making' : 'none'
+  if (s === 'stopped') return i < 6 ? 'reprint' : 'untried'
   if (s === 'receipt') return 'reprint'
   if (s === 'partial') return i < 6 ? 'reprint' : i === 6 ? 'refused' : 'untried'
   return 'none'
 }
-const SHEET_STATES = ['reading', 'preview', 'again', 'nokey', 'progress', 'receipt', 'partial']
+const SHEET_STATES = ['reading', 'preview', 'again', 'nokey', 'progress', 'stopping', 'stopped', 'receipt', 'partial']
 function sheet(s) {
   const reading = s === 'reading'
-  const running = s === 'progress'
-  const answered = s === 'receipt' || s === 'partial'
+  const running = s === 'progress' || s === 'stopping'
+  const answered = ['receipt', 'partial', 'stopped'].includes(s)
   const list = s === 'again' ? TO_LABEL.slice(6) : TO_LABEL
   const n = list.length
   const insured = (i) => i === 2 && !['preview', 'again', 'reading'].includes(s)
@@ -4652,9 +4654,12 @@ function sheet(s) {
     reading: `<div class="bn-stat-row">${stat(sk(true, '15'), 'to label')}${stat(sk(true, '5'), 'held back')}</div>
       <dl class="bn-kv"><dt>Envelope</dt><dd>${sk(true, '#10 letter')}</dd></dl>
       <p class="labels-fee">Counting the orders. Nothing is bought yet.</p>`,
-    nokey: notice('danger', 'alert', 'Nothing was bought. Banchi has no TCGTracking key on this Mac. Add it to Banchi\'s settings file, then press Make 15 Labels again.', { said: 'The label key is not set on the server.', code: 'tracking_key_missing' }),
+    nokey: notice('danger', 'alert', 'Banchi has no TCGTracking key on this Mac, so it cannot buy labels. Add the key to Banchi\'s settings file, then press Read Again. Nothing is bought.'),
     progress: `<div class="bn-progress" role="progressbar" aria-valuenow="5" aria-valuemin="0" aria-valuemax="${n}" aria-label="Labels made"><span style="width:${(5 / n) * 100}%"></span></div>
       <p class="labels-progress-line">5 of ${n} made. They are made one at a time, top to bottom.</p>${fee}`,
+    stopping: `<div class="bn-progress" role="progressbar" aria-valuenow="5" aria-valuemin="0" aria-valuemax="${n}" aria-label="Labels made"><span style="width:${(5 / n) * 100}%"></span></div>
+      <p class="labels-progress-line">5 of ${n} made. Stopping once the label being made is done.</p>${fee}`,
+    stopped: notice('info', 'info', 'Stopped after 6 labels, as you asked. 9 were not tried. Make the Other 9 asks for those only, and the 6 made are not bought twice.'),
     receipt: notice('ok', 'check', `${n} labels made. Print them all now, or reprint one later from the Labels list.`),
     partial: notice('warn', 'alert', 'Stopped after 6 labels. TCGTracking asked Banchi to slow down, so 1 was refused and 8 were not tried. Make the Other 9 asks for those only. The 6 made are not bought twice.', { said: 'Too many requests. Retry after 60 seconds.', code: 'tracking_rate_limited' }),
   }
@@ -4663,8 +4668,10 @@ function sheet(s) {
     preview: `${make(n)}${btn('Cancel', { variant: 'ghost' })}`,
     again: `${make(n)}${btn('Cancel', { variant: 'ghost' })}`,
     reading: `<span class="bn-slot" aria-hidden="true"><span class="bn-slot-ghost">${make(n)}</span></span>${btn('Cancel', { variant: 'ghost' })}`,
-    nokey: `${make(n)}${btn('Cancel', { variant: 'ghost' })}`,
+    nokey: `${btn('Read Again', { ic: 'refresh' })}${btn('Cancel', { variant: 'ghost' })}`,
     progress: `${btn('Stop After This Label', { ic: 'pause' })}`,
+    stopping: `${btn('Stop After This Label', { ic: 'pause', busy: true, disabled: true })}`,
+    stopped: `${btn('Print All 6 Labels', { variant: 'primary', ic: 'printer' })}${btn('Make the Other 9', { ic: 'mail' })}${btn('Close', { variant: 'ghost' })}`,
     receipt: `${btn(`Print All ${n} Labels`, { variant: 'primary', ic: 'printer' })}${btn('Close', { variant: 'ghost' })}`,
     partial: `${btn('Print All 6 Labels', { variant: 'primary', ic: 'printer' })}${btn('Make the Other 9', { ic: 'mail' })}${btn('Close', { variant: 'ghost' })}`,
   }
@@ -4694,10 +4701,10 @@ function page(s) {
         <span class="shipping-drop-title">Drop the Export Shipping file here</span>
         <span class="shipping-drop-body">or <span class="shipping-drop-link">choose it</span>. It comes from TCGplayer's Orders → Export Shipping.</span></label>
       <p class="shipping-empty-note mk-strike" data-mk="today" data-part="Today: no longer true">Nothing is saved, and the file is forgotten after 30 minutes. No buyer info shows here, only in the file you download.</p>
-      <p class="shipping-empty-note" data-mk="new" data-part="New: the note" id="nofile-note">Banchi keeps each envelope order's address to make its label. The file itself is forgotten after 30 minutes.</p>
+      <p class="shipping-empty-note" data-mk="new" data-part="New: the note" id="nofile-note">Banchi keeps each envelope order's address, so it can make the label. The file is forgotten after 30 minutes. No buyer info shows here.</p>
       </div>${labelsSection(s)}`
   } else {
-    const showLabels = ['receipt', 'partial', 'labels', 'checking', 'reprint'].includes(s)
+    const showLabels = ['receipt', 'partial', 'stopped', 'labels', 'checking', 'reprint'].includes(s)
     body = `<div class="shipping-files labels-files">${exportCard()}${labelsCard(s)}${pirateCard()}</div>
       ${lanes(['labels', 'checking', 'reprint'].includes(s))}${showLabels ? labelsSection(s) : ''}`
   }
@@ -4710,10 +4717,12 @@ const STATES = [
   ['reading', 'Preview, reading', 'The sheet opens at once and counts. The confirm is absent: an empty slot the size of the button holds its place, so the foot does not grow when the preview answers.'],
   ['preview', 'Preview, answered', 'Free. The count to label, the orders held back grouped by reason with one sentence each, the envelope, a per-order insurance switch (all off), and the fee line. Only now does the confirm exist, and it carries the count.'],
   ['again', 'Preview, after a stop', 'Make the Other 9 opens this preview again. The 6 made are held back with their own sentence, so the confirm names 9.'],
-  ['nokey', 'Confirm refused before any spend', 'The press found no TCGTracking key. Nothing was bought, and the same press tries again once the key is set.'],
-  ['progress', 'Making, order by order', 'One at a time, top to bottom. A row turns Made when its label shows in the store\'s label list, read during this press only. Close is off while labels are made; Stop After This Label ends it cleanly and gives a partial receipt.'],
+  ['nokey', 'Preview, no label account', 'The preview says the TCGTracking key is missing, so the confirm is absent and nothing can be bought. Read Again asks the free preview again once the key is set. A missing shipper number reads the same way.'],
+  ['progress', 'Making, order by order', 'One at a time, top to bottom. The store\'s label list, read during this press only, marks each order pending or made: the pending one says Making, and only a made one says Made. Close is off while labels are made; Stop After This Label ends it cleanly.'],
+  ['stopping', 'Stop pressed', 'The Stop press turns its ring in its own place. The label being made is finished, so nothing is left half bought, and no other is started.'],
+  ['stopped', 'Receipt, stopped by the person', 'Made and not tried show on each row. Print All prints the one file for every label made so far. Make the Other 9 opens a new preview over the rest only.'],
   ['receipt', 'Receipt, all made', 'One print file for every label of this press, and a Reprint on each order.'],
-  ['partial', 'Receipt, stopped early', 'The press stopped at the first refusal. Made, refused and not tried show on each row. Make the Other 9 opens a new preview over the rest only.'],
+  ['partial', 'Receipt, stopped by a refusal', 'The press stopped at the first refusal. Made, refused and not tried show on each row. Make the Other 9 opens a new preview over the rest only.'],
   ['labels', 'Labels list, after Check Scans', 'The person folded the three lanes. The Labels list is read from the store and sits last, so a label that lands moves nothing above it. Check Scans is free and on demand. Its answer lands on the line under the title, in a line held from the first paint. The order of rows does not change on a check.'],
   ['checking', 'Labels list, checking', 'The press turns its ring in its own place. The rows keep their words until the answer lands.'],
   ['reprint', 'Reprint, opening and failed', 'Reprint reads one order\'s stored label file and opens it to print. It costs nothing. The first row is opening; the fourth could not open its file, says so in its own line, and offers Try Again in the same place.'],
