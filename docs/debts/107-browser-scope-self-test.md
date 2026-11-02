@@ -1,4 +1,4 @@
-## DEBT-browser-scope-self-test — the browser-scope self-test went red on main in three runs
+## DEBT107 — the browser-scope self-test went red on main in three runs
 
 **What.** The `audit-self-test` step of `ci-check (ci-check-guards-1)` went red on three main runs, with two browser-scope rows failing.
 

@@ -1,4 +1,4 @@
-## DEBT-capture-freeze-timing — two capture timing checks go red on design-check shard 4
+## DEBT108 — two capture timing checks go red on design-check shard 4
 
 **What.** Two timing checks in `tests/capture-freeze.spec.ts` go red on `design-check (4)`, one by timing out and one by growth in blocked time per capture.
 

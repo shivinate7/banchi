@@ -1,4 +1,4 @@
-## DEBT-add-a-slab-focus — focus does not land on Add a Slab after Remove on an empty list
+## DEBT105 — focus does not land on Add a Slab after Remove on an empty list
 
 **What.** The test `after Remove by a click that focuses Remove and a quick list read, focus lands on Add a Slab` in `tests/slabs.spec.ts` goes red on `design-check (10)` when focus does not land on Add a Slab after Remove, with the list read quickly and the list empty.
 

@@ -1,4 +1,4 @@
-## DEBT-merge-speed-backstop — the merge-speed guard's 10 s wall-clock backstop can fail on a loaded machine
+## DEBT110 — the merge-speed guard's 10 s wall-clock backstop can fail on a loaded machine
 
 **What.** `harness/tests/t7_box_map.py:check_merge_speed` can fail through its 10 s wall-clock backstop on a loaded machine, with no defect in the merge.
 

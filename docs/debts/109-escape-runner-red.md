@@ -1,4 +1,4 @@
-## DEBT-escape-runner-red — the assertion after Escape goes red on the CI runner, and the cause is unread
+## DEBT109 — the assertion after Escape goes red on the CI runner, and the cause is unread
 
 **What.** A `design-check` shard fails on the assertion right after `keyboard.press('Escape')` in `capture-claims.spec.ts`, `live-reconcile.spec.ts` or `markdown.spec.ts`, and it does so on the CI runner.
 

@@ -1,4 +1,4 @@
-## DEBT-apt-install-timeout — a package install in design-check can fail a shard on a mirror stall
+## DEBT106 — a package install in design-check can fail a shard on a mirror stall
 
 **What.** The install step in `design-check`, which installs the build tools and fonts, runs `apt-get` under two 60 s timeouts, and when both expire it exits 124 and fails the shard before any test runs.
 

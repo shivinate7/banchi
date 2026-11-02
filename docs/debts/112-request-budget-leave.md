@@ -1,4 +1,4 @@
-## DEBT-request-budget-leave — the Capture screen's sweep read is counted as still asking after the screen is left
+## DEBT112 — the Capture screen's sweep read is counted as still asking after the screen is left
 
 **What.** The test `a screen that is left stops asking, and what it had open is aborted` in `tests/request-budget.spec.ts` goes red on `design-check (11)` when a `GET /pipeline/match/sweep` read, sent by the Capture screen, is still open or is sent after the screen is left.
 

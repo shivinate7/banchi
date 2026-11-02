@@ -1,4 +1,4 @@
-## DEBT-palette-focus-red — the palette input's focus check goes red on design-check shard 8
+## DEBT111 — the palette input's focus check goes red on design-check shard 8
 
 **What.** `tests/nav.spec.ts` (`ux-wave1: the palette input shows a focus indicator when focused`) goes red on `design-check (8)` when the focused palette input shows no outline and no box-shadow change.
 
