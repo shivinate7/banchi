@@ -94,9 +94,9 @@ def _card(index, name, number, total="159", metadata=None, confidence="high"):
 #                                       copy at the rule. `price` is the store rule's price at
 #                                       today's market, clamped to the floor, and None with no
 #                                       market. `reason` is plain words, "" when nothing fired.
-#   Needs you holds only rows that would send something a person must decide: a new copy with no
-#   market, a new copy at or above the value line, or a live suggestion past the cap or at or
-#   above the value line. A live listing with no trigger, or with no market, stays in at_rule at
+#   Needs you holds the rows a person must decide: a card with no market price (new copy or live
+#   listing, price None), a new copy at or above the value line, or a live suggestion past the cap
+#   or at or above the value line. A live listing with a market and no trigger stays in at_rule at
 #   its asking price, even at or above the value line.
 #
 # `today` is an ISO date string. A listing holds "sku", "live" (False for a new copy, whose
@@ -369,9 +369,15 @@ def _suggest_checks(c: Checks) -> None:
     c.equal(field(still, "V3", "source"), "Live", "and its source says Live")
 
     blank = review(_listing(sku="NM", market=None))
-    c.equal(groups(blank, "NM"), ["at_rule"], "a live listing with no market fires nothing: Going at the rule")
-    c.equal(field(blank, "NM", "price"), Decimal("10.00"), "and keeps its asking price")
+    c.equal(groups(blank, "NM"), ["needs_you"], "a live listing with no market price goes to Needs you")
+    c.equal(field(blank, "NM", "price"), None, "and with no market there is no suggested price")
+    c.equal(field(blank, "NM", "asking"), Decimal("10.00"), "and the row still names its asking price")
     c.equal(field(blank, "NM", "source"), "Live", "and its source says Live")
+    c.ok(
+        says(blank, "NM", "no market price"),
+        "and the reason says there is no market price",
+        str(field(blank, "NM", "reason")),
+    )
 
     new_blank = review(_listing(sku="NC", live=False, asking=None, market=None))
     c.equal(groups(new_blank, "NC"), ["needs_you"], "a new copy with no market goes to Needs you")

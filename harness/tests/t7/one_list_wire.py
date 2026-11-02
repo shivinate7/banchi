@@ -285,10 +285,11 @@ def check_worklist_carries_live_listings(checks: Checks) -> None:
 
 
 def check_worklist_without_runs_reads_newest_export(checks: Checks) -> None:
-    """With no run on disk the worklist still carries `live`, and the price is the NEWER export's.
+    """With no run on disk the worklist still carries `live`, and the asking price is the NEWER export's.
 
-    Two live exports sit in the folder; the older names 9.00 and the newer 2.50. The row must read
-    2.50, and the read must not reach the network.
+    Two live exports sit in the folder; the older names 9.00 and the newer 2.50. The row must ask
+    2.50, and the read must not reach the network. No reading exists for the SKU, so the row needs
+    you, with no suggested price (spec "Needs you": a live listing with no market price).
     """
     checks.note("")
     checks.note("WORKLIST, NO RUNS — the newest live export is the price, read off disk")
@@ -302,10 +303,10 @@ def check_worklist_without_runs_reads_newest_export(checks: Checks) -> None:
             checks.equal(
                 _pinned(_live_row(payload, DUNSPARCE_SKU)),
                 {
-                    "asking": "2.50", "last_sold_at": None, "group": "at_rule", "price": "2.50",
-                    "source": "Live", "reason": "",
+                    "asking": "2.50", "last_sold_at": None, "group": "needs_you", "price": None,
+                    "source": "Live", "reason": "no market price",
                 },
-                "with no run and no market, the live row carries the NEWER export's asking price",
+                "with no send and no market, the live row needs you with no price, and asks the NEWER export's price",
             )
 
 
