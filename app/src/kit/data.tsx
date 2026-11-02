@@ -66,6 +66,10 @@ export function Sep() {
  * Money and Count — a figure, drawn one way.
  * ============================================================================================ */
 
+/** The class a dollar figure carries. `Money` is a span, which SVG `<text>` and a `<title>` cannot
+ *  hold, so a chart marks its own figures with this (D221). */
+export const MONEY_CLASS = 'bn-money'
+
 /** A dollar figure: mono, tabular, always `$`, grouped past a thousand. `—` where there is none.
  *  `signed` draws a change (`+$1.20`, `−$0.35`). */
 export function Money({
@@ -79,7 +83,7 @@ export function Money({
 }) {
   const empty = typeof value !== 'number'
   return (
-    <span className={['bn-money', className].filter(Boolean).join(' ')} data-empty={empty ? 'true' : undefined}>
+    <span className={[MONEY_CLASS, className].filter(Boolean).join(' ')} data-empty={empty ? 'true' : undefined}>
       {signed ? moneySigned(value) : moneyGrouped(value)}
     </span>
   )

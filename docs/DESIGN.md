@@ -627,6 +627,8 @@ COLUMN-BLIND    a sheet allowed to ask the VIEWPORT a question at or above 1024,
                      at 800px of HEIGHT, an input-modality question (the rig's own frame) the
                      docstring's own "100dvh stage" exception names, and no `--bn-shell-main`
                      column width changes what it is deciding
+  HistoryFloat.css   a card fixed in the body over the list, sized by the window it floats
+                     in; it sits in no column, so a column width has nothing to say
 ```
 
 **Above 1024, prefer a cap or a container to a viewport width.** Every screen but the

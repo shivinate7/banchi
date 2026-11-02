@@ -217,7 +217,7 @@ def main() -> int:
                     one.get("location") == f"tests/probe.spec.ts:{FAILING_LINE}",
                     f"and the line is the one the test is declared on ({FAILING_LINE})",
                     f"got {one.get('location')!r} under node {node}. @playwright/test below 1.58.0 reports "
-                    "`test.location` short under Node 23+; this repo pins 1.58.0 in app/package.json "
+                    "`test.location` short under Node 23+; this repo pins 1.64.1 in app/package.json "
                     "for exactly that. Check the installed version (`npm --prefix app ls @playwright/test`) "
                     "before suspecting the reporter.",
                 )
