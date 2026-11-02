@@ -760,6 +760,6 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: shivinate7/claude-settings/actions/ci-done-comment@17492e58853703168d025128a2da315e9936ee90 # main, 2026-11-01
+      - uses: shivinate7/claude-settings/actions/ci-done-comment@49a41651a3f8182b211db3b1a4596933ca4eca58 # main, 2026-11-01
         with:
           needs: ${{ toJSON(needs) }}
