@@ -3587,6 +3587,13 @@ COMPONENTS = [
                         "is deleted, an unmerged one is kept.",
                 "governed_by": ["D18", "D138"],
             },
+            "ci-skip-count.sh": {
+                "does": "the one reader of a CI shard's skip count: `check.yml`'s matrix step and "
+                        "its `ci-static` job call it over the shard's log. It prints "
+                        "`skipped in <target>: ...` to the job log and the step summary, and "
+                        "never fails: the calling step keeps make's exit code.",
+                "governed_by": ["D161"],
+            },
             "ignore-check.sh": {"does": "the other half of D47: `git check-ignore` over every path "
                                         "a worktree provisions, asserting each is ignored WHATEVER "
                                         "kind of thing is at it. That entry's own reopening "

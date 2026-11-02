@@ -229,19 +229,13 @@ jobs:
           BANCHI_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
           TARGET: ${{ matrix.target }}
         # A SKIP SHOWS AND NEVER FAILS. The shard's own exit code is kept (`rc`). The count reads the
-        # markers the tools already print: a gated self-test's `<name>: SKIPPED`, the docs-audit
-        # self-test's `UNKNOWN <case>` and Playwright's `N skipped` summary (the unit specs).
+        # markers the tools already print (`scripts/ci-skip-count.sh` is the one home of the reader).
         run: |
           set -o pipefail
           log="$RUNNER_TEMP/make-$TARGET.log"
           rc=0
           make "$TARGET" 2>&1 | tee "$log" || rc=$?
-          awk '
-            /^[a-z0-9-]+: SKIPPED /               { gated += 1 }
-            /^ +UNKNOWN /                         { unknown += 1 }
-            /^ +[0-9]+ skipped/                   { tests += $1 }
-            END { printf "skipped in %s: %d gated self-test(s), %d unknown case(s), %d test(s)\n", ENVIRON["TARGET"], gated, unknown, tests }
-          ' "$log" | tee -a "$GITHUB_STEP_SUMMARY"
+          scripts/ci-skip-count.sh "$TARGET" "$log"
           exit "$rc"
 
   # The static targets run alone so `design-check` can wait for them and not for the slowest shard.
@@ -318,7 +312,14 @@ jobs:
         env:
           BANCHI_GUARD_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
           BANCHI_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
-        run: make ci-check-static
+        # A SKIP SHOWS AND NEVER FAILS, as in the matrix step above: the job's exit code is make's.
+        run: |
+          set -o pipefail
+          log="$RUNNER_TEMP/make-ci-check-static.log"
+          rc=0
+          make ci-check-static 2>&1 | tee "$log" || rc=$?
+          scripts/ci-skip-count.sh ci-check-static "$log"
+          exit "$rc"
 
   # THE CHECK PROTECTION IS TO REQUIRE IS `all-jobs-passed` (claude-settings decision same-check-kinds). One check,
   # built on the shared action: it fails when any job it `needs` failed, was cancelled or was

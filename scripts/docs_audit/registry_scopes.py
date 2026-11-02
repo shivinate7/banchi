@@ -95,14 +95,36 @@ def _checks_registry() -> Optional[Tuple[List[dict], dict]]:
     return [dict(entry) for entry in entries], dict(needs)
 
 
+def _run_commands(workflow: str) -> List[str]:
+    """Each command line of every `run:` key: the inline value, or the body of a `|`/`>` block
+    (every following line indented deeper than the key). Comment lines are dropped first."""
+    lines = [ln for ln in workflow.splitlines() if not ln.lstrip().startswith("#")]
+    commands: List[str] = []
+    for i, line in enumerate(lines):
+        key = re.match(r"^(\s*)(?:-\s+)?run:\s*(.*?)\s*$", line)
+        if not key:
+            continue
+        indent, rest = len(key.group(1)), key.group(2)
+        if rest[:1] not in ("|", ">"):
+            commands.append(rest)
+            continue
+        for body in lines[i + 1:]:
+            if body.strip() and len(body) - len(body.lstrip()) <= indent:
+                break
+            commands.append(body.strip())
+    return commands
+
+
 def workflow_shards(workflow: str) -> Set[str]:
     """The shards `check.yml` runs: the matrix targets, and any job that runs one as a real
-    `run:` key. A commented line is not a run."""
+    `make ci-check-*` command of a `run:` key, alone on its line or inside a multi-line block
+    (a step that also counts skips). A commented line is not a run."""
     live = "\n".join(ln for ln in workflow.splitlines() if not ln.lstrip().startswith("#"))
     matrix = re.search(r"target:\s*\[([^\]]*)\]", live)
     listed = {t.strip() for t in matrix.group(1).split(",")} if matrix else set()
     # a shard that runs as a job of its own (`ci-static`, so `design-check` can wait on it alone)
-    return listed | set(re.findall(r"^\s*run: make (ci-check-[\w-]+)\s*$", live, flags=re.M))
+    found = {m.group(1) for cmd in _run_commands(live) for m in [re.match(r"make (ci-check-[\w-]+)(?:\s|$)", cmd)] if m}
+    return listed | found
 
 
 def _check_registry() -> Row:

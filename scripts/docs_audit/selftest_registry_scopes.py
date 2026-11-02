@@ -42,6 +42,16 @@ def run(ok) -> None:
        "a real `run:` line counts as a shard", "")
     ok(workflow_shards("matrix:\n  target: [a]\n    # run: make ci-check-static\n") == {"a"},
        "a commented `run:` line is not a shard", "")
+    block = ("jobs:\n  s:\n    steps:\n      - name: x\n        run: |\n          set -o pipefail\n"
+             "          make ci-check-static 2>&1 | tee \"$log\" || rc=$?\n          exit \"$rc\"\n")
+    ok(workflow_shards("matrix:\n  target: [a]\n" + block) == {"a", "ci-check-static"},
+       "a make line inside a multi-line `run: |` block counts as a shard", "")
+    ok(workflow_shards("matrix:\n  target: [a]\n" + block.replace("make ci-check-static", "echo ci-check-static")) == {"a"},
+       "a block with no make line is not a shard", "")
+    ok(workflow_shards("matrix:\n  target: [a]\n" + block.replace("make ci-check-static", "# make ci-check-static")) == {"a"},
+       "a commented make line inside a block is not a shard", "")
+    ok(workflow_shards("matrix:\n  target: [a]\n" + block + "      - name: y\n        run: echo done\n          make ci-check-other\n") == {"a", "ci-check-static"},
+       "text after the block's own indent is not read as the block", "")
     report = Report()
     check_audit_invocation(report)
     by_label = {row.check: row.findings for row in report.checks}
