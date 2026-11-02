@@ -1152,14 +1152,17 @@ export function Pricing() {
   const isListed = useCallback((sku: string) => listed.has(sku), [listed])
   const [listedTyped, setListedTyped] = useState<Readonly<Record<string, string>>>({})
   /** Which suggestions are ticked, where the owner has pressed one. Absent is the group's own start:
-   *  ticked in Suggested changes, unticked in Needs you. */
+   *  ticked in Suggested changes, unticked in Needs you. A live listing's tick is keyed to the suggested
+   *  price it was given for (`tickKey`), so a new figure (a refresh) starts unticked again. A new copy's
+   *  tick is keyed by its SKU alone. */
   const [ticks, setTicks] = useState<Readonly<Record<string, boolean>>>({})
+  const tickKey = useCallback((sku: string): string => `${sku}@${centsOf(listed.get(sku)?.price ?? '') ?? ''}`, [listed])
   const tickedOf = useCallback(
     (sku: string): boolean => {
       const one = listed.get(sku)
-      return ticks[sku] ?? (one !== undefined && one.group === 'suggested')
+      return ticks[tickKey(sku)] ?? (one !== undefined && one.group === 'suggested')
     },
-    [listed, ticks],
+    [listed, ticks, tickKey],
   )
   const doc = useMemo(() => corpusAsDoc(book, run), [book, run])
 
@@ -1406,12 +1409,13 @@ export function Pricing() {
      * row, a hold or a typed price (the owner's ruling). A no-market row reads the `unknown`
      * channel only when nothing sits on the `price` one. One SKU holds one answer. */
     (sku: PricingSku): unknown => {
-      /* A LIVE LISTING'S ANSWER IS THE PRICE TYPED ON IT THIS VISIT, or the hold the owner put on it.
+      /* A LIVE LISTING'S ANSWER IS THE HOLD THE OWNER PUT ON IT, else the price typed on it this visit.
+         The hold is read first: a held row has no price field, so no typed price can stand under it,
+         whatever order the clock put them in (an undone release puts a hold back over a later price).
          A price stored for it on an earlier visit is no answer here: its field opens on the suggestion. */
       if (isListed(sku.sku)) {
-        const typed = listedTyped[sku.sku]
-        if (typed !== undefined) return typed
-        return isWithheld(answers[sku.sku]) ? answers[sku.sku] : undefined
+        if (isWithheld(answers[sku.sku])) return answers[sku.sku]
+        return listedTyped[sku.sku]
       }
       return targetOf(sku.bucket) === 'overrides' ? answers[sku.sku] : (answers[sku.sku] ?? unpriced[sku.sku])
     },
@@ -2219,6 +2223,12 @@ export function Pricing() {
         /* AN UNDONE ANSWER WAS NOT TYPED THIS VISIT (round 7, R6-2). */
         const next = new Set(held)
         for (const w of top.writes) next.delete(w.sku)
+        return next
+      })
+      /* A HOLD PUT BACK TAKES THE TYPED PRICE WITH IT, as `setHold` does, so a later release does not bring it back. */
+      setListedTyped((held) => {
+        const next = { ...held }
+        for (const w of top.writes) if (isWithheld(w.before?.value)) delete next[w.sku]
         return next
       })
       for (const w of top.writes) {
@@ -3361,7 +3371,7 @@ export function Pricing() {
                       return {
                         reason: one.reason,
                         tone: one.group === 'needs_you' ? ('warn' as const) : ('quiet' as const),
-                        tick: ticking ? { on: tickedOf(sku.sku), onChange: (on: boolean) => setTicks((held) => ({ ...held, [sku.sku]: on })) } : null,
+                        tick: ticking ? { on: tickedOf(sku.sku), onChange: (on: boolean) => setTicks((held) => ({ ...held, [tickKey(sku.sku)]: on })) } : null,
                       }
                     })()}
                     asking={readView ? (askingOf.get(sku.sku) ?? null) : listed.get(sku.sku) === undefined ? undefined : (listed.get(sku.sku)?.asking ?? null)}
