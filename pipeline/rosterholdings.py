@@ -31,6 +31,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
 
 from pipeline.join import name_index_key, normalize_set
+from pipeline.tcgcsv import SEALED_CONDITION
 from store.pricearchive import PriceArchive
 
 #: The reasons a row is excluded, in report order.
@@ -44,7 +45,6 @@ _COLUMNS = (
     "Condition", "Finish", "Quantity", "Total Amount",
 )
 _NEAR_MINT = "Near Mint"
-_UNOPENED = "Unopened"
 _NON_FOIL = "non-foil"
 
 
@@ -78,7 +78,11 @@ class SkuRow(NamedTuple):
 
 
 def _money(text: str) -> Decimal:
-    return Decimal(str(text).strip().replace("$", "").replace(",", "") or "0")
+    """A finite, non-negative amount. Blank after cleanup (`$`, `,`) raises, never reads as 0."""
+    value = Decimal(str(text).strip().replace("$", "").replace(",", ""))
+    if not value.is_finite() or value < 0:
+        raise ValueError(f"amount {text!r} is not a non-negative number")
+    return value
 
 
 def read_roster(fileobj) -> Roster:
@@ -86,16 +90,18 @@ def read_roster(fileobj) -> Roster:
 
     A kept row is `Type` purchase, `Vendor` TCG, `Shipping Status` not canceled. A row that
     fails one test is counted under the first reason that applies, and is never parsed for
-    amount or quantity. A column missing from the header, or a kept row that is short, has a
-    blank amount, or a quantity that is unreadable or not above zero, raises `ValueError` and
-    names its file line: guessing would hide a line.
+    amount or quantity. A column missing from the header, or a kept row that is short, has an
+    amount that is blank, unreadable or negative, or a quantity that is unreadable or not above
+    zero, raises `ValueError` and names its file line (`reader.line_num`, so a quoted newline
+    earlier in the file does not shift it): guessing would hide a line.
     """
     reader = csv.DictReader(fileobj)
     missing = [c for c in _COLUMNS if c not in (reader.fieldnames or [])]
     if missing:
         raise ValueError(f"roster is missing column(s): {', '.join(missing)}")
     roster = Roster(excluded={reason: 0 for reason in EXCLUDE_REASONS})
-    for n, row in enumerate(reader, start=2):
+    for row in reader:
+        n = reader.line_num
         kind = (row["Type"] or "").strip().lower()
         if kind != "purchase":
             roster.excluded["sale" if kind == "sale" else "other_type"] += 1
@@ -111,8 +117,8 @@ def read_roster(fileobj) -> Roster:
                 paid = _money(row["Total Amount"])
             except (ValueError, InvalidOperation) as exc:
                 raise ValueError(f"roster line {n}: unreadable quantity or amount") from exc
-            if quantity <= 0 or not row["Total Amount"].strip():
-                raise ValueError(f"roster line {n}: quantity must be above zero and amount present")
+            if quantity <= 0:
+                raise ValueError(f"roster line {n}: quantity must be above zero")
             roster.lines.append(RosterLine(
                 row["Vendor Product Id"].strip(), row["Set Name"], row["Product Name"],
                 row["Condition"], row["Finish"].strip(), quantity, paid,
@@ -218,7 +224,7 @@ def _unit_price(finish: str, skus: Iterable[SkuRow], archive: PriceArchive):
     """`(price, start, None)` or `(None, None, reason)` for one product's SKUs."""
     skus = list(skus)
     # Sealed product has no Near Mint SKU and no finish: price its Unopened SKU.
-    sealed = bool(skus) and all(s.condition == _UNOPENED for s in skus)
+    sealed = bool(skus) and all(s.condition == SEALED_CONDITION for s in skus)
     found = []
     for sku in skus:
         if not sealed and (not sku.condition.startswith(_NEAR_MINT)

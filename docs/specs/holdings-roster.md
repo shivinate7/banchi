@@ -28,6 +28,8 @@ because D324 calls the first deliverable a one-off, read-only report.
 - Keep only the product id (`Vendor Product Id`), `Set Name`, `Product Name`, `Condition`,
   `Finish`, `Quantity` and paid (`Total Amount`). Every other column is dropped at read. A
   seller, buyer, account, order id or URL never reaches a dataclass or the output.
+- A kept row with a blank or unreadable amount, a quantity of zero or less, or missing columns
+  stops the report with an error that names its file line.
 
 ## Join
 
