@@ -43,7 +43,8 @@ because D324 calls the first deliverable a one-off, read-only report.
   in its condition and no `Foil`, `Holofoil` or `Reverse Holofoil` printing. Any other finish
   keeps a SKU with `Foil` in its condition or printing. When exactly one kept SKU has a latest
   `month` bucket with a market, that market is the unit price. Otherwise the line is `unpriced`,
-  with the reason `no_price` or `printing`.
+  with the reason `no_price` or `printing`. A product whose SKUs are all `Unopened` (sealed) is priced
+  from its `Unopened` SKU's latest `month` market, for any finish.
 - No line is dropped. Every kept line is priced, unpriced, ambiguous or unmatched.
 
 ## Report, in order

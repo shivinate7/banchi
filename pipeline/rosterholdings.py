@@ -44,6 +44,7 @@ _COLUMNS = (
     "Condition", "Finish", "Quantity", "Total Amount",
 )
 _NEAR_MINT = "Near Mint"
+_UNOPENED = "Unopened"
 _NON_FOIL = "non-foil"
 
 
@@ -84,9 +85,10 @@ def read_roster(fileobj) -> Roster:
     """Kept lines and excluded counts from a roster CSV. The `csv` module only.
 
     A kept row is `Type` purchase, `Vendor` TCG, `Shipping Status` not canceled. A row that
-    fails one test is counted under the first reason that applies. A column missing from the
-    header, or a kept row whose quantity or amount does not parse, raises `ValueError` and
-    names it: guessing would hide a line.
+    fails one test is counted under the first reason that applies, and is never parsed for
+    amount or quantity. A column missing from the header, or a kept row that is short, has a
+    blank amount, or a quantity that is unreadable or not above zero, raises `ValueError` and
+    names its file line: guessing would hide a line.
     """
     reader = csv.DictReader(fileobj)
     missing = [c for c in _COLUMNS if c not in (reader.fieldnames or [])]
@@ -94,19 +96,23 @@ def read_roster(fileobj) -> Roster:
         raise ValueError(f"roster is missing column(s): {', '.join(missing)}")
     roster = Roster(excluded={reason: 0 for reason in EXCLUDE_REASONS})
     for n, row in enumerate(reader, start=2):
-        kind = row["Type"].strip().lower()
+        kind = (row["Type"] or "").strip().lower()
         if kind != "purchase":
             roster.excluded["sale" if kind == "sale" else "other_type"] += 1
-        elif row["Vendor"].strip() != "TCG":
+        elif (row["Vendor"] or "").strip() != "TCG":
             roster.excluded["not_tcg"] += 1
-        elif row["Shipping Status"].strip().lower() == "canceled":
+        elif (row["Shipping Status"] or "").strip().lower() == "canceled":
             roster.excluded["canceled"] += 1
         else:
+            if any(row[c] is None for c in _COLUMNS):
+                raise ValueError(f"roster line {n}: the row is too short for its columns")
             try:
                 quantity = int(row["Quantity"].strip())
                 paid = _money(row["Total Amount"])
             except (ValueError, InvalidOperation) as exc:
-                raise ValueError(f"roster row {n}: unreadable quantity or amount") from exc
+                raise ValueError(f"roster line {n}: unreadable quantity or amount") from exc
+            if quantity <= 0 or not row["Total Amount"].strip():
+                raise ValueError(f"roster line {n}: quantity must be above zero and amount present")
             roster.lines.append(RosterLine(
                 row["Vendor Product Id"].strip(), row["Set Name"], row["Product Name"],
                 row["Condition"], row["Finish"].strip(), quantity, paid,
@@ -210,10 +216,13 @@ def _finish_agrees(finish: str, condition: str, printing: Optional[str]) -> bool
 
 def _unit_price(finish: str, skus: Iterable[SkuRow], archive: PriceArchive):
     """`(price, start, None)` or `(None, None, reason)` for one product's SKUs."""
+    skus = list(skus)
+    # Sealed product has no Near Mint SKU and no finish: price its Unopened SKU.
+    sealed = bool(skus) and all(s.condition == _UNOPENED for s in skus)
     found = []
     for sku in skus:
-        if not sku.condition.startswith(_NEAR_MINT) or not _finish_agrees(
-                finish, sku.condition, sku.printing):
+        if not sealed and (not sku.condition.startswith(_NEAR_MINT)
+                           or not _finish_agrees(finish, sku.condition, sku.printing)):
             continue
         priced = [b for b in archive.for_sku(sku.key) if b.range == "month" and b.market]
         if priced:
