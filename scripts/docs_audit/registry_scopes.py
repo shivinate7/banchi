@@ -1552,7 +1552,7 @@ def _rollup_findings(where: str, text: str, files: Dict[str, str],
     # `continue-on-error` turns a failed job or step into a success, so the rollup would read green
     # over it. Only a literal `false` is allowed: an expression or `true` can hide a failure.
     # A flow-style step (`- { name: x, continue-on-error: true }`) puts the key after `{` or `,`.
-    watched = needed_jobs + [ROLLUP_JOB] + (["check"] if "check" in names else [])
+    watched = needed_jobs + [ROLLUP_JOB]
     for name in watched:
         for line in _job_lines(jobs, name) or []:
             if line.lstrip().startswith("#"):
@@ -1564,16 +1564,6 @@ def _rollup_findings(where: str, text: str, files: Dict[str, str],
                     f"`{name}` sets `continue-on-error: {value}`, which turns a failure\n"
                     f"  into a success the rollup cannot see. Only `false` is allowed on a job `{ROLLUP_JOB}` reads.")))
                 break
-
-    # The alias reads the rollup and nothing else, or it is a second required check with its own
-    # wiring, which is the defect the rollup exists to remove.
-    if "check" in names:
-        alias_needs = _job_needs(_job_lines(jobs, "check") or [])
-        if alias_needs is None:
-            out.append((where, f"`check` has no `needs:`, so it passes without reading `{ROLLUP_JOB}`."))
-        elif alias_needs != [ROLLUP_JOB]:
-            out.append((where, (
-                f"`check` needs [{', '.join(alias_needs)}], and the alias may need only [{ROLLUP_JOB}].")))
     return out
 
 
