@@ -103,6 +103,7 @@ jobs:
   build:
     needs: hold
     if: ${{ needs.hold.outputs.publish == 'true' }}
+    # ubuntu-latest needs Playwright 1.61 or newer for chromium; app/package.json holds it.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
