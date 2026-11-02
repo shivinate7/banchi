@@ -63,9 +63,9 @@ D86 states the rule: nothing here is ever defaulted on the operator's behalf.
 
 T7 asserts the blank **on an order routed by its weight**, so the temptation is strongest where the assertion applies. The first draft took the first order in the lane and passed by accident. 58 of the 126 carry no weight at all. So it asserted only that a blank column stayed blank.
 
-### Buyer PII passes through and is not stored
+### Buyer PII passes through these two modules
 
-Names and addresses enter as arguments and leave as the bytes the caller asked for. Neither module reaches `store/`, and neither caches. `render` returns **bytes, not a path**, so a buyer's name never has to touch a disk. `write_csv` is the one function that writes, and only where it is told to.
+Names and addresses enter as arguments and leave as the bytes the caller asked for. Neither module reaches `store/`, and neither caches. The order ledger may keep them: D326 (the TCGTracking pipe) keeps every field the imports return. These two modules still store nothing. `render` returns **bytes, not a path**, so a buyer's name never has to touch a disk. `write_csv` is the one function that writes, and only where it is told to.
 
 ### The one-way edge, and why this is two modules
 

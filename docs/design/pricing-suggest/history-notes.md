@@ -42,7 +42,8 @@ row. The row's 30-day trend is read off the chart's market line, so the two agre
    opens a card for its row, with no scrim, and so does the row's history door. The card is 560px
    at 1440 and 384px at 820. Its chart is 520px wide at 1440 and 344px at 820, against 380px in
    today's sheet. It shows the chart and the four prices. The reason and the sold range stay on
-   the row, so each shows once. Links: `#f=1440`, `#f=820`, `#t=dark`, `#state=top`, `#state=top&fb=next`.
+   the row, so each shows once. Links: `#f=1440`, `#f=820`, `#t=dark`, `#state=top`, `#state=top&fb=next`,
+   `#state=long`, `#state=loading`, `#try=add`, `#try=fold`.
    - Gain: at 1440, the widest chart of the four. The focused row, with its price, tick, reason
      and sold range, stays in view, and the rest of the list stays pressable.
    - Loss: at 820 its chart is smaller than the sheet's. The daily copies-sold bars do not fit.
@@ -81,9 +82,10 @@ row. The row's 30-day trend is read off the chart's market line, so the two agre
 
 7. **Focus.** A card opened by focus takes no focus, so focus stays in the price field. A card
    opened by the history door takes focus, and gives it back to the door when it closes. Esc
-   closes it, and focus stays where it was: in the field, or back on the door. It closes when
-   focus leaves the list's price fields for anything but the card. A press outside it closes it.
-   A press on another price field or door moves it to that row.
+   closes it, and focus stays where it was: in the field, or back on the door. It stays open while
+   focus is anywhere in the list, and closes when focus leaves the list for anything but the card
+   (item 8, pick b). A press outside the list and the card closes it. A press on another price
+   field or door moves it to that row. A press on a tick, a name or a lock leaves it on its row.
 
 8. **What Tab reaches next.** Section 9c says Tab goes on to the next price. Today's row puts the
    history door, the lock, the next row's tick and its name between two price fields, so native
@@ -97,3 +99,21 @@ row. The row's 30-day trend is read off the chart's market line, so the two agre
    - c. Enter in a price field moves focus to the next price field. Gain: one key, price to
      price. Loss: a new key binding, which must go in `SHORTCUTS`.
    - Pick: b.
+
+9. **Pinned to its row when the list changes** (`#try=add`, `#try=fold`). A row added above, or
+   a group folded above, moves the focused row with no scroll and no resize. The card is placed
+   again on every change to the list's layout, by the same rule: above with room, else below.
+   A row folded away closes the card. The strip under the cull strip makes each change; it is
+   mockup-only, and the fold is a sample list change, not a new control.
+   - Gain: the card never points at a row that has moved away.
+   - Loss: none on screen. The built card must watch the list's layout, not only resize and scroll.
+   - Pick: this.
+
+10. **A long name** (`#state=long`). The card's name is one line. A name too long for it ends in
+    an ellipsis at the card's width, and its `title` holds the whole name. At 820 the sample name
+    truncates; at 1440 it fits. While the history loads (`#state=loading`), the name reads "Price
+    history", in a quieter ink, with no title, and the chart box and the four prices hold their
+    loaded size, with a dash for each figure.
+    - Gain: the head never wraps, so the card's height does not depend on the name.
+    - Loss: the end of a long name shows only on hover.
+    - Pick: this.

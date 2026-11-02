@@ -375,6 +375,8 @@ Use bold labels in one quoted block, never a code fence. Start with the point. N
 - Read `docs/decisions/` before you propose an architecture change (`scripts/decision-context.py` finds the entry,
   `make map ARGS=--decisions` indexes them). Reopen one only by citing it and waiting for the owner's word.
 - Design work is repo work. Land it in `docs/specs/` or the decision that owns it in the same session, or declare it abandoned.
+- The waiting page's writer exports the page's data to `docs/waiting/` at each wake and before any republish
+  (D327, the waiting page is a committed record). `scripts/waiting-export.py --calls` prints the reads.
 - When compacting, keep the fixture schema facts, every `make` command and the modified-file list.
 
 ### Writing a brief
