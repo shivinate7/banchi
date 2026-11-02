@@ -141,10 +141,12 @@ def _expected_step(target: str) -> List[str]:
 
 def _run_body(lines: List[str], i: int, col: int, rest: str) -> List[str]:
     """The command lines of the `run:` key at line i: its block scalar, or its inline value.
-    Blank and comment lines are dropped."""
+    Blank and comment lines are dropped. A folded `>` block joins its lines into one command
+    line, so make never runs as the shape says: its body leads with the indicator, which no
+    shape holds, and the caller reports it."""
     if rest[:1] not in ("|", ">"):
         return [rest] if rest else []
-    body: List[str] = []
+    body: List[str] = [rest] if rest[:1] == ">" else []
     for follow in lines[i + 1:]:
         if follow.strip() and _indent(follow) <= col:
             break
