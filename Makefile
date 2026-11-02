@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status restart-now map explain harness harness-1 harness-2 harness-3 harness-part check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint pytypes typecheck unit venv launch-config worktree-setup worktree-provision-selftest worktree-create-selftest session-teardown-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent backup backup-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
+.PHONY: help status restart-now map explain harness harness-1 harness-2 harness-3 harness-part check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest rosterholdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint pytypes typecheck unit venv launch-config worktree-setup worktree-provision-selftest worktree-create-selftest session-teardown-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent backup backup-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -1052,6 +1052,17 @@ holdings-selftest:
 		$(PYTHON) scripts/holdings-selftest.py; \
 	else \
 		echo "holdings-selftest: SKIPPED — this branch does not touch unsold-stock holdings or its callers. BANCHI_GUARD_SCOPE=all runs it anyway."; \
+	fi
+
+# pipeline/rosterholdings.py, proved against an in-memory roster CSV, SKU list and archive,
+# no store, no network: the TCG-purchase filter, the privacy floor, the name join, the Near Mint
+# printing pick, one bucket per line. PATH GATED (D247).
+rosterholdings-selftest:
+	@python3 scripts/guard-scope.py classify --target rosterholdings-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
+		$(PYTHON) scripts/rosterholdings-selftest.py; \
+	else \
+		echo "rosterholdings-selftest: SKIPPED — this branch does not touch the roster value report or its callers. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # pipeline/identity_checks.py's four stored-data checks, proved against literal

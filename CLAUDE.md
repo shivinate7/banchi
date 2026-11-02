@@ -124,6 +124,7 @@ make catalog-mirror # fills the image mirror (about 16.7 GB). ARGS=--dry-run sam
 ./banchi prices   adopt [--write] | show [--held]  # the price corpus. Adopt folds legacy decisions.json in.
 ./banchi readings adopt [--write] | show           # the market-reading table. --write fully replaces both tables, and refuses over no source or a malformed pricing.json.
 ./banchi skus     adopt [--write]                  # the store-owned SKU table. Never a full replace.
+./banchi holdings-roster <csv> [--store F]         # the owner's investment roster at this store's prices (D324 (Banchi values investment holdings)). Read-only, no screen.
 ./banchi archive  sweep [--write] | show [--sku ID]  # price-history archive. Previews with no network.
 ./banchi queue    refresh [--export <file.csv>] [--write]  # re-resolve every open queue entry.
 ./banchi reconcile <run-dir> <staged-export.csv>   # one import against one Export From Staged.
