@@ -2824,7 +2824,7 @@ test('the reason a row adds nothing is a heading, composed by the CLIENT, verbat
   const heads = page.locator('.pricing-group-head')
   /* THE ONE LIST ALWAYS DRAWS ITS THREE GROUPS, EMPTY OR NOT, and the server's sentences follow them. */
   await expect(heads).toHaveCount(5)
-  await expect(heads.locator('.pricing-group-why')).toHaveText(['Needs you', 'Suggested changes', 'Going at the rule', pending, 'Nothing to add this run.'])
+  await expect(heads.locator('.pricing-group-why')).toHaveText(['Needs You', 'Suggested Changes', 'Going at the Rule', pending, 'Nothing to add this run.'])
   await expect(page.locator('.pricing-row .pricing-why')).toHaveCount(0)
 
   /* THE FALSE SENTENCE BY NAME, so a client that starts composing again is caught even if it
@@ -2866,9 +2866,9 @@ test('a row that adds nothing sinks to the bottom of its section, under its head
      `group`), and the row that adds nothing falls under the server's own sentence, last, after the
      other two groups, which are drawn empty. */
   await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
-    'Needs you',
-    'Suggested changes',
-    'Going at the rule',
+    'Needs You',
+    'Suggested Changes',
+    'Going at the Rule',
     'Every copy in this run is already listed or has left the box.',
   ])
   const lastGroup = page.locator('.pricing-group').last()
@@ -2911,9 +2911,9 @@ test('a row that is both held and at the cap sinks to the deeper heading', async
   })
 
   await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
-    'Needs you',
-    'Suggested changes',
-    'Going at the rule',
+    'Needs You',
+    'Suggested Changes',
+    'Going at the Rule',
     'Every copy in this run is already listed or has left the box.',
   ])
   await expect(page.locator('.pricing-row').nth(1).locator('.pricing-held')).toHaveAttribute(
@@ -4463,7 +4463,7 @@ test('the rows that need the owner come first, each with its reason, and the res
   /* Q2's three reasons, and the order: no market price first, then by value. The card at the
      cut-off is the floor at work, not a drift, so it is not flagged (the call in the decision
      entry). */
-  await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText(['Needs you', 'Suggested changes', 'Going at the rule'])
+  await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText(['Needs You', 'Suggested Changes', 'Going at the Rule'])
   await expect(page.locator('.pricing-group').nth(0).locator('.pricing-name')).toHaveText(['Unpriced', 'Dear', 'Drifted'])
   await expect(page.locator('.pricing-group').nth(1).locator('.pricing-name')).toHaveText([])
   await expect(page.locator('.pricing-group').nth(2).locator('.pricing-name')).toHaveText(['Ordinary', 'Cheap on the cut-off'])
@@ -4477,11 +4477,14 @@ test('the rows that need the owner come first, each with its reason, and the res
   await expect(page.locator('.pricing-group').nth(2).locator('.pricing-flag')).toHaveCount(0)
   /* THE BAR NAMES WHAT STAYS BACK (Q3). */
   await expect(page.locator('[data-tile="priced"]')).toContainText(/\b1 need a price/)
-  /* AND ITS COPIES ARE NOT READY (the delta review, R3-1): four rows of three copies go, the
-     unpriced row's three do not. The bar and the press both say twelve, which is what the file
-     will carry. */
-  await expect(page.locator('[data-tile="ready"]')).toContainText(/\b12 ready to go/)
-  await expect(sendPress(page)).toHaveText(/^Send all 4 SKUs to TCGplayer$/i)
+  /* A NEW COPY UNDER NEEDS YOU WAITS FOR A TICK (pricing-suggest spec, "How far one suggestion may
+     move": bigger moves need a tick), unless the owner typed its price ("Nothing here goes until you
+     tick it or type a price"). Three rows of three copies go: the two at the rule, and Drifted,
+     whose price is typed. Dear is worth the value line and unticked, and Unpriced has no price, so
+     neither goes. The bar and the press both say nine, which is what the file will carry. */
+  await expect(page.getByRole('checkbox', { name: 'Send the new price for Dear' })).not.toBeChecked()
+  await expect(page.locator('[data-tile="ready"]')).toContainText(/\b9 ready to go/)
+  await expect(sendPress(page)).toHaveText(/^Send all 3 SKUs to TCGplayer$/i)
 })
 
 test('a price typed far from market gives the row its flag, and the row does not move', async ({ page }) => {
@@ -5172,7 +5175,7 @@ test('F3: the price sort orders within each heading, and a row with no price goe
      price) goes last in its own group. */
   const names = await page.locator('.pricing-row .pricing-name').allInnerTexts()
   expect(firstWords(names)).toEqual(['Articuno', 'Poro', 'Annie', 'Dunsparce'])
-  await expect(page.locator('.pricing-group-head .pricing-group-why').first()).toHaveText('Needs you')
+  await expect(page.locator('.pricing-group-head .pricing-group-why').first()).toHaveText('Needs You')
 })
 
 test('F3: the game filter and the set filter each narrow the list, and together with a search they combine', async ({ page }) => {
@@ -5880,7 +5883,7 @@ function leftBoxExpected(): [string, string[]][] {
     const rows = byMarket.filter((row) => leftBoxGroup(row) === which)
     return [...rows.filter((row) => row.on_hand > 0), ...rows.filter((row) => row.on_hand === 0)].map((row) => row.name)
   }
-  return [['Needs you', group('needs_you')], ['Suggested changes', []], ['Going at the rule', group('at_rule')]]
+  return [['Needs You', group('needs_you')], ['Suggested Changes', []], ['Going at the Rule', group('at_rule')]]
 }
 async function openLeftBox(page: Page): Promise<void> {
   await setViewport(page, { width: 1440, height: 900 })
@@ -6887,7 +6890,7 @@ const ONE_LIST_LIVE: LiveStub[] = [
   { sku: '9000003', name: 'Pecharunt ex', set_name: 'Shrouded Fable', image_url: null, market: '3.01', low: '3.10', asking: '2.85', last_sold_at: null, group: 'at_rule', price: '2.85', source: 'Live', reason: '' },
 ]
 
-const GROUP_TITLES = ['Needs you', 'Suggested changes', 'Going at the rule'] as const
+const GROUP_TITLES = ['Needs You', 'Suggested Changes', 'Going at the Rule'] as const
 /** One group of the list: the element that holds its heading and its rows. */
 const listGroup = (page: Page, title: (typeof GROUP_TITLES)[number]) =>
   page.locator('main.pricing section', { has: page.getByRole('heading', { name: new RegExp(`^${title}\\b`) }) })
@@ -6908,15 +6911,15 @@ test('one list: three groups in order, live listings are rows of them, and there
   await expect(page.getByRole('button', { name: /^Live$/ }), 'no Live tab').toHaveCount(0)
   await expect(page.getByRole('button', { name: /^Unsent$/ }), 'no Unsent tab').toHaveCount(0)
   /* THREE GROUPS, IN THE SPEC'S ORDER (section 3). */
-  const titles = await page.getByRole('heading', { name: /^(Needs you|Suggested changes|Going at the rule)\b/ }).allInnerTexts()
+  const titles = await page.getByRole('heading', { name: /^(Needs You|Suggested Changes|Going at the Rule)\b/ }).allInnerTexts()
   expect(
     titles.map((text) => GROUP_TITLES.find((title) => text.startsWith(title))),
     'the groups, top to bottom',
   ).toEqual([...GROUP_TITLES])
   /* THE LIVE LISTINGS ARE ROWS: each sits in the group the wire put it in, with its reason or its price. */
-  await expect(listGroup(page, 'Needs you').getByText('Market up 41% since listed, past your 25% limit.')).toBeVisible()
-  await expect(listGroup(page, 'Suggested changes').getByText('Market up 18% since listed.')).toBeVisible()
-  const atRule = listGroup(page, 'Going at the rule')
+  await expect(listGroup(page, 'Needs You').getByText('Market up 41% since listed, past your 25% limit.')).toBeVisible()
+  await expect(listGroup(page, 'Suggested Changes').getByText('Market up 18% since listed.')).toBeVisible()
+  const atRule = listGroup(page, 'Going at the Rule')
   await expect(atRule.getByRole('textbox', { name: /^Price for / }), 'the new copy and the live listing at the rule').toHaveCount(2)
   await fieldHolding(atRule, '2.85')
   await fieldHolding(atRule, '22.03')
@@ -6925,14 +6928,14 @@ test('one list: three groups in order, live listings are rows of them, and there
 test('one list: a suggested change shows its reason and the suggested price, ticked; a row that needs you starts unticked', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   await open(page, { live: ONE_LIST_LIVE })
-  const suggested = listGroup(page, 'Suggested changes')
+  const suggested = listGroup(page, 'Suggested Changes')
   await expect(suggested.getByText('Market up 18% since listed.')).toBeVisible()
   await fieldHolding(suggested, '4.01')
   const kept = suggested.getByRole('checkbox', { name: /^Send the new price for / })
   await expect(kept, 'the suggestion is ticked as the mockup draws it').toHaveCount(1)
   await expect(kept).toBeChecked()
   /* THE MOCKUP'S NEEDS-YOU ROWS START UNTICKED, so nothing there goes by accident (list-notes, item 9). */
-  const needs = listGroup(page, 'Needs you').getByRole('checkbox', { name: /^Send the new price for / })
+  const needs = listGroup(page, 'Needs You').getByRole('checkbox', { name: /^Send the new price for / })
   await expect(needs).toHaveCount(1)
   await expect(needs).not.toBeChecked()
 })
@@ -6940,7 +6943,7 @@ test('one list: a suggested change shows its reason and the suggested price, tic
 test('one list: one send carries the new copies, the kept suggestion and a typed price', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   const wire = await open(page, { live: ONE_LIST_LIVE })
-  const atRule = listGroup(page, 'Going at the rule')
+  const atRule = listGroup(page, 'Going at the Rule')
   /* A TYPED PRICE on the live listing at the rule, and one on the new copy. */
   const typedLive = await fieldHolding(atRule, '2.85')
   await typedLive.fill('3.10')
@@ -6975,14 +6978,14 @@ test('one list: after a send lands the screen re-reads the worklist, and the sen
         ? ONE_LIST_LIVE
         : ONE_LIST_LIVE.map((one) => (one.sku === '9000002' ? { ...one, asking: '4.01', group: 'at_rule' as const, source: 'Live' as const, reason: '' } : one)),
   })
-  const suggested = listGroup(page, 'Suggested changes')
+  const suggested = listGroup(page, 'Suggested Changes')
   await expect(suggested.getByText('Market up 18% since listed.')).toBeVisible()
   const before = reads.length
   await page.getByRole('button', { name: /^Send .* to TCGplayer$/i }).click()
   await expect.poll(() => sendPosts(wire).length).toBe(1)
   await expect.poll(() => reads.length, 'the worklist is read again once the send has landed').toBeGreaterThan(before)
   await expect(page.getByText('Market up 18% since listed.'), 'the sent suggestion no longer reads as a suggestion').toHaveCount(0)
-  await fieldHolding(listGroup(page, 'Going at the rule'), '4.01')
+  await fieldHolding(listGroup(page, 'Going at the Rule'), '4.01')
 })
 
 /* AN EMPTY GROUP STILL DRAWS, as the mockup's own `paint` draws it: the title, a count of 0 and the group's
@@ -6990,12 +6993,13 @@ test('one list: after a send lands the screen re-reads the worklist, and the sen
 test('one list: with no live listing the three groups still draw, an empty one with a count of 0 and its sentence', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   await open(page, { skus: [inGroup(sku(), 'at_rule')] })
-  const heads = page.getByRole('heading', { name: /^(Needs you|Suggested changes|Going at the rule)\b/ })
+  const heads = page.getByRole('heading', { name: /^(Needs You|Suggested Changes|Going at the Rule)\b/ })
   await expect(heads).toHaveCount(3)
-  await expect(heads.nth(0)).toHaveText(/^Needs you\s*0\s*Nothing here goes until you tick it or type a price\.$/)
-  await expect(heads.nth(1)).toHaveText(/^Suggested changes\s*0\s*Ticked rows go with the next send\. Untick one to keep its live price\.$/)
-  await expect(heads.nth(2)).toHaveText(/^Going at the rule\s*1\s*These go at your rule, at the floor, or at a price you typed\.$/)
-  await expect(page.getByRole('heading', { name: /^(Ready|Needs You)\b/ }), 'the tabbed screen headings are gone').toHaveCount(0)
+  await expect(heads.nth(0)).toHaveText(/^Needs You\s*0\s*Nothing here goes until you tick it or type a price\.$/)
+  await expect(heads.nth(1)).toHaveText(/^Suggested Changes\s*0\s*Ticked rows go with the next send\. Untick one to keep its live price\.$/)
+  await expect(heads.nth(2)).toHaveText(/^Going at the Rule\s*1\s*These go at your rule, at the floor, or at a price you typed\.$/)
+  /* "Needs You" is the one list's own first heading now (Chicago Title Case), so only the tabbed screen's "Ready" can say the tabs are back. */
+  await expect(page.getByRole('heading', { name: /^Ready\b/ }), 'the tabbed screen heading is gone').toHaveCount(0)
 })
 
 /* THE VALUE LINE ($25, the policy's own) IS THE SERVER'S: a new copy's group arrives on the wire (stubbed `group`) and the
@@ -7012,17 +7016,17 @@ test('one list: a new copy worth $25 or more is under Needs you, never under Goi
       inGroup(priced('Pecharunt', '7.49'), 'at_rule'),
     ],
   })
-  const needs = listGroup(page, 'Needs you')
-  const atRule = listGroup(page, 'Going at the rule')
+  const needs = listGroup(page, 'Needs You')
+  const atRule = listGroup(page, 'Going at the Rule')
   for (const name of ['Umbreon VMAX', 'On the line']) {
-    await expect(needs.getByRole('textbox', { name: `Price for ${name}` }), `${name} needs the owner`).toHaveCount(1)
-    await expect(atRule.getByRole('textbox', { name: `Price for ${name}` }), `${name} is not going at the rule`).toHaveCount(0)
+    await expect(needs.getByRole('textbox', { name: `Price for ${name}`, exact: true }), `${name} needs the owner`).toHaveCount(1)
+    await expect(atRule.getByRole('textbox', { name: `Price for ${name}`, exact: true }), `${name} is not going at the rule`).toHaveCount(0)
     /* UNTICKED, like every Needs you row (list-notes, item 9). */
     await expect(needs.getByRole('checkbox', { name: `Send the new price for ${name}` })).not.toBeChecked()
   }
   for (const name of ['Just under', 'Pecharunt']) {
-    await expect(atRule.getByRole('textbox', { name: `Price for ${name}` }), `${name} goes at the rule`).toHaveCount(1)
-    await expect(needs.getByRole('textbox', { name: `Price for ${name}` })).toHaveCount(0)
+    await expect(atRule.getByRole('textbox', { name: `Price for ${name}`, exact: true }), `${name} goes at the rule`).toHaveCount(1)
+    await expect(needs.getByRole('textbox', { name: `Price for ${name}`, exact: true })).toHaveCount(0)
   }
 })
 
@@ -7038,13 +7042,13 @@ test('one list: live rows draw name, market and low from the worklist, with no m
   await open(page, { live: ONE_LIST_LIVE })
   const row = (name: string, group: (typeof GROUP_TITLES)[number]) =>
     listGroup(page, group).locator('.pricing-row', { has: page.getByRole('textbox', { name: `Price for ${name}` }) })
-  const iono = row('Iono', 'Needs you')
+  const iono = row('Iono', 'Needs You')
   await expect(iono.getByText('Iono', { exact: true })).toBeVisible()
   await expect(iono).toContainText('$12.41')
   await expect(iono).toContainText('$12.95')
-  await expect(row('Gardevoir ex', 'Suggested changes')).toContainText('$4.22')
-  await expect(row('Gardevoir ex', 'Suggested changes')).toContainText('$4.35')
-  await expect(row('Pecharunt ex', 'Going at the rule')).toContainText('$3.10')
+  await expect(row('Gardevoir ex', 'Suggested Changes')).toContainText('$4.22')
+  await expect(row('Gardevoir ex', 'Suggested Changes')).toContainText('$4.35')
+  await expect(row('Pecharunt ex', 'Going at the Rule')).toContainText('$3.10')
   expect(reads, 'no call to the mark-down reads').toEqual([])
 })
 
@@ -7061,12 +7065,12 @@ test('one list: each row says where its price comes from, and the send bar count
   })
   const pill = (group: (typeof GROUP_TITLES)[number], name: string) =>
     listGroup(page, group).locator('.pricing-row', { has: page.getByRole('textbox', { name: `Price for ${name}` }) })
-  await expect(pill('Needs you', 'Mew ex').getByText('No price yet', { exact: true })).toBeVisible()
-  await expect(pill('Going at the rule', 'Bulbasaur').getByText('Rule', { exact: true })).toBeVisible()
-  await expect(pill('Needs you', 'Iono').getByText('Suggested', { exact: true })).toBeVisible()
-  await expect(pill('Suggested changes', 'Gardevoir ex').getByText('Suggested', { exact: true })).toBeVisible()
+  await expect(pill('Needs You', 'Mew ex').getByText('No price yet', { exact: true })).toBeVisible()
+  await expect(pill('Going at the Rule', 'Bulbasaur').getByText('Rule', { exact: true })).toBeVisible()
+  await expect(pill('Needs You', 'Iono').getByText('Suggested', { exact: true })).toBeVisible()
+  await expect(pill('Suggested Changes', 'Gardevoir ex').getByText('Suggested', { exact: true })).toBeVisible()
   /* A LIVE ROW SHOWS ITS PRICE NOW BEFORE THE ARROW ("Now $8.80"). */
-  await expect(pill('Needs you', 'Iono')).toContainText('Now $8.80')
+  await expect(pill('Needs You', 'Iono')).toContainText('Now $8.80')
 
   /* THE BAR: copies in all, then new, rises, falls and typed, each with its total. Ticked: 3 new at the rule ($22.03 each) and the one suggestion. */
   const bar = page.getByRole('complementary', { name: 'Send to TCGplayer' })
@@ -7077,14 +7081,14 @@ test('one list: each row says where its price comes from, and the send bar count
   await expect(bar).toContainText('0 typed by you, listing for')
   await expect(page.getByRole('button', { name: 'Send 4 copies to TCGplayer' })).toBeVisible()
   /* A TICK CHANGES THE FIGURES AT ONCE: Iono's rise ($8.80 to $12.41) joins. */
-  await listGroup(page, 'Needs you').getByRole('checkbox', { name: 'Send the new price for Iono' }).check()
+  await listGroup(page, 'Needs You').getByRole('checkbox', { name: 'Send the new price for Iono' }).check()
   await expect(bar).toContainText('5 copies ready to send.')
   await expect(bar).toContainText('2 rises, up $4.22 in all')
   /* A TYPED PRICE has its own pill and its own line. */
   const typed = page.getByRole('textbox', { name: 'Price for Pecharunt ex' })
   await typed.fill('3.10')
   await typed.press('Tab')
-  await expect(pill('Going at the rule', 'Pecharunt ex').getByText('You', { exact: true })).toBeVisible()
+  await expect(pill('Going at the Rule', 'Pecharunt ex').getByText('You', { exact: true })).toBeVisible()
   await expect(bar).toContainText('6 copies ready to send.')
   await expect(bar).toContainText('1 typed by you, listing for $3.10')
   await expect(page.getByRole('button', { name: 'Send 6 copies to TCGplayer' })).toBeVisible()
@@ -7111,9 +7115,9 @@ test('one list: a ?markdown= link lands on the one list and opens no second surf
   )
   await open(page, { live: ONE_LIST_LIVE })
   await page.goto(`/#/pricing?markdown=${stamp}`)
-  await expect(listGroup(page, 'Needs you').getByText('Market up 41% since listed, past your 25% limit.')).toBeVisible()
-  await expect(listGroup(page, 'Suggested changes').getByText('Market up 18% since listed.')).toBeVisible()
-  await expect(page.getByRole('heading', { name: /^Going at the rule\b/ })).toBeVisible()
+  await expect(listGroup(page, 'Needs You').getByText('Market up 41% since listed, past your 25% limit.')).toBeVisible()
+  await expect(listGroup(page, 'Suggested Changes').getByText('Market up 18% since listed.')).toBeVisible()
+  await expect(page.getByRole('heading', { name: /^Going at the Rule\b/ })).toBeVisible()
   await expect(page.locator('.pricing-tabs'), 'no tab bar').toHaveCount(0)
   await expect(page.getByRole('heading', { name: /^(No market price|With a market price)\b/ }), 'no sheet headings').toHaveCount(0)
   await expect(page.getByRole('button', { name: /^Mark down \d+/ }), 'no mark-down sheet control').toHaveCount(0)

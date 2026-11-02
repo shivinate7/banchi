@@ -980,7 +980,7 @@ test('a card with no market price is never marked down, and leads the list for t
     counts: { considered: 2, offered: 1, deferred: 0, refused: 1 },
   })
   const groups = page.locator('.pricing-group-head')
-  await expect(groups.first()).toContainText('Needs you')
+  await expect(groups.first()).toContainText('Needs You')
   await expect(page.getByRole('textbox', { name: 'Price for Kai Sa' })).toHaveAttribute('placeholder', '6000.00')
   await page.getByRole('button', { name: 'Mark down 1' }).click()
   await expect(page.getByRole('textbox', { name: 'Price for Kai Sa' })).toHaveValue('')
@@ -1102,7 +1102,7 @@ function liveLeftBoxExpected(): [string, string[]][] {
     const rows = byMarket.filter((row) => (row.market === null) === needs)
     return [...rows.filter((row) => row.on_hand > 0), ...rows.filter((row) => row.on_hand === 0)].map((row) => row.name)
   }
-  return [['Needs you', group(true)], ['Suggested changes', []], ['Going at the rule', group(false)]]
+  return [['Needs You', group(true)], ['Suggested Changes', []], ['Going at the Rule', group(false)]]
 }
 async function openLiveLeftBox(page: Page): Promise<void> {
   await setViewport(page, { width: 1440, height: 900 })
@@ -1133,7 +1133,7 @@ test('7b-29: one list, All lens: a row with every copy gone sorts below every ro
 test('7b-29: one list: the Market header sort ignores the left-box rule', async ({ page }) => {
   await openLiveLeftBox(page)
   await liveHead(page).click()
-  const [, names] = (await liveGroups(page)).find(([head]) => head === 'Going at the rule')!
+  const [, names] = (await liveGroups(page)).find(([head]) => head === 'Going at the Rule')!
   const market = (name: string) => Number(LEFT_BOX_LIVE.find((row) => row.name === name)!.market)
   expect(names.map(market)).toEqual([...names.map(market)].sort((a, b) => b - a))
   const hands = names.map(liveHandOf)
