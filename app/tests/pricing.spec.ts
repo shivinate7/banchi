@@ -4477,12 +4477,13 @@ test('the rows that need the owner come first, each with its reason, and the res
   await expect(page.locator('.pricing-group').nth(2).locator('.pricing-flag')).toHaveCount(0)
   /* THE BAR NAMES WHAT STAYS BACK (Q3). */
   await expect(page.locator('[data-tile="priced"]')).toContainText(/\b1 need a price/)
-  /* A NEW COPY UNDER NEEDS YOU WAITS FOR A TICK (pricing-suggest spec, "How far one suggestion may
-     move": bigger moves need a tick), unless the owner typed its price ("Nothing here goes until you
-     tick it or type a price"). Three rows of three copies go: the two at the rule, and Drifted,
-     whose price is typed. Dear is worth the value line and unticked, and Unpriced has no price, so
-     neither goes. The bar and the press both say nine, which is what the file will carry. */
-  await expect(page.getByRole('checkbox', { name: 'Send the new price for Dear' })).not.toBeChecked()
+  /* A NEW COPY UNDER NEEDS YOU WAITS FOR A TICK (pricing-suggest spec, section 1, "How far one
+     suggestion may move": bigger moves need a tick; section 3 puts a card at the value line under
+     Needs You), unless the owner typed its price (section 2: Send carries new copies, kept
+     suggestions and typed prices together). Three rows of three copies go: the two at the rule,
+     and Drifted, whose price is typed. Dear is worth the value line and unticked, and Unpriced has
+     no price, so neither goes. The bar and the press both say nine, which is what the file will carry. */
+  await expect(page.getByRole('checkbox', { name: 'Send the new price for Dear', exact: true })).not.toBeChecked()
   await expect(page.locator('[data-tile="ready"]')).toContainText(/\b9 ready to go/)
   await expect(sendPress(page)).toHaveText(/^Send all 3 SKUs to TCGplayer$/i)
 })
@@ -6998,7 +6999,7 @@ test('one list: with no live listing the three groups still draw, an empty one w
   await expect(heads.nth(0)).toHaveText(/^Needs You\s*0\s*Nothing here goes until you tick it or type a price\.$/)
   await expect(heads.nth(1)).toHaveText(/^Suggested Changes\s*0\s*Ticked rows go with the next send\. Untick one to keep its live price\.$/)
   await expect(heads.nth(2)).toHaveText(/^Going at the Rule\s*1\s*These go at your rule, at the floor, or at a price you typed\.$/)
-  /* "Needs You" is the one list's own first heading now (Chicago Title Case), so only the tabbed screen's "Ready" can say the tabs are back. */
+  /* "Needs You" is the one list's own first heading (Chicago Title Case), so only the tabbed screen's "Ready" can say the tabs are back; `heads` above is exactly three, so a second "Needs You" would fail there. */
   await expect(page.getByRole('heading', { name: /^Ready\b/ }), 'the tabbed screen heading is gone').toHaveCount(0)
 })
 
