@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """`pipeline/rosterholdings.py`, proved against fixtures built in this file (D324).
 
-Protects: The roster value report keeps only TCG purchases, lets no counterparty field out, joins on folded set and name keys, values a line only from one unambiguous Near Mint SKU, and files every kept line in exactly one bucket.
+Protects: The roster value report keeps only TCG purchases, lets no counterparty field out, joins a line to its product by the roster's product id against the price archive's, reports what the folded set and name cross-check prices that the id join does not, values a line only from one Near Mint SKU, and files every kept line in exactly one bucket.
 Governs: D324, D247
 
 NO STORE ON DISK. NO NETWORK. The roster is a CSV string behind `io.StringIO`. The store side is
@@ -17,22 +17,26 @@ THE BUILDER MEETS THESE NAMES, NOT A GUESS. Only what the cases below read is pi
                                        `.quantity` (int-like) and `.paid` (money-like).
       .excluded                       a mapping, reason -> row count. Reasons: `sale`,
                                        `not_tcg`, `canceled`.
-  build_roster_report(lines, skus, archive, product_ids_priced) -> RosterReport.
+  build_roster_report(lines, skus, archive) -> RosterReport. Three parameters, no more.
       `skus` is a list of `SkuRow` (the roster module's own, six fields). `condition` holds the
       whole store cell (`Near Mint Holofoil`) and `printing` its suffix, or `None` for plain
-      Near Mint. `product_ids_priced` is a set of ints, because `Bucket.product_id` is an int.
-      The roster's id is a CSV string, so the conversion is part of what case 6 pins.
+      Near Mint. The crosswalk comes from `archive` alone: each `price_history` row's
+      `product_id` (an int) maps to its `sku`. The roster's id is a CSV string, so the
+      conversion is the builder's. Id `0` is never a key. An id no archive row carries, or one
+      that is blank or not a number, is `unmatched`. An archive SKU with no `skus` row is
+      `unpriced`, reason `no_sku_row`. There is no ambiguous bucket.
   RosterReport
       .excluded                       the roster's `excluded` mapping, carried through.
       .base_lines                     the count of kept lines (the coverage denominator).
       .priced                         one row per priced product id: `.product_id`, `.lines`,
                                        `.units`, `.paid`, `.market_each`, `.market_total`.
       .unpriced                       a mapping, reason -> line count. Reasons: `no_price`,
-                                       `printing`.
-      .ambiguous                      one row per product id: `.product_id`, `.lines`.
+                                       `printing`, `no_sku_row`.
       .unmatched                      one row per product id: `.product_id`, `.lines`, `.units`.
-      .store_side                     the product ids (a collection) of unmatched or ambiguous
-                                       lines whose id is in `product_ids_priced`.
+      .store_side                     the roster product ids (a collection) of lines the
+                                       folded set and name join prices that the id join leaves
+                                       unmatched or unpriced. A line the id join prices is
+                                       never in it.
       .price_date                     the newest bucket start used, `str()` of it `YYYY-MM-DD`.
       .render()                       the report text. The spec names no renderer; this is the
                                        one method, and `str(report)` is not pinned.
@@ -41,12 +45,14 @@ THE BUILDER MEETS THESE NAMES, NOT A GUESS. Only what the cases below read is pi
   excluded row is never parsed for either. A product whose SKUs are all `Unopened` is priced
   from its `Unopened` SKU's month market, for any finish.
   Not pinned: `gain` (the spec does not say dollars or percent), the order and wording of
-  report sections 2 to 9, and the `(P%)` format. Money compares as `Decimal(str(value))`, ids
-  as `str(value)`, so `Decimal` against `str` and `int` against `str` both pass.
+  the report sections, and the `(P%)` format. Also not pinned: an id whose archive SKUs are
+  only partly in `skus`, and the cross-check on a name key that two products share. Money
+  compares as `Decimal(str(value))`, ids as `str(value)`, so `Decimal` against `str` and `int`
+  against `str` both pass.
 
 TWO MUTATION ARMS ARE INCLUDED, ON `CLAUDE.md`'s OWN RULE: A GUARD IS TRUSTED ONLY ONCE IT HAS
 BEEN SEEN TO FAIL ON THE DEFECT IT GUARDS. Each one defeats the guard by rebinding the one name
-that matters in `pipeline.rosterholdings` (the two folds, then the finish pick), reruns a case's
+that matters in `pipeline.rosterholdings` (the two folds of the cross-check, then the finish pick), reruns a case's
 input and requires the defeat to show. If a mutant does not change the answer, the arm's `ok`
 fails and this script exits non-zero.
 
@@ -58,6 +64,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import inspect
 import io
 import sys
 import types
@@ -111,25 +118,43 @@ SET_CINDER = "Cinder Hollow"
 
 EMBER = {"pid": 9001, "set": SET_FROST, "name": "Ember Wisp"}
 FOX = {"pid": 9002, "set": SET_CINDER, "name": "Brindle Fox, Elder"}  # a quoted comma in the CSV
-WREN = {"pid": 9004, "set": SET_CINDER, "name": "Wren Archivist"}  # two products under one key
+WREN = {"pid": 9004, "set": SET_CINDER, "name": "Wren Archivist"}  # two products under one name key
+WREN_TWIN = {**WREN, "pid": 9003}  # the other product under that name key, with its own id
 LANTERN = {"pid": 9005, "set": SET_CINDER, "name": "Ashen Lantern"}  # no Near Mint month price
 SPRITE = {"pid": 9006, "set": SET_CINDER, "name": "Tide Sprite"}  # two priced Near Mint foils
 COURIER = {"pid": 9007, "set": SET_CINDER, "name": "Moss Courier"}  # one priced of two foils
 HERALD = {"pid": 9008, "set": SET_CINDER, "name": "Gale Herald"}  # holo printings, not for non-foil
-PHANTOM = {"pid": 9100, "set": SET_CINDER, "name": "Phantom Quill"}  # not in the store
-ALMANAC = {"pid": 9101, "set": SET_CINDER, "name": "Lost Almanac"}  # not in the store
-NEARMISS = {"pid": 9102, "set": SET_FROST, "name": "Ember Wisps"}  # one letter off EMBER
+PHANTOM = {"pid": 9100, "set": SET_CINDER, "name": "Phantom Quill"}  # no archive row, no SKU
+ALMANAC = {"pid": 9101, "set": SET_CINDER, "name": "Lost Almanac"}  # archive row, no `skus` row
+NEARMISS = {"pid": 9102, "set": SET_FROST, "name": "Ember Wisps"}  # one letter off EMBER, no archive row
 SEALED = {"pid": 9009, "set": SET_CINDER, "name": "Cinder Hollow Booster Box"}  # only an Unopened SKU
-GHOST = {"pid": 9014, "set": SET_CINDER, "name": "Ghost Page"}  # not in the store, id priced by it
+# The roster names this product one way and the store another, under the same id: the id join
+# prices it and the name join cannot.
+GHOST = {"pid": 9014, "set": SET_CINDER, "name": "Ghost Page"}
+GHOST_STORE = {**GHOST, "name": "Spectral Folio"}
+# The reverse: set and name agree with a SKU, the id does not. The archive carries the product
+# under id 9201, so the name join prices the line and the id join finds no archive row.
+DRIFT = {"pid": 9200, "set": SET_CINDER, "name": "Drift Warden"}
+# The id is in the archive but only on a SKU with no `skus` row, while the set and name agree
+# with another SKU (id 9301) that is priced: the id join leaves it unpriced, the name join prices it.
+STRAY = {"pid": 9300, "set": SET_CINDER, "name": "Stray Cantor"}
+# A SKU the archive files under id 0 (a row that had no product id). Its name agrees with the
+# roster line, so a join that let 0 be a key would price the line.
+NULLID = {"pid": 0, "set": SET_CINDER, "name": "Null Sigil"}
+# Only a quarter bucket carries this id, and the roster's name folds to nothing in the store.
+QUARTER = {"pid": 9400, "set": SET_CINDER, "name": "Faint Ledger"}
+QUARTER_STORE = {**QUARTER, "name": "Quarterly Tome"}
 
-# The roster spells the same two products differently from the store: case, runs of space,
+# The roster spells the same products differently from the store: case, runs of space,
 # punctuation in the set label, and a trailing " - 012/100"-style number on the name.
 EMBER_SPELLED = {**EMBER, "set": "frostmere rift - tide edition", "name": "  ember   WISP - 012/100"}
 FOX_SPELLED = {**FOX, "set": "Cinder  Hollow", "name": "brindle fox,  elder - 7/50"}
+DRIFT_SPELLED = {**DRIFT, "set": "cinder   hollow", "name": "  DRIFT   warden - 80/50"}
 
 ALL_NAMES = ("Ember Wisp", "Brindle Fox", "Wren Archivist", "Ashen Lantern", "Tide Sprite",
              "Moss Courier", "Gale Herald", "Phantom Quill", "Lost Almanac", "Ghost Page",
-             "Frostmere", "Cinder Hollow")
+             "Spectral Folio", "Drift Warden", "Stray Cantor", "Null Sigil", "Faint Ledger",
+             "Quarterly Tome", "Frostmere", "Cinder Hollow")
 
 
 def line(product, *, finish="non-foil", qty=1, total="1.00", **over) -> dict:
@@ -173,16 +198,23 @@ def world():
 
     EMBER has a Near Mint non-foil with an older and a newer `month` bucket and a still newer
     `quarter` bucket (the range filter), a Near Mint Foil, and a Lightly Played with a market
-    (the condition filter). WREN is two products (different `number`) under one key, both
-    priced. LANTERN's only Near Mint SKU has no `month` bucket at all. SPRITE has two priced
-    Near Mint foils; COURIER has two, one of them priced. Both are spelled with a capital-F
-    `Foil`, so no reading of "keeps a SKU with Foil" can split them. HERALD has a plain Near
-    Mint SKU and two holofoil printings, all priced: the spec says non-foil drops the
-    `Holofoil` and `Reverse Holofoil` printings."""
+    (the condition filter). WREN and WREN_TWIN are two products (different `number`, different
+    id) under one name key, both priced. LANTERN's only Near Mint SKU has no `month` bucket at
+    all. SPRITE has two priced Near Mint foils; COURIER has two, one of them priced. Both are
+    spelled with a capital-F `Foil`, so no reading of "keeps a SKU with Foil" can split them.
+    HERALD has a plain Near Mint SKU and two holofoil printings, all priced: the spec says
+    non-foil drops the `Holofoil` and `Reverse Holofoil` printings.
+
+    The id join's cases: GHOST_STORE is the store's own name for the id GHOST carries. ALMANAC
+    and STRAY's id 9300 are archive rows with no `skus` row (`row=False`). DRIFT is archived
+    under 9201 and STRAY's named SKU under 9301, so the roster's ids 9200 and 9300 differ from
+    the id the name join would find. NULLID is archived under id 0. QUARTER_STORE has a
+    `quarter` bucket only. PHANTOM and NEARMISS are in neither table."""
     skus, buckets = [], {}
 
-    def add(key, product, number, condition, printing, pid, *marks):
-        skus.append(SkuRow(key, product["set"], product["name"], number, condition, printing))
+    def add(key, product, number, condition, printing, pid, *marks, row=True):
+        if row:
+            skus.append(SkuRow(key, product["set"], product["name"], number, condition, printing))
         for range_, start, market in marks:
             buckets[f"{key}:{range_}:{start}"] = _bucket(key, pid, range_, start, market)
 
@@ -194,8 +226,8 @@ def world():
     add("EMBER-LP", EMBER, "012/100", "Lightly Played", None, 9001,
         ("month", "2026-08-02", "3.00"))
     add("FOX-NM", FOX, "007/050", "Near Mint", None, 9002, ("month", "2026-08-02", "2.50"))
-    add("WREN-A-NM", WREN, "021/050", "Near Mint", None, 9014, ("month", "2026-08-02", "1.10"))
-    add("WREN-B-NM", WREN, "071/050", "Near Mint", None, 9015, ("month", "2026-08-02", "30.00"))
+    add("WREN-A-NM", WREN, "021/050", "Near Mint", None, 9004, ("month", "2026-08-02", "1.10"))
+    add("WREN-B-NM", WREN_TWIN, "071/050", "Near Mint", None, 9003, ("month", "2026-08-02", "30.00"))
     add("LANTERN-NM", LANTERN, "030/050", "Near Mint", None, 9005,
         ("quarter", "2026-08-09", "9.99"))
     add("LANTERN-LP", LANTERN, "030/050", "Lightly Played", None, 9005,
@@ -213,17 +245,26 @@ def world():
     add("HERALD-NMR", HERALD, "060/050", "Near Mint Reverse Holofoil", "Reverse Holofoil", 9008,
         ("month", "2026-08-02", "11.00"))
     add("BOX-U", SEALED, "", "Unopened", None, 9009, ("month", "2026-08-02", "45.00"))
+    add("GHOST-NM", GHOST_STORE, "070/050", "Near Mint", None, 9014, ("month", "2026-08-02", "3.75"))
+    add("ALMANAC-NM", ALMANAC, "", "Near Mint", None, 9101, ("month", "2026-08-02", "8.00"),
+        row=False)
+    add("DRIFT-NM", DRIFT, "080/050", "Near Mint", None, 9201, ("month", "2026-08-02", "3.00"))
+    add("STRAY-NM", STRAY, "090/050", "Near Mint", None, 9301, ("month", "2026-08-02", "7.00"))
+    add("STRAY-X", STRAY, "", "Near Mint", None, 9300, ("month", "2026-08-02", "5.00"), row=False)
+    add("NULL-NM", NULLID, "100/050", "Near Mint", None, 0, ("month", "2026-08-02", "2.00"))
+    add("QUARTER-NM", QUARTER_STORE, "110/050", "Near Mint", None, 9400,
+        ("quarter", "2026-08-09", "6.00"))
 
     archive = PriceArchive()
     archive.upsert(buckets)
     return skus, archive
 
 
-def report_for(*rows: dict, ids=()):
+def report_for(*rows: dict):
     """`(roster, report)` for a roster of `rows` against the shared store fixture."""
     skus, archive = world()
     roster = read(*rows)
-    return roster, build_roster_report(roster, skus, archive, set(ids))
+    return roster, build_roster_report(roster, skus, archive)
 
 
 # ------------------------------------------------------------------------------- readers
@@ -364,9 +405,10 @@ def test_privacy() -> None:
         line(PHANTOM, qty=1, total="1.00"), line(WREN, qty=1, total="1.00"),
         line(LANTERN, Type="sale"), line(SPRITE, **{"Shipping Status": "canceled"}),
         line(COURIER, Vendor="Other Shop"),
+        line(DRIFT), line(STRAY), line(ALMANAC), line(GHOST),  # fill the store-side and no_sku_row lines
     ]
     ok(all(m in roster_csv(*rows) for m in MARKERS), "fixture: every marker is in the CSV")
-    roster, report = report_for(*rows, ids={9101})
+    roster, report = report_for(*rows)
     ok(len(roster.lines) > 0, "fixture: the privacy roster keeps lines, so the checks are not vacuous")
     for name, subject in (("a kept line", roster.lines), ("the read result", roster),
                           ("the report", report), ("the report text", report.render())):
@@ -378,56 +420,144 @@ def test_privacy() -> None:
     ok(not named, "the report text names no product or set (ids, counts and money only)", str(named))
 
 
+def test_signature() -> None:
+    """The crosswalk comes from the archive, so the report needs no id set of its own."""
+    params = list(inspect.signature(build_roster_report).parameters)
+    ok(len(params) == 3, "build_roster_report takes the roster, the SKUs and the archive, and nothing else",
+       str(params))
+
+
 def test_name_fold() -> None:
+    """Re-pointed: the folded set and name join is the cross-check now, not the join. A line is
+    priced by its id whatever its spelling; the fold decides only what the store side lists."""
     _roster, report = report_for(
-        line(EMBER_SPELLED, qty=1, total="4.00"), line(FOX_SPELLED, qty=1, total="2.00"))
+        line(EMBER_SPELLED, qty=1, total="4.00"), line(FOX_SPELLED, qty=1, total="2.00"),
+        line(DRIFT_SPELLED, qty=1, total="3.00"))
     priced = by_pid(report.priced)
     ok({"9001", "9002"} <= set(priced),
-       "case, spacing, punctuation and a trailing number do not stop a match", str(sorted(priced)))
-    ok(len(report.unmatched) == 0 and len(report.ambiguous) == 0,
-       "a folded match is neither unmatched nor ambiguous",
-       f"{len(report.unmatched)} unmatched, {len(report.ambiguous)} ambiguous")
+       "case, spacing, punctuation and a trailing number do not stop an id match", str(sorted(priced)))
+    ok(pids(report.unmatched) == {"9200"}, "only the line whose id the archive lacks is unmatched",
+       str(pids(report.unmatched)))
+    listed = {str(p) for p in report.store_side}
+    ok(listed == {"9200"},
+       "the cross-check folds the roster's spelling like the SKU side: the spelled line with an "
+       "unknown id is listed store-side, the two the id join prices are not", str(sorted(listed)))
 
 
-def test_ambiguous() -> None:
-    _roster, report = report_for(line(WREN, qty=2, total="4.00"))
-    ok(pids(report.ambiguous) == {"9004"}, "two products under one key are ambiguous, listed by id",
-       str(pids(report.ambiguous)))
-    row = by_pid(report.ambiguous).get("9004")
-    ok(row is not None and row.lines == 1, "the ambiguous row counts its line")
-    ok(len(report.priced) == 0, "an ambiguous line is never valued, though both products have prices",
-       str(pids(report.priced)))
+def test_same_name_two_ids_price_by_id() -> None:
+    """Re-pointed from the ambiguous case: one product id is one product, so two products that
+    share a name key are two priced rows, each at its own price."""
+    _roster, report = report_for(line(WREN, qty=2, total="4.00"), line(WREN_TWIN, qty=1, total="25.00"))
+    priced = by_pid(report.priced)
+    ok(set(priced) == {"9003", "9004"}, "both products under one name key are priced, each by its id",
+       str(sorted(priced)))
+    a, b = priced.get("9004"), priced.get("9003")
+    ok(a is not None and D(a.market_each) == D("1.10") and D(a.market_total) == D("2.20"),
+       "the first product is valued at its own SKU's market", str(a and (a.market_each, a.market_total)))
+    ok(b is not None and D(b.market_each) == D("30.00") and D(b.market_total) == D("30.00"),
+       "the second product is valued at its own SKU's market", str(b and (b.market_each, b.market_total)))
     ok(len(report.unmatched) == 0 and sum(report.unpriced.values()) == 0,
-       "an ambiguous line is in no other bucket")
+       "neither line is in another bucket")
+
+
+def test_no_ambiguous_section() -> None:
+    """One product id is one product, so the report has nothing to call ambiguous."""
+    _roster, report = report_for(line(WREN), line(WREN_TWIN), line(DRIFT), line(PHANTOM))
+    text = report.render()
+    ok("ambiguous" not in text.lower(), "the report text has no Ambiguous section or mention", text)
+    ok(not hasattr(report, "ambiguous"), "the report has no ambiguous bucket")
+
+
+def test_id_join_prices_a_renamed_product() -> None:
+    """The roster's set and name fold to no SKU; the archive holds the id on a SKU the store names
+    differently. The id join prices the line, and it is not store-side (the name join cannot)."""
+    _roster, report = report_for(line(GHOST, qty=2, total="6.00"))
+    row = by_pid(report.priced).get("9014")
+    ok(row is not None and D(row.market_each) == D("3.75") and D(row.market_total) == D("7.50"),
+       "a line whose set and name match no SKU is priced by its product id",
+       str(row and (row.market_each, row.market_total)))
+    ok(len(report.unmatched) == 0 and sum(report.unpriced.values()) == 0,
+       "the renamed product's line is in no other bucket")
+    ok(len(report.store_side) == 0, "a line the id join prices is never listed store-side",
+       str(list(report.store_side)))
+
+
+def test_archive_sku_without_a_skus_row() -> None:
+    """The archive carries the id, on a SKU the `skus` table lacks: the line is unpriced, with its own
+    reason, and not unmatched."""
+    _roster, report = report_for(line(ALMANAC, qty=2, total="9.00"))
+    ok(report.unpriced.get("no_sku_row") == 1, "an archive SKU with no skus row is unpriced, no_sku_row",
+       str(dict(report.unpriced)))
+    ok(sum(report.unpriced.values()) == 1, "the line is counted once in the unpriced reasons",
+       str(dict(report.unpriced)))
+    ok(len(report.unmatched) == 0 and len(report.priced) == 0,
+       "a no_sku_row line is neither unmatched nor priced", f"{pids(report.unmatched)} {pids(report.priced)}")
+
+
+def test_crosswalk_reads_every_range() -> None:
+    """The id maps to the SKU keys of every archive row that carries it, any range. A product
+    with a quarter bucket only has its SKU, no month market: unpriced no_price, not unmatched."""
+    _roster, report = report_for(line(QUARTER))
+    ok(report.unpriced.get("no_price") == 1 and len(report.unmatched) == 0 and len(report.priced) == 0,
+       "an id carried by a quarter bucket only reaches its SKU: unpriced, no_price",
+       f"{dict(report.unpriced)} unmatched {pids(report.unmatched)}")
 
 
 def test_unmatched_roster_side() -> None:
+    """Re-pointed: unmatched is now 'no archive row carries the id', whatever the set and name say.
+    DRIFT's set and name fold to a priced SKU, which the old name join would have priced."""
     _roster, report = report_for(
         line(PHANTOM, qty=2, total="5.00"), line(PHANTOM, qty=3, total="6.00"),
-        line(NEARMISS, qty=1, total="1.00"))
+        line(NEARMISS, qty=1, total="1.00"), line(DRIFT, qty=4, total="9.00"))
     rows = by_pid(report.unmatched)
-    ok(set(rows) == {"9100", "9102"},
-       "a product the store lacks, and a name one letter off, are unmatched by id", str(sorted(rows)))
+    ok(set(rows) == {"9100", "9102", "9200"},
+       "an id no archive row carries is unmatched, whether or not its set and name match a stocked product",
+       str(sorted(rows)))
     row = rows.get("9100")
     ok(row is not None and row.lines == 2 and int(row.units) == 5,
        "the unmatched row sums its lines and its units",
        str(row and (row.lines, row.units)))
-    ok(len(report.priced) == 0, "an unmatched line is never valued")
+    drift = rows.get("9200")
+    ok(drift is not None and drift.lines == 1 and int(drift.units) == 4,
+       "the line a name join would price counts under its roster id", str(drift and (drift.lines, drift.units)))
+    ok(len(report.priced) == 0, "an unmatched line is never valued", str(pids(report.priced)))
+    # A blank or non-numeric id cannot be a key. Both stay in the report, filed unmatched.
+    _roster, report = report_for(
+        line({**EMBER, "pid": ""}), line({**EMBER, "pid": "n/a"}, qty=2, total="2.00"))
+    ok(sum(r.lines for r in report.unmatched) == 2 and len(report.priced) == 0,
+       "a blank id and a non-numeric id are unmatched, never an error and never priced by name",
+       f"{[(r.product_id, r.lines) for r in report.unmatched]} priced {pids(report.priced)}")
+
+
+def test_id_zero_is_never_a_key() -> None:
+    """The archive files a row it had no product id for under 0. NULLID's SKU is in `skus`, priced,
+    and its name matches the roster line, so a join that let 0 be a key would price this line."""
+    _roster, report = report_for(line(NULLID, qty=2, total="4.00"))
+    ok(pids(report.unmatched) == {"0"}, "a roster line with id 0 is unmatched", str(pids(report.unmatched)))
+    ok(len(report.priced) == 0 and sum(report.unpriced.values()) == 0,
+       "id 0 reaches no SKU, so the line is neither priced nor unpriced",
+       f"{pids(report.priced)} {dict(report.unpriced)}")
 
 
 def test_unmatched_store_side() -> None:
+    """Re-pointed: store side was 'unmatched or ambiguous lines whose id the store prices' (an id set
+    the caller passed). It is now the lines the name join prices that the id join leaves unmatched
+    or unpriced. DRIFT: the archive has no row for the roster's id. STRAY: the archive has the id,
+    on a SKU with no skus row."""
     _roster, report = report_for(
-        line(ALMANAC), line(PHANTOM), line(WREN), line(EMBER),
-        ids={9101, 9004, 9001})  # ints: `Bucket.product_id` is an int, the CSV cell a string
+        line(DRIFT), line(STRAY), line(EMBER), line(PHANTOM), line(ALMANAC), line(NEARMISS))
     listed = {str(p) for p in report.store_side}
-    ok("9101" in listed, "an unmatched line whose id the store prices is listed store-side",
+    ok("9200" in listed, "a line the name join prices and the id join leaves unmatched is listed",
        str(sorted(listed)))
-    ok("9004" in listed, "an ambiguous line whose id the store prices is listed store-side",
+    ok("9300" in listed, "a line the name join prices and the id join leaves unpriced is listed",
        str(sorted(listed)))
-    ok("9100" not in listed, "an unmatched line whose id the store does not price is not listed",
+    ok(listed == {"9200", "9300"},
+       "nothing else is listed: not the line both joins price, nor a line the name join cannot price",
        str(sorted(listed)))
-    ok("9001" not in listed, "a matched line is never listed store-side", str(sorted(listed)))
-    ok("9101" in pids(report.unmatched), "the store-side line is still an unmatched line")
+    ok("9200" in pids(report.unmatched), "the store-side unmatched line is still an unmatched line")
+    ok(report.unpriced.get("no_sku_row") == 2,
+       "the store-side unpriced line is still an unpriced line (STRAY and ALMANAC)",
+       str(dict(report.unpriced)))
 
 
 def test_printing_pick() -> None:
@@ -502,10 +632,11 @@ def test_verb_reads_a_store_and_writes_nothing() -> None:
     """`cli.cmd_holdingsroster.run` over a real store file, on a throwaway home. The store holds
     `world()`'s SKUs and buckets, so the verb's text must equal the in-memory report's."""
     skus, archive = world()
-    ids = {bucket.product_id for bucket in archive.entries.values()}
+    # DRIFT (store side), ALMANAC (no_sku_row) and GHOST (priced by id alone) make the verb's text
+    # depend on the archive's product ids, so the text can only match if the verb reads them.
     rows = (line(EMBER, qty=2, total="6.00"), line(FOX), line(WREN),
-            line(PHANTOM, qty=2, total="5.00"), line(GHOST))
-    _roster, report = report_for(*rows, ids=ids)
+            line(PHANTOM, qty=2, total="5.00"), line(GHOST), line(DRIFT), line(ALMANAC))
+    _roster, report = report_for(*rows)
     with run_folder() as folder, isolated_home(folder) as home:
         store = Store()
         with store.write() as snapshot:
@@ -526,41 +657,39 @@ def test_verb_reads_a_store_and_writes_nothing() -> None:
     ok(code == 0, "the verb exits 0 on a readable roster and a store", str(code))
     ok(text.splitlines()[:2] == ["units received unknown", "units sold unknown"],
        "the verb's output opens with the two unknowns", text[:120])
-    ok(text == report.render(), "the verb reads the store's SKUs, buckets and priced ids as the "
-       "in-memory report does", text[:600])
+    ok(text == report.render(), "the verb reads the store's SKUs and the archive's buckets and product ids "
+       "as the in-memory report does", text[:600])
     ok(bool(before) and before == after, "the verb leaves the store file's bytes and mtime unchanged",
        f"{before} -> {after}")
 
 
 def roster_of_every_bucket() -> tuple:
-    """Seven kept lines: two priced, two unpriced, one ambiguous, two unmatched. Two more rows
-    (a sale, a canceled purchase) are excluded and must not move any count."""
+    """Ten kept lines: four priced (EMBER, FOX, WREN, GHOST), three unpriced (LANTERN no_price,
+    SPRITE printing, ALMANAC no_sku_row), three unmatched (PHANTOM twice, DRIFT). Two more rows (a
+    sale, a canceled purchase) are excluded and must not move any count. The name join alone
+    would price EMBER, FOX and DRIFT: three, not four, and not the same three."""
     return report_for(
         line(EMBER, qty=1, total="4.00"), line(FOX, qty=1, total="2.00"),
-        line(WREN), line(LANTERN), line(SPRITE, finish="foil"),
-        line(PHANTOM, qty=2, total="5.00"), line(PHANTOM, qty=3, total="6.00"),
+        line(WREN), line(GHOST), line(LANTERN), line(SPRITE, finish="foil"), line(ALMANAC),
+        line(PHANTOM, qty=2, total="5.00"), line(PHANTOM, qty=3, total="6.00"), line(DRIFT),
         line(COURIER, Type="sale"), line(ALMANAC, **{"Shipping Status": "canceled"}),
     )
 
 
 def test_every_line_in_one_bucket() -> None:
+    """Re-pointed: three buckets (priced, unpriced, unmatched). The ambiguous one is gone."""
     roster, report = roster_of_every_bucket()
     kept = len(roster.lines)
     priced = sum(r.lines for r in report.priced)
     unpriced = sum(report.unpriced.values())
-    ambiguous = sum(r.lines for r in report.ambiguous)
     unmatched = sum(r.lines for r in report.unmatched)
-    ok(kept == 7, "fixture: seven lines kept", str(kept))
+    ok(kept == 10, "fixture: ten lines kept", str(kept))
     ok(report.base_lines == kept, "base_lines is the kept line count", str(report.base_lines))
-    ok((priced, unpriced, ambiguous, unmatched) == (2, 2, 1, 2),
-       "lines fall into priced, unpriced, ambiguous, unmatched as built",
-       str((priced, unpriced, ambiguous, unmatched)))
-    ok(priced + unpriced + ambiguous + unmatched == kept,
-       "priced + unpriced + ambiguous + unmatched equals the kept lines, none dropped, none twice")
-    ok(not (pids(report.priced) & pids(report.ambiguous))
-       and not (pids(report.priced) & pids(report.unmatched))
-       and not (pids(report.ambiguous) & pids(report.unmatched)),
-       "no product id is in two buckets")
+    ok((priced, unpriced, unmatched) == (4, 3, 3),
+       "lines fall into priced, unpriced, unmatched as built", str((priced, unpriced, unmatched)))
+    ok(priced + unpriced + unmatched == kept,
+       "priced + unpriced + unmatched equals the kept lines, none dropped, none twice")
+    ok(not (pids(report.priced) & pids(report.unmatched)), "no product id is in two buckets")
 
 
 def test_report_text() -> None:
@@ -568,19 +697,22 @@ def test_report_text() -> None:
     lines = report.render().splitlines()
     ok(lines[:2] == ["units received unknown", "units sold unknown"],
        "the first two lines are the two unknowns, exactly", str(lines[:2]))
-    ok("priced 2 of 7 lines" in report.render(), "the coverage line names the priced and base counts",
-       report.render())
+    ok("priced 4 of 10 lines" in report.render(),
+       "the coverage line names the lines the id join priced and the base count", report.render())
 
 
 def mutation_fold_bypassed() -> None:
-    """Raw names instead of the folds: a roster spelling the product differently matches nothing."""
+    """Raw names instead of the folds: the cross-check no longer reads a differently spelled roster
+    line as the stocked product, so the spelled line leaves the store side. The id join is untouched."""
     saved = rosterholdings.normalize_set, rosterholdings.name_index_key
     rosterholdings.normalize_set = rosterholdings.name_index_key = lambda text: str(text)
     try:
         _roster, report = report_for(
-            line(EMBER_SPELLED, qty=1, total="4.00"), line(FOX_SPELLED, qty=1, total="2.00"))
-        ok(not {"9001", "9002"} <= pids(report.priced) and len(report.unmatched) == 2,
-           "MUTATION: raw names defeat the folded match, as expected")
+            line(EMBER_SPELLED, qty=1, total="4.00"), line(FOX_SPELLED, qty=1, total="2.00"),
+            line(DRIFT_SPELLED, qty=1, total="3.00"))
+        ok(len(report.store_side) == 0 and {"9001", "9002"} <= pids(report.priced),
+           "MUTATION: raw names defeat the folded cross-check and leave the id join alone, as expected",
+           str(list(report.store_side)))
     finally:
         rosterholdings.normalize_set, rosterholdings.name_index_key = saved
 
@@ -602,8 +734,11 @@ def main() -> int:
     for case in (
         test_read_keeps_tcg_purchases_only, test_read_refuses_unreadable_kept_rows,
         test_read_names_the_file_line, test_verb_refuses_an_unreadable_roster,
-        test_privacy, test_name_fold, test_ambiguous,
-        test_unmatched_roster_side, test_unmatched_store_side, test_printing_pick,
+        test_privacy, test_signature, test_name_fold, test_same_name_two_ids_price_by_id,
+        test_no_ambiguous_section, test_id_join_prices_a_renamed_product,
+        test_archive_sku_without_a_skus_row, test_crosswalk_reads_every_range,
+        test_unmatched_roster_side, test_id_zero_is_never_a_key, test_unmatched_store_side,
+        test_printing_pick,
         test_sealed_product_prices_from_its_unopened_sku, test_verb_reads_a_store_and_writes_nothing,
         test_every_line_in_one_bucket, test_report_text,
     ):
