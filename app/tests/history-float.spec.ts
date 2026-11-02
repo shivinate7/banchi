@@ -589,13 +589,17 @@ for (const size of SIZES) {
  * never overlaps the bar; a row with no room under the bar opens it below (the first case); a row with room under it
  * opens it above (the second case, which passes today and keeps a fix from always opening below).
  *
- * Ten rows and one live listing (11), so the page scrolls far enough to put a row at any height. */
+ * Ten rows and one live listing (11), so the page scrolls far enough to put a row at any height. The viewport is 1200
+ * tall so a card fits below the row at every width: at 900 the 385px card at 820 fits neither above the row under the
+ * bar nor below it, and a case that no placement can pass says nothing about the placement. */
 for (const size of SIZES) {
   test.describe(`#/pricing card placement at ${size.width} wide`, () => {
     const GAP_PX = 8
+    /* A row high enough in the list that the page can scroll it to any height. */
+    const ROW = 2
     const barOf = (page: Page) => page.locator('.pricing-bar')
     test.beforeEach(async ({ page }) => {
-      await setViewport(page, size)
+      await setViewport(page, { width: size.width, height: 1200 })
       await seedPopulatedPricing(page, 8, () => [liveListing()])
       await page.route(HISTORY, (route) =>
         route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payloadWithAsking()) }),
@@ -625,8 +629,8 @@ for (const size of SIZES) {
     }
 
     test('with no room above, the card opens below the row, inside the list, and ends 8px left of the price column', async ({ page }) => {
-      await putRowAt(page, 5, 150)
-      await listPrice(page, 5).focus()
+      await putRowAt(page, ROW, 150)
+      await listPrice(page, ROW).focus()
       await expect(card(page)).toHaveAttribute('data-mode', 'focus')
       await expect(card(page)).toHaveAttribute('data-placement', 'below')
 
@@ -635,8 +639,8 @@ for (const size of SIZES) {
       const list = await boxOf(page.locator('.pricing-list'))
       expect.soft(meets(c, side), `the card (x ${Math.round(c.x)}) does not cover the sidebar or the rail (to x ${Math.round(side.x + side.width)})`).toBe(false)
       expect.soft(c.x, 'the card sits inside the list').toBeGreaterThanOrEqual(list.x)
-      const cell = await boxOf(listRow(page, 5).locator('.pricing-price'))
-      const field = await boxOf(listPrice(page, 5))
+      const cell = await boxOf(listRow(page, ROW).locator('.pricing-price'))
+      const field = await boxOf(listPrice(page, ROW))
       const right = c.x + c.width
       expect.soft(right, 'the card ends no nearer than 8px to the price field').toBeLessThanOrEqual(field.x - GAP_PX + 1)
       expect.soft(right, 'the card ends 8px left of the price column, not further').toBeGreaterThanOrEqual(cell.x - GAP_PX - 1)
@@ -645,23 +649,26 @@ for (const size of SIZES) {
     test('a card opened above a row never overlaps the Send bar: with no room under the bar it opens below', async ({ page }) => {
       const h = await cardHeight(page)
       /* Room above by the viewport alone (the row is `h` + 16 + 20 from the top), none under the 100px-plus bar. */
-      await putRowAt(page, 5, h + 2 * GAP_PX + 20)
-      await listPrice(page, 5).focus()
+      await putRowAt(page, ROW, h + 2 * GAP_PX + 20)
+      const row = await boxOf(listRow(page, ROW))
+      const bar = await boxOf(barOf(page))
+      expect(row.y - bar.height - 2 * GAP_PX, 'there is no room above the row under the bar').toBeLessThan(h)
+      expect(page.viewportSize()!.height - (row.y + row.height) - 2 * GAP_PX, 'a card fits below the row').toBeGreaterThanOrEqual(h)
+      await listPrice(page, ROW).focus()
       await expect(card(page)).toHaveAttribute('data-mode', 'focus')
 
       const c = await boxOf(card(page))
-      const bar = await boxOf(barOf(page))
       expect(meets(c, bar), `the card (y ${Math.round(c.y)} to ${Math.round(c.y + c.height)}) does not overlap the Send bar (to y ${Math.round(bar.y + bar.height)})`).toBe(false)
-      expect(meets(c, await boxOf(listRow(page, 5))), 'the card does not cover the row').toBe(false)
-      expect(meets(c, await boxOf(listPrice(page, 5))), 'the card does not cover the price field').toBe(false)
+      expect(meets(c, await boxOf(listRow(page, ROW))), 'the card does not cover the row').toBe(false)
+      expect(meets(c, await boxOf(listPrice(page, ROW))), 'the card does not cover the price field').toBe(false)
     })
 
     test('with room above under the Send bar, the card opens above the row and clear of the bar', async ({ page }) => {
       const h = await cardHeight(page)
       const bar = await boxOf(barOf(page))
       /* Stuck, the bar ends at its own height. */
-      await putRowAt(page, 5, bar.height + h + 2 * GAP_PX + 40)
-      await listPrice(page, 5).focus()
+      await putRowAt(page, ROW, bar.height + h + 2 * GAP_PX + 40)
+      await listPrice(page, ROW).focus()
       await expect(card(page)).toHaveAttribute('data-mode', 'focus')
       await expect(card(page)).toHaveAttribute('data-placement', 'above')
       const c = await boxOf(card(page))
