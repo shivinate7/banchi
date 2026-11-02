@@ -1,4 +1,4 @@
-// Protects: The floating price-history card opens by focus or by its door, sits above its row by default, covers neither the row nor the next price field, keeps focus where its mode says, holds its size while history loads, and draws the product chart with the owner's asking step line and the suggestion dot. Its name carries the full card name as a title. On `#/pricing` it opens above the focused row, follows that row when the list above changes, and stays open while focus is in the list.
+// Protects: The floating price-history card opens by focus or by its door, sits above its row by default, covers neither the row nor the next price field, keeps focus where its mode says, holds its size while history loads, and draws the product chart with the owner's asking step line and the suggestion dot. Its name carries the full card name as a title. On `#/pricing` it opens above the focused row, follows that row when the list above changes, and stays open while focus is in the list. It reads a row's history and prices once, only for the row where focus rests, and tries a failed sales read again on the next open. Esc closes it and leaves focus in the price field.
 // Governs: D313, D278, D227
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
@@ -7,7 +7,7 @@ import { productHistory } from './routeFixtures'
 import { markNow, readShifts, sumOf, watchShifts } from './layoutShift'
 import { afterPaint, settleMotion } from './motionSettled'
 import { scanMoneyFace } from './moneyFace'
-import { seedPopulatedPricing } from './routeFixtures'
+import { seedPopulatedPricing, order, line, payloadOf } from './routeFixtures'
 import type { AskingPosting, ProductHistoryPayload } from '../src/types'
 
 /* THE CONTRACT THIS FILE PINS. `#/gallery` and `app/src/HistoryFloat.tsx` must match it.
@@ -548,3 +548,109 @@ for (const size of SIZES) {
     })
   })
 }
+
+/* ---- `#/pricing`: WHAT THE CARD READS, AND WHEN (D278 "no request per arrow key"; spec section 9c) ----
+ *
+ * `getPriceHistory`'s docstring in `server.ts` says a walk may never fire it; the card's two reads
+ * (`GET /pipeline/products/<sku>/history`, `GET /pipeline/price-facts?sku=`) are the same kind of
+ * read, so a walk down the list asks for the row where focus RESTS and nothing on the way. A row
+ * read once is not read again. `GET /orders`, the sale marks, is read on an open and, when it
+ * failed, again on the next open. Esc closes the card and focus stays in the price field (9c).
+ *
+ * Ten rows: `seedPopulatedPricing`'s two and eight more. Every read lands in `reads`. The history
+ * stub answers `productHistory`, the price read falls through to the shell's own answer, and the
+ * orders read is stubbed by the case that needs sale marks. One width is enough: none of this is
+ * placement. */
+test.describe('#/pricing card reads', () => {
+  let reads: { history: string[]; facts: string[]; orders: number }
+  const readsOf = (list: string[], sku: string) => list.filter((one) => one === sku).length
+  const skuOfRead = (url: string) =>
+    new URL(url).searchParams.get('sku') ?? /\/products\/([^/]+)\/history$/.exec(new URL(url).pathname)?.[1] ?? ''
+
+  test.beforeEach(async ({ page }) => {
+    reads = { history: [], facts: [], orders: 0 }
+    await setViewport(page, SIZES[0])
+    await seedPopulatedPricing(page, 8)
+    await page.route(HISTORY, (route) => {
+      reads.history.push(skuOfRead(route.request().url()))
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(productHistory()) })
+    })
+    await page.route(/\/pipeline\/price-facts/, (route) => {
+      reads.facts.push(skuOfRead(route.request().url()))
+      return route.fallback()
+    })
+    await page.goto(PRICING)
+    await expect(page.locator('.pricing-row')).toHaveCount(10)
+    await settleMotion(page)
+  })
+
+  /* A card's reads are done: its history is drawn and its price read has gone out. A condition, not a pause. */
+  const answered = async (page: Page, sku: string) => {
+    await expect(card(page)).toHaveAttribute('data-state', 'ready')
+    await expect.poll(() => readsOf(reads.facts, sku), `the price read for ${sku} went out`).toBeGreaterThanOrEqual(1)
+    await afterPaint(page)
+  }
+
+  test('a quick walk down ten rows sends one history read and one price read, for the row where focus rests', async ({ page }) => {
+    await listPrice(page, 0).focus()
+    for (let i = 0; i < 9; i++) await page.keyboard.press('ArrowDown')
+    await expect(listPrice(page, 9)).toBeFocused()
+    const rest = await skuOfRow(page, 9)
+
+    await answered(page, rest)
+    expect(reads.history, 'one history read, for the row where focus rests').toEqual([rest])
+    expect(reads.facts, 'one price read, for the row where focus rests').toEqual([rest])
+  })
+
+  test('a row whose card was read once sends no second read when focus comes back to it', async ({ page }) => {
+    const skus = { 3: await skuOfRow(page, 3), 4: await skuOfRow(page, 4), 5: await skuOfRow(page, 5) } as const
+    for (const i of [3, 4, 3, 5] as const) {
+      await listPrice(page, i).click()
+      await answered(page, skus[i])
+      await page.waitForTimeout(500) // keep: a repeat read has to show itself, and no event says it will not come
+    }
+    for (const [name, list] of [['history', reads.history], ['price', reads.facts]] as const) {
+      expect(readsOf(list, skus[3]), `row 3: one ${name} read over two visits`).toBe(1)
+      expect(readsOf(list, skus[4]), `row 4: one ${name} read over one visit`).toBe(1)
+      expect(readsOf(list, skus[5]), `row 5: one ${name} read over one visit`).toBe(1)
+    }
+  })
+
+  test('a failed sales read is tried again on the next open, and the second open draws the sale marks', async ({ page }) => {
+    const sku = await skuOfRow(page, 0)
+    const sale = order({ placed_at: '2026-08-27T12:00:00+00:00', lines: [{ ...line().line, sku, unit_price: '1.40' }] })
+    let failing = true
+    await page.route(/\/orders$/, (route) => {
+      reads.orders++
+      return failing
+        ? route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
+        : route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payloadOf([sale], [])) })
+    })
+
+    await listPrice(page, 0).click()
+    await expect.poll(() => reads.orders, 'the first open asked for the sales').toBeGreaterThanOrEqual(1)
+    await answered(page, sku)
+    await expect(card(page).locator('.producthistory-fill-mark'), 'the failed read leaves the chart without sale marks').toHaveCount(0)
+
+    /* Focus leaves the list and the card closes; the price field taking focus again is a new open, and the server answers now. */
+    await page.getByRole('searchbox', { name: 'Search This List' }).focus()
+    await expect(card(page)).toHaveCount(0)
+    const failed = reads.orders
+    failing = false
+    await listPrice(page, 0).click()
+    await expect(card(page)).toHaveAttribute('data-mode', 'focus')
+
+    await expect.poll(() => reads.orders, 'the second open asked for the sales again').toBeGreaterThan(failed)
+    await expect(card(page).locator('.producthistory-fill-mark').first(), 'the second open draws the sale mark').toBeAttached()
+  })
+
+  test('Esc in a price field closes the card and leaves focus in that field (spec 9c)', async ({ page }) => {
+    await listPrice(page, 1).click()
+    await expect(card(page)).toHaveAttribute('data-mode', 'focus')
+    await expect(listPrice(page, 1)).toBeFocused()
+
+    await page.keyboard.press('Escape')
+    await expect(card(page)).toHaveCount(0)
+    await expect(listPrice(page, 1), 'Esc leaves focus in the price field').toBeFocused()
+  })
+})

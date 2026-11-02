@@ -924,8 +924,9 @@ export function pricingRow(
 /** `#/pricing` WITH ROWS, so the sweep reads its Market and Lowest figures (the coordinator's
  *  R7 note: money-face drew no Market figure, so a Market chip in Inter was never seen). The
  *  corpus is registered first, because `/\/pricing$/` also matches the worklist's path and the
- *  newest handler wins. */
-export async function seedPopulatedPricing(page: Page): Promise<void> {
+ *  newest handler wins. `extra` appends that many more listable rows after the two, each with
+ *  its own SKU, name and place, for a case that walks a long list. */
+export async function seedPopulatedPricing(page: Page, extra = 0): Promise<void> {
   await page.route(/\/pricing$/, (route) =>
     route.fulfill({
       status: 200,
@@ -947,6 +948,9 @@ export async function seedPopulatedPricing(page: Page): Promise<void> {
         skus: [
           pricingRow('8608859', 'Articuno', '22.03', '21.98', { box: 2, index: 1, label: 'Box 2, Section 1, Card 1', cid: NAME_A, capture_id: 'cap-2-1' }),
           pricingRow('8608459', 'Dunsparce', '2.06', '1.48', { box: 3, index: 4, label: 'Box 3, Section 2, Card 4', cid: NAME_B, capture_id: 'cap-3-4' }),
+          ...Array.from({ length: extra }, (_, i) =>
+            pricingRow(`86090${String(i).padStart(2, '0')}`, `Filler ${i + 1}`, '1.50', '1.10', { box: 4, index: i + 1, label: `Box 4, Section 1, Card ${i + 1}`, cid: NAME_A, capture_id: `cap-4-${i + 1}` }),
+          ),
         ],
         written_at: {},
         skipped: [],
