@@ -62,7 +62,7 @@ from harness.tests.t7.common import (
 from harness.tests.t7.price_history import _network_recorder
 from harness.tests.t7.send_markdown import _case, _live_export_priced, _seed_sync, send_portal
 from cli import cmd_emit
-from pipeline import corpus, readings
+from pipeline import corpus, pricing, readings, tcgcsv, worklist
 from server import pipeline_routes, send_routes
 from store import clock, db, files, master
 from store.pricearchive import RANGE_WIDTH_DAYS, Bucket
@@ -951,6 +951,45 @@ def check_worklist_new_copy_group(checks: Checks) -> None:
                      "a card with no market price needs you, whatever the line")
 
 
+def check_worklist_group_follows_rule_price(checks: Checks) -> None:
+    """A new copy's group is decided from the export's own cells, the ones `SkuMatch.list_price`
+    reads, so the group and the `rule_price` the screen shows come from one figure.
+
+    The `snap` cells are two-decimal renderings of cells that are four-decimal in the fixtures.
+    Low 22.7240 on markup:10 prices at 25.00 (at the value line); the rendered 22.72 prices at
+    24.99. Low 0.0040 prices at the floor, 0.49; the rendered 0.00 reads as no market price.
+    A row with no `snap`, or a `snap` with no `low`, is read as blank and never raises.
+    """
+    checks.note("")
+    checks.note("WORKLIST, NEW COPIES — the group follows the rule price")
+    market, low = tcgcsv.MARKET_PRICE_COLUMN, tcgcsv.LOW_PRICE_COLUMN
+    policy = {"basis": "low", "rule": "markup:10"}
+
+    def group(cells: dict, snap=None, *, basis_policy=policy) -> str:
+        row = {"sku": "S", "row": cells}
+        if snap is not None:
+            row["snap"] = snap
+        return worklist.new_copy_groups([row], basis_policy, "2026-11-02")["S"]
+
+    with _case(checks, "worklist group: rule price from the raw cell"):
+        raw = tcgcsv.parse_price("22.7240")
+        checks.equal(str(pricing.list_price(raw, "markup:10", pricing.FLOOR)), "25.00",
+                     "the rule price the screen shows for low 22.7240 is 25.00")
+        checks.equal(group({market: "30.0000", low: "22.7240"}, {"market": "30.00", "low": "22.72"}),
+                     "needs_you", "25.00 is at the value line, so the group says needs_you")
+    with _case(checks, "worklist group: a sub-cent low is still a price"):
+        checks.equal(group({market: "1.0000", low: "0.0040"}, {"market": "1.00", "low": "0.00"}),
+                     "at_rule", "low 0.0040 prices at the floor 0.49, so the group says at_rule")
+    with _case(checks, "worklist group: row with no snap"):
+        checks.equal(group({market: "5.0000"}, basis_policy={}), "at_rule",
+                     "a row with cells and no snap is read from its cells")
+        checks.equal(group({market: "5.0000"}, {"market": "5.00"}), "needs_you",
+                     "a snap with no low, on the low basis, is no market price")
+    with _case(checks, "worklist group: row with no cells"):
+        checks.equal(worklist.new_copy_groups([{"sku": "S"}], {}, "2026-11-02"), {"S": "needs_you"},
+                     "a row with neither cells nor snap is no market price")
+
+
 CHECKS = (
     check_worklist_carries_live_listings,
     check_worklist_without_runs_reads_newest_export,
@@ -970,4 +1009,5 @@ CHECKS = (
     check_worklist_no_runs_corrupt_corpus,
     check_worklist_live_listing_card_facts,
     check_worklist_new_copy_group,
+    check_worklist_group_follows_rule_price,
 )
