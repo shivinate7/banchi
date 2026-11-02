@@ -144,7 +144,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # FIVE `ci-check` SHARDS IN PARALLEL (THE `target` MATRIX BELOW), MEASURED PER SHARD (D136 HOLDS THE FIGURES AND THE `timeout-minutes` CAP), AND ONE JOB NAMED `all-jobs-passed` THAT ANSWERS FOR THEM (owner's word,
+  # SIX SHARDS IN PARALLEL, MEASURED PER SHARD (D136 HOLDS THE FIGURES AND THE `timeout-minutes` CAP), AND ONE JOB NAMED `all-jobs-passed` THAT ANSWERS FOR THEM (owner's word,
   # 2026-09-28; D161, amended). The serial `make ci-check` took 600s on run 36509895299. The
   # shards' recipes together are exactly `ci-check`'s, and `make docs-audit`'s `check registry`
   # row fails when they are not. Each shard installs the same way and keeps D161's order, product
