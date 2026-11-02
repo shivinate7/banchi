@@ -2512,8 +2512,9 @@ export type PricingSku = {
   nothing_to_add: string | null
   /** The engine's own call on this new copy (`suggest.review` for a listing that is not live):
    *  `needs_you` with no market price or a rule price at or above the value line, else `at_rule`.
-   *  Only the pricing worklist answers it; a run's own table does not. */
-  group?: 'needs_you' | 'at_rule'
+   *  Only the pricing worklist answers it; a run's own table does not. The tests also state `suggested`, the
+   *  value a live listing carries. */
+  group?: LiveGroup
   condition: string
   set_name: string
   name: string

@@ -26,6 +26,7 @@
 
 import type { IconName } from './kit'
 import type {
+  LiveGroup,
   LiveListing,
   MarkdownSku,
   MarkdownTable,
@@ -167,6 +168,7 @@ function asRow(entry: MarkdownSku): MergedSku {
     game: '',
     row: entry.row,
     bucket: 'listable',
+    group: (entry as unknown as { group?: LiveGroup }).group,
     name: entry.name,
     condition: entry.condition,
     set_name: cell('Set Name') ?? '',
@@ -282,20 +284,31 @@ export function markdownSource(
   }
 }
 
-/** One live listing of the worklist as the row draws it: the newest read's own entry for that SKU when
- *  it holds one (name, market, lowest, the set), the asking price from the worklist either way. A
- *  listing the read does not hold is drawn with no market and a plain name, never a guessed one: the
- *  wire carries no name for it. */
-function listedRow(listing: LiveListing, entry: MarkdownSku | undefined): MergedSku {
-  const named: MarkdownSku = entry ?? {
+/** A price off the wire, or null where there is none. The wire sends "0.00" for a figure it has no
+ *  reading for (as `pipeline/pricing.py:has_market_data` treats it), and a zero is never drawn as a price. */
+function pricedOrNull(value: string | null | undefined): string | null {
+  return value !== null && value !== undefined && Number(value) > 0 ? value : null
+}
+
+/** The group the server put a row in: a live listing's `group`, a new copy's `group`, or a markdown
+ *  entry's. A row with none is going at the rule. The screen never works a group out itself. */
+export function serverGroup(row: PricingSku): LiveGroup {
+  return (row as unknown as { group?: LiveGroup }).group ?? 'at_rule'
+}
+
+/** One live listing of the worklist as the row draws it, from the listing's own facts (name, set,
+ *  market, lowest) and nothing else: the wire carries them, so no second read is joined in. */
+function listedRow(listing: LiveListing): MergedSku {
+  const set = listing.set_name ?? ''
+  const named: MarkdownSku = {
     sku: listing.sku,
     standing: 'offered',
     skip: null,
-    name: `Listing ${listing.sku}`,
+    name: listing.name ?? `Listing ${listing.sku}`,
     condition: '',
     live: 0,
     asking: listing.asking,
-    market: null,
+    market: pricedOrNull(listing.market),
     above_market: null,
     at_risk: '0.00',
     proposed: null,
@@ -307,19 +320,22 @@ function listedRow(listing: LiveListing, entry: MarkdownSku | undefined): Merged
     held_here: false,
     last_sold: null,
     priced_at: null,
-    row: {},
+    row: { 'Set Name': set },
   }
   const row = asRow(named)
-  return { ...row, snap: { ...row.snap, now: listing.asking } }
+  return {
+    ...row,
+    group: listing.group,
+    image_url: listing.image_url,
+    snap: { ...row.snap, now: listing.asking, low: pricedOrNull(listing.low) },
+  } as unknown as MergedSku
 }
 
 /** The one list's source: the worklist's new copies, then its live listings, one row per SKU.
  *
  *  A SKU that is both a new copy and a live listing is drawn once, as the new copy: its row already
- *  carries what is live (`live_now`) and the price change a send names. The newest read, when there
- *  is one, only lends the live rows their name, market and lowest price, and says which of them
- *  TCGplayer takes no price for. Which group a live row sits in is the server's word
- *  (`LiveListing.group`) and is never worked out here. */
+ *  carries what is live (`live_now`) and the price change a send names. Which group a row sits in is the
+ *  server's word (`group` on a new copy, `LiveListing.group` on a listing) and is never worked out here. */
 export function oneListSource(
   work: PricingWorklist | null,
   run: string | null,
@@ -328,20 +344,17 @@ export function oneListSource(
     history: (run: string, sku: string) => Promise<PriceHistoryPayload>
     trends: (run: string, skus: string[]) => Promise<TrendsPayload>
   },
-  table: MarkdownTable | null,
 ): { source: PricingSource; listed: ReadonlyMap<string, LiveListing> } {
   const base = runSource(work, run, sections, fetchers)
   const copies = new Set(base.rows.map((row) => row.sku))
-  const entries = new Map((table?.skus ?? []).map((entry) => [entry.sku, entry]))
   const listed = new Map<string, LiveListing>()
   const rows: MergedSku[] = [...base.rows]
   for (const listing of work?.live ?? []) {
     if (copies.has(listing.sku) || listed.has(listing.sku)) continue
     listed.set(listing.sku, listing)
-    rows.push(listedRow(listing, entries.get(listing.sku)))
+    rows.push(listedRow(listing))
   }
-  const locked = lockedOf(table)
-  return { source: { ...base, rows, locked: (sku: string) => locked.get(sku) ?? null }, listed }
+  return { source: { ...base, rows }, listed }
 }
 
 /** The runs named on the hash. `run` repeats rather than carrying a comma list. */
