@@ -2,7 +2,7 @@
 
 **What.** `tests/nav.spec.ts` (`ux-wave1: the palette input shows a focus indicator when focused`) goes red on `design-check (8)` when the focused palette input shows no outline and no box-shadow change.
 
-- **Test and job.** `design-check (8)`, `nav.spec.ts` (line 1048 in run 2503 and run 2569, line 1055 in run 2832; same test). The message: `focused palette input has no outline or box-shadow change`.
+- **Test and job.** `design-check (8)`, `nav.spec.ts`, the same test in runs 2503, 2569 and 2832 (its place in the file moved between runs). The message: `focused palette input has no outline or box-shadow change`.
 - **Measured.** Red on the first attempt in 3 of the 100 most recent completed main check runs (run numbers 2503, 2569 and 2832; window run numbers 2489 to 3148). No retry is set.
 - **Cause.** Cause unread. The read is taken after focus. The log has no timing data for it. Not read: the trace. Not done: a local run of shard 8.
 - **Owner.** shivinate7. **Fix by.** 2026-12-01 (D308, a deadline date is allowed).
