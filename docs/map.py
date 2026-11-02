@@ -3587,6 +3587,13 @@ COMPONENTS = [
                         "is deleted, an unmerged one is kept.",
                 "governed_by": ["D18", "D138"],
             },
+            "ci-skip-count.sh": {
+                "does": "the one reader of a CI shard's skip count: `check.yml`'s matrix step and "
+                        "its `ci-static` job call it over the shard's log. It prints "
+                        "`skipped in <target>: ...` to the job log and the step summary, and "
+                        "never fails: the calling step keeps make's exit code.",
+                "governed_by": ["D136"],
+            },
             "ignore-check.sh": {"does": "the other half of D47: `git check-ignore` over every path "
                                         "a worktree provisions, asserting each is ignored WHATEVER "
                                         "kind of thing is at it. That entry's own reopening "
@@ -4750,13 +4757,6 @@ COMPONENTS = [
                         "through the `route rosters` row's own reader. Previews by default, "
                         "`--write` applies. It gates nothing: the `readme blocks` row "
                         "renders in memory and compares.",
-                "governed_by": ["D18"],
-            },
-            "readme_links.py": {
-                "does": "Lists every external http(s) link in README.md and exits 1 naming "
-                        "each dead one (HEAD, then GET, one retry). Run weekly by "
-                        "`.github/workflows/readme-links.yml`, never by a pull request, so a "
-                        "flaky site cannot turn one red. It gates nothing in `make check`.",
                 "governed_by": ["D18"],
             },
             "tests_page.py": {

@@ -327,7 +327,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **Opsec.** A live unredeemed code card is a bearer instrument. No code-card photo in a listing, README,
   screenshot or commit. `scripts/githooks/pre-commit` enforces it, armed by `make hooks`.
 - **Seven shell mistakes are refused before they run** by `scripts/guard-shell.py --hook` on Bash and Write/Edit (D135, Codex reads the same rules).
-  Claude Code sets `GUARD_SHELL_SKIP=checkout,stash,reset,tree` on Bash and `GUARD_SHELL_SKIP=tree` on Write|Edit (`--skip` is an alias). The shared layer's guard owns checkout, stash and reset there, and refuses a write that names a path in another checkout of this clone. A path in no checkout passes, and so does a `cd` there followed by a command that names no path (D179, shell mistakes are refused by resolving). Codex runs all seven.
+  Claude Code sets `GUARD_SHELL_SKIP=checkout,stash,reset,tree` on Bash and `GUARD_SHELL_SKIP=tree` on Write|Edit (`--skip` is an alias). The shared layer's guard owns checkout, stash and reset there, and refuses a write into, or a `cd` into, another checkout of this clone. A path in no checkout passes, and so does a `cd` into a separate clone (D179, shell mistakes are refused by resolving). Codex runs all seven.
   Each clause fails open on its own bugs. A tool call that sets a real `BANCHI_*=off` is refused as owner-only, with no switch named, unless it is a recovery lever (`BANCHI_KILL`, `BANCHI_SUITE_LOCK`, `BANCHI_SERVE_MAIN`, `BANCHI_SYNC`). Only the owner's terminal and CI set the rest (D042 (main moves by pull request) and D179 (shell mistakes are refused by resolving)). Each has an owner-held escape hatch, never printed to an agent: `BANCHI_CHECKOUT`, `BANCHI_TREE`,
   `BANCHI_WAIT`, `BANCHI_PUSH`, `BANCHI_STASH`, `BANCHI_RESET`, `BANCHI_NARRATE`
   (D235, the heartbeat is refused a pipe). The narrate clause names its subjects, a short per-incident roster
@@ -351,9 +351,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   One standing exception (D42, main moves by pull request):
   the weekly demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
   GitHub branch protection has 0 reviews and `strict: false`. The one check it is to require is `all-jobs-passed`,
-  which rolls up every job, `revert-guard` included (claude-settings decision same-check-kinds). `check` is its
-  alias; a follow-up deletes it after the owner flips protection to it (same-check-kinds). The list protection
-  holds changes only by that flip.
+  which rolls up every job, `revert-guard` included (claude-settings decision same-check-kinds). Protection holds that one check and no other.
   It catches the remote half. The local hook is the only cover for a local fast-forward.
   `scripts/githooks/reference-transaction` and `scripts/githooks/pre-push` refuse, armed by `make hooks`.
   `BANCHI_MAIN=off` is the hatch. The primary checkout syncs itself (D176, the primary checkout syncs):

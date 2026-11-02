@@ -1501,8 +1501,8 @@ screenshot:
 # `--` on each side (D136). `.github/workflows/check.yml` runs this suite as twelve shards with
 # `--workers=2`, each handed its spec files by `scripts/browser-scope.py shard`, which packs
 # whole files by measured time rather than splitting the cases. More workers on one box is
-# more suite around a test, and docs/debts/ section 8 measured a one-in-thirteen red whose
-# only known mechanism is "the suite around it". On the rig `PW_ARGS` is for a session that
+# more suite around a test, and DEBT109 records an Escape red whose cause is unread (the same
+# sequence passes outside the suite; 0 of 19 recent first-attempt main reds was Escape). On the rig `PW_ARGS` is for a session that
 # wants one spec — `PW_ARGS=tests/brand.spec.ts` — and nothing else.
 # Each shard leaves its own `.serve/design-check.json`; on a runner that is one file per job.
 design-check:
