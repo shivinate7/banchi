@@ -309,9 +309,14 @@ call. `shipping_routes` keeps the envelope-lane shipments it parses today and dr
   TCGTracking account". **The confirm is absent until the preview answers**, and takes the
   preview's order list. Creates run one at a time. The press stops at the first error and
   returns a partial receipt.
-- **The screen** is the Envelope lane on `#/shipping`: Make labels, then the receipt with one
-  print file and a reprint per order, then a Labels list read from the store. `#/orders` may
-  show a status word only (D69). `#/fulfillment` does not change.
+- **Screens.** `#/shipping` gains an Envelope labels card and a Make Labels sheet: a free
+  preview with the count, the held-back orders grouped by reason, the envelope, a per-order
+  insurance switch (off) and "Fee per your TCGTracking account"; then the confirm, progress read
+  from the label list during the press, and a receipt with Print All and a per-order Reprint
+  (`GET /shipping/labels/<order>/pdf`, the stored file, free). A Labels list, read from the
+  store, sits last on the page with Check Scans. `#/orders` shows one label word per order, read
+  with the orders, never on a buyer row (D69). `#/fulfillment` does not change. Mockups:
+  `docs/design/shipping-labels.html` and `docs/design/orders-labels.html`, with their notes.
 
 **Done:** harness T7 (`harness/tests/t7/labels.py`) runs against a loopback fake that counts
 creates: no confirm makes 0, a replay 0, a double press 1, a parcel-lane order 0, a missing key

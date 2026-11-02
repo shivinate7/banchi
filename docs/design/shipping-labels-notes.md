@@ -154,16 +154,3 @@ outline marks what this design adds.
 - a scan time on the stored scan answer, and `checked_at` per row: for "Last scan", "Held Up" by
   days, and "Scans were last checked".
 - the `reason` codes in item 7: the contract pins only that a held-back row has a reason.
-
-## For the orchestrator: the spec's Screens paragraph
-
-The design folder is my only write scope, so this paragraph goes to whoever owns the spec, for
-`docs/specs/order-pipeline.md` under T4 and T5:
-
-> **Screens.** `#/shipping` gains an Envelope labels card in its file row and a Make Labels sheet:
-> a free preview with the count, the held-back orders grouped by reason, the envelope, a
-> per-order insurance switch (off) and "Fee per your TCGTracking account"; then the confirm,
-> progress read from the label list during the press, and a receipt with Print All and a
-> per-order Reprint. A Labels list, read from the store, sits last on the page with Check Scans.
-> `#/orders` shows one label word per order, read with the orders. Mockups:
-> `docs/design/shipping-labels.html` and `docs/design/orders-labels.html`, with their notes.
