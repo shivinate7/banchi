@@ -161,7 +161,7 @@ from pipeline import holdings  # noqa: E402
 from pipeline import movers as price_movers  # noqa: E402
 from pipeline import pricerefresh  # noqa: E402
 from pipeline import stockimages  # noqa: E402
-from store.pricearchive import RANGE_WIDTH_DAYS, Bucket, PriceArchive  # noqa: E402
+from store.pricearchive import RANGE_WIDTH_DAYS, Bucket  # noqa: E402
 # THE SAME RULE, AND IT IS WHY THE RATES MOVED OUT OF `cli/cmd_identify.py`. `identify/cost.py`
 # reaches `decimal` and nothing else, and `identify/__init__.py` is a docstring with no imports
 # in it, so this costs one stdlib module. The command module could not be imported for them:
@@ -3450,14 +3450,17 @@ def _day_of(stamp: Optional[str]) -> Optional[str]:
     return None if moment is None else clock.central_day(moment).isoformat()
 
 
-def _market_on(archive: "PriceArchive", sku: str, day: str) -> Optional[str]:
+_MARKET_RANGES = ("month", "quarter")
+
+
+def _market_on(summaries: Sequence, sku: str, day: str) -> Optional[str]:
     """The archived market on `day` (ISO) for `sku`: the `month` bucket that holds it, else the
-    `quarter` bucket, else None. One indexed read of the summary table. The window rule is
-    `realized.bucket_on`'s: this only lifts the summary's points into the buckets it takes."""
+    `quarter` bucket, else None, off that SKU's summary rows (`PriceArchive.summaries`). The window
+    rule is `realized.bucket_on`'s: this only lifts the summary's points into the buckets it takes."""
     held = [
         Bucket(sku, 0, row.range, width, start, market, 0, 0, None, None, 0)
-        for row in archive.summary.where(sku=sku)
-        if row.range in ("month", "quarter")
+        for row in summaries
+        if row.range in _MARKET_RANGES
         for start, market, width in row.points
     ]
     found = realized.bucket_on(day, held)
@@ -3500,10 +3503,15 @@ def _live_wire(
         except ArithmeticError:
             return None
 
+    skus = [sku for sku, (_, copies) in sorted(live_now.items()) if copies]
+    # THREE KEYED READS FOR EVERY LISTING, NEVER THREE PER LISTING (T7 read budget, rule 8).
+    readings.load(skus)
+    snapshot.inventory.listings.load(skus)
+    archived = snapshot.archive.summaries(skus, _MARKET_RANGES)
+
     listings = []
-    for sku, (asking, copies) in sorted(live_now.items()):
-        if not copies:
-            continue
+    for sku in skus:
+        asking, _ = live_now[sku]
         reading = readings.get(sku)
         kept = snapshot.inventory.listings.get(sku)
         sold = _day_of(last_sold.get(sku))
@@ -3522,7 +3530,7 @@ def _live_wire(
                 "low": money(reading.low) if reading else None,
                 "low_with_shipping": money(reading.low_with_shipping) if reading else None,
                 "first_seen_live": first_seen,
-                "market_listed": money(_market_on(snapshot.archive, sku, first_seen)) if first_seen and reading else None,
+                "market_listed": money(_market_on(archived[sku], sku, first_seen)) if first_seen and reading else None,
                 "last_sold_at": sold,
             }
         )

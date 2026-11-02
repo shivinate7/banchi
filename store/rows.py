@@ -48,6 +48,7 @@ THE `Source` CONTRACT, duck-typed rather than declared, stated here once:
                                             descending, NULLs excluded — column values only
     pluck(column, keys) -> Iterable[(key, value)]
                                             one column of just the named rows, no text
+    payloads(keys) -> Iterable[(key, text)] the named rows that exist, whole
 
 `equals` maps an INDEXED COLUMN NAME to a value, and `None` means the column is NULL —
 which is how `Inventory.next_index` finds a record whose box will not coerce without
@@ -365,6 +366,24 @@ class Rows(MutableMapping):
         if pending:
             out.update((str(key), value) for key, value in self.source.pluck(column, pending))
         return out
+
+    def load(self, keys: Iterable) -> None:
+        """Read every one of `keys` not yet known into this mapping, in one indexed query per
+        500 keys, so a caller about to `.get` each key pays for them once and not per key. A key
+        the source does not hold is remembered as absent, as a `.get` miss would be."""
+        if self._complete:
+            return
+        pending = [
+            key for key in dict.fromkeys(str(k) for k in keys)
+            if key not in self._loaded and key not in self._deleted and key not in self._absent
+        ]
+        if not pending:
+            return
+        found = set()
+        for key, text in self.source.payloads(pending):
+            found.add(str(key))
+            self._remember(str(key), text)
+        self._absent.update(key for key in pending if key not in found)
 
     def high_water(self, column: str, unreadable: Sequence[str], **equals) -> Optional[int]:
         """`MAX(column)` over matching rows (0 when none), straight off the source's index,

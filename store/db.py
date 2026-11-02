@@ -1970,6 +1970,20 @@ class SqliteSource:
             ).fetchall()
         return [(row[0], row[1]) for row in found]
 
+    def payloads(self, keys: Sequence[str]) -> Iterable[Tuple[str, str]]:
+        """`(key, payload)` for the named keys that exist: `pluck`'s chunked `key IN`, whole rows."""
+        where, params = self._where({})
+        joiner = " AND " if where else " WHERE "
+        found: list = []
+        for start in range(0, len(keys), 500):
+            chunk = list(keys[start : start + 500])
+            marks = ",".join("?" * len(chunk))
+            found += self.conn.execute(
+                f"SELECT key, payload FROM {self.table}{where}{joiner}key IN ({marks})",
+                params + chunk,
+            ).fetchall()
+        return found
+
     def high_water(
         self, column: str, equals: Dict[str, Any], unreadable: Sequence[str]
     ) -> Tuple[int, bool]:
