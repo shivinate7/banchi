@@ -16,6 +16,7 @@ import {
   fetchLiveExport,
   getMarkdownTable,
   getMarkdowns,
+  getOrders,
   getPriceHistory,
   getPriceTrends,
   getSavedTrends,
@@ -44,6 +45,7 @@ import type {
   DecisionsDocument,
   CorpusAnswer,
   MergedSku,
+  OrderRow,
   RosterRun,
   PricingCorpus,
   PricingClearable,
@@ -125,6 +127,8 @@ import {
 import type { FilterFacet, SortOption, SortValue } from './kit'
 import { dismissToast, toast } from './kit/toast'
 import { PriceMovers } from './PriceMovers'
+import { HistoryFloat } from './HistoryFloat'
+import { fillsFor } from './ProductHistory'
 import './Pricing.css'
 import { SendCard, useOwedTakeOffs } from './SendCard'
 import { useLeaveWarning } from './useLeaveWarning'
@@ -1854,6 +1858,21 @@ export function Pricing() {
 
   const order = useMemo(() => drawn.flatMap((group) => group.rows.map((row) => row.sku)), [drawn])
 
+  /* THE HISTORY CARD (spec 9c): a price field taking focus opens it on that row, and it stays open while focus
+     is anywhere in `.pricing-list`. The owner's sales for its chart come from the orders, read once on first open. */
+  const [float, setFloat] = useState<{ sku: string; anchor: HTMLElement } | null>(null)
+  const [orders, setOrders] = useState<readonly OrderRow[]>([])
+  const ordersAsked = useRef(false)
+  useEffect(() => {
+    if (float === null || ordersAsked.current) return
+    ordersAsked.current = true
+    // A failed read leaves the chart without sale marks; the card draws the rest.
+    getOrders().then((payload) => setOrders(payload.orders)).catch(() => {})
+  }, [float])
+  const floatFills = useMemo(() => (float === null ? [] : fillsFor(float.sku, orders)), [float, orders])
+  const floatRow = float === null ? undefined : rows.find((one) => one.sku === float.sku)
+  const floatSuggestion = floatRow === undefined ? '' : suggestionFor(floatRow)
+
   const move = useCallback(
     (sku: string, by: number) => {
       const at = order.indexOf(sku)
@@ -3297,7 +3316,12 @@ export function Pricing() {
           {filtering && order.length === 0 ? (
             <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." didYouMean={{ name: nearName, onPick: setQuery }} />
           ) : null}
-          <div className="pricing-list" ref={measureList} data-copies={source.copies ? 'some' : 'none'} data-range={rangeOn ? 'some' : undefined} data-now={oneList ? 'some' : undefined}>
+          <div className="pricing-list" ref={measureList} data-copies={source.copies ? 'some' : 'none'} data-range={rangeOn ? 'some' : undefined} data-now={oneList ? 'some' : undefined}
+            // Focus leaving the list closes the card. The card takes no focus in this mode, so the list is all there is to stay in.
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFloat(null)
+            }}
+          >
             <div className="pricing-caption" role="row">
               {source.copies ? <span /> : null}
               {/* "ITEM", NOT "CARD" (the owner's add-on, 2026-09-26): the rows include sealed
@@ -3374,6 +3398,7 @@ export function Pricing() {
                     asked={sendQty[sku.sku] ?? ''}
                     onAsked={(text) => setAsked(sku.sku, text)}
                     holding={holdFor === sku.sku}
+                    onPriceFocus={(rowEl) => setFloat({ sku: sku.sku, anchor: rowEl })}
                     registerInput={(node) => {
                       if (node) inputs.current.set(sku.sku, node)
                       else inputs.current.delete(sku.sku)
@@ -3408,6 +3433,17 @@ export function Pricing() {
         )}
       </div>
       </Page>
+
+      {float !== null && float.anchor.isConnected ? (
+        <HistoryFloat
+          sku={float.sku}
+          anchor={float.anchor}
+          mode="focus"
+          fills={floatFills}
+          suggestion={floatSuggestion === '' ? undefined : floatSuggestion}
+          onClose={() => setFloat(null)}
+        />
+      ) : null}
 
       <Popover open={runsOpen} onClose={() => setRunsOpen(false)} anchor={runsAnchor} label="Which cards to price" className="pricing-runs-pop">
         <PickRuns runs={roster} picked={picked} onToggle={toggleRun} onClear={clearPicked} />
@@ -3553,6 +3589,7 @@ function PricingRow({
   asked,
   onAsked,
   holding,
+  onPriceFocus,
   registerInput,
   registerHold,
   onHover,
@@ -3592,6 +3629,8 @@ function PricingRow({
   asked: string
   onAsked: (text: string) => void
   holding: boolean
+  /** The price field took focus: the row it sits in, which the history card floats above. */
+  onPriceFocus: (row: HTMLElement) => void
   registerInput: (node: HTMLInputElement | null) => void
   registerHold: (node: HTMLButtonElement | null) => void
   onHover: (on: boolean) => void
@@ -3857,7 +3896,11 @@ function PricingRow({
                     : ''
               }
               ref={registerInput}
-              onFocus={(event) => event.currentTarget.select()}
+              onFocus={(event) => {
+                event.currentTarget.select()
+                const rowEl = event.currentTarget.closest<HTMLElement>('.pricing-row')
+                if (rowEl !== null) onPriceFocus(rowEl)
+              }}
               onBeforeInput={(event) => {
                 const native = event.nativeEvent as InputEvent
                 const insert = native.data ?? ''

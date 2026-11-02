@@ -7,8 +7,9 @@
  * FOCUS BY MODE. `focus`: opened by a price field, the card takes no focus (its close button is
  * out of the tab order), so Tab goes on to the next price and the caller moves `anchor`/`sku`.
  * `door`: opened by the history door, the card takes focus and `restoreFocus` (the door) gets it
- * back when it closes. Esc and the close button call `onClose` in both modes. Focus leaving the
- * price fields is the caller's to see (`HistoryFloatSpecimen` shows how).
+ * back when it closes. Esc and the close button call `onClose` in both modes. The card stays open
+ * while focus is anywhere in the caller's list, and focus leaving the list is the caller's to see
+ * (`HistoryFloatSpecimen` shows how).
  *
  * NOTHING MOVES (D313). The card is `position: fixed`, so the list under it never shifts. Its
  * size is the same while the history loads: the chart box and the four prices are held, and a
@@ -131,9 +132,14 @@ export function HistoryFloat({
     move()
     window.addEventListener('resize', move)
     window.addEventListener('scroll', move, true)
+    // A row added above or a group folded moves the row without a scroll or a resize. Every
+    // ancestor of the row grows or shrinks with the list, so watching them all catches it.
+    const watch = new ResizeObserver(move)
+    for (let el: HTMLElement | null = anchor; el !== null; el = el.parentElement) watch.observe(el)
     return () => {
       window.removeEventListener('resize', move)
       window.removeEventListener('scroll', move, true)
+      watch.disconnect()
     }
   }, [anchor, wide])
 
@@ -175,7 +181,7 @@ export function HistoryFloat({
     >
       <header className="hfloat-head">
         <span className="bn-overlay-icon"><Icon name="history" size={18} /></span>
-        <p className="hfloat-name">{payload?.name ?? 'Price history'}</p>
+        <p className="hfloat-name" title={payload?.name ?? undefined}>{payload?.name ?? 'Price history'}</p>
         <IconButton icon="x" label="Close" onClick={close} tabIndex={mode === 'focus' ? -1 : undefined} {...{ 'data-history-float-close': '' }} />
       </header>
       <h3 className="hfloat-h">Last 90 days</h3>
@@ -246,9 +252,12 @@ export function HistoryFloatSpecimen() {
               defaultValue={r.price}
               data-float-price=""
               onFocus={() => setOpen({ row: i, mode: 'focus', door: null })}
-              // Focus going to another price field moves the card (its onFocus); anywhere else closes it.
+              // Focus going to another price field moves the card (its onFocus); anywhere else in the
+              // list leaves it where it is; focus leaving the list closes it.
               onBlur={(e) => {
-                if (!e.relatedTarget?.matches('[data-float-price]')) setOpen((o) => (o?.mode === 'focus' ? null : o))
+                if (!e.currentTarget.closest('.hfloat-specimen')?.contains(e.relatedTarget as Node | null)) {
+                  setOpen((o) => (o?.mode === 'focus' ? null : o))
+                }
               }}
             />
             <IconButton
