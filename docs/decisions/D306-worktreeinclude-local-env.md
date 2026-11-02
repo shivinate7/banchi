@@ -6,6 +6,6 @@
 
 **Why the owner chose it.**
 - A worktree session can run paid identify runs. Without `.env` it cannot, and the owner wants it to.
-- A copied `.claude/settings.local.json` may carry a subagent-cap raise. The owner's config watch still sees it, because the watch reads the file's expiry (`_subagentCapUntil`), not the tree it sits in.
+- A copied `.claude/settings.local.json` may carry an agent-cap raise. The owner's config watch still sees it, because the watch reads the file's expiry (`_subagentCapUntil`), not the tree it sits in.
 
 **What protects the old argument's outcome now.** The copy is one owner-named list, tracked and reviewable. A session never reads, prints or copies these files' contents. `.env` stays ignored, so it cannot be committed.

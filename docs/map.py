@@ -1,6 +1,6 @@
 """The repo, as data. One Read answers "what is built, what is TBD, what governs this file".
 
-Written because that question kept costing a subagent sweep and a quarter-million tokens to
+Written because that question kept costing an agent sweep and a quarter-million tokens to
 re-derive from prose that already knew the answer. `docs/GATES.md` has the build order,
 `docs/decisions/` has the rulings, `README.md` has the layout — but all three are prose,
 and prose has to be read in full before it can be trusted.
@@ -2770,7 +2770,7 @@ COMPONENTS = [
                         "root, and `_ownership_verdict` decides whether THIS caller — read from "
                         "`CLAUDE_CODE_SESSION_ID` — may stop a pid tagged that way. A bare "
                         "`--confirm` from the top-level session is D127's original sweep, "
-                        "untouched; the same bare `--confirm` from a subagent stops only pids "
+                        "untouched; the same bare `--confirm` from an agent stops only pids "
                         "tagged with its OWN session id, and an explicit `pid:`/`port:`/"
                         "`match:` may still take an UNTAGGED pid but never one tagged to another "
                         "session, for either caller.",
@@ -3586,6 +3586,13 @@ COMPONENTS = [
                         "a throwaway repo. A worktree-* branch already in the local origin/main "
                         "is deleted, an unmerged one is kept.",
                 "governed_by": ["D18", "D138"],
+            },
+            "ci-skip-count.sh": {
+                "does": "the one reader of a CI shard's skip count: `check.yml`'s matrix step and "
+                        "its `ci-static` job call it over the shard's log. It prints "
+                        "`skipped in <target>: ...` to the job log and the step summary, and "
+                        "never fails: the calling step keeps make's exit code.",
+                "governed_by": ["D136"],
             },
             "ignore-check.sh": {"does": "the other half of D47: `git check-ignore` over every path "
                                         "a worktree provisions, asserting each is ignored WHATEVER "
@@ -4752,13 +4759,6 @@ COMPONENTS = [
                         "renders in memory and compares.",
                 "governed_by": ["D18"],
             },
-            "readme_links.py": {
-                "does": "Lists every external http(s) link in README.md and exits 1 naming "
-                        "each dead one (HEAD, then GET, one retry). Run weekly by "
-                        "`.github/workflows/readme-links.yml`, never by a pull request, so a "
-                        "flaky site cannot turn one red. It gates nothing in `make check`.",
-                "governed_by": ["D18"],
-            },
             "tests_page.py": {
                 "does": "`make tests-page` — writes `docs/TESTS.md`, one page of what "
                         "each test file protects. It reads the `Protects:` and `Governs:` lines "
@@ -5564,6 +5564,27 @@ COMPONENTS = [
                 "tree: how a guard passes for the wrong reason, and session and worktree "
                 "hazards. Lessons only, no dates.",
         "governed_by": ["D16"],
+    },
+    {
+        "path": "docs/todo.md",
+        "status": "built",
+        "does": "the shared todo list: tasks a session caught and did not do, one line each. "
+                "Known gaps stay in docs/debts/.",
+        "governed_by": [],
+    },
+    {
+        "path": "docs/plans/README.md",
+        "status": "built",
+        "does": "the plans folder's short index: a plan holds the open lanes for work "
+                "too big for one pull request, one file per plan. None open.",
+        "governed_by": [],
+    },
+    {
+        "path": ".claude/rules/README.md",
+        "status": "built",
+        "does": "the shared rules-folder note, copied verbatim from claude-settings. Its "
+                "paths frontmatter keeps it out of every session's context.",
+        "governed_by": [],
     },
     {
         "path": "docs/specs/home-assistant.md",
@@ -8257,7 +8278,9 @@ COMPONENTS = [
                                                "`history_begins` states where the source's own "
                                                "data starts; a fill older than that is listed "
                                                "separately as having no market data at all, "
-                                               "never plotted.",
+                                               "never plotted. `ProductChart` is exported and also takes "
+                                               "the owner's asking postings (a dashed step) and "
+                                               "a suggestion (one dot) for the floating card.",
                                        "governed_by": ["D50", "D196", "D212", "D218", "D219",
                                                        "D227", "D278", "D313"],
                                        "note": "No harness test -- a Playwright spec would be "
@@ -8278,6 +8301,19 @@ COMPONENTS = [
             # questions. D8 governs it for PriceHistory.tsx's reason, and harder — a reading
             # drawn one column from the field a listing price is typed into is one keystroke
             # from becoming a price, which is why no figure here is denominated in money.
+            "src/HistoryFloat.tsx": {"does": "the floating price-history card (spec pricing-suggest "
+                                             "9c): opens above a row when a price field takes "
+                                             "focus or its history door is pressed, draws "
+                                             "`ProductHistory.tsx:ProductChart` with the "
+                                             "owner's asking step line and the suggestion dot, "
+                                             "holds its size while history loads, takes focus "
+                                             "only in door mode. Also the `#/gallery` "
+                                             "`history-float` specimen.",
+                                     "governed_by": ["D313", "D278", "D227"]},
+            "src/HistoryFloat.css": {"does": "the card at `--bn-*` tokens only: fixed, "
+                                             "fixed-height chart box, 560px wide at 1440 and "
+                                             "384px below.",
+                                     "governed_by": ["D313", "D278", "D227"]},
             "src/PriceTrend.tsx": {"does": "the trend strip in a #/pricing row: a daily and a "
                                            "weekly sparkline with a signed percentage under "
                                            "each, in a real 168px column between the card and "
@@ -10226,6 +10262,15 @@ COMPONENTS = [
                         "payload); no real request is made and no store is touched. Not a "
                         "harness test; `make design-check` runs it.",
                 "governed_by": ["D278", "D212", "D219", "D227"],
+            },
+            "tests/history-float.spec.ts": {
+                "does": "the floating price-history card on `#/gallery`'s `history-float` "
+                        "section: opens by focus or by its door, sits above its row by default "
+                        "and below when there is no room, covers neither its row nor a price "
+                        "field, takes focus only in door mode, holds its size while history "
+                        "loads, and draws the product chart with the asking step line and the "
+                        "suggestion dot, in tokens and `.bn-money`. Two sizes, 11 cases each.",
+                "governed_by": ["D313", "D278", "D227"],
             },
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "

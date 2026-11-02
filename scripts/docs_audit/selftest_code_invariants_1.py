@@ -89,6 +89,62 @@ def run(ok) -> None:
         "recording guard")
     ok(any("skipped matrix" in m for _, m in browser_gate_findings(_recording)),
        "a pass record written for a skipped matrix is refused")
+
+    # THE GATE, READ STEP BY STEP. The gate is `design-check`'s first step, and every later step
+    # reads its answer. Each mutation below changes ONE thing the gate depends on, inside one job
+    # only, and asserts the finding that names it. `_in_job` keeps the change in that job's block.
+    print("\nthe design-check gate is read step by step, and each way it could stop gating is a finding")
+
+    def _in_job(job_name: str, old: str, new: str, label: str) -> str:
+        block = _yaml_job_block(_workflow, job_name) or ""
+        return _mutant(_workflow.replace(block, block.replace(old, new, 1), 1), label)
+
+    _gate_closed = _in_job(
+        "design-check",
+        "RUN: ${{ needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false'",
+        "RUN: ${{ needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run == 'true'",
+        "fail-closed spelling in the gate step",
+    )
+    ok(any("gate step does not read `needs.browser-scope.outputs.run != 'false'`" in m
+           for _, m in browser_gate_findings(_gate_closed)),
+       "the fail-closed spelling in the gate step is refused by name")
+    _no_always = _in_job(
+        "design-check",
+        "if: ${{ always() && !github.event.pull_request.draft }}",
+        "if: ${{ !github.event.pull_request.draft }}",
+        "design-check job-level if without always()",
+    )
+    ok(any("job-level `if:` has no `always()`" in m for _, m in browser_gate_findings(_no_always)),
+       "a design-check job-level if without always() is refused: a failed need would skip the gate")
+    _ungated = _in_job(
+        "design-check",
+        "if: steps.gate.outputs.run == 'true'\n        run: npm ci --prefix app",
+        "run: npm ci --prefix app",
+        "later step that does not read the gate",
+    )
+    ok(any("do not read the gate" in m and "name: Install" in m for _, m in browser_gate_findings(_ungated)),
+       "a later step that does not read steps.gate.outputs.run is refused, and named")
+    _passed_unanswered = _in_job(
+        "design-check-passed",
+        "needs.already-passed.outputs.skip != 'true' && ",
+        "",
+        "design-check-passed without the already-passed answer",
+    )
+    ok(any("does not read `needs.already-passed.outputs.skip != 'true'`" in m
+           for _, m in browser_gate_findings(_passed_unanswered)),
+       "a pass record without the already-passed answer is refused by name")
+    # The real shape: the head's gate reads clean, and each text the four mutations change is in it.
+    _anchors = (
+        "RUN: ${{ needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false'",
+        "if: ${{ always() && !github.event.pull_request.draft }}",
+        "if: steps.gate.outputs.run == 'true'\n        run: npm ci --prefix app",
+        "needs.already-passed.outputs.skip != 'true' && needs.ci-static.result == 'success'",
+    )
+    ok(
+        all(anchor in _workflow for anchor in _anchors) and not _gate,
+        "the branch's real gate reads clean, and every text the four mutations change is in it",
+        "\n".join(m for _, m in _gate),
+    )
     _module = _sibling("browser-scope.py")
     ok(_module is not None, "scripts/browser-scope.py imports")
     if _module is not None:
