@@ -74,8 +74,8 @@
 # evening, most touching no screen code, at about 27 billed minutes each, until the account's
 # Actions minutes ran out. The repository went public the same night and minutes are free since;
 # what the gate still buys is the wait — a docs PR's verdict in ~100s rather than 8.5 minutes —
-# and one fewer draw per push against docs/debts/ section 8's one-in-thirteen red for a change
-# that cannot have caused it. Replayed over main's last 14 merges, 9 would have skipped. The
+# and one fewer draw per push against DEBT109's Escape red (cause unread; 0 of the 19 recent
+# first-attempt main reds was an Escape failure) for a change that cannot have caused it. Replayed over main's last 14 merges, 9 would have skipped. The
 # `browser-scope` job below asks the other question — does what this branch LANDS touch a file
 # the suite reads? — and `scripts/browser-scope.py` holds that list, DERIVED from what the run
 # loads rather than typed: Vite's root, Playwright's `testDir`, the traces a spec reads off
@@ -538,7 +538,8 @@ jobs:
   # TWELVE SHARDS, TWO WORKERS EACH — WIDENED ON THE OWNER'S WORD, 2026-09-19 ("both": raise the
   # worker count AND build the spec allow-list). D136 SAID "the suite is sharded and never
   # widened" on the premise that `ubuntu-latest` was 2 vCPU on a PRIVATE repo, so half-of-cores
-  # floored to one and more workers meant more of DEBT8's one-in-thirteen red. THAT PREMISE WENT
+  # floored to one, and DEBT8 once read more workers as more Escape red (DEBT109 now holds that red:
+  # cause unread, 0 of 19 recent first-attempt main reds). THAT PREMISE WENT
   # FALSE ON 2026-09-11: the repository went public, and the hosted runner measured on this repo
   # (run 35420998424) is 4 vCPU / 15 GB, not 2. A local one-worker run of the whole suite
   # took 11.7 minutes then; `--workers=2` fits the runner's real core count. The clause is amended,
