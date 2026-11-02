@@ -30,6 +30,9 @@
     "devPort.ts",
     "checkoutIdentity.ts",
     "vite.config.ts",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "demoSplit.ts",
+    "design-check-reporter.ts",
+    "playwright.unit.config.ts"
   ]
 }

@@ -23,7 +23,83 @@ from .dispatch import UNDISPATCHED, check_dispatch
 from .env_map import _consumer_block, _map_sections
 from .hygiene import ROSTER_MARK, ROUTE_HASH, _balanced, expected_rosters
 from . import registry_scopes
-from .registry_scopes import workflow_shards, INVOKERS, UNIT_COMMAND, check_audit_invocation, check_check_registry, fleet_scripts
+from .registry_scopes import workflow_shards, workflow_step_problems, INVOKERS, UNIT_COMMAND, check_audit_invocation, check_check_registry, fleet_scripts
+
+_DRAFT = "${{ !github.event.pull_request.draft }}"
+# The counted-skip shape written out as literal lines. A change to SKIP_COUNT_STEP must show up
+# here as a red case, never as a silent re-pin of the expectation.
+_STATIC_STEP = [
+    "set -o pipefail",
+    'log="$RUNNER_TEMP/make-ci-check-static.log"',
+    "rc=0",
+    'make ci-check-static 2>&1 | tee "$log" || rc=$?',
+    'scripts/ci-skip-count.sh ci-check-static "$log"',
+    'exit "$rc"',
+]
+_MATRIX_STEP = [
+    "set -o pipefail",
+    'log="$RUNNER_TEMP/make-$TARGET.log"',
+    "rc=0",
+    'make "$TARGET" 2>&1 | tee "$log" || rc=$?',
+    'scripts/ci-skip-count.sh "$TARGET" "$log"',
+    'exit "$rc"',
+]
+
+
+def _wf(body, step_keys="", job_if=_DRAFT, inline=None, indicator="|") -> str:
+    """A workflow with one matrix job (target `a`) and a `ci-static` job holding one step.
+    `indicator` is the block scalar's header: `|` (literal), or `>`, `>-`, `>+` (folded)."""
+    run = ("        run: " + inline + "\n") if inline else (
+        "        run: " + indicator + "\n" + "".join("          " + ln + "\n" for ln in body))
+    return ("jobs:\n  m:\n    strategy:\n      matrix:\n        target: [a]\n"
+            "  ci-static:\n    if: " + job_if + "\n    runs-on: x\n    steps:\n      - name: make ci-check-static\n"
+            + step_keys + run)
+
+
+def _shard_step_cases(ok) -> None:
+    """A shard's `run:` must be the one counted-skip shape; anything else is a finding, and a
+    block that is not that shape is no shard. Each case is a way a red run could read green."""
+    def swap(old, new):
+        return [new if ln == old else ln for ln in _STATIC_STEP]
+    make = _STATIC_STEP[3]
+    cases = [
+        ("the exact step shape is a shard and no problem", _STATIC_STEP, {"a", "ci-check-static"}, False),
+        ("blank and comment lines inside the block are allowed, a lone quote in one included",
+         ["# don't stop", ""] + _STATIC_STEP + ["# end"], {"a", "ci-check-static"}, False),
+        ("`|| true` in place of `|| rc=$?` is a problem and no shard", swap(make, make.replace("|| rc=$?", "|| true")), {"a"}, True),
+        ('`exit 0` in place of `exit "$rc"` is a problem', swap('exit "$rc"', "exit 0"), {"a"}, True),
+        ("an extra line is a problem", _STATIC_STEP + ["echo done"], {"a"}, True),
+        ("a second make line after the exit is a problem", _STATIC_STEP + [make], {"a"}, True),
+        ("a make line inside `if false` is a problem", swap(make, "if false; then " + make + "; fi"), {"a"}, True),
+        ("a make line inside a heredoc is a problem", ["cat <<'EOF'"] + _STATIC_STEP + ["EOF"], {"a"}, True),
+        ("a comment opener in a quoted string does not hide a line",
+         _STATIC_STEP + ['msg="# make ci-check-static"'], {"a"}, True),
+        ("a make line inside a multi-line quoted string is a problem and no shard",
+         ['msg="start', "make ci-check-static", 'end"'], {"a"}, True),
+        ("a trailing comment on the make line is a problem", swap(make, make + " # || true"), {"a"}, True),
+        ("an echo that names the make line is a problem and no shard",
+         ['echo "# make ci-check-static"'], {"a"}, True),
+        ("the matrix step's own shape is no problem", _MATRIX_STEP, {"a"}, False),
+        ("the matrix step with `|| true` is a problem",
+         [ln.replace("|| rc=$?", "|| true") for ln in _MATRIX_STEP], {"a"}, True),
+    ]
+    for label, body, shards, problem in cases:
+        text = _wf(body)
+        got = (workflow_shards(text), bool(workflow_step_problems(text)))
+        ok(got == (shards, problem), label, str(got))
+    for label, text in (
+        ("a job `if: false` is a problem and no shard", _wf(_STATIC_STEP, job_if="false")),
+        ("a step `if:` is a problem", _wf(_STATIC_STEP, step_keys="        if: false\n")),
+        ("a step `continue-on-error` is a problem", _wf(_STATIC_STEP, step_keys="        continue-on-error: true\n")),
+        ("a step `shell:` is a problem", _wf(_STATIC_STEP, step_keys="        shell: bash {0}\n")),
+        ("an inline `run: make ci-check-static` in a job is a problem and no shard", _wf([], inline="make ci-check-static")),
+    ):
+        got = (workflow_shards(text), bool(workflow_step_problems(text)))
+        ok(got == ({"a"}, True), label, str(got))
+    for indicator in (">", ">-", ">+"):
+        text = _wf(_STATIC_STEP, indicator=indicator)
+        got = (workflow_shards(text), len(workflow_step_problems(text)))
+        ok(got == ({"a"}, 1), f"a folded `run: {indicator}` block of the counted-skip step is one problem and no shard", str(got))
 
 
 def run(ok) -> None:
@@ -38,10 +114,23 @@ def run(ok) -> None:
        "the exact unit command is not a fleet, and a bare `playwright test` is", "")
     ok(fleet_scripts({"sneaky": UNIT_COMMAND + " && playwright test"}) == ["sneaky"],
        "a fleet chained after the unit command is still a fleet", "")
-    ok(workflow_shards("matrix:\n  target: [a, b]\n    run: make ci-check-static\n") == {"a", "b", "ci-check-static"},
-       "a real `run:` line counts as a shard", "")
-    ok(workflow_shards("matrix:\n  target: [a]\n    # run: make ci-check-static\n") == {"a"},
-       "a commented `run:` line is not a shard", "")
+    inline = "matrix:\n  target: [a, b]\n    run: make ci-check-static\n"
+    ok(workflow_shards(inline) == {"a", "b"} and bool(workflow_step_problems(inline)),
+       "a bare inline `run: make ci-check-static` adds no shard and is a problem", "")
+    commented = "matrix:\n  target: [a]\n    # run: make ci-check-static\n"
+    ok(workflow_shards(commented) == {"a"} and not workflow_step_problems(commented),
+       "a commented `run:` line is not a shard and no problem", "")
+    block = ("jobs:\n  s:\n    steps:\n      - name: x\n        run: |\n"
+             + "".join("          " + ln + "\n" for ln in _STATIC_STEP))
+    ok(workflow_shards("matrix:\n  target: [a]\n" + block) == {"a", "ci-check-static"},
+       "the exact counted-skip step, as a `run: |` block, is a shard", "")
+    ok(workflow_shards("matrix:\n  target: [a]\n" + block.replace("make ci-check-static", "echo ci-check-static")) == {"a"},
+       "a block with no make line is not a shard", "")
+    ok(workflow_shards("matrix:\n  target: [a]\n" + block.replace("make ci-check-static", "# make ci-check-static")) == {"a"},
+       "a commented make line inside a block is not a shard", "")
+    ok(workflow_shards("matrix:\n  target: [a]\n" + block + "      - name: y\n        run: echo done\n          make ci-check-other\n") == {"a", "ci-check-static"},
+       "text after the block's own indent is not read as the block", "")
+    _shard_step_cases(ok)
     report = Report()
     check_audit_invocation(report)
     by_label = {row.check: row.findings for row in report.checks}
@@ -294,3 +383,381 @@ def run(ok) -> None:
         ok("TRACKS" in _map_sections(), "TRACKS is a section this check can see", str(_map_sections()))
     finally:
         module_globals()["MAP"] = _saved
+
+    # THE REQUIRED CHECK'S WIRING (the `all jobs passed` row). The reader is
+    # `registry_scopes.all_jobs_passed_findings`, a pure function over check.yml's text, the other
+    # workflows and the stamp. It is fetched by name, so a reader not yet built fails each case with
+    # a plain label rather than a crash. The fixture is ONE valid check.yml; each red case is ONE
+    # mutation of it, and asserts the finding its mutation must raise, because "any finding" passes
+    # vacuously when the fixture itself is broken.
+    print("\nthe required check's wiring is read both ways, and each defect is a finding")
+    NOT_BUILT = "not built: registry_scopes has no such reader yet (a builder adds it)"
+    wiring_fn = getattr(registry_scopes, "all_jobs_passed_findings", None)
+    jobs_fn = getattr(registry_scopes, "_jobs_block", None)
+    names_fn = getattr(registry_scopes, "_job_names", None)
+    value_fn = getattr(registry_scopes, "_yaml_value", None)
+    blank_fn = getattr(registry_scopes, "_blank_block_scalars", None)
+    check_fn = getattr(registry_scopes, "check_all_jobs_passed", None)
+    PIN = "1cc47f015bdaf073d8cb0f043a988c28d09aa3e1"
+    OTHER = "2" * 40
+    DEMO = ".github/workflows/demo.yml"
+    CHECK_PATH = rel(registry_scopes.CHECK_WORKFLOW)
+    WANTED = {
+        "design-check-passed": "a recorder: it skips on purpose unless the browser matrix really ran",
+        "nightly-alarm": "a reporter: it skips unless a nightly run failed, and a skip is its normal answer",
+        "ci-done": "the last job: it reads every other job's result and comments on a red pull request run; it needs the rollup, so the rollup cannot need it",
+    }
+    GREEN_STAMP = '{"merge": {"requiredChecks": "protection"}}'
+
+    def fill(text: str) -> str:
+        return text.replace("@PIN@", PIN).replace("@OTHER@", OTHER)
+
+    FIXTURE = fill("""name: check
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  # A comment with a lone quote, don't read it as a key or as a job.
+  ci-check:
+    if: ${{ !github.event.pull_request.draft }} # the shards, don't skip them
+    runs-on: ubuntu-latest
+    steps:
+      - run: make ci-check
+        if: ${{ github.event_name == 'push' }}
+  ci-static:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: a script whose body reads like keys
+        run: |
+          echo "a # inside a string is not a comment"
+          uses: shivinate7/claude-settings/actions/stamp@@OTHER@
+          needs: ${{ toJSON(needs) }}
+  already-passed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+  records:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      # - uses: shivinate7/claude-settings/actions/stamp@@OTHER@
+      - uses: shivinate7/claude-settings/actions/code-check@@PIN@
+  design-check:
+    needs: [ci-check]
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: make design-check
+  design-check-passed:
+    needs: [design-check]
+    if: ${{ github.event_name != 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo recorded
+  nightly-alarm:
+    needs: [ci-check]
+    if: ${{ always() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo alarm
+  all-jobs-passed:
+    needs: [ci-check, ci-static, already-passed, records, design-check]
+    if: ${{ always() && !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@
+        with:
+          needs: ${{ toJSON(needs) }}
+  ci-done:
+    needs: [all-jobs-passed]
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo recorded
+""")
+    DEMO_TEXT = fill("""jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: shivinate7/claude-settings/actions/playwright-setup@@PIN@
+""")
+
+    def findings_for(check_text, stamp=GREEN_STAMP, excluded=WANTED):
+        if wiring_fn is None:
+            return None
+        return wiring_fn({CHECK_PATH: check_text, DEMO: DEMO_TEXT}, stamp, excluded)
+
+    def red(label, old, new, needle):
+        """One mutation of the fixture. Its finding must name `needle`, and the mutation must apply."""
+        mutated = FIXTURE.replace(fill(old), fill(new), 1)
+        got = findings_for(mutated)
+        applied = mutated != FIXTURE
+        ok(
+            applied and got is not None and any(needle in message for _, message in got),
+            label,
+            NOT_BUILT if got is None else f"mutation applied: {applied}; findings: {got}",
+        )
+
+    got = findings_for(FIXTURE)
+    ok(got is not None and got == [], "the valid fixture reads clean", NOT_BUILT if got is None else str(got))
+
+    expected_jobs = [
+        "ci-check", "ci-static", "already-passed", "records", "design-check",
+        "design-check-passed", "nightly-alarm", "all-jobs-passed", "ci-done",
+    ]
+    names = names_fn(jobs_fn(FIXTURE)) if names_fn and jobs_fn else None
+    ok(
+        names == expected_jobs,
+        "only the jobs block names jobs: `on:` triggers such as push and schedule are not jobs",
+        NOT_BUILT if names is None else str(names),
+    )
+    ok(
+        registry_scopes.__dict__.get("EXCLUDED") is not None and set(registry_scopes.EXCLUDED) == set(WANTED),
+        "EXCLUDED names exactly design-check-passed, nightly-alarm and ci-done, each with a reason",
+        NOT_BUILT if not hasattr(registry_scopes, "EXCLUDED") else str(sorted(registry_scopes.EXCLUDED)),
+    )
+
+    # Scanner cases: a comment opener inside a string, a multi-line block scalar, a lone quote in text.
+    ok(
+        value_fn is not None and value_fn('"a # b" # note') == "a # b",
+        "a comment opener inside a quoted value is text, and the comment after it is cut",
+        NOT_BUILT if value_fn is None else repr(value_fn('"a # b" # note')),
+    )
+    ok(
+        value_fn is not None and value_fn("${{ x }} # don't stop") == "${{ x }}",
+        "a lone quote in a trailing comment does not change the value",
+        NOT_BUILT if value_fn is None else repr(value_fn("${{ x }} # don't stop")),
+    )
+    ok(
+        value_fn is not None and value_fn("${{ a#b }}") == "${{ a#b }}",
+        "a # with no space before it is text, not a comment",
+        NOT_BUILT if value_fn is None else repr(value_fn("${{ a#b }}")),
+    )
+    blanked = blank_fn(FIXTURE) if blank_fn else None
+    ok(
+        blanked is not None and not any(line.strip().startswith("uses: shivinate7/") for line in blanked),
+        "a run block's body that reads like a uses key is blanked, so it is not a pin",
+        NOT_BUILT if blanked is None else "a script line was read as a key",
+    )
+    ok(
+        blanked is not None and len(blanked) == len(FIXTURE.split("\n")),
+        "blanking a block scalar keeps every line number",
+        NOT_BUILT if blanked is None else f"{len(blanked)} lines for {len(FIXTURE.split(chr(10)))}",
+    )
+
+    if wiring_fn is not None:
+        mutated_no_rollup = FIXTURE.split("  all-jobs-passed:")[0]
+        got = findings_for(mutated_no_rollup)
+        ok(
+            got is not None and any("has no `all-jobs-passed` job" in m for _, m in got),
+            "a check.yml with no rollup job is a finding that names the missing job",
+            NOT_BUILT if got is None else str(got),
+        )
+    else:
+        ok(False, "a check.yml with no rollup job is a finding that names the missing job", NOT_BUILT)
+
+    red(
+        "a pin that differs from the rollup's pin is a finding that names the action",
+        "actions/code-check@@PIN@",
+        "actions/code-check@@OTHER@",
+        "uses `code-check`",
+    )
+    red(
+        "a needed job with a job-level skip is a finding that names the job",
+        "  already-passed:\n    runs-on: ubuntu-latest",
+        "  already-passed:\n    if: ${{ github.event_name == 'push' }}\n    runs-on: ubuntu-latest",
+        "`already-passed` has the job-level `if:",
+    )
+    red(
+        "a needed job missing from needs is a finding that names the job",
+        "needs: [ci-check, ci-static, already-passed, records, design-check]",
+        "needs: [ci-check, ci-static, already-passed, design-check]",
+        "does not need `records`",
+    )
+    red(
+        "design-check, now needed, missing from needs is a finding that names it",
+        "needs: [ci-check, ci-static, already-passed, records, design-check]",
+        "needs: [ci-check, ci-static, already-passed, records]",
+        "does not need `design-check`",
+    )
+    red(
+        "an excluded job named in needs is a finding (ci-done would be a cycle)",
+        "needs: [ci-check, ci-static, already-passed, records, design-check]",
+        "needs: [ci-check, ci-static, already-passed, records, design-check, ci-done]",
+        "needs `ci-done`, which is excluded",
+    )
+    got = findings_for(FIXTURE, excluded={k: v for k, v in WANTED.items() if k != "ci-done"})
+    ok(
+        got is not None and any("does not need `ci-done`" in m for _, m in got),
+        "ci-done left out of the exclusion and absent from needs is a finding that names it",
+        NOT_BUILT if got is None else str(got),
+    )
+    red(
+        "design-check's job-level if that reads needs outputs is a finding",
+        "  design-check:\n    needs: [ci-check]\n    if: ${{ !github.event.pull_request.draft }}",
+        "  design-check:\n    needs: [ci-check]\n    if: ${{ !cancelled() && needs.already-passed.outputs.skip != 'true' }}",
+        "`design-check` has the job-level `if:",
+    )
+    red(
+        "a rollup not under always() is a finding",
+        "    if: ${{ always() && !github.event.pull_request.draft }}\n    runs-on: ubuntu-latest\n    timeout-minutes: 5",
+        "    if: ${{ !github.event.pull_request.draft }}\n    runs-on: ubuntu-latest\n    timeout-minutes: 5",
+        "`all-jobs-passed` has the job-level `if:",
+    )
+    red(
+        "a rollup whose with block passes no needs is a finding",
+        "        with:\n          needs: ${{ toJSON(needs) }}",
+        "        with:\n          other: ${{ toJSON(needs) }}",
+        "passes no `needs:`",
+    )
+    red(
+        "a uses line inside a run body is not the rollup step (the body is blanked)",
+        "      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n        with:\n          needs: ${{ toJSON(needs) }}",
+        "      - run: |\n          uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n          needs: ${{ toJSON(needs) }}",
+        "does not run `shivinate7/claude-settings/actions/all-jobs-passed`",
+    )
+    red(
+        "a rollup pinned to a tag, not a 40-character sha, is a finding",
+        "all-jobs-passed@@PIN@",
+        "all-jobs-passed@v1",
+        "40-character",
+    )
+    red(
+        "a needed job whose job-level if is a multi-line block is a finding",
+        "  records:\n    if: ${{ !github.event.pull_request.draft }}",
+        "  records:\n    if: >-\n      ${{ !github.event.pull_request.draft }}",
+        "`records` has the job-level `if:",
+    )
+    # CONTINUE-ON-ERROR HIDES A FAILURE FROM THE ROLLUP. A failed step or job that cannot fail its
+    # job reads green to the action, so it is a finding on a needed job, on one of its steps and on
+    # the rollup itself. `continue-on-error: false` is the default and is not one.
+    red(
+        "continue-on-error on a needed job is a finding that names it",
+        "  ci-static:\n    if: ${{ !github.event.pull_request.draft }}",
+        "  ci-static:\n    if: ${{ !github.event.pull_request.draft }}\n    continue-on-error: true",
+        "continue-on-error",
+    )
+    red(
+        "continue-on-error on a step of a needed job is a finding that names it",
+        "      - run: make design-check",
+        "      - run: make design-check\n        continue-on-error: true",
+        "continue-on-error",
+    )
+    red(
+        "continue-on-error on the all-jobs-passed job is a finding that names it",
+        "    timeout-minutes: 5\n    steps:\n      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@",
+        "    timeout-minutes: 5\n    continue-on-error: true\n    steps:\n      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@",
+        "continue-on-error",
+    )
+    red(
+        "continue-on-error on the all-jobs-passed step is a finding that names it",
+        "      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n        with:",
+        "      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n        continue-on-error: true\n        with:",
+        "continue-on-error",
+    )
+    got = findings_for(FIXTURE.replace(
+        "  ci-static:\n    if: ${{ !github.event.pull_request.draft }}",
+        "  ci-static:\n    if: ${{ !github.event.pull_request.draft }}\n    continue-on-error: false",
+        1,
+    ))
+    ok(
+        got is not None and got == [],
+        "continue-on-error: false on a needed job is not a finding",
+        NOT_BUILT if got is None else str(got),
+    )
+    # THE SPELLINGS THE LINE READER DID NOT SEE. A flow-style step (`- { ... }`) puts its keys after
+    # the `- {`, so a reader that matches only a line that starts with the key misses them. The
+    # expression and quoted forms are plain values, and each must still be a finding.
+    red(
+        "continue-on-error: true inside a single-line flow step on a needed job is a finding",
+        "      - run: make design-check",
+        "      - { name: x, continue-on-error: true, run: make design-check }",
+        "continue-on-error",
+    )
+    red(
+        "continue-on-error first in a single-line flow step on a needed job is a finding",
+        "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4",
+        "      - { continue-on-error: true, uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 }",
+        "continue-on-error",
+    )
+    red(
+        "continue-on-error as an expression on a needed job is a finding",
+        "  ci-static:\n    if: ${{ !github.event.pull_request.draft }}",
+        "  ci-static:\n    if: ${{ !github.event.pull_request.draft }}\n    continue-on-error: ${{ matrix.x }}",
+        "continue-on-error",
+    )
+    red(
+        "continue-on-error quoted as 'true' on a needed job is a finding",
+        "  records:\n    if: ${{ !github.event.pull_request.draft }}",
+        "  records:\n    if: ${{ !github.event.pull_request.draft }}\n    continue-on-error: 'true'",
+        "continue-on-error",
+    )
+    got = findings_for(FIXTURE.replace(
+        "      - run: make design-check",
+        "      - { name: x, run: make design-check, continue-on-error: false }",
+        1,
+    ))
+    ok(
+        got is not None and got == [],
+        "continue-on-error: false inside a flow step on a needed job is not a finding",
+        NOT_BUILT if got is None else str(got),
+    )
+    got = findings_for(FIXTURE, excluded={**WANTED, "ghost-job": "renamed away"})
+    ok(
+        got is not None and any("`ghost-job`" in m for _, m in got),
+        "an EXCLUDED name that is not a job is a stale finding",
+        NOT_BUILT if got is None else str(got),
+    )
+    got = findings_for(FIXTURE, stamp='{"merge": {"requiredChecks": ["ci-check"]}}')
+    ok(
+        got is not None and any("requiredChecks" in m for _, m in got),
+        "a stamp that names some other required check is a finding",
+        NOT_BUILT if got is None else str(got),
+    )
+    got = findings_for(FIXTURE, stamp='{"merge": {"requiredChecks": ["all-jobs-passed"]}}')
+    ok(got is not None and got == [], "a stamp that names exactly all-jobs-passed reads clean", NOT_BUILT if got is None else str(got))
+    got = findings_for(FIXTURE, stamp=None)
+    ok(
+        got is not None and any("required check is unknown" in m for _, m in got),
+        "a missing stamp is a finding, never a pass",
+        NOT_BUILT if got is None else str(got),
+    )
+    got = wiring_fn({DEMO: DEMO_TEXT}, GREEN_STAMP, WANTED) if wiring_fn else None
+    ok(
+        got is not None and any("does not exist or cannot be read" in m for _, m in got),
+        "a missing check.yml is a finding, never a pass",
+        NOT_BUILT if got is None else str(got),
+    )
+
+    # The live row, read the way `make docs-audit` reads it. Its findings are NOT asserted: they
+    # change as the builder lands the rollup. Only that it reads, and that a missing file is a finding.
+    if check_fn is None:
+        ok(False, "the row's check function exists in registry_scopes.py", NOT_BUILT)
+    else:
+        report = Report()
+        check_fn(report)
+        rows = [row for row in report.checks if row.check == "all jobs passed"]
+        ok(
+            len(rows) == 1 and rows[0].severity == MECHANICAL and bool(rows[0].summary),
+            "the row is one mechanical row with a summary",
+            str([row.check for row in report.checks]),
+        )
+        saved_check = registry_scopes.CHECK_WORKFLOW
+        registry_scopes.CHECK_WORKFLOW = ROOT / ".github" / "workflows" / "no-such-check.yml"
+        try:
+            report = Report()
+            check_fn(report)
+            rows = [row for row in report.checks if row.check == "all jobs passed"]
+            ok(
+                len(rows) == 1 and any("does not exist or cannot be read" in f.message for f in rows[0].findings),
+                "a missing check.yml makes the live row red, never a crash or a pass",
+                str([f.message for f in rows[0].findings]) if rows else "no row",
+            )
+        finally:
+            registry_scopes.CHECK_WORKFLOW = saved_check

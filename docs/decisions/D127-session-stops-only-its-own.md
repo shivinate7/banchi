@@ -79,4 +79,4 @@ On a Bash call it has no opinion about, the guard costs 35 ms. Measured over fiv
 
 Two sessions can now stand in one checkout. An agent session lost its worktree, carried on inside another session's, and ran a blanket `--confirm` there. That sweep did what this entry describes, and it still stopped a process it should not have. The process was the owning session's own pre-push check. `D305` reads OURS a second way: by WHO started it, not only by WHERE.
 
-This entry's full-checkout sweep stands for the top-level session driving a call by hand. A subagent's blanket sweep is narrowed to its own tag. Read D305 before you change ownership here.
+This entry's full-checkout sweep stands for the top-level session driving a call by hand. An agent's blanket sweep is narrowed to its own tag. Read D305 before you change ownership here.

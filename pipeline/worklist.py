@@ -148,13 +148,19 @@ def live_rows(listings: list, policy: dict, today: str) -> list:
     not carry it). Money leaves as the two-decimal strings the export uses, `None` where there
     is none. `listings` and `policy` are `suggest.review`'s own.
     """
-    sold = {one["sku"]: one.get("last_sold_at") for one in listings}
+    card = {one["sku"]: one for one in listings}
+    sold = {sku: one.get("last_sold_at") for sku, one in card.items()}
     reviewed = suggest.review(listings, policy, today)
     return [
         {
             "sku": row["sku"],
             "asking": _money(row["asking"]),
             "last_sold_at": sold[row["sku"]],
+            "name": card[row["sku"]].get("name"),
+            "set_name": card[row["sku"]].get("set_name"),
+            "market": _money(card[row["sku"]].get("market")),
+            "low": _money(card[row["sku"]].get("low")),
+            "image_url": card[row["sku"]].get("image_url"),
             "group": group,
             "price": _money(row["price"]),
             "source": row["source"],
@@ -163,6 +169,21 @@ def live_rows(listings: list, policy: dict, today: str) -> list:
         for group in LIVE_GROUPS
         for row in reviewed[group]
     ]
+
+
+def new_copy_groups(rows: list, policy: dict, today: str) -> dict:
+    """SKU -> `needs_you` or `at_rule` for each unsent `sku_row`, by `suggest.review`'s rule for a
+    listing that is not live: no market price, or a rule price at or above `value_line`, needs you."""
+    listings = [
+        {"sku": row["sku"], "market": _price(row["snap"]["market"]), "low": _price(row["snap"]["low"])}
+        for row in rows
+    ]
+    reviewed = suggest.review(listings, policy, today)
+    return {one["sku"]: group for group in ("needs_you", "at_rule") for one in reviewed[group]}
+
+
+def _price(text):
+    return tcgcsv.parse_price(text or "")
 
 
 def _money(value) -> Optional[str]:

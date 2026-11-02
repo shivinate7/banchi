@@ -57,7 +57,7 @@ AREAS: Tuple[Tuple[str, str], ...] = (
     ("Capture", r"capture-|motion|dispenser|t9_traces"),
     ("Review and identity", r"review|absent-photo|confirm-identity|correct-answer|card-variants|t1_|t3_|t4_"),
     ("Inventory and boxes", r"inventory|boxmap|empty-section|section-ruler|locating|deleted-boxes|t7_"),
-    ("Pricing and runs", r"pricing|product-history|live-reconcile|run-panel|photo-cache|t5_|t2_"),
+    ("Pricing and runs", r"pricing|product-history|history-float|live-reconcile|run-panel|photo-cache|t5_|t2_"),
     ("Orders, sales and shipping", r"orders|order-walk|shipping|revenue|home|t11_"),
     ("The Fulfiller's screen", r"fulfillment|pull-confirm"),
     ("Shell, kit and layout", r"nav|themes|stability|request-budget|scaffold|page-edge|status-busy|phone|wide|cursor|icon-button|button-stack|filters|filter-standard|kit-data|gallery|brand|^match|did-you-mean|tab-title|t6_"),
