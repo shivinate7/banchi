@@ -159,7 +159,7 @@ def review(listings: list, policy: dict, today: str) -> dict:
         reason = _reason(listing, triggers, today)
         move = abs(priced - listing["asking"]) / listing["asking"]
         if move > limit:
-            group, reason = "needs_you", "{0}; moves {1}% from your price".format(reason, _pct(move))
+            group, reason = "needs_you", "{0}; capped at your {1}%".format(reason, _pct(limit))
         elif priced >= value_line:
             group, reason = "needs_you", "{0}; at or above {1}".format(reason, pricing.money(value_line))
         else:

@@ -5987,6 +5987,16 @@ def do_markdown_table(stamp: str) -> dict:
             {**row, "on_hand": sum(1 for card in by_sku.get(row["sku"], ()) if master.is_on_hand(card))}
             for row in rows
         ]
+    # EACH ROW'S GROUP, THE WORKLIST'S OWN RULE (`worklist.new_copy_groups`), so the screen files a
+    # row under Needs you or Going at the Rule. An unreadable corpus leaves `group` absent, as
+    # `_live_wire`'s caller does: the owner's settings decide, and a default policy would guess.
+    try:
+        groups = worklist.new_copy_groups(
+            rows, corpus.Corpus.read().policy_for(), clock.central_day(clock.now()).isoformat()
+        )
+        rows = [{**row, "group": groups[row["sku"]]} for row in rows]
+    except (decisions.MalformedDecisions, ValueError):
+        pass
     return {
         "stamp": stamp,
         "asked": payload.get("asked") or {},
