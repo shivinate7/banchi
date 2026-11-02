@@ -103,6 +103,7 @@ jobs:
   build:
     needs: hold
     if: ${{ needs.hold.outputs.publish == 'true' }}
+    # ubuntu-latest (26.04) needs Playwright 1.61 or newer for chromium; app/package.json holds it.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -159,7 +160,7 @@ jobs:
       # `npm-ci` is off because the Install step above already ran `npm ci --prefix app`.
       - name: Install the browser
         timeout-minutes: 5
-        uses: shivinate7/claude-settings/actions/playwright-setup@1cc47f015bdaf073d8cb0f043a988c28d09aa3e1 # main, 2026-10-29
+        uses: shivinate7/claude-settings/actions/playwright-setup@49a41651a3f8182b211db3b1a4596933ca4eca58 # main, 2026-11-01
         with:
           package-dir: app
           npm-ci: 'false'

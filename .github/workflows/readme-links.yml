@@ -22,6 +22,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: shivinate7/claude-settings/actions/readme-links@1cc47f015bdaf073d8cb0f043a988c28d09aa3e1 # main, 2026-10-29
+      - uses: shivinate7/claude-settings/actions/readme-links@49a41651a3f8182b211db3b1a4596933ca4eca58 # main, 2026-11-01
         with:
           open-issue: "true"
