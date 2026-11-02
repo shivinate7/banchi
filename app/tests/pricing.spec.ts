@@ -194,6 +194,9 @@ function sku(over: Partial<PricingSku> = {}): PricingSku {
       { box: 7, index: 3, label: 'Box 7, Section 1, Card 3' },
     ],
     listing: null,
+    /* THE SERVER NAMES A GROUP ON EVERY NEW COPY (`worklist.new_copy_groups`), so the fixture does too: a case about a row going at the rule
+       says so by default, and a case about a row that arrives with none passes `group: undefined`. */
+    group: 'at_rule',
   }
   return { ...base, ...over }
 }
@@ -5950,7 +5953,6 @@ async function openLeftBox(page: Page): Promise<void> {
     worklist: {
       runs: [{ run: RUN, box: 7, box_name: 'Box 7', skus: LEFT_BOX_ROWS.length }],
       skus: LEFT_BOX_ROWS.map((row) => ({
-        group: leftBoxGroup(row),
         ...sku({
           sku: row.sku,
           name: row.name,
@@ -5958,6 +5960,7 @@ async function openLeftBox(page: Page): Promise<void> {
           add_to_quantity: row.on_hand,
           snap: { market: row.market, direct_low: null, low: row.low, low_with_shipping: null, now: null },
         }),
+        group: leftBoxGroup(row),
         on_hand: row.on_hand,
         in: [{ run: RUN, add_to_quantity: row.on_hand }],
         claimed_add: row.on_hand,
@@ -7213,14 +7216,12 @@ type OneListSend = { runs: string[]; confirm?: boolean; quantities?: Record<stri
 const sentBody = (wire: Wire[], at = 0) => sendPosts(wire)[at]?.body as OneListSend
 const oneListSend = (page: Page) => page.getByRole('button', { name: /^Send .* to TCGplayer$/i })
 const sendFigures = (page: Page) => page.getByRole('complementary', { name: 'Send to TCGplayer' })
-/** The default new copy (3 at $22.03), filed at the rule, so a case about live rows does not move when a new copy with no group does. */
-const NEW_AT_RULE = () => [inGroup(sku(), 'at_rule')]
 
 /* A HOLD BEATS A TYPED PRICE. The owner types a price on a live row, then keeps the card off TCGplayer: the hold is the later word, so the row
  * draws held, the Send figures count it as kept off and not as typed, and the press carries neither the price nor the row. */
 test('one list: a hold on a live row beats the price typed on it, in the row, the figures and the body', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
-  const wire = await open(page, { live: ONE_LIST_LIVE, skus: NEW_AT_RULE() })
+  const wire = await open(page, { live: ONE_LIST_LIVE })
   const typed = page.getByRole('textbox', { name: 'Price for Pecharunt ex' })
   await typed.fill('3.10')
   await typed.press('Tab')
@@ -7244,10 +7245,10 @@ test('one list: a hold on a live row beats the price typed on it, in the row, th
 })
 
 /* KEPT SUGGESTIONS SEND ALONE. With no run in the link and every copy already at TCGplayer, the ticked suggestions are the whole press: the body names them
- * with their `source` and no run, since no run has a copy to carry, and the press is not turned away for having no cards picked. The stub answers as the server
- * does: an empty `runs` is enough only when every named price is a kept suggestion (`runs_required`). Two states reach the same press: the worklist loads no run,
- * and the worklist still lists a run whose rows are all at TCGplayer (the second is red while the press names that run). Typed prices on live rows with no new
- * copy are an open question for the owner and are not asserted here. */
+ * with their `source` and the press is not turned away for having no cards picked. The stub answers as the server does: an empty `runs` is enough only when
+ * every named price is a kept suggestion (`runs_required`). Two states reach the same press: the worklist loads no run, and the worklist still lists a run whose
+ * rows are all at TCGplayer (a joined run never emitted stays open). Typed prices on live rows with no new copy are an open question for the owner and are not
+ * asserted here. */
 for (const [state, worklist] of [
   ['the worklist loads no run', { runs: [], skus: [] }],
   ['the worklist still lists a run whose rows are all at TCGplayer', { skus: [sku({ sku: 'capped', name: 'Capped', at_cap: true, add_to_quantity: 0, nothing_to_add: 'every copy is already at TCGplayer' })] }],
@@ -7270,7 +7271,6 @@ for (const [state, worklist] of [
     await oneListSend(page).click()
     await expect.poll(() => sendPosts(wire).length).toBe(1)
     expect(sentBody(wire).prices, 'the ticked suggestion is named, with its source').toEqual([{ sku: '9000002', price: '4.01', was: '3.40', source: 'suggested' }])
-    expect(sentBody(wire).runs, 'no run has a copy to carry, so none is named').toEqual([])
     await expect(page.getByText('No cards are picked, so nothing was sent.'), 'the press is not refused for having no cards picked').toHaveCount(0)
   })
 }
@@ -7285,7 +7285,7 @@ const BESIDE_READ: LiveStub[] = [
 test('one list: a chip never files a listing the read did not judge, and never takes a ticked suggestion out of the send', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   const wire = await openLiveWithRead(page, {
-    open: { live: BESIDE_READ, skus: NEW_AT_RULE() },
+    open: { live: BESIDE_READ },
     read: [readRow({ sku: '9000004', name: 'Roaring Moon', standing: 'offered' }), readRow({ sku: '9000003', name: 'Pecharunt ex', standing: 'refused' })],
   })
   const lens = (name: RegExp) => page.getByRole('group', { name: 'Which live listings to show' }).getByRole('button', { name })
@@ -7325,7 +7325,7 @@ test('one list: a chip never files a listing the read did not judge, and never t
  * known to be safe to send, so it files under Needs You, unticked, and the press carries none of its copies until it is ticked. */
 test('one list: a new copy with no group on the wire files under Needs You and does not send without a tick', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
-  const wire = await open(page, { live: ONE_LIST_LIVE, skus: [sku({ sku: 'plain', name: 'Plain' })] })
+  const wire = await open(page, { live: ONE_LIST_LIVE, skus: [sku({ sku: 'plain', name: 'Plain', group: undefined })] })
   const needs = listGroup(page, 'Needs You')
   await expect(needs.getByRole('textbox', { name: 'Price for Plain', exact: true }), 'filed under Needs You').toHaveCount(1)
   await expect(listGroup(page, 'Going at the Rule').getByRole('textbox', { name: 'Price for Plain', exact: true }), 'not going at the rule').toHaveCount(0)
@@ -7340,7 +7340,7 @@ test('one list: a new copy with no group on the wire files under Needs You and d
  * owner ticks it, the body carries the row with `ticked: true`, which is how the server knows the owner said yes to a move past the limit. */
 test('one list: a past-cap suggestion is left out unticked, and carries ticked: true once the owner ticks it', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
-  const wire = await open(page, { live: ONE_LIST_LIVE, skus: NEW_AT_RULE() })
+  const wire = await open(page, { live: ONE_LIST_LIVE })
   await oneListSend(page).click()
   await expect.poll(() => sendPosts(wire).length).toBe(1)
   expect((sentBody(wire, 0).prices ?? []).find((one) => one.sku === '9000001'), 'unticked, the row is not in the body').toBeUndefined()
