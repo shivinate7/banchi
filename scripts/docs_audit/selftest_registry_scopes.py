@@ -46,10 +46,11 @@ _MATRIX_STEP = [
 ]
 
 
-def _wf(body, step_keys="", job_if=_DRAFT, inline=None) -> str:
-    """A workflow with one matrix job (target `a`) and a `ci-static` job holding one step."""
+def _wf(body, step_keys="", job_if=_DRAFT, inline=None, indicator="|") -> str:
+    """A workflow with one matrix job (target `a`) and a `ci-static` job holding one step.
+    `indicator` is the block scalar's header: `|` (literal), or `>`, `>-`, `>+` (folded)."""
     run = ("        run: " + inline + "\n") if inline else (
-        "        run: |\n" + "".join("          " + ln + "\n" for ln in body))
+        "        run: " + indicator + "\n" + "".join("          " + ln + "\n" for ln in body))
     return ("jobs:\n  m:\n    strategy:\n      matrix:\n        target: [a]\n"
             "  ci-static:\n    if: " + job_if + "\n    runs-on: x\n    steps:\n      - name: make ci-check-static\n"
             + step_keys + run)
@@ -95,6 +96,10 @@ def _shard_step_cases(ok) -> None:
     ):
         got = (workflow_shards(text), bool(workflow_step_problems(text)))
         ok(got == ({"a"}, True), label, str(got))
+    for indicator in (">", ">-", ">+"):
+        text = _wf(_STATIC_STEP, indicator=indicator)
+        got = (workflow_shards(text), len(workflow_step_problems(text)))
+        ok(got == ({"a"}, 1), f"a folded `run: {indicator}` block of the counted-skip step is one problem and no shard", str(got))
 
 
 def run(ok) -> None:
