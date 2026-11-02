@@ -16,11 +16,23 @@ shape that differs from the real API is changed here, once:
                                    "duplicate": true} for a `source_order_id` it has seen: NO pdf_base64
     GET  /orders/<id>/pdf     200 {"pdf_base64": <base64 of the label>, "tracking_number": "9400********0001"},
                               query `size`
-    GET  /orders/track        200 {"order_number": <asked>, "status": "T7-SCAN-MARK accepted", ...}
+    GET  /orders/track        200 {"order_number": <asked>, "status": "T7-SCAN-MARK accepted",
+                                   "events": [{"scan": "accepted", "timestamp": <ISO time>}, ...]}
                               404 when nothing matches or no scan has happened yet
-    every request             headers X-API-Key and X-Shipper-Number (named here, not asserted)
+    every request             headers X-API-Key and X-Shipper-Number (asserted by `check_labels_auth_headers`)
 
-The shapes are the live API's (read from tcgtracking.com/api/index.php).
+The shapes are the live API's (read from tcgtracking.com/api/index.php), except the event
+`timestamp` key: the live event shape is unread, so the key is a T7 assumption. Every label PDF the
+fake hands out is a valid one-page PDF whose page height is 400 plus the id's last four digits, so a
+combined file can be told page from page.
+
+THE LABEL ROUTES ARE THE MODULE DOCSTRING OF `server/shipping_routes.py`, plus four routes and one
+field it does not yet name (their shape is pinned by the cases below, and only as far as a case reads it):
+
+    pdf_token                     on each GET /shipping/labels row: 32 hex characters, distinct per row.
+    GET  /shipping/labels/<pdf_token>/pdf    the stored bytes. The ORDER NUMBER in that place answers 404.
+    POST /shipping/batches/<b>/labels/stop   body {}. Ends a confirm after the create in flight.
+    GET  /shipping/batches/<b>/labels/pdf    one PDF of every label made for the batch's orders.
 
 THE ROUTES ARE DRIVEN OVER A REAL SOCKET, not through a `do_*` function, because the contract
 names paths and not the module that serves them. `server/tcgtracking.py` is imported inside each
@@ -30,7 +42,9 @@ check down with it.
 WHAT THE CASES DO NOT PIN, so the builder is free there: the status and code of a refused
 confirm, whether a key or shipper refusal is a whole-request error or a `refused` entry (the
 code is looked for anywhere in the answer), the top-level shape of the label listing (the
-longest list in it is the rows), and the insurance field's name (any key holding "insur").
+longest list in it is the rows), the insurance field's name (any key holding "insur"), the
+body of a stop answer, whether a stopped confirm also names the orders it left in `refused`,
+and the refusal for a batch with no labels (any 4xx with a code, or a 404).
 """
 
 from __future__ import annotations
@@ -40,6 +54,7 @@ import contextlib
 import csv
 import functools
 import http.server
+import io
 import json
 import logging
 import os
@@ -56,6 +71,7 @@ from harness.tests import Checks
 from harness.tests.t7.common import (
     QuietHandler,
     _spawn_server,
+    error_code,
     fresh_hosts,
     isolated_home,
     quiet,
@@ -69,6 +85,9 @@ from server import capture_server
 SENTINEL = "t7-sentinel-key-9f4c2e61b7d0"
 SHIPPER = "T7SHIP0042"
 SCAN_MARK = "T7-SCAN-MARK"
+# The fake's scan events, deliberately out of order: the row's `scanned_at` is the latest, not the first or the last.
+SCAN_TIMES = ("2026-11-01T10:00:00Z", "2026-11-02T08:15:00Z", "2026-10-31T17:45:00Z")
+LATEST_SCAN = max(SCAN_TIMES)
 FEE_WORDS = "fee per your TCGTracking account"
 RECEIPT_KEYS = {"made", "existing", "refused", "partial"}
 
@@ -79,8 +98,8 @@ RECEIPT_KEYS = {"made", "existing", "refused", "partial"}
 class _Tracking:
     """TCGTracking on loopback. `script(n, request)` may answer the nth create `(status, body)`;
     returning None gives the default bought answer. `track_script` does the same for the nth
-    track lookup. `hold` parks the first create until `release` is set, so a second press can
-    arrive while the first is in flight. `alias` maps each identifier an answer handed out (order
+    track lookup. `hold` parks the create numbered `hold_at` (the first, by default) until
+    `release` is set, so a second press can arrive while that create is in flight. `alias` maps each identifier an answer handed out (order
     id, `ordernum`, masked tracking number) to the TCGplayer order it was made for, so a lookup
     or fetch by any of them still names its order in `requests`."""
 
@@ -94,6 +113,7 @@ class _Tracking:
         self.script = None
         self.track_script = None
         self.hold = False
+        self.hold_at = 1
         self.arrived = threading.Event()
         self.release = threading.Event()
 
@@ -106,11 +126,28 @@ class _Tracking:
         return [r for r in list(self.requests) if r["method"] == "GET" and r["path"] == "/orders/track"]
 
     def pdf_for(self, order_id):
-        return self.pdfs.setdefault(order_id, b"%PDF-1.4\n% T7-LABEL-PDF-" + order_id.encode() + b"\n%%EOF\n")
+        return self.pdfs.setdefault(order_id, self.page(order_id))
 
     @staticmethod
     def tail(order_id):
         return (re.sub(r"\D", "", order_id)[-4:] or "0").zfill(4)
+
+    @classmethod
+    def page(cls, order_id):
+        """A valid one-page PDF with a real xref table. The page is 288 points wide and 400 + the id's tail high."""
+        objects = (
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 288 %d] >>" % (400 + int(cls.tail(order_id))),
+        )
+        out, at = b"%PDF-1.4\n% T7-LABEL-PDF-" + order_id.encode() + b"\n", []
+        for number, body in enumerate(objects, 1):
+            at.append(len(out))
+            out += b"%d 0 obj\n%s\nendobj\n" % (number, body)
+        table = b"".join(b"%010d 00000 n \n" % offset for offset in at)
+        size = len(objects) + 1
+        return out + b"xref\n0 %d\n0000000000 65535 f \n%strailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (
+            size, table, size, len(out))
 
     def label(self, order_id, **more):
         """The fields every create answer carries."""
@@ -172,7 +209,7 @@ class _Tracking:
                     n = len(fake.creates)
                     tracked = len(fake.tracks)
                 if entry["method"] == "POST" and parts.path == "/orders":
-                    if fake.hold and n == 1:
+                    if fake.hold and n == fake.hold_at:
                         fake.arrived.set()
                         fake.release.wait(10)
                     scripted = fake.script(n, entry) if fake.script else None
@@ -186,9 +223,8 @@ class _Tracking:
                     if scripted:
                         return self._reply(*scripted)
                     asked = (urllib.parse.parse_qs(parts.query).get("order_number") or [""])[0]
-                    return self._reply(
-                        200, {"order_number": asked, "status": f"{SCAN_MARK} accepted", "events": [{"scan": "accepted"}]}
-                    )
+                    events = [{"scan": "accepted", "timestamp": when} for when in SCAN_TIMES]
+                    return self._reply(200, {"order_number": asked, "status": f"{SCAN_MARK} accepted", "events": events})
                 match = re.fullmatch(r"/orders/([^/]+)/pdf", parts.path)
                 if entry["method"] == "GET" and match and match.group(1) in fake.pdfs:
                     return self._reply(
@@ -274,6 +310,19 @@ class _Rig:
     def listing(self):
         status, doc = self.call("GET", "/shipping/labels")
         return status, _rows(doc)
+
+    def press_held(self, orders):
+        """Start a confirm on its own thread and wait until the fake has parked one of its creates.
+        Returns `(thread, got)`; `got` gains the confirm's `(status, doc)` when it ends. The caller
+        sets `fake.hold_at` first when the create to park is not the first one the fake sees."""
+        self.fake.hold = True
+        got = []
+        thread = threading.Thread(target=lambda: got.append(self.confirm(orders)), daemon=True)
+        thread.start()
+        deadline = time.monotonic() + 5
+        while not self.fake.arrived.is_set() and thread.is_alive() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        return thread, got
 
     def key_sent(self):
         return any(SENTINEL in _blob(r) for r in self.fake.requests)
@@ -405,8 +454,26 @@ def _sent_body(rig, order):
     return next((c["body"] for c in rig.fake.creates if c["order"] == order), b"")
 
 
-def _pdf_path(order):
-    return f"/shipping/labels/{urllib.parse.quote(order, safe='')}/pdf"
+def _pdf_path(ref):
+    """The stored label's path. `ref` is a listing row's `pdf_token`; an order number there is a refused ask."""
+    return f"/shipping/labels/{urllib.parse.quote(str(ref), safe='')}/pdf"
+
+
+def _token(rows, order):
+    return (_row(rows, order) or {}).get("pdf_token")
+
+
+def _pages(pdf):
+    """The page heights of a PDF, in file order: through pypdf when it is importable, else by
+    reading each object that is a `/Type /Page` and its MediaBox. A page of the fake is 288 wide
+    and `400 + tail` high, so the heights name the labels a combined file holds."""
+    try:
+        import pypdf
+    except ImportError:
+        objects = re.findall(rb"\bobj\b(.*?)\bendobj\b", pdf, re.S)
+        found = [re.search(rb"/MediaBox\s*\[([^\]]*)\]", o) for o in objects if re.search(rb"/Type\s*/Page(?![A-Za-z])", o)]
+        return [int(float(m.group(1).split()[-1])) if m else 0 for m in found]
+    return [int(float(page.mediabox.height)) for page in pypdf.PdfReader(io.BytesIO(pdf)).pages]
 
 
 def _blob(req):
@@ -447,6 +514,12 @@ def check_labels_preview(checks: Checks) -> None:
     It answers the count, every order with its lane verdict and insurance switch, and the fee
     sentence, and it makes no request to TCGTracking and writes no store row. The insurance
     switch is off for every order (D326). A parcel-lane order is held back and says why.
+
+    The screen's own fields are pinned here too: the envelope size code and its readable label,
+    whether the key and shipper are set (never their values), and the reason codes. THE COMMITTED
+    EXPORT CAN MAKE THREE OF THE FIVE: `envelope`, `parcel` and `needs_a_look`. Every envelope-lane
+    row in it has a full street, so `no_full_street` is not pinned (a case would need an export of
+    its own). `already_labelled` needs a bought label, and `check_labels_preview_presence` has one.
     """
     checks.note("")
     checks.note("TCGTRACKING LABELS, PREVIEW: free, no network, no store row (D326, D33)")
@@ -481,11 +554,78 @@ def check_labels_preview(checks: Checks) -> None:
             "the insurance switch is off for every order (D326, off by default)",
         )
         checks.ok(FEE_WORDS in str(doc.get("fee_note")), f"the fee note says \"{FEE_WORDS}\"", str(doc.get("fee_note")))
+        checks.equal(doc.get("envelope_size"), "10", "`envelope_size` is the API's code for the size, \"10\"")
+        label = doc.get("envelope")
+        checks.ok(
+            isinstance(label, str) and "envelope" in label.lower() and "10" in label and label != doc.get("envelope_size"),
+            "and `envelope` is the readable label for that size",
+            repr(label),
+        )
+        checks.ok(
+            doc.get("key_present") is True and doc.get("shipper_present") is True,
+            "`key_present` and `shipper_present` are true booleans while both are set",
+            f"{doc.get('key_present')!r} {doc.get('shipper_present')!r}",
+        )
+        checks.ok(
+            SENTINEL not in json.dumps(doc) and SHIPPER not in json.dumps(doc),
+            "and the answer holds neither the key nor the shipper number",
+        )
+        unjudged = [o for o in by_order if o not in rig.envelope and o not in rig.parcel]
+        checks.ok(
+            bool(unjudged) and all(by_order[o].get("reason") == "needs_a_look" for o in unjudged),
+            "every unjudged order is held back as `needs_a_look`",
+        )
+        checks.ok(
+            all(by_order[o].get("reason") == "parcel" for o in rig.parcel),
+            "and every parcel-lane order as `parcel`",
+        )
+        checks.equal(
+            {r.get("reason") for r in rows},
+            {"envelope", "parcel", "needs_a_look"},
+            "so before any label the export gives exactly the reasons `envelope`, `parcel` and `needs_a_look`",
+        )
         checks.equal(len(rig.fake.requests), 0, "the preview made no request to TCGTracking")
         checks.ok(
             (store_tables(), home_files(rig.home)) == before,
             "and wrote no store row and no file: no claim, no label row",
         )
+
+
+@_guarded
+def check_labels_preview_presence(checks: Checks) -> None:
+    """The preview says whether the key and the shipper number are set, and which order is bought.
+
+    Unsetting one variable flips its own flag to false and leaves the other true. The preview still
+    answers 200, sends nothing and carries no value. After a confirm the bought order is held back as
+    `already_labelled` and `count` falls by one: the reason code a replay would answer as `existing`.
+    """
+    checks.note("")
+    checks.note("TCGTRACKING LABELS, PREVIEW FIELDS: the key and shipper flags flip with their settings, a bought order is `already_labelled` (D326)")
+    with _rig() as rig:
+        if not rig.upload(checks):
+            return
+        count = rig.preview()[1].get("count")
+        for name, want in (
+            ("TCG_TRACKING_KEY", {"key_present": False, "shipper_present": True}),
+            ("TCG_TRACKING_SHIPPER_NUMBER", {"key_present": True, "shipper_present": False}),
+        ):
+            with mock.patch.dict(os.environ):
+                os.environ.pop(name)
+                status, doc = rig.preview()
+            got = {flag: doc.get(flag) for flag in want}
+            checks.ok(status == 200 and got == want, f"with {name} unset the preview answers 200 with {want}", f"{status} {got}")
+            checks.ok(SENTINEL not in json.dumps(doc) and SHIPPER not in json.dumps(doc), "and the answer holds neither value")
+        checks.equal(len(rig.fake.requests), 0, "no preview sent a request to TCGTracking")
+        order = rig.envelope[0]
+        rig.confirm([order])
+        status, doc = rig.preview()
+        row = next((r for r in doc.get("orders") or [] if r.get("order") == order), {})
+        checks.ok(
+            row.get("eligible") is False and row.get("reason") == "already_labelled",
+            "after a confirm the bought order is held back as `already_labelled`",
+            f"{row}",
+        )
+        checks.equal(doc.get("count"), count - 1, "and `count` falls by that one order")
 
 
 # ---------------------------------------------------------------------- the money gate
@@ -602,6 +742,45 @@ def check_labels_make_and_replay(checks: Checks) -> None:
         checks.equal(len(rig.listing()[1]), 3, "the listing now holds three rows, one per order")
 
 
+@_guarded
+def check_labels_listing_rows(checks: Checks) -> None:
+    """The rows of `GET /shipping/labels` carry their status and three times.
+
+    A create in flight is `pending`: no tracking number and a null `made_at`. A bought label is
+    `made` with a `made_at`. Before a scan press `scanned_at` and `checked_at` are present and
+    null. After it, `checked_at` is set and `scanned_at` is the latest event time in the answer
+    (the fake lists its events out of order, so first and last both read wrong).
+    """
+    checks.note("")
+    checks.note("TCGTRACKING LABELS, LISTING ROWS: pending then made, made_at, and the scan times null until a scan press (D326, T5)")
+    with _rig() as rig:
+        if not rig.upload(checks):
+            return
+        order, fake = rig.envelope[0], rig.fake
+        press, _ = rig.press_held([order])
+        checks.ok(fake.arrived.is_set(), "the create reached the fake and is held in flight")
+        row = _row(rig.listing()[1], order) or {}
+        checks.ok(
+            row.get("status") == "pending" and not row.get("tracking_number") and row.get("made_at") is None,
+            "while it is in flight the row is `pending`, with no tracking number and a null `made_at`",
+            f"{row}",
+        )
+        fake.release.set()
+        press.join(timeout=15)
+        row = _row(rig.listing()[1], order) or {}
+        checks.equal(row.get("status"), "made", "once bought the row is `made`")
+        checks.ok(bool(row.get("tracking_number")) and isinstance(row.get("made_at"), str) and row["made_at"], "with a tracking number and a `made_at`", f"{row}")
+        checks.ok(
+            all(key in row and row[key] is None for key in ("scanned_at", "checked_at")),
+            "and before a scan press `scanned_at` and `checked_at` are present and null",
+            f"{row}",
+        )
+        rig.call("POST", "/shipping/labels/scans", {})
+        row = _row(rig.listing()[1], order) or {}
+        checks.ok(isinstance(row.get("checked_at"), str) and row["checked_at"], "after the press `checked_at` is set", f"{row}")
+        checks.equal(row.get("scanned_at"), LATEST_SCAN, "and `scanned_at` is the latest event time in the track answer")
+
+
 # ------------------------------------------------------------------------ the double press
 
 
@@ -619,30 +798,77 @@ def check_labels_double_press(checks: Checks) -> None:
         if not rig.upload(checks):
             return
         order = rig.envelope[0]
-        rig.fake.hold = True
-        answers = {}
-
-        def press(tag):
-            answers[tag] = rig.confirm([order])
-
-        first = threading.Thread(target=press, args=("a",), daemon=True)
-        first.start()
-        deadline = time.monotonic() + 5
-        while not rig.fake.arrived.is_set() and first.is_alive() and time.monotonic() < deadline:
-            time.sleep(0.02)
+        first, answers = rig.press_held([order])
         checks.ok(rig.fake.arrived.is_set(), "the first press's create reached the fake and is held in flight")
-        second = threading.Thread(target=press, args=("b",), daemon=True)
+        second = threading.Thread(target=lambda: answers.append(rig.confirm([order])), daemon=True)
         second.start()
         time.sleep(0.6)
         rig.fake.release.set()
         first.join(timeout=15)
         second.join(timeout=15)
         checks.ok(not first.is_alive() and not second.is_alive(), "both presses answered")
-        made = [n for tag in answers for n in _names(answers[tag][1].get("made"))]
+        made = [n for _, doc in answers for n in _names(doc.get("made"))]
         checks.equal(len(rig.fake.creates), 1, "the fake saw exactly 1 create")
         checks.equal(made, [order], "and exactly one press reports the order as made")
-        checks.ok(all(s < 500 for s, _ in answers.values()), "and neither press answered with a server error", str(answers))
+        checks.ok(all(s < 500 for s, _ in answers), "and neither press answered with a server error", str(answers))
         checks.equal(len(rig.listing()[1]), 1, "and the store holds 1 label row")
+
+
+@_guarded
+def check_labels_stop(checks: Checks) -> None:
+    """`POST /shipping/batches/<batch>/labels/stop` ends a confirm after the create in flight.
+
+    The fake parks the first create of a four-order confirm and a stop arrives meanwhile. That
+    create finishes and its label is kept (nothing is voided: the fake sees no request but the
+    create), no second create is sent, and the confirm's receipt makes 1 and is partial. A stop with
+    nothing in flight answers 200 and changes nothing, and it leaves no mark: the confirm after it
+    makes both its orders. A later confirm for the three that were left makes them.
+    """
+    checks.note("")
+    checks.note("TCGTRACKING LABELS, STOP: the create in flight finishes and is kept, no further create, a partial receipt (D326)")
+    with _rig() as rig:
+        if not rig.upload(checks):
+            return
+        four, idle = rig.envelope[:4], rig.envelope[4:6]
+        fake, stop = rig.fake, f"{rig.labels_path}/stop"
+        before = (store_tables(), home_files(rig.home), len(fake.requests))
+        status, doc = rig.call("POST", stop, {})
+        checks.ok(
+            status == 200 and (store_tables(), home_files(rig.home), len(fake.requests)) == before,
+            "a stop with nothing in flight answers 200 and changes nothing: no store row, no file, no request",
+            f"{status} {doc}",
+        )
+        status, doc = rig.confirm(idle)
+        checks.ok(
+            sorted(_names(doc.get("made"))) == sorted(idle) and doc.get("partial") is False,
+            "and it leaves no mark: the next confirm makes both its orders",
+            f"{status} {doc}",
+        )
+        fake.hold_at = len(fake.creates) + 1
+        press, got = rig.press_held(four)
+        checks.ok(fake.arrived.is_set(), "the first create of the four-order confirm reached the fake and is held in flight")
+        halted = []
+        stopper = threading.Thread(target=lambda: halted.append(rig.call("POST", stop, {})), daemon=True)
+        stopper.start()
+        time.sleep(0.6)
+        fake.release.set()
+        press.join(timeout=15)
+        stopper.join(timeout=15)
+        checks.ok(bool(halted) and halted[0][0] == 200, "the stop press answers 200", f"{halted}")
+        status, doc = got[0] if got else (0, {})
+        checks.equal(_names(doc.get("made")), four[:1], "the confirm's receipt makes 1: the order whose create was in flight")
+        checks.ok(doc.get("partial") is True, "and the receipt is partial", f"{status} {doc}")
+        checks.equal(len(fake.creates), len(idle) + 1, "no further create was sent after the stop")
+        checks.ok(
+            {(r["method"], r["path"]) for r in fake.requests} == {("POST", "/orders")} and not fake.unknown,
+            "and the fake saw nothing but creates: the in-flight label was not voided",
+        )
+        rows = rig.listing()[1]
+        mine = _row(rows, four[0]) or {}
+        checks.ok(mine.get("status") == "made" and not any(_row(rows, o) for o in four[1:]), "the label is kept as a made row, and the other three have no row", f"{rows}")
+        checks.ok(_kept(_stored(rig.home), fake.pdf_for(f"TT-{len(idle) + 1:04d}")), "and its label PDF is stored")
+        status, doc = rig.confirm(four[1:])
+        checks.equal(sorted(_names(doc.get("made"))), sorted(four[1:]), "a later confirm for the other three makes them all: the stop left no mark")
 
 
 # ------------------------------------------------------------------ the client module
@@ -947,14 +1173,16 @@ def check_labels_duplicate(checks: Checks) -> None:
 
 @_guarded
 def check_labels_pdf_route(checks: Checks) -> None:
-    """`GET /shipping/labels/<order>/pdf` serves the label PDF the store holds.
+    """`GET /shipping/labels/<pdf_token>/pdf` serves the label PDF the store holds.
 
-    It answers the stored bytes as application/pdf and sends nothing to TCGTracking, and it
-    answers 404 for an order with no label row. The right press comes first in the case, as in
-    the money gate: a route that does not exist answers 404 to every order too.
+    Each listing row carries a `pdf_token`, 32 hex characters and distinct per row. The token
+    route answers the stored bytes as application/pdf and sends nothing to TCGTracking. The
+    ORDER NUMBER in the token's place answers 404 (a buyer's label is not fetched by a guessable
+    name), as does a token no row owns. The right press comes first in the case, as in the money
+    gate: a route that does not exist answers 404 to every ask too.
     """
     checks.note("")
-    checks.note("TCGTRACKING LABELS, PDF ROUTE: the stored label as application/pdf, no network, 404 with no row (D326)")
+    checks.note("TCGTRACKING LABELS, PDF ROUTE: a row's token fetches the stored label as application/pdf, an order number is 404 (D326)")
     with _rig() as rig:
         if not rig.upload(checks):
             return
@@ -962,20 +1190,73 @@ def check_labels_pdf_route(checks: Checks) -> None:
         fake = rig.fake
         rig.confirm([e1, e2])
         label = {c["order"]: fake.pdf_for(f"TT-{n:04d}") for n, c in enumerate(fake.creates, 1)}
+        rows = rig.listing()[1]
+        token = {order: _token(rows, order) for order in (e1, e2)}
+        checks.ok(
+            all(isinstance(t, str) and re.fullmatch(r"[0-9a-fA-F]{32}", t) for t in token.values()),
+            "every listing row carries a `pdf_token` of 32 hex characters",
+            str(token),
+        )
+        checks.equal(len(set(token.values())), 2, "and the two tokens differ")
         before = len(fake.requests)
         for order in (e1, e2):
-            status, body, headers = rig.raw("GET", _pdf_path(order))
+            status, body, headers = rig.raw("GET", _pdf_path(token[order]))
             kind = {k.lower(): v for k, v in headers.items()}.get("content-type", "")
             checks.ok(
                 status == 200 and kind.split(";")[0].strip() == "application/pdf" and body == label.get(order),
-                "a labelled order answers 200 with its own stored bytes as application/pdf",
+                "a row's token answers 200 with its own stored bytes as application/pdf",
                 f"{status} {kind!r} {body[:60]!r}",
             )
         checks.equal(len(fake.requests), before, "and the two reads sent 0 requests to TCGTracking")
-        for order, why in ((e3, "an envelope order with no label row"), ("T7-NOT-IN-THE-BATCH-1", "an order no batch lists")):
-            status, _, _ = rig.raw("GET", _pdf_path(order))
+        for ref, why in (
+            (e1, "the order number of a labelled order"),
+            (e3, "an order number with no label row"),
+            ("0" * 32, "a well-formed token no row owns"),
+        ):
+            status, _, _ = rig.raw("GET", _pdf_path(ref))
             checks.equal(status, 404, f"{why} answers 404")
-        checks.equal(len(fake.requests), before, "and neither 404 sent a request to TCGTracking")
+        checks.equal(len(fake.requests), before, "and no 404 sent a request to TCGTracking")
+
+
+@_guarded
+def check_labels_combined_pdf(checks: Checks) -> None:
+    """`GET /shipping/batches/<batch>/labels/pdf` is one PDF of every label made for the batch.
+
+    A batch with no label answers 404 or a named refusal. After 3 orders are labelled the answer is
+    one application/pdf of 3 pages, and the pages are those 3 labels (the fake's pages differ in
+    height, so three copies of one label read wrong). It sends nothing to TCGTracking. The empty ask
+    comes first, so the later 200 is what shows the route exists.
+    """
+    checks.note("")
+    checks.note("TCGTRACKING LABELS, COMBINED FILE: one PDF of the batch's labels, 3 pages for 3 labels, no network (D326)")
+    with _rig() as rig:
+        if not rig.upload(checks):
+            return
+        fake, path = rig.fake, f"{rig.labels_path}/pdf"
+        status, body, _ = rig.raw("GET", path)
+        checks.ok(
+            (status == 404 or (400 <= status < 500 and error_code(body))) and not body.startswith(b"%PDF"),
+            "a batch with no label answers 404 or a named refusal, not a file",
+            f"{status} {body[:80]!r}",
+        )
+        rig.confirm(rig.envelope[:3])
+        before = len(fake.requests)
+        status, body, headers = rig.raw("GET", path)
+        kind = {k.lower(): v for k, v in headers.items()}.get("content-type", "")
+        checks.ok(
+            status == 200 and kind.split(";")[0].strip() == "application/pdf" and body.startswith(b"%PDF"),
+            "after 3 orders are labelled the answer is 200 and one application/pdf",
+            f"{status} {kind!r} {body[:60]!r}",
+        )
+        try:
+            heights = _pages(body)
+        except Exception as caught:  # noqa: BLE001 - an unreadable file is the failure
+            heights = []
+            checks.ok(False, "the combined file can be read as a PDF", f"{type(caught).__name__}: {caught}")
+        checks.equal(len(heights), 3, "and it holds 3 pages")
+        want = sorted(h for n in (1, 2, 3) for h in _pages(fake.pdf_for(f"TT-{n:04d}")))
+        checks.equal(sorted(heights), want, "which are the 3 labels, one page each")
+        checks.equal(len(fake.requests), before, "and the read sent 0 requests to TCGTracking")
 
 
 # ------------------------------------------------------------------------- T5, scans
@@ -1054,6 +1335,40 @@ def check_labels_scans_not_found(checks: Checks) -> None:
         )
 
 
+@_guarded
+def check_labels_auth_headers(checks: Checks) -> None:
+    """Every request TCGTracking sees carries `X-API-Key` (the key) and `X-Shipper-Number` (the shipper).
+
+    One run makes each kind of call the routes make: a create, a pdf fetch (a duplicate answer has
+    no PDF in it) and a track lookup. The kinds are asserted too, so a run that sent fewer cannot pass.
+    """
+    checks.note("")
+    checks.note("TCGTRACKING AUTH: X-API-Key and X-Shipper-Number on every create, pdf fetch and track lookup (D326)")
+    with _rig() as rig:
+        if not rig.upload(checks):
+            return
+        e1, e2 = rig.envelope[:2]
+        fake = rig.fake
+        rig.confirm([e1])
+        fake.pdf_for("TT-DUP-0731")
+        fake.script = lambda n, e: (200, fake.duplicate("TT-DUP-0731"))
+        rig.confirm([e2])
+        fake.script = None
+        rig.call("POST", "/shipping/labels/scans", {})
+        kinds = {(r["method"], "pdf" if r["path"].endswith("/pdf") else r["path"]) for r in fake.requests}
+        checks.equal(
+            kinds,
+            {("POST", "/orders"), ("GET", "pdf"), ("GET", "/orders/track")},
+            "the run made a create, a pdf fetch and a track lookup",
+        )
+        bad = [
+            (r["method"], r["path"])
+            for r in fake.requests
+            if r["headers"].get("x-api-key") != SENTINEL or r["headers"].get("x-shipper-number") != SHIPPER
+        ]
+        checks.equal(bad, [], f"and each of the {len(fake.requests)} requests carries the key and the shipper number as headers")
+
+
 # --------------------------------------------------------------------- the secret
 
 
@@ -1062,8 +1377,9 @@ def check_labels_key_never_leaks(checks: Checks) -> None:
     """The key value is in no response, refusal text, log line, printed line or store row.
 
     One run through every path that handles it: a preview, a bought label, a 401 and a 429
-    whose bodies echo the key back, the scans press, the listing, the pdf route (a label and
-    a refused order), and the client module's own refusals. The positive control is that the fake did receive the key: without it a build
+    whose bodies echo the key back, the scans press, the listing, the pdf route (a token, and an
+    order number that is refused), the combined file, the stop press, and the client module's own
+    refusals. The positive control is that the fake did receive the key: without it a build
     that never sent the key would pass.
     """
     checks.note("")
@@ -1080,9 +1396,12 @@ def check_labels_key_never_leaks(checks: Checks) -> None:
             rig.confirm([order])
         rig.fake.script = None
         rig.call("POST", "/shipping/labels/scans", {})
-        rig.listing()
+        rows = rig.listing()[1]
+        rig.call("GET", _pdf_path(_token(rows, e1)))
         rig.call("GET", _pdf_path(e1))
         rig.call("GET", _pdf_path(e2))
+        rig.call("GET", f"{rig.labels_path}/pdf")
+        rig.call("POST", f"{rig.labels_path}/stop", {})
         if tt is not None:
             rig.fake.script = lambda n, e: (401, {"error": f"upstream 401 {SENTINEL}"})
             try:
@@ -1096,16 +1415,21 @@ def check_labels_key_never_leaks(checks: Checks) -> None:
 
 CHECKS = (
     check_labels_preview,
+    check_labels_preview_presence,
     check_labels_money_gate,
     check_labels_make_and_replay,
+    check_labels_listing_rows,
     check_labels_double_press,
+    check_labels_stop,
     check_labels_client,
     check_labels_default_host,
     check_labels_refusals,
     check_labels_partial_and_bought,
     check_labels_duplicate,
     check_labels_pdf_route,
+    check_labels_combined_pdf,
     check_labels_scans,
     check_labels_scans_not_found,
+    check_labels_auth_headers,
     check_labels_key_never_leaks,
 )
