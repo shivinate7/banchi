@@ -1,12 +1,13 @@
-// Protects: The floating price-history card opens by focus or by its door, sits above its row by default, covers neither the row nor the next price field, keeps focus where its mode says, holds its size while history loads, and draws the product chart with the owner's asking step line and the suggestion dot.
+// Protects: The floating price-history card opens by focus or by its door, sits above its row by default, covers neither the row nor the next price field, keeps focus where its mode says, holds its size while history loads, and draws the product chart with the owner's asking step line and the suggestion dot. Its name carries the full card name as a title. On `#/pricing` it opens above the focused row, follows that row when the list above changes, and stays open while focus is in the list.
 // Governs: D313, D278, D227
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { setViewport } from './phoneSwitch'
 import { productHistory } from './routeFixtures'
 import { markNow, readShifts, sumOf, watchShifts } from './layoutShift'
-import { settleMotion } from './motionSettled'
+import { afterPaint, settleMotion } from './motionSettled'
 import { scanMoneyFace } from './moneyFace'
+import { seedPopulatedPricing } from './routeFixtures'
 import type { AskingPosting, ProductHistoryPayload } from '../src/types'
 
 /* THE CONTRACT THIS FILE PINS. `#/gallery` and `app/src/HistoryFloat.tsx` must match it.
@@ -93,6 +94,52 @@ async function placeRow(page: Page, top: number) {
 async function openByFocus(page: Page, i = 1) {
   await priceOf(page, i).click()
   await expect(card(page)).toHaveAttribute('data-mode', 'focus')
+}
+
+/* The gap between the card's bottom edge and `anchor`'s top edge: positive when the card is above it. */
+async function gapAbove(page: Page, anchor: Locator): Promise<number> {
+  const c = await boxOf(card(page))
+  const a = await boxOf(anchor)
+  return a.y - (c.y + c.height)
+}
+
+/* A row added in front of `row`, and a row folded away. NO CONTROL FOLDS A GROUP YET, so both change
+ * the list in the DOM, the way an added row or a folded group does. The card must follow its row
+ * whatever draws the change. */
+const addRowAbove = (row: Locator) =>
+  row.evaluate((el) => {
+    const added = document.createElement('div')
+    added.setAttribute('aria-hidden', 'true')
+    added.style.height = '96px'
+    el.before(added)
+  })
+const foldRow = (row: Locator) =>
+  row.evaluate((el) => {
+    el.style.display = 'none'
+  })
+
+/* THE ONE STEP FOR "THE LIST ABOVE THE OPEN CARD CHANGED", run on the gallery specimen and on `#/pricing`.
+ * Focus the row's price field, change the list so `row` moves in the viewport, and the card is still
+ * above `row` at the distance it had (the door-edge tolerance of 1px). The browser's own scroll
+ * anchoring is off for the change, so the row really moves. */
+async function expectCardFollowsRow(page: Page, row: Locator, price: Locator, change: () => Promise<void>, way: 'down' | 'up') {
+  await price.click()
+  await expect(card(page)).toHaveAttribute('data-mode', 'focus')
+  await expect(card(page)).toHaveAttribute('data-placement', 'above')
+  const before = await gapAbove(page, row)
+  expect(before, 'the card starts above the row').toBeGreaterThanOrEqual(0)
+  const top = (await boxOf(row)).y
+
+  await page.evaluate(() => {
+    document.documentElement.style.overflowAnchor = 'none'
+  })
+  await change()
+  const moved = (await boxOf(row)).y - top
+  expect(way === 'down' ? moved : -moved, `the row moved ${way} with the list`).toBeGreaterThan(30)
+
+  await expect.poll(async () => Math.abs((await gapAbove(page, row)) - before), `the card moved ${way} with its row`).toBeLessThanOrEqual(1)
+  await expect(card(page)).toHaveAttribute('data-placement', 'above')
+  expect(await gapAbove(page, row), 'the card still ends above the row').toBeGreaterThanOrEqual(0)
 }
 
 /* Two asking postings, so the step line has a change to draw. */
@@ -363,6 +410,141 @@ for (const size of SIZES) {
     test('the card shows four prices: Market, Lowest, Lowest, shipped, and Direct Low', async ({ page }) => {
       await openByFocus(page)
       await expect(card(page).locator('.hfloat-facts dt')).toHaveText(['Market', 'Lowest', 'Lowest, shipped', 'Direct Low'])
+    })
+
+    /* The name is cut to one line by an ellipsis (`.hfloat-name`), so its title is the way to read all of it. */
+    test("the card's name carries the full card name as its title once history loads, and no title while it loads", async ({ page }) => {
+      const FULL = 'Pikachu with Grey Felt Hat, SVP 085, Black Star Promos, Near Mint Holofoil, a name long enough that the ellipsis cuts it'
+      let release!: () => void
+      const gate = new Promise<void>((done) => (release = done))
+      await page.route(HISTORY, async (route) => {
+        await gate
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...payloadWithAsking(), name: FULL }) })
+      })
+
+      await priceOf(page, 1).click()
+      await expect(card(page)).toHaveAttribute('data-state', 'loading')
+      const name = card(page).locator('.hfloat-name')
+      expect(await name.getAttribute('title'), 'no title while history loads').toBeNull()
+
+      release()
+      await expect(card(page)).toHaveAttribute('data-state', 'ready')
+      await expect(name, 'the name is the loaded card name').toHaveText(FULL)
+      await expect(name, 'its title is the whole name').toHaveAttribute('title', FULL)
+    })
+
+    /* The card measures its row when it opens, on resize and on scroll. A row that moves on its own, because
+     * the list above it changed, is a move the card must follow, or it floats over the wrong place. */
+    test('a row added above the open card keeps the card above its row', async ({ page }) => {
+      await placeRow(page, 600)
+      await expectCardFollowsRow(page, row(page, 1), priceOf(page, 1), () => addRowAbove(row(page, 1)), 'down')
+    })
+
+    test('rows above the open card folding away keep the card above its row', async ({ page }) => {
+      await placeRow(page, 600)
+      await expectCardFollowsRow(page, row(page, 1), priceOf(page, 1), () => foldRow(row(page, 0)), 'up')
+    })
+  })
+}
+
+/* ---- `#/pricing`: THE CARD'S ONE CALL SITE (spec `docs/specs/pricing-suggest.md` section 9c) --------
+ *
+ * OWNER RULING. On `#/pricing` the card opens when a price field takes focus, ABOVE its row, and
+ * stays open while focus is anywhere in the list (`.pricing-list`). It closes on Esc, on its close
+ * button, and when focus leaves the list for anything but the card. The gallery cases above pin the
+ * card; these pin the mount, so each reads the real screen over `seedPopulatedPricing` (two rows in
+ * "Going at the Rule", the second row has a row above it, and both have room above at every size).
+ *
+ * A row's tab stops, in order: price field, "Keep <name> off TCGplayer", the next row's photo
+ * button, its name link, then its price field. The card keeps its row through the first three.
+ *
+ * The reflow cases share `expectCardFollowsRow` with the gallery cases above.
+ */
+const PRICING = '/#/pricing'
+const listRow = (page: Page, i: number) => page.locator('.pricing-row').nth(i)
+const listPrice = (page: Page, i: number) => listRow(page, i).getByRole('textbox', { name: /^Price for / })
+
+/** The SKU a row's name link opens, so a case can tell which product the card was asked about. */
+async function skuOfRow(page: Page, i: number): Promise<string> {
+  const href = (await listRow(page, i).locator('a.pricing-name').getAttribute('href')) ?? ''
+  const sku = /[?&]sku=([^&]+)/.exec(href)?.[1]
+  expect(sku, `row ${i} name link names its SKU (${href})`).toBeTruthy()
+  return decodeURIComponent(sku!)
+}
+
+for (const size of SIZES) {
+  test.describe(`#/pricing at ${size.width} wide`, () => {
+    let asked: string[]
+    test.beforeEach(async ({ page }) => {
+      asked = []
+      await setViewport(page, size)
+      await seedPopulatedPricing(page)
+      await page.route(HISTORY, (route) => {
+        asked.push(/\/products\/([^/]+)\/history$/.exec(new URL(route.request().url()).pathname)?.[1] ?? '')
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payloadWithAsking()) })
+      })
+      await page.goto(PRICING)
+      await expect(page.locator('.pricing-row')).toHaveCount(2)
+      await settleMotion(page)
+    })
+
+    test("focusing a row's price field opens the card above that row, for that row's product", async ({ page }) => {
+      for (const i of [0, 1]) {
+        await listPrice(page, i).click()
+        await expect(card(page), `row ${i}: the price field took focus, so the card is open`).toHaveAttribute('data-mode', 'focus')
+        await expect(card(page)).toHaveAttribute('data-placement', 'above')
+        const c = await boxOf(card(page))
+        const anchor = await boxOf(listRow(page, i))
+        expect(c.y + c.height, `row ${i}: the card ends above the row`).toBeLessThanOrEqual(anchor.y)
+        expect(meets(c, anchor), `row ${i}: the card does not cover the row`).toBe(false)
+        const sku = await skuOfRow(page, i)
+        await expect.poll(() => asked.at(-1), `row ${i}: the card asked for this row's history`).toBe(sku)
+        await expect(listPrice(page, i)).toBeFocused()
+        await page.keyboard.press('Escape')
+        await expect(card(page)).toHaveCount(0)
+      }
+    })
+
+    test('a row added above the open card keeps the card above its row', async ({ page }) => {
+      await expectCardFollowsRow(page, listRow(page, 1), listPrice(page, 1), () => addRowAbove(listRow(page, 1)), 'down')
+    })
+
+    test('rows above the open card folding away keep the card above its row', async ({ page }) => {
+      await expectCardFollowsRow(page, listRow(page, 1), listPrice(page, 1), () => foldRow(listRow(page, 0)), 'up')
+    })
+
+    test('Tab to other controls in the list keeps the card open on its row, and focus leaving the list closes it', async ({ page }) => {
+      await listPrice(page, 0).click()
+      await expect(card(page)).toHaveAttribute('data-mode', 'focus')
+      const home = await gapAbove(page, listRow(page, 0))
+      expect(home, 'the card starts above row 0').toBeGreaterThanOrEqual(0)
+
+      /* Tab on until the next price field has focus. Every stop before it is another control in the list. */
+      let between = 0
+      for (;;) {
+        await page.keyboard.press('Tab')
+        if (await listPrice(page, 1).evaluate((el) => el === document.activeElement)) break
+        between++
+        expect(between, 'Tab reaches the next price field within a few stops').toBeLessThan(8)
+        const at = await page.evaluate(() => {
+          const a = document.activeElement
+          return { inList: !!a?.closest('.pricing-list'), price: !!a?.matches('input[aria-label^="Price for "]') }
+        })
+        expect(at, `stop ${between}: Tab landed on another control in the list`).toEqual({ inList: true, price: false })
+        await afterPaint(page)
+        await expect(card(page), `stop ${between}: the card is still open`).toHaveAttribute('data-mode', 'focus')
+        expect(Math.abs((await gapAbove(page, listRow(page, 0))) - home), `stop ${between}: the card stays on row 0`).toBeLessThanOrEqual(1)
+      }
+      expect(between, 'the lock, the next photo and the next name sit between the two price fields').toBeGreaterThanOrEqual(1)
+
+      /* The next price field took focus: the card moves to its row. */
+      await expect(listPrice(page, 1)).toBeFocused()
+      await expect.poll(() => gapAbove(page, listRow(page, 1)), 'the card is above row 1').toBeGreaterThanOrEqual(0)
+      await expect(card(page)).toHaveAttribute('data-mode', 'focus')
+
+      /* Focus leaves the list for something that is not the card: the search box above it. */
+      await page.getByRole('searchbox', { name: 'Search This List' }).focus()
+      await expect(card(page)).toHaveCount(0)
     })
   })
 }
