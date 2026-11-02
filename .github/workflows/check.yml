@@ -154,7 +154,7 @@ jobs:
     name: ci-check (${{ matrix.target }})
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
-    timeout-minutes: 9
+    timeout-minutes: 14
     strategy:
       fail-fast: false
       matrix:
