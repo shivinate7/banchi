@@ -98,7 +98,7 @@ outline marks what this design adds.
 13. **Stopped early (`#s=partial`): made, refused and not tried show on each row.** Make the Other
     9 opens a new preview over the rest only (`#s=again`), where the 6 made are held back with
     their own sentence.
-14. **Reprint, against `GET /shipping/labels/<order>/pdf`.** It sits at the end of each made row on
+14. **Reprint, against `GET /shipping/labels/<pdf_token>/pdf`, the token from the row in the label list, never the order number.** It sits at the end of each made row on
     the receipt and on each row of the Labels list. It is an icon button, the printer icon, 40 px:
     the word "Reprint" on fifteen rows is the same label fifteen times (the house rule: a label
     shows once on a screen). Its tooltip is "Reprint", and its name to a screen reader is "Reprint
