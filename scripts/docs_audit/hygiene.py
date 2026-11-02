@@ -26,6 +26,7 @@ from .core import (
     python_files,
     read,
     rel,
+    rule_files,
 )
 from .design import _POSITIONAL_RE
 from .records import _corpus, decisions_text
@@ -417,13 +418,13 @@ def check_agent_links(report: Report) -> None:
     """Each link CLAUDE.md names is a relative symlink; root `AGENTS.md` holds every rule file."""
     findings: List[Finding] = []
     composed_sources = {source for _, sources in AGENT_COMPOSED for source in sources}
-    for rule in glob_files(ROOT / ".claude" / "rules", "*.md"):
+    for rule in rule_files():
         relative = rel(rule)
-        if rule.name != "README.md" and relative not in composed_sources:
+        if relative not in composed_sources:
             findings.append(Finding(
                 relative,
                 "is a rule file the composed `AGENTS.md` does not hold, so Codex would never read it. "
-                f"Add `{rule.name}` to `AGENT_RULE_ORDER` in `scripts/docs_audit/hygiene.py`, then "
+                f"Add `{relative.removeprefix('.claude/rules/')}` to `AGENT_RULE_ORDER` in `scripts/docs_audit/hygiene.py`, then "
                 f"run `{AGENTS_GEN_COMMAND}`."))
     for link, target in AGENT_LINKS:
         path = ROOT / link
@@ -437,7 +438,12 @@ def check_agent_links(report: Report) -> None:
         path = ROOT / link
         want = composed_agents_text(sources)
         if want is None:
-            findings.append(Finding(link, f"is composed from {', '.join(sources)}, and one does not exist."))
+            gone = [source for source in sources if not exists(ROOT / source)]
+            findings.append(Finding(
+                link,
+                f"is composed from {', '.join(sources)}, and {', '.join(gone)} does not exist. "
+                f"Restore it, or drop it from `AGENT_COMPOSED` (and `AGENT_RULE_ORDER`) in "
+                f"`scripts/docs_audit/hygiene.py`, then run `{AGENTS_GEN_COMMAND}`."))
             continue
         if path.is_symlink() or not exists(path):
             findings.append(Finding(link, "must be a real file holding the bodies of " + ", ".join(sources) + ". "

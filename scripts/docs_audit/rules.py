@@ -22,6 +22,7 @@ from .core import (
     markdown_files,
     read,
     rel,
+    rule_files,
 )
 from .paths_commands import _MAKE_REF_RE, _MAKE_RULE_RE, iter_code_lines
 from .records import _corpus, _debts_corpus
@@ -211,11 +212,6 @@ def _gloss_after(rest: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
-def rule_files() -> List[Path]:
-    """Each path-scoped rule file, the README excluded: the prose that moved out of `CLAUDE.md`."""
-    return [p for p in glob_files(ROOT / ".claude" / "rules", "*.md") if p.name != "README.md"]
-
-
 _FOLDER_RULES_RE = re.compile(r"^## Folder rules\n(.*?)(?=^## |\Z)", re.M | re.S)
 
 
@@ -226,8 +222,9 @@ def folder_rule_roster_findings(text: str, files: Sequence[Path]) -> List[Findin
     check reading nothing and printing `ok`.
     """
     section = _FOLDER_RULES_RE.search(text)
-    named = set(re.findall(r"`([a-z][a-z-]*\.md)`", section.group(1))) if section else set()
-    on_disk = {p.name for p in files}
+    named = set(re.findall(r"`([a-z][a-z/-]*\.md)`", section.group(1))) if section else set()
+    rules_dir = ROOT / ".claude" / "rules"
+    on_disk = {p.relative_to(rules_dir).as_posix() for p in files}
     found: List[Finding] = []
     for name in sorted(named - on_disk):
         found.append(Finding(
