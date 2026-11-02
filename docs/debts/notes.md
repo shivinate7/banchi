@@ -24,3 +24,5 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - `scripts/waiting-export.py` scan false alarms, each costing one reword before an export: `key=str.lower`, `idempotency key: 8f3a2c91`, `TOKEN=xxxxxxxxxx`, "Round 3 Review Lane", `react@19.0.0-rc`, and a phone-shaped run of digits.
 - `pipeline/rosterholdings.py`'s `read_roster`: a bad roster row that spans lines is named by its last line, a missing header column gets an error with no line, and an amount of `-0` reads as `Decimal('-0')`.
 - `pipeline/rosterholdings.py` has its own `SkuRow`, beside `store/skus.py`'s; the totals line shows one price date, the newest, so an older price on another line is not shown.
+- `pipeline/rosterholdings.py`'s `build_roster_report`: a product id whose archive SKUs are only partly in `skus` prices from the ones present, so a foil line can take a non-foil price. `no_sku_row` covers only all-missing. `skus` has no delete path today.
+- `pipeline/rosterholdings.py`'s `_id_of` reads ids with `int()`, so `09001` and `+9001` become separate rows. Roster ids are plain integers today.

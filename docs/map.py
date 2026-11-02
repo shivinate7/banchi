@@ -1426,12 +1426,14 @@ COMPONENTS = [
             "rosterholdings.py": {
                 "does": "`read_roster` keeps a roster CSV's TCG purchases that are not canceled "
                         "and drops every counterparty column at read, counting the rest by "
-                        "reason. `build_roster_report` joins each line to a product on "
-                        "`pipeline/join.py`'s set and name folds, then prices a matched line "
-                        "from the one Near Mint SKU of its finish with a latest `month` market "
-                        "(`PriceArchive.for_sku` only). Every kept line lands in exactly one "
-                        "of priced, unpriced, ambiguous or unmatched; the report names product "
-                        "ids, counts and money only. Sits beside `holdings.py`, which values "
+                        "reason. `build_roster_report` joins each line to a product on its "
+                        "product id, through a crosswalk read from the archive's own "
+                        "`product_id` column (any range, id 0 never a key), then prices a "
+                        "matched line from the one Near Mint SKU of its finish with a latest "
+                        "`month` market (`PriceArchive.for_sku` only). `pipeline/join.py`'s set "
+                        "and name folds stay as a cross-check that lists store-side lines. "
+                        "Every kept line lands in exactly one of priced, unpriced or "
+                        "unmatched; the report names product ids, counts and money only. Sits beside `holdings.py`, which values "
                         "the store's own stock.",
                 "governed_by": ["D324"],
                 "note": "PROVED BY `make rosterholdings-selftest`, PATH GATED (D247).",
@@ -3328,8 +3330,8 @@ COMPONENTS = [
                 "does": "proves pipeline/rosterholdings.py against a roster CSV string, a "
                         "SKU list and a PriceArchive built in the file (`D324`) — no store "
                         "on disk, no network. Covers the TCG-purchase filter and excluded "
-                        "counts, the privacy floor, the folded set and name join, ambiguous "
-                        "and unmatched lines on both sides, the Near Mint printing pick, one "
+                        "counts, the privacy floor, the product-id join, the set and name "
+                        "cross-check, unmatched lines on both sides, the Near Mint printing pick, one "
                         "bucket per kept line, and the report's opening lines and coverage "
                         "line. PATH GATED (`D247`).",
                 "governed_by": ["D247", "D324"],

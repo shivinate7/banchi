@@ -36,9 +36,7 @@ def run(args, say) -> int:
         ]
         archive = PriceArchive(
             entries=Rows(PriceArchive.ENTRIES, source=db.source(conn, "price_history"), track=False))
-        priced_ids = {int(r[0]) for r in conn.execute("SELECT DISTINCT product_id FROM price_history")
-                      if r[0] is not None}
-        say(build_roster_report(roster, skus, archive, priced_ids).render())
+        say(build_roster_report(roster, skus, archive).render())
     finally:
         conn.close()
     return 0
