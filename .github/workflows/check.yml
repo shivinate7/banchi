@@ -227,7 +227,22 @@ jobs:
         env:
           BANCHI_GUARD_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
           BANCHI_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
-        run: make ${{ matrix.target }}
+          TARGET: ${{ matrix.target }}
+        # A SKIP SHOWS AND NEVER FAILS. The shard's own exit code is kept (`rc`). The count reads the
+        # markers the tools already print: a gated self-test's `<name>: SKIPPED`, the docs-audit
+        # self-test's `UNKNOWN <case>` and Playwright's `N skipped` summary (the unit specs).
+        run: |
+          set -o pipefail
+          log="$RUNNER_TEMP/make-$TARGET.log"
+          rc=0
+          make "$TARGET" 2>&1 | tee "$log" || rc=$?
+          awk '
+            /^[a-z0-9-]+: SKIPPED /               { gated += 1 }
+            /^ +UNKNOWN /                         { unknown += 1 }
+            /^ +[0-9]+ skipped/                   { tests += $1 }
+            END { printf "skipped in %s: %d gated self-test(s), %d unknown case(s), %d test(s)\n", ENVIRON["TARGET"], gated, unknown, tests }
+          ' "$log" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
 
   # The static targets run alone so `design-check` can wait for them and not for the slowest shard.
   ci-static:
@@ -665,6 +680,17 @@ jobs:
             exit 0
           fi
           make design-check PW_ARGS="--workers=2 $files"
+
+      # A SKIP SHOWS AND NEVER FAILS. The reporter's verdict file holds the shard's skipped count
+      # (the `list` reporter's own `N skipped` line sits in the stream above). No file means no spec
+      # ran or the run died, which is unknown here and not zero.
+      - name: Count the shard's skipped cases
+        if: ${{ always() && steps.gate.outputs.run == 'true' }}
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          n="$(python3 -c "import json; print(json.load(open('.serve/design-check.json')).get('counts', {}).get('skipped', 'unknown'))" 2>/dev/null || echo 'unknown (no verdict file)')"
+          echo "skipped in design-check shard $SHARD: $n case(s)" | tee -a "$GITHUB_STEP_SUMMARY"
 
       # Every full-suite run keeps each shard's per-file seconds, for `browser-scope.py shard-refresh` (a narrowed run times only some specs, so it keeps none).
       - name: Keep the shard's timings
