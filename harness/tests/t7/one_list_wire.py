@@ -39,6 +39,10 @@ THE WIRE THIS GROUP PINS (the one-list-wire lane's brief names the behaviour, no
     that SKU under its top-level `held` key. `send.held` stays the receipt's own boolean.
   - The worklist's no-runs branch, with a corpus that cannot be read, answers `error:
     "corpus_unreadable"` and draws no default-policy suggestion.
+  - A live suggestion held back by the owner's limit has a reason ending "; capped at your N%",
+    N being the owner's `limit` as a percent.
+  - `do_markdown_table(stamp)["skus"]` rows carry `group` (the worklist's own rule, read off each
+    survey row's `row` cells). A corpus that cannot be read leaves `group` absent on every row.
 """
 
 from __future__ import annotations
@@ -60,6 +64,7 @@ from harness.tests.t7.common import (
     seam_run,
 )
 from harness.tests.t7.price_history import _network_recorder
+from harness.tests.t7.read_budget import TABLE_STAMP, _write_survey
 from harness.tests.t7.send_markdown import _case, _live_export_priced, _seed_sync, send_portal
 from cli import cmd_emit
 from pipeline import corpus, pricing, readings, tcgcsv, worklist
@@ -280,10 +285,11 @@ def check_worklist_carries_live_listings(checks: Checks) -> None:
 
 
 def check_worklist_without_runs_reads_newest_export(checks: Checks) -> None:
-    """With no run on disk the worklist still carries `live`, and the price is the NEWER export's.
+    """With no run on disk the worklist still carries `live`, and the asking price is the NEWER export's.
 
-    Two live exports sit in the folder; the older names 9.00 and the newer 2.50. The row must read
-    2.50, and the read must not reach the network.
+    Two live exports sit in the folder; the older names 9.00 and the newer 2.50. The row must ask
+    2.50, and the read must not reach the network. No reading exists for the SKU, so the row needs
+    you, with no suggested price (spec "Needs you": a live listing with no market price).
     """
     checks.note("")
     checks.note("WORKLIST, NO RUNS — the newest live export is the price, read off disk")
@@ -297,10 +303,10 @@ def check_worklist_without_runs_reads_newest_export(checks: Checks) -> None:
             checks.equal(
                 _pinned(_live_row(payload, DUNSPARCE_SKU)),
                 {
-                    "asking": "2.50", "last_sold_at": None, "group": "at_rule", "price": "2.50",
-                    "source": "Live", "reason": "",
+                    "asking": "2.50", "last_sold_at": None, "group": "needs_you", "price": None,
+                    "source": "Live", "reason": "no market price",
                 },
-                "with no run and no market, the live row carries the NEWER export's asking price",
+                "with no send and no market, the live row needs you with no price, and asks the NEWER export's price",
             )
 
 
@@ -990,6 +996,112 @@ def check_worklist_group_follows_rule_price(checks: Checks) -> None:
                      "a row with neither cells nor snap is no market price")
 
 
+def check_live_capped_reason_names_the_cap(checks: Checks) -> None:
+    """A live listing whose suggested move passes the owner's limit lands in `needs_you`, and its
+    reason ends by naming that limit: "; capped at your 25%".
+
+    Dunsparce asks 3.00 at market 2.06, unsold 60 days, so the engine's price is 2.06: a 31% drop,
+    over the default 25% limit and far under the 25-dollar value line, so only the cap holds it back.
+    Only the ENDING is pinned, not the sentence before it. A second case sets the owner's limit to
+    0.20: the ending then names 20%, so the figure is the owner's setting and not a constant.
+    """
+    checks.note("")
+    checks.note("WORKLIST, CAPPED LIVE SUGGESTION — the reason names the owner's limit")
+    for label, limit, ending in (
+        ("default limit", None, "; capped at your 25%"),
+        ("limit 0.20", "0.20", "; capped at your 20%"),
+    ):
+        with run_folder() as run, isolated_home(run), _case(checks, f"worklist capped reason: {label}"):
+            _write_live("20260201-000000", _live_export_priced({DUNSPARCE_SKU: 1}, {DUNSPARCE_SKU: "3.00"}))
+            _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
+            _market_reading(DUNSPARCE_SKU, "2.06", "2.40")
+            if limit is not None:
+                book = corpus.Corpus.read()
+                book.limit = limit
+                book.write()
+            row = _live_row(pipeline_routes.do_pipeline_worklist([]), DUNSPARCE_SKU) or {}
+            checks.equal(row.get("group"), "needs_you",
+                         f"{label}: a suggested move past the limit is held for the owner")
+            checks.ok(str(row.get("reason")).endswith(ending),
+                      f"{label}: the reason ends {ending!r}", repr(row.get("reason")))
+
+
+def check_markdown_table_carries_group(checks: Checks) -> None:
+    """`do_markdown_table` rows carry the SAME `group` `/pipeline/pricing`'s `live` row gives the
+    same SKU, so one listing has one group on both screens (`_live_wire` is the one source).
+
+    Three live SKUs, one shape each, and a fourth the survey saw but the newest live export lacks:
+      Articuno   unsold 60 days, 13% over market: a trigger fires, `suggested`.
+      Dunsparce  asks 3.00 at market 2.06: the move passes the owner's limit, `needs_you`.
+      Reverse    5 days live, asking at market: nothing fires, `at_rule`.
+      Gone       in the survey, not in the live export: no `group`.
+    The survey's own export cells are set so the old rule (a new copy's group, off those cells) reads
+    `at_rule` for Articuno and Dunsparce, which the wire does not. A `prices.json` that cannot be
+    read leaves `group` absent on every row, and the table still answers: the owner's settings decide
+    the group, and a default policy would guess.
+    """
+    checks.note("")
+    checks.note("MARKDOWN TABLE — each row carries the live wire's group")
+    live = {ARTICUNO_SKU: "22.03", DUNSPARCE_SKU: "2.06", DUNSPARCE_REVERSE_SKU: "2.60"}
+    asking = {ARTICUNO_SKU: "25.00", DUNSPARCE_SKU: "3.00", DUNSPARCE_REVERSE_SKU: "2.60"}
+    cells = {sku: {tcgcsv.MARKET_PRICE_COLUMN: market + "00"} for sku, market in live.items()}
+
+    def seed() -> None:
+        _write_live("20260201-000000", _live_export_priced({sku: 1 for sku in live}, asking))
+        for sku, market in live.items():
+            _market_reading(sku, market, "2.40" if sku == DUNSPARCE_SKU else None)
+        _set_listing(ARTICUNO_SKU, first_seen_live=_noon(_day(60)))
+        _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
+        _set_listing(DUNSPARCE_REVERSE_SKU, first_seen_live=_noon(_day(5)))
+
+    def table_groups() -> dict:
+        _write_survey(0, (*live, "GONE"), cells)
+        table = pipeline_routes.do_markdown_table(TABLE_STAMP)
+        return {row["sku"]: row.get("group", "<absent>") for row in table["skus"]}
+
+    with run_folder() as run, isolated_home(run), _case(checks, "markdown table group: readable corpus"):
+        seed()
+        wire = {sku: (_live_row(pipeline_routes.do_pipeline_worklist([]), sku) or {}).get("group", "<no row>")
+                for sku in live}
+        checks.equal(wire, {ARTICUNO_SKU: "suggested", DUNSPARCE_SKU: "needs_you", DUNSPARCE_REVERSE_SKU: "at_rule"},
+                     "precondition: the live wire fires a trigger on two SKUs and leaves the third at the rule")
+        checks.equal(table_groups(), {**wire, "GONE": "<absent>"},
+                     "each markdown row's group is the live wire's for that SKU; a SKU the live export lacks has none")
+    with run_folder() as run, isolated_home(run), _case(checks, "markdown table group: corpus unreadable"):
+        seed()
+        files.prices_path().parent.mkdir(parents=True, exist_ok=True)
+        files.prices_path().write_text("{ not json", encoding="utf-8")
+        checks.equal(table_groups(), {**dict.fromkeys(live, "<absent>"), "GONE": "<absent>"},
+                     "an unreadable corpus leaves `group` absent on every row, and the rows still come")
+
+
+def check_live_no_market_needs_you(checks: Checks) -> None:
+    """A live listing with copies and no market price is `needs_you` on `/pipeline/pricing`'s `live`
+    wire: the spec's first group is "No market price, a move past the cap, or a card at or above the
+    value line", and it holds for a listing that is live as much as for a new copy.
+
+    One Dunsparce listing, first seen 5 days ago so no trigger fires, asking 2.60, in four shapes:
+    a blank market, a zero market, no reading row at all (each `needs_you`), and a market of 2.60,
+    which stays `at_rule` and keeps the rule honest about the other direction.
+    """
+    checks.note("")
+    checks.note("WORKLIST, LIVE LISTING WITH NO MARKET PRICE — needs you")
+    for label, market, expected in (
+        ("blank market", "", "needs_you"),
+        ("zero market", "0.00", "needs_you"),
+        ("no reading", None, "needs_you"),
+        ("market present", "2.60", "at_rule"),
+    ):
+        with run_folder() as run, isolated_home(run), _case(checks, f"worklist no market: {label}"):
+            _write_live("20260201-000000", _live_export_priced({DUNSPARCE_SKU: 1}, {DUNSPARCE_SKU: "2.60"}))
+            _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(5)))
+            if market is not None:
+                _market_reading(DUNSPARCE_SKU, market)
+            row = _live_row(pipeline_routes.do_pipeline_worklist([]), DUNSPARCE_SKU) or {}
+            checks.equal(row.get("group", "<no row>"), expected,
+                         f"{label}: a live listing with copies is filed under {expected}")
+
+
 CHECKS = (
     check_worklist_carries_live_listings,
     check_worklist_without_runs_reads_newest_export,
@@ -1010,4 +1122,7 @@ CHECKS = (
     check_worklist_live_listing_card_facts,
     check_worklist_new_copy_group,
     check_worklist_group_follows_rule_price,
+    check_live_capped_reason_names_the_cap,
+    check_markdown_table_carries_group,
+    check_live_no_market_needs_you,
 )

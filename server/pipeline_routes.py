@@ -5928,7 +5928,7 @@ def _survey_envelope(directory: Path) -> Optional[dict]:
         return None
 
 
-def _markdown_floor() -> str:
+def _markdown_floor(book: "Optional[corpus.Corpus]" = None) -> str:
     """The store's cut-off, which is the floor a markdown may not price below.
 
     `_policy_threshold`'s body plus the read, and the read is what needs the guard: this is a
@@ -5938,7 +5938,7 @@ def _markdown_floor() -> str:
     it refuses rather than falls back, and a screen drawing a figure is not the enforcement.
     """
     try:
-        return _policy_threshold(corpus.Corpus.read())
+        return _policy_threshold(corpus.Corpus.read() if book is None else book)
     except (OSError, ValueError):
         return str(pricing_mod.THRESHOLD)
 
@@ -5977,9 +5977,10 @@ def do_markdown_table(stamp: str) -> dict:
     # Live tab can sink a row whose copies have all left (spec 7b-29). A store that cannot be read
     # sends no figure rather than a zero, which would sink every row.
     try:
-        inventory: Optional[master.Inventory] = Store().read().inventory
+        snapshot: Optional[Snapshot] = Store().read()
     except (files.StoreError, OSError, ValueError, TypeError):
-        inventory = None
+        snapshot = None
+    inventory = snapshot.inventory if snapshot is not None else None
     if inventory is not None:
         # ONE PASS over the cards, the ledger's own (`_unsent_ledger`'s `on_hand`), never a query per row.
         by_sku = run_resolve._cards_by_sku(inventory)
@@ -5987,15 +5988,19 @@ def do_markdown_table(stamp: str) -> dict:
             {**row, "on_hand": sum(1 for card in by_sku.get(row["sku"], ()) if master.is_on_hand(card))}
             for row in rows
         ]
-    # EACH ROW'S GROUP, THE WORKLIST'S OWN RULE (`worklist.new_copy_groups`), so the screen files a
-    # row under Needs you or Going at the Rule. An unreadable corpus leaves `group` absent, as
-    # `_live_wire`'s caller does: the owner's settings decide, and a default policy would guess.
+    # EACH ROW'S GROUP IS `_live_wire`'S, so one SKU has one group here and on `/pipeline/pricing`'s
+    # live list. These rows are live listings; the new-copy rule (`worklist.new_copy_groups`) files a
+    # listing with no trigger under Needs you. Called as that route calls it: the newest live export
+    # and the store give the asking price, market, low, first-seen day and last sale, and nothing is
+    # passed in from the survey. A SKU that wire does not carry (no live copies in the newest export)
+    # has no `group`; neither has any row when the corpus cannot be read: the owner's settings decide,
+    # and a default policy would guess.
+    book: Optional[corpus.Corpus] = None
     try:
-        groups = worklist.new_copy_groups(
-            rows, corpus.Corpus.read().policy_for(), clock.central_day(clock.now()).isoformat()
-        )
-        rows = [{**row, "group": groups[row["sku"]]} for row in rows]
-    except (decisions.MalformedDecisions, ValueError):
+        book = corpus.Corpus.read()
+        groups = {one["sku"]: one["group"] for one in _live_wire(snapshot, book)}
+        rows = [{**row, "group": groups[row["sku"]]} if row["sku"] in groups else row for row in rows]
+    except (OSError, ValueError):
         pass
     return {
         "stamp": stamp,
@@ -6019,7 +6024,7 @@ def do_markdown_table(stamp: str) -> dict:
         # what this screen is holding. The constant was here while the apply refused 293 rows
         # against $0.40 on a store set to $0.29, so the sheet drew the wrong figure and the
         # receipt named it.
-        "floor": _markdown_floor(),
+        "floor": _markdown_floor(book),
         # HOW OLD THIS READ MAY BE AND STILL BE SENT FROM: it must be from today (US Central), so
         # this is the seconds since the day began. The screen offers "Read again" in place of Send
         # past it, and the apply and the send refuse past it. A screen left open over midnight

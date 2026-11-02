@@ -147,6 +147,11 @@ def review(listings: list, policy: dict, today: str) -> dict:
                 out["at_rule"].append(_row(listing, "Rule", priced, ""))
             continue
 
+        # No market price to price from: the owner types one, nothing here guesses it.
+        if not pricing.has_market_data(market):
+            out["needs_you"].append(_row(listing, "Live", None, "no market price"))
+            continue
+
         triggers = fired(listing, today)
         # A trigger that leaves the price where it is has nothing to suggest. No asking price fires
         # no trigger. A suggestion moves in its reason's direction: only a market move UP may raise
