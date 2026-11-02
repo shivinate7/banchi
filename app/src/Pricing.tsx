@@ -127,7 +127,7 @@ import { PriceMovers } from './PriceMovers'
 import './Pricing.css'
 import { SendCard, useOwedTakeOffs } from './SendCard'
 import { useLeaveWarning } from './useLeaveWarning'
-import { ABSENT_SENTENCE, AbsentPhotoNote, gameLabel, noPhotoSentence } from './CardHero'
+import { ABSENT_SENTENCE, AbsentPhotoNote, gameLabel, noPhotoSentence, titleCase } from './CardHero'
 
 /* #/pricing — THE HAND-PRICING WORKLIST (D86), REBUILT TO THE OWNER'S RE-INTERVIEW (D277).
  *
@@ -1822,11 +1822,11 @@ export function Pricing() {
       }
     }
     /* THE THREE GROUPS IN THE SPEC'S ORDER, each named for what the owner does there. An empty one still
-       draws, with its count of 0 and its sentence. */
+       draws, with its count of 0 and its sentence. A heading is Chicago Title Case (docs/DESIGN.md R5). */
     const groups: { head: string; rows: MergedSku[]; lede?: string }[] = [
-      { head: 'Needs you', lede: 'Nothing here goes until you tick it or type a price.', rows: needs },
-      { head: 'Suggested changes', lede: 'Ticked rows go with the next send. Untick one to keep its live price.', rows: suggested },
-      { head: 'Going at the rule', lede: 'These go at your rule, at the floor, or at a price you typed.', rows: ready },
+      { head: titleCase('Needs you', true), lede: 'Nothing here goes until you tick it or type a price.', rows: needs },
+      { head: titleCase('Suggested changes', true), lede: 'Ticked rows go with the next send. Untick one to keep its live price.', rows: suggested },
+      { head: titleCase('Going at the rule', true), lede: 'These go at your rule, at the floor, or at a price you typed.', rows: ready },
     ]
     /* THE SERVER'S SENTENCE, VERBATIM (D59): the client never composes a reason. */
     for (const [why, group] of closed) groups.push({ head: why, rows: group })

@@ -168,7 +168,9 @@ function asRow(entry: MarkdownSku): MergedSku {
     game: '',
     row: entry.row,
     bucket: 'listable',
-    group: (entry as unknown as { group?: LiveGroup }).group,
+    // THE SERVER'S GROUP. Absent only where it could not read the owner's settings: the row then
+    // waits for the owner, since going at the rule would be a guess.
+    group: entry.group ?? 'needs_you',
     name: entry.name,
     condition: entry.condition,
     set_name: cell('Set Name') ?? '',
@@ -293,7 +295,7 @@ function pricedOrNull(value: string | null | undefined): string | null {
 /** The group the server put a row in: a live listing's `group`, a new copy's `group`, or a markdown
  *  entry's. A row with none is going at the rule. The screen never works a group out itself. */
 export function serverGroup(row: PricingSku): LiveGroup {
-  return (row as unknown as { group?: LiveGroup }).group ?? 'at_rule'
+  return row.group ?? 'at_rule'
 }
 
 /** One live listing of the worklist as the row draws it, from the listing's own facts (name, set,
