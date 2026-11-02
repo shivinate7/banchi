@@ -99,6 +99,7 @@ ROSTER = (
     {"target": "pricearchive-selftest", "test": "scripts/pricearchive-selftest.py"},
     {"target": "archive-review-selftest", "test": "scripts/archive-review-selftest.py"},
     {"target": "holdings-selftest", "test": "scripts/holdings-selftest.py"},
+    {"target": "rosterholdings-selftest", "test": "scripts/rosterholdings-selftest.py"},
     {"target": "identity-checks-selftest", "test": "scripts/identity-checks-selftest.py"},
     {"target": "price-postings-selftest", "test": "scripts/price-postings-selftest.py"},
     {"target": "product-history-selftest", "test": "scripts/product-history-selftest.py"},
