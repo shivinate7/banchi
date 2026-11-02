@@ -96,6 +96,15 @@ async function openByFocus(page: Page, i = 1) {
   await expect(card(page)).toHaveAttribute('data-mode', 'focus')
 }
 
+/* THE ONE STEP FOR "THE CARD HAS READ", run before any case that counts or scans what the card draws.
+ * The card reads only after focus rests on its row (D278), so right after `openByFocus` it is still
+ * "loading" and holds no figure. `data-state` flips when the history lands; the facts come from a
+ * second read and each shows its dash until that lands too. A condition, never a pause. */
+async function cardLoaded(page: Page) {
+  await expect(card(page)).toHaveAttribute('data-state', 'ready')
+  await expect(card(page).locator('.hfloat-facts dd:not(:has(.bn-money, .hfloat-quiet))'), 'every fact has its answer, a price or "not carried"').toHaveCount(0)
+}
+
 /* The gap between the card's bottom edge and `anchor`'s top edge: positive when the card is above it. */
 async function gapAbove(page: Page, anchor: Locator): Promise<number> {
   const c = await boxOf(card(page))
@@ -340,6 +349,7 @@ for (const size of SIZES) {
 
     test('the card draws from --bn tokens, and every price carries bn-money', async ({ page }) => {
       await openByFocus(page)
+      await cardLoaded(page)
       /* A probe takes the token's own colour, so the card matches a token and no literal. The
          literal ban itself is `make docs-audit`'s `raw color` row, which reads the source. */
       const surface = await page.evaluate(() => {
@@ -586,7 +596,7 @@ test.describe('#/pricing card reads', () => {
 
   /* A card's reads are done: its history is drawn and its price read has gone out. A condition, not a pause. */
   const answered = async (page: Page, sku: string) => {
-    await expect(card(page)).toHaveAttribute('data-state', 'ready')
+    await cardLoaded(page)
     await expect.poll(() => readsOf(reads.facts, sku), `the price read for ${sku} went out`).toBeGreaterThanOrEqual(1)
     await afterPaint(page)
   }
