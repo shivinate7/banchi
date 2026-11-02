@@ -1010,54 +1010,68 @@ def check_live_capped_reason_names_the_cap(checks: Checks) -> None:
         ("default limit", None, "; capped at your 25%"),
         ("limit 0.20", "0.20", "; capped at your 20%"),
     ):
-        with run_folder() as run, isolated_home(run):
-            with _case(checks, f"worklist capped reason: {label}"):
-                _write_live("20260201-000000", _live_export_priced({DUNSPARCE_SKU: 1}, {DUNSPARCE_SKU: "3.00"}))
-                _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
-                _market_reading(DUNSPARCE_SKU, "2.06", "2.40")
-                if limit is not None:
-                    book = corpus.Corpus.read()
-                    book.limit = limit
-                    book.write()
-                row = _live_row(pipeline_routes.do_pipeline_worklist([]), DUNSPARCE_SKU) or {}
-                checks.equal(row.get("group"), "needs_you",
-                             f"{label}: a suggested move past the limit is held for the owner")
-                checks.ok(str(row.get("reason")).endswith(ending),
-                          f"{label}: the reason ends {ending!r}", repr(row.get("reason")))
+        with run_folder() as run, isolated_home(run), _case(checks, f"worklist capped reason: {label}"):
+            _write_live("20260201-000000", _live_export_priced({DUNSPARCE_SKU: 1}, {DUNSPARCE_SKU: "3.00"}))
+            _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
+            _market_reading(DUNSPARCE_SKU, "2.06", "2.40")
+            if limit is not None:
+                book = corpus.Corpus.read()
+                book.limit = limit
+                book.write()
+            row = _live_row(pipeline_routes.do_pipeline_worklist([]), DUNSPARCE_SKU) or {}
+            checks.equal(row.get("group"), "needs_you",
+                         f"{label}: a suggested move past the limit is held for the owner")
+            checks.ok(str(row.get("reason")).endswith(ending),
+                      f"{label}: the reason ends {ending!r}", repr(row.get("reason")))
 
 
 def check_markdown_table_carries_group(checks: Checks) -> None:
-    """`do_markdown_table` rows carry `group`, the worklist's own rule for a copy that is not live
-    (`worklist.new_copy_groups`), read off each survey row's export cells (`row`).
+    """`do_markdown_table` rows carry the SAME `group` `/pipeline/pricing`'s `live` row gives the
+    same SKU, so one listing has one group on both screens (`_live_wire` is the one source).
 
-    Three rows, default value line 25: market 2.06 is `at_rule`; market 25.00, AT the line, is
-    `needs_you`; a row with no market cell is `needs_you`. A `prices.json` that cannot be read
-    leaves `group` absent on every row, and the table still answers: the owner's settings decide
+    Three live SKUs, one shape each, and a fourth the survey saw but the newest live export lacks:
+      Articuno   unsold 60 days, 13% over market: a trigger fires, `suggested`.
+      Dunsparce  asks 3.00 at market 2.06: the move passes the owner's limit, `needs_you`.
+      Reverse    5 days live, asking at market: nothing fires, `at_rule`.
+      Gone       in the survey, not in the live export: no `group`.
+    The survey's own export cells are set so the old rule (a new copy's group, off those cells) reads
+    `at_rule` for Articuno and Dunsparce, which the wire does not. A `prices.json` that cannot be
+    read leaves `group` absent on every row, and the table still answers: the owner's settings decide
     the group, and a default policy would guess.
     """
     checks.note("")
-    checks.note("MARKDOWN TABLE — each row carries the engine's group")
-    cells = {
-        "UNDER": {tcgcsv.MARKET_PRICE_COLUMN: "2.0600"},
-        "ATLINE": {tcgcsv.MARKET_PRICE_COLUMN: "25.0000"},
-        "NOMARKET": {},
-    }
+    checks.note("MARKDOWN TABLE — each row carries the live wire's group")
+    live = {ARTICUNO_SKU: "22.03", DUNSPARCE_SKU: "2.06", DUNSPARCE_REVERSE_SKU: "2.60"}
+    asking = {ARTICUNO_SKU: "25.00", DUNSPARCE_SKU: "3.00", DUNSPARCE_REVERSE_SKU: "2.60"}
+    cells = {sku: {tcgcsv.MARKET_PRICE_COLUMN: market + "00"} for sku, market in live.items()}
 
-    def groups() -> dict:
-        _write_survey(0, tuple(cells), cells)
+    def seed() -> None:
+        _write_live("20260201-000000", _live_export_priced({sku: 1 for sku in live}, asking))
+        for sku, market in live.items():
+            _market_reading(sku, market, "2.40" if sku == DUNSPARCE_SKU else None)
+        _set_listing(ARTICUNO_SKU, first_seen_live=_noon(_day(60)))
+        _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
+        _set_listing(DUNSPARCE_REVERSE_SKU, first_seen_live=_noon(_day(5)))
+
+    def table_groups() -> dict:
+        _write_survey(0, (*live, "GONE"), cells)
         table = pipeline_routes.do_markdown_table(TABLE_STAMP)
         return {row["sku"]: row.get("group", "<absent>") for row in table["skus"]}
 
-    with run_folder() as run, isolated_home(run):
-        with _case(checks, "markdown table group: readable corpus"):
-            checks.equal(groups(), {"UNDER": "at_rule", "ATLINE": "needs_you", "NOMARKET": "needs_you"},
-                         "under the value line is at the rule; at the line, or with no market, needs you")
-    with run_folder() as run, isolated_home(run):
-        with _case(checks, "markdown table group: corpus unreadable"):
-            files.prices_path().parent.mkdir(parents=True, exist_ok=True)
-            files.prices_path().write_text("{ not json", encoding="utf-8")
-            checks.equal(groups(), {"UNDER": "<absent>", "ATLINE": "<absent>", "NOMARKET": "<absent>"},
-                         "an unreadable corpus leaves `group` absent on every row, and the rows still come")
+    with run_folder() as run, isolated_home(run), _case(checks, "markdown table group: readable corpus"):
+        seed()
+        wire = {sku: (_live_row(pipeline_routes.do_pipeline_worklist([]), sku) or {}).get("group", "<no row>")
+                for sku in live}
+        checks.equal(wire, {ARTICUNO_SKU: "suggested", DUNSPARCE_SKU: "needs_you", DUNSPARCE_REVERSE_SKU: "at_rule"},
+                     "precondition: the live wire fires a trigger on two SKUs and leaves the third at the rule")
+        checks.equal(table_groups(), {**wire, "GONE": "<absent>"},
+                     "each markdown row's group is the live wire's for that SKU; a SKU the live export lacks has none")
+    with run_folder() as run, isolated_home(run), _case(checks, "markdown table group: corpus unreadable"):
+        seed()
+        files.prices_path().parent.mkdir(parents=True, exist_ok=True)
+        files.prices_path().write_text("{ not json", encoding="utf-8")
+        checks.equal(table_groups(), {**dict.fromkeys(live, "<absent>"), "GONE": "<absent>"},
+                     "an unreadable corpus leaves `group` absent on every row, and the rows still come")
 
 
 CHECKS = (
