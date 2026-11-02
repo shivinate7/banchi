@@ -40,7 +40,11 @@ THE BUILDER MEETS THESE NAMES, NOT A GUESS. Only what the cases below read is pi
   report sections 2 to 9, and the `(P%)` format. Money compares as `Decimal(str(value))`, ids
   as `str(value)`, so `Decimal` against `str` and `int` against `str` both pass.
 
-Mutation arms are left to the builder: they need the module to exist.
+TWO MUTATION ARMS ARE INCLUDED, ON `CLAUDE.md`'s OWN RULE: A GUARD IS TRUSTED ONLY ONCE IT HAS
+BEEN SEEN TO FAIL ON THE DEFECT IT GUARDS. Each one defeats the guard by rebinding the one name
+that matters in `pipeline.rosterholdings` (the two folds, then the finish pick), reruns a case's
+input and requires the defeat to show. If a mutant does not change the answer, the arm's `ok`
+fails and this script exits non-zero.
 
 PATH GATED (D247): `make rosterholdings-selftest`, wired into `make check` and `make ci-check`
 through `scripts/guard-scope.py`.
@@ -57,6 +61,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from pipeline import rosterholdings  # noqa: E402
 from pipeline.rosterholdings import (  # noqa: E402
     RosterReport,
     SkuRow,
@@ -247,7 +252,7 @@ def texts(obj, _depth=0):
 
 
 def test_read_keeps_tcg_purchases_only() -> None:
-    cancelled = {"Shipping Status": "canceled"}
+    canceled = {"Shipping Status": "canceled"}
     roster = read(
         line(EMBER, qty=3, total="12.00"),
         line(FOX, qty=2, total="7.50"),  # a quoted comma: `split(",")` shifts every column
@@ -255,9 +260,9 @@ def test_read_keeps_tcg_purchases_only() -> None:
         line(WREN, Type="sale"),
         line(LANTERN, Type="sale"),
         line(COURIER, Vendor="Other Shop"),
-        line(PHANTOM, **cancelled),
-        line(ALMANAC, **cancelled),
-        line(NEARMISS, **cancelled),
+        line(PHANTOM, **canceled),
+        line(ALMANAC, **canceled),
+        line(NEARMISS, **canceled),
     )
     kept = roster.lines
     ok(len(kept) == 3, "only the three TCG purchases that are not canceled are kept", str(len(kept)))
@@ -433,6 +438,31 @@ def test_report_text() -> None:
        report.render())
 
 
+def mutation_fold_bypassed() -> None:
+    """Raw names instead of the folds: a roster spelling the product differently matches nothing."""
+    saved = rosterholdings.normalize_set, rosterholdings.name_index_key
+    rosterholdings.normalize_set = rosterholdings.name_index_key = lambda text: str(text)
+    try:
+        _roster, report = report_for(
+            line(EMBER_SPELLED, qty=1, total="4.00"), line(FOX_SPELLED, qty=1, total="2.00"))
+        ok(not {"9001", "9002"} <= pids(report.priced) and len(report.unmatched) == 2,
+           "MUTATION: raw names defeat the folded match, as expected")
+    finally:
+        rosterholdings.normalize_set, rosterholdings.name_index_key = saved
+
+
+def mutation_printing_pick_skipped() -> None:
+    """Every SKU agrees with every finish: EMBER has two priced Near Mint SKUs, so unpriced `printing`."""
+    saved = rosterholdings._finish_agrees
+    rosterholdings._finish_agrees = lambda finish, condition, printing: True
+    try:
+        _roster, report = report_for(line(EMBER, qty=2, total="6.00"))
+        ok(by_pid(report.priced).get("9001") is None and report.unpriced.get("printing") == 1,
+           "MUTATION: skipping the printing pick defeats the price, as expected")
+    finally:
+        rosterholdings._finish_agrees = saved
+
+
 def main() -> int:
     print("pipeline/rosterholdings.py:")
     for case in (
@@ -444,6 +474,9 @@ def main() -> int:
             case()
         except Exception as exc:  # noqa: BLE001 - one broken case must not hide the rest
             ok(False, f"{case.__name__} raised", repr(exc))
+    print("mutation arms (each proves the real guard above would have caught it):")
+    mutation_fold_bypassed()
+    mutation_printing_pick_skipped()
     print(f"{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0
 
