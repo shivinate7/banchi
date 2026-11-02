@@ -7244,6 +7244,45 @@ test('one list: a hold on a live row beats the price typed on it, in the row, th
   expect((body.prices ?? []).map((one) => one.sku), 'the kept suggestion still goes').toEqual(['9000002'])
 })
 
+/* A HOLD BEATS A TYPED PRICE ON EVERY PATH, AN UNDO INCLUDED. The owner keeps a live card off TCGplayer, releases it, types a price, then undoes the release.
+ * The undo puts the hold back, and the hold is the older word only by the clock: the price typed in between is the one the row must not read. The row draws
+ * held and the press carries neither the price nor the row. Both ways to undo (the release toast's own button, and `U`) reach the same reversal. */
+for (const [how, undoRelease] of [
+  ['the release toast', (page: Page) => page.locator('.bn-toast', { hasText: 'Released Pecharunt ex' }).getByRole('button', { name: 'Undo' }).click()],
+  [
+    'the U key',
+    async (page: Page) => {
+      await page.locator(`${VIEW} h1`).click() // a key press in a field types, so leave the field first
+      await page.keyboard.press('u')
+    },
+  ],
+] as const) {
+  test(`one list: undoing a release over a price typed since puts the hold back and not the price, with ${how}`, async ({ page }) => {
+    await setViewport(page, { width: 1440, height: 900 })
+    const wire = await open(page, { live: ONE_LIST_LIVE })
+    const row = page.locator('.pricing-row', { hasText: 'Pecharunt ex' })
+    await page.getByRole('button', { name: 'Keep Pecharunt ex off TCGplayer', exact: true }).click()
+    await page.getByRole('button', { name: 'Keep it off' }).click()
+    await expect(row.locator('.pricing-held'), 'the hold is on').toBeVisible()
+
+    await page.getByRole('button', { name: 'Release Pecharunt ex', exact: true }).click()
+    await expect(page.locator('.bn-toast', { hasText: 'Released Pecharunt ex' })).toBeVisible()
+    const typed = page.getByRole('textbox', { name: 'Price for Pecharunt ex' })
+    await typed.fill('3.10')
+    await typed.press('Tab')
+    await expect(sendFigures(page), 'the typed price counts once the hold is gone').toContainText('1 typed by you, listing for $3.10')
+
+    await undoRelease(page)
+    await expect.soft(row.locator('.pricing-held'), 'the row draws held again, not at the typed price').toBeVisible()
+
+    await oneListSend(page).click()
+    await expect.poll(() => sendPosts(wire).length).toBe(1)
+    const body = sentBody(wire)
+    expect((body.prices ?? []).find((one) => one.sku === '9000003'), 'the held row is not sent').toBeUndefined()
+    expect(JSON.stringify(body), 'the price typed before the undo is not sent').not.toContain('3.10')
+  })
+}
+
 /* KEPT SUGGESTIONS SEND ALONE. With no run in the link and every copy already at TCGplayer, the ticked suggestions are the whole press: the body names them
  * with their `source` and the press is not turned away for having no cards picked. The stub answers as the server does: an empty `runs` is enough only when
  * every named price is a kept suggestion (`runs_required`). Two states reach the same press: the worklist loads no run, and the worklist still lists a run whose
@@ -7351,6 +7390,44 @@ test('one list: a past-cap suggestion is left out unticked, and carries ticked: 
   await expect.poll(() => sendPosts(wire).length).toBe(2)
   expect((sentBody(wire, 1).prices ?? []).find((one) => one.sku === '9000001'), 'ticked, the row is in the body with its tick').toMatchObject({
     price: '12.41',
+    was: '8.80',
+    source: 'suggested',
+    ticked: true,
+  })
+})
+
+/* A TICK IS FOR THE FIGURE THE OWNER SAW. Iono is ticked at $12.41, then "Refresh Now" brings a different suggested price for it ($13.00). The owner said yes
+ * to a move past the limit at $12.41 and never saw $13.00, so the row is unticked again and leaves the press until it is ticked again. The stub answers the
+ * new figure once the refresh has been asked for, as the server does after the catalog read lands. */
+test('one list: a tick does not carry over to a new suggested price from Refresh Now', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const wire = await open(page, {
+    live: (seen) =>
+      seen.some((call) => call.method === 'POST' && call.path === '/pipeline/prices/refresh')
+        ? ONE_LIST_LIVE.map((one) =>
+            one.sku === '9000001' ? { ...one, market: '13.00', price: '13.00', reason: 'Market up 48% since listed, past your 25% limit.' } : one,
+          )
+        : ONE_LIST_LIVE,
+  })
+  const needs = listGroup(page, 'Needs You')
+  const iono = needs.getByRole('checkbox', { name: 'Send the new price for Iono' })
+  await iono.check()
+  await expect(iono).toBeChecked()
+
+  await page.getByRole('button', { name: /Refresh Now/ }).click()
+  await expect(needs.getByText('Market up 48% since listed, past your 25% limit.'), 'the new suggestion has landed').toBeVisible({ timeout: 15_000 })
+  await expect.soft(iono, 'the tick was for $12.41 and is gone with it').not.toBeChecked()
+
+  await oneListSend(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  expect((sentBody(wire, 0).prices ?? []).find((one) => one.sku === '9000001'), 'unticked again, the row is not in the body').toBeUndefined()
+
+  await iono.check()
+  await expect(oneListSend(page)).toBeEnabled()
+  await oneListSend(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(2)
+  expect((sentBody(wire, 1).prices ?? []).find((one) => one.sku === '9000001'), 'ticked again, the row is in the body at the new figure').toMatchObject({
+    price: '13.00',
     was: '8.80',
     source: 'suggested',
     ticked: true,
